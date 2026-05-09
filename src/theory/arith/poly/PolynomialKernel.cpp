@@ -1,0 +1,44 @@
+#include "theory/arith/poly/PolynomialKernel.h"
+
+#ifdef NLCOLVER_HAS_LIBPOLY
+#include "theory/arith/poly/LibPolyKernel.h"
+#endif
+
+namespace nlcolver {
+
+#ifdef NLCOLVER_HAS_LIBPOLY
+
+std::unique_ptr<PolynomialKernel> createPolynomialKernel() {
+    return std::make_unique<LibPolyKernel>();
+}
+
+#else // !NLCOLVER_HAS_LIBPOLY
+
+// Stub implementation: no polynomial support without libpoly.
+class StubPolyKernel : public PolynomialKernel {
+public:
+    PolyId mkZero() override { return 0; }
+    PolyId mkOne() override { return 0; }
+    PolyId mkConst(const mpq_class&) override { return 0; }
+    PolyId mkVar(std::string_view) override { return 0; }
+    PolyId add(PolyId, PolyId) override { return 0; }
+    PolyId sub(PolyId, PolyId) override { return 0; }
+    PolyId neg(PolyId) override { return 0; }
+    PolyId mul(PolyId, PolyId) override { return 0; }
+    PolyId pow(PolyId, uint32_t) override { return 0; }
+    bool isZero(PolyId) const override { return true; }
+    bool isConstant(PolyId) const override { return true; }
+    mpq_class toConstant(PolyId) const override { return mpq_class(0); }
+    std::vector<std::string> variables(PolyId) const override { return {}; }
+    bool eq(PolyId, PolyId) const override { return true; }
+    int sgn(PolyId, const std::unordered_map<std::string, mpq_class>&) const override { return 0; }
+    std::string toString(PolyId) const override { return "stub"; }
+};
+
+std::unique_ptr<PolynomialKernel> createPolynomialKernel() {
+    return std::make_unique<StubPolyKernel>();
+}
+
+#endif
+
+} // namespace nlcolver

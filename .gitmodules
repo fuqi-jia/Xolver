@@ -1,0 +1,11 @@
+[submodule "third_party/SOMTParser"]
+	path = third_party/SOMTParser
+	url = https://github.com/fuqi-jia/SOMTParser.git
+
+[submodule "third_party/cadical"]
+	path = third_party/cadical
+	url = https://github.com/arminbiere/cadical.git
+
+[submodule "third_party/libpoly"]
+	path = third_party/libpoly
+	url = https://github.com/SRI-CSL/libpoly.git
