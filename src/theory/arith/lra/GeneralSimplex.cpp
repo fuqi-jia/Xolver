@@ -12,7 +12,6 @@ namespace nlcolver {
 bool BoundValue::operator<(const BoundValue& rhs) const {
     if (kind == BoundKind::NegInf) return rhs.kind != BoundKind::NegInf;
     if (kind == BoundKind::PosInf) return false;
-    // this is finite
     if (rhs.kind == BoundKind::NegInf) return false;
     if (rhs.kind == BoundKind::PosInf) return true;
     return value < rhs.value;
@@ -33,46 +32,186 @@ bool BoundValue::operator>=(const BoundValue& rhs) const {
 // ============================================================================
 
 GeneralSimplex::GeneralSimplex() {
-    // Initialize base trail frame
     trail_.push_back({});
 }
 
+// ---------------------------------------------------------------------------
+// Variable registration
+// ---------------------------------------------------------------------------
+
 int GeneralSimplex::addVar(const std::string& name) {
     int id = static_cast<int>(vars_.size());
-    vars_.push_back({name});
-    lower_.push_back(BoundInfo(BoundValue::negInf()));
-    upper_.push_back(BoundInfo(BoundValue::posInf()));
-    beta_.push_back(DeltaRational(0));
-    isBasic_.push_back(false);
-    numCols_ = static_cast<int>(vars_.size());
-    // Pad existing tableau rows with a zero column for the new variable.
-    for (auto& row : matrix_) {
-        row.push_back(mpq_class(0));
-    }
+    VarState vs;
+    vs.name = name;
+    vs.lower = BoundInfo(BoundValue::negInf());
+    vs.upper = BoundInfo(BoundValue::posInf());
+    vs.beta = DeltaRational(0);
+    vs.basicRow = -1;
+    vars_.push_back(std::move(vs));
+    tab_.addEmptyCol();
+
+    nonBasicPos_.push_back(static_cast<int>(nonBasicVars_.size()));
+    nonBasicVars_.push_back(id);
+
+    inViolationQueue_.push_back(false);
     return id;
 }
 
+// ---------------------------------------------------------------------------
+// Basis helpers
+// ---------------------------------------------------------------------------
+
+void GeneralSimplex::removeFromNonBasic(int var) {
+    assert(vars_[var].basicRow == -1);
+    int pos = nonBasicPos_[var];
+    assert(pos >= 0);
+    int last = nonBasicVars_.back();
+    nonBasicVars_[pos] = last;
+    nonBasicPos_[last] = pos;
+    nonBasicVars_.pop_back();
+    nonBasicPos_[var] = -1;
+}
+
+void GeneralSimplex::makeBasicWithoutPivot(int var, int row) {
+    assert(vars_[var].basicRow == -1);
+    removeFromNonBasic(var);
+    vars_[var].basicRow = row;
+    basicVars_[row] = var;
+    tab_.row(row).basicVar = var;
+}
+
+void GeneralSimplex::markBasicSwitch(int leaving, int entering) {
+    // entering was non-basic, remove it
+    assert(vars_[entering].basicRow == -1);
+    removeFromNonBasic(entering);
+
+    // leaving becomes non-basic
+    assert(vars_[leaving].basicRow != -1);
+    vars_[leaving].basicRow = -1;
+    nonBasicPos_[leaving] = static_cast<int>(nonBasicVars_.size());
+    nonBasicVars_.push_back(leaving);
+}
+
+// ---------------------------------------------------------------------------
+// rewriteToNonBasic
+// ---------------------------------------------------------------------------
+
+GeneralSimplex::LinearForm GeneralSimplex::rewriteToNonBasic(const LinearForm& input) {
+    LinearForm out;
+    out.constant = input.constant;
+
+    std::unordered_map<int, mpq_class> coeffs;
+
+    auto addTerm = [&](int v, const mpq_class& a) {
+        if (a == 0) return;
+        coeffs[v] += a;
+        if (coeffs[v] == 0) {
+            coeffs.erase(v);
+        }
+    };
+
+    for (const auto& [v, a] : input.terms) {
+        int row = vars_[v].basicRow;
+        if (row == -1) {
+            addTerm(v, a);
+        } else {
+            out.constant += a * tab_.row(row).rhs;
+            for (const auto& e : tab_.row(row).entries) {
+                addTerm(e.col, a * e.coeff);
+            }
+        }
+    }
+
+    out.terms.reserve(coeffs.size());
+    for (auto& [v, a] : coeffs) {
+        if (a != 0) out.terms.push_back({v, a});
+    }
+
+    std::sort(out.terms.begin(), out.terms.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Constraint registration
+// ---------------------------------------------------------------------------
+//
+// Semantic contract (the ONLY interpretation):
+//   addConstraint(terms, rhs_input) creates an auxiliary variable s with row:
+//       s = Σ coeff_i * x_i - rhs_input
+//   Internally stored as:
+//       row.rhs  = -rhs_input
+//       row.entries[var_i] = coeff_i
+//   Therefore:
+//       s = 0  <=>  Σ coeff_i * x_i = rhs_input
+//       s <= 0 <=>  Σ coeff_i * x_i <= rhs_input
+//       s >= 0 <=>  Σ coeff_i * x_i >= rhs_input
+//
 int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& terms,
                                   const mpq_class& rhs) {
-    // Create auxiliary variable s
-    int s = addVar("s" + std::to_string(numRows_));
-
-    // Build tableau row: s = -rhs + sum terms_j * x_j
-    // In matrix form: s - sum terms_j * x_j = -rhs
-    // Tableau stores: s = rhs + sum matrix[r][j] * x_j
-    // So matrix[r][j] = coeff (the original coefficient)
-    std::vector<mpq_class> row(numCols_, 0);
-    row[s] = 1;  // coefficient of s
+    // Step 1: Build raw linear form.
+    //   s = Σ coeff_i * x_i - rhs
+    LinearForm raw;
+    raw.constant = -rhs;
     for (const auto& [var, coeff] : terms) {
-        assert(var >= 0 && var < numCols_);
-        row[var] = coeff;
+        if (coeff != 0) raw.terms.push_back({var, coeff});
     }
-    matrix_.push_back(std::move(row));
-    rhs_.push_back(-rhs);
-    basicVars_.push_back(s);
-    isBasic_[s] = true;
-    numRows_++;
-    return s;
+
+    // Step 2: Rewrite to non-basic variables. Must happen BEFORE aux is basic.
+    LinearForm f = rewriteToNonBasic(raw);
+
+    // Step 3: Create auxiliary variable (initially non-basic).
+    int aux = addVar("s" + std::to_string(tab_.numRows()));
+
+    // Step 4: Create empty row.
+    int row = tab_.addEmptyRow();
+
+    // Step 5: Make aux the basic variable of this row.
+    basicVars_.push_back(aux);
+    makeBasicWithoutPivot(aux, row);
+
+    // Step 6: Fill row with rewritten coefficients (all non-basic).
+    tab_.row(row).rhs = f.constant;
+    for (const auto& [var, coeff] : f.terms) {
+        assert(vars_[var].basicRow == -1);
+        if (coeff != 0) {
+            tab_.setCoeff(row, var, coeff);
+        }
+    }
+
+    betaDirty_ = true;
+    return aux;
+}
+
+// ============================================================================
+// Invariants (debug only)
+// ============================================================================
+
+void GeneralSimplex::checkInvariants() const {
+#ifndef NDEBUG
+    std::vector<int> basicRowOfVar;
+    basicRowOfVar.resize(vars_.size(), -1);
+    for (int v = 0; v < static_cast<int>(vars_.size()); ++v) {
+        basicRowOfVar[v] = vars_[v].basicRow;
+    }
+    tab_.checkInvariants(basicRowOfVar);
+
+    // nonBasicVars_ / nonBasicPos_ consistency
+    assert(static_cast<int>(nonBasicVars_.size()) + tab_.numRows() == static_cast<int>(vars_.size()));
+    for (int i = 0; i < static_cast<int>(nonBasicVars_.size()); ++i) {
+        int v = nonBasicVars_[i];
+        assert(nonBasicPos_[v] == i);
+        assert(vars_[v].basicRow == -1);
+    }
+    for (int v = 0; v < static_cast<int>(vars_.size()); ++v) {
+        if (vars_[v].basicRow == -1) {
+            assert(nonBasicPos_[v] >= 0);
+        } else {
+            assert(nonBasicPos_[v] == -1);
+        }
+    }
+#endif
 }
 
 // ============================================================================
@@ -82,20 +221,22 @@ int GeneralSimplex::addConstraint(const std::vector<std::pair<int, mpq_class>>& 
 bool GeneralSimplex::assertLower(int var, const BoundInfo& info) {
     assert(info.bound.isFinite());
     assert(info.reason.has_value());
-    assert(var >= 0 && var < numCols_);
+    assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
-    if (info.bound <= lower_[var].bound) return true;  // not tighter
-    if (info.bound > upper_[var].bound) {
+    if (info.bound <= vars_[var].lower.bound) return true;
+    if (info.bound > vars_[var].upper.bound) {
         explainImmediateConflict(var, true);
         hasImmediateConflict_ = true;
-        return false;   // conflict
+        return false;
     }
 
-    trail_.back().push_back({var, true, lower_[var]});
-    lower_[var] = info;
+    trail_.back().push_back({var, true, vars_[var].lower});
+    vars_[var].lower = info;
 
-    if (!isBasic_[var] && violatesLower(var)) {
+    if (vars_[var].basicRow == -1 && violatesLower(var)) {
         update(var, info.bound.value);
+    } else {
+        refreshViolationStatus(var);
     }
     return true;
 }
@@ -103,20 +244,22 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info) {
 bool GeneralSimplex::assertUpper(int var, const BoundInfo& info) {
     assert(info.bound.isFinite());
     assert(info.reason.has_value());
-    assert(var >= 0 && var < numCols_);
+    assert(var >= 0 && var < static_cast<int>(vars_.size()));
 
-    if (info.bound >= upper_[var].bound) return true;  // not tighter
-    if (info.bound < lower_[var].bound) {
+    if (info.bound >= vars_[var].upper.bound) return true;
+    if (info.bound < vars_[var].lower.bound) {
         explainImmediateConflict(var, false);
         hasImmediateConflict_ = true;
-        return false;   // conflict
+        return false;
     }
 
-    trail_.back().push_back({var, false, upper_[var]});
-    upper_[var] = info;
+    trail_.back().push_back({var, false, vars_[var].upper});
+    vars_[var].upper = info;
 
-    if (!isBasic_[var] && violatesUpper(var)) {
+    if (vars_[var].basicRow == -1 && violatesUpper(var)) {
         update(var, info.bound.value);
+    } else {
+        refreshViolationStatus(var);
     }
     return true;
 }
@@ -126,73 +269,134 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
-    // Non-basic vars: choose a value within bounds
-    for (int j = 0; j < numCols_; ++j) {
-        if (isBasic_[j]) continue;
-        beta_[j] = chooseValueWithinBounds(j);
+    for (int x : nonBasicVars_) {
+        vars_[x].beta = chooseValueWithinBounds(x);
     }
-    // Basic vars: compute from tableau
-    for (int r = 0; r < numRows_; ++r) {
-        int b = basicVars_[r];
-        DeltaRational val = DeltaRational(rhs_[r]);
-        for (int j = 0; j < numCols_; ++j) {
-            if (isBasic_[j]) continue;
-            if (matrix_[r][j] != 0) {
-                val += matrix_[r][j] * beta_[j];
-            }
+
+    for (int r = 0; r < tab_.numRows(); ++r) {
+        const SparseRow& row = tab_.row(r);
+        int xb = row.basicVar;
+
+        DeltaRational v(row.rhs);
+        for (const auto& e : row.entries) {
+            v += e.coeff * vars_[e.col].beta;
         }
-        beta_[b] = val;
+        vars_[xb].beta = v;
     }
+
     betaDirty_ = false;
+    rebuildViolationQueue();
 }
 
 DeltaRational GeneralSimplex::chooseValueWithinBounds(int var) const {
-    const auto& l = lower_[var].bound;
-    const auto& u = upper_[var].bound;
+    const auto& l = vars_[var].lower.bound;
+    const auto& u = vars_[var].upper.bound;
+
+    DeltaRational zero(0);
+
+    if ((!l.isFinite() || zero >= l.value) &&
+        (!u.isFinite() || zero <= u.value)) {
+        return zero;
+    }
 
     if (l.isFinite() && u.isFinite()) {
         DeltaRational mid = (l.value + u.value) / 2;
         if (mid >= l.value && mid <= u.value) return mid;
         return l.value;
     }
+
     if (l.isFinite()) return l.value;
     if (u.isFinite()) return u.value;
-    return DeltaRational(0);
+    return zero;
 }
 
 bool GeneralSimplex::violatesLower(int var) const {
-    return lower_[var].bound.isFinite() && beta_[var] < lower_[var].bound.value;
+    return vars_[var].lower.bound.isFinite() && vars_[var].beta < vars_[var].lower.bound.value;
 }
 
 bool GeneralSimplex::violatesUpper(int var) const {
-    return upper_[var].bound.isFinite() && beta_[var] > upper_[var].bound.value;
+    return vars_[var].upper.bound.isFinite() && vars_[var].beta > vars_[var].upper.bound.value;
 }
 
 bool GeneralSimplex::canIncrease(int var) const {
-    return !upper_[var].bound.isFinite() || beta_[var] < upper_[var].bound.value;
+    return !vars_[var].upper.bound.isFinite() || vars_[var].beta < vars_[var].upper.bound.value;
 }
 
 bool GeneralSimplex::canDecrease(int var) const {
-    return !lower_[var].bound.isFinite() || beta_[var] > lower_[var].bound.value;
+    return !vars_[var].lower.bound.isFinite() || vars_[var].beta > vars_[var].lower.bound.value;
 }
 
 bool GeneralSimplex::atLower(int var) const {
-    return lower_[var].bound.isFinite() && beta_[var] == lower_[var].bound.value;
+    return vars_[var].lower.bound.isFinite() && vars_[var].beta == vars_[var].lower.bound.value;
 }
 
 bool GeneralSimplex::atUpper(int var) const {
-    return upper_[var].bound.isFinite() && beta_[var] == upper_[var].bound.value;
+    return vars_[var].upper.bound.isFinite() && vars_[var].beta == vars_[var].upper.bound.value;
 }
 
 void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
-    assert(!isBasic_[nonBasicVar]);
-    DeltaRational delta = value - beta_[nonBasicVar];
-    for (int r = 0; r < numRows_; ++r) {
-        if (matrix_[r][nonBasicVar] != 0) {
-            beta_[basicVars_[r]] += matrix_[r][nonBasicVar] * delta;
+    assert(vars_[nonBasicVar].basicRow == -1);
+    DeltaRational delta = value - vars_[nonBasicVar].beta;
+    if (delta.isZero()) return;
+
+    const auto& colEntries = tab_.col(nonBasicVar).entries;
+    // snapshot copy to avoid issues if column is mutated (it shouldn't be here)
+    std::vector<ColEntry> affected(colEntries);
+
+    for (const auto& ce : affected) {
+        int row = ce.row;
+        int xb = tab_.row(row).basicVar;
+        mpq_class a = tab_.row(row).entries[ce.rowPos].coeff;
+        vars_[xb].beta += a * delta;
+        refreshViolationStatus(xb);
+    }
+
+    vars_[nonBasicVar].beta = value;
+}
+
+// ============================================================================
+// Violation queue (lazy enqueue only)
+// ============================================================================
+
+void GeneralSimplex::refreshViolationStatus(int var) {
+    if (vars_[var].basicRow == -1) return;
+    bool violated = violatesLower(var) || violatesUpper(var);
+    if (violated && !inViolationQueue_[var]) {
+        violatedQueue_.push_back(var);
+        inViolationQueue_[var] = true;
+    }
+}
+
+int GeneralSimplex::pickViolatedBasic() {
+    while (!violatedQueue_.empty()) {
+        int x = violatedQueue_.front();
+        violatedQueue_.pop_front();
+        inViolationQueue_[x] = false;
+
+        if (vars_[x].basicRow != -1 &&
+            (violatesLower(x) || violatesUpper(x))) {
+            return x;
         }
     }
-    beta_[nonBasicVar] = value;
+
+    // Fallback scan (mainly after recomputeBeta)
+    for (int xb : basicVars_) {
+        if (violatesLower(xb) || violatesUpper(xb)) {
+            return xb;
+        }
+    }
+    return -1;
+}
+
+void GeneralSimplex::rebuildViolationQueue() {
+    violatedQueue_.clear();
+    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    for (int xb : basicVars_) {
+        if (violatesLower(xb) || violatesUpper(xb)) {
+            violatedQueue_.push_back(xb);
+            inViolationQueue_[xb] = true;
+        }
+    }
 }
 
 // ============================================================================
@@ -205,7 +409,6 @@ GeneralSimplex::Result GeneralSimplex::check() {
     }
     if (betaDirty_) {
         recomputeBeta();
-        betaDirty_ = false;
     }
     return checkInternal();
 }
@@ -214,7 +417,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
     const int MAX_ITERATIONS = 10000;
 
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
-        int xi = findViolatedBasicVar();
+        int xi = pickViolatedBasic();
         if (xi == -1) {
             conflict_.clear();
             return Result::Sat;
@@ -226,53 +429,60 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
                 explainLowerConflict(xi);
                 return Result::Unsat;
             }
-            pivotAndUpdate(xi, xj, lower_[xi].bound.value);
+            pivotAndUpdate(xi, xj, vars_[xi].lower.bound.value);
         } else if (violatesUpper(xi)) {
             int xj = findEnteringVarToDecrease(xi);
             if (xj == -1) {
                 explainUpperConflict(xi);
                 return Result::Unsat;
             }
-            pivotAndUpdate(xi, xj, upper_[xi].bound.value);
+            pivotAndUpdate(xi, xj, vars_[xi].upper.bound.value);
         }
     }
 
-    // Should not reach here with Bland's rule on rational LRA
     std::cerr << "[GeneralSimplex] Warning: iteration limit reached" << std::endl;
     conflict_.clear();
     return Result::Unknown;
 }
 
-int GeneralSimplex::findViolatedBasicVar() const {
-    for (int r = 0; r < numRows_; ++r) {
-        int b = basicVars_[r];
-        if (violatesLower(b) || violatesUpper(b)) {
-            return b;
-        }
-    }
-    return -1;
-}
+// ============================================================================
+// Entering variable selection
+// ============================================================================
 
 int GeneralSimplex::findEnteringVarToIncrease(int basicVar) const {
     int r = rowOfBasic(basicVar);
-    for (int j = 0; j < numCols_; ++j) {
-        if (isBasic_[j]) continue;
-        mpq_class a = matrix_[r][j];
-        if (a > 0 && canIncrease(j)) return j;
-        if (a < 0 && canDecrease(j)) return j;
+    int best = -1;
+
+    for (const auto& e : tab_.row(r).entries) {
+        int xj = e.col;
+        const mpq_class& a = e.coeff;
+
+        bool eligible = (a > 0 && canIncrease(xj)) || (a < 0 && canDecrease(xj));
+        if (!eligible) continue;
+
+        if (best == -1 || xj < best) {
+            best = xj;  // Bland's rule
+        }
     }
-    return -1;
+    return best;
 }
 
 int GeneralSimplex::findEnteringVarToDecrease(int basicVar) const {
     int r = rowOfBasic(basicVar);
-    for (int j = 0; j < numCols_; ++j) {
-        if (isBasic_[j]) continue;
-        mpq_class a = matrix_[r][j];
-        if (a < 0 && canIncrease(j)) return j;
-        if (a > 0 && canDecrease(j)) return j;
+    int best = -1;
+
+    for (const auto& e : tab_.row(r).entries) {
+        int xj = e.col;
+        const mpq_class& a = e.coeff;
+
+        bool eligible = (a < 0 && canIncrease(xj)) || (a > 0 && canDecrease(xj));
+        if (!eligible) continue;
+
+        if (best == -1 || xj < best) {
+            best = xj;  // Bland's rule
+        }
     }
-    return -1;
+    return best;
 }
 
 // ============================================================================
@@ -282,61 +492,103 @@ int GeneralSimplex::findEnteringVarToDecrease(int basicVar) const {
 void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
                                     const DeltaRational& target) {
     int r = rowOfBasic(leavingBasic);
-    mpq_class aij = matrix_[r][enteringNonBasic];
+    mpq_class aij = tab_.getCoeff(r, enteringNonBasic);
     assert(aij != 0);
 
-    DeltaRational theta = (target - beta_[leavingBasic]) / aij;
+    DeltaRational theta = (target - vars_[leavingBasic].beta) / aij;
 
-    // Update assignment
-    beta_[leavingBasic] = target;
-    beta_[enteringNonBasic] += theta;
-    for (int k = 0; k < numRows_; ++k) {
-        if (basicVars_[k] == leavingBasic) continue;
-        if (matrix_[k][enteringNonBasic] != 0) {
-            beta_[basicVars_[k]] += matrix_[k][enteringNonBasic] * theta;
+    // Update beta using snapshot of entering column
+    std::vector<ColEntry> affected(tab_.col(enteringNonBasic).entries);
+
+    for (const auto& ce : affected) {
+        int row = ce.row;
+        int xb = tab_.row(row).basicVar;
+        mpq_class a = tab_.row(row).entries[ce.rowPos].coeff;
+
+        if (xb == leavingBasic) {
+            vars_[xb].beta = target;
+        } else {
+            vars_[xb].beta += a * theta;
         }
+        refreshViolationStatus(xb);
     }
 
-    // Pivot in tableau
+    vars_[enteringNonBasic].beta += theta;
+
     pivot(leavingBasic, enteringNonBasic);
+
+    refreshViolationStatus(leavingBasic);  // now non-basic, harmless
+    refreshViolationStatus(enteringNonBasic);  // now basic
 }
 
 void GeneralSimplex::pivot(int leaving, int entering) {
     int r = rowOfBasic(leaving);
-    mpq_class d = matrix_[r][entering];
+    mpq_class d = tab_.getCoeff(r, entering);
     assert(d != 0);
 
     mpq_class inv_d = 1 / d;
 
-    // Update row r: solve for entering var
-    // x_entering = (x_leaving - rhs_r - sum_{k!=entering} a_rk * x_k) / d
-    // But we want: x_entering = new_rhs + sum new_coeff * x_k
-    // where new_coeff for leaving var is 1/d, others are -a_rk/d
-    matrix_[r][entering] = inv_d;  // coefficient of leaving var
-    rhs_[r] = -rhs_[r] * inv_d;
-    for (int k = 0; k < numCols_; ++k) {
-        if (k == entering) continue;
-        matrix_[r][k] = -matrix_[r][k] * inv_d;
-    }
+    // Copy old pivot row
+    SparseRow oldPivot = tab_.row(r);
 
-    // Eliminate entering from all other rows
-    for (int p = 0; p < numRows_; ++p) {
-        if (p == r) continue;
-        mpq_class a = matrix_[p][entering];
-        if (a == 0) continue;
-        // row_p -= a * row_r
-        for (int k = 0; k < numCols_; ++k) {
-            if (k == entering) continue;
-            matrix_[p][k] -= a * matrix_[r][k];
+    // Build new pivot row: entering = -rhs/a + (1/a)*leaving + Σ(-coeff/a)*x
+    std::vector<std::pair<int, mpq_class>> newEntries;
+    newEntries.reserve(oldPivot.entries.size());
+
+    mpq_class newRhs = -oldPivot.rhs * inv_d;
+    newEntries.push_back({leaving, inv_d});
+
+    for (const auto& e : oldPivot.entries) {
+        int col = e.col;
+        if (col == entering) continue;
+        mpq_class coeff = -e.coeff * inv_d;
+        if (coeff != 0) {
+            newEntries.push_back({col, coeff});
         }
-        rhs_[p] -= a * rhs_[r];
-        matrix_[p][entering] = -a * matrix_[r][entering];  // = -a/d
     }
 
-    // Update basic/non-basic tracking
-    isBasic_[leaving] = false;
-    isBasic_[entering] = true;
+    // Snapshot of rows containing entering before any mutation
+    std::vector<ColEntry> affected(tab_.col(entering).entries);
+
+    // Update all affected non-pivot rows
+    for (const auto& ce : affected) {
+        int row = ce.row;
+        if (row == r) continue;
+
+        mpq_class c = tab_.getCoeff(row, entering);
+        if (c == 0) continue;
+
+        tab_.eraseCoeff(row, entering);
+
+        // row_rhs += c * newRhs
+        tab_.row(row).rhs += c * newRhs;
+
+        // row += c * newEntries
+        for (const auto& [col, coeff] : newEntries) {
+            tab_.addCoeff(row, col, c * coeff);
+        }
+
+        tab_.row(row).version++;
+
+        int xb = tab_.row(row).basicVar;
+        refreshViolationStatus(xb);
+    }
+
+    // Replace pivot row
+    tab_.replaceRow(r, entering, newRhs, newEntries);
+
+    // Update basis metadata
+    vars_[leaving].basicRow = -1;
+    vars_[entering].basicRow = r;
     basicVars_[r] = entering;
+    tab_.row(r).basicVar = entering;
+
+    markBasicSwitch(leaving, entering);
+
+    // Invariant: entering is now basic, so its column must be empty
+    assert(tab_.col(entering).entries.empty());
+
+    checkInvariants();
 }
 
 // ============================================================================
@@ -347,19 +599,19 @@ void GeneralSimplex::explainLowerConflict(int basicVar) {
     conflict_.clear();
     int r = rowOfBasic(basicVar);
 
-    assert(lower_[basicVar].bound.isFinite());
-    assert(lower_[basicVar].reason.has_value());
+    assert(vars_[basicVar].lower.bound.isFinite());
+    assert(vars_[basicVar].lower.reason.has_value());
     conflict_.push_back({basicVar, true});
 
-    for (int j = 0; j < numCols_; ++j) {
-        if (isBasic_[j]) continue;
-        mpq_class a = matrix_[r][j];
-        if (a > 0 && atUpper(j)) {
-            assert(upper_[j].reason.has_value());
-            conflict_.push_back({j, false});
-        } else if (a < 0 && atLower(j)) {
-            assert(lower_[j].reason.has_value());
-            conflict_.push_back({j, true});
+    for (const auto& e : tab_.row(r).entries) {
+        int xj = e.col;
+        const mpq_class& a = e.coeff;
+        if (a > 0 && atUpper(xj)) {
+            assert(vars_[xj].upper.reason.has_value());
+            conflict_.push_back({xj, false});
+        } else if (a < 0 && atLower(xj)) {
+            assert(vars_[xj].lower.reason.has_value());
+            conflict_.push_back({xj, true});
         }
     }
 }
@@ -368,39 +620,35 @@ void GeneralSimplex::explainUpperConflict(int basicVar) {
     conflict_.clear();
     int r = rowOfBasic(basicVar);
 
-    assert(upper_[basicVar].bound.isFinite());
-    assert(upper_[basicVar].reason.has_value());
+    assert(vars_[basicVar].upper.bound.isFinite());
+    assert(vars_[basicVar].upper.reason.has_value());
     conflict_.push_back({basicVar, false});
 
-    for (int j = 0; j < numCols_; ++j) {
-        if (isBasic_[j]) continue;
-        mpq_class a = matrix_[r][j];
-        if (a > 0 && atLower(j)) {
-            assert(lower_[j].reason.has_value());
-            conflict_.push_back({j, true});
-        } else if (a < 0 && atUpper(j)) {
-            assert(upper_[j].reason.has_value());
-            conflict_.push_back({j, false});
+    for (const auto& e : tab_.row(r).entries) {
+        int xj = e.col;
+        const mpq_class& a = e.coeff;
+        if (a > 0 && atLower(xj)) {
+            assert(vars_[xj].lower.reason.has_value());
+            conflict_.push_back({xj, true});
+        } else if (a < 0 && atUpper(xj)) {
+            assert(vars_[xj].upper.reason.has_value());
+            conflict_.push_back({xj, false});
         }
     }
 }
 
 void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower) {
     conflict_.clear();
-    // The conflicting bounds are the new bound (which has a reason) and
-    // the opposing existing bound (which also has a reason).
     if (newBoundIsLower) {
-        assert(lower_[var].bound.isFinite() || true);  // new lower is finite by contract
-        assert(upper_[var].bound.isFinite());
-        assert(upper_[var].reason.has_value());
-        conflict_.push_back({var, true});   // the new lower bound
-        conflict_.push_back({var, false});  // the existing upper bound
+        assert(vars_[var].upper.bound.isFinite());
+        assert(vars_[var].upper.reason.has_value());
+        conflict_.push_back({var, true});
+        conflict_.push_back({var, false});
     } else {
-        assert(upper_[var].bound.isFinite() || true);  // new upper is finite by contract
-        assert(lower_[var].bound.isFinite());
-        assert(lower_[var].reason.has_value());
-        conflict_.push_back({var, false});  // the new upper bound
-        conflict_.push_back({var, true});   // the existing lower bound
+        assert(vars_[var].lower.bound.isFinite());
+        assert(vars_[var].lower.reason.has_value());
+        conflict_.push_back({var, false});
+        conflict_.push_back({var, true});
     }
 }
 
@@ -416,8 +664,8 @@ void GeneralSimplex::pop() {
     assert(!trail_.empty());
     auto& entries = trail_.back();
     for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
-        if (it->isLower) lower_[it->var] = it->oldBound;
-        else             upper_[it->var] = it->oldBound;
+        if (it->isLower) vars_[it->var].lower = it->oldBound;
+        else             vars_[it->var].upper = it->oldBound;
     }
     trail_.pop_back();
     betaDirty_ = true;
@@ -428,33 +676,31 @@ void GeneralSimplex::pop() {
 // ============================================================================
 
 void GeneralSimplex::resetActiveBounds() {
-    for (int i = 0; i < numCols_; ++i) {
-        lower_[i] = BoundInfo(BoundValue::negInf());
-        upper_[i] = BoundInfo(BoundValue::posInf());
+    for (int i = 0; i < static_cast<int>(vars_.size()); ++i) {
+        vars_[i].lower = BoundInfo(BoundValue::negInf());
+        vars_[i].upper = BoundInfo(BoundValue::posInf());
     }
-    // Clear active bound trail frame (first frame is base, keep it)
     if (!trail_.empty()) {
         trail_[0].clear();
     }
     betaDirty_ = true;
     conflict_.clear();
     hasImmediateConflict_ = false;
+    violatedQueue_.clear();
+    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
 }
 
 void GeneralSimplex::reset() {
     vars_.clear();
-    matrix_.clear();
-    rhs_.clear();
+    tab_ = SparseTableau();
     basicVars_.clear();
-    isBasic_.clear();
-    beta_.clear();
-    lower_.clear();
-    upper_.clear();
+    nonBasicVars_.clear();
+    nonBasicPos_.clear();
+    violatedQueue_.clear();
+    inViolationQueue_.clear();
     conflict_.clear();
     trail_.clear();
-    trail_.push_back({});  // base frame
-    numRows_ = 0;
-    numCols_ = 0;
+    trail_.push_back({});
     betaDirty_ = true;
     hasImmediateConflict_ = false;
 }
@@ -464,21 +710,23 @@ void GeneralSimplex::reset() {
 // ============================================================================
 
 DeltaRational GeneralSimplex::value(int var) const {
-    assert(var >= 0 && var < numCols_);
-    return beta_[var];
+    assert(var >= 0 && var < static_cast<int>(vars_.size()));
+    return vars_[var].beta;
 }
 
 bool GeneralSimplex::isBasic(int var) const {
-    assert(var >= 0 && var < numCols_);
-    return isBasic_[var];
+    assert(var >= 0 && var < static_cast<int>(vars_.size()));
+    return vars_[var].basicRow != -1;
+}
+
+bool GeneralSimplex::debugCheckInvariants() const {
+    checkInvariants();
+    return true;
 }
 
 int GeneralSimplex::rowOfBasic(int var) const {
-    for (int r = 0; r < numRows_; ++r) {
-        if (basicVars_[r] == var) return r;
-    }
-    assert(false && "Variable is not basic");
-    return -1;
+    assert(vars_[var].basicRow != -1);
+    return vars_[var].basicRow;
 }
 
 } // namespace nlcolver

@@ -1,12 +1,14 @@
 #pragma once
 
 #include "DeltaRational.h"
+#include "SparseTableau.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 #include <vector>
 #include <string>
 #include <optional>
 #include <unordered_map>
+#include <deque>
 
 namespace nlcolver {
 
@@ -64,6 +66,11 @@ public:
     /** Add a linear constraint: p(x) ~ c where p(x) = sum a_j * x_j.
      *  Internally creates auxiliary var s = p(x) - c and a tableau row.
      *  Returns the auxiliary var index, or -1 on error.
+     *
+     *  Semantic contract (preserved from dense version):
+     *    addConstraint(terms, rhs) creates aux s with
+     *        s = -rhs + Σ terms[i].coeff * terms[i].var
+     *    So s = 0  <=>  Σ terms[i].coeff * terms[i].var = rhs
      */
     int addConstraint(const std::vector<std::pair<int, mpq_class>>& terms,
                       const mpq_class& rhs);
@@ -72,10 +79,12 @@ public:
     // Incremental bound assertion
     // -------------------------------------------------------------------------
 
-    /** Assert lower bound. Must be finite with valid reason. */
+    /** Assert lower bound. Must be finite with valid reason.
+     *  Returns false if immediate bound conflict (lower > upper). */
     bool assertLower(int var, const BoundInfo& info);
 
-    /** Assert upper bound. Must be finite with valid reason. */
+    /** Assert upper bound. Must be finite with valid reason.
+     *  Returns false if immediate bound conflict (upper < lower). */
     bool assertUpper(int var, const BoundInfo& info);
 
     // -------------------------------------------------------------------------
@@ -126,45 +135,57 @@ public:
     // Diagnostics
     // -------------------------------------------------------------------------
     int numVars() const { return static_cast<int>(vars_.size()); }
-    int numRows() const { return numRows_; }
+    int numRows() const { return tab_.numRows(); }
     bool isBasic(int var) const;
 
+    // -------------------------------------------------------------------------
+    // Debug / testing interface
+    // -------------------------------------------------------------------------
+    /** Verify all sparse tableau invariants. Returns true, or asserts in debug. */
+    bool debugCheckInvariants() const;
+
 private:
-    // -------------------------------------------------------------------------
-    // Variable info
-    // -------------------------------------------------------------------------
-    struct VarInfo {
+    // ========================================================================
+    // Variable state
+    // ========================================================================
+    struct VarState {
         std::string name;
+        int basicRow = -1;   // -1 means non-basic
+        BoundInfo lower;
+        BoundInfo upper;
+        DeltaRational beta;
     };
-    std::vector<VarInfo> vars_;
 
-    // -------------------------------------------------------------------------
-    // Tableau state (persistent)
-    // -------------------------------------------------------------------------
-    // Row r:  basicVars_[r] = rhs_[r] + sum_j matrix_[r][j] * x_j
-    // matrix_[r][j] is meaningful for non-basic vars only.
-    std::vector<std::vector<mpq_class>> matrix_;  // m x n
-    std::vector<mpq_class> rhs_;                  // m
-    std::vector<int> basicVars_;                  // m
-    std::vector<bool> isBasic_;                   // n
-    int numRows_ = 0;
-    int numCols_ = 0;
+    std::vector<VarState> vars_;
 
-    // Current assignment
-    std::vector<DeltaRational> beta_;
+    // ========================================================================
+    // Sparse indexed tableau
+    // ========================================================================
+    SparseTableau tab_;
+
+    // row -> basic var
+    std::vector<int> basicVars_;
+
+    // non-basic variable set with O(1) membership and update
+    std::vector<int> nonBasicVars_;
+    std::vector<int> nonBasicPos_;  // var -> index in nonBasicVars_, -1 if basic
+
+    // ========================================================================
+    // Violation queue (lazy)
+    // ========================================================================
+    std::deque<int> violatedQueue_;
+    std::vector<bool> inViolationQueue_;
+
+    // ========================================================================
+    // Other state
+    // ========================================================================
     bool betaDirty_ = true;
-
-    // Bounds
-    std::vector<BoundInfo> lower_;
-    std::vector<BoundInfo> upper_;
-
-    // Conflict
     std::vector<BoundReason> conflict_;
     bool hasImmediateConflict_ = false;
 
-    // -------------------------------------------------------------------------
+    // ========================================================================
     // Trail for push/pop
-    // -------------------------------------------------------------------------
+    // ========================================================================
     struct TrailEntry {
         int var;
         bool isLower;
@@ -172,12 +193,31 @@ private:
     };
     std::vector<std::vector<TrailEntry>> trail_;
 
-    // -------------------------------------------------------------------------
-    // Internal helpers
-    // -------------------------------------------------------------------------
-    void buildInitialTableau(const std::vector<std::vector<std::pair<int, mpq_class>>>& allTerms,
-                             const std::vector<mpq_class>& allRhs);
-    void refactorizeTableau();  // Gauss-Jordan: basic columns -> identity
+    // ========================================================================
+    // Linear form for rewriteToNonBasic
+    // ========================================================================
+    struct LinearForm {
+        mpq_class constant;
+        std::vector<std::pair<int, mpq_class>> terms;  // var, coeff
+    };
+
+    // ========================================================================
+    // Invariants (debug only)
+    // ========================================================================
+    void checkInvariants() const;
+
+    // ========================================================================
+    // Basis helpers
+    // ========================================================================
+    void makeBasicWithoutPivot(int var, int row);
+    void markBasicSwitch(int leaving, int entering);
+    void removeFromNonBasic(int var);
+
+    LinearForm rewriteToNonBasic(const LinearForm& input);
+
+    // ========================================================================
+    // Beta computation and helpers
+    // ========================================================================
     void recomputeBeta();
     DeltaRational chooseValueWithinBounds(int var) const;
 
@@ -189,11 +229,13 @@ private:
     bool atLower(int var) const;
     bool atUpper(int var) const;
 
+    // Violation queue
+    void refreshViolationStatus(int var);
+    int pickViolatedBasic();
+    void rebuildViolationQueue();
+
     // Core check loop
     Result checkInternal();
-
-    // Find a basic variable that violates its bounds. Returns var index or -1.
-    int findViolatedBasicVar() const;
 
     // Find entering var for violated basic var
     int findEnteringVarToIncrease(int basicVar) const;
