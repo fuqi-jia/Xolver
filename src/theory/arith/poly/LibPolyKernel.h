@@ -5,6 +5,7 @@
 #ifdef NLCOLVER_HAS_LIBPOLY
 
 #include <polyxx.h>
+#include <optional>
 #include <unordered_map>
 
 namespace nlcolver {
@@ -38,12 +39,19 @@ public:
     std::vector<std::string> variables(PolyId a) const override;
     bool eq(PolyId a, PolyId b) const override;
     int sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const override;
+    std::optional<mpz_class> evalInteger(
+        PolyId a,
+        const std::unordered_map<std::string, mpz_class>& sample) const override;
+    std::optional<int> degree(PolyId a, std::string_view var) const override;
+    std::optional<std::vector<mpz_class>> getIntegerCoefficients(
+        PolyId a, std::string_view var) const override;
     std::string toString(PolyId a) const override;
 
 private:
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
     std::unordered_map<std::string, poly::Variable> varMap_;
+    std::unordered_map<lp_variable_t, std::string> revVarMap_;
 
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
