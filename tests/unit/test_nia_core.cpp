@@ -249,6 +249,164 @@ TEST_CASE("NIA-Core: x^2 - 4 != 0, 0<=x<=10 -> sat (x=3)") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
+TEST_CASE("NIA-Core: x^2 <= 4 -> sat (square bound)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (<= (* x x) 4))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("NIA-Core: x^2 <= -1 -> unsat (square bound)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (<= (* x x) -1))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: x^2 = 49 -> sat (square bound)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (= (* x x) 49))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("NIA-Core: x^2 != 4, 0<=x<=10 -> sat (square exclusion)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (<= x 10))\n"
+        "(assert (not (= (* x x) 4)))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+// ---------------------------------------------------------------------------
+// Sum-of-squares bound + bounded enumeration
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: x^2 + y^2 = 65, x>=0, y>=0 -> sat (sos bound)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (>= y 0))\n"
+        "(assert (= (+ (* x x) (* y y)) 65))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("NIA-Core: x^2 + y^2 = 5000, 0<=x,y<=100 -> sat (sos bound + enumeration)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (<= x 100))\n"
+        "(assert (>= y 0))\n"
+        "(assert (<= y 100))\n"
+        "(assert (= (+ (* x x) (* y y)) 5000))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("NIA-Core: x^2 + y^2 <= -1 -> unsat (sos conflict)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (<= (+ (* x x) (* y y)) -1))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+// ---------------------------------------------------------------------------
+// Interval evaluation pruning
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: 0<=x<=100000, x^3+1<=0 -> unsat (interval pruning)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (<= x 100000))\n"
+        "(assert (<= (+ (* x (* x x)) 1) 0))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: 0<=x<=2, x^3-8<=0 -> sat (interval not violated)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (<= x 2))\n"
+        "(assert (<= (- (* x (* x x)) 8) 0))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
 // ---------------------------------------------------------------------------
 // Category D: AlgebraicIntegerReasoner boundary tests
 // ---------------------------------------------------------------------------

@@ -107,8 +107,9 @@ public:
         } else if (logic == "QF_NIA" || logic == "NIA") {
             auto polyKernel = createPolynomialKernel();
             polyKernelRaw = polyKernel.get();
-            theoryManager.registerSolver(
-                std::make_unique<NiaSolver>(std::move(polyKernel)));
+            auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+            nia->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(nia));
         } else {
             // Default: LRA covers most linear arithmetic; pure boolean works too.
             theoryManager.registerSolver(std::make_unique<LraSolver>());

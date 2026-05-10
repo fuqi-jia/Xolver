@@ -126,3 +126,22 @@ TEST_CASE("DomainStore: allFinite requires both bounds or finite set") {
     ds.addUpperBound("x", mpz_class(5), reason(2));
     CHECK(ds.allFinite({"x"}));
 }
+
+TEST_CASE("DomainStore: finite set fully excluded -> empty") {
+    DomainStore ds;
+    ds.restrictToFiniteSet("x", {mpz_class(1), mpz_class(2), mpz_class(3)}, reason(1));
+    ds.excludeValue("x", mpz_class(1), reason(2));
+    ds.excludeValue("x", mpz_class(2), reason(3));
+    ds.excludeValue("x", mpz_class(3), reason(4));
+    CHECK(ds.isEmpty("x"));
+    CHECK(ds.isEmpty());
+
+    auto conflict = ds.buildEmptyDomainConflict();
+    REQUIRE(!conflict.clause.empty());
+    // Should contain negated reasons from finite set and exclusions
+    bool hasR1 = false;
+    for (const auto& lit : conflict.clause) {
+        if (lit.var == 1 && !lit.sign) hasR1 = true;
+    }
+    CHECK(hasR1);
+}

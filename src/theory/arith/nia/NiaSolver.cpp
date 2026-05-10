@@ -1,5 +1,6 @@
 #include "theory/arith/nia/NiaSolver.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/TheoryLemmaDatabase.h"
 #include <unordered_set>
 
 namespace nlcolver {
@@ -11,6 +12,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       validator_(*kernel_),
       univariate_(*kernel_),
       linearDomain_(*kernel_),
+      squareBound_(*kernel_),
+      sumOfSquaresBound_(*kernel_),
+      intervalEvaluator_(*kernel_),
       algebraic_(*kernel_),
       bounded_(*kernel_),
       localSearch_(*kernel_) {}
@@ -24,6 +28,8 @@ void NiaSolver::reset() {
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
+    emittedSplits_.clear();
+    branchCountPerVar_.clear();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -118,7 +124,31 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
-    // 5. Univariate reasoning
+    // 5. Square bound reasoning
+    auto sr = squareBound_.run(normalized, domains_);
+    if (sr.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*sr.conflict);
+    }
+    if (sr.kind == NiaReasoningKind::FatalUnknown) {
+        return TheoryCheckResult::unknown();
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+
+    // 6. Sum-of-squares bound reasoning
+    auto ssr = sumOfSquaresBound_.run(normalized, domains_);
+    if (ssr.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*ssr.conflict);
+    }
+    if (ssr.kind == NiaReasoningKind::FatalUnknown) {
+        return TheoryCheckResult::unknown();
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+
+    // 7. Univariate reasoning
     auto ur = univariate_.run(normalized, domains_, lemmaDb);
     if (ur.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*ur.conflict);
@@ -133,7 +163,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
-    // 6. Algebraic reasoning
+    // 8. Algebraic reasoning
     auto ar = algebraic_.run(normalized, domains_, lemmaDb);
     if (ar.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*ar.conflict);
@@ -148,7 +178,16 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
-    // 7. Bounded complete solver
+    // 9. Interval evaluation (single-variable only)
+    auto ir = intervalEvaluator_.run(normalized, domains_);
+    if (ir.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*ir.conflict);
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+
+    // 10. Bounded complete solver
     auto allVars = collectVars(normalized, *kernel_);
     if (domains_.allFinite(allVars)) {
         auto br = bounded_.solve(normalized, domains_, validator_, lemmaDb);
@@ -162,7 +201,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         // UnknownBudget / UnknownUnsupported: continue pipeline
     }
 
-    // 8. Local search SAT finder
+    // 10. Local search SAT finder
     if (auto model = localSearch_.tryFindModel(normalized, domains_)) {
         if (validator_.validate(*model, normalized)) {
             currentModel_ = *model;
@@ -170,7 +209,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         }
     }
 
-    // 9. Branch split or Unknown
+    // 11. Branch split or Unknown
     if (auto lemma = buildBranchLemma(normalized, domains_, lemmaDb)) {
         return TheoryCheckResult::mkLemma(*lemma);
     }
@@ -191,12 +230,100 @@ bool NiaSolver::relationSatisfied(const mpq_class& val, Relation rel) const {
 }
 
 std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
-    const std::vector<NormalizedNiaConstraint>& /*constraints*/,
-    const DomainStore& /*domains*/,
-    TheoryLemmaDatabase& /*lemmaDb*/) {
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    const DomainStore& domains,
+    TheoryLemmaDatabase& lemmaDb) {
 
-    // Phase NIA-Core: branch lemma generation is a skeleton.
-    // Globally valid integer splits: x <= k ∨ x >= k+1
+    if (!registry_) return std::nullopt;
+
+    auto allVars = collectVars(constraints, *kernel_);
+    if (allVars.empty()) return std::nullopt;
+
+    // Collect candidate variables with their domain info
+    struct Candidate {
+        std::string var;
+        bool hasLower;
+        bool hasUpper;
+        mpz_class lower;
+        mpz_class upper;
+        mpz_class rangeSize; // upper - lower, or 0 if unbounded
+        int priority; // 0 = both bounds, 1 = one bound, 2 = no bounds
+    };
+    std::vector<Candidate> candidates;
+
+    for (const auto& var : allVars) {
+        const IntDomain* d = domains.getDomain(var);
+        Candidate c{var, false, false, 0, 0, 0, 2};
+        if (d) {
+            c.hasLower = d->hasLower;
+            c.hasUpper = d->hasUpper;
+            if (c.hasLower) c.lower = d->lower.value;
+            if (c.hasUpper) c.upper = d->upper.value;
+            if (c.hasLower && c.hasUpper) {
+                c.rangeSize = c.upper - c.lower;
+                c.priority = 0;
+                // Skip singleton domains (already fixed)
+                if (c.rangeSize <= 0) continue;
+            } else if (c.hasLower || c.hasUpper) {
+                c.priority = 1;
+            }
+        }
+        candidates.push_back(c);
+    }
+
+    if (candidates.empty()) return std::nullopt;
+
+    // Sort: priority first, then larger range size
+    std::sort(candidates.begin(), candidates.end(),
+        [](const Candidate& a, const Candidate& b) {
+            if (a.priority != b.priority) return a.priority < b.priority;
+            return a.rangeSize > b.rangeSize;
+        });
+
+    for (const auto& cand : candidates) {
+        mpz_class k;
+        if (cand.hasLower && cand.hasUpper) {
+            k = (cand.lower + cand.upper) / 2;
+        } else if (cand.hasLower) {
+            k = cand.lower;
+        } else if (cand.hasUpper) {
+            k = cand.upper - 1;
+        } else {
+            // Unbounded: only center split at k=0
+            k = 0;
+        }
+
+        const IntDomain* d = domains.getDomain(cand.var);
+        bool hasBothBounds = d && d->hasLower && d->hasUpper;
+        bool isUnbounded = !cand.hasLower && !cand.hasUpper;
+        int& count = branchCountPerVar_[cand.var];
+        if (isUnbounded && count >= MAX_UNBOUNDED_SPLITS) continue;
+        if (!hasBothBounds && !isUnbounded && count >= MAX_SINGLE_BOUND_SPLITS) continue;
+
+        // Duplicate suppression: skip if already emitted
+        BranchSplitKey key{cand.var, k};
+        if (emittedSplits_.count(key)) continue;
+
+        PolyId xPoly = kernel_->mkVar(cand.var);
+
+        // x <= k
+        SatLit litLeq = registry_->getOrCreatePolynomialAtom(
+            xPoly, Relation::Leq, mpq_class(k), TheoryId::NIA);
+
+        // x >= k+1
+        SatLit litGeq = registry_->getOrCreatePolynomialAtom(
+            xPoly, Relation::Geq, mpq_class(k + 1), TheoryId::NIA);
+
+        TheoryLemma lemma{{litLeq, litGeq}};
+
+        if (lemmaDb.contains(lemma)) continue;
+        lemmaDb.insertIfNew(lemma);
+        emittedSplits_.insert(key);
+        ++count;
+
+        return lemma;
+    }
+
     return std::nullopt;
 }
 
