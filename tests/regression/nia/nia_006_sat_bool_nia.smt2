@@ -1,0 +1,5 @@
+(set-logic QF_NIA)
+(declare-const p Bool)
+(declare-const x Int)
+(assert (or p (= (* x x) 4)))
+(check-sat)

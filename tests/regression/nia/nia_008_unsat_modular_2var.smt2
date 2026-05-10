@@ -1,0 +1,5 @@
+(set-logic QF_NIA)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (+ (* x x) (* y y)) 3))
+(check-sat)

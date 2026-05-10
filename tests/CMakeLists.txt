@@ -23,6 +23,8 @@ if(UNIT_TEST_SOURCES)
         PRIVATE
             nlcolver_core
             doctest::doctest
+            ${GMP_LIBRARIES}
+            gmpxx
     )
     target_include_directories(nlcolver_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME unit COMMAND nlcolver_unit_tests)

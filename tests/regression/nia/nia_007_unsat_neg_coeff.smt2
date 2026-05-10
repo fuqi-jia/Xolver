@@ -1,0 +1,5 @@
+(set-logic QF_NIA)
+(declare-const x Int)
+(assert (<= (- (* 3 x)) 5))
+(assert (>= (- (* 3 x)) 5))
+(check-sat)
