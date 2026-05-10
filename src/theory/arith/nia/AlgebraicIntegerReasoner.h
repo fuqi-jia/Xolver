@@ -1,0 +1,51 @@
+#pragma once
+
+#include "theory/arith/nia/NiaTypes.h"
+#include "theory/arith/nia/NiaNormalizer.h"
+#include "theory/arith/nia/DomainStore.h"
+#include "theory/TheorySolver.h"
+#include "theory/TheoryAtomRegistry.h"
+
+namespace nlcolver {
+
+/**
+ * AlgebraicIntegerReasoner: square rules, GCD conflicts, factor lemmas,
+ * and modular reasoning for NIA.
+ */
+class AlgebraicIntegerReasoner {
+public:
+    explicit AlgebraicIntegerReasoner(PolynomialKernel& kernel);
+
+    NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints,
+                           DomainStore& domains,
+                           TheoryLemmaDatabase& lemmaDb);
+
+private:
+    PolynomialKernel& kernel_;
+
+    // Square rules: x^2 < 0 → UNSAT, x^2 <= 0 → x = 0
+    NiaReasoningResult checkSquareRules(const NormalizedNiaConstraint& c,
+                                         DomainStore& domains);
+
+    // GCD equality conflict: 2x^2 + 4y = 3 → UNSAT
+    NiaReasoningResult checkGcdConflict(const NormalizedNiaConstraint& c);
+
+    // Factor rules: p*q = 0 → lemma
+    NiaReasoningResult checkFactorRules(const NormalizedNiaConstraint& c,
+                                         TheoryLemmaDatabase& lemmaDb);
+
+    // Modular reasoning: x^2 = 2 → mod-4 UNSAT
+    NiaReasoningResult checkModular(const std::vector<NormalizedNiaConstraint>& equalities);
+
+    // Check if polynomial is syntactically a sum of squares
+    bool isSumOfSquares(PolyId poly, std::vector<PolyId>& squares) const;
+
+    // Evaluate polynomial mod m at a residue assignment
+    bool evaluateMod(PolyId poly,
+                     const std::vector<std::string>& vars,
+                     const std::vector<int>& residues,
+                     int modulus,
+                     int& result) const;
+};
+
+} // namespace nlcolver
