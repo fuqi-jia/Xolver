@@ -8,7 +8,9 @@ A research-grade SMT/OMT solver platform with dual-engine architecture:
 
 ## Status
 
-🚧 **Early development** — Stage A (Reproducible SMT Core) in progress.
+**Stages A–E functional, Stage I (NIA-Core) MVP complete.**
+
+Core infrastructure (boolean, LRA, LIA, NRA) is operational. NIA-Core (Nonlinear Integer Arithmetic) now has a working pipeline covering univariate root finding, algebraic reasoning (square rules, GCD conflict, modular reasoning), bounded complete enumeration, and sound conflict generation.
 
 ## Architecture Overview
 
@@ -21,7 +23,8 @@ NLColver Core
 ├── SAT Engine (CaDiCaL)             (CDCL boolean reasoning)
 ├── Theory Solvers
 │   ├── LRA / LIA                    (rational simplex)
-│   └── NRA (CAlC / CAC)             (exact CAD-like)
+│   ├── NRA (CAlC / CAC)             (exact CAD-like)
+│   └── NIA (NIA-Core)               (univariate RRT + algebraic + bounded)
 ├── Polynomial Kernel (libpoly)      (algebraic numbers, root isolation)
 ├── Local Search Advisor             (heuristic suggestion only)
 ├── Proof / Certificate              (drat-lrat + cell certificates)
@@ -43,6 +46,25 @@ cmake ..
 cmake --build .
 ctest
 ```
+
+## Verified Logics (end-to-end)
+
+| Logic | Example | Result |
+|-------|---------|--------|
+| QF_BOOL | `p ∧ q` | **sat** |
+| QF_BOOL | `p ∧ ¬p` | **unsat** |
+| QF_LRA | `x>0 ∧ x<10` | **sat** |
+| QF_LRA | `x>0 ∧ x<0` | **unsat** |
+| QF_LIA | `2x=1` (Int) | **unsat** |
+| QF_LIA | `x≠0 ∧ x≥0 ∧ x≤0` | **unsat** |
+| QF_NRA | `x²>2 ∧ x<0` | **sat** |
+| QF_NRA | `x²>2 ∧ x²<1` | **unsat** |
+| QF_NIA | `x²=4` | **sat** |
+| QF_NIA | `x²=2` | **unsat** |
+| QF_NIA | `0≤x≤10 ∧ x²=49` | **sat** |
+| QF_NIA | `0≤x≤10 ∧ x²=50` | **unsat** |
+| QF_NIA | `x²+y²=3` | **unsat** (modular) |
+| QF_NIA | `0≤x≤3 ∧ 0≤y≤3 ∧ xy=6` | **sat** |
 
 ## References
 

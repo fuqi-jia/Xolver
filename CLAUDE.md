@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project context
 
-NLColver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The repository is in **Stage A (bootstrap)** — the CMake build, top-level API headers (`include/solver/Solver.h`, `Result.h`), the `core/` IR skeleton (`Expr`, `Sort`, `Types`, `SmallVector`), and the directory scaffolding for all 16 planned subsystems exist, but most `src/<subsystem>/` directories contain no `.cpp` files yet. CLI tools (`tools/solver-cli`, etc.) are placeholder `main.cpp`s.
+NLColver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The repository has progressed beyond initial bootstrap:
+
+- **Stage A (Core IR + SAT)**: Complete — CoreExpr, CoreIr, CaDiCaL SAT backend, Atomizer
+- **Stage C/E (LRA/LIA)**: Functional — Simplex-based LRA, branch-and-bound LIA with disequality
+- **Stage D (NRA)**: MVP — Grid sampling, univariate/bivariate polynomial constraints
+- **Stage I (NIA-Core)**: MVP — Univariate RRT, algebraic reasoning (square rules, GCD, modular), bounded enumeration, sound conflict generation
+- **Stages F, G, H, J, K**: Skeleton interfaces exist, not yet functional
 
 The frontend is **SOMTParser**, vendored as a git submodule at `third_party/SOMTParser`. After cloning, run `git submodule update --init --recursive` before building.
 
@@ -15,7 +21,7 @@ The frontend is **SOMTParser**, vendored as a git submodule at `third_party/SOMT
 - The CDCL(T) + CAlC/CAC main path, MCSAT/NLSAT secondary path, and how incremental linearization bridges them.
 - The 11 development stages (A → K), each with concrete acceptance criteria.
 
-**Before adding any subsystem, read the corresponding section of `plan.md` and follow its data structures and invariants.** The README's architecture diagram is a thumbnail of plan.md §0; `AGENTS.md` is **stale** (it was written before the source skeleton was added — do not rely on its "no source code" claim).
+**Before adding any subsystem, read the corresponding section of `plan.md` and follow its data structures and invariants.**
 
 ## Build, test, run
 
@@ -28,14 +34,14 @@ mkdir build && cd build
 cmake ..                    # Release by default
 cmake --build . -j
 
-# Single test executable, doctest-based
+# Tests — 88 unit tests (doctest-based)
 ctest                       # all tests
 ./tests/nlcolver_unit_tests                          # all units, direct
 ./tests/nlcolver_unit_tests --test-case="<name>"     # single test
 ./tests/nlcolver_unit_tests -ltc                     # list test cases
 
 # CLI
-./bin/nlcolver path/to/input.smt2
+./bin/nlcolver solve path/to/input.smt2
 ```
 
 CMake build options (defaults shown):
@@ -61,7 +67,7 @@ The CMake config has **silent degradation**: `cmake ..` will succeed even when S
 | nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
 | doctest v2.4.11 | FetchContent (network) | Tests skip |
 
-When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` and provide a stub fallback — the CMakeLists deliberately permits builds without them so Stage-A IR work isn't blocked.
+When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` and provide a stub fallback — the CMakeLists deliberately permits builds without them so IR work isn't blocked.
 
 `src/CMakeLists.txt` uses `file(GLOB_RECURSE ... CONFIGURE_DEPENDS)` over each subsystem directory: new `.cpp`/`.h` files under `src/<subsystem>/` are picked up automatically — no need to edit any CMakeLists.
 
@@ -74,47 +80,63 @@ These are non-negotiable per `plan.md` §0 and are easy to violate by accident:
 2. **Advisor pattern for anything heuristic.** Local search, learning modules (GNN/RL/LLM), portfolio schedulers — all of these flow through `Advisor::propose() → Proposal → policy.accept()`. Heuristics never write solver state directly. This is what protects soundness end-to-end.
 
 3. **Three views of an expression, kept separately.**
-   - **DAG view** (`Expr` in `src/core/Expr.h`): for rewriting, proof, pretty-printing. Hash-consed; never mutate.
-   - **Polynomial view** (`PolyId` in the future `src/poly/`): for theory reasoning. Canonical sparse polynomial.
+   - **DAG view** (`Expr` in `src/expr/`): for rewriting, proof, pretty-printing. Hash-consed; never mutate.
+   - **Polynomial view** (`PolyId` in `src/theory/arith/poly/`): for theory reasoning. Canonical sparse polynomial via libpoly.
    - **Evaluation view**: for local-search incremental scoring.
    Don't force everything into the polynomial view eagerly — `plan.md` §2.3 calls this out specifically.
 
-4. **Atomizer separates SAT literals from theory atoms.** A theory atom (`AtomId`, theory + poly + relation) is *not* a SAT variable; the abstraction `b_i ↔ atom_i` is managed by the AtomManager, not implicit. See `plan.md` §2.2.
+4. **Atomizer separates SAT literals from theory atoms.** A theory atom (`AtomId`, theory + poly + relation) is *not* a SAT variable; the abstraction `b_i ↔ atom_i` is managed by the Atomizer, not implicit. See `plan.md` §2.2.
 
 5. **CDCL(T) is the main loop; MCSAT is parallel research path.** Theory solvers implement two interfaces (`TheorySolver` for CDCL(T) and `McsatSolver` for trail-based reasoning). Don't merge them — `plan.md` §5 explains why combination is harder under MCSAT.
 
 6. **Rewriter is DAG-safe and memoized.** Bottom-up with a memo table; optional fixpoint. A naive recursive rewrite blows up on shared subterms.
 
-## Code conventions observed in the existing skeleton
+7. **NIA soundness over completeness.** NIA is undecidable. SAT requires exact integer validation. UNSAT requires sound proof (constant contradiction, empty roots, modular contradiction, GCD contradiction, or finite-domain exhaustion). Unknown is acceptable for unbounded cases. Never emit UNSAT from incomplete reasoning.
+
+## Code conventions observed in the existing source
 
 - `namespace nlcolver { ... }` for all library code.
-- Typed `uint32_t` IDs for everything that is hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/core/Types.h`. Reuse these — don't introduce parallel ID schemes.
-- `pImpl` pattern at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/solver/`.
+- Typed `uint32_t` IDs for everything that is hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/expr/types.h`. Reuse these — don't introduce parallel ID schemes.
+- `pImpl` pattern at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/nlcolver/`.
 - C++17 only (`set(CMAKE_CXX_STANDARD 17)`, extensions OFF). No GCC-isms.
 - Warnings on (`-Wall -Wextra -Wpedantic`); `-Wno-unused-parameter` is the only exception. Don't suppress others — fix the root cause.
-- `SmallVector<T, 4>` (in `src/util/`) is the default container for short child-lists on `Expr` nodes. Use it instead of `std::vector` where N is typically small.
+- `SmallVector<T, 4>` (in `src/util/`) is the default container for short child-lists on `CoreExpr` nodes. Use it instead of `std::vector` where N is typically small.
 
 ## Working on subsystems
 
-The 16 `src/` subdirectories map 1:1 to sections of `plan.md`:
+The `src/` subdirectories map to sections of `plan.md`:
 
-| Directory | plan.md section | Stage |
-|---|---|---|
-| `core/` | §2 (CoreExpr, Rewriter) | A |
-| `frontend/` | §2 (SOMTParser adapter) | A |
-| `preprocess/` | §6 | A–B |
-| `sat/` | §4 (CaDiCaL wrapper) | A |
-| `theory/` | §5 (TheoryManager, dual interfaces) | A onwards |
-| `poly/` | §3 (PolynomialKernel, AlgebraicNumber) | B |
-| `nra/` | §8, §9, §10 (CAlC/CAC, incremental linearization, MCSAT-NRA) | D, F, H |
-| `nia/` | §12 (hybrid: LS + LIA + B&B + bit-blast) | I |
-| `local_search/` | §11 (Advisor, never solver) | G |
-| `omt/` | §14 | K |
-| `proof/` | §15 | J |
-| `learning/` | §16 (trace, advisor plugins) | continuous |
-| `strategy/` | §17 (tactic pipeline, portfolio) | continuous |
+| Directory | plan.md section | Stage | Status |
+|---|---|---|---|
+| `expr/` | §2 (CoreExpr, Rewriter) | A | ✅ Functional |
+| `parser/` | §2 (SOMTParser adapter) | A | ✅ Functional |
+| `sat/` | §4 (CaDiCaL wrapper) | A | ✅ Functional |
+| `theory/arith/lra/` | §5 (LRA) | C/E | ✅ MVP |
+| `theory/arith/lia/` | §5 (LIA) | C/E | ✅ Phase 1 |
+| `theory/arith/nra/` | §8, §9, §10 (NRA) | D | ✅ MVP |
+| `theory/arith/nia/` | §12 (NIA) | I | ✅ MVP |
+| `theory/arith/poly/` | §3 (PolynomialKernel) | B | ✅ Functional |
+| `mcsat/` | §10 (MCSAT-NRA) | H | 🏗️ Skeleton |
+| `search/` | §11 (Advisor) | G | 🏗️ Skeleton |
+| `omt/` | §14 | K | 🏗️ Skeleton |
+| `proof/` | §15 | J | 🏗️ Skeleton |
+| `learning/` | §16 (trace, advisor plugins) | continuous | 🏗️ Skeleton |
 
-When implementing a stub, look up the section, copy the data-structure shapes (they're prescribed in detail), and check that subsystem's "verification criteria" (`plan.md` §21) for what must pass before claiming the stage done.
+When implementing a new subsystem or extending an existing one, look up the section, copy the data-structure shapes (they're prescribed in detail), and check that subsystem's "verification criteria" (`plan.md` §21) for what must pass before claiming the stage done.
+
+## Key files for NIA work
+
+| File | Purpose |
+|---|---|
+| `src/theory/arith/nia/NiaSolver.h/.cpp` | Facade — owns kernel, delegates to engines |
+| `src/theory/arith/nia/DomainStore.h/.cpp` | Per-variable integer domains (intervals, finite sets, exclusions) |
+| `src/theory/arith/nia/UnivariateIntegerReasoner.h/.cpp` | RRT-based integer root finding |
+| `src/theory/arith/nia/LinearNiaDomainReasoner.h/.cpp` | Single-variable linear bound inference |
+| `src/theory/arith/nia/AlgebraicIntegerReasoner.h/.cpp` | Square rules, GCD conflict, modular reasoning |
+| `src/theory/arith/nia/BoundedNiaSolver.h/.cpp` | Finite-domain complete enumeration |
+| `src/theory/arith/nia/NiaNormalizer.h/.cpp` | Clear denominators, strict → non-strict |
+| `src/theory/arith/poly/LibPolyKernel.h/.cpp` | libpoly backend — polynomial operations |
+| `src/theory/arith/poly/PolynomialConverter.h/.cpp` | CoreIr → PolyId conversion |
 
 ## Reference solvers
 

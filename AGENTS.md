@@ -10,7 +10,9 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 
 ## Current Status
 
-**Stages A–K skeleton complete.** Core solvers (boolean, LRA, NRA) are functional; remaining stages (F–K) have working skeletons ready for implementation.
+**Stages A–E functional, Stage I (NIA-Core) MVP complete.**
+
+Core solvers (boolean, LRA, LIA, NRA) are functional. NIA-Core now has a working pipeline with sound conflict generation and model validation.
 
 ### What's Working
 
@@ -24,6 +26,7 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 - ✅ ModelValidator: boolean expression evaluator skeleton
 - ✅ TraceRecorder + Statistics skeletons
 - ✅ CLI subcommands: solve, bench, trace, model-check, proof-check, version
+- ✅ CLI auto-detects `(set-logic ...)` from parsed SMT2 files
 
 ### Theory Solvers (functional)
 
@@ -32,12 +35,36 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 | C/E | LraSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
 | C/E | LiaSolver (LIA) | ✅ Phase 1 | Branch-and-bound, gcd-strength disequality, dynamic atom registry |
 | D | NraSolver (NRA) | ✅ MVP | Grid sampling, univariate + bivariate polynomial constraints |
+| I | NiaSolver (NIA-Core) | ✅ MVP | Univariate RRT, square rules, GCD conflict, modular reasoning, bounded enumeration, sound conflict generation |
 | F | IncrementalLinearizer | 🏗️ Skeleton | Lemma generation interface ready |
 | G | LocalSearchAdvisor | 🏗️ Skeleton | Model proposal interface ready |
 | H | McsatSolver | 🏗️ Skeleton | MCSAT engine interface ready |
-| I | NiaSolver | 🏗️ Skeleton | NIA hybrid interface ready |
 | J | ProofManager | 🏗️ Skeleton | SAT/theory proof tracking interface ready |
 | K | Optimize (OMT) | 🏗️ Skeleton | Single-objective optimization interface ready |
+
+### NIA-Core Pipeline
+
+```
+assertLit (effective relation via negateRelation)
+    ↓
+NiaNormalizer (clear denominators, strict → non-strict)
+    ↓
+Trivial constants (constant contradiction → Conflict)
+    ↓
+LinearNiaDomainReasoner (single-var linear bounds)
+    ↓
+UnivariateIntegerReasoner (RRT integer roots, square bounds)
+    ↓
+AlgebraicIntegerReasoner (square rules, GCD conflict, modular reasoning)
+    ↓
+Empty domain check → Conflict
+    ↓
+BoundedNiaSolver (direct enumeration over finite domains)
+    ↓
+NiaLocalSearch (heuristic candidate SAT finder)
+    ↓
+Branch lemma or Unknown
+```
 
 ### Verified End-to-End Cases
 
@@ -55,6 +82,12 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 | QF_NRA unsat | `x²>2 ∧ x²<1` | **unsat** |
 | QF_NRA 2D sat | `x²+y²≤1` | **sat** |
 | QF_NRA 2D unsat | `y=x² ∧ y<0` | **unsat** |
+| QF_NIA sat | `x²=4` | **sat** |
+| QF_NIA unsat | `x²=2` | **unsat** |
+| QF_NIA sat | `0≤x≤10 ∧ x²=49` | **sat** |
+| QF_NIA unsat | `0≤x≤10 ∧ x²=50` | **unsat** |
+| QF_NIA unsat | `x²+y²=3` | **unsat** (modular) |
+| QF_NIA sat | `0≤x≤3 ∧ 0≤y≤3 ∧ xy=6` | **sat** |
 
 ### Directory Layout
 
@@ -80,11 +113,23 @@ NLColver/
 │   ├── theory/              # Theory solvers
 │   │   ├── TheorySolver.h
 │   │   ├── TheoryManager.h/.cpp
+│   │   ├── TheoryAtomRegistry.h/.cpp
 │   │   ├── euf/             # (reserved)
 │   │   └── arith/
 │   │       ├── lra/SimplexSolver.h/.cpp
+│   │       ├── lia/LiaSolver.h/.cpp
 │   │       ├── nra/NraSolver.h/.cpp
-│   │       ├── nia/NiaSolver.h/.cpp
+│   │       ├── nia/         # NIA-Core engines
+│   │       │   ├── NiaSolver.h/.cpp
+│   │       │   ├── NiaNormalizer.h/.cpp
+│   │       │   ├── DomainStore.h/.cpp
+│   │       │   ├── UnivariateIntegerReasoner.h/.cpp
+│   │       │   ├── LinearNiaDomainReasoner.h/.cpp
+│   │       │   ├── AlgebraicIntegerReasoner.h/.cpp
+│   │       │   ├── BoundedNiaSolver.h/.cpp
+│   │       │   ├── NiaLocalSearch.h/.cpp
+│   │       │   ├── IntegerModelValidator.h/.cpp
+│   │       │   └── NiaTypes.h
 │   │       ├── poly/        # PolynomialKernel, LibPolyKernel, PolynomialConverter
 │   │       └── IncrementalLinearizer.h/.cpp
 │   ├── mcsat/               # MCSAT/NLSAT engine
@@ -98,7 +143,11 @@ NLColver/
 │   ├── learning/            # TraceRecorder + advisor interface
 │   └── util/                # SmallVector, infrastructure
 ├── tests/
-│   └── unit/                # doctest unit tests
+│   ├── fuzz/
+│   ├── regression/
+│   │   └── nia/             # NIA regression SMT2 files
+│   ├── unit/                # doctest unit tests
+│   └── CMakeLists.txt
 ├── tools/cli/               # nlcolver command-line
 ├── CMakeLists.txt
 ├── README.md
@@ -150,8 +199,8 @@ ctest -R unit
 
 # Manual CLI tests
 ./build/bin/nlcolver solve tests/unit/test_bool.smt2
-./build/bin/nlcolver solve /tmp/test_lra.smt2
-./build/bin/nlcolver solve /tmp/test_nra.smt2
+./build/bin/nlcolver solve tests/regression/nia/nia_001_sat_x2_eq_4.smt2
+./build/bin/nlcolver solve tests/regression/nia/nia_002_unsat_x2_eq_2.smt2
 ```
 
 ## Security Considerations
@@ -167,3 +216,4 @@ ctest -R unit
 4. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
 5. **SOMTParser already provides hash-consing, rewriter, visitor.** Do not reimplement these. The internal CoreIr is a lightweight dense array for solver-specific metadata (literal IDs, proof IDs, scope levels), not a replacement for SOMTParser's DAG.
 6. **TheoryManager dispatches to all registered solvers.** Each solver silently ignores unsupported constraints. For MVP, positive theory literals are asserted; negative literals are handled by SAT-level negation.
+7. **CLI auto-detects logic from `(set-logic ...)` in SMT2 files.** If no logic is set, default is LRA path, which will mark nonlinear constraints as unsupported and return Unknown.
