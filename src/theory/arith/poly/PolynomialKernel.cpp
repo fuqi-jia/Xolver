@@ -32,6 +32,18 @@ public:
     std::vector<std::string> variables(PolyId) const override { return {}; }
     bool eq(PolyId, PolyId) const override { return true; }
     int sgn(PolyId, const std::unordered_map<std::string, mpq_class>&) const override { return 0; }
+    std::optional<mpz_class> evalInteger(
+        PolyId,
+        const std::unordered_map<std::string, mpz_class>&) const override {
+        return std::nullopt;
+    }
+    std::optional<int> degree(PolyId, std::string_view) const override {
+        return std::nullopt;
+    }
+    std::optional<std::vector<mpz_class>> getIntegerCoefficients(
+        PolyId, std::string_view) const override {
+        return std::nullopt;
+    }
     std::string toString(PolyId) const override { return "stub"; }
 };
 

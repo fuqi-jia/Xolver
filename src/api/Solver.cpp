@@ -10,6 +10,7 @@
 #include "theory/arith/lra/LraSolver.h"
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/arith/nra/NraSolver.h"
+#include "theory/arith/nia/NiaSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
@@ -49,6 +50,11 @@ public:
         parser = std::make_unique<SOMTParser::Parser>();
         if (!parser->parse(std::string(filename))) {
             return false;
+        }
+        // Auto-detect logic from the parsed file.
+        auto opts = parser->getOptions();
+        if (opts && opts->logic != "UNKNOWN_LOGIC" && opts->logic != "ALL") {
+            logic = opts->logic;
         }
         FrontendAdapter adapter(*parser);
         ir = adapter.importProblem();
@@ -98,6 +104,11 @@ public:
             polyKernelRaw = polyKernel.get();
             theoryManager.registerSolver(
                 std::make_unique<NraSolver>(std::move(polyKernel)));
+        } else if (logic == "QF_NIA" || logic == "NIA") {
+            auto polyKernel = createPolynomialKernel();
+            polyKernelRaw = polyKernel.get();
+            theoryManager.registerSolver(
+                std::make_unique<NiaSolver>(std::move(polyKernel)));
         } else {
             // Default: LRA covers most linear arithmetic; pure boolean works too.
             theoryManager.registerSolver(std::make_unique<LraSolver>());
@@ -118,6 +129,13 @@ public:
             atomizer.setDefaultTheory(TheoryId::NRA);
             // Atomizer and NraSolver must share the same PolynomialKernel instance.
             // NraSolver owns the kernel; Atomizer borrows a raw pointer.
+            if (polyKernelRaw) {
+                atomizer.setPolynomialKernel(polyKernelRaw);
+            }
+        } else if (logic == "QF_NIA" || logic == "NIA") {
+            atomizer.setDefaultTheory(TheoryId::NIA);
+            // Atomizer and NiaSolver must share the same PolynomialKernel instance.
+            // NiaSolver owns the kernel; Atomizer borrows a raw pointer.
             if (polyKernelRaw) {
                 atomizer.setPolynomialKernel(polyKernelRaw);
             }

@@ -110,10 +110,12 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
             if (isTheory && registry_) {
-                if (defaultTheory_ == TheoryId::NRA) {
-                    // Under QF_NRA, ALL arithmetic comparison atoms (including linear)
-                    // must be registered as PolynomialAtomPayload and routed to TheoryId::NRA.
-                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v)) {
+                if (defaultTheory_ == TheoryId::NRA || defaultTheory_ == TheoryId::NIA) {
+                    // Under QF_NRA/QF_NIA, ALL arithmetic comparison atoms (including linear)
+                    // must be registered as PolynomialAtomPayload.
+                    // The theory ID must match defaultTheory_ so TheoryManager routes
+                    // QF_NRA atoms to NraSolver and QF_NIA atoms to NiaSolver.
+                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, defaultTheory_)) {
                         // registered inside extractPolynomialConstraint
                     } else {
                         registry_->setUnsupportedTheorySeen();
@@ -150,9 +152,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     return result;
 }
 
-bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v) {
+bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v, TheoryId theory) {
     const auto& e = ir.get(eid);
-    if (e.children.size() != 2) return false;  // binary only for Phase NRA-1
+    if (e.children.size() != 2) return false;  // binary only for Phase NRA-1/NIA-1
 
     PolyId lhsPoly = polyConverter_->convert(e.children[0], ir);
     PolyId rhsPoly = polyConverter_->convert(e.children[1], ir);
@@ -172,7 +174,7 @@ bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar 
     }
 
     registry_->registerParsedTheoryAtom(
-        v, eid, TheoryId::NRA,
+        v, eid, theory,
         PolynomialAtomPayload{diff, rel, mpq_class(0)});
     return true;
 }

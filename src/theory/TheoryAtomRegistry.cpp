@@ -54,6 +54,34 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     return lit;
 }
 
+SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
+    PolyId poly,
+    Relation rel,
+    const mpq_class& rhs,
+    TheoryId theory) {
+
+    assert(sat_ != nullptr && atomizer_ != nullptr &&
+           "TheoryAtomRegistry::setContext must be called before getOrCreatePolynomialAtom");
+
+    PolyLookupKey key{poly, rel, rhs};
+    auto it = polyLookup_.find(key);
+    if (it != polyLookup_.end()) {
+        const auto& rec = records_[it->second];
+        return SatLit::positive(rec.satVar);
+    }
+
+    ExprId expr = nextSyntheticExprId_++;
+    SatLit lit = atomizer_->registerDynamicAtom(expr, theory);
+
+    size_t idx = records_.size();
+    records_.push_back({lit.var, theory, true, expr, PolynomialAtomPayload{poly, rel, rhs}});
+    satVarToIdx_[lit.var] = idx;
+    polyLookup_[key] = idx;
+    observeIfNeeded(lit.var);
+
+    return lit;
+}
+
 bool TheoryAtomRegistry::findByExprId(ExprId expr, LinearFormKey& outLhs,
                                        Relation& outRel, mpq_class& outRhs) const {
     for (const auto& rec : records_) {

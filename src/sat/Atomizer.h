@@ -56,7 +56,7 @@ private:
     SatLit atomizeRec(ExprId eid, const CoreIr& ir);
     SatVar freshVar();
 
-    bool extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v);
+    bool extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v, TheoryId theory);
 
     SatSolver& sat_;
     std::vector<AtomRecord> atoms_;

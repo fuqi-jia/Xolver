@@ -4,6 +4,7 @@
 #include "expr/ir.h"
 #include <vector>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <gmpxx.h>
 
@@ -57,6 +58,27 @@ public:
     // Evaluation (for CAlC / sample checking)
     // ------------------------------------------------------------------
     virtual int sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const = 0;
+
+    // ------------------------------------------------------------------
+    // Integer evaluation (for NIA exact validation)
+    // ------------------------------------------------------------------
+    // Evaluate polynomial at integer assignment (exact integer arithmetic).
+    // Returns nullopt if evaluation is unsupported (e.g. stub backend).
+    virtual std::optional<mpz_class> evalInteger(
+        PolyId a,
+        const std::unordered_map<std::string, mpz_class>& sample) const = 0;
+
+    // ------------------------------------------------------------------
+    // Univariate analysis (for NIA integer root solving)
+    // ------------------------------------------------------------------
+    // Exact degree of polynomial with respect to a given variable.
+    // Returns nullopt if not univariate in x or unsupported.
+    virtual std::optional<int> degree(PolyId a, std::string_view var) const = 0;
+
+    // For univariate polynomials only. Returns coefficients from highest degree to constant.
+    // Returns nullopt if not univariate, unsupported, or coefficients unavailable.
+    virtual std::optional<std::vector<mpz_class>>
+    getIntegerCoefficients(PolyId a, std::string_view var) const = 0;
 
     // ------------------------------------------------------------------
     // Debugging

@@ -27,6 +27,13 @@ public:
         TheoryId theory
     );
 
+    SatLit getOrCreatePolynomialAtom(
+        PolyId poly,
+        Relation rel,
+        const mpq_class& rhs,
+        TheoryId theory
+    );
+
     bool findByExprId(ExprId expr, LinearFormKey& outLhs, Relation& outRel, mpq_class& outRhs) const;
 
     const TheoryAtomRecord* findBySatVar(SatVar v) const;
@@ -60,6 +67,24 @@ private:
         }
     };
     std::unordered_map<LinearLookupKey, size_t, LinearLookupKeyHash> linearLookup_;
+
+    struct PolyLookupKey {
+        PolyId poly;
+        Relation rel;
+        mpq_class rhs;
+        bool operator==(const PolyLookupKey& o) const {
+            return poly == o.poly && rel == o.rel && rhs == o.rhs;
+        }
+    };
+    struct PolyLookupKeyHash {
+        std::size_t operator()(const PolyLookupKey& k) const {
+            std::size_t h = std::hash<PolyId>{}(k.poly);
+            h ^= static_cast<std::size_t>(k.rel) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<std::string>{}(k.rhs.get_str()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+    std::unordered_map<PolyLookupKey, size_t, PolyLookupKeyHash> polyLookup_;
 
     ExprId nextSyntheticExprId_ = static_cast<ExprId>(0x80000000);
     bool unsupportedTheorySeen_ = false;
