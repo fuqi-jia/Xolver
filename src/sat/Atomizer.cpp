@@ -110,23 +110,34 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
             if (isTheory && registry_) {
-                std::unordered_map<std::string, mpq_class> coeffs;
-                mpq_class rhs;
-                Relation rel;
-                if (extractLinearConstraint(eid, ir, coeffs, rhs, rel)) {
-                    LinearFormKey lhs;
-                    for (auto& [name, coeff] : coeffs) {
-                        if (coeff != 0) {
-                            lhs.terms.push_back({name, coeff});
-                        }
+                if (defaultTheory_ == TheoryId::NRA) {
+                    // Under QF_NRA, ALL arithmetic comparison atoms (including linear)
+                    // must be registered as PolynomialAtomPayload and routed to TheoryId::NRA.
+                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v)) {
+                        // registered inside extractPolynomialConstraint
+                    } else {
+                        registry_->setUnsupportedTheorySeen();
                     }
-                    std::sort(lhs.terms.begin(), lhs.terms.end(),
-                              [](auto& a, auto& b) { return a.first < b.first; });
-                    registry_->registerParsedTheoryAtom(
-                        v, eid, defaultTheory_, LinearAtomPayload{lhs, rel, rhs});
                 } else {
-                    // Non-arithmetic Eq/Distinct or unsupported theory atom
-                    registry_->setUnsupportedTheorySeen();
+                    // Existing LRA/LIA path.
+                    std::unordered_map<std::string, mpq_class> coeffs;
+                    mpq_class rhs;
+                    Relation rel;
+                    if (extractLinearConstraint(eid, ir, coeffs, rhs, rel)) {
+                        LinearFormKey lhs;
+                        for (auto& [name, coeff] : coeffs) {
+                            if (coeff != 0) {
+                                lhs.terms.push_back({name, coeff});
+                            }
+                        }
+                        std::sort(lhs.terms.begin(), lhs.terms.end(),
+                                  [](auto& a, auto& b) { return a.first < b.first; });
+                        registry_->registerParsedTheoryAtom(
+                            v, eid, defaultTheory_, LinearAtomPayload{lhs, rel, rhs});
+                    } else {
+                        // Non-arithmetic Eq/Distinct or unsupported theory atom
+                        registry_->setUnsupportedTheorySeen();
+                    }
                 }
             } else {
                 atoms_.push_back({v, eid, isTheory, TheoryId::Bool});
@@ -137,6 +148,33 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
 
     memo_[eid] = result;
     return result;
+}
+
+bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v) {
+    const auto& e = ir.get(eid);
+    if (e.children.size() != 2) return false;  // binary only for Phase NRA-1
+
+    PolyId lhsPoly = polyConverter_->convert(e.children[0], ir);
+    PolyId rhsPoly = polyConverter_->convert(e.children[1], ir);
+    if (lhsPoly == NullPoly || rhsPoly == NullPoly) return false;
+
+    PolyId diff = polyKernel_->sub(lhsPoly, rhsPoly);
+
+    Relation rel;
+    switch (e.kind) {
+        case Kind::Eq:       rel = Relation::Eq;  break;
+        case Kind::Distinct: rel = Relation::Neq; break;
+        case Kind::Lt:       rel = Relation::Lt;  break;
+        case Kind::Leq:      rel = Relation::Leq; break;
+        case Kind::Gt:       rel = Relation::Gt;  break;
+        case Kind::Geq:      rel = Relation::Geq; break;
+        default: return false;
+    }
+
+    registry_->registerParsedTheoryAtom(
+        v, eid, TheoryId::NRA,
+        PolynomialAtomPayload{diff, rel, mpq_class(0)});
+    return true;
 }
 
 } // namespace nlcolver

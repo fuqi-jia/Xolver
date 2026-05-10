@@ -2,6 +2,8 @@
 
 #include "expr/ir.h"
 #include "sat/SatSolver.h"
+#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/poly/PolynomialConverter.h"
 #include <unordered_map>
 #include <vector>
 
@@ -44,9 +46,17 @@ public:
     // Set the default theory ID for parsed linear atoms (LRA or LIA).
     void setDefaultTheory(TheoryId theory) { defaultTheory_ = theory; }
 
+    // Set the polynomial kernel for NRA atom extraction.
+    void setPolynomialKernel(PolynomialKernel* kernel) {
+        polyKernel_ = kernel;
+        polyConverter_ = std::make_unique<PolynomialConverter>(*kernel);
+    }
+
 private:
     SatLit atomizeRec(ExprId eid, const CoreIr& ir);
     SatVar freshVar();
+
+    bool extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v);
 
     SatSolver& sat_;
     std::vector<AtomRecord> atoms_;
@@ -54,6 +64,8 @@ private:
     SatVar nextVar_ = 1;
     TheoryAtomRegistry* registry_ = nullptr;
     TheoryId defaultTheory_ = TheoryId::LRA;
+    PolynomialKernel* polyKernel_ = nullptr;
+    std::unique_ptr<PolynomialConverter> polyConverter_;
 };
 
 } // namespace nlcolver

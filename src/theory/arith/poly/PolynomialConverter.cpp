@@ -27,7 +27,12 @@ PolyId PolynomialConverter::convertRec(ExprId eid, const CoreIr& ir) {
         case Kind::ConstReal: {
             // ConstReal payload is a string "num/den" or decimal
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                result = kernel_.mkConst(mpq_class(*s));
+                mpq_class q(*s);
+                // Phase NRA-1: reject non-integer rational constants to avoid
+                // unsoundness from LibPolyKernel::mkConst dropping denominators.
+                if (q.get_den() == 1) {
+                    result = kernel_.mkConst(q);
+                }
             }
             break;
         }

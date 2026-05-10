@@ -9,7 +9,7 @@
 #include "theory/TheoryAtomRegistry.h"
 #include "theory/arith/lra/LraSolver.h"
 #include "theory/arith/lia/LiaSolver.h"
-#include "theory/arith/cad/CdcacSolver.h"
+#include "theory/arith/nra/NraSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
@@ -84,6 +84,7 @@ public:
         TheoryAtomRegistry registry;
         TheoryManager theoryManager;
         TheoryLemmaDatabase lemmaDb;
+        PolynomialKernel* polyKernelRaw = nullptr;
 
         // Register solvers based on logic.
         if (logic == "QF_LIA" || logic == "LIA") {
@@ -93,8 +94,10 @@ public:
         } else if (logic == "QF_LRA" || logic == "LRA") {
             theoryManager.registerSolver(std::make_unique<LraSolver>());
         } else if (logic == "QF_NRA" || logic == "NRA") {
+            auto polyKernel = createPolynomialKernel();
+            polyKernelRaw = polyKernel.get();
             theoryManager.registerSolver(
-                std::make_unique<CdcacSolver>(createPolynomialKernel()));
+                std::make_unique<NraSolver>(std::move(polyKernel)));
         } else {
             // Default: LRA covers most linear arithmetic; pure boolean works too.
             theoryManager.registerSolver(std::make_unique<LraSolver>());
@@ -111,6 +114,13 @@ public:
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
+        } else if (logic == "QF_NRA" || logic == "NRA") {
+            atomizer.setDefaultTheory(TheoryId::NRA);
+            // Atomizer and NraSolver must share the same PolynomialKernel instance.
+            // NraSolver owns the kernel; Atomizer borrows a raw pointer.
+            if (polyKernelRaw) {
+                atomizer.setPolynomialKernel(polyKernelRaw);
+            }
         } else {
             atomizer.setDefaultTheory(TheoryId::LRA);
         }

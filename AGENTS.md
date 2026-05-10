@@ -31,7 +31,7 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 |-------|-----------|--------|----------|
 | C/E | LraSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
 | C/E | LiaSolver (LIA) | ✅ Phase 1 | Branch-and-bound, gcd-strength disequality, dynamic atom registry |
-| D | CdcacSolver (NRA) | ✅ MVP | Grid sampling, univariate + bivariate polynomial constraints |
+| D | NraSolver (NRA) | ✅ MVP | Grid sampling, univariate + bivariate polynomial constraints |
 | F | IncrementalLinearizer | 🏗️ Skeleton | Lemma generation interface ready |
 | G | LocalSearchAdvisor | 🏗️ Skeleton | Model proposal interface ready |
 | H | McsatSolver | 🏗️ Skeleton | MCSAT engine interface ready |
@@ -83,7 +83,7 @@ NLColver/
 │   │   ├── euf/             # (reserved)
 │   │   └── arith/
 │   │       ├── lra/SimplexSolver.h/.cpp
-│   │       ├── cad/CdcacSolver.h/.cpp
+│   │       ├── nra/NraSolver.h/.cpp
 │   │       ├── nia/NiaSolver.h/.cpp
 │   │       ├── poly/        # PolynomialKernel, LibPolyKernel, PolynomialConverter
 │   │       └── IncrementalLinearizer.h/.cpp
