@@ -38,6 +38,9 @@ public:
 
     virtual bool value(SatVar v) const = 0;
     virtual bool configure(const char* name, int64_t value) { (void)name; (void)value; return false; }
+
+    // Observed variable support (for CaDiCaL ExternalPropagator)
+    virtual void addObservedVar(SatVar /*v*/) {}
 };
 
 /**

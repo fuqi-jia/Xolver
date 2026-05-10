@@ -3,43 +3,38 @@
 namespace nlcolver {
 
 void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
+    TheoryId id = solver->id();
     solvers_.push_back(std::move(solver));
+    solverByTheory_[id] = solvers_.back().get();
 }
 
-void TheoryManager::push() {
-    for (auto& s : solvers_) s->push();
+void TheoryManager::clearSolvers() {
+    solvers_.clear();
+    solverByTheory_.clear();
 }
 
-void TheoryManager::pop(uint32_t n) {
-    for (auto& s : solvers_) s->pop(n);
+void TheoryManager::assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) {
+    auto it = solverByTheory_.find(atom.theory);
+    if (it != solverByTheory_.end()) {
+        it->second->assertLit(atom, assignedLit.sign, level, assignedLit);
+    }
 }
 
-void TheoryManager::reset() {
-    for (auto& s : solvers_) s->reset();
+void TheoryManager::backtrackToLevel(int level) {
+    for (auto& solver : solvers_) {
+        solver->backtrackToLevel(level);
+    }
 }
 
-TheoryCheckResult TheoryManager::check(const CoreIr& ir,
-                                       const std::vector<Atomizer::AtomRecord>& atoms,
-                                       const SatSolver& sat) {
+TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
     if (solvers_.empty()) return TheoryCheckResult::consistent();
 
     for (auto& solver : solvers_) {
-        solver->reset();
-
-        // Feed theory literals to the solver based on SAT assignment.
-        // Assert BOTH true and false literals.
-        for (const auto& atom : atoms) {
-            if (!atom.isTheory) continue;
-            bool val = sat.value(atom.var);
-            solver->assertLit({atom.var, atom.expr}, val, ir);
-        }
-
-        auto tr = solver->check(ir);
+        auto tr = solver->check(lemmaDb);
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
             return tr;
         }
     }
-
     return TheoryCheckResult::consistent();
 }
 

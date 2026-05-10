@@ -8,11 +8,15 @@ void NiaSolver::push() {}
 void NiaSolver::pop(uint32_t) {}
 void NiaSolver::reset() {}
 
-void NiaSolver::assertLit(const TheoryAtom&, bool, const CoreIr&) {
+void NiaSolver::assertLit(const TheoryAtomRecord&, bool, int, SatLit) {
     // TODO: dispatch to LIA / local search / bit-blaster
 }
 
-TheoryCheckResult NiaSolver::check(const CoreIr&) {
+void NiaSolver::backtrackToLevel(int) {
+    // TODO: backtrack
+}
+
+TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase&) {
     // TODO: run hybrid portfolio
     return TheoryCheckResult::unknown();
 }

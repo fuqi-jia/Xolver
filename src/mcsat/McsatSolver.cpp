@@ -8,11 +8,15 @@ void McsatSolver::push() {}
 void McsatSolver::pop(uint32_t) {}
 void McsatSolver::reset() {}
 
-void McsatSolver::assertLit(const TheoryAtom&, bool, const CoreIr&) {
+void McsatSolver::assertLit(const TheoryAtomRecord&, bool, int, SatLit) {
     // TODO: add to theory trail
 }
 
-TheoryCheckResult McsatSolver::check(const CoreIr&) {
+void McsatSolver::backtrackToLevel(int) {
+    // TODO: backtrack theory trail
+}
+
+TheoryCheckResult McsatSolver::check(TheoryLemmaDatabase&) {
     // TODO: integrate with local search advisor and theory propagation
     return TheoryCheckResult::unknown();
 }

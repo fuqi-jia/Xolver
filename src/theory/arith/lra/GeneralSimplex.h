@@ -81,11 +81,14 @@ public:
 
     /** Assert lower bound. Must be finite with valid reason.
      *  Returns false if immediate bound conflict (lower > upper). */
-    bool assertLower(int var, const BoundInfo& info);
+    bool assertLower(int var, const BoundInfo& info, int level = 0);
 
     /** Assert upper bound. Must be finite with valid reason.
      *  Returns false if immediate bound conflict (upper < lower). */
-    bool assertUpper(int var, const BoundInfo& info);
+    bool assertUpper(int var, const BoundInfo& info, int level = 0);
+
+    /** Backtrack to target decision level. */
+    void backtrackToLevel(int level);
 
     // -------------------------------------------------------------------------
     // Solving
@@ -184,14 +187,16 @@ private:
     bool hasImmediateConflict_ = false;
 
     // ========================================================================
-    // Trail for push/pop
+    // Trail for push/pop / level-aware backtracking
     // ========================================================================
     struct TrailEntry {
+        int level;
         int var;
         bool isLower;
         BoundInfo oldBound;
     };
-    std::vector<std::vector<TrailEntry>> trail_;
+    std::vector<TrailEntry> trail_;
+    std::vector<size_t> scopeStack_;
 
     // ========================================================================
     // Linear form for rewriteToNonBasic

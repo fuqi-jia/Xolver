@@ -1,46 +1,54 @@
 #include <doctest/doctest.h>
-#include "theory/arith/lra/SimplexSolver.h"
+#include "theory/arith/lra/LraSolver.h"
 #include "theory/arith/lra/GeneralSimplex.h"
+#include "theory/arith/linear/LinearExpr.h"
+#include "theory/TheoryLemmaDatabase.h"
 #include "expr/ir.h"
 #include <random>
 
 using namespace nlcolver;
 
-// ============================================================================
-// Existing test: single variable bound conflict
-// ============================================================================
+static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const CoreIr& ir, TheoryId theory) {
+    std::unordered_map<std::string, mpq_class> coeffs;
+    mpq_class rhs;
+    Relation rel;
+    REQUIRE(extractLinearConstraint(eid, ir, coeffs, rhs, rel));
+    LinearFormKey lhs;
+    for (auto& [n, c] : coeffs) {
+        if (c != 0) lhs.terms.push_back({n, c});
+    }
+    std::sort(lhs.terms.begin(), lhs.terms.end(),
+              [](auto& a, auto& b) { return a.first < b.first; });
+    return TheoryAtomRecord{sv, theory, false, eid, LinearAtomPayload{lhs, rel, rhs}};
+}
 
-TEST_CASE("SimplexSolver: single variable bound conflict") {
+TEST_CASE("LraSolver: single variable bound conflict") {
     CoreIr ir;
 
-    // x < 0
     ExprId x = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("x"))});
     ExprId zero = ir.add(CoreExpr{Kind::ConstInt, 0, {}, Payload(int64_t(0))});
     ExprId lt0 = ir.add(CoreExpr{Kind::Lt, 0, {x, zero}, {}});
 
-    // x = 0
     ExprId eq0 = ir.add(CoreExpr{Kind::Eq, 0, {x, zero}, {}});
 
-    SimplexSolver solver;
+    LraSolver solver;
     solver.push();
 
+    TheoryLemmaDatabase lemmaDb;
+
     // assert x < 0 (satVar 1)
-    solver.assertLit({1, lt0}, true, ir);
-    auto r1 = solver.check(ir);
+    solver.assertLit(makeLinearAtom(1, lt0, ir, TheoryId::LRA), true, 0, SatLit{1, true});
+    auto r1 = solver.check(lemmaDb);
     CHECK(r1.kind == TheoryCheckResult::Kind::Consistent);
 
     // assert x = 0 (satVar 2)
-    solver.assertLit({2, eq0}, true, ir);
-    auto r2 = solver.check(ir);
+    solver.assertLit(makeLinearAtom(2, eq0, ir, TheoryId::LRA), true, 0, SatLit{2, true});
+    auto r2 = solver.check(lemmaDb);
     CHECK(r2.kind == TheoryCheckResult::Kind::Conflict);
 
     CHECK(r2.conflictOpt.has_value());
     CHECK(r2.conflictOpt->clause.size() == 2);
 }
-
-// ============================================================================
-// Semantic contract test for GeneralSimplex::addConstraint
-// ============================================================================
 
 TEST_CASE("GeneralSimplex: addConstraint semantic contract") {
     GeneralSimplex gs;
@@ -70,10 +78,6 @@ TEST_CASE("GeneralSimplex: addConstraint semantic contract") {
 
     CHECK(gs.debugCheckInvariants());
 }
-
-// ============================================================================
-// Sparse tableau stress: multiple variables, sparse constraints
-// ============================================================================
 
 TEST_CASE("GeneralSimplex: sparse stress test (sat)") {
     GeneralSimplex gs;
@@ -106,7 +110,6 @@ TEST_CASE("GeneralSimplex: sparse stress test (sat)") {
     auto r = gs.check();
     CHECK(r == GeneralSimplex::Result::Sat);
 
-    // Verify all constraints are satisfied
     auto v0 = gs.value(vars[0]);
     auto v1 = gs.value(vars[1]);
     auto v2 = gs.value(vars[2]);
@@ -146,10 +149,6 @@ TEST_CASE("GeneralSimplex: sparse stress test (unsat)") {
 
     CHECK(gs.debugCheckInvariants());
 }
-
-// ============================================================================
-// Randomized sparse LRA stress test
-// ============================================================================
 
 TEST_CASE("GeneralSimplex: randomized sparse LRA stress") {
     std::mt19937 rng(42);

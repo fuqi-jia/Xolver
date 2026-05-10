@@ -22,8 +22,9 @@ public:
 
     void push() override;
     void pop(uint32_t n) override;
-    void assertLit(const TheoryAtom& atom, bool value, const CoreIr& ir) override;
-    TheoryCheckResult check(const CoreIr& ir) override;
+    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
+    void backtrackToLevel(int level) override;
+    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
     void reset() override;
 
     void setAdvisor(std::shared_ptr<LocalSearchAdvisor> advisor);

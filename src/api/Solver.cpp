@@ -5,9 +5,17 @@
 #include "sat/SatSolver.h"
 #include "sat/Atomizer.h"
 #include "theory/TheoryManager.h"
-#include "theory/arith/lra/SimplexSolver.h"
+#include "theory/TheoryLemmaDatabase.h"
+#include "theory/TheoryAtomRegistry.h"
+#include "theory/arith/lra/LraSolver.h"
+#include "theory/arith/lia/LiaSolver.h"
 #include "theory/arith/cad/CdcacSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+
+#ifdef NLCOLVER_HAS_CADICAL
+#include "sat/CadicalBackend.h"
+#include "sat/CadicalTheoryPropagator.h"
+#endif
 
 #include <somtparser/frontend/parser.h>
 
@@ -28,17 +36,13 @@ public:
     std::unique_ptr<SOMTParser::Parser> parser;
     std::unique_ptr<CoreIr> ir;
     std::unique_ptr<SatSolver> sat;
-    TheoryManager theoryManager_;
 
-    Impl() : sat(createSatSolver()) {
-        theoryManager_.registerSolver(std::make_unique<SimplexSolver>());
-        theoryManager_.registerSolver(std::make_unique<CdcacSolver>(createPolynomialKernel()));
-    }
+    Impl() : sat(createSatSolver()) {}
 
     void reset() {
         parser = std::make_unique<SOMTParser::Parser>();
         ir.reset();
-        theoryManager_.reset();
+        sat.reset();
     }
 
     bool parseFile(std::string_view filename) {
@@ -68,49 +72,66 @@ public:
             sat->configure("seed", itSeed->second.i);
         }
 
-        // Stage C/E: CDCL(T) loop.
+#ifndef NLCOLVER_HAS_CADICAL
+        return Result::Unknown;
+#else
+        auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
+        if (!cadicalBackend) {
+            return Result::Unknown;
+        }
+
+        // Fresh per-check-sat instances
+        TheoryAtomRegistry registry;
+        TheoryManager theoryManager;
+        TheoryLemmaDatabase lemmaDb;
+
+        // Register solvers based on logic.
+        if (logic == "QF_LIA" || logic == "LIA") {
+            auto lia = std::make_unique<LiaSolver>();
+            lia->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lia));
+        } else if (logic == "QF_LRA" || logic == "LRA") {
+            theoryManager.registerSolver(std::make_unique<LraSolver>());
+        } else if (logic == "QF_NRA" || logic == "NRA") {
+            theoryManager.registerSolver(
+                std::make_unique<CdcacSolver>(createPolynomialKernel()));
+        } else {
+            // Default: LRA covers most linear arithmetic; pure boolean works too.
+            theoryManager.registerSolver(std::make_unique<LraSolver>());
+        }
+
+        // Connect propagator FIRST (required before addObservedVar)
+        CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
+        cadicalBackend->connectPropagator(&propagator);
+
+        // Atomizer registers parsed atoms into registry (which calls addObservedVar)
         Atomizer atomizer(*sat);
+        registry.setContext(sat.get(), &atomizer);
+        atomizer.setRegistry(&registry);
+
+        if (logic == "QF_LIA" || logic == "LIA") {
+            atomizer.setDefaultTheory(TheoryId::LIA);
+        } else {
+            atomizer.setDefaultTheory(TheoryId::LRA);
+        }
+
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
 
-        // Theory check loop (MVP: single iteration, no lemma learning)
-        while (true) {
-            SatSolver::SolveResult sr = sat->solve();
-            if (sr == SatSolver::SolveResult::Unsat) {
-                return Result::Unsat;
-            }
-            if (sr == SatSolver::SolveResult::Unknown) {
-                return Result::Unknown;
-            }
-
-            // SAT model found → ask theories.
-            auto tr = theoryManager_.check(*ir, atomizer.atoms(), *sat);
-
-            if (tr.kind == TheoryCheckResult::Kind::Consistent) {
-                return Result::Sat;
-            }
-
-            if (tr.kind == TheoryCheckResult::Kind::Conflict) {
-                if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
-                    sat->addClause(tr.conflictOpt->clause);
-                    continue; // retry with conflict clause
-                }
-                return Result::Unknown;
-            }
-
-            if (tr.kind == TheoryCheckResult::Kind::Lemma) {
-                if (tr.lemmaOpt && !tr.lemmaOpt->lits.empty()) {
-                    sat->addClause(tr.lemmaOpt->lits);
-                    continue; // retry with lemma
-                }
-                return Result::Unknown;
-            }
-
-            // Unknown
+        if (registry.hasUnsupportedTheoryAtom()) {
+            cadicalBackend->disconnectPropagator();
             return Result::Unknown;
         }
+
+        auto result = sat->solve();
+        cadicalBackend->disconnectPropagator();
+
+        if (result == SatSolver::SolveResult::Sat) return Result::Sat;
+        if (result == SatSolver::SolveResult::Unsat) return Result::Unsat;
+        return Result::Unknown;
+#endif
     }
 };
 

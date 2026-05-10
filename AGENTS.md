@@ -29,7 +29,8 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 
 | Stage | Component | Status | Coverage |
 |-------|-----------|--------|----------|
-| C/E | SimplexSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
+| C/E | LraSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
+| C/E | LiaSolver (LIA) | ✅ Phase 1 | Branch-and-bound, gcd-strength disequality, dynamic atom registry |
 | D | CdcacSolver (NRA) | ✅ MVP | Grid sampling, univariate + bivariate polynomial constraints |
 | F | IncrementalLinearizer | 🏗️ Skeleton | Lemma generation interface ready |
 | G | LocalSearchAdvisor | 🏗️ Skeleton | Model proposal interface ready |
@@ -47,6 +48,9 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 | QF_LRA sat | `x>0 ∧ x<10` | **sat** |
 | QF_LRA unsat | `x>0 ∧ x<0` | **unsat** |
 | QF_LRA + bool unsat | `(p ∨ x>0) ∧ (¬p ∨ x<0) ∧ (x=0)` | **unsat** |
+| QF_LIA sat | `2x≤5 ∧ x≥0` | **sat** |
+| QF_LIA unsat | `2x=1` (Int) | **unsat** |
+| QF_LIA diseq | `x≠0 ∧ x≥0 ∧ x≤0` | **unsat** |
 | QF_NRA sat | `x²>2 ∧ x<0` | **sat** |
 | QF_NRA unsat | `x²>2 ∧ x²<1` | **unsat** |
 | QF_NRA 2D sat | `x²+y²≤1` | **sat** |

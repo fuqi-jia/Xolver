@@ -3,45 +3,68 @@
 #include "expr/types.h"
 #include "expr/ir.h"
 #include "sat/SatSolver.h"
+#include "theory/arith/linear/LinearExpr.h"
 #include <vector>
 #include <optional>
+#include <variant>
+#include <gmpxx.h>
 
 namespace nlcolver {
 
-/**
- * A theory atom maps a SAT variable to a CoreIr atomic expression.
- * The expression kind is one of: Eq, Lt, Leq, Gt, Geq, Distinct.
- */
-struct TheoryAtom {
-    SatVar satVar;   // associated SAT literal's variable
-    ExprId exprId;   // expression in CoreIr
+// Forward declaration
+class TheoryLemmaDatabase;
+
+// ---------------------------------------------------------------------------
+// Theory atom payloads
+// ---------------------------------------------------------------------------
+
+struct LinearAtomPayload {
+    LinearFormKey lhs;
+    Relation rel;
+    mpq_class rhs;
 };
 
-/**
- * Theory conflict: a set of theory atoms that are mutually inconsistent.
- * Represented as a clause to be added to the SAT solver.
- */
+struct PolynomialAtomPayload {
+    PolyId poly;
+    Relation rel;
+    mpq_class rhs;
+};
+
+using TheoryAtomPayload = std::variant<
+    LinearAtomPayload,
+    PolynomialAtomPayload
+>;
+
+// ---------------------------------------------------------------------------
+// TheoryAtomRecord: maps a SAT variable to its theory semantics.
+// ---------------------------------------------------------------------------
+
+struct TheoryAtomRecord {
+    SatVar satVar;
+    TheoryId theory;
+    bool isDynamic;
+    ExprId exprId;  // diagnostic only; routing uses satVar
+    TheoryAtomPayload payload;
+};
+
+// ---------------------------------------------------------------------------
+// Theory conflict / lemma / check result
+// ---------------------------------------------------------------------------
+
 struct TheoryConflict {
-    std::vector<SatLit> clause; // negated theory literals
+    std::vector<SatLit> clause;
 };
 
-/**
- * Theory lemma: a valid theory consequence to be added to the SAT solver.
- * Examples: disequality split, integer branch, Gomory cut, GCD tightening.
- */
 struct TheoryLemma {
     std::vector<SatLit> lits;
 };
 
-/**
- * Result of a theory check.
- */
 struct TheoryCheckResult {
     enum class Kind {
-        Consistent,   // assignment is theory-consistent
-        Conflict,     // assignment is theory-inconsistent
-        Lemma,        // theory-valid lemma to be added
-        Unknown,      // solver gave up
+        Consistent,
+        Conflict,
+        Lemma,
+        Unknown,
     };
 
     Kind kind;
@@ -62,27 +85,37 @@ struct TheoryCheckResult {
     }
 };
 
-/**
- * Abstract interface for theory solvers (LRA, LIA, NRA, etc.)
- */
+// ---------------------------------------------------------------------------
+// Abstract interface for theory solvers
+// ---------------------------------------------------------------------------
+
 class TheorySolver {
 public:
     virtual ~TheorySolver() = default;
 
     virtual TheoryId id() const = 0;
 
-    // Scope management
+    // Scope management (for Solver::push/pop API)
     virtual void push() = 0;
     virtual void pop(uint32_t n) = 0;
 
-    // Assert a theory literal under the current SAT assignment
-    virtual void assertLit(const TheoryAtom& atom, bool value, const CoreIr& ir) = 0;
+    // Incremental assertion from SAT trail
+    virtual void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) = 0;
 
-    // Check theory consistency under current assertions
-    virtual TheoryCheckResult check(const CoreIr& ir) = 0;
+    // Backtrack to target decision level
+    virtual void backtrackToLevel(int level) = 0;
 
-    // Reset all assertions (bounds, state, but not registered constraints)
+    // Check current incremental state
+    virtual TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) = 0;
+
+    // Reset ONCE per fresh check-sat initialization
     virtual void reset() = 0;
+};
+
+// Legacy struct (for backward compatibility during transition)
+struct TheoryAtom {
+    SatVar satVar;
+    ExprId exprId;
 };
 
 } // namespace nlcolver

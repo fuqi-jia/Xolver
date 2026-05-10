@@ -27,28 +27,30 @@ public:
 
     void push() override;
     void pop(uint32_t n) override;
-    void assertLit(const TheoryAtom& atom, bool value, const CoreIr& ir) override;
-    TheoryCheckResult check(const CoreIr& ir) override;
+    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
+    void backtrackToLevel(int level) override;
+    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
     void reset() override;
 
 private:
     struct PolyConstraint {
         SatVar satVar;
-        PolyId poly;       // polynomial representing lhs - rhs
-        Relation rel;      // original relation (after value flip)
+        PolyId poly;
+        Relation rel;
+    };
+
+    struct TrailEntry {
+        int level;
+        size_t constraintsSize;
     };
 
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     std::vector<PolyConstraint> constraints_;
+    std::vector<TrailEntry> trail_;
     std::unordered_set<std::string> allVars_;
-    std::optional<TheoryConflict> lastConflict_;
 
-    void collectVars(ExprId eid, const CoreIr& ir);
-
-    bool evaluateAtSample(const std::vector<PolyConstraint>& constraints,
-                          const std::unordered_map<std::string, mpq_class>& sample);
-    TheoryCheckResult trySolve(const CoreIr& ir);
+    void collectVars(const std::vector<std::pair<std::string, mpq_class>>& coeffs);
 };
 
 } // namespace nlcolver

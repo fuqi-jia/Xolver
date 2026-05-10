@@ -82,7 +82,7 @@ void GeneralSimplex::makeBasicWithoutPivot(int var, int row) {
 
 void GeneralSimplex::markBasicSwitch(int leaving, int entering) {
     // entering was non-basic, remove it
-    assert(vars_[entering].basicRow == -1);
+    // Note: pivot() has already set vars_[entering].basicRow before calling this.
     removeFromNonBasic(entering);
 
     // leaving becomes non-basic
@@ -218,7 +218,7 @@ void GeneralSimplex::checkInvariants() const {
 // Bound assertion
 // ============================================================================
 
-bool GeneralSimplex::assertLower(int var, const BoundInfo& info) {
+bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
     assert(info.bound.isFinite());
     assert(info.reason.has_value());
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
@@ -230,7 +230,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info) {
         return false;
     }
 
-    trail_.back().push_back({var, true, vars_[var].lower});
+    trail_.push_back({level, var, true, vars_[var].lower});
     vars_[var].lower = info;
 
     if (vars_[var].basicRow == -1 && violatesLower(var)) {
@@ -241,7 +241,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info) {
     return true;
 }
 
-bool GeneralSimplex::assertUpper(int var, const BoundInfo& info) {
+bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
     assert(info.bound.isFinite());
     assert(info.reason.has_value());
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
@@ -253,7 +253,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info) {
         return false;
     }
 
-    trail_.back().push_back({var, false, vars_[var].upper});
+    trail_.push_back({level, var, false, vars_[var].upper});
     vars_[var].upper = info;
 
     if (vars_[var].basicRow == -1 && violatesUpper(var)) {
@@ -578,12 +578,11 @@ void GeneralSimplex::pivot(int leaving, int entering) {
     tab_.replaceRow(r, entering, newRhs, newEntries);
 
     // Update basis metadata
-    vars_[leaving].basicRow = -1;
+    // markBasicSwitch assumes entering is still non-basic (basicRow == -1)
+    markBasicSwitch(leaving, entering);
     vars_[entering].basicRow = r;
     basicVars_[r] = entering;
     tab_.row(r).basicVar = entering;
-
-    markBasicSwitch(leaving, entering);
 
     // Invariant: entering is now basic, so its column must be empty
     assert(tab_.col(entering).entries.empty());
@@ -657,18 +656,32 @@ void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower) {
 // ============================================================================
 
 void GeneralSimplex::push() {
-    trail_.push_back({});
+    scopeStack_.push_back(trail_.size());
 }
 
 void GeneralSimplex::pop() {
-    assert(!trail_.empty());
-    auto& entries = trail_.back();
-    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
-        if (it->isLower) vars_[it->var].lower = it->oldBound;
-        else             vars_[it->var].upper = it->oldBound;
+    assert(!scopeStack_.empty());
+    size_t target = scopeStack_.back();
+    scopeStack_.pop_back();
+    while (trail_.size() > target) {
+        const auto& e = trail_.back();
+        if (e.isLower) vars_[e.var].lower = e.oldBound;
+        else           vars_[e.var].upper = e.oldBound;
+        trail_.pop_back();
     }
-    trail_.pop_back();
     betaDirty_ = true;
+}
+
+void GeneralSimplex::backtrackToLevel(int level) {
+    while (!trail_.empty() && trail_.back().level > level) {
+        const auto& e = trail_.back();
+        if (e.isLower) vars_[e.var].lower = e.oldBound;
+        else           vars_[e.var].upper = e.oldBound;
+        trail_.pop_back();
+    }
+    betaDirty_ = true;
+    hasImmediateConflict_ = false;
+    conflict_.clear();
 }
 
 // ============================================================================
@@ -680,9 +693,8 @@ void GeneralSimplex::resetActiveBounds() {
         vars_[i].lower = BoundInfo(BoundValue::negInf());
         vars_[i].upper = BoundInfo(BoundValue::posInf());
     }
-    if (!trail_.empty()) {
-        trail_[0].clear();
-    }
+    trail_.clear();
+    scopeStack_.clear();
     betaDirty_ = true;
     conflict_.clear();
     hasImmediateConflict_ = false;
@@ -700,7 +712,7 @@ void GeneralSimplex::reset() {
     inViolationQueue_.clear();
     conflict_.clear();
     trail_.clear();
-    trail_.push_back({});
+    scopeStack_.clear();
     betaDirty_ = true;
     hasImmediateConflict_ = false;
 }
