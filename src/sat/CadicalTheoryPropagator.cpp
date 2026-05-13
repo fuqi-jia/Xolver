@@ -39,6 +39,13 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& /*mod
         return true;
     }
 
+    // Slow-path fuse: prevent infinite loops from buggy theory solvers
+    if (++modelCheckCount_ > MAX_MODEL_CHECKS) {
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return true;
+    }
+
     auto tr = tm_.check(lemmaDb_);
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
@@ -57,10 +64,11 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& /*mod
 
     if (tr.kind == TheoryCheckResult::Kind::Lemma) {
         if (tr.lemmaOpt && !tr.lemmaOpt->lits.empty()) {
-            if (lemmaDb_.insertIfNew(*tr.lemmaOpt)) {
-                setPendingClause(*tr.lemmaOpt);
-                return false;
-            }
+            // Always return the clause, even if seen before.
+            // The current model violates the theory; we must reject it.
+            lemmaDb_.insertIfNew(*tr.lemmaOpt);
+            setPendingClause(*tr.lemmaOpt);
+            return false;
         }
         abortWithUnknown_ = true;
         terminateSolve();

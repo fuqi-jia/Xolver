@@ -158,11 +158,20 @@ NLColver/
 ## Build Commands
 
 ```bash
+# First time only
+git submodule update --init --recursive
+
+# Standard build
 mkdir build && cd build
-cmake ..
+cmake ..                    # Release by default
 cmake --build . -j$(nproc)
 ctest
 ```
+
+### Build Types
+
+- Default `CMAKE_BUILD_TYPE` is `Release` (`-O3`).
+- For debugging: `cmake -DCMAKE_BUILD_TYPE=Debug ..` (`-g -O0`).
 
 ## Build Options
 
@@ -184,24 +193,88 @@ ctest
 | nlohmann/json | ✅ (FetchContent) | JSON handling |
 | doctest | ✅ (FetchContent) | Unit testing |
 
+### Dependency Handling (Silent Degradation)
+
+The CMake config has **silent degradation**: `cmake ..` will succeed even when SAT or polynomial backends are missing. It emits `WARNING` messages and stubs the backends out via compile-definition flags.
+
+| Dependency | Found via | If missing |
+|---|---|---|
+| GMP, MPFR | pkg-config / `find_library` | **FATAL_ERROR** |
+| CaDiCaL | `configure` + `make` in submodule dir | Warning + `NLCOLVER_HAS_CADICAL` undefined → SAT backend stubbed |
+| libpoly | `add_subdirectory` | Warning + `NLCOLVER_HAS_LIBPOLY` undefined → polynomial kernel stubbed |
+| nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
+| doctest v2.4.11 | FetchContent (network) | Tests skip |
+
+When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `#NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
+
 ## Code Style Guidelines
 
-- C++17 minimum.
-- Follow SOMTParser conventions.
-- Internal headers use relative paths; public headers use `<nlcolver/...>`.
-- Target-specific compile options (`-Wall -Wextra -Wpedantic`) applied only to `nlcolver_core`, not vendor code.
+- **C++17 minimum.** `set(CMAKE_CXX_STANDARD 17)`, extensions OFF. No GCC-isms.
+- **Namespace:** All library code lives in `namespace nlcolver { ... }`.
+- **Typed IDs:** Use `uint32_t` IDs for everything hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/expr/types.h`. Do not introduce parallel ID schemes.
+- **pImpl pattern:** Used at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/nlcolver/`.
+- **Includes:**
+  - Public headers use `<nlcolver/...>`.
+  - Internal headers use relative paths.
+- **Containers:** `SmallVector<T, 4>` (in `src/util/SmallVector.h`) is the default container for short child-lists on `CoreExpr` nodes. Use it instead of `std::vector` where N is typically small.
+- **Compiler flags:** `-Wall -Wextra -Wpedantic -Wno-unused-parameter` applied **only** to `nlcolver_core`, not vendor code. Do not suppress other warnings — fix the root cause.
+- **CMake file discovery:** `src/CMakeLists.txt` uses `file(GLOB_RECURSE ... CONFIGURE_DEPENDS)` over each subsystem directory. New `.cpp`/`.h` files under `src/<subsystem>/` are picked up automatically — no need to edit CMakeLists.
 
 ## Testing Instructions
 
+### Framework
+
+Tests use **doctest** v2.4.11 (header-only, fetched via FetchContent).
+
+- `tests/unit/test_main.cpp` defines `DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN`.
+- All other unit test files include `<doctest/doctest.h>` and declare `TEST_CASE` macros.
+- Common pattern: write temporary `.smt2` files to `std::filesystem::temp_directory_path()` for end-to-end tests.
+
+### Running Tests
+
 ```bash
-# Unit tests
+# All tests
+ctest
+
+# Unit tests only
 ctest -R unit
 
-# Manual CLI tests
+# Run unit test binary directly
+./build/tests/nlcolver_unit_tests
+
+# Single test case
+./build/tests/nlcolver_unit_tests --test-case="NIA-Core: x^2 = 4 -> sat"
+
+# List all test cases
+./build/tests/nlcolver_unit_tests -ltc
+```
+
+### Manual CLI Tests
+
+```bash
 ./build/bin/nlcolver solve tests/unit/test_bool.smt2
 ./build/bin/nlcolver solve tests/regression/nia/nia_001_sat_x2_eq_4.smt2
 ./build/bin/nlcolver solve tests/regression/nia/nia_002_unsat_x2_eq_2.smt2
 ```
+
+## Architecture Invariants
+
+1. **Soundness boundary.** `Result::Sat` must be backed by a `ModelValidator` pass over original assertions. Local search, MCSAT value proposals, and bit-blasted NIA results are all *candidates only* — they must be validated by the exact kernel before being returned. Never short-circuit this.
+
+2. **Advisor pattern for anything heuristic.** Local search, learning modules, portfolio schedulers — all flow through `Advisor::propose() → Proposal → policy.accept()`. Heuristics never write solver state directly.
+
+3. **Three views of an expression, kept separately.**
+   - **DAG view** (`Expr` in `src/expr/`): for rewriting, proof, pretty-printing. Hash-consed; never mutate.
+   - **Polynomial view** (`PolyId` in `src/theory/arith/poly/`): for theory reasoning. Canonical sparse polynomial via libpoly.
+   - **Evaluation view**: for local-search incremental scoring.
+
+4. **Atomizer separates SAT literals from theory atoms.** A theory atom (`AtomId`, theory + poly + relation) is *not* a SAT variable; the abstraction `b_i ↔ atom_i` is managed by the Atomizer, not implicit.
+
+5. **CDCL(T) is the main loop; MCSAT is parallel research path.** Theory solvers implement two interfaces (`TheorySolver` for CDCL(T) and `McsatSolver` for trail-based reasoning). Don't merge them.
+
+6. **Rewriter is DAG-safe and memoized.** Bottom-up with a memo table; optional fixpoint. A naive recursive rewrite blows up on shared subterms.
+
+7. **NIA soundness over completeness.** NIA is undecidable. SAT requires exact integer validation. UNSAT requires sound proof (constant contradiction, empty roots, modular contradiction, GCD contradiction, or finite-domain exhaustion). Unknown is acceptable for unbounded cases. Never emit UNSAT from incomplete reasoning.
 
 ## Security Considerations
 
@@ -210,10 +283,20 @@ ctest -R unit
 
 ## Notes for Agents
 
-1. **plan.md is the canonical design document.** Read it before making architectural decisions. It contains full Stage A–K roadmap with interfaces, data structures, and acceptance criteria.
-2. **SOMTParser is a git submodule.** If it appears empty, run `git submodule update --init --recursive`.
-3. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` macros.
-4. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
-5. **SOMTParser already provides hash-consing, rewriter, visitor.** Do not reimplement these. The internal CoreIr is a lightweight dense array for solver-specific metadata (literal IDs, proof IDs, scope levels), not a replacement for SOMTParser's DAG.
-6. **TheoryManager dispatches to all registered solvers.** Each solver silently ignores unsupported constraints. For MVP, positive theory literals are asserted; negative literals are handled by SAT-level negation.
-7. **CLI auto-detects logic from `(set-logic ...)` in SMT2 files.** If no logic is set, default is LRA path, which will mark nonlinear constraints as unsupported and return Unknown.
+1. **plan.md is the canonical design document.** Read it before making architectural decisions. It contains the full Stage A–K roadmap with interfaces, data structures, and acceptance criteria.
+
+2. **CLAUDE.md contains additional technical guidance.** It documents subsystem mappings to `plan.md` sections, key files for NIA work, and reference solver usage. Read it alongside this file.
+
+3. **SOMTParser is a git submodule.** If it appears empty, run `git submodule update --init --recursive`.
+
+4. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` macros.
+
+5. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
+
+6. **SOMTParser already provides hash-consing, rewriter, visitor.** Do not reimplement these. The internal CoreIr is a lightweight dense array for solver-specific metadata (literal IDs, proof IDs, scope levels), not a replacement for SOMTParser's DAG.
+
+7. **TheoryManager dispatches to all registered solvers.** Each solver silently ignores unsupported constraints. For MVP, positive theory literals are asserted; negative literals are handled by SAT-level negation.
+
+8. **CLI auto-detects logic from `(set-logic ...)` in SMT2 files.** If no logic is set, default is LRA path, which will mark nonlinear constraints as unsupported and return Unknown.
+
+9. **The `implementation_process/` directory** contains historical design documents and chat logs from the iterative development process. It is not source code and can be ignored for builds, but may contain useful context for understanding design decisions.

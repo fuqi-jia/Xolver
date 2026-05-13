@@ -60,6 +60,7 @@ LOGIC_ALIASES = {
     "nira": "QF_NIRA",
     "idl": "QF_IDL",
     "rdl": "QF_RDL",
+    "uf": "QF_UF",
     "bool": "QF_BOOL",
 }
 

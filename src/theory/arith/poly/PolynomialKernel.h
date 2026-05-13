@@ -81,6 +81,22 @@ public:
     getIntegerCoefficients(PolyId a, std::string_view var) const = 0;
 
     // ------------------------------------------------------------------
+    // Multivariate term decomposition (for GCD, interval evaluation, CAD)
+    // ------------------------------------------------------------------
+    struct MonomialTerm {
+        mpz_class coefficient;                           // exact integer coefficient
+        std::vector<std::pair<std::string, int>> powers; // [(var, exp), ...]; empty = constant term
+    };
+
+    // Return all monomial terms, INCLUDING the constant term as powers.empty().
+    // For a constant polynomial c, return { MonomialTerm{c, {}} }.
+    // Return nullopt only if decomposition fails, coefficients are not exact integers,
+    // or backend unsupported. Base default returns nullopt.
+    virtual std::optional<std::vector<MonomialTerm>> terms(PolyId) const {
+        return std::nullopt;
+    }
+
+    // ------------------------------------------------------------------
     // Debugging
     // ------------------------------------------------------------------
     virtual std::string toString(PolyId a) const = 0;

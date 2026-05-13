@@ -45,7 +45,11 @@ public:
     std::optional<int> degree(PolyId a, std::string_view var) const override;
     std::optional<std::vector<mpz_class>> getIntegerCoefficients(
         PolyId a, std::string_view var) const override;
+    std::optional<std::vector<MonomialTerm>> terms(PolyId a) const override;
     std::string toString(PolyId a) const override;
+
+    // Public accessor for variable name resolution (used by C traverse callback)
+    std::optional<std::string> resolveVariableName(lp_variable_t v) const;
 
 private:
     poly::Context ctx_;

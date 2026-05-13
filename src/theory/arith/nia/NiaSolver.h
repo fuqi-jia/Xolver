@@ -10,7 +10,7 @@
 #include "theory/arith/nia/LinearNiaDomainReasoner.h"
 #include "theory/arith/nia/AlgebraicIntegerReasoner.h"
 #include "theory/arith/nia/SquareBoundReasoner.h"
-#include "theory/arith/nia/IntervalEvaluator.h"
+#include "theory/arith/interval/IntervalEvaluator.h"
 #include "theory/arith/nia/SumOfSquaresBoundReasoner.h"
 #include "theory/arith/nia/BoundedNiaSolver.h"
 #include "theory/arith/nia/NiaLocalSearch.h"

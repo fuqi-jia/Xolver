@@ -178,10 +178,31 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
-    // 9. Interval evaluation (single-variable only)
-    auto ir = intervalEvaluator_.run(normalized, domains_);
-    if (ir.kind == NiaReasoningKind::Conflict) {
-        return TheoryCheckResult::mkConflict(*ir.conflict);
+    // 9. Interval evaluation (single-variable only, via common framework)
+    ReasonedBox box;
+    for (const auto& c : normalized) {
+        for (const auto& var : kernel_->variables(c.poly)) {
+            if (box.get(var)) continue; // already set
+            const IntDomain* d = domains_.getDomain(var);
+            if (d && d->hasLower && d->hasUpper) {
+                std::vector<SatLit> reasons;
+                reasons.insert(reasons.end(), d->lower.reasons.begin(), d->lower.reasons.end());
+                reasons.insert(reasons.end(), d->upper.reasons.begin(), d->upper.reasons.end());
+                box.set(var, ReasonedInterval{IntervalZ{d->lower.value, d->upper.value}, reasons});
+            }
+        }
+    }
+    for (const auto& c : normalized) {
+        IntervalConstraint ic{c.poly, c.rel, c.reason};
+        auto ir = intervalEvaluator_.run(ic, box);
+        if (ir.status == IntervalEvalStatus::DefinitelyViolated) {
+            std::vector<SatLit> lits;
+            lits.push_back(c.reason.negated());
+            for (const auto& r : ir.usedReasons) {
+                lits.push_back(r.negated());
+            }
+            return TheoryCheckResult::mkConflict(TheoryConflict{lits});
+        }
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());

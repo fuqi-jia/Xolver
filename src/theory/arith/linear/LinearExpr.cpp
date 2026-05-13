@@ -65,6 +65,24 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             }
             return false;
         }
+        case Kind::Div: {
+            if (e.children.size() != 2) return false;
+            const CoreExpr& a = ir.get(e.children[0]);
+            const CoreExpr& b = ir.get(e.children[1]);
+            if (a.isConst() && b.isConst()) {
+                mpq_class num, den;
+                if (auto* iv = std::get_if<int64_t>(&a.payload.value)) num = mpq_class(*iv);
+                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) num = mpq_class(*sv);
+                else return false;
+                if (auto* iv = std::get_if<int64_t>(&b.payload.value)) den = mpq_class(*iv);
+                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) den = mpq_class(*sv);
+                else return false;
+                if (den == 0) return false;
+                constant += mul * (num / den);
+                return true;
+            }
+            return false;
+        }
         default:
             return false;
     }

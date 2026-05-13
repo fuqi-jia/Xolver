@@ -44,6 +44,8 @@ private:
     size_t pendingClausePos_ = 0;
     bool hasPendingClause_ = false;
     bool abortWithUnknown_ = false;
+    int modelCheckCount_ = 0;
+    static constexpr int MAX_MODEL_CHECKS = 10000;
 
     void setPendingClause(const std::vector<SatLit>& lits);
     void setPendingClause(const TheoryLemma& lemma);

@@ -11,6 +11,8 @@
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/arith/nra/NraSolver.h"
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/idl/IdlSolver.h"
+#include "theory/arith/rdl/RdlSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
@@ -110,6 +112,14 @@ public:
             auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
             nia->setRegistry(&registry);
             theoryManager.registerSolver(std::move(nia));
+        } else if (logic == "QF_IDL" || logic == "IDL") {
+            auto idl = std::make_unique<IdlSolver>();
+            idl->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(idl));
+        } else if (logic == "QF_RDL" || logic == "RDL") {
+            auto rdl = std::make_unique<RdlSolver>();
+            rdl->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(rdl));
         } else {
             // Default: LRA covers most linear arithmetic; pure boolean works too.
             theoryManager.registerSolver(std::make_unique<LraSolver>());
@@ -140,6 +150,10 @@ public:
             if (polyKernelRaw) {
                 atomizer.setPolynomialKernel(polyKernelRaw);
             }
+        } else if (logic == "QF_IDL" || logic == "IDL") {
+            atomizer.setDefaultTheory(TheoryId::IDL);
+        } else if (logic == "QF_RDL" || logic == "RDL") {
+            atomizer.setDefaultTheory(TheoryId::RDL);
         } else {
             atomizer.setDefaultTheory(TheoryId::LRA);
         }
@@ -229,7 +243,11 @@ Result Solver::checkSatAssuming(std::vector<Term>) {
     return Result::Unknown;
 }
 
-Model Solver::getModel() const { return Model{}; }
+Model Solver::getModel() const {
+    // TODO: When model construction is implemented, filter out internal
+    // variables such as "__ZERO__" used by difference-logic solvers.
+    return Model{};
+}
 Term Solver::getValue(Term) const { return Term{}; }
 std::vector<Term> Solver::getUnsatCore() const { return {}; }
 Proof Solver::getProof() const { return Proof{}; }

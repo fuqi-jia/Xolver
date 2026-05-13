@@ -241,6 +241,76 @@ std::optional<std::vector<mpz_class>> LibPolyKernel::getIntegerCoefficients(
     return coeffs;
 }
 
+// Traverse data: holds result vector, kernel pointer, and failure flag
+struct TermsTraverseData {
+    std::vector<PolynomialKernel::MonomialTerm> terms;
+    const LibPolyKernel* kernel;
+    bool failed = false;
+};
+
+extern "C" {
+
+// C callback for lp_polynomial_traverse
+static void termsTraverseCallback(const lp_polynomial_context_t* /*ctx*/,
+                                   lp_monomial_t* m, void* data) {
+    auto* tdata = static_cast<TermsTraverseData*>(data);
+    if (tdata->failed) return;
+
+    // Extract coefficient: lp_integer_t -> poly::Integer -> mpz_class
+    poly::Integer coeff(&m->a);
+    mpz_class coeffMpz = *poly::detail::cast_to_gmp(&coeff);
+
+    // Drop zero-coefficient terms
+    if (coeffMpz == 0) return;
+
+    PolynomialKernel::MonomialTerm term;
+    term.coefficient = std::move(coeffMpz);
+
+    for (size_t i = 0; i < m->n; ++i) {
+        lp_variable_t v = m->p[i].x;
+        size_t d = m->p[i].d;
+        auto nameOpt = tdata->kernel->resolveVariableName(v);
+        if (!nameOpt) {
+            tdata->failed = true;
+            return;
+        }
+        term.powers.push_back({*nameOpt, static_cast<int>(d)});
+    }
+
+    tdata->terms.push_back(std::move(term));
+}
+
+} // extern "C"
+
+std::optional<std::string> LibPolyKernel::resolveVariableName(lp_variable_t v) const {
+    auto it = revVarMap_.find(v);
+    if (it != revVarMap_.end()) return it->second;
+    return std::nullopt;
+}
+
+std::optional<std::vector<PolynomialKernel::MonomialTerm>>
+LibPolyKernel::terms(PolyId a) const {
+    const auto& p = get(a);
+
+    // Constant polynomial: return single term with empty powers
+    if (poly::is_constant(p)) {
+        poly::Assignment empty(ctx_);
+        poly::Value v = poly::evaluate(p, empty);
+        if (!poly::is_rational(v)) return std::nullopt;
+        const poly::Rational& r = poly::as_rational(v);
+        mpq_class c = *poly::detail::cast_to_gmp(&r);
+        if (c.get_den() != 1) return std::nullopt;
+        return std::vector<MonomialTerm>{{c.get_num(), {}}};
+    }
+
+    TermsTraverseData data;
+    data.kernel = this;
+    lp_polynomial_traverse(p.get_internal(), termsTraverseCallback, &data);
+
+    if (data.failed) return std::nullopt;
+    return data.terms;
+}
+
 } // namespace nlcolver
 
 #endif // NLCOLVER_HAS_LIBPOLY
