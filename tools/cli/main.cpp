@@ -23,15 +23,16 @@ static void printUsage(const char* prog) {
 
 #include <nlcolver/Solver.h>
 
-static int cmdSolve(int argc, char* argv[]) {
-    if (argc < 3) {
+static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
+    int fileIdx = defaultMode ? 1 : 2;
+    if (argc < fileIdx + 1) {
         std::cerr << "Error: solve requires an input file.\n";
         return EXIT_FAILURE;
     }
 
     nlcolver::Solver solver;
-    if (!solver.parseFile(argv[2])) {
-        std::cerr << "Error: failed to parse " << argv[2] << "\n";
+    if (!solver.parseFile(argv[fileIdx])) {
+        std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
         return EXIT_FAILURE;
     }
 
@@ -87,6 +88,11 @@ int main(int argc, char* argv[]) {
         std::strcmp(cmd, "--help") == 0) {
         printUsage(argv[0]);
         return EXIT_SUCCESS;
+    }
+
+    // Default: if the first arg doesn't start with '-', treat it as a file to solve
+    if (cmd[0] != '-') {
+        return cmdSolve(argc, argv, true);
     }
 
     std::cerr << "Unknown command: " << cmd << "\n";
