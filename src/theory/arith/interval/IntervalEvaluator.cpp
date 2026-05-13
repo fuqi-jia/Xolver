@@ -9,7 +9,7 @@ IntervalEvaluator::IntervalEvaluator(PolynomialKernel& kernel)
     : kernel_(kernel) {}
 
 std::optional<IntervalZ> IntervalEvaluator::getVariableInterval(
-    const std::string& var, const ReasonedBox& box) const {
+    const std::string& var, const ReasonedBoxZ& box) const {
 
     auto riOpt = box.get(var);
     if (!riOpt) return std::nullopt;
@@ -58,7 +58,7 @@ bool IntervalEvaluator::isDefinitelyViolated(const IntervalZ& polyInterval, Rela
 
 IntervalEvalResult IntervalEvaluator::run(
     const IntervalConstraint& constraint,
-    const ReasonedBox& box) {
+    const ReasonedBoxZ& box) {
 
     auto vars = kernel_.variables(constraint.poly);
     if (vars.size() != 1) {

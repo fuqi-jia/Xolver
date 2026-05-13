@@ -8,12 +8,12 @@
 namespace nlcolver {
 
 /**
- * ReasonedBox: a box of per-variable intervals, each carrying SAT literal reasons.
+ * ReasonedBoxZ: a box of per-variable integer intervals, each carrying SAT literal reasons.
  *
  * Does NOT construct conflicts. The caller (e.g. NiaSolver adapter) is responsible
  * for assembling conflicts from violated constraints + used interval reasons.
  */
-class ReasonedBox {
+class ReasonedBoxZ {
 public:
     // Get interval for a variable
     std::optional<ReasonedInterval> get(const std::string& var) const;

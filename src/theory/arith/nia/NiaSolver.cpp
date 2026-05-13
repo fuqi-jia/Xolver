@@ -179,7 +179,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
     }
 
     // 9. Interval evaluation (single-variable only, via common framework)
-    ReasonedBox box;
+    ReasonedBoxZ box;
     for (const auto& c : normalized) {
         for (const auto& var : kernel_->variables(c.poly)) {
             if (box.get(var)) continue; // already set

@@ -1,19 +1,19 @@
-#include "theory/arith/interval/ReasonedBox.h"
+#include "theory/arith/interval/ReasonedBoxZ.h"
 #include <algorithm>
 
 namespace nlcolver {
 
-std::optional<ReasonedInterval> ReasonedBox::get(const std::string& var) const {
+std::optional<ReasonedInterval> ReasonedBoxZ::get(const std::string& var) const {
     auto it = box_.find(var);
     if (it == box_.end()) return std::nullopt;
     return it->second;
 }
 
-void ReasonedBox::set(const std::string& var, ReasonedInterval ri) {
+void ReasonedBoxZ::set(const std::string& var, ReasonedInterval ri) {
     box_[var] = std::move(ri);
 }
 
-bool ReasonedBox::narrow(const std::string& var, IntervalZ newInterval,
+bool ReasonedBoxZ::narrow(const std::string& var, IntervalZ newInterval,
                          const std::vector<SatLit>& reasons) {
     auto it = box_.find(var);
     if (it == box_.end()) {
@@ -26,7 +26,6 @@ bool ReasonedBox::narrow(const std::string& var, IntervalZ newInterval,
     mpz_class newHi = std::min(ri.interval.hi, newInterval.hi);
 
     if (newLo > newHi) {
-        // Empty interval — mark it
         ri.interval = IntervalZ{newLo, newHi};
         ri.reasons.insert(ri.reasons.end(), reasons.begin(), reasons.end());
         return true;
@@ -40,18 +39,18 @@ bool ReasonedBox::narrow(const std::string& var, IntervalZ newInterval,
     return changed;
 }
 
-bool ReasonedBox::isEmpty() const {
+bool ReasonedBoxZ::isEmpty() const {
     for (const auto& [var, ri] : box_) {
         if (ri.interval.isEmpty()) return true;
     }
     return false;
 }
 
-void ReasonedBox::clear() {
+void ReasonedBoxZ::clear() {
     box_.clear();
 }
 
-const std::unordered_map<std::string, ReasonedInterval>& ReasonedBox::entries() const {
+const std::unordered_map<std::string, ReasonedInterval>& ReasonedBoxZ::entries() const {
     return box_;
 }
 

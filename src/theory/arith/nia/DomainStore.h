@@ -53,6 +53,8 @@ public:
 
     const IntDomain* getDomain(const std::string& var) const;
 
+    const std::map<std::string, IntDomain>& getAllDomains() const { return domains_; }
+
     TheoryConflict buildEmptyDomainConflict() const;
 
 private:
