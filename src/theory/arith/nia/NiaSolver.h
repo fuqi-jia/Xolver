@@ -21,8 +21,11 @@
 #include <memory>
 #include <optional>
 #include <unordered_set>
+#include <deque>
 
 namespace nlcolver {
+
+class NiaLinearizationAdapter;
 
 /**
  * NIA (Nonlinear Integer Arithmetic) theory solver.
@@ -42,6 +45,7 @@ namespace nlcolver {
 class NiaSolver : public TheorySolver {
 public:
     explicit NiaSolver(std::unique_ptr<PolynomialKernel> kernel);
+    ~NiaSolver();
 
     TheoryId id() const override { return TheoryId::NIA; }
 
@@ -53,7 +57,7 @@ public:
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
     void reset() override;
 
-    void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
+    void setRegistry(TheoryAtomRegistry* reg);
 
 private:
     struct NiaTrailEntry {
@@ -70,11 +74,19 @@ private:
         int level;
     };
 
+    struct ActiveAssignment {
+        int level;
+        SatLit lit;
+        TheoryAtomRecord atom;
+        bool value;
+    };
+
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
 
     std::vector<ActiveNiaConstraint> active_;
     std::vector<NiaTrailEntry> trail_;
+    std::vector<ActiveAssignment> activeAssignments_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
 
@@ -94,6 +106,8 @@ private:
     std::optional<IntegerModel> currentModel_;
 
     TheoryAtomRegistry* registry_ = nullptr;
+    std::unique_ptr<NiaLinearizationAdapter> linAdapter_;
+    std::deque<TheoryLemma> pendingLinLemmas_;
 
     struct BranchSplitKey {
         std::string var;

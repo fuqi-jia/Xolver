@@ -21,6 +21,9 @@ constexpr AtomId  NullAtom  = std::numeric_limits<AtomId>::max();
 constexpr PolyId  NullPoly  = std::numeric_limits<PolyId>::max();
 constexpr ClauseId NullClause = std::numeric_limits<ClauseId>::max();
 
+constexpr ExprId TrueSentinelExpr  = std::numeric_limits<ExprId>::max() - 1;
+constexpr ExprId FalseSentinelExpr = std::numeric_limits<ExprId>::max() - 2;
+
 using ScopeLevel = uint32_t;
 constexpr ScopeLevel ScopeRoot = 0;
 
@@ -30,6 +33,10 @@ enum class TheoryId : uint8_t {
 
 enum class Relation : uint8_t {
     Eq, Neq, Lt, Leq, Gt, Geq
+};
+
+enum class SortKind : uint8_t {
+    Int, Real
 };
 
 } // namespace nlcolver

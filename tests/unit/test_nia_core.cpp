@@ -631,3 +631,44 @@ TEST_CASE("NIA-Core: x*y=0, x!=0, y!=0 -> unsat (factor lemma skeleton)") {
     Result r = solver.checkSat();
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
 }
+
+// ---------------------------------------------------------------------------
+// IncrementalLinearizer V1 tests
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: 0<=x,y<=10, x*y>200 -> unsat (McCormick)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (>= x 0))\n"
+        "(assert (<= x 10))\n"
+        "(assert (>= y 0))\n"
+        "(assert (<= y 10))\n"
+        "(assert (> (* x y) 200))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: x^2+y^2<=1, x=2 -> unsat (square cut)") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (<= (+ (* x x) (* y y)) 1))\n"
+        "(assert (= x 2))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}

@@ -1,9 +1,19 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/nia/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/TheoryLemmaDatabase.h"
 #include <unordered_set>
 
 namespace nlcolver {
+
+NiaSolver::~NiaSolver() = default;
+
+void NiaSolver::setRegistry(TheoryAtomRegistry* reg) {
+    registry_ = reg;
+    if (kernel_) {
+        linAdapter_ = std::make_unique<NiaLinearizationAdapter>(*kernel_, reg);
+    }
+}
 
 NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
@@ -25,15 +35,19 @@ void NiaSolver::pop(uint32_t) {}
 void NiaSolver::reset() {
     active_.clear();
     trail_.clear();
+    activeAssignments_.clear();
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
     emittedSplits_.clear();
     branchCountPerVar_.clear();
+    pendingLinLemmas_.clear();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
                           int level, SatLit reason) {
+    activeAssignments_.push_back({level, reason, atom, value});
+
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
     if (!payload) {
         pendingUnknown_ = PendingUnknown{level};
@@ -59,6 +73,9 @@ void NiaSolver::backtrackToLevel(int level) {
         active_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
     }
+    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+        [level](const auto& a) { return a.level > level; });
+    activeAssignments_.erase(it, activeAssignments_.end());
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
@@ -106,7 +123,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(TheoryConflict{conflictLits});
     }
     if (!hasNonConstant) {
-        return TheoryCheckResult::consistent();
+    return TheoryCheckResult::consistent();
     }
 
     // 3. Reset domains
@@ -118,7 +135,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(*lr.conflict);
     }
     if (lr.kind == NiaReasoningKind::FatalUnknown) {
-        return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown();
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -208,6 +225,55 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
+    // 9.4: Mirror effective active linear bounds to LIA
+    if (pendingLinLemmas_.empty() && registry_ && linAdapter_) {
+        std::vector<LinearizerActiveAssignment> laas;
+        laas.reserve(activeAssignments_.size());
+        for (const auto& a : activeAssignments_) {
+            laas.push_back({a.level, a.lit, a.atom, a.value});
+        }
+        auto mirrorLemmas = linAdapter_->mirrorActiveLinearBounds(laas, TheoryId::LIA);
+        for (auto& ml : mirrorLemmas) {
+            if (!lemmaDb.contains(ml)) {
+                lemmaDb.insertIfNew(ml);
+                pendingLinLemmas_.push_back(std::move(ml));
+            }
+        }
+    }
+
+    // 9.5: Incremental linearization for nonlinear constraints
+    // V1 limited: abstraction lemma + square nonnegativity only.
+    // No McCormick, secant, tangent until LIA aux-var handling is verified.
+    if (pendingLinLemmas_.empty() && registry_ && linAdapter_) {
+        LinearizationConfig cfg;
+        cfg.emitAllMcCormick = true;
+        cfg.emitSquareSecant = false;
+        cfg.emitSquareTangent = true;
+        cfg.emitSquareNonneg = true;
+        cfg.maxLemmas = 10;
+        cfg.maxCutsPerTerm = 4;
+
+        auto lr = linAdapter_->runLinearizer(normalized, domains_, lemmaDb, cfg);
+        if (lr.status == LinearizationStatus::Lemma) {
+            for (auto& item : lr.lemmas) {
+                if (!lemmaDb.contains(item.lemma)) {
+                    lemmaDb.insertIfNew(item.lemma);
+                    pendingLinLemmas_.push_back(std::move(item.lemma));
+                    if (item.cacheKey) {
+                        linAdapter_->markEmitted(*item.cacheKey);
+                    }
+                }
+            }
+        }
+    }
+
+    if (!pendingLinLemmas_.empty()) {
+        auto lemma = std::move(pendingLinLemmas_.front());
+        pendingLinLemmas_.pop_front();
+        return TheoryCheckResult::mkLemma(lemma);
+    }
+
+    // DEBUG
     // 10. Bounded complete solver
     auto allVars = collectVars(normalized, *kernel_);
     if (domains_.allFinite(allVars)) {

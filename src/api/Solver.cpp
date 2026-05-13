@@ -106,12 +106,16 @@ public:
             polyKernelRaw = polyKernel.get();
             theoryManager.registerSolver(
                 std::make_unique<NraSolver>(std::move(polyKernel)));
+            theoryManager.registerSolver(std::make_unique<LraSolver>()); // co-register for linearizer cuts
         } else if (logic == "QF_NIA" || logic == "NIA") {
             auto polyKernel = createPolynomialKernel();
             polyKernelRaw = polyKernel.get();
             auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
             nia->setRegistry(&registry);
             theoryManager.registerSolver(std::move(nia));
+            auto lia = std::make_unique<LiaSolver>();
+            lia->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lia));
         } else if (logic == "QF_IDL" || logic == "IDL") {
             auto idl = std::make_unique<IdlSolver>();
             idl->setRegistry(&registry);
