@@ -70,3 +70,9 @@ Testing/
 
 # reference files
 reference/
+
+# Benchmark datasets and generated results
+benchmark/
+benchmark_results/
+*.csv
+report.html
