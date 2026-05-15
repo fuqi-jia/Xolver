@@ -612,9 +612,9 @@ TEST_CASE("NIA-Core: (or (= x^2 4) (= x^2 2)) -> sat") {
 // Category I: Dynamic polynomial atom / factor lemma
 // ---------------------------------------------------------------------------
 
-TEST_CASE("NIA-Core: x*y=0, x!=0, y!=0 -> unsat (factor lemma skeleton)") {
-    // Factor lemma (xy=0 => x=0 or y=0) is not yet implemented.
-    // Without it, the solver cannot prove unsat for this case.
+TEST_CASE("NIA-Core: x*y=0, x!=0, y!=0 -> unsat (factor direct conflict)") {
+    // Factor direct conflict: xy=0 ∧ x≠0 ∧ y≠0 is detected as UNSAT
+    // by AlgebraicIntegerReasoner::checkFactorDirectConflict.
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"
         "(declare-const x Int)\n"
@@ -629,7 +629,7 @@ TEST_CASE("NIA-Core: x*y=0, x!=0, y!=0 -> unsat (factor lemma skeleton)") {
     solver.setLogic("QF_NIA");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
 // ---------------------------------------------------------------------------

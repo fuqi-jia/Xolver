@@ -93,6 +93,78 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkFactorRules(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
+NiaReasoningResult AlgebraicIntegerReasoner::checkFactorDirectConflict(
+    const std::vector<NormalizedNiaConstraint>& constraints) {
+
+    // Step 1: collect all variables that are asserted != 0
+    // Map: variable name -> reason lit of the != 0 constraint
+    std::unordered_map<std::string, SatLit> nonZeroVarReasons;
+
+    for (const auto& c : constraints) {
+        if (c.rel != Relation::Neq) continue;
+
+        auto vars = kernel_.variables(c.poly);
+        if (vars.size() != 1) continue;
+
+        // Verify poly is effectively a single variable (or negated variable)
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        if (termsOpt->size() != 1) continue;
+
+        const auto& term = (*termsOpt)[0];
+        if (term.powers.size() != 1) continue;
+        if (term.powers[0].second != 1) continue;
+        // Coefficient can be any non-zero integer; v != 0  <=>  -v != 0
+        if (term.coefficient == 0) continue;
+
+        nonZeroVarReasons[vars[0]] = c.reason;
+    }
+
+    if (nonZeroVarReasons.empty()) {
+        return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+    }
+
+    // Step 2: find monomial = 0 constraints where all factors are != 0
+    for (const auto& c : constraints) {
+        if (c.rel != Relation::Eq) continue;
+
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        if (termsOpt->size() != 1) continue;
+
+        const auto& term = (*termsOpt)[0];
+        if (term.coefficient == 0) continue;
+        if (term.powers.empty()) continue; // constant = 0, not a product of variables
+
+        // Build conflict: not(monomial=0) OR (var1=0) OR (var2=0) OR ...
+        // If every var_i has a != 0 constraint, then all literals in the
+        // conflict clause are falsified → UNSAT.
+        std::vector<SatLit> conflictLits;
+        conflictLits.push_back(c.reason.negated()); // not(monomial = 0)
+
+        bool allFactorsNonZero = true;
+        for (const auto& [varId, exp] : term.powers) {
+            if (exp == 0) continue;
+            std::string varName = std::string(kernel_.varName(varId));
+            auto it = nonZeroVarReasons.find(varName);
+            if (it == nonZeroVarReasons.end()) {
+                allFactorsNonZero = false;
+                break;
+            }
+            // not(var != 0)  ==  var == 0
+            conflictLits.push_back(it->second.negated());
+        }
+
+        if (allFactorsNonZero && conflictLits.size() > 1) {
+            return {NiaReasoningKind::Conflict,
+                    TheoryConflict{std::move(conflictLits)},
+                    std::nullopt};
+        }
+    }
+
+    return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+}
+
 bool AlgebraicIntegerReasoner::evaluateMod(
     PolyId /*poly*/,
     const std::vector<std::string>& /*vars*/,
@@ -200,6 +272,10 @@ NiaReasoningResult AlgebraicIntegerReasoner::run(
     }
 
     auto r = checkModular(equalities);
+    if (r.kind == NiaReasoningKind::Conflict) return r;
+
+    // Factor direct conflict (e.g. xy=0 ∧ x≠0 ∧ y≠0 → UNSAT)
+    r = checkFactorDirectConflict(constraints);
     if (r.kind == NiaReasoningKind::Conflict) return r;
 
     if (updated) {

@@ -30,9 +30,13 @@ private:
     // GCD equality conflict: 2x^2 + 4y = 3 → UNSAT
     NiaReasoningResult checkGcdConflict(const NormalizedNiaConstraint& c);
 
-    // Factor rules: p*q = 0 → lemma
+    // Factor rules: p*q = 0 → lemma (split lemma, V2)
     NiaReasoningResult checkFactorRules(const NormalizedNiaConstraint& c,
                                          TheoryLemmaDatabase& lemmaDb);
+
+    // Factor direct conflict: p*q = 0 ∧ p≠0 ∧ q≠0 → UNSAT
+    NiaReasoningResult checkFactorDirectConflict(
+        const std::vector<NormalizedNiaConstraint>& constraints);
 
     // Modular reasoning: x^2 = 2 → mod-4 UNSAT
     NiaReasoningResult checkModular(const std::vector<NormalizedNiaConstraint>& equalities);
