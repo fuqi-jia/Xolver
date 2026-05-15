@@ -4,12 +4,15 @@
 #include "sat/SatSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
+#include "theory/euf/EufTypes.h"
+#include <cassert>
 #include <unordered_map>
 #include <vector>
 
 namespace nlcolver {
 
 class TheoryAtomRegistry;
+class SharedTermRegistry;
 
 /**
  * Atomizer: extracts boolean atoms from CoreExpr and builds SAT clauses.
@@ -52,11 +55,56 @@ public:
         polyConverter_ = std::make_unique<PolynomialConverter>(*kernel);
     }
 
+    void setBoolSortId(SortId id) { boolSortId_ = id; }
+    void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+
 private:
     SatLit atomizeRec(ExprId eid, const CoreIr& ir);
     SatVar freshVar();
 
     bool extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v, TheoryId theory);
+
+    // EUF atom dedup: canonical key -> existing SAT literal
+    struct EufAtomKey {
+        ExprId lhs;
+        ExprId rhs;
+        Relation rel;
+        EufAtomKind kind;
+        bool operator==(const EufAtomKey& o) const {
+            return lhs == o.lhs && rhs == o.rhs && rel == o.rel && kind == o.kind;
+        }
+    };
+    struct EufAtomKeyHash {
+        std::size_t operator()(const EufAtomKey& k) const {
+            std::size_t h = std::hash<ExprId>{}(k.lhs);
+            h ^= std::hash<ExprId>{}(k.rhs) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= static_cast<std::size_t>(k.rel) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= static_cast<std::size_t>(k.kind) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+
+    class SyntheticExprIdAllocator {
+        static constexpr ExprId SyntheticStart = std::numeric_limits<ExprId>::max() - 100;
+        ExprId nextId_ = SyntheticStart;
+    public:
+        ExprId next() {
+            assert(nextId_ != TrueSentinelExpr);
+            assert(nextId_ != FalseSentinelExpr);
+            assert(nextId_ > 0);
+            return nextId_--;
+        }
+        void reset() { nextId_ = SyntheticStart; }
+    };
+
+    SatLit getOrCreateEufAtom(EufAtomPayload payload, ExprId originExpr);
+    SatLit atomizeNaryEufEq(ExprId eid, const CoreIr& ir);
+    SatLit atomizeNaryEufDistinct(ExprId eid, const CoreIr& ir);
+    static bool isFormulaPositionTerm(Kind k);
+
+    bool areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const;
+    SatLit encodeBoolEq(ExprId eid, const CoreIr& ir);
+    SatLit encodeBoolDistinct(ExprId eid, const CoreIr& ir);
 
     SatSolver& sat_;
     std::vector<AtomRecord> atoms_;
@@ -66,6 +114,11 @@ private:
     TheoryId defaultTheory_ = TheoryId::LRA;
     PolynomialKernel* polyKernel_ = nullptr;
     std::unique_ptr<PolynomialConverter> polyConverter_;
+    SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    SortId boolSortId_ = NullSort;
+    SyntheticExprIdAllocator synthExprAlloc_;
+    std::unordered_map<EufAtomKey, SatLit, EufAtomKeyHash> eufAtomDedup_;
 };
 
 } // namespace nlcolver

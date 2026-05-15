@@ -38,7 +38,7 @@ PolyId PolynomialConverter::convertRec(ExprId eid, const CoreIr& ir) {
         }
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                result = kernel_.mkVar(*s);
+                result = kernel_.mkVar(kernel_.getOrCreateVar(*s));
             }
             break;
         }

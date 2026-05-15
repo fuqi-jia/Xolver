@@ -15,7 +15,7 @@ static NormalizedNiaConstraint makeSquareConstraint(
     const mpz_class& a, const mpz_class& b, const mpz_class& c,
     Relation rel, SatLit reason) {
 
-    PolyId varPoly = kernel.mkVar(var);
+    PolyId varPoly = kernel.mkVar(kernel.getOrCreateVar(var));
     PolyId aPoly = kernel.mkConst(mpq_class(a));
     PolyId bPoly = kernel.mkConst(mpq_class(b));
     PolyId cPoly = kernel.mkConst(mpq_class(c));
@@ -163,7 +163,7 @@ TEST_CASE("SquareBound: linear constraint ignored") {
     SquareBoundReasoner reasoner(*kernel);
     DomainStore ds;
 
-    PolyId varPoly = kernel->mkVar("x");
+    PolyId varPoly = kernel->mkVar(kernel->getOrCreateVar("x"));
     PolyId two = kernel->mkConst(mpq_class(2));
     PolyId poly = kernel->add(kernel->mul(two, varPoly), kernel->mkConst(mpq_class(5)));
 
@@ -177,8 +177,8 @@ TEST_CASE("SquareBound: multivariate ignored") {
     SquareBoundReasoner reasoner(*kernel);
     DomainStore ds;
 
-    PolyId x = kernel->mkVar("x");
-    PolyId y = kernel->mkVar("y");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
     PolyId poly = kernel->add(kernel->pow(x, 2), kernel->pow(y, 2));
 
     auto c = NormalizedNiaConstraint{poly, Relation::Leq, mkReason(1)};

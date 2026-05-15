@@ -42,6 +42,10 @@ public:
     bool hasUnsupportedTheoryAtom() const { return unsupportedTheorySeen_; }
     void setUnsupportedTheorySeen() { unsupportedTheorySeen_ = true; }
 
+    // Shared equality atom: Eq(a,b) for Nelson-Oppen combination.
+    // Canonical key ensures Eq(a,b) and Eq(b,a) share one SatVar.
+    SatLit getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b);
+
 private:
     SatSolver* sat_ = nullptr;
     Atomizer* atomizer_ = nullptr;
@@ -85,6 +89,7 @@ private:
         }
     };
     std::unordered_map<PolyLookupKey, size_t, PolyLookupKeyHash> polyLookup_;
+    std::unordered_map<uint64_t, size_t> sharedEqLookup_;
 
     ExprId nextSyntheticExprId_ = static_cast<ExprId>(0x80000000);
     bool unsupportedTheorySeen_ = false;

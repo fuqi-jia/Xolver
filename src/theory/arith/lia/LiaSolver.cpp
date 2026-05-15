@@ -27,16 +27,16 @@ void LiaSolver::reset() {
     manager_.resetBoundReasons();
 }
 
-void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) {
+void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
     if (!std::holds_alternative<LinearAtomPayload>(atom.payload)) return;
 
     for (auto& a : activeAssignments_) {
         if (a.atom.satVar == atom.satVar) {
-            a = {level, reason, atom, value};
+            a = {level, assertedLit, atom, value};
             return;
         }
     }
-    activeAssignments_.push_back({level, reason, atom, value});
+    activeAssignments_.push_back({level, assertedLit, atom, value});
 }
 
 void LiaSolver::backtrackToLevel(int level) {

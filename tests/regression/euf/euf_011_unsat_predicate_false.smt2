@@ -1,0 +1,7 @@
+(set-logic QF_UF)
+(declare-sort U 0)
+(declare-const a U)
+(declare-fun p (U) Bool)
+(assert (not (p a)))
+(assert (p a))
+(check-sat)

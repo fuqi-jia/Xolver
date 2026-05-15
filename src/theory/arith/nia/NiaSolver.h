@@ -52,7 +52,7 @@ public:
     void push() override;
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value,
-                   int level, SatLit reason) override;
+                   int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
     void reset() override;

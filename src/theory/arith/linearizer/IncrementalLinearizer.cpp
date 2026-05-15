@@ -75,8 +75,10 @@ LinearizationResult IncrementalLinearizer::run(
             processedAuxNames.insert(aux.name);
 
             if (aux.key.kind == NonlinearKind::Product && aux.key.powers.size() == 2) {
-                const std::string& x = aux.key.powers[0].first;
-                const std::string& y = aux.key.powers[1].first;
+                VarId xVid = aux.key.powers[0].first;
+                VarId yVid = aux.key.powers[1].first;
+                std::string x = std::string(kernel_.varName(xVid));
+                std::string y = std::string(kernel_.varName(yVid));
 
                 auto xBounds = bounds.get(x);
                 auto yBounds = bounds.get(y);
@@ -113,7 +115,8 @@ LinearizationResult IncrementalLinearizer::run(
                     ++idx;
                 }
             } else if (aux.key.kind == NonlinearKind::Square && aux.key.powers.size() == 1) {
-                const std::string& x = aux.key.powers[0].first;
+                VarId xVid = aux.key.powers[0].first;
+                std::string x = std::string(kernel_.varName(xVid));
                 auto xBounds = bounds.get(x);
 
                 auto sqCuts = sqGen_.generate(

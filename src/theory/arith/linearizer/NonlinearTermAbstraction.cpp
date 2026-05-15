@@ -47,9 +47,10 @@ AuxTerm NonlinearTermAbstraction::getOrCreateAux(const NonlinearTermKey& key) {
     }
 
     std::string name = std::string(NL_AUX_PREFIX) + std::to_string(nextAuxId_++);
-    PolyId poly = kernel_.mkVar(name);
+    VarId vid = kernel_.getOrCreateVar(name);
+    PolyId poly = kernel_.mkVar(vid);
 
-    AuxTerm aux{std::move(name), poly, key};
+    AuxTerm aux{std::move(name), vid, poly, key};
     auxCache_.emplace(key, aux);
     return aux;
 }
@@ -78,7 +79,7 @@ AbstractionResult NonlinearTermAbstraction::abstract(PolyId poly) {
 
         PolynomialKernel::MonomialTerm newTerm;
         newTerm.coefficient = term.coefficient;
-        newTerm.powers = {{aux.name, 1}};
+        newTerm.powers = {{aux.vid, 1}};
         linearizedTerms.push_back(std::move(newTerm));
     }
 

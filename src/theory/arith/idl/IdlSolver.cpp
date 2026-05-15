@@ -58,14 +58,14 @@ void IdlSolver::reset() {
     pendingLemma_.reset();
 }
 
-void IdlSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) {
+void IdlSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
     for (auto& a : activeAssignments_) {
         if (a.atom.satVar == atom.satVar) {
-            a = {level, reason, atom, value};
+            a = {level, assertedLit, atom, value};
             return;
         }
     }
-    activeAssignments_.push_back({level, reason, atom, value});
+    activeAssignments_.push_back({level, assertedLit, atom, value});
 }
 
 void IdlSolver::backtrackToLevel(int level) {

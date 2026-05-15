@@ -13,6 +13,7 @@ using PolyId  = uint32_t;
 using SatVar  = uint32_t;
 using ProofId = uint32_t;
 using ClauseId = uint32_t;
+using SharedTermId = uint32_t;
 
 constexpr ExprId  NullExpr  = std::numeric_limits<ExprId>::max();
 constexpr SortId  NullSort  = std::numeric_limits<SortId>::max();
@@ -28,7 +29,7 @@ using ScopeLevel = uint32_t;
 constexpr ScopeLevel ScopeRoot = 0;
 
 enum class TheoryId : uint8_t {
-    Bool, EUF, LRA, LIA, NRA, NIA, BV, FP, IDL, RDL, Custom
+    Bool, EUF, LRA, LIA, NRA, NIA, BV, FP, IDL, RDL, Combination, Custom
 };
 
 enum class Relation : uint8_t {

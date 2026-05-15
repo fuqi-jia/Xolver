@@ -106,4 +106,31 @@ const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
     return nullptr;
 }
 
+SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b) {
+    assert(sat_ != nullptr && atomizer_ != nullptr);
+
+    // Canonical key: min(a,b), max(a,b)
+    SharedTermId lo = a < b ? a : b;
+    SharedTermId hi = a < b ? b : a;
+    uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+
+    auto it = sharedEqLookup_.find(key);
+    if (it != sharedEqLookup_.end()) {
+        const auto& rec = records_[it->second];
+        return SatLit::positive(rec.satVar);
+    }
+
+    ExprId expr = nextSyntheticExprId_++;
+    SatLit lit = atomizer_->registerDynamicAtom(expr, TheoryId::Combination);
+
+    size_t idx = records_.size();
+    records_.push_back({lit.var, TheoryId::Combination, true, expr,
+                        SharedEqualityPayload{a, b}});
+    satVarToIdx_[lit.var] = idx;
+    sharedEqLookup_[key] = idx;
+    observeIfNeeded(lit.var);
+
+    return lit;
+}
+
 } // namespace nlcolver

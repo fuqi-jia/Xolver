@@ -15,6 +15,7 @@ namespace nlcolver {
 enum class Kind : uint16_t {
     ConstBool, ConstInt, ConstReal, ConstBV, ConstFP,
     Variable,
+    UFApply,
     Not, And, Or, Implies, Xor, Ite,
     Add, Sub, Neg, Mul, Div, Mod, Abs, Pow,
     Eq, Distinct, Lt, Leq, Gt, Geq,
@@ -89,6 +90,13 @@ public:
             result.push_back(id);
         }
         return result;
+    }
+
+    void replaceAssertions(const std::vector<ExprId>& newAssertions) {
+        scopedAssertions_.clear();
+        for (ExprId id : newAssertions) {
+            scopedAssertions_.push_back({currentScope_, id});
+        }
     }
 
     ScopeLevel currentScopeLevel() const { return currentScope_; }

@@ -14,7 +14,7 @@ static NormalizedNiaConstraint makeLinearConstraint(
     PolynomialKernel& kernel, const std::string& var,
     const mpz_class& a, const mpz_class& c, Relation rel, SatLit reason) {
 
-    PolyId varPoly = kernel.mkVar(var);
+    PolyId varPoly = kernel.mkVar(kernel.getOrCreateVar(var));
     PolyId aPoly = kernel.mkConst(mpq_class(a));
     PolyId cPoly = kernel.mkConst(mpq_class(c));
     PolyId ax = kernel.mul(aPoly, varPoly);

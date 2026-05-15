@@ -15,8 +15,8 @@ TEST_CASE("PolynomialKernel: basic arithmetic") {
     CHECK(kernel->isConstant(one));
     CHECK(!kernel->isZero(one));
 
-    PolyId x = kernel->mkVar("x");
-    PolyId y = kernel->mkVar("y");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
 
     CHECK(!kernel->isConstant(x));
     CHECK(!kernel->isZero(x));

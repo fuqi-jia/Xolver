@@ -75,6 +75,11 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
 
     SortId id = static_cast<SortId>(sortMemo_.size());
     sortMemo_[sort] = id;
+
+    if (sort->isBool() && boolSortId_ == NullSort) {
+        boolSortId_ = id;
+    }
+
     return id;
 }
 
@@ -84,6 +89,7 @@ Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
         case NODE_KIND::NT_CONST_FALSE: return Kind::ConstBool;
         case NODE_KIND::NT_CONST:       return Kind::ConstReal; // refined by payload later
         case NODE_KIND::NT_VAR:         return Kind::Variable;
+        case NODE_KIND::NT_UF_APPLY:    return Kind::UFApply;
         case NODE_KIND::NT_AND:         return Kind::And;
         case NODE_KIND::NT_OR:          return Kind::Or;
         case NODE_KIND::NT_NOT:         return Kind::Not;
@@ -163,6 +169,10 @@ Payload FrontendAdapter::extractPayload(SOMTParser::Node node) {
             }
         }
         // Fallback: use node name (symbol name or literal string).
+        return Payload(node->getName());
+    }
+
+    if (nk == NODE_KIND::NT_UF_APPLY) {
         return Payload(node->getName());
     }
 

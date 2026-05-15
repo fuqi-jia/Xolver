@@ -47,7 +47,7 @@ std::optional<ZeroLinearConstraint> LinearConstraintNormalizer::fromPolynomialZe
         if (term.powers.empty()) {
             expr.constant += mpq_class(term.coefficient);
         } else if (term.powers.size() == 1 && term.powers[0].second == 1) {
-            expr.terms.push_back({term.powers[0].first, mpq_class(term.coefficient)});
+            expr.terms.push_back({std::string(kernel.varName(term.powers[0].first)), mpq_class(term.coefficient)});
         } else {
             // Nonlinear term: degree > 1
             return std::nullopt;

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(NLColver VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -36,6 +36,7 @@ endif()
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(GMP QUIET gmp)
+    pkg_check_modules(GMPXX QUIET gmpxx)
     pkg_check_modules(MPFR QUIET mpfr)
 endif()
 
@@ -117,14 +118,17 @@ endif()
 # ---------------------------------------------------------------------------
 # Dependencies: nlohmann/json via FetchContent (for trace/config)
 # ---------------------------------------------------------------------------
-include(FetchContent)
-FetchContent_Declare(
-    json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.3
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(json)
+find_package(nlohmann_json 3.11.3 QUIET)
+if(NOT nlohmann_json_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(json)
+endif()
 
 # ---------------------------------------------------------------------------
 # Submodules

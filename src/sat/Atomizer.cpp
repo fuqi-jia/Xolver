@@ -1,8 +1,11 @@
 #include "sat/Atomizer.h"
 #include "theory/TheoryAtomRegistry.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/euf/EufTypes.h"
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -28,6 +31,221 @@ SatLit Atomizer::registerDynamicAtom(ExprId expr, TheoryId theory) {
     return lit;
 }
 
+SatLit Atomizer::getOrCreateEufAtom(EufAtomPayload payload, ExprId originExpr) {
+    // Canonicalize payload in-place
+    if (payload.lhs > payload.rhs) {
+        std::swap(payload.lhs, payload.rhs);
+    }
+
+    EufAtomKey key{payload.lhs, payload.rhs, payload.rel, payload.kind};
+    auto it = eufAtomDedup_.find(key);
+    if (it != eufAtomDedup_.end()) {
+        memo_[originExpr] = it->second;
+        return it->second;
+    }
+
+    SatVar v = freshVar();
+    SatLit lit = SatLit::positive(v);
+    atoms_.push_back({v, originExpr, true, TheoryId::EUF});
+    eufAtomDedup_[key] = lit;
+    memo_[originExpr] = lit;
+
+    if (registry_) {
+        registry_->registerParsedTheoryAtom(v, originExpr, TheoryId::EUF, payload);
+    }
+
+    return lit;
+}
+
+SatLit Atomizer::atomizeNaryEufEq(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+
+    // Bool equality: encode propositionally
+    if (defaultTheory_ == TheoryId::EUF && areAllChildrenBool(e, ir)) {
+        return encodeBoolEq(eid, ir);
+    }
+
+    SatVar andVar = freshVar();
+    std::vector<SatLit> pairwiseLits;
+
+    for (size_t i = 0; i + 1 < e.children.size(); ++i) {
+        ExprId lhs = e.children[i];
+        ExprId rhs = e.children[i + 1];
+        ExprId synthExpr = synthExprAlloc_.next();
+        SatLit plit = getOrCreateEufAtom(
+            EufAtomPayload{lhs, rhs, Relation::Eq}, synthExpr);
+        pairwiseLits.push_back(plit);
+    }
+
+    // Tseitin: andVar → each pairwise
+    for (SatLit pl : pairwiseLits) {
+        sat_.addClause({SatLit::negative(andVar), pl});
+    }
+    // Tseitin: any pairwise → andVar
+    std::vector<SatLit> clause;
+    clause.push_back(SatLit::positive(andVar));
+    for (SatLit pl : pairwiseLits) {
+        clause.push_back(pl.negated());
+    }
+    sat_.addClause(clause);
+
+    return SatLit::positive(andVar);
+}
+
+SatLit Atomizer::atomizeNaryEufDistinct(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+
+    // Bool distinct: encode propositionally
+    if (defaultTheory_ == TheoryId::EUF && areAllChildrenBool(e, ir)) {
+        return encodeBoolDistinct(eid, ir);
+    }
+
+    if (e.children.size() <= 1) {
+        // vacuously true
+        SatVar tv = freshVar();
+        sat_.addClause({SatLit::positive(tv)});
+        return SatLit::positive(tv);
+    }
+
+    SatVar andVar = freshVar();
+    std::vector<SatLit> pairwiseLits;
+
+    for (size_t i = 0; i < e.children.size(); ++i) {
+        for (size_t j = i + 1; j < e.children.size(); ++j) {
+            ExprId lhs = e.children[i];
+            ExprId rhs = e.children[j];
+            ExprId synthExpr = synthExprAlloc_.next();
+            SatLit plit = getOrCreateEufAtom(
+                EufAtomPayload{lhs, rhs, Relation::Neq}, synthExpr);
+            pairwiseLits.push_back(plit);
+        }
+    }
+
+    // Tseitin AND encoding
+    for (SatLit pl : pairwiseLits) {
+        sat_.addClause({SatLit::negative(andVar), pl});
+    }
+    std::vector<SatLit> clause;
+    clause.push_back(SatLit::positive(andVar));
+    for (SatLit pl : pairwiseLits) {
+        clause.push_back(pl.negated());
+    }
+    sat_.addClause(clause);
+
+    return SatLit::positive(andVar);
+}
+
+bool Atomizer::areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const {
+    for (ExprId cid : e.children) {
+        if (ir.get(cid).sort != boolSortId_) {
+            return false;
+        }
+    }
+    return true;
+}
+
+SatLit Atomizer::encodeBoolEq(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+    assert(e.children.size() >= 2);
+
+    SatVar andVar = freshVar();
+    std::vector<SatLit> pairwiseLits;
+
+    for (size_t i = 0; i + 1 < e.children.size(); ++i) {
+        SatLit li = atomizeRec(e.children[i], ir);
+        SatLit ri = atomizeRec(e.children[i + 1], ir);
+        // li ↔ ri
+        sat_.addClause({li.negated(), ri});
+        sat_.addClause({li, ri.negated()});
+        pairwiseLits.push_back(li);  // any one is fine for Tseitin
+    }
+
+    // Tseitin: andVar → each pairwise equality is satisfied
+    for (SatLit pl : pairwiseLits) {
+        (void)pl;
+        sat_.addClause({SatLit::negative(andVar), SatLit::positive(0)}); // tautology, skip
+    }
+
+    // Since pairwise ↔ clauses already enforce the semantics,
+    // andVar just needs to be equisatisfiable.
+    // For simplicity: andVar is a fresh variable that must be true
+    // because the pairwise clauses already constrain everything.
+    // But we need a proper Tseitin encoding.
+    // Let's use a helper variable for each pairwise equality.
+
+    std::vector<SatLit> eqLits;
+    for (size_t i = 0; i + 1 < e.children.size(); ++i) {
+        SatLit li = atomizeRec(e.children[i], ir);
+        SatLit ri = atomizeRec(e.children[i + 1], ir);
+        SatVar eqVar = freshVar();
+        // eqVar ↔ (li ↔ ri)
+        // eqVar → (li ↔ ri):
+        sat_.addClause({SatLit::negative(eqVar), li.negated(), ri});
+        sat_.addClause({SatLit::negative(eqVar), li, ri.negated()});
+        // (li ↔ ri) → eqVar:
+        sat_.addClause({SatLit::positive(eqVar), li, ri});
+        sat_.addClause({SatLit::positive(eqVar), li.negated(), ri.negated()});
+        eqLits.push_back(SatLit::positive(eqVar));
+    }
+
+    // andVar ↔ ∧ eqLits
+    for (SatLit el : eqLits) {
+        sat_.addClause({SatLit::negative(andVar), el});
+    }
+    std::vector<SatLit> clause;
+    clause.push_back(SatLit::positive(andVar));
+    for (SatLit el : eqLits) {
+        clause.push_back(el.negated());
+    }
+    sat_.addClause(clause);
+
+    return SatLit::positive(andVar);
+}
+
+SatLit Atomizer::encodeBoolDistinct(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+
+    if (e.children.size() <= 1) {
+        SatVar tv = freshVar();
+        sat_.addClause({SatLit::positive(tv)});
+        return SatLit::positive(tv);
+    }
+
+    if (e.children.size() == 2) {
+        SatLit l = atomizeRec(e.children[0], ir);
+        SatLit r = atomizeRec(e.children[1], ir);
+        // XOR: l ≠ r
+        SatVar xorVar = freshVar();
+        // xorVar → (l XOR r)
+        sat_.addClause({SatLit::negative(xorVar), l, r});
+        sat_.addClause({SatLit::negative(xorVar), l.negated(), r.negated()});
+        // (l XOR r) → xorVar
+        sat_.addClause({SatLit::positive(xorVar), l.negated(), r});
+        sat_.addClause({SatLit::positive(xorVar), l, r.negated()});
+        return SatLit::positive(xorVar);
+    }
+
+    // n >= 3: impossible in Bool domain
+    SatVar fv = freshVar();
+    sat_.addClause({SatLit::negative(fv)});
+    return SatLit::positive(fv);
+}
+
+bool Atomizer::isFormulaPositionTerm(Kind k) {
+    return k == Kind::Variable || k == Kind::UFApply;
+}
+
+static bool containsUfApply(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+    if (e.kind == Kind::UFApply) return true;
+    for (ExprId child : e.children) {
+        if (containsUfApply(child, ir)) return true;
+    }
+    return false;
+}
+
+
+
 SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     if (eid == NullExpr) return SatLit{0, true};
 
@@ -36,6 +254,17 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
 
     const CoreExpr& e = ir.get(eid);
     SatLit result{0, true};
+
+    // Bool-valued terms in formula position under QF_UF:
+    // p(a), q (Bool var), etc. → (= term true)
+    if (defaultTheory_ == TheoryId::EUF &&
+        e.sort == boolSortId_ &&
+        isFormulaPositionTerm(e.kind)) {
+        result = getOrCreateEufAtom(
+            EufAtomPayload{eid, TrueSentinelExpr, Relation::Eq, EufAtomKind::BoolTermAsFormula}, eid);
+        memo_[eid] = result;
+        return result;
+    }
 
     switch (e.kind) {
         case Kind::Variable: {
@@ -110,14 +339,76 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
             if (isTheory && registry_) {
-                if (defaultTheory_ == TheoryId::NRA || defaultTheory_ == TheoryId::NIA) {
-                    // Under QF_NRA/QF_NIA, ALL arithmetic comparison atoms (including linear)
-                    // must be registered as PolynomialAtomPayload.
-                    // The theory ID must match defaultTheory_ so TheoryManager routes
-                    // QF_NRA atoms to NraSolver and QF_NIA atoms to NiaSolver.
-                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, defaultTheory_)) {
+                TheoryId targetTheory = defaultTheory_;
+                if (defaultTheory_ == TheoryId::Combination) {
+                    bool isEqOrDistinct = (e.kind == Kind::Eq || e.kind == Kind::Distinct);
+                    bool bothShared = false;
+                    if (isEqOrDistinct && e.children.size() == 2 && sharedTermRegistry_) {
+                        bothShared = sharedTermRegistry_->hasTerm(e.children[0]) &&
+                                     sharedTermRegistry_->hasTerm(e.children[1]);
+                    }
+                    if (bothShared) {
+                        auto optA = sharedTermRegistry_->findByExprId(e.children[0]);
+                        auto optB = sharedTermRegistry_->findByExprId(e.children[1]);
+                        if (optA && optB) {
+                            SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(*optA, *optB);
+                            result = (e.kind == Kind::Distinct) ? eqLit.negated() : eqLit;
+                            memo_[eid] = result;
+                            return result;
+                        }
+                    }
+                    bool hasUf = containsUfApply(eid, ir);
+                    std::cerr << "[ATOM] combination eid=" << eid << " kind=" << (int)e.kind
+                              << " hasUf=" << hasUf << "\n";
+                    if (hasUf) {
+                        targetTheory = TheoryId::EUF;
+                    } else {
+                        targetTheory = TheoryId::LRA;
+                    }
+                }
+
+                if (targetTheory == TheoryId::NRA || targetTheory == TheoryId::NIA) {
+                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
                         // registered inside extractPolynomialConstraint
                     } else {
+                        std::cerr << "[ATOM] unsupported NRA/NIA kind=" << (int)e.kind << "\n";
+                        registry_->setUnsupportedTheorySeen();
+                    }
+                } else if (targetTheory == TheoryId::EUF) {
+                    if (e.kind == Kind::Eq || e.kind == Kind::Distinct) {
+                        if (e.children.size() == 2) {
+                            // Check if both sides are Bool: encode propositionally
+                            if (areAllChildrenBool(e, ir)) {
+                                if (e.kind == Kind::Eq) {
+                                    result = encodeBoolEq(eid, ir);
+                                } else {
+                                    result = encodeBoolDistinct(eid, ir);
+                                }
+                                memo_[eid] = result;
+                                return result;
+                            }
+                            Relation rel = (e.kind == Kind::Eq) ? Relation::Eq : Relation::Neq;
+                            ExprId lhs = e.children[0];
+                            ExprId rhs = e.children[1];
+                            result = getOrCreateEufAtom(
+                                EufAtomPayload{lhs, rhs, rel}, eid);
+                        } else if (e.children.size() > 2) {
+                            result = (e.kind == Kind::Eq)
+                                ? atomizeNaryEufEq(eid, ir)
+                                : atomizeNaryEufDistinct(eid, ir);
+                            memo_[eid] = result;
+                            return result;
+                        } else if (e.kind == Kind::Distinct && e.children.size() <= 1) {
+                            // distinct with 0/1 args is vacuously true
+                            SatVar tv = freshVar();
+                            sat_.addClause({SatLit::positive(tv)});
+                            result = SatLit::positive(tv);
+                        } else {
+                            std::cerr << "[ATOM] unsupported EUF kind=" << (int)e.kind << " children=" << e.children.size() << "\n";
+                            registry_->setUnsupportedTheorySeen();
+                        }
+                    } else {
+                        std::cerr << "[ATOM] unsupported EUF non-eq kind=" << (int)e.kind << "\n";
                         registry_->setUnsupportedTheorySeen();
                     }
                 } else {
@@ -135,9 +426,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                         std::sort(lhs.terms.begin(), lhs.terms.end(),
                                   [](auto& a, auto& b) { return a.first < b.first; });
                         registry_->registerParsedTheoryAtom(
-                            v, eid, defaultTheory_, LinearAtomPayload{lhs, rel, rhs});
+                            v, eid, targetTheory, LinearAtomPayload{lhs, rel, rhs});
                     } else {
-                        // Non-arithmetic Eq/Distinct or unsupported theory atom
+                        std::cerr << "[ATOM] unsupported LRA kind=" << (int)e.kind << "\n";
                         registry_->setUnsupportedTheorySeen();
                     }
                 }
@@ -154,7 +445,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
 
 bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar v, TheoryId theory) {
     const auto& e = ir.get(eid);
-    if (e.children.size() != 2) return false;  // binary only for Phase NRA-1/NIA-1
+    if (e.children.size() != 2) return false;
 
     PolyId lhsPoly = polyConverter_->convert(e.children[0], ir);
     PolyId rhsPoly = polyConverter_->convert(e.children[1], ir);

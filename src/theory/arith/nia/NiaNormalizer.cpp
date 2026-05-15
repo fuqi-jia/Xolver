@@ -23,7 +23,7 @@ PolyId NiaNormalizer::clearDenominators(PolyId poly) {
         if (coeffs) {
             // Rebuild polynomial from integer coefficients
             PolyId result = kernel_.mkZero();
-            PolyId var = kernel_.mkVar(vars[0]);
+            PolyId var = kernel_.mkVar(kernel_.getOrCreateVar(vars[0]));
             for (size_t i = 0; i < coeffs->size(); ++i) {
                 mpz_class c = (*coeffs)[i];
                 if (c == 0) continue;

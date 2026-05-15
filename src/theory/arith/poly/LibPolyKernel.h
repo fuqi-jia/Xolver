@@ -22,10 +22,16 @@ class LibPolyKernel : public PolynomialKernel {
 public:
     LibPolyKernel();
 
+    // Variable registry
+    VarId getOrCreateVar(std::string_view name) override;
+    std::optional<VarId> findVar(std::string_view name) const override;
+    std::string_view varName(VarId v) const override;
+    bool isValidVar(VarId v) const override;
+
     PolyId mkZero() override;
     PolyId mkOne() override;
     PolyId mkConst(const mpq_class& c) override;
-    PolyId mkVar(std::string_view name) override;
+    PolyId mkVar(VarId v) override;
 
     PolyId add(PolyId a, PolyId b) override;
     PolyId sub(PolyId a, PolyId b) override;
@@ -39,28 +45,45 @@ public:
     std::vector<std::string> variables(PolyId a) const override;
     bool eq(PolyId a, PolyId b) const override;
     int sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const override;
+    int sgnVarId(PolyId a, const std::unordered_map<VarId, mpq_class>& sample) const override;
     std::optional<mpz_class> evalInteger(
         PolyId a,
         const std::unordered_map<std::string, mpz_class>& sample) const override;
+    std::optional<mpz_class> evalIntegerVarId(
+        PolyId a,
+        const std::unordered_map<VarId, mpz_class>& sample) const override;
     std::optional<int> degree(PolyId a, std::string_view var) const override;
     std::optional<std::vector<mpz_class>> getIntegerCoefficients(
         PolyId a, std::string_view var) const override;
     std::optional<std::vector<MonomialTerm>> terms(PolyId a) const override;
     std::string toString(PolyId a) const override;
 
-    // Public accessor for variable name resolution (used by C traverse callback)
-    std::optional<std::string> resolveVariableName(lp_variable_t v) const;
+    std::optional<PolyId> pseudoRemainder(PolyId p, PolyId divisor) override;
+    std::optional<PolyId> leadingCoefficient(PolyId p) override;
+    std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) override;
+
+    // Public accessor for variable id resolution (used by C traverse callback)
+    std::optional<VarId> resolveVariableId(lp_variable_t v) const;
+
+    // Accessors for other libpoly-backed components (e.g., CDCAC backend)
+    const poly::Context& context() const { return ctx_; }
+    const poly::Polynomial& getPolynomial(PolyId id) const { return pool_[id]; }
+    poly::Variable getVariable(const std::string& name) const;
 
 private:
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
-    std::unordered_map<std::string, poly::Variable> varMap_;
-    std::unordered_map<lp_variable_t, std::string> revVarMap_;
+
+    // VarId registry: unified variable identity across NLColver
+    std::vector<std::string> varNames_;                     // index = VarId
+    std::unordered_map<std::string, VarId> nameToVar_;      // name -> VarId
+    std::vector<poly::Variable> varIdToPolyVar_;            // VarId -> libpoly variable
+    std::unordered_map<lp_variable_t, VarId> polyVarToVarId_; // libpoly var -> VarId
 
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
     PolyId alloc(poly::Polynomial p);
-    poly::Variable resolveVar(std::string_view name);
+    poly::Variable resolvePolyVar(VarId v);
 };
 
 } // namespace nlcolver

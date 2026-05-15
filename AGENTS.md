@@ -1,3 +1,4 @@
+<!-- From: /mnt/d/D_Study/BUAA/projects/NLColver/AGENTS.md -->
 # NLColver — AI Agent Notes
 
 ## Project Overview
@@ -12,31 +13,37 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 
 **Stages A–E functional, Stage I (NIA-Core) MVP complete.**
 
-Core solvers (boolean, LRA, LIA, NRA) are functional. NIA-Core now has a working pipeline with sound conflict generation and model validation.
+Core infrastructure (boolean, LRA, LIA, NRA, EUF, IDL, RDL) is operational. NIA-Core now has a working pipeline with sound conflict generation and model validation. Stages F/G/H/J/K are skeleton interfaces only.
 
 ### What's Working
 
-- ✅ CMake build system (C++17, GMP/MPFR, nlohmann/json, doctest)
+- ✅ CMake build system (C++20, GMP/MPFR, nlohmann/json, doctest)
 - ✅ SOMTParser integration (git submodule, FrontendAdapter, Rewriter)
-- ✅ SMT-LIB parsing: `nlcolver solve file.smt2`
+- ✅ SMT-LIB parsing: `nlcolver solve file.smt2` (also supports default-mode: `./nlcolver file.smt2`)
 - ✅ Internal IR: CoreExpr / CoreIr with scope-aware assertions
 - ✅ Atomizer: Tseitin CNF conversion + theory atom extraction
-- ✅ SAT backend: CaDiCaL wrapper + unit-propagation stub fallback
+- ✅ SAT backend: CaDiCaL wrapper + stub fallback
 - ✅ Solver API: parseFile, checkSat, push/pop, dumpSMT2, seed option
 - ✅ ModelValidator: boolean expression evaluator skeleton
 - ✅ TraceRecorder + Statistics skeletons
 - ✅ CLI subcommands: solve, bench, trace, model-check, proof-check, version
 - ✅ CLI auto-detects `(set-logic ...)` from parsed SMT2 files
+- ✅ Python benchmark runner: `tools/run_benchmark.py` with HTML report generation
 
 ### Theory Solvers (functional)
 
 | Stage | Component | Status | Coverage |
 |-------|-----------|--------|----------|
-| C/E | LraSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
-| C/E | LiaSolver (LIA) | ✅ Phase 1 | Branch-and-bound, gcd-strength disequality, dynamic atom registry |
+| A/E | LraSolver (LRA) | ✅ MVP | Single-variable bound propagation, CDCL(T) loop |
+| A/E | LiaSolver (LIA) | ✅ Phase 1 | Branch-and-bound, gcd-strength disequality, dynamic atom registry |
 | D | NraSolver (NRA) | ✅ MVP | Grid sampling, univariate + bivariate polynomial constraints |
 | I | NiaSolver (NIA-Core) | ✅ MVP | Univariate RRT, square rules, GCD conflict, modular reasoning, bounded enumeration, sound conflict generation |
-| F | IncrementalLinearizer | 🏗️ Skeleton | Lemma generation interface ready |
+| A–E | EufSolver (EUF) | ✅ Functional | Congruence closure, distinct constraints, boolean predicates |
+| A–E | IdlSolver (IDL) | ✅ Functional | Integer difference logic, Bellman-Ford negative-cycle detection |
+| A–E | RdlSolver (RDL) | ✅ Functional | Real difference logic, difference constraint graphs |
+| B | PolynomialKernel | ✅ Functional | libpoly-backed canonical sparse polynomials |
+| B | IntervalEvaluator | ✅ Functional | Polynomial interval arithmetic, ReasonedBox (Q / Z) |
+| F | IncrementalLinearizer | 🏗️ Skeleton | Lemma generation interface; McCormick / square-cut / sign lemmas not yet wired |
 | G | LocalSearchAdvisor | 🏗️ Skeleton | Model proposal interface ready |
 | H | McsatSolver | 🏗️ Skeleton | MCSAT engine interface ready |
 | J | ProofManager | 🏗️ Skeleton | SAT/theory proof tracking interface ready |
@@ -88,6 +95,10 @@ Branch lemma or Unknown
 | QF_NIA unsat | `0≤x≤10 ∧ x²=50` | **unsat** |
 | QF_NIA unsat | `x²+y²=3` | **unsat** (modular) |
 | QF_NIA sat | `0≤x≤3 ∧ 0≤y≤3 ∧ xy=6` | **sat** |
+| QF_UF sat | `f(a)=b ∧ f(c)=d` | **sat** |
+| QF_UF unsat | `a=b ∧ f(a)≠f(b)` | **unsat** |
+| QF_IDL sat | `x−y≤3 ∧ y−z≤−1 ∧ z−x≤−2` | **sat** |
+| QF_RDL sat | `x−y≤1.5 ∧ y−z≤2.0` | **sat** |
 
 ### Directory Layout
 
@@ -108,17 +119,18 @@ NLColver/
 ├── src/
 │   ├── api/                 # C++ API implementation (Solver.cpp)
 │   ├── parser/              # SOMTParser bridge (FrontendAdapter)
-│   ├── expr/                # Core IR (types, payload, ir)
-│   ├── sat/                 # SAT engine (CaDiCaL + stub) + Atomizer
+│   ├── expr/                # Core IR (types, payload, ir, rewriter)
+│   ├── sat/                 # SAT engine (CaDiCaL wrapper + stub) + Atomizer
 │   ├── theory/              # Theory solvers
 │   │   ├── TheorySolver.h
 │   │   ├── TheoryManager.h/.cpp
 │   │   ├── TheoryAtomRegistry.h/.cpp
-│   │   ├── euf/             # (reserved)
+│   │   ├── TheoryLemmaDatabase.h/.cpp
+│   │   ├── euf/             # EUF solver (congruence closure)
 │   │   └── arith/
-│   │       ├── lra/SimplexSolver.h/.cpp
-│   │       ├── lia/LiaSolver.h/.cpp
-│   │       ├── nra/NraSolver.h/.cpp
+│   │       ├── lra/         # Simplex-based LRA solver
+│   │       ├── lia/         # Branch-and-bound LIA solver
+│   │       ├── nra/         # Grid-sampling NRA solver + CDCAC skeleton
 │   │       ├── nia/         # NIA-Core engines
 │   │       │   ├── NiaSolver.h/.cpp
 │   │       │   ├── NiaNormalizer.h/.cpp
@@ -129,30 +141,47 @@ NLColver/
 │   │       │   ├── BoundedNiaSolver.h/.cpp
 │   │       │   ├── NiaLocalSearch.h/.cpp
 │   │       │   ├── IntegerModelValidator.h/.cpp
+│   │       │   ├── NiaIcpAdapter.h/.cpp
+│   │       │   ├── NiaLinearizationAdapter.h/.cpp
+│   │       │   ├── SquareBoundReasoner.h/.cpp
+│   │       │   ├── SumOfSquaresBoundReasoner.h/.cpp
 │   │       │   └── NiaTypes.h
-│   │       ├── poly/        # PolynomialKernel, LibPolyKernel, PolynomialConverter
-│   │       └── IncrementalLinearizer.h/.cpp
-│   ├── mcsat/               # MCSAT/NLSAT engine
-│   │   └── McsatSolver.h/.cpp
-│   ├── search/              # Local search + strategy
-│   │   └── LocalSearchAdvisor.h/.cpp
-│   ├── omt/                 # Optimization
-│   │   └── Optimize.h/.cpp
-│   ├── proof/               # Proof/certificate infrastructure
-│   │   └── ProofManager.h/.cpp
-│   ├── learning/            # TraceRecorder + advisor interface
-│   └── util/                # SmallVector, infrastructure
+│   │       ├── poly/        # LibPolyKernel, PolynomialConverter, PolynomialKernel
+│   │       ├── dl/          # Difference-logic shared data structures
+│   │       ├── idl/         # Integer difference-logic solver
+│   │       ├── rdl/         # Real difference-logic solver
+│   │       ├── interval/    # Interval arithmetic & ReasonedBox (Q/Z)
+│   │       ├── icp/         # Interval constraint propagation engine
+│   │       ├── linear/      # Linear expression, normalizer, model validator
+│   │       └── linearizer/  # Incremental linearization (McCormick, square cuts, cache)
+│   ├── mcsat/               # MCSAT/NLSAT engine skeleton
+│   ├── search/              # Local search + strategy skeleton
+│   ├── omt/                 # Optimization skeleton
+│   ├── proof/               # Proof/certificate + ModelValidator
+│   ├── learning/            # TraceRecorder + advisor interface skeleton
+│   └── util/                # SmallVector, Statistics
 ├── tests/
 │   ├── fuzz/
 │   ├── regression/
+│   │   ├── euf/             # EUF regression SMT2 files
 │   │   └── nia/             # NIA regression SMT2 files
-│   ├── unit/                # doctest unit tests
+│   ├── unit/                # doctest unit tests (~170+ TEST_CASEs)
 │   └── CMakeLists.txt
-├── tools/cli/               # nlcolver command-line
+├── tools/
+│   ├── cli/                 # nlcolver command-line binary
+│   └── run_benchmark.py     # Python benchmark runner (HTML reports, Z3 cross-check)
+├── cmake/                   # Additional CMake modules (if any)
+├── benchmark/               # Benchmark dataset directory (gitignored)
+├── benchmark_results/       # Generated benchmark outputs (gitignored)
+├── reference/               # cvc5/ and z3/ source copies for reading only (gitignored)
+├── implementation_process/  # Historical design docs & chat logs
+│   └── 1.plan.md            # Canonical master design document (Chinese)
 ├── CMakeLists.txt
 ├── README.md
+├── CLAUDE.md                # Additional technical guidance for Claude Code
+├── milestone-2026-05-13.md  # Latest milestone snapshot (Chinese)
 ├── AGENTS.md                # This file
-└── plan.md                  # Full Stage A–K design document
+└── .github/prompts/         # Prompt templates for AI-assisted development
 ```
 
 ## Build Commands
@@ -205,11 +234,11 @@ The CMake config has **silent degradation**: `cmake ..` will succeed even when S
 | nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
 | doctest v2.4.11 | FetchContent (network) | Tests skip |
 
-When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `#NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
+When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
 
 ## Code Style Guidelines
 
-- **C++17 minimum.** `set(CMAKE_CXX_STANDARD 17)`, extensions OFF. No GCC-isms.
+- **C++20 minimum.** `set(CMAKE_CXX_STANDARD 20)`, extensions OFF. No GCC-isms.
 - **Namespace:** All library code lives in `namespace nlcolver { ... }`.
 - **Typed IDs:** Use `uint32_t` IDs for everything hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/expr/types.h`. Do not introduce parallel ID schemes.
 - **pImpl pattern:** Used at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/nlcolver/`.
@@ -252,10 +281,26 @@ ctest -R unit
 ### Manual CLI Tests
 
 ```bash
+# Explicit solve subcommand
 ./build/bin/nlcolver solve tests/unit/test_bool.smt2
 ./build/bin/nlcolver solve tests/regression/nia/nia_001_sat_x2_eq_4.smt2
 ./build/bin/nlcolver solve tests/regression/nia/nia_002_unsat_x2_eq_2.smt2
+./build/bin/nlcolver solve tests/regression/euf/euf_001_sat_basic_eq.smt2
+
+# Default mode (no subcommand)
+./build/bin/nlcolver tests/regression/nia/nia_001_sat_x2_eq_4.smt2
 ```
+
+### Benchmark Runner
+
+A Python 3 script is provided for SMT-LIB benchmark evaluation:
+
+```bash
+python tools/run_benchmark.py --logic QF_NIA -j 8 -t 30
+python tools/run_benchmark.py --logic QF_LRA -j 8 -t 30 --compare-with z3
+```
+
+Outputs `summary.txt`, `results.csv`, `report.html`, `discrepancies.txt`, `errors.txt`, `statistics.json`, and `top_slow.txt` under `benchmark_results/<logic>_<timestamp>/`.
 
 ## Architecture Invariants
 
@@ -283,20 +328,24 @@ ctest -R unit
 
 ## Notes for Agents
 
-1. **plan.md is the canonical design document.** Read it before making architectural decisions. It contains the full Stage A–K roadmap with interfaces, data structures, and acceptance criteria.
+1. **`implementation_process/1.plan.md` is the canonical design document.** It contains the full Stage A–K roadmap (in Chinese) with interfaces, data structures, and acceptance criteria. Read it before making architectural decisions.
 
-2. **CLAUDE.md contains additional technical guidance.** It documents subsystem mappings to `plan.md` sections, key files for NIA work, and reference solver usage. Read it alongside this file.
+2. **`milestone-2026-05-13.md` is the latest status snapshot.** It records the current implementation state, verified cases, skeleton modules, and a prioritized TODO list (in Chinese).
 
-3. **SOMTParser is a git submodule.** If it appears empty, run `git submodule update --init --recursive`.
+3. **`CLAUDE.md` contains additional technical guidance.** It documents subsystem mappings to `plan.md` sections, key files for NIA work, and reference solver usage. Read it alongside this file.
 
-4. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` macros.
+4. **SOMTParser is a git submodule.** If it appears empty, run `git submodule update --init --recursive`.
 
-5. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
+5. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` macros.
 
-6. **SOMTParser already provides hash-consing, rewriter, visitor.** Do not reimplement these. The internal CoreIr is a lightweight dense array for solver-specific metadata (literal IDs, proof IDs, scope levels), not a replacement for SOMTParser's DAG.
+6. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
 
-7. **TheoryManager dispatches to all registered solvers.** Each solver silently ignores unsupported constraints. For MVP, positive theory literals are asserted; negative literals are handled by SAT-level negation.
+7. **SOMTParser already provides hash-consing, rewriter, visitor.** Do not reimplement these. The internal CoreIr is a lightweight dense array for solver-specific metadata (literal IDs, proof IDs, scope levels), not a replacement for SOMTParser's DAG.
 
-8. **CLI auto-detects logic from `(set-logic ...)` in SMT2 files.** If no logic is set, default is LRA path, which will mark nonlinear constraints as unsupported and return Unknown.
+8. **TheoryManager dispatches to all registered solvers.** Each solver silently ignores unsupported constraints. For MVP, positive theory literals are asserted; negative literals are handled by SAT-level negation.
 
-9. **The `implementation_process/` directory** contains historical design documents and chat logs from the iterative development process. It is not source code and can be ignored for builds, but may contain useful context for understanding design decisions.
+9. **CLI auto-detects logic from `(set-logic ...)` in SMT2 files.** If no logic is set, the default path may mark nonlinear constraints as unsupported and return Unknown.
+
+10. **The `implementation_process/` directory** contains historical design documents and chat logs from the iterative development process. It is not source code and can be ignored for builds, but may contain useful context for understanding design decisions.
+
+11. **Do not silently take shortcuts or simplifications.** When a planned feature (e.g., tower reduction, algebraic-coefficient root isolation, exact zero detection) requires infrastructure that does not yet exist, **ask the user** instead of silently degrading to a weaker approximation. Soundness bugs are far more costly than a delay for clarification. Never replace a missing primitive with a "close enough" workaround without explicit approval.

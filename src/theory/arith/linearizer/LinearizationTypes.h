@@ -24,7 +24,7 @@ enum class NonlinearKind { Product, Square };
  */
 struct NonlinearTermKey {
     NonlinearKind kind;
-    std::vector<std::pair<std::string, int>> powers; // sorted by var name
+    std::vector<std::pair<VarId, int>> powers; // sorted by VarId
 
     bool operator==(const NonlinearTermKey& o) const {
         return kind == o.kind && powers == o.powers;
@@ -35,7 +35,7 @@ struct NonlinearTermKeyHash {
     std::size_t operator()(const NonlinearTermKey& k) const {
         std::size_t h = static_cast<std::size_t>(k.kind);
         for (const auto& p : k.powers) {
-            h ^= std::hash<std::string>{}(p.first) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h ^= std::hash<uint32_t>{}(p.first) + 0x9e3779b9 + (h << 6) + (h >> 2);
             h ^= std::hash<int>{}(p.second) + 0x9e3779b9 + (h << 6) + (h >> 2);
         }
         return h;
@@ -48,6 +48,7 @@ struct NonlinearTermKeyHash {
 
 struct AuxTerm {
     std::string name;
+    VarId vid = NullVar;
     PolyId poly;
     NonlinearTermKey key;
 };

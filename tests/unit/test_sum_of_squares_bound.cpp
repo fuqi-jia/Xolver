@@ -14,8 +14,8 @@ static NormalizedNiaConstraint makeSOSConstraint(
     PolynomialKernel& kernel, const std::string& x, const std::string& y,
     const mpz_class& c, Relation rel, SatLit reason) {
 
-    PolyId xVar = kernel.mkVar(x);
-    PolyId yVar = kernel.mkVar(y);
+    PolyId xVar = kernel.mkVar(kernel.getOrCreateVar(x));
+    PolyId yVar = kernel.mkVar(kernel.getOrCreateVar(y));
     PolyId x2 = kernel.pow(xVar, 2);
     PolyId y2 = kernel.pow(yVar, 2);
     PolyId cPoly = kernel.mkConst(mpq_class(c));
@@ -77,7 +77,7 @@ TEST_CASE("SumOfSquaresBound: linear constraint ignored") {
     SumOfSquaresBoundReasoner reasoner(*kernel);
     DomainStore ds;
 
-    PolyId x = kernel->mkVar("x");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
     PolyId two = kernel->mkConst(mpq_class(2));
     PolyId poly = kernel->add(kernel->mul(two, x), kernel->mkConst(mpq_class(5)));
 
@@ -91,7 +91,7 @@ TEST_CASE("SumOfSquaresBound: single variable x^2-4=0 -> bounds [-2,2]") {
     SumOfSquaresBoundReasoner reasoner(*kernel);
     DomainStore ds;
 
-    PolyId x = kernel->mkVar("x");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
     PolyId x2 = kernel->pow(x, 2);
     PolyId cPoly = kernel->mkConst(mpq_class(mpz_class(-4)));
     PolyId poly = kernel->add(x2, cPoly);
@@ -111,9 +111,9 @@ TEST_CASE("SumOfSquaresBound: three variables x^2+y^2+z^2-27=0") {
     SumOfSquaresBoundReasoner reasoner(*kernel);
     DomainStore ds;
 
-    PolyId x = kernel->mkVar("x");
-    PolyId y = kernel->mkVar("y");
-    PolyId z = kernel->mkVar("z");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    PolyId z = kernel->mkVar(kernel->getOrCreateVar("z"));
     PolyId poly = kernel->add(kernel->add(kernel->pow(x, 2), kernel->pow(y, 2)),
                                kernel->add(kernel->pow(z, 2), kernel->mkConst(mpq_class(mpz_class(-27)))));
 

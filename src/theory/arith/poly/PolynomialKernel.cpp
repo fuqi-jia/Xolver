@@ -20,7 +20,7 @@ public:
     PolyId mkZero() override { return 0; }
     PolyId mkOne() override { return 0; }
     PolyId mkConst(const mpq_class&) override { return 0; }
-    PolyId mkVar(std::string_view) override { return 0; }
+    PolyId mkVar(VarId) override { return 0; }
     PolyId add(PolyId, PolyId) override { return 0; }
     PolyId sub(PolyId, PolyId) override { return 0; }
     PolyId neg(PolyId) override { return 0; }
@@ -32,10 +32,18 @@ public:
     std::vector<std::string> variables(PolyId) const override { return {}; }
     bool eq(PolyId, PolyId) const override { return true; }
     int sgn(PolyId, const std::unordered_map<std::string, mpq_class>&) const override { return 0; }
+    int sgnVarId(PolyId a, const std::unordered_map<VarId, mpq_class>& sample) const override {
+        return PolynomialKernel::sgnVarId(a, sample);
+    }
     std::optional<mpz_class> evalInteger(
         PolyId,
         const std::unordered_map<std::string, mpz_class>&) const override {
         return std::nullopt;
+    }
+    std::optional<mpz_class> evalIntegerVarId(
+        PolyId a,
+        const std::unordered_map<VarId, mpz_class>& sample) const override {
+        return PolynomialKernel::evalIntegerVarId(a, sample);
     }
     std::optional<int> degree(PolyId, std::string_view) const override {
         return std::nullopt;

@@ -22,6 +22,8 @@ public:
     // Import all assertions from parser into a fresh CoreIr.
     std::unique_ptr<CoreIr> importProblem();
 
+    SortId getBoolSortId() const { return boolSortId_; }
+
 private:
     ExprId importNode(SOMTParser::Node node);
     SortId mapSort(SOMTParser::Node node);
@@ -31,6 +33,7 @@ private:
 
     SOMTParser::Parser& parser_;
     std::unique_ptr<CoreIr> ir_;
+    SortId boolSortId_ = NullSort;
 
     // Memo: each SOMTParser Node maps to exactly one ExprId.
     std::unordered_map<

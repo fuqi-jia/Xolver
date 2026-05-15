@@ -4,6 +4,7 @@
 
 #include "sat/CadicalBackend.h"
 #include <cassert>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -33,7 +34,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     tm_.backtrackToLevel(currentLevel_);
 }
 
-bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& /*model*/) {
+bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
     if (abortWithUnknown_) {
         terminateSolve();
         return true;
@@ -46,7 +47,15 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& /*mod
         return true;
     }
 
+    assignmentView_.clear();
+    for (int lit : model) {
+        SatVar var = static_cast<SatVar>(std::abs(lit));
+        assignmentView_.setVarValue(var, lit > 0);
+    }
+    tm_.setAssignmentView(&assignmentView_);
+
     auto tr = tm_.check(lemmaDb_);
+    std::cerr << "[PROP] check result=" << (int)tr.kind << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;

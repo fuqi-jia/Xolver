@@ -18,14 +18,40 @@ PolyId LibPolyKernel::alloc(poly::Polynomial p) {
     return id;
 }
 
-poly::Variable LibPolyKernel::resolveVar(std::string_view name) {
+VarId LibPolyKernel::getOrCreateVar(std::string_view name) {
     std::string key(name);
-    auto it = varMap_.find(key);
-    if (it != varMap_.end()) return it->second;
+    auto it = nameToVar_.find(key);
+    if (it != nameToVar_.end()) return it->second;
+    VarId id = static_cast<VarId>(varNames_.size());
+    varNames_.push_back(key);
     poly::Variable v(ctx_, key.c_str());
-    revVarMap_[v.get_internal()] = key;
-    varMap_[std::move(key)] = v;
-    return v;
+    varIdToPolyVar_.push_back(v);
+    polyVarToVarId_[v.get_internal()] = id;
+    nameToVar_[std::move(key)] = id;
+    return id;
+}
+
+std::optional<VarId> LibPolyKernel::findVar(std::string_view name) const {
+    auto it = nameToVar_.find(std::string(name));
+    if (it != nameToVar_.end()) return it->second;
+    return std::nullopt;
+}
+
+std::string_view LibPolyKernel::varName(VarId v) const {
+    if (v >= varNames_.size()) return "";
+    return varNames_[v];
+}
+
+bool LibPolyKernel::isValidVar(VarId v) const {
+    return v < varNames_.size();
+}
+
+poly::Variable LibPolyKernel::resolvePolyVar(VarId v) {
+    if (v >= varIdToPolyVar_.size()) {
+        // Should not happen if VarId was obtained through getOrCreateVar
+        return poly::Variable(ctx_, "invalid");
+    }
+    return varIdToPolyVar_[v];
 }
 
 PolyId LibPolyKernel::mkZero() {
@@ -47,9 +73,9 @@ PolyId LibPolyKernel::mkConst(const mpq_class& c) {
     return alloc(poly::Polynomial(ctx_.get_polynomial_context(), poly::Integer(c.get_num())));
 }
 
-PolyId LibPolyKernel::mkVar(std::string_view name) {
-    poly::Variable v = resolveVar(name);
-    return alloc(poly::Polynomial(ctx_.get_polynomial_context(), v));
+PolyId LibPolyKernel::mkVar(VarId v) {
+    poly::Variable pv = resolvePolyVar(v);
+    return alloc(poly::Polynomial(ctx_.get_polynomial_context(), pv));
 }
 
 PolyId LibPolyKernel::add(PolyId a, PolyId b) {
@@ -110,9 +136,9 @@ std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
     collect(p);
 
     for (lp_variable_t v : found) {
-        auto it = revVarMap_.find(v);
-        if (it != revVarMap_.end()) {
-            result.push_back(it->second);
+        auto it = polyVarToVarId_.find(v);
+        if (it != polyVarToVarId_.end()) {
+            result.push_back(varNames_[it->second]);
         }
     }
     return result;
@@ -125,9 +151,19 @@ bool LibPolyKernel::eq(PolyId a, PolyId b) const {
 int LibPolyKernel::sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const {
     poly::Assignment pa(ctx_);
     for (const auto& [name, val] : sample) {
-        auto it = varMap_.find(name);
-        if (it != varMap_.end()) {
-            pa.set(it->second, poly::Value(poly::Rational(val)));
+        auto it = nameToVar_.find(name);
+        if (it != nameToVar_.end()) {
+            pa.set(varIdToPolyVar_[it->second], poly::Value(poly::Rational(val)));
+        }
+    }
+    return poly::sgn(get(a), pa);
+}
+
+int LibPolyKernel::sgnVarId(PolyId a, const std::unordered_map<VarId, mpq_class>& sample) const {
+    poly::Assignment pa(ctx_);
+    for (const auto& [vid, val] : sample) {
+        if (isValidVar(vid)) {
+            pa.set(varIdToPolyVar_[vid], poly::Value(poly::Rational(val)));
         }
     }
     return poly::sgn(get(a), pa);
@@ -145,9 +181,9 @@ std::optional<mpz_class> LibPolyKernel::evalInteger(
 
     poly::Assignment pa(ctx_);
     for (const auto& [name, val] : sample) {
-        auto it = varMap_.find(name);
-        if (it != varMap_.end()) {
-            pa.set(it->second, poly::Value(poly::Integer(val)));
+        auto it = nameToVar_.find(name);
+        if (it != nameToVar_.end()) {
+            pa.set(varIdToPolyVar_[it->second], poly::Value(poly::Integer(val)));
         }
     }
     poly::Value v = poly::evaluate(get(a), pa);
@@ -168,18 +204,43 @@ std::optional<mpz_class> LibPolyKernel::evalInteger(
     return std::nullopt;
 }
 
+std::optional<mpz_class> LibPolyKernel::evalIntegerVarId(
+    PolyId a,
+    const std::unordered_map<VarId, mpz_class>& sample) const {
+
+    poly::Assignment pa(ctx_);
+    for (const auto& [vid, val] : sample) {
+        if (isValidVar(vid)) {
+            pa.set(varIdToPolyVar_[vid], poly::Value(poly::Integer(val)));
+        }
+    }
+    poly::Value v = poly::evaluate(get(a), pa);
+    if (poly::is_integer(v)) {
+        const poly::Integer& i = poly::as_integer(v);
+        return *poly::detail::cast_to_gmp(&i);
+    }
+    if (poly::is_rational(v)) {
+        const poly::Rational& r = poly::as_rational(v);
+        const mpq_class* q = poly::detail::cast_to_gmp(&r);
+        if (q->get_den() == 1) {
+            return q->get_num();
+        }
+    }
+    return std::nullopt;
+}
+
 std::optional<int> LibPolyKernel::degree(PolyId a, std::string_view var) const {
     const auto& p = get(a);
     // If polynomial is constant, degree is 0
     if (poly::is_constant(p)) {
         return 0;
     }
-    auto it = varMap_.find(std::string(var));
-    if (it == varMap_.end()) {
+    auto it = nameToVar_.find(std::string(var));
+    if (it == nameToVar_.end()) {
         // Variable not in this kernel's context → not present in polynomial
         return 0;
     }
-    poly::Variable pv = it->second;
+    poly::Variable pv = varIdToPolyVar_[it->second];
     if (poly::main_variable(p) == pv) {
         return static_cast<int>(poly::degree(p));
     }
@@ -204,9 +265,9 @@ std::optional<std::vector<mpz_class>> LibPolyKernel::getIntegerCoefficients(
         return std::vector<mpz_class>{c.get_num()};
     }
 
-    auto it = varMap_.find(std::string(var));
-    if (it == varMap_.end()) return std::nullopt;
-    poly::Variable pv = it->second;
+    auto it = nameToVar_.find(std::string(var));
+    if (it == nameToVar_.end()) return std::nullopt;
+    poly::Variable pv = varIdToPolyVar_[it->second];
 
     if (poly::main_variable(p) != pv) {
         // Variable is not main variable. Cannot extract coefficients via libpoly API.
@@ -269,12 +330,12 @@ static void termsTraverseCallback(const lp_polynomial_context_t* /*ctx*/,
     for (size_t i = 0; i < m->n; ++i) {
         lp_variable_t v = m->p[i].x;
         size_t d = m->p[i].d;
-        auto nameOpt = tdata->kernel->resolveVariableName(v);
-        if (!nameOpt) {
+        auto varOpt = tdata->kernel->resolveVariableId(v);
+        if (!varOpt) {
             tdata->failed = true;
             return;
         }
-        term.powers.push_back({*nameOpt, static_cast<int>(d)});
+        term.powers.push_back({*varOpt, static_cast<int>(d)});
     }
 
     tdata->terms.push_back(std::move(term));
@@ -282,10 +343,18 @@ static void termsTraverseCallback(const lp_polynomial_context_t* /*ctx*/,
 
 } // extern "C"
 
-std::optional<std::string> LibPolyKernel::resolveVariableName(lp_variable_t v) const {
-    auto it = revVarMap_.find(v);
-    if (it != revVarMap_.end()) return it->second;
+std::optional<VarId> LibPolyKernel::resolveVariableId(lp_variable_t v) const {
+    auto it = polyVarToVarId_.find(v);
+    if (it != polyVarToVarId_.end()) return it->second;
     return std::nullopt;
+}
+
+poly::Variable LibPolyKernel::getVariable(const std::string& name) const {
+    auto it = nameToVar_.find(name);
+    if (it != nameToVar_.end()) return varIdToPolyVar_[it->second];
+    // Variable not found: this should not happen if the polynomial was created
+    // through this kernel. Return a dummy variable for safety.
+    return poly::Variable(ctx_, name.c_str());
 }
 
 std::optional<std::vector<PolynomialKernel::MonomialTerm>>
@@ -309,6 +378,64 @@ LibPolyKernel::terms(PolyId a) const {
 
     if (data.failed) return std::nullopt;
     return data.terms;
+}
+
+std::optional<PolyId> LibPolyKernel::pseudoRemainder(PolyId p, PolyId divisor) {
+    const auto& pp = get(p);
+    const auto& dd = get(divisor);
+    try {
+        poly::Polynomial r = poly::prem(pp, dd);
+        return alloc(std::move(r));
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
+    const auto& pp = get(p);
+    if (poly::is_constant(pp)) return std::nullopt;
+    try {
+        poly::Polynomial lc = poly::leading_coefficient(pp);
+        return alloc(std::move(lc));
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {
+    auto termsOpt = terms(p);
+    if (!termsOpt) return std::nullopt;
+
+    PolyId result = mkZero();
+    for (const auto& term : *termsOpt) {
+        mpq_class coeff(term.coefficient);
+        PolyId termPoly = mkOne();
+        bool hasNonSubstitutedVar = false;
+
+        for (const auto& [varId, exp] : term.powers) {
+            if (varId == v) {
+                mpq_class factor(1);
+                for (int i = 0; i < exp; ++i) factor *= value;
+                coeff *= factor;
+            } else {
+                hasNonSubstitutedVar = true;
+                PolyId varPoly = mkVar(varId);
+                if (exp == 1) {
+                    termPoly = mul(termPoly, varPoly);
+                } else {
+                    termPoly = mul(termPoly, pow(varPoly, static_cast<uint32_t>(exp)));
+                }
+            }
+        }
+
+        if (hasNonSubstitutedVar) {
+            termPoly = mul(mkConst(coeff), termPoly);
+        } else {
+            termPoly = mkConst(coeff);
+        }
+        result = add(result, termPoly);
+    }
+    return result;
 }
 
 } // namespace nlcolver

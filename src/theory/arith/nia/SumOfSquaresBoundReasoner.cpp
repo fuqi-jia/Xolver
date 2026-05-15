@@ -17,7 +17,7 @@ bool SumOfSquaresBoundReasoner::extractSumOfSquaresForm(
     vars.clear();
 
     for (const auto& var : allVars) {
-        PolyId varPoly = kernel_.mkVar(var);
+        PolyId varPoly = kernel_.mkVar(kernel_.getOrCreateVar(var));
         PolyId varSq = kernel_.pow(varPoly, 2);
         PolyId candidate = kernel_.sub(remaining, varSq);
 

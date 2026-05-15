@@ -1,6 +1,7 @@
 #pragma once
 
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/nra/CdcacTypes.h"
 #include "theory/TheorySolver.h"
 #include <gmpxx.h>
 #include <vector>
@@ -22,6 +23,7 @@ public:
     void assertConstraint(PolyId poly, Relation rel, SatLit reason, int level);
     void backtrack(int level);
     TheoryCheckResult check();
+    TheoryCheckResult check(TheoryEffort effort, void* trail);
     void reset();
 
 private:

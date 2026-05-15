@@ -25,12 +25,20 @@ public:
     virtual ~PolynomialKernel() = default;
 
     // ------------------------------------------------------------------
+    // Variable registry (VarId is the canonical variable identity)
+    // ------------------------------------------------------------------
+    virtual VarId getOrCreateVar(std::string_view name) = 0;
+    virtual std::optional<VarId> findVar(std::string_view name) const = 0;
+    virtual std::string_view varName(VarId v) const = 0;
+    virtual bool isValidVar(VarId v) const = 0;
+
+    // ------------------------------------------------------------------
     // Factory / constants
     // ------------------------------------------------------------------
     virtual PolyId mkZero() = 0;
     virtual PolyId mkOne()  = 0;
     virtual PolyId mkConst(const mpq_class& c) = 0;
-    virtual PolyId mkVar(std::string_view name) = 0;
+    virtual PolyId mkVar(VarId v) = 0;
 
     // ------------------------------------------------------------------
     // Core operations
@@ -59,6 +67,16 @@ public:
     // ------------------------------------------------------------------
     virtual int sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const = 0;
 
+    // VarId-based variant for CDCAC internal use.
+    virtual int sgnVarId(PolyId a, const std::unordered_map<VarId, mpq_class>& sample) const {
+        std::unordered_map<std::string, mpq_class> stringSample;
+        stringSample.reserve(sample.size());
+        for (const auto& [vid, val] : sample) {
+            stringSample[std::string(varName(vid))] = val;
+        }
+        return sgn(a, stringSample);
+    }
+
     // ------------------------------------------------------------------
     // Integer evaluation (for NIA exact validation)
     // ------------------------------------------------------------------
@@ -67,6 +85,18 @@ public:
     virtual std::optional<mpz_class> evalInteger(
         PolyId a,
         const std::unordered_map<std::string, mpz_class>& sample) const = 0;
+
+    // VarId-based variant for CDCAC internal use.
+    virtual std::optional<mpz_class> evalIntegerVarId(
+        PolyId a,
+        const std::unordered_map<VarId, mpz_class>& sample) const {
+        std::unordered_map<std::string, mpz_class> stringSample;
+        stringSample.reserve(sample.size());
+        for (const auto& [vid, val] : sample) {
+            stringSample[std::string(varName(vid))] = val;
+        }
+        return evalInteger(a, stringSample);
+    }
 
     // ------------------------------------------------------------------
     // Univariate analysis (for NIA integer root solving)
@@ -81,11 +111,35 @@ public:
     getIntegerCoefficients(PolyId a, std::string_view var) const = 0;
 
     // ------------------------------------------------------------------
+    // Pseudo-remainder (for tower reduction in CDCAC)
+    // ------------------------------------------------------------------
+    // Compute the pseudo-remainder of p divided by divisor.
+    // Returns nullopt if unsupported by the backend.
+    virtual std::optional<PolyId> pseudoRemainder(PolyId p, PolyId divisor) {
+        (void)p; (void)divisor;
+        return std::nullopt;
+    }
+
+    // Leading coefficient of p with respect to its main variable.
+    // Returns nullopt if unsupported.
+    virtual std::optional<PolyId> leadingCoefficient(PolyId p) {
+        (void)p;
+        return std::nullopt;
+    }
+
+    // Substitute a rational value for a variable, returning a new polynomial.
+    // Returns nullopt if unsupported or the decomposition fails.
+    virtual std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) {
+        (void)p; (void)v; (void)value;
+        return std::nullopt;
+    }
+
+    // ------------------------------------------------------------------
     // Multivariate term decomposition (for GCD, interval evaluation, CAD)
     // ------------------------------------------------------------------
     struct MonomialTerm {
-        mpz_class coefficient;                           // exact integer coefficient
-        std::vector<std::pair<std::string, int>> powers; // [(var, exp), ...]; empty = constant term
+        mpz_class coefficient;                        // exact integer coefficient
+        std::vector<std::pair<VarId, int>> powers;    // [(varId, exp), ...]; empty = constant term
     };
 
     // Return all monomial terms, INCLUDING the constant term as powers.empty().

@@ -6,10 +6,34 @@
 #include "theory/TheoryAtomRegistry.h"
 #include "theory/TheoryManager.h"
 #include "theory/TheoryLemmaDatabase.h"
+#include "theory/TheoryAssignmentView.h"
 
 namespace nlcolver {
 
 class CadicalBackend;
+
+/**
+ * Lightweight assignment view populated from CaDiCaL's cb_check_found_model model.
+ * Safe to query from TheoryManager::check() because it does not call back into CaDiCaL.
+ */
+class CadicalAssignmentView : public TheoryAssignmentView {
+public:
+    void clear() { values_.clear(); }
+    void setVarValue(SatVar var, bool value) {
+        if (var >= values_.size()) values_.resize(var + 1, 0);
+        values_[var] = value ? 1 : -1;
+    }
+    LitValue value(SatLit lit) const override {
+        if (lit.var >= values_.size()) return LitValue::Unknown;
+        int v = values_[lit.var];
+        if (v == 0) return LitValue::Unknown;
+        bool varTrue = (v > 0);
+        bool litTrue = lit.sign ? varTrue : !varTrue;
+        return litTrue ? LitValue::True : LitValue::False;
+    }
+private:
+    std::vector<int8_t> values_;
+};
 
 /**
  * CadicalTheoryPropagator: bridges CaDiCaL's ExternalPropagator to our theory stack.
@@ -46,6 +70,9 @@ private:
     bool abortWithUnknown_ = false;
     int modelCheckCount_ = 0;
     static constexpr int MAX_MODEL_CHECKS = 10000;
+    CadicalAssignmentView assignmentView_;
+
+    CadicalAssignmentView& assignmentView() { return assignmentView_; }
 
     void setPendingClause(const std::vector<SatLit>& lits);
     void setPendingClause(const TheoryLemma& lemma);

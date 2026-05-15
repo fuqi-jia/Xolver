@@ -80,4 +80,8 @@ TheoryCheckResult CdcacSolver::check() {
     return TheoryCheckResult::unknown();
 }
 
+TheoryCheckResult CdcacSolver::check(TheoryEffort /*effort*/, void* /*trail*/) {
+    return check();
+}
+
 } // namespace nlcolver

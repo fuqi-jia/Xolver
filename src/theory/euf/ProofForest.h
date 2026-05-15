@@ -1,0 +1,34 @@
+#pragma once
+#include "theory/euf/EufTypes.h"
+#include <vector>
+#include <cstdint>
+
+namespace nlcolver {
+
+class ProofForest {
+public:
+    void addEdge(EufTermId u, EufTermId v, const MergeReason& reason);
+    size_t snapshot() const;
+    void rollback(size_t snap);
+    void clear();
+
+    // Returns edge IDs along the path u→v in the active forest.
+    // Empty if no path (should not happen for same-class terms).
+    std::vector<size_t> path(EufTermId u, EufTermId v) const;
+
+    size_t activeEdgeCount() const { return activeEdgeCount_; }
+
+    const MergeReason& edgeReason(size_t edgeId) const { return edges_[edgeId].reason; }
+
+private:
+    struct Edge {
+        EufTermId u;
+        EufTermId v;
+        MergeReason reason;
+    };
+    std::vector<Edge> edges_;
+    std::vector<std::vector<std::pair<EufTermId, size_t>>> adj_;
+    size_t activeEdgeCount_ = 0;
+};
+
+} // namespace nlcolver

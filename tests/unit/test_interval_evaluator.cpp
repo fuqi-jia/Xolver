@@ -14,7 +14,7 @@ static IntervalConstraint makeIntervalConstraint(
     PolynomialKernel& kernel, const std::string& var,
     const std::vector<mpz_class>& coeffs, Relation rel, SatLit reason) {
 
-    PolyId varPoly = kernel.mkVar(var);
+    PolyId varPoly = kernel.mkVar(kernel.getOrCreateVar(var));
     PolyId result = kernel.mkZero();
     for (size_t i = 0; i < coeffs.size(); ++i) {
         if (coeffs[i] == 0) continue;
@@ -90,8 +90,8 @@ TEST_CASE("IntervalEvaluator: multivariate -> skip") {
     IntervalEvaluator eval(*kernel);
     auto box = makeBox("x", mpz_class(-2), mpz_class(2), {mkReason(1), mkReason(2)});
 
-    PolyId x = kernel->mkVar("x");
-    PolyId y = kernel->mkVar("y");
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
     PolyId poly = kernel->add(kernel->pow(x, 2), kernel->pow(y, 2));
 
     auto c = IntervalConstraint{poly, Relation::Leq, mkReason(5)};

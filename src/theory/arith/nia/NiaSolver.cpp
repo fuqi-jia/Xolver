@@ -45,8 +45,8 @@ void NiaSolver::reset() {
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
-                          int level, SatLit reason) {
-    activeAssignments_.push_back({level, reason, atom, value});
+                          int level, SatLit assertedLit) {
+    activeAssignments_.push_back({level, assertedLit, atom, value});
 
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
     if (!payload) {
@@ -64,7 +64,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         diff = kernel_->sub(payload->poly, rhsPoly);
     }
 
-    active_.push_back({diff, rel, reason});
+    active_.push_back({diff, rel, assertedLit});
     trail_.push_back({level, oldSize});
 }
 
@@ -391,7 +391,7 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
         BranchSplitKey key{cand.var, k};
         if (emittedSplits_.count(key)) continue;
 
-        PolyId xPoly = kernel_->mkVar(cand.var);
+        PolyId xPoly = kernel_->mkVar(kernel_->getOrCreateVar(cand.var));
 
         // x <= k
         SatLit litLeq = registry_->getOrCreatePolynomialAtom(

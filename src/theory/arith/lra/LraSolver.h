@@ -2,6 +2,7 @@
 
 #include "theory/TheorySolver.h"
 #include "theory/arith/linear/LinearAtomManager.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include "GeneralSimplex.h"
 #include <gmpxx.h>
 #include <unordered_map>
@@ -18,10 +19,24 @@ public:
 
     void push() override;
     void pop(uint32_t n) override;
-    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
+    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
     void reset() override;
+
+    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+
+    // Nelson-Oppen combination hooks
+    bool supportsCombination() const override { return true; }
+
+    TheoryCheckResult assertInterfaceEquality(
+        SharedTermId a, SharedTermId b, SatLit reason) override;
+    TheoryCheckResult assertInterfaceDisequality(
+        SharedTermId a, SharedTermId b, SatLit reason) override;
+
+    std::vector<SharedEqualityPropagation>
+    getDeducedSharedEqualities() override;
 
 private:
     GeneralSimplex gs_;
@@ -41,8 +56,30 @@ private:
     };
     std::vector<ActiveAssignment> activeAssignments_;
 
+    const CoreIr* coreIr_ = nullptr;
+    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    // Map from SharedTermId to variable name for simplex
+    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
+
+    struct InterfaceEq {
+        SharedTermId a;
+        SharedTermId b;
+        SatLit reason;
+        int level;
+    };
+    std::vector<InterfaceEq> interfaceEqualities_;
+    std::vector<InterfaceEq> interfaceDisequalities_;
+    int currentLevel_ = 0;
+
+    // Map from (a,b) canonical key to auxiliary var index for x - y
+    std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
+
     TheoryCheckResult handleDisequalities();
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d);
+
+    std::string getVarNameForSharedTerm(SharedTermId s);
+    int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
 };
 
 } // namespace nlcolver

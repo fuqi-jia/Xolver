@@ -14,6 +14,9 @@
 #include "theory/arith/idl/IdlSolver.h"
 #include "theory/arith/rdl/RdlSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/euf/EufSolver.h"
+#include "theory/combination/Purifier.h"
+#include "theory/combination/SharedTermRegistry.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
 #include "sat/CadicalBackend.h"
@@ -39,6 +42,8 @@ public:
     std::unique_ptr<SOMTParser::Parser> parser;
     std::unique_ptr<CoreIr> ir;
     std::unique_ptr<SatSolver> sat;
+    SortId boolSortId_ = NullSort;
+    std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
 
     Impl() : sat(createSatSolver()) {}
 
@@ -46,6 +51,7 @@ public:
         parser = std::make_unique<SOMTParser::Parser>();
         ir.reset();
         sat.reset();
+        sharedTermRegistry_.reset();
     }
 
     bool parseFile(std::string_view filename) {
@@ -60,6 +66,7 @@ public:
         }
         FrontendAdapter adapter(*parser);
         ir = adapter.importProblem();
+        boolSortId_ = adapter.getBoolSortId();
         return true;
     }
 
@@ -124,6 +131,32 @@ public:
             auto rdl = std::make_unique<RdlSolver>();
             rdl->setRegistry(&registry);
             theoryManager.registerSolver(std::move(rdl));
+        } else if (logic == "QF_UF") {
+            auto euf = std::make_unique<EufSolver>();
+            euf->setCoreIr(ir.get());
+            theoryManager.registerSolver(std::move(euf));
+        } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
+            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
+            {
+                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
+                purifier.run();
+            }
+            auto euf = std::make_unique<EufSolver>();
+            euf->setCoreIr(ir.get());
+            euf->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(euf));
+            auto lra = std::make_unique<LraSolver>();
+            lra->setCoreIr(ir.get());
+            lra->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(lra));
+            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.setRegistry(&registry);
+            theoryManager.setCombinationMode(true);
+        } else if (logic == "QF_UFLIA" || logic == "QF_UFNIA" || logic == "QF_UFNRA" ||
+                   logic == "UFLIA" || logic == "UFNIA" || logic == "UFNRA" ||
+                   logic == "UF") {
+            // Mixed theories not supported in V1
+            return Result::Unknown;
         } else {
             // Default: LRA covers most linear arithmetic; pure boolean works too.
             theoryManager.registerSolver(std::make_unique<LraSolver>());
@@ -158,6 +191,13 @@ public:
             atomizer.setDefaultTheory(TheoryId::IDL);
         } else if (logic == "QF_RDL" || logic == "RDL") {
             atomizer.setDefaultTheory(TheoryId::RDL);
+        } else if (logic == "QF_UF") {
+            atomizer.setDefaultTheory(TheoryId::EUF);
+            atomizer.setBoolSortId(boolSortId_);
+        } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setBoolSortId(boolSortId_);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
         } else {
             atomizer.setDefaultTheory(TheoryId::LRA);
         }
@@ -167,7 +207,17 @@ public:
             sat->addClause({lit});
         }
 
+        if (sharedTermRegistry_) {
+            const auto& sharedTerms = sharedTermRegistry_->allSharedTerms();
+            for (size_t i = 0; i < sharedTerms.size(); ++i) {
+                for (size_t j = i + 1; j < sharedTerms.size(); ++j) {
+                    registry.getOrCreateSharedEqualityAtom(sharedTerms[i], sharedTerms[j]);
+                }
+            }
+        }
+
         if (registry.hasUnsupportedTheoryAtom()) {
+            std::cerr << "[Solver] unsupported theory atom detected\n";
             cadicalBackend->disconnectPropagator();
             return Result::Unknown;
         }

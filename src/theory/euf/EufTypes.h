@@ -1,0 +1,95 @@
+#pragma once
+#include "expr/types.h"
+#include "sat/SatSolver.h"
+#include <vector>
+#include <string>
+#include <cstdint>
+#include <limits>
+
+namespace nlcolver {
+
+using EufTermId = uint32_t;
+using EClassId = uint32_t;
+using FuncSymbolId = uint32_t;
+using MergeId = uint32_t;
+
+constexpr EufTermId NullEufTerm = std::numeric_limits<EufTermId>::max();
+constexpr EClassId NullEClass = std::numeric_limits<EClassId>::max();
+constexpr FuncSymbolId NullFunc = std::numeric_limits<FuncSymbolId>::max();
+constexpr MergeId NullMergeId = std::numeric_limits<MergeId>::max();
+
+enum class EufAtomKind {
+    Equality,
+    Disequality,
+    BoolTermAsFormula
+};
+
+struct EufAtomPayload {
+    ExprId lhs;
+    ExprId rhs;
+    Relation rel;
+    EufAtomKind kind = EufAtomKind::Equality;
+};
+
+struct EufAtom {
+    EufTermId lhs;
+    EufTermId rhs;
+    Relation rel;
+    SatLit assertedLit;
+};
+
+enum class MergeReasonKind {
+    AssertedEquality,
+    Congruence
+};
+
+struct MergeReason {
+    MergeReasonKind kind;
+    SatLit assertedLit;
+    EufTermId lhsApp = NullEufTerm;
+    EufTermId rhsApp = NullEufTerm;
+    std::vector<std::pair<EufTermId, EufTermId>> argPairs;
+};
+
+enum class MergeStatus {
+    Ok,
+    SortMismatch
+};
+
+enum class CloseStatus {
+    Ok,
+    SortMismatch
+};
+
+struct MergeRecord {
+    MergeId id;
+    EufTermId lhs;
+    EufTermId rhs;
+    EClassId lhsRootBefore;
+    EClassId rhsRootBefore;
+    MergeReason reason;
+};
+
+struct EGraphSnapshot {
+    size_t ufTrailSize = 0;
+    size_t memberTrailSize = 0;
+    size_t mergeRecordSize = 0;
+    size_t mergeQueueSize = 0;
+    size_t sigTableSnap = 0;
+    size_t currentSigSnap = 0;
+    size_t proofForestSnap = 0;
+    EufTermId nextTermToRegister = 0;
+};
+
+struct MemberChange {
+    EClassId dstRoot;
+    EClassId srcRoot;
+    size_t oldDstSize;
+};
+
+struct ExplainResult {
+    bool ok;
+    std::vector<SatLit> reasons;
+};
+
+} // namespace nlcolver
