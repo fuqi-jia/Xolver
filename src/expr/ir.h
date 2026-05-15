@@ -5,6 +5,8 @@
 #include "util/SmallVector.h"
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
+#include <optional>
 
 namespace nlcolver {
 
@@ -101,10 +103,23 @@ public:
 
     ScopeLevel currentScopeLevel() const { return currentScope_; }
 
+    // Sort kind tracking (populated by FrontendAdapter)
+    void registerSort(SortId id, SortKind kind) { sortKinds_[id] = kind; }
+    std::optional<SortKind> sortKind(SortId id) const {
+        auto it = sortKinds_.find(id);
+        if (it != sortKinds_.end()) return it->second;
+        return std::nullopt;
+    }
+
+    SortId boolSortId() const { return boolSortId_; }
+    void setBoolSortId(SortId id) { boolSortId_ = id; }
+
 private:
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;
+    std::unordered_map<SortId, SortKind> sortKinds_;
+    SortId boolSortId_ = NullSort;
 };
 
 } // namespace nlcolver

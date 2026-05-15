@@ -80,6 +80,16 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
         boolSortId_ = id;
     }
 
+    // Register sort kind in CoreIr
+    SortKind kind = SortKind::Other;
+    if (sort->isBool()) kind = SortKind::Bool;
+    else if (sort->isInt()) kind = SortKind::Int;
+    else if (sort->isReal()) kind = SortKind::Real;
+    else if (sort->isBv()) kind = SortKind::BV;
+    else if (sort->isFp()) kind = SortKind::FP;
+    else if (sort->isArray()) kind = SortKind::Array;
+    ir_->registerSort(id, kind);
+
     return id;
 }
 

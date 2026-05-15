@@ -37,7 +37,7 @@ enum class Relation : uint8_t {
 };
 
 enum class SortKind : uint8_t {
-    Int, Real
+    Bool, Int, Real, BV, FP, Array, Other
 };
 
 } // namespace nlcolver

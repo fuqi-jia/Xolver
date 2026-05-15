@@ -17,6 +17,7 @@
 #include "theory/euf/EufSolver.h"
 #include "theory/combination/Purifier.h"
 #include "theory/combination/SharedTermRegistry.h"
+#include "theory/LogicFeatureDetector.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
 #include "sat/CadicalBackend.h"
@@ -101,7 +102,52 @@ public:
         TheoryLemmaDatabase lemmaDb;
         PolynomialKernel* polyKernelRaw = nullptr;
 
-        // Register solvers based on logic.
+        // Detect features from CoreIr for safe routing
+        LogicFeatureDetector detector(*ir);
+        LogicFeatures features = detector.detect();
+
+        // -------------------------------------------------------------------
+        // Mismatch guard: declared logic must cover detected features
+        // -------------------------------------------------------------------
+        bool logicMismatch = false;
+        if (logic == "QF_LIA" || logic == "LIA") {
+            if (features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_LRA" || logic == "LRA") {
+            if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_NRA" || logic == "NRA") {
+            if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_NIA" || logic == "NIA") {
+            if (features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_IDL" || logic == "IDL") {
+            if (features.hasRealVar || features.hasNonlinear || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_RDL" || logic == "RDL") {
+            if (features.hasIntVar || features.hasNonlinear || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_UF" || logic == "UF") {
+            if (features.hasIntVar || features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
+            if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
+        }
+
+        if (logicMismatch) {
+            std::cerr << "[Solver] declared logic '" << logic
+                      << "' mismatches detected features ("
+                      << "Bool=" << features.hasBool
+                      << " Int=" << features.hasInt
+                      << " Real=" << features.hasReal
+                      << " UF=" << features.hasUF
+                      << " NL=" << features.hasNonlinear
+                      << " Mixed=" << features.hasMixedIntReal
+                      << "). Returning Unknown.\n";
+            return Result::Unknown;
+        }
+
+        if (features.hasUnsupported) {
+            return Result::Unknown;
+        }
+
+        // -------------------------------------------------------------------
+        // Register solvers based on logic or detected features
+        // -------------------------------------------------------------------
         if (logic == "QF_LIA" || logic == "LIA") {
             auto lia = std::make_unique<LiaSolver>();
             lia->setRegistry(&registry);
@@ -158,8 +204,39 @@ public:
             // Mixed theories not supported in V1
             return Result::Unknown;
         } else {
-            // Default: LRA covers most linear arithmetic; pure boolean works too.
-            theoryManager.registerSolver(std::make_unique<LraSolver>());
+            // No declared logic or unrecognized logic: route by detected features.
+            // Never silently fallback to LRA — mixed Int/Real or unsupported
+            // features must return Unknown.
+            if (features.hasMixedIntReal) {
+                return Result::Unknown;
+            }
+            if (features.hasUF) {
+                return Result::Unknown; // combination not yet supported for auto-detect
+            }
+            if (features.hasInt && features.hasNonlinear) {
+                auto polyKernel = createPolynomialKernel();
+                polyKernelRaw = polyKernel.get();
+                auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+                nia->setRegistry(&registry);
+                theoryManager.registerSolver(std::move(nia));
+                auto lia = std::make_unique<LiaSolver>();
+                lia->setRegistry(&registry);
+                theoryManager.registerSolver(std::move(lia));
+            } else if (features.hasInt) {
+                auto lia = std::make_unique<LiaSolver>();
+                lia->setRegistry(&registry);
+                theoryManager.registerSolver(std::move(lia));
+            } else if (features.hasReal && features.hasNonlinear) {
+                auto polyKernel = createPolynomialKernel();
+                polyKernelRaw = polyKernel.get();
+                theoryManager.registerSolver(
+                    std::make_unique<NraSolver>(std::move(polyKernel)));
+                theoryManager.registerSolver(std::make_unique<LraSolver>());
+            } else if (features.hasReal) {
+                theoryManager.registerSolver(std::make_unique<LraSolver>());
+            } else {
+                // Pure boolean or empty: no theory solver needed
+            }
         }
 
         // Connect propagator FIRST (required before addObservedVar)
@@ -199,7 +276,20 @@ public:
             atomizer.setBoolSortId(boolSortId_);
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
         } else {
-            atomizer.setDefaultTheory(TheoryId::LRA);
+            // No declared logic: route by detected features
+            if (features.hasInt && features.hasNonlinear) {
+                atomizer.setDefaultTheory(TheoryId::NIA);
+                if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+            } else if (features.hasInt) {
+                atomizer.setDefaultTheory(TheoryId::LIA);
+            } else if (features.hasReal && features.hasNonlinear) {
+                atomizer.setDefaultTheory(TheoryId::NRA);
+                if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+            } else if (features.hasReal) {
+                atomizer.setDefaultTheory(TheoryId::LRA);
+            } else {
+                atomizer.setDefaultTheory(TheoryId::Bool);
+            }
         }
 
         for (ExprId assertion : ir->assertions()) {

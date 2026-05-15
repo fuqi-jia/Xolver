@@ -88,3 +88,92 @@ TEST_CASE("Solver: empty assertions = sat") {
     CHECK(solver.parseFile(path));
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
+
+// ---------------------------------------------------------------------------
+// P0 Safe Routing soundness regression tests
+// ---------------------------------------------------------------------------
+
+TEST_CASE("P0 Routing: Int variable without set-logic routes to LIA") {
+    std::string path = writeTempSmt2(
+        "(declare-const x Int)\n"
+        "(assert (= (* 2 x) 1))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("P0 Routing: Real variable without set-logic routes to LRA") {
+    std::string path = writeTempSmt2(
+        "(declare-const x Real)\n"
+        "(assert (> x 0))\n"
+        "(assert (< x 10))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("P0 Routing: QF_LRA declared with Int variable returns Unknown") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_LRA)\n"
+        "(declare-const x Int)\n"
+        "(assert (= (* 2 x) 1))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_LRA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unknown));
+}
+
+TEST_CASE("P0 Routing: QF_LIA declared with Real variable returns Unknown") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_LIA)\n"
+        "(declare-const x Real)\n"
+        "(assert (> x 0))\n"
+        "(assert (< x 0))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_LIA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unknown));
+}
+
+TEST_CASE("P0 Routing: mixed Int/Real without set-logic returns Unknown") {
+    std::string path = writeTempSmt2(
+        "(declare-const x Int)\n"
+        "(declare-const y Real)\n"
+        "(assert (> (+ x y) 0))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unknown));
+}
+
+TEST_CASE("P0 Routing: Int nonlinear without set-logic routes to NIA") {
+    std::string path = writeTempSmt2(
+        "(declare-const x Int)\n"
+        "(assert (= (* x x) 4))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("P0 Routing: pure boolean without set-logic works") {
+    std::string path = writeTempSmt2(
+        "(declare-const p Bool)\n"
+        "(declare-const q Bool)\n"
+        "(assert (and p q))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
