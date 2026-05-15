@@ -125,14 +125,14 @@ public:
     virtual bool supportsCombination() const { return false; }
 
     virtual TheoryCheckResult assertInterfaceEquality(
-        SharedTermId a, SharedTermId b, SatLit reason) {
-        (void)a; (void)b; (void)reason;
+        SharedTermId a, SharedTermId b, SatLit reason, int level) {
+        (void)a; (void)b; (void)reason; (void)level;
         return TheoryCheckResult::consistent();
     }
 
     virtual TheoryCheckResult assertInterfaceDisequality(
-        SharedTermId a, SharedTermId b, SatLit reason) {
-        (void)a; (void)b; (void)reason;
+        SharedTermId a, SharedTermId b, SatLit reason, int level) {
+        (void)a; (void)b; (void)reason; (void)level;
         return TheoryCheckResult::consistent();
     }
 

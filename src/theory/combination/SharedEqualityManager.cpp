@@ -1,4 +1,5 @@
 #include "theory/combination/SharedEqualityManager.h"
+#include "theory/DebugTrace.h"
 #include <algorithm>
 
 namespace nlcolver {
@@ -9,6 +10,8 @@ uint64_t SharedEqualityManager::pairKey(SharedTermId a, SharedTermId b) {
 }
 
 void SharedEqualityManager::assertEquality(SharedTermId a, SharedTermId b, SatLit reasonLit) {
+    NO_DBG << "[SEM] assertEquality st" << a << " = st" << b
+           << " reason=" << debug::fmtLit(reasonLit) << "\n";
     // Ensure nodes exist
     while (a >= uf_.size()) uf_.addNode();
     while (b >= uf_.size()) uf_.addNode();
@@ -16,6 +19,8 @@ void SharedEqualityManager::assertEquality(SharedTermId a, SharedTermId b, SatLi
 }
 
 void SharedEqualityManager::assertDisequality(SharedTermId a, SharedTermId b, SatLit reasonLit) {
+    NO_DBG << "[SEM] assertDisequality st" << a << " != st" << b
+           << " reason=" << debug::fmtLit(reasonLit) << "\n";
     disequalities_.push_back({a, b, reasonLit});
 }
 
@@ -32,8 +37,12 @@ bool SharedEqualityManager::diseqKnown(SharedTermId a, SharedTermId b) const {
 }
 
 std::optional<TheoryConflict> SharedEqualityManager::checkDisequalityConflict() const {
+    NO_DBG << "[SEM] checkDisequalityConflict: disequalities=" << disequalities_.size() << "\n";
     for (const auto& d : disequalities_) {
-        if (same(d.a, d.b)) {
+        bool isSame = same(d.a, d.b);
+        NO_DBG << "  st" << d.a << " != st" << d.b
+               << " sameClass=" << isSame << "\n";
+        if (isSame) {
             auto eqReasons = explainEquality(d.a, d.b);
             std::vector<SatLit> conflictLits;
             conflictLits.reserve(eqReasons.size() + 1);
@@ -41,6 +50,7 @@ std::optional<TheoryConflict> SharedEqualityManager::checkDisequalityConflict() 
                 conflictLits.push_back(r.negated());
             }
             conflictLits.push_back(d.reasonLit.negated());
+            NO_DBG << "[SEM] CONFLICT: " << debug::fmtClause(conflictLits) << "\n";
             return TheoryConflict{std::move(conflictLits)};
         }
     }

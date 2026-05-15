@@ -3,6 +3,7 @@
 #ifdef NLCOLVER_HAS_CADICAL
 
 #include "sat/CadicalBackend.h"
+#include "theory/DebugTrace.h"
 #include <cassert>
 #include <iostream>
 
@@ -19,6 +20,7 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
     for (int lit : lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
+        varToLevel_[var] = currentLevel_;
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
@@ -32,6 +34,13 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
 void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
+    for (auto it = varToLevel_.begin(); it != varToLevel_.end(); ) {
+        if (it->second > static_cast<int>(new_level)) {
+            it = varToLevel_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
@@ -54,8 +63,28 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
     tm_.setAssignmentView(&assignmentView_);
 
+    NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
+
+    // Re-assert all combination atoms from the current model so that
+    // TheoryManager rebuilds solver state after backtrack clears it.
+    for (int lit : model) {
+        SatVar var = static_cast<SatVar>(std::abs(lit));
+        bool sign = lit > 0;
+        const auto* atom = registry_.findBySatVar(var);
+        if (!atom || atom->theory != TheoryId::Combination) continue;
+        int level = 0;
+        auto it = varToLevel_.find(var);
+        if (it != varToLevel_.end()) level = it->second;
+        tm_.assertTheoryLit(*atom, SatLit{var, sign}, level);
+    }
+    for (int lit : model) {
+        SatVar var = static_cast<SatVar>(std::abs(lit));
+        bool sign = lit > 0;
+        NO_DBG << "  raw=" << lit << " var=" << var << " sign=" << (sign ? "T" : "F") << "\n";
+    }
+
     auto tr = tm_.check(lemmaDb_);
-    std::cerr << "[PROP] check result=" << (int)tr.kind << "\n";
+    std::cerr << "[PROP] modelCheck=" << modelCheckCount_ << " result=" << (int)tr.kind << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;

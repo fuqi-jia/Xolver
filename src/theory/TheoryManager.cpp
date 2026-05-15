@@ -1,12 +1,22 @@
 #include "theory/TheoryManager.h"
 #include "theory/TheoryAtomRegistry.h"
 #include "theory/TheoryLemmaDatabase.h"
+#include "theory/DebugTrace.h"
 #include "sat/SatSolver.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
 
 namespace nlcolver {
+
+static int noDebugModelCheckId = 0;
+
+static std::string stName(const SharedTermRegistry* reg, SharedTermId id) {
+    if (!reg) return "st" + std::to_string(id);
+    auto* st = reg->get(id);
+    if (!st) return "st" + std::to_string(id);
+    return st->name;
+}
 
 void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
     TheoryId id = solver->id();
@@ -104,52 +114,70 @@ void TheoryManager::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
+    NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
+
     if (!combinationMode_) {
         // Legacy single-theory path
-        if (solvers_.empty()) return TheoryCheckResult::consistent();
+        if (solvers_.empty()) {
+            NO_DBG << "[NO-RET-0] legacy: no solvers -> Consistent\n";
+            return TheoryCheckResult::consistent();
+        }
         for (auto& solver : solvers_) {
             auto tr = solver->check(lemmaDb);
             if (tr.kind != TheoryCheckResult::Kind::Consistent) {
+                NO_DBG << "[NO-RET-1] legacy solver=" << (int)solver->id()
+                       << " kind=" << (int)tr.kind << "\n";
                 return tr;
             }
         }
+        NO_DBG << "[NO-RET-2] legacy: all consistent\n";
         return TheoryCheckResult::consistent();
     }
 
     // ---- Nelson-Oppen combination path ----
 
+    NO_DBG << "[NO] pendingSharedEqEvents=" << pendingSharedEqEvents_.size() << "\n";
+    for (auto& ev : pendingSharedEqEvents_) {
+        NO_DBG << "[NO] pending " << (ev.isEquality ? "EQ " : "NEQ")
+               << " " << stName(sharedTermRegistry_, ev.a)
+               << " " << stName(sharedTermRegistry_, ev.b)
+               << " reason=" << debug::fmtLit(ev.reasonLit)
+               << " level=" << ev.decisionLevel << "\n";
+    }
+
     // 1. Process pending SAT-assigned shared equalities/disequalities
-    std::cerr << "[TM] pending events=" << pendingSharedEqEvents_.size() << "\n";
     for (auto& ev : pendingSharedEqEvents_) {
         if (ev.isEquality) {
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
-                std::cerr << "[TM] SEM conflict! size=" << c->clause.size() << " clause=";
-                for (auto& l : c->clause) std::cerr << (l.sign?"":"-") << l.var << " ";
-                std::cerr << "\n";
                 pendingSharedEqEvents_.clear();
+                NO_DBG << "[NO-RET-3] SEM conflict after EQ: "
+                       << debug::fmtClause(c->clause) << "\n";
                 return TheoryCheckResult::mkConflict(*c);
             }
             for (auto* solver : solversOwning(ev.a, ev.b)) {
-                auto r = solver->assertInterfaceEquality(ev.a, ev.b, ev.reasonLit);
+                auto r = solver->assertInterfaceEquality(ev.a, ev.b, ev.reasonLit, ev.decisionLevel);
                 if (r.kind != TheoryCheckResult::Kind::Consistent) {
-                    std::cerr << "[TM] solver conflict/unknown in equality\n";
                     pendingSharedEqEvents_.clear();
+                    NO_DBG << "[NO-RET-4] solver=" << (int)solver->id()
+                           << " conflict on IEQ: " << debug::fmtClause(r.conflictOpt->clause) << "\n";
                     return r;
                 }
             }
         } else {
             sharedEqMgr_.assertDisequality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
-                std::cerr << "[TM] SEM conflict! size=" << c->clause.size() << "\n";
                 pendingSharedEqEvents_.clear();
+                NO_DBG << "[NO-RET-5] SEM conflict after NEQ: "
+                       << debug::fmtClause(c->clause) << "\n";
                 return TheoryCheckResult::mkConflict(*c);
             }
             for (auto* solver : solversOwning(ev.a, ev.b)) {
-                auto r = solver->assertInterfaceDisequality(ev.a, ev.b, ev.reasonLit);
+                auto r = solver->assertInterfaceDisequality(ev.a, ev.b, ev.reasonLit, ev.decisionLevel);
                 if (r.kind != TheoryCheckResult::Kind::Consistent) {
-                    std::cerr << "[TM] solver conflict/unknown in disequality\n";
                     pendingSharedEqEvents_.clear();
+                    NO_DBG << "[NO-RET-6] solver=" << (int)solver->id()
+                           << " conflict on IDISEQ: " << debug::fmtClause(r.conflictOpt->clause) << "\n";
                     return r;
                 }
             }
@@ -159,12 +187,18 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
 
     // 2. Run each theory check
     for (auto& solver : solvers_) {
+        NO_DBG << "[NO] checking solver=" << (int)solver->id() << "\n";
         auto tr = solver->check(lemmaDb);
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
-            std::cerr << "[TM] solver " << (int)solver->id() << " check result=" << (int)tr.kind << "\n";
+            NO_DBG << "[NO-RET-7] solver=" << (int)solver->id()
+                   << " kind=" << (int)tr.kind;
             if (tr.conflictOpt) {
-                std::cerr << "[TM]  conflict clause size=" << tr.conflictOpt->clause.size() << "\n";
+                NO_DBG << " clause=" << debug::fmtClause(tr.conflictOpt->clause);
             }
+            if (tr.lemmaOpt) {
+                NO_DBG << " lemma=" << debug::fmtClause(tr.lemmaOpt->lits);
+            }
+            NO_DBG << "\n";
             return tr;
         }
     }
@@ -173,17 +207,27 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
-        for (auto& prop : solver->getDeducedSharedEqualities()) {
+        auto props = solver->getDeducedSharedEqualities();
+        NO_DBG << "[NO] solver=" << (int)solver->id()
+               << " deducedEqualities=" << props.size() << "\n";
+        for (auto& prop : props) {
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
+            NO_DBG << "[NO] deduced EQ " << stName(sharedTermRegistry_, prop.a)
+                   << " = " << stName(sharedTermRegistry_, prop.b)
+                   << " atom=" << debug::fmtLit(eqLit) << "\n";
             if (assignmentView_) {
                 LitValue val = assignmentView_->value(eqLit);
                 if (val == LitValue::True) {
-                    continue; // already true in current model
+                    NO_DBG << "  already true in model\n";
+                    continue;
                 }
             }
 
             ReportedPropKey key{solver->id(), prop.a, prop.b};
-            if (deducedEqCache_.count(key)) continue;
+            if (deducedEqCache_.count(key)) {
+                NO_DBG << "  cached, skip\n";
+                continue;
+            }
             deducedEqCache_.insert(key);
 
             TheoryLemma lemma;
@@ -191,12 +235,14 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
                 lemma.lits.push_back(reason.negated());
             }
             lemma.lits.push_back(eqLit);
+            NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
     }
 
+    NO_DBG << "[NO-RET-9] Consistent\n";
     return TheoryCheckResult::consistent();
 }
 

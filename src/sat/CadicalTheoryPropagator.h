@@ -71,6 +71,7 @@ private:
     int modelCheckCount_ = 0;
     static constexpr int MAX_MODEL_CHECKS = 10000;
     CadicalAssignmentView assignmentView_;
+    std::unordered_map<SatVar, int> varToLevel_;
 
     CadicalAssignmentView& assignmentView() { return assignmentView_; }
 

@@ -1,4 +1,5 @@
 #include "theory/arith/lra/LraSolver.h"
+#include "theory/DebugTrace.h"
 #include <cassert>
 #include <iostream>
 
@@ -50,66 +51,87 @@ void LraSolver::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
+    NO_DBG << "[LRA] check begin\n";
     // Rebuild all bounds from current active assignments.
     gs_.resetActiveBounds();
     manager_.resetBoundReasons();
     disequalities_.clear();
 
-    std::cerr << "[LRA] check: active=" << activeAssignments_.size()
-              << " ieq=" << interfaceEqualities_.size()
-              << " idiseq=" << interfaceDisequalities_.size() << "\n";
-
+    NO_DBG << "[LRA] activeAssignments=" << activeAssignments_.size() << "\n";
     for (const auto& a : activeAssignments_) {
         const auto& payload = std::get<LinearAtomPayload>(a.atom.payload);
         int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
-        std::cerr << "[LRA]  bound aux=" << auxVar << " rel=" << (int)payload.rel
-                  << " val=" << a.value << "\n";
+        NO_DBG << "[LRA] assert bound aux=" << auxVar
+               << " rel=" << (int)payload.rel
+               << " val=" << a.value
+               << " lit=" << debug::fmtLit(a.lit)
+               << " level=" << a.level << "\n";
         if (payload.rel == Relation::Neq) {
             disequalities_.push_back({auxVar, a.lit});
         } else {
             bool ok = manager_.assertBound(gs_, auxVar, payload.rel, a.value, a.lit, a.level);
             if (!ok) {
-                std::cerr << "[LRA]  bound conflict!\n";
-                return TheoryCheckResult::mkConflict(manager_.translateConflict(gs_));
+                auto tc = manager_.translateConflict(gs_);
+                NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
+                return TheoryCheckResult::mkConflict(std::move(tc));
             }
         }
     }
 
     // Apply interface equalities from Nelson-Oppen combination
+    NO_DBG << "[LRA] interfaceEqualities=" << interfaceEqualities_.size() << "\n";
     for (const auto& ieq : interfaceEqualities_) {
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
-        std::cerr << "[LRA]  ieq aux=" << aux << " a=" << ieq.a << " b=" << ieq.b << "\n";
+        NO_DBG << "[LRA] IEQ st" << ieq.a << " = st" << ieq.b
+               << " aux=" << aux
+               << " reason=" << debug::fmtLit(ieq.reason)
+               << " level=" << ieq.level << "\n";
         if (aux >= 0) {
             bool ok = true;
             ok = gs_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
             ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
             if (!ok) {
-                std::cerr << "[LRA]  ieq bound conflict!\n";
-                return TheoryCheckResult::mkConflict(manager_.translateConflict(gs_));
+                auto tc = manager_.translateConflict(gs_);
+                tc.clause.push_back(ieq.reason.negated());
+                NO_DBG << "[LRA] IEQ immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
+                return TheoryCheckResult::mkConflict(std::move(tc));
             }
         }
     }
 
     auto r = gs_.check();
-    std::cerr << "[LRA]  simplex result=" << (int)r << "\n";
+    NO_DBG << "[LRA] simplex result=" << (r == GeneralSimplex::Result::Sat ? "Sat" :
+                                          r == GeneralSimplex::Result::Unsat ? "Unsat" : "Unknown") << "\n";
     if (r == GeneralSimplex::Result::Unsat) {
-        return TheoryCheckResult::mkConflict(manager_.translateConflict(gs_));
+        auto tc = manager_.translateConflict(gs_);
+        NO_DBG << "[LRA] full conflict: " << debug::fmtClause(tc.clause) << "\n";
+        // Augment conflict with interface equality reasons that are decisions
+        // (level > 0).  Level-0 interface equalities are unit propagations;
+        // including them makes the clause non-unit and causes the SAT solver
+        // to backtrack instead of detecting UNSAT at level 0.
+        for (const auto& ieq : interfaceEqualities_) {
+            if (ieq.level > 0) {
+                tc.clause.push_back(ieq.reason.negated());
+            }
+        }
+        NO_DBG << "[LRA] augmented conflict: " << debug::fmtClause(tc.clause) << "\n";
+        if (tc.clause.empty()) {
+            NO_DBG << "[BUG] LRA empty conflict clause!\n";
+        }
+        return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {
         return TheoryCheckResult::unknown();
     }
 
     // Stage A: skip interface disequality checking against current model value.
-    // The current simplex model may assign x-y=0 by default even when no
-    // constraints force x=y.  Real conflict detection requires checking whether
-    // the equality is *deducible* from bounds, not just whether the current
-    // model happens to satisfy it.  This will be refined in later stages.
     (void)interfaceDisequalities_;
 
     if (!disequalities_.empty()) {
         return handleDisequalities();
     }
 
+    NO_DBG << "[LRA] Consistent\n";
     return TheoryCheckResult::consistent();
 }
 
@@ -177,22 +199,22 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
 }
 
 TheoryCheckResult LraSolver::assertInterfaceEquality(
-    SharedTermId a, SharedTermId b, SatLit reason) {
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();
 
-    interfaceEqualities_.push_back({a, b, reason, currentLevel_});
+    interfaceEqualities_.push_back({a, b, reason, level});
     return TheoryCheckResult::consistent();
 }
 
 TheoryCheckResult LraSolver::assertInterfaceDisequality(
-    SharedTermId a, SharedTermId b, SatLit reason) {
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();
 
-    interfaceDisequalities_.push_back({a, b, reason, currentLevel_});
+    interfaceDisequalities_.push_back({a, b, reason, level});
     return TheoryCheckResult::consistent();
 }
 

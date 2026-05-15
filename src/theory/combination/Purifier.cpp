@@ -1,4 +1,5 @@
 #include "theory/combination/Purifier.h"
+#include "theory/DebugTrace.h"
 #include "expr/ir.h"
 #include <iostream>
 
@@ -39,6 +40,7 @@ ExprId Purifier::makeFreshVar(SortId sort) {
     // Register in SharedTermRegistry so it appears in allSharedTerms()
     SharedTermId stid = registry_.getOrCreate(id, sort, name, true);
     registry_.addOwner(stid, TheoryId::Combination);
+    NO_DBG << "[Purifier] makeFreshVar " << name << " stid=" << stid << "\n";
     return id;
 }
 
@@ -85,7 +87,10 @@ ExprId Purifier::purifyRec(ExprId eid) {
     // UFApply -> bridge variable
     if (e.kind == Kind::UFApply) {
         auto it = cache_.find(eid);
-        if (it != cache_.end()) return it->second;
+        if (it != cache_.end()) {
+            NO_DBG << "[Purifier] cache hit eid=" << eid << " -> eid=" << it->second << "\n";
+            return it->second;
+        }
 
         std::vector<ExprId> newArgs;
         newArgs.reserve(e.children.size());
@@ -104,6 +109,8 @@ ExprId Purifier::purifyRec(ExprId eid) {
         ExprId bridge = makeEq(fresh, purifiedApply);
         bridgeAssertions_.push_back(bridge);
         cache_[eid] = fresh;
+        NO_DBG << "[Purifier] bridge eid=" << eid << " -> eid=" << fresh
+               << " bridge=" << bridge << "\n";
         return fresh;
     }
 
@@ -125,22 +132,26 @@ ExprId Purifier::purifyRec(ExprId eid) {
             auto it = cache_.find(lhs);
             if (it != cache_.end() && it->second != lhs) {
                 newLhs = it->second;
+                NO_DBG << "[Purifier] arith cache hit lhs=" << lhs << " -> " << newLhs << "\n";
             } else {
                 ExprId fresh = makeFreshVar(ir_.get(lhs).sort);
                 cache_[lhs] = fresh;
                 bridgeAssertions_.push_back(makeEq(fresh, lhs));
                 newLhs = fresh;
+                NO_DBG << "[Purifier] arith bridge lhs=" << lhs << " -> " << fresh << "\n";
             }
         }
         if (rhsHasUf) {
             auto it = cache_.find(rhs);
             if (it != cache_.end() && it->second != rhs) {
                 newRhs = it->second;
+                NO_DBG << "[Purifier] arith cache hit rhs=" << rhs << " -> " << newRhs << "\n";
             } else {
                 ExprId fresh = makeFreshVar(ir_.get(rhs).sort);
                 cache_[rhs] = fresh;
                 bridgeAssertions_.push_back(makeEq(fresh, rhs));
                 newRhs = fresh;
+                NO_DBG << "[Purifier] arith bridge rhs=" << rhs << " -> " << fresh << "\n";
             }
         }
         CoreExpr ne;

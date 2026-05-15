@@ -30,9 +30,9 @@ public:
     bool supportsCombination() const override { return true; }
 
     TheoryCheckResult assertInterfaceEquality(
-        SharedTermId a, SharedTermId b, SatLit reason) override;
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
     TheoryCheckResult assertInterfaceDisequality(
-        SharedTermId a, SharedTermId b, SatLit reason) override;
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
 
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;

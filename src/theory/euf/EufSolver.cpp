@@ -1,4 +1,5 @@
 #include "theory/euf/EufSolver.h"
+#include "theory/DebugTrace.h"
 #include <iostream>
 #include "theory/TheoryLemmaDatabase.h"
 #include <cassert>
@@ -164,11 +165,14 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 }
 
 TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
+    NO_DBG << "[EUF] check begin\n";
     if (pendingUnknown_) {
+        NO_DBG << "[EUF] pendingUnknown -> Unknown\n";
         return TheoryCheckResult::unknown();
     }
 
     if (pendingConflict_) {
+        NO_DBG << "[EUF] pendingConflict -> Conflict\n";
         return TheoryCheckResult::mkConflict(*pendingConflict_);
     }
 
@@ -182,8 +186,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
         auto er = egraph_.explainEquality(tTrue, tFalse);
         if (er.ok) {
             for (auto& lit : er.reasons) lit = lit.negated();
+            NO_DBG << "[EUF] true=false conflict: " << debug::fmtClause(er.reasons) << "\n";
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
+        NO_DBG << "[EUF] true=same but explain failed -> Unknown\n";
         return TheoryCheckResult::unknown();
     }
 
@@ -194,12 +200,15 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
             if (er.ok) {
                 for (auto& lit : er.reasons) lit = lit.negated();
                 er.reasons.push_back(d.reason.negated());
+                NO_DBG << "[EUF] disequality conflict: " << debug::fmtClause(er.reasons) << "\n";
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
+            NO_DBG << "[EUF] disequality same but explain failed -> Unknown\n";
             return TheoryCheckResult::unknown();
         }
     }
 
+    NO_DBG << "[EUF] Consistent\n";
     return TheoryCheckResult::consistent();
 }
 
@@ -224,7 +233,9 @@ EufTermId EufSolver::internSharedTerm(SharedTermId s) {
 }
 
 TheoryCheckResult EufSolver::assertInterfaceEquality(
-    SharedTermId a, SharedTermId b, SatLit reason) {
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+
+    ensureSnapshotForLevel(level);
 
     EufTermId ta = internSharedTerm(a);
     EufTermId tb = internSharedTerm(b);
@@ -243,7 +254,9 @@ TheoryCheckResult EufSolver::assertInterfaceEquality(
 }
 
 TheoryCheckResult EufSolver::assertInterfaceDisequality(
-    SharedTermId a, SharedTermId b, SatLit reason) {
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+
+    ensureSnapshotForLevel(level);
 
     EufTermId ta = internSharedTerm(a);
     EufTermId tb = internSharedTerm(b);
@@ -261,7 +274,7 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
         return TheoryCheckResult::unknown();
     }
 
-    sharedDisequalities_.push_back({ta, tb, reason, currentLevel_, trail_.size()});
+    sharedDisequalities_.push_back({ta, tb, reason, level, trail_.size()});
     return TheoryCheckResult::consistent();
 }
 
@@ -271,18 +284,14 @@ EufSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return result;
 
     const auto& allShared = sharedTermRegistry_->allSharedTerms();
-    std::cerr << "[EUF] deduced eqs: shared terms=" << allShared.size() << "\n";
     for (size_t i = 0; i < allShared.size(); ++i) {
         EufTermId ti = internSharedTerm(allShared[i]);
         if (ti == NullEufTerm) continue;
         for (size_t j = i + 1; j < allShared.size(); ++j) {
             EufTermId tj = internSharedTerm(allShared[j]);
             if (tj == NullEufTerm) continue;
-            std::cerr << "[EUF]  check same: " << allShared[i] << " vs " << allShared[j]
-                      << " -> " << egraph_.same(ti, tj) << "\n";
             if (egraph_.same(ti, tj)) {
                 auto er = egraph_.explainEquality(ti, tj);
-                std::cerr << "[EUF]   explain ok=" << er.ok << " reasons=" << er.reasons.size() << "\n";
                 if (er.ok) {
                     result.push_back({allShared[i], allShared[j], std::move(er.reasons)});
                 }
