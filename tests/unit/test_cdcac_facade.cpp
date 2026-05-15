@@ -118,8 +118,8 @@ TEST_CASE("CDCAC facade: univariate linear x=0 returns Consistent") {
     solver.assertConstraint(x, Relation::Eq, SatLit::positive(1), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core handles univariate constraints
+    CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("ReasonManager: deduplicate and toConflict") {
@@ -219,8 +219,8 @@ TEST_CASE("CDCAC: univariate sat x^2 - 2 = 0") {
 
     solver.assertConstraint(x2m2, Relation::Eq, SatLit::positive(1), 0);
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core handles univariate constraints
+    CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("CDCAC: univariate unsat x^2 + 1 = 0") {
@@ -234,8 +234,8 @@ TEST_CASE("CDCAC: univariate unsat x^2 + 1 = 0") {
 
     solver.assertConstraint(x2p1, Relation::Eq, SatLit::positive(1), 0);
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat for x^2+1=0 (no real roots)
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 // ------------------------------------------------------------------
@@ -254,8 +254,8 @@ TEST_CASE("CDCAC: algebraic sat x^2=2") {
     solver.assertConstraint(eq, Relation::Eq, SatLit::positive(1), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core handles univariate constraints
+    CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("CDCAC: algebraic unsat x^2=2 && x^2!=2") {
@@ -271,8 +271,8 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && x^2!=2") {
     solver.assertConstraint(eq, Relation::Neq, SatLit::positive(2), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 TEST_CASE("CDCAC: algebraic unsat x^2=2 && (x^2-2)(x+1)!=0") {
@@ -291,8 +291,8 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && (x^2-2)(x+1)!=0") {
     solver.assertConstraint(product, Relation::Neq, SatLit::positive(2), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat (x^2=2 implies product=0)
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 TEST_CASE("CDCAC: algebraic sat x^2=2 && x>0 && x-1>0") {
@@ -313,8 +313,8 @@ TEST_CASE("CDCAC: algebraic sat x^2=2 && x>0 && x-1>0") {
     solver.assertConstraint(gt1, Relation::Gt, SatLit::positive(3), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves sat (x = sqrt(2) > 1)
+    CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("CDCAC: algebraic unsat x^2=2 && x>0 && x-2>0") {
@@ -334,8 +334,8 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && x>0 && x-2>0") {
     solver.assertConstraint(gt2, Relation::Gt, SatLit::positive(3), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat (sqrt(2) < 2)
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 TEST_CASE("CDCAC: univariate unsat x^2 < 0") {
@@ -385,8 +385,8 @@ TEST_CASE("CDCAC: univariate unsat x^2 < 0") {
 
     solver.assertConstraint(x2, Relation::Lt, SatLit::positive(1), 0);
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat (x^2 >= 0 for all real x)
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 // ------------------------------------------------------------------
@@ -410,8 +410,8 @@ TEST_CASE("CDCAC: multivariate sat x*y=1, x=1, y=1") {
     solver.assertConstraint(eq3, Relation::Eq, SatLit::positive(3), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core handles multivariate constraints (x=1, y=1)
+    CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
 TEST_CASE("CDCAC: multivariate unsat x*y=0, x!=0, y!=0") {
@@ -431,8 +431,8 @@ TEST_CASE("CDCAC: multivariate unsat x*y=0, x!=0, y!=0") {
     solver.assertConstraint(neq2, Relation::Neq, SatLit::positive(3), 0);
 
     auto res = solver.check(TheoryEffort::Full, nullptr);
-    // P1 skeleton: non-constant constraints return Unknown
-    CHECK(res.kind == TheoryCheckResult::Kind::Unknown);
+    // P2a: CDCAC core proves unsat for xy=0 ∧ x≠0 ∧ y≠0
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
 
 TEST_CASE("P4: isolateRealRootsAlgebraic with sqrt(2) prefix") {

@@ -1,10 +1,21 @@
 #include "theory/arith/nra/CdcacSolver.h"
+#include "theory/arith/nra/CdcacCore.h"
+#include "theory/arith/nra/LibpolyBackend.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include <unordered_set>
+#include <algorithm>
 
 namespace nlcolver {
 
 CdcacSolver::CdcacSolver(PolynomialKernel* kernel)
-    : kernel_(kernel) {}
+    : kernel_(kernel) {
+#ifdef NLCOLVER_HAS_LIBPOLY
+    algebra_ = std::make_unique<LibpolyBackend>(kernel_);
+    core_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
+#endif
+}
+
+CdcacSolver::~CdcacSolver() = default;
 
 void CdcacSolver::reset() {
     active_.clear();
@@ -75,6 +86,52 @@ TheoryCheckResult CdcacSolver::check() {
 
     if (!hasNonConstant) {
         return TheoryCheckResult::consistent();
+    }
+
+    // P2a: delegate non-constant constraints to CDCAC core
+    if (!core_ || !algebra_) {
+        return TheoryCheckResult::unknown();
+    }
+
+    // Build CdcacInput from active constraints
+    CdcacInput input;
+    std::unordered_set<std::string> varNames;
+    std::vector<std::string> varOrderNames;
+
+    for (const auto& c : active_) {
+        CdcacConstraint cc;
+        cc.poly = c.poly;
+        cc.rel = c.rel;
+        cc.reason = c.reason;
+        input.constraints.push_back(std::move(cc));
+
+        for (const auto& v : kernel_->variables(c.poly)) {
+            if (varNames.insert(v).second) {
+                varOrderNames.push_back(v);
+            }
+        }
+    }
+
+    // Sort variables lexicographically for deterministic order
+    std::sort(varOrderNames.begin(), varOrderNames.end());
+    for (const auto& name : varOrderNames) {
+        input.varOrder.push_back(kernel_->getOrCreateVar(name));
+    }
+
+    CdcacResult result = core_->solve(input);
+
+    switch (result.status) {
+        case CdcacStatus::Sat:
+            return TheoryCheckResult::consistent();
+        case CdcacStatus::Unsat: {
+            std::vector<SatLit> reasons;
+            if (result.unsat) {
+                reasons = ReasonManager::minimize(result.unsat->covering);
+            }
+            return TheoryCheckResult::mkConflict(ReasonManager::toConflict(reasons));
+        }
+        case CdcacStatus::Unknown:
+            return TheoryCheckResult::unknown();
     }
 
     return TheoryCheckResult::unknown();

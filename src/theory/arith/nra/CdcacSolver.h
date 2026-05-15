@@ -2,12 +2,17 @@
 
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/nra/CdcacTypes.h"
+#include "theory/arith/nra/CdcacConstraint.h"
 #include "theory/TheorySolver.h"
 #include <gmpxx.h>
 #include <vector>
 #include <optional>
+#include <memory>
 
 namespace nlcolver {
+
+class CdcacCore;
+class LibpolyBackend;
 
 /**
  * CDCAC (Conflict-Driven Cylindrical Algebraic Covering) engine.
@@ -19,6 +24,7 @@ namespace nlcolver {
 class CdcacSolver {
 public:
     explicit CdcacSolver(PolynomialKernel* kernel);
+    ~CdcacSolver();
 
     void assertConstraint(PolyId poly, Relation rel, SatLit reason, int level);
     void backtrack(int level);
@@ -53,6 +59,10 @@ private:
     std::vector<TrailEntry> trail_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
+
+    // P2a: CDCAC core + algebra backend
+    std::unique_ptr<LibpolyBackend> algebra_;
+    std::unique_ptr<CdcacCore> core_;
 };
 
 } // namespace nlcolver

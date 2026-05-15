@@ -40,7 +40,7 @@ TEST_CASE("NRA: trivial constant sat (> 1 0)") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("NRA: non-constant returns Unknown (= (+ (* x x) 1) 0)") {
+TEST_CASE("NRA: non-constant unsat (= (+ (* x x) 1) 0)") {
     std::string path = writeTempSmt2(
         "(set-logic QF_NRA)\n"
         "(declare-const x Real)\n"
@@ -52,7 +52,7 @@ TEST_CASE("NRA: non-constant returns Unknown (= (+ (* x x) 1) 0)") {
     solver.setLogic("QF_NRA");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
 TEST_CASE("NRA: false literal negation (not (> 1 0)) -> unsat") {

@@ -332,7 +332,8 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         cell.upper = Bound::posInf();
         cell.reasons = std::move(conflictLits);
         cover.cells.push_back(std::move(cell));
-        return CdcacResult::mkUnsat(std::move(cover), ReasonManager::minimize(cover));
+        auto reasons = ReasonManager::minimize(cover);
+        return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
     }
     return CdcacResult::mkSat(sample);
 }
