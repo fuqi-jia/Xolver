@@ -78,6 +78,7 @@ private:
     void setPendingClause(const std::vector<SatLit>& lits);
     void setPendingClause(const TheoryLemma& lemma);
     void terminateSolve();
+    bool isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const;
 };
 
 } // namespace nlcolver

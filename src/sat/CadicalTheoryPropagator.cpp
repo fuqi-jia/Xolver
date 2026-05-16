@@ -65,13 +65,16 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
 
-    // Re-assert all combination atoms from the current model so that
+    // Re-assert all theory atoms from the current model so that
     // TheoryManager rebuilds solver state after backtrack clears it.
+    // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
+    // not just Combination atoms, otherwise legacy single-theory paths
+    // see an empty active state after backtrack.
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         const auto* atom = registry_.findBySatVar(var);
-        if (!atom || atom->theory != TheoryId::Combination) continue;
+        if (!atom) continue;
         int level = 0;
         auto it = varToLevel_.find(var);
         if (it != varToLevel_.end()) level = it->second;
@@ -92,6 +95,20 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     if (tr.kind == TheoryCheckResult::Kind::Conflict) {
         if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
+            std::cerr << "[PROP] conflict clause = ";
+            for (SatLit lit : tr.conflictOpt->clause) {
+                std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+            }
+            std::cerr << "\n";
+
+            if (!isClauseFalsifiedByCurrentModel(tr.conflictOpt->clause)) {
+                std::cerr << "[PROP][BUG] malformed external conflict clause. "
+                             "Rejecting it to avoid infinite modelCheck loop.\n";
+                abortWithUnknown_ = true;
+                terminateSolve();
+                return true;
+            }
+
             setPendingClause(tr.conflictOpt->clause);
             return false;
         }
@@ -148,6 +165,21 @@ void CadicalTheoryPropagator::setPendingClause(const TheoryLemma& lemma) {
 
 void CadicalTheoryPropagator::terminateSolve() {
     backend_.requestTerminate();
+}
+
+bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const {
+    bool ok = true;
+    for (SatLit lit : clause) {
+        LitValue v = assignmentView_.value(lit);
+        if (v != LitValue::False) {
+            ok = false;
+            std::cerr << "[PROP][BAD CLAUSE] lit not false under model: "
+                      << (lit.sign ? "" : "-") << lit.var
+                      << " value=" << (v == LitValue::True ? "True" : "Unknown")
+                      << "\n";
+        }
+    }
+    return ok;
 }
 
 } // namespace nlcolver

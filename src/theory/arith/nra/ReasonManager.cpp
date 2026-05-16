@@ -15,7 +15,7 @@ TheoryConflict ReasonManager::toConflict(const std::vector<SatLit>& reasons) {
     std::vector<SatLit> clause;
     clause.reserve(reasons.size());
     for (SatLit lit : reasons) {
-        clause.push_back(lit.negated());
+        clause.push_back(lit);
     }
     return TheoryConflict{std::move(clause)};
 }

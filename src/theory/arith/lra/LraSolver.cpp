@@ -20,7 +20,6 @@ void LraSolver::pop(uint32_t n) {
 void LraSolver::reset() {
     activeAssignments_.clear();
     gs_.resetActiveBounds();
-    manager_.resetBoundReasons();
 }
 
 void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
@@ -54,7 +53,6 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
     NO_DBG << "[LRA] check begin\n";
     // Rebuild all bounds from current active assignments.
     gs_.resetActiveBounds();
-    manager_.resetBoundReasons();
     disequalities_.clear();
 
     NO_DBG << "[LRA] activeAssignments=" << activeAssignments_.size() << "\n";
@@ -92,8 +90,8 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
             ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
-                tc.clause.push_back(ieq.reason.negated());
-                NO_DBG << "[LRA] IEQ immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
+                tc.clause.push_back(ieq.reason);
+                NO_DBG << "[LRA] IEQ immediate conflict reasons: " << debug::fmtClause(tc.clause) << "\n";
                 return TheoryCheckResult::mkConflict(std::move(tc));
             }
         }
@@ -105,14 +103,9 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
     if (r == GeneralSimplex::Result::Unsat) {
         auto tc = manager_.translateConflict(gs_);
         NO_DBG << "[LRA] full conflict: " << debug::fmtClause(tc.clause) << "\n";
-        // Augment conflict with interface equality reasons that are decisions
-        // (level > 0).  Level-0 interface equalities are unit propagations;
-        // including them makes the clause non-unit and causes the SAT solver
-        // to backtrack instead of detecting UNSAT at level 0.
+        // Include all interface equality reasons that participate in the conflict.
         for (const auto& ieq : interfaceEqualities_) {
-            if (ieq.level > 0) {
-                tc.clause.push_back(ieq.reason.negated());
-            }
+            tc.clause.push_back(ieq.reason);
         }
         NO_DBG << "[LRA] augmented conflict: " << debug::fmtClause(tc.clause) << "\n";
         if (tc.clause.empty()) {

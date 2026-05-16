@@ -62,17 +62,6 @@ public:
     int getOrCreateVar(GeneralSimplex& gs, const std::string& name);
     std::string getVarName(int idx) const;
 
-    // -------------------------------------------------------------------------
-    // Bound reasons access (for conflict translation)
-    // -------------------------------------------------------------------------
-    const std::unordered_map<int, std::pair<std::optional<SatLit>, std::optional<SatLit>>>&
-    boundReasons() const { return boundReasons_; }
-
-    // -------------------------------------------------------------------------
-    // Reset bound reasons (called on theory reset, not full solver reset)
-    // -------------------------------------------------------------------------
-    void resetBoundReasons() { boundReasons_.clear(); }
-
 private:
     // Canonical (lhs, rhs) -> aux var (solver-local)
     struct FormKey {
@@ -94,8 +83,7 @@ private:
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;
 
-    // Bound reasons for conflict translation: auxVar -> (lowerReason, upperReason)
-    std::unordered_map<int, std::pair<std::optional<SatLit>, std::optional<SatLit>>> boundReasons_;
+
 };
 
 } // namespace nlcolver

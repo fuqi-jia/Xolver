@@ -35,6 +35,10 @@ ExprId FrontendAdapter::importNode(Node node) {
 
     SOMTParser::NODE_KIND nk = kind(node);
     Kind k = mapKind(nk);
+    if (k == Kind::ConstReal) {
+        auto s = sort(node);
+        if (s && s->isInt()) k = Kind::ConstInt;
+    }
     SortId s = mapSort(node);
     Payload p = extractPayload(node);
 

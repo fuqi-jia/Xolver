@@ -47,9 +47,9 @@ std::optional<TheoryConflict> SharedEqualityManager::checkDisequalityConflict() 
             std::vector<SatLit> conflictLits;
             conflictLits.reserve(eqReasons.size() + 1);
             for (SatLit r : eqReasons) {
-                conflictLits.push_back(r.negated());
+                conflictLits.push_back(r);
             }
-            conflictLits.push_back(d.reasonLit.negated());
+            conflictLits.push_back(d.reasonLit);
             NO_DBG << "[SEM] CONFLICT: " << debug::fmtClause(conflictLits) << "\n";
             return TheoryConflict{std::move(conflictLits)};
         }

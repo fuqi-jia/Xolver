@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <map>
+#include <unordered_set>
 
 #ifdef NLCOLVER_HAS_LIBPOLY
 #include <polyxx.h>
@@ -367,12 +368,106 @@ UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& pr
     return allocUni(std::move(*coeffsOpt));
 }
 
-std::vector<PolyId> LibpolyBackend::projectionPolys(
-    const std::vector<PolyId>& /*polys*/,
-    VarId /*eliminateVar*/,
-    ProjectionMode /*mode*/) {
-    // P0: stub. P2b: implement.
-    return {};
+ProjectionResult LibpolyBackend::projectionPolys(
+    const std::vector<PolyId>& polys,
+    VarId eliminateVar,
+    ProjectionMode mode) {
+#ifndef NLCOLVER_HAS_LIBPOLY
+    (void)polys; (void)eliminateVar; (void)mode;
+    return {ProjectionStatus::BackendFailure, {}};
+#else
+    if (!libKernel_) {
+        return {ProjectionStatus::BackendFailure, {}};
+    }
+    if (mode != ProjectionMode::Conservative) {
+        return {ProjectionStatus::UnsupportedMode, {}};
+    }
+
+    std::string elimName(kernel_->varName(eliminateVar));
+    poly::Variable elimPolyVar = libKernel_->resolvePolyVar(eliminateVar);
+
+    std::unordered_set<std::string> seen;
+    std::vector<PolyId> result;
+
+    auto addIfNew = [&](poly::Polynomial p) {
+        if (poly::is_constant(p)) return;
+        PolyId id = libKernel_->alloc(std::move(p));
+        std::string s = kernel_->toString(id);
+        if (seen.insert(s).second) {
+            result.push_back(id);
+        }
+    };
+
+    for (PolyId p : polys) {
+        // Skip polynomials that don't contain eliminateVar
+        auto vars = kernel_->variables(p);
+        if (std::find(vars.begin(), vars.end(), elimName) == vars.end()) {
+            continue;
+        }
+
+        const poly::Polynomial& poly = libKernel_->getPolynomial(p);
+
+        // Hard requirement: main_variable must be eliminateVar
+        if (poly::main_variable(poly) != elimPolyVar) {
+            return {ProjectionStatus::UnsupportedVarOrder, {}};
+        }
+
+        try {
+            // Coefficients (including leading coefficient)
+            for (size_t i = 0; i <= poly::degree(poly); ++i) {
+                poly::Polynomial coeff = poly::coefficient(poly, i);
+                if (!poly::is_constant(coeff)) {
+                    addIfNew(std::move(coeff));
+                }
+            }
+
+            // Discriminant
+            poly::Polynomial disc = poly::discriminant(poly);
+            if (!poly::is_constant(disc)) {
+                addIfNew(std::move(disc));
+            }
+        } catch (...) {
+            return {ProjectionStatus::BackendFailure, {}};
+        }
+    }
+
+    // Pairwise resultants
+    for (size_t i = 0; i < polys.size(); ++i) {
+        auto vars_i = kernel_->variables(polys[i]);
+        bool has_i = std::find(vars_i.begin(), vars_i.end(), elimName) != vars_i.end();
+        if (!has_i) continue;
+
+        const poly::Polynomial& pi = libKernel_->getPolynomial(polys[i]);
+        if (poly::main_variable(pi) != elimPolyVar) {
+            return {ProjectionStatus::UnsupportedVarOrder, {}};
+        }
+
+        for (size_t j = i + 1; j < polys.size(); ++j) {
+            auto vars_j = kernel_->variables(polys[j]);
+            bool has_j = std::find(vars_j.begin(), vars_j.end(), elimName) != vars_j.end();
+            if (!has_j) continue;
+
+            const poly::Polynomial& pj = libKernel_->getPolynomial(polys[j]);
+            if (poly::main_variable(pj) != elimPolyVar) {
+                return {ProjectionStatus::UnsupportedVarOrder, {}};
+            }
+
+            try {
+                poly::Polynomial res = poly::resultant(pi, pj);
+                if (!poly::is_constant(res)) {
+                    addIfNew(std::move(res));
+                }
+            } catch (...) {
+                return {ProjectionStatus::BackendFailure, {}};
+            }
+        }
+    }
+
+    if (result.empty()) {
+        return {ProjectionStatus::EmptyBecauseNoRelevantPolys, {}};
+    }
+    return {ProjectionStatus::Success, std::move(result)};
+#endif
 }
 
 bool LibpolyBackend::validateRootIsolation(UniPolyId p, const RootSet& roots) {

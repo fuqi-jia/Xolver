@@ -116,7 +116,11 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     // Intern lhs/rhs (monotonic)
     EufTermId lhs = termManager_.intern(payload.lhs, *coreIr_);
     EufTermId rhs = termManager_.intern(payload.rhs, *coreIr_);
-    if (lhs == NullEufTerm || rhs == NullEufTerm) return;
+    if (lhs == NullEufTerm || rhs == NullEufTerm) {
+        std::cerr << "[EUF] assertLit: intern failed lhs=" << payload.lhs
+                  << " rhs=" << payload.rhs << "\n";
+        return;
+    }
 
     egraph_.ensureTerm(lhs);
     egraph_.ensureTerm(rhs);
@@ -157,6 +161,10 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
         mr.assertedLit = reason;
         auto status = egraph_.merge(lhs, rhs, mr);
         if (status == MergeStatus::SortMismatch) {
+            std::cerr << "[EUF] SortMismatch merge lhs=" << lhs
+                      << " sort=" << termManager_.node(lhs).sort
+                      << " rhs=" << rhs
+                      << " sort=" << termManager_.node(rhs).sort << "\n";
             pendingUnknown_ = true;
         }
     } else {
@@ -185,22 +193,20 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
     if (tTrue != NullEufTerm && tFalse != NullEufTerm && egraph_.same(tTrue, tFalse)) {
         auto er = egraph_.explainEquality(tTrue, tFalse);
         if (er.ok) {
-            for (auto& lit : er.reasons) lit = lit.negated();
-            NO_DBG << "[EUF] true=false conflict: " << debug::fmtClause(er.reasons) << "\n";
+            NO_DBG << "[EUF] true=false conflict reasons: " << debug::fmtClause(er.reasons) << "\n";
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
         NO_DBG << "[EUF] true=same but explain failed -> Unknown\n";
         return TheoryCheckResult::unknown();
     }
 
-    // disequality conflicts
+    // disequality conflicts (from assertLit)
     for (const auto& d : disequalities_) {
         if (egraph_.same(d.lhs, d.rhs)) {
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
             if (er.ok) {
-                for (auto& lit : er.reasons) lit = lit.negated();
-                er.reasons.push_back(d.reason.negated());
-                NO_DBG << "[EUF] disequality conflict: " << debug::fmtClause(er.reasons) << "\n";
+                er.reasons.push_back(d.reason);
+                NO_DBG << "[EUF] disequality conflict reasons: " << debug::fmtClause(er.reasons) << "\n";
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
             NO_DBG << "[EUF] disequality same but explain failed -> Unknown\n";
@@ -208,7 +214,22 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
         }
     }
 
-    NO_DBG << "[EUF] Consistent\n";
+    // shared disequality conflicts (from assertInterfaceDisequality)
+    for (const auto& d : sharedDisequalities_) {
+        if (egraph_.same(d.lhs, d.rhs)) {
+            auto er = egraph_.explainEquality(d.lhs, d.rhs);
+            if (er.ok) {
+                er.reasons.push_back(d.reason);
+                NO_DBG << "[EUF] shared disequality conflict reasons: " << debug::fmtClause(er.reasons) << "\n";
+                return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
+            }
+            NO_DBG << "[EUF] shared disequality same but explain failed -> Unknown\n";
+            return TheoryCheckResult::unknown();
+        }
+    }
+
+    std::cerr << "[EUF] Consistent disequalities=" << disequalities_.size()
+              << " sharedDisequalities=" << sharedDisequalities_.size() << "\n";
     return TheoryCheckResult::consistent();
 }
 
@@ -248,6 +269,8 @@ TheoryCheckResult EufSolver::assertInterfaceEquality(
     mr.assertedLit = reason;
     auto status = egraph_.merge(ta, tb, mr);
     if (status == MergeStatus::SortMismatch) {
+        std::cerr << "[EUF] IEQ SortMismatch a=" << a << " sort=" << termManager_.node(ta).sort
+                  << " b=" << b << " sort=" << termManager_.node(tb).sort << "\n";
         return TheoryCheckResult::unknown();
     }
     return TheoryCheckResult::consistent();
@@ -267,11 +290,21 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
     if (egraph_.same(ta, tb)) {
         auto er = egraph_.explainEquality(ta, tb);
         if (er.ok) {
-            for (auto& lit : er.reasons) lit = lit.negated();
-            er.reasons.push_back(reason.negated());
+            std::cerr << "[EUF-IDISEQ] same a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"") << reason.var;
+            std::cerr << " explain=";
+            for (auto& lit : er.reasons) std::cerr << (lit.sign?"+":"") << lit.var << " ";
+            std::cerr << "\n";
+            er.reasons.push_back(reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
         return TheoryCheckResult::unknown();
+    }
+
+    const auto& na = termManager_.node(ta);
+    const auto& nb = termManager_.node(tb);
+    if (na.args.empty() && nb.args.empty() && na.symbol != nb.symbol) {
+        // Distinct constants: no need to record disequality
+        return TheoryCheckResult::consistent();
     }
 
     sharedDisequalities_.push_back({ta, tb, reason, level, trail_.size()});
@@ -284,6 +317,7 @@ EufSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return result;
 
     const auto& allShared = sharedTermRegistry_->allSharedTerms();
+    std::cerr << "[EUF-DEDUCE] sharedTerms=" << allShared.size() << "\n";
     for (size_t i = 0; i < allShared.size(); ++i) {
         EufTermId ti = internSharedTerm(allShared[i]);
         if (ti == NullEufTerm) continue;
@@ -293,6 +327,7 @@ EufSolver::getDeducedSharedEqualities() {
             if (egraph_.same(ti, tj)) {
                 auto er = egraph_.explainEquality(ti, tj);
                 if (er.ok) {
+                    std::cerr << "[EUF-DEDUCE] EQ st=" << allShared[i] << " st=" << allShared[j] << " reasons=" << er.reasons.size() << "\n";
                     result.push_back({allShared[i], allShared[j], std::move(er.reasons)});
                 }
             }

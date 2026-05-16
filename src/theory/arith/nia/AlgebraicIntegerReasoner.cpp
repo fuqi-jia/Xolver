@@ -44,7 +44,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkSquareRules(
                 // Phase NIA-Core: for a0 > 0, UNSAT. For a0 < 0, let bounded solver handle.
                 if (a0 > 0) {
                     return {NiaReasoningKind::Conflict,
-                            TheoryConflict{{c.reason.negated()}},
+                            TheoryConflict{{c.reason}},
                             std::nullopt};
                 }
             }
@@ -78,7 +78,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkGcdConflict(
 
     if (g != 0 && constantTerm % g != 0) {
         return {NiaReasoningKind::Conflict,
-                TheoryConflict{{c.reason.negated()}},
+                TheoryConflict{{c.reason}},
                 std::nullopt};
     }
 
@@ -140,7 +140,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkFactorDirectConflict(
         // If every var_i has a != 0 constraint, then all literals in the
         // conflict clause are falsified → UNSAT.
         std::vector<SatLit> conflictLits;
-        conflictLits.push_back(c.reason.negated()); // not(monomial = 0)
+        conflictLits.push_back(c.reason); // monomial = 0 (true reason)
 
         bool allFactorsNonZero = true;
         for (const auto& [varId, exp] : term.powers) {
@@ -152,7 +152,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkFactorDirectConflict(
                 break;
             }
             // not(var != 0)  ==  var == 0
-            conflictLits.push_back(it->second.negated());
+            conflictLits.push_back(it->second);
         }
 
         if (allFactorsNonZero && conflictLits.size() > 1) {
@@ -235,7 +235,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
         if (!anySatisfies) {
             std::vector<SatLit> conflictLits;
             for (const auto& c : equalities) {
-                conflictLits.push_back(c.reason.negated());
+                conflictLits.push_back(c.reason);
             }
             return {NiaReasoningKind::Conflict,
                     TheoryConflict{conflictLits},

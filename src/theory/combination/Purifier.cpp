@@ -40,6 +40,8 @@ ExprId Purifier::makeFreshVar(SortId sort) {
     // Register in SharedTermRegistry so it appears in allSharedTerms()
     SharedTermId stid = registry_.getOrCreate(id, sort, name, true);
     registry_.addOwner(stid, TheoryId::Combination);
+    registry_.addOwner(stid, TheoryId::EUF);
+    registry_.addOwner(stid, arithTheory_);
     NO_DBG << "[Purifier] makeFreshVar " << name << " stid=" << stid << "\n";
     return id;
 }
@@ -55,7 +57,7 @@ ExprId Purifier::makeEq(ExprId lhs, ExprId rhs) {
 
 TheoryId Purifier::theoryOf(ExprId eid) const {
     if (containsUfApply(eid)) return TheoryId::EUF;
-    if (containsArithmetic(eid)) return TheoryId::LRA;
+    if (containsArithmetic(eid)) return arithTheory_;
     return TheoryId::EUF;
 }
 
@@ -65,7 +67,25 @@ void Purifier::registerEufVars(ExprId eid) {
         if (auto* s = std::get_if<std::string>(&e.payload.value)) {
             SharedTermId id = registry_.getOrCreate(eid, e.sort, *s, false);
             registry_.addOwner(id, TheoryId::EUF);
-            registry_.addOwner(id, TheoryId::LRA);
+            registry_.addOwner(id, arithTheory_);
+        }
+        return;
+    }
+    if (e.isConst()) {
+        std::string name;
+        if (auto* b = std::get_if<bool>(&e.payload.value)) {
+            name = *b ? "true" : "false";
+        } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
+            name = std::to_string(*i);
+        } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+            name = *s;
+        } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
+            name = "bv" + std::to_string(*bv);
+        }
+        if (!name.empty()) {
+            SharedTermId id = registry_.getOrCreate(eid, e.sort, name, false);
+            registry_.addOwner(id, TheoryId::EUF);
+            registry_.addOwner(id, arithTheory_);
         }
         return;
     }
@@ -90,6 +110,13 @@ ExprId Purifier::purifyRec(ExprId eid) {
         if (it != cache_.end()) {
             NO_DBG << "[Purifier] cache hit eid=" << eid << " -> eid=" << it->second << "\n";
             return it->second;
+        }
+
+        // Register original UF arguments as shared/interface terms.
+        // This ensures constants like f(1) have '1' in the shared registry
+        // so that combination equalities like x = 1 can be created.
+        for (ExprId arg : e.children) {
+            registerEufVars(arg);
         }
 
         std::vector<ExprId> newArgs;

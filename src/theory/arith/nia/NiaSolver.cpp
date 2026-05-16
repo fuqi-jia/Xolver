@@ -116,7 +116,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         }
         mpq_class val = kernel_->toConstant(c.poly);
         if (!relationSatisfied(val, c.rel)) {
-            conflictLits.push_back(c.reason.negated());
+            conflictLits.push_back(c.reason);
         }
     }
     if (!conflictLits.empty()) {
@@ -214,9 +214,9 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
         auto ir = intervalEvaluator_.run(ic, box);
         if (ir.status == IntervalEvalStatus::DefinitelyViolated) {
             std::vector<SatLit> lits;
-            lits.push_back(c.reason.negated());
+            lits.push_back(c.reason);
             for (const auto& r : ir.usedReasons) {
-                lits.push_back(r.negated());
+                lits.push_back(r);
             }
             return TheoryCheckResult::mkConflict(TheoryConflict{lits});
         }

@@ -28,7 +28,8 @@ public:
         const std::optional<mpq_class>& preferred);
 
     // Build a cell containing the given sample from a set of root bounds.
-    static Cell cellContaining(VarId var, const RealAlg& sample, const RootSet& roots);
+    // Returns Unknown if algebraic comparison is inconclusive.
+    static CellLookupResult cellContaining(AlgebraBackend* algebra, VarId var, const RealAlg& sample, const RootSet& roots);
 };
 
 } // namespace nlcolver

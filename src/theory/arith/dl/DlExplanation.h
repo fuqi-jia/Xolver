@@ -21,7 +21,7 @@ inline TheoryConflict buildConflict(const std::vector<EdgeId>& cycle,
         SatLit reason = graph.edge(eid).reason;
         uint64_t key = (static_cast<uint64_t>(reason.var) << 1) | (reason.sign ? 1u : 0u);
         if (seen.insert(key).second) {
-            lits.push_back(reason.negated());
+            lits.push_back(reason);
         }
     }
     return TheoryConflict{std::move(lits)};

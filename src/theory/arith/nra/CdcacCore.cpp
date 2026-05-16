@@ -214,8 +214,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         std::cerr << "[CDCAC]   full-line sample result=" << (int)res.status << std::endl;
         if (res.status == CdcacStatus::Sat) return res;
         if (res.status == CdcacStatus::Unknown) return res;
-        auto reasons = res.unsat ? res.unsat->reasons : std::vector<SatLit>{};
-        conflictCells.push_back(addCell(CellKind::FullLine, Bound::negInf(), Bound::posInf(), reasons, NullPoly));
+        auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+        if (bcr.status == BuildCellStatus::Unknown) {
+            return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+        }
+        conflictCells.push_back(std::move(bcr.cell));
     } else {
         // Has roots: sectors + sections
         std::optional<RealAlg> prevRoot;
@@ -236,11 +239,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     std::cerr << "[CDCAC]   sector(" << sectorLo.get_d() << "," << sectorHi.get_d() << ") result=" << (int)res.status << std::endl;
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
-                    auto reasons = res.unsat ? res.unsat->reasons : std::vector<SatLit>{};
-                    conflictCells.push_back(addCell(CellKind::Sector,
-                            boundFromRealAlg(*prevRoot, true),
-                            boundFromRealAlg(root, true),
-                            reasons, NullPoly));
+                    auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                    }
+                    conflictCells.push_back(std::move(bcr.cell));
                 }
             } else {
                 // First sector: (-inf, r0)
@@ -251,11 +254,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 std::cerr << "[CDCAC]   sector(-inf," << sectorHi.get_d() << ") result=" << (int)res.status << std::endl;
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
-                auto reasons = res.unsat ? res.unsat->reasons : std::vector<SatLit>{};
-                conflictCells.push_back(addCell(CellKind::Sector,
-                        Bound::negInf(),
-                        boundFromRealAlg(root, true),
-                        reasons, NullPoly));
+                auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                if (bcr.status == BuildCellStatus::Unknown) {
+                    return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                }
+                conflictCells.push_back(std::move(bcr.cell));
             }
 
             // Section at this root
@@ -264,11 +267,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 std::cerr << "[CDCAC]   section[" << rootVal.get_d() << "] result=" << (int)res.status << std::endl;
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
-                auto reasons = res.unsat ? res.unsat->reasons : std::vector<SatLit>{};
-                conflictCells.push_back(addCell(CellKind::Section,
-                        boundFromRealAlg(root, false),
-                        boundFromRealAlg(root, false),
-                        reasons, NullPoly));
+                auto bcr = buildConflictCell(k, root, res, input, allRoots);
+                if (bcr.status == BuildCellStatus::Unknown) {
+                    return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                }
+                conflictCells.push_back(std::move(bcr.cell));
             }
 
             prevRoot = root;
@@ -283,11 +286,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             std::cerr << "[CDCAC]   sector(" << sectorLo.get_d() << ",+inf) result=" << (int)res.status << std::endl;
             if (res.status == CdcacStatus::Sat) return res;
             if (res.status == CdcacStatus::Unknown) return res;
-            auto reasons = res.unsat ? res.unsat->reasons : std::vector<SatLit>{};
-            conflictCells.push_back(addCell(CellKind::Sector,
-                    boundFromRealAlg(*prevRoot, true),
-                    Bound::posInf(),
-                    reasons, NullPoly));
+            auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+            if (bcr.status == BuildCellStatus::Unknown) {
+                return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+            }
+            conflictCells.push_back(std::move(bcr.cell));
         }
     }
 
@@ -343,11 +346,39 @@ Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const Sample
     return Cell{};
 }
 
-Cell CdcacCore::generalizeConflictCell(int /*k*/, const RealAlg& /*sample*/,
-                                       const CdcacResult& /*childConflict*/,
-                                       const CdcacInput& /*input*/) {
-    // P2b: implement.
-    return Cell{};
+BuildCellResult CdcacCore::buildConflictCell(
+    int k,
+    const RealAlg& sample,
+    const CdcacResult& childRes,
+    const CdcacInput& input,
+    const RootSet& roots) {
+    // P2b: shallow generalization only.
+    // Uses current-level constraint roots and full child reasons.
+    // Does not perform projection-driven parent generalization.
+    // Guards are recorded for future certificate use only.
+
+    if (childRes.status != CdcacStatus::Unsat || !childRes.unsat) {
+        return {BuildCellStatus::Unknown, Cell{}};
+    }
+
+    VarId var = input.varOrder[k];
+
+    auto lookup = CoveringManager::cellContaining(algebra_, var, sample, roots);
+    if (lookup.status == CellLookupStatus::Unknown) {
+        return {BuildCellStatus::Unknown, Cell{}};
+    }
+    if (lookup.status == CellLookupStatus::InvalidInput) {
+        return {BuildCellStatus::Unknown, Cell{}};
+    }
+
+    Cell cell = lookup.cell;
+    cell.reasons = childRes.unsat->reasons;
+
+    // Guards: constraint polynomials (shallow, no projection in P2b)
+    std::vector<PolyId> guards = collectPolys(input.constraints);
+    cell.guards = std::move(guards);
+
+    return {BuildCellStatus::Success, std::move(cell)};
 }
 
 CdcacResult CdcacCore::solveUnivariate(const CdcacInput& input) {

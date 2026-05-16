@@ -59,10 +59,18 @@ struct TheoryAtomRecord {
 // Theory conflict / lemma / check result
 // ---------------------------------------------------------------------------
 
+// TheoryConflict stores raw reason literals: each literal is TRUE in the
+// current SAT assignment (it is the reason why the corresponding bound/
+// equality was asserted).  It is the caller's responsibility (typically
+// TheoryManager) to negate each literal before submitting the clause as a
+// falsified external conflict to the SAT solver.
 struct TheoryConflict {
     std::vector<SatLit> clause;
 };
 
+// TheoryLemma stores a propagation lemma in the form:
+//   (¬reason₁ ∨ ¬reason₂ ∨ ... ∨ implied)
+// where each literal is expressed in its SAT-polarity form.
 struct TheoryLemma {
     std::vector<SatLit> lits;
 };

@@ -47,7 +47,7 @@ NiaReasoningResult SquareBoundReasoner::handleConstraint(
             if (negC < 0) {
                 // x^2 <= negative: impossible since x^2 >= 0
                 return {NiaReasoningKind::Conflict,
-                        TheoryConflict{{c.reason.negated()}},
+                        TheoryConflict{{c.reason}},
                         std::nullopt};
             }
             // x^2 <= negC  =>  |x| <= floor(sqrt(negC))
@@ -63,7 +63,7 @@ NiaReasoningResult SquareBoundReasoner::handleConstraint(
             mpz_class negC = -constant;
             if (negC < 0) {
                 return {NiaReasoningKind::Conflict,
-                        TheoryConflict{{c.reason.negated()}},
+                        TheoryConflict{{c.reason}},
                         std::nullopt};
             }
             if (negC == 0) {
@@ -78,7 +78,7 @@ NiaReasoningResult SquareBoundReasoner::handleConstraint(
             }
             // -constant is positive but not a perfect square: no integer roots
             return {NiaReasoningKind::Conflict,
-                    TheoryConflict{{c.reason.negated()}},
+                    TheoryConflict{{c.reason}},
                     std::nullopt};
         }
 

@@ -346,6 +346,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                     if (isEqOrDistinct && e.children.size() == 2 && sharedTermRegistry_) {
                         bothShared = sharedTermRegistry_->hasTerm(e.children[0]) &&
                                      sharedTermRegistry_->hasTerm(e.children[1]);
+                        std::cerr << "[ATOM] combo-check eid=" << eid << " kind=" << (int)e.kind
+                                  << " c0=" << e.children[0] << " c1=" << e.children[1]
+                                  << " bothShared=" << bothShared << "\n";
                     }
                     if (bothShared) {
                         auto optA = sharedTermRegistry_->findByExprId(e.children[0]);
@@ -363,7 +366,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                     if (hasUf) {
                         targetTheory = TheoryId::EUF;
                     } else {
-                        targetTheory = TheoryId::LRA;
+                        targetTheory = combinationArithTheory_;
                     }
                 }
 

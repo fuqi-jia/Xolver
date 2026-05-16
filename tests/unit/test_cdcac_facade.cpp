@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "theory/arith/nra/CdcacSolver.h"
 #include "theory/arith/nra/CdcacTypes.h"
+#include "theory/arith/nra/CoveringManager.h"
 #include "theory/arith/nra/ReasonManager.h"
 #include "theory/arith/nra/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
@@ -23,7 +24,7 @@ TEST_CASE("CDCAC facade: constant unsat conflict") {
     REQUIRE(res.conflictOpt.has_value());
     CHECK(!res.conflictOpt->clause.empty());
     CHECK(res.conflictOpt->clause[0].var == reason.var);
-    CHECK(res.conflictOpt->clause[0].sign == !reason.sign);
+    CHECK(res.conflictOpt->clause[0].sign == reason.sign);
 }
 
 TEST_CASE("CDCAC facade: constant sat consistent") {
@@ -134,9 +135,9 @@ TEST_CASE("ReasonManager: deduplicate and toConflict") {
     auto conflict = ReasonManager::toConflict(deduped);
     REQUIRE(conflict.clause.size() == 2);
     CHECK(conflict.clause[0].var == 1);
-    CHECK(conflict.clause[0].sign == false);
+    CHECK(conflict.clause[0].sign == true);
     CHECK(conflict.clause[1].var == 2);
-    CHECK(conflict.clause[1].sign == false);
+    CHECK(conflict.clause[1].sign == true);
 }
 
 TEST_CASE("RealAlg: factory methods and accessors") {
@@ -483,4 +484,196 @@ TEST_CASE("P4: isolateRealRootsAlgebraic with sqrt(2) prefix") {
     }
     CHECK(hasNegative);
     CHECK(hasPositive);
+}
+
+// ------------------------------------------------------------------
+// P2b: projectionPolys infrastructure tests
+// ------------------------------------------------------------------
+
+TEST_CASE("P2b: projectionPolys conservative univariate empty") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+
+    // Univariate polynomial: x^2 - 1.
+    // Its discriminant = 4 (constant), coefficients = {1, 0, -1} (all constant except lc).
+    // Conservative projection of a univariate may be empty (all projection polys are constant).
+    VarId xVar = kernel->getOrCreateVar("x");
+    PolyId x = kernel->mkVar(xVar);
+    PolyId x2 = kernel->pow(x, 2);
+    PolyId one = kernel->mkConst(mpq_class(1));
+    PolyId poly = kernel->sub(x2, one);  // x^2 - 1
+
+    ProjectionResult result = algebra.projectionPolys({poly}, xVar, ProjectionMode::Conservative);
+    // EmptyBecauseNoRelevantPolys is acceptable for univariate (no non-constant projection)
+    CHECK((result.status == ProjectionStatus::Success || result.status == ProjectionStatus::EmptyBecauseNoRelevantPolys));
+}
+
+TEST_CASE("P2b: projectionPolys unsupported var order (bivariate)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+
+    // Bivariate polynomial: x^2 + y - 1
+    // One of x or y will be libpoly main variable; projection w.r.t. the other
+    // must return UnsupportedVarOrder.
+    VarId xVar = kernel->getOrCreateVar("x");
+    VarId yVar = kernel->getOrCreateVar("y");
+
+    PolyId x = kernel->mkVar(xVar);
+    PolyId y = kernel->mkVar(yVar);
+    PolyId x2 = kernel->pow(x, 2);
+    PolyId one = kernel->mkConst(mpq_class(1));
+    PolyId poly = kernel->add(x2, kernel->sub(y, one));  // x^2 + y - 1
+
+    ProjectionResult rx = algebra.projectionPolys({poly}, xVar, ProjectionMode::Conservative);
+    ProjectionResult ry = algebra.projectionPolys({poly}, yVar, ProjectionMode::Conservative);
+
+    // Exactly one must succeed (matching main var), the other must fail
+    bool xOk = (rx.status == ProjectionStatus::Success);
+    bool yOk = (ry.status == ProjectionStatus::Success);
+    CHECK((xOk || yOk));           // at least one matches main var
+    CHECK(!(xOk && yOk));          // at most one matches (they are different vars)
+    if (xOk) CHECK(!rx.polys.empty());
+    if (yOk) CHECK(!ry.polys.empty());
+}
+
+TEST_CASE("P2b: projectionPolys unsupported mode") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+
+    VarId xVar = kernel->getOrCreateVar("x");
+    PolyId x = kernel->mkVar(xVar);
+    PolyId x2 = kernel->pow(x, 2);
+
+    ProjectionResult result = algebra.projectionPolys({x2}, xVar, ProjectionMode::McCallum);
+    CHECK(result.status == ProjectionStatus::UnsupportedMode);
+    CHECK(result.polys.empty());
+}
+
+// ------------------------------------------------------------------
+// P2b: cellContaining tests
+// ------------------------------------------------------------------
+
+TEST_CASE("P2b: cellContaining section at root 0") {
+    RootSet roots;
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(0)));
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(1)));
+
+    auto result = CoveringManager::cellContaining(nullptr, VarId{0}, RealAlg::fromRational(mpq_class(0)), roots);
+    CHECK(result.status == CellLookupStatus::Found);
+    CHECK(result.cell.kind == CellKind::Section);
+    CHECK(result.cell.lower.isRational());
+    CHECK(!result.cell.lower.open);
+}
+
+TEST_CASE("P2b: cellContaining sector (0,1)") {
+    RootSet roots;
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(0)));
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(1)));
+
+    auto result = CoveringManager::cellContaining(nullptr, VarId{0}, RealAlg::fromRational(mpq_class(0.5)), roots);
+    CHECK(result.status == CellLookupStatus::Found);
+    CHECK(result.cell.kind == CellKind::Sector);
+    CHECK(result.cell.lower.isRational());
+    CHECK(result.cell.lower.open);
+    CHECK(result.cell.upper.isRational());
+    CHECK(result.cell.upper.open);
+}
+
+TEST_CASE("P2b: cellContaining sector (-inf,0)") {
+    RootSet roots;
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(0)));
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(1)));
+
+    auto result = CoveringManager::cellContaining(nullptr, VarId{0}, RealAlg::fromRational(mpq_class(-1)), roots);
+    CHECK(result.status == CellLookupStatus::Found);
+    CHECK(result.cell.kind == CellKind::Sector);
+    CHECK(result.cell.lower.isNegInf());
+    CHECK(result.cell.upper.isRational());
+}
+
+TEST_CASE("P2b: cellContaining sector (1,+inf)") {
+    RootSet roots;
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(0)));
+    roots.roots.push_back(RealAlg::fromRational(mpq_class(1)));
+
+    auto result = CoveringManager::cellContaining(nullptr, VarId{0}, RealAlg::fromRational(mpq_class(2)), roots);
+    CHECK(result.status == CellLookupStatus::Found);
+    CHECK(result.cell.kind == CellKind::Sector);
+    CHECK(result.cell.lower.isRational());
+    CHECK(result.cell.upper.isPosInf());
+}
+
+TEST_CASE("P2b: cellContaining full-line on empty roots") {
+    RootSet roots;
+    auto result = CoveringManager::cellContaining(nullptr, VarId{0}, RealAlg::fromRational(mpq_class(0)), roots);
+    CHECK(result.status == CellLookupStatus::Found);
+    CHECK(result.cell.kind == CellKind::FullLine);
+    CHECK(result.cell.lower.isNegInf());
+    CHECK(result.cell.upper.isPosInf());
+}
+
+// ------------------------------------------------------------------
+// P2b: coversAllLine gap tests
+// ------------------------------------------------------------------
+
+TEST_CASE("P2b: coversAllLine open-open gap at 0 -> DoesNotCover") {
+    Covering cover;
+    cover.var = VarId{0};
+
+    Cell left;
+    left.kind = CellKind::Sector;
+    left.lower = Bound::negInf();
+    left.upper = Bound::rational(mpq_class(0), true);   // (-inf, 0) open
+    cover.cells.push_back(std::move(left));
+
+    Cell right;
+    right.kind = CellKind::Sector;
+    right.lower = Bound::rational(mpq_class(0), true);  // (0, +inf) open
+    right.upper = Bound::posInf();
+    cover.cells.push_back(std::move(right));
+
+    CHECK(CoveringManager::coversAllLine(nullptr, cover) == CoverageResult::DoesNotCover);
+}
+
+TEST_CASE("P2b: coversAllLine with section at 0 -> Covers") {
+    Covering cover;
+    cover.var = VarId{0};
+
+    Cell left;
+    left.kind = CellKind::Sector;
+    left.lower = Bound::negInf();
+    left.upper = Bound::rational(mpq_class(0), true);   // (-inf, 0) open
+    cover.cells.push_back(std::move(left));
+
+    Cell mid;
+    mid.kind = CellKind::Section;
+    mid.lower = Bound::rational(mpq_class(0), false);   // [0] closed
+    mid.upper = Bound::rational(mpq_class(0), false);
+    cover.cells.push_back(std::move(mid));
+
+    Cell right;
+    right.kind = CellKind::Sector;
+    right.lower = Bound::rational(mpq_class(0), true);  // (0, +inf) open
+    right.upper = Bound::posInf();
+    cover.cells.push_back(std::move(right));
+
+    CHECK(CoveringManager::coversAllLine(nullptr, cover) == CoverageResult::Covers);
+}
+
+// ------------------------------------------------------------------
+// P2b: buildConflictCell equivalence test
+// ------------------------------------------------------------------
+
+TEST_CASE("P2b: buildConflictCell produces FullLine for x^2+1=0") {
+    auto kernel = createPolynomialKernel();
+    CdcacSolver solver(kernel.get());
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId one = kernel->mkConst(mpq_class(1));
+    PolyId x2 = kernel->pow(x, 2);
+    PolyId x2p1 = kernel->add(x2, one);
+
+    solver.assertConstraint(x2p1, Relation::Eq, SatLit::positive(1), 0);
+    auto res = solver.check(TheoryEffort::Full, nullptr);
+    CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }

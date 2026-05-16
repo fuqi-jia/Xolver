@@ -97,7 +97,7 @@ TEST_CASE("NRA: eq negation constant unsat (not (= 1 1))") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("NRA: non-integer rational constant returns Unknown") {
+TEST_CASE("NRA: non-integer rational constant returns Unsat") {
     std::string path = writeTempSmt2(
         "(set-logic QF_NRA)\n"
         "(assert (= (/ 1 2) 0))\n"
@@ -108,5 +108,5 @@ TEST_CASE("NRA: non-integer rational constant returns Unknown") {
     solver.setLogic("QF_NRA");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }

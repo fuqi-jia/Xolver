@@ -139,7 +139,7 @@ NiaReasoningResult UnivariateIntegerReasoner::run(
             if (c.rel == Relation::Neq) {
                 // 0 != 0 is UNSAT
                 return {NiaReasoningKind::Conflict,
-                        TheoryConflict{{c.reason.negated()}},
+                        TheoryConflict{{c.reason}},
                         std::nullopt};
             }
             continue;
@@ -151,7 +151,7 @@ NiaReasoningResult UnivariateIntegerReasoner::run(
                 if (rootResult.isZeroPolynomial) continue;
                 if (rootResult.status == IntegerRootStatus::Complete && rootResult.roots.empty()) {
                     return {NiaReasoningKind::Conflict,
-                            TheoryConflict{{c.reason.negated()}},
+                            TheoryConflict{{c.reason}},
                             std::nullopt};
                 }
                 if (!rootResult.roots.empty()) {
@@ -164,7 +164,7 @@ NiaReasoningResult UnivariateIntegerReasoner::run(
                 auto rootResult = findIntegerRoots(c.poly, var, c.reason);
                 if (rootResult.isZeroPolynomial) {
                     return {NiaReasoningKind::Conflict,
-                            TheoryConflict{{c.reason.negated()}},
+                            TheoryConflict{{c.reason}},
                             std::nullopt};
                 }
                 if (rootResult.status == IntegerRootStatus::Complete && rootResult.roots.empty()) {

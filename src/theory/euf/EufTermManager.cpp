@@ -1,6 +1,7 @@
 #include "theory/euf/EufTermManager.h"
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -81,8 +82,29 @@ EufTermId EufTermManager::intern(ExprId eid, const CoreIr& ir) {
         std::string name = std::get<std::string>(e.payload.value);
         FuncSymbolId sym = internSymbol(name, {}, e.sort);
         result = createNode(sym, {}, e.sort, eid);
+    } else if (e.isConst()) {
+        // Register integer/real/BV/FP constants as 0-ary EUF symbols
+        // so they can participate in congruence closure and shared equalities.
+        // Use NullSort so they can merge with any sort (constants are ground
+        // terms and their concrete sort does not matter for EUF).
+        std::string name;
+        if (auto* b = std::get_if<bool>(&e.payload.value)) {
+            name = *b ? "true" : "false";
+        } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
+            name = std::to_string(*i);
+        } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+            name = *s;
+        } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
+            name = "bv" + std::to_string(*bv);
+        }
+        if (!name.empty()) {
+            FuncSymbolId sym = internSymbol(name, {}, NullSort);
+            result = createNode(sym, {}, NullSort, eid);
+        }
     } else if (e.kind == Kind::UFApply) {
-        std::string name = std::get<std::string>(e.payload.value);
+        std::string name = std::get_if<std::string>(&e.payload.value)
+                           ? std::get<std::string>(e.payload.value)
+                           : "";
         std::vector<EufTermId> args;
         std::vector<SortId> argSorts;
         args.reserve(e.children.size());
@@ -94,9 +116,15 @@ EufTermId EufTermManager::intern(ExprId eid, const CoreIr& ir) {
                 return NullEufTerm;
             }
             args.push_back(arg);
+            // Use the original CoreExpr sort for argSorts, not the EUF term sort.
+            // Constants are interned with NullSort for flexibility, but their
+            // original sort (e.g. Int) matters for function symbol identity.
             argSorts.push_back(ir.get(cid).sort);
         }
         FuncSymbolId sym = internSymbol(name, argSorts, e.sort);
+        std::cerr << "[EUF-TERM] UFApply " << name << " argSorts=[";
+        for (auto s : argSorts) std::cerr << s << " ";
+        std::cerr << "] resultSort=" << e.sort << " sym=" << sym << "\n";
         result = createNode(sym, args, e.sort, eid);
     } else {
         // Anything else (Add, Sub, etc.) -> NullEufTerm

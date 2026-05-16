@@ -50,30 +50,24 @@ bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel
                                     bool value, SatLit reasonLit, int level) {
     Relation effective = value ? rel : nlcolver::negateRelation(rel);
 
-    auto& reasons = boundReasons_[auxVar];
     bool ok = true;
     switch (effective) {
         case Relation::Eq:
-            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            reasons.first = reasonLit;
-            reasons.second = reasonLit;
+            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level);
+            if (!ok) break;
+            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level);
             break;
         case Relation::Leq:
             ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            reasons.second = reasonLit;
             break;
         case Relation::Lt:
             ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0, -1)), reasonLit), level) && ok;
-            reasons.second = reasonLit;
             break;
         case Relation::Geq:
             ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
-            reasons.first = reasonLit;
             break;
         case Relation::Gt:
             ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0, 1)), reasonLit), level) && ok;
-            reasons.first = reasonLit;
             break;
         case Relation::Neq:
             // Neq cannot be expressed as a single convex bound.
@@ -86,13 +80,10 @@ bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel
 TheoryConflict LinearAtomManager::translateConflict(const GeneralSimplex& gs) const {
     TheoryConflict tc;
     for (const auto& br : gs.getConflict()) {
-        auto it = boundReasons_.find(br.var);
-        if (it == boundReasons_.end()) continue;
-        const auto& reasons = it->second;
-        std::optional<SatLit> reasonLit = br.isLower ? reasons.first : reasons.second;
-        if (reasonLit.has_value()) {
-            tc.clause.push_back(reasonLit->negated());
-        }
+        // Return the raw asserted SAT literal (true in the current model).
+        // TheoryManager is the single place that negates raw reasons into
+        // a falsified external conflict clause.
+        tc.clause.push_back(br.reason);
     }
     return tc;
 }

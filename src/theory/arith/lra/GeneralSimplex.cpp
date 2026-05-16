@@ -225,7 +225,7 @@ bool GeneralSimplex::assertLower(int var, const BoundInfo& info, int level) {
 
     if (info.bound <= vars_[var].lower.bound) return true;
     if (info.bound > vars_[var].upper.bound) {
-        explainImmediateConflict(var, true);
+        explainImmediateConflict(var, true, info.reason.value());
         hasImmediateConflict_ = true;
         return false;
     }
@@ -248,7 +248,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 
     if (info.bound >= vars_[var].upper.bound) return true;
     if (info.bound < vars_[var].lower.bound) {
-        explainImmediateConflict(var, false);
+        explainImmediateConflict(var, false, info.reason.value());
         hasImmediateConflict_ = true;
         return false;
     }
@@ -600,17 +600,17 @@ void GeneralSimplex::explainLowerConflict(int basicVar) {
 
     assert(vars_[basicVar].lower.bound.isFinite());
     assert(vars_[basicVar].lower.reason.has_value());
-    conflict_.push_back({basicVar, true});
+    conflict_.push_back({basicVar, true, vars_[basicVar].lower.reason.value()});
 
     for (const auto& e : tab_.row(r).entries) {
         int xj = e.col;
         const mpq_class& a = e.coeff;
         if (a > 0 && atUpper(xj)) {
             assert(vars_[xj].upper.reason.has_value());
-            conflict_.push_back({xj, false});
+            conflict_.push_back({xj, false, vars_[xj].upper.reason.value()});
         } else if (a < 0 && atLower(xj)) {
             assert(vars_[xj].lower.reason.has_value());
-            conflict_.push_back({xj, true});
+            conflict_.push_back({xj, true, vars_[xj].lower.reason.value()});
         }
     }
 }
@@ -621,33 +621,33 @@ void GeneralSimplex::explainUpperConflict(int basicVar) {
 
     assert(vars_[basicVar].upper.bound.isFinite());
     assert(vars_[basicVar].upper.reason.has_value());
-    conflict_.push_back({basicVar, false});
+    conflict_.push_back({basicVar, false, vars_[basicVar].upper.reason.value()});
 
     for (const auto& e : tab_.row(r).entries) {
         int xj = e.col;
         const mpq_class& a = e.coeff;
         if (a > 0 && atLower(xj)) {
             assert(vars_[xj].lower.reason.has_value());
-            conflict_.push_back({xj, true});
+            conflict_.push_back({xj, true, vars_[xj].lower.reason.value()});
         } else if (a < 0 && atUpper(xj)) {
             assert(vars_[xj].upper.reason.has_value());
-            conflict_.push_back({xj, false});
+            conflict_.push_back({xj, false, vars_[xj].upper.reason.value()});
         }
     }
 }
 
-void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower) {
+void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower, SatLit newReason) {
     conflict_.clear();
     if (newBoundIsLower) {
         assert(vars_[var].upper.bound.isFinite());
         assert(vars_[var].upper.reason.has_value());
-        conflict_.push_back({var, true});
-        conflict_.push_back({var, false});
+        conflict_.push_back({var, true, newReason});
+        conflict_.push_back({var, false, vars_[var].upper.reason.value()});
     } else {
         assert(vars_[var].lower.bound.isFinite());
         assert(vars_[var].lower.reason.has_value());
-        conflict_.push_back({var, false});
-        conflict_.push_back({var, true});
+        conflict_.push_back({var, false, newReason});
+        conflict_.push_back({var, true, vars_[var].lower.reason.value()});
     }
 }
 

@@ -70,6 +70,10 @@ public:
     const poly::Polynomial& getPolynomial(PolyId id) const { return pool_[id]; }
     poly::Variable getVariable(const std::string& name) const;
 
+    // P2b: expose for LibpolyBackend::projectionPolys
+    PolyId alloc(poly::Polynomial p);
+    poly::Variable resolvePolyVar(VarId v);
+
 private:
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
@@ -82,8 +86,6 @@ private:
 
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
-    PolyId alloc(poly::Polynomial p);
-    poly::Variable resolvePolyVar(VarId v);
 };
 
 } // namespace nlcolver

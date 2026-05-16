@@ -68,7 +68,7 @@ NiaReasoningResult SumOfSquaresBoundReasoner::handleConstraint(
             if (negC < 0) {
                 // sum of squares <= negative: impossible
                 return {NiaReasoningKind::Conflict,
-                        TheoryConflict{{c.reason.negated()}},
+                        TheoryConflict{{c.reason}},
                         std::nullopt};
             }
             // Each |xi| <= floor(sqrt(negC))
@@ -86,7 +86,7 @@ NiaReasoningResult SumOfSquaresBoundReasoner::handleConstraint(
             mpz_class negC = -constant;
             if (negC < 0) {
                 return {NiaReasoningKind::Conflict,
-                        TheoryConflict{{c.reason.negated()}},
+                        TheoryConflict{{c.reason}},
                         std::nullopt};
             }
             // Equality implies <=, so same bounds apply

@@ -220,9 +220,8 @@ TheoryConflict DomainStore::buildEmptyDomainConflict() const {
         }
     }
     // Negate all reasons
-    for (auto& lit : clause) {
-        lit = lit.negated();
-    }
+    // Reasons are already in true-under-model form; do not negate here.
+    // TheoryManager will negate them into a conflict clause.
     return TheoryConflict{clause};
 }
 

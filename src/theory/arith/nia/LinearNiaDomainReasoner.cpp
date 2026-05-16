@@ -109,7 +109,7 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
                 } else {
                     // No integer solution
                     return {NiaReasoningKind::Conflict,
-                            TheoryConflict{{c.reason.negated()}},
+                            TheoryConflict{{c.reason}},
                             std::nullopt};
                 }
                 break;

@@ -23,6 +23,9 @@ public:
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
     bool isCombinationMode() const { return combinationMode_; }
 
+    void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
+    bool isNonConvexMode() const { return nonConvexMode_; }
+
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level);
     void backtrackToLevel(int level);
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb);
@@ -39,6 +42,7 @@ private:
     std::unordered_map<TheoryId, TheorySolver*> solverByTheory_;
 
     bool combinationMode_ = false;
+    bool nonConvexMode_ = false;
     TheoryAtomRegistry* registry_ = nullptr;
     const TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;

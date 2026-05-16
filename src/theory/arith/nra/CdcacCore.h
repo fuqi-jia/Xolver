@@ -28,7 +28,18 @@ private:
     CdcacResult checkFullSample(const SamplePoint& sample, const CdcacInput& input);
 
     Cell buildLeafConflictCell(const CdcacConstraint& c, const SamplePoint& sample, VarId var);
-    Cell generalizeConflictCell(int k, const RealAlg& sample, const CdcacResult& childConflict, const CdcacInput& input);
+
+    // P2b: shallow generalization only.
+    // Uses current-level constraint roots and full child reasons.
+    // Does not perform projection-driven parent generalization.
+    // Guards are recorded for future certificate use only.
+    BuildCellResult buildConflictCell(
+        int k,
+        const RealAlg& sample,
+        const CdcacResult& childRes,
+        const CdcacInput& input,
+        const RootSet& roots
+    );
 
     bool relationHolds(Sign s, Relation rel) const;
 

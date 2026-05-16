@@ -154,7 +154,7 @@ std::optional<TheoryConflict> IntegerReasoner::checkGcdEqualityConflict(
     if (g == 0) {
         // No variables - constant equation
         if (c.rhs != 0) {
-            return TheoryConflict{{lit.negated()}};
+            return TheoryConflict{{lit}};
         }
         return std::nullopt;
     }
@@ -162,7 +162,7 @@ std::optional<TheoryConflict> IntegerReasoner::checkGcdEqualityConflict(
     mpz_class rhsInt = c.rhs.get_num();
     if (rhsInt % g != 0) {
         // g ∤ c => unsatisfiable
-        return TheoryConflict{{lit.negated()}};
+        return TheoryConflict{{lit}};
     }
 
     return std::nullopt;

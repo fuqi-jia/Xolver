@@ -184,7 +184,7 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaDatabase& lemmaDb) {
                 return TheoryCheckResult::unknown();
             case NormalizeResult::ImmediateConflict:
                 return TheoryCheckResult::mkConflict(
-                    TheoryConflict{{a.lit.negated()}});
+                    TheoryConflict{{a.lit}});
             case NormalizeResult::Tautology:
                 continue;
             case NormalizeResult::Edges:

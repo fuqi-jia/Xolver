@@ -23,6 +23,21 @@ size_t ProofForest::snapshot() const {
 }
 
 void ProofForest::rollback(size_t snap) {
+    // Remove edges with edgeId >= snap from adjacency lists.
+    for (size_t eid = snap; eid < edges_.size(); ++eid) {
+        const auto& e = edges_[eid];
+        if (e.u < adj_.size()) {
+            auto& au = adj_[e.u];
+            au.erase(std::remove_if(au.begin(), au.end(),
+                [eid](const auto& p){ return p.second == eid; }), au.end());
+        }
+        if (e.v < adj_.size()) {
+            auto& av = adj_[e.v];
+            av.erase(std::remove_if(av.begin(), av.end(),
+                [eid](const auto& p){ return p.second == eid; }), av.end());
+        }
+    }
+    edges_.resize(snap);
     activeEdgeCount_ = snap;
 }
 

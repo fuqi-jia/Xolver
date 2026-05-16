@@ -21,6 +21,8 @@ class Purifier {
 public:
     Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort);
 
+    void setArithTheory(TheoryId theory) { arithTheory_ = theory; }
+
     void run();
 
     const std::vector<ExprId>& bridgeAssertions() const { return bridgeAssertions_; }
@@ -29,6 +31,7 @@ private:
     CoreIr& ir_;
     SharedTermRegistry& registry_;
     SortId boolSortId_;
+    TheoryId arithTheory_ = TheoryId::LRA;
 
     std::vector<ExprId> bridgeAssertions_;
     uint32_t freshCounter_ = 0;

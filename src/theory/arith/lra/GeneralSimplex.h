@@ -112,6 +112,7 @@ public:
     struct BoundReason {
         int var;
         bool isLower;
+        SatLit reason;
     };
 
     /** Return the set of bounds that caused the last conflict. */
@@ -256,7 +257,7 @@ private:
     // Conflict explanation
     void explainLowerConflict(int basicVar);
     void explainUpperConflict(int basicVar);
-    void explainImmediateConflict(int var, bool newBoundIsLower);
+    void explainImmediateConflict(int var, bool newBoundIsLower, SatLit newReason);
 
     // Row of a basic var
     int rowOfBasic(int var) const;

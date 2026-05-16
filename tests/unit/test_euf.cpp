@@ -397,7 +397,7 @@ TEST_CASE("EUF: cyclic explanation UNSAT") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("EUF: unsupported mixed logic returns Unknown") {
+TEST_CASE("EUF: QF_UFLIA experimental skeleton routes to combination") {
     std::string path = writeTempSmt2(
         "(set-logic QF_UFLIA)\n"
         "(declare-const a Int)\n"
@@ -409,7 +409,9 @@ TEST_CASE("EUF: unsupported mixed logic returns Unknown") {
     solver.setLogic("QF_UFLIA");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    // P3: QF_UFLIA is now routed to EUF+LIA combination skeleton.
+    // Simple pure-LIA cases should still return Sat.
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
 // ---------------------------------------------------------------------------

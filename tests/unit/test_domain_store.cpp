@@ -17,11 +17,11 @@ TEST_CASE("DomainStore: bounds conflict x>=5 and x<=3") {
 
     auto conflict = ds.buildEmptyDomainConflict();
     REQUIRE(!conflict.clause.empty());
-    // Clause should contain negated reasons
+    // Clause should contain raw reasons (TheoryManager negates them)
     bool hasR1 = false, hasR2 = false;
     for (const auto& lit : conflict.clause) {
-        if (lit.var == 1 && !lit.sign) hasR1 = true;
-        if (lit.var == 2 && !lit.sign) hasR2 = true;
+        if (lit.var == 1 && lit.sign) hasR1 = true;
+        if (lit.var == 2 && lit.sign) hasR2 = true;
     }
     CHECK(hasR1);
     CHECK(hasR2);
@@ -37,8 +37,8 @@ TEST_CASE("DomainStore: finite set disjoint from bounds") {
     REQUIRE(!conflict.clause.empty());
     bool hasR1 = false, hasR2 = false;
     for (const auto& lit : conflict.clause) {
-        if (lit.var == 1 && !lit.sign) hasR1 = true;
-        if (lit.var == 2 && !lit.sign) hasR2 = true;
+        if (lit.var == 1 && lit.sign) hasR1 = true;
+        if (lit.var == 2 && lit.sign) hasR2 = true;
     }
     CHECK(hasR1);
     CHECK(hasR2);
@@ -57,8 +57,8 @@ TEST_CASE("DomainStore: exclusions exhaust bounded range") {
     REQUIRE(!conflict.clause.empty());
     bool hasR1 = false, hasR2 = false;
     for (const auto& lit : conflict.clause) {
-        if (lit.var == 1 && !lit.sign) hasR1 = true;
-        if (lit.var == 2 && !lit.sign) hasR2 = true;
+        if (lit.var == 1 && lit.sign) hasR1 = true;
+        if (lit.var == 2 && lit.sign) hasR2 = true;
     }
     CHECK(hasR1);
     CHECK(hasR2);
@@ -138,10 +138,10 @@ TEST_CASE("DomainStore: finite set fully excluded -> empty") {
 
     auto conflict = ds.buildEmptyDomainConflict();
     REQUIRE(!conflict.clause.empty());
-    // Should contain negated reasons from finite set and exclusions
+    // Should contain raw reasons from finite set and exclusions
     bool hasR1 = false;
     for (const auto& lit : conflict.clause) {
-        if (lit.var == 1 && !lit.sign) hasR1 = true;
+        if (lit.var == 1 && lit.sign) hasR1 = true;
     }
     CHECK(hasR1);
 }

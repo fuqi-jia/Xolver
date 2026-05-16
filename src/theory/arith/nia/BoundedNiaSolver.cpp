@@ -80,7 +80,7 @@ BoundedSolveResult BoundedNiaSolver::enumerate(
     // Collect all active reasons for conflict
     std::vector<SatLit> conflictLits;
     for (const auto& c : constraints) {
-        conflictLits.push_back(c.reason.negated());
+        conflictLits.push_back(c.reason);
     }
 
     return {BoundedSolveStatus::UnsatComplete, std::nullopt,

@@ -198,22 +198,46 @@ public:
             theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
             theoryManager.setRegistry(&registry);
             theoryManager.setCombinationMode(true);
-        } else if (logic == "QF_UFLIA" || logic == "QF_UFNIA" || logic == "QF_UFNRA" ||
-                   logic == "UFLIA" || logic == "UFNIA" || logic == "UFNRA" ||
+        } else if (logic == "QF_UFLIA" || logic == "UFLIA") {
+            if (features.hasRealVar || features.hasNonlinear || features.hasMixedIntReal) {
+                logicMismatch = true;
+            } else {
+                sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
+                {
+                    Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
+                    purifier.setArithTheory(TheoryId::LIA);
+                    purifier.run();
+                }
+                auto euf = std::make_unique<EufSolver>();
+                euf->setCoreIr(ir.get());
+                euf->setSharedTermRegistry(sharedTermRegistry_.get());
+                theoryManager.registerSolver(std::move(euf));
+                auto lia = std::make_unique<LiaSolver>();
+                lia->setCoreIr(ir.get());
+                lia->setSharedTermRegistry(sharedTermRegistry_.get());
+                lia->setRegistry(&registry);
+                theoryManager.registerSolver(std::move(lia));
+                theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
+                theoryManager.setRegistry(&registry);
+                theoryManager.setCombinationMode(true);
+                theoryManager.setNonConvexMode(true);
+            }
+        } else if (logic == "QF_UFNIA" || logic == "QF_UFNRA" ||
+                   logic == "UFNIA" || logic == "UFNRA" ||
                    logic == "UF") {
             // Mixed theories not supported in V1
             return Result::Unknown;
         } else {
             // No declared logic or unrecognized logic: route by detected features.
-            // Never silently fallback to LRA — mixed Int/Real or unsupported
-            // features must return Unknown.
+            // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
+            // mis-routing caused by integer/real constant literals.
             if (features.hasMixedIntReal) {
                 return Result::Unknown;
             }
             if (features.hasUF) {
                 return Result::Unknown; // combination not yet supported for auto-detect
             }
-            if (features.hasInt && features.hasNonlinear) {
+            if (features.hasIntVar && features.hasNonlinear) {
                 auto polyKernel = createPolynomialKernel();
                 polyKernelRaw = polyKernel.get();
                 auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
@@ -222,17 +246,17 @@ public:
                 auto lia = std::make_unique<LiaSolver>();
                 lia->setRegistry(&registry);
                 theoryManager.registerSolver(std::move(lia));
-            } else if (features.hasInt) {
+            } else if (features.hasIntVar) {
                 auto lia = std::make_unique<LiaSolver>();
                 lia->setRegistry(&registry);
                 theoryManager.registerSolver(std::move(lia));
-            } else if (features.hasReal && features.hasNonlinear) {
+            } else if (features.hasRealVar && features.hasNonlinear) {
                 auto polyKernel = createPolynomialKernel();
                 polyKernelRaw = polyKernel.get();
                 theoryManager.registerSolver(
                     std::make_unique<NraSolver>(std::move(polyKernel)));
                 theoryManager.registerSolver(std::make_unique<LraSolver>());
-            } else if (features.hasReal) {
+            } else if (features.hasRealVar) {
                 theoryManager.registerSolver(std::make_unique<LraSolver>());
             } else {
                 // Pure boolean or empty: no theory solver needed
@@ -250,6 +274,8 @@ public:
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
+        } else if (logic == "QF_LRA" || logic == "LRA") {
+            atomizer.setDefaultTheory(TheoryId::LRA);
         } else if (logic == "QF_NRA" || logic == "NRA") {
             atomizer.setDefaultTheory(TheoryId::NRA);
             // Atomizer and NraSolver must share the same PolynomialKernel instance.
@@ -275,17 +301,24 @@ public:
             atomizer.setDefaultTheory(TheoryId::Combination);
             atomizer.setBoolSortId(boolSortId_);
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+        } else if (logic == "QF_UFLIA" || logic == "UFLIA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setBoolSortId(boolSortId_);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::LIA);
         } else {
-            // No declared logic: route by detected features
-            if (features.hasInt && features.hasNonlinear) {
+            // No declared logic: route by detected features.
+            // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
+            // mis-routing caused by integer/real constant literals.
+            if (features.hasIntVar && features.hasNonlinear) {
                 atomizer.setDefaultTheory(TheoryId::NIA);
                 if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
-            } else if (features.hasInt) {
+            } else if (features.hasIntVar) {
                 atomizer.setDefaultTheory(TheoryId::LIA);
-            } else if (features.hasReal && features.hasNonlinear) {
+            } else if (features.hasRealVar && features.hasNonlinear) {
                 atomizer.setDefaultTheory(TheoryId::NRA);
                 if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
-            } else if (features.hasReal) {
+            } else if (features.hasRealVar) {
                 atomizer.setDefaultTheory(TheoryId::LRA);
             } else {
                 atomizer.setDefaultTheory(TheoryId::Bool);
@@ -293,18 +326,36 @@ public:
         }
 
         for (ExprId assertion : ir->assertions()) {
+            const auto& ae = ir->get(assertion);
+            std::cerr << "[ASSERT] eid=" << assertion << " kind=" << (int)ae.kind << " children=" << ae.children.size() << "\n";
+            for (size_t i = 0; i < ae.children.size(); ++i) {
+                const auto& c = ir->get(ae.children[i]);
+                std::cerr << "  child[" << i << "] eid=" << ae.children[i] << " kind=" << (int)c.kind << "\n";
+                for (size_t j = 0; j < c.children.size(); ++j) {
+                    const auto& cc = ir->get(c.children[j]);
+                    std::cerr << "    grandchild[" << j << "] eid=" << c.children[j] << " kind=" << (int)cc.kind << "\n";
+                }
+            }
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
 
-        if (sharedTermRegistry_) {
-            const auto& sharedTerms = sharedTermRegistry_->allSharedTerms();
-            for (size_t i = 0; i < sharedTerms.size(); ++i) {
-                for (size_t j = i + 1; j < sharedTerms.size(); ++j) {
-                    registry.getOrCreateSharedEqualityAtom(sharedTerms[i], sharedTerms[j]);
-                }
-            }
-        }
+        // P3: Do NOT eagerly create all shared-term-pair equality atoms.
+        // Full arrangement search requires sound theory conflict explanation,
+        // complete transitivity handling, and stable model-check replay.
+        // Until those are verified, only equalities that appear in the
+        // original formula or are explicitly requested by a theory are
+        // registered.  UFLIA defaults to Unknown for cases that would need
+        // arrangement.
+        //
+        // if (sharedTermRegistry_) {
+        //     const auto& sharedTerms = sharedTermRegistry_->allSharedTerms();
+        //     for (size_t i = 0; i < sharedTerms.size(); ++i) {
+        //         for (size_t j = i + 1; j < sharedTerms.size(); ++j) {
+        //             registry.getOrCreateSharedEqualityAtom(sharedTerms[i], sharedTerms[j]);
+        //         }
+        //     }
+        // }
 
         if (registry.hasUnsupportedTheoryAtom()) {
             std::cerr << "[Solver] unsupported theory atom detected\n";

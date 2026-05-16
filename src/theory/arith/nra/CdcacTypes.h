@@ -123,6 +123,22 @@ enum class ProjectionMode : uint8_t {
 };
 
 // ------------------------------------------------------------------
+// Projection result status
+// ------------------------------------------------------------------
+enum class ProjectionStatus : uint8_t {
+    Success,
+    UnsupportedVarOrder,    // libpoly main_variable != eliminateVar
+    UnsupportedMode,        // only Conservative is supported in P2b
+    BackendFailure,         // exception during discriminant/resultant/coeff
+    EmptyBecauseNoRelevantPolys
+};
+
+struct ProjectionResult {
+    ProjectionStatus status = ProjectionStatus::BackendFailure;
+    std::vector<PolyId> polys;
+};
+
+// ------------------------------------------------------------------
 // Model seed from LRA / linearizer
 // ------------------------------------------------------------------
 struct ModelSeed {
@@ -315,6 +331,33 @@ struct CdcacResult {
         r.unknownReason = reason;
         return r;
     }
+};
+
+// ------------------------------------------------------------------
+// Cell lookup result (three-value, propagates uncertainty)
+// ------------------------------------------------------------------
+enum class CellLookupStatus : uint8_t {
+    Found,
+    Unknown,       // compareRealAlg returned Unknown
+    InvalidInput   // root set not sorted (duplicate or inverted)
+};
+
+struct CellLookupResult {
+    CellLookupStatus status = CellLookupStatus::InvalidInput;
+    Cell cell;
+};
+
+// ------------------------------------------------------------------
+// Build conflict cell result (P2b shallow generalization)
+// ------------------------------------------------------------------
+enum class BuildCellStatus : uint8_t {
+    Success,
+    Unknown
+};
+
+struct BuildCellResult {
+    BuildCellStatus status = BuildCellStatus::Unknown;
+    Cell cell;
 };
 
 } // namespace nlcolver

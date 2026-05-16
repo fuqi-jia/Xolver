@@ -49,6 +49,9 @@ public:
     // Set the default theory ID for parsed linear atoms (LRA or LIA).
     void setDefaultTheory(TheoryId theory) { defaultTheory_ = theory; }
 
+    // Set the arithmetic theory used in combination mode for non-UF expressions.
+    void setCombinationArithTheory(TheoryId theory) { combinationArithTheory_ = theory; }
+
     // Set the polynomial kernel for NRA atom extraction.
     void setPolynomialKernel(PolynomialKernel* kernel) {
         polyKernel_ = kernel;
@@ -112,6 +115,7 @@ private:
     SatVar nextVar_ = 1;
     TheoryAtomRegistry* registry_ = nullptr;
     TheoryId defaultTheory_ = TheoryId::LRA;
+    TheoryId combinationArithTheory_ = TheoryId::LRA;
     PolynomialKernel* polyKernel_ = nullptr;
     std::unique_ptr<PolynomialConverter> polyConverter_;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;

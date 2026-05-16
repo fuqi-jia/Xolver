@@ -177,3 +177,39 @@ TEST_CASE("P0 Routing: pure boolean without set-logic works") {
     CHECK(solver.parseFile(path));
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
+
+TEST_CASE("LRA: same-variable multiple bounds -> unsat") {
+    // x >= 0  (weaker bound)
+    // x >= 3  (stronger bound)
+    // x <= 2  (conflicts with stronger bound)
+    // The conflict must include x >= 3 and x <= 2, not x >= 0.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_LRA)\n"
+        "(declare-const x Real)\n"
+        "(assert (>= x 0))\n"
+        "(assert (>= x 3))\n"
+        "(assert (<= x 2))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("LRA: strict same-variable immediate conflict -> unsat") {
+    // x <= 1
+    // x >= 1
+    // x > 1   conflicts with x <= 1
+    // The conflict must include x > 1 and x <= 1.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_LRA)\n"
+        "(declare-const x Real)\n"
+        "(assert (<= x 1))\n"
+        "(assert (>= x 1))\n"
+        "(assert (> x 1))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}

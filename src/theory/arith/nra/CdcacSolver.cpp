@@ -76,7 +76,7 @@ TheoryCheckResult CdcacSolver::check() {
             case Relation::Geq: ok = (s >= 0); break;
         }
         if (!ok) {
-            conflictLits.push_back(c.reason.negated());
+            conflictLits.push_back(c.reason);
         }
     }
 

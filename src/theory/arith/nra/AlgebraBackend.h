@@ -47,8 +47,10 @@ public:
 
     /**
      * Projection: eliminate eliminateVar from polys, return new polynomial set.
+     * P2b: returns status + polynomials. UnsupportedVarOrder / BackendFailure
+     * must be treated as "no projection available" (safe silent degradation).
      */
-    virtual std::vector<PolyId> projectionPolys(
+    virtual ProjectionResult projectionPolys(
         const std::vector<PolyId>& polys,
         VarId eliminateVar,
         ProjectionMode mode
