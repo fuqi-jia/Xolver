@@ -1,4 +1,5 @@
 #include "theory/arith/nra/LocalProjection.h"
+#include "theory/arith/nra/DegeneracyResolver.h"
 #include <algorithm>
 #include <unordered_set>
 
@@ -184,7 +185,20 @@ LocalProjectionResult LocalProjectionEngine::project(
         if (!dp.isZero()) {
             auto disc = resultant(p, dp, eliminateVar);
             if (disc.isZero()) {
-                result.hasDegeneracy = true;
+                // V2-5: try to resolve self-degeneracy
+                DegeneracyResolver resolver;
+                auto resolution = resolver.resolveSelfDegeneracy(rp, eliminateVar);
+                if (resolution.hasUnresolvedDegeneracy) {
+                    result.hasDegeneracy = true;
+                    result.degeneracyReason = resolution.reason;
+                } else if (!resolution.replacementPolys.empty()) {
+                    // Use squarefree replacement
+                    result.polys.insert(result.polys.end(),
+                        resolution.replacementPolys.begin(),
+                        resolution.replacementPolys.end());
+                }
+                // If resolution produced no replacement (already constant gcd),
+                // continue without adding discriminant
             } else if (!disc.isConstant()) {
                 result.polys.push_back({
                     disc,
@@ -206,7 +220,18 @@ LocalProjectionResult LocalProjectionEngine::project(
 
             auto r = resultant(pi, pj, eliminateVar);
             if (r.isZero()) {
-                result.hasDegeneracy = true;
+                // V2-5: try to resolve pair-degeneracy
+                DegeneracyResolver resolver;
+                auto resolution = resolver.resolvePairDegeneracy(
+                    deduped[i], deduped[j], eliminateVar);
+                if (resolution.hasUnresolvedDegeneracy) {
+                    result.hasDegeneracy = true;
+                    result.degeneracyReason = resolution.reason;
+                } else if (!resolution.replacementPolys.empty()) {
+                    result.polys.insert(result.polys.end(),
+                        resolution.replacementPolys.begin(),
+                        resolution.replacementPolys.end());
+                }
             } else if (!r.isConstant()) {
                 // Merge reasons
                 std::vector<SatLit> mergedReasons = deduped[i].reasons;

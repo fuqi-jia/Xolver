@@ -33,7 +33,7 @@ struct ReasonedPolynomial {
 struct LocalProjectionResult {
     bool hasDegeneracy = false;
     std::vector<ReasonedPolynomial> polys;
-    // V1: degeneracy details omitted (conservative Unknown)
+    CdcacUnknownReason degeneracyReason = CdcacUnknownReason::None;
 };
 
 class LocalProjectionEngine {
