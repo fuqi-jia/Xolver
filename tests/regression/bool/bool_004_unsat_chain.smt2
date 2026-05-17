@@ -1,0 +1,9 @@
+
+(declare-const p Bool)
+(declare-const q Bool)
+(declare-const r Bool)
+(assert (=> p q))
+(assert (=> q r))
+(assert p)
+(assert (not r))
+(check-sat)

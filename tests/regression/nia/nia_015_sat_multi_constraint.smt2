@@ -1,0 +1,10 @@
+; Simple two-variable nonlinear system
+(set-logic QF_NIA)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (+ (* x x) (* y y)) 25))
+(assert (> x 0))
+(assert (> y 0))
+(assert (<= x 5))
+(assert (<= y 5))
+(check-sat)

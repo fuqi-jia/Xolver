@@ -1,0 +1,13 @@
+; Rollback opposite branch
+(set-logic QF_UF)
+(declare-fun c () Bool)
+(declare-fun a () Bool)
+(declare-fun b () Bool)
+(push)
+(assert (= c true))
+(assert (distinct (ite c a b) a))
+(check-sat)
+(pop)
+(assert (= c false))
+(assert (distinct (ite c a b) b))
+(check-sat)

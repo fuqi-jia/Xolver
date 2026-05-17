@@ -26,6 +26,7 @@ import csv
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -61,6 +62,10 @@ LOGIC_ALIASES = {
     "idl": "QF_IDL",
     "rdl": "QF_RDL",
     "uf": "QF_UF",
+    "uflia": "QF_UFLIA",
+    "uflra": "QF_UFLRA",
+    "ufnia": "QF_UFNIA",
+    "ufnra": "QF_UFNRA",
     "bool": "QF_BOOL",
 }
 
@@ -409,12 +414,37 @@ def write_errors(output_dir: Path, nlcolver_results: List[RunResult], compare_re
 
 def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonRow]):
     path = output_dir / "statistics.json"
+    # Build stats dict manually because asdict() cannot serialize defaultdict
+    stats_dict = {
+        "logic": stats.logic,
+        "total_files": stats.total_files,
+        "nlcolver": dict(stats.nlcolver),
+        "compare": dict(stats.compare),
+        "mismatches": stats.mismatches,
+        "diffs": stats.diffs,
+        "total_time_nlcolver": stats.total_time_nlcolver,
+        "total_time_compare": stats.total_time_compare,
+        "avg_time_nlcolver": stats.avg_time_nlcolver,
+        "avg_time_compare": stats.avg_time_compare,
+        "max_time_nlcolver": stats.max_time_nlcolver,
+        "max_time_compare": stats.max_time_compare,
+        "category_stats": {
+            cat: {
+                "count": cstat["count"],
+                "nlcolver": dict(cstat["nlcolver"]),
+                "compare": dict(cstat.get("compare", {})),
+                "mismatches": cstat["mismatches"],
+                "diffs": cstat["diffs"],
+            }
+            for cat, cstat in stats.category_stats.items()
+        },
+    }
     data = {
         "meta": {
             "date": datetime.now().isoformat(),
             "logic": stats.logic,
         },
-        "statistics": asdict(stats),
+        "statistics": stats_dict,
         "results": [asdict(r) for r in rows],
     }
     with open(path, "w") as f:
@@ -920,57 +950,20 @@ renderTopSlow();
 # Main
 # =============================================================================
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="NLColver Benchmark Runner",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python tools/run_benchmark.py --logic QF_LRA -j 8 -t 30
-  python tools/run_benchmark.py --logic nia -j 4 -t 60 --compare-with z3
-  nohup python tools/run_benchmark.py --logic QF_NIA -j 8 -t 30 --compare-with z3 &
-        """,
-    )
-    parser.add_argument("--logic", required=True, help="Logic to benchmark (e.g., QF_LRA, lra, nia)")
-    parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of parallel jobs (default: 1)")
-    parser.add_argument("-t", "--timeout", type=float, default=30, help="Timeout per instance in seconds (default: 30)")
-    parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to nlcolver binary")
-    parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
-    parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
-    parser.add_argument("--max-files", type=int, default=None, help="Limit number of files (for quick tests)")
-    parser.add_argument("--filter", default=None, help="Filter files by substring in relative path")
-    parser.add_argument("--verbose", action="store_true", help="Verbose output")
-
-    args = parser.parse_args()
-
-    # Validate solver binary
-    if not os.path.isfile(args.solver):
-        print(f"ERROR: NLColver binary not found: {args.solver}")
-        sys.exit(1)
-
-    if args.compare_with and not shutil.which(args.compare_with):
-        print(f"ERROR: Comparison solver not found in PATH: {args.compare_with}")
-        sys.exit(1)
-
-    # Resolve logic
-    try:
-        logic = resolve_logic(args.logic)
-    except ValueError as e:
-        print(f"ERROR: {e}")
-        sys.exit(1)
-
+def run_single_logic(args, logic: str, output_dir: Path):
+    """Run benchmark for a single logic and return statistics."""
     # Find files
     try:
         files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files)
     except FileNotFoundError as e:
         print(f"ERROR: {e}")
-        print(f"Available logics: {', '.join(list_logic_dirs())}")
-        sys.exit(1)
+        return None
 
     if not files:
-        print("ERROR: No .smt2 files found for the given criteria.")
-        sys.exit(1)
+        print(f"WARNING: No .smt2 files found for logic {logic}.")
+        return None
 
+    print(f"\n{'='*70}")
     print(f"Logic: {logic}")
     print(f"Files: {len(files)}")
     print(f"Jobs:  {args.jobs}")
@@ -979,13 +972,6 @@ Examples:
     if args.compare_with:
         print(f"Compare: {args.compare_with}")
     print("-" * 70)
-
-    # Output directory
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = Path(args.output or f"benchmark_results/{logic}_{timestamp}")
-    output_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Output directory: {output_dir}")
-    print("=" * 70)
 
     total = len(files)
     start_time = time.time()
@@ -996,18 +982,26 @@ Examples:
     nlcolver_results: List[RunResult] = []
     print(f"\n[1/2] Running NLColver on {total} files ...")
 
-    with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-        futures = {
-            executor.submit(run_nlcolver, f, args.solver, args.timeout, logic): f
-            for f in files
-        }
-        completed = 0
-        for future in as_completed(futures):
-            res = future.result()
+    if args.serial or args.jobs == 1:
+        # True serial mode: no subprocess pool, lower memory footprint
+        for i, f in enumerate(files, 1):
+            res = run_nlcolver(f, args.solver, args.timeout, logic)
             nlcolver_results.append(res)
-            completed += 1
-            if args.verbose or completed % 100 == 0 or completed == total:
-                print(f"  NLColver: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
+            if args.verbose or i % 100 == 0 or i == total:
+                print(f"  NLColver: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
+    else:
+        with ProcessPoolExecutor(max_workers=args.jobs) as executor:
+            futures = {
+                executor.submit(run_nlcolver, f, args.solver, args.timeout, logic): f
+                for f in files
+            }
+            completed = 0
+            for future in as_completed(futures):
+                res = future.result()
+                nlcolver_results.append(res)
+                completed += 1
+                if args.verbose or completed % 100 == 0 or completed == total:
+                    print(f"  NLColver: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
 
     # -------------------------------------------------------------------------
     # Run comparison solver (if requested)
@@ -1015,18 +1009,25 @@ Examples:
     compare_res_list: List[RunResult] = []
     if args.compare_with:
         print(f"\n[2/2] Running {args.compare_with} on {total} files ...")
-        with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-            futures = {
-                executor.submit(run_compare, f, args.compare_with, args.timeout): f
-                for f in files
-            }
-            completed = 0
-            for future in as_completed(futures):
-                res = future.result()
+        if args.serial or args.jobs == 1:
+            for i, f in enumerate(files, 1):
+                res = run_compare(f, args.compare_with, args.timeout)
                 compare_res_list.append(res)
-                completed += 1
-                if args.verbose or completed % 100 == 0 or completed == total:
-                    print(f"  {args.compare_with}: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
+                if args.verbose or i % 100 == 0 or i == total:
+                    print(f"  {args.compare_with}: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
+        else:
+            with ProcessPoolExecutor(max_workers=args.jobs) as executor:
+                futures = {
+                    executor.submit(run_compare, f, args.compare_with, args.timeout): f
+                    for f in files
+                }
+                completed = 0
+                for future in as_completed(futures):
+                    res = future.result()
+                    compare_res_list.append(res)
+                    completed += 1
+                    if args.verbose or completed % 100 == 0 or completed == total:
+                        print(f"  {args.compare_with}: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
 
     wall_time = time.time() - start_time
     print(f"\nAll done in {wall_time:.2f}s (wall-clock)")
@@ -1149,11 +1150,133 @@ Examples:
     print(f"\nAll reports saved to: {output_dir}")
     print("=" * 70)
 
-    # Return non-zero if there are mismatches
-    if args.compare_with and stats.mismatches > 0:
-        sys.exit(2)
+    return stats
+
+
+def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args):
+    """Write a master summary for --all-logics run."""
+    summary_path = output_dir / "all_logics_summary.txt"
+    with open(summary_path, "w") as f:
+        f.write("=" * 70 + "\n")
+        f.write("NLColver All-Logics Benchmark Report\n")
+        f.write("=" * 70 + "\n\n")
+        f.write(f"Date:     {datetime.now().isoformat()}\n")
+        f.write(f"Solver:   {args.solver}\n")
+        f.write(f"Compare:  {args.compare_with or 'none'}\n")
+        f.write(f"Timeout:  {args.timeout}s\n")
+        f.write(f"Max files per logic: {args.max_files}\n")
+        f.write("\n" + "-" * 70 + "\n")
+        f.write(f"{'Logic':<15} {'Files':>6} {'sat':>6} {'unsat':>6} {'unk':>6} {'t/o':>6} {'err':>6} {'Mism':>6} {'Diff':>6}\n")
+        f.write("-" * 70 + "\n")
+
+        total_mismatches = 0
+        total_diffs = 0
+        for stats in all_stats:
+            n = stats.nlcolver
+            mism = stats.mismatches if args.compare_with else 0
+            diff = stats.diffs if args.compare_with else 0
+            total_mismatches += mism
+            total_diffs += diff
+            f.write(f"{stats.logic:<15} {stats.total_files:>6} "
+                    f"{n.get('sat', 0):>6} {n.get('unsat', 0):>6} "
+                    f"{n.get('unknown', 0):>6} {n.get('timeout', 0):>6} "
+                    f"{n.get('error', 0):>6} {mism:>6} {diff:>6}\n")
+
+        f.write("-" * 70 + "\n")
+        f.write(f"{'TOTAL':<15} {sum(s.total_files for s in all_stats):>6} "
+                f"{sum(s.nlcolver.get('sat', 0) for s in all_stats):>6} "
+                f"{sum(s.nlcolver.get('unsat', 0) for s in all_stats):>6} "
+                f"{sum(s.nlcolver.get('unknown', 0) for s in all_stats):>6} "
+                f"{sum(s.nlcolver.get('timeout', 0) for s in all_stats):>6} "
+                f"{sum(s.nlcolver.get('error', 0) for s in all_stats):>6} "
+                f"{total_mismatches:>6} {total_diffs:>6}\n")
+        f.write("\n")
+        if total_mismatches > 0:
+            f.write(f"*** WARNING: {total_mismatches} MISMATCH(es) detected! ***\n")
+        f.write("=" * 70 + "\n")
+    print(f"\n[All-logics summary written to {summary_path}]")
+    return total_mismatches
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="NLColver Benchmark Runner",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python tools/run_benchmark.py --logic QF_LRA -j 8 -t 30
+  python tools/run_benchmark.py --logic nia -j 4 -t 60 --compare-with z3
+  python tools/run_benchmark.py --all-logics -j 8 -t 10 --compare-with z3 --max-files 50
+  nohup python tools/run_benchmark.py --logic QF_NIA -j 8 -t 30 --compare-with z3 &
+        """,
+    )
+    parser.add_argument("--logic", default=None, help="Logic to benchmark (e.g., QF_LRA, lra, nia)")
+    parser.add_argument("--all-logics", action="store_true", help="Run on all available logics in benchmark dir")
+    parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of parallel jobs (default: 1)")
+    parser.add_argument("-t", "--timeout", type=float, default=30, help="Timeout per instance in seconds (default: 30)")
+    parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to nlcolver binary")
+    parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
+    parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
+    parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
+    parser.add_argument("--filter", default=None, help="Filter files by substring in relative path")
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--serial", action="store_true", help="Run serially without subprocess pool (saves memory)")
+
+    args = parser.parse_args()
+
+    if not args.logic and not args.all_logics:
+        parser.error("Either --logic or --all-logics must be specified.")
+
+    # Validate solver binary
+    if not os.path.isfile(args.solver):
+        print(f"ERROR: NLColver binary not found: {args.solver}")
+        sys.exit(1)
+
+    if args.compare_with and not shutil.which(args.compare_with):
+        print(f"ERROR: Comparison solver not found in PATH: {args.compare_with}")
+        sys.exit(1)
+
+    # Master output directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    master_dir = Path(args.output or f"benchmark_results/all_logics_{timestamp}")
+    master_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.all_logics:
+        logics = list_logic_dirs()
+        if not logics:
+            print("ERROR: No benchmark logic directories found.")
+            sys.exit(1)
+        print(f"Running on all {len(logics)} logics: {', '.join(logics)}")
+        # Default max-files for --all-logics if not specified
+        if args.max_files is None:
+            args.max_files = 50
+            print(f"Default --max-files set to {args.max_files} per logic (override with --max-files N)")
+    else:
+        try:
+            logics = [resolve_logic(args.logic)]
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            sys.exit(1)
+
+    all_stats = []
+    for logic in logics:
+        logic_dir = master_dir / logic
+        logic_dir.mkdir(parents=True, exist_ok=True)
+        stats = run_single_logic(args, logic, logic_dir)
+        if stats:
+            all_stats.append(stats)
+
+    if args.all_logics and all_stats:
+        total_mismatches = write_all_logics_summary(all_stats, master_dir, args)
+        print(f"\n{'='*70}")
+        print(f"ALL LOGICS COMPLETE: {len(all_stats)} logics, {sum(s.total_files for s in all_stats)} files")
+        print(f"Master directory: {master_dir}")
+        if args.compare_with:
+            print(f"Total mismatches: {total_mismatches}")
+        print(f"{'='*70}")
+        if args.compare_with and total_mismatches > 0:
+            sys.exit(2)
 
 
 if __name__ == "__main__":
-    import shutil
     main()

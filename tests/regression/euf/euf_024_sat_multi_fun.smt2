@@ -1,0 +1,11 @@
+; Multiple function symbols with shared args
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun f (S S) S)
+(declare-fun g (S S) S)
+(declare-fun h (S) S)
+(declare-fun a () S)
+(declare-fun b () S)
+(assert (= (f a b) (g a b)))
+(assert (= (h (f a b)) (h (g a b))))
+(check-sat)

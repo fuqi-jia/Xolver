@@ -295,18 +295,20 @@ NIA 是不可判定问题。NLColver 的 UNSAT 结论基于以下**可靠冲突*
 
 | 文件 | 函数 | 状态 |
 |------|------|------|
-| `src/api/Solver.cpp:221` | `boolSort()` | 返回空 Sort |
-| `src/api/Solver.cpp:222` | `intSort()` | 返回空 Sort |
-| `src/api/Solver.cpp:223` | `realSort()` | 返回空 Sort |
-| `src/api/Solver.cpp:224` | `bvSort(uint32_t)` | 返回空 Sort（位向量）|
-| `src/api/Solver.cpp:225` | `fpSort(uint32_t, uint32_t)` | 返回空 Sort（浮点）|
-| `src/api/Solver.cpp:227` | `mkConst(Sort, string_view)` | 返回空 Term |
-| `src/api/Solver.cpp:228` | `mkVar(Sort, string_view)` | 返回空 Term |
-| `src/api/Solver.cpp:229` | `mkBool(bool)` | 返回空 Term |
-| `src/api/Solver.cpp:230` | `mkInt(int64_t)` | 返回空 Term |
-| `src/api/Solver.cpp:231` | `mkReal(const string&)` | 返回空 Term |
-| `src/api/Solver.cpp:232` | `mkOp(uint32_t, vector<Term>)` | 返回空 Term |
-| `src/api/Solver.cpp:235` | `assertFormula()` | build term and assert（待实现）|
+| `src/api/Solver.cpp` | `boolSort()` | ✅ 已实现（懒创建 CoreIr sort） |
+| `src/api/Solver.cpp` | `intSort()` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `realSort()` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `bvSort(uint32_t)` | 返回空 Sort（位向量，待实现）|
+| `src/api/Solver.cpp` | `fpSort(uint32_t, uint32_t)` | 返回空 Sort（浮点，待实现）|
+| `src/api/Solver.cpp` | `mkConst(Sort, string_view)` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `mkVar(Sort, string_view)` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `mkBool(bool)` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `mkInt(int64_t)` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `mkReal(const string&)` | ✅ 已实现 |
+| `src/api/Solver.cpp` | `mkOp(uint32_t, vector<Term>)` | ✅ 已实现（sort inference TODO）|
+| `src/api/Solver.cpp` | `assertFormula()` | ✅ 已实现 |
+| `tests/unit/test_api.cpp` | — | ✅ 新增 6 个 API 单元测试 |
+| `tests/unit/test_e2e.cpp` | — | ✅ 新增 Factor 引理回归测试 |
 | `src/api/Solver.cpp:247` | `getModel()` | 模型构造完成后需过滤内部变量 |
 
 ---
@@ -364,8 +366,12 @@ NIA 是不可判定问题。NLColver 的 UNSAT 结论基于以下**可靠冲突*
 | 优先级 | 任务 | 理由 |
 |--------|------|------|
 | P0 | **修复 LRA/NIA 大规模 benchmark 的 parser 兼容性** | 当前 Heizmann/VeryMax 等 benchmark 导致大量 error，需诊断具体不支持的 SMT-LIB 语法 |
-| P1 | **API 层实现** (`mkBool`, `mkInt`, `assertFormula` 等) | 使 C++ API 可用，支持程序化建模 |
-| P2 | **Factor 引理** (`xy=0 ⇒ x=0 ∨ y=0`) | NIA-Core 完整性的关键缺口 |
+| P1 | **API 层实现** (`mkBool`, `mkInt`, `assertFormula` 等) | ✅ 已完成，支持程序化建模 |
+| P2 | **Factor 引理** (`xy=0 ⇒ x=0 ∨ y=0`) | ✅ 已实现于 `NiaSolver::check()` |
+| P2b | **LIA branch split bug 修复** (`val.b != 0` 处理) | ✅ 已修复 `buildBranchSplitLemma` |
+| P2c | **NiaLocalSearch 增强** | ✅ 已添加 domain bounds / 枚举 / 采样 |
+| P2d | **CLI 选项解析** (`--logic`, `--seed`) | ✅ 已支持 |
+| P2e | **dumpSMT2 API 支持** | ✅ 已实现 `dumpExprToSMT2` |
 | P3 | **Stage G — LocalSearchAdvisor** | 提升 NIA 有界实例的 SAT 发现能力 |
 | P4 | **Stage F — IncrementalLinearizer** | 为非线性约束生成 lemmas，增强 CDCL(T) 推理 |
 | P5 | **Stage H — McsatSolver** | 长期研究方向，NLSAT 引擎 |

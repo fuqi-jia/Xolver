@@ -1,0 +1,5 @@
+(set-logic QF_LIA)
+(declare-const x Int)
+(assert (<= (* 3 x) 10))
+(assert (>= x 0))
+(check-sat)

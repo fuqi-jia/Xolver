@@ -1,0 +1,10 @@
+; Nested function applications
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun f (S) S)
+(declare-fun g (S) S)
+(declare-fun a () S)
+(declare-fun b () S)
+(assert (= a b))
+(assert (= (f (g a)) (f (g b))))
+(check-sat)

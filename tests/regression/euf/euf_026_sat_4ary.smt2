@@ -1,0 +1,10 @@
+; 4-ary function
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun f (S S S S) S)
+(declare-fun a () S)
+(declare-fun b () S)
+(declare-fun c () S)
+(declare-fun d () S)
+(assert (= (f a b c d) (f b a d c)))
+(check-sat)

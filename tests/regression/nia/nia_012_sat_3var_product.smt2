@@ -1,0 +1,13 @@
+; Three-variable product with small bounds
+(set-logic QF_NIA)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (= (* x y z) 6))
+(assert (>= x 1))
+(assert (<= x 3))
+(assert (>= y 1))
+(assert (<= y 3))
+(assert (>= z 1))
+(assert (<= z 3))
+(check-sat)

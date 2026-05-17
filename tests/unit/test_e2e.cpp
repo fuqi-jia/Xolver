@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 
 using namespace nlcolver;
 
@@ -97,6 +98,21 @@ TEST_CASE("P0 Routing: Int variable without set-logic routes to LIA") {
     std::string path = writeTempSmt2(
         "(declare-const x Int)\n"
         "(assert (= (* 2 x) 1))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: factor lemma xy=0, x≠0, y≠0 -> unsat") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-fun x () Int)\n"
+        "(declare-fun y () Int)\n"
+        "(assert (= (* x y) 0))\n"
+        "(assert (distinct x 0))\n"
+        "(assert (distinct y 0))\n"
         "(check-sat)\n"
     );
     Solver solver;
@@ -212,4 +228,82 @@ TEST_CASE("LRA: strict same-variable immediate conflict -> unsat") {
     Solver solver;
     CHECK(solver.parseFile(path));
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+// ---------------------------------------------------------------------------
+// Regression test suite: reads .smt2 files from tests/regression/<logic>/
+// Expected result is encoded in the filename prefix:
+//   sat_   -> Result::Sat
+//   unsat_ -> Result::Unsat
+// Files without prefix are skipped.
+// ---------------------------------------------------------------------------
+
+#include <filesystem>
+
+static void runRegressionDir(const std::string& relDir, const std::string& logic) {
+    std::vector<std::string> candidates = {relDir, "../" + relDir, "../../" + relDir};
+    std::string dirPath;
+    for (const auto& c : candidates) {
+        if (std::filesystem::exists(c)) {
+            dirPath = c;
+            break;
+        }
+    }
+    if (dirPath.empty()) {
+        FAIL("Regression directory does not exist");
+    }
+    std::vector<std::filesystem::path> files;
+    for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        if (entry.path().extension() == ".smt2") {
+            files.push_back(entry.path());
+        }
+    }
+    std::sort(files.begin(), files.end());
+
+    for (const auto& p : files) {
+        std::string name = p.filename().string();
+        Result expected;
+        if (name.find("sat_") == 0 || name.find("_sat_") != std::string::npos) {
+            expected = Result::Sat;
+        } else if (name.find("unsat_") == 0 || name.find("_unsat_") != std::string::npos) {
+            expected = Result::Unsat;
+        } else {
+            continue; // skip files without expected result prefix
+        }
+
+        CAPTURE(name);
+        Solver solver;
+        if (!logic.empty()) solver.setLogic(logic);
+        CHECK(solver.parseFile(p.string()));
+        Result r = solver.checkSat();
+        CHECK(static_cast<int>(r) == static_cast<int>(expected));
+    }
+}
+
+TEST_CASE("Regression: QF_LIA") {
+    runRegressionDir("tests/regression/lia", "QF_LIA");
+}
+
+TEST_CASE("Regression: QF_LRA") {
+    runRegressionDir("tests/regression/lra", "QF_LRA");
+}
+
+TEST_CASE("Regression: QF_NRA") {
+    runRegressionDir("tests/regression/nra", "QF_NRA");
+}
+
+TEST_CASE("Regression: BOOL") {
+    runRegressionDir("tests/regression/bool", "");
+}
+
+TEST_CASE("Regression: QF_NIA") {
+    runRegressionDir("tests/regression/nia", "QF_NIA");
+}
+
+TEST_CASE("Regression: QF_UFLRA") {
+    runRegressionDir("tests/regression/uflra", "QF_UFLRA");
+}
+
+TEST_CASE("Regression: QF_UFNIA") {
+    runRegressionDir("tests/regression/ufnia", "QF_UFNIA");
 }

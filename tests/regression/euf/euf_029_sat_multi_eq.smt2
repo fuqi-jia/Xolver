@@ -1,0 +1,12 @@
+; Multiple equality/disequality mix
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun a () S)
+(declare-fun b () S)
+(declare-fun c () S)
+(declare-fun d () S)
+(assert (= a b))
+(assert (= c d))
+(assert (distinct a c))
+(assert (distinct b d))
+(check-sat)

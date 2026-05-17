@@ -1,0 +1,13 @@
+; Pythagorean triple with tighter bounds for bounded solver
+(set-logic QF_NIA)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (= (+ (* x x) (* y y)) (* z z)))
+(assert (> x 0))
+(assert (> y 0))
+(assert (> z 0))
+(assert (<= x 5))
+(assert (<= y 5))
+(assert (<= z 5))
+(check-sat)

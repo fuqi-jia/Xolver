@@ -1,0 +1,13 @@
+; Long congruence chain leading to conflict
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun f (S) S)
+(declare-fun a () S)
+(declare-fun b () S)
+(declare-fun c () S)
+(declare-fun d () S)
+(assert (= a b))
+(assert (= b c))
+(assert (= c d))
+(assert (distinct (f a) (f d)))
+(check-sat)

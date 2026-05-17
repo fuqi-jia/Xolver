@@ -1,0 +1,8 @@
+(declare-const c Bool)
+(declare-const t Bool)
+(declare-const e Bool)
+(assert (= c true))
+(assert (= t true))
+(assert (= e false))
+(assert (ite c t e))
+(check-sat)

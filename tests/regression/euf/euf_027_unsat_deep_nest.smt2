@@ -1,0 +1,9 @@
+; Deeply nested function applications
+(set-logic QF_UF)
+(declare-sort S 0)
+(declare-fun f (S) S)
+(declare-fun a () S)
+(declare-fun b () S)
+(assert (= a b))
+(assert (distinct (f (f (f (f a)))) (f (f (f (f b))))))
+(check-sat)
