@@ -9,6 +9,7 @@
 #include <string>
 #include <variant>
 #include <unordered_map>
+#include <cassert>
 
 namespace nlcolver {
 
@@ -24,14 +25,42 @@ constexpr UniPolyId    NullUniPolyId    = std::numeric_limits<UniPolyId>::max();
 // ------------------------------------------------------------------
 // Unknown reason (for debugging and stats)
 // ------------------------------------------------------------------
-enum class CdcacUnknownReason : uint8_t {
+enum class CdcacUnknownReason {
     None,
+
+    // Algebraic / evaluation
     BackendFailure,
     RootIsolationInvalid,
+    RootIsolationFailed,
     SignEvaluationInconclusive,
     UnsupportedAlgebraicSection,
     AlgebraicComparisonInconclusive,
+    MissingDefiningPoly,
+
+    // Polynomial arithmetic
+    ExactDivisionFailed,
+    SquarefreeFailed,
+    GcdFailed,
+    SubresultantFailed,
+    ParametricDegreeDrop,
+    PseudoRemainderFailed,
+    LeadingCoefficientNullified,
+
+    // Projection / generalization
+    ProjectionDegeneracyUnresolved,
+    SpecializationFailed,
+    NullificationInGeneralization,
     NullificationUnresolved,
+    CellConstructionFailed,
+    GeneralizedCellDoesNotContainSample,
+    MalformedCell,
+    CoveringDidNotGrow,
+
+    // Reason / proof
+    ReasonReplayFailed,
+    ReasonMinimizationFailed,
+
+    // Resource / internal
     ResourceBudgetExceeded,
     InternalInvariantViolation
 };
@@ -325,7 +354,8 @@ struct CdcacResult {
         r.unsat = CdcacUnsatCertificate{std::move(cover), std::move(reasons)};
         return r;
     }
-    static CdcacResult mkUnknown(CdcacUnknownReason reason = CdcacUnknownReason::None) {
+    static CdcacResult mkUnknown(CdcacUnknownReason reason) {
+        assert(reason != CdcacUnknownReason::None);
         CdcacResult r;
         r.status = CdcacStatus::Unknown;
         r.unknownReason = reason;

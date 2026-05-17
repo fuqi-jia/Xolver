@@ -295,7 +295,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             if (res.status == CdcacStatus::Sat) return res;
             if (res.status == CdcacStatus::Unknown) return res;
             // Unsat without cells: cannot construct covering in P2a (no projection)
-            return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+            return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
         }
 
         // Has uniPolys but no roots: entire line is one cell
