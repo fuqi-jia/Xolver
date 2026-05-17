@@ -22,6 +22,7 @@ public:
     SolveResult solve(const std::vector<SatLit>& assumptions) override;
     bool value(SatVar v) const override;
     bool configure(const char* name, int64_t value) override;
+    std::vector<SatLit> getFailedAssumptions() const override;
     void addObservedVar(SatVar v) override;
 
     void connectPropagator(CadicalTheoryPropagator* propagator);
@@ -33,6 +34,7 @@ private:
     SatVar maxVar_ = 0;
     bool terminateRequested_ = false;
     bool propagatorConnected_ = false;
+    std::vector<SatLit> lastAssumptions_;
 };
 
 } // namespace nlcolver

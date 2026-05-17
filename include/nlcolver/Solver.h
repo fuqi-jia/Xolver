@@ -82,7 +82,7 @@ public:
 
     // Results
     Model getModel() const;
-    Term getValue(Term t) const;
+    Term getValue(Term t);
     std::vector<Term> getUnsatCore() const;
     Proof getProof() const;
     Statistics getStatistics() const;

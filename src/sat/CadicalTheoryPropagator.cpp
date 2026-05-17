@@ -106,7 +106,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
                              "Rejecting it to avoid infinite modelCheck loop.\n";
                 abortWithUnknown_ = true;
                 terminateSolve();
-                return true;
+                return false;
             }
 
             setPendingClause(tr.conflictOpt->clause);
@@ -114,7 +114,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         }
         abortWithUnknown_ = true;
         terminateSolve();
-        return true;
+        return false;
     }
 
     if (tr.kind == TheoryCheckResult::Kind::Lemma) {
@@ -127,13 +127,13 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         }
         abortWithUnknown_ = true;
         terminateSolve();
-        return true;
+        return false;
     }
 
     // Unknown
     abortWithUnknown_ = true;
     terminateSolve();
-    return true;
+    return false;
 }
 
 bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {

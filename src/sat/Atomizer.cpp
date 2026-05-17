@@ -149,30 +149,6 @@ SatLit Atomizer::encodeBoolEq(ExprId eid, const CoreIr& ir) {
     assert(e.children.size() >= 2);
 
     SatVar andVar = freshVar();
-    std::vector<SatLit> pairwiseLits;
-
-    for (size_t i = 0; i + 1 < e.children.size(); ++i) {
-        SatLit li = atomizeRec(e.children[i], ir);
-        SatLit ri = atomizeRec(e.children[i + 1], ir);
-        // li ↔ ri
-        sat_.addClause({li.negated(), ri});
-        sat_.addClause({li, ri.negated()});
-        pairwiseLits.push_back(li);  // any one is fine for Tseitin
-    }
-
-    // Tseitin: andVar → each pairwise equality is satisfied
-    for (SatLit pl : pairwiseLits) {
-        (void)pl;
-        sat_.addClause({SatLit::negative(andVar), SatLit::positive(0)}); // tautology, skip
-    }
-
-    // Since pairwise ↔ clauses already enforce the semantics,
-    // andVar just needs to be equisatisfiable.
-    // For simplicity: andVar is a fresh variable that must be true
-    // because the pairwise clauses already constrain everything.
-    // But we need a proper Tseitin encoding.
-    // Let's use a helper variable for each pairwise equality.
-
     std::vector<SatLit> eqLits;
     for (size_t i = 0; i + 1 < e.children.size(); ++i) {
         SatLit li = atomizeRec(e.children[i], ir);
@@ -331,6 +307,24 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
             result = SatLit::positive(x);
             break;
         }
+        case Kind::Ite: {
+            assert(e.children.size() == 3);
+            SatLit c = atomizeRec(e.children[0], ir);
+            SatLit t = atomizeRec(e.children[1], ir);
+            SatLit f = atomizeRec(e.children[2], ir);
+            SatVar x = freshVar();
+            // x = ite(c, t, f)
+            // Tseitin: x -> (c -> t)  i.e.  ¬x ∨ ¬c ∨ t
+            sat_.addClause({SatLit::negative(x), c.negated(), t});
+            // Tseitin: x -> (¬c -> f)  i.e.  ¬x ∨ c ∨ f
+            sat_.addClause({SatLit::negative(x), c, f});
+            // Tseitin: (c ∧ t) -> x    i.e.  x ∨ ¬c ∨ ¬t
+            sat_.addClause({SatLit::positive(x), c.negated(), t.negated()});
+            // Tseitin: (¬c ∧ f) -> x   i.e.  x ∨ c ∨ ¬f
+            sat_.addClause({SatLit::positive(x), c, f.negated()});
+            result = SatLit::positive(x);
+            break;
+        }
         default: {
             SatVar v = freshVar();
             result = SatLit::positive(v);
@@ -450,12 +444,6 @@ bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar 
     const auto& e = ir.get(eid);
     if (e.children.size() != 2) return false;
 
-    PolyId lhsPoly = polyConverter_->convert(e.children[0], ir);
-    PolyId rhsPoly = polyConverter_->convert(e.children[1], ir);
-    if (lhsPoly == NullPoly || rhsPoly == NullPoly) return false;
-
-    PolyId diff = polyKernel_->sub(lhsPoly, rhsPoly);
-
     Relation rel;
     switch (e.kind) {
         case Kind::Eq:       rel = Relation::Eq;  break;
@@ -467,10 +455,24 @@ bool Atomizer::extractPolynomialConstraint(ExprId eid, const CoreIr& ir, SatVar 
         default: return false;
     }
 
-    registry_->registerParsedTheoryAtom(
-        v, eid, theory,
-        PolynomialAtomPayload{diff, rel, mpq_class(0)});
-    return true;
+    auto cc = polyConverter_->convertConstraint(e.children[0], e.children[1], rel, ir);
+    switch (cc.status) {
+        case PolyConstraintStatus::Tautology:
+            // Always true: add unit clause asserting the literal
+            sat_.addClause({SatLit::positive(v)});
+            return true;
+        case PolyConstraintStatus::Conflict:
+            // Always false: add unit clause negating the literal
+            sat_.addClause({SatLit::negative(v)});
+            return true;
+        case PolyConstraintStatus::Constraint:
+            registry_->registerParsedTheoryAtom(
+                v, eid, theory,
+                PolynomialAtomPayload{cc.diff, rel, mpq_class(0)});
+            return true;
+        default:
+            return false;
+    }
 }
 
 } // namespace nlcolver

@@ -1,6 +1,7 @@
 #include "nlcolver/Solver.h"
 #include "nlcolver/Result.h"
 #include "expr/ir.h"
+#include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
 #include "sat/Atomizer.h"
@@ -44,7 +45,11 @@ public:
     std::unique_ptr<CoreIr> ir;
     std::unique_ptr<SatSolver> sat;
     SortId boolSortId_ = NullSort;
+    SortId intSortId_ = NullSort;
+    SortId realSortId_ = NullSort;
     std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
+    std::optional<TheorySolver::TheoryModel> lastModel_;
+    std::vector<Term> lastAssumptions_;
 
     Impl() : sat(createSatSolver()) {}
 
@@ -53,10 +58,15 @@ public:
         ir.reset();
         sat.reset();
         sharedTermRegistry_.reset();
+        boolSortId_ = NullSort;
+        intSortId_ = NullSort;
+        realSortId_ = NullSort;
+        lastModel_.reset();
     }
 
     bool parseFile(std::string_view filename) {
         parser = std::make_unique<SOMTParser::Parser>();
+        parser->setOption("expand_functions", true);
         if (!parser->parse(std::string(filename))) {
             return false;
         }
@@ -68,7 +78,41 @@ public:
         FrontendAdapter adapter(*parser);
         ir = adapter.importProblem();
         boolSortId_ = adapter.getBoolSortId();
+        intSortId_ = ir->intSortId();
+        realSortId_ = ir->realSortId();
         return true;
+    }
+
+    CoreIr& ensureIr() {
+        if (!ir) ir = std::make_unique<CoreIr>();
+        return *ir;
+    }
+
+    SortId getOrCreateBoolSort() {
+        if (boolSortId_ != NullSort) return boolSortId_;
+        auto& cir = ensureIr();
+        boolSortId_ = cir.allocateSortId();
+        cir.registerSort(boolSortId_, SortKind::Bool);
+        cir.setBoolSortId(boolSortId_);
+        return boolSortId_;
+    }
+
+    SortId getOrCreateIntSort() {
+        if (intSortId_ != NullSort) return intSortId_;
+        auto& cir = ensureIr();
+        intSortId_ = cir.allocateSortId();
+        cir.registerSort(intSortId_, SortKind::Int);
+        cir.setIntSortId(intSortId_);
+        return intSortId_;
+    }
+
+    SortId getOrCreateRealSort() {
+        if (realSortId_ != NullSort) return realSortId_;
+        auto& cir = ensureIr();
+        realSortId_ = cir.allocateSortId();
+        cir.registerSort(realSortId_, SortKind::Real);
+        cir.setRealSortId(realSortId_);
+        return realSortId_;
     }
 
     Result checkSatInternal() {
@@ -326,16 +370,6 @@ public:
         }
 
         for (ExprId assertion : ir->assertions()) {
-            const auto& ae = ir->get(assertion);
-            std::cerr << "[ASSERT] eid=" << assertion << " kind=" << (int)ae.kind << " children=" << ae.children.size() << "\n";
-            for (size_t i = 0; i < ae.children.size(); ++i) {
-                const auto& c = ir->get(ae.children[i]);
-                std::cerr << "  child[" << i << "] eid=" << ae.children[i] << " kind=" << (int)c.kind << "\n";
-                for (size_t j = 0; j < c.children.size(); ++j) {
-                    const auto& cc = ir->get(c.children[j]);
-                    std::cerr << "    grandchild[" << j << "] eid=" << c.children[j] << " kind=" << (int)cc.kind << "\n";
-                }
-            }
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
@@ -366,7 +400,10 @@ public:
         auto result = sat->solve();
         cadicalBackend->disconnectPropagator();
 
-        if (result == SatSolver::SolveResult::Sat) return Result::Sat;
+        if (result == SatSolver::SolveResult::Sat) {
+            lastModel_ = theoryManager.getModel();
+            return Result::Sat;
+        }
         if (result == SatSolver::SolveResult::Unsat) return Result::Unsat;
         return Result::Unknown;
 #endif
@@ -413,45 +450,161 @@ OptionValue Solver::getOption(std::string_view key) const {
     return OptionValue(false);
 }
 
-Sort Solver::boolSort() { return Sort{}; /* TODO */ }
-Sort Solver::intSort()  { return Sort{}; /* TODO */ }
-Sort Solver::realSort() { return Sort{}; /* TODO */ }
+Sort Solver::boolSort() { return Sort{pImpl->getOrCreateBoolSort()}; }
+Sort Solver::intSort()  { return Sort{pImpl->getOrCreateIntSort()}; }
+Sort Solver::realSort() { return Sort{pImpl->getOrCreateRealSort()}; }
 Sort Solver::bvSort(uint32_t) { return Sort{}; /* TODO */ }
 Sort Solver::fpSort(uint32_t, uint32_t) { return Sort{}; /* TODO */ }
 
-Term Solver::mkConst(Sort, std::string_view) { return Term{}; /* TODO */ }
-Term Solver::mkVar(Sort, std::string_view)   { return Term{}; /* TODO */ }
-Term Solver::mkBool(bool)                    { return Term{}; /* TODO */ }
-Term Solver::mkInt(int64_t)                  { return Term{}; /* TODO */ }
-Term Solver::mkReal(const std::string&)      { return Term{}; /* TODO */ }
-Term Solver::mkOp(uint32_t, std::vector<Term>) { return Term{}; /* TODO */ }
+Term Solver::mkConst(Sort s, std::string_view name) {
+    CoreExpr e;
+    e.kind = Kind::Variable;
+    e.sort = s.id();
+    e.payload = Payload(std::string(name));
+    ExprId id = pImpl->ensureIr().add(e);
+    return Term{id};
+}
 
-void Solver::assertFormula(Term) {
-    // TODO: build term and assert
+Term Solver::mkVar(Sort s, std::string_view name) {
+    // In CoreIr, variables and constants both use Kind::Variable.
+    return mkConst(s, name);
+}
+
+Term Solver::mkBool(bool v) {
+    CoreExpr e;
+    e.kind = Kind::ConstBool;
+    e.sort = pImpl->getOrCreateBoolSort();
+    e.payload = Payload(v);
+    ExprId id = pImpl->ensureIr().add(e);
+    return Term{id};
+}
+
+Term Solver::mkInt(int64_t v) {
+    CoreExpr e;
+    e.kind = Kind::ConstInt;
+    e.sort = pImpl->getOrCreateIntSort();
+    e.payload = Payload(v);
+    ExprId id = pImpl->ensureIr().add(e);
+    return Term{id};
+}
+
+Term Solver::mkReal(const std::string& rational) {
+    CoreExpr e;
+    e.kind = Kind::ConstReal;
+    e.sort = pImpl->getOrCreateRealSort();
+    e.payload = Payload(rational);
+    ExprId id = pImpl->ensureIr().add(e);
+    return Term{id};
+}
+
+Term Solver::mkOp(uint32_t kind, std::vector<Term> args) {
+    CoreExpr e;
+    e.kind = static_cast<Kind>(kind);
+    // Simple sort inference: for arithmetic ops, take sort from first arg;
+    // for boolean ops (And, Or, etc.), use bool sort;
+    // for comparisons (Eq, Lt, etc.), use bool sort.
+    if (args.empty()) {
+        e.sort = NullSort;
+    } else if (e.kind == Kind::And || e.kind == Kind::Or || e.kind == Kind::Not ||
+               e.kind == Kind::Implies || e.kind == Kind::Xor ||
+               e.kind == Kind::Eq || e.kind == Kind::Distinct ||
+               e.kind == Kind::Lt || e.kind == Kind::Leq ||
+               e.kind == Kind::Gt || e.kind == Kind::Geq) {
+        e.sort = pImpl->getOrCreateBoolSort();
+    } else {
+        // Use the sort of the first argument if IR is available.
+        if (pImpl->ir) {
+            e.sort = pImpl->ir->get(args[0].id()).sort;
+        } else {
+            e.sort = NullSort;
+        }
+    }
+    for (const auto& a : args) {
+        e.children.push_back(a.id());
+    }
+    ExprId id = pImpl->ensureIr().add(e);
+    return Term{id};
+}
+
+void Solver::assertFormula(Term t) {
+    pImpl->ensureIr().addAssertion(t.id());
 }
 
 Result Solver::checkSat() {
     return pImpl->checkSatInternal();
 }
 
-Result Solver::checkSatAssuming(std::vector<Term>) {
-    return Result::Unknown;
+Result Solver::checkSatAssuming(std::vector<Term> assumptions) {
+    pImpl->lastAssumptions_ = assumptions;
+    push();
+    for (Term a : assumptions) {
+        assertFormula(a);
+    }
+    Result r = checkSat();
+    pop();
+    return r;
 }
 
 Model Solver::getModel() const {
-    // TODO: When model construction is implemented, filter out internal
-    // variables such as "__ZERO__" used by difference-logic solvers.
-    return Model{};
+    Model model;
+    if (!pImpl) return model;
+
+    if (!pImpl->lastModel_) return model;
+
+    const auto& theoryModel = *pImpl->lastModel_;
+
+    // Map variable names to ExprIds from CoreIr
+    if (pImpl->ir) {
+        for (ExprId id = 0; id < static_cast<ExprId>(pImpl->ir->size()); ++id) {
+            const auto& expr = pImpl->ir->get(id);
+            if (expr.kind != Kind::Variable) continue;
+            if (!std::holds_alternative<std::string>(expr.payload.value)) continue;
+            const std::string& name = std::get<std::string>(expr.payload.value);
+            auto it = theoryModel.assignments.find(name);
+            if (it != theoryModel.assignments.end()) {
+                model.setValue(id, it->second);
+            }
+        }
+    }
+
+    return model;
 }
-Term Solver::getValue(Term) const { return Term{}; }
-std::vector<Term> Solver::getUnsatCore() const { return {}; }
+Term Solver::getValue(Term t) {
+    if (!pImpl || !pImpl->ir) return Term{};
+    Model m = getModel();
+    const std::string* val = m.getValue(t.id());
+    if (!val) return Term{};
+
+    const auto& expr = pImpl->ir->get(t.id());
+    auto sortKind = pImpl->ir->sortKind(expr.sort);
+
+    if (sortKind == SortKind::Int) {
+        int64_t v = std::stoll(*val);
+        return mkInt(v);
+    } else if (sortKind == SortKind::Real) {
+        return mkReal(*val);
+    } else if (sortKind == SortKind::Bool) {
+        return mkBool(*val == "true");
+    }
+    return Term{};
+}
+std::vector<Term> Solver::getUnsatCore() const {
+    // TODO: proper unsat core extraction using SAT solver assumptions.
+    // For now, return the last assumptions passed to checkSatAssuming.
+    if (!pImpl) return {};
+    return pImpl->lastAssumptions_;
+}
 Proof Solver::getProof() const { return Proof{}; }
 Statistics Solver::getStatistics() const { return Statistics{}; }
 
 void Solver::dumpSMT2(std::ostream& os) {
-    if (pImpl->parser) {
+    if (pImpl->parser && !pImpl->parser->getAssertions().empty()) {
         for (auto& a : pImpl->parser->getAssertions()) {
             os << SOMTParser::dumpSMTLIB2(a) << "\n";
+        }
+    } else if (pImpl->ir) {
+        for (ExprId aid : pImpl->ir->assertions()) {
+            os << dumpExprToSMT2(aid, *pImpl->ir) << "\n";
         }
     }
 }

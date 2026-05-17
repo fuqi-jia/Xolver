@@ -2,6 +2,7 @@
 #include "expr/rewriter.h"
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -35,6 +36,11 @@ ExprId FrontendAdapter::importNode(Node node) {
 
     SOMTParser::NODE_KIND nk = kind(node);
     Kind k = mapKind(nk);
+    if (k == Kind::Unknown) {
+        std::cerr << "[FrontendAdapter] WARNING: unmapped SOMTParser node kind="
+                  << static_cast<int>(nk) << " name='" << node->getName()
+                  << "' children=" << numChildren(node) << "\n";
+    }
     if (k == Kind::ConstReal) {
         auto s = sort(node);
         if (s && s->isInt()) k = Kind::ConstInt;
@@ -54,6 +60,33 @@ ExprId FrontendAdapter::importNode(Node node) {
     } else if (nk == SOMTParser::NODE_KIND::NT_GE) {
         k = Kind::Leq;
         std::swap(childIds[0], childIds[1]);
+    }
+
+    // Boolean ite(c, t, f) -> (c ∧ t) ∨ (¬c ∧ f)
+    // This eliminates Ite from the boolean fragment so that Atomizer
+    // and EUF solver do not need special Ite handling.
+    if (k == Kind::Ite && s == boolSortId_ && childIds.size() == 3) {
+        ExprId c = childIds[0];
+        ExprId t = childIds[1];
+        ExprId f = childIds[2];
+
+        // notC = (not c)
+        CoreExpr notC{Kind::Not, boolSortId_, {c}, Payload{}};
+        ExprId notCid = ir_->add(std::move(notC));
+
+        // ct = (and c t)
+        CoreExpr ct{Kind::And, boolSortId_, {c, t}, Payload{}};
+        ExprId ctid = ir_->add(std::move(ct));
+
+        // nf = (and notC f)
+        CoreExpr nf{Kind::And, boolSortId_, {notCid, f}, Payload{}};
+        ExprId nfid = ir_->add(std::move(nf));
+
+        // or(ct, nf)
+        CoreExpr result{Kind::Or, boolSortId_, {ctid, nfid}, Payload{}};
+        ExprId id = ir_->add(std::move(result));
+        memo_[node] = id;
+        return id;
     }
 
     CoreExpr expr;
@@ -83,6 +116,12 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
     if (sort->isBool() && boolSortId_ == NullSort) {
         boolSortId_ = id;
     }
+    if (sort->isInt() && ir_->intSortId() == NullSort) {
+        ir_->setIntSortId(id);
+    }
+    if (sort->isReal() && ir_->realSortId() == NullSort) {
+        ir_->setRealSortId(id);
+    }
 
     // Register sort kind in CoreIr
     SortKind kind = SortKind::Other;
@@ -104,6 +143,7 @@ Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
         case NODE_KIND::NT_CONST:       return Kind::ConstReal; // refined by payload later
         case NODE_KIND::NT_VAR:         return Kind::Variable;
         case NODE_KIND::NT_UF_APPLY:    return Kind::UFApply;
+        case NODE_KIND::NT_FUNC_APPLY:  return Kind::UFApply;
         case NODE_KIND::NT_AND:         return Kind::And;
         case NODE_KIND::NT_OR:          return Kind::Or;
         case NODE_KIND::NT_NOT:         return Kind::Not;

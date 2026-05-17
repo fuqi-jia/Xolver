@@ -2,6 +2,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <optional>
 
 static void printUsage(const char* prog) {
     std::cout << "Usage: " << prog << " <command> [options]\n"
@@ -31,9 +32,34 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     }
 
     nlcolver::Solver solver;
+    
+    // Parse options after the file path
+    std::optional<std::string> logicOpt;
+    for (int i = fileIdx + 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--logic" && i + 1 < argc) {
+            logicOpt = argv[++i];
+        } else if (arg == "--seed" && i + 1 < argc) {
+            solver.setOption("seed", nlcolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+        } else if (arg == "--produce-models") {
+            // TODO: enable model production
+        } else if (arg == "--produce-proofs") {
+            // TODO: enable proof production
+        } else if (arg == "-v" || arg == "--verbose") {
+            // TODO: enable verbose output
+        } else {
+            std::cerr << "Warning: unknown option " << arg << "\n";
+        }
+    }
+
     if (!solver.parseFile(argv[fileIdx])) {
         std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
         return EXIT_FAILURE;
+    }
+
+    // Command-line --logic overrides file-declared logic
+    if (logicOpt) {
+        solver.setLogic(*logicOpt);
     }
 
     solver.dumpSMT2(std::cout);
@@ -44,8 +70,17 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
 }
 
 static int cmdBench(int argc, char* argv[]) {
-    std::cout << "[NLColver bench] (stub)\n";
-    return EXIT_SUCCESS;
+    std::string scriptDir = "tools/run_benchmark.py";
+    std::string cmd = "python3 " + scriptDir;
+
+    // Pass all args after 'bench' to the Python script
+    for (int i = 2; i < argc; ++i) {
+        cmd += " ";
+        cmd += argv[i];
+    }
+
+    int ret = std::system(cmd.c_str());
+    return (ret == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 static int cmdTrace(int argc, char* argv[]) {
@@ -54,7 +89,38 @@ static int cmdTrace(int argc, char* argv[]) {
 }
 
 static int cmdModelCheck(int argc, char* argv[]) {
-    std::cout << "[NLColver model-check] (stub)\n";
+    int fileIdx = 2;
+    std::optional<std::string> logicOpt;
+    for (int i = fileIdx; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--logic") == 0 && i + 1 < argc) {
+            logicOpt = argv[i + 1];
+            ++i;
+        }
+    }
+    if (argc < fileIdx + 1) {
+        std::cerr << "Error: model-check requires an input file.\n";
+        return EXIT_FAILURE;
+    }
+
+    nlcolver::Solver solver;
+    if (logicOpt) solver.setLogic(*logicOpt);
+    if (!solver.parseFile(argv[fileIdx])) {
+        std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
+        return EXIT_FAILURE;
+    }
+
+    nlcolver::Result r = solver.checkSat();
+    if (r == nlcolver::Result::Sat) {
+        std::cout << "sat\n";
+        auto model = solver.getModel();
+        for (const auto& [varId, value] : model.values()) {
+            std::cout << "  v" << varId << " = " << value << "\n";
+        }
+    } else if (r == nlcolver::Result::Unsat) {
+        std::cout << "unsat\n";
+    } else {
+        std::cout << "unknown\n";
+    }
     return EXIT_SUCCESS;
 }
 

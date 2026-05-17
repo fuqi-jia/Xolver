@@ -17,6 +17,9 @@ struct SatLit {
     static SatLit positive(SatVar v) { return {v, true}; }
     static SatLit negative(SatVar v) { return {v, false}; }
     SatLit negated() const { return {var, !sign}; }
+
+    bool operator==(const SatLit& other) const { return var == other.var && sign == other.sign; }
+    bool operator!=(const SatLit& other) const { return !(*this == other); }
 };
 
 /**
@@ -38,6 +41,9 @@ public:
 
     virtual bool value(SatVar v) const = 0;
     virtual bool configure(const char* name, int64_t value) { (void)name; (void)value; return false; }
+
+    // Assumption / unsat-core support
+    virtual std::vector<SatLit> getFailedAssumptions() const { return {}; }
 
     // Observed variable support (for CaDiCaL ExternalPropagator)
     virtual void addObservedVar(SatVar /*v*/) {}

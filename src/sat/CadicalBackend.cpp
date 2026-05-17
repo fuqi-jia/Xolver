@@ -40,6 +40,7 @@ SatSolver::SolveResult CadicalBackend::solve() {
 }
 
 SatSolver::SolveResult CadicalBackend::solve(const std::vector<SatLit>& assumptions) {
+    lastAssumptions_ = assumptions;
     for (SatLit lit : assumptions) {
         int cadicalLit = lit.sign ? static_cast<int>(lit.var)
                                    : -static_cast<int>(lit.var);
@@ -50,6 +51,18 @@ SatSolver::SolveResult CadicalBackend::solve(const std::vector<SatLit>& assumpti
 
 bool CadicalBackend::value(SatVar v) const {
     return solver_->val(static_cast<int>(v)) > 0;
+}
+
+std::vector<SatLit> CadicalBackend::getFailedAssumptions() const {
+    std::vector<SatLit> failed;
+    for (SatLit lit : lastAssumptions_) {
+        int cadicalLit = lit.sign ? static_cast<int>(lit.var)
+                                   : -static_cast<int>(lit.var);
+        if (solver_->failed(cadicalLit)) {
+            failed.push_back(lit);
+        }
+    }
+    return failed;
 }
 
 bool CadicalBackend::configure(const char* name, int64_t value) {

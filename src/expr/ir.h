@@ -114,12 +114,23 @@ public:
     SortId boolSortId() const { return boolSortId_; }
     void setBoolSortId(SortId id) { boolSortId_ = id; }
 
+    SortId intSortId() const { return intSortId_; }
+    void setIntSortId(SortId id) { intSortId_ = id; }
+
+    SortId realSortId() const { return realSortId_; }
+    void setRealSortId(SortId id) { realSortId_ = id; }
+
+    SortId allocateSortId() { return nextSortId_++; }
+
 private:
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;
     std::unordered_map<SortId, SortKind> sortKinds_;
     SortId boolSortId_ = NullSort;
+    SortId intSortId_ = NullSort;
+    SortId realSortId_ = NullSort;
+    SortId nextSortId_ = 1;
 };
 
 } // namespace nlcolver
