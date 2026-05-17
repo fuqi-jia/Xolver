@@ -1,7 +1,7 @@
 #include "theory/arith/nra/CdcacCore.h"
+#include "theory/arith/nra/LocalProjection.h"
 #include <algorithm>
 #include <unordered_set>
-#include <iostream>
 #include <iostream>
 
 namespace nlcolver {
@@ -30,6 +30,70 @@ static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
 static Bound boundFromRealAlg(const RealAlg& ra, bool isOpen) {
     if (ra.isRational()) return Bound::rational(ra.rational, isOpen);
     return Bound::algebraic(ra.root, isOpen);
+}
+
+// Helper: try local projection to get univariate polynomials for current level
+static std::vector<RootSet> tryLocalProjection(
+    const std::vector<CdcacConstraint>& constraints,
+    const SamplePoint& prefix,
+    VarId var,
+    int level,
+    PolynomialKernel* kernel,
+    AlgebraBackend* algebra) {
+
+    std::vector<RootSet> result;
+
+    // Convert constraints to RationalPolynomial
+    std::vector<ReasonedPolynomial> rpConstraints;
+    for (const auto& c : constraints) {
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, *kernel);
+        if (!rpOpt) continue;
+        rpConstraints.push_back({*rpOpt, PolyRole::ConstraintPolynomial, {c.reason}});
+    }
+
+    if (rpConstraints.empty()) return result;
+
+    // Find the highest variable present in any constraint (above current level)
+    // For V1: we eliminate the highest-level variable that appears in constraints
+    // This is a simplified approach; full CDCAC would do this iteratively.
+    LocalProjectionEngine engine;
+
+    // Try eliminating each variable that's not the current variable
+    std::set<VarId> allVars;
+    for (const auto& rp : rpConstraints) {
+        auto vars = rp.poly.variables();
+        allVars.insert(vars.begin(), vars.end());
+    }
+
+    for (VarId eliminateVar : allVars) {
+        if (eliminateVar == var) continue;
+
+        auto projResult = engine.project(rpConstraints, eliminateVar);
+        if (projResult.hasDegeneracy) {
+            // V1: ignore degenerate projections conservatively
+            continue;
+        }
+
+        // Try to convert projected polynomials to univariate in current var
+        for (const auto& rp : projResult.polys) {
+            if (!rp.poly.contains(var)) continue;
+
+            // Convert to PolyId
+            PolyId polyId = rp.poly.toPolyId(*kernel);
+            if (polyId == NullPoly) continue;
+
+            // Specialize to univariate (substituting prefix values for lower vars)
+            UniPolyId up = algebra->specializeToUnivariate(polyId, prefix, var);
+            if (up == NullUniPolyId) continue;
+
+            RootSet roots = algebra->isolateRealRoots(up);
+            if (roots.numRoots() > 0) {
+                result.push_back(std::move(roots));
+            }
+        }
+    }
+
+    return result;
 }
 
 // ------------------------------------------------------------------
@@ -119,11 +183,27 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     std::vector<PolyId> polys = collectPolys(input.constraints);
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
+    bool hasAlgebraicPrefix = false;
+    for (const auto& v : prefix.values) {
+        if (v.isAlgebraic()) {
+            hasAlgebraicPrefix = true;
+            break;
+        }
+    }
 
     for (PolyId p : polys) {
         if (kernel_->isConstant(p)) continue;
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
         if (up == NullUniPolyId) {
+            // If specialization failed due to algebraic prefix, try algebraic root isolation
+            if (hasAlgebraicPrefix) {
+                std::cerr << "[CDCAC]   trying algebraic isolation for poly=" << kernel_->toString(p) << std::endl;
+                RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
+                std::cerr << "[CDCAC]   algebraic roots=" << roots.numRoots() << std::endl;
+                if (roots.numRoots() > 0) {
+                    rootSets.push_back(std::move(roots));
+                }
+            }
             continue;
         }
         std::cerr << "[CDCAC]   specialize poly=" << kernel_->toString(p) << std::endl;
@@ -141,6 +221,16 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
         uniPolys.push_back(up);
         rootSets.push_back(std::move(roots));
+    }
+
+    // 1b. If no local univariate polynomials, try local projection
+    if (uniPolys.empty() && rootSets.empty() && k + 1 < n) {
+        std::cerr << "[CDCAC]   no local polys, trying projection" << std::endl;
+        auto projRoots = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_);
+        for (auto& rs : projRoots) {
+            std::cerr << "[CDCAC]   projection roots=" << rs.numRoots() << std::endl;
+            rootSets.push_back(std::move(rs));
+        }
     }
 
     // 2. Merge all roots

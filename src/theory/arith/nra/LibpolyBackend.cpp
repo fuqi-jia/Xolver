@@ -1,6 +1,7 @@
 #include "theory/arith/nra/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 
 #include <iostream>
 #include <map>
@@ -208,8 +209,18 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
             mpq_class lowerQ(loNum, loDen);
             mpq_class upperQ(hiNum, hiDen);
 
+            // Extract defining polynomial from libpoly AlgebraicNumber
+            poly::UPolynomial defPoly = poly::get_defining_polynomial(an);
+            std::vector<poly::Integer> defCoeffs = poly::coefficients(defPoly);
+            std::vector<mpz_class> coeffs;
+            coeffs.reserve(defCoeffs.size());
+            for (auto it = defCoeffs.rbegin(); it != defCoeffs.rend(); ++it) {
+                coeffs.push_back(*poly::detail::cast_to_gmp(&*it));
+            }
+            UniPolyId upId = allocUni(std::move(coeffs));
+
             AlgebraicRoot ar;
-            ar.definingPoly = NullUniPolyId;
+            ar.definingPoly = upId;
             ar.rootIndex = static_cast<int>(i);
             ar.lower = std::move(lowerQ);
             ar.upper = std::move(upperQ);
@@ -362,10 +373,55 @@ UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& pr
         current = *nextOpt;
     }
 
-    // After substitution, extract univariate coefficients in mainVar.
-    auto coeffsOpt = kernel_->getIntegerCoefficients(current, kernel_->varName(mainVar));
-    if (!coeffsOpt) return NullUniPolyId;
-    return allocUni(std::move(*coeffsOpt));
+    // Convert to RationalPolynomial to handle any variable order and rational coefficients.
+    // This bypasses the libpoly main_variable restriction in getIntegerCoefficients().
+    auto rpOpt = RationalPolynomial::fromPolyId(current, *kernel_);
+    if (!rpOpt) return NullUniPolyId;
+
+    rpOpt->normalize();
+    auto norm = rpOpt->toPrimitiveInteger(*kernel_);
+    if (!norm.ok()) return NullUniPolyId;
+
+    // Extract univariate coefficients in mainVar from the normalized polynomial
+    auto termsOpt = kernel_->terms(norm.poly);
+    if (!termsOpt) return NullUniPolyId;
+
+    // Find maximum degree of mainVar and check for other variables
+    int maxDegree = -1;
+    for (const auto& term : *termsOpt) {
+        int deg = 0;
+        bool hasOtherVars = false;
+        for (const auto& [varId, exp] : term.powers) {
+            if (varId == mainVar) {
+                deg = exp;
+            } else {
+                hasOtherVars = true;
+            }
+        }
+        if (hasOtherVars) {
+            // Contains other variables: not univariate in mainVar
+            return NullUniPolyId;
+        }
+        maxDegree = std::max(maxDegree, deg);
+    }
+
+    if (maxDegree < 0) {
+        // Constant polynomial
+        mpq_class c = kernel_->toConstant(norm.poly);
+        if (c.get_den() != 1) return NullUniPolyId;
+        return allocUni(std::vector<mpz_class>{c.get_num()});
+    }
+
+    std::vector<mpz_class> coeffs(maxDegree + 1, mpz_class(0));
+    for (const auto& term : *termsOpt) {
+        int deg = 0;
+        for (const auto& [varId, exp] : term.powers) {
+            if (varId == mainVar) deg = exp;
+        }
+        coeffs[maxDegree - deg] = mpz_class(term.coefficient);
+    }
+
+    return allocUni(std::move(coeffs));
 }
 
 ProjectionResult LibpolyBackend::projectionPolys(
@@ -721,16 +777,25 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
 
     // same defining poly + same rootIndex
     if (a.isAlgebraic() && b.isAlgebraic()) {
-        if (a.root.definingPoly == b.root.definingPoly &&
+        if (a.root.definingPoly != NullUniPolyId &&
+            b.root.definingPoly != NullUniPolyId &&
+            a.root.definingPoly == b.root.definingPoly &&
             a.root.rootIndex == b.root.rootIndex) {
             return CompareResult::Equal;
         }
-        // Singleton rational intervals (already canonicalized, but defensive)
+        // Same isolating interval (exact match) -> Equal
         if (a.root.lower == a.root.upper &&
             b.root.lower == b.root.upper &&
             a.root.lower == b.root.lower) {
             return CompareResult::Equal;
         }
+        // Same non-singleton interval -> Equal (same root, different provenance)
+        if (a.root.lower == b.root.lower && a.root.upper == b.root.upper) {
+            return CompareResult::Equal;
+        }
+        // Disjoint intervals -> can determine order
+        if (a.root.upper < b.root.lower) return CompareResult::Less;
+        if (b.root.upper < a.root.lower) return CompareResult::Greater;
     }
 
     // disjoint intervals (algebraic-algebraic)
@@ -759,9 +824,11 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
 
     // rational-algebraic inside interval: eval defining poly at q
     if (a.isRational() && b.isAlgebraic()) {
-        const auto& fCoeffs = getUni(b.root.definingPoly);
-        mpq_class val = evalUniAtRational(fCoeffs, a.rational);
-        if (val == 0) return CompareResult::Equal;
+        if (b.root.definingPoly != NullUniPolyId) {
+            const auto& fCoeffs = getUni(b.root.definingPoly);
+            mpq_class val = evalUniAtRational(fCoeffs, a.rational);
+            if (val == 0) return CompareResult::Equal;
+        }
 
         AlgebraicRoot mutableB = b.root;
         for (int iter = 0; iter < 20; ++iter) {
@@ -774,9 +841,11 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
 
     // algebraic-rational inside interval
     if (a.isAlgebraic() && b.isRational()) {
-        const auto& fCoeffs = getUni(a.root.definingPoly);
-        mpq_class val = evalUniAtRational(fCoeffs, b.rational);
-        if (val == 0) return CompareResult::Equal;
+        if (a.root.definingPoly != NullUniPolyId) {
+            const auto& fCoeffs = getUni(a.root.definingPoly);
+            mpq_class val = evalUniAtRational(fCoeffs, b.rational);
+            if (val == 0) return CompareResult::Equal;
+        }
 
         AlgebraicRoot mutableA = a.root;
         for (int iter = 0; iter < 20; ++iter) {

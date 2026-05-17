@@ -39,30 +39,75 @@ static CompareResult boundCompare(AlgebraBackend* algebra, const Bound& a, const
 CoverageResult CoveringManager::coversAllLine(AlgebraBackend* algebra, const Covering& cover) {
     if (cover.cells.empty()) return CoverageResult::DoesNotCover;
 
-    // First cell must start at -inf
-    if (!cover.cells.front().lower.isNegInf()) return CoverageResult::DoesNotCover;
-    // Last cell must end at +inf
-    if (!cover.cells.back().upper.isPosInf()) return CoverageResult::DoesNotCover;
+    // Make a mutable copy for sorting
+    std::vector<Cell> cells = cover.cells;
 
-    // Check contiguousness: adjacent cells must meet at the same point,
-    // and at least one side must be closed.
-    for (size_t i = 1; i < cover.cells.size(); ++i) {
-        const auto& prev = cover.cells[i - 1];
-        const auto& curr = cover.cells[i];
+    // Helper to compare two lower/upper bounds
+    auto compareBoundValue = [&](const Bound& a, const Bound& b) -> CompareResult {
+        if (a.isNegInf() && b.isNegInf()) return CompareResult::Equal;
+        if (a.isNegInf()) return CompareResult::Less;
+        if (b.isNegInf()) return CompareResult::Greater;
+        if (a.isPosInf() && b.isPosInf()) return CompareResult::Equal;
+        if (a.isPosInf()) return CompareResult::Greater;
+        if (b.isPosInf()) return CompareResult::Less;
+        if (!algebra) {
+            if (a.value.isRational() && b.value.isRational()) {
+                if (a.value.rational < b.value.rational) return CompareResult::Less;
+                if (a.value.rational > b.value.rational) return CompareResult::Greater;
+                return CompareResult::Equal;
+            }
+            return CompareResult::Unknown;
+        }
+        return algebra->compareRealAlg(a.value, b.value);
+    };
+
+    // Sort by lower bound value. Must be strict weak ordering.
+    std::sort(cells.begin(), cells.end(), [&](const Cell& a, const Cell& b) {
+        auto cmp = compareBoundValue(a.lower, b.lower);
+        if (cmp == CompareResult::Unknown) {
+            return &a < &b;
+        }
+        if (cmp == CompareResult::Less) return true;
+        if (cmp == CompareResult::Greater) return false;
+        // Equal lower bounds: tie-breaker for strict weak ordering
+        if (a.lower.open != b.lower.open) return !a.lower.open;
+        if (a.kind != b.kind) return a.kind == CellKind::Section;
+        auto cmpU = compareBoundValue(a.upper, b.upper);
+        if (cmpU == CompareResult::Unknown) return &a < &b;
+        if (cmpU == CompareResult::Less) return true;
+        if (cmpU == CompareResult::Greater) return false;
+        return &a < &b;
+    });
+
+    // First cell must start at -inf
+    if (!cells.front().lower.isNegInf()) return CoverageResult::DoesNotCover;
+    // Last cell must end at +inf
+    if (!cells.back().upper.isPosInf()) return CoverageResult::DoesNotCover;
+
+    // Check coverage by sweeping left to right.
+    // Track the rightmost point that is DEFINITELY covered.
+    // For Sector(a,b): covers (a,b). Point b is NOT covered. So covered_to = b (but note b itself is uncovered).
+    // For Section{a}: covers {a}. covered_to = a.
+    // We need to ensure no gaps between cells.
+    for (size_t i = 1; i < cells.size(); ++i) {
+        const auto& prev = cells[i - 1];
+        const auto& curr = cells[i];
 
         CompareResult c = boundCompare(algebra, prev.upper, curr.lower);
         if (c == CompareResult::Unknown) {
             return CoverageResult::Unknown;
         }
-        if (c != CompareResult::Equal) {
+        if (c == CompareResult::Less) {
+            // Definite gap
             return CoverageResult::DoesNotCover;
         }
-
-        // Same point: check open/closed contract.
-        // Both sides open means there is a gap at this point.
-        if (prev.upper.open && curr.lower.open) {
-            return CoverageResult::DoesNotCover;
+        if (c == CompareResult::Equal) {
+            // Same point. Gap only if BOTH sides are open.
+            if (prev.upper.open && curr.lower.open) {
+                return CoverageResult::DoesNotCover;
+            }
         }
+        // c == Greater: overlap, no gap
     }
 
     return CoverageResult::Covers;

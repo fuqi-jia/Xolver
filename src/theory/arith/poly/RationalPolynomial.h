@@ -4,7 +4,10 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <gmpxx.h>
 #include <map>
+#include <set>
 #include <vector>
+#include <optional>
+#include <utility>
 
 namespace nlcolver {
 
@@ -45,6 +48,39 @@ public:
     bool isConstant() const;
     mpq_class constantValue() const;
     const std::map<MonomialKey, mpq_class>& terms() const { return terms_; }
+
+    // -- CDCAC V1 extensions --------------------------------------------------
+
+    /** Does this polynomial contain the given variable? */
+    bool contains(VarId v) const;
+
+    /** Degree of this polynomial in the given variable. Returns -1 for zero poly. */
+    int degree(VarId v) const;
+
+    /**
+     * Coefficients when viewing this polynomial as univariate in `v`.
+     * Result[i] = coefficient of v^i (i from 0 to degree).
+     * Each coefficient is a RationalPolynomial in the remaining variables.
+     */
+    std::vector<RationalPolynomial> coefficients(VarId v) const;
+
+    /** Leading coefficient w.r.t. variable v. Returns zero polynomial if p is zero. */
+    RationalPolynomial leadingCoefficient(VarId v) const;
+
+    /** Partial derivative w.r.t. variable v. */
+    RationalPolynomial derivative(VarId v) const;
+
+    /** Set of all variables appearing in this polynomial. */
+    std::set<VarId> variables() const;
+
+    /** Highest index of any variable in varOrder, or -1 if constant. */
+    int highestVariableLevel(const std::vector<VarId>& varOrder) const;
+
+    /** Substitute a rational value for a variable. */
+    RationalPolynomial substituteRational(VarId v, const mpq_class& q) const;
+
+    /** Convert back to PolyId in the given kernel. */
+    PolyId toPolyId(PolynomialKernel& kernel) const;
 
     // -- Algebraic operations -------------------------------------------------
 

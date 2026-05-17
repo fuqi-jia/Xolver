@@ -340,4 +340,159 @@ std::optional<RationalPolynomial> RationalPolynomial::fromPolyId(
     return rp;
 }
 
+// ============================================================================
+// CDCAC V1 extensions
+// ============================================================================
+
+bool RationalPolynomial::contains(VarId v) const {
+    for (const auto& [key, coeff] : terms_) {
+        (void)coeff;
+        for (const auto& [varId, exp] : key) {
+            if (varId == v && exp > 0) return true;
+        }
+    }
+    return false;
+}
+
+int RationalPolynomial::degree(VarId v) const {
+    int d = -1;
+    for (const auto& [key, coeff] : terms_) {
+        (void)coeff;
+        int termDeg = 0;
+        for (const auto& [varId, exp] : key) {
+            if (varId == v) termDeg = exp;
+        }
+        d = std::max(d, termDeg);
+    }
+    return d;
+}
+
+std::vector<RationalPolynomial> RationalPolynomial::coefficients(VarId v) const {
+    int d = degree(v);
+    if (d < 0) return {};
+
+    std::vector<RationalPolynomial> result(d + 1);
+    for (const auto& [key, coeff] : terms_) {
+        int exp = 0;
+        MonomialKey remaining;
+        for (const auto& [varId, e] : key) {
+            if (varId == v) {
+                exp = e;
+            } else {
+                remaining.push_back({varId, e});
+            }
+        }
+        result[exp].terms_[remaining] += coeff;
+    }
+    for (auto& rp : result) {
+        rp.normalize();
+    }
+    return result;
+}
+
+RationalPolynomial RationalPolynomial::leadingCoefficient(VarId v) const {
+    int d = degree(v);
+    if (d < 0) return fromConstant(mpq_class(0));
+
+    RationalPolynomial result;
+    for (const auto& [key, coeff] : terms_) {
+        int exp = 0;
+        MonomialKey remaining;
+        for (const auto& [varId, e] : key) {
+            if (varId == v) {
+                exp = e;
+            } else {
+                remaining.push_back({varId, e});
+            }
+        }
+        if (exp == d) {
+            result.terms_[remaining] += coeff;
+        }
+    }
+    result.normalize();
+    return result;
+}
+
+RationalPolynomial RationalPolynomial::derivative(VarId v) const {
+    RationalPolynomial result;
+    for (const auto& [key, coeff] : terms_) {
+        int exp = 0;
+        MonomialKey remaining;
+        for (const auto& [varId, e] : key) {
+            if (varId == v) {
+                exp = e;
+            } else {
+                remaining.push_back({varId, e});
+            }
+        }
+        if (exp > 0) {
+            mpq_class newCoeff = coeff * mpq_class(exp);
+            if (exp == 1) {
+                result.terms_[remaining] += newCoeff;
+            } else {
+                MonomialKey newKey = remaining;
+                auto it = std::lower_bound(newKey.begin(), newKey.end(), v,
+                    [](const auto& p, VarId vid) { return p.first < vid; });
+                newKey.insert(it, {v, exp - 1});
+                result.terms_[newKey] += newCoeff;
+            }
+        }
+    }
+    result.normalize();
+    return result;
+}
+
+std::set<VarId> RationalPolynomial::variables() const {
+    std::set<VarId> result;
+    for (const auto& [key, coeff] : terms_) {
+        (void)coeff;
+        for (const auto& [varId, exp] : key) {
+            if (exp > 0) result.insert(varId);
+        }
+    }
+    return result;
+}
+
+int RationalPolynomial::highestVariableLevel(const std::vector<VarId>& varOrder) const {
+    int highest = -1;
+    auto vars = variables();
+    for (VarId v : vars) {
+        for (size_t i = 0; i < varOrder.size(); ++i) {
+            if (varOrder[i] == v) {
+                highest = std::max(highest, static_cast<int>(i));
+                break;
+            }
+        }
+    }
+    return highest;
+}
+
+RationalPolynomial RationalPolynomial::substituteRational(VarId v, const mpq_class& q) const {
+    RationalPolynomial result;
+    for (const auto& [key, coeff] : terms_) {
+        mpq_class factor(1);
+        MonomialKey remaining;
+        for (const auto& [varId, exp] : key) {
+            if (varId == v) {
+                // q^exp
+                mpq_class qe = q;
+                for (int i = 1; i < exp; ++i) qe *= q;
+                factor *= qe;
+            } else {
+                remaining.push_back({varId, exp});
+            }
+        }
+        result.terms_[remaining] += coeff * factor;
+    }
+    result.normalize();
+    return result;
+}
+
+PolyId RationalPolynomial::toPolyId(PolynomialKernel& kernel) const {
+    if (terms_.empty()) return kernel.mkZero();
+    auto norm = toPrimitiveInteger(kernel);
+    if (!norm.ok()) return NullPoly;
+    return norm.poly;
+}
+
 } // namespace nlcolver
