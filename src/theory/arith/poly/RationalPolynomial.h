@@ -79,6 +79,24 @@ public:
     /** Substitute a rational value for a variable. */
     RationalPolynomial substituteRational(VarId v, const mpq_class& q) const;
 
+    // -- V2-1: content and primitive part ------------------------------------
+
+    /**
+     * Content of this polynomial w.r.t. variable v.
+     *
+     * If all coefficients (viewed as univariate in v) are constants,
+     * returns the GCD of those coefficients as a rational number.
+     * If coefficients are multivariate polynomials, returns 1
+     * (treated as primitive for V2-1; V2-4 multivariate GCD will refine).
+     */
+    mpq_class content(VarId v) const;
+
+    /**
+     * Primitive part w.r.t. variable v: p / content(v).
+     * If content is 0 or 1, returns a copy of this polynomial.
+     */
+    RationalPolynomial primitivePart(VarId v) const;
+
     /** Convert back to PolyId in the given kernel. */
     PolyId toPolyId(PolynomialKernel& kernel) const;
 

@@ -66,6 +66,10 @@ private:
     Sign signAtOneAlgebraic(PolyId p, const SamplePoint& sample);
     Sign signAtTower(PolyId p, const SamplePoint& sample);
 
+    // V2-1: exact division of univariate polynomials
+    // Returns NullUniPolyId if b does not divide a exactly.
+    UniPolyId exactDivideUni(UniPolyId a, UniPolyId b);
+
     // Helper: convert UniPolyId coefficient vector back to PolyId in given variable
     PolyId univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var);
 

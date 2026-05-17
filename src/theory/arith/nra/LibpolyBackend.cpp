@@ -646,6 +646,65 @@ bool LibpolyBackend::isConstantUni(UniPolyId p) const {
     return c.size() == 1 && c[0] != 0;
 }
 
+UniPolyId LibpolyBackend::exactDivideUni(UniPolyId a, UniPolyId b) {
+    const auto& ca = getUni(a);
+    const auto& cb = getUni(b);
+
+    // Division by zero
+    if (cb.empty() || (cb.size() == 1 && cb[0] == 0)) {
+        return NullUniPolyId;
+    }
+    // Zero dividend
+    if (ca.empty() || (ca.size() == 1 && ca[0] == 0)) {
+        return allocUni(std::vector<mpz_class>{0});
+    }
+
+    int degA = static_cast<int>(ca.size()) - 1;
+    int degB = static_cast<int>(cb.size()) - 1;
+
+    if (degA < degB) {
+        return NullUniPolyId;
+    }
+
+    // Convert to rational coefficients for exact division
+    std::vector<mpq_class> dividend;
+    dividend.reserve(ca.size());
+    for (const auto& c : ca) dividend.emplace_back(c);
+
+    std::vector<mpq_class> divisor;
+    divisor.reserve(cb.size());
+    for (const auto& c : cb) divisor.emplace_back(c);
+
+    std::vector<mpq_class> quotient(degA - degB + 1);
+
+    for (int i = 0; i <= degA - degB; ++i) {
+        mpq_class q = dividend[i] / divisor[0];
+        quotient[i] = q;
+        for (int j = 0; j <= degB; ++j) {
+            dividend[i + j] -= q * divisor[j];
+        }
+    }
+
+    // Check remainder is zero
+    for (size_t i = 0; i < dividend.size(); ++i) {
+        if (dividend[i] != 0) {
+            return NullUniPolyId;
+        }
+    }
+
+    // Convert quotient back to integer coefficients
+    std::vector<mpz_class> result;
+    result.reserve(quotient.size());
+    for (const auto& q : quotient) {
+        if (q.get_den() != 1) {
+            return NullUniPolyId; // not exact integer division
+        }
+        result.push_back(q.get_num());
+    }
+
+    return allocUni(std::move(result));
+}
+
 bool LibpolyBackend::rootBelongsTo(const AlgebraicRoot& alpha, UniPolyId g) {
     UniPolyId d = gcdUni(alpha.definingPoly, g);
     if (d == NullUniPolyId) return false;

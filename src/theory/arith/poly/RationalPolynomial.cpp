@@ -495,4 +495,57 @@ PolyId RationalPolynomial::toPolyId(PolynomialKernel& kernel) const {
     return norm.poly;
 }
 
+// ============================================================================
+// V2-1: content and primitive part
+// ============================================================================
+
+mpq_class RationalPolynomial::content(VarId v) const {
+    if (terms_.empty()) return mpq_class(0);
+
+    auto coeffs = coefficients(v);
+    if (coeffs.empty()) return mpq_class(0);
+
+    // Skip zero coefficients and check if all non-zero coefficients are constant
+    mpq_class result = mpq_class(0);
+    bool allConstant = true;
+    bool foundNonZero = false;
+
+    for (const auto& c : coeffs) {
+        if (c.isZero()) continue;
+        if (!c.isConstant()) {
+            allConstant = false;
+            break;
+        }
+        mpq_class val = c.constantValue();
+        if (!foundNonZero) {
+            result = val;
+            foundNonZero = true;
+        } else {
+            // GCD of two rationals a/b and c/d:
+            // = gcd(a*d, c*b) / (b*d)
+            mpz_class num1 = result.get_num() * val.get_den();
+            mpz_class num2 = val.get_num() * result.get_den();
+            mpz_class den = result.get_den() * val.get_den();
+            mpz_class g;
+            mpz_gcd(g.get_mpz_t(), num1.get_mpz_t(), num2.get_mpz_t());
+            result = mpq_class(g, den);
+        }
+    }
+
+    if (!foundNonZero) return mpq_class(0);
+    if (!allConstant) return mpq_class(1);  // multivariate: primitive by default
+    return result;
+}
+
+RationalPolynomial RationalPolynomial::primitivePart(VarId v) const {
+    mpq_class c = content(v);
+    if (c == 0 || c == 1) return *this;
+    RationalPolynomial result = *this;
+    for (auto& [key, coeff] : result.terms_) {
+        coeff /= c;
+    }
+    result.normalize();
+    return result;
+}
+
 } // namespace nlcolver
