@@ -76,3 +76,10 @@ benchmark/
 benchmark_results/
 *.csv
 report.html
+
+# Conversation history & debug artifacts
+conversations/
+build_debug_info/
+
+# Submodule modifications
+third_party/*/
