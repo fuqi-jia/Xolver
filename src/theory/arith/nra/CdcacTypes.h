@@ -93,6 +93,13 @@ enum class Sign : int8_t {
     Unknown = 2
 };
 
+inline Sign multiplySigns(Sign a, Sign b) {
+    if (a == Sign::Unknown || b == Sign::Unknown) return Sign::Unknown;
+    if (a == Sign::Zero || b == Sign::Zero) return Sign::Zero;
+    int prod = static_cast<int>(a) * static_cast<int>(b);
+    return (prod > 0) ? Sign::Pos : Sign::Neg;
+}
+
 // ------------------------------------------------------------------
 // Real algebraic number comparison result
 // ------------------------------------------------------------------
@@ -177,10 +184,14 @@ struct ModelSeed {
 // ------------------------------------------------------------------
 // Provenance: where an algebraic root came from
 // ------------------------------------------------------------------
+using PrefixContextId = uint32_t;
+
 struct RootOrigin {
     PolyId liftedDefiningPoly = NullPoly;   // original multivariate polynomial
     VarId mainVar = NullVar;                 // variable this root belongs to
     int level = -1;                          // index in varOrder
+    int rootIndex = -1;                      // which root of the defining polynomial
+    PrefixContextId contextId = 0;           // sample prefix where this root was created
 };
 
 // ------------------------------------------------------------------
@@ -257,10 +268,9 @@ struct RootSet {
 // Cell kinds
 // ------------------------------------------------------------------
 enum class CellKind : uint8_t {
+    FullLine,   // (-inf, +inf)
     Sector,     // open interval between roots
-    Section,    // exactly one root
-    Point,      // single rational point
-    FullLine    // (-inf, +inf)
+    Section     // exactly one root
 };
 
 // ------------------------------------------------------------------
@@ -293,6 +303,54 @@ struct Bound {
 
 // Forward declaration
 struct Covering;
+
+// ------------------------------------------------------------------
+// Extended real algebraic number (includes ±inf)
+// ------------------------------------------------------------------
+struct ExtRealAlg {
+    bool isNegInf = false;
+    bool isPosInf = false;
+    RealAlg value;  // valid if !isNegInf && !isPosInf
+
+    static ExtRealAlg negInfinity() {
+        ExtRealAlg e;
+        e.isNegInf = true;
+        return e;
+    }
+    static ExtRealAlg posInfinity() {
+        ExtRealAlg e;
+        e.isPosInf = true;
+        return e;
+    }
+    static ExtRealAlg fromRealAlg(RealAlg r) {
+        ExtRealAlg e;
+        e.value = std::move(r);
+        return e;
+    }
+};
+
+// ------------------------------------------------------------------
+// Well-formed check result (three-state)
+// ------------------------------------------------------------------
+enum class WellFormedKind : uint8_t {
+    Valid,
+    Invalid,
+    Unknown
+};
+
+struct WellFormedResult {
+    WellFormedKind kind = WellFormedKind::Unknown;
+    CdcacUnknownReason reason = CdcacUnknownReason::None;
+};
+
+// ------------------------------------------------------------------
+// Cell contains sample result (three-state)
+// ------------------------------------------------------------------
+enum class ContainsResult : uint8_t {
+    True,
+    False,
+    Unknown
+};
 
 // ------------------------------------------------------------------
 // Pick sample result (three-state)

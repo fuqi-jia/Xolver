@@ -113,11 +113,61 @@ public:
     // ------------------------------------------------------------------
     // Pseudo-remainder (for tower reduction in CDCAC)
     // ------------------------------------------------------------------
+    struct PseudoRemainderResult {
+        PolyId remainder = NullPoly;
+        PolyId scaleFactor = NullPoly;  // lc(divisor)^k as a polynomial
+        int exponent = 0;               // k = max(0, deg(dividend) - deg(divisor) + 1)
+        bool ok() const { return remainder != NullPoly; }
+    };
+
     // Compute the pseudo-remainder of p divided by divisor.
     // Returns nullopt if unsupported by the backend.
     virtual std::optional<PolyId> pseudoRemainder(PolyId p, PolyId divisor) {
         (void)p; (void)divisor;
         return std::nullopt;
+    }
+
+    // Compute pseudo-remainder and the scale factor polynomial.
+    // VarId is the variable with respect to which pseudo-remainder is computed.
+    // Even if divisor.mainVar is implied, passing it explicitly prevents bugs
+    // in tower/context usage.
+    virtual PseudoRemainderResult pseudoRemainderWithScale(PolyId dividend, PolyId divisor, VarId mainVar) {
+        auto remOpt = pseudoRemainder(dividend, divisor);
+        if (!remOpt) {
+            return {NullPoly, NullPoly, 0};
+        }
+
+        auto degDividend = degree(dividend, varName(mainVar));
+        auto degDivisor  = degree(divisor, varName(mainVar));
+
+        if (!degDivisor) {
+            return {NullPoly, NullPoly, 0};
+        }
+
+        if (!degDividend) {
+            // Cannot determine dividend degree w.r.t. mainVar.
+            // This happens when mainVar is not the main variable of dividend.
+            // In tower reduction, prem may still succeed if variables match.
+            // Conservative: no scale factor tracking.
+            return {*remOpt, NullPoly, 0};
+        }
+
+        int k = *degDividend - *degDivisor + 1;
+        if (k <= 0) {
+            return {*remOpt, NullPoly, 0};
+        }
+
+        auto lcOpt = leadingCoefficient(divisor);
+        if (!lcOpt) {
+            return {*remOpt, NullPoly, 0};
+        }
+
+        PolyId scaleFactor = mkOne();
+        for (int i = 0; i < k; ++i) {
+            scaleFactor = mul(scaleFactor, *lcOpt);
+        }
+
+        return {*remOpt, scaleFactor, k};
     }
 
     // Leading coefficient of p with respect to its main variable.

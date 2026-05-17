@@ -315,32 +315,60 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
     if (algIndices.empty()) return signAtRational(p, sample);
     if (algIndices.size() == 1) return signAtOneAlgebraic(p, sample);
 
-    // Reduce modulo each defining polynomial, from highest level to lowest.
+    // Patch 7 invariant: sample.prefix(k) = variables at levels [0, k).
+    // Tower reduction processes from highest level to lowest.
+    // When reducing modulo level i's defining polynomial, the prefix contains
+    // all variables at levels [0, i), which were used to create the univariate
+    // defining polynomial via specializeToUnivariate.
     PolyId current = p;
+    Sign scaleSign = Sign::Pos;
+
     for (auto it = algIndices.rbegin(); it != algIndices.rend(); ++it) {
         size_t idx = *it;
         const auto& val = sample.values[idx];
         if (!val.isAlgebraic()) continue;
 
         const AlgebraicRoot& alpha = val.root;
+        // Patch 10: missing definingPoly → Unknown (hard rule)
         if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
 
         // Convert the univariate defining polynomial back to a PolyId
         VarId var = sample.varOrder[idx];
         PolyId definingPoly = univariateToPoly(getUni(alpha.definingPoly), var);
 
-        // Reduce current polynomial modulo the defining polynomial
-        auto remOpt = kernel_->pseudoRemainder(current, definingPoly);
-        if (!remOpt) {
-            // pseudoRemainder may fail if main variables differ or division is unsupported.
-            // Fall back to Unknown for safety.
+        // Patch 6 + 8: pseudo-remainder with scale tracking
+        auto pr = kernel_->pseudoRemainderWithScale(current, definingPoly, var);
+        if (!pr.ok()) {
             return Sign::Unknown;
         }
-        current = *remOpt;
+        current = pr.remainder;
+
+        if (pr.exponent > 0 && pr.scaleFactor != NullPoly) {
+            if (kernel_->isConstant(pr.scaleFactor)) {
+                mpq_class c = kernel_->toConstant(pr.scaleFactor);
+                if (c == 0) {
+                    // Leading coefficient nullified at sample: degeneracy
+                    return Sign::Unknown;
+                }
+                Sign s = (c > 0) ? Sign::Pos : Sign::Neg;
+                if (pr.exponent % 2 != 0) {
+                    scaleSign = multiplySigns(scaleSign, s);
+                }
+                // even exponent: sign is always positive, no change needed
+            } else {
+                // Non-constant scale factor in tower reduction.
+                // In normal operation, definingPoly has constant coefficients,
+                // so scaleFactor should always be constant.
+                // If not, return Unknown conservatively.
+                return Sign::Unknown;
+            }
+        }
     }
 
     // After tower reduction, evaluate at the (now rational-only) sample point.
-    return signAtRational(current, sample);
+    Sign s = signAtRational(current, sample);
+    if (s == Sign::Unknown) return Sign::Unknown;
+    return multiplySigns(scaleSign, s);
 }
 
 PolyId LibpolyBackend::univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var) {
