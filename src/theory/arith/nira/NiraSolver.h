@@ -37,10 +37,12 @@ public:
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
+    void setCoreIr(const CoreIr* ir);
 
     std::optional<TheoryModel> getModel() const override;
 
 private:
+    const CoreIr* coreIr_ = nullptr;
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     TheoryAtomRegistry* registry_ = nullptr;
@@ -64,6 +66,12 @@ private:
 
     bool validateOriginalConstraints() const;
     std::vector<SatLit> allActiveReasons() const;
+
+    // Bounded-complete helper: check one integer assignment with fresh simplex
+    static bool checkAssignmentWithSimplex(
+        const std::vector<ActiveAssignment>& assignments,
+        const std::unordered_map<std::string, mpq_class>& fixedValues,
+        PolynomialKernel* kernel);
 };
 
 } // namespace nlcolver

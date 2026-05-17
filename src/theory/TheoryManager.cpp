@@ -132,7 +132,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
             return TheoryCheckResult::consistent();
         }
         for (auto& solver : solvers_) {
-            auto tr = solver->check(lemmaDb, TheoryEffort::Standard);
+            auto tr = solver->check(lemmaDb, effort);
             if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
                 auto fc = makeFalsifiedConflict(tr.conflictOpt->clause);
                 return TheoryCheckResult::mkConflict(std::move(fc));
@@ -210,7 +210,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
     // 2. Run each theory check
     for (auto& solver : solvers_) {
         NO_DBG << "[NO] checking solver=" << (int)solver->id() << "\n";
-        auto tr = solver->check(lemmaDb, TheoryEffort::Standard);
+        auto tr = solver->check(lemmaDb, effort);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             // Defensive: every raw reason should be true in the current model.
             if (assignmentView_) {

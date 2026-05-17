@@ -14,8 +14,11 @@ namespace nlcolver {
  *
  * Used by LiraSolver (complete fallback) and NiraSolver (relaxation).
  *
- * checkComplete() reuses the same GeneralSimplex + branch-and-bound core as
- * LiaSolver, but without SatLit/Registry/Lemma dependencies.
+ * The core is one branch-and-cut solver with different solve policies:
+ *   - RelaxationOnly: LP relaxation only, ignores integrality.
+ *   - Budgeted:       LP relaxation + bounded branch-and-bound.
+ *                     May return NeedBranch with fractional var info.
+ *   - Complete:       LP relaxation + exhaustive branch-and-bound.
  */
 class InternalMilpEngine {
 public:
@@ -24,27 +27,38 @@ public:
     struct LinearConstraint {
         std::vector<std::pair<int, mpq_class>> terms; // var index -> coeff
         mpq_class rhs;
-        Relation rel; // Eq, Le, Lt, Ge, Gt (NOT Neq)
+        Relation rel; // Eq, Leq, Lt, Geq, Gt (NOT Neq)
     };
 
-    enum class Result { Sat, Unsat, Unknown };
+    enum class MilpMode {
+        RelaxationOnly,
+        Budgeted,
+        Complete
+    };
+
+    struct MilpResult {
+        enum class Kind { Sat, Unsat, Unknown, NeedBranch };
+        Kind kind;
+        // Populated when kind == NeedBranch
+        int branchVar = -1;
+        mpq_class floorVal;
+        mpq_class ceilVal;
+    };
 
     void clear();
     int addVar(std::string_view name, VarKind kind);
 
     void addConstraint(const LinearConstraint& c);
 
-    // Exact LP relaxation (ignores integrality)
-    Result checkRelaxation();
+    MilpResult solve(MilpMode mode);
 
-    // Branch/cut with budget, may return Unknown
-    Result checkFast();
-
-    // Complete check (no artificial branch budget)
-    // Completeness is bounded by the underlying GeneralSimplex + branch-and-cut capability.
-    Result checkComplete();
-
+    int numVars() const { return static_cast<int>(varNames_.size()); }
     mpq_class value(int var) const;
+    DeltaRational deltaValue(int var) const;
+    std::string_view varName(int var) const;
+
+    void push();
+    void pop();
 
 private:
     GeneralSimplex simplex_;
@@ -56,9 +70,11 @@ private:
     // Fast mode budget
     static constexpr int FAST_BRANCH_BUDGET = 100;
 
-    Result solveLpRelaxation();
-    Result checkIntegrality(bool useBudget);
+    MilpResult solveLpRelaxation();
+    MilpResult checkIntegrality(bool useBudget, int& budget);
+    MilpResult dfsCheckIntegrality(bool useBudget, int& budget);
     int findBestFractionalVar(mpq_class& outFrac) const;
+    void computeFloorCeil(const DeltaRational& val, mpq_class& floorVal, mpq_class& ceilVal) const;
 };
 
 } // namespace nlcolver

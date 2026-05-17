@@ -1,6 +1,5 @@
 #include "theory/arith/lia/InternalMilpEngine.h"
 #include <algorithm>
-#include <iostream>
 
 namespace nlcolver {
 
@@ -10,6 +9,14 @@ void InternalMilpEngine::clear() {
     varKinds_.clear();
     constraints_.clear();
     integerVars_.clear();
+}
+
+void InternalMilpEngine::push() {
+    simplex_.push();
+}
+
+void InternalMilpEngine::pop() {
+    simplex_.pop();
 }
 
 int InternalMilpEngine::addVar(std::string_view name, VarKind kind) {
@@ -23,28 +30,39 @@ int InternalMilpEngine::addVar(std::string_view name, VarKind kind) {
     return idx;
 }
 
+std::string_view InternalMilpEngine::varName(int var) const {
+    if (var < 0 || var >= (int)varNames_.size()) return "";
+    return varNames_[var];
+}
+
 void InternalMilpEngine::addConstraint(const LinearConstraint& c) {
     constraints_.push_back(c);
 }
 
-InternalMilpEngine::Result InternalMilpEngine::checkRelaxation() {
-    return solveLpRelaxation();
-}
-
-InternalMilpEngine::Result InternalMilpEngine::checkFast() {
+InternalMilpEngine::MilpResult InternalMilpEngine::solve(MilpMode mode) {
     auto r = solveLpRelaxation();
-    if (r != Result::Sat) return r;
-    return checkIntegrality(/*useBudget=*/true);
+    if (r.kind != MilpResult::Kind::Sat) return r;
+
+    switch (mode) {
+        case MilpMode::RelaxationOnly:
+            return r;
+        case MilpMode::Budgeted: {
+            int budget = FAST_BRANCH_BUDGET;
+            auto ir = checkIntegrality(/*useBudget=*/true, budget);
+            return ir;
+        }
+        case MilpMode::Complete: {
+            int budget = -1;
+            auto ir = checkIntegrality(/*useBudget=*/false, budget);
+            return ir;
+        }
+    }
+    return r; // unreachable
 }
 
-InternalMilpEngine::Result InternalMilpEngine::checkComplete() {
-    auto r = solveLpRelaxation();
-    if (r != Result::Sat) return r;
-    return checkIntegrality(/*useBudget=*/false);
-}
-
-InternalMilpEngine::Result InternalMilpEngine::solveLpRelaxation() {
+InternalMilpEngine::MilpResult InternalMilpEngine::solveLpRelaxation() {
     simplex_.resetActiveBounds();
+    SatLit dummyReason{0, true};
 
     for (const auto& c : constraints_) {
         int aux = simplex_.addConstraint(c.terms, c.rhs);
@@ -52,20 +70,20 @@ InternalMilpEngine::Result InternalMilpEngine::solveLpRelaxation() {
 
         switch (c.rel) {
             case Relation::Eq:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0))));
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
                 break;
             case Relation::Leq:
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
                 break;
             case Relation::Lt:
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1))));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1)), dummyReason));
                 break;
             case Relation::Geq:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0))));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
                 break;
             case Relation::Gt:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1))));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1)), dummyReason));
                 break;
             case Relation::Neq:
                 // Neq is not supported at engine level; caller must split
@@ -74,9 +92,9 @@ InternalMilpEngine::Result InternalMilpEngine::solveLpRelaxation() {
     }
 
     auto r = simplex_.check();
-    if (r == GeneralSimplex::Result::Unsat) return Result::Unsat;
-    if (r == GeneralSimplex::Result::Unknown) return Result::Unknown;
-    return Result::Sat;
+    if (r == GeneralSimplex::Result::Unsat) return {MilpResult::Kind::Unsat, -1, {}, {}};
+    if (r == GeneralSimplex::Result::Unknown) return {MilpResult::Kind::Unknown, -1, {}, {}};
+    return {MilpResult::Kind::Sat, -1, {}, {}};
 }
 
 int InternalMilpEngine::findBestFractionalVar(mpq_class& outFrac) const {
@@ -116,121 +134,125 @@ int InternalMilpEngine::findBestFractionalVar(mpq_class& outFrac) const {
     return bestVar;
 }
 
-InternalMilpEngine::Result InternalMilpEngine::checkIntegrality(bool useBudget) {
-    int budget = useBudget ? FAST_BRANCH_BUDGET : -1;
+void InternalMilpEngine::computeFloorCeil(const DeltaRational& val,
+                                          mpq_class& floorVal,
+                                          mpq_class& ceilVal) const {
+    mpq_class q = val.a;
+    mpz_class num = q.get_num();
+    mpz_class den = q.get_den();
 
-    struct BranchState {
-        std::vector<std::pair<int, BoundInfo>> addedBounds;
-    };
-    std::vector<BranchState> stack;
-
-    while (true) {
-        mpq_class frac;
-        int bestVar = findBestFractionalVar(frac);
-
-        if (bestVar == -1) {
-            // All integer variables are integral
-            return Result::Sat;
-        }
-
-        if (useBudget && budget <= 0) {
-            return Result::Unknown;
-        }
-        if (useBudget) --budget;
-
-        auto val = simplex_.value(bestVar);
-        mpq_class q = val.a;
-        mpz_class num = q.get_num();
-        mpz_class den = q.get_den();
-
-        mpq_class floorVal;
-        mpq_class ceilVal;
-
-        if (den == 1) {
-            if (val.b > 0) {
-                floorVal = q;
-                ceilVal = mpq_class(num + 1, 1);
-            } else if (val.b < 0) {
-                floorVal = mpq_class(num - 1, 1);
-                ceilVal = q;
-            } else {
-                floorVal = q;
-                ceilVal = q;
-            }
+    if (den == 1) {
+        if (val.b > 0) {
+            floorVal = q;
+            ceilVal = mpq_class(num + 1, 1);
+        } else if (val.b < 0) {
+            floorVal = mpq_class(num - 1, 1);
+            ceilVal = q;
         } else {
-            mpz_class f = num / den;
-            mpz_class r = num % den;
-            if (r == 0) {
-                floorVal = mpq_class(f, 1);
-                ceilVal = mpq_class(f, 1);
-            } else if (num >= 0) {
-                floorVal = mpq_class(f, 1);
-                ceilVal = mpq_class(f + 1, 1);
-            } else {
-                floorVal = mpq_class(f - 1, 1);
-                ceilVal = mpq_class(f, 1);
-            }
+            floorVal = q;
+            ceilVal = q;
         }
-
-        // Branch 1: x <= floor
-        bool ok1 = simplex_.assertUpper(bestVar, BoundInfo(BoundValue(DeltaRational(floorVal))));
-        if (ok1) {
-            auto r1 = simplex_.check();
-            if (r1 == GeneralSimplex::Result::Sat) {
-                continue; // check again for more fractional vars
-            }
-            if (r1 == GeneralSimplex::Result::Unknown) {
-                return Result::Unknown;
-            }
+    } else {
+        mpz_class f = num / den;
+        mpz_class r = num % den;
+        if (r == 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f, 1);
+        } else if (num >= 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f + 1, 1);
+        } else {
+            floorVal = mpq_class(f - 1, 1);
+            ceilVal = mpq_class(f, 1);
         }
-
-        // Branch 1 failed, try Branch 2: x >= ceil
-        simplex_.backtrackToLevel(0); // reset bounds added in this branch
-        simplex_.resetActiveBounds();
-        // Re-apply all original constraints
-        for (const auto& c : constraints_) {
-            int aux = simplex_.addConstraint(c.terms, c.rhs);
-            if (aux < 0) continue;
-            switch (c.rel) {
-                case Relation::Eq:
-                    simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0))));
-                    simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
-                    break;
-                case Relation::Leq:
-                    simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0))));
-                    break;
-                case Relation::Lt:
-                    simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1))));
-                    break;
-                case Relation::Geq:
-                    simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0))));
-                    break;
-                case Relation::Gt:
-                    simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1))));
-                    break;
-                default: break;
-            }
-        }
-
-        bool ok2 = simplex_.assertLower(bestVar, BoundInfo(BoundValue(DeltaRational(ceilVal))));
-        if (ok2) {
-            auto r2 = simplex_.check();
-            if (r2 == GeneralSimplex::Result::Sat) {
-                continue;
-            }
-            if (r2 == GeneralSimplex::Result::Unknown) {
-                return Result::Unknown;
-            }
-        }
-
-        // Both branches failed
-        return Result::Unsat;
     }
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::checkIntegrality(bool useBudget, int& budget) {
+    mpq_class frac;
+    int bestVar = findBestFractionalVar(frac);
+
+    if (bestVar == -1) {
+        return {MilpResult::Kind::Sat, -1, {}, {}};
+    }
+
+    if (useBudget && budget <= 0) {
+        auto val = simplex_.value(bestVar);
+        mpq_class floorVal, ceilVal;
+        computeFloorCeil(val, floorVal, ceilVal);
+        return {MilpResult::Kind::NeedBranch, bestVar, floorVal, ceilVal};
+    }
+    if (useBudget) --budget;
+
+    return dfsCheckIntegrality(useBudget, budget);
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::dfsCheckIntegrality(bool useBudget, int& budget) {
+    mpq_class frac;
+    int bestVar = findBestFractionalVar(frac);
+
+    if (bestVar == -1) {
+        return {MilpResult::Kind::Sat, -1, {}, {}};
+    }
+
+    if (useBudget && budget <= 0) {
+        auto val = simplex_.value(bestVar);
+        mpq_class floorVal, ceilVal;
+        computeFloorCeil(val, floorVal, ceilVal);
+        return {MilpResult::Kind::NeedBranch, bestVar, floorVal, ceilVal};
+    }
+    if (useBudget) --budget;
+
+    auto val = simplex_.value(bestVar);
+    mpq_class floorVal, ceilVal;
+    computeFloorCeil(val, floorVal, ceilVal);
+
+    SatLit dummyReason{0, true};
+
+    // Branch 1: x <= floor
+    simplex_.push();
+    bool ok1 = simplex_.assertUpper(bestVar, BoundInfo(BoundValue(DeltaRational(floorVal)), dummyReason));
+    if (ok1) {
+        auto r1 = simplex_.check();
+        if (r1 == GeneralSimplex::Result::Sat) {
+            auto sub = dfsCheckIntegrality(useBudget, budget);
+            if (sub.kind == MilpResult::Kind::Sat || sub.kind == MilpResult::Kind::Unknown) {
+                return sub;
+            }
+        } else if (r1 == GeneralSimplex::Result::Unknown) {
+            simplex_.pop();
+            return {MilpResult::Kind::Unknown, -1, {}, {}};
+        }
+    }
+    simplex_.pop();
+
+    // Branch 2: x >= ceil
+    simplex_.push();
+    bool ok2 = simplex_.assertLower(bestVar, BoundInfo(BoundValue(DeltaRational(ceilVal)), dummyReason));
+    if (ok2) {
+        auto r2 = simplex_.check();
+        if (r2 == GeneralSimplex::Result::Sat) {
+            auto sub = dfsCheckIntegrality(useBudget, budget);
+            if (sub.kind == MilpResult::Kind::Sat || sub.kind == MilpResult::Kind::Unknown) {
+                return sub;
+            }
+        } else if (r2 == GeneralSimplex::Result::Unknown) {
+            simplex_.pop();
+            return {MilpResult::Kind::Unknown, -1, {}, {}};
+        }
+    }
+    simplex_.pop();
+
+    return {MilpResult::Kind::Unsat, -1, {}, {}};
 }
 
 mpq_class InternalMilpEngine::value(int var) const {
     auto dr = simplex_.value(var);
     return dr.a;
+}
+
+DeltaRational InternalMilpEngine::deltaValue(int var) const {
+    return simplex_.value(var);
 }
 
 } // namespace nlcolver

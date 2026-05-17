@@ -3,6 +3,7 @@
 #include "theory/TheorySolver.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/arith/lra/GeneralSimplex.h"
+#include "theory/arith/lia/InternalMilpEngine.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 #include <unordered_map>
@@ -16,8 +17,10 @@ class TheoryAtomRegistry;
 /**
  * LiraSolver: QF_LIRA (Linear Integer-Real Arithmetic) theory solver.
  *
- * Main algorithm: exact rational LP relaxation + branch-and-cut / MILP-style engine.
- * FM is only used as optional small-case equality elimination, not as the complete path.
+ * Delegates to InternalMilpEngine with different solve policies:
+ *   - Standard effort: Budgeted mode (LP relaxation + bounded branch-and-bound,
+ *     may return NeedBranch for lemma generation).
+ *   - Full effort: Complete mode (exhaustive branch-and-bound final decision).
  */
 class LiraSolver : public TheorySolver {
 public:
@@ -39,28 +42,25 @@ public:
     std::optional<TheoryModel> getModel() const override;
 
 private:
-    // Variable management: CoreVarId -> LiraVarId
+    // Legacy fields kept to avoid breaking compilation of other TU references.
+    // New code uses milpEngine_ exclusively.
+    GeneralSimplex gsRelax_;
+    LinearAtomManager managerRelax_;
+    GeneralSimplex gsReconstruct_;
+    LinearAtomManager managerReconstruct_;
+    std::vector<int> liraVarToSimplexColRelax_;
     std::unordered_map<uint64_t, int> coreVarToLiraVar_;
     std::vector<uint64_t> liraVarToCoreVar_;
     std::vector<SortKind> liraVarSort_;
-    int getOrCreateLiraVar(uint64_t coreVarId, SortKind sort);
 
-    // Relaxation simplex
-    GeneralSimplex gsRelax_;
-    LinearAtomManager managerRelax_;
-    std::vector<int> liraVarToSimplexColRelax_;
-
-    // Reconstruction simplex (state isolation)
-    GeneralSimplex gsReconstruct_;
-    LinearAtomManager managerReconstruct_;
+    // Active MILP engine
+    InternalMilpEngine milpEngine_;
 
     // CDCL state
     TheoryAtomRegistry* registry_ = nullptr;
     const CoreIr* coreIr_ = nullptr;
-    std::unordered_set<int> integerVars_; // simplex column indices of Int vars
 
     struct DiseqInfo {
-        int auxVar;
         LinearFormKey lhs;
         mpq_class rhs;
         SatLit lit;
@@ -79,14 +79,9 @@ private:
     TheoryCheckResult checkStandardEffort(TheoryLemmaDatabase& lemmaDb);
     TheoryCheckResult checkFullEffort(TheoryLemmaDatabase& lemmaDb);
 
-    bool buildRelaxationBounds();
-    bool isRelaxationIntegral() const;
-    bool validateFullModel() const;
-    std::optional<TheoryLemma> tryGenerateBranchLemma();
-
-    // Utilities
+    // Helpers
+    bool isIntegerVar(const std::string& name) const;
     std::vector<SatLit> allActiveReasons() const;
-    DeltaRational getRelaxationValue(int liraVarId) const;
 };
 
 } // namespace nlcolver

@@ -1,8 +1,8 @@
 #include "theory/arith/lira/LiraSolver.h"
 #include "theory/TheoryAtomRegistry.h"
 #include "expr/ir.h"
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -10,16 +10,22 @@ LiraSolver::LiraSolver() = default;
 LiraSolver::~LiraSolver() = default;
 
 void LiraSolver::push() {
-    gsRelax_.push();
+    milpEngine_.push();
 }
 
 void LiraSolver::pop(uint32_t n) {
     for (uint32_t i = 0; i < n; ++i) {
-        gsRelax_.pop();
+        milpEngine_.pop();
     }
 }
 
 void LiraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
+    for (auto& a : activeAssignments_) {
+        if (a.atom.satVar == atom.satVar) {
+            a = {level, assertedLit, atom, value};
+            return;
+        }
+    }
     activeAssignments_.push_back({level, assertedLit, atom, value});
 }
 
@@ -27,7 +33,6 @@ void LiraSolver::backtrackToLevel(int level) {
     auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
         [level](const auto& a) { return a.level > level; });
     activeAssignments_.erase(it, activeAssignments_.end());
-    gsRelax_.backtrackToLevel(level);
 }
 
 TheoryCheckResult LiraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) {
@@ -37,196 +42,206 @@ TheoryCheckResult LiraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort e
     return checkFullEffort(lemmaDb);
 }
 
-TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaDatabase& /*lemmaDb*/) {
-    gsRelax_.resetActiveBounds();
-    disequalities_.clear();
-
-    integerVars_.clear();
-    for (const auto& a : activeAssignments_) {
-        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-
-        const auto& payload = std::get<LinearAtomPayload>(a.atom.payload);
-        int auxVar = managerRelax_.getOrCreateAuxVar(gsRelax_, payload.lhs, payload.rhs);
-
-        for (const auto& [name, coeff] : payload.lhs.terms) {
-            (void)coeff;
-            int v = managerRelax_.getOrCreateVar(gsRelax_, name);
-            if (coreIr_) {
-                // Try to determine sort from CoreIr by variable name
-                for (size_t i = 0; i < coreIr_->size(); ++i) {
-                    ExprId eid = static_cast<ExprId>(i);
-                    const auto& expr = coreIr_->get(eid);
-                    if (expr.kind == Kind::Variable) {
-                        if (std::holds_alternative<std::string>(expr.payload.value)) {
-                            if (std::get<std::string>(expr.payload.value) == name) {
-                                if (expr.sort == coreIr_->intSortId()) {
-                                    integerVars_.insert(v);
-                                }
-                                break;
-                            }
-                        }
-                    }
+bool LiraSolver::isIntegerVar(const std::string& name) const {
+    if (!coreIr_) return false;
+    for (size_t i = 0; i < coreIr_->size(); ++i) {
+        ExprId eid = static_cast<ExprId>(i);
+        const auto& expr = coreIr_->get(eid);
+        if (expr.kind == Kind::Variable) {
+            if (std::holds_alternative<std::string>(expr.payload.value)) {
+                if (std::get<std::string>(expr.payload.value) == name) {
+                    return expr.sort == coreIr_->intSortId();
                 }
             }
         }
+    }
+    return false;
+}
 
-        if (payload.rel == Relation::Neq) {
-            disequalities_.push_back({auxVar, payload.lhs, payload.rhs, a.lit});
-        } else {
-            bool ok = managerRelax_.assertBound(gsRelax_, auxVar, payload.rel, a.value, a.lit, a.level);
-            if (!ok) {
-                return TheoryCheckResult::mkConflict(managerRelax_.translateConflict(gsRelax_));
+TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaDatabase& /*lemmaDb*/) {
+    milpEngine_.clear();
+    disequalities_.clear();
+    std::unordered_map<std::string, int> nameToIdx;
+
+    for (const auto& a : activeAssignments_) {
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
+
+        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+
+        // Compute effective relation (handle negated literals)
+        Relation effRel = p.rel;
+        if (!a.value) {
+            switch (p.rel) {
+                case Relation::Eq:  effRel = Relation::Neq; break;
+                case Relation::Neq: effRel = Relation::Eq; break;
+                case Relation::Lt:  effRel = Relation::Geq; break;
+                case Relation::Leq: effRel = Relation::Gt; break;
+                case Relation::Gt:  effRel = Relation::Leq; break;
+                case Relation::Geq: effRel = Relation::Lt; break;
             }
+        }
+
+        // Register variables
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            (void)coeff;
+            if (nameToIdx.count(name)) continue;
+            auto kind = isIntegerVar(name)
+                ? InternalMilpEngine::VarKind::Int
+                : InternalMilpEngine::VarKind::Real;
+            int idx = milpEngine_.addVar(name, kind);
+            nameToIdx[name] = idx;
+        }
+
+        if (effRel == Relation::Neq) {
+            disequalities_.push_back({p.lhs, p.rhs, a.lit});
+        } else {
+            InternalMilpEngine::LinearConstraint c;
+            for (const auto& [name, coeff] : p.lhs.terms) {
+                c.terms.push_back({nameToIdx[name], coeff});
+            }
+            c.rhs = p.rhs;
+            c.rel = effRel;
+            milpEngine_.addConstraint(c);
         }
     }
 
-    auto res = gsRelax_.check();
-    if (res == GeneralSimplex::Result::Unsat) {
-        auto tc = TheoryConflict{};
-        tc.clause = allActiveReasons();
-        return TheoryCheckResult::mkConflict(std::move(tc));
-    }
-    if (res == GeneralSimplex::Result::Unknown) {
-        return TheoryCheckResult::unknown();
-    }
+    auto r = milpEngine_.solve(InternalMilpEngine::MilpMode::Budgeted);
 
-    if (isRelaxationIntegral() && validateFullModel()) {
-        return TheoryCheckResult::consistent();
-    }
+    switch (r.kind) {
+        case InternalMilpEngine::MilpResult::Kind::Unsat: {
+            auto tc = TheoryConflict{};
+            tc.clause = allActiveReasons();
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
+        case InternalMilpEngine::MilpResult::Kind::Unknown:
+            return TheoryCheckResult::unknown();
 
-    if (auto lemma = tryGenerateBranchLemma()) {
-        return TheoryCheckResult::mkLemma(std::move(*lemma));
+        case InternalMilpEngine::MilpResult::Kind::Sat: {
+            // Validate disequalities using full DeltaRational values
+            for (const auto& d : disequalities_) {
+                DeltaRational val;
+                for (const auto& [name, coeff] : d.lhs.terms) {
+                    auto it = nameToIdx.find(name);
+                    if (it != nameToIdx.end()) {
+                        auto dv = milpEngine_.deltaValue(it->second);
+                        val.a += dv.a * coeff;
+                        val.b += dv.b * coeff;
+                    }
+                }
+                val.a -= d.rhs;
+                if (val.isZero()) {
+                    auto litLt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Lt, d.rhs, TheoryId::LIRA);
+                    auto litGt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Gt, d.rhs, TheoryId::LIRA);
+                    return TheoryCheckResult::mkLemma(TheoryLemma{{litLt, litGt}});
+                }
+            }
+            return TheoryCheckResult::consistent();
+        }
+
+        case InternalMilpEngine::MilpResult::Kind::NeedBranch: {
+            if (!registry_) return TheoryCheckResult::unknown();
+            std::string name = std::string(milpEngine_.varName(r.branchVar));
+            if (name.empty()) return TheoryCheckResult::unknown();
+            LinearFormKey form;
+            form.terms.push_back({name, mpq_class(1)});
+            auto litLo = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Leq, r.floorVal, TheoryId::LIRA);
+            auto litHi = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Geq, r.ceilVal, TheoryId::LIRA);
+            return TheoryCheckResult::mkLemma(TheoryLemma{{litLo, litHi}});
+        }
     }
 
     return TheoryCheckResult::unknown();
 }
 
-TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaDatabase& lemmaDb) {
-    // V1: delegate to standard effort for now
-    // TODO: implement InternalMilpEngine::checkComplete() path with diseq splitting
-    return checkStandardEffort(lemmaDb);
-}
+TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaDatabase& /*lemmaDb*/) {
+    milpEngine_.clear();
+    disequalities_.clear();
+    std::unordered_map<std::string, int> nameToIdx;
 
-bool LiraSolver::buildRelaxationBounds() {
-    // Handled inline in checkStandardEffort
-    return true;
-}
+    for (const auto& a : activeAssignments_) {
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
-bool LiraSolver::isRelaxationIntegral() const {
-    for (int col : integerVars_) {
-        auto val = gsRelax_.value(col);
-        if (val.b != 0 || val.a.get_den() != 1) {
-            return false;
+        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+
+        Relation effRel = p.rel;
+        if (!a.value) {
+            switch (p.rel) {
+                case Relation::Eq:  effRel = Relation::Neq; break;
+                case Relation::Neq: effRel = Relation::Eq; break;
+                case Relation::Lt:  effRel = Relation::Geq; break;
+                case Relation::Leq: effRel = Relation::Gt; break;
+                case Relation::Gt:  effRel = Relation::Leq; break;
+                case Relation::Geq: effRel = Relation::Lt; break;
+            }
+        }
+
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            (void)coeff;
+            if (nameToIdx.count(name)) continue;
+            auto kind = isIntegerVar(name)
+                ? InternalMilpEngine::VarKind::Int
+                : InternalMilpEngine::VarKind::Real;
+            int idx = milpEngine_.addVar(name, kind);
+            nameToIdx[name] = idx;
+        }
+
+        if (effRel == Relation::Neq) {
+            disequalities_.push_back({p.lhs, p.rhs, a.lit});
+        } else {
+            InternalMilpEngine::LinearConstraint c;
+            for (const auto& [name, coeff] : p.lhs.terms) {
+                c.terms.push_back({nameToIdx[name], coeff});
+            }
+            c.rhs = p.rhs;
+            c.rel = effRel;
+            milpEngine_.addConstraint(c);
         }
     }
-    return true;
-}
 
-bool LiraSolver::validateFullModel() const {
-    // Validate strict inequalities and disequalities
-    for (const auto& d : disequalities_) {
-        auto val = gsRelax_.value(d.auxVar);
-        if (val.isZero()) {
-            return false;
-        }
-    }
-    return true;
-}
+    auto r = milpEngine_.solve(InternalMilpEngine::MilpMode::Complete);
 
-std::optional<TheoryLemma> LiraSolver::tryGenerateBranchLemma() {
-    // Find a fractional integer variable
-    int bestVar = -1;
-    mpq_class bestFrac(-1);
-
-    for (int col : integerVars_) {
-        auto val = gsRelax_.value(col);
-        if (val.b != 0 || val.a.get_den() != 1) {
-            mpq_class frac;
-            if (val.b != 0) {
-                frac = mpq_class(1, 2);
-            } else {
-                mpz_class num = val.a.get_num();
-                mpz_class den = val.a.get_den();
-                mpz_class f = num / den;
-                mpz_class r = num % den;
-                mpz_class floorVal;
-                if (r == 0) {
-                    floorVal = f;
-                } else if (num >= 0) {
-                    floorVal = f;
-                } else {
-                    floorVal = f - 1;
+    switch (r.kind) {
+        case InternalMilpEngine::MilpResult::Kind::Sat: {
+            // Validate disequalities using full DeltaRational values
+            for (const auto& d : disequalities_) {
+                DeltaRational val;
+                for (const auto& [name, coeff] : d.lhs.terms) {
+                    auto it = nameToIdx.find(name);
+                    if (it != nameToIdx.end()) {
+                        auto dv = milpEngine_.deltaValue(it->second);
+                        val.a += dv.a * coeff;
+                        val.b += dv.b * coeff;
+                    }
                 }
-                frac = val.a - mpq_class(floorVal, 1);
-                if (frac < 0) frac = -frac;
+                val.a -= d.rhs;
+                if (val.isZero()) {
+                    auto litLt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Lt, d.rhs, TheoryId::LIRA);
+                    auto litGt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Gt, d.rhs, TheoryId::LIRA);
+                    return TheoryCheckResult::mkLemma(TheoryLemma{{litLt, litGt}});
+                }
             }
-            if (frac > bestFrac) {
-                bestFrac = frac;
-                bestVar = col;
-            }
+            return TheoryCheckResult::consistent();
         }
+        case InternalMilpEngine::MilpResult::Kind::Unsat: {
+            auto tc = TheoryConflict{};
+            tc.clause = allActiveReasons();
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
+        default:
+            return TheoryCheckResult::unknown();
     }
-
-    if (bestVar == -1) return std::nullopt;
-
-    int col = bestVar;
-    auto val = gsRelax_.value(col);
-    mpq_class q = val.a;
-    mpz_class num = q.get_num();
-    mpz_class den = q.get_den();
-
-    mpq_class floorVal;
-    mpq_class ceilVal;
-
-    if (den == 1) {
-        if (val.b > 0) {
-            floorVal = q;
-            ceilVal = mpq_class(num + 1, 1);
-        } else if (val.b < 0) {
-            floorVal = mpq_class(num - 1, 1);
-            ceilVal = q;
-        } else {
-            floorVal = q;
-            ceilVal = q;
-        }
-    } else {
-        mpz_class f = num / den;
-        mpz_class r = num % den;
-        if (r == 0) {
-            floorVal = mpq_class(f, 1);
-            ceilVal = mpq_class(f, 1);
-        } else if (num >= 0) {
-            floorVal = mpq_class(f, 1);
-            ceilVal = mpq_class(f + 1, 1);
-        } else {
-            floorVal = mpq_class(f - 1, 1);
-            ceilVal = mpq_class(f, 1);
-        }
-    }
-
-    if (!registry_) return std::nullopt;
-
-    std::string name = managerRelax_.getVarName(col);
-    if (name.empty()) return std::nullopt;
-
-    LinearFormKey form;
-    form.terms.push_back({name, mpq_class(1)});
-
-    auto litLo = registry_->getOrCreateLinearBoundAtom(form, Relation::Leq, floorVal, TheoryId::LIRA);
-    auto litHi = registry_->getOrCreateLinearBoundAtom(form, Relation::Geq, ceilVal, TheoryId::LIRA);
-
-    return TheoryLemma{{litLo, litHi}};
 }
 
 void LiraSolver::reset() {
     activeAssignments_.clear();
     disequalities_.clear();
-    coreVarToLiraVar_.clear();
-    liraVarToCoreVar_.clear();
-    liraVarSort_.clear();
-    liraVarToSimplexColRelax_.clear();
-    gsRelax_.reset();
-    gsReconstruct_.reset();
+    milpEngine_.clear();
 }
 
 void LiraSolver::setRegistry(TheoryAtomRegistry* reg) {
@@ -239,15 +254,16 @@ void LiraSolver::setCoreIr(const CoreIr* ir) {
 
 std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
     TheoryModel model;
-    for (int i = 0; i < gsRelax_.numVars(); ++i) {
-        std::string name = managerRelax_.getVarName(i);
+    int n = milpEngine_.numVars();
+    for (int i = 0; i < n; ++i) {
+        std::string name = std::string(milpEngine_.varName(i));
         if (name.empty()) continue;
         if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
-        DeltaRational val = gsRelax_.value(i);
-        if (val.b == 0 && val.a.get_den() == 1) {
-            model.assignments[name] = val.a.get_num().get_str();
+        mpq_class val = milpEngine_.value(i);
+        if (val.get_den() == 1) {
+            model.assignments[name] = val.get_num().get_str();
         } else {
-            model.assignments[name] = val.a.get_str();
+            model.assignments[name] = val.get_str();
         }
     }
     if (model.assignments.empty()) return std::nullopt;
@@ -267,11 +283,6 @@ std::vector<SatLit> LiraSolver::allActiveReasons() const {
         return a.var == b.var && a.sign == b.sign;
     }), reasons.end());
     return reasons;
-}
-
-DeltaRational LiraSolver::getRelaxationValue(int liraVarId) const {
-    int col = liraVarToSimplexColRelax_[liraVarId];
-    return gsRelax_.value(col);
 }
 
 } // namespace nlcolver

@@ -250,6 +250,7 @@ public:
             polyKernelRaw = polyKernel.get();
             auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
             nira->setRegistry(&registry);
+            nira->setCoreIr(ir.get());
             theoryManager.registerSolver(std::move(nira));
         } else if (logic == "QF_IDL" || logic == "IDL") {
             auto idl = std::make_unique<IdlSolver>();
