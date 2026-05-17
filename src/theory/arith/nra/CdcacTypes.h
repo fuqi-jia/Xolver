@@ -295,6 +295,21 @@ struct Bound {
 struct Covering;
 
 // ------------------------------------------------------------------
+// Pick sample result (three-state)
+// ------------------------------------------------------------------
+enum class PickKind {
+    Sample,
+    Covered,
+    Unknown
+};
+
+struct PickSampleResult {
+    PickKind kind = PickKind::Unknown;
+    RealAlg sample;
+    CdcacUnknownReason reason = CdcacUnknownReason::None;
+};
+
+// ------------------------------------------------------------------
 // Cell: a region of the real line for one variable
 // ------------------------------------------------------------------
 struct Cell {
@@ -325,7 +340,7 @@ struct Covering {
     // coversAllLine() is implemented in CoveringManager with an AlgebraBackend comparator.
 
     // Pick a sample outside all cells. If preferred is given and not covered, use it.
-    std::optional<RealAlg> chooseSampleOutside(const std::optional<mpq_class>& preferred) const;
+    PickSampleResult chooseSampleOutside(const std::optional<mpq_class>& preferred) const;
 };
 
 // ------------------------------------------------------------------

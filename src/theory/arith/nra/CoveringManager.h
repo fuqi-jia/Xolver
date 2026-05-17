@@ -23,7 +23,7 @@ public:
 
     // Choose a sample point outside all cells in the covering.
     // If preferred is given and not covered, use it.
-    static std::optional<RealAlg> chooseSampleOutside(
+    static PickSampleResult chooseSampleOutside(
         const Covering& cover,
         const std::optional<mpq_class>& preferred);
 

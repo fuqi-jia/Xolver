@@ -113,14 +113,14 @@ CoverageResult CoveringManager::coversAllLine(AlgebraBackend* algebra, const Cov
     return CoverageResult::Covers;
 }
 
-std::optional<RealAlg> CoveringManager::chooseSampleOutside(
+PickSampleResult CoveringManager::chooseSampleOutside(
     const Covering& /*cover*/,
     const std::optional<mpq_class>& preferred) {
     // P1: if preferred is given, return it; otherwise return 0.
     if (preferred) {
-        return RealAlg::fromRational(*preferred);
+        return {PickKind::Sample, RealAlg::fromRational(*preferred), CdcacUnknownReason::None};
     }
-    return RealAlg::fromRational(mpq_class(0));
+    return {PickKind::Sample, RealAlg::fromRational(mpq_class(0)), CdcacUnknownReason::None};
 }
 
 // Helper: compare two RealAlgs when algebra backend is unavailable.
