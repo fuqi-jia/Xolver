@@ -38,6 +38,8 @@ public:
     // Cache marking (called by adapter after successful enqueue)
     void markEmitted(const CutCacheKey& key);
 
+    void clearCache() { cache_.clear(); }
+
 private:
     PolynomialKernel& kernel_;
     TheoryAtomRegistry* registry_;

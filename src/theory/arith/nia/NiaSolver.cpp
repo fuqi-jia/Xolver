@@ -36,6 +36,7 @@ void NiaSolver::reset() {
     active_.clear();
     trail_.clear();
     activeAssignments_.clear();
+    activeSet_.reset();
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
@@ -46,6 +47,15 @@ void NiaSolver::reset() {
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
                           int level, SatLit assertedLit) {
+    auto r = activeSet_.insert(assertedLit);
+    if (r == ActiveLiteralSet::InsertResult::Duplicate) {
+        return;
+    }
+    if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
+        pendingUnknown_ = PendingUnknown{level};
+        return;
+    }
+
     activeAssignments_.push_back({level, assertedLit, atom, value});
 
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
@@ -76,6 +86,7 @@ void NiaSolver::backtrackToLevel(int level) {
     auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
         [level](const auto& a) { return a.level > level; });
     activeAssignments_.erase(it, activeAssignments_.end());
+    activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }

@@ -15,6 +15,7 @@
 #include "theory/arith/nia/BoundedNiaSolver.h"
 #include "theory/arith/nia/NiaLocalSearch.h"
 #include "theory/TheoryAtomRegistry.h"
+#include "theory/ActiveLiteralSet.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 #include <vector>
@@ -87,6 +88,7 @@ private:
     std::vector<ActiveNiaConstraint> active_;
     std::vector<NiaTrailEntry> trail_;
     std::vector<ActiveAssignment> activeAssignments_;
+    ActiveLiteralSet activeSet_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
 

@@ -107,10 +107,10 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
 
     auto r = gs_.check();
     if (r == GeneralSimplex::Result::Unsat) {
-        auto tc = manager_.translateConflict(gs_);
-        for (const auto& ieq : interfaceEqualities_) {
-            tc.clause.push_back(ieq.reason);
-        }
+        // P3 fallback: use all active reasons instead of potentially
+        // incomplete GeneralSimplex explanation.
+        auto tc = TheoryConflict{};
+        tc.clause = allActiveReasons();
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {
@@ -225,12 +225,46 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaDatabase& /*lemmaDb*
 }
 
 TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaDatabase& /*lemmaDb*/) {
+    int bestVar = -1;
+    mpq_class bestFrac(-1);
+
     for (int v : integerVars_) {
         auto val = gs_.value(v);
         if (val.b != 0 || val.a.get_den() != 1) {
-            assert(registry_ != nullptr);
-            return TheoryCheckResult::mkLemma(buildBranchSplitLemma(v, val));
+            mpq_class frac;
+            if (val.b != 0) {
+                // Delta-rational: value is a + b·δ where δ is infinitesimal.
+                // If b > 0, value is just above a (frac ≈ 1).
+                // If b < 0, value is just below a (frac ≈ 0).
+                // Use 1/2 as a representative fractional distance.
+                frac = mpq_class(1, 2);
+            } else {
+                // Compute fractional part = |val.a - floor(val.a)|
+                mpz_class num = val.a.get_num();
+                mpz_class den = val.a.get_den();
+                mpz_class f = num / den;  // truncates toward zero
+                mpz_class r = num % den;
+                mpz_class floorVal;
+                if (r == 0) {
+                    floorVal = f;
+                } else if (num >= 0) {
+                    floorVal = f;
+                } else {
+                    floorVal = f - 1;
+                }
+                frac = val.a - mpq_class(floorVal, 1);
+                if (frac < 0) frac = -frac;
+            }
+            if (frac > bestFrac) {
+                bestFrac = frac;
+                bestVar = v;
+            }
         }
+    }
+
+    if (bestVar != -1) {
+        assert(registry_ != nullptr);
+        return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
     }
     return TheoryCheckResult::consistent();
 }
@@ -248,8 +282,18 @@ TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) 
     mpq_class ceilVal;
 
     if (den == 1) {
-        floorVal = q;
-        ceilVal = q;
+        if (val.b > 0) {
+            // value = a + epsilon, strictly greater than a
+            floorVal = q;
+            ceilVal = mpq_class(num + 1, 1);
+        } else if (val.b < 0) {
+            // value = a - epsilon, strictly less than a
+            floorVal = mpq_class(num - 1, 1);
+            ceilVal = q;
+        } else {
+            floorVal = q;
+            ceilVal = q;
+        }
     } else {
         mpz_class f = num / den;
         mpz_class r = num % den;
@@ -396,6 +440,47 @@ LiaSolver::getDeducedSharedEqualities() {
     // P3: LIA is non-convex; deducing single equalities from a convex
     // simplex model is unsound without arrangement. Return empty.
     return {};
+}
+
+std::vector<SatLit> LiaSolver::allActiveReasons() const {
+    std::vector<SatLit> rs;
+    rs.reserve(activeAssignments_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    for (const auto& a : activeAssignments_) {
+        rs.push_back(a.lit);
+    }
+    for (const auto& ieq : interfaceEqualities_) {
+        rs.push_back(ieq.reason);
+    }
+    for (const auto& idiseq : interfaceDisequalities_) {
+        rs.push_back(idiseq.reason);
+    }
+    std::sort(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    rs.erase(std::unique(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), rs.end());
+    return rs;
+}
+
+std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
+    TheoryModel model;
+    for (int i = 0; i < gs_.numVars(); ++i) {
+        std::string name = manager_.getVarName(i);
+        if (name.empty()) continue;           // skip auxiliary vars
+        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue; // internal
+        DeltaRational val = gs_.value(i);
+        // For integer variables, value should be integral after check().
+        // If delta component is non-zero, take the rational part (delta is infinitesimal).
+        if (val.b == 0 && val.a.get_den() == 1) {
+            model.assignments[name] = val.a.get_num().get_str();
+        } else {
+            model.assignments[name] = val.a.get_str();
+        }
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
 }
 
 } // namespace nlcolver

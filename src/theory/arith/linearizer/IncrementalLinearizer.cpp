@@ -114,6 +114,64 @@ LinearizationResult IncrementalLinearizer::run(
                     }
                     ++idx;
                 }
+
+                // Sign lemmas for product: infer sign of x*y from signs of x and y
+                if (registry_) {
+                    PolyId xPoly = kernel_.mkVar(xVid);
+                    PolyId yPoly = kernel_.mkVar(yVid);
+                    PolyId tPoly = aux.poly;
+
+                    auto buildSignLemma = [&](Relation xRel, Relation yRel, Relation tRel) -> std::optional<TheoryLemma> {
+                        SatLit xLit = registry_->getOrCreatePolynomialAtom(xPoly, xRel, mpq_class(0), linearTheory);
+                        SatLit yLit = registry_->getOrCreatePolynomialAtom(yPoly, yRel, mpq_class(0), linearTheory);
+                        SatLit tLit = registry_->getOrCreatePolynomialAtom(tPoly, tRel, mpq_class(0), linearTheory);
+                        if (xLit.var != 0 && yLit.var != 0 && tLit.var != 0) {
+                            return TheoryLemma{{xLit.negated(), yLit.negated(), tLit}};
+                        }
+                        return std::nullopt;
+                    };
+
+                    // x > 0 && y > 0  =>  t > 0
+                    if (xBounds->hasLower && xBounds->lower > 0 &&
+                        yBounds->hasLower && yBounds->lower > 0) {
+                        auto lemma = buildSignLemma(Relation::Gt, Relation::Gt, Relation::Gt);
+                        if (lemma) {
+                            result.lemmas.push_back({*lemma, std::nullopt});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                    }
+                    // x < 0 && y < 0  =>  t > 0
+                    if (xBounds->hasUpper && xBounds->upper < 0 &&
+                        yBounds->hasUpper && yBounds->upper < 0) {
+                        auto lemma = buildSignLemma(Relation::Lt, Relation::Lt, Relation::Gt);
+                        if (lemma) {
+                            result.lemmas.push_back({*lemma, std::nullopt});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                    }
+                    // x > 0 && y < 0  =>  t < 0
+                    if (xBounds->hasLower && xBounds->lower > 0 &&
+                        yBounds->hasUpper && yBounds->upper < 0) {
+                        auto lemma = buildSignLemma(Relation::Gt, Relation::Lt, Relation::Lt);
+                        if (lemma) {
+                            result.lemmas.push_back({*lemma, std::nullopt});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                    }
+                    // x < 0 && y > 0  =>  t < 0
+                    if (xBounds->hasUpper && xBounds->upper < 0 &&
+                        yBounds->hasLower && yBounds->lower > 0) {
+                        auto lemma = buildSignLemma(Relation::Lt, Relation::Gt, Relation::Lt);
+                        if (lemma) {
+                            result.lemmas.push_back({*lemma, std::nullopt});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                    }
+                }
             } else if (aux.key.kind == NonlinearKind::Square && aux.key.powers.size() == 1) {
                 VarId xVid = aux.key.powers[0].first;
                 std::string x = std::string(kernel_.varName(xVid));

@@ -142,6 +142,9 @@ public:
     int numRows() const { return tab_.numRows(); }
     bool isBasic(int var) const;
 
+    /** Get the name of a variable (original or auxiliary). */
+    const std::string& varName(int var) const { return vars_[var].name; }
+
     // -------------------------------------------------------------------------
     // Debug / testing interface
     // -------------------------------------------------------------------------

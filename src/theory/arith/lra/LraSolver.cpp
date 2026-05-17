@@ -1,5 +1,6 @@
 #include "theory/arith/lra/LraSolver.h"
 #include "theory/DebugTrace.h"
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 
@@ -101,16 +102,11 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
     NO_DBG << "[LRA] simplex result=" << (r == GeneralSimplex::Result::Sat ? "Sat" :
                                           r == GeneralSimplex::Result::Unsat ? "Unsat" : "Unknown") << "\n";
     if (r == GeneralSimplex::Result::Unsat) {
-        auto tc = manager_.translateConflict(gs_);
-        NO_DBG << "[LRA] full conflict: " << debug::fmtClause(tc.clause) << "\n";
-        // Include all interface equality reasons that participate in the conflict.
-        for (const auto& ieq : interfaceEqualities_) {
-            tc.clause.push_back(ieq.reason);
-        }
-        NO_DBG << "[LRA] augmented conflict: " << debug::fmtClause(tc.clause) << "\n";
-        if (tc.clause.empty()) {
-            NO_DBG << "[BUG] LRA empty conflict clause!\n";
-        }
+        // P3 fallback: use all active reasons instead of potentially
+        // incomplete GeneralSimplex explanation.
+        auto tc = TheoryConflict{};
+        tc.clause = allActiveReasons();
+        NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {
@@ -150,6 +146,23 @@ TheoryLemma LraSolver::buildDiseqSplitLemma(const DiseqInfo& d) {
 // Nelson-Oppen combination hooks (skeleton for Stage A)
 // ---------------------------------------------------------------------------
 
+static std::optional<mpq_class> getConstantRationalValue(const CoreIr& ir, const SharedTermRegistry& reg, SharedTermId s) {
+    const auto* st = reg.get(s);
+    if (!st) return std::nullopt;
+    const auto& expr = ir.get(st->coreExpr);
+    if (expr.kind == Kind::ConstInt) {
+        if (auto* i = std::get_if<int64_t>(&expr.payload.value)) {
+            return mpq_class(*i);
+        }
+    }
+    if (expr.kind == Kind::ConstReal) {
+        if (auto* str = std::get_if<std::string>(&expr.payload.value)) {
+            return mpq_class(*str);
+        }
+    }
+    return std::nullopt;
+}
+
 std::string LraSolver::getVarNameForSharedTerm(SharedTermId s) {
     auto it = sharedTermToVarName_.find(s);
     if (it != sharedTermToVarName_.end()) return it->second;
@@ -179,14 +192,42 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
 
     std::string va = getVarNameForSharedTerm(a);
     std::string vb = getVarNameForSharedTerm(b);
-    if (va.empty() || vb.empty()) return -1;
 
-    // Build linear form: va - vb = 0
+    // If both sides are constants, no auxiliary variable is needed.
+    // The caller (assertInterfaceEquality / assertInterfaceDisequality)
+    // will detect the conflict directly.
+    if (va.empty() && vb.empty()) return -2;
+
+    // At least one side is a variable.
+    // We want to encode: va - vb = 0, i.e. va = vb.
+    // addConstraint(terms, rhs) creates s = sum(c_i * x_i) - rhs,
+    // and assertLower/Upper(s,0) forces s = 0, so sum(c_i * x_i) = rhs.
     std::vector<std::pair<int, mpq_class>> terms;
-    terms.push_back({manager_.getOrCreateVar(gs_, va), mpq_class(1)});
-    terms.push_back({manager_.getOrCreateVar(gs_, vb), mpq_class(-1)});
+    mpq_class rhs = 0;
 
-    int aux = gs_.addConstraint(terms, mpq_class(0));
+    auto ca = va.empty() ? getConstantRationalValue(*coreIr_, *sharedTermRegistry_, a) : std::nullopt;
+    auto cb = vb.empty() ? getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b) : std::nullopt;
+
+    if (!va.empty()) {
+        // va is a variable, coefficient +1
+        terms.push_back({manager_.getOrCreateVar(gs_, va), mpq_class(1)});
+    } else {
+        // va is constant ca: contributes +ca to RHS
+        if (!ca) return -1;
+        rhs += *ca;
+    }
+
+    if (!vb.empty()) {
+        // vb is a variable, coefficient -1
+        terms.push_back({manager_.getOrCreateVar(gs_, vb), mpq_class(-1)});
+    } else {
+        // vb is constant cb: contributes -cb to RHS
+        // because va - cb = 0  =>  va = cb  =>  terms={(va,1)}, rhs=cb
+        if (!cb) return -1;
+        rhs -= *cb;
+    }
+
+    int aux = gs_.addConstraint(terms, rhs);
     interfaceEqAuxVars_[key] = aux;
     return aux;
 }
@@ -195,6 +236,15 @@ TheoryCheckResult LraSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
+    if (aux == -2) {
+        // Both sides are constants: check if they are equal.
+        auto ca = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, a);
+        auto cb = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b);
+        if (ca && cb && *ca != *cb) {
+            return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+        }
+        return TheoryCheckResult::consistent();
+    }
     if (aux < 0) return TheoryCheckResult::consistent();
 
     interfaceEqualities_.push_back({a, b, reason, level});
@@ -205,6 +255,15 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
+    if (aux == -2) {
+        // Both sides are constants: check if they are distinct.
+        auto ca = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, a);
+        auto cb = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b);
+        if (ca && cb && *ca == *cb) {
+            return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+        }
+        return TheoryCheckResult::consistent();
+    }
     if (aux < 0) return TheoryCheckResult::consistent();
 
     interfaceDisequalities_.push_back({a, b, reason, level});
@@ -216,6 +275,45 @@ LraSolver::getDeducedSharedEqualities() {
     // Stage A: return empty for now.
     // Full implementation would scan tight bounds after check().
     return {};
+}
+
+std::vector<SatLit> LraSolver::allActiveReasons() const {
+    std::vector<SatLit> rs;
+    rs.reserve(activeAssignments_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    for (const auto& a : activeAssignments_) {
+        rs.push_back(a.lit);
+    }
+    for (const auto& ieq : interfaceEqualities_) {
+        rs.push_back(ieq.reason);
+    }
+    for (const auto& idiseq : interfaceDisequalities_) {
+        rs.push_back(idiseq.reason);
+    }
+    std::sort(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    rs.erase(std::unique(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), rs.end());
+    return rs;
+}
+
+std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
+    TheoryModel model;
+    for (int i = 0; i < gs_.numVars(); ++i) {
+        std::string name = manager_.getVarName(i);
+        if (name.empty()) continue;
+        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
+        DeltaRational val = gs_.value(i);
+        if (val.b == 0) {
+            model.assignments[name] = val.a.get_str();
+        } else {
+            model.assignments[name] = val.toString();
+        }
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
 }
 
 } // namespace nlcolver

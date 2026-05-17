@@ -38,6 +38,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    std::optional<TheoryModel> getModel() const override;
+
 private:
     GeneralSimplex gs_;
     LinearAtomManager manager_;
@@ -80,6 +82,8 @@ private:
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
+
+    std::vector<SatLit> allActiveReasons() const;
 };
 
 } // namespace nlcolver

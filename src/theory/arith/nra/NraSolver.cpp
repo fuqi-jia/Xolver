@@ -13,10 +13,24 @@ void NraSolver::pop(uint32_t) {}
 
 void NraSolver::reset() {
     engine_.reset();
+    activeLits_.clear();
+    trail_.clear();
+    activeSet_.reset();
 }
 
 void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
                           int level, SatLit reason) {
+    // Facade-level dedup: same polarity already active → ignore.
+    // Opposite polarity is left to the engine's defense-in-depth check.
+    if (activeSet_.contains(reason)) {
+        return;
+    }
+    activeSet_.insert(reason);
+
+    size_t oldSize = activeLits_.size();
+    activeLits_.push_back(reason);
+    trail_.push_back({level, oldSize});
+
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
     if (!payload) {
         // Payload mismatch is an internal routing error, NOT a theory conflict.
@@ -30,6 +44,11 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
 }
 
 void NraSolver::backtrackToLevel(int level) {
+    while (!trail_.empty() && trail_.back().level > level) {
+        activeLits_.resize(trail_.back().activeSizeBefore);
+        trail_.pop_back();
+    }
+    activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     engine_.backtrack(level);
 }
 

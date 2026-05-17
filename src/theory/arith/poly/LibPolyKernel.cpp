@@ -1,4 +1,5 @@
 #include "theory/arith/poly/LibPolyKernel.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 
 #ifdef NLCOLVER_HAS_LIBPOLY
 
@@ -66,11 +67,10 @@ PolyId LibPolyKernel::mkConst(const mpq_class& c) {
     if (c.get_den() == 1) {
         return alloc(poly::Polynomial(ctx_.get_polynomial_context(), poly::Integer(c.get_num())));
     }
-    // Non-integer rationals are not directly supported by libpoly's integer-ring
-    // polynomials. Upper layers (Simplex, CAD) should clear denominators.
-    // For now, return the numerator polynomial (approximate).
-    // TODO: proper rational coefficient handling via scaling or Q-ring.
-    return alloc(poly::Polynomial(ctx_.get_polynomial_context(), poly::Integer(c.get_num())));
+    // Non-integer rationals are not supported by libpoly's integer-ring polynomials.
+    // Callers must clear denominators before constructing polynomials.
+    // Returning NullPoly prevents silent unsoundness (e.g. 3/2 becoming 3).
+    return NullPoly;
 }
 
 PolyId LibPolyKernel::mkVar(VarId v) {
@@ -406,36 +406,30 @@ std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const
     auto termsOpt = terms(p);
     if (!termsOpt) return std::nullopt;
 
-    PolyId result = mkZero();
+    // Build a RationalPolynomial from the substituted terms.
+    // This avoids the mkConst non-integer restriction because we
+    // normalize the whole substituted polynomial to integer coefficients
+    // in one step via toPrimitiveInteger.
+    RationalPolynomial rp;
     for (const auto& term : *termsOpt) {
         mpq_class coeff(term.coefficient);
-        PolyId termPoly = mkOne();
-        bool hasNonSubstitutedVar = false;
-
+        MonomialKey key;
         for (const auto& [varId, exp] : term.powers) {
             if (varId == v) {
                 mpq_class factor(1);
                 for (int i = 0; i < exp; ++i) factor *= value;
                 coeff *= factor;
             } else {
-                hasNonSubstitutedVar = true;
-                PolyId varPoly = mkVar(varId);
-                if (exp == 1) {
-                    termPoly = mul(termPoly, varPoly);
-                } else {
-                    termPoly = mul(termPoly, pow(varPoly, static_cast<uint32_t>(exp)));
-                }
+                key.push_back({varId, exp});
             }
         }
-
-        if (hasNonSubstitutedVar) {
-            termPoly = mul(mkConst(coeff), termPoly);
-        } else {
-            termPoly = mkConst(coeff);
-        }
-        result = add(result, termPoly);
+        rp.addTerm(key, coeff);
     }
-    return result;
+    rp.normalize();
+
+    auto norm = rp.toPrimitiveInteger(*this);
+    if (!norm.ok()) return std::nullopt;
+    return norm.poly;
 }
 
 } // namespace nlcolver

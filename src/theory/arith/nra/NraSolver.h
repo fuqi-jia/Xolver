@@ -4,7 +4,9 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nra/CdcacSolver.h"
+#include "theory/ActiveLiteralSet.h"
 #include <memory>
+#include <vector>
 
 namespace nlcolver {
 
@@ -33,9 +35,18 @@ public:
     void reset() override;
 
 private:
+    struct NraTrailEntry {
+        int level;
+        size_t activeSizeBefore;
+    };
+
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
+
+    std::vector<SatLit> activeLits_;
+    std::vector<NraTrailEntry> trail_;
+    ActiveLiteralSet activeSet_;
 };
 
 } // namespace nlcolver

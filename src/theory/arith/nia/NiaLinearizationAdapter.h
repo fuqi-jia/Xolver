@@ -37,6 +37,8 @@ public:
     // Cache marking (called by NiaSolver after successful enqueue)
     void markEmitted(const CutCacheKey& key);
 
+    void clearCache() { linearizer_.clearCache(); }
+
 private:
     PolynomialKernel& kernel_;
     IncrementalLinearizer linearizer_;
