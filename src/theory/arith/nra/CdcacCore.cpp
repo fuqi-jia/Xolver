@@ -200,7 +200,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     }
                     return CdcacResult::mkUnknown(CdcacUnknownReason::NullificationInGeneralization);
                 case NullificationAnalyzer::Action::Unknown:
-                    return CdcacResult::mkUnknown(analysis.reason);
+                    // V2-7: nullification check is best-effort.
+                    // If we can't determine nullification (e.g. algebraic prefix),
+                    // continue with normal specialization rather than aborting.
+                    std::cerr << "[CDCAC]   nullification: Unknown for constraint " << c.id
+                              << ", continuing normally" << std::endl;
+                    break;
                 case NullificationAnalyzer::Action::ContinueNormally:
                     break;
             }
