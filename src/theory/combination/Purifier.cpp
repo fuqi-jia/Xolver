@@ -1,7 +1,7 @@
 #include "theory/combination/Purifier.h"
 #include "theory/DebugTrace.h"
 #include "expr/ir.h"
-#include <iostream>
+#include <unordered_set>
 
 namespace nlcolver {
 
@@ -9,23 +9,39 @@ Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
     : ir_(ir), registry_(registry), boolSortId_(boolSort) {}
 
 bool Purifier::containsUfApply(ExprId eid) const {
-    const auto& e = ir_.get(eid);
-    if (e.kind == Kind::UFApply) return true;
-    for (ExprId child : e.children) {
-        if (containsUfApply(child)) return true;
+    std::vector<ExprId> stack;
+    stack.push_back(eid);
+    std::unordered_set<ExprId> visited;
+    while (!stack.empty()) {
+        ExprId cur = stack.back();
+        stack.pop_back();
+        if (!visited.insert(cur).second) continue;
+        const auto& e = ir_.get(cur);
+        if (e.kind == Kind::UFApply) return true;
+        for (ExprId child : e.children) {
+            stack.push_back(child);
+        }
     }
     return false;
 }
 
 bool Purifier::containsArithmetic(ExprId eid) const {
-    const auto& e = ir_.get(eid);
-    if (e.kind == Kind::Add || e.kind == Kind::Sub || e.kind == Kind::Neg ||
-        e.kind == Kind::Mul || e.kind == Kind::Div || e.kind == Kind::Mod ||
-        e.kind == Kind::Abs || e.kind == Kind::Pow) {
-        return true;
-    }
-    for (ExprId child : e.children) {
-        if (containsArithmetic(child)) return true;
+    std::vector<ExprId> stack;
+    stack.push_back(eid);
+    std::unordered_set<ExprId> visited;
+    while (!stack.empty()) {
+        ExprId cur = stack.back();
+        stack.pop_back();
+        if (!visited.insert(cur).second) continue;
+        const auto& e = ir_.get(cur);
+        if (e.kind == Kind::Add || e.kind == Kind::Sub || e.kind == Kind::Neg ||
+            e.kind == Kind::Mul || e.kind == Kind::Div || e.kind == Kind::Mod ||
+            e.kind == Kind::Abs || e.kind == Kind::Pow) {
+            return true;
+        }
+        for (ExprId child : e.children) {
+            stack.push_back(child);
+        }
     }
     return false;
 }
@@ -62,149 +78,222 @@ TheoryId Purifier::theoryOf(ExprId eid) const {
 }
 
 void Purifier::registerEufVars(ExprId eid) {
-    const auto& e = ir_.get(eid);
-    if (e.kind == Kind::Variable) {
-        if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-            SharedTermId id = registry_.getOrCreate(eid, e.sort, *s, false);
-            registry_.addOwner(id, TheoryId::EUF);
-            registry_.addOwner(id, arithTheory_);
+    std::vector<ExprId> stack;
+    stack.push_back(eid);
+    std::unordered_set<ExprId> visited;
+    while (!stack.empty()) {
+        ExprId cur = stack.back();
+        stack.pop_back();
+        if (!visited.insert(cur).second) continue;
+        const auto& e = ir_.get(cur);
+        if (e.kind == Kind::Variable) {
+            if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                SharedTermId id = registry_.getOrCreate(cur, e.sort, *s, false);
+                registry_.addOwner(id, TheoryId::EUF);
+                registry_.addOwner(id, arithTheory_);
+            }
+            continue;
         }
-        return;
-    }
-    if (e.isConst()) {
-        std::string name;
-        if (auto* b = std::get_if<bool>(&e.payload.value)) {
-            name = *b ? "true" : "false";
-        } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
-            name = std::to_string(*i);
-        } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-            name = *s;
-        } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
-            name = "bv" + std::to_string(*bv);
+        if (e.isConst()) {
+            std::string name;
+            if (auto* b = std::get_if<bool>(&e.payload.value)) {
+                name = *b ? "true" : "false";
+            } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
+                name = std::to_string(*i);
+            } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                name = *s;
+            } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
+                name = "bv" + std::to_string(*bv);
+            }
+            if (!name.empty()) {
+                SharedTermId id = registry_.getOrCreate(cur, e.sort, name, false);
+                registry_.addOwner(id, TheoryId::EUF);
+                registry_.addOwner(id, arithTheory_);
+            }
+            continue;
         }
-        if (!name.empty()) {
-            SharedTermId id = registry_.getOrCreate(eid, e.sort, name, false);
-            registry_.addOwner(id, TheoryId::EUF);
-            registry_.addOwner(id, arithTheory_);
+        for (ExprId child : e.children) {
+            stack.push_back(child);
         }
-        return;
-    }
-    for (ExprId child : e.children) {
-        registerEufVars(child);
     }
 }
 
-ExprId Purifier::purifyRec(ExprId eid) {
-    const auto& e = ir_.get(eid);
+ExprId Purifier::purifyRec(ExprId root) {
+    // Fast path: already in global cache
+    auto it = cache_.find(root);
+    if (it != cache_.end()) return it->second;
 
-    // Leaf
-    if (e.kind == Kind::Variable || e.kind == Kind::ConstBool ||
-        e.kind == Kind::ConstInt || e.kind == Kind::ConstReal ||
-        e.kind == Kind::ConstBV || e.kind == Kind::ConstFP) {
-        return eid;
+    struct Frame {
+        ExprId eid;
+        bool childrenDone;  // false = first visit, true = children processed
+    };
+
+    std::vector<Frame> stack;
+    std::unordered_map<ExprId, ExprId> done;  // local results for this invocation
+
+    auto tryResolve = [&](ExprId eid) -> bool {
+        const auto& e = ir_.get(eid);
+        // Leaf
+        if (e.kind == Kind::Variable || e.kind == Kind::ConstBool ||
+            e.kind == Kind::ConstInt || e.kind == Kind::ConstReal ||
+            e.kind == Kind::ConstBV || e.kind == Kind::ConstFP) {
+            done[eid] = eid;
+            return true;
+        }
+        // Already in global cache
+        auto git = cache_.find(eid);
+        if (git != cache_.end()) {
+            done[eid] = git->second;
+            return true;
+        }
+        // Already computed in this invocation
+        if (done.count(eid)) return true;
+        return false;
+    };
+
+    if (!tryResolve(root)) {
+        stack.push_back(Frame{root, false});
     }
 
-    // UFApply -> bridge variable
-    if (e.kind == Kind::UFApply) {
-        auto it = cache_.find(eid);
-        if (it != cache_.end()) {
-            NO_DBG << "[Purifier] cache hit eid=" << eid << " -> eid=" << it->second << "\n";
-            return it->second;
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        if (f.eid >= ir_.size()) {
+            done[f.eid] = f.eid;
+            stack.pop_back();
+            continue;
+        }
+        // Use value copy because ir_.add() below may reallocate exprs_ vector,
+        // invalidating any prior reference.
+        const CoreExpr e = ir_.get(f.eid);
+
+        if (!f.childrenDone) {
+            // First visit
+            f.childrenDone = true;
+
+            // UFApply -> bridge variable
+            if (e.kind == Kind::UFApply) {
+                for (ExprId arg : e.children) {
+                    registerEufVars(arg);
+                }
+                // Push args in reverse so they are processed left-to-right
+                for (size_t i = e.children.size(); i-- > 0; ) {
+                    if (!tryResolve(e.children[i])) {
+                        stack.push_back(Frame{e.children[i], false});
+                    }
+                }
+                continue;
+            }
+
+            // Arithmetic relation: handle inline (no child recursion needed)
+            bool isArithRelation = (e.kind == Kind::Eq || e.kind == Kind::Distinct ||
+                                    e.kind == Kind::Lt || e.kind == Kind::Leq ||
+                                    e.kind == Kind::Gt || e.kind == Kind::Geq);
+            if (isArithRelation && e.children.size() == 2) {
+                ExprId lhs = e.children[0];
+                ExprId rhs = e.children[1];
+                bool lhsHasUf = containsUfApply(lhs);
+                bool rhsHasUf = containsUfApply(rhs);
+                if (!lhsHasUf && !rhsHasUf) {
+                    done[f.eid] = f.eid;
+                    stack.pop_back();
+                    continue;
+                }
+
+                ExprId newLhs = lhs;
+                ExprId newRhs = rhs;
+
+                if (lhsHasUf) {
+                    auto cit = cache_.find(lhs);
+                    if (cit != cache_.end() && cit->second != lhs) {
+                        newLhs = cit->second;
+                        NO_DBG << "[Purifier] arith cache hit lhs=" << lhs << " -> " << newLhs << "\n";
+                    } else {
+                        ExprId fresh = makeFreshVar(ir_.get(lhs).sort);
+                        cache_[lhs] = fresh;
+                        bridgeAssertions_.push_back(makeEq(fresh, lhs));
+                        newLhs = fresh;
+                        NO_DBG << "[Purifier] arith bridge lhs=" << lhs << " -> " << fresh << "\n";
+                    }
+                }
+                if (rhsHasUf) {
+                    auto cit = cache_.find(rhs);
+                    if (cit != cache_.end() && cit->second != rhs) {
+                        newRhs = cit->second;
+                        NO_DBG << "[Purifier] arith cache hit rhs=" << rhs << " -> " << newRhs << "\n";
+                    } else {
+                        ExprId fresh = makeFreshVar(ir_.get(rhs).sort);
+                        cache_[rhs] = fresh;
+                        bridgeAssertions_.push_back(makeEq(fresh, rhs));
+                        newRhs = fresh;
+                        NO_DBG << "[Purifier] arith bridge rhs=" << rhs << " -> " << fresh << "\n";
+                    }
+                }
+                CoreExpr ne;
+                ne.kind = e.kind;
+                ne.sort = boolSortId_;
+                ne.children.push_back(newLhs);
+                ne.children.push_back(newRhs);
+                done[f.eid] = ir_.add(ne);
+                stack.pop_back();
+                continue;
+            }
+
+            // Default: recurse into children
+            for (size_t i = e.children.size(); i-- > 0; ) {
+                if (!tryResolve(e.children[i])) {
+                    stack.push_back(Frame{e.children[i], false});
+                }
+            }
+            continue;
         }
 
-        // Register original UF arguments as shared/interface terms.
-        // This ensures constants like f(1) have '1' in the shared registry
-        // so that combination equalities like x = 1 can be created.
-        for (ExprId arg : e.children) {
-            registerEufVars(arg);
+        // Second visit: children are resolved in `done`
+        // UFApply -> bridge variable
+        if (e.kind == Kind::UFApply) {
+            std::vector<ExprId> newArgs;
+            newArgs.reserve(e.children.size());
+            bool changed = false;
+            for (ExprId arg : e.children) {
+                ExprId p = done.at(arg);
+                if (p != arg) changed = true;
+                newArgs.push_back(p);
+            }
+            ExprId purifiedApply = changed
+                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), Payload{}})
+                : f.eid;
+            ExprId fresh = makeFreshVar(e.sort);
+            ExprId bridge = makeEq(fresh, purifiedApply);
+            bridgeAssertions_.push_back(bridge);
+            cache_[f.eid] = fresh;
+            done[f.eid] = fresh;
+            NO_DBG << "[Purifier] bridge eid=" << f.eid << " -> eid=" << fresh
+                   << " bridge=" << bridge << "\n";
+            stack.pop_back();
+            continue;
         }
 
-        std::vector<ExprId> newArgs;
-        newArgs.reserve(e.children.size());
+        // Default branch
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(e.children.size());
         bool changed = false;
-        for (ExprId arg : e.children) {
-            ExprId p = purifyRec(arg);
-            if (p != arg) changed = true;
-            newArgs.push_back(p);
+        for (ExprId child : e.children) {
+            ExprId p = done.at(child);
+            if (p != child) changed = true;
+            newChildren.push_back(p);
         }
-
-        ExprId purifiedApply = changed
-            ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), Payload{}})
-            : eid;
-
-        ExprId fresh = makeFreshVar(e.sort);
-        ExprId bridge = makeEq(fresh, purifiedApply);
-        bridgeAssertions_.push_back(bridge);
-        cache_[eid] = fresh;
-        NO_DBG << "[Purifier] bridge eid=" << eid << " -> eid=" << fresh
-               << " bridge=" << bridge << "\n";
-        return fresh;
+        if (!changed) {
+            done[f.eid] = f.eid;
+        } else {
+            CoreExpr ne;
+            ne.kind = e.kind;
+            ne.sort = e.sort;
+            for (ExprId c : newChildren) ne.children.push_back(c);
+            done[f.eid] = ir_.add(ne);
+        }
+        stack.pop_back();
     }
 
-    // Arithmetic relation: replace children containing UF with bridges
-    bool isArithRelation = (e.kind == Kind::Eq || e.kind == Kind::Distinct ||
-                            e.kind == Kind::Lt || e.kind == Kind::Leq ||
-                            e.kind == Kind::Gt || e.kind == Kind::Geq);
-    if (isArithRelation && e.children.size() == 2) {
-        ExprId lhs = e.children[0];
-        ExprId rhs = e.children[1];
-        bool lhsHasUf = containsUfApply(lhs);
-        bool rhsHasUf = containsUfApply(rhs);
-        if (!lhsHasUf && !rhsHasUf) return eid;
-
-        ExprId newLhs = lhs;
-        ExprId newRhs = rhs;
-
-        if (lhsHasUf) {
-            auto it = cache_.find(lhs);
-            if (it != cache_.end() && it->second != lhs) {
-                newLhs = it->second;
-                NO_DBG << "[Purifier] arith cache hit lhs=" << lhs << " -> " << newLhs << "\n";
-            } else {
-                ExprId fresh = makeFreshVar(ir_.get(lhs).sort);
-                cache_[lhs] = fresh;
-                bridgeAssertions_.push_back(makeEq(fresh, lhs));
-                newLhs = fresh;
-                NO_DBG << "[Purifier] arith bridge lhs=" << lhs << " -> " << fresh << "\n";
-            }
-        }
-        if (rhsHasUf) {
-            auto it = cache_.find(rhs);
-            if (it != cache_.end() && it->second != rhs) {
-                newRhs = it->second;
-                NO_DBG << "[Purifier] arith cache hit rhs=" << rhs << " -> " << newRhs << "\n";
-            } else {
-                ExprId fresh = makeFreshVar(ir_.get(rhs).sort);
-                cache_[rhs] = fresh;
-                bridgeAssertions_.push_back(makeEq(fresh, rhs));
-                newRhs = fresh;
-                NO_DBG << "[Purifier] arith bridge rhs=" << rhs << " -> " << fresh << "\n";
-            }
-        }
-        CoreExpr ne;
-        ne.kind = e.kind;
-        ne.sort = boolSortId_;
-        ne.children.push_back(newLhs);
-        ne.children.push_back(newRhs);
-        return ir_.add(ne);
-    }
-
-    // Default: recurse into children
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(e.children.size());
-    bool changed = false;
-    for (ExprId child : e.children) {
-        ExprId p = purifyRec(child);
-        if (p != child) changed = true;
-        newChildren.push_back(p);
-    }
-    if (!changed) return eid;
-
-    CoreExpr ne;
-    ne.kind = e.kind;
-    ne.sort = e.sort;
-    for (ExprId c : newChildren) ne.children.push_back(c);
-    return ir_.add(ne);
+    return done.at(root);
 }
 
 void Purifier::purifyAssertion(ExprId eid) {

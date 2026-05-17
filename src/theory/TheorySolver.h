@@ -153,7 +153,10 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
-    struct TheoryModel {}; // placeholder
+    struct TheoryModel {
+        // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4")
+        std::unordered_map<std::string, std::string> assignments;
+    };
     virtual std::optional<TheoryModel>
     getModel() const { return std::nullopt; }
 };

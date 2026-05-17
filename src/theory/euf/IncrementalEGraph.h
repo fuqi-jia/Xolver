@@ -27,8 +27,16 @@ public:
 
     void clear();
     void ensureTerm(EufTermId t);
-    MergeStatus merge(EufTermId a, EufTermId b, const MergeReason& reason);
-    MergeStatus processMergeQueue();
+
+    // 执行一次 UF unite + proof-forest + member-merge。
+    // 不 refresh congruence，不 drain queue。
+    MergeResult merge(EufTermId a, EufTermId b, const MergeReason& reason);
+
+    // 扫描 kept/killed 的 parents，refresh signature，
+    // 把发现的 congruence merges 推到 outQueue。
+    void refreshCongruence(EClassId kept, EClassId killed,
+                           std::deque<PendingMerge>& outQueue);
+
     bool same(EufTermId a, EufTermId b) const;
     EClassId rep(EufTermId t) const;
 
@@ -36,6 +44,9 @@ public:
     void rollback(EGraphSnapshot snap);
 
     ExplainResult explainEquality(EufTermId a, EufTermId b);
+
+    size_t mergeRecordCount() const { return mergeRecords_.size(); }
+    const MergeRecord& mergeRecord(size_t i) const { return mergeRecords_[i]; }
 
     void setTrueTerm(EufTermId t) { trueTerm_ = t; }
     void setFalseTerm(EufTermId t) { falseTerm_ = t; }
@@ -49,6 +60,7 @@ private:
     std::vector<MemberChange> memberTrail_;
     std::vector<MergeRecord> mergeRecords_;
 
+    // 内部保留的 queue，仅用于兼容旧路径（如有），EufSolver 不再调用 processMergeQueue。
     std::deque<PendingMerge> mergeQueue_;
 
     RollbackSignatureTable sigTable_;
@@ -62,7 +74,7 @@ private:
     EufTermId nextTermToRegister_ = 0;
 
     AppSignature computeSignature(EufTermId t) const;
-    void refreshSignature(EufTermId app);
+    void refreshSignature(EufTermId app, std::deque<PendingMerge>* outQueue);
     void setCurrentSig(EufTermId app, std::optional<AppSignature> sig);
     void rollbackCurrentSig(size_t snap);
     std::vector<EufTermId> collectParents(EClassId root) const;

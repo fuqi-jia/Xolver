@@ -37,6 +37,9 @@ public:
     SharedTermRegistry* sharedTermRegistry() { return sharedTermRegistry_; }
     const SharedTermRegistry* sharedTermRegistry() const { return sharedTermRegistry_; }
 
+    /** Aggregate models from all registered theory solvers. */
+    std::optional<TheorySolver::TheoryModel> getModel() const;
+
 private:
     std::vector<std::unique_ptr<TheorySolver>> solvers_;
     std::unordered_map<TheoryId, TheorySolver*> solverByTheory_;

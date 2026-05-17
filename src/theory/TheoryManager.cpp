@@ -280,4 +280,18 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
     return TheoryCheckResult::consistent();
 }
 
+std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
+    TheorySolver::TheoryModel aggregated;
+    for (const auto& solver : solvers_) {
+        auto m = solver->getModel();
+        if (m) {
+            for (const auto& [name, value] : m->assignments) {
+                aggregated.assignments[name] = value;
+            }
+        }
+    }
+    if (aggregated.assignments.empty()) return std::nullopt;
+    return aggregated;
+}
+
 } // namespace nlcolver

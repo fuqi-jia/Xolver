@@ -13,6 +13,7 @@ void EufTermManager::clear() {
     parents_.clear();
     trueConstant_ = NullEufTerm;
     falseConstant_ = NullEufTerm;
+    iteSymbolIds_.clear();
 }
 
 FuncSymbolId EufTermManager::internSymbol(const std::string& name,
@@ -65,74 +66,172 @@ EufTermId EufTermManager::internFalseConstant() {
     return falseConstant_;
 }
 
-EufTermId EufTermManager::intern(ExprId eid, const CoreIr& ir) {
-    if (eid == TrueSentinelExpr) return internTrueConstant();
-    if (eid == FalseSentinelExpr) return internFalseConstant();
 
-    auto it = exprToTerm_.find(eid);
+EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
+    if (root == TrueSentinelExpr) return internTrueConstant();
+    if (root == FalseSentinelExpr) return internFalseConstant();
+
+    auto it = exprToTerm_.find(root);
     if (it != exprToTerm_.end()) return it->second;
 
-    const CoreExpr& e = ir.get(eid);
-    EufTermId result = NullEufTerm;
+    struct Frame {
+        ExprId eid;
+        bool childrenDone;
+    };
 
-    if (e.kind == Kind::ConstBool) {
-        bool val = std::get<bool>(e.payload.value);
-        result = val ? internTrueConstant() : internFalseConstant();
-    } else if (e.kind == Kind::Variable) {
-        std::string name = std::get<std::string>(e.payload.value);
-        FuncSymbolId sym = internSymbol(name, {}, e.sort);
-        result = createNode(sym, {}, e.sort, eid);
-    } else if (e.isConst()) {
-        // Register integer/real/BV/FP constants as 0-ary EUF symbols
-        // so they can participate in congruence closure and shared equalities.
-        // Use NullSort so they can merge with any sort (constants are ground
-        // terms and their concrete sort does not matter for EUF).
-        std::string name;
-        if (auto* b = std::get_if<bool>(&e.payload.value)) {
-            name = *b ? "true" : "false";
-        } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
-            name = std::to_string(*i);
-        } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-            name = *s;
-        } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
-            name = "bv" + std::to_string(*bv);
+    std::vector<Frame> stack;
+    std::unordered_map<ExprId, EufTermId> done;
+
+    auto tryResolve = [&](ExprId eid) -> bool {
+        if (eid == TrueSentinelExpr) {
+            done[eid] = internTrueConstant();
+            return true;
         }
-        if (!name.empty()) {
-            FuncSymbolId sym = internSymbol(name, {}, NullSort);
-            result = createNode(sym, {}, NullSort, eid);
+        if (eid == FalseSentinelExpr) {
+            done[eid] = internFalseConstant();
+            return true;
         }
-    } else if (e.kind == Kind::UFApply) {
-        std::string name = std::get_if<std::string>(&e.payload.value)
-                           ? std::get<std::string>(e.payload.value)
-                           : "";
-        std::vector<EufTermId> args;
-        std::vector<SortId> argSorts;
-        args.reserve(e.children.size());
-        argSorts.reserve(e.children.size());
-        for (ExprId cid : e.children) {
-            EufTermId arg = intern(cid, ir);
-            if (arg == NullEufTerm) {
-                exprToTerm_[eid] = NullEufTerm;
-                return NullEufTerm;
+        auto git = exprToTerm_.find(eid);
+        if (git != exprToTerm_.end()) {
+            done[eid] = git->second;
+            return true;
+        }
+        if (done.count(eid)) return true;
+        return false;
+    };
+
+    auto computeLeaf = [&](ExprId eid) -> EufTermId {
+        const CoreExpr& e = ir.get(eid);
+        if (e.kind == Kind::ConstBool) {
+            bool val = std::get<bool>(e.payload.value);
+            return val ? internTrueConstant() : internFalseConstant();
+        }
+        if (e.kind == Kind::Variable) {
+            std::string name = std::get<std::string>(e.payload.value);
+            FuncSymbolId sym = internSymbol(name, {}, e.sort);
+            return createNode(sym, {}, e.sort, eid);
+        }
+        if (e.isConst()) {
+            std::string name;
+            if (auto* b = std::get_if<bool>(&e.payload.value)) {
+                name = *b ? "true" : "false";
+            } else if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
+                name = std::to_string(*i);
+            } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                name = *s;
+            } else if (auto* bv = std::get_if<uint64_t>(&e.payload.value)) {
+                name = "bv" + std::to_string(*bv);
             }
-            args.push_back(arg);
-            // Use the original CoreExpr sort for argSorts, not the EUF term sort.
-            // Constants are interned with NullSort for flexibility, but their
-            // original sort (e.g. Int) matters for function symbol identity.
-            argSorts.push_back(ir.get(cid).sort);
+            if (!name.empty()) {
+                FuncSymbolId sym = internSymbol(name, {}, NullSort);
+                return createNode(sym, {}, NullSort, eid);
+            }
         }
-        FuncSymbolId sym = internSymbol(name, argSorts, e.sort);
-        std::cerr << "[EUF-TERM] UFApply " << name << " argSorts=[";
-        for (auto s : argSorts) std::cerr << s << " ";
-        std::cerr << "] resultSort=" << e.sort << " sym=" << sym << "\n";
-        result = createNode(sym, args, e.sort, eid);
-    } else {
-        // Anything else (Add, Sub, etc.) -> NullEufTerm
-        result = NullEufTerm;
+        return NullEufTerm;
+    };
+
+    if (!tryResolve(root)) {
+        stack.push_back(Frame{root, false});
     }
 
-    exprToTerm_[eid] = result;
-    return result;
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        // Value copy: intern()/createNode() may reallocate CoreIr's exprs_ vector.
+        const CoreExpr e = ir.get(f.eid);
+
+        if (!f.childrenDone) {
+            f.childrenDone = true;
+
+            // Leaf or unsupported -> compute inline
+            if (e.kind != Kind::UFApply && e.kind != Kind::Ite) {
+                EufTermId res = computeLeaf(f.eid);
+                exprToTerm_[f.eid] = res;
+                done[f.eid] = res;
+                stack.pop_back();
+                continue;
+            }
+
+            // UFApply or Ite: need children first
+            for (size_t i = e.children.size(); i-- > 0; ) {
+                if (!tryResolve(e.children[i])) {
+                    stack.push_back(Frame{e.children[i], false});
+                }
+            }
+            continue;
+        }
+
+        // Second visit: children resolved in `done`
+        if (e.kind == Kind::UFApply) {
+            std::string name = std::get_if<std::string>(&e.payload.value)
+                               ? std::get<std::string>(e.payload.value)
+                               : "";
+            std::vector<EufTermId> args;
+            std::vector<SortId> argSorts;
+            args.reserve(e.children.size());
+            argSorts.reserve(e.children.size());
+            bool hasNull = false;
+            for (ExprId cid : e.children) {
+                EufTermId arg = done.at(cid);
+                if (arg == NullEufTerm) {
+                    hasNull = true;
+                    break;
+                }
+                args.push_back(arg);
+                argSorts.push_back(ir.get(cid).sort);
+            }
+            if (hasNull) {
+                exprToTerm_[f.eid] = NullEufTerm;
+                done[f.eid] = NullEufTerm;
+            } else {
+                FuncSymbolId sym = internSymbol(name, argSorts, e.sort);
+                std::cerr << "[EUF-TERM] UFApply " << name << " argSorts=[";
+                for (auto s : argSorts) std::cerr << s << " ";
+                std::cerr << "] resultSort=" << e.sort << " sym=" << sym << "\n";
+                EufTermId res = createNode(sym, args, e.sort, f.eid);
+                exprToTerm_[f.eid] = res;
+                done[f.eid] = res;
+            }
+            stack.pop_back();
+            continue;
+        }
+
+        if (e.kind == Kind::Ite) {
+            std::vector<EufTermId> args;
+            std::vector<SortId> argSorts;
+            args.reserve(e.children.size());
+            argSorts.reserve(e.children.size());
+            bool hasNull = false;
+            for (ExprId cid : e.children) {
+                EufTermId arg = done.at(cid);
+                if (arg == NullEufTerm) {
+                    hasNull = true;
+                    break;
+                }
+                args.push_back(arg);
+                argSorts.push_back(ir.get(cid).sort);
+            }
+            if (hasNull) {
+                exprToTerm_[f.eid] = NullEufTerm;
+                done[f.eid] = NullEufTerm;
+            } else {
+                FuncSymbolId sym = internSymbol("ite", argSorts, e.sort);
+                iteSymbolIds_.insert(sym);
+                EufTermId res = createNode(sym, args, e.sort, f.eid);
+                exprToTerm_[f.eid] = res;
+                done[f.eid] = res;
+            }
+            stack.pop_back();
+            continue;
+        }
+
+        // Fallback (should not reach here)
+        EufTermId res = computeLeaf(f.eid);
+        exprToTerm_[f.eid] = res;
+        done[f.eid] = res;
+        stack.pop_back();
+    }
+
+    return done.at(root);
 }
 
 } // namespace nlcolver

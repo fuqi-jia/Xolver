@@ -67,7 +67,8 @@ std::vector<EufTermId> IncrementalEGraph::collectParents(EClassId root) const {
     return out;
 }
 
-void IncrementalEGraph::refreshSignature(EufTermId app) {
+void IncrementalEGraph::refreshSignature(EufTermId app,
+                                         std::deque<PendingMerge>* outQueue) {
     if (app >= tm_.termCount()) return;
     if (tm_.node(app).args.empty()) return;
 
@@ -83,20 +84,20 @@ void IncrementalEGraph::refreshSignature(EufTermId app) {
         EufTermId owner = *ownerOpt;
         bool ownerIsFresh = currentSig_[owner].has_value() &&
                             *currentSig_[owner] == newSig;
-        // std::cerr << " owner=" << owner
-        //           << " fresh=" << ownerIsFresh
-        //           << " same=" << same(owner, app) << "\n";
         if (ownerIsFresh && !same(owner, app)) {
             MergeReason cr;
             cr.kind = MergeReasonKind::Congruence;
             cr.lhsApp = owner;
-            cr.rhsApp = app;
             const auto& n1 = tm_.node(owner);
             const auto& n2 = tm_.node(app);
             for (size_t i = 0; i < n1.args.size(); ++i) {
                 cr.argPairs.push_back({n1.args[i], n2.args[i]});
             }
-            mergeQueue_.push_back({owner, app, cr});
+            if (outQueue) {
+                outQueue->push_back({owner, app, cr});
+            } else {
+                mergeQueue_.push_back({owner, app, cr});
+            }
             return;
         }
     }
@@ -107,6 +108,17 @@ void IncrementalEGraph::refreshSignature(EufTermId app) {
 
     sigTable_.insertOrAssign(newSig, app);
     setCurrentSig(app, newSig);
+}
+
+void IncrementalEGraph::refreshCongruence(EClassId kept, EClassId killed,
+                                          std::deque<PendingMerge>& outQueue) {
+    std::vector<EufTermId> affected = collectParents(kept);
+    auto affectedB = collectParents(killed);
+    affected.insert(affected.end(), affectedB.begin(), affectedB.end());
+
+    for (EufTermId app : affected) {
+        refreshSignature(app, &outQueue);
+    }
 }
 
 void IncrementalEGraph::setCurrentSig(EufTermId app, std::optional<AppSignature> sig) {
@@ -123,65 +135,69 @@ void IncrementalEGraph::rollbackCurrentSig(size_t snap) {
     }
 }
 
-MergeStatus IncrementalEGraph::processMergeQueue() {
-    // std::cerr << " count=" << tm_.termCount() << "\n";
+// 执行一次 UF unite。不 refresh congruence，不 drain queue。
+MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
+                                       const MergeReason& reason) {
+    // 注册新 term 的 signature（只在有新 term 时工作）
     for (EufTermId t = nextTermToRegister_; t < tm_.termCount(); ++t) {
         if (!tm_.node(t).args.empty()) {
-            refreshSignature(t);
+            refreshSignature(t, nullptr);
         }
     }
     nextTermToRegister_ = static_cast<EufTermId>(tm_.termCount());
 
-    while (!mergeQueue_.empty()) {
-        auto m = mergeQueue_.front();
-        mergeQueue_.pop_front();
+    ensureTerm(a);
+    ensureTerm(b);
 
-        if (same(m.a, m.b)) continue;
+    if (same(a, b)) return {false, NullEClass, NullEClass};
 
-        EClassId ra = rep(m.a);
-        EClassId rb = rep(m.b);
+    EClassId ra = rep(a);
+    EClassId rb = rep(b);
 
-        if (tm_.node(m.a).sort != tm_.node(m.b).sort &&
-            tm_.node(m.a).sort != NullSort && tm_.node(m.b).sort != NullSort) {
-            return MergeStatus::SortMismatch;
-        }
-
-        std::vector<EufTermId> affected = collectParents(ra);
-        auto affectedB = collectParents(rb);
-        affected.insert(affected.end(), affectedB.begin(), affectedB.end());
-
+    if (tm_.node(a).sort != tm_.node(b).sort &&
+        tm_.node(a).sort != NullSort && tm_.node(b).sort != NullSort) {
+        // SortMismatch：记录但返回未合并
         MergeRecord rec;
         rec.id = static_cast<MergeId>(mergeRecords_.size());
-        rec.lhs = m.a;
-        rec.rhs = m.b;
+        rec.lhs = a;
+        rec.rhs = b;
         rec.lhsRootBefore = ra;
         rec.rhsRootBefore = rb;
-        rec.reason = m.reason;
+        rec.merged = false;
+        rec.reason = reason;
         mergeRecords_.push_back(rec);
-
-        auto ur = uf_.unite(ra, rb);
-        if (!ur.merged) continue;
-        EClassId dst = ur.winner;
-        EClassId src = ur.loser;
-
-        proofForest_.addEdge(m.a, m.b, m.reason);
-
-        memberTrail_.push_back({dst, src, members_[dst].size()});
-        members_[dst].insert(members_[dst].end(), members_[src].begin(), members_[src].end());
-
-        for (EufTermId app : affected) {
-            refreshSignature(app);
-        }
+        return {false, NullEClass, NullEClass};
     }
-#ifndef NDEBUG
-    checkSignatureTableInvariant();
-#endif
-    return MergeStatus::Ok;
-}
 
-MergeStatus IncrementalEGraph::merge(EufTermId a, EufTermId b, const MergeReason& reason) {
-    mergeQueue_.push_back({a, b, reason});
-    return processMergeQueue();
+    MergeRecord rec;
+    rec.id = static_cast<MergeId>(mergeRecords_.size());
+    rec.lhs = a;
+    rec.rhs = b;
+    rec.lhsRootBefore = ra;
+    rec.rhsRootBefore = rb;
+    rec.reason = reason;
+
+    auto ur = uf_.unite(ra, rb);
+    if (!ur.merged) {
+        rec.merged = false;
+        mergeRecords_.push_back(rec);
+        return {false, NullEClass, NullEClass};
+    }
+
+    EClassId dst = ur.winner;
+    EClassId src = ur.loser;
+    rec.kept = dst;
+    rec.killed = src;
+    rec.merged = true;
+    mergeRecords_.push_back(rec);
+
+    proofForest_.addEdge(a, b, reason);
+
+    memberTrail_.push_back({dst, src, members_[dst].size()});
+    members_[dst].insert(members_[dst].end(),
+                         members_[src].begin(), members_[src].end());
+
+    return {true, dst, src};
 }
 
 bool IncrementalEGraph::same(EufTermId a, EufTermId b) const {
@@ -245,7 +261,8 @@ ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b) {
     return explainEquality(a, b, ctx);
 }
 
-ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b, ExplainContext& ctx) {
+ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b,
+                                                   ExplainContext& ctx) {
     if (a == b) return {true, {}};
     if (!same(a, b)) return {false, {}};
 
@@ -292,7 +309,17 @@ ExplainResult IncrementalEGraph::explainEdge(size_t edgeId, ExplainContext& ctx)
     const auto& edge = proofForest_.edgeReason(edgeId);
 
     if (edge.kind == MergeReasonKind::AssertedEquality) {
-        return {true, {edge.assertedLit}};
+        return {true, {edge.lit}};
+    }
+
+    if (edge.kind == MergeReasonKind::IteTrue ||
+        edge.kind == MergeReasonKind::IteFalse ||
+        edge.kind == MergeReasonKind::IteBranchesEqual) {
+        if (edge.explainA == NullEufTerm || edge.explainB == NullEufTerm)
+            return {false, {}};
+        auto sub = explainEquality(edge.explainA, edge.explainB, ctx);
+        if (!sub.ok) return {false, {}};
+        return {true, std::move(sub.reasons)};
     }
 
     std::vector<SatLit> out;

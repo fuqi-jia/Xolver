@@ -12,6 +12,7 @@ using EufTermId = uint32_t;
 using EClassId = uint32_t;
 using FuncSymbolId = uint32_t;
 using MergeId = uint32_t;
+using IteId = uint32_t;
 
 constexpr EufTermId NullEufTerm = std::numeric_limits<EufTermId>::max();
 constexpr EClassId NullEClass = std::numeric_limits<EClassId>::max();
@@ -40,14 +41,18 @@ struct EufAtom {
 
 enum class MergeReasonKind {
     AssertedEquality,
-    Congruence
+    Congruence,
+    IteTrue,
+    IteFalse,
+    IteBranchesEqual
 };
 
 struct MergeReason {
     MergeReasonKind kind;
-    SatLit assertedLit;
-    EufTermId lhsApp = NullEufTerm;
-    EufTermId rhsApp = NullEufTerm;
+    SatLit lit;
+    EufTermId lhsApp = NullEufTerm;    // Congruence / Axiom
+    EufTermId explainA = NullEufTerm;  // ITE 解释用
+    EufTermId explainB = NullEufTerm;  // ITE 解释用
     std::vector<std::pair<EufTermId, EufTermId>> argPairs;
 };
 
@@ -61,12 +66,21 @@ enum class CloseStatus {
     SortMismatch
 };
 
+struct MergeResult {
+    bool merged;
+    EClassId kept;   // winner root
+    EClassId killed; // loser root
+};
+
 struct MergeRecord {
     MergeId id;
     EufTermId lhs;
     EufTermId rhs;
     EClassId lhsRootBefore;
     EClassId rhsRootBefore;
+    EClassId kept = NullEClass;
+    EClassId killed = NullEClass;
+    bool merged = false;
     MergeReason reason;
 };
 

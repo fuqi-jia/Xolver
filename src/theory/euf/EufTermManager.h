@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace nlcolver {
 
@@ -62,6 +63,7 @@ public:
     bool isApplication(EufTermId id) const {
         return id < nodes_.size() && !nodes_[id].args.empty();
     }
+    bool isIteSymbol(FuncSymbolId s) const { return iteSymbolIds_.count(s); }
     size_t termCount() const { return nodes_.size(); }
     void clear();
 
@@ -85,6 +87,7 @@ private:
 
     EufTermId trueConstant_ = NullEufTerm;
     EufTermId falseConstant_ = NullEufTerm;
+    std::unordered_set<FuncSymbolId> iteSymbolIds_;
 
     FuncSymbolId internSymbol(const std::string& name,
                               const std::vector<SortId>& argSorts,
