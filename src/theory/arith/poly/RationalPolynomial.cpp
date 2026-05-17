@@ -442,6 +442,63 @@ RationalPolynomial RationalPolynomial::derivative(VarId v) const {
     return result;
 }
 
+RationalPolynomial RationalPolynomial::pseudoRemainder(VarId v, const RationalPolynomial& divisor) const {
+    int degP = degree(v);
+    int degQ = divisor.degree(v);
+
+    if (degP < degQ) return *this;
+    if (degQ < 0) return *this; // divisor is zero
+
+    auto pCoeffs = coefficients(v);
+    auto qCoeffs = divisor.coefficients(v);
+
+    RationalPolynomial lcQ = qCoeffs[degQ];
+    int k = degP - degQ + 1;
+
+    std::vector<RationalPolynomial> rem = pCoeffs;
+
+    for (int step = 0; step < k; ++step) {
+        int remDeg = -1;
+        for (int i = static_cast<int>(rem.size()) - 1; i >= 0; --i) {
+            if (!rem[i].isZero()) {
+                remDeg = i;
+                break;
+            }
+        }
+        if (remDeg < degQ) break;
+
+        // r = lc(q) * r
+        for (auto& c : rem) {
+            c = c * lcQ;
+        }
+
+        // r = r - lc(r) * q * x^(remDeg - degQ)
+        RationalPolynomial lcRem = rem[remDeg];
+        int shift = remDeg - degQ;
+        for (size_t j = 0; j < qCoeffs.size(); ++j) {
+            int idx = shift + static_cast<int>(j);
+            if (idx >= 0 && idx < static_cast<int>(rem.size())) {
+                rem[idx] = rem[idx] - lcRem * qCoeffs[j];
+            }
+        }
+    }
+
+    // Reconstruct remainder polynomial
+    RationalPolynomial result;
+    for (size_t i = 0; i < rem.size(); ++i) {
+        if (rem[i].isZero()) continue;
+        for (const auto& [key, coeff] : rem[i].terms()) {
+            MonomialKey newKey = key;
+            auto it = std::lower_bound(newKey.begin(), newKey.end(), v,
+                [](const auto& pair, VarId vid) { return pair.first < vid; });
+            newKey.insert(it, {v, static_cast<int>(i)});
+            result.addTerm(newKey, coeff);
+        }
+    }
+    result.normalize();
+    return result;
+}
+
 std::set<VarId> RationalPolynomial::variables() const {
     std::set<VarId> result;
     for (const auto& [key, coeff] : terms_) {

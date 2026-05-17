@@ -70,6 +70,9 @@ public:
     /** Partial derivative w.r.t. variable v. */
     RationalPolynomial derivative(VarId v) const;
 
+    /** Pseudo-remainder of this polynomial divided by divisor, w.r.t. variable v. */
+    RationalPolynomial pseudoRemainder(VarId v, const RationalPolynomial& divisor) const;
+
     /** Set of all variables appearing in this polynomial. */
     std::set<VarId> variables() const;
 
