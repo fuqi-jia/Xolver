@@ -64,9 +64,12 @@ public:
 
     /**
      * Check whether a polynomial vanishes (is identically zero) under a
-     * partial sample (prefix). Used for nullification detection (P4).
+     * partial sample (prefix). Used for nullification detection (P4/V2-7).
+     *
+     * Rational prefix: returns Vanishes or NonVanishes.
+     * Algebraic prefix: returns Unknown (not supported in V2-7).
      */
-    virtual bool vanishesAtPrefix(PolyId p, const SamplePoint& prefix, VarId var) = 0;
+    virtual VanishResult vanishesAtPrefix(PolyId p, const SamplePoint& prefix, VarId var) = 0;
 
     /**
      * Compare two real algebraic numbers.

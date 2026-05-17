@@ -175,6 +175,15 @@ struct ProjectionResult {
 };
 
 // ------------------------------------------------------------------
+// Vanish result (for nullification detection)
+// ------------------------------------------------------------------
+enum class VanishResult : uint8_t {
+    Vanishes,
+    NonVanishes,
+    Unknown
+};
+
+// ------------------------------------------------------------------
 // Model seed from LRA / linearizer
 // ------------------------------------------------------------------
 struct ModelSeed {

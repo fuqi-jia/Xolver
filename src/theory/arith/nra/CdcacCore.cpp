@@ -1,5 +1,6 @@
 #include "theory/arith/nra/CdcacCore.h"
 #include "theory/arith/nra/LocalProjection.h"
+#include "theory/arith/nra/NullificationAnalyzer.h"
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
@@ -178,6 +179,33 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     VarId var = input.varOrder[k];
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var) << std::endl;
+
+    // V2-7: nullification check before specialization
+    {
+        NullificationAnalyzer na(algebra_);
+        for (const auto& c : input.constraints) {
+            auto analysis = na.analyzeConstraint(c, prefix, var);
+            switch (analysis.action) {
+                case NullificationAnalyzer::Action::SkipConstraintAsTrue:
+                    std::cerr << "[CDCAC]   nullification: skip constraint " << c.id << " (true)" << std::endl;
+                    continue;
+                case NullificationAnalyzer::Action::ReturnFullLineConflict:
+                    std::cerr << "[CDCAC]   nullification: FullLine conflict for constraint " << c.id << std::endl;
+                    if (analysis.conflictCell) {
+                        Cell cell = *analysis.conflictCell;
+                        Covering cover;
+                        cover.var = var;
+                        cover.cells.push_back(std::move(cell));
+                        return CdcacResult::mkUnsat(std::move(cover), {c.reason});
+                    }
+                    return CdcacResult::mkUnknown(CdcacUnknownReason::NullificationInGeneralization);
+                case NullificationAnalyzer::Action::Unknown:
+                    return CdcacResult::mkUnknown(analysis.reason);
+                case NullificationAnalyzer::Action::ContinueNormally:
+                    break;
+            }
+        }
+    }
 
     // 1. Collect polynomials that become univariate in 'var' after prefix substitution
     std::vector<PolyId> polys = collectPolys(input.constraints);

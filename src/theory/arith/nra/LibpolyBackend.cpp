@@ -584,9 +584,50 @@ bool LibpolyBackend::validateRootIsolation(UniPolyId p, const RootSet& roots) {
     return true;
 }
 
-bool LibpolyBackend::vanishesAtPrefix(PolyId /*p*/, const SamplePoint& /*prefix*/, VarId /*var*/) {
-    // P0: stub. P4: implement.
-    return false;
+VanishResult LibpolyBackend::vanishesAtPrefix(PolyId p, const SamplePoint& prefix, VarId var) {
+    // V2-7: nullification detection.
+    // Algebraic prefix: return Unknown (not supported).
+    for (const auto& val : prefix.values) {
+        if (val.isAlgebraic()) {
+            return VanishResult::Unknown;
+        }
+    }
+
+    // Rational prefix: substitute and check if zero.
+    PolyId current = p;
+    for (size_t i = 0; i < prefix.numVars(); ++i) {
+        if (!prefix.values[i].isRational()) {
+            return VanishResult::Unknown;
+        }
+        auto nextOpt = kernel_->substituteRational(current, prefix.varOrder[i], prefix.values[i].rational);
+        if (!nextOpt) {
+            return VanishResult::Unknown;
+        }
+        current = *nextOpt;
+    }
+
+    // After substitution, check if the remaining polynomial contains 'var'
+    // and if its coefficients are all zero.
+    auto rpOpt = RationalPolynomial::fromPolyId(current, *kernel_);
+    if (!rpOpt) {
+        return VanishResult::Unknown;
+    }
+
+    // If the polynomial doesn't contain var, it's a constant w.r.t. var.
+    // Check if it's zero.
+    if (!rpOpt->contains(var)) {
+        return rpOpt->isZero() ? VanishResult::Vanishes : VanishResult::NonVanishes;
+    }
+
+    // The polynomial still contains var. For nullification detection,
+    // we need to check if ALL coefficients w.r.t. var are zero.
+    auto coeffs = rpOpt->coefficients(var);
+    for (const auto& c : coeffs) {
+        if (!c.isZero()) {
+            return VanishResult::NonVanishes;
+        }
+    }
+    return VanishResult::Vanishes;
 }
 
 std::unordered_map<VarId, mpq_class> LibpolyBackend::toRationalMap(const SamplePoint& sample) const {

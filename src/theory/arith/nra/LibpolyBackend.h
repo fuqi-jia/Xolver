@@ -26,7 +26,7 @@ public:
     UniPolyId specializeToUnivariate(PolyId p, const SamplePoint& prefix, VarId mainVar) override;
     ProjectionResult projectionPolys(const std::vector<PolyId>& polys, VarId eliminateVar, ProjectionMode mode) override;
     bool validateRootIsolation(UniPolyId p, const RootSet& roots) override;
-    bool vanishesAtPrefix(PolyId p, const SamplePoint& prefix, VarId var) override;
+    VanishResult vanishesAtPrefix(PolyId p, const SamplePoint& prefix, VarId var) override;
     CompareResult compareRealAlg(const RealAlg& a, const RealAlg& b) override;
     RootSet isolateRealRootsAlgebraic(
         PolyId p, const SamplePoint& prefix, VarId mainVar) override;
