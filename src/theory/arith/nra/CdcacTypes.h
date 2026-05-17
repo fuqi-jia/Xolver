@@ -187,11 +187,12 @@ struct ModelSeed {
 using PrefixContextId = uint32_t;
 
 struct RootOrigin {
-    PolyId liftedDefiningPoly = NullPoly;   // original multivariate polynomial
-    VarId mainVar = NullVar;                 // variable this root belongs to
-    int level = -1;                          // index in varOrder
-    int rootIndex = -1;                      // which root of the defining polynomial
-    PrefixContextId contextId = 0;           // sample prefix where this root was created
+    PolyId liftedDefiningPoly = NullPoly;      // original multivariate polynomial
+    UniPolyId squarefreeDefiningPoly = NullUniPolyId;  // tower reduction divisor
+    VarId mainVar = NullVar;                    // variable this root belongs to
+    int level = -1;                             // index in varOrder
+    int rootIndex = -1;                         // which root of the defining polynomial
+    PrefixContextId contextId = 0;              // sample prefix where this root was created
 };
 
 // ------------------------------------------------------------------
@@ -305,6 +306,15 @@ struct Bound {
 struct Covering;
 
 // ------------------------------------------------------------------
+// Section data: extra information for section cells
+// ------------------------------------------------------------------
+struct SectionData {
+    PolyId liftedDefiningPoly = NullPoly;      // original multivariate polynomial
+    UniPolyId squarefreeDefiningPoly = NullUniPolyId;  // univariate squarefree polynomial
+    RootOrigin origin;
+};
+
+// ------------------------------------------------------------------
 // Extended real algebraic number (includes ±inf)
 // ------------------------------------------------------------------
 struct ExtRealAlg {
@@ -385,6 +395,9 @@ struct Cell {
 
     bool isSection() const { return kind == CellKind::Section; }
     bool isSector() const { return kind == CellKind::Sector; }
+
+    // V2-6: section metadata (populated for Section cells)
+    std::optional<SectionData> section;
 };
 
 // ------------------------------------------------------------------

@@ -253,12 +253,22 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     // 3. Helper: test a sample and recurse to deeper levels
     auto testAndRecurse = [&](const RealAlg& sample) -> CdcacResult {
-        prefix.push(var, sample);
+        RealAlg sampleWithOrigin = sample;
+        if (sampleWithOrigin.isAlgebraic()) {
+            // V2-6: populate RootOrigin for algebraic samples
+            RootOrigin origin;
+            origin.squarefreeDefiningPoly = sampleWithOrigin.root.definingPoly;
+            origin.mainVar = var;
+            origin.level = k;
+            origin.rootIndex = sampleWithOrigin.root.rootIndex;
+            sampleWithOrigin.root.origins.push_back(std::move(origin));
+        }
+        prefix.push(var, sampleWithOrigin);
         CdcacResult childRes = solveLevel(k + 1, prefix, input);
         prefix.pop();
         if (childRes.status == CdcacStatus::Sat && childRes.model) {
             childRes.model->varOrder.insert(childRes.model->varOrder.begin(), var);
-            childRes.model->values.insert(childRes.model->values.begin(), sample);
+            childRes.model->values.insert(childRes.model->values.begin(), sampleWithOrigin);
         }
         return childRes;
     };
@@ -463,6 +473,17 @@ BuildCellResult CdcacCore::buildConflictCell(
 
     Cell cell = lookup.cell;
     cell.reasons = childRes.unsat->reasons;
+
+    // V2-6: populate section data for Section cells
+    if (cell.isSection() && sample.isAlgebraic()) {
+        SectionData sd;
+        sd.squarefreeDefiningPoly = sample.root.definingPoly;
+        sd.origin.squarefreeDefiningPoly = sample.root.definingPoly;
+        sd.origin.mainVar = var;
+        sd.origin.level = k;
+        sd.origin.rootIndex = sample.root.rootIndex;
+        cell.section = std::move(sd);
+    }
 
     // Guards: constraint polynomials (shallow, no projection in P2b)
     std::vector<PolyId> guards = collectPolys(input.constraints);
