@@ -31,15 +31,27 @@ public:
     RootSet isolateRealRootsAlgebraic(
         PolyId p, const SamplePoint& prefix, VarId mainVar) override;
 
+    // --- V2-1: univariate polynomial pool access (public for engines) ---
+
+    UniPolyId allocUni(std::vector<mpz_class> coeffs);
+    const std::vector<mpz_class>& getUni(UniPolyId id) const;
+
+    // GCD of two univariate polynomials (returns 0 if both are zero)
+    UniPolyId gcdUni(UniPolyId a, UniPolyId b);
+
+    // True if univariate polynomial is a non-zero constant
+    bool isConstantUni(UniPolyId p) const;
+
+    // V2-1: exact division of univariate polynomials
+    // Returns NullUniPolyId if b does not divide a exactly.
+    UniPolyId exactDivideUni(UniPolyId a, UniPolyId b);
+
 private:
     PolynomialKernel* kernel_;
     LibPolyKernel* libKernel_ = nullptr;  // null if kernel is not LibPolyKernel
 
     // UniPolyId pool: stores coefficient vectors (high-to-low degree, integer coeffs)
     std::vector<std::vector<mpz_class>> uniPool_;
-
-    UniPolyId allocUni(std::vector<mpz_class> coeffs);
-    const std::vector<mpz_class>& getUni(UniPolyId id) const;
 
     // Helper: build mpq_class sample map from SamplePoint (rational values only)
     std::unordered_map<VarId, mpq_class> toRationalMap(const SamplePoint& sample) const;
@@ -48,12 +60,6 @@ private:
     mpq_class evalUniAtRational(const std::vector<mpz_class>& coeffs, const mpq_class& q) const;
 
     // --- P2a univariate algebraic helpers ---
-
-    // GCD of two univariate polynomials (returns 0 if both are zero)
-    UniPolyId gcdUni(UniPolyId a, UniPolyId b);
-
-    // True if univariate polynomial is a non-zero constant
-    bool isConstantUni(UniPolyId p) const;
 
     // Check if algebraic root alpha is also a root of univariate polynomial g
     bool rootBelongsTo(const AlgebraicRoot& alpha, UniPolyId g);
@@ -65,10 +71,6 @@ private:
     Sign signAtRational(PolyId p, const SamplePoint& sample);
     Sign signAtOneAlgebraic(PolyId p, const SamplePoint& sample);
     Sign signAtTower(PolyId p, const SamplePoint& sample);
-
-    // V2-1: exact division of univariate polynomials
-    // Returns NullUniPolyId if b does not divide a exactly.
-    UniPolyId exactDivideUni(UniPolyId a, UniPolyId b);
 
     // Helper: convert UniPolyId coefficient vector back to PolyId in given variable
     PolyId univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var);

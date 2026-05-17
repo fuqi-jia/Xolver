@@ -1,4 +1,5 @@
 #include "theory/arith/nra/LibpolyBackend.h"
+#include "theory/arith/nra/SquarefreeEngine.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
@@ -37,7 +38,12 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
 #else
     if (!libKernel_) return RootSet{};
 
-    const auto& coeffs = getUni(p);
+    // V2-2: compute squarefree part before isolation
+    SquarefreeEngine sqf(*this);
+    auto sqfResult = sqf.compute(p);
+    UniPolyId polyToIsolate = sqfResult.ok() ? sqfResult.squarefree : p;
+
+    const auto& coeffs = getUni(polyToIsolate);
     if (coeffs.empty()) return RootSet{};
 
     // Convert coefficients (high-to-low) to libpoly format (low-to-high)
@@ -80,7 +86,8 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
         }
 
         AlgebraicRoot ar;
-        ar.definingPoly = p;
+        // V2-2: definingPoly is the squarefree polynomial
+        ar.definingPoly = polyToIsolate;
         ar.rootIndex = static_cast<int>(i);
         ar.lower = lowerQ;
         ar.upper = upperQ;
