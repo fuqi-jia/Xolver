@@ -54,7 +54,7 @@ void LiaSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     // Rebuild all state from current active assignments.
     gs_.resetActiveBounds();
     disequalities_.clear();

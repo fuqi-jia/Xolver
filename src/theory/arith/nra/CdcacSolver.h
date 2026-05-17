@@ -29,7 +29,7 @@ public:
     void assertConstraint(PolyId poly, Relation rel, SatLit reason, int level);
     void backtrack(int level);
     TheoryCheckResult check();
-    TheoryCheckResult check(TheoryEffort effort, void* trail);
+    TheoryCheckResult check(CdcacEffort effort, void* trail);
     void reset();
 
 private:

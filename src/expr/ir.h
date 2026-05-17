@@ -84,6 +84,8 @@ public:
         scopedAssertions_.erase(it, scopedAssertions_.end());
     }
     void addAssertion(ExprId id) { scopedAssertions_.push_back({currentScope_, id}); }
+    void addAssertion(ExprId id, ScopeLevel level) { scopedAssertions_.push_back({level, id}); }
+    void clearAssertions() { scopedAssertions_.clear(); }
 
     std::vector<ExprId> assertions() const {
         std::vector<ExprId> result;
@@ -92,6 +94,10 @@ public:
             result.push_back(id);
         }
         return result;
+    }
+
+    const std::vector<std::pair<ScopeLevel, ExprId>>& getScopedAssertions() const {
+        return scopedAssertions_;
     }
 
     void replaceAssertions(const std::vector<ExprId>& newAssertions) {

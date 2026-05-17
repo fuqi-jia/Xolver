@@ -29,7 +29,7 @@ using ScopeLevel = uint32_t;
 constexpr ScopeLevel ScopeRoot = 0;
 
 enum class TheoryId : uint8_t {
-    Bool, EUF, LRA, LIA, NRA, NIA, BV, FP, IDL, RDL, Combination, Custom
+    Bool, EUF, LRA, LIA, NRA, NIA, LIRA, NIRA, BV, FP, IDL, RDL, Combination, Custom
 };
 
 enum class Relation : uint8_t {

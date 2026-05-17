@@ -107,7 +107,7 @@ static std::unordered_set<std::string> collectVars(
     return vars;
 }
 
-TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     if (pendingUnknown_) return TheoryCheckResult::unknown();
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();

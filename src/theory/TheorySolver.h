@@ -75,6 +75,11 @@ struct TheoryLemma {
     std::vector<SatLit> lits;
 };
 
+enum class TheoryEffort : uint8_t {
+    Standard,
+    Full
+};
+
 struct TheoryCheckResult {
     enum class Kind {
         Consistent,
@@ -122,7 +127,8 @@ public:
     virtual void backtrackToLevel(int level) = 0;
 
     // Check current incremental state
-    virtual TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) = 0;
+    virtual TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb,
+                                    TheoryEffort effort = TheoryEffort::Standard) = 0;
 
     // Reset ONCE per fresh check-sat initialization
     virtual void reset() = 0;

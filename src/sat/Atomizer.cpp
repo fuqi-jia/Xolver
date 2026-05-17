@@ -308,19 +308,15 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
             break;
         }
         case Kind::Ite: {
-            assert(e.children.size() == 3);
+            assert(!"ITE should have been lowered by CoreIteLowerer before atomization");
+            // Fallback: old Tseitin encoding (should never reach here).
             SatLit c = atomizeRec(e.children[0], ir);
             SatLit t = atomizeRec(e.children[1], ir);
             SatLit f = atomizeRec(e.children[2], ir);
             SatVar x = freshVar();
-            // x = ite(c, t, f)
-            // Tseitin: x -> (c -> t)  i.e.  ¬x ∨ ¬c ∨ t
             sat_.addClause({SatLit::negative(x), c.negated(), t});
-            // Tseitin: x -> (¬c -> f)  i.e.  ¬x ∨ c ∨ f
             sat_.addClause({SatLit::negative(x), c, f});
-            // Tseitin: (c ∧ t) -> x    i.e.  x ∨ ¬c ∨ ¬t
             sat_.addClause({SatLit::positive(x), c.negated(), t.negated()});
-            // Tseitin: (¬c ∧ f) -> x   i.e.  x ∨ c ∨ ¬f
             sat_.addClause({SatLit::positive(x), c, f.negated()});
             result = SatLit::positive(x);
             break;
@@ -364,12 +360,38 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                     }
                 }
 
-                if (targetTheory == TheoryId::NRA || targetTheory == TheoryId::NIA) {
-                    if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
-                        // registered inside extractPolynomialConstraint
+                if (targetTheory == TheoryId::NRA || targetTheory == TheoryId::NIA ||
+                    targetTheory == TheoryId::NIRA) {
+                    // For NIRA, try linear extraction first so linear constraints
+                    // are registered as LinearAtomPayload (usable by LIRA engine).
+                    if (targetTheory == TheoryId::NIRA) {
+                        std::unordered_map<std::string, mpq_class> coeffs;
+                        mpq_class rhs;
+                        Relation rel;
+                        if (extractLinearConstraint(eid, ir, coeffs, rhs, rel)) {
+                            LinearFormKey lhs;
+                            for (auto& [name, coeff] : coeffs) {
+                                if (coeff != 0) {
+                                    lhs.terms.push_back({name, coeff});
+                                }
+                            }
+                            std::sort(lhs.terms.begin(), lhs.terms.end(),
+                                      [](auto& a, auto& b) { return a.first < b.first; });
+                            registry_->registerParsedTheoryAtom(
+                                v, eid, targetTheory, LinearAtomPayload{lhs, rel, rhs});
+                        } else if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
+                            // registered inside extractPolynomialConstraint
+                        } else {
+                            std::cerr << "[ATOM] unsupported NIRA kind=" << (int)e.kind << "\n";
+                            registry_->setUnsupportedTheorySeen();
+                        }
                     } else {
-                        std::cerr << "[ATOM] unsupported NRA/NIA kind=" << (int)e.kind << "\n";
-                        registry_->setUnsupportedTheorySeen();
+                        if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
+                            // registered inside extractPolynomialConstraint
+                        } else {
+                            std::cerr << "[ATOM] unsupported NRA/NIA/NIRA kind=" << (int)e.kind << "\n";
+                            registry_->setUnsupportedTheorySeen();
+                        }
                     }
                 } else if (targetTheory == TheoryId::EUF) {
                     if (e.kind == Kind::Eq || e.kind == Kind::Distinct) {

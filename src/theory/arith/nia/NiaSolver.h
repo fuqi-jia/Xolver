@@ -55,7 +55,7 @@ public:
     void assertLit(const TheoryAtomRecord& atom, bool value,
                    int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb) override;
+    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);

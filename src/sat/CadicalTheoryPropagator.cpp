@@ -86,7 +86,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         NO_DBG << "  raw=" << lit << " var=" << var << " sign=" << (sign ? "T" : "F") << "\n";
     }
 
-    auto tr = tm_.check(lemmaDb_);
+    auto tr = tm_.check(lemmaDb_, TheoryEffort::Full);
     std::cerr << "[PROP] modelCheck=" << modelCheckCount_ << " result=" << (int)tr.kind << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {

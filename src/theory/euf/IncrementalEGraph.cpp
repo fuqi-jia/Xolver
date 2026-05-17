@@ -312,15 +312,6 @@ ExplainResult IncrementalEGraph::explainEdge(size_t edgeId, ExplainContext& ctx)
         return {true, {edge.lit}};
     }
 
-    if (edge.kind == MergeReasonKind::IteTrue ||
-        edge.kind == MergeReasonKind::IteFalse ||
-        edge.kind == MergeReasonKind::IteBranchesEqual) {
-        if (edge.explainA == NullEufTerm || edge.explainB == NullEufTerm)
-            return {false, {}};
-        auto sub = explainEquality(edge.explainA, edge.explainB, ctx);
-        if (!sub.ok) return {false, {}};
-        return {true, std::move(sub.reasons)};
-    }
 
     std::vector<SatLit> out;
     for (const auto& [ai, bi] : edge.argPairs) {

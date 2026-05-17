@@ -159,7 +159,7 @@ TEST_CASE("P0 Routing: QF_LIA declared with Real variable returns Unknown") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unknown));
 }
 
-TEST_CASE("P0 Routing: mixed Int/Real without set-logic returns Unknown") {
+TEST_CASE("P0 Routing: mixed Int/Real linear auto-routes to LIRA") {
     std::string path = writeTempSmt2(
         "(declare-const x Int)\n"
         "(declare-const y Real)\n"
@@ -168,7 +168,7 @@ TEST_CASE("P0 Routing: mixed Int/Real without set-logic returns Unknown") {
     );
     Solver solver;
     CHECK(solver.parseFile(path));
-    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
 
 TEST_CASE("P0 Routing: Int nonlinear without set-logic routes to NIA") {

@@ -162,7 +162,7 @@ TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatab
     return lemma;
 }
 
-TheoryCheckResult RdlSolver::check(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult RdlSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     if (pendingConflict_) {
         auto c = *pendingConflict_;
         pendingConflict_.reset();

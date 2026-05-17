@@ -39,7 +39,7 @@ enum class CdcacUnknownReason : uint8_t {
 // ------------------------------------------------------------------
 // Effort levels
 // ------------------------------------------------------------------
-enum class TheoryEffort : uint8_t {
+enum class CdcacEffort : uint8_t {
     Cheap,      // constants, duplicates, simple bounds
     Standard,   // + incremental linearization, LRA model, cuts
     Full        // + CDCAC complete check

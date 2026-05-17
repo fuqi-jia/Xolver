@@ -19,7 +19,7 @@ TEST_CASE("CDCAC facade: constant unsat conflict") {
     SatLit reason = SatLit::positive(1);
     solver.assertConstraint(eqPoly, Relation::Eq, reason, 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
     REQUIRE(res.conflictOpt.has_value());
     CHECK(!res.conflictOpt->clause.empty());
@@ -37,7 +37,7 @@ TEST_CASE("CDCAC facade: constant sat consistent") {
 
     solver.assertConstraint(gtPoly, Relation::Gt, SatLit::positive(1), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
@@ -46,10 +46,10 @@ TEST_CASE("CDCAC facade: effort cheap defers to full") {
     CdcacSolver solver(kernel.get());
 
     // No constraints -> consistent regardless of effort
-    auto cheap = solver.check(TheoryEffort::Cheap, nullptr);
+    auto cheap = solver.check(CdcacEffort::Cheap, nullptr);
     CHECK(cheap.kind == TheoryCheckResult::Kind::Consistent);
 
-    auto standard = solver.check(TheoryEffort::Standard, nullptr);
+    auto standard = solver.check(CdcacEffort::Standard, nullptr);
     CHECK(standard.kind == TheoryCheckResult::Kind::Consistent);
 }
 
@@ -63,16 +63,16 @@ TEST_CASE("CDCAC facade: backtrack clears pending conflict") {
 
     SatLit reason = SatLit::positive(1);
     solver.assertConstraint(eqPoly, Relation::Eq, reason, 1);
-    auto res1 = solver.check(TheoryEffort::Full, nullptr);
+    auto res1 = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res1.kind == TheoryCheckResult::Kind::Conflict);
 
     // Re-check should return cached conflict
-    auto res2 = solver.check(TheoryEffort::Full, nullptr);
+    auto res2 = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res2.kind == TheoryCheckResult::Kind::Conflict);
 
     // Backtrack to level 0 clears the conflict
     solver.backtrack(0);
-    auto res3 = solver.check(TheoryEffort::Full, nullptr);
+    auto res3 = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res3.kind == TheoryCheckResult::Kind::Consistent);
 }
 
@@ -90,7 +90,7 @@ TEST_CASE("CDCAC facade: active constraint trail") {
 
     // Backtrack to level 1 should keep first two constraints (both true)
     solver.backtrack(1);
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
@@ -105,7 +105,7 @@ TEST_CASE("CDCAC facade: reset clears everything") {
     solver.assertConstraint(eqPoly, Relation::Eq, SatLit::positive(1), 0);
     solver.reset();
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
 
@@ -118,7 +118,7 @@ TEST_CASE("CDCAC facade: univariate linear x=0 returns Consistent") {
     // x = 0
     solver.assertConstraint(x, Relation::Eq, SatLit::positive(1), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core handles univariate constraints
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
@@ -219,7 +219,7 @@ TEST_CASE("CDCAC: univariate sat x^2 - 2 = 0") {
     CHECK(sAlg == Sign::Zero);
 
     solver.assertConstraint(x2m2, Relation::Eq, SatLit::positive(1), 0);
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core handles univariate constraints
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
@@ -234,7 +234,7 @@ TEST_CASE("CDCAC: univariate unsat x^2 + 1 = 0") {
     PolyId x2p1 = kernel->add(x2, one);
 
     solver.assertConstraint(x2p1, Relation::Eq, SatLit::positive(1), 0);
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat for x^2+1=0 (no real roots)
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -254,7 +254,7 @@ TEST_CASE("CDCAC: algebraic sat x^2=2") {
 
     solver.assertConstraint(eq, Relation::Eq, SatLit::positive(1), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core handles univariate constraints
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
@@ -271,7 +271,7 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && x^2!=2") {
     solver.assertConstraint(eq, Relation::Eq, SatLit::positive(1), 0);
     solver.assertConstraint(eq, Relation::Neq, SatLit::positive(2), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -291,7 +291,7 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && (x^2-2)(x+1)!=0") {
     solver.assertConstraint(x2minus2, Relation::Eq, SatLit::positive(1), 0);
     solver.assertConstraint(product, Relation::Neq, SatLit::positive(2), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat (x^2=2 implies product=0)
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -313,7 +313,7 @@ TEST_CASE("CDCAC: algebraic sat x^2=2 && x>0 && x-1>0") {
     solver.assertConstraint(gt0, Relation::Gt, SatLit::positive(2), 0);
     solver.assertConstraint(gt1, Relation::Gt, SatLit::positive(3), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves sat (x = sqrt(2) > 1)
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
@@ -334,7 +334,7 @@ TEST_CASE("CDCAC: algebraic unsat x^2=2 && x>0 && x-2>0") {
     solver.assertConstraint(gt0, Relation::Gt, SatLit::positive(2), 0);
     solver.assertConstraint(gt2, Relation::Gt, SatLit::positive(3), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat (sqrt(2) < 2)
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -385,7 +385,7 @@ TEST_CASE("CDCAC: univariate unsat x^2 < 0") {
     CHECK(vars[0] == "x");
 
     solver.assertConstraint(x2, Relation::Lt, SatLit::positive(1), 0);
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat (x^2 >= 0 for all real x)
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -410,7 +410,7 @@ TEST_CASE("CDCAC: multivariate sat x*y=1, x=1, y=1") {
     solver.assertConstraint(eq2, Relation::Eq, SatLit::positive(2), 0);
     solver.assertConstraint(eq3, Relation::Eq, SatLit::positive(3), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core handles multivariate constraints (x=1, y=1)
     CHECK(res.kind == TheoryCheckResult::Kind::Consistent);
 }
@@ -431,7 +431,7 @@ TEST_CASE("CDCAC: multivariate unsat x*y=0, x!=0, y!=0") {
     solver.assertConstraint(neq1, Relation::Neq, SatLit::positive(2), 0);
     solver.assertConstraint(neq2, Relation::Neq, SatLit::positive(3), 0);
 
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     // P2a: CDCAC core proves unsat for xy=0 ∧ x≠0 ∧ y≠0
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }
@@ -674,6 +674,6 @@ TEST_CASE("P2b: buildConflictCell produces FullLine for x^2+1=0") {
     PolyId x2p1 = kernel->add(x2, one);
 
     solver.assertConstraint(x2p1, Relation::Eq, SatLit::positive(1), 0);
-    auto res = solver.check(TheoryEffort::Full, nullptr);
+    auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
 }

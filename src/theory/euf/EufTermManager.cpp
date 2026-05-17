@@ -13,7 +13,7 @@ void EufTermManager::clear() {
     parents_.clear();
     trueConstant_ = NullEufTerm;
     falseConstant_ = NullEufTerm;
-    iteSymbolIds_.clear();
+
 }
 
 FuncSymbolId EufTermManager::internSymbol(const std::string& name,
@@ -143,7 +143,7 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
             f.childrenDone = true;
 
             // Leaf or unsupported -> compute inline
-            if (e.kind != Kind::UFApply && e.kind != Kind::Ite) {
+            if (e.kind != Kind::UFApply) {
                 EufTermId res = computeLeaf(f.eid);
                 exprToTerm_[f.eid] = res;
                 done[f.eid] = res;
@@ -151,7 +151,7 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                 continue;
             }
 
-            // UFApply or Ite: need children first
+            // UFApply: need children first
             for (size_t i = e.children.size(); i-- > 0; ) {
                 if (!tryResolve(e.children[i])) {
                     stack.push_back(Frame{e.children[i], false});
@@ -195,36 +195,9 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
             continue;
         }
 
-        if (e.kind == Kind::Ite) {
-            std::vector<EufTermId> args;
-            std::vector<SortId> argSorts;
-            args.reserve(e.children.size());
-            argSorts.reserve(e.children.size());
-            bool hasNull = false;
-            for (ExprId cid : e.children) {
-                EufTermId arg = done.at(cid);
-                if (arg == NullEufTerm) {
-                    hasNull = true;
-                    break;
-                }
-                args.push_back(arg);
-                argSorts.push_back(ir.get(cid).sort);
-            }
-            if (hasNull) {
-                exprToTerm_[f.eid] = NullEufTerm;
-                done[f.eid] = NullEufTerm;
-            } else {
-                FuncSymbolId sym = internSymbol("ite", argSorts, e.sort);
-                iteSymbolIds_.insert(sym);
-                EufTermId res = createNode(sym, args, e.sort, f.eid);
-                exprToTerm_[f.eid] = res;
-                done[f.eid] = res;
-            }
-            stack.pop_back();
-            continue;
-        }
+        assert(e.kind != Kind::Ite && "ITE must be lowered by CoreIteLowerer before reaching EUF");
 
-        // Fallback (should not reach here)
+        // Fallback (should not reach here including ITE)
         EufTermId res = computeLeaf(f.eid);
         exprToTerm_[f.eid] = res;
         done[f.eid] = res;

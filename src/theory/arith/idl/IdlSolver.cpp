@@ -190,7 +190,7 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatab
     return lemma;
 }
 
-TheoryCheckResult IdlSolver::check(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult IdlSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     if (pendingConflict_) {
         auto c = *pendingConflict_;
         pendingConflict_.reset();

@@ -28,7 +28,7 @@ public:
 
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level);
     void backtrackToLevel(int level);
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb);
+    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard);
 
     void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; }
     void setAssignmentView(const TheoryAssignmentView* view) { assignmentView_ = view; }

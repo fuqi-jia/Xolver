@@ -11,8 +11,11 @@ namespace nlcolver {
  * Positive = var true, Negative = var false.
  */
 struct SatLit {
-    SatVar var;
-    bool sign;
+    SatVar var = 0;
+    bool sign = true;
+
+    SatLit() = default;
+    SatLit(SatVar v, bool s) : var(v), sign(s) {}
 
     static SatLit positive(SatVar v) { return {v, true}; }
     static SatLit negative(SatVar v) { return {v, false}; }

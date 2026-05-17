@@ -12,7 +12,7 @@ using EufTermId = uint32_t;
 using EClassId = uint32_t;
 using FuncSymbolId = uint32_t;
 using MergeId = uint32_t;
-using IteId = uint32_t;
+
 
 constexpr EufTermId NullEufTerm = std::numeric_limits<EufTermId>::max();
 constexpr EClassId NullEClass = std::numeric_limits<EClassId>::max();
@@ -41,18 +41,15 @@ struct EufAtom {
 
 enum class MergeReasonKind {
     AssertedEquality,
-    Congruence,
-    IteTrue,
-    IteFalse,
-    IteBranchesEqual
+    Congruence
 };
 
 struct MergeReason {
     MergeReasonKind kind;
     SatLit lit;
     EufTermId lhsApp = NullEufTerm;    // Congruence / Axiom
-    EufTermId explainA = NullEufTerm;  // ITE 解释用
-    EufTermId explainB = NullEufTerm;  // ITE 解释用
+    EufTermId explainA = NullEufTerm;
+    EufTermId explainB = NullEufTerm;
     std::vector<std::pair<EufTermId, EufTermId>> argPairs;
 };
 

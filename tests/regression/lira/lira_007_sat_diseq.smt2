@@ -1,0 +1,5 @@
+(set-logic QF_LIRA)
+(declare-fun x () Int)
+(declare-fun r () Real)
+(assert (not (= (+ x r) 0)))
+(check-sat)

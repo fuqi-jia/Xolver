@@ -1,6 +1,7 @@
 #include "nlcolver/Solver.h"
 #include "nlcolver/Result.h"
 #include "expr/ir.h"
+#include "expr/CoreIteLowerer.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -12,6 +13,8 @@
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/arith/nra/NraSolver.h"
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/lira/LiraSolver.h"
+#include "theory/arith/nira/NiraSolver.h"
 #include "theory/arith/idl/IdlSolver.h"
 #include "theory/arith/rdl/RdlSolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
@@ -126,6 +129,26 @@ public:
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
+        // Lower ITEs before any theory processing or atomization.
+        // CoreIteLowerer is a pure IR-to-IR pass: no SatLit, no theory atom
+        // registration, no SAT clause insertion.
+        {
+            CoreIteLowerer lowerer(*ir);
+            auto originalScoped = ir->getScopedAssertions();
+            std::vector<std::pair<ScopeLevel, ExprId>> loweredScoped;
+            for (const auto& [level, a] : originalScoped) {
+                loweredScoped.push_back({level, lowerer.lowerAssertion(a)});
+            }
+            for (ExprId def : lowerer.generatedAssertions()) {
+                // Generated definitions belong to the current scope
+                loweredScoped.push_back({ir->currentScopeLevel(), def});
+            }
+            ir->clearAssertions();
+            for (const auto& [level, a] : loweredScoped) {
+                ir->addAssertion(a, level);
+            }
+        }
+
         // Apply solver options (seed, etc.)
         auto itSeed = options.find("seed");
         if (itSeed != options.end() && itSeed->second.kind == OptionValue::Int) {
@@ -170,6 +193,10 @@ public:
             if (features.hasIntVar || features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
         } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
             if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
+        } else if (logic == "QF_LIRA" || logic == "LIRA") {
+            if (features.hasNonlinear || features.hasUF) logicMismatch = true;
+        } else if (logic == "QF_NIRA" || logic == "NIRA") {
+            if (features.hasUF) logicMismatch = true;
         }
 
         if (logicMismatch) {
@@ -213,6 +240,17 @@ public:
             auto lia = std::make_unique<LiaSolver>();
             lia->setRegistry(&registry);
             theoryManager.registerSolver(std::move(lia));
+        } else if (logic == "QF_LIRA" || logic == "LIRA") {
+            auto lira = std::make_unique<LiraSolver>();
+            lira->setRegistry(&registry);
+            lira->setCoreIr(ir.get());
+            theoryManager.registerSolver(std::move(lira));
+        } else if (logic == "QF_NIRA" || logic == "NIRA") {
+            auto polyKernel = createPolynomialKernel();
+            polyKernelRaw = polyKernel.get();
+            auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
+            nira->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(nira));
         } else if (logic == "QF_IDL" || logic == "IDL") {
             auto idl = std::make_unique<IdlSolver>();
             idl->setRegistry(&registry);
@@ -275,13 +313,23 @@ public:
             // No declared logic or unrecognized logic: route by detected features.
             // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
             // mis-routing caused by integer/real constant literals.
-            if (features.hasMixedIntReal) {
-                return Result::Unknown;
-            }
             if (features.hasUF) {
                 return Result::Unknown; // combination not yet supported for auto-detect
             }
-            if (features.hasIntVar && features.hasNonlinear) {
+            if (features.hasMixedIntReal) {
+                if (features.hasNonlinear) {
+                    auto polyKernel = createPolynomialKernel();
+                    polyKernelRaw = polyKernel.get();
+                    auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
+                    nira->setRegistry(&registry);
+                    theoryManager.registerSolver(std::move(nira));
+                } else {
+                    auto lira = std::make_unique<LiraSolver>();
+                    lira->setRegistry(&registry);
+                    lira->setCoreIr(ir.get());
+                    theoryManager.registerSolver(std::move(lira));
+                }
+            } else if (features.hasIntVar && features.hasNonlinear) {
                 auto polyKernel = createPolynomialKernel();
                 polyKernelRaw = polyKernel.get();
                 auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
@@ -334,6 +382,13 @@ public:
             if (polyKernelRaw) {
                 atomizer.setPolynomialKernel(polyKernelRaw);
             }
+        } else if (logic == "QF_LIRA" || logic == "LIRA") {
+            atomizer.setDefaultTheory(TheoryId::LIRA);
+        } else if (logic == "QF_NIRA" || logic == "NIRA") {
+            atomizer.setDefaultTheory(TheoryId::NIRA);
+            if (polyKernelRaw) {
+                atomizer.setPolynomialKernel(polyKernelRaw);
+            }
         } else if (logic == "QF_IDL" || logic == "IDL") {
             atomizer.setDefaultTheory(TheoryId::IDL);
         } else if (logic == "QF_RDL" || logic == "RDL") {
@@ -354,7 +409,14 @@ public:
             // No declared logic: route by detected features.
             // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
             // mis-routing caused by integer/real constant literals.
-            if (features.hasIntVar && features.hasNonlinear) {
+            if (features.hasMixedIntReal) {
+                if (features.hasNonlinear) {
+                    atomizer.setDefaultTheory(TheoryId::NIRA);
+                    if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+                } else {
+                    atomizer.setDefaultTheory(TheoryId::LIRA);
+                }
+            } else if (features.hasIntVar && features.hasNonlinear) {
                 atomizer.setDefaultTheory(TheoryId::NIA);
                 if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
             } else if (features.hasIntVar) {

@@ -62,33 +62,6 @@ ExprId FrontendAdapter::importNode(Node node) {
         std::swap(childIds[0], childIds[1]);
     }
 
-    // Boolean ite(c, t, f) -> (c ∧ t) ∨ (¬c ∧ f)
-    // This eliminates Ite from the boolean fragment so that Atomizer
-    // and EUF solver do not need special Ite handling.
-    if (k == Kind::Ite && s == boolSortId_ && childIds.size() == 3) {
-        ExprId c = childIds[0];
-        ExprId t = childIds[1];
-        ExprId f = childIds[2];
-
-        // notC = (not c)
-        CoreExpr notC{Kind::Not, boolSortId_, {c}, Payload{}};
-        ExprId notCid = ir_->add(std::move(notC));
-
-        // ct = (and c t)
-        CoreExpr ct{Kind::And, boolSortId_, {c, t}, Payload{}};
-        ExprId ctid = ir_->add(std::move(ct));
-
-        // nf = (and notC f)
-        CoreExpr nf{Kind::And, boolSortId_, {notCid, f}, Payload{}};
-        ExprId nfid = ir_->add(std::move(nf));
-
-        // or(ct, nf)
-        CoreExpr result{Kind::Or, boolSortId_, {ctid, nfid}, Payload{}};
-        ExprId id = ir_->add(std::move(result));
-        memo_[node] = id;
-        return id;
-    }
-
     CoreExpr expr;
     expr.kind = k;
     expr.sort = s;

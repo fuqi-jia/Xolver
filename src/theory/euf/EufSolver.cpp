@@ -29,34 +29,6 @@ void EufSolver::pop(uint32_t n) {
             [limit](const auto& d) { return d.trailIndex >= limit; });
         disequalities_.erase(dit, disequalities_.end());
 
-        // rollback ITE metadata before egraph
-        while (!iteOccMoveTrail_.empty()) {
-            auto t = iteOccMoveTrail_.back();
-            iteOccMoveTrail_.pop_back();
-
-            auto& kInfo = classInfo(t.kept);
-            auto& dInfo = classInfo(t.killed);
-
-            auto moveTailBack = [](auto& kept, auto& killed,
-                                   size_t keptOldSize, size_t /*killedOldSize*/,
-                                   size_t movedCount) {
-                assert(kept.size() == keptOldSize + movedCount);
-                for (size_t i = 0; i < movedCount; ++i) {
-                    killed.push_back(kept[keptOldSize + i]);
-                }
-                kept.resize(keptOldSize);
-            };
-
-            moveTailBack(kInfo.condUses, dInfo.condUses,
-                         t.keptCondOldSize, t.killedCondOldSize, t.movedCondCount);
-            moveTailBack(kInfo.thenUses, dInfo.thenUses,
-                         t.keptThenOldSize, t.killedThenOldSize, t.movedThenCount);
-            moveTailBack(kInfo.elseUses, dInfo.elseUses,
-                         t.keptElseOldSize, t.killedElseOldSize, t.movedElseCount);
-
-            kInfo.boolMark = t.keptOldMark;
-            dInfo.boolMark = t.killedOldMark;
-        }
         mergeQueue_.clear();
 
         egraph_.rollback(snap);
@@ -86,12 +58,8 @@ void EufSolver::reset() {
     sharedTermToEufTerm_.clear();
     sharedDisequalities_.clear();
 
-    iteRecords_.clear();
-    iteOfResult_.clear();
     classInfo_.clear();
-    iteOccMoveTrail_.clear();
     mergeQueue_.clear();
-    nextTermToScan_ = 0;
     trueTerm_ = NullEufTerm;
     falseTerm_ = NullEufTerm;
 
@@ -106,7 +74,7 @@ void EufSolver::ensureSnapshotForLevel(int level) {
             level,
             trail_.size(),
             egraph_.snapshot(),
-            {iteOccMoveTrail_.size(), mergeQueue_.size(), nextTermToScan_}
+            mergeQueue_.size()
         });
     }
 }
@@ -124,36 +92,7 @@ void EufSolver::backtrackToLevel(int target) {
             [snap](const auto& d) { return d.trailIndex >= snap.trailSizeBeforeLevel; });
         disequalities_.erase(dit, disequalities_.end());
 
-        // rollback ITE metadata before egraph
-        mergeQueue_.resize(snap.iteSnapshot.mergeQueueSize);
-
-        while (iteOccMoveTrail_.size() > snap.iteSnapshot.occMoveTrailSize) {
-            auto t = iteOccMoveTrail_.back();
-            iteOccMoveTrail_.pop_back();
-
-            auto& kInfo = classInfo(t.kept);
-            auto& dInfo = classInfo(t.killed);
-
-            auto moveTailBack = [](auto& kept, auto& killed,
-                                   size_t keptOldSize, size_t /*killedOldSize*/,
-                                   size_t movedCount) {
-                assert(kept.size() == keptOldSize + movedCount);
-                for (size_t i = 0; i < movedCount; ++i) {
-                    killed.push_back(kept[keptOldSize + i]);
-                }
-                kept.resize(keptOldSize);
-            };
-
-            moveTailBack(kInfo.condUses, dInfo.condUses,
-                         t.keptCondOldSize, t.killedCondOldSize, t.movedCondCount);
-            moveTailBack(kInfo.thenUses, dInfo.thenUses,
-                         t.keptThenOldSize, t.killedThenOldSize, t.movedThenCount);
-            moveTailBack(kInfo.elseUses, dInfo.elseUses,
-                         t.keptElseOldSize, t.killedElseOldSize, t.movedElseCount);
-
-            kInfo.boolMark = t.keptOldMark;
-            dInfo.boolMark = t.killedOldMark;
-        }
+        mergeQueue_.resize(snap.mergeQueueSize);
 
         egraph_.rollback(snap.egraphSnapshotBeforeLevel);
     }
@@ -171,10 +110,6 @@ void EufSolver::backtrackToLevel(int target) {
     pendingConflict_.reset();
     pendingUnknown_ = false;
 }
-
-// ---------------------------------------------------------------------------
-// ITE helpers
-// ---------------------------------------------------------------------------
 
 void EufSolver::initializeBoolConstants() {
     trueTerm_ = termManager_.internTrueConstant();
@@ -205,125 +140,20 @@ EufSolver::BoolConstMark EufSolver::mergeBoolMark(BoolConstMark a, BoolConstMark
     return BoolConstMark::Both;
 }
 
-void EufSolver::registerNewIteTerms() {
-    size_t n = termManager_.termCount();
-    for (; nextTermToScan_ < n; ++nextTermToScan_) {
-        auto term = static_cast<EufTermId>(nextTermToScan_);
-        const auto& node = termManager_.node(term);
-        if (!termManager_.isIteSymbol(node.symbol) || node.args.size() != 3)
-            continue;
-        if (iteOfResult_.find(term) != iteOfResult_.end())
-            continue;  // hash-cons duplicate
-
-        EufTermId cond = node.args[0];
-        EufTermId thenTerm = node.args[1];
-        EufTermId elseTerm = node.args[2];
-        registerIte(term, cond, thenTerm, elseTerm);
-    }
-}
-
-void EufSolver::registerIte(EufTermId result, EufTermId cond,
-                            EufTermId thenTerm, EufTermId elseTerm) {
-    IteId id = static_cast<IteId>(iteRecords_.size());
-    iteRecords_.push_back({result, cond, thenTerm, elseTerm});
-    iteOfResult_[result] = id;
-
-    classInfo(egraph_.rep(cond)).condUses.push_back(id);
-    classInfo(egraph_.rep(thenTerm)).thenUses.push_back(id);
-    classInfo(egraph_.rep(elseTerm)).elseUses.push_back(id);
-
-    tryFireIte(id);
-}
-
-void EufSolver::tryFireIte(IteId id) {
-    const auto& r = iteRecords_[id];
-    EClassId c  = egraph_.rep(r.cond);
-    EClassId th = egraph_.rep(r.thenTerm);
-    EClassId el = egraph_.rep(r.elseTerm);
-    EClassId res = egraph_.rep(r.result);
-
-    auto cMark = classInfo(c).boolMark;
-
-    if (cMark == BoolConstMark::True && !egraph_.same(res, th)) {
-        mergeQueue_.push_back(PendingMerge{
-            r.result, r.thenTerm,
-            MergeReason{MergeReasonKind::IteTrue, SatLit{}, 0,
-                        r.cond, trueTerm_}
-        });
-    }
-    if (cMark == BoolConstMark::False && !egraph_.same(res, el)) {
-        mergeQueue_.push_back(PendingMerge{
-            r.result, r.elseTerm,
-            MergeReason{MergeReasonKind::IteFalse, SatLit{}, 0,
-                        r.cond, falseTerm_}
-        });
-    }
-    if (th == el && !egraph_.same(res, th)) {
-        mergeQueue_.push_back(PendingMerge{
-            r.result, r.thenTerm,
-            MergeReason{MergeReasonKind::IteBranchesEqual, SatLit{}, 0,
-                        r.thenTerm, r.elseTerm}
-        });
-    }
-}
-
 void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
     auto& kInfo = classInfo(kept);
     auto& dInfo = classInfo(killed);
 
-    // Trail
-    IteOccMoveTrail trail;
-    trail.kept = kept; trail.killed = killed;
-    trail.keptCondOldSize  = kInfo.condUses.size();
-    trail.keptThenOldSize  = kInfo.thenUses.size();
-    trail.keptElseOldSize  = kInfo.elseUses.size();
-    trail.killedCondOldSize = dInfo.condUses.size();
-    trail.killedThenOldSize = dInfo.thenUses.size();
-    trail.killedElseOldSize = dInfo.elseUses.size();
-
-    // Append killed -> kept
-    for (IteId iid : dInfo.condUses) kInfo.condUses.push_back(iid);
-    for (IteId iid : dInfo.thenUses) kInfo.thenUses.push_back(iid);
-    for (IteId iid : dInfo.elseUses) kInfo.elseUses.push_back(iid);
-
-    trail.movedCondCount = dInfo.condUses.size();
-    trail.movedThenCount = dInfo.thenUses.size();
-    trail.movedElseCount = dInfo.elseUses.size();
-
-    dInfo.condUses.clear();
-    dInfo.thenUses.clear();
-    dInfo.elseUses.clear();
-
-    // boolMark
-    trail.keptOldMark  = kInfo.boolMark;
-    trail.killedOldMark = dInfo.boolMark;
-
     BoolConstMark merged = mergeBoolMark(kInfo.boolMark, dInfo.boolMark);
     kInfo.boolMark = merged;
     dInfo.boolMark = BoolConstMark::None;
-
-    iteOccMoveTrail_.push_back(trail);
 
     // Both -> conflict
     if (merged == BoolConstMark::Both) {
         pendingConflict_ = TheoryConflict{
             egraph_.explainEquality(trueTerm_, falseTerm_).reasons
         };
-        return;
     }
-
-    // boolMark 新变成 const -> 扫描 condUses
-    bool keptWasConst = (trail.keptOldMark == BoolConstMark::True ||
-                         trail.keptOldMark == BoolConstMark::False);
-    bool nowConst = (merged == BoolConstMark::True ||
-                     merged == BoolConstMark::False);
-    if (nowConst && !keptWasConst) {
-        for (IteId iid : kInfo.condUses) tryFireIte(iid);
-    }
-
-    // then/else 可能相等 -> 扫描所有 thenUses/elseUses
-    for (IteId iid : kInfo.thenUses) tryFireIte(iid);
-    for (IteId iid : kInfo.elseUses) tryFireIte(iid);
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +232,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // check — 唯一 saturation loop
 // ---------------------------------------------------------------------------
 
-TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
     NO_DBG << "[EUF] check begin\n";
     if (pendingUnknown_) {
         NO_DBG << "[EUF] pendingUnknown -> Unknown\n";
@@ -413,9 +243,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
         return TheoryCheckResult::mkConflict(*pendingConflict_);
     }
 
-    registerNewIteTerms();
-
-    // 唯一 saturation loop：drain SAT decisions + congruence + ITE
+    // 唯一 saturation loop：drain SAT decisions + congruence
     while (!mergeQueue_.empty()) {
         auto req = mergeQueue_.back();
         mergeQueue_.pop_back();

@@ -113,7 +113,7 @@ void TheoryManager::backtrackToLevel(int level) {
     discardSnapshotsAbove(level);
 }
 
-TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
     auto makeFalsifiedConflict = [](const std::vector<SatLit>& rawReasons) {
@@ -132,7 +132,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
             return TheoryCheckResult::consistent();
         }
         for (auto& solver : solvers_) {
-            auto tr = solver->check(lemmaDb);
+            auto tr = solver->check(lemmaDb, TheoryEffort::Standard);
             if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
                 auto fc = makeFalsifiedConflict(tr.conflictOpt->clause);
                 return TheoryCheckResult::mkConflict(std::move(fc));
@@ -210,7 +210,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb) {
     // 2. Run each theory check
     for (auto& solver : solvers_) {
         NO_DBG << "[NO] checking solver=" << (int)solver->id() << "\n";
-        auto tr = solver->check(lemmaDb);
+        auto tr = solver->check(lemmaDb, TheoryEffort::Standard);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             // Defensive: every raw reason should be true in the current model.
             if (assignmentView_) {

@@ -52,7 +52,7 @@ void NraSolver::backtrackToLevel(int level) {
     engine_.backtrack(level);
 }
 
-TheoryCheckResult NraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult NraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
     return engine_.check();
 }
 
