@@ -3,6 +3,7 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/TheoryLemmaDatabase.h"
 #include <unordered_set>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -43,6 +44,8 @@ void NiaSolver::reset() {
     emittedSplits_.clear();
     branchCountPerVar_.clear();
     pendingLinLemmas_.clear();
+    interfaceEqualities_.clear();
+    interfaceDisequalities_.clear();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -93,6 +96,12 @@ void NiaSolver::backtrackToLevel(int level) {
     if (pendingUnknown_ && pendingUnknown_->level > level) {
         pendingUnknown_.reset();
     }
+    auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
+        [level](const auto& ie) { return ie.level > level; });
+    interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
+    auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
+        [level](const auto& ie) { return ie.level > level; });
+    interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
 static std::unordered_set<std::string> collectVars(
@@ -108,6 +117,10 @@ static std::unordered_set<std::string> collectVars(
 }
 
 TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+    std::cerr << "[NIA-CHECK] active=" << active_.size() << " ieq=" << interfaceEqualities_.size() << " idiseq=" << interfaceDisequalities_.size() << "\n";
+    for (const auto& c : active_) {
+        std::cerr << "[NIA-CHECK] poly=" << kernel_->toString(c.poly) << " rel=" << (int)c.rel << "\n";
+    }
     if (pendingUnknown_) return TheoryCheckResult::unknown();
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();
@@ -423,6 +436,60 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     }
 
     return std::nullopt;
+}
+
+TheoryCheckResult NiaSolver::assertInterfaceEquality(
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    std::cerr << "[NIA-IEQ] a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"") << reason.var << "\n";
+    if (!sharedTermRegistry_ || !coreIr_ || !converter_)
+        return TheoryCheckResult::consistent();
+    const auto* stA = sharedTermRegistry_->get(a);
+    const auto* stB = sharedTermRegistry_->get(b);
+    if (!stA || !stB) return TheoryCheckResult::consistent();
+
+    auto cc = converter_->convertConstraint(stA->coreExpr, stB->coreExpr,
+                                            Relation::Eq, *coreIr_);
+    if (cc.status == PolyConstraintStatus::Tautology)
+        return TheoryCheckResult::consistent();
+    if (cc.status == PolyConstraintStatus::Conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+    if (!cc.isConstraint())
+        return TheoryCheckResult::consistent();
+
+    size_t oldSize = active_.size();
+    active_.push_back({cc.diff, Relation::Eq, reason});
+    trail_.push_back({level, oldSize});
+    interfaceEqualities_.push_back({a, b, reason, level});
+    return TheoryCheckResult::consistent();
+}
+
+TheoryCheckResult NiaSolver::assertInterfaceDisequality(
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    if (!sharedTermRegistry_ || !coreIr_ || !converter_)
+        return TheoryCheckResult::consistent();
+    const auto* stA = sharedTermRegistry_->get(a);
+    const auto* stB = sharedTermRegistry_->get(b);
+    if (!stA || !stB) return TheoryCheckResult::consistent();
+
+    auto cc = converter_->convertConstraint(stA->coreExpr, stB->coreExpr,
+                                            Relation::Neq, *coreIr_);
+    if (cc.status == PolyConstraintStatus::Tautology)
+        return TheoryCheckResult::consistent();
+    if (cc.status == PolyConstraintStatus::Conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+    if (!cc.isConstraint())
+        return TheoryCheckResult::consistent();
+
+    size_t oldSize = active_.size();
+    active_.push_back({cc.diff, Relation::Neq, reason});
+    trail_.push_back({level, oldSize});
+    interfaceDisequalities_.push_back({a, b, reason, level});
+    return TheoryCheckResult::consistent();
+}
+
+std::vector<TheorySolver::SharedEqualityPropagation>
+NiaSolver::getDeducedSharedEqualities() {
+    return {};
 }
 
 } // namespace nlcolver

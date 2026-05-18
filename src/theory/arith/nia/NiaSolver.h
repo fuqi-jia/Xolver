@@ -15,6 +15,7 @@
 #include "theory/arith/nia/BoundedNiaSolver.h"
 #include "theory/arith/nia/NiaLocalSearch.h"
 #include "theory/TheoryAtomRegistry.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include "theory/ActiveLiteralSet.h"
 #include "expr/types.h"
 #include <gmpxx.h>
@@ -59,6 +60,18 @@ public:
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
+    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+
+    bool supportsCombination() const override { return true; }
+
+    TheoryCheckResult assertInterfaceEquality(
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
+    TheoryCheckResult assertInterfaceDisequality(
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
+
+    std::vector<SharedEqualityPropagation>
+    getDeducedSharedEqualities() override;
 
 private:
     struct NiaTrailEntry {
@@ -107,9 +120,20 @@ private:
 
     std::optional<IntegerModel> currentModel_;
 
+    const CoreIr* coreIr_ = nullptr;
+    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
     TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<NiaLinearizationAdapter> linAdapter_;
     std::deque<TheoryLemma> pendingLinLemmas_;
+
+    struct InterfaceEq {
+        SharedTermId a;
+        SharedTermId b;
+        SatLit reason;
+        int level;
+    };
+    std::vector<InterfaceEq> interfaceEqualities_;
+    std::vector<InterfaceEq> interfaceDisequalities_;
 
     struct BranchSplitKey {
         std::string var;

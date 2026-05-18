@@ -329,6 +329,18 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
             if (isTheory && registry_) {
+                // Bool equalities/distincts are propositional regardless of target theory
+                if ((e.kind == Kind::Eq || e.kind == Kind::Distinct) &&
+                    e.children.size() >= 2 && areAllChildrenBool(e, ir)) {
+                    if (e.kind == Kind::Eq) {
+                        result = encodeBoolEq(eid, ir);
+                    } else {
+                        result = encodeBoolDistinct(eid, ir);
+                    }
+                    memo_[eid] = result;
+                    return result;
+                }
+
                 TheoryId targetTheory = defaultTheory_;
                 if (defaultTheory_ == TheoryId::Combination) {
                     bool isEqOrDistinct = (e.kind == Kind::Eq || e.kind == Kind::Distinct);
@@ -396,16 +408,6 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                 } else if (targetTheory == TheoryId::EUF) {
                     if (e.kind == Kind::Eq || e.kind == Kind::Distinct) {
                         if (e.children.size() == 2) {
-                            // Check if both sides are Bool: encode propositionally
-                            if (areAllChildrenBool(e, ir)) {
-                                if (e.kind == Kind::Eq) {
-                                    result = encodeBoolEq(eid, ir);
-                                } else {
-                                    result = encodeBoolDistinct(eid, ir);
-                                }
-                                memo_[eid] = result;
-                                return result;
-                            }
                             Relation rel = (e.kind == Kind::Eq) ? Relation::Eq : Relation::Neq;
                             ExprId lhs = e.children[0];
                             ExprId rhs = e.children[1];

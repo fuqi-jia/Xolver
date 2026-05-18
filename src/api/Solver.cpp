@@ -334,10 +334,60 @@ public:
                 theoryManager.setCombinationMode(true);
                 theoryManager.setNonConvexMode(true);
             }
-        } else if (logic == "QF_UFNIA" || logic == "QF_UFNRA" ||
-                   logic == "UFNIA" || logic == "UFNRA" ||
-                   logic == "UF") {
-            // Mixed theories not supported in V1
+        } else if (logic == "QF_UFNIA" || logic == "UFNIA") {
+            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
+            {
+                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
+                purifier.setArithTheory(TheoryId::NIA);
+                purifier.run();
+            }
+            auto polyKernel = createPolynomialKernel();
+            polyKernelRaw = polyKernel.get();
+            auto euf = std::make_unique<EufSolver>();
+            euf->setCoreIr(ir.get());
+            euf->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(euf));
+            auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+            nia->setCoreIr(ir.get());
+            nia->setSharedTermRegistry(sharedTermRegistry_.get());
+            nia->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(nia));
+            auto lia = std::make_unique<LiaSolver>();
+            lia->setCoreIr(ir.get());
+            lia->setSharedTermRegistry(sharedTermRegistry_.get());
+            lia->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lia));
+            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.setRegistry(&registry);
+            theoryManager.setCombinationMode(true);
+            theoryManager.setNonConvexMode(true);
+        } else if (logic == "QF_UFNRA" || logic == "UFNRA") {
+            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
+            {
+                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
+                purifier.setArithTheory(TheoryId::NRA);
+                purifier.run();
+            }
+            auto polyKernel = createPolynomialKernel();
+            polyKernelRaw = polyKernel.get();
+            auto euf = std::make_unique<EufSolver>();
+            euf->setCoreIr(ir.get());
+            euf->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(euf));
+            auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+            nra->setCoreIr(ir.get());
+            nra->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(nra));
+            auto lra = std::make_unique<LraSolver>();
+            lra->setCoreIr(ir.get());
+            lra->setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.registerSolver(std::move(lra));
+            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
+            theoryManager.setRegistry(&registry);
+            theoryManager.setCombinationMode(true);
+            theoryManager.setNonConvexMode(true);
+        } else if (logic == "UF") {
+            // UF without arithmetic: not yet supported
             return Result::Unknown;
         } else {
             // No declared logic or unrecognized logic: route by detected features.
@@ -393,6 +443,7 @@ public:
         Atomizer atomizer(*sat);
         registry.setContext(sat.get(), &atomizer);
         atomizer.setRegistry(&registry);
+        atomizer.setBoolSortId(boolSortId_);
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
@@ -425,16 +476,23 @@ public:
             atomizer.setDefaultTheory(TheoryId::RDL);
         } else if (logic == "QF_UF") {
             atomizer.setDefaultTheory(TheoryId::EUF);
-            atomizer.setBoolSortId(boolSortId_);
         } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
             atomizer.setDefaultTheory(TheoryId::Combination);
-            atomizer.setBoolSortId(boolSortId_);
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
         } else if (logic == "QF_UFLIA" || logic == "UFLIA") {
             atomizer.setDefaultTheory(TheoryId::Combination);
-            atomizer.setBoolSortId(boolSortId_);
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
             atomizer.setCombinationArithTheory(TheoryId::LIA);
+        } else if (logic == "QF_UFNIA" || logic == "UFNIA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::NIA);
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+        } else if (logic == "QF_UFNRA" || logic == "UFNRA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::NRA);
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
         } else {
             // No declared logic: route by detected features.
             // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid

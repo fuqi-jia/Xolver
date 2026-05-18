@@ -184,60 +184,6 @@ ExprId Purifier::purifyRec(ExprId root) {
                 continue;
             }
 
-            // Arithmetic relation: handle inline (no child recursion needed)
-            bool isArithRelation = (e.kind == Kind::Eq || e.kind == Kind::Distinct ||
-                                    e.kind == Kind::Lt || e.kind == Kind::Leq ||
-                                    e.kind == Kind::Gt || e.kind == Kind::Geq);
-            if (isArithRelation && e.children.size() == 2) {
-                ExprId lhs = e.children[0];
-                ExprId rhs = e.children[1];
-                bool lhsHasUf = containsUfApply(lhs);
-                bool rhsHasUf = containsUfApply(rhs);
-                if (!lhsHasUf && !rhsHasUf) {
-                    done[f.eid] = f.eid;
-                    stack.pop_back();
-                    continue;
-                }
-
-                ExprId newLhs = lhs;
-                ExprId newRhs = rhs;
-
-                if (lhsHasUf) {
-                    auto cit = cache_.find(lhs);
-                    if (cit != cache_.end() && cit->second != lhs) {
-                        newLhs = cit->second;
-                        NO_DBG << "[Purifier] arith cache hit lhs=" << lhs << " -> " << newLhs << "\n";
-                    } else {
-                        ExprId fresh = makeFreshVar(ir_.get(lhs).sort);
-                        cache_[lhs] = fresh;
-                        bridgeAssertions_.push_back(makeEq(fresh, lhs));
-                        newLhs = fresh;
-                        NO_DBG << "[Purifier] arith bridge lhs=" << lhs << " -> " << fresh << "\n";
-                    }
-                }
-                if (rhsHasUf) {
-                    auto cit = cache_.find(rhs);
-                    if (cit != cache_.end() && cit->second != rhs) {
-                        newRhs = cit->second;
-                        NO_DBG << "[Purifier] arith cache hit rhs=" << rhs << " -> " << newRhs << "\n";
-                    } else {
-                        ExprId fresh = makeFreshVar(ir_.get(rhs).sort);
-                        cache_[rhs] = fresh;
-                        bridgeAssertions_.push_back(makeEq(fresh, rhs));
-                        newRhs = fresh;
-                        NO_DBG << "[Purifier] arith bridge rhs=" << rhs << " -> " << fresh << "\n";
-                    }
-                }
-                CoreExpr ne;
-                ne.kind = e.kind;
-                ne.sort = boolSortId_;
-                ne.children.push_back(newLhs);
-                ne.children.push_back(newRhs);
-                done[f.eid] = ir_.add(ne);
-                stack.pop_back();
-                continue;
-            }
-
             // Default: recurse into children
             for (size_t i = e.children.size(); i-- > 0; ) {
                 if (!tryResolve(e.children[i])) {

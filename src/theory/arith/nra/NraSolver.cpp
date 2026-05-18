@@ -30,6 +30,8 @@ void NraSolver::reset() {
     trail_.clear();
     scopeStack_.clear();
     activeSet_.reset();
+    interfaceEqualities_.clear();
+    interfaceDisequalities_.clear();
 }
 
 void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -64,10 +66,65 @@ void NraSolver::backtrackToLevel(int level) {
     }
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     engine_.backtrack(level);
+    auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
+        [level](const auto& ie) { return ie.level > level; });
+    interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
+    auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
+        [level](const auto& ie) { return ie.level > level; });
+    interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
 TheoryCheckResult NraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
     return engine_.check();
+}
+
+TheoryCheckResult NraSolver::assertInterfaceEquality(
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    if (!sharedTermRegistry_ || !coreIr_ || !converter_)
+        return TheoryCheckResult::consistent();
+    const auto* stA = sharedTermRegistry_->get(a);
+    const auto* stB = sharedTermRegistry_->get(b);
+    if (!stA || !stB) return TheoryCheckResult::consistent();
+
+    auto cc = converter_->convertConstraint(stA->coreExpr, stB->coreExpr,
+                                            Relation::Eq, *coreIr_);
+    if (cc.status == PolyConstraintStatus::Tautology)
+        return TheoryCheckResult::consistent();
+    if (cc.status == PolyConstraintStatus::Conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+    if (!cc.isConstraint())
+        return TheoryCheckResult::consistent();
+
+    engine_.assertConstraint(cc.diff, Relation::Eq, reason, level);
+    interfaceEqualities_.push_back({a, b, reason, level});
+    return TheoryCheckResult::consistent();
+}
+
+TheoryCheckResult NraSolver::assertInterfaceDisequality(
+    SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    if (!sharedTermRegistry_ || !coreIr_ || !converter_)
+        return TheoryCheckResult::consistent();
+    const auto* stA = sharedTermRegistry_->get(a);
+    const auto* stB = sharedTermRegistry_->get(b);
+    if (!stA || !stB) return TheoryCheckResult::consistent();
+
+    auto cc = converter_->convertConstraint(stA->coreExpr, stB->coreExpr,
+                                            Relation::Neq, *coreIr_);
+    if (cc.status == PolyConstraintStatus::Tautology)
+        return TheoryCheckResult::consistent();
+    if (cc.status == PolyConstraintStatus::Conflict)
+        return TheoryCheckResult::mkConflict(TheoryConflict{{reason}});
+    if (!cc.isConstraint())
+        return TheoryCheckResult::consistent();
+
+    engine_.assertConstraint(cc.diff, Relation::Neq, reason, level);
+    interfaceDisequalities_.push_back({a, b, reason, level});
+    return TheoryCheckResult::consistent();
+}
+
+std::vector<TheorySolver::SharedEqualityPropagation>
+NraSolver::getDeducedSharedEqualities() {
+    return {};
 }
 
 } // namespace nlcolver

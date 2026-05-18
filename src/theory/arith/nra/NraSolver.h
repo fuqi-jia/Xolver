@@ -4,6 +4,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nra/CdcacSolver.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include "theory/ActiveLiteralSet.h"
 #include <memory>
 #include <vector>
@@ -34,6 +35,19 @@ public:
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
+    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+
+    bool supportsCombination() const override { return true; }
+
+    TheoryCheckResult assertInterfaceEquality(
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
+    TheoryCheckResult assertInterfaceDisequality(
+        SharedTermId a, SharedTermId b, SatLit reason, int level) override;
+
+    std::vector<SharedEqualityPropagation>
+    getDeducedSharedEqualities() override;
+
 private:
     struct NraTrailEntry {
         int level;
@@ -47,6 +61,18 @@ private:
     std::vector<SatLit> activeLits_;
     std::vector<NraTrailEntry> trail_;
     ActiveLiteralSet activeSet_;
+
+    const CoreIr* coreIr_ = nullptr;
+    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    struct InterfaceEq {
+        SharedTermId a;
+        SharedTermId b;
+        SatLit reason;
+        int level;
+    };
+    std::vector<InterfaceEq> interfaceEqualities_;
+    std::vector<InterfaceEq> interfaceDisequalities_;
 
     // V5: scope stack for push/pop
     std::vector<size_t> scopeStack_;
