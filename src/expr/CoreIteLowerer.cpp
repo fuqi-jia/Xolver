@@ -187,26 +187,33 @@ ExprId CoreIteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
 }
 
 ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
-    // ---------- Phase 1: classify each node as Bool-lowered or Term-lowered ----------
-    // This mirrors the recursive dispatch logic of the original lowerBoolExpr/lowerExpr.
-    std::unordered_set<ExprId> boolNodes;
-    std::unordered_map<ExprId, SortId> termSort; // for term-lowered nodes, stores the expectedSort
+    // ---------- Phase 1: collect all work items ----------
+    // Bool work items: just ExprId (lowered via lowerBoolExpr equivalent)
+    // Term work items: (ExprId, SortId) pairs (lowered via lowerExpr(expectedSort) equivalent)
+    std::unordered_set<ExprId> boolWork;
+    std::unordered_set<TermKey, TermKeyHash> termWork;
     {
-        std::vector<ExprId> stack;
+        struct WorkItem {
+            ExprId e;
+            std::optional<SortId> sort; // nullopt = bool, otherwise = term with this expectedSort
+        };
+        std::vector<WorkItem> stack;
         stack.reserve(1024);
-        boolNodes.reserve(1024);
-        termSort.reserve(1024);
+        boolWork.reserve(1024);
+        termWork.reserve(1024);
 
         // Assertion is always lowered as Bool.
-        stack.push_back(assertion);
-        boolNodes.insert(assertion);
+        stack.push_back({assertion, std::nullopt});
+        boolWork.insert(assertion);
 
         while (!stack.empty()) {
-            ExprId e = stack.back();
+            WorkItem item = stack.back();
             stack.pop_back();
 
+            ExprId e = item.e;
             const auto& node = ir_.get(e);
-            bool isBoolNode = boolNodes.count(e);
+            bool isBool = !item.sort.has_value();
+            SortId S = isBool ? boolSortId_ : *item.sort;
 
             if (node.kind == Kind::Ite) {
                 assert(node.children.size() == 3);
@@ -214,36 +221,38 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
                 ExprId t = node.children[1];
                 ExprId eBranch = node.children[2];
 
-                if (isBoolNode) {
+                if (isBool) {
                     // lowerBoolIte: c, p, q all go through lowerBoolExpr
-                    if (boolNodes.insert(c).second) stack.push_back(c);
-                    if (boolNodes.insert(t).second) stack.push_back(t);
-                    if (boolNodes.insert(eBranch).second) stack.push_back(eBranch);
+                    if (boolWork.insert(c).second) stack.push_back({c, std::nullopt});
+                    if (boolWork.insert(t).second) stack.push_back({t, std::nullopt});
+                    if (boolWork.insert(eBranch).second) stack.push_back({eBranch, std::nullopt});
                 } else {
                     // lowerTermIte: c goes through lowerBoolExpr, t/e go through lowerExpr(S)
-                    SortId S = termSort.at(e);
-                    if (boolNodes.insert(c).second) stack.push_back(c);
-                    if (termSort.insert({t, S}).second) stack.push_back(t);
-                    if (termSort.insert({eBranch, S}).second) stack.push_back(eBranch);
+                    if (boolWork.insert(c).second) stack.push_back({c, std::nullopt});
+                    TermKey tKey{t, S};
+                    if (termWork.insert(tKey).second) stack.push_back({t, S});
+                    TermKey eKey{eBranch, S};
+                    if (termWork.insert(eKey).second) stack.push_back({eBranch, S});
                 }
             } else {
                 // Non-ITE: dispatch children exactly like the recursive version
                 for (ExprId child : node.children) {
                     SortId childSort = ir_.get(child).sort;
-                    if (isBoolNode) {
-                        // lowerBoolExpr path: childSort == boolSortId_ -> bool, else term
+                    if (isBool) {
+                        // lowerBoolExpr path: childSort == boolSortId_ -> bool, else term(childSort)
                         if (childSort == boolSortId_) {
-                            if (boolNodes.insert(child).second) stack.push_back(child);
+                            if (boolWork.insert(child).second) stack.push_back({child, std::nullopt});
                         } else {
-                            if (termSort.insert({child, childSort}).second) stack.push_back(child);
+                            TermKey key{child, childSort};
+                            if (termWork.insert(key).second) stack.push_back({child, childSort});
                         }
                     } else {
-                        // lowerExpr path: expectedSort == boolSortId_ -> bool, else term
-                        SortId expectedSort = termSort.at(e);
-                        if (expectedSort == boolSortId_) {
-                            if (boolNodes.insert(child).second) stack.push_back(child);
+                        // lowerExpr path: S == boolSortId_ -> bool, else term(childSort)
+                        if (S == boolSortId_) {
+                            if (boolWork.insert(child).second) stack.push_back({child, std::nullopt});
                         } else {
-                            if (termSort.insert({child, expectedSort}).second) stack.push_back(child);
+                            TermKey key{child, childSort};
+                            if (termWork.insert(key).second) stack.push_back({child, childSort});
                         }
                     }
                 }
@@ -251,21 +260,19 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
         }
     }
 
-    // ---------- Phase 2: iterative post-order traversal ----------
+    // ---------- Phase 2: post-order traversal over all reachable ExprIds ----------
     std::vector<ExprId> postOrder;
     {
+        std::unordered_set<ExprId> allExprs;
+        for (ExprId e : boolWork) allExprs.insert(e);
+        for (const auto& key : termWork) allExprs.insert(key.expr);
+
         std::vector<ExprId> stack;
         std::unordered_set<ExprId> visited;
         stack.reserve(1024);
         visited.reserve(1024);
 
-        // We need to traverse all nodes that were classified above.
-        std::vector<ExprId> roots;
-        roots.reserve(boolNodes.size() + termSort.size());
-        for (ExprId e : boolNodes) roots.push_back(e);
-        for (const auto& kv : termSort) roots.push_back(kv.first);
-
-        for (ExprId root : roots) {
+        for (ExprId root : allExprs) {
             if (!visited.insert(root).second) continue;
             stack.push_back(root);
 
@@ -275,7 +282,7 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
 
                 bool allChildrenVisited = true;
                 for (ExprId child : node.children) {
-                    if (boolNodes.count(child) || termSort.count(child)) {
+                    if (allExprs.count(child)) {
                         if (visited.insert(child).second) {
                             stack.push_back(child);
                             allChildrenVisited = false;
@@ -292,32 +299,51 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
         }
     }
 
-    // ---------- Phase 3: process nodes in post-order ----------
+    // ---------- Phase 3: process all work items for each ExprId in post-order ----------
     for (ExprId e : postOrder) {
         const auto& node = ir_.get(e);
-        bool isBoolNode = boolNodes.count(e);
 
-        if (node.kind == Kind::Ite) {
-            if (isBoolNode) {
+        // Process bool work item first (if any)
+        if (boolWork.count(e)) {
+            if (node.kind == Kind::Ite) {
                 lowerBoolIte(e);
             } else {
-                lowerTermIte(e, termSort.at(e));
-            }
-        } else {
-            std::vector<ExprId> newChildren;
-            newChildren.reserve(node.children.size());
-            for (ExprId child : node.children) {
-                if (boolNodes.count(child)) {
-                    newChildren.push_back(boolMemo_.at(child));
-                } else {
-                    newChildren.push_back(termMemo_.at({child, termSort.at(child)}));
+                std::vector<ExprId> newChildren;
+                newChildren.reserve(node.children.size());
+                for (ExprId child : node.children) {
+                    if (boolWork.count(child)) {
+                        newChildren.push_back(boolMemo_.at(child));
+                    } else {
+                        SortId childSort = ir_.get(child).sort;
+                        newChildren.push_back(termMemo_.at({child, childSort}));
+                    }
                 }
-            }
-            ExprId result = rebuildLike(e, newChildren);
-            if (isBoolNode)
+                ExprId result = rebuildLike(e, newChildren);
                 boolMemo_[e] = result;
-            else
-                termMemo_[{e, termSort.at(e)}] = result;
+            }
+        }
+
+        // Process all term work items for this ExprId
+        for (const auto& key : termWork) {
+            if (key.expr != e) continue;
+            SortId S = key.expectedSort;
+
+            if (node.kind == Kind::Ite) {
+                lowerTermIte(e, S);
+            } else {
+                std::vector<ExprId> newChildren;
+                newChildren.reserve(node.children.size());
+                for (ExprId child : node.children) {
+                    if (boolWork.count(child)) {
+                        newChildren.push_back(boolMemo_.at(child));
+                    } else {
+                        SortId childSort = ir_.get(child).sort;
+                        newChildren.push_back(termMemo_.at({child, childSort}));
+                    }
+                }
+                ExprId result = rebuildLike(e, newChildren);
+                termMemo_[{e, S}] = result;
+            }
         }
     }
 
