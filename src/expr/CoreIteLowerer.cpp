@@ -1,5 +1,6 @@
 #include "expr/CoreIteLowerer.h"
 #include <cassert>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -65,116 +66,6 @@ ExprId CoreIteLowerer::rebuildLike(ExprId original,
     return ir_.add(std::move(ne));
 }
 
-ExprId CoreIteLowerer::lowerBoolExpr(ExprId e) {
-    if (auto it = boolMemo_.find(e); it != boolMemo_.end())
-        return it->second;
-
-    const auto& node = ir_.get(e);
-
-    if (node.kind == Kind::Ite) {
-        ExprId result = lowerBoolIte(e);
-        boolMemo_[e] = result;
-        return result;
-    }
-
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    for (ExprId child : node.children) {
-        SortId childSort = ir_.get(child).sort;
-        if (childSort == boolSortId_)
-            newChildren.push_back(lowerBoolExpr(child));
-        else
-            newChildren.push_back(lowerExpr(child, childSort));
-    }
-
-    ExprId result = rebuildLike(e, newChildren);
-    boolMemo_[e] = result;
-    return result;
-}
-
-ExprId CoreIteLowerer::lowerExpr(ExprId e, SortId expectedSort) {
-    // Bool expressions always go through lowerBoolExpr to avoid dual-memo issue.
-    if (expectedSort == boolSortId_)
-        return lowerBoolExpr(e);
-
-    TermKey key{e, expectedSort};
-    if (auto it = termMemo_.find(key); it != termMemo_.end())
-        return it->second;
-
-    const auto& node = ir_.get(e);
-
-    if (node.kind == Kind::Ite) {
-        ExprId result = lowerTermIte(e, expectedSort);
-        termMemo_[key] = result;
-        return result;
-    }
-
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    for (ExprId child : node.children) {
-        SortId childSort = ir_.get(child).sort;
-        if (childSort == boolSortId_)
-            newChildren.push_back(lowerBoolExpr(child));
-        else
-            newChildren.push_back(lowerExpr(child, childSort));
-    }
-
-    ExprId result = rebuildLike(e, newChildren);
-    termMemo_[key] = result;
-    return result;
-}
-
-ExprId CoreIteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
-    TermKey key{iteExpr, S};
-    if (auto it = termMemo_.find(key); it != termMemo_.end())
-        return it->second;
-
-    const auto& node = ir_.get(iteExpr);
-    assert(node.kind == Kind::Ite && node.children.size() == 3);
-
-    ExprId c = node.children[0];
-    ExprId t = node.children[1];
-    ExprId e = node.children[2];
-
-    ExprId cLower = lowerBoolExpr(c);
-    ExprId tLower = lowerExpr(t, S);
-    ExprId eLower = lowerExpr(e, S);
-
-    // Optimization: ite(c, t, t) -> t
-    if (tLower == eLower) {
-        termMemo_[key] = tLower;
-        return tLower;
-    }
-
-    ExprId v = freshTerm(S);
-    termMemo_[key] = v;
-
-    // (or (not c) (= v t))
-    ExprId eqThen = ir_.add(CoreExpr{Kind::Eq, boolSortId_, {}, Payload{}});
-    ir_.get(eqThen).children.push_back(v);
-    ir_.get(eqThen).children.push_back(tLower);
-
-    ExprId notC = ir_.add(CoreExpr{Kind::Not, boolSortId_, {}, Payload{}});
-    ir_.get(notC).children.push_back(cLower);
-
-    ExprId guardThen = ir_.add(CoreExpr{Kind::Or, boolSortId_, {}, Payload{}});
-    ir_.get(guardThen).children.push_back(notC);
-    ir_.get(guardThen).children.push_back(eqThen);
-    generatedAssertions_.push_back(guardThen);
-
-    // (or c (= v e))
-    ExprId eqElse = ir_.add(CoreExpr{Kind::Eq, boolSortId_, {}, Payload{}});
-    ir_.get(eqElse).children.push_back(v);
-    ir_.get(eqElse).children.push_back(eLower);
-
-    ExprId guardElse = ir_.add(CoreExpr{Kind::Or, boolSortId_, {}, Payload{}});
-    ir_.get(guardElse).children.push_back(cLower);
-    ir_.get(guardElse).children.push_back(eqElse);
-    generatedAssertions_.push_back(guardElse);
-
-    return v;
-}
-
 ExprId CoreIteLowerer::lowerBoolIte(ExprId iteExpr) {
     if (auto it = boolMemo_.find(iteExpr); it != boolMemo_.end())
         return it->second;
@@ -186,9 +77,10 @@ ExprId CoreIteLowerer::lowerBoolIte(ExprId iteExpr) {
     ExprId p = node.children[1];
     ExprId q = node.children[2];
 
-    ExprId cLower = lowerBoolExpr(c);
-    ExprId pLower = lowerBoolExpr(p);
-    ExprId qLower = lowerBoolExpr(q);
+    // Children must already be lowered (post-order guarantees this).
+    ExprId cLower = boolMemo_.at(c);
+    ExprId pLower = boolMemo_.at(p);
+    ExprId qLower = boolMemo_.at(q);
 
     // Optimization: ite(c, p, p) -> p
     if (pLower == qLower) {
@@ -242,8 +134,194 @@ ExprId CoreIteLowerer::lowerBoolIte(ExprId iteExpr) {
     return r;
 }
 
+ExprId CoreIteLowerer::lowerTermIte(ExprId iteExpr, SortId S) {
+    TermKey key{iteExpr, S};
+    if (auto it = termMemo_.find(key); it != termMemo_.end())
+        return it->second;
+
+    const auto& node = ir_.get(iteExpr);
+    assert(node.kind == Kind::Ite && node.children.size() == 3);
+
+    ExprId c = node.children[0];
+    ExprId t = node.children[1];
+    ExprId e = node.children[2];
+
+    // Children must already be lowered (post-order guarantees this).
+    ExprId cLower = boolMemo_.at(c);
+    ExprId tLower = termMemo_.at({t, S});
+    ExprId eLower = termMemo_.at({e, S});
+
+    // Optimization: ite(c, t, t) -> t
+    if (tLower == eLower) {
+        termMemo_[key] = tLower;
+        return tLower;
+    }
+
+    ExprId v = freshTerm(S);
+    termMemo_[key] = v;
+
+    // (or (not c) (= v t))
+    ExprId eqThen = ir_.add(CoreExpr{Kind::Eq, boolSortId_, {}, Payload{}});
+    ir_.get(eqThen).children.push_back(v);
+    ir_.get(eqThen).children.push_back(tLower);
+
+    ExprId notC = ir_.add(CoreExpr{Kind::Not, boolSortId_, {}, Payload{}});
+    ir_.get(notC).children.push_back(cLower);
+
+    ExprId guardThen = ir_.add(CoreExpr{Kind::Or, boolSortId_, {}, Payload{}});
+    ir_.get(guardThen).children.push_back(notC);
+    ir_.get(guardThen).children.push_back(eqThen);
+    generatedAssertions_.push_back(guardThen);
+
+    // (or c (= v e))
+    ExprId eqElse = ir_.add(CoreExpr{Kind::Eq, boolSortId_, {}, Payload{}});
+    ir_.get(eqElse).children.push_back(v);
+    ir_.get(eqElse).children.push_back(eLower);
+
+    ExprId guardElse = ir_.add(CoreExpr{Kind::Or, boolSortId_, {}, Payload{}});
+    ir_.get(guardElse).children.push_back(cLower);
+    ir_.get(guardElse).children.push_back(eqElse);
+    generatedAssertions_.push_back(guardElse);
+
+    return v;
+}
+
 ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
-    return lowerBoolExpr(assertion);
+    // ---------- Phase 1: classify each node as Bool-lowered or Term-lowered ----------
+    // This mirrors the recursive dispatch logic of the original lowerBoolExpr/lowerExpr.
+    std::unordered_set<ExprId> boolNodes;
+    std::unordered_map<ExprId, SortId> termSort; // for term-lowered nodes, stores the expectedSort
+    {
+        std::vector<ExprId> stack;
+        stack.reserve(1024);
+        boolNodes.reserve(1024);
+        termSort.reserve(1024);
+
+        // Assertion is always lowered as Bool.
+        stack.push_back(assertion);
+        boolNodes.insert(assertion);
+
+        while (!stack.empty()) {
+            ExprId e = stack.back();
+            stack.pop_back();
+
+            const auto& node = ir_.get(e);
+            bool isBoolNode = boolNodes.count(e);
+
+            if (node.kind == Kind::Ite) {
+                assert(node.children.size() == 3);
+                ExprId c = node.children[0];
+                ExprId t = node.children[1];
+                ExprId eBranch = node.children[2];
+
+                if (isBoolNode) {
+                    // lowerBoolIte: c, p, q all go through lowerBoolExpr
+                    if (boolNodes.insert(c).second) stack.push_back(c);
+                    if (boolNodes.insert(t).second) stack.push_back(t);
+                    if (boolNodes.insert(eBranch).second) stack.push_back(eBranch);
+                } else {
+                    // lowerTermIte: c goes through lowerBoolExpr, t/e go through lowerExpr(S)
+                    SortId S = termSort.at(e);
+                    if (boolNodes.insert(c).second) stack.push_back(c);
+                    if (termSort.insert({t, S}).second) stack.push_back(t);
+                    if (termSort.insert({eBranch, S}).second) stack.push_back(eBranch);
+                }
+            } else {
+                // Non-ITE: dispatch children exactly like the recursive version
+                for (ExprId child : node.children) {
+                    SortId childSort = ir_.get(child).sort;
+                    if (isBoolNode) {
+                        // lowerBoolExpr path: childSort == boolSortId_ -> bool, else term
+                        if (childSort == boolSortId_) {
+                            if (boolNodes.insert(child).second) stack.push_back(child);
+                        } else {
+                            if (termSort.insert({child, childSort}).second) stack.push_back(child);
+                        }
+                    } else {
+                        // lowerExpr path: expectedSort == boolSortId_ -> bool, else term
+                        SortId expectedSort = termSort.at(e);
+                        if (expectedSort == boolSortId_) {
+                            if (boolNodes.insert(child).second) stack.push_back(child);
+                        } else {
+                            if (termSort.insert({child, expectedSort}).second) stack.push_back(child);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- Phase 2: iterative post-order traversal ----------
+    std::vector<ExprId> postOrder;
+    {
+        std::vector<ExprId> stack;
+        std::unordered_set<ExprId> visited;
+        stack.reserve(1024);
+        visited.reserve(1024);
+
+        // We need to traverse all nodes that were classified above.
+        std::vector<ExprId> roots;
+        roots.reserve(boolNodes.size() + termSort.size());
+        for (ExprId e : boolNodes) roots.push_back(e);
+        for (const auto& kv : termSort) roots.push_back(kv.first);
+
+        for (ExprId root : roots) {
+            if (!visited.insert(root).second) continue;
+            stack.push_back(root);
+
+            while (!stack.empty()) {
+                ExprId e = stack.back();
+                const auto& node = ir_.get(e);
+
+                bool allChildrenVisited = true;
+                for (ExprId child : node.children) {
+                    if (boolNodes.count(child) || termSort.count(child)) {
+                        if (visited.insert(child).second) {
+                            stack.push_back(child);
+                            allChildrenVisited = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allChildrenVisited) {
+                    postOrder.push_back(e);
+                    stack.pop_back();
+                }
+            }
+        }
+    }
+
+    // ---------- Phase 3: process nodes in post-order ----------
+    for (ExprId e : postOrder) {
+        const auto& node = ir_.get(e);
+        bool isBoolNode = boolNodes.count(e);
+
+        if (node.kind == Kind::Ite) {
+            if (isBoolNode) {
+                lowerBoolIte(e);
+            } else {
+                lowerTermIte(e, termSort.at(e));
+            }
+        } else {
+            std::vector<ExprId> newChildren;
+            newChildren.reserve(node.children.size());
+            for (ExprId child : node.children) {
+                if (boolNodes.count(child)) {
+                    newChildren.push_back(boolMemo_.at(child));
+                } else {
+                    newChildren.push_back(termMemo_.at({child, termSort.at(child)}));
+                }
+            }
+            ExprId result = rebuildLike(e, newChildren);
+            if (isBoolNode)
+                boolMemo_[e] = result;
+            else
+                termMemo_[{e, termSort.at(e)}] = result;
+        }
+    }
+
+    return boolMemo_.at(assertion);
 }
 
 } // namespace nlcolver
