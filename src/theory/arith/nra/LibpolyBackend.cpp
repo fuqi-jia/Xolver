@@ -216,6 +216,14 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
             mpq_class lowerQ(loNum, loDen);
             mpq_class upperQ(hiNum, hiDen);
 
+            // Defensive: libpoly may represent simple rationals (0, 1, -1) as
+            // LP_VALUE_ALGEBRAIC with a null defining polynomial (f == nullptr).
+            // In that case, treat them as rational roots.
+            if (!an.get_internal()->f) {
+                result.roots.push_back(RealAlg::fromRational(std::move(lowerQ)));
+                continue;
+            }
+
             // Extract defining polynomial from libpoly AlgebraicNumber
             poly::UPolynomial defPoly = poly::get_defining_polynomial(an);
             std::vector<poly::Integer> defCoeffs = poly::coefficients(defPoly);
