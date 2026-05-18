@@ -6,42 +6,14 @@ namespace nlcolver {
 
 CoreIteLowerer::CoreIteLowerer(CoreIr& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
-    // Scan existing variable names to avoid collision with fresh symbols.
-    for (ExprId id = 0; id < static_cast<ExprId>(ir_.size()); ++id) {
-        const auto& e = ir_.get(id);
-        if (e.kind == Kind::Variable) {
-            if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                usedNames_.insert(*s);
-            }
-        }
-    }
-}
-
-std::string CoreIteLowerer::makeUniqueName(const std::string& prefix) {
-    std::string name;
-    do {
-        name = prefix + "_" + std::to_string(freshCounter_++);
-    } while (usedNames_.count(name));
-    usedNames_.insert(name);
-    return name;
 }
 
 ExprId CoreIteLowerer::freshTerm(SortId sort) {
-    std::string name = makeUniqueName("__nlc_ite");
-    CoreExpr e;
-    e.kind = Kind::Variable;
-    e.sort = sort;
-    e.payload = Payload(std::move(name));
-    return ir_.add(std::move(e));
+    return ir_.makeFreshVariable(sort, "__nlc_ite");
 }
 
 ExprId CoreIteLowerer::freshBool() {
-    std::string name = makeUniqueName("__nlc_ite");
-    CoreExpr e;
-    e.kind = Kind::Variable;
-    e.sort = boolSortId_;
-    e.payload = Payload(std::move(name));
-    return ir_.add(std::move(e));
+    return ir_.makeFreshVariable(boolSortId_, "__nlc_ite");
 }
 
 ExprId CoreIteLowerer::rebuildLike(ExprId original,

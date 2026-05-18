@@ -2,6 +2,8 @@
 #include "nlcolver/Result.h"
 #include "expr/ir.h"
 #include "expr/CoreIteLowerer.h"
+#include "expr/ArithCastNormalizer.h"
+#include "expr/LinearToIntPurifier.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -148,6 +150,39 @@ public:
                 ir->addAssertion(a, level);
             }
         }
+
+        // Normalize arithmetic casts (fold constant to_int/to_real)
+        // TEMPORARILY DISABLED for debugging
+        /*
+        {
+            ArithCastNormalizer normalizer(*ir);
+            auto normResult = normalizer.run();
+            ir->clearAssertions();
+            for (const auto& [level, a] : normResult.assertions) {
+                ir->addAssertion(a, level);
+            }
+        }
+        */
+
+        // Purify linear to_int applications into fresh Int variables + floor lemmas
+        // TEMPORARILY DISABLED for debugging
+        /*
+        {
+            LinearToIntPurifier purifier(*ir);
+            auto detectResult = purifier.detectOnly();
+            if (detectResult.hasUnsupportedNonlinearToInt) {
+                return Result::Unknown;
+            }
+            auto purifyResult = purifier.run();
+            ir->clearAssertions();
+            for (const auto& [level, a] : purifyResult.purifiedAssertions) {
+                ir->addAssertion(a, level);
+            }
+            for (const auto& [level, lemma] : purifyResult.floorLemmas) {
+                ir->addAssertion(lemma, level);
+            }
+        }
+        */
 
         // Apply solver options (seed, etc.)
         auto itSeed = options.find("seed");

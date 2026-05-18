@@ -150,6 +150,12 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         case Kind::BvMul:
             f.hasBV = true;
             break;
+        case Kind::ToReal:
+            scanExpr(e.children[0], f, visited);
+            return;
+        case Kind::ToInt:
+            f.hasUnsupported = true;
+            break;
         default:
             break;
     }

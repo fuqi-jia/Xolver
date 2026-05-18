@@ -1,0 +1,5 @@
+(set-logic QF_LIRA)
+(declare-const x Real)
+(assert (= (to_int x) 3))
+(assert (>= x 4))
+(check-sat)

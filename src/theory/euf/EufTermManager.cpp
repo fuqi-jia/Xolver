@@ -1,7 +1,6 @@
 #include "theory/euf/EufTermManager.h"
 #include <cassert>
 #include <algorithm>
-#include <iostream>
 
 namespace nlcolver {
 
@@ -130,6 +129,32 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
         return NullEufTerm;
     };
 
+    auto builtinName = [](Kind k) -> std::string {
+        switch (k) {
+            case Kind::Add:    return "#builtin.Add";
+            case Kind::Sub:    return "#builtin.Sub";
+            case Kind::Neg:    return "#builtin.Neg";
+            case Kind::Mul:    return "#builtin.Mul";
+            case Kind::Div:    return "#builtin.Div";
+            case Kind::Mod:    return "#builtin.Mod";
+            case Kind::Abs:    return "#builtin.Abs";
+            case Kind::Pow:    return "#builtin.Pow";
+            case Kind::ToInt:  return "#builtin.ToInt";
+            case Kind::ToReal: return "#builtin.ToReal";
+            default:           return "";
+        }
+    };
+
+    auto isLeafKind = [](Kind k) -> bool {
+        return k == Kind::ConstBool || k == Kind::ConstInt ||
+               k == Kind::ConstReal || k == Kind::ConstBV ||
+               k == Kind::ConstFP || k == Kind::Variable;
+    };
+
+    auto isApplicationKind = [&](Kind k) -> bool {
+        return k == Kind::UFApply || !builtinName(k).empty();
+    };
+
     if (!tryResolve(root)) {
         stack.push_back(Frame{root, false});
     }
@@ -142,8 +167,8 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
         if (!f.childrenDone) {
             f.childrenDone = true;
 
-            // Leaf or unsupported -> compute inline
-            if (e.kind != Kind::UFApply) {
+            // Leaf: compute inline
+            if (isLeafKind(e.kind)) {
                 EufTermId res = computeLeaf(f.eid);
                 exprToTerm_[f.eid] = res;
                 done[f.eid] = res;
@@ -151,20 +176,25 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                 continue;
             }
 
-            // UFApply: need children first
-            for (size_t i = e.children.size(); i-- > 0; ) {
-                if (!tryResolve(e.children[i])) {
-                    stack.push_back(Frame{e.children[i], false});
+            // Application (UFApply or interpreted term): need children first
+            if (isApplicationKind(e.kind)) {
+                for (size_t i = e.children.size(); i-- > 0; ) {
+                    if (!tryResolve(e.children[i])) {
+                        stack.push_back(Frame{e.children[i], false});
+                    }
                 }
+                continue;
             }
+
+            // Unsupported kind (e.g. Ite, And, Or, Lt, etc.)
+            exprToTerm_[f.eid] = NullEufTerm;
+            done[f.eid] = NullEufTerm;
+            stack.pop_back();
             continue;
         }
 
         // Second visit: children resolved in `done`
-        if (e.kind == Kind::UFApply) {
-            std::string name = std::get_if<std::string>(&e.payload.value)
-                               ? std::get<std::string>(e.payload.value)
-                               : "";
+        if (isApplicationKind(e.kind)) {
             std::vector<EufTermId> args;
             std::vector<SortId> argSorts;
             args.reserve(e.children.size());
@@ -183,10 +213,15 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                 exprToTerm_[f.eid] = NullEufTerm;
                 done[f.eid] = NullEufTerm;
             } else {
+                std::string name;
+                if (e.kind == Kind::UFApply) {
+                    name = std::get_if<std::string>(&e.payload.value)
+                           ? std::get<std::string>(e.payload.value)
+                           : "";
+                } else {
+                    name = builtinName(e.kind);
+                }
                 FuncSymbolId sym = internSymbol(name, argSorts, e.sort);
-                std::cerr << "[EUF-TERM] UFApply " << name << " argSorts=[";
-                for (auto s : argSorts) std::cerr << s << " ";
-                std::cerr << "] resultSort=" << e.sort << " sym=" << sym << "\n";
                 EufTermId res = createNode(sym, args, e.sort, f.eid);
                 exprToTerm_[f.eid] = res;
                 done[f.eid] = res;
@@ -197,7 +232,7 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
 
         assert(e.kind != Kind::Ite && "ITE must be lowered by CoreIteLowerer before reaching EUF");
 
-        // Fallback (should not reach here including ITE)
+        // Fallback (should not reach here for non-leaf kinds)
         EufTermId res = computeLeaf(f.eid);
         exprToTerm_[f.eid] = res;
         done[f.eid] = res;

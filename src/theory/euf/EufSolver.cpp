@@ -4,6 +4,7 @@
 #include "theory/TheoryLemmaDatabase.h"
 #include <cassert>
 #include <algorithm>
+#include <functional>
 #include <iostream>
 
 namespace nlcolver {
@@ -189,7 +190,8 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     EufTermId rhs = termManager_.intern(payload.rhs, *coreIr_);
     if (lhs == NullEufTerm || rhs == NullEufTerm) {
         std::cerr << "[EUF] assertLit: intern failed lhs=" << payload.lhs
-                  << " rhs=" << payload.rhs << "\n";
+                  << " rhs=" << payload.rhs << " -> pendingUnknown\n";
+        pendingUnknown_ = true;
         return;
     }
 
@@ -352,7 +354,7 @@ TheoryCheckResult EufSolver::assertInterfaceEquality(
     EufTermId ta = internSharedConstant(a);
     EufTermId tb = internSharedConstant(b);
     if (ta == NullEufTerm || tb == NullEufTerm) {
-        return TheoryCheckResult::consistent();
+        return TheoryCheckResult::unknown();
     }
 
     MergeReason mr;
@@ -370,7 +372,7 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
     EufTermId ta = internSharedConstant(a);
     EufTermId tb = internSharedConstant(b);
     if (ta == NullEufTerm || tb == NullEufTerm) {
-        return TheoryCheckResult::consistent();
+        return TheoryCheckResult::unknown();
     }
 
     if (egraph_.same(ta, tb)) {

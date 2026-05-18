@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
 #include <optional>
 
 namespace nlcolver {
@@ -129,7 +130,39 @@ public:
 
     SortId allocateSortId() { return nextSortId_++; }
 
+    // Generate a globally unique fresh variable name and add it to the IR.
+    // Guarantees:
+    //   1. Name does not collide with any existing Variable node in exprs_
+    //   2. Name does not collide with any previously generated fresh name
+    //   3. Returns a newly added ExprId (never reuses existing node)
+    ExprId makeFreshVariable(SortId sort, std::string_view prefix) {
+        std::string name;
+        do {
+            name = std::string(prefix) + "_" + std::to_string(freshVarCounter_++);
+        } while (nameCollides(name));
+        freshVarNames_.insert(name);
+        CoreExpr e;
+        e.kind = Kind::Variable;
+        e.sort = sort;
+        e.payload = Payload(std::move(name));
+        return add(std::move(e));
+    }
+
 private:
+    bool nameCollides(const std::string& name) const {
+        // Check against existing variable nodes in exprs_
+        for (ExprId id = 0; id < static_cast<ExprId>(exprs_.size()); ++id) {
+            const auto& node = exprs_[id];
+            if (node.kind == Kind::Variable) {
+                if (auto* s = std::get_if<std::string>(&node.payload.value)) {
+                    if (*s == name) return true;
+                }
+            }
+        }
+        // Check against previously generated fresh names
+        if (freshVarNames_.count(name)) return true;
+        return false;
+    }
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;
@@ -138,6 +171,9 @@ private:
     SortId intSortId_ = NullSort;
     SortId realSortId_ = NullSort;
     SortId nextSortId_ = 1;
+
+    uint64_t freshVarCounter_ = 0;
+    std::unordered_set<std::string> freshVarNames_;
 };
 
 } // namespace nlcolver

@@ -1,0 +1,8 @@
+(set-logic QF_LIRA)
+(declare-const k Int)
+(declare-const x Real)
+(assert (= k 3))
+(assert (<= (to_real k) x))
+(assert (< x (+ (to_real k) 1)))
+(assert (= x (/ 7 2)))
+(check-sat)

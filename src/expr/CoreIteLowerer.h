@@ -38,7 +38,6 @@ private:
     ExprId lowerTermIte(ExprId iteExpr, SortId resultSort);
     ExprId lowerBoolIte(ExprId iteExpr);
 
-    std::string makeUniqueName(const std::string& prefix);
     ExprId freshTerm(SortId sort);
     ExprId freshBool();
 
@@ -47,8 +46,6 @@ private:
 private:
     CoreIr& ir_;
     SortId boolSortId_;
-    uint32_t freshCounter_ = 0;
-    std::unordered_set<std::string> usedNames_;
 
     // Bool expressions: key is just ExprId (Bool sort has no IntOrReal ambiguity).
     std::unordered_map<ExprId, ExprId> boolMemo_;
