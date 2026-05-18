@@ -1,6 +1,7 @@
 #include "theory/arith/nra/CdcacSolver.h"
 #include "theory/arith/nra/CdcacCore.h"
 #include "theory/arith/nra/LibpolyBackend.h"
+#include "theory/arith/nra/CdcacCache.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include <unordered_set>
 #include <algorithm>
@@ -20,8 +21,25 @@ CdcacSolver::~CdcacSolver() = default;
 void CdcacSolver::reset() {
     active_.clear();
     trail_.clear();
+    scopeStack_.clear();
     pendingConflict_.reset();
     pendingUnknown_.reset();
+    if (cache_) cache_->clear();
+}
+
+void CdcacSolver::push() {
+    scopeStack_.push_back({active_.size(), trail_.size()});
+    if (cache_) cache_->push();
+}
+
+void CdcacSolver::pop(uint32_t n) {
+    for (uint32_t i = 0; i < n && !scopeStack_.empty(); ++i) {
+        const auto& snap = scopeStack_.back();
+        active_.resize(snap.activeSize);
+        trail_.resize(snap.trailSize);
+        scopeStack_.pop_back();
+    }
+    if (cache_) cache_->pop(n);
 }
 
 void CdcacSolver::assertConstraint(PolyId poly, Relation rel, SatLit reason, int level) {

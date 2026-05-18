@@ -8,13 +8,27 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       engine_(kernel_.get()) {}
 
-void NraSolver::push() {}
-void NraSolver::pop(uint32_t) {}
+void NraSolver::push() {
+    scopeStack_.push_back(activeLits_.size());
+    engine_.push();
+}
+
+void NraSolver::pop(uint32_t n) {
+    for (uint32_t i = 0; i < n && !scopeStack_.empty(); ++i) {
+        size_t targetSize = scopeStack_.back();
+        scopeStack_.pop_back();
+        activeLits_.resize(targetSize);
+    }
+    trail_.clear();  // V5: rebuild trail from activeLits on next backtrack
+    activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
+    engine_.pop(n);
+}
 
 void NraSolver::reset() {
     engine_.reset();
     activeLits_.clear();
     trail_.clear();
+    scopeStack_.clear();
     activeSet_.reset();
 }
 

@@ -13,6 +13,7 @@ namespace nlcolver {
 
 class CdcacCore;
 class LibpolyBackend;
+class CdcacCache;
 
 /**
  * CDCAC (Conflict-Driven Cylindrical Algebraic Covering) engine.
@@ -32,6 +33,13 @@ public:
     TheoryCheckResult check(CdcacEffort effort, void* trail);
     void reset();
 
+    // V5: push/pop for Solver::push/pop API
+    void push();
+    void pop(uint32_t n);
+
+    // V5: cache access
+    void setCache(CdcacCache* cache) { cache_ = cache; }
+
 private:
     struct ActiveConstraint {
         PolyId poly;
@@ -44,9 +52,15 @@ private:
         size_t activeSizeBefore;
     };
 
+    struct ScopeSnapshot {
+        size_t activeSize;
+        size_t trailSize;
+    };
+
     struct PendingConflict {
         int level;
         TheoryConflict conflict;
+        std::optional<CoveringCertificate> certificate;  // V5: optional certificate
     };
 
     struct PendingUnknown {
@@ -57,12 +71,16 @@ private:
 
     std::vector<ActiveConstraint> active_;
     std::vector<TrailEntry> trail_;
+    std::vector<ScopeSnapshot> scopeStack_;  // V5: push/pop scope stack
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
 
     // P2a: CDCAC core + algebra backend
     std::unique_ptr<LibpolyBackend> algebra_;
     std::unique_ptr<CdcacCore> core_;
+
+    // V5: cache
+    CdcacCache* cache_ = nullptr;
 };
 
 } // namespace nlcolver

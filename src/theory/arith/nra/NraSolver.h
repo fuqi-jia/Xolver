@@ -47,6 +47,9 @@ private:
     std::vector<SatLit> activeLits_;
     std::vector<NraTrailEntry> trail_;
     ActiveLiteralSet activeSet_;
+
+    // V5: scope stack for push/pop
+    std::vector<size_t> scopeStack_;
 };
 
 } // namespace nlcolver
