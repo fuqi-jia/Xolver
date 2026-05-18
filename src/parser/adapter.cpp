@@ -22,7 +22,10 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
 
     for (Node assertion : parser_.getAssertions()) {
         Node rewritten = rewriter.rewrite(assertion);
-        ExprId id = importNode(rewritten);
+        // Expand preserving-let nodes before CoreIr import.
+        // SOMTParser's expandLet is iterative and idempotent on non-let nodes.
+        Node expanded = parser_.expandLet(rewritten);
+        ExprId id = importNode(expanded);
         ir_->addAssertion(id);
     }
     return std::move(ir_);
@@ -34,43 +37,88 @@ ExprId FrontendAdapter::importNode(Node node) {
     auto it = memo_.find(node);
     if (it != memo_.end()) return it->second;
 
-    SOMTParser::NODE_KIND nk = kind(node);
-    Kind k = mapKind(nk);
-    if (k == Kind::Unknown) {
-        std::cerr << "[FrontendAdapter] WARNING: unmapped SOMTParser node kind="
-                  << static_cast<int>(nk) << " name='" << node->getName()
-                  << "' children=" << numChildren(node) << "\n";
-    }
-    if (k == Kind::ConstReal) {
-        auto s = sort(node);
-        if (s && s->isInt()) k = Kind::ConstInt;
-    }
-    SortId s = mapSort(node);
-    Payload p = extractPayload(node);
+    // Iterative post-order traversal to avoid stack overflow on deep DAGs.
+    struct Frame {
+        Node node;
+        size_t nextChild;
+    };
 
-    std::vector<ExprId> childIds;
-    for (size_t i = 0; i < numChildren(node); ++i) {
-        childIds.push_back(importNode(child(node, i)));
+    std::vector<Frame> stack;
+    std::unordered_set<Node> visited;
+    stack.reserve(1024);
+    visited.reserve(1024);
+
+    stack.push_back({node, 0});
+    visited.insert(node);
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+
+        // Push unprocessed children first
+        if (frame.nextChild < numChildren(frame.node)) {
+            Node c = child(frame.node, frame.nextChild);
+            ++frame.nextChild;
+
+            if (c) {
+                auto memoIt = memo_.find(c);
+                if (memoIt == memo_.end() && visited.find(c) == visited.end()) {
+                    stack.push_back({c, 0});
+                    visited.insert(c);
+                }
+            }
+            continue;
+        }
+
+        // All children processed — create CoreExpr for this node
+        Node n = frame.node;
+        stack.pop_back();
+        visited.erase(n);
+
+        std::vector<ExprId> childIds;
+        childIds.reserve(numChildren(n));
+        for (size_t i = 0; i < numChildren(n); ++i) {
+            Node c = child(n, i);
+            if (!c) continue;
+            auto memoIt = memo_.find(c);
+            if (memoIt != memo_.end()) {
+                childIds.push_back(memoIt->second);
+            }
+        }
+
+        SOMTParser::NODE_KIND nk = kind(n);
+        Kind k = mapKind(nk);
+        if (k == Kind::Unknown) {
+            std::cerr << "[FrontendAdapter] WARNING: unmapped SOMTParser node kind="
+                      << static_cast<int>(nk) << " name='" << n->getName()
+                      << "' children=" << numChildren(n) << "\n";
+        }
+        if (k == Kind::ConstReal) {
+            auto s = sort(n);
+            if (s && s->isInt()) k = Kind::ConstInt;
+        }
+        SortId s = mapSort(n);
+        Payload p = extractPayload(n);
+
+        // Flip > and >= to < and <= by swapping children.
+        if (nk == SOMTParser::NODE_KIND::NT_GT) {
+            k = Kind::Lt;
+            std::swap(childIds[0], childIds[1]);
+        } else if (nk == SOMTParser::NODE_KIND::NT_GE) {
+            k = Kind::Leq;
+            std::swap(childIds[0], childIds[1]);
+        }
+
+        CoreExpr expr;
+        expr.kind = k;
+        expr.sort = s;
+        expr.children = SmallVector<ExprId, 4>(childIds.begin(), childIds.end());
+        expr.payload = std::move(p);
+
+        ExprId id = ir_->add(std::move(expr));
+        memo_[n] = id;
     }
 
-    // Flip > and >= to < and <= by swapping children.
-    if (nk == SOMTParser::NODE_KIND::NT_GT) {
-        k = Kind::Lt;
-        std::swap(childIds[0], childIds[1]);
-    } else if (nk == SOMTParser::NODE_KIND::NT_GE) {
-        k = Kind::Leq;
-        std::swap(childIds[0], childIds[1]);
-    }
-
-    CoreExpr expr;
-    expr.kind = k;
-    expr.sort = s;
-    expr.children = SmallVector<ExprId, 4>(childIds.begin(), childIds.end());
-    expr.payload = std::move(p);
-
-    ExprId id = ir_->add(std::move(expr));
-    memo_[node] = id;
-    return id;
+    return memo_[node];
 }
 
 SortId FrontendAdapter::mapSort(Node node) {
