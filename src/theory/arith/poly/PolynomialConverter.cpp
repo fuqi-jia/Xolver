@@ -187,6 +187,34 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             }
             break;
         }
+        case Kind::ToReal: {
+            // to_real is a transparent coercion from Int to Real.
+            if (e.children.size() == 1) {
+                result = collectRec(e.children[0], ir);
+            }
+            break;
+        }
+        case Kind::ToInt: {
+            // Supported: to_int(constant) -> floor(constant)
+            if (e.children.size() == 1) {
+                const CoreExpr& arg = ir.get(e.children[0]);
+                if (arg.kind == Kind::ConstInt) {
+                    if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
+                        result = RationalPolynomial::fromConstant(mpq_class(*v));
+                    }
+                } else if (arg.kind == Kind::ConstReal) {
+                    if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                        mpq_class q(*s);
+                        mpz_class z = q.get_num() / q.get_den();
+                        if (q < 0 && q.get_num() % q.get_den() != 0) {
+                            z -= 1;
+                        }
+                        result = RationalPolynomial::fromConstant(mpq_class(z));
+                    }
+                }
+            }
+            break;
+        }
         default:
             // Non-arithmetic or unsupported node
             result = std::nullopt;

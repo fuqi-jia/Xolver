@@ -193,6 +193,8 @@ Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
         case NODE_KIND::NT_BV_MUL:      return Kind::BvMul;
         case NODE_KIND::NT_FORALL:      return Kind::Forall;
         case NODE_KIND::NT_EXISTS:      return Kind::Exists;
+        case NODE_KIND::NT_TO_INT:      return Kind::ToInt;
+        case NODE_KIND::NT_TO_REAL:     return Kind::ToReal;
         default:                        return Kind::Unknown;
     }
 }

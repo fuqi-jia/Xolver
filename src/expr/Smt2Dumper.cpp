@@ -32,6 +32,8 @@ static const char* kindToSMT2(Kind k) {
         case Kind::BvMul:     return "bvmul";
         case Kind::Forall:    return "forall";
         case Kind::Exists:    return "exists";
+        case Kind::ToInt:     return "to_int";
+        case Kind::ToReal:    return "to_real";
         default:              return "";
     }
 }

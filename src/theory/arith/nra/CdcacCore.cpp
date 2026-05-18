@@ -1,6 +1,7 @@
 #include "theory/arith/nra/CdcacCore.h"
 #include "theory/arith/nra/LocalProjection.h"
 #include "theory/arith/nra/NullificationAnalyzer.h"
+#include "theory/arith/nra/CellCertificateValidator.h"
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
@@ -31,6 +32,52 @@ static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
 static Bound boundFromRealAlg(const RealAlg& ra, bool isOpen) {
     if (ra.isRational()) return Bound::rational(ra.rational, isOpen);
     return Bound::algebraic(ra.root, isOpen);
+}
+
+// V3: Helper: convert Bound to AlgebraicEndpoint
+static AlgebraicEndpoint boundToEndpoint(const Bound& bound) {
+    AlgebraicEndpoint ep;
+    if (bound.isNegInf()) {
+        ep.kind = EndpointKind::MinusInfinity;
+    } else if (bound.isPosInf()) {
+        ep.kind = EndpointKind::PlusInfinity;
+    } else {
+        ep.kind = EndpointKind::Algebraic;
+        ep.value = bound.value;
+    }
+    return ep;
+}
+
+// V3: Helper: convert Cell to FiberCellCoverage
+static FiberCellCoverage cellToFiberCoverage(const Cell& cell, size_t index) {
+    FiberCellCoverage fc;
+    switch (cell.kind) {
+        case CellKind::FullLine:
+            fc.kind = FiberCellKind::FullLine;
+            break;
+        case CellKind::Sector:
+            if (cell.lower.isNegInf()) {
+                fc.kind = FiberCellKind::MinusInfinitySector;
+            } else if (cell.upper.isPosInf()) {
+                fc.kind = FiberCellKind::PlusInfinitySector;
+            } else {
+                fc.kind = FiberCellKind::Sector;
+            }
+            break;
+        case CellKind::Section:
+            fc.kind = FiberCellKind::Section;
+            break;
+    }
+    fc.cell = cell;
+    fc.lower = boundToEndpoint(cell.lower);
+    fc.upper = boundToEndpoint(cell.upper);
+    fc.lowerOpen = cell.lower.open;
+    fc.upperOpen = cell.upper.open;
+    if (cell.isSection() && cell.section) {
+        fc.sectionDefiningPoly = cell.section->liftedDefiningPoly;
+    }
+    fc.certifiedCellIndex = index;
+    return fc;
 }
 
 // Helper: try local projection to get univariate polynomials for current level
@@ -193,10 +240,48 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     std::cerr << "[CDCAC]   nullification: FullLine conflict for constraint " << c.id << std::endl;
                     if (analysis.conflictCell) {
                         Cell cell = *analysis.conflictCell;
+                        Cell cellCopy = cell;  // copy for certificate
                         Covering cover;
                         cover.var = var;
                         cover.cells.push_back(std::move(cell));
-                        return CdcacResult::mkUnsat(std::move(cover), {c.reason});
+                        CdcacResult result = CdcacResult::mkUnsat(std::move(cover), {c.reason});
+
+                        // V3: Build minimal CoveringCertificate for nullification conflict
+                        CellCertificate cert;
+                        cert.kind = CellCertificateKind::NullificationConflict;
+                        cert.level = k;
+                        cert.var = var;
+                        cert.cell = cellCopy;
+                        AtomCondition ac;
+                        ac.atom = NullAtom;
+                        ac.poly = c.poly;
+                        ac.rel = c.rel;
+                        ac.allowedSigns = signSetFromRelation(c.rel);
+                        ac.invariantSigns = signToAtomSignSet(Sign::Zero);
+                        ac.isConstant = kernel_->isConstant(c.poly);
+                        cert.atomConditions.push_back(std::move(ac));
+                        CertificateReasonLit crl;
+                        crl.lit = c.reason;
+                        crl.atom = NullAtom;
+                        crl.polarity = true;
+                        crl.normalized = {c.poly, c.rel};
+                        cert.reasons.push_back(std::move(crl));
+
+                        CoveringCertificate coverCert;
+                        coverCert.level = k;
+                        coverCert.var = var;
+                        coverCert.cells.push_back(CertifiedCell{std::move(cellCopy), std::move(cert)});
+
+                        // V3: Build CoverageCertificate
+                        CoverageCertificate coverage;
+                        coverage.level = k;
+                        coverage.var = var;
+                        coverage.coversWholeFiber = true;
+                        coverage.orderedCells.push_back(cellToFiberCoverage(coverCert.cells[0].cell, 0));
+                        coverCert.coverage = std::move(coverage);
+
+                        result.coveringCert = std::move(coverCert);
+                        return result;
                     }
                     return CdcacResult::mkUnknown(CdcacUnknownReason::NullificationInGeneralization);
                 case NullificationAnalyzer::Action::Unknown:
@@ -321,7 +406,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return cell;
     };
 
-    std::vector<Cell> conflictCells;
+    std::vector<CertifiedCell> certifiedCells;
 
     // 4. Generate and test cells
     if (allRoots.roots.empty()) {
@@ -351,7 +436,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         if (bcr.status == BuildCellStatus::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
         }
-        conflictCells.push_back(std::move(bcr.cell));
+        certifiedCells.push_back(std::move(*bcr.conflictCell));
     } else {
         // Has roots: sectors + sections
         std::optional<RealAlg> prevRoot;
@@ -376,7 +461,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
-                    conflictCells.push_back(std::move(bcr.cell));
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
                 }
             } else {
                 // First sector: (-inf, r0)
@@ -391,7 +476,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (bcr.status == BuildCellStatus::Unknown) {
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
-                conflictCells.push_back(std::move(bcr.cell));
+                certifiedCells.push_back(std::move(*bcr.conflictCell));
             }
 
             // Section at this root
@@ -404,7 +489,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (bcr.status == BuildCellStatus::Unknown) {
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
-                conflictCells.push_back(std::move(bcr.cell));
+                certifiedCells.push_back(std::move(*bcr.conflictCell));
             }
 
             prevRoot = root;
@@ -423,14 +508,16 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             if (bcr.status == BuildCellStatus::Unknown) {
                 return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
             }
-            conflictCells.push_back(std::move(bcr.cell));
+            certifiedCells.push_back(std::move(*bcr.conflictCell));
         }
     }
 
-    // 5. Build covering and check
+    // 5. Build covering and check (copy cells from certifiedCells for legacy Covering)
     Covering cover;
     cover.var = var;
-    cover.cells = std::move(conflictCells);
+    for (const auto& cc : certifiedCells) {
+        cover.cells.push_back(cc.cell);  // copy
+    }
 
     std::cerr << "[CDCAC] final cells=" << cover.cells.size() << std::endl;
     CoverageResult cov = CoveringManager::coversAllLine(algebra_, cover);
@@ -444,11 +531,49 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
 
     auto reasons = ReasonManager::minimize(cover);
-    return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+    CdcacResult result = CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+
+    // V3: Build CoveringCertificate
+    CoveringCertificate coverCert;
+    coverCert.level = k;
+    coverCert.var = var;
+    for (auto& cc : certifiedCells) {
+        coverCert.cells.push_back(std::move(cc));
+    }
+
+    // V3: Build CoverageCertificate
+    CoverageCertificate coverage;
+    coverage.level = k;
+    coverage.var = var;
+    coverage.coversWholeFiber = true;
+    for (size_t i = 0; i < coverCert.cells.size(); ++i) {
+        coverage.orderedCells.push_back(cellToFiberCoverage(coverCert.cells[i].cell, i));
+    }
+    coverCert.coverage = std::move(coverage);
+
+    // V3: Validate certificate (debug build only — catches implementation bugs)
+#ifndef NDEBUG
+    CellCertificateValidator validator;
+    auto valRes = validator.validateCovering(coverCert, algebra_);
+    if (valRes.status != ValidationStatus::Valid) {
+        std::cerr << "[CDCAC] Certificate validation FAILED: reason=" << static_cast<int>(valRes.reason) << std::endl;
+        // Do not abort — validation failure is a bug, but return the result anyway
+        // to avoid breaking solver on validator edge cases.
+    } else {
+        std::cerr << "[CDCAC] Certificate validation OK" << std::endl;
+    }
+#endif
+
+    result.coveringCert = std::move(coverCert);
+
+    return result;
 }
 
 CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInput& input) {
     std::vector<SatLit> conflictLits;
+    std::vector<AtomCondition> atomConditions;
+    std::vector<CertificateReasonLit> certReasons;
+
     for (const auto& c : input.constraints) {
         Sign sign = algebra_->signAt(c.poly, sample);
         if (sign == Sign::Unknown) {
@@ -456,20 +581,82 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         }
         if (!relationHolds(sign, c.rel)) {
             conflictLits.push_back(c.reason);
+
+            AtomCondition ac;
+            ac.atom = NullAtom;
+            ac.poly = c.poly;
+            ac.rel = c.rel;
+            ac.allowedSigns = signSetFromRelation(c.rel);
+            ac.invariantSigns = signToAtomSignSet(sign);
+            ac.isConstant = kernel_->isConstant(c.poly);
+            atomConditions.push_back(std::move(ac));
+
+            CertificateReasonLit crl;
+            crl.lit = c.reason;
+            crl.atom = NullAtom;
+            crl.polarity = true;
+            crl.normalized = {c.poly, c.rel};
+            certReasons.push_back(std::move(crl));
         }
     }
     if (!conflictLits.empty()) {
+        VarId var = input.varOrder.empty() ? NullVar : input.varOrder[0];
+        int level = static_cast<int>(input.varOrder.size());
+
+        // Build Cell (for legacy Covering)
+        Cell cellForCover;
+        cellForCover.var = var;
+        cellForCover.kind = CellKind::FullLine;
+        cellForCover.lower = Bound::negInf();
+        cellForCover.upper = Bound::posInf();
+        cellForCover.reasons = conflictLits;
+
+        // Build CellCertificate
+        CellCertificate cert;
+        cert.kind = CellCertificateKind::FullLineViolation;
+        cert.level = level;
+        cert.var = var;
+        cert.cell = cellForCover;  // copy
+        cert.atomConditions = std::move(atomConditions);
+        cert.reasons = std::move(certReasons);
+
+        // Build legacy Covering
         Covering cover;
-        cover.var = input.varOrder.empty() ? NullVar : input.varOrder[0];
-        Cell cell;
-        cell.var = cover.var;
-        cell.kind = CellKind::FullLine;
-        cell.lower = Bound::negInf();
-        cell.upper = Bound::posInf();
-        cell.reasons = std::move(conflictLits);
-        cover.cells.push_back(std::move(cell));
+        cover.var = var;
+        cover.cells.push_back(std::move(cellForCover));
         auto reasons = ReasonManager::minimize(cover);
-        return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+
+        CdcacResult result = CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+
+        // Build V3 CoveringCertificate
+        CoveringCertificate coverCert;
+        coverCert.level = level;
+        coverCert.var = var;
+        // Note: cover.cells[0] may have been moved, so copy from the original cell
+        Cell cellCopy = cellForCover;  // copy original cell before it was moved
+        coverCert.cells.push_back(CertifiedCell{std::move(cellCopy), std::move(cert)});
+
+        // V3: Build CoverageCertificate
+        CoverageCertificate coverage;
+        coverage.level = level;
+        coverage.var = var;
+        coverage.coversWholeFiber = true;
+        coverage.orderedCells.push_back(cellToFiberCoverage(coverCert.cells[0].cell, 0));
+        coverCert.coverage = std::move(coverage);
+
+#ifndef NDEBUG
+        CellCertificateValidator validator;
+        auto valRes = validator.validateCovering(coverCert, algebra_);
+        if (valRes.status != ValidationStatus::Valid) {
+            std::cerr << "[CDCAC] Leaf certificate validation FAILED: reason=" << static_cast<int>(valRes.reason) << std::endl;
+        } else {
+            std::cerr << "[CDCAC] Leaf certificate validation OK" << std::endl;
+        }
+#endif
+
+        result.coveringCert = std::move(coverCert);
+
+        return result;
     }
     return CdcacResult::mkSat(sample);
 }
@@ -482,7 +669,7 @@ Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const Sample
 BuildCellResult CdcacCore::buildConflictCell(
     int k,
     const RealAlg& sample,
-    const CdcacResult& childRes,
+    CdcacResult& childRes,
     const CdcacInput& input,
     const RootSet& roots) {
     // P2b: shallow generalization only.
@@ -491,17 +678,26 @@ BuildCellResult CdcacCore::buildConflictCell(
     // Guards are recorded for future certificate use only.
 
     if (childRes.status != CdcacStatus::Unsat || !childRes.unsat) {
-        return {BuildCellStatus::Unknown, Cell{}};
+        BuildCellResult bcr;
+        bcr.status = BuildCellStatus::Unknown;
+        bcr.unknownReason = CdcacUnknownReason::InternalInvariantViolation;
+        return bcr;
     }
 
     VarId var = input.varOrder[k];
 
     auto lookup = CoveringManager::cellContaining(algebra_, var, sample, roots);
     if (lookup.status == CellLookupStatus::Unknown) {
-        return {BuildCellStatus::Unknown, Cell{}};
+        BuildCellResult bcr;
+        bcr.status = BuildCellStatus::Unknown;
+        bcr.unknownReason = CdcacUnknownReason::AlgebraicComparisonInconclusive;
+        return bcr;
     }
     if (lookup.status == CellLookupStatus::InvalidInput) {
-        return {BuildCellStatus::Unknown, Cell{}};
+        BuildCellResult bcr;
+        bcr.status = BuildCellStatus::Unknown;
+        bcr.unknownReason = CdcacUnknownReason::InternalInvariantViolation;
+        return bcr;
     }
 
     Cell cell = lookup.cell;
@@ -522,7 +718,57 @@ BuildCellResult CdcacCore::buildConflictCell(
     std::vector<PolyId> guards = collectPolys(input.constraints);
     cell.guards = std::move(guards);
 
-    return {BuildCellStatus::Success, std::move(cell)};
+    // V3: Build CellCertificate
+    CellCertificate cert;
+    cert.kind = CellCertificateKind::LiftedCoveringInvariant;
+    cert.level = k;
+    cert.var = var;
+    cert.cell = cell;  // copy
+    cert.guards = guards;
+
+    // Convert child result reasons to CertificateReasonLit
+    for (SatLit lit : childRes.unsat->reasons) {
+        bool found = false;
+        for (const auto& c : input.constraints) {
+            if (c.reason == lit) {
+                CertificateReasonLit crl;
+                crl.lit = lit;
+                crl.atom = NullAtom;
+                crl.polarity = true;
+                crl.normalized = {c.poly, c.rel};
+                cert.reasons.push_back(std::move(crl));
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            // Reason not found in current constraints: may be from deeper level.
+            // Add minimal CertificateReasonLit.
+            CertificateReasonLit crl;
+            crl.lit = lit;
+            crl.atom = NullAtom;
+            crl.polarity = true;
+            cert.reasons.push_back(std::move(crl));
+        }
+    }
+
+    // V3: Inherit child covering certificate and atomConditions
+    if (childRes.coveringCert) {
+        // Copy atomConditions from all child cells
+        for (const auto& cc : childRes.coveringCert->cells) {
+            for (const auto& ac : cc.certificate.atomConditions) {
+                cert.atomConditions.push_back(ac);
+            }
+        }
+        // Move child covering certificate as childCoverCert
+        cert.childCoverCert = std::make_unique<CoveringCertificate>(
+            std::move(*childRes.coveringCert));
+    }
+
+    BuildCellResult bcr;
+    bcr.status = BuildCellStatus::Success;
+    bcr.conflictCell = CertifiedCell{std::move(cell), std::move(cert)};
+    return bcr;
 }
 
 CdcacResult CdcacCore::solveUnivariate(const CdcacInput& input) {

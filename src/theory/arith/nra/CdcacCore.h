@@ -36,7 +36,7 @@ private:
     BuildCellResult buildConflictCell(
         int k,
         const RealAlg& sample,
-        const CdcacResult& childRes,
+        CdcacResult& childRes,
         const CdcacInput& input,
         const RootSet& roots
     );

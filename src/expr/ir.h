@@ -23,6 +23,7 @@ enum class Kind : uint16_t {
     Eq, Distinct, Lt, Leq, Gt, Geq,
     BvNot, BvAnd, BvOr, BvAdd, BvMul,
     Forall, Exists,
+    ToInt, ToReal,
     Unknown,
 };
 

@@ -17,24 +17,7 @@ RationalPolynomial resultant(
 // ------------------------------------------------------------------
 // Local projection engine (Collins conservative, local call)
 // ------------------------------------------------------------------
-enum class PolyRole {
-    ConstraintPolynomial,
-    ProjectionPolynomial,
-    BoundaryPolynomial,
-    DelineationPolynomial
-};
-
-struct ReasonedPolynomial {
-    RationalPolynomial poly;
-    PolyRole role;
-    std::vector<SatLit> reasons;
-};
-
-struct LocalProjectionResult {
-    bool hasDegeneracy = false;
-    std::vector<ReasonedPolynomial> polys;
-    CdcacUnknownReason degeneracyReason = CdcacUnknownReason::None;
-};
+// PolyRole, ReasonedPolynomial, LocalProjectionResult are now defined in CdcacTypes.h
 
 class LocalProjectionEngine {
 public:

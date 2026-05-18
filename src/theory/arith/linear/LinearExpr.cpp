@@ -83,6 +83,46 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             }
             return false;
         }
+        case Kind::ToReal: {
+            if (e.children.size() != 1) return false;
+            return extractLinearExpr(e.children[0], ir, coeffs, constant, mul);
+        }
+        case Kind::ToInt: {
+            // Supported cases:
+            // 1. to_int(constant) -> floor(constant)
+            // 2. to_int(integer_var) -> integer_var
+            // All other cases (real vars, expressions) are unsupported.
+            if (e.children.size() != 1) return false;
+            const CoreExpr& arg = ir.get(e.children[0]);
+            if (arg.kind == Kind::ConstInt) {
+                if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
+                    constant += mul * mpq_class(*v);
+                }
+                return true;
+            }
+            if (arg.kind == Kind::ConstReal) {
+                if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                    mpq_class q(*s);
+                    // floor for positive, ceil for negative
+                    mpz_class z = q.get_num() / q.get_den();
+                    if (q < 0 && q.get_num() % q.get_den() != 0) {
+                        z -= 1;
+                    }
+                    constant += mul * mpq_class(z);
+                }
+                return true;
+            }
+            if (arg.kind == Kind::Variable) {
+                auto sk = ir.sortKind(arg.sort);
+                if (sk == SortKind::Int) {
+                    if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                        coeffs[*s] += mul;
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
         default:
             return false;
     }
