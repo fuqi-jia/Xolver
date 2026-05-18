@@ -5,8 +5,10 @@
 #include "theory/arith/nra/AlgebraBackend.h"
 #include "theory/arith/nra/CoveringManager.h"
 #include "theory/arith/nra/ReasonManager.h"
+#include "theory/arith/nra/ProjectionPolicy.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
+#include <memory>
 
 namespace nlcolver {
 
@@ -21,6 +23,11 @@ public:
     CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra);
 
     CdcacResult solve(const CdcacInput& input);
+
+    /**
+     * V4: Set the projection policy. If not set, defaults to CollinsConservative.
+     */
+    void setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy);
 
 private:
     CdcacResult solveUnivariate(const CdcacInput& input);
@@ -48,6 +55,7 @@ private:
 private:
     PolynomialKernel* kernel_;
     AlgebraBackend* algebra_;
+    std::unique_ptr<ProjectionPolicy> policy_;  // V4: configurable projection policy
 };
 
 } // namespace nlcolver

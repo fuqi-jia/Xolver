@@ -16,7 +16,7 @@ class AlgebraBackend;
  * 1. analyzeConstraint: check if a constraint polynomial vanishes at prefix.
  * 2. analyzeProjectionPoly: check if a projection polynomial vanishes after specialization.
  *
- * V2-7: rational prefix only. Algebraic prefix → Unknown.
+ * V4: produces NullificationRepair with verifiable obligations where possible.
  */
 class NullificationAnalyzer {
 public:
@@ -24,6 +24,7 @@ public:
         SkipConstraintAsTrue,    // constraint is tautologically satisfied
         ReturnFullLineConflict,  // immediate FullLine conflict
         ContinueNormally,        // proceed with normal specialization
+        NeedsRepair,             // V4: nullification can be repaired with obligations
         Unknown                  // cannot determine
     };
 
@@ -32,6 +33,7 @@ public:
         CdcacUnknownReason reason = CdcacUnknownReason::None;
         std::optional<Cell> conflictCell;  // for ReturnFullLineConflict
         std::vector<ReasonedPolynomial> replacementPolys;  // for ContinueNormally with replacements
+        NullificationRepair repair;  // V4: for NeedsRepair
     };
 
     explicit NullificationAnalyzer(AlgebraBackend* algebra);
@@ -46,8 +48,18 @@ public:
 
     /**
      * Analyze a projection polynomial after specialization.
+     * V4 skeleton: returns ContinueNormally or Unknown.
      */
     Analysis analyzeProjectionPoly(
+        const ReasonedPolynomial& rp,
+        const SamplePoint& prefix,
+        VarId currentVar);
+
+    /**
+     * V4: Attempt to build a certified repair for a nullified polynomial.
+     * Returns a NullificationRepair with obligations, or Unknown if not possible.
+     */
+    NullificationRepair attemptRepair(
         const ReasonedPolynomial& rp,
         const SamplePoint& prefix,
         VarId currentVar);

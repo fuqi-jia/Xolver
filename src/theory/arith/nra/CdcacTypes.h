@@ -17,6 +17,9 @@
 
 namespace nlcolver {
 
+// Forward declarations (used by V4 types)
+class AlgebraBackend;
+
 // ------------------------------------------------------------------
 // IDs
 // ------------------------------------------------------------------
@@ -525,6 +528,28 @@ struct LocalProjectionResult {
 };
 
 // ------------------------------------------------------------------
+// V4: Projection input / context / fallback
+// ------------------------------------------------------------------
+struct ProjectionInput {
+    std::vector<ReasonedPolynomial> polys;
+    VarId eliminateVar;
+    Cell baseCell;  // obligation scope
+};
+
+struct ProjectionContext {
+    int level = -1;
+    VarId currentVar = NullVar;
+    SamplePoint prefix;
+    PolynomialKernel* kernel = nullptr;
+    AlgebraBackend* algebra = nullptr;
+};
+
+// Note: FallbackCondition is defined after ProjectionPolicyKind.
+// PolicyProjectionResult, DelineabilityCondition, NullificationRepair
+// are defined later (after ProjectionObligation / CertifiedCell) to avoid
+// incomplete-type issues.
+
+// ------------------------------------------------------------------
 // V3: Cell certificate kind
 // ------------------------------------------------------------------
 enum class CellCertificateKind : uint8_t {
@@ -600,6 +625,16 @@ enum class ProjectionPolicyKind : uint8_t {
     HybridAdaptive
 };
 
+// ------------------------------------------------------------------
+// V4: Fallback condition — placed after ProjectionPolicyKind
+// ------------------------------------------------------------------
+struct FallbackCondition {
+    enum class Kind { ObligationFailed, ECNotApplicable, ReducedNotValid } kind;
+    ProjectionPolicyKind fallbackTo = ProjectionPolicyKind::CollinsConservative;
+    std::vector<ProjectionObligationId> failedObligations;
+    CdcacUnknownReason reason = CdcacUnknownReason::None;
+};
+
 struct ProjectionObligation {
     ProjectionObligationId id;
     PolyId targetPoly = NullPoly;
@@ -609,6 +644,32 @@ struct ProjectionObligation {
     ProjectionPolicyKind policy = ProjectionPolicyKind::CollinsConservative;
     std::vector<PolyId> witnessPolys;
     std::vector<NonZeroCertificate> witnesses;
+};
+
+// ------------------------------------------------------------------
+// V4: Policy-level projection result (wraps LocalProjectionResult)
+// ------------------------------------------------------------------
+struct PolicyProjectionResult {
+    ProjectionPolicyKind kind = ProjectionPolicyKind::CollinsConservative;
+    std::vector<ReasonedPolynomial> projectionPolys;
+    std::vector<ProjectionObligation> obligations;
+    bool isReduced = false;
+    std::optional<FallbackCondition> fallbackCondition;
+    CdcacUnknownReason degeneracyReason = CdcacUnknownReason::None;
+    bool hasDegeneracy = false;
+};
+
+// ------------------------------------------------------------------
+// V4: Delineability condition — witness-bearing
+// ------------------------------------------------------------------
+struct DelineabilityCondition {
+    PolyId poly = NullPoly;
+    VarId mainVar = NullVar;
+    Cell baseCell;
+    std::vector<NonZeroCertificate> leadingCoeffNonzero;
+    std::vector<NonZeroCertificate> discriminantNonzero;
+    std::vector<NonZeroCertificate> resultantNonzero;
+    std::vector<ProjectionObligationId> obligations;
 };
 
 // ------------------------------------------------------------------
@@ -703,6 +764,25 @@ struct CellCertificate {
 struct CertifiedCell {
     Cell cell;
     CellCertificate certificate;
+};
+
+// ------------------------------------------------------------------
+// V4: Nullification repair — produces verifiable obligations
+// ------------------------------------------------------------------
+enum class NullificationRepairKind : uint8_t {
+    NoRepairNeeded,
+    ConstraintDropped,       // 0 = 0, constraint vanishes and is tautologically true
+    ImmediateConflict,       // nullification leads to immediate certified conflict
+    ReplacementPolys,        // replace with substitute polynomials + obligations
+    Unknown                  // cannot repair
+};
+
+struct NullificationRepair {
+    NullificationRepairKind kind = NullificationRepairKind::Unknown;
+    std::vector<ReasonedPolynomial> replacementPolys;
+    std::vector<ProjectionObligation> newObligations;
+    std::optional<CertifiedCell> immediateConflict;  // certified, not raw Cell
+    CdcacUnknownReason reason = CdcacUnknownReason::None;
 };
 
 // ------------------------------------------------------------------

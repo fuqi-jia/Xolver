@@ -2,6 +2,7 @@
 #include "theory/arith/nra/LocalProjection.h"
 #include "theory/arith/nra/NullificationAnalyzer.h"
 #include "theory/arith/nra/CellCertificateValidator.h"
+#include "theory/arith/nra/ProjectionPolicy.h"
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
@@ -81,13 +82,15 @@ static FiberCellCoverage cellToFiberCoverage(const Cell& cell, size_t index) {
 }
 
 // Helper: try local projection to get univariate polynomials for current level
+// V4: uses ProjectionPolicy instead of raw LocalProjectionEngine.
 static std::vector<RootSet> tryLocalProjection(
     const std::vector<CdcacConstraint>& constraints,
     const SamplePoint& prefix,
     VarId var,
     int level,
     PolynomialKernel* kernel,
-    AlgebraBackend* algebra) {
+    AlgebraBackend* algebra,
+    ProjectionPolicy* policy) {
 
     std::vector<RootSet> result;
 
@@ -102,28 +105,39 @@ static std::vector<RootSet> tryLocalProjection(
     if (rpConstraints.empty()) return result;
 
     // Find the highest variable present in any constraint (above current level)
-    // For V1: we eliminate the highest-level variable that appears in constraints
-    // This is a simplified approach; full CDCAC would do this iteratively.
-    LocalProjectionEngine engine;
-
-    // Try eliminating each variable that's not the current variable
     std::set<VarId> allVars;
     for (const auto& rp : rpConstraints) {
         auto vars = rp.poly.variables();
         allVars.insert(vars.begin(), vars.end());
     }
 
+    // Build projection context
+    ProjectionContext ctx;
+    ctx.level = level;
+    ctx.currentVar = var;
+    ctx.prefix = prefix;
+    ctx.kernel = kernel;
+    ctx.algebra = algebra;
+
     for (VarId eliminateVar : allVars) {
         if (eliminateVar == var) continue;
 
-        auto projResult = engine.project(rpConstraints, eliminateVar);
+        ProjectionInput input;
+        input.polys = rpConstraints;
+        input.eliminateVar = eliminateVar;
+        input.baseCell = Cell();  // V4: baseCell for obligation scope
+        input.baseCell.var = var;
+
+        auto projResult = policy->project(input, ctx);
         if (projResult.hasDegeneracy) {
-            // V1: ignore degenerate projections conservatively
-            continue;
+            // V4: if policy reports fallback, still try to use any polys produced
+            if (!projResult.fallbackCondition.has_value()) {
+                continue;
+            }
         }
 
         // Try to convert projected polynomials to univariate in current var
-        for (const auto& rp : projResult.polys) {
+        for (const auto& rp : projResult.projectionPolys) {
             if (!rp.poly.contains(var)) continue;
 
             // Convert to PolyId
@@ -150,6 +164,10 @@ static std::vector<RootSet> tryLocalProjection(
 
 CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     : kernel_(kernel), algebra_(algebra) {}
+
+void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
+    policy_ = std::move(policy);
+}
 
 std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSets) {
     // Collect all roots
@@ -224,6 +242,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return checkFullSample(prefix, input);
     }
 
+    // V4: ensure a projection policy is available (default: CollinsConservative)
+    if (!policy_) {
+        policy_ = std::make_unique<CollinsConservativePolicy>();
+    }
+
     VarId var = input.varOrder[k];
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var) << std::endl;
 
@@ -284,6 +307,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                         return result;
                     }
                     return CdcacResult::mkUnknown(CdcacUnknownReason::NullificationInGeneralization);
+                case NullificationAnalyzer::Action::NeedsRepair:
+                    // V4: nullification repair is not yet fully wired.
+                    // Treat as ContinueNormally for now; obligations are recorded
+                    // in analysis.repair for future certificate use.
+                    std::cerr << "[CDCAC]   nullification: NeedsRepair for constraint " << c.id
+                              << ", continuing with obligations" << std::endl;
+                    break;
                 case NullificationAnalyzer::Action::Unknown:
                     // V2-7: nullification check is best-effort.
                     // If we can't determine nullification (e.g. algebraic prefix),
@@ -344,7 +374,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     // 1b. If no local univariate polynomials, try local projection
     if (uniPolys.empty() && rootSets.empty() && k + 1 < n) {
         std::cerr << "[CDCAC]   no local polys, trying projection" << std::endl;
-        auto projRoots = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_);
+        auto projRoots = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_, policy_.get());
         for (auto& rs : projRoots) {
             std::cerr << "[CDCAC]   projection roots=" << rs.numRoots() << std::endl;
             rootSets.push_back(std::move(rs));
