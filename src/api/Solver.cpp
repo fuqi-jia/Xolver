@@ -152,8 +152,6 @@ public:
         }
 
         // Normalize arithmetic casts (fold constant to_int/to_real)
-        // TEMPORARILY DISABLED for debugging
-        /*
         {
             ArithCastNormalizer normalizer(*ir);
             auto normResult = normalizer.run();
@@ -162,11 +160,8 @@ public:
                 ir->addAssertion(a, level);
             }
         }
-        */
 
         // Purify linear to_int applications into fresh Int variables + floor lemmas
-        // TEMPORARILY DISABLED for debugging
-        /*
         {
             LinearToIntPurifier purifier(*ir);
             auto detectResult = purifier.detectOnly();
@@ -182,7 +177,6 @@ public:
                 ir->addAssertion(lemma, level);
             }
         }
-        */
 
         // Apply solver options (seed, etc.)
         auto itSeed = options.find("seed");

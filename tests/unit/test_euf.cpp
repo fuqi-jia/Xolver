@@ -471,6 +471,143 @@ TEST_CASE("EUF incremental: congruence closure conflict") {
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
 }
 
+// ---------------------------------------------------------------------------
+// A′: Opaque arithmetic term support in EUF term manager
+// ---------------------------------------------------------------------------
+
+TEST_CASE("EUF term manager: intern opaque Add node") {
+    CoreIr ir;
+    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId f_add = ir.add(CoreExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
+
+    EufTermManager tm;
+    EufTermId t = tm.intern(f_add, ir);
+    CHECK(t != NullEufTerm);
+    const auto& node = tm.node(t);
+    CHECK(node.args.size() == 1);
+    CHECK(node.sort == 1);
+}
+
+TEST_CASE("EUF term manager: intern nested opaque arithmetic") {
+    CoreIr ir;
+    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId mul_2x1 = ir.add(CoreExpr{Kind::Mul, 1, {one, add_x1}, Payload{}});
+    ExprId g_mul = ir.add(CoreExpr{Kind::UFApply, 1, {mul_2x1}, Payload(std::string("g"))});
+
+    EufTermManager tm;
+    EufTermId t = tm.intern(g_mul, ir);
+    CHECK(t != NullEufTerm);
+    CHECK(tm.node(t).args.size() == 1);
+}
+
+TEST_CASE("EUF term manager: unsupported Ite returns NullEufTerm") {
+    CoreIr ir;
+    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId t = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
+    ExprId e = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
+    ExprId ite = ir.add(CoreExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
+    ExprId f_ite = ir.add(CoreExpr{Kind::UFApply, 1, {ite}, Payload(std::string("f"))});
+
+    EufTermManager tm;
+    EufTermId result = tm.intern(f_ite, ir);
+    CHECK(result == NullEufTerm);
+}
+
+TEST_CASE("EUF solver: assertLit with unsupported subterm sets pendingUnknown") {
+    CoreIr ir;
+    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+    ExprId t = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("t"))});
+    ExprId e = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("e"))});
+    ExprId ite = ir.add(CoreExpr{Kind::Ite, 1, {c, t, e}, Payload{}});
+    ExprId a = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("a"))});
+
+    EufSolver solver;
+    solver.setCoreIr(&ir);
+    TheoryLemmaDatabase lemmaDb;
+
+    solver.assertLit(makeEufRecord(ite, a), true, 0, SatLit{1, true});
+    auto r = solver.check(lemmaDb);
+    CHECK(r.kind == TheoryCheckResult::Kind::Unknown);
+}
+
+TEST_CASE("EUF solver: congruence through opaque Add") {
+    CoreIr ir;
+    ExprId x = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("x"))});
+    ExprId y = ir.add(CoreExpr{Kind::Variable, 1, {}, Payload(std::string("y"))});
+    ExprId one = ir.add(CoreExpr{Kind::ConstInt, 2, {}, Payload(int64_t(1))});
+    ExprId add_x1 = ir.add(CoreExpr{Kind::Add, 1, {x, one}, Payload{}});
+    ExprId add_y1 = ir.add(CoreExpr{Kind::Add, 1, {y, one}, Payload{}});
+    ExprId f_x1 = ir.add(CoreExpr{Kind::UFApply, 1, {add_x1}, Payload(std::string("f"))});
+    ExprId f_y1 = ir.add(CoreExpr{Kind::UFApply, 1, {add_y1}, Payload(std::string("f"))});
+
+    EufSolver solver;
+    solver.setCoreIr(&ir);
+    TheoryLemmaDatabase lemmaDb;
+
+    solver.assertLit(makeEufRecord(x, y), true, 0, SatLit{1, true});
+    solver.assertLit(makeEufRecord(f_x1, f_y1), false, 0, SatLit{2, true});
+    auto r = solver.check(lemmaDb);
+    CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
+}
+
+// ---------------------------------------------------------------------------
+// End-to-end QF_UFLRA regression with opaque arithmetic in EUF
+// ---------------------------------------------------------------------------
+
+TEST_CASE("QF_UFLRA: pointer-arithmetic style equality is sat") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UFLRA)\n"
+        "(declare-fun addr () Real)\n"
+        "(declare-fun f (Real) Real)\n"
+        "(assert (= (f (+ addr 10.0)) (f (+ addr 10.0))))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_UFLRA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("QF_UFLRA: congruence through arithmetic subterm is unsat") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UFLRA)\n"
+        "(declare-fun x () Real)\n"
+        "(declare-fun y () Real)\n"
+        "(declare-fun f (Real) Real)\n"
+        "(assert (= x y))\n"
+        "(assert (not (= (f (+ x 1.0)) (f (+ y 1.0)))))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_UFLRA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("QF_UFLRA: no false merge of distinct arithmetic terms") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UFLRA)\n"
+        "(declare-fun x () Real)\n"
+        "(declare-fun f (Real) Real)\n"
+        "(assert (not (= (f (+ x 1.0)) (f (+ x 2.0)))))\n"
+        "(check-sat)\n"
+    );
+
+    Solver solver;
+    solver.setLogic("QF_UFLRA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
 TEST_CASE("EUF incremental: nested congruence closure conflict") {
     CoreIr ir;
     ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
