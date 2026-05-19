@@ -11,18 +11,7 @@
 #include "theory/TheoryManager.h"
 #include "theory/TheoryLemmaDatabase.h"
 #include "theory/TheoryAtomRegistry.h"
-#include "theory/arith/lra/LraSolver.h"
-#include "theory/arith/lia/LiaSolver.h"
-#include "theory/arith/nra/NraSolver.h"
-#include "theory/arith/nia/NiaSolver.h"
-#include "theory/arith/lira/LiraSolver.h"
-#include "theory/arith/nira/NiraSolver.h"
-#include "theory/arith/idl/IdlSolver.h"
-#include "theory/arith/rdl/RdlSolver.h"
-#include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/euf/EufSolver.h"
-#include "theory/combination/Purifier.h"
-#include "theory/combination/SharedTermRegistry.h"
+#include "frontend/factory/TheoryFactory.h"
 #include "theory/LogicFeatureDetector.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
@@ -248,198 +237,17 @@ public:
         // -------------------------------------------------------------------
         // Register solvers based on logic or detected features
         // -------------------------------------------------------------------
-        if (logic == "QF_LIA" || logic == "LIA") {
-            auto lia = std::make_unique<LiaSolver>();
-            lia->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lia));
-        } else if (logic == "QF_LRA" || logic == "LRA") {
-            auto lra = std::make_unique<LraSolver>();
-            lra->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lra));
-        } else if (logic == "QF_NRA" || logic == "NRA") {
-            auto polyKernel = createPolynomialKernel();
-            polyKernelRaw = polyKernel.get();
-            theoryManager.registerSolver(
-                std::make_unique<NraSolver>(std::move(polyKernel)));
-            auto lra = std::make_unique<LraSolver>();
-            lra->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lra)); // co-register for linearizer cuts
-        } else if (logic == "QF_NIA" || logic == "NIA") {
-            auto polyKernel = createPolynomialKernel();
-            polyKernelRaw = polyKernel.get();
-            auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
-            nia->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(nia));
-            auto lia = std::make_unique<LiaSolver>();
-            lia->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lia));
-        } else if (logic == "QF_LIRA" || logic == "LIRA") {
-            auto lira = std::make_unique<LiraSolver>();
-            lira->setRegistry(&registry);
-            lira->setCoreIr(ir.get());
-            theoryManager.registerSolver(std::move(lira));
-        } else if (logic == "QF_NIRA" || logic == "NIRA") {
-            auto polyKernel = createPolynomialKernel();
-            polyKernelRaw = polyKernel.get();
-            auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
-            nira->setRegistry(&registry);
-            nira->setCoreIr(ir.get());
-            theoryManager.registerSolver(std::move(nira));
-        } else if (logic == "QF_IDL" || logic == "IDL") {
-            auto idl = std::make_unique<IdlSolver>();
-            idl->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(idl));
-        } else if (logic == "QF_RDL" || logic == "RDL") {
-            auto rdl = std::make_unique<RdlSolver>();
-            rdl->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(rdl));
-        } else if (logic == "QF_UF") {
-            auto euf = std::make_unique<EufSolver>();
-            euf->setCoreIr(ir.get());
-            theoryManager.registerSolver(std::move(euf));
-        } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
-            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
-            {
-                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
-                purifier.run();
-            }
-            auto euf = std::make_unique<EufSolver>();
-            euf->setCoreIr(ir.get());
-            euf->setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.registerSolver(std::move(euf));
-            auto lra = std::make_unique<LraSolver>();
-            lra->setCoreIr(ir.get());
-            lra->setSharedTermRegistry(sharedTermRegistry_.get());
-            lra->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lra));
-            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.setRegistry(&registry);
-            theoryManager.setCombinationMode(true);
-        } else if (logic == "QF_UFLIA" || logic == "UFLIA") {
-            if (features.hasRealVar || features.hasNonlinear || features.hasMixedIntReal) {
-                logicMismatch = true;
-            } else {
-                sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
-                {
-                    Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
-                    purifier.setArithTheory(TheoryId::LIA);
-                    purifier.run();
-                }
-                auto euf = std::make_unique<EufSolver>();
-                euf->setCoreIr(ir.get());
-                euf->setSharedTermRegistry(sharedTermRegistry_.get());
-                theoryManager.registerSolver(std::move(euf));
-                auto lia = std::make_unique<LiaSolver>();
-                lia->setCoreIr(ir.get());
-                lia->setSharedTermRegistry(sharedTermRegistry_.get());
-                lia->setRegistry(&registry);
-                theoryManager.registerSolver(std::move(lia));
-                theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
-                theoryManager.setRegistry(&registry);
-                theoryManager.setCombinationMode(true);
-                theoryManager.setNonConvexMode(true);
-            }
-        } else if (logic == "QF_UFNIA" || logic == "UFNIA") {
-            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
-            {
-                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
-                purifier.setArithTheory(TheoryId::NIA);
-                purifier.run();
-            }
-            auto polyKernel = createPolynomialKernel();
-            polyKernelRaw = polyKernel.get();
-            auto euf = std::make_unique<EufSolver>();
-            euf->setCoreIr(ir.get());
-            euf->setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.registerSolver(std::move(euf));
-            auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
-            nia->setCoreIr(ir.get());
-            nia->setSharedTermRegistry(sharedTermRegistry_.get());
-            nia->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(nia));
-            auto lia = std::make_unique<LiaSolver>();
-            lia->setCoreIr(ir.get());
-            lia->setSharedTermRegistry(sharedTermRegistry_.get());
-            lia->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lia));
-            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.setRegistry(&registry);
-            theoryManager.setCombinationMode(true);
-            theoryManager.setNonConvexMode(true);
-        } else if (logic == "QF_UFNRA" || logic == "UFNRA") {
-            sharedTermRegistry_ = std::make_unique<SharedTermRegistry>();
-            {
-                Purifier purifier(*ir, *sharedTermRegistry_, boolSortId_);
-                purifier.setArithTheory(TheoryId::NRA);
-                purifier.run();
-            }
-            auto polyKernel = createPolynomialKernel();
-            polyKernelRaw = polyKernel.get();
-            auto euf = std::make_unique<EufSolver>();
-            euf->setCoreIr(ir.get());
-            euf->setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.registerSolver(std::move(euf));
-            auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
-            nra->setCoreIr(ir.get());
-            nra->setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.registerSolver(std::move(nra));
-            auto lra = std::make_unique<LraSolver>();
-            lra->setCoreIr(ir.get());
-            lra->setSharedTermRegistry(sharedTermRegistry_.get());
-            lra->setRegistry(&registry);
-            theoryManager.registerSolver(std::move(lra));
-            theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
-            theoryManager.setRegistry(&registry);
-            theoryManager.setCombinationMode(true);
-            theoryManager.setNonConvexMode(true);
-        } else if (logic == "UF") {
-            // UF without arithmetic: not yet supported
+        auto setupResult = setupSolvers(
+            logic, features, ir.get(), registry, theoryManager,
+            sharedTermRegistry_, boolSortId_);
+
+        if (!setupResult.success) {
             return Result::Unknown;
-        } else {
-            // No declared logic or unrecognized logic: route by detected features.
-            // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
-            // mis-routing caused by integer/real constant literals.
-            if (features.hasUF) {
-                return Result::Unknown; // combination not yet supported for auto-detect
-            }
-            if (features.hasMixedIntReal) {
-                if (features.hasNonlinear) {
-                    auto polyKernel = createPolynomialKernel();
-                    polyKernelRaw = polyKernel.get();
-                    auto nira = std::make_unique<NiraSolver>(std::move(polyKernel));
-                    nira->setRegistry(&registry);
-                    theoryManager.registerSolver(std::move(nira));
-                } else {
-                    auto lira = std::make_unique<LiraSolver>();
-                    lira->setRegistry(&registry);
-                    lira->setCoreIr(ir.get());
-                    theoryManager.registerSolver(std::move(lira));
-                }
-            } else if (features.hasIntVar && features.hasNonlinear) {
-                auto polyKernel = createPolynomialKernel();
-                polyKernelRaw = polyKernel.get();
-                auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
-                nia->setRegistry(&registry);
-                theoryManager.registerSolver(std::move(nia));
-                auto lia = std::make_unique<LiaSolver>();
-                lia->setRegistry(&registry);
-                theoryManager.registerSolver(std::move(lia));
-            } else if (features.hasIntVar) {
-                auto lia = std::make_unique<LiaSolver>();
-                lia->setRegistry(&registry);
-                theoryManager.registerSolver(std::move(lia));
-            } else if (features.hasRealVar && features.hasNonlinear) {
-                auto polyKernel = createPolynomialKernel();
-                polyKernelRaw = polyKernel.get();
-                theoryManager.registerSolver(
-                    std::make_unique<NraSolver>(std::move(polyKernel)));
-                theoryManager.registerSolver(std::make_unique<LraSolver>());
-            } else if (features.hasRealVar) {
-                theoryManager.registerSolver(std::make_unique<LraSolver>());
-            } else {
-                // Pure boolean or empty: no theory solver needed
-            }
         }
+        if (setupResult.logicMismatch) {
+            logicMismatch = true;
+        }
+        polyKernelRaw = setupResult.polyKernelRaw;
 
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
