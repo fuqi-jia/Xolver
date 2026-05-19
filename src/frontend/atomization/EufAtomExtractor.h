@@ -2,7 +2,7 @@
 
 #include "expr/ir.h"
 #include "sat/SatSolver.h"
-#include "theory/euf/EufTypes.h"
+#include "theory/core/TheoryAtomTypes.h"
 #include <unordered_map>
 #include <functional>
 

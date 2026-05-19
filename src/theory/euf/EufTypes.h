@@ -1,6 +1,7 @@
 #pragma once
 #include "expr/types.h"
 #include "sat/SatSolver.h"
+#include "theory/core/TheoryAtomTypes.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -18,19 +19,6 @@ constexpr EufTermId NullEufTerm = std::numeric_limits<EufTermId>::max();
 constexpr EClassId NullEClass = std::numeric_limits<EClassId>::max();
 constexpr FuncSymbolId NullFunc = std::numeric_limits<FuncSymbolId>::max();
 constexpr MergeId NullMergeId = std::numeric_limits<MergeId>::max();
-
-enum class EufAtomKind {
-    Equality,
-    Disequality,
-    BoolTermAsFormula
-};
-
-struct EufAtomPayload {
-    ExprId lhs;
-    ExprId rhs;
-    Relation rel;
-    EufAtomKind kind = EufAtomKind::Equality;
-};
 
 struct EufAtom {
     EufTermId lhs;
