@@ -214,3 +214,5 @@ struct RootOrigin {
 // ------------------------------------------------------------------
 // Real algebraic number: rational or algebraic root
 // ------------------------------------------------------------------
+
+} // namespace nlcolver
