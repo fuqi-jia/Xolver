@@ -33,7 +33,7 @@ public:
     BoundedSolveResult solve(const std::vector<NormalizedNiaConstraint>& constraints,
                               const DomainStore& domains,
                               const IntegerModelValidator& validator,
-                              TheoryLemmaDatabase& lemmaDb);
+                              TheoryLemmaStorage& lemmaDb);
 
 private:
     PolynomialKernel& kernel_;

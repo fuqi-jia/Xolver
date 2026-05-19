@@ -26,7 +26,7 @@ public:
 
     LinearizationResult runLinearizer(
         const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
-        TheoryLemmaDatabase& lemmaDb);
+        TheoryLemmaStorage& lemmaDb);
 
     void markEmitted(const CutCacheKey& key);
 

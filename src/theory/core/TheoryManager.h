@@ -2,6 +2,7 @@
 
 #include "theory/core/TheorySolver.h"
 #include "theory/core/TheoryAssignmentView.h"
+#include "theory/core/TheoryPropagatorCallbacks.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/combination/SharedEqualityManager.h"
 #include <memory>
@@ -15,7 +16,7 @@ namespace nlcolver {
 class TheoryAtomRegistry;
 class SatSolver;
 
-class TheoryManager {
+class TheoryManager : public TheoryPropagationCallbacks {
 public:
     void registerSolver(std::unique_ptr<TheorySolver> solver);
     void clearSolvers();
@@ -29,12 +30,12 @@ public:
     void setArrangementComplete(bool v) { arrangementComplete_ = v; }
     bool isArrangementComplete() const { return arrangementComplete_; }
 
-    void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level);
-    void backtrackToLevel(int level);
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard);
+    void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) override;
+    void backtrackToLevel(int level) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
 
     void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; }
-    void setAssignmentView(const TheoryAssignmentView* view) { assignmentView_ = view; }
+    void setAssignmentView(TheoryAssignmentView* view) override { assignmentView_ = view; }
     void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
     SharedTermRegistry* sharedTermRegistry() { return sharedTermRegistry_; }
@@ -51,7 +52,7 @@ private:
     bool nonConvexMode_ = false;
     bool arrangementComplete_ = true;
     TheoryAtomRegistry* registry_ = nullptr;
-    const TheoryAssignmentView* assignmentView_ = nullptr;
+    TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;
 
     SharedEqualityManager sharedEqMgr_;

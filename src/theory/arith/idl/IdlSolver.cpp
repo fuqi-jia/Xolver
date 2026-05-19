@@ -165,7 +165,7 @@ bool IdlSolver::validateModel(const std::vector<mpz_class>& dist) {
     return true;
 }
 
-TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatabase& lemmaDb) {
+TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb) {
     auto lemma = buildDiffLogicDiseqSplitLemma(
         d.x, d.y, d.lit,
         Relation::Leq, Relation::Leq,
@@ -177,7 +177,7 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatab
     return lemma;
 }
 
-TheoryCheckResult IdlSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (pendingConflict_) {
         auto c = *pendingConflict_;
         pendingConflict_.reset();

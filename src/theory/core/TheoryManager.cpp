@@ -112,7 +112,7 @@ void TheoryManager::backtrackToLevel(int level) {
     discardSnapshotsAbove(level);
 }
 
-TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) {
+TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
     auto makeFalsifiedConflict = [](const std::vector<SatLit>& rawReasons) {

@@ -38,7 +38,7 @@ void NiraSolver::backtrackToLevel(int level) {
     gsRelax_.backtrackToLevel(level);
 }
 
-TheoryCheckResult NiraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) {
+TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     if (activeAssignments_.empty()) {
         return TheoryCheckResult::consistent();
     }
@@ -104,11 +104,11 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort e
     return TheoryCheckResult::unknown();
 }
 
-TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb*/) {
     return TheoryCheckResult::consistent();
 }
 
-TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaStorage& /*lemmaDb*/) {
     return TheoryCheckResult::unknown();
 }
 
@@ -270,7 +270,7 @@ bool NiraSolver::checkAssignmentWithSimplex(
     return r == GeneralSimplex::Result::Sat;
 }
 
-TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb*/) {
     if (!coreIr_ || !kernel_) {
         return TheoryCheckResult::unknown();
     }

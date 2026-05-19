@@ -3,16 +3,18 @@
 #ifdef NLCOLVER_HAS_CADICAL
 
 #include "sat/CadicalBackend.h"
-#include "theory/core/DebugTrace.h"
 #include <cassert>
 #include <iostream>
+
+// Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
+#define NO_DBG if (true) {} else std::cerr
 
 namespace nlcolver {
 
 CadicalTheoryPropagator::CadicalTheoryPropagator(
-    TheoryAtomRegistry& registry,
-    TheoryManager& tm,
-    TheoryLemmaDatabase& lemmaDb,
+    TheoryAtomLookup& registry,
+    TheoryPropagationCallbacks& tm,
+    TheoryLemmaStorage& lemmaDb,
     CadicalBackend& backend
 ) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {}
 

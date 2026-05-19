@@ -18,7 +18,7 @@ public:
 
     NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints,
                            DomainStore& domains,
-                           TheoryLemmaDatabase& lemmaDb);
+                           TheoryLemmaStorage& lemmaDb);
 
 private:
     PolynomialKernel& kernel_;
@@ -32,7 +32,7 @@ private:
 
     // Factor rules: p*q = 0 → lemma (split lemma, V2)
     NiaReasoningResult checkFactorRules(const NormalizedNiaConstraint& c,
-                                         TheoryLemmaDatabase& lemmaDb);
+                                         TheoryLemmaStorage& lemmaDb);
 
     // Factor direct conflict: p*q = 0 ∧ p≠0 ∧ q≠0 → UNSAT
     NiaReasoningResult checkFactorDirectConflict(

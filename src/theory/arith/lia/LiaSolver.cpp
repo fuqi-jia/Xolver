@@ -55,7 +55,7 @@ void LiaSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // Rebuild all state from current active assignments.
     gs_.resetActiveBounds();
     disequalities_.clear();
@@ -174,7 +174,7 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::unknown();
 }
 
-TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
         [this](const DiseqInfo& d) -> TheoryCheckResult {
@@ -229,7 +229,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
         });
 }
 
-TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/) {
     int bestVar = -1;
     mpq_class bestFrac(-1);
 

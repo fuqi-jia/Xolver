@@ -26,7 +26,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg) {
@@ -99,8 +99,8 @@ private:
 
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
 
-    TheoryCheckResult handleDisequalities(TheoryLemmaDatabase& lemmaDb);
-    TheoryCheckResult checkIntegrality(TheoryLemmaDatabase& lemmaDb);
+    TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
+    TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb);
 
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
 

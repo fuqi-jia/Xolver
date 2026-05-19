@@ -87,7 +87,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkGcdConflict(
 
 NiaReasoningResult AlgebraicIntegerReasoner::checkFactorRules(
     const NormalizedNiaConstraint& c,
-    TheoryLemmaDatabase& /*lemmaDb*/) {
+    TheoryLemmaStorage& /*lemmaDb*/) {
 
     (void)c;
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
@@ -249,7 +249,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
 NiaReasoningResult AlgebraicIntegerReasoner::run(
     const std::vector<NormalizedNiaConstraint>& constraints,
     DomainStore& domains,
-    TheoryLemmaDatabase& lemmaDb) {
+    TheoryLemmaStorage& lemmaDb) {
 
     std::vector<NormalizedNiaConstraint> equalities;
     bool updated = false;

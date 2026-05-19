@@ -31,7 +31,7 @@ public:
     LinearizationResult runLinearizer(
         const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
         const DomainStore& domains,
-        TheoryLemmaDatabase& lemmaDb,
+        TheoryLemmaStorage& lemmaDb,
         const LinearizationConfig& config = {});
 
     // Cache marking (called by NiaSolver after successful enqueue)

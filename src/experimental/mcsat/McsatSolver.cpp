@@ -16,7 +16,7 @@ void McsatSolver::backtrackToLevel(int) {
     // TODO: backtrack theory trail
 }
 
-TheoryCheckResult McsatSolver::check(TheoryLemmaDatabase&, TheoryEffort) {
+TheoryCheckResult McsatSolver::check(TheoryLemmaStorage&, TheoryEffort) {
     // TODO: integrate with local search advisor and theory propagation
     return TheoryCheckResult::unknown();
 }

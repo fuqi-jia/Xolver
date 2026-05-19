@@ -29,7 +29,7 @@ public:
 
     NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints,
                            DomainStore& domains,
-                           TheoryLemmaDatabase& lemmaDb);
+                           TheoryLemmaStorage& lemmaDb);
 
 private:
     PolynomialKernel& kernel_;

@@ -74,7 +74,7 @@ void NraSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult NraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
+TheoryCheckResult NraSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
     return engine_.check();
 }
 

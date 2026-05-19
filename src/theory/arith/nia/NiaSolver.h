@@ -56,7 +56,7 @@ public:
     void assertLit(const TheoryAtomRecord& atom, bool value,
                    int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
@@ -158,7 +158,7 @@ private:
     std::optional<TheoryLemma> buildBranchLemma(
         const std::vector<NormalizedNiaConstraint>& constraints,
         const DomainStore& domains,
-        TheoryLemmaDatabase& lemmaDb);
+        TheoryLemmaStorage& lemmaDb);
 };
 
 } // namespace nlcolver

@@ -40,7 +40,7 @@ std::vector<TheoryLemma> NiaLinearizationAdapter::mirrorActiveLinearBounds(
 LinearizationResult NiaLinearizationAdapter::runLinearizer(
     const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
     const DomainStore& domains,
-    TheoryLemmaDatabase& /*lemmaDb*/,
+    TheoryLemmaStorage& /*lemmaDb*/,
     const LinearizationConfig& config) {
 
     DomainStoreBoundStore boundStore(domains);

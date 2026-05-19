@@ -33,7 +33,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
@@ -60,9 +60,9 @@ private:
     std::vector<ActiveAssignment> activeAssignments_;
 
     // Check sub-stages
-    TheoryCheckResult checkPureSubproblems(TheoryLemmaDatabase& lemmaDb);
-    TheoryCheckResult checkRelaxationAndValidate(TheoryLemmaDatabase& lemmaDb);
-    TheoryCheckResult checkBoundedComplete(TheoryLemmaDatabase& lemmaDb);
+    TheoryCheckResult checkPureSubproblems(TheoryLemmaStorage& lemmaDb);
+    TheoryCheckResult checkRelaxationAndValidate(TheoryLemmaStorage& lemmaDb);
+    TheoryCheckResult checkBoundedComplete(TheoryLemmaStorage& lemmaDb);
 
     bool validateOriginalConstraints() const;
     std::vector<SatLit> allActiveReasons() const;

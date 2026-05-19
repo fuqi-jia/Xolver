@@ -53,7 +53,7 @@ void LraSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
     // Rebuild all bounds from current active assignments.
     gs_.resetActiveBounds();
@@ -134,7 +134,7 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::consistent();
 }
 
-TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
         [this](const DiseqInfo& d) -> TheoryCheckResult {

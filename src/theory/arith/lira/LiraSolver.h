@@ -33,7 +33,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
@@ -76,8 +76,8 @@ private:
     std::vector<ActiveAssignment> activeAssignments_;
 
     // Check sub-stages
-    TheoryCheckResult checkStandardEffort(TheoryLemmaDatabase& lemmaDb);
-    TheoryCheckResult checkFullEffort(TheoryLemmaDatabase& lemmaDb);
+    TheoryCheckResult checkStandardEffort(TheoryLemmaStorage& lemmaDb);
+    TheoryCheckResult checkFullEffort(TheoryLemmaStorage& lemmaDb);
 
     // Helpers
     bool isIntegerVar(const std::string& name) const;

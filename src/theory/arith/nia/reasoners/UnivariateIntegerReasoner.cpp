@@ -125,7 +125,7 @@ NiaReasoningResult UnivariateIntegerReasoner::handleSquareBound(
 NiaReasoningResult UnivariateIntegerReasoner::run(
     const std::vector<NormalizedNiaConstraint>& constraints,
     DomainStore& domains,
-    TheoryLemmaDatabase& /*lemmaDb*/) {
+    TheoryLemmaStorage& /*lemmaDb*/) {
 
     bool updated = false;
 

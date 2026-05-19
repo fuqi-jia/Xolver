@@ -91,7 +91,7 @@ BoundedSolveResult BoundedNiaSolver::solve(
     const std::vector<NormalizedNiaConstraint>& constraints,
     const DomainStore& domains,
     const IntegerModelValidator& validator,
-    TheoryLemmaDatabase& /*lemmaDb*/) {
+    TheoryLemmaStorage& /*lemmaDb*/) {
 
     // Collect all variables from constraints
     std::unordered_set<std::string> varSet;

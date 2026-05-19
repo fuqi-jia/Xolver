@@ -35,7 +35,7 @@ void LiraSolver::backtrackToLevel(int level) {
     activeAssignments_.erase(it, activeAssignments_.end());
 }
 
-TheoryCheckResult LiraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort) {
+TheoryCheckResult LiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     if (effort == TheoryEffort::Standard) {
         return checkStandardEffort(lemmaDb);
     }
@@ -58,7 +58,7 @@ bool LiraSolver::isIntegerVar(const std::string& name) const {
     return false;
 }
 
-TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*/) {
     milpEngine_.clear();
     disequalities_.clear();
     std::unordered_map<std::string, int> nameToIdx;
@@ -157,7 +157,7 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaDatabase& /*lemmaDb
     return TheoryCheckResult::unknown();
 }
 
-TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaDatabase& /*lemmaDb*/) {
+TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
     milpEngine_.clear();
     disequalities_.clear();
     std::unordered_map<std::string, int> nameToIdx;

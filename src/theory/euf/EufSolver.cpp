@@ -230,7 +230,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // check — 唯一 saturation loop
 // ---------------------------------------------------------------------------
 
-TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
+TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }

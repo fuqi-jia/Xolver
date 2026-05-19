@@ -3,10 +3,7 @@
 #ifdef NLCOLVER_HAS_CADICAL
 
 #include <cadical.hpp>
-#include "theory/core/TheoryAtomRegistry.h"
-#include "theory/core/TheoryManager.h"
-#include "theory/core/TheoryLemmaDatabase.h"
-#include "theory/core/TheoryAssignmentView.h"
+#include "theory/core/TheoryPropagatorCallbacks.h"
 
 namespace nlcolver {
 
@@ -41,9 +38,9 @@ private:
 class CadicalTheoryPropagator : public CaDiCaL::ExternalPropagator {
 public:
     CadicalTheoryPropagator(
-        TheoryAtomRegistry& registry,
-        TheoryManager& tm,
-        TheoryLemmaDatabase& lemmaDb,
+        TheoryAtomLookup& registry,
+        TheoryPropagationCallbacks& tm,
+        TheoryLemmaStorage& lemmaDb,
         CadicalBackend& backend
     );
 
@@ -58,9 +55,9 @@ public:
     int cb_add_external_clause_lit() override;
 
 private:
-    TheoryAtomRegistry& registry_;
-    TheoryManager& tm_;
-    TheoryLemmaDatabase& lemmaDb_;
+    TheoryAtomLookup& registry_;
+    TheoryPropagationCallbacks& tm_;
+    TheoryLemmaStorage& lemmaDb_;
     CadicalBackend& backend_;
 
     int currentLevel_ = 0;

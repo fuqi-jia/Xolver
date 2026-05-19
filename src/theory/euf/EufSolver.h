@@ -22,7 +22,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }

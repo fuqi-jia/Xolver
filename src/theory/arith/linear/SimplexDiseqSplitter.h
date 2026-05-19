@@ -25,7 +25,7 @@ template <typename DiseqInfoT, typename SplitBuilder>
 TheoryCheckResult handleSimplexDisequalities(
     const std::vector<DiseqInfoT>& disequalities,
     const GeneralSimplex& gs,
-    TheoryLemmaDatabase& lemmaDb,
+    TheoryLemmaStorage& lemmaDb,
     SplitBuilder&& buildSplit)
 {
     for (const auto& d : disequalities) {
