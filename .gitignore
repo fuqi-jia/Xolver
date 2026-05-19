@@ -81,5 +81,8 @@ report.html
 conversations/
 build_debug_info/
 
+# Python cache
+__pycache__/
+
 # Submodule modifications
 third_party/*/__pycache__/
