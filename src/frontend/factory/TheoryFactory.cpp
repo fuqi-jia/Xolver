@@ -64,6 +64,11 @@ SolverSetupResult setupSolvers(
         nira->setRegistry(&registry);
         nira->setCoreIr(ir);
         theoryManager.registerSolver(std::move(nira));
+
+        auto lira = std::make_unique<LiraSolver>();
+        lira->setRegistry(&registry);
+        lira->setCoreIr(ir);
+        theoryManager.registerSolver(std::move(lira));
     } else if (logic == "QF_IDL" || logic == "IDL") {
         auto idl = std::make_unique<IdlSolver>();
         idl->setRegistry(&registry);

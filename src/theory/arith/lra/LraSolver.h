@@ -56,6 +56,7 @@ private:
         TheoryAtomRecord atom;
         bool value;
         int auxVar = -1;  // pre-computed aux var for this linear form
+        bool isDiseq = false;
     };
     std::vector<LraTrailEntry> theoryTrail_;
     size_t appliedCursor_ = 0;
@@ -71,7 +72,10 @@ private:
         LinearFormKey lhs;
         mpq_class rhs;
         SatLit lit;
+        int level;
     };
+
+    std::vector<DiseqInfo> activeDisequalities_;
 
     // -------------------------------------------------------------------------
     // Interface equalities / disequalities (Nelson-Oppen)

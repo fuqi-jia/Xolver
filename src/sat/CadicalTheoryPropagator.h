@@ -54,6 +54,8 @@ public:
     bool cb_has_external_clause(bool& is_forgettable) override;
     int cb_add_external_clause_lit() override;
 
+    void setUnknownReasonSink(std::string* sink);
+
 private:
     TheoryAtomLookup& registry_;
     TheoryPropagationCallbacks& tm_;
@@ -68,6 +70,7 @@ private:
     int modelCheckCount_ = 0;
     static constexpr int MAX_MODEL_CHECKS = 10000;
     CadicalAssignmentView assignmentView_;
+    std::string* unknownReasonSink_ = nullptr;
     std::unordered_map<SatVar, int> varToLevel_;
 
     CadicalAssignmentView& assignmentView() { return assignmentView_; }

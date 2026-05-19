@@ -106,18 +106,19 @@ struct TheoryCheckResult {
     Kind kind;
     std::optional<TheoryConflict> conflictOpt;
     std::optional<TheoryLemma> lemmaOpt;
+    std::string reason; // human-readable for Unknown; optional for others
 
     static TheoryCheckResult consistent() {
-        return {Kind::Consistent, std::nullopt, std::nullopt};
+        return {Kind::Consistent, std::nullopt, std::nullopt, {}};
     }
     static TheoryCheckResult mkConflict(TheoryConflict c) {
-        return {Kind::Conflict, std::move(c), std::nullopt};
+        return {Kind::Conflict, std::move(c), std::nullopt, {}};
     }
     static TheoryCheckResult mkLemma(TheoryLemma l) {
-        return {Kind::Lemma, std::nullopt, std::move(l)};
+        return {Kind::Lemma, std::nullopt, std::move(l), {}};
     }
-    static TheoryCheckResult unknown() {
-        return {Kind::Unknown, std::nullopt, std::nullopt};
+    static TheoryCheckResult unknown(std::string reason = {}) {
+        return {Kind::Unknown, std::nullopt, std::nullopt, std::move(reason)};
     }
 };
 

@@ -98,10 +98,13 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
     if (effort == TheoryEffort::Full) {
         auto r = checkBoundedComplete(lemmaDb);
         if (r.kind == TheoryCheckResult::Kind::Consistent) return r;
+        if (r.kind == TheoryCheckResult::Kind::Unknown && !r.reason.empty()) {
+            return TheoryCheckResult::unknown("NIRA: bounded-complete failed -> " + r.reason);
+        }
     }
 
     // TODO: classify, pure subproblem delegation, relaxation
-    return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown("NIRA: not yet implemented (classify+delegate)");
 }
 
 TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -109,7 +112,7 @@ TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb
 }
 
 TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaStorage& /*lemmaDb*/) {
-    return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown("NIRA: relaxation+validate not yet implemented");
 }
 
 namespace {
@@ -272,7 +275,7 @@ bool NiraSolver::checkAssignmentWithSimplex(
 
 TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb*/) {
     if (!coreIr_ || !kernel_) {
-        return TheoryCheckResult::unknown();
+        return TheoryCheckResult::unknown("NIRA: missing CoreIr or PolynomialKernel");
     }
 
     // Step 1: Extract integer variable bounds from single-variable linear constraints
@@ -323,7 +326,22 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         }
     }
 
-    // Step 2: Identify integer variables appearing in polynomial constraints
+    // Step 2: Identify if there are any polynomial constraints at all.
+    // If not, NiraSolver has no nonlinear obligations to discharge;
+    // linear obligations are handled by LiraSolver (registered for QF_NIRA).
+    bool hasPolynomialPayload = false;
+    for (const auto& a : activeAssignments_) {
+        if (!a.value) continue;
+        if (std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
+            hasPolynomialPayload = true;
+            break;
+        }
+    }
+    if (!hasPolynomialPayload) {
+        return TheoryCheckResult::consistent();
+    }
+
+    // Step 2b: Identify integer variables appearing in polynomial constraints
     std::unordered_set<std::string> polyIntVars;
     for (const auto& a : activeAssignments_) {
         if (!a.value) continue;
@@ -337,15 +355,32 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     }
 
     if (polyIntVars.empty()) {
-        return TheoryCheckResult::unknown();
+        // Polynomial payload exists but no integer polynomial variables.
+        // Real-only polynomial constraints require NRA/CDCAC delegation,
+        // which is not yet implemented for NiraSolver.
+        return TheoryCheckResult::unknown(
+            "NIRA: polynomial payload has no integer polynomial vars; NRA delegation not implemented");
     }
 
     // Step 3: Ensure every polynomial integer variable has finite bounds
+    std::vector<std::string> unboundedVars;
     for (const auto& name : polyIntVars) {
         auto it = bounds.find(name);
         if (it == bounds.end() || !it->second.lower || !it->second.upper) {
-            return TheoryCheckResult::unknown();
+            unboundedVars.push_back(name);
         }
+    }
+    if (!unboundedVars.empty()) {
+        std::cerr << "[NIRA] checkBoundedComplete: " << polyIntVars.size()
+                  << " integer polynomial vars, " << unboundedVars.size() << " unbounded:\n";
+        for (const auto& name : unboundedVars) {
+            auto it = bounds.find(name);
+            bool hasLow = it != bounds.end() && it->second.lower.has_value();
+            bool hasUp  = it != bounds.end() && it->second.upper.has_value();
+            std::cerr << "  " << name << " lower=" << (hasLow ? "yes" : "no")
+                      << " upper=" << (hasUp ? "yes" : "no") << "\n";
+        }
+        return TheoryCheckResult::unknown("NIRA: unbounded integer variable(s)");
     }
 
     // Step 4: Enumerate all integer combinations
@@ -376,7 +411,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         return TheoryCheckResult::consistent();
     }
 
-    return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown("NIRA: bounded complete solver exhausted (no conflict, no model)");
 }
 
 bool NiraSolver::validateOriginalConstraints() const {

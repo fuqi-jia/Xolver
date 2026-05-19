@@ -116,13 +116,13 @@ static std::unordered_set<std::string> collectVars(
 }
 
 TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    if (pendingUnknown_) return TheoryCheckResult::unknown();
+    if (pendingUnknown_) return TheoryCheckResult::unknown("NIA: pending unknown (opposite polarity asserted)");
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();
 
     // 1. Normalize
     auto normalizedOpt = normalizer_.normalize(active_);
-    if (!normalizedOpt) return TheoryCheckResult::unknown();
+    if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     const auto& normalized = *normalizedOpt;
 
     // 2. Trivial constants
@@ -154,7 +154,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkConflict(*lr.conflict);
     }
     if (lr.kind == NiaReasoningKind::FatalUnknown) {
-    return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown("NIA: linear domain reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -257,7 +257,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkConflict(*sr.conflict);
     }
     if (sr.kind == NiaReasoningKind::FatalUnknown) {
-        return TheoryCheckResult::unknown();
+        return TheoryCheckResult::unknown("NIA: square bound reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -269,7 +269,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkConflict(*ssr.conflict);
     }
     if (ssr.kind == NiaReasoningKind::FatalUnknown) {
-        return TheoryCheckResult::unknown();
+        return TheoryCheckResult::unknown("NIA: sum-of-squares bound reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -284,7 +284,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkLemma(*ur.lemma);
     }
     if (ur.kind == NiaReasoningKind::FatalUnknown) {
-        return TheoryCheckResult::unknown();
+        return TheoryCheckResult::unknown("NIA: univariate reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -299,7 +299,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkLemma(*ar.lemma);
     }
     if (ar.kind == NiaReasoningKind::FatalUnknown) {
-        return TheoryCheckResult::unknown();
+        return TheoryCheckResult::unknown("NIA: algebraic reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
@@ -413,7 +413,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkLemma(*lemma);
     }
 
-    return TheoryCheckResult::unknown();
+    return TheoryCheckResult::unknown("NIA: no progress (finite domain not closed, branch lemma failed, local search failed)");
 }
 
 bool NiaSolver::relationSatisfied(const mpq_class& val, Relation rel) const {

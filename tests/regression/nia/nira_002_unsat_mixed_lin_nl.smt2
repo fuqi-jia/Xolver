@@ -1,0 +1,6 @@
+(set-logic QF_NIRA)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (* x y) 1))
+(assert (= x 0))
+(check-sat)

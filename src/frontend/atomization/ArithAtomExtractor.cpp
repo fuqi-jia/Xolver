@@ -17,6 +17,18 @@ void ArithAtomExtractor::setPolynomialKernel(PolynomialKernel* kernel) {
 bool ArithAtomExtractor::extractAndRegister(ExprId eid, const CoreIr& ir, SatVar v, TheoryId targetTheory) {
     const auto& e = ir.get(eid);
 
+    // Defensive: integer div/mod should have been lowered before atomization.
+    if (e.kind == Kind::Mod && e.sort == ir.intSortId()) {
+        std::cerr << "[ATOM] integer mod leaked into extractor (should have been lowered)\n";
+        if (registry_) registry_->setUnsupportedTheorySeen();
+        return false;
+    }
+    if (e.kind == Kind::Div && e.sort == ir.intSortId()) {
+        std::cerr << "[ATOM] integer div leaked into extractor (should have been lowered)\n";
+        if (registry_) registry_->setUnsupportedTheorySeen();
+        return false;
+    }
+
     if (targetTheory == TheoryId::NRA || targetTheory == TheoryId::NIA ||
         targetTheory == TheoryId::NIRA) {
         // For NIRA, try linear extraction first so linear constraints

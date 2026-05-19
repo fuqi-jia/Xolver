@@ -49,14 +49,29 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
+    Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
+    bool isDiseq = (effectiveRel == Relation::Neq);
 
     for (auto& e : theoryTrail_) {
         if (e.atom.satVar == atom.satVar) {
-            e = {level, assertedLit, atom, value, auxVar};
+            if (e.isDiseq) {
+                // Remove stale disequality from incremental cache.
+                auto it = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
+                    [&e](const auto& d) { return d.lit == e.lit; });
+                activeDisequalities_.erase(it, activeDisequalities_.end());
+            }
+            e = {level, assertedLit, atom, value, auxVar, isDiseq};
+            if (isDiseq) {
+                activeDisequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit, level});
+            }
             return;
         }
     }
-    theoryTrail_.push_back({level, assertedLit, atom, value, auxVar});
+    theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
+
+    if (isDiseq) {
+        activeDisequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit, level});
+    }
 }
 
 void LraSolver::backtrackToLevel(int level) {
@@ -81,6 +96,11 @@ void LraSolver::backtrackToLevel(int level) {
     auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
+
+    // Phase 2: sync active disequalities cache
+    auto adIt = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
+        [level](const auto& d) { return d.level > level; });
+    activeDisequalities_.erase(adIt, activeDisequalities_.end());
 
     pendingConflict_.reset();
 }
@@ -226,16 +246,9 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     (void)interfaceDisequalities_;
 
     // -------------------------------------------------------------------------
-    // Disequalities: collect from active trail entries
+    // Disequalities: use incremental cache (subset of active trail entries)
     // -------------------------------------------------------------------------
-    std::vector<DiseqInfo> disequalities;
-    for (const auto& e : theoryTrail_) {
-        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
-        Relation effectiveRel = e.value ? payload.rel : negateRelation(payload.rel);
-        if (effectiveRel == Relation::Neq) {
-            disequalities.push_back({e.auxVar, payload.lhs, payload.rhs, e.lit});
-        }
-    }
+    std::vector<DiseqInfo> disequalities = activeDisequalities_;
 
     if (!disequalities.empty()) {
 #ifdef NLCOLVER_LRA_PROFILE

@@ -4,6 +4,7 @@
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/LinearToIntPurifier.h"
+#include "frontend/preprocess/IntDivModLowerer.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -44,6 +45,7 @@ public:
     std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
     std::optional<TheorySolver::TheoryModel> lastModel_;
     std::vector<Term> lastAssumptions_;
+    std::string lastUnknownReason_;
 
     Impl() : sat(createSatSolver()) {}
 
@@ -110,6 +112,7 @@ public:
     }
 
     Result checkSatInternal() {
+        lastUnknownReason_.clear();
         if (!ir) {
             return Result::Sat;
         }
@@ -140,6 +143,29 @@ public:
             }
         }
 
+        // Lower integer div/mod before arithmetic extraction.
+        {
+            IntDivModLowerer dmLowerer(*ir);
+            if (!dmLowerer.run()) {
+                lastUnknownReason_ = "IntDivModLowerer: unsupported or internal error";
+                return Result::Unknown;
+            }
+            const auto& req = dmLowerer.requirement();
+            bool hasEuf = (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
+                           logic == "QF_UFNIA" || logic == "UFNIA" ||
+                           logic == "QF_UFNRA" || logic == "UFNRA");
+            bool isLinearOnly = (logic == "QF_LIA" || logic == "LIA" ||
+                                 logic == "QF_LIRA" || logic == "LIRA" ||
+                                 logic == "QF_IDL" || logic == "IDL" ||
+                                 logic == "QF_RDL" || logic == "RDL" ||
+                                 logic == "QF_UFLIA" || logic == "UFLIA" ||
+                                 logic == "QF_UFLRA" || logic == "UFLRA");
+            if (req.unsupported) { lastUnknownReason_ = "IntDivModLowerer: unsupported divisor"; return Result::Unknown; }
+            if (req.needsEUF && !hasEuf) { lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic; return Result::Unknown; }
+            if (req.needsNonlinearInt && isLinearOnly) { lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic; return Result::Unknown; }
+            dmLowerer.commit();
+        }
+
         // Normalize arithmetic casts (fold constant to_int/to_real)
         {
             ArithCastNormalizer normalizer(*ir);
@@ -155,6 +181,7 @@ public:
             LinearToIntPurifier purifier(*ir);
             auto detectResult = purifier.detectOnly();
             if (detectResult.hasUnsupportedNonlinearToInt) {
+                lastUnknownReason_ = "LinearToIntPurifier: unsupported nonlinear to_int";
                 return Result::Unknown;
             }
             auto purifyResult = purifier.run();
@@ -174,10 +201,12 @@ public:
         }
 
 #ifndef NLCOLVER_HAS_CADICAL
+        lastUnknownReason_ = "SAT: CaDiCaL backend not compiled";
         return Result::Unknown;
 #else
         auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
         if (!cadicalBackend) {
+            lastUnknownReason_ = "SAT: CadicalBackend cast failed";
             return Result::Unknown;
         }
 
@@ -227,10 +256,12 @@ public:
                       << " NL=" << features.hasNonlinear
                       << " Mixed=" << features.hasMixedIntReal
                       << "). Returning Unknown.\n";
+            lastUnknownReason_ = "LogicFeatureDetector: logic mismatch (declared=" + logic + ")";
             return Result::Unknown;
         }
 
         if (features.hasUnsupported) {
+            lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/array/FP/BV)";
             return Result::Unknown;
         }
 
@@ -242,15 +273,18 @@ public:
             sharedTermRegistry_, boolSortId_);
 
         if (!setupResult.success) {
+            lastUnknownReason_ = "TheoryFactory: solver setup failed (unsupported logic=" + logic + ")";
             return Result::Unknown;
         }
         if (setupResult.logicMismatch) {
+            lastUnknownReason_ = "TheoryFactory: logic mismatch in setupSolvers";
             logicMismatch = true;
         }
         polyKernelRaw = setupResult.polyKernelRaw;
 
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
+        propagator.setUnknownReasonSink(&lastUnknownReason_);
         cadicalBackend->connectPropagator(&propagator);
 
         // Atomizer registers parsed atoms into registry (which calls addObservedVar)
@@ -357,6 +391,7 @@ public:
 
         if (registry.hasUnsupportedTheoryAtom()) {
             std::cerr << "[Solver] unsupported theory atom detected\n";
+            lastUnknownReason_ = "Atomizer: unsupported theory atom";
             cadicalBackend->disconnectPropagator();
             return Result::Unknown;
         }
@@ -369,6 +404,9 @@ public:
             return Result::Sat;
         }
         if (result == SatSolver::SolveResult::Unsat) return Result::Unsat;
+        if (lastUnknownReason_.empty()) {
+            lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+        }
         return Result::Unknown;
 #endif
     }
@@ -560,6 +598,8 @@ std::vector<Term> Solver::getUnsatCore() const {
 }
 Proof Solver::getProof() const { return Proof{}; }
 Statistics Solver::getStatistics() const { return Statistics{}; }
+
+std::string Solver::lastUnknownReason() const { return pImpl->lastUnknownReason_; }
 
 void Solver::dumpSMT2(std::ostream& os) {
     if (pImpl->parser && !pImpl->parser->getAssertions().empty()) {

@@ -65,7 +65,14 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     solver.dumpSMT2(std::cout);
 
     nlcolver::Result r = solver.checkSat();
-    std::cout << toString(r) << "\n";
+    std::cout << toString(r);
+    if (r == nlcolver::Result::Unknown) {
+        auto reason = solver.lastUnknownReason();
+        if (!reason.empty()) {
+            std::cout << " (reason=" << reason << ")";
+        }
+    }
+    std::cout << "\n";
     return EXIT_SUCCESS;
 }
 

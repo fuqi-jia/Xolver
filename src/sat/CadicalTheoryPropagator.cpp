@@ -18,6 +18,14 @@ CadicalTheoryPropagator::CadicalTheoryPropagator(
     CadicalBackend& backend
 ) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {}
 
+void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
+    unknownReasonSink_ = sink;
+}
+
+static void writeReason(std::string* sink, const std::string& msg) {
+    if (sink) *sink = msg;
+}
+
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
     for (int lit : lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
@@ -53,6 +61,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     // Slow-path fuse: prevent infinite loops from buggy theory solvers
     if (++modelCheckCount_ > MAX_MODEL_CHECKS) {
+        writeReason(unknownReasonSink_, "SAT: theory modelCheck budget exceeded (>" + std::to_string(MAX_MODEL_CHECKS) + ")");
         abortWithUnknown_ = true;
         terminateSolve();
         return true;
@@ -89,7 +98,9 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     auto tr = tm_.check(lemmaDb_, TheoryEffort::Full);
-    std::cerr << "[PROP] modelCheck=" << modelCheckCount_ << " result=" << (int)tr.kind << "\n";
+    std::cerr << "[PROP] modelCheck=" << modelCheckCount_ << " result=" << (int)tr.kind;
+    if (!tr.reason.empty()) std::cerr << " reason=" << tr.reason;
+    std::cerr << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;
@@ -133,6 +144,11 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     // Unknown
+    if (!tr.reason.empty()) {
+        writeReason(unknownReasonSink_, tr.reason);
+    } else {
+        writeReason(unknownReasonSink_, "Theory: unknown (no reason provided)");
+    }
     abortWithUnknown_ = true;
     terminateSolve();
     return false;

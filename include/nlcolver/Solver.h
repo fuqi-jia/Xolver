@@ -87,6 +87,9 @@ public:
     Proof getProof() const;
     Statistics getStatistics() const;
 
+    // If the last checkSat returned Unknown, this gives a human-readable reason.
+    std::string lastUnknownReason() const;
+
     // Debug / research
     void dumpSMT2(std::ostream& os);
 
