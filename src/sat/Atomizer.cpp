@@ -252,8 +252,9 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
         case Kind::ConstBool: {
             bool val = std::get<bool>(e.payload.value);
             SatVar v = freshVar();
-            sat_.addClause({SatLit::positive(v)});
-            if (!val) {
+            if (val) {
+                sat_.addClause({SatLit::positive(v)});
+            } else {
                 sat_.addClause({SatLit::negative(v)});
             }
             result = SatLit::positive(v);

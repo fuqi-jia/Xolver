@@ -140,6 +140,7 @@ TheoryCheckResult CdcacSolver::check() {
 
     switch (result.status) {
         case CdcacStatus::Sat:
+            lastModel_ = std::move(result.model);
             return TheoryCheckResult::consistent();
         case CdcacStatus::Unsat: {
             std::vector<SatLit> reasons;
@@ -157,6 +158,28 @@ TheoryCheckResult CdcacSolver::check() {
 
 TheoryCheckResult CdcacSolver::check(CdcacEffort /*effort*/, void* /*trail*/) {
     return check();
+}
+
+std::optional<SamplePoint> CdcacSolver::getModel() const {
+    return lastModel_;
+}
+
+std::string CdcacSolver::formatAlgebraicRoot(const AlgebraicRoot& root) const {
+    if (!algebra_ || root.definingPoly == NullUniPolyId) {
+        // Fallback: use midpoint of isolating interval
+        mpq_class mid = (root.lower + root.upper);
+        mid /= 2;
+        return mid.get_str();
+    }
+
+    const auto& coeffs = algebra_->getUni(root.definingPoly);
+    std::string result = "(AlgebraicNumber (poly";
+    for (const auto& c : coeffs) {
+        result += " " + c.get_str();
+    }
+    result += ") (lower " + root.lower.get_str() + ")";
+    result += " (upper " + root.upper.get_str() + "))";
+    return result;
 }
 
 } // namespace nlcolver

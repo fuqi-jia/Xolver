@@ -10,10 +10,12 @@ CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) 
 CadicalBackend::~CadicalBackend() = default;
 
 SatVar CadicalBackend::newVar() {
-    if (!propagatorConnected_) {
-        solver_->declare_more_variables(1);
+    ++maxVar_;
+    if (maxVar_ > declaredVars_) {
+        declaredVars_ = maxVar_ + 10000;
+        solver_->declare_more_variables(declaredVars_);
     }
-    return ++maxVar_;
+    return maxVar_;
 }
 
 void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
@@ -74,7 +76,10 @@ void CadicalBackend::addObservedVar(SatVar v) {
 }
 
 void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
-    solver_->declare_more_variables(1000000);
+    if (maxVar_ > declaredVars_) {
+        declaredVars_ = maxVar_ + 10000;
+        solver_->declare_more_variables(declaredVars_);
+    }
     solver_->connect_external_propagator(propagator);
     propagatorConnected_ = true;
 }

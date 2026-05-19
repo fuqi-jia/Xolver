@@ -73,7 +73,8 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
             integerVars_.insert(v);
         }
 
-        if (payload.rel == Relation::Neq) {
+        Relation effectiveRel = a.value ? payload.rel : negateRelation(payload.rel);
+        if (effectiveRel == Relation::Neq) {
             disequalities_.push_back({auxVar, payload.lhs, payload.rhs, a.lit});
         } else {
             bool ok = manager_.assertBound(gs_, auxVar, payload.rel, a.value, a.lit, a.level);
@@ -107,10 +108,15 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
 
     auto r = gs_.check();
     if (r == GeneralSimplex::Result::Unsat) {
-        // P3 fallback: use all active reasons instead of potentially
-        // incomplete GeneralSimplex explanation.
         auto tc = TheoryConflict{};
-        tc.clause = allActiveReasons();
+        const auto& conflict = gs_.getConflict();
+        if (!conflict.empty()) {
+            for (const auto& cr : conflict) {
+                tc.clause.push_back(cr.reason);
+            }
+        } else {
+            tc.clause = allActiveReasons();
+        }
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {

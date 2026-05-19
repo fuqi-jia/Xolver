@@ -74,8 +74,14 @@ PolyId LibPolyKernel::mkConst(const mpq_class& c) {
 }
 
 PolyId LibPolyKernel::mkVar(VarId v) {
+    auto it = varToPoly_.find(v);
+    if (it != varToPoly_.end()) {
+        return it->second;
+    }
     poly::Variable pv = resolvePolyVar(v);
-    return alloc(poly::Polynomial(ctx_.get_polynomial_context(), pv));
+    PolyId id = alloc(poly::Polynomial(ctx_.get_polynomial_context(), pv));
+    varToPoly_[v] = id;
+    return id;
 }
 
 PolyId LibPolyKernel::add(PolyId a, PolyId b) {

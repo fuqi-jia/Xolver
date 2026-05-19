@@ -84,6 +84,9 @@ private:
     std::vector<poly::Variable> varIdToPolyVar_;            // VarId -> libpoly variable
     std::unordered_map<lp_variable_t, VarId> polyVarToVarId_; // libpoly var -> VarId
 
+    // Cache: VarId -> PolyId for single-variable polynomials
+    std::unordered_map<VarId, PolyId> varToPoly_;
+
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
 };

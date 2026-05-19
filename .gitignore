@@ -82,4 +82,4 @@ conversations/
 build_debug_info/
 
 # Submodule modifications
-third_party/*/
+third_party/*/__pycache__/

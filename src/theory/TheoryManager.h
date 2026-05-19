@@ -26,6 +26,9 @@ public:
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }
 
+    void setArrangementComplete(bool v) { arrangementComplete_ = v; }
+    bool isArrangementComplete() const { return arrangementComplete_; }
+
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level);
     void backtrackToLevel(int level);
     TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard);
@@ -46,6 +49,7 @@ private:
 
     bool combinationMode_ = false;
     bool nonConvexMode_ = false;
+    bool arrangementComplete_ = true;
     TheoryAtomRegistry* registry_ = nullptr;
     const TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;

@@ -33,6 +33,7 @@ public:
 
     std::vector<SharedTermId> termsOwnedBy(TheoryId theory) const;
     std::vector<SharedTermId> allSharedTerms() const;
+    std::vector<SharedTermId> sharedTermsOfSort(SortId sort) const;
 
     bool hasTerm(ExprId expr) const;
     std::optional<SharedTermId> findByExprId(ExprId expr) const;

@@ -3,7 +3,6 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/TheoryLemmaDatabase.h"
 #include <unordered_set>
-#include <iostream>
 
 namespace nlcolver {
 
@@ -117,10 +116,6 @@ static std::unordered_set<std::string> collectVars(
 }
 
 TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
-    std::cerr << "[NIA-CHECK] active=" << active_.size() << " ieq=" << interfaceEqualities_.size() << " idiseq=" << interfaceDisequalities_.size() << "\n";
-    for (const auto& c : active_) {
-        std::cerr << "[NIA-CHECK] poly=" << kernel_->toString(c.poly) << " rel=" << (int)c.rel << "\n";
-    }
     if (pendingUnknown_) return TheoryCheckResult::unknown();
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();
@@ -163,6 +158,97 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+
+    // 4.5 Product bound propagation: from a*b = c and a,b > 0 derive upper bounds
+    for (const auto& c : normalized) {
+        if (c.rel != Relation::Eq) continue;
+        auto termsOpt = kernel_->terms(c.poly);
+        if (!termsOpt) {
+            continue;
+        }
+        const auto& terms = *termsOpt;
+        const PolynomialKernel::MonomialTerm* quadTerm = nullptr;
+        const PolynomialKernel::MonomialTerm* constTerm = nullptr;
+        for (const auto& t : terms) {
+            if (t.powers.empty()) {
+                constTerm = &t;
+            } else if (t.powers.size() == 2 && t.powers[0].second == 1 && t.powers[1].second == 1) {
+                quadTerm = &t;
+            }
+        }
+        if (!quadTerm || !constTerm) {
+            continue;
+        }
+        mpz_class numer = -constTerm->coefficient;
+        mpz_class denom = quadTerm->coefficient;
+        if (denom == 0) continue;
+        if (numer % denom != 0) continue;
+        mpz_class product = numer / denom;
+        if (product <= 0) continue;
+
+        std::string v1 = std::string(kernel_->varName(quadTerm->powers[0].first));
+        std::string v2 = std::string(kernel_->varName(quadTerm->powers[1].first));
+        const IntDomain* d1 = domains_.getDomain(v1);
+        const IntDomain* d2 = domains_.getDomain(v2);
+        if (!d1 || !d2) continue;
+        if (!d1->hasLower || d1->lower.value <= 0) continue;
+        if (!d2->hasLower || d2->lower.value <= 0) continue;
+
+        mpz_class ub1 = product / d2->lower.value;
+        mpz_class ub2 = product / d1->lower.value;
+        domains_.addUpperBound(v1, ub1, c.reason);
+        domains_.addUpperBound(v2, ub2, c.reason);
+    }
+
+    // 4.6 Propagate bounds through equalities (after product bounds)
+    for (const auto& c : normalized) {
+        if (c.rel != Relation::Eq) continue;
+        auto termsOpt = kernel_->terms(c.poly);
+        if (!termsOpt) continue;
+        const auto& terms = *termsOpt;
+        const PolynomialKernel::MonomialTerm* constTerm = nullptr;
+        std::vector<const PolynomialKernel::MonomialTerm*> varTerms;
+        for (const auto& t : terms) {
+            if (t.powers.empty()) {
+                constTerm = &t;
+            } else if (t.powers.size() == 1 && t.powers[0].second == 1) {
+                varTerms.push_back(&t);
+            } else {
+                varTerms.clear();
+                break;
+            }
+        }
+        if (varTerms.size() != 2) continue;
+        if (constTerm && constTerm->coefficient != 0) continue;
+        const auto& t1 = *varTerms[0];
+        const auto& t2 = *varTerms[1];
+        if (t1.coefficient != -t2.coefficient) continue;
+
+        std::string v1 = std::string(kernel_->varName(t1.powers[0].first));
+        std::string v2 = std::string(kernel_->varName(t2.powers[0].first));
+        const IntDomain* d1 = domains_.getDomain(v1);
+        const IntDomain* d2 = domains_.getDomain(v2);
+        if (!d1 && !d2) continue;
+
+        auto propagate = [&](const std::string& src, const std::string& dst, const IntDomain* srcDom) {
+            if (!srcDom) return;
+            if (srcDom->hasLower) domains_.addLowerBound(dst, srcDom->lower.value, c.reason);
+            if (srcDom->hasUpper) domains_.addUpperBound(dst, srcDom->upper.value, c.reason);
+        };
+
+        if (d1 && !d2) propagate(v1, v2, d1);
+        else if (!d1 && d2) propagate(v2, v1, d2);
+        else if (d1 && d2) {
+            if (d1->hasLower && (!d2->hasLower || d1->lower.value > d2->lower.value))
+                domains_.addLowerBound(v2, d1->lower.value, c.reason);
+            if (d1->hasUpper && (!d2->hasUpper || d1->upper.value < d2->upper.value))
+                domains_.addUpperBound(v2, d1->upper.value, c.reason);
+            if (d2->hasLower && (!d1->hasLower || d2->lower.value > d1->lower.value))
+                domains_.addLowerBound(v1, d2->lower.value, c.reason);
+            if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value))
+                domains_.addUpperBound(v1, d2->upper.value, c.reason);
+        }
     }
 
     // 5. Square bound reasoning
@@ -291,16 +377,12 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
         }
     }
 
-    if (!pendingLinLemmas_.empty()) {
-        auto lemma = std::move(pendingLinLemmas_.front());
-        pendingLinLemmas_.pop_front();
-        return TheoryCheckResult::mkLemma(lemma);
-    }
-
-    // DEBUG
     // 10. Bounded complete solver
     auto allVars = collectVars(normalized, *kernel_);
-    if (domains_.allFinite(allVars)) {
+    bool allFinite = domains_.allFinite(allVars);
+    if (allFinite) {
+        // Domain is finite: bounded solver is authoritative; skip linear lemmas
+        pendingLinLemmas_.clear();
         auto br = bounded_.solve(normalized, domains_, validator_, lemmaDb);
         if (br.status == BoundedSolveStatus::Sat) {
             currentModel_ = br.model;
@@ -310,6 +392,12 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
             return TheoryCheckResult::mkConflict(*br.conflict);
         }
         // UnknownBudget / UnknownUnsupported: continue pipeline
+    }
+
+    if (!pendingLinLemmas_.empty()) {
+        auto lemma = std::move(pendingLinLemmas_.front());
+        pendingLinLemmas_.pop_front();
+        return TheoryCheckResult::mkLemma(lemma);
     }
 
     // 10. Local search SAT finder
@@ -440,7 +528,6 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
 
 TheoryCheckResult NiaSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
-    std::cerr << "[NIA-IEQ] a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"") << reason.var << "\n";
     if (!sharedTermRegistry_ || !coreIr_ || !converter_)
         return TheoryCheckResult::consistent();
     const auto* stA = sharedTermRegistry_->get(a);

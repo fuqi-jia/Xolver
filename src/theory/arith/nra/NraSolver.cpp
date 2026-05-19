@@ -127,4 +127,26 @@ NraSolver::getDeducedSharedEqualities() {
     return {};
 }
 
+std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
+    auto sampleOpt = engine_.getModel();
+    if (!sampleOpt) return std::nullopt;
+    const auto& sample = *sampleOpt;
+
+    TheoryModel model;
+    for (size_t i = 0; i < sample.varOrder.size(); ++i) {
+        VarId v = sample.varOrder[i];
+        const auto& val = sample.values[i];
+        std::string name(kernel_->varName(v));
+        std::string valueStr;
+        if (val.kind == RealAlg::Kind::Rational) {
+            valueStr = val.rational.get_str();
+        } else {
+            // AlgebraicRoot: strict representation with defining polynomial + isolating interval
+            valueStr = engine_.formatAlgebraicRoot(val.root);
+        }
+        model.assignments[std::move(name)] = std::move(valueStr);
+    }
+    return model;
+}
+
 } // namespace nlcolver

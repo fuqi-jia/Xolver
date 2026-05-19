@@ -40,6 +40,14 @@ std::vector<SharedTermId> SharedTermRegistry::allSharedTerms() const {
     return out;
 }
 
+std::vector<SharedTermId> SharedTermRegistry::sharedTermsOfSort(SortId sort) const {
+    std::vector<SharedTermId> out;
+    for (const auto& t : terms_) {
+        if (t.sort == sort) out.push_back(t.id);
+    }
+    return out;
+}
+
 bool SharedTermRegistry::hasTerm(ExprId expr) const {
     return exprToId_.count(expr);
 }

@@ -40,6 +40,12 @@ public:
     // V5: cache access
     void setCache(CdcacCache* cache) { cache_ = cache; }
 
+    // Model extraction: returns the last SAT sample point
+    std::optional<SamplePoint> getModel() const;
+
+    // Format an algebraic root as (AlgebraicNumber (poly ...) (lower ...) (upper ...))
+    std::string formatAlgebraicRoot(const AlgebraicRoot& root) const;
+
 private:
     struct ActiveConstraint {
         PolyId poly;
@@ -81,6 +87,9 @@ private:
 
     // V5: cache
     CdcacCache* cache_ = nullptr;
+
+    // Last SAT model from CDCAC core
+    std::optional<SamplePoint> lastModel_;
 };
 
 } // namespace nlcolver

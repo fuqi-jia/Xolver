@@ -48,6 +48,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    std::optional<TheoryModel> getModel() const override;
+
 private:
     struct NraTrailEntry {
         int level;

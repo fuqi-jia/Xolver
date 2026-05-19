@@ -1,6 +1,7 @@
 #pragma once
 
 #include "theory/TheorySolver.h"
+#include "theory/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "GeneralSimplex.h"
@@ -26,6 +27,7 @@ public:
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
 
     // Nelson-Oppen combination hooks
     bool supportsCombination() const override { return true; }
@@ -46,6 +48,8 @@ private:
 
     struct DiseqInfo {
         int auxVar;
+        LinearFormKey lhs;
+        mpq_class rhs;
         SatLit lit;
     };
     std::vector<DiseqInfo> disequalities_;
@@ -77,11 +81,13 @@ private:
     // Map from (a,b) canonical key to auxiliary var index for x - y
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
 
-    TheoryCheckResult handleDisequalities();
+    TheoryCheckResult handleDisequalities(TheoryLemmaDatabase& lemmaDb);
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d);
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
+
+    TheoryAtomRegistry* registry_ = nullptr;
 
     std::vector<SatLit> allActiveReasons() const;
 };

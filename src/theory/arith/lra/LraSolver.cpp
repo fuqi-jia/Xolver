@@ -1,5 +1,7 @@
 #include "theory/arith/lra/LraSolver.h"
 #include "theory/DebugTrace.h"
+#include "theory/TheoryAtomRegistry.h"
+#include "theory/TheoryLemmaDatabase.h"
 #include <algorithm>
 #include <cassert>
 #include <iostream>
@@ -47,10 +49,10 @@ void LraSolver::backtrackToLevel(int level) {
 
     auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
         [level](const auto& ie) { return ie.level > level; });
-    interfaceDisequalities_.erase(idIt, idIt);
+    interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
+TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
     // Rebuild all bounds from current active assignments.
     gs_.resetActiveBounds();
@@ -65,8 +67,9 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
                << " val=" << a.value
                << " lit=" << debug::fmtLit(a.lit)
                << " level=" << a.level << "\n";
-        if (payload.rel == Relation::Neq) {
-            disequalities_.push_back({auxVar, a.lit});
+        Relation effectiveRel = a.value ? payload.rel : negateRelation(payload.rel);
+        if (effectiveRel == Relation::Neq) {
+            disequalities_.push_back({auxVar, payload.lhs, payload.rhs, a.lit});
         } else {
             bool ok = manager_.assertBound(gs_, auxVar, payload.rel, a.value, a.lit, a.level);
             if (!ok) {
@@ -102,11 +105,17 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
     NO_DBG << "[LRA] simplex result=" << (r == GeneralSimplex::Result::Sat ? "Sat" :
                                           r == GeneralSimplex::Result::Unsat ? "Unsat" : "Unknown") << "\n";
     if (r == GeneralSimplex::Result::Unsat) {
-        // P3 fallback: use all active reasons instead of potentially
-        // incomplete GeneralSimplex explanation.
         auto tc = TheoryConflict{};
-        tc.clause = allActiveReasons();
-        NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
+        const auto& conflict = gs_.getConflict();
+        if (!conflict.empty()) {
+            for (const auto& cr : conflict) {
+                tc.clause.push_back(cr.reason);
+            }
+            NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
+        } else {
+            tc.clause = allActiveReasons();
+            NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
+        }
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {
@@ -117,29 +126,42 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
     (void)interfaceDisequalities_;
 
     if (!disequalities_.empty()) {
-        return handleDisequalities();
+        return handleDisequalities(lemmaDb);
     }
 
     NO_DBG << "[LRA] Consistent\n";
     return TheoryCheckResult::consistent();
 }
 
-TheoryCheckResult LraSolver::handleDisequalities() {
+TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
     for (const auto& d : disequalities_) {
         auto val = gs_.value(d.auxVar);
         if (val.isZero()) {
-            return TheoryCheckResult::mkLemma(buildDiseqSplitLemma(d));
+            auto lemma = buildDiseqSplitLemma(d);
+            if (!lemma.lits.empty()) {
+                if (lemmaDb.contains(lemma)) {
+                    return TheoryCheckResult::unknown();
+                }
+                lemmaDb.insertIfNew(lemma);
+                return TheoryCheckResult::mkLemma(std::move(lemma));
+            }
+            return TheoryCheckResult::unknown();
         }
     }
     return TheoryCheckResult::consistent();
 }
 
 TheoryLemma LraSolver::buildDiseqSplitLemma(const DiseqInfo& d) {
-    SatLit notD = d.lit.negated();
-    SatLit lt = d.lit;
-    SatLit gt = d.lit;
-    (void)lt; (void)gt;
-    return TheoryLemma{{notD}};
+    if (!registry_) return TheoryLemma{};
+
+    auto litLt = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
+    auto litGt = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Gt, d.rhs, TheoryId::LRA);
+
+    TheoryLemma lemma;
+    lemma.lits.push_back(d.lit.negated());
+    lemma.lits.push_back(litLt);
+    lemma.lits.push_back(litGt);
+    return lemma;
 }
 
 // ---------------------------------------------------------------------------

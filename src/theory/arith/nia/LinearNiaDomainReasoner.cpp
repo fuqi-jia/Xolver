@@ -128,6 +128,79 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
         }
     }
 
+    // Second pass: propagate bounds through binary equalities like x - y = 0
+    for (const auto& c : constraints) {
+        if (c.rel != Relation::Eq) continue;
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        const auto& terms = *termsOpt;
+
+        const PolynomialKernel::MonomialTerm* constTerm = nullptr;
+        std::vector<const PolynomialKernel::MonomialTerm*> varTerms;
+        for (const auto& t : terms) {
+            if (t.powers.empty()) {
+                constTerm = &t;
+            } else if (t.powers.size() == 1 && t.powers[0].second == 1) {
+                varTerms.push_back(&t);
+            } else {
+                varTerms.clear();
+                break;
+            }
+        }
+        if (varTerms.size() != 2) continue;
+        if (constTerm && constTerm->coefficient != 0) continue;
+
+        const auto& t1 = *varTerms[0];
+        const auto& t2 = *varTerms[1];
+        if (t1.coefficient != -t2.coefficient) continue;
+
+        std::string var1 = std::string(kernel_.varName(t1.powers[0].first));
+        std::string var2 = std::string(kernel_.varName(t2.powers[0].first));
+
+        const IntDomain* d1 = domains.getDomain(var1);
+        const IntDomain* d2 = domains.getDomain(var2);
+        if (!d1 && !d2) continue;
+
+        auto propagate = [&](const std::string& srcVar, const std::string& dstVar,
+                             const IntDomain* srcDomain) {
+            if (!srcDomain) return false;
+            bool changed = false;
+            if (srcDomain->hasLower) {
+                domains.addLowerBound(dstVar, srcDomain->lower.value, c.reason);
+                changed = true;
+            }
+            if (srcDomain->hasUpper) {
+                domains.addUpperBound(dstVar, srcDomain->upper.value, c.reason);
+                changed = true;
+            }
+            return changed;
+        };
+
+        if (d1 && !d2) {
+            if (propagate(var1, var2, d1)) updated = true;
+        } else if (!d1 && d2) {
+            if (propagate(var2, var1, d2)) updated = true;
+        } else if (d1 && d2) {
+            // Both have bounds: tighten each with the other's bounds
+            if (d1->hasLower && (!d2->hasLower || d1->lower.value > d2->lower.value)) {
+                domains.addLowerBound(var2, d1->lower.value, c.reason);
+                updated = true;
+            }
+            if (d1->hasUpper && (!d2->hasUpper || d1->upper.value < d2->upper.value)) {
+                domains.addUpperBound(var2, d1->upper.value, c.reason);
+                updated = true;
+            }
+            if (d2->hasLower && (!d1->hasLower || d2->lower.value > d1->lower.value)) {
+                domains.addLowerBound(var1, d2->lower.value, c.reason);
+                updated = true;
+            }
+            if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value)) {
+                domains.addUpperBound(var1, d2->upper.value, c.reason);
+                updated = true;
+            }
+        }
+    }
+
     if (updated) {
         return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
     }

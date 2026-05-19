@@ -1,0 +1,9 @@
+; UF + NRA: f(x)*g(x) = 1, both > 0  =>  sat
+(set-logic QF_UFNRA)
+(declare-fun f (Real) Real)
+(declare-fun g (Real) Real)
+(declare-fun x () Real)
+(assert (= (* (f x) (g x)) 1.0))
+(assert (> (f x) 0.0))
+(assert (> (g x) 0.0))
+(check-sat)

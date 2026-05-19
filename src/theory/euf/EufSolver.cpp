@@ -1,11 +1,9 @@
 #include "theory/euf/EufSolver.h"
 #include "theory/DebugTrace.h"
-#include <iostream>
 #include "theory/TheoryLemmaDatabase.h"
 #include <cassert>
 #include <algorithm>
 #include <functional>
-#include <iostream>
 
 namespace nlcolver {
 
@@ -189,8 +187,6 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     EufTermId lhs = termManager_.intern(payload.lhs, *coreIr_);
     EufTermId rhs = termManager_.intern(payload.rhs, *coreIr_);
     if (lhs == NullEufTerm || rhs == NullEufTerm) {
-        std::cerr << "[EUF] assertLit: intern failed lhs=" << payload.lhs
-                  << " rhs=" << payload.rhs << " -> pendingUnknown\n";
         pendingUnknown_ = true;
         return;
     }
@@ -235,13 +231,10 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // ---------------------------------------------------------------------------
 
 TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffort) {
-    NO_DBG << "[EUF] check begin\n";
     if (pendingUnknown_) {
-        NO_DBG << "[EUF] pendingUnknown -> Unknown\n";
         return TheoryCheckResult::unknown();
     }
     if (pendingConflict_) {
-        NO_DBG << "[EUF] pendingConflict -> Conflict\n";
         return TheoryCheckResult::mkConflict(*pendingConflict_);
     }
 
@@ -249,7 +242,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
     while (!mergeQueue_.empty()) {
         auto req = mergeQueue_.back();
         mergeQueue_.pop_back();
-
         if (egraph_.same(req.a, req.b)) continue;
 
         // sort check
@@ -290,7 +282,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
             if (er.ok) {
                 er.reasons.push_back(d.reason);
-                NO_DBG << "[EUF] disequality conflict reasons: " << debug::fmtClause(er.reasons) << "\n";
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
             NO_DBG << "[EUF] disequality same but explain failed -> Unknown\n";
@@ -304,7 +295,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
             if (er.ok) {
                 er.reasons.push_back(d.reason);
-                NO_DBG << "[EUF] shared disequality conflict reasons: " << debug::fmtClause(er.reasons) << "\n";
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
             NO_DBG << "[EUF] shared disequality same but explain failed -> Unknown\n";
@@ -312,8 +302,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
         }
     }
 
-    std::cerr << "[EUF] Consistent disequalities=" << disequalities_.size()
-              << " sharedDisequalities=" << sharedDisequalities_.size() << "\n";
     return TheoryCheckResult::consistent();
 }
 
@@ -323,7 +311,9 @@ TheoryCheckResult EufSolver::check(TheoryLemmaDatabase& /*lemmaDb*/, TheoryEffor
 
 EufTermId EufSolver::internSharedConstant(SharedTermId s) {
     auto it = sharedTermToEufTerm_.find(s);
-    if (it != sharedTermToEufTerm_.end()) return it->second;
+    if (it != sharedTermToEufTerm_.end()) {
+        return it->second;
+    }
 
     if (!sharedTermRegistry_ || !coreIr_) return NullEufTerm;
     const auto* st = sharedTermRegistry_->get(s);
@@ -378,20 +368,10 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
     if (egraph_.same(ta, tb)) {
         auto er = egraph_.explainEquality(ta, tb);
         if (er.ok) {
-            std::cerr << "[EUF-IDISEQ] same a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"") << reason.var;
-            std::cerr << " explain=";
-            for (auto& lit : er.reasons) std::cerr << (lit.sign?"+":"") << lit.var << " ";
-            std::cerr << "\n";
             er.reasons.push_back(reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
         return TheoryCheckResult::unknown();
-    }
-
-    const auto& na = termManager_.node(ta);
-    const auto& nb = termManager_.node(tb);
-    if (na.args.empty() && nb.args.empty() && na.symbol != nb.symbol) {
-        return TheoryCheckResult::consistent();
     }
 
     sharedDisequalities_.push_back({ta, tb, reason, level, trail_.size()});
@@ -404,7 +384,6 @@ EufSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return result;
 
     const auto& allShared = sharedTermRegistry_->allSharedTerms();
-    std::cerr << "[EUF-DEDUCE] sharedTerms=" << allShared.size() << "\n";
     for (size_t i = 0; i < allShared.size(); ++i) {
         EufTermId ti = internSharedConstant(allShared[i]);
         if (ti == NullEufTerm) continue;
@@ -414,7 +393,6 @@ EufSolver::getDeducedSharedEqualities() {
             if (egraph_.same(ti, tj)) {
                 auto er = egraph_.explainEquality(ti, tj);
                 if (er.ok) {
-                    std::cerr << "[EUF-DEDUCE] EQ st=" << allShared[i] << " st=" << allShared[j] << " reasons=" << er.reasons.size() << "\n";
                     result.push_back({allShared[i], allShared[j], std::move(er.reasons)});
                 }
             }

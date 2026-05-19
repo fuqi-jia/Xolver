@@ -5,7 +5,6 @@
 #include "sat/SatSolver.h"
 #include <cassert>
 #include <algorithm>
-#include <iostream>
 
 namespace nlcolver {
 
@@ -128,7 +127,6 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
     if (!combinationMode_) {
         // Legacy single-theory path
         if (solvers_.empty()) {
-            NO_DBG << "[NO-RET-0] legacy: no solvers -> Consistent\n";
             return TheoryCheckResult::consistent();
         }
         for (auto& solver : solvers_) {
@@ -138,25 +136,13 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
                 return TheoryCheckResult::mkConflict(std::move(fc));
             }
             if (tr.kind != TheoryCheckResult::Kind::Consistent) {
-                NO_DBG << "[NO-RET-1] legacy solver=" << (int)solver->id()
-                       << " kind=" << (int)tr.kind << "\n";
                 return tr;
             }
         }
-        NO_DBG << "[NO-RET-2] legacy: all consistent\n";
         return TheoryCheckResult::consistent();
     }
 
     // ---- Nelson-Oppen combination path ----
-
-    std::cerr << "[NO] pendingSharedEqEvents=" << pendingSharedEqEvents_.size() << "\n";
-    for (auto& ev : pendingSharedEqEvents_) {
-        std::cerr << "[NO] pending " << (ev.isEquality ? "EQ " : "NEQ")
-               << " " << stName(sharedTermRegistry_, ev.a)
-               << " " << stName(sharedTermRegistry_, ev.b)
-               << " reason=" << debug::fmtLit(ev.reasonLit)
-               << " level=" << ev.decisionLevel << "\n";
-    }
 
     // 1. Process pending SAT-assigned shared equalities/disequalities
     for (auto& ev : pendingSharedEqEvents_) {
@@ -191,7 +177,6 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
                 return TheoryCheckResult::mkConflict(std::move(fc));
             }
             for (auto* solver : solversOwning(ev.a, ev.b)) {
-                std::cerr << "[NO] IDISEQ solver=" << (int)solver->id() << " a=" << ev.a << " b=" << ev.b << "\n";
                 auto r = solver->assertInterfaceDisequality(ev.a, ev.b, ev.reasonLit, ev.decisionLevel);
                 if (r.kind == TheoryCheckResult::Kind::Conflict && r.conflictOpt) {
                     r.conflictOpt = makeFalsifiedConflict(r.conflictOpt->clause);
@@ -209,7 +194,6 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaDatabase& lemmaDb, TheoryEffor
 
     // 2. Run each theory check
     for (auto& solver : solvers_) {
-        NO_DBG << "[NO] checking solver=" << (int)solver->id() << "\n";
         auto tr = solver->check(lemmaDb, effort);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             // Defensive: every raw reason should be true in the current model.

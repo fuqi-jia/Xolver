@@ -253,13 +253,17 @@ public:
             lia->setRegistry(&registry);
             theoryManager.registerSolver(std::move(lia));
         } else if (logic == "QF_LRA" || logic == "LRA") {
-            theoryManager.registerSolver(std::make_unique<LraSolver>());
+            auto lra = std::make_unique<LraSolver>();
+            lra->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lra));
         } else if (logic == "QF_NRA" || logic == "NRA") {
             auto polyKernel = createPolynomialKernel();
             polyKernelRaw = polyKernel.get();
             theoryManager.registerSolver(
                 std::make_unique<NraSolver>(std::move(polyKernel)));
-            theoryManager.registerSolver(std::make_unique<LraSolver>()); // co-register for linearizer cuts
+            auto lra = std::make_unique<LraSolver>();
+            lra->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lra)); // co-register for linearizer cuts
         } else if (logic == "QF_NIA" || logic == "NIA") {
             auto polyKernel = createPolynomialKernel();
             polyKernelRaw = polyKernel.get();
@@ -306,6 +310,7 @@ public:
             auto lra = std::make_unique<LraSolver>();
             lra->setCoreIr(ir.get());
             lra->setSharedTermRegistry(sharedTermRegistry_.get());
+            lra->setRegistry(&registry);
             theoryManager.registerSolver(std::move(lra));
             theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
             theoryManager.setRegistry(&registry);
@@ -381,6 +386,7 @@ public:
             auto lra = std::make_unique<LraSolver>();
             lra->setCoreIr(ir.get());
             lra->setSharedTermRegistry(sharedTermRegistry_.get());
+            lra->setRegistry(&registry);
             theoryManager.registerSolver(std::move(lra));
             theoryManager.setSharedTermRegistry(sharedTermRegistry_.get());
             theoryManager.setRegistry(&registry);
