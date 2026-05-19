@@ -4,6 +4,7 @@
 #include "sat/SatSolver.h"
 #include "frontend/atomization/ArithAtomExtractor.h"
 #include "frontend/atomization/EufAtomExtractor.h"
+#include "theory/core/DynamicAtomRegistrar.h"
 #include <cassert>
 #include <unordered_map>
 #include <vector>
@@ -21,7 +22,7 @@ class SharedTermRegistry;
  * - And/Or/Not/Implies -> CNF via Tseitin or direct unit clauses.
  * - Theory atoms (arithmetic comparisons) -> SAT literal + TheoryAtom record.
  */
-class Atomizer {
+class Atomizer : public DynamicAtomRegistrar {
 public:
     struct AtomRecord {
         SatVar var;
@@ -40,7 +41,7 @@ public:
 
     // Register a dynamically created theory atom (e.g. branch split, disequality split).
     // Returns the SAT literal. The exprId should be a synthetic id (not in CoreIr).
-    SatLit registerDynamicAtom(ExprId expr, TheoryId theory);
+    SatLit registerDynamicAtom(ExprId expr, TheoryId theory) override;
 
     // Set the theory atom registry for registering parsed atoms.
     void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; arithExtractor_.setRegistry(registry); eufExtractor_.setRegistry(registry); }

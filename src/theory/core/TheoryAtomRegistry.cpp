@@ -3,9 +3,9 @@
 
 namespace nlcolver {
 
-void TheoryAtomRegistry::setContext(SatSolver* sat, Atomizer* atomizer) {
+void TheoryAtomRegistry::setContext(SatSolver* sat, DynamicAtomRegistrar* registrar) {
     sat_ = sat;
-    atomizer_ = atomizer;
+    registrar_ = registrar;
 }
 
 void TheoryAtomRegistry::observeIfNeeded(SatVar v) {
@@ -32,7 +32,7 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     const mpq_class& rhs,
     TheoryId theory) {
 
-    assert(sat_ != nullptr && atomizer_ != nullptr &&
+    assert(sat_ != nullptr && registrar_ != nullptr &&
            "TheoryAtomRegistry::setContext must be called before getOrCreateLinearBoundAtom");
 
     LinearLookupKey key{lhs, rel, rhs};
@@ -43,7 +43,7 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     }
 
     ExprId expr = nextSyntheticExprId_++;
-    SatLit lit = atomizer_->registerDynamicAtom(expr, theory);
+    SatLit lit = registrar_->registerDynamicAtom(expr, theory);
 
     size_t idx = records_.size();
     records_.push_back({lit.var, theory, true, expr, LinearAtomPayload{lhs, rel, rhs}});
@@ -71,7 +71,7 @@ SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
     }
 
     ExprId expr = nextSyntheticExprId_++;
-    SatLit lit = atomizer_->registerDynamicAtom(expr, theory);
+    SatLit lit = registrar_->registerDynamicAtom(expr, theory);
 
     size_t idx = records_.size();
     records_.push_back({lit.var, theory, true, expr, PolynomialAtomPayload{poly, rel, rhs}});
@@ -107,7 +107,7 @@ const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
 }
 
 SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b) {
-    assert(sat_ != nullptr && atomizer_ != nullptr);
+    assert(sat_ != nullptr && registrar_ != nullptr);
 
     // Canonical key: min(a,b), max(a,b)
     SharedTermId lo = a < b ? a : b;
@@ -121,7 +121,7 @@ SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedT
     }
 
     ExprId expr = nextSyntheticExprId_++;
-    SatLit lit = atomizer_->registerDynamicAtom(expr, TheoryId::Combination);
+    SatLit lit = registrar_->registerDynamicAtom(expr, TheoryId::Combination);
 
     size_t idx = records_.size();
     records_.push_back({lit.var, TheoryId::Combination, true, expr,

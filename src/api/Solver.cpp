@@ -7,7 +7,7 @@
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
-#include "sat/Atomizer.h"
+#include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"

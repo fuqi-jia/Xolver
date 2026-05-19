@@ -1,4 +1,4 @@
-#include "sat/Atomizer.h"
+#include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include <cassert>

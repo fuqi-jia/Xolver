@@ -1,17 +1,18 @@
 #pragma once
 
 #include "theory/core/TheorySolver.h"
-#include "sat/Atomizer.h"
+#include "theory/core/DynamicAtomRegistrar.h"
+#include "theory/core/TheoryPropagatorCallbacks.h"
 #include <unordered_map>
 #include <unordered_set>
 
 namespace nlcolver {
 
-class TheoryAtomRegistry {
+class TheoryAtomRegistry : public TheoryAtomLookup {
 public:
     TheoryAtomRegistry() = default;
 
-    void setContext(SatSolver* sat, Atomizer* atomizer);
+    void setContext(SatSolver* sat, DynamicAtomRegistrar* registrar);
 
     void registerParsedTheoryAtom(
         SatVar satVar,
@@ -36,7 +37,7 @@ public:
 
     bool findByExprId(ExprId expr, LinearFormKey& outLhs, Relation& outRel, mpq_class& outRhs) const;
 
-    const TheoryAtomRecord* findBySatVar(SatVar v) const;
+    const TheoryAtomRecord* findBySatVar(SatVar v) const override;
     const std::vector<TheoryAtomRecord>& records() const { return records_; }
 
     bool hasUnsupportedTheoryAtom() const { return unsupportedTheorySeen_; }
@@ -48,7 +49,7 @@ public:
 
 private:
     SatSolver* sat_ = nullptr;
-    Atomizer* atomizer_ = nullptr;
+    DynamicAtomRegistrar* registrar_ = nullptr;
 
     std::vector<TheoryAtomRecord> records_;
     std::unordered_map<SatVar, size_t> satVarToIdx_;
