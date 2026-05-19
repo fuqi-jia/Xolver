@@ -60,7 +60,7 @@ SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
     const mpq_class& rhs,
     TheoryId theory) {
 
-    assert(sat_ != nullptr && atomizer_ != nullptr &&
+    assert(sat_ != nullptr && registrar_ != nullptr &&
            "TheoryAtomRegistry::setContext must be called before getOrCreatePolynomialAtom");
 
     PolyLookupKey key{poly, rel, rhs};

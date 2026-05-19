@@ -151,6 +151,11 @@ public:
     /** Verify all sparse tableau invariants. Returns true, or asserts in debug. */
     bool debugCheckInvariants() const;
 
+#ifdef NLCOLVER_LRA_PROFILE
+    int pivotCount() const { return pivotCount_; }
+    void resetPivotCount() { pivotCount_ = 0; }
+#endif
+
 private:
     // ========================================================================
     // Variable state
@@ -189,6 +194,10 @@ private:
     bool betaDirty_ = true;
     std::vector<BoundReason> conflict_;
     bool hasImmediateConflict_ = false;
+
+#ifdef NLCOLVER_LRA_PROFILE
+    int pivotCount_ = 0;
+#endif
 
     // ========================================================================
     // Trail for push/pop / level-aware backtracking

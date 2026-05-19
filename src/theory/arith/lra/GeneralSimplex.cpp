@@ -522,6 +522,9 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 }
 
 void GeneralSimplex::pivot(int leaving, int entering) {
+#ifdef NLCOLVER_LRA_PROFILE
+    ++pivotCount_;
+#endif
     int r = rowOfBasic(leaving);
     mpq_class d = tab_.getCoeff(r, entering);
     assert(d != 0);
@@ -682,6 +685,8 @@ void GeneralSimplex::backtrackToLevel(int level) {
     betaDirty_ = true;
     hasImmediateConflict_ = false;
     conflict_.clear();
+    violatedQueue_.clear();
+    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
 }
 
 // ============================================================================

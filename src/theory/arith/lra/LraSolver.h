@@ -15,6 +15,7 @@ namespace nlcolver {
 class LraSolver : public TheorySolver {
 public:
     LraSolver();
+    ~LraSolver();
 
     TheoryId id() const override { return TheoryId::LRA; }
 
@@ -46,28 +47,35 @@ private:
     GeneralSimplex gs_;
     LinearAtomManager manager_;
 
+    // -------------------------------------------------------------------------
+    // Incremental trail (Phase 1)
+    // -------------------------------------------------------------------------
+    struct LraTrailEntry {
+        int level;
+        SatLit lit;
+        TheoryAtomRecord atom;
+        bool value;
+        int auxVar = -1;  // pre-computed aux var for this linear form
+    };
+    std::vector<LraTrailEntry> theoryTrail_;
+    size_t appliedCursor_ = 0;
+    std::optional<TheoryCheckResult> pendingConflict_;
+
+    bool applyEntryToSimplex(const LraTrailEntry& e);
+
+    // -------------------------------------------------------------------------
+    // Disequality handling
+    // -------------------------------------------------------------------------
     struct DiseqInfo {
         int auxVar;
         LinearFormKey lhs;
         mpq_class rhs;
         SatLit lit;
     };
-    std::vector<DiseqInfo> disequalities_;
 
-    struct ActiveAssignment {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-    };
-    std::vector<ActiveAssignment> activeAssignments_;
-
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
-
-    // Map from SharedTermId to variable name for simplex
-    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
-
+    // -------------------------------------------------------------------------
+    // Interface equalities / disequalities (Nelson-Oppen)
+    // -------------------------------------------------------------------------
     struct InterfaceEq {
         SharedTermId a;
         SharedTermId b;
@@ -81,7 +89,11 @@ private:
     // Map from (a,b) canonical key to auxiliary var index for x - y
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
 
-    TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
+    const CoreIr* coreIr_ = nullptr;
+    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    // Map from SharedTermId to variable name for simplex
+    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
@@ -89,6 +101,48 @@ private:
     TheoryAtomRegistry* registry_ = nullptr;
 
     std::vector<SatLit> allActiveReasons() const;
+
+#ifdef NLCOLVER_LRA_PROFILE
+    struct ProfileStats {
+        int solveCount = 0;
+        int checkCalls = 0;
+        int64_t totalActiveLiterals = 0;
+        int maxActiveLiterals = 0;
+        int prevActiveCount = 0;
+        int64_t totalNewLiterals = 0;
+        int64_t resetTimeUs = 0;
+        int64_t assertBoundTimeUs = 0;
+        int64_t simplexCheckTimeUs = 0;
+        int fallbackConflictCount = 0;
+        int64_t totalConflictSize = 0;
+        int maxConflictSize = 0;
+        int rowConflictCount = 0;
+        int immediateConflictCount = 0;
+        int disequalitySplitCount = 0;
+        int64_t totalPivotCount = 0;
+
+        void resetForNewSolve() {
+            solveCount++;
+            checkCalls = 0;
+            totalActiveLiterals = 0;
+            maxActiveLiterals = 0;
+            prevActiveCount = 0;
+            totalNewLiterals = 0;
+            resetTimeUs = 0;
+            assertBoundTimeUs = 0;
+            simplexCheckTimeUs = 0;
+            fallbackConflictCount = 0;
+            totalConflictSize = 0;
+            maxConflictSize = 0;
+            rowConflictCount = 0;
+            immediateConflictCount = 0;
+            disequalitySplitCount = 0;
+            totalPivotCount = 0;
+        }
+        void dump() const;
+    };
+    mutable ProfileStats profile_;
+#endif
 };
 
 } // namespace nlcolver

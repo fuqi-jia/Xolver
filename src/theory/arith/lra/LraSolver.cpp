@@ -5,11 +5,21 @@
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>
+#include <chrono>
+#include <fstream>
 #include <iostream>
 
 namespace nlcolver {
 
 LraSolver::LraSolver() = default;
+
+LraSolver::~LraSolver() {
+#ifdef NLCOLVER_LRA_PROFILE
+    if (profile_.checkCalls > 0) {
+        profile_.dump();
+    }
+#endif
+}
 
 void LraSolver::push() {
     gs_.push();
@@ -22,28 +32,48 @@ void LraSolver::pop(uint32_t n) {
 }
 
 void LraSolver::reset() {
-    activeAssignments_.clear();
+#ifdef NLCOLVER_LRA_PROFILE
+    if (profile_.checkCalls > 0) {
+        profile_.dump();
+    }
+    profile_.resetForNewSolve();
+#endif
+    theoryTrail_.clear();
+    appliedCursor_ = 0;
+    pendingConflict_.reset();
     gs_.resetActiveBounds();
 }
 
 void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
     if (!std::holds_alternative<LinearAtomPayload>(atom.payload)) return;
 
-    for (auto& a : activeAssignments_) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
+    const auto& payload = std::get<LinearAtomPayload>(atom.payload);
+    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
+
+    for (auto& e : theoryTrail_) {
+        if (e.atom.satVar == atom.satVar) {
+            e = {level, assertedLit, atom, value, auxVar};
             return;
         }
     }
-    activeAssignments_.push_back({level, assertedLit, atom, value});
+    theoryTrail_.push_back({level, assertedLit, atom, value, auxVar});
 }
 
 void LraSolver::backtrackToLevel(int level) {
     currentLevel_ = level;
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
 
+    // Backtrack GeneralSimplex bounds by SAT decision level.
+    gs_.backtrackToLevel(level);
+
+    // Synchronize theory trail.
+    while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
+        theoryTrail_.pop_back();
+    }
+    if (appliedCursor_ > theoryTrail_.size()) {
+        appliedCursor_ = theoryTrail_.size();
+    }
+
+    // Interface equalities / disequalities
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
@@ -51,37 +81,75 @@ void LraSolver::backtrackToLevel(int level) {
     auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
+
+    pendingConflict_.reset();
+}
+
+bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
+    const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+    Relation effectiveRel = e.value ? payload.rel : negateRelation(payload.rel);
+
+    if (effectiveRel == Relation::Neq) {
+        // Disequalities are handled after simplex check, not as bounds.
+        return true;
+    }
+
+    return manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
 }
 
 TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
-    // Rebuild all bounds from current active assignments.
-    gs_.resetActiveBounds();
-    disequalities_.clear();
 
-    NO_DBG << "[LRA] activeAssignments=" << activeAssignments_.size() << "\n";
-    for (const auto& a : activeAssignments_) {
-        const auto& payload = std::get<LinearAtomPayload>(a.atom.payload);
-        int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
-        NO_DBG << "[LRA] assert bound aux=" << auxVar
-               << " rel=" << (int)payload.rel
-               << " val=" << a.value
-               << " lit=" << debug::fmtLit(a.lit)
-               << " level=" << a.level << "\n";
-        Relation effectiveRel = a.value ? payload.rel : negateRelation(payload.rel);
-        if (effectiveRel == Relation::Neq) {
-            disequalities_.push_back({auxVar, payload.lhs, payload.rhs, a.lit});
-        } else {
-            bool ok = manager_.assertBound(gs_, auxVar, payload.rel, a.value, a.lit, a.level);
-            if (!ok) {
-                auto tc = manager_.translateConflict(gs_);
-                NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
-                return TheoryCheckResult::mkConflict(std::move(tc));
-            }
+#ifdef NLCOLVER_LRA_PROFILE
+    profile_.checkCalls++;
+    int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    profile_.totalActiveLiterals += currentActive;
+    if (currentActive > profile_.maxActiveLiterals) profile_.maxActiveLiterals = currentActive;
+    profile_.totalNewLiterals += std::max(0, currentActive - profile_.prevActiveCount);
+    profile_.prevActiveCount = currentActive;
+    auto prof_t0 = std::chrono::steady_clock::now();
+#endif
+
+    if (pendingConflict_) {
+        return *pendingConflict_;
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 1: incremental replay of new trail entries
+    // -------------------------------------------------------------------------
+    NO_DBG << "[LRA] theoryTrail=" << theoryTrail_.size()
+           << " appliedCursor=" << appliedCursor_ << "\n";
+
+    while (appliedCursor_ < theoryTrail_.size()) {
+        const auto& e = theoryTrail_[appliedCursor_];
+        NO_DBG << "[LRA] replay lit=" << debug::fmtLit(e.lit)
+               << " level=" << e.level << "\n";
+
+        bool ok = applyEntryToSimplex(e);
+        ++appliedCursor_;
+        if (!ok) {
+            auto tc = manager_.translateConflict(gs_);
+            NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
+#ifdef NLCOLVER_LRA_PROFILE
+            int sz = static_cast<int>(tc.clause.size());
+            profile_.totalConflictSize += sz;
+            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+            profile_.immediateConflictCount++;
+#endif
+            pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
+            return *pendingConflict_;
         }
     }
 
-    // Apply interface equalities from Nelson-Oppen combination
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t1 = std::chrono::steady_clock::now();
+    profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+    auto prof_t2 = prof_t1;
+#endif
+
+    // -------------------------------------------------------------------------
+    // Interface equalities (still full replay for simplicity; usually few)
+    // -------------------------------------------------------------------------
     NO_DBG << "[LRA] interfaceEqualities=" << interfaceEqualities_.size() << "\n";
     for (const auto& ieq : interfaceEqualities_) {
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
@@ -91,18 +159,33 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                << " level=" << ieq.level << "\n";
         if (aux >= 0) {
             bool ok = true;
-            ok = gs_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
-            ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason)) && ok;
+            ok = gs_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason), ieq.level) && ok;
+            ok = gs_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), ieq.reason), ieq.level) && ok;
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
                 NO_DBG << "[LRA] IEQ immediate conflict reasons: " << debug::fmtClause(tc.clause) << "\n";
-                return TheoryCheckResult::mkConflict(std::move(tc));
+#ifdef NLCOLVER_LRA_PROFILE
+                int sz = static_cast<int>(tc.clause.size());
+                profile_.totalConflictSize += sz;
+                if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+                profile_.immediateConflictCount++;
+#endif
+                pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
+                return *pendingConflict_;
             }
         }
     }
 
     auto r = gs_.check();
+
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t3 = std::chrono::steady_clock::now();
+    profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
+    profile_.totalPivotCount += gs_.pivotCount();
+    gs_.resetPivotCount();
+#endif
+
     NO_DBG << "[LRA] simplex result=" << (r == GeneralSimplex::Result::Sat ? "Sat" :
                                           r == GeneralSimplex::Result::Unsat ? "Unsat" : "Unknown") << "\n";
     if (r == GeneralSimplex::Result::Unsat) {
@@ -113,9 +196,25 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                 tc.clause.push_back(cr.reason);
             }
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
+#ifdef NLCOLVER_LRA_PROFILE
+            int sz = static_cast<int>(tc.clause.size());
+            profile_.totalConflictSize += sz;
+            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+            if (gs_.hasImmediateConflict()) {
+                profile_.immediateConflictCount++;
+            } else {
+                profile_.rowConflictCount++;
+            }
+#endif
         } else {
             tc.clause = allActiveReasons();
             NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
+#ifdef NLCOLVER_LRA_PROFILE
+            int sz = static_cast<int>(tc.clause.size());
+            profile_.totalConflictSize += sz;
+            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+            profile_.fallbackConflictCount++;
+#endif
         }
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
@@ -126,26 +225,37 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // Stage A: skip interface disequality checking against current model value.
     (void)interfaceDisequalities_;
 
-    if (!disequalities_.empty()) {
-        return handleDisequalities(lemmaDb);
+    // -------------------------------------------------------------------------
+    // Disequalities: collect from active trail entries
+    // -------------------------------------------------------------------------
+    std::vector<DiseqInfo> disequalities;
+    for (const auto& e : theoryTrail_) {
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        Relation effectiveRel = e.value ? payload.rel : negateRelation(payload.rel);
+        if (effectiveRel == Relation::Neq) {
+            disequalities.push_back({e.auxVar, payload.lhs, payload.rhs, e.lit});
+        }
+    }
+
+    if (!disequalities.empty()) {
+#ifdef NLCOLVER_LRA_PROFILE
+        profile_.disequalitySplitCount++;
+#endif
+        return handleSimplexDisequalities(
+            disequalities, gs_, lemmaDb,
+            [this](const DiseqInfo& d) -> TheoryCheckResult {
+                if (!registry_) return TheoryCheckResult::consistent();
+                auto litLt = registry_->getOrCreateLinearBoundAtom(
+                    d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
+                auto litGt = registry_->getOrCreateLinearBoundAtom(
+                    d.lhs, Relation::Gt, d.rhs, TheoryId::LRA);
+                return TheoryCheckResult::mkLemma(
+                    TheoryLemma{{d.lit.negated(), litLt, litGt}});
+            });
     }
 
     NO_DBG << "[LRA] Consistent\n";
     return TheoryCheckResult::consistent();
-}
-
-TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
-    return handleSimplexDisequalities(
-        disequalities_, gs_, lemmaDb,
-        [this](const DiseqInfo& d) -> TheoryCheckResult {
-            if (!registry_) return TheoryCheckResult::consistent();
-            auto litLt = registry_->getOrCreateLinearBoundAtom(
-                d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
-            auto litGt = registry_->getOrCreateLinearBoundAtom(
-                d.lhs, Relation::Gt, d.rhs, TheoryId::LRA);
-            return TheoryCheckResult::mkLemma(
-                TheoryLemma{{d.lit.negated(), litLt, litGt}});
-        });
 }
 
 // ---------------------------------------------------------------------------
@@ -199,15 +309,8 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     std::string va = getVarNameForSharedTerm(a);
     std::string vb = getVarNameForSharedTerm(b);
 
-    // If both sides are constants, no auxiliary variable is needed.
-    // The caller (assertInterfaceEquality / assertInterfaceDisequality)
-    // will detect the conflict directly.
     if (va.empty() && vb.empty()) return -2;
 
-    // At least one side is a variable.
-    // We want to encode: va - vb = 0, i.e. va = vb.
-    // addConstraint(terms, rhs) creates s = sum(c_i * x_i) - rhs,
-    // and assertLower/Upper(s,0) forces s = 0, so sum(c_i * x_i) = rhs.
     std::vector<std::pair<int, mpq_class>> terms;
     mpq_class rhs = 0;
 
@@ -215,20 +318,15 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     auto cb = vb.empty() ? getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b) : std::nullopt;
 
     if (!va.empty()) {
-        // va is a variable, coefficient +1
         terms.push_back({manager_.getOrCreateVar(gs_, va), mpq_class(1)});
     } else {
-        // va is constant ca: contributes +ca to RHS
         if (!ca) return -1;
         rhs += *ca;
     }
 
     if (!vb.empty()) {
-        // vb is a variable, coefficient -1
         terms.push_back({manager_.getOrCreateVar(gs_, vb), mpq_class(-1)});
     } else {
-        // vb is constant cb: contributes -cb to RHS
-        // because va - cb = 0  =>  va = cb  =>  terms={(va,1)}, rhs=cb
         if (!cb) return -1;
         rhs -= *cb;
     }
@@ -243,7 +341,6 @@ TheoryCheckResult LraSolver::assertInterfaceEquality(
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux == -2) {
-        // Both sides are constants: check if they are equal.
         auto ca = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, a);
         auto cb = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b);
         if (ca && cb && *ca != *cb) {
@@ -262,7 +359,6 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux == -2) {
-        // Both sides are constants: check if they are distinct.
         auto ca = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, a);
         auto cb = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, b);
         if (ca && cb && *ca == *cb) {
@@ -278,16 +374,14 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 LraSolver::getDeducedSharedEqualities() {
-    // Stage A: return empty for now.
-    // Full implementation would scan tight bounds after check().
     return {};
 }
 
 std::vector<SatLit> LraSolver::allActiveReasons() const {
     std::vector<SatLit> rs;
-    rs.reserve(activeAssignments_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
-    for (const auto& a : activeAssignments_) {
-        rs.push_back(a.lit);
+    rs.reserve(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    for (const auto& e : theoryTrail_) {
+        rs.push_back(e.lit);
     }
     for (const auto& ieq : interfaceEqualities_) {
         rs.push_back(ieq.reason);
@@ -321,5 +415,28 @@ std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
     if (model.assignments.empty()) return std::nullopt;
     return model;
 }
+
+#ifdef NLCOLVER_LRA_PROFILE
+void LraSolver::ProfileStats::dump() const {
+    int totalConflicts = fallbackConflictCount + immediateConflictCount + rowConflictCount;
+    std::ofstream ofs("/tmp/lra_profile.log", std::ios::app);
+    if (!ofs) return;
+    ofs << "[LRA-PROFILE] solve=" << solveCount
+        << " checks=" << checkCalls
+        << " avgActive=" << (checkCalls > 0 ? totalActiveLiterals / checkCalls : 0)
+        << " maxActive=" << maxActiveLiterals
+        << " avgNew=" << (checkCalls > 0 ? totalNewLiterals / checkCalls : 0)
+        << " assertMs=" << (assertBoundTimeUs / 1000)
+        << " simplexMs=" << (simplexCheckTimeUs / 1000)
+        << " fallback=" << fallbackConflictCount
+        << " immediate=" << immediateConflictCount
+        << " row=" << rowConflictCount
+        << " avgConflictSize=" << (totalConflicts > 0 ? totalConflictSize / totalConflicts : 0)
+        << " maxConflictSize=" << maxConflictSize
+        << " split=" << disequalitySplitCount
+        << " pivots=" << totalPivotCount
+        << "\n";
+}
+#endif
 
 } // namespace nlcolver
