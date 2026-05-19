@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/dl/DifferenceGraph.h"
 #include "theory/arith/dl/BellmanFord.h"
 #include <gmpxx.h>
@@ -28,7 +28,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
@@ -61,7 +61,7 @@ private:
 
     NormalizeResult normalizeAndAdd(const ActiveAssignment& a);
     bool validateModel(const std::vector<RdlWeight>& dist);
-    TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatabase& lemmaDb);
+    TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
 };
 
 } // namespace nlcolver

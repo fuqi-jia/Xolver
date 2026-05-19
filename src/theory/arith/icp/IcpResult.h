@@ -3,7 +3,7 @@
 #include "theory/arith/interval/IntervalTypes.h"
 #include "theory/arith/interval/IntervalQ.h"
 #include "theory/arith/icp/IcpTypes.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <optional>
 #include <vector>
 

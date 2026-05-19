@@ -17,6 +17,9 @@ Usage:
     # Quick test on 100 files
     python tools/run_benchmark.py --logic QF_LRA -j 8 -t 10 --max-files 100
 
+    # Random sample of 10 files for smoke testing
+    python tools/run_benchmark.py --logic QF_LRA -j 4 -t 30 --random 10
+
     # Filter specific sub-directory
     python tools/run_benchmark.py --logic QF_LIA -j 8 -t 30 --filter 2023
 """
@@ -25,6 +28,7 @@ import argparse
 import csv
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -141,7 +145,7 @@ def list_logic_dirs() -> List[str]:
     return sorted([d.name for d in BENCHMARK_ROOT.iterdir() if d.is_dir()])
 
 
-def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Optional[int] = None) -> List[Path]:
+def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Optional[int] = None, random_sample: Optional[int] = None) -> List[Path]:
     """Find all .smt2 files for a given logic."""
     logic_dir = BENCHMARK_ROOT / logic
     if not logic_dir.exists():
@@ -154,9 +158,16 @@ def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Opt
             continue
         files.append(f)
 
-    files.sort()
-    if max_files is not None and max_files > 0:
-        files = files[:max_files]
+    if random_sample is not None and random_sample > 0:
+        if len(files) <= random_sample:
+            pass  # use all
+        else:
+            files = random.sample(files, random_sample)
+            files.sort()
+    else:
+        files.sort()
+        if max_files is not None and max_files > 0:
+            files = files[:max_files]
     return files
 
 
@@ -954,7 +965,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
     """Run benchmark for a single logic and return statistics."""
     # Find files
     try:
-        files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files)
+        files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files, random_sample=args.random)
     except FileNotFoundError as e:
         print(f"ERROR: {e}")
         return None
@@ -1207,6 +1218,7 @@ Examples:
   python tools/run_benchmark.py --logic QF_LRA -j 8 -t 30
   python tools/run_benchmark.py --logic nia -j 4 -t 60 --compare-with z3
   python tools/run_benchmark.py --all-logics -j 8 -t 10 --compare-with z3 --max-files 50
+  python tools/run_benchmark.py --all-logics -j 4 -t 30 --random 10
   nohup python tools/run_benchmark.py --logic QF_NIA -j 8 -t 30 --compare-with z3 &
         """,
     )
@@ -1218,6 +1230,7 @@ Examples:
     parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
+    parser.add_argument("--random", type=int, default=None, help="Randomly sample N files per logic (shuffled, overrides --max-files)")
     parser.add_argument("--filter", default=None, help="Filter files by substring in relative path")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     parser.add_argument("--serial", action="store_true", help="Run serially without subprocess pool (saves memory)")

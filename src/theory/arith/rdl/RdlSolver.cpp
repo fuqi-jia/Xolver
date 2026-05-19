@@ -1,6 +1,6 @@
 #include "theory/arith/rdl/RdlSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/dl/DlExplanation.h"
 #include "theory/arith/dl/DlModel.h"
 #include "theory/arith/linear/LinearExpr.h"
@@ -137,7 +137,7 @@ bool RdlSolver::validateModel(const std::vector<RdlWeight>& dist) {
     return true;
 }
 
-TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatabase& lemmaDb) {
+TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb) {
     auto lemma = buildDiffLogicDiseqSplitLemma(
         d.x, d.y, d.lit,
         Relation::Lt, Relation::Lt,
@@ -149,7 +149,7 @@ TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatab
     return lemma;
 }
 
-TheoryCheckResult RdlSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (pendingConflict_) {
         auto c = *pendingConflict_;
         pendingConflict_.reset();

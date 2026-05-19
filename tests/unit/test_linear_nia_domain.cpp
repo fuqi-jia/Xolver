@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/LinearNiaDomainReasoner.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/LinearNiaDomainReasoner.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>

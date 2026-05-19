@@ -1,7 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
-#include "theory/arith/nia/NiaLinearizationAdapter.h"
+#include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include <unordered_set>
 
 namespace nlcolver {
@@ -115,7 +115,7 @@ static std::unordered_set<std::string> collectVars(
     return vars;
 }
 
-TheoryCheckResult NiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (pendingUnknown_) return TheoryCheckResult::unknown();
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();
@@ -431,7 +431,7 @@ bool NiaSolver::relationSatisfied(const mpq_class& val, Relation rel) const {
 std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     const std::vector<NormalizedNiaConstraint>& constraints,
     const DomainStore& domains,
-    TheoryLemmaDatabase& lemmaDb) {
+    TheoryLemmaStorage& lemmaDb) {
 
     if (!registry_) return std::nullopt;
 

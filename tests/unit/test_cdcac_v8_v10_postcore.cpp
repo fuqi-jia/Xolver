@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/CdcacObjective.h"
+#include "theory/arith/nra/core/CdcacObjective.h"
 
 using namespace nlcolver;
 

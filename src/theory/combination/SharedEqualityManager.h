@@ -1,7 +1,7 @@
 #pragma once
 #include "expr/types.h"
 #include "sat/SatSolver.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/combination/ExplainableRollbackUnionFind.h"
 #include <vector>
 #include <optional>

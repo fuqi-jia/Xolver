@@ -1,5 +1,5 @@
 #include "theory/combination/SharedEqualityManager.h"
-#include "theory/DebugTrace.h"
+#include "theory/core/DebugTrace.h"
 #include <algorithm>
 
 namespace nlcolver {

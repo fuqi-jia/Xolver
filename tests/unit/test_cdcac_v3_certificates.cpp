@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/CdcacCore.h"
-#include "theory/arith/nra/CdcacTypes.h"
-#include "theory/arith/nra/CdcacConstraint.h"
-#include "theory/arith/nra/CellCertificateValidator.h"
-#include "theory/arith/nra/LibpolyBackend.h"
+#include "theory/arith/nra/core/CdcacCore.h"
+#include "theory/arith/nra/core/CdcacTypes.h"
+#include "theory/arith/nra/core/CdcacConstraint.h"
+#include "theory/arith/nra/proof/CellCertificateValidator.h"
+#include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 using namespace nlcolver;

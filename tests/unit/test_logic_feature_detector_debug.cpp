@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
 #include "expr/ir.h"
-#include "expr/ArithCastNormalizer.h"
-#include "expr/LinearToIntPurifier.h"
+#include "frontend/preprocess/ArithCastNormalizer.h"
+#include "frontend/preprocess/LinearToIntPurifier.h"
 #include "expr/CoreIteLowerer.h"
-#include "theory/LogicFeatureDetector.h"
+#include "theory/core/LogicFeatureDetector.h"
 #include <iostream>
 
 using namespace nlcolver;

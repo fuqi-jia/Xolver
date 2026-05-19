@@ -39,7 +39,7 @@ std::vector<TheoryLemma> NraLinearizationAdapter::mirrorActiveLinearBounds(
 
 LinearizationResult NraLinearizationAdapter::runLinearizer(
     const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
-    TheoryLemmaDatabase& /*lemmaDb*/) {
+    TheoryLemmaStorage& /*lemmaDb*/) {
 
     // NRA V1: no bound store yet; pass empty bounds
     struct EmptyBoundStore : public BoundStore {

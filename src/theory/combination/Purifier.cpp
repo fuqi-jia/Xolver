@@ -1,5 +1,5 @@
 #include "theory/combination/Purifier.h"
-#include "theory/DebugTrace.h"
+#include "theory/core/DebugTrace.h"
 #include "expr/ir.h"
 #include <unordered_set>
 

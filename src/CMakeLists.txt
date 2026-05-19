@@ -6,14 +6,12 @@ file(GLOB_RECURSE NLCOLVER_SOURCES CONFIGURE_DEPENDS
     "api/*.cpp"
     "parser/*.cpp"
     "expr/*.cpp"
+    "frontend/*.cpp"
+    "frontend/**/*.cpp"
     "sat/*.cpp"
     "theory/*.cpp"
     "theory/**/*.cpp"
-    "mcsat/*.cpp"
-    "search/*.cpp"
-    "omt/*.cpp"
     "proof/*.cpp"
-    "learning/*.cpp"
     "util/*.cpp"
 )
 
@@ -22,14 +20,12 @@ file(GLOB_RECURSE NLCOLVER_HEADERS CONFIGURE_DEPENDS
     "api/*.h"
     "parser/*.h"
     "expr/*.h"
+    "frontend/*.h"
+    "frontend/**/*.h"
     "sat/*.h"
     "theory/*.h"
     "theory/**/*.h"
-    "mcsat/*.h"
-    "search/*.h"
-    "omt/*.h"
     "proof/*.h"
-    "learning/*.h"
     "util/*.h"
 )
 

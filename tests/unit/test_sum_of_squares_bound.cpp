@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/SumOfSquaresBoundReasoner.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>

@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "expr/ir.h"
-#include "expr/ArithCastNormalizer.h"
-#include "expr/LinearToIntPurifier.h"
+#include "frontend/preprocess/ArithCastNormalizer.h"
+#include "frontend/preprocess/LinearToIntPurifier.h"
 #include "expr/Smt2Dumper.h"
 #include <iostream>
 

@@ -1,6 +1,6 @@
 #include "theory/arith/idl/IdlSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/dl/DlExplanation.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/linear/DiffLogicDiseqSplitter.h"
@@ -165,7 +165,7 @@ bool IdlSolver::validateModel(const std::vector<mpz_class>& dist) {
     return true;
 }
 
-TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatabase& lemmaDb) {
+TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb) {
     auto lemma = buildDiffLogicDiseqSplitLemma(
         d.x, d.y, d.lit,
         Relation::Leq, Relation::Leq,
@@ -177,7 +177,7 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatab
     return lemma;
 }
 
-TheoryCheckResult IdlSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (pendingConflict_) {
         auto c = *pendingConflict_;
         pendingConflict_.reset();

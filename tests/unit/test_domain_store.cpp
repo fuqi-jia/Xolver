@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 

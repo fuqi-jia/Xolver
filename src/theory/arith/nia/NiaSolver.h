@@ -1,22 +1,22 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
-#include "theory/arith/nia/NiaNormalizer.h"
-#include "theory/arith/nia/IntegerModelValidator.h"
-#include "theory/arith/nia/DomainStore.h"
-#include "theory/arith/nia/UnivariateIntegerReasoner.h"
-#include "theory/arith/nia/LinearNiaDomainReasoner.h"
-#include "theory/arith/nia/AlgebraicIntegerReasoner.h"
-#include "theory/arith/nia/SquareBoundReasoner.h"
+#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/search/IntegerModelValidator.h"
+#include "theory/arith/nia/core/DomainStore.h"
+#include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"
+#include "theory/arith/nia/core/LinearNiaDomainReasoner.h"
+#include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
 #include "theory/arith/interval/IntervalEvaluator.h"
-#include "theory/arith/nia/SumOfSquaresBoundReasoner.h"
-#include "theory/arith/nia/BoundedNiaSolver.h"
-#include "theory/arith/nia/NiaLocalSearch.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
+#include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
+#include "theory/arith/nia/search/NiaLocalSearch.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
-#include "theory/ActiveLiteralSet.h"
+#include "theory/core/ActiveLiteralSet.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 #include <vector>
@@ -56,7 +56,7 @@ public:
     void assertLit(const TheoryAtomRecord& atom, bool value,
                    int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
@@ -158,7 +158,7 @@ private:
     std::optional<TheoryLemma> buildBranchLemma(
         const std::vector<NormalizedNiaConstraint>& constraints,
         const DomainStore& domains,
-        TheoryLemmaDatabase& lemmaDb);
+        TheoryLemmaStorage& lemmaDb);
 };
 
 } // namespace nlcolver

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheorySolver.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include <algorithm>
 #include <string>

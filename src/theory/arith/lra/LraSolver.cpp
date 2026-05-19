@@ -1,7 +1,7 @@
 #include "theory/arith/lra/LraSolver.h"
-#include "theory/DebugTrace.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/DebugTrace.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>
@@ -53,7 +53,7 @@ void LraSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
+TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
     // Rebuild all bounds from current active assignments.
     gs_.resetActiveBounds();
@@ -134,7 +134,7 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::consistent();
 }
 
-TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
+TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
         [this](const DiseqInfo& d) -> TheoryCheckResult {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/linearizer/LinearizationTypes.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <vector>
 
 namespace nlcolver {

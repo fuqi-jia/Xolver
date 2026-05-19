@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/linearizer/BoundStore.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/DomainStore.h"
 
 namespace nlcolver {
 

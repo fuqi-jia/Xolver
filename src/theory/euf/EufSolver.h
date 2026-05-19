@@ -1,5 +1,5 @@
 #pragma once
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/euf/EufTypes.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
@@ -22,7 +22,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }

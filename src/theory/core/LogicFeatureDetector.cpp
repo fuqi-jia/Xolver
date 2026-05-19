@@ -1,0 +1,176 @@
+#include "theory/core/LogicFeatureDetector.h"
+#include "expr/ir.h"
+#include <iostream>
+
+namespace nlcolver {
+
+LogicFeatureDetector::LogicFeatureDetector(const CoreIr& ir) : ir_(ir) {}
+
+LogicFeatures LogicFeatureDetector::detect() const {
+    LogicFeatures f;
+    std::unordered_set<ExprId> visited;
+
+    for (ExprId aid : ir_.assertions()) {
+        scanExpr(aid, f, visited);
+    }
+
+    if (f.hasIntVar && f.hasRealVar) {
+        f.hasMixedIntReal = true;
+    }
+
+    // Quantifiers and arrays are currently unsupported for sound solving.
+    if (f.hasQuantifier || f.hasArray || f.hasFP || f.hasBV) {
+        f.hasUnsupported = true;
+    }
+
+    return f;
+}
+
+bool LogicFeatureDetector::isNonConstantExpr(ExprId id, const std::unordered_set<ExprId>& visited) const {
+    if (id >= ir_.size()) return false;
+    const auto& e = ir_.get(id);
+    if (e.isConst()) return false;
+    if (e.kind == Kind::Variable) return true;
+    // Any composite expr that is not a constant is non-constant.
+    // For safety, if not visited we conservatively say non-constant.
+    if (visited.find(id) == visited.end()) return true;
+    return true;
+}
+
+void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_set<ExprId>& visited) const {
+    if (id >= ir_.size()) return;
+    if (!visited.insert(id).second) return;
+
+    const auto& e = ir_.get(id);
+
+
+    // Detect sort-based features for variables
+    if (e.kind == Kind::Variable) {
+        auto sk = ir_.sortKind(e.sort);
+        if (sk) {
+            switch (*sk) {
+                case SortKind::Bool:  f.hasBool = true; break;
+                case SortKind::Int:   f.hasInt = true; f.hasIntVar = true; break;
+                case SortKind::Real:  f.hasReal = true; f.hasRealVar = true; break;
+                case SortKind::BV:    f.hasBV = true; break;
+                case SortKind::FP:    f.hasFP = true; break;
+                case SortKind::Array: f.hasArray = true; break;
+                default: break;
+            }
+        }
+    }
+
+    // Detect kind-based features
+    switch (e.kind) {
+        case Kind::ConstBool:
+            f.hasBool = true;
+            break;
+        case Kind::ConstInt:
+            f.hasInt = true;
+            break;
+        case Kind::ConstReal: {
+            auto sk = ir_.sortKind(e.sort);
+            if (sk == SortKind::Int) {
+                f.hasInt = true;
+            } else if (sk == SortKind::Real) {
+                f.hasReal = true;
+            } else {
+                // SK_INTOREAL or unregistered sort: inspect payload string.
+                // Integer literals (no '.' and no '/') → Int, otherwise → Real.
+                bool isIntLit = false;
+                if (std::holds_alternative<std::string>(e.payload.value)) {
+                    const std::string& s = std::get<std::string>(e.payload.value);
+                    bool hasDot = s.find('.') != std::string::npos;
+                    bool hasSlash = s.find('/') != std::string::npos;
+                    if (!hasDot && !hasSlash) {
+                        isIntLit = true;
+                    }
+                }
+                if (isIntLit) f.hasInt = true;
+                else f.hasReal = true;
+            }
+            break;
+        }
+        case Kind::ConstFP:
+            f.hasFP = true;
+            break;
+        case Kind::ConstBV:
+            f.hasBV = true;
+            break;
+        case Kind::UFApply:
+            f.hasUF = true;
+            break;
+        case Kind::Not:
+        case Kind::And:
+        case Kind::Or:
+        case Kind::Implies:
+        case Kind::Xor:
+            f.hasBool = true;
+            break;
+        case Kind::Mod:
+        case Kind::Abs:
+            f.hasInt = true;
+            break;
+        case Kind::Pow:
+            f.hasNonlinear = true;
+            if (e.children.size() >= 1) {
+                auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
+                if (sk == SortKind::Int) f.hasInt = true;
+                else if (sk == SortKind::Real) f.hasReal = true;
+            }
+            break;
+        case Kind::Mul: {
+            if (e.children.size() >= 2) {
+                bool leftNonConst = isNonConstantExpr(e.children[0], visited);
+                bool rightNonConst = isNonConstantExpr(e.children[1], visited);
+                if (leftNonConst && rightNonConst) {
+                    f.hasNonlinear = true;
+                }
+            }
+            break;
+        }
+        case Kind::Div: {
+            // Integer div vs real div: use sort of result
+            auto sk = ir_.sortKind(e.sort);
+            if (sk == SortKind::Int) {
+                f.hasInt = true;
+            } else {
+                f.hasReal = true;
+            }
+            break;
+        }
+        case Kind::Forall:
+        case Kind::Exists:
+            f.hasQuantifier = true;
+            break;
+        case Kind::BvNot:
+        case Kind::BvAnd:
+        case Kind::BvOr:
+        case Kind::BvAdd:
+        case Kind::BvMul:
+            f.hasBV = true;
+            break;
+        case Kind::ToReal:
+            scanExpr(e.children[0], f, visited);
+            return;
+        case Kind::ToInt:
+            f.hasUnsupported = true;
+            break;
+        default:
+            break;
+    }
+
+    // Propagate sort features from arithmetic relations
+    if (e.isAtom() && e.children.size() >= 2) {
+        auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
+        if (sk == SortKind::Int) f.hasInt = true;
+        else if (sk == SortKind::Real) f.hasReal = true;
+    }
+
+    // Recurse into children
+    for (ExprId child : e.children) {
+        scanExpr(child, f, visited);
+    }
+}
+
+} // namespace nlcolver

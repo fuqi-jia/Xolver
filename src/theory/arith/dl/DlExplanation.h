@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/dl/DifferenceGraph.h"
 #include <vector>
 #include <unordered_set>

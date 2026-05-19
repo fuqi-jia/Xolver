@@ -2,7 +2,7 @@
 
 #include "theory/arith/linear/LinearConstraintTypes.h"
 #include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include <optional>
 
 namespace nlcolver {

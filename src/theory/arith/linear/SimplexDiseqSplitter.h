@@ -1,7 +1,7 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheorySolver.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <vector>
 
@@ -25,7 +25,7 @@ template <typename DiseqInfoT, typename SplitBuilder>
 TheoryCheckResult handleSimplexDisequalities(
     const std::vector<DiseqInfoT>& disequalities,
     const GeneralSimplex& gs,
-    TheoryLemmaDatabase& lemmaDb,
+    TheoryLemmaStorage& lemmaDb,
     SplitBuilder&& buildSplit)
 {
     for (const auto& d : disequalities) {

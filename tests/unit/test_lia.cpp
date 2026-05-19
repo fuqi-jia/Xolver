@@ -1,8 +1,9 @@
 #include <doctest/doctest.h>
 #include "nlcolver/Solver.h"
 #include "theory/arith/lia/LiaSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "frontend/atomization/Atomizer.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <fstream>

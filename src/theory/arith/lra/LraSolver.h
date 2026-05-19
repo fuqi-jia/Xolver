@@ -1,7 +1,7 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheorySolver.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "GeneralSimplex.h"
@@ -22,7 +22,7 @@ public:
     void pop(uint32_t n) override;
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaDatabase& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
     void reset() override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
@@ -81,7 +81,7 @@ private:
     // Map from (a,b) canonical key to auxiliary var index for x - y
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
 
-    TheoryCheckResult handleDisequalities(TheoryLemmaDatabase& lemmaDb);
+    TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
