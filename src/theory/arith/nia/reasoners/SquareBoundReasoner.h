@@ -1,8 +1,8 @@
 #pragma once
 
 #include "theory/arith/nia/NiaTypes.h"
-#include "theory/arith/nia/NiaNormalizer.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "theory/TheorySolver.h"
 
 namespace nlcolver {

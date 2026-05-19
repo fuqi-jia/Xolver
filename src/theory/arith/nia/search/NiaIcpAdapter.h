@@ -2,7 +2,7 @@
 
 #include "theory/arith/icp/IcpResult.h"
 #include "theory/arith/icp/IcpTypes.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 

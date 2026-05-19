@@ -1,4 +1,4 @@
-#include "theory/arith/nia/SumOfSquaresBoundReasoner.h"
+#include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 
 namespace nlcolver {
 

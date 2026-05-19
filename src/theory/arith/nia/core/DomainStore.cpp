@@ -1,4 +1,4 @@
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include <algorithm>
 
 namespace nlcolver {

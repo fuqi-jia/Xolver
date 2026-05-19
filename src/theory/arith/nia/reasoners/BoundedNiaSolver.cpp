@@ -1,4 +1,4 @@
-#include "theory/arith/nia/BoundedNiaSolver.h"
+#include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 
 namespace nlcolver {
 

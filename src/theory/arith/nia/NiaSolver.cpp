@@ -1,5 +1,5 @@
 #include "theory/arith/nia/NiaSolver.h"
-#include "theory/arith/nia/NiaLinearizationAdapter.h"
+#include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/TheoryLemmaDatabase.h"
 #include <unordered_set>

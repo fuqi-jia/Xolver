@@ -1,4 +1,4 @@
-#include "theory/arith/nia/NiaNormalizer.h"
+#include "theory/arith/nia/core/NiaNormalizer.h"
 #include "theory/arith/nia/NiaSolver.h"
 #include <numeric>
 

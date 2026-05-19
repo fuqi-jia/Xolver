@@ -1,5 +1,5 @@
-#include "theory/arith/nia/AlgebraicIntegerReasoner.h"
-#include "theory/arith/nia/IntegerModelValidator.h"
+#include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <numeric>
 
 // Helper: GCD for mpz_class using GMP

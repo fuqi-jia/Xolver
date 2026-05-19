@@ -1,4 +1,4 @@
-#include "theory/arith/nia/NiaLocalSearch.h"
+#include "theory/arith/nia/search/NiaLocalSearch.h"
 #include <random>
 #include <algorithm>
 #include <functional>

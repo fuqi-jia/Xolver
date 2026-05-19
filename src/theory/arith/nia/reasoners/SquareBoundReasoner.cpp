@@ -1,4 +1,4 @@
-#include "theory/arith/nia/SquareBoundReasoner.h"
+#include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
 #include <cmath>
 
 namespace nlcolver {

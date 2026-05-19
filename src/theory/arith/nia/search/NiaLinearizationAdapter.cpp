@@ -1,4 +1,4 @@
-#include "theory/arith/nia/NiaLinearizationAdapter.h"
+#include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linearizer/DomainStoreBoundStore.h"
 #include "theory/arith/linear/LinearExpr.h"
 

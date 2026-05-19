@@ -1,5 +1,5 @@
-#include "theory/arith/nia/UnivariateIntegerReasoner.h"
-#include "theory/arith/nia/IntegerModelValidator.h"
+#include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"
+#include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <cmath>
 
 namespace nlcolver {

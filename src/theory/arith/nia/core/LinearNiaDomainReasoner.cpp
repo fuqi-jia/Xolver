@@ -1,4 +1,4 @@
-#include "theory/arith/nia/LinearNiaDomainReasoner.h"
+#include "theory/arith/nia/core/LinearNiaDomainReasoner.h"
 
 namespace nlcolver {
 

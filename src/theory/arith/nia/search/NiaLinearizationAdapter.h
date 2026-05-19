@@ -2,8 +2,8 @@
 
 #include "theory/arith/linearizer/IncrementalLinearizer.h"
 #include "theory/arith/linearizer/LinearizationResult.h"
-#include "theory/arith/nia/NiaNormalizer.h"
-#include "theory/arith/nia/DomainStore.h"
+#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/core/DomainStore.h"
 #include "theory/TheorySolver.h"
 #include <vector>
 

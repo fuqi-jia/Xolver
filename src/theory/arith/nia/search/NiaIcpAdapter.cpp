@@ -1,4 +1,4 @@
-#include "theory/arith/nia/NiaIcpAdapter.h"
+#include "theory/arith/nia/search/NiaIcpAdapter.h"
 #include "theory/arith/icp/ContractorFactoryZ.h"
 #include "theory/arith/icp/IcpEngineZ.h"
 #include "theory/arith/interval/ReasonedBoxZ.h"

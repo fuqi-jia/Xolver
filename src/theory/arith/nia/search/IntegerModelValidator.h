@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/arith/nia/NiaNormalizer.h"
+#include "theory/arith/nia/core/NiaNormalizer.h"
 #include <unordered_map>
 #include <vector>
 

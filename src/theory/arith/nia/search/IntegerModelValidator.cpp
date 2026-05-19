@@ -1,4 +1,4 @@
-#include "theory/arith/nia/IntegerModelValidator.h"
+#include "theory/arith/nia/search/IntegerModelValidator.h"
 
 namespace nlcolver {
 
