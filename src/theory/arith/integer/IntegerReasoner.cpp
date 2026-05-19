@@ -1,4 +1,4 @@
-#include "theory/arith/linear/IntegerReasoner.h"
+#include "theory/arith/integer/IntegerReasoner.h"
 #include <algorithm>
 
 namespace nlcolver {

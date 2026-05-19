@@ -3,7 +3,7 @@
 #include "theory/TheorySolver.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/arith/linear/LinearModelValidator.h"
-#include "theory/arith/linear/IntegerReasoner.h"
+#include "theory/arith/integer/IntegerReasoner.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include <gmpxx.h>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "LinearExpr.h"
+#include "theory/arith/linear/LinearExpr.h"
 #include "theory/TheorySolver.h"
 #include "theory/arith/linear/LinearModelValidator.h"
 #include "theory/TheoryAtomRegistry.h"

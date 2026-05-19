@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/TheorySolver.h"
-#include "search/LocalSearchAdvisor.h"
+#include "experimental/search/LocalSearchAdvisor.h"
 #include <memory>
 
 namespace nlcolver {
