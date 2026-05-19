@@ -82,6 +82,7 @@ private:
     // Helpers
     bool isIntegerVar(const std::string& name) const;
     std::vector<SatLit> allActiveReasons() const;
+    void dumpUnsatAssignment(const std::string& prefix) const;
 };
 
 } // namespace nlcolver

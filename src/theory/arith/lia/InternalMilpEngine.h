@@ -28,6 +28,7 @@ public:
         std::vector<std::pair<int, mpq_class>> terms; // var index -> coeff
         mpq_class rhs;
         Relation rel; // Eq, Leq, Lt, Geq, Gt (NOT Neq)
+        SatLit reason; // SAT literal that activated this constraint
     };
 
     enum class MilpMode {
@@ -59,6 +60,12 @@ public:
 
     void push();
     void pop();
+
+    /** Return the set of SAT reasons from the last simplex conflict.
+     *  Empty if no conflict has occurred since last solve().
+     *  Dummy reasons (var==0) from internal branching bounds are filtered out.
+     */
+    std::vector<SatLit> getConflictReasons() const;
 
 private:
     GeneralSimplex simplex_;

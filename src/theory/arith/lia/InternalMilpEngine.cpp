@@ -62,28 +62,30 @@ InternalMilpEngine::MilpResult InternalMilpEngine::solve(MilpMode mode) {
 
 InternalMilpEngine::MilpResult InternalMilpEngine::solveLpRelaxation() {
     simplex_.resetActiveBounds();
-    SatLit dummyReason{0, true};
 
     for (const auto& c : constraints_) {
         int aux = simplex_.addConstraint(c.terms, c.rhs);
         if (aux < 0) continue;
 
+        SatLit reason = c.reason;
+        if (reason.var == 0) reason = SatLit{0, true}; // defensive fallback
+
         switch (c.rel) {
             case Relation::Eq:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
                 break;
             case Relation::Leq:
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
                 break;
             case Relation::Lt:
-                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1)), dummyReason));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1)), reason));
                 break;
             case Relation::Geq:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), dummyReason));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
                 break;
             case Relation::Gt:
-                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1)), dummyReason));
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1)), reason));
                 break;
             case Relation::Neq:
                 // Neq is not supported at engine level; caller must split
@@ -253,6 +255,23 @@ mpq_class InternalMilpEngine::value(int var) const {
 
 DeltaRational InternalMilpEngine::deltaValue(int var) const {
     return simplex_.value(var);
+}
+
+std::vector<SatLit> InternalMilpEngine::getConflictReasons() const {
+    std::vector<SatLit> reasons;
+    const auto& conflict = simplex_.getConflict();
+    for (const auto& br : conflict) {
+        if (br.reason.var == 0) continue; // filter dummy reasons from branching
+        reasons.push_back(br.reason);
+    }
+    std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), reasons.end());
+    return reasons;
 }
 
 } // namespace nlcolver
