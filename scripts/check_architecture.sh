@@ -19,8 +19,13 @@ check_forbidden() {
 
 echo "=== Checking architecture constraints ==="
 
-check_forbidden '#include "theory/' src/sat \
-  "sat/ must not include theory/"
+# sat/ -> theory/ with whitelist for thin callback interfaces
+sat_theory_lines=$(find src/sat -type f \( -name '*.h' -o -name '*.cpp' \) -exec grep -Hn '#include "theory/' {} + 2>/dev/null | grep -v 'TheoryPropagatorCallbacks.h' | grep -v 'TheoryAssignmentView.h' || true)
+if [ -n "$sat_theory_lines" ]; then
+  echo "ARCH VIOLATION: sat/ must not include theory/ (whitelisted: TheoryPropagatorCallbacks.h, TheoryAssignmentView.h)"
+  echo "$sat_theory_lines" | cut -d: -f1 | sort -u | head -5
+  fail=1
+fi
 
 check_forbidden '#include "frontend/' src/sat \
   "sat/ must not include frontend/"
@@ -37,8 +42,13 @@ check_forbidden '#include "frontend/' src/expr \
 check_forbidden '#include "theory/euf/' src/theory/core \
   "theory/core must not depend on euf/"
 
-check_forbidden 'LraSolver\|LiaSolver\|NraSolver\|NiaSolver\|EufSolver' src/api/Solver.cpp \
-  "api/Solver.cpp must not directly reference concrete solvers"
+# api/Solver.cpp must not directly reference concrete solvers (ignore comments)
+api_solver_refs=$(grep -n 'LraSolver\|LiaSolver\|NraSolver\|NiaSolver\|EufSolver' src/api/Solver.cpp 2>/dev/null | grep -v '^[0-9]*:\s*//' || true)
+if [ -n "$api_solver_refs" ]; then
+  echo "ARCH VIOLATION: api/Solver.cpp must not directly reference concrete solvers"
+  echo "$api_solver_refs" | head -5
+  fail=1
+fi
 
 if [ "$fail" -eq 0 ]; then
   echo "=== All architecture constraints satisfied ==="
