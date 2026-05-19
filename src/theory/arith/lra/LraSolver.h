@@ -82,7 +82,6 @@ private:
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
 
     TheoryCheckResult handleDisequalities(TheoryLemmaDatabase& lemmaDb);
-    TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d);
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);

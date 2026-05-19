@@ -102,7 +102,6 @@ private:
     TheoryCheckResult handleDisequalities(TheoryLemmaDatabase& lemmaDb);
     TheoryCheckResult checkIntegrality(TheoryLemmaDatabase& lemmaDb);
 
-    TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d);
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
 
     std::string getVarNameForSharedTerm(SharedTermId s);

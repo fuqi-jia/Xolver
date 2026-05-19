@@ -4,6 +4,7 @@
 #include "theory/arith/dl/DlExplanation.h"
 #include "theory/arith/dl/DlModel.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/linear/DiffLogicDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>
 
@@ -137,25 +138,11 @@ bool RdlSolver::validateModel(const std::vector<RdlWeight>& dist) {
 }
 
 TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaDatabase& lemmaDb) {
-    // plus - minus != c  ->  (plus - minus < c) OR (minus - plus < -c)
-    LinearFormKey lhs1;
-    lhs1.terms.push_back({d.x, mpq_class(1)});
-    lhs1.terms.push_back({d.y, mpq_class(-1)});
-    std::sort(lhs1.terms.begin(), lhs1.terms.end(),
-              [](auto& a, auto& b) { return a.first < b.first; });
-
-    LinearFormKey lhs2;
-    lhs2.terms.push_back({d.y, mpq_class(1)});
-    lhs2.terms.push_back({d.x, mpq_class(-1)});
-    std::sort(lhs2.terms.begin(), lhs2.terms.end(),
-              [](auto& a, auto& b) { return a.first < b.first; });
-
-    SatLit litLo = registry_->getOrCreateLinearBoundAtom(
-        lhs1, Relation::Lt, d.rhs, TheoryId::RDL);
-    SatLit litHi = registry_->getOrCreateLinearBoundAtom(
-        lhs2, Relation::Lt, -d.rhs, TheoryId::RDL);
-
-    TheoryLemma lemma{{d.lit.negated(), litLo, litHi}};
+    auto lemma = buildDiffLogicDiseqSplitLemma(
+        d.x, d.y, d.lit,
+        Relation::Lt, Relation::Lt,
+        d.rhs, -d.rhs,
+        TheoryId::RDL, registry_);
 
     if (lemmaDb.contains(lemma)) return TheoryLemma{};
     lemmaDb.insertIfNew(lemma);

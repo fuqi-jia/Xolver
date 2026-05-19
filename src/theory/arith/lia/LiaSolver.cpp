@@ -1,6 +1,7 @@
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/TheoryAtomRegistry.h"
 #include "theory/TheoryLemmaDatabase.h"
+#include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
@@ -173,61 +174,59 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::unknown();
 }
 
-TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaDatabase& /*lemmaDb*/) {
-    for (const auto& d : disequalities_) {
-        auto val = gs_.value(d.auxVar);
-        if (!val.isZero()) {
-            continue;
-        }
-
-        if (d.rhs.get_den() != 1) {
-            continue;
-        }
-
-        mpz_class g = 0;
-        for (const auto& t : d.lhs.terms) {
-            const mpq_class& c = t.second;
-            if (c.get_den() != 1) {
-                g = 1;
-                break;
+TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
+    return handleSimplexDisequalities(
+        disequalities_, gs_, lemmaDb,
+        [this](const DiseqInfo& d) -> TheoryCheckResult {
+            if (d.rhs.get_den() != 1) {
+                return TheoryCheckResult::consistent();
             }
-            mpz_class a = c.get_num();
-            if (a < 0) a = -a;
-            if (a == 0) continue;
+
+            mpz_class g = 0;
+            for (const auto& t : d.lhs.terms) {
+                const mpq_class& c = t.second;
+                if (c.get_den() != 1) {
+                    g = 1;
+                    break;
+                }
+                mpz_class a = c.get_num();
+                if (a < 0) a = -a;
+                if (a == 0) continue;
+                if (g == 0) {
+                    g = a;
+                } else {
+                    mpz_class tmp;
+                    mpz_gcd(tmp.get_mpz_t(), g.get_mpz_t(), a.get_mpz_t());
+                    g = tmp;
+                }
+            }
+
+            mpz_class c = d.rhs.get_num();
+
             if (g == 0) {
-                g = a;
-            } else {
-                mpz_class tmp;
-                mpz_gcd(tmp.get_mpz_t(), g.get_mpz_t(), a.get_mpz_t());
-                g = tmp;
+                if (c == 0) {
+                    return TheoryCheckResult::mkConflict(
+                        TheoryConflict{{d.lit}});
+                }
+                return TheoryCheckResult::consistent();
             }
-        }
 
-        mpz_class c = d.rhs.get_num();
-
-        if (g == 0) {
-            if (c == 0) {
-                return TheoryCheckResult::mkConflict(
-                    TheoryConflict{{d.lit}});
+            if (c % g != 0) {
+                return TheoryCheckResult::consistent();
             }
-            continue;
-        }
 
-        if (c % g != 0) {
-            continue;
-        }
+            assert(registry_ != nullptr);
+            mpq_class leRhs = mpq_class(c - g, 1);
+            mpq_class geRhs = mpq_class(c + g, 1);
 
-        assert(registry_ != nullptr);
-        mpq_class leRhs = mpq_class(c - g, 1);
-        mpq_class geRhs = mpq_class(c + g, 1);
+            auto lit1 = registry_->getOrCreateLinearBoundAtom(
+                d.lhs, Relation::Leq, leRhs, TheoryId::LIA);
+            auto lit2 = registry_->getOrCreateLinearBoundAtom(
+                d.lhs, Relation::Geq, geRhs, TheoryId::LIA);
 
-        auto lit1 = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Leq, leRhs, TheoryId::LIA);
-        auto lit2 = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Geq, geRhs, TheoryId::LIA);
-
-        return TheoryCheckResult::mkLemma(
-            TheoryLemma{{d.lit.negated(), lit1, lit2}});
-    }
-    return TheoryCheckResult::consistent();
+            return TheoryCheckResult::mkLemma(
+                TheoryLemma{{d.lit.negated(), lit1, lit2}});
+        });
 }
 
 TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaDatabase& /*lemmaDb*/) {
@@ -273,10 +272,6 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaDatabase& /*lemmaDb*/) 
         return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
     }
     return TheoryCheckResult::consistent();
-}
-
-TheoryLemma LiaSolver::buildDiseqSplitLemma(const DiseqInfo& /*d*/) {
-    return TheoryLemma{};
 }
 
 TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) {

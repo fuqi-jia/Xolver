@@ -2,6 +2,7 @@
 #include "theory/DebugTrace.h"
 #include "theory/TheoryAtomRegistry.h"
 #include "theory/TheoryLemmaDatabase.h"
+#include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>
 #include <iostream>
@@ -134,34 +135,17 @@ TheoryCheckResult LraSolver::check(TheoryLemmaDatabase& lemmaDb, TheoryEffort) {
 }
 
 TheoryCheckResult LraSolver::handleDisequalities(TheoryLemmaDatabase& lemmaDb) {
-    for (const auto& d : disequalities_) {
-        auto val = gs_.value(d.auxVar);
-        if (val.isZero()) {
-            auto lemma = buildDiseqSplitLemma(d);
-            if (!lemma.lits.empty()) {
-                if (lemmaDb.contains(lemma)) {
-                    return TheoryCheckResult::unknown();
-                }
-                lemmaDb.insertIfNew(lemma);
-                return TheoryCheckResult::mkLemma(std::move(lemma));
-            }
-            return TheoryCheckResult::unknown();
-        }
-    }
-    return TheoryCheckResult::consistent();
-}
-
-TheoryLemma LraSolver::buildDiseqSplitLemma(const DiseqInfo& d) {
-    if (!registry_) return TheoryLemma{};
-
-    auto litLt = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
-    auto litGt = registry_->getOrCreateLinearBoundAtom(d.lhs, Relation::Gt, d.rhs, TheoryId::LRA);
-
-    TheoryLemma lemma;
-    lemma.lits.push_back(d.lit.negated());
-    lemma.lits.push_back(litLt);
-    lemma.lits.push_back(litGt);
-    return lemma;
+    return handleSimplexDisequalities(
+        disequalities_, gs_, lemmaDb,
+        [this](const DiseqInfo& d) -> TheoryCheckResult {
+            if (!registry_) return TheoryCheckResult::consistent();
+            auto litLt = registry_->getOrCreateLinearBoundAtom(
+                d.lhs, Relation::Lt, d.rhs, TheoryId::LRA);
+            auto litGt = registry_->getOrCreateLinearBoundAtom(
+                d.lhs, Relation::Gt, d.rhs, TheoryId::LRA);
+            return TheoryCheckResult::mkLemma(
+                TheoryLemma{{d.lit.negated(), litLt, litGt}});
+        });
 }
 
 // ---------------------------------------------------------------------------
