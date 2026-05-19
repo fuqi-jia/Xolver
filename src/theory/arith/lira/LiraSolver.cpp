@@ -1,5 +1,5 @@
 #include "theory/arith/lira/LiraSolver.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "expr/ir.h"
 #include <algorithm>
 #include <iostream>

@@ -1,6 +1,6 @@
 #include "theory/arith/idl/IdlSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/dl/DlExplanation.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/linear/DiffLogicDiseqSplitter.h"

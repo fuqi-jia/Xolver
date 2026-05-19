@@ -1,7 +1,7 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
-#include "theory/TheoryAssignmentView.h"
+#include "theory/core/TheorySolver.h"
+#include "theory/core/TheoryAssignmentView.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/combination/SharedEqualityManager.h"
 #include <memory>

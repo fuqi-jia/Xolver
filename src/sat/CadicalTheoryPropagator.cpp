@@ -3,7 +3,7 @@
 #ifdef NLCOLVER_HAS_CADICAL
 
 #include "sat/CadicalBackend.h"
-#include "theory/DebugTrace.h"
+#include "theory/core/DebugTrace.h"
 #include <cassert>
 #include <iostream>
 

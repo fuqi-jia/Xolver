@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nia/core/NiaNormalizer.h"
@@ -14,9 +14,9 @@
 #include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
-#include "theory/ActiveLiteralSet.h"
+#include "theory/core/ActiveLiteralSet.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 #include <vector>

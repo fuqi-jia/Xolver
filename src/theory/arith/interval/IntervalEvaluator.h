@@ -3,7 +3,7 @@
 #include "theory/arith/interval/IntervalTypes.h"
 #include "theory/arith/interval/ReasonedBoxZ.h"
 #include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 

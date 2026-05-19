@@ -1,4 +1,4 @@
-#include "theory/LogicFeatureDetector.h"
+#include "theory/core/LogicFeatureDetector.h"
 #include "expr/ir.h"
 #include <iostream>
 

@@ -1,4 +1,4 @@
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include <algorithm>
 
 namespace nlcolver {

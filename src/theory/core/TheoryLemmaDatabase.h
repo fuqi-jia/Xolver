@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <unordered_set>
 
 namespace nlcolver {

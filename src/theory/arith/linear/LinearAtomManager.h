@@ -1,7 +1,7 @@
 #pragma once
 
 #include "LinearExpr.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <gmpxx.h>
 #include <unordered_map>

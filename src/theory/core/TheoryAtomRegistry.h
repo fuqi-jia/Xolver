@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "sat/Atomizer.h"
 #include <unordered_map>
 #include <unordered_set>

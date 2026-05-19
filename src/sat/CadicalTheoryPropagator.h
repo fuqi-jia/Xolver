@@ -3,10 +3,10 @@
 #ifdef NLCOLVER_HAS_CADICAL
 
 #include <cadical.hpp>
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryManager.h"
-#include "theory/TheoryLemmaDatabase.h"
-#include "theory/TheoryAssignmentView.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryManager.h"
+#include "theory/core/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAssignmentView.h"
 
 namespace nlcolver {
 

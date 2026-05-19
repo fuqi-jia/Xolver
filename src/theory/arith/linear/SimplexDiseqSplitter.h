@@ -1,7 +1,7 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheorySolver.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <vector>
 

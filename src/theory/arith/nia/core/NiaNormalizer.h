@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <vector>
 #include <optional>
 

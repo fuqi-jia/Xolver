@@ -1,11 +1,11 @@
 #pragma once
 
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nra/core/CdcacSolver.h"
 #include "theory/combination/SharedTermRegistry.h"
-#include "theory/ActiveLiteralSet.h"
+#include "theory/core/ActiveLiteralSet.h"
 #include <memory>
 #include <vector>
 

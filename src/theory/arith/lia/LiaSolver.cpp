@@ -1,6 +1,6 @@
 #include "theory/arith/lia/LiaSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <cassert>
 #include <algorithm>

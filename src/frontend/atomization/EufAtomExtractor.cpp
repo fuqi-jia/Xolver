@@ -1,5 +1,5 @@
 #include "frontend/atomization/EufAtomExtractor.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "expr/ir.h"
 
 namespace nlcolver {

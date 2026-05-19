@@ -1,5 +1,5 @@
 #include "sat/Atomizer.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include <cassert>
 #include <algorithm>

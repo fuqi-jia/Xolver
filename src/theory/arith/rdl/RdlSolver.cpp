@@ -1,6 +1,6 @@
 #include "theory/arith/rdl/RdlSolver.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/dl/DlExplanation.h"
 #include "theory/arith/dl/DlModel.h"
 #include "theory/arith/linear/LinearExpr.h"

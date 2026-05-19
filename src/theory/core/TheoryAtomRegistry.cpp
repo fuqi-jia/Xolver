@@ -1,4 +1,4 @@
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include <cassert>
 
 namespace nlcolver {

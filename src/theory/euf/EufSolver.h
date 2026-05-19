@@ -1,5 +1,5 @@
 #pragma once
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include "theory/euf/EufTypes.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"

@@ -3,7 +3,7 @@
 #include "theory/arith/linearizer/IncrementalLinearizer.h"
 #include "theory/arith/linearizer/LinearizationResult.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <vector>
 
 namespace nlcolver {

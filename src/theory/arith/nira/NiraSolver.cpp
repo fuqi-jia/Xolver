@@ -1,5 +1,5 @@
 #include "theory/arith/nira/NiraSolver.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "expr/ir.h"
 #include <algorithm>

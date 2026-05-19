@@ -3,7 +3,7 @@
 #include "theory/arith/nia/core/NiaNormalizer.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 
 namespace nlcolver {
 

@@ -1,7 +1,7 @@
-#include "theory/TheoryManager.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
-#include "theory/DebugTrace.h"
+#include "theory/core/TheoryManager.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
+#include "theory/core/DebugTrace.h"
 #include "sat/SatSolver.h"
 #include <cassert>
 #include <algorithm>

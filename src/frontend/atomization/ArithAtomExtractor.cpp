@@ -1,5 +1,5 @@
 #include "frontend/atomization/ArithAtomExtractor.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include <algorithm>
 #include <iostream>
 

@@ -1,7 +1,7 @@
 #include "theory/arith/lra/LraSolver.h"
-#include "theory/DebugTrace.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/DebugTrace.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>

@@ -7,8 +7,8 @@
 #include "theory/arith/linearizer/LinearizationCache.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/arith/nia/core/NiaNormalizer.h"
-#include "theory/TheoryAtomRegistry.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include <vector>
 
 namespace nlcolver {

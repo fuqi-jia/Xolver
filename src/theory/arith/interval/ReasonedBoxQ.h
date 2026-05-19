@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/interval/IntervalQ.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <string>
 #include <unordered_map>
 #include <optional>

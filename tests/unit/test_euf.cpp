@@ -2,7 +2,7 @@
 #include "nlcolver/Solver.h"
 #include "expr/ir.h"
 #include "theory/euf/EufSolver.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
 

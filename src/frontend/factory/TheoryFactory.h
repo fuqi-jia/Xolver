@@ -1,11 +1,11 @@
 #pragma once
 
 #include "expr/ir.h"
-#include "theory/TheoryManager.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryManager.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/LogicFeatureDetector.h"
+#include "theory/core/LogicFeatureDetector.h"
 #include <memory>
 #include <string>
 

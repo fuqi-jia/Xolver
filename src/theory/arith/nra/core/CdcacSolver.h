@@ -3,7 +3,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include "theory/arith/nra/core/CdcacConstraint.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <gmpxx.h>
 #include <vector>
 #include <optional>

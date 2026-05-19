@@ -1,6 +1,6 @@
 #include "theory/euf/EufSolver.h"
-#include "theory/DebugTrace.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/DebugTrace.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include <cassert>
 #include <algorithm>
 #include <functional>

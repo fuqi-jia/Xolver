@@ -8,11 +8,11 @@
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
 #include "sat/Atomizer.h"
-#include "theory/TheoryManager.h"
-#include "theory/TheoryLemmaDatabase.h"
-#include "theory/TheoryAtomRegistry.h"
+#include "theory/core/TheoryManager.h"
+#include "theory/core/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
-#include "theory/LogicFeatureDetector.h"
+#include "theory/core/LogicFeatureDetector.h"
 
 #ifdef NLCOLVER_HAS_CADICAL
 #include "sat/CadicalBackend.h"

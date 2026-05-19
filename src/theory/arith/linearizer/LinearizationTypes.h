@@ -2,7 +2,7 @@
 
 #include "theory/arith/linear/LinearConstraintTypes.h"
 #include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/TheorySolver.h"
+#include "theory/core/TheorySolver.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>

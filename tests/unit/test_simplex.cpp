@@ -2,7 +2,7 @@
 #include "theory/arith/lra/LraSolver.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include "theory/arith/linear/LinearExpr.h"
-#include "theory/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryLemmaDatabase.h"
 #include "expr/ir.h"
 #include <random>
 
