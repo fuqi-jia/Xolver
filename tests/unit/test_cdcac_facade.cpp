@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/CdcacSolver.h"
-#include "theory/arith/nra/CdcacTypes.h"
-#include "theory/arith/nra/CoveringManager.h"
-#include "theory/arith/nra/ReasonManager.h"
-#include "theory/arith/nra/LibpolyBackend.h"
+#include "theory/arith/nra/core/CdcacSolver.h"
+#include "theory/arith/nra/core/CdcacTypes.h"
+#include "theory/arith/nra/engine/CoveringManager.h"
+#include "theory/arith/nra/engine/ReasonManager.h"
+#include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 using namespace nlcolver;

@@ -3,7 +3,7 @@
 #include "theory/TheorySolver.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
-#include "theory/arith/nra/CdcacSolver.h"
+#include "theory/arith/nra/core/CdcacSolver.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/ActiveLiteralSet.h"
 #include <memory>
