@@ -199,6 +199,19 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
             result = SatLit::positive(x);
             break;
         }
+        case Kind::Xor: {
+            assert(e.children.size() == 2);
+            SatLit a = atomizeRec(e.children[0], ir);
+            SatLit b = atomizeRec(e.children[1], ir);
+            SatVar x = freshVar();
+            // x ↔ (a ⊕ b)
+            sat_.addClause({SatLit::negative(x), a.negated(), b.negated()});
+            sat_.addClause({SatLit::negative(x), a, b});
+            sat_.addClause({SatLit::positive(x), a.negated(), b});
+            sat_.addClause({SatLit::positive(x), a, b.negated()});
+            result = SatLit::positive(x);
+            break;
+        }
         case Kind::Ite: {
             assert(!"ITE should have been lowered by CoreIteLowerer before atomization");
             // Fallback: old Tseitin encoding (should never reach here).
