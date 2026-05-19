@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "expr/ir.h"
-#include "expr/LinearToIntPurifier.h"
+#include "frontend/preprocess/LinearToIntPurifier.h"
 #include <iostream>
 
 using namespace nlcolver;

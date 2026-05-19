@@ -1,4 +1,4 @@
-#include "expr/LinearToIntPurifier.h"
+#include "frontend/preprocess/LinearToIntPurifier.h"
 #include <gmpxx.h>
 
 namespace nlcolver {
