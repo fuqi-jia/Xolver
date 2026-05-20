@@ -94,3 +94,15 @@ endif()
 if(NLCOLVER_ENABLE_TRACING)
     target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_ENABLE_TRACING)
 endif()
+
+if(NLCOLVER_ENABLE_LRA_PROFILE)
+    target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_LRA_PROFILE)
+endif()
+
+if(NLCOLVER_ENABLE_LIA_PROFILE)
+    target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_LIA_PROFILE)
+endif()
+
+if(NLCOLVER_ENABLE_CASESTATS)
+    target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_ENABLE_CASESTATS)
+endif()

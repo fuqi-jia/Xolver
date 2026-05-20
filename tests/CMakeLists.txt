@@ -3,14 +3,21 @@ cmake_minimum_required(VERSION 3.16)
 # ---------------------------------------------------------------------------
 # Testing framework: doctest (header-only, fetched)
 # ---------------------------------------------------------------------------
-include(FetchContent)
-FetchContent_Declare(
-    doctest
-    GIT_REPOSITORY https://github.com/doctest/doctest.git
-    GIT_TAG v2.4.11
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(doctest)
+# Use local doctest if available (from prior build), otherwise fetch
+if(EXISTS "${CMAKE_BINARY_DIR}/_deps/doctest-src/doctest/doctest.h")
+    add_library(doctest INTERFACE)
+    target_include_directories(doctest INTERFACE "${CMAKE_BINARY_DIR}/_deps/doctest-src")
+    add_library(doctest::doctest ALIAS doctest)
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        doctest
+        GIT_REPOSITORY https://github.com/doctest/doctest.git
+        GIT_TAG v2.4.11
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(doctest)
+endif()
 
 # ---------------------------------------------------------------------------
 # Unit tests

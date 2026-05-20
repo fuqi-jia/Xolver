@@ -187,6 +187,9 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     int conflictSize = (tr.conflictOpt && !tr.conflictOpt->clause.empty())
                            ? static_cast<int>(tr.conflictOpt->clause.size()) : 0;
     stats_.recordModelCheckResult(tr.kind, conflictSize);
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    updateCaseStatsSearch();
+#endif
 
     std::cerr << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
     if (!tr.reason.empty()) std::cerr << " reason=" << tr.reason;
@@ -279,6 +282,12 @@ int CadicalTheoryPropagator::cb_propagate() {
     bool isConflict = (tr.kind == TheoryCheckResult::Kind::Conflict);
     bool isLemma = (tr.kind == TheoryCheckResult::Kind::Lemma);
     stats_.recordPropagateCheck(isConflict, isLemma, conflictSize, dur);
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    updateCaseStatsSearch();
+    if (!dumpStatsBasePath_.empty()) {
+        heartbeatWriter_.maybeWrite(*caseStats_, dumpStatsBasePath_);
+    }
+#endif
 
     if (isConflict) {
         if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
@@ -352,6 +361,25 @@ void CadicalTheoryPropagator::setPendingClause(const TheoryLemma& lemma) {
 void CadicalTheoryPropagator::terminateSolve() {
     backend_.requestTerminate();
 }
+
+#ifdef NLCOLVER_ENABLE_CASESTATS
+void CadicalTheoryPropagator::updateCaseStatsSearch() {
+    if (!caseStats_) return;
+    caseStats_->search.modelCheckCalls = stats_.modelCheckCount;
+    caseStats_->search.modelCheckConflicts = stats_.modelCheckConflict;
+    caseStats_->search.modelCheckLemmas = stats_.modelCheckLemma;
+    caseStats_->search.modelCheckUnknowns = stats_.modelCheckUnknown;
+    caseStats_->search.conflictMinSize = stats_.conflictMinSize;
+    caseStats_->search.conflictMaxSize = stats_.conflictMaxSize;
+    if (stats_.modelCheckConflict > 0) {
+        caseStats_->search.conflictAvgSize = static_cast<double>(stats_.conflictTotalSize) / stats_.modelCheckConflict;
+    }
+    caseStats_->search.propagateCalls = stats_.propagateCallCount;
+    caseStats_->search.propagateTheoryChecks = stats_.propagateTheoryCheckCount;
+    caseStats_->search.propagateConflicts = stats_.propagateConflictCount;
+    caseStats_->search.propagateLemmas = stats_.propagateLemmaCount;
+}
+#endif
 
 bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const {
     bool ok = true;

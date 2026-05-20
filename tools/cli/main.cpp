@@ -19,6 +19,7 @@ static void printUsage(const char* prog) {
               << "  --produce-proofs       Enable proof production\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
+              << "  --dump-stats <file>    Dump per-case stats JSON (requires NLCOLVER_ENABLE_CASESTATS)\n"
               << "  -v, --verbose          Verbose output\n";
 }
 
@@ -41,6 +42,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
             solver.setOption("seed", nlcolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+        } else if (arg == "--dump-stats" && i + 1 < argc) {
+            solver.setDumpStatsPath(argv[++i]);
         } else if (arg == "--produce-models") {
             // TODO: enable model production
         } else if (arg == "--produce-proofs") {

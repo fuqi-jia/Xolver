@@ -14,6 +14,11 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
 #include "theory/core/LogicFeatureDetector.h"
+#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef NLCOLVER_ENABLE_CASESTATS
+#include "util/CaseStats.h"
+#endif
+#endif
 
 #ifdef NLCOLVER_HAS_CADICAL
 #include "sat/CadicalBackend.h"
@@ -24,6 +29,7 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <chrono>
 
 namespace nlcolver {
 
@@ -46,6 +52,13 @@ public:
     std::optional<TheorySolver::TheoryModel> lastModel_;
     std::vector<Term> lastAssumptions_;
     std::string lastUnknownReason_;
+    std::string lastUnknownCode_;
+    std::string lastUnknownComponent_;
+    std::string lastUnknownDetail_;
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    CaseStats caseStats_;
+    std::string dumpStatsPath_;
+#endif
 
     Impl() : sat(createSatSolver()) {}
 
@@ -58,6 +71,14 @@ public:
         intSortId_ = NullSort;
         realSortId_ = NullSort;
         lastModel_.reset();
+        lastAssumptions_.clear();
+        lastUnknownReason_.clear();
+        lastUnknownCode_.clear();
+        lastUnknownComponent_.clear();
+        lastUnknownDetail_.clear();
+#ifdef NLCOLVER_ENABLE_CASESTATS
+        caseStats_ = CaseStats{};
+#endif
     }
 
     bool parseFile(std::string_view filename) {
@@ -396,21 +417,40 @@ public:
             return Result::Unknown;
         }
 
+        auto solveT0 = std::chrono::steady_clock::now();
         auto result = sat->solve();
+        auto solveT1 = std::chrono::steady_clock::now();
+        auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
         cadicalBackend->disconnectPropagator();
         propagator.stats().print(std::cerr);
 
+        Result ret = Result::Unknown;
         if (result == SatSolver::SolveResult::Sat) {
             lastModel_ = theoryManager.getModel();
-            return Result::Sat;
+            ret = Result::Sat;
+        } else if (result == SatSolver::SolveResult::Unsat) {
+            ret = Result::Unsat;
+        } else {
+            if (lastUnknownReason_.empty()) {
+                lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+            }
+            ret = Result::Unknown;
         }
-        if (result == SatSolver::SolveResult::Unsat) return Result::Unsat;
-        if (lastUnknownReason_.empty()) {
-            lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+
+#ifdef NLCOLVER_ENABLE_CASESTATS
+        caseStats_.timeMs = solveDurMs;
+        caseStats_.result = (ret == Result::Sat) ? "sat" :
+                            (ret == Result::Unsat) ? "unsat" :
+                            (ret == Result::Unknown) ? "unknown" : "error";
+        if (!dumpStatsPath_.empty()) {
+            caseStats_.dumpToFile(dumpStatsPath_);
         }
-        return Result::Unknown;
+#endif
+        return ret;
 #endif
     }
+
+
 };
 
 // ---------------------------------------------------------------------------
@@ -601,6 +641,17 @@ Proof Solver::getProof() const { return Proof{}; }
 Statistics Solver::getStatistics() const { return Statistics{}; }
 
 std::string Solver::lastUnknownReason() const { return pImpl->lastUnknownReason_; }
+std::string Solver::lastUnknownCode() const { return pImpl->lastUnknownCode_; }
+std::string Solver::lastUnknownComponent() const { return pImpl->lastUnknownComponent_; }
+std::string Solver::lastUnknownDetail() const { return pImpl->lastUnknownDetail_; }
+
+#ifdef NLCOLVER_ENABLE_CASESTATS
+void Solver::setDumpStatsPath(std::string_view path) {
+    pImpl->dumpStatsPath_ = std::string(path);
+}
+#else
+void Solver::setDumpStatsPath(std::string_view) {}
+#endif
 
 void Solver::dumpSMT2(std::ostream& os) {
     if (pImpl->parser && !pImpl->parser->getAssertions().empty()) {

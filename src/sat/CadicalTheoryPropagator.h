@@ -6,6 +6,10 @@
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include <chrono>
 
+#ifdef NLCOLVER_ENABLE_CASESTATS
+#include "util/CaseStats.h"
+#endif
+
 namespace nlcolver {
 
 /**
@@ -92,6 +96,12 @@ public:
 
     const TheorySearchStats& stats() const { return stats_; }
 
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    // --- CaseStats integration ---
+    void setCaseStats(CaseStats* stats) { caseStats_ = stats; }
+    void setDumpStatsBasePath(const std::string& path) { dumpStatsBasePath_ = path; }
+#endif
+
 private:
     TheoryAtomLookup& registry_;
     TheoryPropagationCallbacks& tm_;
@@ -113,7 +123,17 @@ private:
 
     TheorySearchStats stats_;
 
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    CaseStats* caseStats_ = nullptr;
+    std::string dumpStatsBasePath_;
+    HeartbeatWriter heartbeatWriter_;
+#endif
+
     CadicalAssignmentView& assignmentView() { return assignmentView_; }
+
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    void updateCaseStatsSearch();
+#endif
 
     void setPendingClause(const std::vector<SatLit>& lits);
     void setPendingClause(const TheoryLemma& lemma);

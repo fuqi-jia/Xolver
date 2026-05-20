@@ -11,6 +11,14 @@ namespace nlcolver {
 
 LiaSolver::LiaSolver() = default;
 
+LiaSolver::~LiaSolver() {
+#ifdef NLCOLVER_LIA_PROFILE
+    if (profile_.checkCalls > 0) {
+        profile_.dump();
+    }
+#endif
+}
+
 void LiaSolver::push() {
     gs_.push();
 }

@@ -90,6 +90,14 @@ public:
     // If the last checkSat returned Unknown, this gives a human-readable reason.
     std::string lastUnknownReason() const;
 
+    // Structured unknown reason (code + component + detail)
+    std::string lastUnknownCode() const;
+    std::string lastUnknownComponent() const;
+    std::string lastUnknownDetail() const;
+
+    // Set path for per-case stats dump (--dump-stats)
+    void setDumpStatsPath(std::string_view path);
+
     // Debug / research
     void dumpSMT2(std::ostream& os);
 
