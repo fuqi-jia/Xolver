@@ -107,6 +107,47 @@ void LiaSolver::backtrackToLevel(int level) {
 TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     pendingConflict_.reset();
 
+#ifdef NLCOLVER_LIA_PROFILE
+    profile_.checkCalls++;
+    int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    profile_.totalActiveLiterals += currentActive;
+    if (currentActive > profile_.maxActiveLiterals) profile_.maxActiveLiterals = currentActive;
+    profile_.totalNewLiterals += std::max(0, currentActive - profile_.prevActiveCount);
+    profile_.prevActiveCount = currentActive;
+    auto prof_t0 = std::chrono::steady_clock::now();
+#endif
+
+#ifndef NLCOLVER_LIA_INCREMENTAL
+    // -------------------------------------------------------------------------
+    // Full-rebuild mode (baseline for comparison)
+    // -------------------------------------------------------------------------
+    gs_.resetActiveBounds();
+    disequalities_.clear();
+    activeAtoms_.clear();
+    integerVars_.clear();
+
+    for (const auto& e : theoryTrail_) {
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+
+        for (const auto& [name, coeff] : payload.lhs.terms) {
+            (void)coeff;
+            int v = manager_.getOrCreateVar(gs_, name);
+            integerVars_.insert(v);
+        }
+
+        if (e.isDiseq) {
+            disequalities_.push_back({e.auxVar, payload.lhs, payload.rhs, e.lit});
+        } else {
+            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
+            if (!ok) {
+                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
+                break;
+            }
+        }
+
+        activeAtoms_.push_back({e.atom.exprId, e.auxVar, payload.rel, e.value, payload.lhs, payload.rhs, e.lit});
+    }
+#else
     // -------------------------------------------------------------------------
     // Phase 1: incremental replay of new trail entries
     // -------------------------------------------------------------------------
@@ -124,14 +165,30 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 
         ++appliedCursor_;
     }
+#endif
 
     if (pendingConflict_) {
+#ifdef NLCOLVER_LIA_PROFILE
+        auto prof_t1 = std::chrono::steady_clock::now();
+        profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+        int sz = static_cast<int>(pendingConflict_->conflict.clause.size());
+        profile_.totalConflictSize += sz;
+        if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+        profile_.immediateConflictCount++;
+#endif
         bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
         assert(ok && "complementary literal in pending conflict");
         (void)ok;
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
 
+#ifdef NLCOLVER_LIA_PROFILE
+    auto prof_t1 = std::chrono::steady_clock::now();
+    profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+    auto prof_t2 = prof_t1;
+#endif
+
+#ifdef NLCOLVER_LIA_INCREMENTAL
     // Rebuild integerVars_ from activeAtoms_ (low overhead, avoids stale entries)
     integerVars_.clear();
     for (const auto& a : activeAtoms_) {
@@ -141,6 +198,7 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             integerVars_.insert(v);
         }
     }
+#endif
 
     // Apply interface equalities from Nelson-Oppen combination
     for (const auto& ieq : interfaceEqualities_) {
@@ -152,6 +210,14 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
+#ifdef NLCOLVER_LIA_PROFILE
+                auto prof_t3 = std::chrono::steady_clock::now();
+                profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
+                int sz = static_cast<int>(tc.clause.size());
+                profile_.totalConflictSize += sz;
+                if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+                profile_.immediateConflictCount++;
+#endif
                 bool ok = normalizeTheoryClause(tc.clause);
                 assert(ok && "complementary literal in IEQ conflict");
                 (void)ok;
@@ -161,6 +227,23 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     }
 
     auto r = gs_.check();
+
+#ifdef NLCOLVER_LIA_PROFILE
+    auto prof_t3 = std::chrono::steady_clock::now();
+    profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
+    profile_.totalPivotCount += gs_.pivotCount();
+    gs_.resetPivotCount();
+    auto cs = gs_.coeffStats();
+    profile_.mpqOpTimeUs += cs.mpqOpTimeUs;
+    profile_.maxCoeffNumBits = std::max(profile_.maxCoeffNumBits, cs.maxCoeffNumBits);
+    profile_.maxCoeffDenBits = std::max(profile_.maxCoeffDenBits, cs.maxCoeffDenBits);
+    profile_.totalCoeffNumBits += cs.totalCoeffNumBits;
+    profile_.totalCoeffDenBits += cs.totalCoeffDenBits;
+    profile_.totalCoeffSamples += cs.totalCoeffSamples;
+    gs_.resetCoeffStats();
+    auto prof_t4 = prof_t3;
+#endif
+
     if (r == GeneralSimplex::Result::Unsat) {
         auto tc = TheoryConflict{};
         const auto& conflict = gs_.getConflict();
@@ -168,8 +251,24 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             for (const auto& cr : conflict) {
                 tc.clause.push_back(cr.reason);
             }
+#ifdef NLCOLVER_LIA_PROFILE
+            int sz = static_cast<int>(tc.clause.size());
+            profile_.totalConflictSize += sz;
+            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+            if (gs_.hasImmediateConflict()) {
+                profile_.immediateConflictCount++;
+            } else {
+                profile_.rowConflictCount++;
+            }
+#endif
         } else {
             tc.clause = allActiveReasons();
+#ifdef NLCOLVER_LIA_PROFILE
+            int sz = static_cast<int>(tc.clause.size());
+            profile_.totalConflictSize += sz;
+            if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
+            profile_.fallbackConflictCount++;
+#endif
         }
         bool ok = normalizeTheoryClause(tc.clause);
         assert(ok && "complementary literal in simplex conflict");
@@ -196,11 +295,24 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (!disequalities_.empty()) {
         auto dr = handleDisequalities(lemmaDb);
         if (dr.kind != TheoryCheckResult::Kind::Consistent) {
+#ifdef NLCOLVER_LIA_PROFILE
+            if (dr.kind == TheoryCheckResult::Kind::Lemma) {
+                profile_.disequalitySplitCount++;
+            }
+#endif
             return dr;
         }
     }
 
     auto ir = checkIntegrality(lemmaDb);
+
+#ifdef NLCOLVER_LIA_PROFILE
+    auto prof_t5 = std::chrono::steady_clock::now();
+    profile_.integralityCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t5 - prof_t4).count();
+    if (ir.kind == TheoryCheckResult::Kind::Lemma) {
+        profile_.branchSplitCount++;
+    }
+#endif
     if (ir.kind == TheoryCheckResult::Kind::Consistent) {
         std::vector<DiseqValidationInfo> diseqInfos;
         for (const auto& d : disequalities_) {

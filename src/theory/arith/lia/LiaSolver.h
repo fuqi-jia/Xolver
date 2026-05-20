@@ -19,6 +19,7 @@ class TheoryAtomRegistry;
 class LiaSolver : public TheorySolver {
 public:
     LiaSolver();
+    ~LiaSolver() override;
 
     TheoryId id() const override { return TheoryId::LIA; }
 

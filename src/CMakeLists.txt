@@ -103,6 +103,11 @@ if(NLCOLVER_ENABLE_LIA_PROFILE)
     target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_LIA_PROFILE)
 endif()
 
+# Incremental replay for LiaSolver (disable for baseline comparison)
+if(NOT DEFINED NLCOLVER_LIA_INCREMENTAL OR NLCOLVER_LIA_INCREMENTAL)
+    target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_LIA_INCREMENTAL)
+endif()
+
 if(NLCOLVER_ENABLE_CASESTATS)
     target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_ENABLE_CASESTATS)
 endif()
