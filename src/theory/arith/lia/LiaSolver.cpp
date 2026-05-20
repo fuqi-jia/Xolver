@@ -143,9 +143,8 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                 pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
                 break;
             }
+            activeAtoms_.push_back({e.atom.exprId, e.auxVar, payload.rel, e.value, payload.lhs, payload.rhs, e.lit});
         }
-
-        activeAtoms_.push_back({e.atom.exprId, e.auxVar, payload.rel, e.value, payload.lhs, payload.rhs, e.lit});
     }
 #else
     // -------------------------------------------------------------------------
@@ -189,10 +188,17 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 #endif
 
 #ifdef NLCOLVER_LIA_INCREMENTAL
-    // Rebuild integerVars_ from activeAtoms_ (low overhead, avoids stale entries)
+    // Rebuild integerVars_ from activeAtoms_ and disequalities_ (low overhead)
     integerVars_.clear();
     for (const auto& a : activeAtoms_) {
         for (const auto& [name, coeff] : a.lhs.terms) {
+            (void)coeff;
+            int v = manager_.getOrCreateVar(gs_, name);
+            integerVars_.insert(v);
+        }
+    }
+    for (const auto& d : disequalities_) {
+        for (const auto& [name, coeff] : d.lhs.terms) {
             (void)coeff;
             int v = manager_.getOrCreateVar(gs_, name);
             integerVars_.insert(v);
