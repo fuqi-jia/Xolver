@@ -48,7 +48,10 @@ ExprId IntDivModLowerer::lowerRec(ExprId e, ScopeLevel level) {
         return it->second;
     }
 
-    const auto& node = ir_.get(e);
+    // Copy node because recursive lowerRec() and rebuildLike() may call
+    // ir_.add(), which can reallocate the internal exprs_ vector and
+    // invalidate references.
+    const auto node = ir_.get(e);
 
     // Rebuild children first (post-order)
     std::vector<ExprId> newChildren;

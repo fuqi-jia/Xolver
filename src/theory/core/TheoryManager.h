@@ -38,6 +38,18 @@ public:
     void setAssignmentView(TheoryAssignmentView* view) override { assignmentView_ = view; }
     void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
+    // Aggregate statistics collected during check() calls
+    struct AggregateStats {
+        int64_t checkCalls = 0;
+        int64_t conflicts = 0;
+        int64_t lemmas = 0;
+        int64_t propagations = 0;
+        int64_t totalConflictSize = 0;
+        int64_t maxConflictSize = 0;
+    };
+    const AggregateStats& aggregateStats() const { return aggStats_; }
+    std::vector<std::string> activeTheoryNames() const;
+
     SharedTermRegistry* sharedTermRegistry() { return sharedTermRegistry_; }
     const SharedTermRegistry* sharedTermRegistry() const { return sharedTermRegistry_; }
 
@@ -54,6 +66,7 @@ private:
     TheoryAtomRegistry* registry_ = nullptr;
     TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    AggregateStats aggStats_;
 
     SharedEqualityManager sharedEqMgr_;
 

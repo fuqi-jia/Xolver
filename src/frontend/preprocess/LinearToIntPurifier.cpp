@@ -53,7 +53,9 @@ ToIntPurifyResult LinearToIntPurifier::run() {
 }
 
 ExprId LinearToIntPurifier::purifyRec(ExprId e, ScopeLevel level) {
-    const auto& node = ir_.get(e);
+    // Copy node because recursive purifyRec() may call ir_.add(), which can
+    // reallocate the internal exprs_ vector and invalidate references.
+    const auto node = ir_.get(e);
 
     if (node.kind == Kind::ToInt && node.children.size() == 1) {
         ExprId r = purifyRec(node.children[0], level);

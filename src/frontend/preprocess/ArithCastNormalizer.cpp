@@ -15,7 +15,9 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId e) {
     auto it = memo_.find(e);
     if (it != memo_.end()) return it->second;
 
-    const auto& node = ir_.get(e);
+    // Copy node because recursive rewriteRec() may call ir_.add(), which can
+    // reallocate the internal exprs_ vector and invalidate references.
+    const auto node = ir_.get(e);
     ExprId result = e;
 
     if (node.kind == Kind::ToReal && node.children.size() == 1) {

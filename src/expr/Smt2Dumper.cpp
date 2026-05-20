@@ -38,7 +38,8 @@ static const char* kindToSMT2(Kind k) {
     }
 }
 
-static void dumpRec(ExprId id, const CoreIr& ir, std::ostream& os) {
+static void dumpRec(ExprId id, const CoreIr& ir, std::ostream& os, int depth = 0) {
+    if (depth > 100000) { os << "<DEPTH-LIMIT-EXCEEDED>"; return; }
     if (id >= ir.size()) { os << "???"; return; }
     const auto& e = ir.get(id);
 
@@ -72,7 +73,7 @@ static void dumpRec(ExprId id, const CoreIr& ir, std::ostream& os) {
             os << "(" << std::get<std::string>(e.payload.value);
             for (ExprId c : e.children) {
                 os << " ";
-                dumpRec(c, ir, os);
+                dumpRec(c, ir, os, depth + 1);
             }
             os << ")";
             break;
@@ -88,7 +89,7 @@ static void dumpRec(ExprId id, const CoreIr& ir, std::ostream& os) {
                 os << "(" << op;
                 for (ExprId c : e.children) {
                     os << " ";
-                    dumpRec(c, ir, os);
+                    dumpRec(c, ir, os, depth + 1);
                 }
                 os << ")";
             }

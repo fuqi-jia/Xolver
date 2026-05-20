@@ -55,6 +55,165 @@ public:
     std::string lastUnknownCode_;
     std::string lastUnknownComponent_;
     std::string lastUnknownDetail_;
+
+#ifdef NLCOLVER_ENABLE_CASESTATS
+    void parseUnknownReasonIntoStats() {
+        // Derive structured unknown fields from the free-text reason.
+        const std::string& r = lastUnknownReason_;
+        if (r.empty()) return;
+
+        // Component detection from prefix
+        auto colonPos = r.find(':');
+        std::string prefix = (colonPos != std::string::npos) ? r.substr(0, colonPos) : r;
+
+        if (prefix == "IntDivModLowerer") {
+            lastUnknownComponent_ = "IntDivModLowerer";
+            lastUnknownCode_ = "FRONTEND_UNSUPPORTED_DIVMOD";
+            caseStats_.failureStage = "frontend";
+        } else if (prefix == "LinearToIntPurifier") {
+            lastUnknownComponent_ = "LinearToIntPurifier";
+            lastUnknownCode_ = "FRONTEND_UNSUPPORTED_TO_INT";
+            caseStats_.failureStage = "frontend";
+        } else if (prefix == "LogicFeatureDetector") {
+            lastUnknownComponent_ = "LogicFeatureDetector";
+            lastUnknownCode_ = "FRONTEND_UNSUPPORTED_FEATURE";
+            caseStats_.failureStage = "frontend";
+        } else if (prefix == "Atomizer") {
+            lastUnknownComponent_ = "Atomizer";
+            lastUnknownCode_ = "ATOMIZER_UNSUPPORTED";
+            caseStats_.failureStage = "atomizer";
+        } else if (prefix == "TheoryFactory") {
+            lastUnknownComponent_ = "TheoryFactory";
+            lastUnknownCode_ = "FRONTEND_LOGIC_MISMATCH";
+            caseStats_.failureStage = "frontend";
+        } else if (prefix == "SAT") {
+            lastUnknownComponent_ = "SAT";
+            lastUnknownCode_ = "SAT_ABORT";
+            caseStats_.failureStage = "sat";
+        } else if (prefix == "Theory") {
+            lastUnknownComponent_ = "Theory";
+            lastUnknownCode_ = "THEORY_UNKNOWN";
+            caseStats_.failureStage = "theory";
+        } else {
+            lastUnknownComponent_ = "Unknown";
+            lastUnknownCode_ = "UNKNOWN";
+            caseStats_.failureStage = "unknown";
+        }
+        lastUnknownDetail_ = r;
+    }
+
+    void finalizeCaseStats(Result result, double timeMs,
+                           const CadicalTheoryPropagator* propagator = nullptr,
+                           const TheoryManager* theoryManager = nullptr,
+                           const CadicalBackend* cadicalBackend = nullptr,
+                           const Atomizer* atomizer = nullptr,
+                           const TheoryAtomRegistry* registry = nullptr) {
+        caseStats_.timeMs = timeMs;
+        caseStats_.result = (result == Result::Sat) ? "sat" :
+                            (result == Result::Unsat) ? "unsat" :
+                            (result == Result::Unknown) ? "unknown" : "error";
+        if (result == Result::Unknown) {
+            parseUnknownReasonIntoStats();
+            caseStats_.unknownCode = lastUnknownCode_;
+            caseStats_.unknownComponent = lastUnknownComponent_;
+            caseStats_.unknownDetail = lastUnknownDetail_;
+        }
+        if (theoryManager) {
+            caseStats_.activeTheories = theoryManager->activeTheoryNames();
+        }
+        caseStats_.enabledStats = {"frontend", "sat", "theory", "search"};
+
+        // Frontend stats
+        if (atomizer) {
+            const auto& atoms = atomizer->atoms();
+            caseStats_.frontend.numAtoms = static_cast<int64_t>(atoms.size());
+            int64_t boolAtoms = 0, arithAtoms = 0, eufAtoms = 0;
+            for (const auto& a : atoms) {
+                if (a.isTheory) {
+                    switch (a.theory) {
+                        case TheoryId::EUF: ++eufAtoms; break;
+                        case TheoryId::LRA:
+                        case TheoryId::LIA:
+                        case TheoryId::NRA:
+                        case TheoryId::NIA:
+                        case TheoryId::IDL:
+                        case TheoryId::RDL:
+                        case TheoryId::LIRA:
+                        case TheoryId::NIRA:
+                        case TheoryId::Combination:
+                            ++arithAtoms; break;
+                        default: break;
+                    }
+                } else {
+                    ++boolAtoms;
+                }
+            }
+            caseStats_.frontend.numBoolAtoms = boolAtoms;
+            caseStats_.frontend.numArithAtoms = arithAtoms;
+            caseStats_.frontend.numEufAtoms = eufAtoms;
+        }
+        if (registry) {
+            caseStats_.frontend.numUnsupported = registry->hasUnsupportedTheoryAtom() ? 1 : 0;
+        }
+        if (ir) {
+            caseStats_.frontend.numExpr = static_cast<int64_t>(ir->assertions().size());
+        }
+
+        // SAT stats
+        if (cadicalBackend) {
+            auto satStats = cadicalBackend->getStats();
+            caseStats_.sat.vars = satStats.vars;
+            caseStats_.sat.clauses = satStats.clauses;
+            caseStats_.sat.conflicts = satStats.conflicts;
+            caseStats_.sat.decisions = satStats.decisions;
+            caseStats_.sat.propagations = satStats.propagations;
+        }
+
+        // Theory stats
+        if (theoryManager) {
+            const auto& agg = theoryManager->aggregateStats();
+            caseStats_.theory.checkCalls = agg.checkCalls;
+            caseStats_.theory.conflicts = agg.conflicts;
+            caseStats_.theory.lemmas = agg.lemmas;
+            caseStats_.theory.propagations = agg.propagations;
+            if (agg.conflicts > 0) {
+                caseStats_.theory.avgConflictSize = static_cast<double>(agg.totalConflictSize) / agg.conflicts;
+            }
+            caseStats_.theory.maxConflictSize = agg.maxConflictSize;
+        }
+
+        // Search stats (from propagator)
+        if (propagator) {
+            const auto& ps = propagator->stats();
+            caseStats_.search.modelCheckCalls = ps.modelCheckCount;
+            caseStats_.search.modelCheckConflicts = ps.modelCheckConflict;
+            caseStats_.search.modelCheckLemmas = ps.modelCheckLemma;
+            caseStats_.search.modelCheckUnknowns = ps.modelCheckUnknown;
+
+            int totalConflicts = ps.modelCheckConflict + ps.propagateConflictCount;
+            long long totalConflictSize = ps.conflictTotalSize + ps.propagateConflictTotalSize;
+            caseStats_.search.conflictMinSize = ps.conflictMinSize;
+            if (ps.propagateConflictCount > 0) {
+                if (caseStats_.search.conflictMinSize < 0 ||
+                    ps.propagateConflictMinSize < caseStats_.search.conflictMinSize) {
+                    caseStats_.search.conflictMinSize = ps.propagateConflictMinSize;
+                }
+            }
+            caseStats_.search.conflictMaxSize = std::max(ps.conflictMaxSize, ps.propagateConflictMaxSize);
+            if (totalConflicts > 0) {
+                caseStats_.search.conflictAvgSize = static_cast<double>(totalConflictSize) / totalConflicts;
+            }
+            caseStats_.search.propagateCalls = ps.propagateCallCount;
+            caseStats_.search.propagateTheoryChecks = ps.propagateTheoryCheckCount;
+            caseStats_.search.propagateConflicts = ps.propagateConflictCount;
+            caseStats_.search.propagateLemmas = ps.propagateLemmaCount;
+        }
+
+        if (!dumpStatsPath_.empty()) {
+            caseStats_.dumpToFile(dumpStatsPath_);
+        }
+    }
+#endif
 #ifdef NLCOLVER_ENABLE_CASESTATS
     CaseStats caseStats_;
     std::string dumpStatsPath_;
@@ -169,6 +328,9 @@ public:
             IntDivModLowerer dmLowerer(*ir);
             if (!dmLowerer.run()) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported or internal error";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unknown, 0.0);
+#endif
                 return Result::Unknown;
             }
             const auto& req = dmLowerer.requirement();
@@ -181,9 +343,27 @@ public:
                                  logic == "QF_RDL" || logic == "RDL" ||
                                  logic == "QF_UFLIA" || logic == "UFLIA" ||
                                  logic == "QF_UFLRA" || logic == "UFLRA");
-            if (req.unsupported) { lastUnknownReason_ = "IntDivModLowerer: unsupported divisor"; return Result::Unknown; }
-            if (req.needsEUF && !hasEuf) { lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic; return Result::Unknown; }
-            if (req.needsNonlinearInt && isLinearOnly) { lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic; return Result::Unknown; }
+            if (req.unsupported) {
+                lastUnknownReason_ = "IntDivModLowerer: unsupported divisor";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                return Result::Unknown;
+            }
+            if (req.needsEUF && !hasEuf) {
+                lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                return Result::Unknown;
+            }
+            if (req.needsNonlinearInt && isLinearOnly) {
+                lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                return Result::Unknown;
+            }
             dmLowerer.commit();
         }
 
@@ -203,6 +383,9 @@ public:
             auto detectResult = purifier.detectOnly();
             if (detectResult.hasUnsupportedNonlinearToInt) {
                 lastUnknownReason_ = "LinearToIntPurifier: unsupported nonlinear to_int";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unknown, 0.0);
+#endif
                 return Result::Unknown;
             }
             auto purifyResult = purifier.run();
@@ -223,11 +406,17 @@ public:
 
 #ifndef NLCOLVER_HAS_CADICAL
         lastUnknownReason_ = "SAT: CaDiCaL backend not compiled";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+        finalizeCaseStats(Result::Unknown, 0.0);
+#endif
         return Result::Unknown;
 #else
         auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
         if (!cadicalBackend) {
             lastUnknownReason_ = "SAT: CadicalBackend cast failed";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0);
+#endif
             return Result::Unknown;
         }
 
@@ -278,11 +467,17 @@ public:
                       << " Mixed=" << features.hasMixedIntReal
                       << "). Returning Unknown.\n";
             lastUnknownReason_ = "LogicFeatureDetector: logic mismatch (declared=" + logic + ")";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
             return Result::Unknown;
         }
 
         if (features.hasUnsupported) {
             lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/array/FP/BV)";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
             return Result::Unknown;
         }
 
@@ -295,6 +490,9 @@ public:
 
         if (!setupResult.success) {
             lastUnknownReason_ = "TheoryFactory: solver setup failed (unsupported logic=" + logic + ")";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
             return Result::Unknown;
         }
         if (setupResult.logicMismatch) {
@@ -306,6 +504,13 @@ public:
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
         propagator.setUnknownReasonSink(&lastUnknownReason_);
+#ifdef NLCOLVER_ENABLE_CASESTATS
+        propagator.setCaseStats(&caseStats_);
+        if (!dumpStatsPath_.empty()) {
+            // Base path without extension for heartbeat
+            propagator.setDumpStatsBasePath(dumpStatsPath_);
+        }
+#endif
         cadicalBackend->connectPropagator(&propagator);
 
         // Atomizer registers parsed atoms into registry (which calls addObservedVar)
@@ -413,6 +618,10 @@ public:
         if (registry.hasUnsupportedTheoryAtom()) {
             std::cerr << "[Solver] unsupported theory atom detected\n";
             lastUnknownReason_ = "Atomizer: unsupported theory atom";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, &theoryManager,
+                              cadicalBackend, &atomizer, &registry);
+#endif
             cadicalBackend->disconnectPropagator();
             return Result::Unknown;
         }
@@ -438,13 +647,8 @@ public:
         }
 
 #ifdef NLCOLVER_ENABLE_CASESTATS
-        caseStats_.timeMs = solveDurMs;
-        caseStats_.result = (ret == Result::Sat) ? "sat" :
-                            (ret == Result::Unsat) ? "unsat" :
-                            (ret == Result::Unknown) ? "unknown" : "error";
-        if (!dumpStatsPath_.empty()) {
-            caseStats_.dumpToFile(dumpStatsPath_);
-        }
+        finalizeCaseStats(ret, solveDurMs, &propagator, &theoryManager,
+                          cadicalBackend, &atomizer, &registry);
 #endif
         return ret;
 #endif

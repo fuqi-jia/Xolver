@@ -272,8 +272,18 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
     }
 
     // ---------- Phase 3: process all work items for each ExprId in post-order ----------
+    // Build a map from ExprId -> its term-work expected sorts for O(1) lookup.
+    std::unordered_map<ExprId, std::vector<SortId>> termWorkByExpr;
+    termWorkByExpr.reserve(termWork.size());
+    for (const auto& key : termWork) {
+        termWorkByExpr[key.expr].push_back(key.expectedSort);
+    }
+
     for (ExprId e : postOrder) {
-        const auto& node = ir_.get(e);
+        // Copy the node because lowerBoolIte / lowerTermIte / rebuildLike
+        // may call ir_.add(), which can reallocate the internal expr vector
+        // and invalidate references.
+        const auto node = ir_.get(e);
 
         // Process bool work item first (if any)
         if (boolWork.count(e)) {
@@ -296,25 +306,25 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
         }
 
         // Process all term work items for this ExprId
-        for (const auto& key : termWork) {
-            if (key.expr != e) continue;
-            SortId S = key.expectedSort;
-
-            if (node.kind == Kind::Ite) {
-                lowerTermIte(e, S);
-            } else {
-                std::vector<ExprId> newChildren;
-                newChildren.reserve(node.children.size());
-                for (ExprId child : node.children) {
-                    if (boolWork.count(child)) {
-                        newChildren.push_back(boolMemo_.at(child));
-                    } else {
-                        SortId childSort = ir_.get(child).sort;
-                        newChildren.push_back(termMemo_.at({child, childSort}));
+        auto it = termWorkByExpr.find(e);
+        if (it != termWorkByExpr.end()) {
+            for (SortId S : it->second) {
+                if (node.kind == Kind::Ite) {
+                    lowerTermIte(e, S);
+                } else {
+                    std::vector<ExprId> newChildren;
+                    newChildren.reserve(node.children.size());
+                    for (ExprId child : node.children) {
+                        if (boolWork.count(child)) {
+                            newChildren.push_back(boolMemo_.at(child));
+                        } else {
+                            SortId childSort = ir_.get(child).sort;
+                            newChildren.push_back(termMemo_.at({child, childSort}));
+                        }
                     }
+                    ExprId result = rebuildLike(e, newChildren);
+                    termMemo_[{e, S}] = result;
                 }
-                ExprId result = rebuildLike(e, newChildren);
-                termMemo_[{e, S}] = result;
             }
         }
     }

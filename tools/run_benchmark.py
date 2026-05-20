@@ -86,7 +86,14 @@ class RunResult:
     stdout: str = ""
     stderr: str = ""
     returncode: int = 0
+    signal: Optional[str] = None
+    killed_by_timeout: bool = False
+    max_rss_mb: Optional[float] = None
+    stdout_path: str = ""
+    stderr_path: str = ""
     solver: str = "nlcolver"
+    stats: Optional[Dict] = None
+    stats_source: str = "none"
 
 
 @dataclass
@@ -205,13 +212,18 @@ def parse_result(stdout: str, stderr: str, returncode: int, timed_out: bool = Fa
     return "unknown"
 
 
-def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str = "solver", extra_args: Optional[List[str]] = None) -> RunResult:
+def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str = "solver",
+               extra_args: Optional[List[str]] = None,
+               log_dir: Optional[Path] = None) -> RunResult:
     """Run a single solver on a single file."""
     start = time.perf_counter()
-    timed_out = False
     full_cmd = cmd + [str(file_path)]
     if extra_args:
         full_cmd += extra_args
+    stdout_data = ""
+    stderr_data = ""
+    stdout_path = ""
+    stderr_path = ""
     try:
         proc = subprocess.run(
             full_cmd,
@@ -220,25 +232,31 @@ def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str
             timeout=timeout,
         )
         elapsed = time.perf_counter() - start
-        result = parse_result(proc.stdout, proc.stderr, proc.returncode, timed_out=False)
+        stdout_data = proc.stdout or ""
+        stderr_data = proc.stderr or ""
+        result = parse_result(stdout_data, stderr_data, proc.returncode, timed_out=False)
         return RunResult(
             file=str(file_path),
             result=result,
             elapsed=elapsed,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=stdout_data,
+            stderr=stderr_data,
             returncode=proc.returncode,
+            signal=None,
             solver=solver_name,
         )
     except subprocess.TimeoutExpired as e:
         elapsed = time.perf_counter() - start
+        stdout_data = (e.stdout.decode() if isinstance(e.stdout, bytes) else e.stdout) or ""
+        stderr_data = (e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr) or ""
         return RunResult(
             file=str(file_path),
             result="timeout",
             elapsed=elapsed,
-            stdout=e.stdout or "",
-            stderr=e.stderr or "",
+            stdout=stdout_data,
+            stderr=stderr_data,
             returncode=-1,
+            killed_by_timeout=True,
             solver=solver_name,
         )
     except Exception as e:
@@ -252,12 +270,29 @@ def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str
             returncode=-2,
             solver=solver_name,
         )
+    finally:
+        if log_dir is not None:
+            import hashlib
+            h = hashlib.sha256(str(file_path).encode()).hexdigest()[:16]
+            stdout_path = str(log_dir / f"{h}.out")
+            stderr_path = str(log_dir / f"{h}.err")
+            with open(stdout_path, "w") as f:
+                f.write(str(stdout_data))
+            with open(stderr_path, "w") as f:
+                f.write(str(stderr_data))
 
 
-def run_nlcolver(file_path: Path, solver_path: str, timeout: float, logic: Optional[str] = None) -> RunResult:
+def run_nlcolver(file_path: Path, solver_path: str, timeout: float,
+                 logic: Optional[str] = None,
+                 dump_stats_path: Optional[str] = None,
+                 log_dir: Optional[Path] = None) -> RunResult:
     cmd = [solver_path, "solve"]
-    # Note: options must come AFTER the file path for this CLI parser
-    return run_solver(cmd, file_path, timeout, solver_name="nlcolver", extra_args=["--logic", logic] if logic else None)
+    extra = []
+    if logic:
+        extra += ["--logic", logic]
+    if dump_stats_path:
+        extra += ["--dump-stats", dump_stats_path]
+    return run_solver(cmd, file_path, timeout, solver_name="nlcolver", extra_args=extra or None, log_dir=log_dir)
 
 
 def run_compare(file_path: Path, compare_solver: str, timeout: float) -> RunResult:
@@ -423,7 +458,8 @@ def write_errors(output_dir: Path, nlcolver_results: List[RunResult], compare_re
     print(f"[Errors written to {path}]")
 
 
-def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonRow]):
+def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonRow],
+                       nlcolver_map: Optional[dict] = None):
     path = output_dir / "statistics.json"
     # Build stats dict manually because asdict() cannot serialize defaultdict
     stats_dict = {
@@ -450,13 +486,27 @@ def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonR
             for cat, cstat in stats.category_stats.items()
         },
     }
+    result_rows = []
+    for r in rows:
+        d = asdict(r)
+        if nlcolver_map and r.file in nlcolver_map:
+            n = nlcolver_map[r.file]
+            d["stats"] = n.stats if n.stats else {}
+            d["stats_source"] = n.stats_source
+            d["returncode"] = n.returncode
+            d["signal"] = n.signal
+            d["killed_by_timeout"] = n.killed_by_timeout
+            d["stderr_tail"] = n.stderr[-4096:] if n.stderr else ""
+            d["stdout_path"] = n.stdout_path
+            d["stderr_path"] = n.stderr_path
+        result_rows.append(d)
     data = {
         "meta": {
             "date": datetime.now().isoformat(),
             "logic": stats.logic,
         },
         "statistics": stats_dict,
-        "results": [asdict(r) for r in rows],
+        "results": result_rows,
     }
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
@@ -964,11 +1014,30 @@ renderTopSlow();
 def run_single_logic(args, logic: str, output_dir: Path):
     """Run benchmark for a single logic and return statistics."""
     # Find files
-    try:
-        files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files, random_sample=args.random)
-    except FileNotFoundError as e:
-        print(f"ERROR: {e}")
-        return None
+    files = []
+    if args.file_list:
+        with open(args.file_list) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    p = Path(line)
+                    if not p.is_absolute():
+                        # Try relative to cwd first, then BENCHMARK_ROOT
+                        if p.exists():
+                            pass  # use as-is
+                        else:
+                            p = BENCHMARK_ROOT / p
+                    if p.exists():
+                        files.append(p)
+        # Filter by logic if specified
+        if logic and logic != "ALL":
+            files = [f for f in files if logic in str(f)]
+    else:
+        try:
+            files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files, random_sample=args.random)
+        except FileNotFoundError as e:
+            print(f"ERROR: {e}")
+            return None
 
     if not files:
         print(f"WARNING: No .smt2 files found for logic {logic}.")
@@ -993,19 +1062,56 @@ def run_single_logic(args, logic: str, output_dir: Path):
     nlcolver_results: List[RunResult] = []
     print(f"\n[1/2] Running NLColver on {total} files ...")
 
+    dump_stats_dir = Path(args.dump_stats_dir) if args.dump_stats_dir else None
+    log_dir = Path(args.log_dir) if args.log_dir else None
+    if dump_stats_dir:
+        dump_stats_dir.mkdir(parents=True, exist_ok=True)
+    if log_dir:
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+    def run_one(f: Path):
+        import hashlib
+        stats_path = None
+        if dump_stats_dir:
+            h = hashlib.sha256(str(f).encode()).hexdigest()[:16]
+            stats_path = str(dump_stats_dir / f"{h}.json")
+        res = run_nlcolver(f, args.solver, args.timeout, logic,
+                           dump_stats_path=stats_path, log_dir=log_dir)
+        # Try to read stats JSON after solve
+        if dump_stats_dir and stats_path:
+            # Check full json first
+            if Path(stats_path).exists():
+                try:
+                    with open(stats_path) as sf:
+                        res.stats = json.load(sf)
+                        res.stats_source = "json"
+                except Exception:
+                    pass
+            else:
+                # Check heartbeat
+                hb = stats_path + ".heartbeat"
+                if Path(hb).exists():
+                    try:
+                        with open(hb) as sf:
+                            res.stats = json.load(sf)
+                            res.stats_source = "heartbeat"
+                    except Exception:
+                        pass
+            if res.stats is None:
+                # Synthesize timeout record
+                res.stats = {"result": res.result, "time_ms": res.elapsed * 1000}
+                res.stats_source = "synthetic"
+        return res
+
     if args.serial or args.jobs == 1:
-        # True serial mode: no subprocess pool, lower memory footprint
         for i, f in enumerate(files, 1):
-            res = run_nlcolver(f, args.solver, args.timeout, logic)
+            res = run_one(f)
             nlcolver_results.append(res)
             if args.verbose or i % 100 == 0 or i == total:
                 print(f"  NLColver: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
     else:
         with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-            futures = {
-                executor.submit(run_nlcolver, f, args.solver, args.timeout, logic): f
-                for f in files
-            }
+            futures = {executor.submit(run_one, f): f for f in files}
             completed = 0
             for future in as_completed(futures):
                 res = future.result()
@@ -1075,8 +1181,18 @@ def run_single_logic(args, logic: str, output_dir: Path):
             match, note = "SKIP", ""
 
         # Category (subdirectory) stats
-        rel = f.relative_to(BENCHMARK_ROOT / logic)
-        cat = rel.parts[0] if rel.parts else "root"
+        cat = "root"
+        try:
+            rel = f.relative_to(BENCHMARK_ROOT / logic)
+            cat = rel.parts[0] if rel.parts else "root"
+        except ValueError:
+            try:
+                rel = f.relative_to(BENCHMARK_ROOT)
+                cat = rel.parts[1] if len(rel.parts) > 1 else rel.parts[0] if rel.parts else "root"
+            except ValueError:
+                # File is outside BENCHMARK_ROOT (e.g. tests/regression/)
+                parts = f.parts
+                cat = parts[-2] if len(parts) >= 2 else "root"
         if cat not in stats.category_stats:
             stats.category_stats[cat] = {
                 "count": 0,
@@ -1122,7 +1238,18 @@ def run_single_logic(args, logic: str, output_dir: Path):
     write_top_slow(output_dir, rows)
     if args.compare_with:
         write_discrepancies(output_dir, rows)
-    write_json_stats(output_dir, stats, rows)
+    write_json_stats(output_dir, stats, rows, nlcolver_map)
+
+    # Write manifest
+    if args.manifest_out:
+        manifest_path = Path(args.manifest_out)
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(manifest_path, "w") as f:
+            for file in sorted(files):
+                try:
+                    f.write(str(file.relative_to(BENCHMARK_ROOT)) + "\n")
+                except ValueError:
+                    f.write(str(file) + "\n")
     write_html_report(output_dir, stats, rows, args, wall_time)
 
     # Category summary
@@ -1222,7 +1349,7 @@ Examples:
   nohup python tools/run_benchmark.py --logic QF_NIA -j 8 -t 30 --compare-with z3 &
         """,
     )
-    parser.add_argument("--logic", default=None, help="Logic to benchmark (e.g., QF_LRA, lra, nia)")
+    parser.add_argument("--logic", default=None, help="Logic(s) to benchmark. Comma-separated for multiple (e.g., QF_LRA, lra,nia)")
     parser.add_argument("--all-logics", action="store_true", help="Run on all available logics in benchmark dir")
     parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of parallel jobs (default: 1)")
     parser.add_argument("-t", "--timeout", type=float, default=30, help="Timeout per instance in seconds (default: 30)")
@@ -1234,11 +1361,15 @@ Examples:
     parser.add_argument("--filter", default=None, help="Filter files by substring in relative path")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     parser.add_argument("--serial", action="store_true", help="Run serially without subprocess pool (saves memory)")
+    parser.add_argument("--dump-stats-dir", default=None, help="Directory to dump per-case stats JSON")
+    parser.add_argument("--log-dir", default=None, help="Directory to write per-case stdout/stderr logs")
+    parser.add_argument("--manifest-out", default=None, help="Write manifest.txt with all benchmarked files")
+    parser.add_argument("--file-list", default=None, help="Run on files from this list (for smoke mode)")
 
     args = parser.parse_args()
 
-    if not args.logic and not args.all_logics:
-        parser.error("Either --logic or --all-logics must be specified.")
+    if not args.logic and not args.all_logics and not args.file_list:
+        parser.error("Either --logic, --all-logics, or --file-list must be specified.")
 
     # Validate solver binary
     if not os.path.isfile(args.solver):
@@ -1254,7 +1385,21 @@ Examples:
     master_dir = Path(args.output or f"benchmark_results/all_logics_{timestamp}")
     master_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.all_logics:
+    if args.file_list:
+        # Infer logics from file list
+        logics_set = set()
+        with open(args.file_list) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split("/")
+                    if len(parts) > 0 and parts[0].startswith("QF_"):
+                        logics_set.add(parts[0])
+        logics = sorted(logics_set)
+        if not logics:
+            logics = ["ALL"]
+        print(f"Running from file list across {len(logics)} logics: {', '.join(logics)}")
+    elif args.all_logics:
         logics = list_logic_dirs()
         if not logics:
             print("ERROR: No benchmark logic directories found.")
@@ -1266,7 +1411,9 @@ Examples:
             print(f"Default --max-files set to {args.max_files} per logic (override with --max-files N)")
     else:
         try:
-            logics = [resolve_logic(args.logic)]
+            raw_names = [n.strip() for n in args.logic.split(",")]
+            logics = [resolve_logic(n) for n in raw_names if n]
+            print(f"Running on {len(logics)} logic(s): {', '.join(logics)}")
         except ValueError as e:
             print(f"ERROR: {e}")
             sys.exit(1)

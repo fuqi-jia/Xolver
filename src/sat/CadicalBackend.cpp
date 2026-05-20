@@ -94,6 +94,16 @@ void CadicalBackend::requestTerminate() {
     solver_->terminate();
 }
 
+CadicalBackend::Stats CadicalBackend::getStats() const {
+    Stats s;
+    s.vars = solver_->active();
+    s.clauses = solver_->irredundant() + solver_->redundant();
+    s.conflicts = solver_->get("conflicts");
+    s.decisions = solver_->get("decisions");
+    s.propagations = solver_->get("propagations");
+    return s;
+}
+
 std::unique_ptr<SatSolver> createSatSolver() {
     return std::make_unique<CadicalBackend>();
 }

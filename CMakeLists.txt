@@ -15,6 +15,7 @@ option(NLCOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
 option(NLCOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
 option(NLCOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
 option(NLCOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
+option(NLCOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -116,6 +117,17 @@ if(EXISTS "${LIBPOLY_SOURCE_DIR}/CMakeLists.txt")
 else()
     set(LIBPOLY_FOUND FALSE)
     message(WARNING "libpoly submodule missing. Run: git submodule update --init --recursive")
+endif()
+
+# ---------------------------------------------------------------------------
+# Static build configuration
+# ---------------------------------------------------------------------------
+if(NLCOLVER_STATIC_BUILD)
+    message(STATUS "Static build enabled: -static -pthread")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -pthread")
+    set(CMAKE_SHARED_LINKER_FLAGS "")
+    # Disable shared libraries for vendored deps
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 endif()
 
 # ---------------------------------------------------------------------------

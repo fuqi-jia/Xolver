@@ -43,6 +43,7 @@
 build/
 Build/
 build-*/
+build_*/
 
 # CMake generated files
 CMakeFiles/
@@ -89,3 +90,4 @@ third_party/*/__pycache__/
 build_old/
 build_profile/
 benchmark_meta.txt
+bench-results/

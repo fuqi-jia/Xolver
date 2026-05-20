@@ -29,6 +29,16 @@ public:
     void disconnectPropagator();
     void requestTerminate();
 
+    // Statistics (available only when compiled with CaDiCaL)
+    struct Stats {
+        int64_t vars = 0;
+        int64_t clauses = 0;
+        int64_t conflicts = 0;
+        int64_t decisions = 0;
+        int64_t propagations = 0;
+    };
+    Stats getStats() const;
+
 private:
     std::unique_ptr<CaDiCaL::Solver> solver_;
     SatVar maxVar_ = 0;

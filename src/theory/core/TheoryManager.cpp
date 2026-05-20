@@ -31,6 +31,28 @@ void TheoryManager::clearSolvers() {
     pendingSharedEqEvents_.clear();
     snapshots_.clear();
     deducedEqCache_.clear();
+    aggStats_ = AggregateStats{};
+}
+
+std::vector<std::string> TheoryManager::activeTheoryNames() const {
+    std::vector<std::string> names;
+    names.reserve(solvers_.size());
+    for (const auto& s : solvers_) {
+        switch (s->id()) {
+            case TheoryId::LRA: names.push_back("LRA"); break;
+            case TheoryId::LIA: names.push_back("LIA"); break;
+            case TheoryId::NRA: names.push_back("NRA"); break;
+            case TheoryId::NIA: names.push_back("NIA"); break;
+            case TheoryId::LIRA: names.push_back("LIRA"); break;
+            case TheoryId::NIRA: names.push_back("NIRA"); break;
+            case TheoryId::IDL: names.push_back("IDL"); break;
+            case TheoryId::RDL: names.push_back("RDL"); break;
+            case TheoryId::EUF: names.push_back("EUF"); break;
+            case TheoryId::Combination: names.push_back("Combination"); break;
+            default: names.push_back("Unknown"); break;
+        }
+    }
+    return names;
 }
 
 std::vector<TheorySolver*> TheoryManager::solversOwning(SharedTermId a, SharedTermId b) const {
@@ -124,6 +146,21 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         return fc;
     };
 
+    auto recordCheckResult = [this](const TheoryCheckResult& tr) {
+        ++aggStats_.checkCalls;
+        if (tr.kind == TheoryCheckResult::Kind::Conflict) {
+            ++aggStats_.conflicts;
+            if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
+                size_t sz = tr.conflictOpt->clause.size();
+                aggStats_.totalConflictSize += static_cast<int64_t>(sz);
+                if (static_cast<int64_t>(sz) > aggStats_.maxConflictSize)
+                    aggStats_.maxConflictSize = static_cast<int64_t>(sz);
+            }
+        } else if (tr.kind == TheoryCheckResult::Kind::Lemma) {
+            ++aggStats_.lemmas;
+        }
+    };
+
     if (!combinationMode_) {
         // Legacy single-theory path
         if (solvers_.empty()) {
@@ -131,6 +168,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
         for (auto& solver : solvers_) {
             auto tr = solver->check(lemmaDb, effort);
+            recordCheckResult(tr);
             if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
                 auto fc = makeFalsifiedConflict(tr.conflictOpt->clause);
                 return TheoryCheckResult::mkConflict(std::move(fc));
@@ -195,6 +233,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // 2. Run each theory check
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
+        recordCheckResult(tr);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             // Defensive: every raw reason should be true in the current model.
             if (assignmentView_) {

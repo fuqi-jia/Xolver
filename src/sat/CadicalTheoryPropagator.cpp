@@ -62,7 +62,7 @@ void TheorySearchStats::print(std::ostream& out) const {
     out << "  consistent=" << modelCheckConsistent
         << " conflict=" << modelCheckConflict
         << " lemma=" << modelCheckLemma
-        << " unknown=" << modelCheckUnknown << "\n";
+        << " unknowns=" << modelCheckUnknown << "\n";
     if (modelCheckConflict > 0) {
         out << "  conflict_size min=" << conflictMinSize
             << " max=" << conflictMaxSize
@@ -369,10 +369,20 @@ void CadicalTheoryPropagator::updateCaseStatsSearch() {
     caseStats_->search.modelCheckConflicts = stats_.modelCheckConflict;
     caseStats_->search.modelCheckLemmas = stats_.modelCheckLemma;
     caseStats_->search.modelCheckUnknowns = stats_.modelCheckUnknown;
+
+    // Combine model-check and propagate conflict sizes for overall stats
+    int totalConflicts = stats_.modelCheckConflict + stats_.propagateConflictCount;
+    long long totalConflictSize = stats_.conflictTotalSize + stats_.propagateConflictTotalSize;
     caseStats_->search.conflictMinSize = stats_.conflictMinSize;
-    caseStats_->search.conflictMaxSize = stats_.conflictMaxSize;
-    if (stats_.modelCheckConflict > 0) {
-        caseStats_->search.conflictAvgSize = static_cast<double>(stats_.conflictTotalSize) / stats_.modelCheckConflict;
+    if (stats_.propagateConflictCount > 0) {
+        if (caseStats_->search.conflictMinSize < 0 ||
+            stats_.propagateConflictMinSize < caseStats_->search.conflictMinSize) {
+            caseStats_->search.conflictMinSize = stats_.propagateConflictMinSize;
+        }
+    }
+    caseStats_->search.conflictMaxSize = std::max(stats_.conflictMaxSize, stats_.propagateConflictMaxSize);
+    if (totalConflicts > 0) {
+        caseStats_->search.conflictAvgSize = static_cast<double>(totalConflictSize) / totalConflicts;
     }
     caseStats_->search.propagateCalls = stats_.propagateCallCount;
     caseStats_->search.propagateTheoryChecks = stats_.propagateTheoryCheckCount;
