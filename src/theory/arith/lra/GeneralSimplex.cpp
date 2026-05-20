@@ -798,9 +798,22 @@ std::vector<GeneralSimplex::BoundReason> GeneralSimplex::explainFixedValue(int v
     return reasons;
 }
 
+static thread_local int proveFixedValueDepth = 0;
+static constexpr int MAX_PROVE_FIXED_VALUE_DEPTH = 10000;
+
 std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
 GeneralSimplex::proveFixedValue(int var) const {
-    assert(var >= 0 && var < static_cast<int>(vars_.size()));
+    if (var < 0 || var >= static_cast<int>(vars_.size())) {
+        return std::nullopt;
+    }
+    if (++proveFixedValueDepth > MAX_PROVE_FIXED_VALUE_DEPTH) {
+        --proveFixedValueDepth;
+        return std::nullopt;
+    }
+
+    struct DepthGuard {
+        ~DepthGuard() { --proveFixedValueDepth; }
+    } guard;
 
     // Direct bound fix
     auto direct = fixedValue(var);
@@ -810,12 +823,17 @@ GeneralSimplex::proveFixedValue(int var) const {
 
     // If var is basic, check whether all non-basic entries in its row are fixed.
     int row = basicRowOfVar(var);
-    if (row < 0) return std::nullopt;
+    if (row < 0 || row >= tableau().numRows()) {
+        return std::nullopt;
+    }
 
     const auto& tabRow = tableau().row(row);
     DeltaRational value(tabRow.rhs);
     std::vector<BoundReason> reasons;
     for (const auto& e : tabRow.entries) {
+        if (e.col < 0 || e.col >= static_cast<int>(vars_.size())) {
+            return std::nullopt;
+        }
         auto sub = proveFixedValue(e.col);
         if (!sub) return std::nullopt;
         value += e.coeff * sub->first;

@@ -104,7 +104,7 @@ void LiaSolver::backtrackToLevel(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     pendingConflict_.reset();
 
 #ifdef NLCOLVER_LIA_PROFILE
@@ -298,7 +298,13 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
 
-    if (!disequalities_.empty()) {
+    // Only handle disequalities at Full effort (model check).
+    // At Standard effort (cb_propagate), partial assignments may not
+    // give enough information for proveFixedValue, and split lemmas
+    // cannot be propagated anyway (cb_propagate ignores lemmas).
+    // This avoids useless work and prevents memory corruption bugs
+    // triggered by repeated split-lemma generation in propagate.
+    if (effort == TheoryEffort::Full && !disequalities_.empty()) {
         auto dr = handleDisequalities(lemmaDb);
         if (dr.kind != TheoryCheckResult::Kind::Consistent) {
 #ifdef NLCOLVER_LIA_PROFILE
