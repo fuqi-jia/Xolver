@@ -1,5 +1,6 @@
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <cassert>
+#include <chrono>
 #include <algorithm>
 #include <iostream>
 
@@ -269,6 +270,9 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t0 = std::chrono::steady_clock::now();
+#endif
     for (int x : nonBasicVars_) {
         vars_[x].beta = chooseValueWithinBounds(x);
     }
@@ -286,6 +290,10 @@ void GeneralSimplex::recomputeBeta() {
 
     betaDirty_ = false;
     rebuildViolationQueue();
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t1 = std::chrono::steady_clock::now();
+    coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+#endif
 }
 
 DeltaRational GeneralSimplex::chooseValueWithinBounds(int var) const {
@@ -335,6 +343,9 @@ bool GeneralSimplex::atUpper(int var) const {
 }
 
 void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t0 = std::chrono::steady_clock::now();
+#endif
     assert(vars_[nonBasicVar].basicRow == -1);
     DeltaRational delta = value - vars_[nonBasicVar].beta;
     if (delta.isZero()) return;
@@ -352,6 +363,10 @@ void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
     }
 
     vars_[nonBasicVar].beta = value;
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t1 = std::chrono::steady_clock::now();
+    coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+#endif
 }
 
 // ============================================================================
@@ -410,7 +425,36 @@ GeneralSimplex::Result GeneralSimplex::check() {
     if (betaDirty_) {
         recomputeBeta();
     }
-    return checkInternal();
+    auto r = checkInternal();
+#ifdef NLCOLVER_LRA_PROFILE
+    if (r == Result::Sat) {
+        // Sample coefficient bit sizes from tableau
+        for (int row = 0; row < tab_.numRows(); ++row) {
+            const auto& sr = tab_.row(row);
+            if (sr.rhs != 0) {
+                int numBits = mpz_sizeinbase(sr.rhs.get_num().get_mpz_t(), 2);
+                int denBits = mpz_sizeinbase(sr.rhs.get_den().get_mpz_t(), 2);
+                coeffStats_.maxCoeffNumBits = std::max(coeffStats_.maxCoeffNumBits, numBits);
+                coeffStats_.maxCoeffDenBits = std::max(coeffStats_.maxCoeffDenBits, denBits);
+                coeffStats_.totalCoeffNumBits += numBits;
+                coeffStats_.totalCoeffDenBits += denBits;
+                coeffStats_.totalCoeffSamples++;
+            }
+            for (const auto& e : sr.entries) {
+                if (e.coeff != 0) {
+                    int numBits = mpz_sizeinbase(e.coeff.get_num().get_mpz_t(), 2);
+                    int denBits = mpz_sizeinbase(e.coeff.get_den().get_mpz_t(), 2);
+                    coeffStats_.maxCoeffNumBits = std::max(coeffStats_.maxCoeffNumBits, numBits);
+                    coeffStats_.maxCoeffDenBits = std::max(coeffStats_.maxCoeffDenBits, denBits);
+                    coeffStats_.totalCoeffNumBits += numBits;
+                    coeffStats_.totalCoeffDenBits += denBits;
+                    coeffStats_.totalCoeffSamples++;
+                }
+            }
+        }
+    }
+#endif
+    return r;
 }
 
 GeneralSimplex::Result GeneralSimplex::checkInternal() {
@@ -524,6 +568,7 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 void GeneralSimplex::pivot(int leaving, int entering) {
 #ifdef NLCOLVER_LRA_PROFILE
     ++pivotCount_;
+    auto prof_t0 = std::chrono::steady_clock::now();
 #endif
     int r = rowOfBasic(leaving);
     mpq_class d = tab_.getCoeff(r, entering);
@@ -589,6 +634,11 @@ void GeneralSimplex::pivot(int leaving, int entering) {
 
     // Invariant: entering is now basic, so its column must be empty
     assert(tab_.col(entering).entries.empty());
+
+#ifdef NLCOLVER_LRA_PROFILE
+    auto prof_t1 = std::chrono::steady_clock::now();
+    coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+#endif
 
     checkInvariants();
 }

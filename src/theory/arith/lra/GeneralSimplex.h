@@ -309,6 +309,33 @@ private:
 
     // Row of a basic var
     int rowOfBasic(int var) const;
+
+#ifdef NLCOLVER_LRA_PROFILE
+public:
+    struct CoeffStats {
+        int64_t mpqOpTimeUs = 0;
+        int maxCoeffNumBits = 0;
+        int maxCoeffDenBits = 0;
+        int64_t totalCoeffNumBits = 0;
+        int64_t totalCoeffDenBits = 0;
+        int64_t totalCoeffSamples = 0;
+
+        void reset() {
+            mpqOpTimeUs = 0;
+            maxCoeffNumBits = 0;
+            maxCoeffDenBits = 0;
+            totalCoeffNumBits = 0;
+            totalCoeffDenBits = 0;
+            totalCoeffSamples = 0;
+        }
+    };
+
+    const CoeffStats& coeffStats() const { return coeffStats_; }
+    void resetCoeffStats() { coeffStats_.reset(); }
+
+private:
+    mutable CoeffStats coeffStats_;
+#endif
 };
 
 } // namespace nlcolver

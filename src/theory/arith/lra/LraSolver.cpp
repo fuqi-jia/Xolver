@@ -206,6 +206,14 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
     profile_.totalPivotCount += gs_.pivotCount();
     gs_.resetPivotCount();
+    auto cs = gs_.coeffStats();
+    profile_.mpqOpTimeUs += cs.mpqOpTimeUs;
+    profile_.maxCoeffNumBits = std::max(profile_.maxCoeffNumBits, cs.maxCoeffNumBits);
+    profile_.maxCoeffDenBits = std::max(profile_.maxCoeffDenBits, cs.maxCoeffDenBits);
+    profile_.totalCoeffNumBits += cs.totalCoeffNumBits;
+    profile_.totalCoeffDenBits += cs.totalCoeffDenBits;
+    profile_.totalCoeffSamples += cs.totalCoeffSamples;
+    gs_.resetCoeffStats();
 #endif
 
     NO_DBG << "[LRA] simplex result=" << (r == GeneralSimplex::Result::Sat ? "Sat" :
@@ -493,6 +501,11 @@ void LraSolver::ProfileStats::dump() const {
         << " maxConflictSize=" << maxConflictSize
         << " split=" << disequalitySplitCount
         << " pivots=" << totalPivotCount
+        << " mpqMs=" << (mpqOpTimeUs / 1000)
+        << " maxCoeffNumBits=" << maxCoeffNumBits
+        << " maxCoeffDenBits=" << maxCoeffDenBits
+        << " avgCoeffNumBits=" << (totalCoeffSamples > 0 ? totalCoeffNumBits / totalCoeffSamples : 0)
+        << " avgCoeffDenBits=" << (totalCoeffSamples > 0 ? totalCoeffDenBits / totalCoeffSamples : 0)
         << "\n";
 }
 #endif

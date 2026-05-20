@@ -139,6 +139,12 @@ private:
         int immediateConflictCount = 0;
         int disequalitySplitCount = 0;
         int64_t totalPivotCount = 0;
+        int64_t mpqOpTimeUs = 0;
+        int maxCoeffNumBits = 0;
+        int maxCoeffDenBits = 0;
+        int64_t totalCoeffNumBits = 0;
+        int64_t totalCoeffDenBits = 0;
+        int64_t totalCoeffSamples = 0;
 
         void resetForNewSolve() {
             solveCount++;
