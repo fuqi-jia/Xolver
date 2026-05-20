@@ -73,7 +73,6 @@ struct EGraphSnapshot {
     size_t ufTrailSize = 0;
     size_t memberTrailSize = 0;
     size_t mergeRecordSize = 0;
-    size_t mergeQueueSize = 0;
     size_t sigTableSnap = 0;
     size_t currentSigSnap = 0;
     size_t proofForestSnap = 0;

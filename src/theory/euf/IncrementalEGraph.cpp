@@ -18,7 +18,6 @@ void IncrementalEGraph::clear() {
     members_.clear();
     memberTrail_.clear();
     mergeRecords_.clear();
-    mergeQueue_.clear();
     sigTable_.clear();
     currentSig_.clear();
     currentSigTrail_.clear();
@@ -28,7 +27,7 @@ void IncrementalEGraph::clear() {
     nextTermToRegister_ = 0;
 }
 
-void IncrementalEGraph::ensureTerm(EufTermId t) {
+void IncrementalEGraph::ensureNodeAllocated(EufTermId t) {
     if (t >= members_.size()) {
         size_t oldSize = members_.size();
         members_.resize(t + 1);
@@ -40,6 +39,29 @@ void IncrementalEGraph::ensureTerm(EufTermId t) {
     if (t >= currentSig_.size()) {
         currentSig_.resize(t + 1, std::nullopt);
     }
+}
+
+void IncrementalEGraph::ensureTermRegistered(EufTermId t,
+                                             std::deque<PendingMerge>& outQueue) {
+    ensureNodeAllocated(t);
+
+    const auto& n = tm_.node(t);
+    for (EufTermId arg : n.args) {
+        ensureTermRegistered(arg, outQueue);
+    }
+
+    if (!n.args.empty()) {
+        refreshSignature(t, outQueue);
+    }
+}
+
+void IncrementalEGraph::registerPendingSignatures(std::deque<PendingMerge>& outQueue) {
+    for (EufTermId t = nextTermToRegister_; t < tm_.termCount(); ++t) {
+        if (!tm_.node(t).args.empty()) {
+            refreshSignature(t, outQueue);
+        }
+    }
+    nextTermToRegister_ = static_cast<EufTermId>(tm_.termCount());
 }
 
 AppSignature IncrementalEGraph::computeSignature(EufTermId t) const {
@@ -68,46 +90,65 @@ std::vector<EufTermId> IncrementalEGraph::collectParents(EClassId root) const {
 }
 
 void IncrementalEGraph::refreshSignature(EufTermId app,
-                                         std::deque<PendingMerge>* outQueue) {
+                                         std::deque<PendingMerge>& outQueue) {
     if (app >= tm_.termCount()) return;
     if (tm_.node(app).args.empty()) return;
 
+    // Use ensureNodeAllocated (NOT ensureTermRegistered) to avoid recursion
     for (EufTermId arg : tm_.node(app).args) {
-        ensureTerm(arg);
+        ensureNodeAllocated(arg);
     }
-    ensureTerm(app);
+    ensureNodeAllocated(app);
 
     AppSignature newSig = computeSignature(app);
 
+    std::optional<AppSignature> oldSig = currentSig_[app];
+
+    // Step 1: Remove stale signature from sigTable_
+    if (oldSig && *oldSig != newSig) {
+        sigTable_.eraseIfOwner(*oldSig, app);
+    }
+
+    // Step 2: Update currentSig_ (even if congruence will be enqueued)
+    if (!oldSig || *oldSig != newSig) {
+        setCurrentSig(app, newSig);
+    }
+
+    // Step 3: Check for congruence with existing valid owner
     auto ownerOpt = sigTable_.find(newSig);
     if (ownerOpt) {
         EufTermId owner = *ownerOpt;
-        bool ownerIsFresh = currentSig_[owner].has_value() &&
-                            *currentSig_[owner] == newSig;
-        if (ownerIsFresh && !same(owner, app)) {
-            MergeReason cr;
-            cr.kind = MergeReasonKind::Congruence;
-            cr.lhsApp = owner;
-            const auto& n1 = tm_.node(owner);
-            const auto& n2 = tm_.node(app);
-            for (size_t i = 0; i < n1.args.size(); ++i) {
-                cr.argPairs.push_back({n1.args[i], n2.args[i]});
+
+        bool ownerValid =
+            owner < currentSig_.size() &&
+            currentSig_[owner].has_value() &&
+            *currentSig_[owner] == newSig;
+
+        if (ownerValid) {
+            if (!same(owner, app)) {
+                const auto& n1 = tm_.node(owner);
+                const auto& n2 = tm_.node(app);
+
+                // Defensive: verify same symbol and arity
+                assert(n1.symbol == n2.symbol);
+                assert(n1.args.size() == n2.args.size());
+
+                MergeReason cr;
+                cr.kind = MergeReasonKind::Congruence;
+                cr.lhsApp = owner;
+                for (size_t i = 0; i < n1.args.size(); ++i) {
+                    cr.argPairs.push_back({n1.args[i], n2.args[i]});
+                }
+                outQueue.push_back({owner, app, cr});
             }
-            if (outQueue) {
-                outQueue->push_back({owner, app, cr});
-            } else {
-                mergeQueue_.push_back({owner, app, cr});
-            }
+            // Valid owner exists: do NOT replace it.  This keeps the
+            // signature table stable and avoids unnecessary trail entries.
             return;
         }
     }
 
-    if (currentSig_[app].has_value()) {
-        sigTable_.eraseIfOwner(*currentSig_[app], app);
-    }
-
+    // Step 4: No valid owner — app becomes owner
     sigTable_.insertOrAssign(newSig, app);
-    setCurrentSig(app, newSig);
 }
 
 void IncrementalEGraph::refreshCongruence(EClassId kept, EClassId killed,
@@ -117,7 +158,7 @@ void IncrementalEGraph::refreshCongruence(EClassId kept, EClassId killed,
     affected.insert(affected.end(), affectedB.begin(), affectedB.end());
 
     for (EufTermId app : affected) {
-        refreshSignature(app, &outQueue);
+        refreshSignature(app, outQueue);
     }
 }
 
@@ -135,19 +176,19 @@ void IncrementalEGraph::rollbackCurrentSig(size_t snap) {
     }
 }
 
-// 执行一次 UF unite。不 refresh congruence，不 drain queue。
 MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
-                                       const MergeReason& reason) {
-    // 注册新 term 的 signature（只在有新 term 时工作）
+                                       const MergeReason& reason,
+                                       std::deque<PendingMerge>& outQueue) {
+    // Register any newly interned terms' signatures
     for (EufTermId t = nextTermToRegister_; t < tm_.termCount(); ++t) {
         if (!tm_.node(t).args.empty()) {
-            refreshSignature(t, nullptr);
+            refreshSignature(t, outQueue);
         }
     }
     nextTermToRegister_ = static_cast<EufTermId>(tm_.termCount());
 
-    ensureTerm(a);
-    ensureTerm(b);
+    ensureNodeAllocated(a);
+    ensureNodeAllocated(b);
 
     if (same(a, b)) return {false, NullEClass, NullEClass};
 
@@ -156,7 +197,6 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
 
     if (tm_.node(a).sort != tm_.node(b).sort &&
         tm_.node(a).sort != NullSort && tm_.node(b).sort != NullSort) {
-        // SortMismatch：记录但返回未合并
         MergeRecord rec;
         rec.id = static_cast<MergeId>(mergeRecords_.size());
         rec.lhs = a;
@@ -168,6 +208,14 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
         mergeRecords_.push_back(rec);
         return {false, NullEClass, NullEClass};
     }
+
+    // CRITICAL: collect affected parents BEFORE union, while both roots
+    // are still valid representatives.
+    std::vector<EufTermId> affected = collectParents(ra);
+    auto affectedB = collectParents(rb);
+    affected.insert(affected.end(), affectedB.begin(), affectedB.end());
+    std::sort(affected.begin(), affected.end());
+    affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
 
     MergeRecord rec;
     rec.id = static_cast<MergeId>(mergeRecords_.size());
@@ -197,6 +245,12 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
     members_[dst].insert(members_[dst].end(),
                          members_[src].begin(), members_[src].end());
 
+    // Refresh signatures for all affected parents.  Congruences are
+    // pushed to outQueue and will be processed by the saturation loop.
+    for (EufTermId app : affected) {
+        refreshSignature(app, outQueue);
+    }
+
     return {true, dst, src};
 }
 
@@ -210,12 +264,10 @@ EClassId IncrementalEGraph::rep(EufTermId t) const {
 }
 
 EGraphSnapshot IncrementalEGraph::snapshot() const {
-    assert(mergeQueue_.empty());
     return {
         uf_.snapshot(),
         memberTrail_.size(),
         mergeRecords_.size(),
-        mergeQueue_.size(),
         sigTable_.snapshot(),
         currentSigTrail_.size(),
         proofForest_.snapshot(),
@@ -224,11 +276,8 @@ EGraphSnapshot IncrementalEGraph::snapshot() const {
 }
 
 void IncrementalEGraph::rollback(EGraphSnapshot snap) {
-    mergeQueue_.resize(snap.mergeQueueSize);
-
     proofForest_.rollback(snap.proofForestSnap);
     mergeRecords_.resize(snap.mergeRecordSize);
-
     nextTermToRegister_ = snap.nextTermToRegister;
     rollbackCurrentSig(snap.currentSigSnap);
     sigTable_.rollback(snap.sigTableSnap);
@@ -349,6 +398,40 @@ void IncrementalEGraph::checkSignatureTableInvariant() const {
             assert(*it == t || same(*it, t));
         }
     }
+}
+
+bool IncrementalEGraph::congruenceClosed() const {
+    // All interned terms must have been registered by registerPendingSignatures
+    if (nextTermToRegister_ != tm_.termCount()) {
+        return false;
+    }
+
+    std::unordered_map<AppSignature, EufTermId, AppSignatureHash> seen;
+
+    for (EufTermId t = 0; t < tm_.termCount(); ++t) {
+        const auto& node = tm_.node(t);
+        if (node.args.empty()) continue;
+
+        // Every app term MUST have a registered signature.
+        // DO NOT skip missing signatures — that would hide the core bug.
+        if (t >= currentSig_.size()) return false;
+        if (!currentSig_[t].has_value()) return false;
+
+        // Signature must match recomputed canonical signature
+        AppSignature actual = computeSignature(t);
+        if (*currentSig_[t] != actual) return false;
+
+        // All terms with same canonical signature must be same-class
+        auto it = seen.find(actual);
+        if (it == seen.end()) {
+            seen.emplace(actual, t);
+        } else {
+            if (!same(it->second, t)) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 #endif
 

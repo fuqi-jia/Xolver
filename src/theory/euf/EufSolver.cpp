@@ -115,8 +115,8 @@ void EufSolver::initializeBoolConstants() {
     falseTerm_ = termManager_.internFalseConstant();
     egraph_.setTrueTerm(trueTerm_);
     egraph_.setFalseTerm(falseTerm_);
-    egraph_.ensureTerm(trueTerm_);
-    egraph_.ensureTerm(falseTerm_);
+    egraph_.ensureTermRegistered(trueTerm_, mergeQueue_);
+    egraph_.ensureTermRegistered(falseTerm_, mergeQueue_);
 
     if (trueTerm_ != NullEufTerm) {
         classInfo(egraph_.rep(trueTerm_)).boolMark = BoolConstMark::True;
@@ -170,8 +170,8 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     EufTermId falseTerm = termManager_.internFalseConstant();
     egraph_.setTrueTerm(trueTerm);
     egraph_.setFalseTerm(falseTerm);
-    egraph_.ensureTerm(trueTerm);
-    egraph_.ensureTerm(falseTerm);
+    egraph_.ensureTermRegistered(trueTerm, mergeQueue_);
+    egraph_.ensureTermRegistered(falseTerm, mergeQueue_);
 
     // Update our cached true/false roots if they changed
     if (trueTerm_ == NullEufTerm) {
@@ -191,8 +191,8 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
         return;
     }
 
-    egraph_.ensureTerm(lhs);
-    egraph_.ensureTerm(rhs);
+    egraph_.ensureTermRegistered(lhs, mergeQueue_);
+    egraph_.ensureTermRegistered(rhs, mergeQueue_);
 
     if (payload.kind == EufAtomKind::BoolTermAsFormula) {
         EufTermId target = value ? trueTerm : falseTerm;
@@ -238,6 +238,11 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         return TheoryCheckResult::mkConflict(*pendingConflict_);
     }
 
+    // Register signatures for all newly interned terms before entering the
+    // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
+    // has already been merged) are visible to congruence detection.
+    egraph_.registerPendingSignatures(mergeQueue_);
+
     // 唯一 saturation loop：drain SAT decisions + congruence
     while (!mergeQueue_.empty()) {
         auto req = mergeQueue_.back();
@@ -252,7 +257,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
             return TheoryCheckResult::unknown();
         }
 
-        auto mr = egraph_.merge(req.a, req.b, req.reason);
+        auto mr = egraph_.merge(req.a, req.b, req.reason, mergeQueue_);
         if (!mr.merged) continue;
 
         // ITE metadata：只 enqueue，不递归 merge
@@ -260,9 +265,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         if (pendingConflict_) {
             return TheoryCheckResult::mkConflict(*pendingConflict_);
         }
-
-        // congruence closure：把新 merges 推到同一 queue
-        egraph_.refreshCongruence(mr.kept, mr.killed, mergeQueue_);
+        // refreshCongruence is now handled inside merge()
     }
 
     // true/false conflict
@@ -302,6 +305,11 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         }
     }
 
+#ifndef NDEBUG
+    assert(mergeQueue_.empty());
+    assert(egraph_.congruenceClosed());
+#endif
+
     return TheoryCheckResult::consistent();
 }
 
@@ -322,7 +330,7 @@ EufTermId EufSolver::internSharedConstant(SharedTermId s) {
     EufTermId t = termManager_.intern(st->coreExpr, const_cast<CoreIr&>(*coreIr_));
     if (t != NullEufTerm) {
         sharedTermToEufTerm_[s] = t;
-        egraph_.ensureTerm(t);
+        egraph_.ensureTermRegistered(t, mergeQueue_);
     }
     return t;
 }
@@ -331,7 +339,7 @@ EufTermId EufSolver::internEufExpr(ExprId eid) {
     if (!coreIr_) return NullEufTerm;
     EufTermId t = termManager_.intern(eid, const_cast<CoreIr&>(*coreIr_));
     if (t != NullEufTerm) {
-        egraph_.ensureTerm(t);
+        egraph_.ensureTermRegistered(t, mergeQueue_);
     }
     return t;
 }
