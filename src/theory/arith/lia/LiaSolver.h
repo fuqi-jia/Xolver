@@ -68,13 +68,16 @@ private:
     LinearModelValidator validator_;
     IntegerReasoner integerReasoner_;
 
-    struct ActiveAssignment {
+    struct LiaTrailEntry {
         int level;
         SatLit lit;
         TheoryAtomRecord atom;
         bool value;
+        int auxVar;
+        bool isDiseq;
     };
-    std::vector<ActiveAssignment> activeAssignments_;
+    std::vector<LiaTrailEntry> theoryTrail_;
+    size_t appliedCursor_ = 0;
 
     struct PendingConflict {
         int level;

@@ -22,7 +22,8 @@ void LiaSolver::pop(uint32_t n) {
 }
 
 void LiaSolver::reset() {
-    activeAssignments_.clear();
+    theoryTrail_.clear();
+    appliedCursor_ = 0;
     activeAtoms_.clear();
     disequalities_.clear();
     pendingConflict_.reset();
@@ -32,20 +33,59 @@ void LiaSolver::reset() {
 void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
     if (!std::holds_alternative<LinearAtomPayload>(atom.payload)) return;
 
-    for (auto& a : activeAssignments_) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
+    const auto& payload = std::get<LinearAtomPayload>(atom.payload);
+    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
+    Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
+    bool isDiseq = (effectiveRel == Relation::Neq);
+
+    for (auto& e : theoryTrail_) {
+        if (e.atom.satVar == atom.satVar) {
+            if (e.isDiseq) {
+                auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
+                    [&e](const auto& d) { return d.lit == e.lit; });
+                disequalities_.erase(it, disequalities_.end());
+            } else {
+                auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
+                    [&e](const auto& a) { return a.lit == e.lit; });
+                activeAtoms_.erase(it, activeAtoms_.end());
+            }
+            e = {level, assertedLit, atom, value, auxVar, isDiseq};
+            if (isDiseq) {
+                disequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit});
+            } else {
+                activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, payload.rhs, assertedLit});
+            }
             return;
         }
     }
-    activeAssignments_.push_back({level, assertedLit, atom, value});
+    theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
+    if (isDiseq) {
+        disequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit});
+    } else {
+        activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, payload.rhs, assertedLit});
+    }
 }
 
 void LiaSolver::backtrackToLevel(int level) {
     currentLevel_ = level;
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
+    gs_.backtrackToLevel(level);
+
+    while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
+        const auto& e = theoryTrail_.back();
+        if (e.isDiseq) {
+            auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
+                [&e](const auto& d) { return d.lit == e.lit; });
+            disequalities_.erase(it, disequalities_.end());
+        } else {
+            auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
+                [&e](const auto& a) { return a.lit == e.lit; });
+            activeAtoms_.erase(it, activeAtoms_.end());
+        }
+        theoryTrail_.pop_back();
+    }
+    if (appliedCursor_ > theoryTrail_.size()) {
+        appliedCursor_ = theoryTrail_.size();
+    }
 
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
@@ -57,36 +97,24 @@ void LiaSolver::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    // Rebuild all state from current active assignments.
-    gs_.resetActiveBounds();
-    disequalities_.clear();
-    activeAtoms_.clear();
     pendingConflict_.reset();
-    integerVars_.clear();
 
+    // -------------------------------------------------------------------------
+    // Phase 1: incremental replay of new trail entries
+    // -------------------------------------------------------------------------
+    while (appliedCursor_ < theoryTrail_.size()) {
+        const auto& e = theoryTrail_[appliedCursor_];
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
-    for (const auto& a : activeAssignments_) {
-        const auto& payload = std::get<LinearAtomPayload>(a.atom.payload);
-        int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
-
-        for (const auto& [name, coeff] : payload.lhs.terms) {
-            (void)coeff;
-            int v = manager_.getOrCreateVar(gs_, name);
-            integerVars_.insert(v);
-        }
-
-        Relation effectiveRel = a.value ? payload.rel : negateRelation(payload.rel);
-        if (effectiveRel == Relation::Neq) {
-            disequalities_.push_back({auxVar, payload.lhs, payload.rhs, a.lit});
-        } else {
-            bool ok = manager_.assertBound(gs_, auxVar, payload.rel, a.value, a.lit, a.level);
+        if (!e.isDiseq) {
+            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
             if (!ok) {
-                pendingConflict_ = PendingConflict{a.level, manager_.translateConflict(gs_)};
+                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
                 break;
             }
         }
 
-        activeAtoms_.push_back({a.atom.exprId, auxVar, payload.rel, a.value, payload.lhs, payload.rhs, a.lit});
+        ++appliedCursor_;
     }
 
     if (pendingConflict_) {
@@ -94,6 +122,16 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         assert(ok && "complementary literal in pending conflict");
         (void)ok;
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
+    }
+
+    // Rebuild integerVars_ from activeAtoms_ (low overhead, avoids stale entries)
+    integerVars_.clear();
+    for (const auto& a : activeAtoms_) {
+        for (const auto& [name, coeff] : a.lhs.terms) {
+            (void)coeff;
+            int v = manager_.getOrCreateVar(gs_, name);
+            integerVars_.insert(v);
+        }
     }
 
     // Apply interface equalities from Nelson-Oppen combination
@@ -473,9 +511,9 @@ LiaSolver::getDeducedSharedEqualities() {
 
 std::vector<SatLit> LiaSolver::allActiveReasons() const {
     std::vector<SatLit> rs;
-    rs.reserve(activeAssignments_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
-    for (const auto& a : activeAssignments_) {
-        rs.push_back(a.lit);
+    rs.reserve(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
+    for (const auto& e : theoryTrail_) {
+        rs.push_back(e.lit);
     }
     for (const auto& ieq : interfaceEqualities_) {
         rs.push_back(ieq.reason);
