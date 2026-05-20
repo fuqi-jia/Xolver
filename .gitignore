@@ -95,3 +95,7 @@ bench-results/
 # Deployment artifacts
 bin/nlcolver
 *.tar.gz
+
+
+# test results
+panda-results/

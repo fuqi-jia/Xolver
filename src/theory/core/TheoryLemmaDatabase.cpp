@@ -25,4 +25,12 @@ bool TheoryLemmaDatabase::insertIfNew(const TheoryLemma& lemma) {
     return emitted_.insert(computeKey(lemma)).second;
 }
 
+bool TheoryLemmaDatabase::isInstalled(const TheoryLemma& lemma) const {
+    return installed_.count(computeKey(lemma)) != 0;
+}
+
+void TheoryLemmaDatabase::markInstalled(const TheoryLemma& lemma) {
+    installed_.insert(computeKey(lemma));
+}
+
 } // namespace nlcolver

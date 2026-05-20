@@ -5,6 +5,7 @@
 #include <cadical.hpp>
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include <chrono>
+#include <deque>
 
 #ifdef NLCOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
@@ -109,8 +110,9 @@ private:
     CadicalBackend& backend_;
 
     int currentLevel_ = 0;
-    std::vector<SatLit> pendingClause_;
-    size_t pendingClausePos_ = 0;
+    std::deque<std::vector<SatLit>> pendingClauses_;
+    std::vector<SatLit> currentPendingClause_;
+    size_t currentPendingClausePos_ = 0;
     bool hasPendingClause_ = false;
     bool abortWithUnknown_ = false;
     static constexpr int MAX_MODEL_CHECKS = 10000;
@@ -135,8 +137,8 @@ private:
     void updateCaseStatsSearch();
 #endif
 
-    void setPendingClause(const std::vector<SatLit>& lits);
-    void setPendingClause(const TheoryLemma& lemma);
+    void enqueuePendingClause(const std::vector<SatLit>& lits);
+    void enqueuePendingClause(const TheoryLemma& lemma);
     void terminateSolve();
     bool isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const;
 };

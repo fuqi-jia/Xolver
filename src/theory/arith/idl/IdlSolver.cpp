@@ -6,6 +6,7 @@
 #include "theory/arith/linear/DiffLogicDiseqSplitter.h"
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -82,6 +83,18 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     Relation rel = a.value ? payload->rel : negateRel(payload->rel);
     mpq_class rhs = payload->rhs;
     const auto& terms = payload->lhs.terms;
+
+    std::cerr << "[IDL-ASSERT-LIT] sat_var=" << a.atom.satVar
+              << " sat_lit=" << (a.lit.sign ? "" : "-") << a.lit.var
+              << " polarity=" << (a.value ? "POS" : "NEG")
+              << " stored_rel=" << (int)payload->rel
+              << " effective_rel=" << (int)rel
+              << " rhs=" << rhs.get_str()
+              << " terms=";
+    for (const auto& [name, coeff] : terms) {
+        std::cerr << name << ":" << coeff.get_str() << " ";
+    }
+    std::cerr << "\n";
 
     // Identify +1 and -1 variables.
     std::string plusVar, minusVar;
@@ -172,7 +185,9 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
         mpq_class(d.rhs - 1), mpq_class(-(d.rhs + 1)),
         TheoryId::IDL, registry_);
 
-    if (lemmaDb.contains(lemma)) return TheoryLemma{};
+    // Only suppress if the lemma has been successfully installed into SAT.
+    // A lemma that was generated but never flushed must be returned again.
+    if (lemmaDb.isInstalled(lemma)) return TheoryLemma{};
     lemmaDb.insertIfNew(lemma);
     return lemma;
 }
@@ -232,6 +247,19 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 
     // Validate model
     if (!validateModel(bfResult.dist)) {
+        // Disequality violated: try to return a repair lemma before giving up.
+        for (const auto& d : disequalities_) {
+            int plusNode = graph_.nodeByName(d.x);
+            int minusNode = graph_.nodeByName(d.y);
+            if (plusNode < 0 || minusNode < 0) continue;
+            mpz_class diff = bfResult.dist[plusNode] - bfResult.dist[minusNode];
+            if (diff == d.rhs) {
+                auto lemma = buildDiseqSplitLemma(d, lemmaDb);
+                if (!lemma.lits.empty()) {
+                    return TheoryCheckResult::mkLemma(lemma);
+                }
+            }
+        }
         return TheoryCheckResult::unknown();
     }
 

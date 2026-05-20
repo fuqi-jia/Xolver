@@ -24,6 +24,8 @@ public:
     virtual ~TheoryLemmaStorage() = default;
     virtual bool contains(const TheoryLemma& lemma) const = 0;
     virtual bool insertIfNew(const TheoryLemma& lemma) = 0;
+    virtual bool isInstalled(const TheoryLemma& lemma) const { (void)lemma; return false; }
+    virtual void markInstalled(const TheoryLemma& lemma) { (void)lemma; }
 };
 
 // ---------------------------------------------------------------------------

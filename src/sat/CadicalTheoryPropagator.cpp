@@ -154,6 +154,20 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
 
+    // --- DEBUG: print all theory literals in current model ---
+    std::cerr << "[SAT-MODEL] theory lits in model:\n";
+    for (int lit : model) {
+        SatVar var = static_cast<SatVar>(std::abs(lit));
+        bool sign = lit > 0;
+        const auto* atom = registry_.findBySatVar(var);
+        if (!atom) continue;
+        std::cerr << "[SAT-MODEL]  var=" << var
+                  << " sign=" << (sign ? "T" : "F")
+                  << " theory=" << (int)atom->theory
+                  << " expr=" << atom->exprId
+                  << " lit=" << lit << "\n";
+    }
+
     // Re-assert all theory atoms from the current model so that
     // TheoryManager rebuilds solver state after backtrack clears it.
     // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
@@ -216,7 +230,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
                 return false;
             }
 
-            setPendingClause(tr.conflictOpt->clause);
+            enqueuePendingClause(tr.conflictOpt->clause);
             return false;
         }
         abortWithUnknown_ = true;
@@ -229,7 +243,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             // Always return the clause, even if seen before.
             // The current model violates the theory; we must reject it.
             lemmaDb_.insertIfNew(*tr.lemmaOpt);
-            setPendingClause(*tr.lemmaOpt);
+            enqueuePendingClause(*tr.lemmaOpt);
             return false;
         }
         abortWithUnknown_ = true;
@@ -313,7 +327,7 @@ int CadicalTheoryPropagator::cb_propagate() {
                 std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
             }
             std::cerr << " us=" << dur.count() << "\n";
-            setPendingClause(clause);
+            enqueuePendingClause(clause);
             return 0;
         }
         // Empty conflict clause is a bug; abort to avoid infinite loop
@@ -333,29 +347,63 @@ int CadicalTheoryPropagator::cb_propagate() {
 
 bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {
     is_forgettable = false;
+    // If current clause exhausted, mark installed and pop
+    while (hasPendingClause_ && currentPendingClausePos_ >= currentPendingClause_.size()) {
+        if (!currentPendingClause_.empty()) {
+            lemmaDb_.markInstalled(TheoryLemma{currentPendingClause_});
+        }
+        pendingClauses_.pop_front();
+        if (pendingClauses_.empty()) {
+            hasPendingClause_ = false;
+            currentPendingClause_.clear();
+            currentPendingClausePos_ = 0;
+        } else {
+            currentPendingClause_ = pendingClauses_.front();
+            currentPendingClausePos_ = 0;
+        }
+    }
     return hasPendingClause_;
 }
 
 int CadicalTheoryPropagator::cb_add_external_clause_lit() {
     if (!hasPendingClause_) return 0;
-    if (pendingClausePos_ == pendingClause_.size()) {
-        hasPendingClause_ = false;
-        pendingClause_.clear();
-        pendingClausePos_ = 0;
-        return 0;
+    if (currentPendingClausePos_ >= currentPendingClause_.size()) {
+        // Mark installed before moving to next
+        if (!currentPendingClause_.empty()) {
+            lemmaDb_.markInstalled(TheoryLemma{currentPendingClause_});
+        }
+        // Move to next pending clause
+        pendingClauses_.pop_front();
+        if (pendingClauses_.empty()) {
+            hasPendingClause_ = false;
+            currentPendingClause_.clear();
+            currentPendingClausePos_ = 0;
+            return 0;
+        }
+        currentPendingClause_ = pendingClauses_.front();
+        currentPendingClausePos_ = 0;
     }
-    SatLit lit = pendingClause_[pendingClausePos_++];
+    SatLit lit = currentPendingClause_[currentPendingClausePos_++];
     return lit.sign ? static_cast<int>(lit.var) : -static_cast<int>(lit.var);
 }
 
-void CadicalTheoryPropagator::setPendingClause(const std::vector<SatLit>& lits) {
-    pendingClause_ = lits;
-    pendingClausePos_ = 0;
-    hasPendingClause_ = true;
+void CadicalTheoryPropagator::enqueuePendingClause(const std::vector<SatLit>& lits) {
+    if (lits.empty()) return;
+    pendingClauses_.push_back(lits);
+    if (!hasPendingClause_) {
+        hasPendingClause_ = true;
+        currentPendingClause_ = lits;
+        currentPendingClausePos_ = 0;
+    }
+    std::cerr << "[PROP] enqueuePendingClause: ";
+    for (SatLit lit : lits) {
+        std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+    }
+    std::cerr << "(queue_size=" << pendingClauses_.size() << ")\n";
 }
 
-void CadicalTheoryPropagator::setPendingClause(const TheoryLemma& lemma) {
-    setPendingClause(lemma.lits);
+void CadicalTheoryPropagator::enqueuePendingClause(const TheoryLemma& lemma) {
+    enqueuePendingClause(lemma.lits);
 }
 
 void CadicalTheoryPropagator::terminateSolve() {
