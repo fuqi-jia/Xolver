@@ -144,7 +144,7 @@ TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
         d.rhs, -d.rhs,
         TheoryId::RDL, registry_);
 
-    if (lemmaDb.contains(lemma)) return TheoryLemma{};
+    if (lemmaDb.isInstalled(lemma)) return TheoryLemma{};
     lemmaDb.insertIfNew(lemma);
     return lemma;
 }
@@ -207,6 +207,9 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             if (!lemma.lits.empty()) {
                 return TheoryCheckResult::mkLemma(lemma);
             }
+            // Lemma already installed but model still violates disequality.
+            // This should not happen if the SAT solver respects the lemma.
+            return TheoryCheckResult::unknown();
         }
     }
 
