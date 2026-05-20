@@ -41,13 +41,13 @@ err()  { echo -e "${RED}[$(date +%H:%M:%S)] ERROR${NC} $*"; exit 1; }
 # build: 编译静态 binary（在源码仓库里执行，不是在部署目录）
 # ---------------------------------------------------------------------------
 cmd_build() {
-    SRC_DIR="$(cd "${DIST_DIR}/../.." && pwd)"
+    SRC_DIR="${DIST_DIR}"
     log "=== 编译静态 binary ==="
     cd "${SRC_DIR}"
 
     if [[ ! -f "third_party/cadical/configure" ]]; then
         log "初始化子模块..."
-        git submodule update --init --recursive
+        git submodule update --init --recursive || warn "子模块初始化失败，继续尝试编译..."
     fi
 
     rm -rf build_static
@@ -70,6 +70,33 @@ cmd_build() {
     mkdir -p "${DIST_DIR}/bin"
     cp "$BIN_BUILT" "${DIST_DIR}/bin/nlcolver"
     log "编译完成: ${DIST_DIR}/bin/nlcolver ($(du -h ${DIST_DIR}/bin/nlcolver | cut -f1))"
+}
+
+# ---------------------------------------------------------------------------
+# package: 把 nlcolver-dist/ 打包成 tar.gz，方便上传
+# ---------------------------------------------------------------------------
+cmd_package() {
+    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build。"
+
+    PKG="$(pwd)/nlcolver-dist.tar.gz"
+    log "打包: ${BIN} + tools/ -> ${PKG}"
+
+    TMPDIR=$(mktemp -d)
+    trap "rm -rf ${TMPDIR}" EXIT
+
+    mkdir -p "${TMPDIR}/nlcolver-dist/bin"
+    cp "$BIN" "${TMPDIR}/nlcolver-dist/bin/nlcolver"
+    chmod +x "${TMPDIR}/nlcolver-dist/bin/nlcolver"
+
+    mkdir -p "${TMPDIR}/nlcolver-dist/tools"
+    cp "${SCRIPT_DIR}/deploy_and_run.sh" "${TMPDIR}/nlcolver-dist/tools/"
+    cp "${SCRIPT_DIR}/run_benchmark.py" "${TMPDIR}/nlcolver-dist/tools/"
+    cp "${SCRIPT_DIR}/analyze_benchmark.py" "${TMPDIR}/nlcolver-dist/tools/"
+
+    tar czf "$PKG" -C "$TMPDIR" nlcolver-dist
+
+    log "打包完成: ${PKG} ($(du -h ${PKG} | cut -f1))"
+    log "上传命令示例: scp ${PKG} user@server:/data/"
 }
 
 # ---------------------------------------------------------------------------
@@ -128,6 +155,9 @@ cmd_run() {
 case "${1:-}" in
     build)
         cmd_build
+        ;;
+    package)
+        cmd_package
         ;;
     run)
         cmd_run "$@"

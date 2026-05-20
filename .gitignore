@@ -91,3 +91,7 @@ build_old/
 build_profile/
 benchmark_meta.txt
 bench-results/
+
+# Deployment artifacts
+bin/nlcolver
+*.tar.gz
