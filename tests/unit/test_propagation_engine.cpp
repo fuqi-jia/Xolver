@@ -183,7 +183,7 @@ TEST_CASE("LraPropagationEngine: budget limits derivation count") {
     CHECK(r == GeneralSimplex::Result::Sat);
 
     LraPropagationEngine engine;
-    LraPropagationEngine::PropagationBudget tightBudget{1, 100, 12, 20};
+    PropagationBudget tightBudget{1, 100, 12, 20};
     auto derived = engine.propagateAll(gs, tightBudget);
 
     CHECK(derived.size() <= 1);

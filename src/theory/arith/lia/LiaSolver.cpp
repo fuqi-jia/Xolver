@@ -168,7 +168,9 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     }
 
     if (ir.kind == TheoryCheckResult::Kind::Lemma && ir.lemmaOpt) {
-        if (!lemmaDb.contains(*ir.lemmaOpt)) return ir;
+        if (!lemmaDb.contains(*ir.lemmaOpt)) {
+            return ir;
+        }
     }
 
     return TheoryCheckResult::unknown();
@@ -180,6 +182,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
         [this](const DiseqInfo& d) -> TheoryCheckResult {
             // If the disequality is forced to be false by current bounds
             // (auxVar is fixed to 0), return a precise conflict.
+            auto val = gs_.value(d.auxVar);
             auto fixed = gs_.fixedValue(d.auxVar);
             if (fixed && fixed->isZero()) {
                 auto reasons = gs_.explainFixedValue(d.auxVar);
@@ -188,6 +191,24 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
                     tc.clause.push_back(br.reason);
                 }
                 tc.clause.push_back(d.lit);
+                return TheoryCheckResult::mkConflict(std::move(tc));
+            }
+
+            // Fallback: model satisfies equality but bounds are on negated forms
+            // (e.g. x>=0 stored as -x<=0).  Collect active reasons as conflict.
+            if (val.isZero()) {
+                TheoryConflict tc;
+                for (const auto& a : activeAtoms_) {
+                    tc.clause.push_back(a.lit);
+                }
+                tc.clause.push_back(d.lit);
+                std::sort(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
+                    if (a.var != b.var) return a.var < b.var;
+                    return a.sign < b.sign;
+                });
+                tc.clause.erase(std::unique(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), tc.clause.end());
                 return TheoryCheckResult::mkConflict(std::move(tc));
             }
 
@@ -382,7 +403,6 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     if (sharedTermRegistry_ && coreIr_) {
         if (const auto* stA = sharedTermRegistry_->get(a)) {
             const auto& exprA = coreIr_->get(stA->coreExpr);
-            std::cerr << "[LIA-AUX] a=" << a << " expr=" << stA->coreExpr << " kind=" << (int)exprA.kind << " name=" << stA->name << "\n";
             if (exprA.isConst()) {
                 aIsConst = true;
                 if (auto* i = std::get_if<int64_t>(&exprA.payload.value)) aVal = mpq_class(*i);
@@ -391,7 +411,6 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
         }
         if (const auto* stB = sharedTermRegistry_->get(b)) {
             const auto& exprB = coreIr_->get(stB->coreExpr);
-            std::cerr << "[LIA-AUX] b=" << b << " expr=" << stB->coreExpr << " kind=" << (int)exprB.kind << " name=" << stB->name << "\n";
             if (exprB.isConst()) {
                 bIsConst = true;
                 if (auto* i = std::get_if<int64_t>(&exprB.payload.value)) bVal = mpq_class(*i);
@@ -432,7 +451,6 @@ TheoryCheckResult LiaSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
-    std::cerr << "[LIA-IEQ] EQ a=" << a << " b=" << b << " aux=" << aux << " reason=" << (reason.sign?"+":"") << reason.var << "\n";
     if (aux < 0) return TheoryCheckResult::consistent();
 
     interfaceEqualities_.push_back({a, b, reason, level});

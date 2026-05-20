@@ -49,6 +49,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
     int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
+    auxFormInfo_[auxVar] = {payload.lhs, payload.rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -215,6 +216,14 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             for (const auto& cr : conflict) {
                 tc.clause.push_back(cr.reason);
             }
+            // Deduplicate: same SAT literal may appear from multiple bound reasons
+            std::sort(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
+                if (a.var != b.var) return a.var < b.var;
+                return a.sign < b.sign;
+            });
+            tc.clause.erase(std::unique(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
+                return a.var == b.var && a.sign == b.sign;
+            }), tc.clause.end());
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
 #ifdef NLCOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
@@ -240,6 +249,25 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     }
     if (r == GeneralSimplex::Result::Unknown) {
         return TheoryCheckResult::unknown();
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase C: bound propagation
+    // -------------------------------------------------------------------------
+    {
+        auto derived = propagationEngine_.propagateAll(gs_);
+        int emitted = 0;
+        const int MAX_PROPAGATION_LEMMAS = 8;
+        for (const auto& eb : derived) {
+            if (emitted >= MAX_PROPAGATION_LEMMAS) break;
+            auto lemmaOpt = tryConvertDerivedBound(eb);
+            if (lemmaOpt) {
+                if (!lemmaDb.contains(*lemmaOpt)) {
+                    lemmaDb.insertIfNew(*lemmaOpt);
+                    ++emitted;
+                }
+            }
+        }
     }
 
     // Stage A: skip interface disequality checking against current model value.
@@ -410,6 +438,27 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
         return a.var == b.var && a.sign == b.sign;
     }), rs.end());
     return rs;
+}
+
+std::optional<TheoryLemma> LraSolver::tryConvertDerivedBound(
+    const LraPropagationEngine::ExplainedBound& eb) const {
+    auto it = auxFormInfo_.find(eb.var);
+    if (it == auxFormInfo_.end()) return std::nullopt;
+
+    const auto& info = it->second;
+    mpq_class boundRhs = info.rhs + eb.value.a;
+
+    Relation rel;
+    if (eb.isLower) {
+        rel = (eb.value.b > 0) ? Relation::Gt : Relation::Geq;
+    } else {
+        rel = (eb.value.b < 0) ? Relation::Lt : Relation::Leq;
+    }
+
+    if (!registry_) return std::nullopt;
+    SatLit lit = registry_->getOrCreateLinearBoundAtom(
+        info.lhs, rel, boundRhs, TheoryId::LRA);
+    return TheoryLemma{{lit}};
 }
 
 std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {

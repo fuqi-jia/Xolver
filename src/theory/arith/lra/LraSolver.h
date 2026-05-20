@@ -5,6 +5,7 @@
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "GeneralSimplex.h"
+#include "LraPropagationEngine.h"
 #include <gmpxx.h>
 #include <unordered_map>
 #include <vector>
@@ -105,6 +106,20 @@ private:
     TheoryAtomRegistry* registry_ = nullptr;
 
     std::vector<SatLit> allActiveReasons() const;
+
+    // -------------------------------------------------------------------------
+    // Phase C: bound propagation
+    // -------------------------------------------------------------------------
+    LraPropagationEngine propagationEngine_;
+
+    struct AuxFormInfo {
+        LinearFormKey lhs;
+        mpq_class rhs;
+    };
+    std::unordered_map<int, AuxFormInfo> auxFormInfo_;
+
+    std::optional<TheoryLemma> tryConvertDerivedBound(
+        const LraPropagationEngine::ExplainedBound& eb) const;
 
 #ifdef NLCOLVER_LRA_PROFILE
     struct ProfileStats {

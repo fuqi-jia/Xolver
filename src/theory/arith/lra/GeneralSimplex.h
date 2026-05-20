@@ -9,6 +9,7 @@
 #include <optional>
 #include <unordered_map>
 #include <deque>
+#include <cassert>
 
 namespace nlcolver {
 
@@ -144,6 +145,36 @@ public:
 
     /** Get the name of a variable (original or auxiliary). */
     const std::string& varName(int var) const { return vars_[var].name; }
+
+    /** Return value if lower == upper (fixed), else nullopt. */
+    std::optional<DeltaRational> fixedValue(int var) const;
+
+    /** Return bound reasons that fix the variable (lower == upper). */
+    std::vector<BoundReason> explainFixedValue(int var) const;
+
+    // -------------------------------------------------------------------------
+    // Read-only accessors for bound propagation / conflict explanation
+    // -------------------------------------------------------------------------
+
+    const SparseTableau& tableau() const { return tab_; }
+
+    struct VarStateView {
+        const std::string& name;
+        int basicRow;   // -1 if non-basic
+        const BoundInfo& lower;
+        const BoundInfo& upper;
+    };
+
+    int basicRowOfVar(int var) const {
+        assert(var >= 0 && var < static_cast<int>(vars_.size()));
+        return vars_[var].basicRow;
+    }
+
+    VarStateView varState(int var) const {
+        assert(var >= 0 && var < static_cast<int>(vars_.size()));
+        const auto& v = vars_[var];
+        return VarStateView{v.name, v.basicRow, v.lower, v.upper};
+    }
 
     // -------------------------------------------------------------------------
     // Debug / testing interface
