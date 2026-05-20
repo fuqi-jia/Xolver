@@ -124,17 +124,6 @@ static std::optional<poly::DyadicRational> mpqToDyadicRational(const mpq_class& 
     return result;
 }
 
-static std::vector<mpz_class> upolynomialToCoeffs(const poly::UPolynomial& up) {
-    std::vector<poly::Integer> lpCoeffs = poly::coefficients(up);
-    std::vector<mpz_class> result;
-    result.reserve(lpCoeffs.size());
-    for (const auto& c : lpCoeffs) {
-        result.push_back(*poly::detail::cast_to_gmp(&c));
-    }
-    std::reverse(result.begin(), result.end());
-    return result;
-}
-
 static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
     const AlgebraicRoot& ar,
     const std::vector<mpz_class>& coeffs) {

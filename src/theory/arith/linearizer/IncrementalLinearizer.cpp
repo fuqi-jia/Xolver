@@ -39,7 +39,7 @@ LinearizationResult IncrementalLinearizer::run(
     TheoryId linearTheory = (owner == TheoryId::NIA) ? TheoryId::LIA : TheoryId::LRA;
     SortKind sort = (owner == TheoryId::NIA) ? SortKind::Int : SortKind::Real;
     std::unordered_set<std::string> processedAuxNames;
-    int cutIndexCounter = 0;
+    // int cutIndexCounter = 0;  // unused
 
     for (const auto& c : constraints) {
         auto abstr = abstraction_.abstract(c.poly);

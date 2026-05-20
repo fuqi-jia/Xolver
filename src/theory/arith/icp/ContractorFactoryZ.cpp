@@ -17,8 +17,8 @@ ContractorFactoryZ::BuildResult ContractorFactoryZ::build(
         // 1. Try SquareContractorZ
         auto sq = std::make_unique<SquareContractorZ>(c, kernel);
         {
-            int sign;
-            mpz_class constant;
+            // int sign;   // unused
+            // mpz_class constant;  // unused
             // Use a temporary box to test pattern recognition
             ReasonedBoxZ tmpBox;
             tmpBox.set("_", ReasonedInterval{IntervalZ{0,0}, {}});

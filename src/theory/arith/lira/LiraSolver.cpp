@@ -2,10 +2,6 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "expr/ir.h"
 #include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <cstdlib>
-#include <set>
 
 namespace nlcolver {
 
@@ -113,7 +109,6 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
 
     switch (r.kind) {
         case InternalMilpEngine::MilpResult::Kind::Unsat: {
-            dumpUnsatAssignment("lira_std");
             auto tc = TheoryConflict{};
             auto precise = milpEngine_.getConflictReasons();
             if (!precise.empty()) {
@@ -240,7 +235,6 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
             return TheoryCheckResult::consistent();
         }
         case InternalMilpEngine::MilpResult::Kind::Unsat: {
-            dumpUnsatAssignment("lira_full");
             auto tc = TheoryConflict{};
             auto precise = milpEngine_.getConflictReasons();
             if (!precise.empty()) {
@@ -302,87 +296,6 @@ std::vector<SatLit> LiraSolver::allActiveReasons() const {
     return reasons;
 }
 
-static std::string mpqToStr(const mpq_class& q) {
-    if (q.get_den() == 1) return q.get_num().get_str();
-    return q.get_str();
-}
 
-static std::string linearFormToSmt2(const LinearFormKey& form) {
-    if (form.terms.empty()) return "0";
-    if (form.terms.size() == 1) {
-        const auto& [name, coeff] = form.terms[0];
-        if (coeff == 1) return name;
-        if (coeff == -1) return "(- " + name + ")";
-        return "(* " + mpqToStr(coeff) + " " + name + ")";
-    }
-    std::string s = "(+";
-    for (const auto& [name, coeff] : form.terms) {
-        if (coeff == 1) s += " " + name;
-        else if (coeff == -1) s += " (- " + name + ")";
-        else s += " (* " + mpqToStr(coeff) + " " + name + ")";
-    }
-    s += ")";
-    return s;
-}
-
-static std::string relationToSmt2(Relation rel, const std::string& lhs, const std::string& rhs) {
-    switch (rel) {
-        case Relation::Eq:  return "(= " + lhs + " " + rhs + ")";
-        case Relation::Neq: return "(not (= " + lhs + " " + rhs + "))";
-        case Relation::Lt:  return "(< " + lhs + " " + rhs + ")";
-        case Relation::Leq: return "(<= " + lhs + " " + rhs + ")";
-        case Relation::Gt:  return "(> " + lhs + " " + rhs + ")";
-        case Relation::Geq: return "(>= " + lhs + " " + rhs + ")";
-    }
-    return "";
-}
-
-void LiraSolver::dumpUnsatAssignment(const std::string& prefix) const {
-    static int dumpCount = 0;
-    if (++dumpCount > 5) return;
-    std::cerr << "[LIRA-DUMP] dumping unsat assignment #" << dumpCount << "\n";
-    std::string path = "/tmp/" + prefix + "_" + std::to_string(dumpCount) + ".smt2";
-    std::ofstream f(path);
-    if (!f) return;
-    f << "(set-logic QF_LIRA)\n";
-
-    std::set<std::string> vars;
-    for (const auto& a : activeAssignments_) {
-        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
-        for (const auto& [name, coeff] : p.lhs.terms) {
-            (void)coeff;
-            vars.insert(name);
-        }
-    }
-    for (const auto& name : vars) {
-        f << "(declare-const " << name << " "
-          << (isIntegerVar(name) ? "Int" : "Real") << ")\n";
-    }
-
-    for (const auto& a : activeAssignments_) {
-        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
-        Relation effRel = p.rel;
-        if (!a.value) {
-            switch (p.rel) {
-                case Relation::Eq:  effRel = Relation::Neq; break;
-                case Relation::Neq: effRel = Relation::Eq; break;
-                case Relation::Lt:  effRel = Relation::Geq; break;
-                case Relation::Leq: effRel = Relation::Gt; break;
-                case Relation::Gt:  effRel = Relation::Leq; break;
-                case Relation::Geq: effRel = Relation::Lt; break;
-            }
-        }
-        std::string lhs = linearFormToSmt2(p.lhs);
-        std::string rhs = mpqToStr(p.rhs);
-        f << "(assert " << relationToSmt2(effRel, lhs, rhs) << ")\n";
-    }
-    f << "(check-sat)\n";
-    f.close();
-
-    std::string cmd = "z3 " + path + " > " + path + ".z3 2>&1";
-    std::system(cmd.c_str());
-}
 
 } // namespace nlcolver

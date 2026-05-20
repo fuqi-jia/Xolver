@@ -29,12 +29,6 @@ static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
     return (lo + hi) / 2;
 }
 
-// Helper: create a Bound from a RealAlg (preserves exactness for algebraic roots)
-static Bound boundFromRealAlg(const RealAlg& ra, bool isOpen) {
-    if (ra.isRational()) return Bound::rational(ra.rational, isOpen);
-    return Bound::algebraic(ra.root, isOpen);
-}
-
 // V3: Helper: convert Bound to AlgebraicEndpoint
 static AlgebraicEndpoint boundToEndpoint(const Bound& bound) {
     AlgebraicEndpoint ep;
@@ -364,7 +358,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // P2c: fill provenance metadata for algebraic roots
         for (auto& r : roots.roots) {
             if (r.isAlgebraic()) {
-                r.root.origins.push_back({p, var, k});
+                r.root.origins.push_back({p, var, static_cast<VarId>(k)});
             }
         }
         uniPolys.push_back(up);
@@ -419,21 +413,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             childRes.model->values.insert(childRes.model->values.begin(), sampleWithOrigin);
         }
         return childRes;
-    };
-
-    // Helper to add conflict cell
-    auto addCell = [&](CellKind kind, const Bound& lower, const Bound& upper,
-                       const std::vector<SatLit>& reasons, PolyId guardPoly) {
-        Cell cell;
-        cell.var = var;
-        cell.kind = kind;
-        cell.lower = lower;
-        cell.upper = upper;
-        cell.reasons = reasons;
-        if (guardPoly != NullPoly) {
-            cell.guards.push_back(guardPoly);
-        }
-        return cell;
     };
 
     std::vector<CertifiedCell> certifiedCells;

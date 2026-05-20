@@ -785,14 +785,15 @@ std::optional<DeltaRational> GeneralSimplex::fixedValue(int var) const {
 std::vector<GeneralSimplex::BoundReason> GeneralSimplex::explainFixedValue(int var) const {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
     std::vector<BoundReason> reasons;
+    reasons.reserve(2);
     const auto& v = vars_[var];
     if (v.lower.bound.isFinite() && v.upper.bound.isFinite() &&
         v.lower.bound.value == v.upper.bound.value) {
         if (v.lower.reason.has_value()) {
-            reasons.push_back({var, true, v.lower.reason.value()});
+            reasons.emplace_back(BoundReason{var, true, v.lower.reason.value()});
         }
         if (v.upper.reason.has_value()) {
-            reasons.push_back({var, false, v.upper.reason.value()});
+            reasons.emplace_back(BoundReason{var, false, v.upper.reason.value()});
         }
     }
     return reasons;
