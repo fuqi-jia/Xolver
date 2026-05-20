@@ -178,6 +178,19 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
     return handleSimplexDisequalities(
         disequalities_, gs_, lemmaDb,
         [this](const DiseqInfo& d) -> TheoryCheckResult {
+            // If the disequality is forced to be false by current bounds
+            // (auxVar is fixed to 0), return a precise conflict.
+            auto fixed = gs_.fixedValue(d.auxVar);
+            if (fixed && fixed->isZero()) {
+                auto reasons = gs_.explainFixedValue(d.auxVar);
+                TheoryConflict tc;
+                for (const auto& br : reasons) {
+                    tc.clause.push_back(br.reason);
+                }
+                tc.clause.push_back(d.lit);
+                return TheoryCheckResult::mkConflict(std::move(tc));
+            }
+
             if (d.rhs.get_den() != 1) {
                 return TheoryCheckResult::consistent();
             }
