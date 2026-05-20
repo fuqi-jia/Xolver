@@ -1017,6 +1017,41 @@ renderTopSlow();
 # Main
 # =============================================================================
 
+def _run_one_task(f: Path, solver: str, timeout: float, logic: str,
+                  dump_stats_dir: Optional[Path],
+                  log_dir: Optional[Path]) -> RunResult:
+    """Module-level task runner for ProcessPoolExecutor (must be picklable)."""
+    import hashlib
+    stats_path = None
+    if dump_stats_dir:
+        h = hashlib.sha256(str(f).encode()).hexdigest()[:16]
+        stats_path = str(dump_stats_dir / f"{h}.json")
+    res = run_nlcolver(f, solver, timeout, logic,
+                       dump_stats_path=stats_path, log_dir=log_dir)
+    # Try to read stats JSON after solve
+    if dump_stats_dir and stats_path:
+        if Path(stats_path).exists():
+            try:
+                with open(stats_path) as sf:
+                    res.stats = json.load(sf)
+                    res.stats_source = "json"
+            except Exception:
+                pass
+        else:
+            hb = stats_path + ".heartbeat"
+            if Path(hb).exists():
+                try:
+                    with open(hb) as sf:
+                        res.stats = json.load(sf)
+                        res.stats_source = "heartbeat"
+                except Exception:
+                    pass
+        if res.stats is None:
+            res.stats = {"result": res.result, "time_ms": res.elapsed * 1000}
+            res.stats_source = "synthetic"
+    return res
+
+
 def run_single_logic(args, logic: str, output_dir: Path):
     """Run benchmark for a single logic and return statistics."""
     # Find files
@@ -1075,49 +1110,20 @@ def run_single_logic(args, logic: str, output_dir: Path):
     if log_dir:
         log_dir.mkdir(parents=True, exist_ok=True)
 
-    def run_one(f: Path):
-        import hashlib
-        stats_path = None
-        if dump_stats_dir:
-            h = hashlib.sha256(str(f).encode()).hexdigest()[:16]
-            stats_path = str(dump_stats_dir / f"{h}.json")
-        res = run_nlcolver(f, args.solver, args.timeout, logic,
-                           dump_stats_path=stats_path, log_dir=log_dir)
-        # Try to read stats JSON after solve
-        if dump_stats_dir and stats_path:
-            # Check full json first
-            if Path(stats_path).exists():
-                try:
-                    with open(stats_path) as sf:
-                        res.stats = json.load(sf)
-                        res.stats_source = "json"
-                except Exception:
-                    pass
-            else:
-                # Check heartbeat
-                hb = stats_path + ".heartbeat"
-                if Path(hb).exists():
-                    try:
-                        with open(hb) as sf:
-                            res.stats = json.load(sf)
-                            res.stats_source = "heartbeat"
-                    except Exception:
-                        pass
-            if res.stats is None:
-                # Synthesize timeout record
-                res.stats = {"result": res.result, "time_ms": res.elapsed * 1000}
-                res.stats_source = "synthetic"
-        return res
-
     if args.serial or args.jobs == 1:
         for i, f in enumerate(files, 1):
-            res = run_one(f)
+            res = _run_one_task(f, args.solver, args.timeout, logic,
+                                dump_stats_dir, log_dir)
             nlcolver_results.append(res)
             if args.verbose or i % 100 == 0 or i == total:
                 print(f"  NLColver: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
     else:
         with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-            futures = {executor.submit(run_one, f): f for f in files}
+            futures = {
+                executor.submit(_run_one_task, f, args.solver, args.timeout,
+                                logic, dump_stats_dir, log_dir): f
+                for f in files
+            }
             completed = 0
             for future in as_completed(futures):
                 res = future.result()
