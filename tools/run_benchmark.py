@@ -47,6 +47,12 @@ from typing import Dict, List, Optional, Tuple
 # =============================================================================
 
 BENCHMARK_ROOT = Path("benchmark/non-incremental")
+
+# Will be overridden by --benchmark-dir if provided
+_benchmark_root_override: Optional[Path] = None
+
+def get_benchmark_root() -> Path:
+    return _benchmark_root_override if _benchmark_root_override else BENCHMARK_ROOT
 DEFAULT_SOLVER = "./build/bin/nlcolver"
 RESULT_PATTERNS = [
     (r"\bunsat\b", "unsat"),
@@ -139,7 +145,7 @@ def resolve_logic(name: str) -> str:
     # Try common prefixes
     for prefix in ["QF_", ""]:
         candidate = prefix + upper
-        path = BENCHMARK_ROOT / candidate
+        path = get_benchmark_root() / candidate
         if path.exists():
             return candidate
     raise ValueError(f"Unknown logic: {name}. Available: {', '.join(list_logic_dirs())}")
@@ -147,14 +153,14 @@ def resolve_logic(name: str) -> str:
 
 def list_logic_dirs() -> List[str]:
     """List available logic directories."""
-    if not BENCHMARK_ROOT.exists():
+    if not get_benchmark_root().exists():
         return []
-    return sorted([d.name for d in BENCHMARK_ROOT.iterdir() if d.is_dir()])
+    return sorted([d.name for d in get_benchmark_root().iterdir() if d.is_dir()])
 
 
 def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Optional[int] = None, random_sample: Optional[int] = None) -> List[Path]:
     """Find all .smt2 files for a given logic."""
-    logic_dir = BENCHMARK_ROOT / logic
+    logic_dir = get_benchmark_root() / logic
     if not logic_dir.exists():
         raise FileNotFoundError(f"Benchmark directory not found: {logic_dir}")
 
@@ -343,7 +349,7 @@ def write_summary(output_dir: Path, stats: Statistics, args, duration: float):
         f.write("=" * 70 + "\n\n")
         f.write(f"Date:           {datetime.now().isoformat()}\n")
         f.write(f"Logic:          {stats.logic}\n")
-        f.write(f"Benchmark root: {BENCHMARK_ROOT}\n")
+        f.write(f"Benchmark root: {get_benchmark_root()}\n")
         f.write(f"NLColver:       {args.solver}\n")
         if args.compare_with:
             f.write(f"Compare with:   {args.compare_with}\n")
@@ -1022,11 +1028,11 @@ def run_single_logic(args, logic: str, output_dir: Path):
                 if line and not line.startswith("#"):
                     p = Path(line)
                     if not p.is_absolute():
-                        # Try relative to cwd first, then BENCHMARK_ROOT
+                        # Try relative to cwd first, then get_benchmark_root()
                         if p.exists():
                             pass  # use as-is
                         else:
-                            p = BENCHMARK_ROOT / p
+                            p = get_benchmark_root() / p
                     if p.exists():
                         files.append(p)
         # Filter by logic if specified
@@ -1183,14 +1189,14 @@ def run_single_logic(args, logic: str, output_dir: Path):
         # Category (subdirectory) stats
         cat = "root"
         try:
-            rel = f.relative_to(BENCHMARK_ROOT / logic)
+            rel = f.relative_to(get_benchmark_root() / logic)
             cat = rel.parts[0] if rel.parts else "root"
         except ValueError:
             try:
-                rel = f.relative_to(BENCHMARK_ROOT)
+                rel = f.relative_to(get_benchmark_root())
                 cat = rel.parts[1] if len(rel.parts) > 1 else rel.parts[0] if rel.parts else "root"
             except ValueError:
-                # File is outside BENCHMARK_ROOT (e.g. tests/regression/)
+                # File is outside get_benchmark_root() (e.g. tests/regression/)
                 parts = f.parts
                 cat = parts[-2] if len(parts) >= 2 else "root"
         if cat not in stats.category_stats:
@@ -1247,7 +1253,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
         with open(manifest_path, "w") as f:
             for file in sorted(files):
                 try:
-                    f.write(str(file.relative_to(BENCHMARK_ROOT)) + "\n")
+                    f.write(str(file.relative_to(get_benchmark_root())) + "\n")
                 except ValueError:
                     f.write(str(file) + "\n")
     write_html_report(output_dir, stats, rows, args, wall_time)
@@ -1364,9 +1370,14 @@ Examples:
     parser.add_argument("--dump-stats-dir", default=None, help="Directory to dump per-case stats JSON")
     parser.add_argument("--log-dir", default=None, help="Directory to write per-case stdout/stderr logs")
     parser.add_argument("--manifest-out", default=None, help="Write manifest.txt with all benchmarked files")
+    parser.add_argument("--benchmark-dir", default=None, help="Path to benchmark dataset root (default: benchmark/non-incremental)")
     parser.add_argument("--file-list", default=None, help="Run on files from this list (for smoke mode)")
 
     args = parser.parse_args()
+
+    if args.benchmark_dir:
+        global _benchmark_root_override
+        _benchmark_root_override = Path(args.benchmark_dir)
 
     if not args.logic and not args.all_logics and not args.file_list:
         parser.error("Either --logic, --all-logics, or --file-list must be specified.")

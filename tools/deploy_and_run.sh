@@ -2,25 +2,31 @@
 # ============================================================================
 # NLColver 极简部署脚本
 #
-# 在哪里运行就在哪里跑。上传此脚本 + nlcolver binary 到服务器后直接执行。
+# 默认目录结构（上传后保持这样）：
+#   部署目录/
+#   ├── nlcolver-dist/          <- 本脚本 + binary + Python 工具
+#   │   ├── bin/nlcolver
+#   │   └── tools/
+#   │       ├── deploy_and_run.sh
+#   │       ├── run_benchmark.py
+#   │       └── analyze_benchmark.py
+#   │
+#   └── benchmark/              <- benchmark 数据集
+#       └── non-incremental/
+#           ├── QF_LIA/
+#           ├── QF_NRA/
+#           └── ...
 #
-# 用法:
-#   ./deploy_and_run.sh build                    # 编译静态 binary
-#   ./deploy_and_run.sh run "lia,nia" -j 128 -t 100
-#   ./deploy_and_run.sh run "lia,nia,lra,nra" -j 256 -t 100 --compare-with z3
-#   ./deploy_and_run.sh run all -j 128 -t 100    # 跑所有 logic
+# 用法（在"部署目录"下执行）：
+#   ./nlcolver-dist/tools/deploy_and_run.sh build
+#   ./nlcolver-dist/tools/deploy_and_run.sh run "lia,nia" -j 200 -t 100
 # ============================================================================
 
 set -euo pipefail
 
-# 自动探测 binary 路径（当前目录或 build_static/bin/）
-if [[ -f "./nlcolver" ]]; then
-    BIN="$(pwd)/nlcolver"
-elif [[ -f "build_static/bin/nlcolver" ]]; then
-    BIN="$(pwd)/build_static/bin/nlcolver"
-else
-    BIN=""
-fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DIST_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BIN="${DIST_DIR}/bin/nlcolver"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -32,10 +38,12 @@ warn() { echo -e "${YELLOW}[$(date +%H:%M:%S)] WARNING${NC} $*"; }
 err()  { echo -e "${RED}[$(date +%H:%M:%S)] ERROR${NC} $*"; exit 1; }
 
 # ---------------------------------------------------------------------------
-# build: 编译静态 binary
+# build: 编译静态 binary（在源码仓库里执行，不是在部署目录）
 # ---------------------------------------------------------------------------
 cmd_build() {
+    SRC_DIR="$(cd "${DIST_DIR}/../.." && pwd)"
     log "=== 编译静态 binary ==="
+    cd "${SRC_DIR}"
 
     if [[ ! -f "third_party/cadical/configure" ]]; then
         log "初始化子模块..."
@@ -55,10 +63,13 @@ cmd_build() {
     cmake --build . -j$(nproc)
     cd ..
 
-    BIN="$(pwd)/build_static/bin/nlcolver"
-    [[ -f "$BIN" ]] || err "Binary 未生成"
-    file "$BIN" | grep -q "statically linked" || err "不是静态链接"
-    log "编译完成: $BIN ($(du -h $BIN | cut -f1))"
+    BIN_BUILT="$(pwd)/build_static/bin/nlcolver"
+    [[ -f "$BIN_BUILT" ]] || err "Binary 未生成"
+    file "$BIN_BUILT" | grep -q "statically linked" || err "不是静态链接"
+
+    mkdir -p "${DIST_DIR}/bin"
+    cp "$BIN_BUILT" "${DIST_DIR}/bin/nlcolver"
+    log "编译完成: ${DIST_DIR}/bin/nlcolver ($(du -h ${DIST_DIR}/bin/nlcolver | cut -f1))"
 }
 
 # ---------------------------------------------------------------------------
@@ -68,33 +79,47 @@ cmd_build() {
 cmd_run() {
     shift  # 去掉 "run"
 
-    [[ -n "$BIN" && -f "$BIN" ]] || err "找不到 nlcolver binary。请先 ./deploy_and_run.sh build"
-    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./deploy_and_run.sh run lia,nia"
+    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build，或把 nlcolver-dist 目录放完整。"
+    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia"
 
     LOGIC="$1"
     shift
 
+    # 默认 benchmark 路径: ./benchmark/non-incremental
+    BENCH_DIR="$(pwd)/benchmark/non-incremental"
+    if [[ ! -d "$BENCH_DIR" ]]; then
+        warn "默认 benchmark 路径不存在: $BENCH_DIR"
+        warn "请确保目录结构如下:"
+        warn "  当前目录/"
+        warn "  ├── nlcolver-dist/"
+        warn "  └── benchmark/non-incremental/QF_*/"
+    fi
+
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    RUN_DIR="run_${TIMESTAMP}"
+    RUN_DIR="$(pwd)/results/run_${TIMESTAMP}"
     mkdir -p "$RUN_DIR"
 
-    # 透传所有剩余参数给 run_benchmark.py
-    EXTRA=("$@")
-
     log "启动: logic=$LOGIC"
-    log "输出: $(pwd)/$RUN_DIR/"
+    log "binary: $BIN"
+    log "benchmark: $BENCH_DIR"
+    log "输出: $RUN_DIR"
 
-    nohup python3 "$(dirname "$0")/run_benchmark.py" \
+    nohup python3 "${DIST_DIR}/tools/run_benchmark.py" \
         --solver "$BIN" \
         --logic "$LOGIC" \
-        --dump-stats-dir "$(pwd)/$RUN_DIR/stats" \
-        --log-dir "$(pwd)/$RUN_DIR/logs" \
-        -o "$(pwd)/$RUN_DIR" \
-        "${EXTRA[@]}" \
-        > "$(pwd)/$RUN_DIR/bench.log" 2>&1 &
+        --benchmark-dir "$BENCH_DIR" \
+        --dump-stats-dir "$RUN_DIR/stats" \
+        --log-dir "$RUN_DIR/logs" \
+        -o "$RUN_DIR" \
+        "$@" \
+        > "$RUN_DIR/bench.log" 2>&1 &
 
     log "后台运行 PID=$!"
-    log "查看日志: tail -f $(pwd)/$RUN_DIR/bench.log"
+    log "查看日志: tail -f $RUN_DIR/bench.log"
+    log ""
+    log "其他常用命令:"
+    log "  ps aux | grep run_benchmark      # 查看进程"
+    log "  tail -f $RUN_DIR/bench.log       # 实时日志"
 }
 
 # ---------------------------------------------------------------------------
@@ -109,26 +134,38 @@ case "${1:-}" in
         ;;
     *)
         cat << 'EOF'
-NLColver 极简部署脚本 — 在哪里运行就在哪里跑
+NLColver 极简部署脚本
+
+默认目录结构:
+  部署目录/
+  ├── nlcolver-dist/          <- 本脚本 + binary + 工具
+  │   ├── bin/nlcolver
+  │   └── tools/
+  │       ├── deploy_and_run.sh
+  │       ├── run_benchmark.py
+  │       └── analyze_benchmark.py
+  └── benchmark/              <- benchmark 数据集
+      └── non-incremental/
+          ├── QF_LIA/
+          ├── QF_NRA/
+          └── ...
 
 用法:
-  ./deploy_and_run.sh build
-    编译静态 binary（产出 build_static/bin/nlcolver）
+  ./nlcolver-dist/tools/deploy_and_run.sh build
+    编译静态 binary（在源码仓库里执行，产出到 nlcolver-dist/bin/）
 
-  ./deploy_and_run.sh run <logic> [选项...]
+  ./nlcolver-dist/tools/deploy_and_run.sh run <logic> [选项...]
     后台运行 benchmark（nohup，终端断开不停止）
 
     示例:
-      ./deploy_and_run.sh run lia,nia
-      ./deploy_and_run.sh run lia,nia,lra,nra -j 128 -t 100
-      ./deploy_and_run.sh run all -j 256 -t 100
-      ./deploy_and_run.sh run nia -j 128 -t 100 --compare-with z3
-      ./deploy_and_run.sh run lra -j 64 -t 30 --max-files 50
+      ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia
+      ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia,lra,nra -j 200 -t 100
+      ./nlcolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
 
     常用选项（透传给 run_benchmark.py）:
-      -j N         并行数（默认 1）
-      -t SEC       超时秒数（默认 30）
-      --max-files N   每个 logic 最多跑 N 个文件
+      -j N         并行数
+      -t SEC       超时秒数
+      --max-files N   每个 logic 最多 N 个 case
       --compare-with z3/cvc5  交叉验证
 EOF
         exit 1
