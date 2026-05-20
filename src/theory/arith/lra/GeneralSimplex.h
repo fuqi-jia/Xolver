@@ -152,6 +152,11 @@ public:
     /** Return bound reasons that fix the variable (lower == upper). */
     std::vector<BoundReason> explainFixedValue(int var) const;
 
+    /** Recursively prove that a variable is fixed by tableau row propagation.
+     *  Returns the fixed value and collected bound reasons, or nullopt.
+     */
+    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>> proveFixedValue(int var) const;
+
     // -------------------------------------------------------------------------
     // Read-only accessors for bound propagation / conflict explanation
     // -------------------------------------------------------------------------

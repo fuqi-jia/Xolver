@@ -95,6 +95,34 @@ enum class TheoryEffort : uint8_t {
     Full
 };
 
+// ---------------------------------------------------------------------------
+// Theory clause normalization
+// ---------------------------------------------------------------------------
+// Sorts, deduplicates exact literals, and detects complementary pairs.
+// Returns false if a complementary pair is found (indicates a bug in conflict
+// construction).  Modifies the vector in-place.
+// ---------------------------------------------------------------------------
+inline bool normalizeTheoryClause(std::vector<SatLit>& lits) {
+    std::sort(lits.begin(), lits.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    lits.erase(std::unique(lits.begin(), lits.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), lits.end());
+    for (size_t i = 0; i < lits.size(); ++i) {
+        SatLit neg = lits[i].negated();
+        auto it = std::lower_bound(lits.begin(), lits.end(), neg, [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+        if (it != lits.end() && *it == neg) {
+            return false; // complementary pair detected
+        }
+    }
+    return true;
+}
+
 struct TheoryCheckResult {
     enum class Kind {
         Consistent,

@@ -3,6 +3,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
+#include "theory/core/TheoryAtomTypes.h"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -216,14 +217,9 @@ TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             for (const auto& cr : conflict) {
                 tc.clause.push_back(cr.reason);
             }
-            // Deduplicate: same SAT literal may appear from multiple bound reasons
-            std::sort(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
-                if (a.var != b.var) return a.var < b.var;
-                return a.sign < b.sign;
-            });
-            tc.clause.erase(std::unique(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
-                return a.var == b.var && a.sign == b.sign;
-            }), tc.clause.end());
+            bool ok = normalizeTheoryClause(tc.clause);
+            assert(ok && "complementary literal in theory conflict clause");
+            (void)ok;
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
 #ifdef NLCOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());

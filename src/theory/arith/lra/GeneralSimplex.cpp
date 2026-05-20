@@ -748,6 +748,44 @@ std::vector<GeneralSimplex::BoundReason> GeneralSimplex::explainFixedValue(int v
     return reasons;
 }
 
+std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
+GeneralSimplex::proveFixedValue(int var) const {
+    assert(var >= 0 && var < static_cast<int>(vars_.size()));
+
+    // Direct bound fix
+    auto direct = fixedValue(var);
+    if (direct) {
+        return std::make_pair(*direct, explainFixedValue(var));
+    }
+
+    // If var is basic, check whether all non-basic entries in its row are fixed.
+    int row = basicRowOfVar(var);
+    if (row < 0) return std::nullopt;
+
+    const auto& tabRow = tableau().row(row);
+    DeltaRational value(tabRow.rhs);
+    std::vector<BoundReason> reasons;
+    for (const auto& e : tabRow.entries) {
+        auto sub = proveFixedValue(e.col);
+        if (!sub) return std::nullopt;
+        value += e.coeff * sub->first;
+        reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
+    }
+
+    // Deduplicate reasons
+    std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+        if (a.var != b.var) return a.var < b.var;
+        if (a.isLower != b.isLower) return a.isLower < b.isLower;
+        if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
+        return a.reason.sign < b.reason.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+        return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
+    }), reasons.end());
+
+    return std::make_pair(value, std::move(reasons));
+}
+
 // ============================================================================
 // Accessors
 // ============================================================================

@@ -1,6 +1,7 @@
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomTypes.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <cassert>
 #include <algorithm>
@@ -89,6 +90,9 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     }
 
     if (pendingConflict_) {
+        bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
+        assert(ok && "complementary literal in pending conflict");
+        (void)ok;
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
 
@@ -102,6 +106,9 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
+                bool ok = normalizeTheoryClause(tc.clause);
+                assert(ok && "complementary literal in IEQ conflict");
+                (void)ok;
                 return TheoryCheckResult::mkConflict(std::move(tc));
             }
         }
@@ -118,6 +125,9 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         } else {
             tc.clause = allActiveReasons();
         }
+        bool ok = normalizeTheoryClause(tc.clause);
+        assert(ok && "complementary literal in simplex conflict");
+        (void)ok;
         return TheoryCheckResult::mkConflict(std::move(tc));
     }
     if (r == GeneralSimplex::Result::Unknown) {
@@ -183,32 +193,16 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
             // If the disequality is forced to be false by current bounds
             // (auxVar is fixed to 0), return a precise conflict.
             auto val = gs_.value(d.auxVar);
-            auto fixed = gs_.fixedValue(d.auxVar);
-            if (fixed && fixed->isZero()) {
-                auto reasons = gs_.explainFixedValue(d.auxVar);
+            auto proved = gs_.proveFixedValue(d.auxVar);
+            if (proved && proved->first.isZero()) {
                 TheoryConflict tc;
-                for (const auto& br : reasons) {
+                for (const auto& br : proved->second) {
                     tc.clause.push_back(br.reason);
                 }
                 tc.clause.push_back(d.lit);
-                return TheoryCheckResult::mkConflict(std::move(tc));
-            }
-
-            // Fallback: model satisfies equality but bounds are on negated forms
-            // (e.g. x>=0 stored as -x<=0).  Collect active reasons as conflict.
-            if (val.isZero()) {
-                TheoryConflict tc;
-                for (const auto& a : activeAtoms_) {
-                    tc.clause.push_back(a.lit);
-                }
-                tc.clause.push_back(d.lit);
-                std::sort(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
-                    if (a.var != b.var) return a.var < b.var;
-                    return a.sign < b.sign;
-                });
-                tc.clause.erase(std::unique(tc.clause.begin(), tc.clause.end(), [](SatLit a, SatLit b) {
-                    return a.var == b.var && a.sign == b.sign;
-                }), tc.clause.end());
+                bool ok = normalizeTheoryClause(tc.clause);
+                assert(ok && "complementary literal in disequality conflict");
+                (void)ok;
                 return TheoryCheckResult::mkConflict(std::move(tc));
             }
 
@@ -239,8 +233,11 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
 
             if (g == 0) {
                 if (c == 0) {
-                    return TheoryCheckResult::mkConflict(
-                        TheoryConflict{{d.lit}});
+                    auto tc = TheoryConflict{{d.lit}};
+                    bool ok = normalizeTheoryClause(tc.clause);
+                    assert(ok && "complementary literal in gcd conflict");
+                    (void)ok;
+                    return TheoryCheckResult::mkConflict(std::move(tc));
                 }
                 return TheoryCheckResult::consistent();
             }

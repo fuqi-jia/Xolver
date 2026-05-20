@@ -148,6 +148,29 @@ bool extractLinearConstraint(ExprId eid, const CoreIr& ir,
     if (!extractLinearExpr(e.children[0], ir, coeffs, constant, mpq_class(1))) return false;
     if (!extractLinearExpr(e.children[1], ir, coeffs, constant, mpq_class(-1))) return false;
     rhs = -constant;
+
+    // Canonicalize: ensure the first non-zero coefficient (by var name) is positive.
+    // This guarantees that e.g. "x >= 0" and "0 <= x" map to the same canonical form.
+    bool needFlip = false;
+    for (const auto& [name, coeff] : coeffs) {
+        if (coeff != 0) {
+            needFlip = (coeff < 0);
+            break;
+        }
+    }
+    if (needFlip) {
+        for (auto& [name, coeff] : coeffs) {
+            coeff = -coeff;
+        }
+        rhs = -rhs;
+        switch (rel) {
+            case Relation::Lt:  rel = Relation::Gt;  break;
+            case Relation::Leq: rel = Relation::Geq; break;
+            case Relation::Gt:  rel = Relation::Lt;  break;
+            case Relation::Geq: rel = Relation::Leq; break;
+            default: break; // Eq, Neq unchanged
+        }
+    }
     return true;
 }
 
