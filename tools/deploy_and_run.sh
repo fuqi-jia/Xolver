@@ -150,6 +150,39 @@ cmd_run() {
 }
 
 # ---------------------------------------------------------------------------
+# pack: 打包最新 benchmark 结果
+# ---------------------------------------------------------------------------
+cmd_pack() {
+    RESULTS_DIR="$(pwd)/results"
+    [[ -d "$RESULTS_DIR" ]] || err "找不到 results 目录: $RESULTS_DIR"
+
+    RUN_DIR=$(ls -d "$RESULTS_DIR"/run_* 2>/dev/null | sort | tail -1)
+    [[ -n "$RUN_DIR" ]] || err "results 目录下没有 run_* 文件夹"
+
+    RUN_NAME=$(basename "$RUN_DIR")
+    OUT="$HOME/nlcolver-$(hostname)-$RUN_NAME.tar.gz"
+
+    log "打包: $RUN_NAME -> $OUT"
+
+    # 收集核心文件
+    FILES=()
+    [[ -f "$RUN_DIR/bench.log" ]] && FILES+=("$RUN_DIR/bench.log")
+
+    for logic_dir in "$RUN_DIR"/QF_*; do
+        [[ -d "$logic_dir" ]] || continue
+        for f in results.csv summary.txt statistics.json discrepancies.txt errors.txt; do
+            [[ -f "$logic_dir/$f" ]] && FILES+=("$logic_dir/$f")
+        done
+    done
+
+    [[ ${#FILES[@]} -eq 0 ]] && err "$RUN_NAME 下没有找到结果文件"
+
+    tar czf "$OUT" -C "$(dirname "$RUN_DIR")" $(for f in "${FILES[@]}"; do echo "${f#$RESULTS_DIR/}"; done)
+
+    log "打包完成: $OUT ($(du -h "$OUT" | cut -f1))"
+}
+
+# ---------------------------------------------------------------------------
 # 主入口
 # ---------------------------------------------------------------------------
 case "${1:-}" in
@@ -161,6 +194,9 @@ case "${1:-}" in
         ;;
     run)
         cmd_run "$@"
+        ;;
+    pack)
+        cmd_pack
         ;;
     *)
         cat << 'EOF'
@@ -191,6 +227,9 @@ NLColver 极简部署脚本
       ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia
       ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia,lra,nra -j 200 -t 100
       ./nlcolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
+
+  ./nlcolver-dist/tools/deploy_and_run.sh pack
+    打包最新 benchmark 结果到 ~/nlcolver-<hostname>-<run>.tar.gz
 
     常用选项（透传给 run_benchmark.py）:
       -j N         并行数
