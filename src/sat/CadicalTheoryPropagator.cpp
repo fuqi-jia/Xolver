@@ -134,7 +134,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
     if (abortWithUnknown_) {
         terminateSolve();
-        return true;
+        return false;
     }
 
     // Slow-path fuse: prevent infinite loops from buggy theory solvers
@@ -142,7 +142,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         writeReason(unknownReasonSink_, "SAT: theory modelCheck budget exceeded (>" + std::to_string(MAX_MODEL_CHECKS) + ")");
         abortWithUnknown_ = true;
         terminateSolve();
-        return true;
+        return false;
     }
 
     assignmentView_.clear();

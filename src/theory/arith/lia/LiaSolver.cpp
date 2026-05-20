@@ -6,10 +6,19 @@
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <cstdlib>
+#include <sstream>
 
 namespace nlcolver {
 
-LiaSolver::LiaSolver() = default;
+LiaSolver::LiaSolver() {
+    const char* env = std::getenv("NLCOLVER_LIA_DUMP_DIR");
+    if (env) {
+        dumpCounter_ = 0;
+    }
+}
 
 LiaSolver::~LiaSolver() {
 #ifdef NLCOLVER_LIA_PROFILE
@@ -178,6 +187,12 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
         assert(ok && "complementary literal in pending conflict");
         (void)ok;
+        if (auto z3r = z3CheckCurrentState(); z3r && *z3r) {
+            std::cerr << "[UNSOUND_LIA_LEMMA] pending conflict but Z3 says SAT\n";
+            dumpState("unsat_pending_UNSOUND");
+            return TheoryCheckResult::unknown();
+        }
+        dumpState("unsat_pending");
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
 
@@ -298,25 +313,27 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         }
     }
 
-    // Only handle disequalities at Full effort (model check).
-    // At Standard effort (cb_propagate), partial assignments may not
-    // give enough information for proveFixedValue, and split lemmas
-    // cannot be propagated anyway (cb_propagate ignores lemmas).
-    // This avoids useless work and prevents memory corruption bugs
-    // triggered by repeated split-lemma generation in propagate.
-    if (effort == TheoryEffort::Full && !disequalities_.empty()) {
-        auto dr = handleDisequalities(lemmaDb);
-        if (dr.kind != TheoryCheckResult::Kind::Consistent) {
+    if (!ultraSafeMode_) {
+        // Only handle disequalities at Full effort (model check).
+        // At Standard effort (cb_propagate), partial assignments may not
+        // give enough information for proveFixedValue, and split lemmas
+        // cannot be propagated anyway (cb_propagate ignores lemmas).
+        // This avoids useless work and prevents memory corruption bugs
+        // triggered by repeated split-lemma generation in propagate.
+        if (effort == TheoryEffort::Full && !disequalities_.empty()) {
+            auto dr = handleDisequalities(lemmaDb);
+            if (dr.kind != TheoryCheckResult::Kind::Consistent) {
 #ifdef NLCOLVER_LIA_PROFILE
-            if (dr.kind == TheoryCheckResult::Kind::Lemma) {
-                profile_.disequalitySplitCount++;
-            }
+                if (dr.kind == TheoryCheckResult::Kind::Lemma) {
+                    profile_.disequalitySplitCount++;
+                }
 #endif
-            return dr;
+                return dr;
+            }
         }
     }
 
-    auto ir = checkIntegrality(lemmaDb);
+    auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb);
 
 #ifdef NLCOLVER_LIA_PROFILE
     auto prof_t5 = std::chrono::steady_clock::now();
@@ -331,12 +348,14 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             diseqInfos.push_back({d.auxVar});
         }
         if (!validator_.validateLiaModel(activeAtoms_, diseqInfos, integerVars_, gs_)) {
+            dumpState("sat_validator_failed");
             return TheoryCheckResult::unknown();
         }
+        dumpState("sat");
         return TheoryCheckResult::consistent();
     }
 
-    if (!activeAtoms_.empty()) {
+    if (!ultraSafeMode_ && !activeAtoms_.empty()) {
         auto cr = integerReasoner_.run(activeAtoms_);
         if (cr) {
             if (cr->kind == TheoryCheckResult::Kind::Lemma && cr->lemmaOpt) {
@@ -680,6 +699,177 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;
+}
+
+// ============================================================================
+// Debug dump helpers
+// ============================================================================
+
+std::string LiaSolver::mpqToSmtLib(const mpq_class& q) {
+    if (q.get_den() == 1) {
+        return q.get_num().get_str();
+    }
+    return "(/ " + q.get_num().get_str() + " " + q.get_den().get_str() + ")";
+}
+
+std::string LiaSolver::relationToSmtLib(Relation rel) {
+    switch (rel) {
+        case Relation::Eq:  return "=";
+        case Relation::Lt:  return "<";
+        case Relation::Leq: return "<=";
+        case Relation::Gt:  return ">";
+        case Relation::Geq: return ">=";
+        case Relation::Neq: return "distinct";
+    }
+    return "=";
+}
+
+std::string LiaSolver::linearFormToSmtLib(const LinearFormKey& form) {
+    if (form.terms.empty()) return "0";
+    if (form.terms.size() == 1) {
+        const auto& [name, coeff] = form.terms[0];
+        if (coeff == 1) return name;
+        if (coeff == -1) return "(- " + name + ")";
+        return "(* " + mpqToSmtLib(coeff) + " " + name + ")";
+    }
+    std::string s = "(+";
+    for (const auto& [name, coeff] : form.terms) {
+        if (coeff == 1) {
+            s += " " + name;
+        } else if (coeff == -1) {
+            s += " (- " + name + ")";
+        } else {
+            s += " (* " + mpqToSmtLib(coeff) + " " + name + ")";
+        }
+    }
+    s += ")";
+    return s;
+}
+
+void LiaSolver::dumpState(const std::string& tag) const {
+    const char* env = std::getenv("NLCOLVER_LIA_DUMP_DIR");
+    if (!env || !*env) return;
+    std::filesystem::path dir(env);
+    if (!std::filesystem::exists(dir)) {
+        std::filesystem::create_directories(dir);
+    }
+
+    int id = ++dumpCounter_;
+    std::filesystem::path path = dir / ("lia_dump_" + std::to_string(id) + "_" + tag + ".smt2");
+    std::ofstream ofs(path);
+    if (!ofs) return;
+
+    ofs << "(set-logic QF_LIA)\n";
+
+    // Collect all variable names
+    std::unordered_set<std::string> vars;
+    for (const auto& a : activeAtoms_) {
+        for (const auto& t : a.lhs.terms) vars.insert(t.first);
+    }
+    for (const auto& d : disequalities_) {
+        for (const auto& t : d.lhs.terms) vars.insert(t.first);
+    }
+    for (const auto& ie : interfaceEqualities_) {
+        (void)ie;
+    }
+
+    for (const auto& v : vars) {
+        ofs << "(declare-fun " << v << " () Int)\n";
+    }
+
+    // Active atoms
+    for (const auto& a : activeAtoms_) {
+        Relation effectiveRel = a.value ? a.rel : negateRelation(a.rel);
+        std::string lhsStr = linearFormToSmtLib(a.lhs);
+        std::string rhsStr = mpqToSmtLib(a.rhs);
+        if (effectiveRel == Relation::Neq) {
+            ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
+        } else {
+            ofs << "(assert (" << relationToSmtLib(effectiveRel) << " " << lhsStr << " " << rhsStr << "))\n";
+        }
+    }
+
+    // Disequalities
+    for (const auto& d : disequalities_) {
+        std::string lhsStr = linearFormToSmtLib(d.lhs);
+        std::string rhsStr = mpqToSmtLib(d.rhs);
+        ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
+    }
+
+    ofs << "(check-sat)\n";
+
+    if (tag == "sat") {
+        ofs << "(get-model)\n";
+    }
+
+    ofs.flush();
+}
+
+std::optional<bool> LiaSolver::z3CheckCurrentState() const {
+    const char* env = std::getenv("NLCOLVER_LIA_Z3_CHECK");
+    if (!env || !*env) return std::nullopt;
+
+    std::filesystem::path tmpDir = std::filesystem::temp_directory_path();
+    std::string base = "nlcolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
+    std::filesystem::path smtPath = tmpDir / (base + ".smt2");
+    std::filesystem::path outPath = tmpDir / (base + ".out");
+
+    {
+        std::ofstream ofs(smtPath);
+        if (!ofs) return std::nullopt;
+
+        ofs << "(set-logic QF_LIA)\n";
+        std::unordered_set<std::string> vars;
+        for (const auto& a : activeAtoms_) {
+            for (const auto& t : a.lhs.terms) vars.insert(t.first);
+        }
+        for (const auto& d : disequalities_) {
+            for (const auto& t : d.lhs.terms) vars.insert(t.first);
+        }
+        for (const auto& v : vars) {
+            ofs << "(declare-fun " << v << " () Int)\n";
+        }
+        for (const auto& a : activeAtoms_) {
+            Relation effectiveRel = a.value ? a.rel : negateRelation(a.rel);
+            std::string lhsStr = linearFormToSmtLib(a.lhs);
+            std::string rhsStr = mpqToSmtLib(a.rhs);
+            if (effectiveRel == Relation::Neq) {
+                ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
+            } else {
+                ofs << "(assert (" << relationToSmtLib(effectiveRel) << " " << lhsStr << " " << rhsStr << "))\n";
+            }
+        }
+        for (const auto& d : disequalities_) {
+            std::string lhsStr = linearFormToSmtLib(d.lhs);
+            std::string rhsStr = mpqToSmtLib(d.rhs);
+            ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
+        }
+        ofs << "(check-sat)\n";
+    }
+
+    std::string cmd = std::string("z3 -T:5 ") + smtPath.string() + " > " + outPath.string() + " 2>/dev/null";
+    int ret = std::system(cmd.c_str());
+    (void)ret;
+
+    std::ifstream ifs(outPath);
+    if (!ifs) {
+        std::filesystem::remove(smtPath);
+        std::filesystem::remove(outPath);
+        return std::nullopt;
+    }
+    std::string line;
+    bool isSat = false;
+    while (std::getline(ifs, line)) {
+        if (line.find("sat") != std::string::npos && line.find("unsat") == std::string::npos) {
+            isSat = true;
+        } else if (line.find("unsat") != std::string::npos) {
+            isSat = false;
+        }
+    }
+
+    std::filesystem::remove(smtPath);
+    std::filesystem::remove(outPath);
+    return isSat;
 }
 
 } // namespace nlcolver

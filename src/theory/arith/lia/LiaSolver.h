@@ -34,6 +34,20 @@ public:
         registry_ = reg;
         integerReasoner_.setRegistry(reg);
     }
+    void setSafeMode(bool v) {
+        safeMode_ = v;
+        integerReasoner_.setSafeMode(v);
+    }
+    void setUltraSafeMode(bool v) { ultraSafeMode_ = v; }
+    void setEnableSingleVarTightening(bool v) {
+        integerReasoner_.setEnableSingleVarTightening(v);
+    }
+    void setEnableGcdIneqTightening(bool v) {
+        integerReasoner_.setEnableGcdIneqTightening(v);
+    }
+    void setEnableEqGcdNormalization(bool v) {
+        integerReasoner_.setEnableEqGcdNormalization(v);
+    }
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -102,11 +116,20 @@ private:
     int currentLevel_ = 0;
 
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
+    bool safeMode_ = false;
+    bool ultraSafeMode_ = false;
+    mutable int dumpCounter_ = 0;
 
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
     TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb);
 
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
+
+    void dumpState(const std::string& tag) const;
+    static std::string linearFormToSmtLib(const LinearFormKey& form);
+    static std::string mpqToSmtLib(const mpq_class& q);
+    static std::string relationToSmtLib(Relation rel);
+    std::optional<bool> z3CheckCurrentState() const;
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);

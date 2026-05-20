@@ -484,9 +484,37 @@ public:
         // -------------------------------------------------------------------
         // Register solvers based on logic or detected features
         // -------------------------------------------------------------------
+        bool liaSafeMode = false;
+        bool liaUltraSafeMode = false;
+        bool liaEnableSingleVar = false;
+        bool liaEnableGcdIneq = false;
+        bool liaEnableEqGcdNorm = false;
+        auto itOpt = options.find("lia-safe-mode");
+        if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
+            liaSafeMode = itOpt->second.b;
+        }
+        itOpt = options.find("lia-ultra-safe-mode");
+        if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
+            liaUltraSafeMode = itOpt->second.b;
+        }
+        itOpt = options.find("lia-enable-single-var-tightening");
+        if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
+            liaEnableSingleVar = itOpt->second.b;
+        }
+        itOpt = options.find("lia-enable-gcd-ineq-tightening");
+        if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
+            liaEnableGcdIneq = itOpt->second.b;
+        }
+        itOpt = options.find("lia-enable-eq-gcd-normalization");
+        if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
+            liaEnableEqGcdNorm = itOpt->second.b;
+        }
+
         auto setupResult = setupSolvers(
             logic, features, ir.get(), registry, theoryManager,
-            sharedTermRegistry_, boolSortId_);
+            sharedTermRegistry_, boolSortId_,
+            liaSafeMode, liaUltraSafeMode,
+            liaEnableSingleVar, liaEnableGcdIneq, liaEnableEqGcdNorm);
 
         if (!setupResult.success) {
             lastUnknownReason_ = "TheoryFactory: solver setup failed (unsupported logic=" + logic + ")";

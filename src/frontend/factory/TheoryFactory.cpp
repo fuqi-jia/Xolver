@@ -20,8 +20,20 @@ SolverSetupResult setupSolvers(
     TheoryAtomRegistry& registry,
     TheoryManager& theoryManager,
     std::unique_ptr<SharedTermRegistry>& sharedTermRegistry,
-    SortId boolSortId)
+    SortId boolSortId,
+    bool liaSafeMode,
+    bool liaUltraSafeMode,
+    bool liaEnableSingleVar,
+    bool liaEnableGcdIneq,
+    bool liaEnableEqGcdNorm)
 {
+    auto configureLia = [&](LiaSolver& lia) {
+        lia.setSafeMode(liaSafeMode);
+        lia.setUltraSafeMode(liaUltraSafeMode);
+        if (liaEnableSingleVar) lia.setEnableSingleVarTightening(true);
+        if (liaEnableGcdIneq) lia.setEnableGcdIneqTightening(true);
+        if (liaEnableEqGcdNorm) lia.setEnableEqGcdNormalization(true);
+    };
     SolverSetupResult result;
     result.polyKernelRaw = nullptr;
 
@@ -30,6 +42,7 @@ SolverSetupResult setupSolvers(
     if (logic == "QF_LIA" || logic == "LIA") {
         auto lia = std::make_unique<LiaSolver>();
         lia->setRegistry(&registry);
+        configureLia(*lia);
         theoryManager.registerSolver(std::move(lia));
     } else if (logic == "QF_LRA" || logic == "LRA") {
         auto lra = std::make_unique<LraSolver>();
@@ -51,6 +64,7 @@ SolverSetupResult setupSolvers(
         theoryManager.registerSolver(std::move(nia));
         auto lia = std::make_unique<LiaSolver>();
         lia->setRegistry(&registry);
+        configureLia(*lia);
         theoryManager.registerSolver(std::move(lia));
     } else if (logic == "QF_LIRA" || logic == "LIRA") {
         auto lira = std::make_unique<LiraSolver>();
@@ -117,6 +131,7 @@ SolverSetupResult setupSolvers(
             lia->setCoreIr(ir);
             lia->setSharedTermRegistry(sharedTermRegistry.get());
             lia->setRegistry(&registry);
+            configureLia(*lia);
             theoryManager.registerSolver(std::move(lia));
             theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
             theoryManager.setRegistry(&registry);
@@ -145,6 +160,7 @@ SolverSetupResult setupSolvers(
         lia->setCoreIr(ir);
         lia->setSharedTermRegistry(sharedTermRegistry.get());
         lia->setRegistry(&registry);
+        configureLia(*lia);
         theoryManager.registerSolver(std::move(lia));
         theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
         theoryManager.setRegistry(&registry);
@@ -203,10 +219,12 @@ SolverSetupResult setupSolvers(
             theoryManager.registerSolver(std::move(nia));
             auto lia = std::make_unique<LiaSolver>();
             lia->setRegistry(&registry);
+            configureLia(*lia);
             theoryManager.registerSolver(std::move(lia));
         } else if (features.hasIntVar) {
             auto lia = std::make_unique<LiaSolver>();
             lia->setRegistry(&registry);
+            configureLia(*lia);
             theoryManager.registerSolver(std::move(lia));
         } else if (features.hasRealVar && features.hasNonlinear) {
             auto polyKernel = createPolynomialKernel();

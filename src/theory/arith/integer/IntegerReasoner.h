@@ -27,6 +27,10 @@ struct NormalizedConstraint {
 class IntegerReasoner {
 public:
     void setRegistry(TheoryAtomRegistry* r) { registry_ = r; }
+    void setSafeMode(bool v) { safeMode_ = v; }
+    void setEnableSingleVarTightening(bool v) { enableSingleVarTightening_ = v; }
+    void setEnableGcdIneqTightening(bool v) { enableGcdIneqTightening_ = v; }
+    void setEnableEqGcdNormalization(bool v) { enableEqGcdNormalization_ = v; }
 
     /**
      * Run all cheap integer reasoning rules on active atoms.
@@ -87,6 +91,10 @@ public:
 
 private:
     TheoryAtomRegistry* registry_ = nullptr;
+    bool safeMode_ = false;
+    bool enableSingleVarTightening_ = true;
+    bool enableGcdIneqTightening_ = true;
+    bool enableEqGcdNormalization_ = true;
 
     static mpz_class gcdAbs(const std::vector<std::pair<std::string, mpq_class>>& terms);
     static void clearDenominators(LinearFormKey& lhs, mpq_class& rhs);

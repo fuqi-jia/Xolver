@@ -90,6 +90,16 @@ struct TheoryLemma {
     std::vector<SatLit> lits;
 };
 
+/**
+ * ActiveLinearConstraint: a linear constraint that is true under the
+ * current SAT assignment.  Used by NiraSolver to obtain linear context
+ * without reading coreIr_->assertions() directly.
+ */
+struct ActiveLinearConstraint {
+    SatLit reasonLit;
+    LinearAtomPayload payload;
+};
+
 enum class TheoryEffort : uint8_t {
     Standard,
     Full

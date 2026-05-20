@@ -36,6 +36,10 @@ public:
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
     void reset() override;
 
+    void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) override {
+        activeLinearContext_ = context;
+    }
+
     void setRegistry(TheoryAtomRegistry* reg);
     void setCoreIr(const CoreIr* ir);
 
@@ -58,6 +62,7 @@ private:
         bool value;
     };
     std::vector<ActiveAssignment> activeAssignments_;
+    const std::vector<ActiveLinearConstraint>* activeLinearContext_ = nullptr;
 
     // Check sub-stages
     TheoryCheckResult checkPureSubproblems(TheoryLemmaStorage& lemmaDb);

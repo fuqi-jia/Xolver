@@ -37,6 +37,13 @@ public:
     virtual void reset() = 0;
 
     // -----------------------------------------------------------------------
+    // Active linear context for nonlinear solvers (optional; default = no-op)
+    // -----------------------------------------------------------------------
+    virtual void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) {
+        (void)context;
+    }
+
+    // -----------------------------------------------------------------------
     // Nelson-Oppen combination hooks (optional; default = no-op)
     // -----------------------------------------------------------------------
     virtual bool supportsCombination() const { return false; }

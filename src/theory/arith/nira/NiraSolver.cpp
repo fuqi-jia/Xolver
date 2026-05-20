@@ -1,6 +1,7 @@
 #include "theory/arith/nira/NiraSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
+#include "theory/arith/linear/LinearExpr.h"
 #include "expr/ir.h"
 #include <algorithm>
 #include <functional>
@@ -39,15 +40,29 @@ void NiraSolver::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
-    if (activeAssignments_.empty()) {
+    // Check if there are any active polynomial constraints
+    bool hasPoly = false;
+    for (const auto& a : activeAssignments_) {
+        if (a.value && std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
+            hasPoly = true;
+            break;
+        }
+    }
+
+    // If there are no polynomial obligations, NiraSolver has nothing to do.
+    // Linear obligations are handled by LiraSolver (registered for QF_NIRA).
+    if (!hasPoly) {
         return TheoryCheckResult::consistent();
     }
 
     // --- Presolve: fixed-value substitution ---
     if (kernel_) {
+        std::cerr << "[NIRA] check: hasPoly=" << hasPoly
+                  << " activeLinearCtx=" << (activeLinearContext_ ? activeLinearContext_->size() : 0)
+                  << "\n";
         std::unordered_map<std::string, mpq_class> fixedValues;
 
-        // Step 1: collect fixed values from linear equalities
+        // Step 1a: collect fixed values from active NIRA linear equalities
         for (const auto& a : activeAssignments_) {
             if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
             if (!a.value) continue;
@@ -59,6 +74,19 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
             const auto& term = payload.lhs.terms[0];
             if (term.second == 0) continue;
             fixedValues[term.first] = payload.rhs / term.second;
+        }
+
+        // Step 1b: collect fixed values from active LIRA linear equalities
+        if (activeLinearContext_) {
+            for (const auto& alc : *activeLinearContext_) {
+                const auto& p = alc.payload;
+                if (p.rel != Relation::Eq) continue;
+                if (p.lhs.terms.size() != 1) continue;
+
+                const auto& term = p.lhs.terms[0];
+                if (term.second == 0) continue;
+                fixedValues[term.first] = p.rhs / term.second;
+            }
         }
 
         // Step 2: substitute into polynomial constraints
@@ -98,13 +126,16 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
     if (effort == TheoryEffort::Full) {
         auto r = checkBoundedComplete(lemmaDb);
         if (r.kind == TheoryCheckResult::Kind::Consistent) return r;
+        if (r.kind == TheoryCheckResult::Kind::Conflict) return r;
         if (r.kind == TheoryCheckResult::Kind::Unknown && !r.reason.empty()) {
             return TheoryCheckResult::unknown("NIRA: bounded-complete failed -> " + r.reason);
         }
     }
 
-    // TODO: classify, pure subproblem delegation, relaxation
-    return TheoryCheckResult::unknown("NIRA: not yet implemented (classify+delegate)");
+    // At Standard effort with polynomial payload but no immediate conflict:
+    // we cannot conclude Consistent without Full effort enumeration.
+    // Return Unknown so the SAT solver continues searching.
+    return TheoryCheckResult::unknown("NIRA: polynomial payload needs Full effort");
 }
 
 TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -285,6 +316,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     };
     std::unordered_map<std::string, BoundInfo> bounds;
 
+    // 1a: from active NIRA linear atoms
     for (const auto& a : activeAssignments_) {
         if (!a.value) continue;
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
@@ -326,9 +358,48 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         }
     }
 
+    // 1b: from active LIRA linear atoms (via ActiveLinearContext)
+    if (activeLinearContext_) {
+        for (const auto& alc : *activeLinearContext_) {
+            const auto& p = alc.payload;
+            if (p.lhs.terms.size() != 1) continue;
+
+            const auto& [name, coeff] = p.lhs.terms[0];
+            if (!isIntegerVar(coreIr_, name)) continue;
+
+            mpq_class rawBound = p.rhs / coeff;
+            if (rawBound.get_den() != 1) continue;
+
+            mpz_class boundVal = rawBound.get_num();
+            bool pos = coeff > 0;
+
+            switch (p.rel) {
+                case Relation::Eq:
+                    bounds[name].lower = boundVal;
+                    bounds[name].upper = boundVal;
+                    break;
+                case Relation::Leq:
+                    if (pos) bounds[name].upper = boundVal;
+                    else     bounds[name].lower = boundVal;
+                    break;
+                case Relation::Geq:
+                    if (pos) bounds[name].lower = boundVal;
+                    else     bounds[name].upper = boundVal;
+                    break;
+                case Relation::Lt:
+                    if (pos) bounds[name].upper = boundVal - 1;
+                    else     bounds[name].lower = boundVal + 1;
+                    break;
+                case Relation::Gt:
+                    if (pos) bounds[name].lower = boundVal + 1;
+                    else     bounds[name].upper = boundVal - 1;
+                    break;
+                default: break;
+            }
+        }
+    }
+
     // Step 2: Identify if there are any polynomial constraints at all.
-    // If not, NiraSolver has no nonlinear obligations to discharge;
-    // linear obligations are handled by LiraSolver (registered for QF_NIRA).
     bool hasPolynomialPayload = false;
     for (const auto& a : activeAssignments_) {
         if (!a.value) continue;
@@ -355,36 +426,27 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     }
 
     if (polyIntVars.empty()) {
-        // Polynomial payload exists but no integer polynomial variables.
-        // Real-only polynomial constraints require NRA/CDCAC delegation,
-        // which is not yet implemented for NiraSolver.
         return TheoryCheckResult::unknown(
             "NIRA: polynomial payload has no integer polynomial vars; NRA delegation not implemented");
     }
 
-    // Step 3: Ensure every polynomial integer variable has finite bounds
+    // Step 3: Separate bounded vs unbounded polynomial integer variables
+    std::vector<std::string> enumVars;   // bounded variables to enumerate
     std::vector<std::string> unboundedVars;
     for (const auto& name : polyIntVars) {
         auto it = bounds.find(name);
-        if (it == bounds.end() || !it->second.lower || !it->second.upper) {
+        if (it != bounds.end() && it->second.lower && it->second.upper) {
+            enumVars.push_back(name);
+        } else {
             unboundedVars.push_back(name);
         }
     }
-    if (!unboundedVars.empty()) {
-        std::cerr << "[NIRA] checkBoundedComplete: " << polyIntVars.size()
-                  << " integer polynomial vars, " << unboundedVars.size() << " unbounded:\n";
-        for (const auto& name : unboundedVars) {
-            auto it = bounds.find(name);
-            bool hasLow = it != bounds.end() && it->second.lower.has_value();
-            bool hasUp  = it != bounds.end() && it->second.upper.has_value();
-            std::cerr << "  " << name << " lower=" << (hasLow ? "yes" : "no")
-                      << " upper=" << (hasUp ? "yes" : "no") << "\n";
-        }
+
+    if (enumVars.empty()) {
+        // No bounded variables to enumerate; cannot make progress.
         return TheoryCheckResult::unknown("NIRA: unbounded integer variable(s)");
     }
 
-    // Step 4: Enumerate all integer combinations
-    std::vector<std::string> enumVars(polyIntVars.begin(), polyIntVars.end());
     std::sort(enumVars.begin(), enumVars.end());
     std::unordered_map<std::string, mpq_class> fixedValues;
 
@@ -411,7 +473,18 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         return TheoryCheckResult::consistent();
     }
 
-    return TheoryCheckResult::unknown("NIRA: bounded complete solver exhausted (no conflict, no model)");
+    // All enumerated combinations lead to contradiction.
+    // Build a conflict clause from the active nonlinear atoms.
+    std::vector<SatLit> conflictReasons;
+    for (const auto& a : activeAssignments_) {
+        if (a.value && std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
+            conflictReasons.push_back(a.lit);
+        }
+    }
+    if (conflictReasons.empty()) {
+        conflictReasons = allActiveReasons();
+    }
+    return TheoryCheckResult::mkConflict(TheoryConflict{std::move(conflictReasons)});
 }
 
 bool NiraSolver::validateOriginalConstraints() const {

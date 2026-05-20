@@ -56,6 +56,13 @@ public:
     /** Aggregate models from all registered theory solvers. */
     std::optional<TheorySolver::TheoryModel> getModel() const;
 
+    /**
+     * Collect all linear atoms whose current SAT assignment makes them
+     * effectively true (including negated atoms, whose effective relation
+     * is the negation of the original relation).
+     */
+    std::vector<ActiveLinearConstraint> collectActiveLinearConstraints() const;
+
 private:
     std::vector<std::unique_ptr<TheorySolver>> solvers_;
     std::unordered_map<TheoryId, TheorySolver*> solverByTheory_;

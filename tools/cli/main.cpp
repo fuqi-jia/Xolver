@@ -20,6 +20,11 @@ static void printUsage(const char* prog) {
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires NLCOLVER_ENABLE_CASESTATS)\n"
+              << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
+              << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
+              << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
+              << "  --lia-enable-gcd-ineq-tightening     Re-enable GCD inequality tightening\n"
+              << "  --lia-enable-eq-gcd-normalization    Re-enable equality GCD normalization\n"
               << "  -v, --verbose          Verbose output\n";
 }
 
@@ -48,6 +53,16 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // TODO: enable model production
         } else if (arg == "--produce-proofs") {
             // TODO: enable proof production
+        } else if (arg == "--lia-safe-mode") {
+            solver.setOption("lia-safe-mode", nlcolver::OptionValue(true));
+        } else if (arg == "--lia-ultra-safe-mode") {
+            solver.setOption("lia-ultra-safe-mode", nlcolver::OptionValue(true));
+        } else if (arg == "--lia-enable-single-var-tightening") {
+            solver.setOption("lia-enable-single-var-tightening", nlcolver::OptionValue(true));
+        } else if (arg == "--lia-enable-gcd-ineq-tightening") {
+            solver.setOption("lia-enable-gcd-ineq-tightening", nlcolver::OptionValue(true));
+        } else if (arg == "--lia-enable-eq-gcd-normalization") {
+            solver.setOption("lia-enable-eq-gcd-normalization", nlcolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
             // TODO: enable verbose output
         } else {

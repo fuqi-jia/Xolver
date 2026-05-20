@@ -74,7 +74,15 @@ def main():
 
         # Python scripts
         (dist / "tools").mkdir()
-        for script in ["run_benchmark.py", "analyze_benchmark.py", "bench_server.py", "freeze_baseline.py"]:
+        for script in [
+            "run_benchmark.py",
+            "analyze_benchmark.py",
+            "bench_server.py",
+            "freeze_baseline.py",
+            "compare_benchmarks.py",
+            "lia_mismatch_replay.py",
+            "run_lia_ablation.sh",
+        ]:
             src = Path("tools") / script
             if src.exists():
                 subprocess.run(["cp", str(src), str(dist / "tools" / script)], check=True)

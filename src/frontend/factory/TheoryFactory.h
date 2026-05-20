@@ -30,6 +30,11 @@ SolverSetupResult setupSolvers(
     TheoryAtomRegistry& registry,
     TheoryManager& theoryManager,
     std::unique_ptr<SharedTermRegistry>& sharedTermRegistry,
-    SortId boolSortId);
+    SortId boolSortId,
+    bool liaSafeMode = false,
+    bool liaUltraSafeMode = false,
+    bool liaEnableSingleVar = false,
+    bool liaEnableGcdIneq = false,
+    bool liaEnableEqGcdNorm = false);
 
 } // namespace nlcolver

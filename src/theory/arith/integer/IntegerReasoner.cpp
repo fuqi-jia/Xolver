@@ -122,19 +122,20 @@ std::optional<TheoryCheckResult> IntegerReasoner::run(
             return TheoryCheckResult::mkConflict(*conflict);
         }
 
-        // 2. GCD inequality tightening
-        if (auto lemma = checkGcdInequalityTightening(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
+        if (!safeMode_ && enableGcdIneqTightening_) {
+            if (auto lemma = checkGcdInequalityTightening(*nc, atom.lit)) {
+                return TheoryCheckResult::mkLemma(*lemma);
+            }
         }
-
-        // 3. Single-variable bound tightening
-        if (auto lemma = singleVarBoundTighten(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
+        if (!safeMode_ && enableSingleVarTightening_) {
+            if (auto lemma = singleVarBoundTighten(*nc, atom.lit)) {
+                return TheoryCheckResult::mkLemma(*lemma);
+            }
         }
-
-        // 4. Equality normalization by GCD
-        if (auto lemma = normalizeEquality(*nc, atom.lit)) {
-            return TheoryCheckResult::mkLemma(*lemma);
+        if (!safeMode_ && enableEqGcdNormalization_) {
+            if (auto lemma = normalizeEquality(*nc, atom.lit)) {
+                return TheoryCheckResult::mkLemma(*lemma);
+            }
         }
     }
 

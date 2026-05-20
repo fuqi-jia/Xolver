@@ -2,6 +2,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/DebugTrace.h"
+#include "theory/arith/linear/LinearExpr.h"
 #include "sat/SatSolver.h"
 #include <cassert>
 #include <algorithm>
@@ -134,6 +135,29 @@ void TheoryManager::backtrackToLevel(int level) {
     discardSnapshotsAbove(level);
 }
 
+std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraints() const {
+    std::vector<ActiveLinearConstraint> result;
+    if (!assignmentView_ || !registry_) return result;
+
+    for (const auto& rec : registry_->records()) {
+        if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
+
+        LitValue lv = assignmentView_->value(SatLit{rec.satVar, true});
+        if (lv == LitValue::Unknown) continue;
+        bool isTrue = (lv == LitValue::True);
+        const auto& orig = std::get<LinearAtomPayload>(rec.payload);
+
+        ActiveLinearConstraint alc;
+        alc.reasonLit = SatLit{rec.satVar, isTrue};
+        alc.payload = orig;
+        if (!isTrue) {
+            alc.payload.rel = negateRelation(orig.rel);
+        }
+        result.push_back(alc);
+    }
+    return result;
+}
+
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
@@ -166,7 +190,9 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         if (solvers_.empty()) {
             return TheoryCheckResult::consistent();
         }
+        auto activeLinearContext = collectActiveLinearConstraints();
         for (auto& solver : solvers_) {
+            solver->setActiveLinearContext(&activeLinearContext);
             auto tr = solver->check(lemmaDb, effort);
             recordCheckResult(tr);
             if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
