@@ -398,6 +398,7 @@ public:
 
         auto result = sat->solve();
         cadicalBackend->disconnectPropagator();
+        propagator.stats().print(std::cerr);
 
         if (result == SatSolver::SolveResult::Sat) {
             lastModel_ = theoryManager.getModel();

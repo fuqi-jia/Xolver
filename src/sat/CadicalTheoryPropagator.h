@@ -4,8 +4,41 @@
 
 #include <cadical.hpp>
 #include "theory/core/TheoryPropagatorCallbacks.h"
+#include <chrono>
 
 namespace nlcolver {
+
+/**
+ * Search statistics collected during SAT + theory solving.
+ * Printed at the end of solve() for diagnostics.
+ */
+struct TheorySearchStats {
+    // --- modelCheck (Full effort) ---
+    int modelCheckCount = 0;
+    long long modelCheckTotalUs = 0;
+    int modelCheckConsistent = 0;
+    int modelCheckConflict = 0;
+    int modelCheckLemma = 0;
+    int modelCheckUnknown = 0;
+    int conflictMinSize = -1;
+    int conflictMaxSize = 0;
+    long long conflictTotalSize = 0;
+
+    // --- cb_propagate (Standard effort) ---
+    int propagateCallCount = 0;
+    int propagateTheoryCheckCount = 0;
+    int propagateConflictCount = 0;
+    int propagateLemmaCount = 0;
+    int propagateConflictMinSize = -1;
+    int propagateConflictMaxSize = 0;
+    long long propagateConflictTotalSize = 0;
+    long long propagateCheckTotalUs = 0;
+
+    void recordModelCheck(bool ok, std::chrono::microseconds dur);
+    void recordModelCheckResult(TheoryCheckResult::Kind kind, int conflictSize);
+    void recordPropagateCheck(bool conflict, bool lemma, int conflictSize, std::chrono::microseconds dur);
+    void print(std::ostream& out) const;
+};
 
 class CadicalBackend;
 
@@ -50,11 +83,14 @@ public:
     void notify_backtrack(size_t new_level) override;
 
     bool cb_check_found_model(const std::vector<int>& model) override;
+    int cb_propagate() override;
 
     bool cb_has_external_clause(bool& is_forgettable) override;
     int cb_add_external_clause_lit() override;
 
     void setUnknownReasonSink(std::string* sink);
+
+    const TheorySearchStats& stats() const { return stats_; }
 
 private:
     TheoryAtomLookup& registry_;
@@ -67,11 +103,15 @@ private:
     size_t pendingClausePos_ = 0;
     bool hasPendingClause_ = false;
     bool abortWithUnknown_ = false;
-    int modelCheckCount_ = 0;
     static constexpr int MAX_MODEL_CHECKS = 10000;
     CadicalAssignmentView assignmentView_;
+    CadicalAssignmentView partialAssignmentView_;
     std::string* unknownReasonSink_ = nullptr;
     std::unordered_map<SatVar, int> varToLevel_;
+    std::unordered_map<SatVar, bool> currentAssignment_;
+    size_t lastCheckedAssignmentSize_ = 0;
+
+    TheorySearchStats stats_;
 
     CadicalAssignmentView& assignmentView() { return assignmentView_; }
 

@@ -5,11 +5,87 @@
 #include "sat/CadicalBackend.h"
 #include <cassert>
 #include <iostream>
+#include <iomanip>
 
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
 
 namespace nlcolver {
+
+// ------------------------------------------------------------------
+// TheorySearchStats implementation
+// ------------------------------------------------------------------
+
+void TheorySearchStats::recordModelCheckResult(TheoryCheckResult::Kind kind, int conflictSize) {
+    ++modelCheckCount;
+    switch (kind) {
+        case TheoryCheckResult::Kind::Consistent: ++modelCheckConsistent; break;
+        case TheoryCheckResult::Kind::Conflict:
+            ++modelCheckConflict;
+            if (conflictSize > 0) {
+                if (conflictMinSize < 0 || conflictSize < conflictMinSize) conflictMinSize = conflictSize;
+                if (conflictSize > conflictMaxSize) conflictMaxSize = conflictSize;
+                conflictTotalSize += conflictSize;
+            }
+            break;
+        case TheoryCheckResult::Kind::Lemma: ++modelCheckLemma; break;
+        case TheoryCheckResult::Kind::Unknown: ++modelCheckUnknown; break;
+    }
+}
+
+void TheorySearchStats::recordPropagateCheck(bool conflict, bool lemma, int conflictSize,
+                                             std::chrono::microseconds dur) {
+    ++propagateTheoryCheckCount;
+    propagateCheckTotalUs += dur.count();
+    if (conflict) {
+        ++propagateConflictCount;
+        if (conflictSize > 0) {
+            if (propagateConflictMinSize < 0 || conflictSize < propagateConflictMinSize)
+                propagateConflictMinSize = conflictSize;
+            if (conflictSize > propagateConflictMaxSize)
+                propagateConflictMaxSize = conflictSize;
+            propagateConflictTotalSize += conflictSize;
+        }
+    } else if (lemma) {
+        ++propagateLemmaCount;
+    }
+}
+
+void TheorySearchStats::print(std::ostream& out) const {
+    out << "\n========== Theory Search Statistics ==========\n";
+    out << "modelCheck (Full effort):\n";
+    out << "  calls=" << modelCheckCount;
+    if (modelCheckCount > 0) {
+        out << " avg_us=" << (modelCheckTotalUs / modelCheckCount);
+    }
+    out << "\n";
+    out << "  consistent=" << modelCheckConsistent
+        << " conflict=" << modelCheckConflict
+        << " lemma=" << modelCheckLemma
+        << " unknown=" << modelCheckUnknown << "\n";
+    if (modelCheckConflict > 0) {
+        out << "  conflict_size min=" << conflictMinSize
+            << " max=" << conflictMaxSize
+            << " avg=" << std::fixed << std::setprecision(1)
+            << (static_cast<double>(conflictTotalSize) / modelCheckConflict) << "\n";
+    }
+
+    out << "cb_propagate (Standard effort):\n";
+    out << "  total_calls=" << propagateCallCount
+        << " theory_checks=" << propagateTheoryCheckCount << "\n";
+    if (propagateTheoryCheckCount > 0) {
+        out << "  check_avg_us=" << (propagateCheckTotalUs / propagateTheoryCheckCount) << "\n";
+    }
+    out << "  early_conflict=" << propagateConflictCount
+        << " early_lemma=" << propagateLemmaCount << "\n";
+    if (propagateConflictCount > 0) {
+        out << "  early_conflict_size min=" << propagateConflictMinSize
+            << " max=" << propagateConflictMaxSize
+            << " avg=" << std::fixed << std::setprecision(1)
+            << (static_cast<double>(propagateConflictTotalSize) / propagateConflictCount) << "\n";
+    }
+    out << "==============================================\n";
+}
 
 CadicalTheoryPropagator::CadicalTheoryPropagator(
     TheoryAtomLookup& registry,
@@ -31,6 +107,7 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         varToLevel_[var] = currentLevel_;
+        currentAssignment_[var] = sign;
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
@@ -46,6 +123,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     tm_.backtrackToLevel(currentLevel_);
     for (auto it = varToLevel_.begin(); it != varToLevel_.end(); ) {
         if (it->second > static_cast<int>(new_level)) {
+            currentAssignment_.erase(it->first);
             it = varToLevel_.erase(it);
         } else {
             ++it;
@@ -60,7 +138,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     // Slow-path fuse: prevent infinite loops from buggy theory solvers
-    if (++modelCheckCount_ > MAX_MODEL_CHECKS) {
+    if (stats_.modelCheckCount + 1 > MAX_MODEL_CHECKS) {
         writeReason(unknownReasonSink_, "SAT: theory modelCheck budget exceeded (>" + std::to_string(MAX_MODEL_CHECKS) + ")");
         abortWithUnknown_ = true;
         terminateSolve();
@@ -97,9 +175,22 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         NO_DBG << "  raw=" << lit << " var=" << var << " sign=" << (sign ? "T" : "F") << "\n";
     }
 
+    auto t0 = std::chrono::steady_clock::now();
     auto tr = tm_.check(lemmaDb_, TheoryEffort::Full);
-    std::cerr << "[PROP] modelCheck=" << modelCheckCount_ << " result=" << (int)tr.kind;
+    auto t1 = std::chrono::steady_clock::now();
+    auto dur = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+    stats_.modelCheckTotalUs += dur.count();
+
+    // Clear assignment view to avoid stale pointer in cb_propagate
+    tm_.setAssignmentView(nullptr);
+
+    int conflictSize = (tr.conflictOpt && !tr.conflictOpt->clause.empty())
+                           ? static_cast<int>(tr.conflictOpt->clause.size()) : 0;
+    stats_.recordModelCheckResult(tr.kind, conflictSize);
+
+    std::cerr << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
     if (!tr.reason.empty()) std::cerr << " reason=" << tr.reason;
+    std::cerr << " us=" << dur.count();
     std::cerr << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
@@ -152,6 +243,83 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     abortWithUnknown_ = true;
     terminateSolve();
     return false;
+}
+
+int CadicalTheoryPropagator::cb_propagate() {
+    ++stats_.propagateCallCount;
+    if (abortWithUnknown_ || hasPendingClause_) return 0;
+
+    // Throttle: avoid calling theory check on every propagate step.
+    // Standard-effort LP checks are expensive; only run them when the
+    // partial assignment has grown by a threshold, or after backtrack.
+    size_t currentSize = currentAssignment_.size();
+    int threshold = std::max(3, static_cast<int>(currentSize) / 10);
+    bool sizeGrewEnough = (currentSize >= lastCheckedAssignmentSize_ + static_cast<size_t>(threshold));
+    bool backtrackHappened = (currentSize < lastCheckedAssignmentSize_);
+    if (!sizeGrewEnough && !backtrackHappened) return 0;
+    lastCheckedAssignmentSize_ = currentSize;
+
+    // Build partial assignment view for defensive validation in TheoryManager
+    partialAssignmentView_.clear();
+    for (const auto& [var, sign] : currentAssignment_) {
+        partialAssignmentView_.setVarValue(var, sign);
+    }
+    tm_.setAssignmentView(&partialAssignmentView_);
+
+    auto t0 = std::chrono::steady_clock::now();
+    auto tr = tm_.check(lemmaDb_, TheoryEffort::Standard);
+    auto t1 = std::chrono::steady_clock::now();
+    auto dur = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0);
+
+    // Clear assignment view to avoid stale pointer
+    tm_.setAssignmentView(nullptr);
+
+    int conflictSize = (tr.conflictOpt && !tr.conflictOpt->clause.empty())
+                           ? static_cast<int>(tr.conflictOpt->clause.size()) : 0;
+    bool isConflict = (tr.kind == TheoryCheckResult::Kind::Conflict);
+    bool isLemma = (tr.kind == TheoryCheckResult::Kind::Lemma);
+    stats_.recordPropagateCheck(isConflict, isLemma, conflictSize, dur);
+
+    if (isConflict) {
+        if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
+            auto& clause = tr.conflictOpt->clause;
+            // Safety: partial-assignment conflicts are only sound if every
+            // literal in the clause is currently assigned.  If a theory solver
+            // (e.g. NIA) includes auxiliary/unobserved literals, the partial
+            // assignment is incomplete and the conflict may be spurious.
+            bool allAssigned = true;
+            for (SatLit lit : clause) {
+                if (currentAssignment_.find(lit.var) == currentAssignment_.end()) {
+                    allAssigned = false;
+                    break;
+                }
+            }
+            if (!allAssigned) {
+                std::cerr << "[PROP] cb_propagate skip conflict with unassigned literals ("
+                          << clause.size() << " lits)\n";
+                return 0;
+            }
+            std::cerr << "[PROP] cb_propagate conflict clause = ";
+            for (SatLit lit : clause) {
+                std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+            }
+            std::cerr << " us=" << dur.count() << "\n";
+            setPendingClause(clause);
+            return 0;
+        }
+        // Empty conflict clause is a bug; abort to avoid infinite loop
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
+
+    // NOTE: Lemmas from partial assignments (e.g. NIA branch lemmas) can
+    // be based on incomplete information and may prune valid SAT branches.
+    // Only propagate lemmas from complete model checks (cb_check_found_model).
+    // Early conflicts are still returned because they are sound pruning.
+    (void)isLemma;
+
+    return 0;
 }
 
 bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {

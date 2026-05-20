@@ -1,6 +1,7 @@
 #include "nlcolver/Solver.h"
 #include <doctest/doctest.h>
 #include <fstream>
+#include <iostream>
 #include <filesystem>
 #include <algorithm>
 
