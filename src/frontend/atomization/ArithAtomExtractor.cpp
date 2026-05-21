@@ -47,9 +47,8 @@ bool ArithAtomExtractor::extractAndRegister(ExprId eid, const CoreIr& ir, SatVar
                 std::sort(lhs.terms.begin(), lhs.terms.end(),
                           [](auto& a, auto& b) { return a.first < b.first; });
                 if (registry_) {
-                    // Register linear constraints as LIRA so LiraSolver handles them
                     registry_->registerParsedTheoryAtom(
-                        v, eid, TheoryId::LIRA, LinearAtomPayload{lhs, rel, rhs});
+                        v, eid, targetTheory, LinearAtomPayload{lhs, rel, rhs});
                 }
                 return true;
             } else if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
