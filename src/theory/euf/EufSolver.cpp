@@ -31,6 +31,18 @@ void EufSolver::pop(uint32_t n) {
         mergeQueue_.clear();
 
         egraph_.rollback(snap);
+
+        // Reset bool marks: recompute from current egraph roots
+        for (auto& info : classInfo_) {
+            info.boolMark = BoolConstMark::None;
+        }
+        if (trueTerm_ != NullEufTerm) {
+            classInfo(egraph_.rep(trueTerm_)).boolMark = BoolConstMark::True;
+        }
+        if (falseTerm_ != NullEufTerm) {
+            classInfo(egraph_.rep(falseTerm_)).boolMark = BoolConstMark::False;
+        }
+
         pendingConflict_.reset();
         pendingUnknown_ = false;
 
@@ -106,6 +118,17 @@ void EufSolver::backtrackToLevel(int target) {
         scopeSnapshots_.pop_back();
     }
 
+    // Reset bool marks: recompute from current egraph roots
+    for (auto& info : classInfo_) {
+        info.boolMark = BoolConstMark::None;
+    }
+    if (trueTerm_ != NullEufTerm) {
+        classInfo(egraph_.rep(trueTerm_)).boolMark = BoolConstMark::True;
+    }
+    if (falseTerm_ != NullEufTerm) {
+        classInfo(egraph_.rep(falseTerm_)).boolMark = BoolConstMark::False;
+    }
+
     pendingConflict_.reset();
     pendingUnknown_ = false;
 }
@@ -139,6 +162,28 @@ EufSolver::BoolConstMark EufSolver::mergeBoolMark(BoolConstMark a, BoolConstMark
     return BoolConstMark::Both;
 }
 
+std::vector<SatLit> EufSolver::allActiveReasons() const {
+    std::vector<SatLit> reasons;
+    reasons.reserve(trail_.size() + disequalities_.size() + sharedDisequalities_.size());
+    for (const auto& e : trail_) {
+        reasons.push_back(e.lit);
+    }
+    for (const auto& d : disequalities_) {
+        reasons.push_back(d.reason);
+    }
+    for (const auto& d : sharedDisequalities_) {
+        reasons.push_back(d.reason);
+    }
+    std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), reasons.end());
+    return reasons;
+}
+
 void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
     auto& kInfo = classInfo(kept);
     auto& dInfo = classInfo(killed);
@@ -149,9 +194,14 @@ void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
 
     // Both -> conflict
     if (merged == BoolConstMark::Both) {
-        pendingConflict_ = TheoryConflict{
-            egraph_.explainEquality(trueTerm_, falseTerm_).reasons
-        };
+        auto er = egraph_.explainEquality(trueTerm_, falseTerm_);
+        if (er.ok) {
+            pendingConflict_ = TheoryConflict{std::move(er.reasons)};
+        } else {
+            NO_DBG << "[EUF] explainEquality(true,false) failed, using fallback conflict\n";
+            pendingConflict_ = TheoryConflict{allActiveReasons()};
+        }
+
     }
 }
 
@@ -275,8 +325,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         if (er.ok) {
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        NO_DBG << "[EUF] true=same but explain failed -> Unknown\n";
-        return TheoryCheckResult::unknown();
+        NO_DBG << "[EUF] true=same but explain failed -> fallback conflict\n";
+        return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
     }
 
     // disequality conflicts
@@ -287,8 +337,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            NO_DBG << "[EUF] disequality same but explain failed -> Unknown\n";
-            return TheoryCheckResult::unknown();
+            NO_DBG << "[EUF] disequality same but explain failed -> fallback conflict\n";
+            auto reasons = allActiveReasons();
+            reasons.push_back(d.reason);
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
         }
     }
 
@@ -300,8 +352,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            NO_DBG << "[EUF] shared disequality same but explain failed -> Unknown\n";
-            return TheoryCheckResult::unknown();
+            NO_DBG << "[EUF] shared disequality same but explain failed -> fallback conflict\n";
+            auto reasons = allActiveReasons();
+            reasons.push_back(d.reason);
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
         }
     }
 
@@ -379,7 +433,10 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
             er.reasons.push_back(reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        return TheoryCheckResult::unknown();
+        NO_DBG << "[EUF] interface disequality same but explain failed -> fallback conflict\n";
+        auto reasons = allActiveReasons();
+        reasons.push_back(reason);
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
     }
 
     sharedDisequalities_.push_back({ta, tb, reason, level, trail_.size()});

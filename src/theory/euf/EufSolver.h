@@ -96,6 +96,9 @@ private:
 
     void ensureSnapshotForLevel(int level);
 
+    // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
+    std::vector<SatLit> allActiveReasons() const;
+
     void initializeBoolConstants();
     void onEclassMerged(EClassId kept, EClassId killed);
     void enqueueMerge(EufTermId a, EufTermId b, const MergeReason& reason);

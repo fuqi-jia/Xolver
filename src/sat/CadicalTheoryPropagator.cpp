@@ -168,6 +168,12 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
                   << " lit=" << lit << "\n";
     }
 
+    // Reset theory state to level 0 before rebuilding from current model.
+    // Without this, stale assignments from previous model checks accumulate
+    // in solver trails and cause malformed conflict clauses (explain returns
+    // reason lits that are false in the current model).
+    tm_.backtrackToLevel(0);
+
     // Re-assert all theory atoms from the current model so that
     // TheoryManager rebuilds solver state after backtrack clears it.
     // This must include *all* theory atoms (LRA, LIA, EUF, Combination),

@@ -56,8 +56,8 @@ def get_benchmark_root() -> Path:
 DEFAULT_SOLVER = "./build/bin/nlcolver"
 RESULT_PATTERNS = [
     (r"\bunsat\b", "unsat"),
-    (r"\bsat\b", "sat"),
     (r"\bunknown\b", "unknown"),
+    (r"\bsat\b", "sat"),
     (r"\berror\b", "error"),
 ]
 
