@@ -93,19 +93,36 @@ void EufSolver::ensureSnapshotForLevel(int level) {
 void EufSolver::backtrackToLevel(int target) {
     currentLevel_ = target;
 
-    while (!levelSnapshots_.empty() && levelSnapshots_.back().level > target) {
-        auto snap = levelSnapshots_.back();
-        levelSnapshots_.pop_back();
+    // Find the rightmost snapshot with level <= target
+    const LevelSnapshot* targetSnap = nullptr;
+    for (auto it = levelSnapshots_.rbegin(); it != levelSnapshots_.rend(); ++it) {
+        if (it->level <= target) {
+            targetSnap = &*it;
+            break;
+        }
+    }
 
-        trail_.resize(snap.trailSizeBeforeLevel);
+    // Pop all snapshots above target
+    while (!levelSnapshots_.empty() && levelSnapshots_.back().level > target) {
+        levelSnapshots_.pop_back();
+    }
+
+    if (targetSnap) {
+        trail_.resize(targetSnap->trailSizeBeforeLevel);
 
         auto dit = std::remove_if(disequalities_.begin(), disequalities_.end(),
-            [snap](const auto& d) { return d.trailIndex >= snap.trailSizeBeforeLevel; });
+            [targetSnap](const auto& d) { return d.trailIndex >= targetSnap->trailSizeBeforeLevel; });
         disequalities_.erase(dit, disequalities_.end());
 
-        mergeQueue_.resize(snap.mergeQueueSize);
+        mergeQueue_.resize(targetSnap->mergeQueueSize);
 
-        egraph_.rollback(snap.egraphSnapshotBeforeLevel);
+        egraph_.rollback(targetSnap->egraphSnapshotBeforeLevel);
+    } else {
+        // No snapshot at or below target - clear everything
+        trail_.clear();
+        disequalities_.clear();
+        mergeQueue_.clear();
+        egraph_.rollback({0, 0, 0, 0, 0, 0});
     }
 
     auto sdIt = std::remove_if(sharedDisequalities_.begin(), sharedDisequalities_.end(),
@@ -325,7 +342,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         if (er.ok) {
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        NO_DBG << "[EUF] true=same but explain failed -> fallback conflict\n";
         return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
     }
 
@@ -337,7 +353,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            NO_DBG << "[EUF] disequality same but explain failed -> fallback conflict\n";
             auto reasons = allActiveReasons();
             reasons.push_back(d.reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
@@ -352,7 +367,6 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            NO_DBG << "[EUF] shared disequality same but explain failed -> fallback conflict\n";
             auto reasons = allActiveReasons();
             reasons.push_back(d.reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
@@ -433,7 +447,6 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
             er.reasons.push_back(reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        NO_DBG << "[EUF] interface disequality same but explain failed -> fallback conflict\n";
         auto reasons = allActiveReasons();
         reasons.push_back(reason);
         return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
@@ -463,6 +476,7 @@ EufSolver::getDeducedSharedEqualities() {
             }
         }
     }
+
     return result;
 }
 
