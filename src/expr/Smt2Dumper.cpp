@@ -34,6 +34,7 @@ static const char* kindToSMT2(Kind k) {
         case Kind::Exists:    return "exists";
         case Kind::ToInt:     return "to_int";
         case Kind::ToReal:    return "to_real";
+        case Kind::IsInt:     return "is_int";
         default:              return "";
     }
 }

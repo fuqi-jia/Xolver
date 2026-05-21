@@ -1,0 +1,10 @@
+; Chain forces x - z ≤ 4; equality x - z = 5 violates.
+(set-logic QF_IDL)
+(set-info :status unsat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (<= (- x y) 2))
+(assert (<= (- y z) 2))
+(assert (= (- x z) 5))
+(check-sat)

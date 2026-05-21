@@ -1,0 +1,12 @@
+; Diamond constraint graph — sat with z reachable from both branches.
+(set-logic QF_IDL)
+(set-info :status sat)
+(declare-const a Int)
+(declare-const b Int)
+(declare-const c Int)
+(declare-const d Int)
+(assert (<= (- b a) 1))
+(assert (<= (- c a) 2))
+(assert (<= (- d b) 1))
+(assert (<= (- d c) 1))
+(check-sat)

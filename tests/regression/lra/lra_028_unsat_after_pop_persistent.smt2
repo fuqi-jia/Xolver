@@ -1,0 +1,10 @@
+; A constraint added BEFORE push must persist after pop.
+(set-logic QF_LRA)
+(set-info :status unsat)
+(declare-const x Real)
+(assert (>= x 10))
+(push 1)
+(assert (>= x 100))
+(pop 1)
+(assert (<= x 5))
+(check-sat)

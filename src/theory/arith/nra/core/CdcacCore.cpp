@@ -335,15 +335,67 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     for (PolyId p : polys) {
         if (kernel_->isConstant(p)) continue;
+        // Skip polynomials that do not contain the current variable at all.
+        // They cannot contribute roots for this level.
+        {
+            bool containsVar = false;
+            std::string_view varName = kernel_->varName(var);
+            for (const auto& vname : kernel_->variables(p)) {
+                if (vname == varName) {
+                    containsVar = true;
+                    break;
+                }
+            }
+            if (!containsVar) continue;
+        }
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
         if (up == NullUniPolyId) {
-            // If specialization failed due to algebraic prefix, try algebraic root isolation
+            // If specialization failed due to algebraic prefix, try algebraic
+            // root isolation — but only when the prefix has at most one
+            // algebraic variable.  libpoly's lp_polynomial_roots_isolate crashes
+            // with SIGSEGV on nested algebraic coefficients (multiple algebraic
+            // vars in the assignment), so we conservatively skip deeper towers.
             if (hasAlgebraicPrefix) {
-                std::cerr << "[CDCAC]   trying algebraic isolation for poly=" << kernel_->toString(p) << std::endl;
-                RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
-                std::cerr << "[CDCAC]   algebraic roots=" << roots.numRoots() << std::endl;
-                if (roots.numRoots() > 0) {
-                    rootSets.push_back(std::move(roots));
+                int algCount = 0;
+                for (const auto& v : prefix.values) {
+                    if (v.isAlgebraic()) ++algCount;
+                }
+                if (algCount <= 1) {
+                    // Also skip if the polynomial still contains variables
+                    // other than 'var' that are not in the prefix.
+                    bool hasFreeVars = false;
+                    std::string_view mainVarName = kernel_->varName(var);
+                    std::cerr << "[CDCAC]     vars in poly:";
+                    for (const auto& vname : kernel_->variables(p)) {
+                        std::cerr << " " << vname;
+                    }
+                    std::cerr << " | mainVar=" << mainVarName << " | prefixVars=";
+                    for (size_t i = 0; i < prefix.numVars(); ++i) {
+                        std::cerr << " " << kernel_->varName(prefix.varOrder[i]);
+                    }
+                    std::cerr << "\n";
+                    for (const auto& vname : kernel_->variables(p)) {
+                        if (vname == mainVarName) continue;
+                        bool inPrefix = false;
+                        for (size_t i = 0; i < prefix.numVars(); ++i) {
+                            if (kernel_->varName(prefix.varOrder[i]) == vname) {
+                                inPrefix = true;
+                                break;
+                            }
+                        }
+                        if (!inPrefix) {
+                            hasFreeVars = true;
+                            break;
+                        }
+                    }
+                    if (!hasFreeVars) {
+                        std::cerr << "[CDCAC]   trying algebraic isolation (algCount=" << algCount << ") for poly=" << kernel_->toString(p) << std::endl;
+                        RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
+                        std::cerr << "[CDCAC]   algebraic roots=" << roots.numRoots() << std::endl;
+                        if (roots.numRoots() > 0) {
+                            rootSets.push_back(std::move(roots));
+                        }
+                    }
                 }
             }
             continue;

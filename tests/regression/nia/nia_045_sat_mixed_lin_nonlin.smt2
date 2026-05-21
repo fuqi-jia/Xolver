@@ -1,0 +1,10 @@
+; Linear + nonlinear mixed — sat.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (= z (* x y)))
+(assert (= (+ x y) 5))
+(assert (>= z 0))
+(check-sat)

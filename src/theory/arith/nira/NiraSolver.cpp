@@ -190,6 +190,109 @@ std::optional<std::pair<LinearFormKey, mpq_class>> polyToLinearForm(
     return std::make_pair(lhs, rhs);
 }
 
+// Standalone enum for the free-function helper (avoids private member access).
+enum class UvCheckResult { Sat, Unsat, Unknown };
+
+// Check a univariate polynomial (after integer substitution) for satisfiability.
+// Handles quadratics and odd-degree polynomials directly without NRA delegation.
+static UvCheckResult checkUnivariatePoly(
+    const PolynomialKernel* kernel, PolyId poly, Relation rel) {
+    auto termsOpt = kernel->terms(poly);
+    if (!termsOpt) return UvCheckResult::Unknown;
+
+    // Identify the single variable and collect coefficients by degree.
+    std::optional<VarId> varId;
+    std::unordered_map<int, mpq_class> coeffsByDegree;
+    for (const auto& term : *termsOpt) {
+        if (term.powers.empty()) {
+            coeffsByDegree[0] += mpq_class(term.coefficient);
+        } else if (term.powers.size() == 1) {
+            if (!varId) {
+                varId = term.powers[0].first;
+            } else if (*varId != term.powers[0].first) {
+                return UvCheckResult::Unknown; // multivariate
+            }
+            coeffsByDegree[term.powers[0].second] += mpq_class(term.coefficient);
+        } else {
+            return UvCheckResult::Unknown; // multivariate
+        }
+    }
+
+    if (!varId) {
+        // Constant — should have been handled by caller.
+        return UvCheckResult::Unknown;
+    }
+
+    // Determine degree.
+    int degree = 0;
+    for (const auto& [d, _] : coeffsByDegree) {
+        if (d > degree) degree = d;
+    }
+    if (degree == 0) {
+        return UvCheckResult::Unknown;
+    }
+
+    // For odd degree ≥ 1: polynomial goes to ±∞ on opposite sides,
+    // so >0 and <0 are always satisfiable; =0 always has a real root.
+    if (degree % 2 == 1) {
+        switch (rel) {
+            case Relation::Eq:
+            case Relation::Neq:
+            case Relation::Gt:
+            case Relation::Lt:
+                return UvCheckResult::Sat;
+            case Relation::Geq:
+            case Relation::Leq:
+                // Touching zero is guaranteed for odd degree.
+                return UvCheckResult::Sat;
+        }
+    }
+
+    // Even degree: need more analysis.  For degree 2 we use discriminant.
+    if (degree == 2) {
+        mpq_class a = coeffsByDegree.count(2) ? coeffsByDegree[2] : mpq_class(0);
+        mpq_class b = coeffsByDegree.count(1) ? coeffsByDegree[1] : mpq_class(0);
+        mpq_class c = coeffsByDegree.count(0) ? coeffsByDegree[0] : mpq_class(0);
+
+        if (a == 0) {
+            // Degenerate to linear — should not reach here.
+            return UvCheckResult::Unknown;
+        }
+
+        // Discriminant D = b² - 4ac
+        mpq_class D = b * b - 4 * a * c;
+
+        switch (rel) {
+            case Relation::Eq:
+                return (D >= 0) ? UvCheckResult::Sat : UvCheckResult::Unsat;
+            case Relation::Neq:
+                // Non-constant polynomial is non-zero almost everywhere.
+                return UvCheckResult::Sat;
+            case Relation::Gt:
+                // p(x) > 0 for some x?  Unsat only if always negative.
+                // Always negative: a < 0 and D < 0.
+                if (a < 0 && D < 0) return UvCheckResult::Unsat;
+                return UvCheckResult::Sat;
+            case Relation::Lt:
+                // p(x) < 0 for some x?  Unsat only if always positive.
+                // Always positive: a > 0 and D < 0.
+                if (a > 0 && D < 0) return UvCheckResult::Unsat;
+                return UvCheckResult::Sat;
+            case Relation::Geq:
+                // p(x) ≥ 0 for some x?  Unsat only if always negative.
+                if (a < 0 && D < 0) return UvCheckResult::Unsat;
+                return UvCheckResult::Sat;
+            case Relation::Leq:
+                // p(x) ≤ 0 for some x?  Unsat only if always positive.
+                if (a > 0 && D < 0) return UvCheckResult::Unsat;
+                return UvCheckResult::Sat;
+        }
+    }
+
+    // Even degree > 2: conservative.
+    return UvCheckResult::Unknown;
+}
+
 } // anonymous namespace
 
 // Check whether a single linear/polynomial assignment satisfies all constraints
@@ -275,6 +378,33 @@ NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
         }
     }
 
+    // First pass: count distinct nonlinear polynomial constraints (those that
+    // remain non-linear after integer substitution).  If there is more than one
+    // *distinct* polynomial, checkUnivariatePoly's per-constraint Sat is unsound
+    // — we must fall back to Unknown because we cannot verify their conjunction.
+    // Use the *original* poly id for deduplication — two active assignments
+    // with the same original polynomial, relation and rhs are the same atom
+    // registered twice (e.g. by different theory solvers).
+    std::set<std::tuple<PolyId, Relation, mpq_class>> distinctNonlinearPolys;
+    for (const auto& a : activeAssignments) {
+        if (!a.value) continue;
+        if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
+
+        const auto& p = std::get<PolynomialAtomPayload>(a.atom.payload);
+        PolyId current = p.poly;
+        for (const auto& [name, value] : fixedValues) {
+            auto varIdOpt = kernel->findVar(name);
+            if (!varIdOpt) continue;
+            auto substituted = kernel->substituteRational(current, *varIdOpt, value);
+            if (substituted) current = *substituted;
+        }
+        if (kernel->isConstant(current)) continue;
+        if (!polyToLinearForm(kernel, current)) {
+            distinctNonlinearPolys.insert({p.poly, p.rel, p.rhs});
+        }
+    }
+    int nonlinearPolyCount = static_cast<int>(distinctNonlinearPolys.size());
+
     // Process polynomial constraints (substitute fixed integer values)
     for (const auto& a : activeAssignments) {
         if (!a.value) continue;
@@ -307,8 +437,21 @@ NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
 
         auto linearOpt = polyToLinearForm(kernel, current);
         if (!linearOpt) {
+            // Try univariate quadratic / odd-degree analysis before giving up.
+            auto uvRes = checkUnivariatePoly(kernel, current, p.rel);
+            if (uvRes != UvCheckResult::Unknown) {
+                if (uvRes == UvCheckResult::Unsat) return AssignmentCheckResult::Unsat;
+                // Soundness fix: per-constraint Sat is only trustworthy when there
+                // is exactly one *distinct* nonlinear polynomial.  With multiple
+                // different polynomials each may be individually satisfiable while
+                // their conjunction is not (e.g. x^2=2 ∧ x^2=3).
+                if (nonlinearPolyCount > 1) {
+                    return AssignmentCheckResult::Unknown;
+                }
+                continue;
+            }
             // Polynomial still contains real variables after integer substitution.
-            // Without NRA delegation we cannot decide feasibility of this assignment.
+            // Without full NRA delegation we cannot decide feasibility.
             return AssignmentCheckResult::Unknown;
         }
 
@@ -444,15 +587,35 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         }
     }
 
-    if (polyIntVars.empty()) {
-        return TheoryCheckResult::unknown(
-            "NIRA: polynomial payload has no integer polynomial vars; NRA delegation not implemented");
+    // Step 2c: Also consider integer variables from linear constraints
+    // (they may bound real variables even if not appearing in polynomials).
+    std::unordered_set<std::string> allIntVars = polyIntVars;
+    auto collectIntVarsFromLinear = [&](const LinearAtomPayload& p) {
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            (void)coeff;
+            if (isIntegerVar(coreIr_, name)) allIntVars.insert(name);
+        }
+    };
+    for (const auto& a : activeAssignments_) {
+        if (!a.value) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
+        collectIntVarsFromLinear(std::get<LinearAtomPayload>(a.atom.payload));
+    }
+    if (activeLinearContext_) {
+        for (const auto& alc : *activeLinearContext_) {
+            collectIntVarsFromLinear(alc.payload);
+        }
     }
 
-    // Step 3: Separate bounded vs unbounded polynomial integer variables
+    if (allIntVars.empty()) {
+        return TheoryCheckResult::unknown(
+            "NIRA: no integer variables at all; NRA delegation not implemented");
+    }
+
+    // Step 3: Separate bounded vs unbounded integer variables
     std::vector<std::string> enumVars;   // bounded variables to enumerate
     std::vector<std::string> unboundedVars;
-    for (const auto& name : polyIntVars) {
+    for (const auto& name : allIntVars) {
         auto it = bounds.find(name);
         if (it != bounds.end() && it->second.lower && it->second.upper) {
             enumVars.push_back(name);

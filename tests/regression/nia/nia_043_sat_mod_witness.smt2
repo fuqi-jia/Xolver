@@ -1,0 +1,10 @@
+; x mod 5 = 2 with 0 ≤ x ≤ 20 — sat (x ∈ {2,7,12,17}).
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (>= x 0))
+(assert (<= x 20))
+(assert (= (mod x 5) 2))
+(assert (= y (* x x)))
+(check-sat)

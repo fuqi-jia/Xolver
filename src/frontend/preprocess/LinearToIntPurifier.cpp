@@ -21,7 +21,7 @@ ToIntDetectResult LinearToIntPurifier::detectOnly() const {
 
 bool LinearToIntPurifier::hasUnsupportedToInt(ExprId e) const {
     const auto& node = ir_.get(e);
-    if (node.kind == Kind::ToInt && node.children.size() == 1) {
+    if ((node.kind == Kind::ToInt || node.kind == Kind::IsInt) && node.children.size() == 1) {
         if (!isLinearRealExpr(node.children[0])) return true;
     }
     for (ExprId c : node.children) {
@@ -69,6 +69,29 @@ ExprId LinearToIntPurifier::purifyRec(ExprId e, ScopeLevel level) {
             toIntCache_[key] = k;
             infos_.push_back({e, r, k, level});
             return k;
+        } else {
+            hasUnsupportedNonlinearToInt_ = true;
+            return e;
+        }
+    }
+
+    if (node.kind == Kind::IsInt && node.children.size() == 1) {
+        ExprId r = purifyRec(node.children[0], level);
+
+        if (isLinearRealExpr(r)) {
+            CacheKey key{r, level};
+            auto it = toIntCache_.find(key);
+            ExprId k;
+            if (it != toIntCache_.end()) {
+                k = it->second;
+            } else {
+                k = ir_.makeFreshVariable(ir_.intSortId(), "__nlc_floor");
+                toIntCache_[key] = k;
+                infos_.push_back({e, r, k, level});
+            }
+            // is_int(r)  <=>  r = to_real(k)  where k = floor(r)
+            ExprId toRealK = ir_.add(CoreExpr{Kind::ToReal, ir_.realSortId(), {k}, {}});
+            return ir_.add(CoreExpr{Kind::Eq, ir_.boolSortId(), {r, toRealK}, {}});
         } else {
             hasUnsupportedNonlinearToInt_ = true;
             return e;

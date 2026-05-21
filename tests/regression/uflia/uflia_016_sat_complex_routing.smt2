@@ -1,0 +1,10 @@
+; Atomizer must purify f(x+1) where x+1 is an Arith term and f is UF.
+(set-logic QF_UFLIA)
+(set-info :status sat)
+(declare-fun f (Int) Int)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= x 1))
+(assert (= y (+ x 1)))
+(assert (= (f (+ x 1)) (f y)))
+(check-sat)

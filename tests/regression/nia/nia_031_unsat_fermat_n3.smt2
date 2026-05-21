@@ -1,0 +1,11 @@
+; x^3 + y^3 = z^3 with small positive bounds — Fermat n=3, no positive solutions.
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (>= x 1)) (assert (<= x 4))
+(assert (>= y 1)) (assert (<= y 4))
+(assert (>= z 1)) (assert (<= z 5))
+(assert (= (+ (* x (* x x)) (* y (* y y))) (* z (* z z))))
+(check-sat)

@@ -1,0 +1,10 @@
+; exp(x) ≈ 1 + x + x²/2 for small x. With x ∈ [-1/10, 1/10], approx > 0.
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const ex Real)
+(assert (>= x (- (/ 1 10))))
+(assert (<= x (/ 1 10)))
+(assert (= ex (+ 1 x (/ (* x x) 2))))
+(assert (> ex 0))
+(check-sat)

@@ -1,0 +1,12 @@
+; Pre-push equality must still conflict with post-pop distinct.
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-sort U 0)
+(declare-const a U)
+(declare-const b U)
+(assert (= a b))
+(push 1)
+(assert (= a b))
+(pop 1)
+(assert (distinct a b))
+(check-sat)

@@ -1,0 +1,10 @@
+; pop should release the tight bound added inside push.
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (>= x 0))
+(push 1)
+(assert (= x 999))
+(pop 1)
+(assert (<= x 5))
+(check-sat)

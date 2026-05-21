@@ -1,0 +1,10 @@
+; x = 7 was set OUTSIDE push; subsequent (= x 8) must still conflict.
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x Int)
+(assert (= x 7))
+(push 1)
+(assert (>= x 7))
+(pop 1)
+(assert (= x 8))
+(check-sat)

@@ -1,0 +1,10 @@
+; Variant: two different functions, congruence via shared input.
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-fun f (Int) Int)
+(declare-fun g (Int) Int)
+(declare-fun x () Int)
+(assert (= x 2))
+(assert (= (f x) (g x)))
+(assert (distinct (f 2) (g 2)))
+(check-sat)

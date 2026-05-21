@@ -1,0 +1,10 @@
+; After push asserting infeasibility, pop must restore consistent state.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x Real)
+(assert (>= x 0))
+(push 1)
+(assert (< x (- 10)))
+(pop 1)
+(assert (<= x 5))
+(check-sat)

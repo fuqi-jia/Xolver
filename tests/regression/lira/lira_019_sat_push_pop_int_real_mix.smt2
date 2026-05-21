@@ -1,0 +1,11 @@
+; Push a temporary nonlinear-ish constraint, pop, then verify simple state is sat.
+(set-logic QF_LIRA)
+(set-info :status sat)
+(declare-const i Int)
+(declare-const r Real)
+(assert (= (to_real i) r))
+(push 1)
+(assert (> r 1000))
+(pop 1)
+(assert (= i 3))
+(check-sat)

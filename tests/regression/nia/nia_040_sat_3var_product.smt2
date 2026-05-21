@@ -1,0 +1,10 @@
+; xyz = 6 with bounds — many solutions (1,2,3), (1,1,6), etc.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (>= x 1)) (assert (>= y 1)) (assert (>= z 1))
+(assert (<= x 6)) (assert (<= y 6)) (assert (<= z 6))
+(assert (= (* x (* y z)) 6))
+(check-sat)

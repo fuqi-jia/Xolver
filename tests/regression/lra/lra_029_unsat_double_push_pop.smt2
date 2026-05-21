@@ -1,0 +1,13 @@
+; Double push then pop 2 — should fully undo.
+(set-logic QF_LRA)
+(set-info :status unsat)
+(declare-const x Real)
+(assert (= x 0))
+(push 1)
+(assert (> x 0))
+(push 1)
+(assert (> x 100))
+(pop 2)
+(assert (= x 0))
+(assert (> x 0))
+(check-sat)

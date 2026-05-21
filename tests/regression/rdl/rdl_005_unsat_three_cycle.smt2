@@ -1,0 +1,10 @@
+; 3-node negative cycle in RDL.
+(set-logic QF_RDL)
+(set-info :status unsat)
+(declare-const a Real)
+(declare-const b Real)
+(declare-const c Real)
+(assert (<= (- a b) (- 1)))
+(assert (<= (- b c) (- 1)))
+(assert (<= (- c a) (- 1)))
+(check-sat)

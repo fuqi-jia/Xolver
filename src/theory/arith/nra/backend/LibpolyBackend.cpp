@@ -7,10 +7,36 @@
 #include <iostream>
 #include <map>
 #include <unordered_set>
+#include <csignal>
+#include <csetjmp>
 
 #ifdef NLCOLVER_HAS_LIBPOLY
 #include <polyxx.h>
 #endif
+
+namespace {
+
+// Crash-recovery for libpoly's lp_polynomial_roots_isolate, which can
+// SIGSEGV on nested algebraic coefficients.  We use sigsetjmp/siglongjmp
+// to return gracefully instead of crashing the whole process.
+static std::sig_atomic_t g_libpolyCrashRecoveryActive = 0;
+static sigjmp_buf g_libpolyJmpBuf;
+static void (*g_oldSegvHandler)(int) = nullptr;
+static void (*g_oldFpeHandler)(int) = nullptr;
+
+static void libpolyCrashHandler(int sig) {
+    if (g_libpolyCrashRecoveryActive) {
+        siglongjmp(g_libpolyJmpBuf, sig);
+    }
+    // Not inside protected zone — chain to previous handler.
+    if (sig == SIGSEGV && g_oldSegvHandler) {
+        g_oldSegvHandler(sig);
+    } else if (sig == SIGFPE && g_oldFpeHandler) {
+        g_oldFpeHandler(sig);
+    }
+}
+
+} // anonymous namespace
 
 namespace nlcolver {
 
@@ -173,9 +199,18 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     }
 
     std::vector<poly::Value> roots;
-    try {
+    // Install crash recovery around libpoly root isolation.
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
         roots = poly::isolate_real_roots(poly, assignment);
-    } catch (...) {
+    }
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    if (jumped != 0) {
         return RootSet{};
     }
 

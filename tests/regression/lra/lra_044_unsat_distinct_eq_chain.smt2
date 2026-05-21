@@ -1,0 +1,10 @@
+; x = y = z then distinct x z must be unsat (LRA).
+(set-logic QF_LRA)
+(set-info :status unsat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (= x y))
+(assert (= y z))
+(assert (distinct x z))
+(check-sat)

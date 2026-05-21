@@ -1,0 +1,10 @@
+; x^2 - 2y^2 = -1 — Pell-like equation. Has solution (1,1), (7,5), (41,29), ...
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (- (* x x) (* 2 (* y y))) (- 1)))
+(assert (>= x 0))
+(assert (>= y 0))
+(assert (<= x 10))
+(check-sat)

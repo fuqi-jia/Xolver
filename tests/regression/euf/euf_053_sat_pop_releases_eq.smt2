@@ -1,0 +1,11 @@
+; Equality inside push is dropped after pop.
+(set-logic QF_UF)
+(set-info :status sat)
+(declare-sort U 0)
+(declare-const a U)
+(declare-const b U)
+(push 1)
+(assert (= a b))
+(pop 1)
+(assert (distinct a b))
+(check-sat)

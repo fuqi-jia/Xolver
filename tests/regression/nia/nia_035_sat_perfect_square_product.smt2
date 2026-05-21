@@ -1,0 +1,10 @@
+; xy = 36 and x+y = 13 — solve via factoring (4, 9). Tests bounded enumeration.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(assert (= (* x y) 36))
+(assert (= (+ x y) 13))
+(assert (>= x 1))
+(assert (>= y 1))
+(check-sat)

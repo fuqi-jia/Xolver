@@ -1,0 +1,10 @@
+; x mod 2 = 1 AND x mod 3 = 2 AND x mod 5 = 4 — CRT gives x=29 in [0, 30).
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (>= x 0))
+(assert (< x 30))
+(assert (= (mod x 2) 1))
+(assert (= (mod x 3) 2))
+(assert (= (mod x 5) 4))
+(check-sat)
