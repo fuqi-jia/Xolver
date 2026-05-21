@@ -89,9 +89,20 @@ cmd_package() {
     chmod +x "${TMPDIR}/nlcolver-dist/bin/nlcolver"
 
     mkdir -p "${TMPDIR}/nlcolver-dist/tools"
-    cp "${SCRIPT_DIR}/deploy_and_run.sh" "${TMPDIR}/nlcolver-dist/tools/"
-    cp "${SCRIPT_DIR}/run_benchmark.py" "${TMPDIR}/nlcolver-dist/tools/"
-    cp "${SCRIPT_DIR}/analyze_benchmark.py" "${TMPDIR}/nlcolver-dist/tools/"
+    for script in \
+        deploy_and_run.sh \
+        run_benchmark.py \
+        analyze_benchmark.py \
+        compare_benchmarks.py \
+        bench_server.py \
+        freeze_baseline.py \
+        lia_mismatch_replay.py \
+        run_lia_ablation.sh; do
+        src="${SCRIPT_DIR}/${script}"
+        if [[ -f "$src" ]]; then
+            cp "$src" "${TMPDIR}/nlcolver-dist/tools/"
+        fi
+    done
 
     tar czf "$PKG" -C "$TMPDIR" nlcolver-dist
 
