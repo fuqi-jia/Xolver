@@ -1,5 +1,6 @@
 ; Rollback stress test: multiple push/pop cycles with ITE
 (set-logic QF_UF)
+(set-info :status sat)
 (declare-fun c () Bool)
 (declare-fun a () Bool)
 (declare-fun b () Bool)

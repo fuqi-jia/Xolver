@@ -1,4 +1,5 @@
 (set-logic QF_NIRA)
+(set-info :status sat)
 (declare-fun x () Int)
 (declare-fun r () Real)
 (assert (= (* x r) 2))

@@ -1,0 +1,10 @@
+; Redundant bounds: many implied by one — solver should not blow up.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x Real)
+(assert (>= x 0))
+(assert (>= x (- 1)))
+(assert (>= x (- 5)))
+(assert (<= x 10))
+(assert (<= x 100))
+(check-sat)

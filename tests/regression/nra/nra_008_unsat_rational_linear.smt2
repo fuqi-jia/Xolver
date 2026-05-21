@@ -1,4 +1,5 @@
 (set-logic QF_NRA)
+(set-info :status unsat)
 (declare-const x Real)
 (assert (= (* (/ 1 2) x) 1))
 (assert (= x 1))

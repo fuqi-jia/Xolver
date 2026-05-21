@@ -85,32 +85,45 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 
 void LiaSolver::backtrackToLevel(int level) {
     currentLevel_ = level;
-    gs_.backtrackToLevel(level);
+    if (level == 0) {
+        gs_.resetActiveBounds();
+    } else {
+        gs_.backtrackToLevel(level);
+    }
 
-    while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
-        const auto& e = theoryTrail_.back();
-        if (e.isDiseq) {
-            auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
-                [&e](const auto& d) { return d.lit == e.lit; });
-            disequalities_.erase(it, disequalities_.end());
-        } else {
-            auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
-                [&e](const auto& a) { return a.lit == e.lit; });
-            activeAtoms_.erase(it, activeAtoms_.end());
+    if (level == 0) {
+        // Full reset for modelCheck rebuild or SAT restart to level 0.
+        // All entries will be re-asserted by the caller.
+        theoryTrail_.clear();
+        disequalities_.clear();
+        activeAtoms_.clear();
+        interfaceEqualities_.clear();
+        interfaceDisequalities_.clear();
+    } else {
+        while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
+            const auto& e = theoryTrail_.back();
+            if (e.isDiseq) {
+                auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
+                    [&e](const auto& d) { return d.lit == e.lit; });
+                disequalities_.erase(it, disequalities_.end());
+            } else {
+                auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
+                    [&e](const auto& a) { return a.lit == e.lit; });
+                activeAtoms_.erase(it, activeAtoms_.end());
+            }
+            theoryTrail_.pop_back();
         }
-        theoryTrail_.pop_back();
+        auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
+            [level](const auto& ie) { return ie.level > level; });
+        interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
+
+        auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
+            [level](const auto& ie) { return ie.level > level; });
+        interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
     }
     if (appliedCursor_ > theoryTrail_.size()) {
         appliedCursor_ = theoryTrail_.size();
     }
-
-    auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
-    interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
-
-    auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
-    interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
 TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -639,7 +652,15 @@ TheoryCheckResult LiaSolver::assertInterfaceEquality(
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();
 
+    // Remove stale disequality for the same pair
+    auto it = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
+        [a, b](const auto& d) { return d.a == a && d.b == b; });
+    interfaceDisequalities_.erase(it, interfaceDisequalities_.end());
+
     interfaceEqualities_.push_back({a, b, reason, level});
+    std::cerr << "[LIA-IEQ] add a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"-") << "v" << reason.var
+              << " level=" << level << " eqSize=" << interfaceEqualities_.size()
+              << " diseqSize=" << interfaceDisequalities_.size() << "\n";
     return TheoryCheckResult::consistent();
 }
 
@@ -649,7 +670,16 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     int aux = getOrCreateInterfaceEqAuxVar(a, b);
     if (aux < 0) return TheoryCheckResult::consistent();
 
+    // Remove stale equality for the same pair
+    auto it = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
+        [a, b](const auto& e) { return e.a == a && e.b == b; });
+    interfaceEqualities_.erase(it, interfaceEqualities_.end());
+
     interfaceDisequalities_.push_back({a, b, reason, level});
+    // Invalidate simplex state because an interface disequality may remove a
+    // previously-applied interface equality bound.  Force full rebuild on next check.
+    gs_.resetActiveBounds();
+    appliedCursor_ = 0;
     return TheoryCheckResult::consistent();
 }
 

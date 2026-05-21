@@ -1,0 +1,13 @@
+; In Z, a < b < c < d combined with d - a < 3 is unsat (needs >= 3 gap).
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const a Int)
+(declare-const b Int)
+(declare-const c Int)
+(declare-const d Int)
+(assert (< a b))
+(assert (< b c))
+(assert (< c d))
+(assert (= a 0))
+(assert (<= d 2))
+(check-sat)

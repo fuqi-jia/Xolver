@@ -1,4 +1,5 @@
 (set-logic QF_LIA)
+(set-info :status sat)
 (declare-const x Int)
 (declare-const y Int)
 (assert (= (+ (* 1000 x) (* 2000 y)) 3000))

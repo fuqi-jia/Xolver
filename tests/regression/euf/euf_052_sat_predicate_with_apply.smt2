@@ -1,0 +1,13 @@
+; Predicates applied to function results — no shared constraint, sat.
+(set-logic QF_UF)
+(set-info :status sat)
+(declare-sort U 0)
+(declare-fun f (U) U)
+(declare-fun g (U) U)
+(declare-fun P (U) Bool)
+(declare-fun Q (U) Bool)
+(declare-const a U)
+(declare-const b U)
+(assert (P (f a)))
+(assert (not (Q (g b))))
+(check-sat)

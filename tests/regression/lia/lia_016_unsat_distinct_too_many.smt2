@@ -1,0 +1,11 @@
+; Three distinct ints squeezed into {0,1} — pigeonhole, unsat.
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (distinct x y z))
+(assert (>= x 0)) (assert (<= x 1))
+(assert (>= y 0)) (assert (<= y 1))
+(assert (>= z 0)) (assert (<= z 1))
+(check-sat)

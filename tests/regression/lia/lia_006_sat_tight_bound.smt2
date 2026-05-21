@@ -1,4 +1,5 @@
 (set-logic QF_LIA)
+(set-info :status sat)
 (declare-const x Int)
 (assert (<= (* 3 x) 10))
 (assert (>= x 0))

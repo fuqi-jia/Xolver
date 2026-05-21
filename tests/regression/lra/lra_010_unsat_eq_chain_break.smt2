@@ -1,0 +1,10 @@
+; Linear eq chain x=y=z but x distinct z is unsat.
+(set-logic QF_LRA)
+(set-info :status unsat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (= x y))
+(assert (= y z))
+(assert (distinct x z))
+(check-sat)

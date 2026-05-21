@@ -93,11 +93,42 @@ ExprId FrontendAdapter::importNode(Node node) {
                       << "' children=" << numChildren(n) << "\n";
         }
         if (k == Kind::ConstReal) {
-            auto s = sort(n);
-            if (s && s->isInt()) k = Kind::ConstInt;
+            auto sn = sort(n);
+            if (sn && sn->isInt()) k = Kind::ConstInt;
         }
         SortId s = mapSort(n);
         Payload p = extractPayload(n);
+        if (nk == SOMTParser::NODE_KIND::NT_CONST) {
+            auto sp = sort(n);
+            std::cerr << "[ADAPTER-CONST] name=" << n->getName()
+                      << " sortKind=" << (sp ? (int)sp->kind : -1)
+                      << " sortName=" << (sp ? sp->name : "null")
+                      << " mapped=" << s << "\n";
+        }
+
+        // Infer sort for numeric constants when parser gives no explicit sort.
+        if (s == NullSort && k == Kind::ConstReal) {
+            if (auto* str = std::get_if<std::string>(&p.value)) {
+                bool isDecimal = (str->find('.') != std::string::npos) ||
+                                 (str->find('/') != std::string::npos);
+                if (!isDecimal) {
+                    k = Kind::ConstInt;
+                    s = ir_->intSortId();
+                    if (s == NullSort) {
+                        s = ir_->allocateSortId();
+                        ir_->setIntSortId(s);
+                        ir_->registerSort(s, SortKind::Int);
+                    }
+                } else {
+                    s = ir_->realSortId();
+                    if (s == NullSort) {
+                        s = ir_->allocateSortId();
+                        ir_->setRealSortId(s);
+                        ir_->registerSort(s, SortKind::Real);
+                    }
+                }
+            }
+        }
 
         // Flip > and >= to < and <= by swapping children.
         if (nk == SOMTParser::NODE_KIND::NT_GT) {
@@ -127,6 +158,22 @@ SortId FrontendAdapter::mapSort(Node node) {
 
 SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
     if (!sort) return NullSort;
+
+    // Canonicalize basic sorts so that SK_DEC/SK_DEF forms of Int/Real/Bool
+    // map to the same SortId as the canonical SK_INT/SK_REAL/SK_BOOL forms.
+    if ((sort->isDec() || sort->isDef()) && sort->arity == 0) {
+        if (sort->name == "Int") {
+            sort = SOMTParser::SortManager::getInt();
+        } else if (sort->name == "Real") {
+            sort = SOMTParser::SortManager::getReal();
+        } else if (sort->name == "Bool") {
+            sort = SOMTParser::SortManager::getBool();
+        }
+    }
+    // SOMTParser represents integer numerals as SK_INTOREAL.  Map them to Int.
+    if (sort->isIntOrReal()) {
+        sort = SOMTParser::SortManager::getInt();
+    }
 
     auto it = sortMemo_.find(sort);
     if (it != sortMemo_.end()) return it->second;

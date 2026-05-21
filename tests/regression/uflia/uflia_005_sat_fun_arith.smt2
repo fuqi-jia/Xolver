@@ -1,5 +1,6 @@
 ; Function result used in linear arithmetic
 (set-logic QF_UFLIA)
+(set-info :status sat)
 (declare-fun f (Int) Int)
 (declare-fun x () Int)
 (declare-fun y () Int)

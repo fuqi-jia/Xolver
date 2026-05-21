@@ -1,4 +1,5 @@
 (set-logic QF_LIRA)
+(set-info :status sat)
 (declare-fun x () Int)
 (declare-fun r () Real)
 (assert (= (+ x r) 1))

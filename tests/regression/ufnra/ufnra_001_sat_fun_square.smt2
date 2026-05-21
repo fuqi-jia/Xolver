@@ -1,5 +1,6 @@
 ; UF + NRA: f(x)^2 = 4, f(x) > 0  =>  sat (f(x) = 2)
 (set-logic QF_UFNRA)
+(set-info :status sat)
 (declare-fun f (Real) Real)
 (declare-fun x () Real)
 (assert (= (* (f x) (f x)) 4.0))

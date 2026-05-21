@@ -1,3 +1,4 @@
+(set-info :status sat)
 (declare-const c Bool)
 (declare-const t Bool)
 (declare-const e Bool)

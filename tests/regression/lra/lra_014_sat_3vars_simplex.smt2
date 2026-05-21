@@ -1,0 +1,11 @@
+; 3D simplex interior point.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (>= x 0))
+(assert (>= y 0))
+(assert (>= z 0))
+(assert (<= (+ x y z) 1))
+(check-sat)

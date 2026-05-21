@@ -1,3 +1,4 @@
+(set-info :status unsat)
 ; Pigeonhole: 3 pigeons, 2 holes -> unsat
 
 (declare-const p1h1 Bool)

@@ -1,4 +1,5 @@
 (set-logic QF_UF)
+(set-info :status unsat)
 (declare-const p Bool)
 (assert p)
 (assert (not p))

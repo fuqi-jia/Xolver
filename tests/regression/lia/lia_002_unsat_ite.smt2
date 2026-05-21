@@ -1,4 +1,5 @@
 (set-logic QF_LIA)
+(set-info :status unsat)
 (declare-fun c () Bool)
 (declare-fun x () Int)
 (declare-fun y () Int)

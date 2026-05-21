@@ -1,4 +1,5 @@
 (set-logic QF_LIRA)
+(set-info :status sat)
 (declare-const k Int)
 (declare-const x Real)
 (assert (= k 3))

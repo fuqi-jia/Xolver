@@ -1,0 +1,292 @@
+======================================================================
+MISMATCHES (sat vs unsat): 56
+======================================================================
+
+benchmark/non-incremental/QF_UF/QG-classification/loops6/gensys_icl044.smt2
+  nlcolver: sat (0.755s)
+  compare:  unsat (0.078s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/loops6/iso_icl017.smt2
+  nlcolver: sat (0.584s)
+  compare:  unsat (0.026s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/loops6/iso_icl065.smt2
+  nlcolver: sat (0.097s)
+  compare:  unsat (0.032s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/loops6/iso_icl076.smt2
+  nlcolver: sat (0.795s)
+  compare:  unsat (0.032s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/dead_dnd048.smt2
+  nlcolver: sat (0.312s)
+  compare:  unsat (0.339s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_brn1271.smt2
+  nlcolver: sat (0.266s)
+  compare:  unsat (0.220s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_brn283.smt2
+  nlcolver: sat (0.090s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_brn487.smt2
+  nlcolver: sat (0.075s)
+  compare:  unsat (0.091s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl1074.smt2
+  nlcolver: sat (0.169s)
+  compare:  unsat (0.053s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl1094.smt2
+  nlcolver: sat (0.069s)
+  compare:  unsat (0.026s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl1195.smt2
+  nlcolver: sat (0.058s)
+  compare:  unsat (0.048s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl1202.smt2
+  nlcolver: sat (0.102s)
+  compare:  unsat (0.073s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl242.smt2
+  nlcolver: sat (0.149s)
+  compare:  unsat (0.030s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl491.smt2
+  nlcolver: sat (0.340s)
+  compare:  unsat (0.057s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl502.smt2
+  nlcolver: sat (0.124s)
+  compare:  unsat (0.060s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl503.smt2
+  nlcolver: sat (0.405s)
+  compare:  unsat (0.053s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl618.smt2
+  nlcolver: sat (0.411s)
+  compare:  unsat (0.204s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl662.smt2
+  nlcolver: sat (0.080s)
+  compare:  unsat (0.087s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl730.smt2
+  nlcolver: sat (0.414s)
+  compare:  unsat (0.174s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl751.smt2
+  nlcolver: sat (0.114s)
+  compare:  unsat (0.040s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl832.smt2
+  nlcolver: sat (0.741s)
+  compare:  unsat (0.595s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl880.smt2
+  nlcolver: sat (0.077s)
+  compare:  unsat (0.040s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl896.smt2
+  nlcolver: sat (0.223s)
+  compare:  unsat (0.119s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/gensys_icl915.smt2
+  nlcolver: sat (0.188s)
+  compare:  unsat (0.068s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn062.smt2
+  nlcolver: sat (0.170s)
+  compare:  unsat (0.022s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn149.smt2
+  nlcolver: sat (0.327s)
+  compare:  unsat (0.024s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn245.smt2
+  nlcolver: sat (0.196s)
+  compare:  unsat (0.021s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn280.smt2
+  nlcolver: sat (0.262s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn452.smt2
+  nlcolver: sat (0.068s)
+  compare:  unsat (0.022s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn491.smt2
+  nlcolver: sat (0.318s)
+  compare:  unsat (0.021s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn642.smt2
+  nlcolver: sat (0.161s)
+  compare:  unsat (0.030s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn646.smt2
+  nlcolver: sat (0.846s)
+  compare:  unsat (0.032s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn702.smt2
+  nlcolver: sat (0.350s)
+  compare:  unsat (0.026s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_brn906.smt2
+  nlcolver: sat (0.382s)
+  compare:  unsat (0.030s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl1055.smt2
+  nlcolver: sat (0.291s)
+  compare:  unsat (0.028s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl1059.smt2
+  nlcolver: sat (0.174s)
+  compare:  unsat (0.025s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl118.smt2
+  nlcolver: sat (0.174s)
+  compare:  unsat (0.028s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl1233.smt2
+  nlcolver: sat (0.257s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl1238.smt2
+  nlcolver: sat (0.444s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl1262.smt2
+  nlcolver: sat (0.115s)
+  compare:  unsat (0.022s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl152.smt2
+  nlcolver: sat (0.238s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl160.smt2
+  nlcolver: sat (0.136s)
+  compare:  unsat (0.024s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl298.smt2
+  nlcolver: sat (0.044s)
+  compare:  unsat (0.029s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl360.smt2
+  nlcolver: sat (0.141s)
+  compare:  unsat (0.026s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl506.smt2
+  nlcolver: sat (0.135s)
+  compare:  unsat (0.030s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl586.smt2
+  nlcolver: sat (0.262s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl649.smt2
+  nlcolver: sat (0.515s)
+  compare:  unsat (0.032s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl660.smt2
+  nlcolver: sat (0.235s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl705.smt2
+  nlcolver: sat (0.328s)
+  compare:  unsat (0.031s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl749.smt2
+  nlcolver: sat (0.127s)
+  compare:  unsat (0.023s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl819.smt2
+  nlcolver: sat (0.469s)
+  compare:  unsat (0.027s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl854.smt2
+  nlcolver: sat (0.865s)
+  compare:  unsat (0.028s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl878.smt2
+  nlcolver: sat (0.408s)
+  compare:  unsat (0.031s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg5/iso_icl896.smt2
+  nlcolver: sat (0.379s)
+  compare:  unsat (0.023s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/QG-classification/qg7/iso_brn_sk012.smt2
+  nlcolver: sat (2.507s)
+  compare:  unsat (0.060s)
+  note:     nlcolver=sat, compare=unsat
+
+benchmark/non-incremental/QF_UF/eq_diamond/eq_diamond83.smt2
+  nlcolver: sat (0.168s)
+  compare:  unsat (0.022s)
+  note:     nlcolver=sat, compare=unsat
+
+======================================================================
+DIFFS (other disagreements): 1
+======================================================================
+
+benchmark/non-incremental/QF_UF/SEQ/SEQ038_size8.smt2
+  nlcolver: unsat (0.179s)
+  compare:  timeout (30.017s)
+  note:     nlcolver=unsat, compare=timeout

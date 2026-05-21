@@ -1,0 +1,10 @@
+; Equivalence chain: P↔Q, Q↔R consistent.
+(set-logic QF_UF)
+(set-info :status sat)
+(declare-const p Bool)
+(declare-const q Bool)
+(declare-const r Bool)
+(assert (= p q))
+(assert (= q r))
+(assert p)
+(check-sat)

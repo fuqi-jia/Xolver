@@ -1,0 +1,13 @@
+; f(a,b) cannot equal both v1 and v2 if v1 != v2.
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-sort U 0)
+(declare-fun f (U U) U)
+(declare-const a U)
+(declare-const b U)
+(declare-const v1 U)
+(declare-const v2 U)
+(assert (= (f a b) v1))
+(assert (= (f a b) v2))
+(assert (distinct v1 v2))
+(check-sat)

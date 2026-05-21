@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status unsat)
 (declare-fun x () Int)
 (declare-fun y () Int)
 (assert (= (* x y) 0))

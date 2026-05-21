@@ -1,5 +1,6 @@
 ; Multiple function symbols with shared args
 (set-logic QF_UF)
+(set-info :status sat)
 (declare-sort S 0)
 (declare-fun f (S S) S)
 (declare-fun g (S S) S)

@@ -1,4 +1,5 @@
 (set-logic QF_NRA)
+(set-info :status sat)
 (declare-const x Real)
 (assert (> (^ x 3) 1))
 (assert (< x 2))

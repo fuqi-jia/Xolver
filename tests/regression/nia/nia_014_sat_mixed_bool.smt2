@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status sat)
 (declare-const p Bool)
 (declare-const x Int)
 (assert (=> p (= (* x x) 4)))

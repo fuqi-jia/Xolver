@@ -1,5 +1,6 @@
 ; Function result in real arithmetic
 (set-logic QF_UFLRA)
+(set-info :status sat)
 (declare-fun f (Real) Real)
 (declare-fun x () Real)
 (declare-fun y () Real)

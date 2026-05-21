@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status unsat)
 (declare-const x Int)
 (assert (< x 3))
 (assert (> x 3))

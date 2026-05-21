@@ -1,4 +1,5 @@
 (set-logic QF_LRA)
+(set-info :status unsat)
 (declare-const x Real)
 (declare-const y Real)
 (assert (>= (+ x y) 5))

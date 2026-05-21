@@ -1,5 +1,6 @@
 ; 4-ary function
 (set-logic QF_UF)
+(set-info :status sat)
 (declare-sort S 0)
 (declare-fun f (S S S S) S)
 (declare-fun a () S)

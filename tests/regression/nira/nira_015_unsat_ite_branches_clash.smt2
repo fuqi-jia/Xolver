@@ -1,0 +1,10 @@
+; ITE branches each force contradictory products.
+(set-logic QF_NIRA)
+(set-info :status unsat)
+(declare-const c Bool)
+(declare-const i Int)
+(declare-const r Real)
+(assert (= i 2))
+(assert (= r 3))
+(assert (= (ite c (* (to_real i) r) (- (* (to_real i) r))) 999))
+(check-sat)

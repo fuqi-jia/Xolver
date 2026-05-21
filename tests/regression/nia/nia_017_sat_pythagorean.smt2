@@ -1,5 +1,6 @@
 ; Pythagorean triple with tighter bounds for bounded solver
 (set-logic QF_NIA)
+(set-info :status sat)
 (declare-const x Int)
 (declare-const y Int)
 (declare-const z Int)

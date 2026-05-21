@@ -1,5 +1,6 @@
 ; Function values multiplied
 (set-logic QF_UFNIA)
+(set-info :status sat)
 (declare-fun f (Int) Int)
 (declare-fun g (Int) Int)
 (declare-fun x () Int)

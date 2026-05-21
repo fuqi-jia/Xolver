@@ -79,30 +79,39 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 void LraSolver::backtrackToLevel(int level) {
     currentLevel_ = level;
 
-    // Backtrack GeneralSimplex bounds by SAT decision level.
-    gs_.backtrackToLevel(level);
+    if (level == 0) {
+        // Full reset for modelCheck rebuild or SAT restart to level 0.
+        gs_.resetActiveBounds();
+        theoryTrail_.clear();
+        activeDisequalities_.clear();
+        interfaceEqualities_.clear();
+        interfaceDisequalities_.clear();
+    } else {
+        // Backtrack GeneralSimplex bounds by SAT decision level.
+        gs_.backtrackToLevel(level);
 
-    // Synchronize theory trail.
-    while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
-        theoryTrail_.pop_back();
+        // Synchronize theory trail.
+        while (!theoryTrail_.empty() && theoryTrail_.back().level > level) {
+            theoryTrail_.pop_back();
+        }
+
+        // Interface equalities / disequalities
+        auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
+            [level](const auto& ie) { return ie.level > level; });
+        interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
+
+        auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
+            [level](const auto& ie) { return ie.level > level; });
+        interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
+
+        // Phase 2: sync active disequalities cache
+        auto adIt = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
+            [level](const auto& d) { return d.level > level; });
+        activeDisequalities_.erase(adIt, activeDisequalities_.end());
     }
     if (appliedCursor_ > theoryTrail_.size()) {
         appliedCursor_ = theoryTrail_.size();
     }
-
-    // Interface equalities / disequalities
-    auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
-    interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
-
-    auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
-    interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
-
-    // Phase 2: sync active disequalities cache
-    auto adIt = std::remove_if(activeDisequalities_.begin(), activeDisequalities_.end(),
-        [level](const auto& d) { return d.level > level; });
-    activeDisequalities_.erase(adIt, activeDisequalities_.end());
 
     pendingConflict_.reset();
 }

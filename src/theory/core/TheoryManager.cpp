@@ -261,6 +261,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
+            std::cerr << "[TM-CONFLICT] solver=" << (int)solver->id() << " clause=";
+            for (auto lit : tr.conflictOpt->clause) {
+                std::cerr << debug::fmtLit(lit) << " ";
+            }
+            std::cerr << "\n";
             // Defensive: every raw reason should be true in the current model.
             if (assignmentView_) {
                 for (auto lit : tr.conflictOpt->clause) {
@@ -273,7 +278,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
         }
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
-            NO_DBG << "[NO-RET-7] solver=" << (int)solver->id()
+            std::cerr << "[TM-CHECK] solver=" << (int)solver->id()
                    << " kind=" << (int)tr.kind;
             if (tr.conflictOpt) {
                 NO_DBG << " clause=" << debug::fmtClause(tr.conflictOpt->clause);

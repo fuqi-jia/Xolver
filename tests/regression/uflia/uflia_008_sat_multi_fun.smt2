@@ -1,5 +1,6 @@
 ; Multiple functions with shared args
 (set-logic QF_UFLIA)
+(set-info :status sat)
 (declare-fun f (Int) Int)
 (declare-fun g (Int) Int)
 (declare-fun x () Int)

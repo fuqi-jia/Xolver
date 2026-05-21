@@ -1,0 +1,12 @@
+; Strict cycle: x1 < x2 < x3 < x4 < x1 — unsat.
+(set-logic QF_LRA)
+(set-info :status unsat)
+(declare-const x1 Real)
+(declare-const x2 Real)
+(declare-const x3 Real)
+(declare-const x4 Real)
+(assert (< x1 x2))
+(assert (< x2 x3))
+(assert (< x3 x4))
+(assert (< x4 x1))
+(check-sat)

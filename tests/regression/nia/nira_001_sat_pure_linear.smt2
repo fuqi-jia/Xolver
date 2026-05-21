@@ -1,4 +1,5 @@
 (set-logic QF_NIRA)
+(set-info :status sat)
 (declare-const x Int)
 (declare-const y Real)
 (assert (= (+ x 1) 3))

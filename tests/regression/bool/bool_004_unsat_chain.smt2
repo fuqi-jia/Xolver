@@ -1,3 +1,4 @@
+(set-info :status unsat)
 
 (declare-const p Bool)
 (declare-const q Bool)

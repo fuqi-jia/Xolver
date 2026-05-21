@@ -1,4 +1,5 @@
 (set-logic QF_LRA)
+(set-info :status sat)
 (declare-const x Real)
 (assert (= (* 2 x) 1))
 (check-sat)

@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status sat)
 (declare-fun x () Int)
 (assert (= (mod x 3) 1))
 (assert (>= x 0))

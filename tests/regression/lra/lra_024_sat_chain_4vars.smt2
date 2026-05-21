@@ -1,0 +1,11 @@
+; Strict chain x1 < x2 < x3 < x4 — satisfiable, e.g. 0,1,2,3.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x1 Real)
+(declare-const x2 Real)
+(declare-const x3 Real)
+(declare-const x4 Real)
+(assert (< x1 x2))
+(assert (< x2 x3))
+(assert (< x3 x4))
+(check-sat)

@@ -1,5 +1,6 @@
 ; Long congruence chain leading to conflict
 (set-logic QF_UF)
+(set-info :status unsat)
 (declare-sort S 0)
 (declare-fun f (S) S)
 (declare-fun a () S)

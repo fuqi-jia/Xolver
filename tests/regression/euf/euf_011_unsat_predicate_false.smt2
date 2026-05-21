@@ -1,4 +1,5 @@
 (set-logic QF_UF)
+(set-info :status unsat)
 (declare-sort U 0)
 (declare-const a U)
 (declare-fun p (U) Bool)

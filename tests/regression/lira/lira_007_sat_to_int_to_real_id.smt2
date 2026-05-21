@@ -1,4 +1,5 @@
 (set-logic QF_LIRA)
+(set-info :status sat)
 (declare-const x Int)
 (assert (= (to_int (to_real x)) x))
 (check-sat)

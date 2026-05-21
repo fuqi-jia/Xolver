@@ -1,5 +1,6 @@
 ; Boolean-valued function with boolean args
 (set-logic QF_UF)
+(set-info :status sat)
 (declare-fun P (Bool) Bool)
 (declare-fun Q (Bool) Bool)
 (declare-fun a () Bool)

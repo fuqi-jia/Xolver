@@ -1,0 +1,10 @@
+; Nested ITE: ite(c1, p, ite(c2, q, r)). Sat when r=true and c1=c2=false.
+(set-logic QF_UF)
+(set-info :status sat)
+(declare-const c1 Bool)
+(declare-const c2 Bool)
+(declare-const p Bool)
+(declare-const q Bool)
+(declare-const r Bool)
+(assert (ite c1 p (ite c2 q r)))
+(check-sat)

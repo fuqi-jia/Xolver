@@ -1,0 +1,12 @@
+; Strict chain a < b < c < d in Z, with d - a >= 3 by integrality.
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const a Int)
+(declare-const b Int)
+(declare-const c Int)
+(declare-const d Int)
+(assert (< a b))
+(assert (< b c))
+(assert (< c d))
+(assert (= a 0))
+(check-sat)

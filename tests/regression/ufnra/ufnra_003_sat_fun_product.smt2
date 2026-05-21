@@ -1,5 +1,6 @@
 ; UF + NRA: f(x)*g(x) = 1, both > 0  =>  sat
 (set-logic QF_UFNRA)
+(set-info :status sat)
 (declare-fun f (Real) Real)
 (declare-fun g (Real) Real)
 (declare-fun x () Real)

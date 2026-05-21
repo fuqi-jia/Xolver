@@ -1,0 +1,11 @@
+; distinct of 3 ints with bounds — many witnesses, sat.
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (distinct x y z))
+(assert (>= x 0)) (assert (<= x 10))
+(assert (>= y 0)) (assert (<= y 10))
+(assert (>= z 0)) (assert (<= z 10))
+(check-sat)

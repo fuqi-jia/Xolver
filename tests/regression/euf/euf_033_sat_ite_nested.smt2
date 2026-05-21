@@ -1,5 +1,6 @@
 ; Nested ITE
 (set-logic QF_UF)
+(set-info :status sat)
 (declare-fun c1 () Bool)
 (declare-fun c2 () Bool)
 (declare-fun a () Bool)

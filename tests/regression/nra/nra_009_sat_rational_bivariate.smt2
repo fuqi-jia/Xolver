@@ -1,4 +1,5 @@
 (set-logic QF_NRA)
+(set-info :status sat)
 (declare-const x Real)
 (declare-const y Real)
 (assert (= (+ (* (/ 1 2) x) y) 1))

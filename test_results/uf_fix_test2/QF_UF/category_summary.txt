@@ -1,0 +1,29 @@
+======================================================================
+Per-Category Summary
+======================================================================
+
+[20170829-Rodin]  count=2
+  nlcolver: {'unsat': 1, 'sat': 1}
+  compare:  {'unsat': 1, 'sat': 1}
+  mismatches: 0  diffs: 0
+
+[2018-Goel-hwbench]  count=8
+  nlcolver: {'sat': 5, 'unsat': 3}
+  compare:  {'sat': 5, 'unsat': 3}
+  mismatches: 0  diffs: 0
+
+[QG-classification]  count=86
+  nlcolver: {'sat': 86}
+  compare:  {'sat': 31, 'unsat': 55}
+  mismatches: 55  diffs: 0
+
+[SEQ]  count=3
+  nlcolver: {'unsat': 2, 'sat': 1}
+  compare:  {'unsat': 1, 'timeout': 1, 'sat': 1}
+  mismatches: 0  diffs: 1
+
+[eq_diamond]  count=1
+  nlcolver: {'sat': 1}
+  compare:  {'unsat': 1}
+  mismatches: 1  diffs: 0
+

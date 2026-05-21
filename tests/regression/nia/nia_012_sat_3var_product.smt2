@@ -1,5 +1,6 @@
 ; Three-variable product with small bounds
 (set-logic QF_NIA)
+(set-info :status sat)
 (declare-const x Int)
 (declare-const y Int)
 (declare-const z Int)

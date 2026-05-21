@@ -1,5 +1,6 @@
 ; Rollback opposite branch
 (set-logic QF_UF)
+(set-info :status unsat)
 (declare-fun c () Bool)
 (declare-fun a () Bool)
 (declare-fun b () Bool)

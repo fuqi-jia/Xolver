@@ -1,5 +1,6 @@
 ; ITE R3: a=b → distinct(ite(c,a,b), a) is unsat
 (set-logic QF_UF)
+(set-info :status unsat)
 (declare-fun c () Bool)
 (declare-fun a () Bool)
 (declare-fun b () Bool)

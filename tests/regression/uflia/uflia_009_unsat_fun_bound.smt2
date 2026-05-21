@@ -1,5 +1,6 @@
 ; Function value bounded contradiction
 (set-logic QF_UFLIA)
+(set-info :status unsat)
 (declare-fun f (Int) Int)
 (declare-fun x () Int)
 (assert (>= (f x) 5))

@@ -1,0 +1,69 @@
+======================================================================
+NLColver Errors / Timeouts / Killed
+======================================================================
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-10/c10_problem__003.smt2.slack.smt2
+  result: timeout (30.008s)
+  stderr: [SAT-MODEL] theory lits in model:
+[SAT-MODEL]  var=1 sign=T theory=3 expr=2 lit=1
+[SAT-MODEL]  var=2 sign=T theory=3 expr=4 lit=2
+[SAT-MODEL]  var=3 sign=T theory=3 expr=6 lit=3
+[SAT-MODEL]  var=4 sign=T theory=3 expr=8 lit=4
+[SAT-MODEL]  var=5 sign=T theory=3 expr=10 lit=5
+[SAT-MODEL]  var=6 sign=T theory=3 expr=12 lit=6
+[SAT-MODEL]  var=7 sign=T theory=3 expr=14 lit=7
+[SAT-MODEL]  var=8 sign=T theory=3 expr=16 lit=8
+[SAT-MODEL]  var=9 sign=T theory=3 expr=18 lit=9
+[SAT-MODEL]  var=10 sign=T th
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-10/c10_problem__006.smt2.slack.smt2
+  result: timeout (30.012s)
+  stderr: [SAT-MODEL] theory lits in model:
+[SAT-MODEL]  var=1 sign=T theory=3 expr=2 lit=1
+[SAT-MODEL]  var=2 sign=T theory=3 expr=4 lit=2
+[SAT-MODEL]  var=3 sign=T theory=3 expr=6 lit=3
+[SAT-MODEL]  var=4 sign=T theory=3 expr=8 lit=4
+[SAT-MODEL]  var=5 sign=T theory=3 expr=10 lit=5
+[SAT-MODEL]  var=6 sign=T theory=3 expr=12 lit=6
+[SAT-MODEL]  var=7 sign=T theory=3 expr=14 lit=7
+[SAT-MODEL]  var=8 sign=T theory=3 expr=16 lit=8
+[SAT-MODEL]  var=9 sign=T theory=3 expr=18 lit=9
+[SAT-MODEL]  var=10 sign=T th
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-50/c50_problem__005.smt2.slack.smt2
+  result: timeout (30.010s)
+  stderr: [SAT-MODEL] theory lits in model:
+[SAT-MODEL]  var=1 sign=T theory=3 expr=2 lit=1
+[SAT-MODEL]  var=2 sign=T theory=3 expr=4 lit=2
+[SAT-MODEL]  var=3 sign=T theory=3 expr=6 lit=3
+[SAT-MODEL]  var=4 sign=T theory=3 expr=8 lit=4
+[SAT-MODEL]  var=5 sign=T theory=3 expr=10 lit=5
+[SAT-MODEL]  var=6 sign=T theory=3 expr=12 lit=6
+[SAT-MODEL]  var=7 sign=T theory=3 expr=14 lit=7
+[SAT-MODEL]  var=8 sign=T theory=3 expr=16 lit=8
+[SAT-MODEL]  var=9 sign=T theory=3 expr=18 lit=9
+[SAT-MODEL]  var=10 sign=T th
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-60/c60_problem__004.smt2.slack.smt2
+  result: timeout (30.054s)
+  stderr: [SAT-MODEL] theory lits in model:
+[SAT-MODEL]  var=1 sign=T theory=3 expr=2 lit=1
+[SAT-MODEL]  var=2 sign=T theory=3 expr=4 lit=2
+[SAT-MODEL]  var=3 sign=T theory=3 expr=6 lit=3
+[SAT-MODEL]  var=4 sign=T theory=3 expr=8 lit=4
+[SAT-MODEL]  var=5 sign=T theory=3 expr=10 lit=5
+[SAT-MODEL]  var=6 sign=T theory=3 expr=12 lit=6
+[SAT-MODEL]  var=7 sign=T theory=3 expr=14 lit=7
+[SAT-MODEL]  var=8 sign=T theory=3 expr=16 lit=8
+[SAT-MODEL]  var=9 sign=T theory=3 expr=18 lit=9
+[SAT-MODEL]  var=10 sign=T th
+
+======================================================================
+Compare Solver Errors / Timeouts / Killed
+======================================================================
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-10/c10_problem__003.smt2.slack.smt2
+  result: timeout (30.043s)
+
+benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-60/c60_problem__004.smt2.slack.smt2
+  result: timeout (30.039s)

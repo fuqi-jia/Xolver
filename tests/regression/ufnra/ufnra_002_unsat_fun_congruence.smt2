@@ -1,5 +1,6 @@
 ; UF + NRA: x = y but f(x) != f(y)  =>  unsat (congruence)
 (set-logic QF_UFNRA)
+(set-info :status unsat)
 (declare-fun f (Real) Real)
 (declare-fun x () Real)
 (declare-fun y () Real)

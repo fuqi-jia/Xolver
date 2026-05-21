@@ -193,9 +193,10 @@ std::optional<std::pair<LinearFormKey, mpq_class>> polyToLinearForm(
 } // anonymous namespace
 
 // Check whether a single linear/polynomial assignment satisfies all constraints
-// using a fresh GeneralSimplex instance. Returns true iff SAT.
-bool NiraSolver::checkAssignmentWithSimplex(
+// using a fresh GeneralSimplex instance.
+NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
     const std::vector<ActiveAssignment>& activeAssignments,
+    const std::vector<ActiveLinearConstraint>* linearCtx,
     const std::unordered_map<std::string, mpq_class>& fixedValues,
     PolynomialKernel* kernel) {
 
@@ -221,13 +222,8 @@ bool NiraSolver::checkAssignmentWithSimplex(
         }
     };
 
-    // Process linear constraints (substitute fixed integer values)
-    for (const auto& a : activeAssignments) {
-        if (!a.value) continue;
-        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
-
-        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
-
+    // Helper to process a LinearAtomPayload with substitution
+    auto processLinearPayload = [&](const LinearAtomPayload& p) -> AssignmentCheckResult {
         LinearFormKey newLhs;
         mpq_class newRhs = p.rhs;
         for (const auto& [name, coeff] : p.lhs.terms) {
@@ -249,15 +245,34 @@ bool NiraSolver::checkAssignmentWithSimplex(
                 case Relation::Gt:  sat = (newRhs < 0); break;   // 0 > newRhs
                 case Relation::Geq: sat = (newRhs <= 0); break;  // 0 >= newRhs
             }
-            if (!sat) return false;
-            continue;
+            if (!sat) return AssignmentCheckResult::Unsat;
+            return AssignmentCheckResult::Sat;
         }
 
         std::sort(newLhs.terms.begin(), newLhs.terms.end(),
                   [](auto& a, auto& b) { return a.first < b.first; });
 
         int aux = manager.getOrCreateAuxVar(gs, newLhs, newRhs);
-        if (!assertRel(aux, p.rel)) return false;
+        if (!assertRel(aux, p.rel)) return AssignmentCheckResult::Unsat;
+        return AssignmentCheckResult::Sat;
+    };
+
+    // Process linear constraints from NIRA active assignments
+    for (const auto& a : activeAssignments) {
+        if (!a.value) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
+
+        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+        auto r = processLinearPayload(p);
+        if (r != AssignmentCheckResult::Sat) return r;
+    }
+
+    // Process linear constraints from LIRA active context
+    if (linearCtx) {
+        for (const auto& alc : *linearCtx) {
+            auto r = processLinearPayload(alc.payload);
+            if (r != AssignmentCheckResult::Sat) return r;
+        }
     }
 
     // Process polynomial constraints (substitute fixed integer values)
@@ -286,22 +301,26 @@ bool NiraSolver::checkAssignmentWithSimplex(
                 case Relation::Gt:  sat = (val > 0); break;
                 case Relation::Geq: sat = (val >= 0); break;
             }
-            if (!sat) return false;
+            if (!sat) return AssignmentCheckResult::Unsat;
             continue;
         }
 
         auto linearOpt = polyToLinearForm(kernel, current);
         if (!linearOpt) {
-            return false;
+            // Polynomial still contains real variables after integer substitution.
+            // Without NRA delegation we cannot decide feasibility of this assignment.
+            return AssignmentCheckResult::Unknown;
         }
 
         auto [lhs, rhs] = *linearOpt;
         int aux = manager.getOrCreateAuxVar(gs, lhs, rhs);
-        if (!assertRel(aux, p.rel)) return false;
+        if (!assertRel(aux, p.rel)) return AssignmentCheckResult::Unsat;
     }
 
     auto r = gs.check();
-    return r == GeneralSimplex::Result::Sat;
+    if (r == GeneralSimplex::Result::Sat) return AssignmentCheckResult::Sat;
+    if (r == GeneralSimplex::Result::Unsat) return AssignmentCheckResult::Unsat;
+    return AssignmentCheckResult::Unknown;
 }
 
 TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -449,10 +468,16 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
 
     std::sort(enumVars.begin(), enumVars.end());
     std::unordered_map<std::string, mpq_class> fixedValues;
+    bool sawUnknown = false;
 
     std::function<bool(int)> enumerate = [&](int idx) -> bool {
         if (idx == (int)enumVars.size()) {
-            return NiraSolver::checkAssignmentWithSimplex(activeAssignments_, fixedValues, kernel_.get());
+            auto r = NiraSolver::checkAssignmentWithSimplex(activeAssignments_, activeLinearContext_, fixedValues, kernel_.get());
+            if (r == AssignmentCheckResult::Sat) return true;
+            if (r == AssignmentCheckResult::Unknown) {
+                sawUnknown = true;
+            }
+            return false;
         }
 
         const std::string& varName = enumVars[idx];
@@ -471,6 +496,11 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
 
     if (enumerate(0)) {
         return TheoryCheckResult::consistent();
+    }
+
+    if (sawUnknown) {
+        return TheoryCheckResult::unknown(
+            "NIRA: bounded-complete enumeration hit non-linear real residual");
     }
 
     // All enumerated combinations lead to contradiction.

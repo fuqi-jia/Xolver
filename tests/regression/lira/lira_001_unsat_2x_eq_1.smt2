@@ -1,4 +1,5 @@
 (set-logic QF_LIRA)
+(set-info :status unsat)
 (declare-fun x () Int)
 (assert (= (* 2 x) 1))
 (check-sat)

@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status unsat)
 (declare-const x Int)
 (assert (= (* 1000 (* x x)) 1000000))
 (check-sat)

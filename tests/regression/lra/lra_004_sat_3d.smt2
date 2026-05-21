@@ -1,4 +1,5 @@
 (set-logic QF_LRA)
+(set-info :status sat)
 (declare-const x Real)
 (declare-const y Real)
 (declare-const z Real)

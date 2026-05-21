@@ -1,0 +1,14 @@
+======================================================================
+Per-Category Summary
+======================================================================
+
+[20170829-Rodin]  count=34
+  nlcolver: {'unsat': 20, 'sat': 14}
+  compare:  {'unsat': 20, 'sat': 14}
+  mismatches: 0  diffs: 0
+
+[2018-Goel-hwbench]  count=66
+  nlcolver: {'sat': 65, 'unsat': 1}
+  compare:  {'sat': 64, 'unsat': 2}
+  mismatches: 1  diffs: 0
+

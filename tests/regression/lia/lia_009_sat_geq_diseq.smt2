@@ -1,4 +1,5 @@
 (set-logic QF_LIA)
+(set-info :status sat)
 (declare-fun x () Int)
 (assert (>= x 0))
 (assert (not (= x 0)))

@@ -1,4 +1,5 @@
 (set-logic QF_NIA)
+(set-info :status sat)
 (declare-const x Int)
 (assert (= (* x x) 4))
 (check-sat)
