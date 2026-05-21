@@ -77,6 +77,8 @@ public:
         return t < parents_.size() ? parents_[t] : empty;
     }
 
+    std::string symbolName(FuncSymbolId sym) const;
+
 private:
     std::vector<ENode> nodes_;
     std::unordered_map<FuncSymbolKey, FuncSymbolId, FuncSymbolKeyHash> symbols_;

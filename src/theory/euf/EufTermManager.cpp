@@ -66,6 +66,13 @@ EufTermId EufTermManager::internFalseConstant() {
 }
 
 
+std::string EufTermManager::symbolName(FuncSymbolId sym) const {
+    for (const auto& [key, id] : symbols_) {
+        if (id == sym) return key.name;
+    }
+    return "?" + std::to_string(sym);
+}
+
 EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
     if (root == TrueSentinelExpr) return internTrueConstant();
     if (root == FalseSentinelExpr) return internFalseConstant();
@@ -122,8 +129,8 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                 name = "bv" + std::to_string(*bv);
             }
             if (!name.empty()) {
-                FuncSymbolId sym = internSymbol(name, {}, NullSort);
-                return createNode(sym, {}, NullSort, eid);
+                FuncSymbolId sym = internSymbol(name, {}, e.sort);
+                return createNode(sym, {}, e.sort, eid);
             }
         }
         return NullEufTerm;
