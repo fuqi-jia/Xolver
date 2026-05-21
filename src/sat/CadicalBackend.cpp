@@ -1,7 +1,4 @@
 #include "sat/CadicalBackend.h"
-
-#ifdef NLCOLVER_HAS_CADICAL
-
 #include "sat/CadicalTheoryPropagator.h"
 
 namespace nlcolver {
@@ -109,5 +106,3 @@ std::unique_ptr<SatSolver> createSatSolver() {
 }
 
 } // namespace nlcolver
-
-#endif // NLCOLVER_HAS_CADICAL

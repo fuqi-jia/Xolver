@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef NLCOLVER_HAS_CADICAL
-
 #include <cadical.hpp>
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include <chrono>
@@ -144,5 +142,3 @@ private:
 };
 
 } // namespace nlcolver
-
-#endif // NLCOLVER_HAS_CADICAL

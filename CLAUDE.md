@@ -57,17 +57,15 @@ Default `CMAKE_BUILD_TYPE` is `Release` (`-O3`). For asserts/debugging use `cmak
 
 ## Dependency tiers — read CMake output, not just exit code
 
-The CMake config has **silent degradation**: `cmake ..` will succeed even when SAT or polynomial backends are missing. It only emits `WARNING` messages and stubs the backends out via the `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` compile-definition flags.
-
 | Dependency | Found via | If missing |
 |---|---|---|
 | GMP, MPFR | pkg-config / `find_library` | **FATAL_ERROR** |
-| CaDiCaL (SAT, headers expose `cadical.hpp`) | `find_library`/`find_path` | Warning + `NLCOLVER_HAS_CADICAL` undefined → SAT backend stubbed |
+| CaDiCaL (SAT, headers expose `cadical.hpp`) | `find_library`/`find_path` | **FATAL_ERROR** |
 | libpoly (`poly/poly.h`) | `find_library`/`find_path` | Warning + `NLCOLVER_HAS_LIBPOLY` undefined → polynomial kernel stubbed |
 | nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
 | doctest v2.4.11 | FetchContent (network) | Tests skip |
 
-When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` and provide a stub fallback — the CMakeLists deliberately permits builds without them so IR work isn't blocked.
+When wiring code into `poly/`, gate it behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
 
 `src/CMakeLists.txt` uses `file(GLOB_RECURSE ... CONFIGURE_DEPENDS)` over each subsystem directory: new `.cpp`/`.h` files under `src/<subsystem>/` are picked up automatically — no need to edit any CMakeLists.
 

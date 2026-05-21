@@ -54,12 +54,15 @@ target_include_directories(nlcolver_core
 )
 
 # ---------------------------------------------------------------------------
-# CaDiCaL: link the IMPORTED target if available
+# CaDiCaL: required SAT backend
 # ---------------------------------------------------------------------------
-if(TARGET cadical)
-    target_link_libraries(nlcolver_core PUBLIC cadical)
-    target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_HAS_CADICAL)
+if(NOT TARGET cadical)
+    message(FATAL_ERROR "CaDiCaL SAT solver is required but not found. "
+                        "Run: git submodule update --init --recursive && "
+                        "cd third_party/cadical && ./configure && make")
 endif()
+target_link_libraries(nlcolver_core PUBLIC cadical)
+target_compile_definitions(nlcolver_core PUBLIC NLCOLVER_HAS_CADICAL)
 
 # ---------------------------------------------------------------------------
 # libpoly: link the static target if available

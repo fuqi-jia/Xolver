@@ -1,9 +1,6 @@
 #pragma once
 
 #include "sat/SatSolver.h"
-
-#ifdef NLCOLVER_HAS_CADICAL
-
 #include <cadical.hpp>
 #include <memory>
 
@@ -49,5 +46,3 @@ private:
 };
 
 } // namespace nlcolver
-
-#endif // NLCOLVER_HAS_CADICAL

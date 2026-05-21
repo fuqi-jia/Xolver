@@ -1,7 +1,4 @@
 #include "sat/CadicalTheoryPropagator.h"
-
-#ifdef NLCOLVER_HAS_CADICAL
-
 #include "sat/CadicalBackend.h"
 #include <cassert>
 #include <iostream>
@@ -461,5 +458,3 @@ bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<
 }
 
 } // namespace nlcolver
-
-#endif // NLCOLVER_HAS_CADICAL

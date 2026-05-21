@@ -222,19 +222,17 @@ ctest
 | nlohmann/json | ✅ (FetchContent) | JSON handling |
 | doctest | ✅ (FetchContent) | Unit testing |
 
-### Dependency Handling (Silent Degradation)
-
-The CMake config has **silent degradation**: `cmake ..` will succeed even when SAT or polynomial backends are missing. It emits `WARNING` messages and stubs the backends out via compile-definition flags.
+### Dependency Handling
 
 | Dependency | Found via | If missing |
 |---|---|---|
 | GMP, MPFR | pkg-config / `find_library` | **FATAL_ERROR** |
-| CaDiCaL | `configure` + `make` in submodule dir | Warning + `NLCOLVER_HAS_CADICAL` undefined → SAT backend stubbed |
+| CaDiCaL | `configure` + `make` in submodule dir | **FATAL_ERROR** |
 | libpoly | `add_subdirectory` | Warning + `NLCOLVER_HAS_LIBPOLY` undefined → polynomial kernel stubbed |
 | nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
 | doctest v2.4.11 | FetchContent (network) | Tests skip |
 
-When wiring code into `sat/` or `poly/`, gate it behind `#ifdef NLCOLVER_HAS_CADICAL` / `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
+When wiring code into `poly/`, gate it behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
 
 ## Code Style Guidelines
 

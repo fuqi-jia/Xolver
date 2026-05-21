@@ -20,10 +20,8 @@
 #endif
 #endif
 
-#ifdef NLCOLVER_HAS_CADICAL
 #include "sat/CadicalBackend.h"
 #include "sat/CadicalTheoryPropagator.h"
-#endif
 
 #include <somtparser/frontend/parser.h>
 
@@ -404,13 +402,7 @@ public:
             sat->configure("seed", itSeed->second.i);
         }
 
-#ifndef NLCOLVER_HAS_CADICAL
-        lastUnknownReason_ = "SAT: CaDiCaL backend not compiled";
-#ifdef NLCOLVER_ENABLE_CASESTATS
-        finalizeCaseStats(Result::Unknown, 0.0);
-#endif
-        return Result::Unknown;
-#else
+
         auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
         if (!cadicalBackend) {
             lastUnknownReason_ = "SAT: CadicalBackend cast failed";
@@ -679,7 +671,6 @@ public:
                           cadicalBackend, &atomizer, &registry);
 #endif
         return ret;
-#endif
     }
 
 

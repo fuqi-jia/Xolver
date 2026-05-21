@@ -28,8 +28,7 @@ struct SatLit {
 /**
  * Abstract SAT solver interface.
  *
- * P0: Stub implementation (no CaDiCaL).
- * P1: CaDiCaL wrapper when library is available.
+ * CaDiCaL wrapper — the only supported SAT backend.
  */
 class SatSolver {
 public:

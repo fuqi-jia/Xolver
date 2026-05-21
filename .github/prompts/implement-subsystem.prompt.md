@@ -60,7 +60,7 @@ Before writing any code:
 - `pImpl` at public-API boundary (`Solver::Impl`). Keep libpoly / CaDiCaL headers out of `include/`.
 - Standard: C++17 only, no GCC-isms, no compiler extensions.
 - Containers: prefer `SmallVector<T, N>` (from `src/util/SmallVector.h`) for short child-lists.
-- Optional backends: gate CaDiCaL code behind `#ifdef NLCOLVER_HAS_CADICAL`, libpoly behind `#ifdef NLCOLVER_HAS_LIBPOLY`. Provide a stub fallback so builds succeed without them.
+- Optional backend: gate libpoly code behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback. CaDiCaL is mandatory (build fails if missing).
 - Warnings: code must compile clean under `-Wall -Wextra -Wpedantic`. Only `-Wno-unused-parameter` is whitelisted.
 - No new CMakeLists edits needed: `src/CMakeLists.txt` uses `GLOB_RECURSE CONFIGURE_DEPENDS`, so new `.cpp`/`.h` files are picked up automatically.
 

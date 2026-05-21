@@ -44,11 +44,10 @@ NLColver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OM
 
 | 组件 | 文件 | 说明 |
 |------|------|------|
-| **CaDiCaL Wrapper** | `src/sat/CadicalSolver.cpp` | CaDiCaL (vendored submodule) 封装，理论传播接口 |
-| **Stub Fallback** | `src/sat/UnitPropagator.cpp` | CaDiCaL 不可用时降级为单元传播桩 |
+| **CaDiCaL Wrapper** | `src/sat/CadicalBackend.cpp` | CaDiCaL (vendored submodule) 封装，理论传播接口 |
 | **Theory Propagation** | `src/sat/CadicalTheoryPropagator.cpp` | CDCL(T) 回调：理论检查、冲突解释、引理注入 |
 
-**编译宏**: `NLCOLVER_HAS_CADICAL` — 定义时表示 CaDiCaL 可用。
+**编译宏**: `NLCOLVER_HAS_CADICAL` — 始终定义（CaDiCaL 为必需依赖）。
 
 ---
 
