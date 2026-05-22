@@ -46,6 +46,9 @@ public:
     // Returns NullUniPolyId if b does not divide a exactly.
     UniPolyId exactDivideUni(UniPolyId a, UniPolyId b);
 
+    // Refine the isolating interval of an algebraic root
+    bool refineRootInterval(AlgebraicRoot& root) override;
+
 private:
     PolynomialKernel* kernel_;
     LibPolyKernel* libKernel_ = nullptr;  // null if kernel is not LibPolyKernel
@@ -61,9 +64,6 @@ private:
 
     // --- P2a univariate algebraic helpers ---
 
-    // Check if algebraic root alpha is also a root of univariate polynomial g
-    bool rootBelongsTo(const AlgebraicRoot& alpha, UniPolyId g);
-
     // Sign of univariate polynomial g at algebraic root alpha
     Sign signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot& alpha);
 
@@ -74,9 +74,6 @@ private:
 
     // Helper: convert UniPolyId coefficient vector back to PolyId in given variable
     PolyId univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var);
-
-    // Refine isolating interval of an algebraic root (bisection)
-    bool refineRootInterval(AlgebraicRoot& alpha);
 
     // Count real roots of univariate polynomial h in open interval (lo, hi)
     int countRealRootsInInterval(UniPolyId h, const mpq_class& lo, const mpq_class& hi);

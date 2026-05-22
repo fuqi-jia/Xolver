@@ -218,6 +218,62 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
         }
     }
 
+    // Refine algebraic intervals so adjacent roots have disjoint isolating intervals.
+    // This ensures sector loops can always construct non-empty rational sectors.
+    for (size_t i = 1; i < merged.size(); ++i) {
+        bool prevAlg = merged[i - 1].isAlgebraic();
+        bool currAlg = merged[i].isAlgebraic();
+        if (!prevAlg && !currAlg) continue; // both rational, already sorted
+
+        if (prevAlg && currAlg) {
+            auto& prev = merged[i - 1].root;
+            auto& curr = merged[i].root;
+            for (int iter = 0; iter < 40; ++iter) {
+                if (prev.upper < curr.lower) break;
+                bool okPrev = algebra_->refineRootInterval(prev);
+                bool okCurr = algebra_->refineRootInterval(curr);
+                if (!okPrev && !okCurr) {
+                    return std::nullopt;
+                }
+            }
+            if (prev.upper >= curr.lower) {
+                return std::nullopt;
+            }
+        } else if (!prevAlg && currAlg) {
+            // prev is rational, curr is algebraic
+            mpq_class q = merged[i - 1].rational;
+            auto& curr = merged[i].root;
+            for (int iter = 0; iter < 40; ++iter) {
+                if (q < curr.lower) break;
+                bool okCurr = algebra_->refineRootInterval(curr);
+                if (!okCurr) break;
+            }
+            if (q >= curr.lower) {
+                // Rational root lies inside algebraic interval: they are equal.
+                // Keep the rational root and discard the algebraic one.
+                merged.erase(merged.begin() + i);
+                --i;
+                continue;
+            }
+        } else {
+            // prev is algebraic, curr is rational
+            auto& prev = merged[i - 1].root;
+            mpq_class q = merged[i].rational;
+            for (int iter = 0; iter < 40; ++iter) {
+                if (prev.upper < q) break;
+                bool okPrev = algebra_->refineRootInterval(prev);
+                if (!okPrev) break;
+            }
+            if (prev.upper >= q) {
+                // Rational root lies inside algebraic interval: they are equal.
+                // Keep the rational root and discard the algebraic one.
+                merged.erase(merged.begin() + i - 1);
+                --i;
+                continue;
+            }
+        }
+    }
+
     return RootSet{std::move(merged)};
 }
 
@@ -640,6 +696,8 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         if (sign == Sign::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::SignEvaluationInconclusive);
         }
+        std::cerr << "[CDCAC]     checkFullSample: poly=" << kernel_->toString(c.poly)
+                  << " sign=" << (int)sign << " rel=" << (int)c.rel << std::endl;
         if (!relationHolds(sign, c.rel)) {
             conflictLits.push_back(c.reason);
 

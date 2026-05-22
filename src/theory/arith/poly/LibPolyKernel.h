@@ -59,6 +59,7 @@ public:
     std::string toString(PolyId a) const override;
 
     std::optional<PolyId> pseudoRemainder(PolyId p, PolyId divisor) override;
+    PseudoRemainderResult pseudoRemainderWithScale(PolyId dividend, PolyId divisor, VarId mainVar) override;
     std::optional<PolyId> leadingCoefficient(PolyId p) override;
     std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) override;
 

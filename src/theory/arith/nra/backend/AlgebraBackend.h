@@ -92,6 +92,16 @@ public:
         (void)p; (void)prefix; (void)mainVar;
         return RootSet{};
     }
+
+    /**
+     * Refine the isolating interval of an algebraic root.
+     * Returns true if refinement succeeded (interval was narrowed).
+     * Returns false if refinement failed or the root is rational.
+     */
+    virtual bool refineRootInterval(AlgebraicRoot& root) {
+        (void)root;
+        return false;
+    }
 };
 
 } // namespace nlcolver

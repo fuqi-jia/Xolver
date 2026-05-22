@@ -70,6 +70,9 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
     UniPolyId polyToIsolate = sqfResult.ok() ? sqfResult.squarefree : p;
 
     const auto& coeffs = getUni(polyToIsolate);
+    std::cerr << "[CDCAC]       isolateRealRoots: polyToIsolate id=" << polyToIsolate << " coeffs=";
+    for (auto c : coeffs) std::cerr << c.get_str() << " ";
+    std::cerr << std::endl;
     if (coeffs.empty()) return RootSet{};
 
     // Convert coefficients (high-to-low) to libpoly format (low-to-high)
@@ -308,6 +311,35 @@ Sign LibpolyBackend::signAt(PolyId p, const SamplePoint& sample) {
 Sign LibpolyBackend::signAtRational(PolyId p, const SamplePoint& sample) {
     auto map = toRationalMap(sample);
     int s = kernel_->sgnVarId(p, map);
+    // Verification: evaluate manually using terms
+    auto termsOpt = kernel_->terms(p);
+    if (termsOpt) {
+        mpq_class manualVal(0);
+        for (const auto& term : *termsOpt) {
+            mpq_class coeff(term.coefficient);
+            for (const auto& [varId, exp] : term.powers) {
+                auto it = map.find(varId);
+                if (it != map.end()) {
+                    mpq_class factor(1);
+                    for (int i = 0; i < exp; ++i) factor *= it->second;
+                    coeff *= factor;
+                } else {
+                    coeff = 0; // missing variable
+                    break;
+                }
+            }
+            manualVal += coeff;
+        }
+        int manualSgn = (manualVal > 0) ? 1 : (manualVal < 0) ? -1 : 0;
+        if (manualSgn != s) {
+            std::cerr << "[VERIFY-FAIL] signAtRational: poly=" << kernel_->toString(p)
+                      << " sgnVarId=" << s << " manual=" << manualSgn
+                      << " manualVal=" << manualVal.get_str() << std::endl;
+            for (const auto& [vid, val] : map) {
+                std::cerr << "  " << kernel_->varName(vid) << "=" << val.get_str() << std::endl;
+            }
+        }
+    }
     if (s < 0) return Sign::Neg;
     if (s > 0) return Sign::Pos;
     return Sign::Zero;
@@ -337,10 +369,19 @@ Sign LibpolyBackend::signAtOneAlgebraic(PolyId p, const SamplePoint& sample) {
     // Specialize polynomial to univariate in algVar
     UniPolyId g = specializeToUnivariate(p, rationalPrefix, algVar);
     if (g == NullUniPolyId) {
+        std::cerr << "[CDCAC]       signAtOneAlgebraic: specializeToUnivariate failed" << std::endl;
         return Sign::Unknown;
     }
 
-    return signUnivariateAtAlgebraic(g, sample.values[algIdx].root);
+    std::cerr << "[CDCAC]       signAtOneAlgebraic: g=";
+    for (auto c : getUni(g)) std::cerr << c.get_str() << " ";
+    std::cerr << "alpha=[" << sample.values[algIdx].root.lower.get_str() << "," << sample.values[algIdx].root.upper.get_str() << "]"
+              << " defPoly=" << sample.values[algIdx].root.definingPoly
+              << " rootIdx=" << sample.values[algIdx].root.rootIndex << std::endl;
+
+    Sign s = signUnivariateAtAlgebraic(g, sample.values[algIdx].root);
+    std::cerr << "[CDCAC]       signAtOneAlgebraic: result=" << (int)s << std::endl;
+    return s;
 }
 
 Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
@@ -374,14 +415,13 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         // Convert the univariate defining polynomial back to a PolyId
         VarId var = sample.varOrder[idx];
         PolyId definingPoly = univariateToPoly(getUni(alpha.definingPoly), var);
-
         // Patch 6 + 8: pseudo-remainder with scale tracking
         auto pr = kernel_->pseudoRemainderWithScale(current, definingPoly, var);
         if (!pr.ok()) {
+            std::cerr << "[CDCAC]       signAtTower: prem failed" << std::endl;
             return Sign::Unknown;
         }
         current = pr.remainder;
-
         if (pr.exponent > 0 && pr.scaleFactor != NullPoly) {
             if (kernel_->isConstant(pr.scaleFactor)) {
                 mpq_class c = kernel_->toConstant(pr.scaleFactor);
@@ -402,6 +442,64 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                 return Sign::Unknown;
             }
         }
+    }
+
+    // After tower reduction, verify no algebraic variables remain in current.
+    // If deg(current, var) < deg(definingPoly, var), pseudo-remainder leaves
+    // var in current. signAtRational would then pass an incomplete assignment
+    // to libpoly, causing crashes on uninitialized algebraic variables.
+    bool hasRemainingAlg = false;
+    auto termsOpt = kernel_->terms(current);
+    if (termsOpt) {
+        for (const auto& term : *termsOpt) {
+            for (const auto& [varId, exp] : term.powers) {
+                for (size_t idx : algIndices) {
+                    if (sample.varOrder[idx] == varId) {
+                        hasRemainingAlg = true;
+                        break;
+                    }
+                }
+                if (hasRemainingAlg) break;
+            }
+            if (hasRemainingAlg) break;
+        }
+    } else {
+        // Cannot inspect terms: conservatively return Unknown
+        return Sign::Unknown;
+    }
+
+    if (hasRemainingAlg) {
+        // Tower reduction did not eliminate all algebraic variables.
+        // Use libpoly direct evaluation with algebraic assignment.
+#ifndef NLCOLVER_HAS_LIBPOLY
+        return Sign::Unknown;
+#else
+        if (!libKernel_) return Sign::Unknown;
+        try {
+            poly::Assignment pa(libKernel_->context());
+            for (size_t i = 0; i < sample.numVars(); ++i) {
+                poly::Variable pv = libKernel_->getVariable(std::string(kernel_->varName(sample.varOrder[i])));
+                const auto& val = sample.values[i];
+                if (val.isRational()) {
+                    pa.set(pv, poly::Value(poly::Rational(val.rational)));
+                } else if (val.isAlgebraic()) {
+                    const auto& ar = val.root;
+                    const auto& coeffs = getUni(ar.definingPoly);
+                    auto algOpt = algebraicRootToPolyAlg(ar, coeffs);
+                    if (!algOpt) return Sign::Unknown;
+                    pa.set(pv, poly::Value(*algOpt));
+                }
+            }
+            std::cerr << "[CDCAC]       signAtTower: hasRemainingAlg, current=" << kernel_->toString(current) << std::endl;
+            int s = poly::sgn(libKernel_->getPolynomial(current), pa);
+            std::cerr << "[CDCAC]       signAtTower: libpoly sgn=" << s << std::endl;
+            if (s < 0) return multiplySigns(scaleSign, Sign::Neg);
+            if (s > 0) return multiplySigns(scaleSign, Sign::Pos);
+            return multiplySigns(scaleSign, Sign::Zero);
+        } catch (...) {
+            return Sign::Unknown;
+        }
+#endif
     }
 
     // After tower reduction, evaluate at the (now rational-only) sample point.
@@ -427,17 +525,23 @@ PolyId LibpolyBackend::univariateToPoly(const std::vector<mpz_class>& coeffs, Va
 
 UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& prefix, VarId mainVar) {
     PolyId current = p;
+    std::cerr << "[CDCAC]       specializeToUnivariate: input=" << kernel_->toString(p) << std::endl;
 
     // Apply rational prefix substitutions one variable at a time.
     // Algebraic prefix values are not supported in P2a.
     for (size_t i = 0; i < prefix.numVars(); ++i) {
         if (!prefix.values[i].isRational()) {
+            std::cerr << "[CDCAC]       specializeToUnivariate: algebraic prefix, fail" << std::endl;
             return NullUniPolyId;
         }
         VarId vid = prefix.varOrder[i];
         auto nextOpt = kernel_->substituteRational(current, vid, prefix.values[i].rational);
-        if (!nextOpt) return NullUniPolyId;
+        if (!nextOpt) {
+            std::cerr << "[CDCAC]       specializeToUnivariate: substituteRational failed for var=" << kernel_->varName(vid) << std::endl;
+            return NullUniPolyId;
+        }
         current = *nextOpt;
+        std::cerr << "[CDCAC]       specializeToUnivariate: after sub " << kernel_->varName(vid) << "=" << prefix.values[i].rational.get_str() << " -> " << kernel_->toString(current) << std::endl;
     }
 
     // Convert to RationalPolynomial to handle any variable order and rational coefficients.
@@ -452,6 +556,16 @@ UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& pr
     // Extract univariate coefficients in mainVar from the normalized polynomial
     auto termsOpt = kernel_->terms(norm.poly);
     if (!termsOpt) return NullUniPolyId;
+
+    std::cerr << "[CDCAC]       specializeToUnivariate: norm.poly=" << kernel_->toString(norm.poly) << " terms=";
+    for (const auto& term : *termsOpt) {
+        std::cerr << "[" << term.coefficient.get_str() << ":";
+        for (const auto& [vid, exp] : term.powers) {
+            std::cerr << kernel_->varName(vid) << "^" << exp << " ";
+        }
+        std::cerr << "] ";
+    }
+    std::cerr << std::endl;
 
     // Find maximum degree of mainVar and check for other variables
     int maxDegree = -1;
@@ -785,30 +899,6 @@ UniPolyId LibpolyBackend::exactDivideUni(UniPolyId a, UniPolyId b) {
     return allocUni(std::move(result));
 }
 
-bool LibpolyBackend::rootBelongsTo(const AlgebraicRoot& alpha, UniPolyId g) {
-    UniPolyId d = gcdUni(alpha.definingPoly, g);
-    if (d == NullUniPolyId) return false;
-    if (isConstantUni(d)) return false;
-
-    // d is a non-constant common divisor of f and g.
-    // Since alpha's isolating interval contains exactly one root of f,
-    // and d | f, any root of d in the interval must be alpha.
-    const auto& dCoeffs = getUni(d);
-    mpq_class loVal = evalUniAtRational(dCoeffs, alpha.lower);
-    mpq_class hiVal = evalUniAtRational(dCoeffs, alpha.upper);
-
-    int loSgn = (loVal > 0) ? 1 : (loVal < 0) ? -1 : 0;
-    int hiSgn = (hiVal > 0) ? 1 : (hiVal < 0) ? -1 : 0;
-
-    if (loSgn == 0 || hiSgn == 0) {
-        // Endpoint is zero - unusual for isolating intervals.
-        // Conservatively assume the root belongs.
-        return true;
-    }
-
-    return loSgn != hiSgn;
-}
-
 Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot& alpha) {
     const auto& gCoeffs = getUni(g);
 
@@ -817,24 +907,11 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
         return Sign::Zero;
     }
 
-    // GCD zero detection
-    if (alpha.definingPoly != NullUniPolyId) {
-        if (rootBelongsTo(alpha, g)) {
-            return Sign::Zero;
-        }
-    }
-
     // Interval sign evaluation
     mpq_class loVal = evalUniAtRational(gCoeffs, alpha.lower);
     mpq_class hiVal = evalUniAtRational(gCoeffs, alpha.upper);
-
     int loSgn = (loVal > 0) ? 1 : (loVal < 0) ? -1 : 0;
     int hiSgn = (hiVal > 0) ? 1 : (hiVal < 0) ? -1 : 0;
-
-    // Same non-zero sign at both endpoints
-    if (loSgn == hiSgn && loSgn != 0) {
-        return (loSgn > 0) ? Sign::Pos : Sign::Neg;
-    }
 
 #ifndef NLCOLVER_HAS_LIBPOLY
     return Sign::Unknown;
@@ -855,82 +932,28 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
         return Sign::Unknown;
     }
 
-    // Endpoint exactly zero: evaluate directly at the algebraic number
-    if (loSgn == 0 || hiSgn == 0) {
-        poly::Assignment pa(libKernel_->context());
-        poly::Variable var = libKernel_->getVariable("x");
-        pa.set(var, poly::Value(roots[alpha.rootIndex]));
-
-        std::vector<poly::Integer> gLpCoeffs;
-        gLpCoeffs.reserve(gCoeffs.size());
-        for (auto it = gCoeffs.rbegin(); it != gCoeffs.rend(); ++it) {
-            gLpCoeffs.emplace_back(*it);
-        }
-        poly::UPolynomial gUp(gLpCoeffs);
-
-        // Convert UPolynomial to Polynomial using C API
-        lp_polynomial_t* lp_poly = lp_upolynomial_to_polynomial(
-            gUp.get_internal(),
-            libKernel_->context().get_polynomial_context(),
-            var.get_internal()
-        );
-        poly::Polynomial gPoly(lp_poly);
-
-        poly::Value v = poly::evaluate(gPoly, pa);
-        if (poly::is_integer(v)) {
-            const poly::Integer& i = poly::as_integer(v);
-            mpz_class val = *poly::detail::cast_to_gmp(&i);
-            if (val > 0) return Sign::Pos;
-            if (val < 0) return Sign::Neg;
-            return Sign::Zero;
-        }
-        if (poly::is_rational(v)) {
-            const poly::Rational& r = poly::as_rational(v);
-            mpq_class val = *poly::detail::cast_to_gmp(&r);
-            if (val > 0) return Sign::Pos;
-            if (val < 0) return Sign::Neg;
-            return Sign::Zero;
-        }
-        if (poly::is_algebraic_number(v)) {
-            const poly::AlgebraicNumber& an = poly::as_algebraic_number(v);
-            int s = poly::sgn(an);
-            if (s < 0) return Sign::Neg;
-            if (s > 0) return Sign::Pos;
-            return Sign::Zero;
-        }
-        return Sign::Unknown;
+    // Build gPoly once
+    poly::Variable var = libKernel_->getVariable("x");
+    std::vector<poly::Integer> gLpCoeffs;
+    gLpCoeffs.reserve(gCoeffs.size());
+    for (auto it = gCoeffs.rbegin(); it != gCoeffs.rend(); ++it) {
+        gLpCoeffs.emplace_back(*it);
     }
+    poly::UPolynomial gUp(gLpCoeffs);
+    lp_polynomial_t* lp_poly = lp_upolynomial_to_polynomial(
+        gUp.get_internal(),
+        libKernel_->context().get_polynomial_context(),
+        var.get_internal()
+    );
+    poly::Polynomial gPoly(lp_poly);
 
-    // Signs differ: refine and retry
-    for (int refineIter = 0; refineIter < 20; ++refineIter) {
-        poly::refine(roots[alpha.rootIndex]);
-        const poly::DyadicRational& newLo = poly::get_lower_bound(roots[alpha.rootIndex]);
-        const poly::DyadicRational& newHi = poly::get_upper_bound(roots[alpha.rootIndex]);
-
-        poly::Integer loNumInt = poly::numerator(newLo);
-        poly::Integer loDenInt = poly::denominator(newLo);
-        poly::Integer hiNumInt = poly::numerator(newHi);
-        poly::Integer hiDenInt = poly::denominator(newHi);
-        mpz_class loNum = *poly::detail::cast_to_gmp(&loNumInt);
-        mpz_class loDen = *poly::detail::cast_to_gmp(&loDenInt);
-        mpz_class hiNum = *poly::detail::cast_to_gmp(&hiNumInt);
-        mpz_class hiDen = *poly::detail::cast_to_gmp(&hiDenInt);
-
-        mpq_class newLoQ(loNum, loDen);
-        mpq_class newHiQ(hiNum, hiDen);
-
-        loVal = evalUniAtRational(gCoeffs, newLoQ);
-        hiVal = evalUniAtRational(gCoeffs, newHiQ);
-
-        loSgn = (loVal > 0) ? 1 : (loVal < 0) ? -1 : 0;
-        hiSgn = (hiVal > 0) ? 1 : (hiVal < 0) ? -1 : 0;
-
-        if (loSgn == hiSgn && loSgn != 0) {
-            return (loSgn > 0) ? Sign::Pos : Sign::Neg;
-        }
-    }
-
-    return Sign::Unknown;
+    // Exact algebraic sign evaluation via libpoly
+    poly::Assignment pa(libKernel_->context());
+    pa.set(var, poly::Value(roots[alpha.rootIndex]));
+    int s = poly::sgn(gPoly, pa);
+    if (s < 0) return Sign::Neg;
+    if (s > 0) return Sign::Pos;
+    return Sign::Zero;
 #endif
 }
 

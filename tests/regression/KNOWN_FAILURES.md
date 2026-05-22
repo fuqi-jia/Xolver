@@ -46,7 +46,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
 - `nra/nra_038_sat_ellipse_tangent.smt2` — Ellipse `x²/4+y²=1` tangent to `y=1` at (0,1). CDCAC unknown — projection gap for rational-coefficient ellipses.
 - `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
-- `nra/nra_065_unsat_two_circles_one_line.smt2` — CDCAC `sector(-inf, -0.8)` SIGSEGV (HIGH); also unknown-via-handler. See known-unsound section for crash details.
+- ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
 - `nra/nra_043_unsat_parabola_below_line.smt2` — `y=x²+1 ∧ y<0` returns unknown. Same family as `nra_021` (sum-of-squares positivity gap).
 - `nra/nra_046_unsat_aggregate_positive.smt2` — `(x-1)²+(y-2)²≤-1` returns unknown. Bivariate aggregate positivity gap.
 - `nia/nia_032_unsat_modular_chain.smt2` — Chain of `mod` constraints returns unknown. NIA modular reasoning chain depth limited.
@@ -75,8 +75,8 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `nia/nia_062_unsat_crt_inconsistent.smt2` — Inconsistent CRT (`x≡1(mod 6) ∧ x≡0(mod 3)`) returns unknown. NIA modular consistency check missing.
 - `nia/nia_064_unsat_polynomial_inequality_clash.smt2` — `x²<y ∧ y≤x ∧ x≥2` should chain to `x²<x` contradiction with `x≥2` — returns unknown. Polynomial-vs-linear chain reasoning gap.
 
-### SEGV minimization study (nra_065 family) — only nra_065 still crashes
-- `nra/nra_093_segv_repro_min_two_circles.smt2` — Two intersecting unit circles (NO line) — `unknown` not SEGV. **Negative result: removing `y=x` from nra_065 eliminates the crash. SEGV root cause requires line-equality interaction.**
+### SEGV minimization study (nra_065 family) — RESOLVED (2026-05-22)
+- ~~`nra/nra_093_segv_repro_min_two_circles.smt2`~~ — delta-debug control case; was `unknown`, now resolved by the same nra_065 fix bundle (root coprimality + rational-algebraic merge).
 - nra_094–100 (other minimization variants) all return `sat` correctly.
 
 ### SOS positivity systematic gap (CDCAC priority)
@@ -106,7 +106,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_009_sat_linear_int_nonlinear_real.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis in `checkAssignmentWithSimplex`.
 - ~~`nira/nira_010_unsat_bound_mix.smt2`~~ — **FIXED** (same root cause as uflia_003 — stale level-0 state after backtrack).
 - ~~`nira/nira_019_unsat_floor_below_zero.smt2`~~ — **FIXED** (same root cause as uflia_003 — stale level-0 state after backtrack).
-- `nra/nra_065_unsat_two_circles_one_line.smt2` — **SIGSEGV** (HIGH PRIORITY) during CDCAC `sector(-inf, -0.75)` lifting on `x²+y²=1 ∧ (x-1)²+y²=1 ∧ y=x`. Delta-debugging (nra_093–100) shows the crash requires the linear equality `y=x` together with both circles; removing any one (nra_093 = two circles only) eliminates the crash (becomes unknown).
+- ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22 (see known-fail section for fix details). Combined `rootBelongsTo` unsoundness + libpoly `prem`/`degree` non-main-var bugs + `mergeRoots` zero-width sector. Delta-debug (nra_093 = two circles, no line) was the control case that confirmed `y=x` interaction; both now pass after fix.
 - ~~`nia/nia_077_sat_mod_2var.smt2`~~ — **FIXED** in 2026-05-21: three changes — (1) try `localSearch` before emitting pending linear lemmas so it actually runs, (2) sync `hasLower/hasUpper` in `DomainStore::restrictToFiniteSet` so local-search candidates respect fixed values like `x=7`, (3) accept `vNext <= curViol` in hill-climbing to cross variable-coupling ridges (e.g. `r3=r1`).
 
 ### J-batch findings (SMT-COMP grade, complex multi-constraint systems)

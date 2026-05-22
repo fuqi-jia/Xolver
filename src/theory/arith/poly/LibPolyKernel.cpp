@@ -250,14 +250,26 @@ std::optional<int> LibPolyKernel::degree(PolyId a, std::string_view var) const {
     if (poly::main_variable(p) == pv) {
         return static_cast<int>(poly::degree(p));
     }
-    // Variable is not the main variable. Check if it appears at all.
-    // For now, we check by comparing the polynomial before/after substitution.
-    // A simpler heuristic: if the polynomial has other variables, this var
-    // may or may not appear. To be conservative:
-    // TODO: proper term iteration for multi-var detection.
-    // For NIA-Core Phase A, we rely on the fact that most univariate
-    // polynomials will have their sole variable as main_variable.
-    return std::nullopt;
+    // Variable is not the main variable: iterate terms to find max exponent.
+    int maxDeg = 0;
+    bool found = false;
+    auto termsOpt = terms(a);
+    if (termsOpt) {
+        for (const auto& term : *termsOpt) {
+            for (const auto& [vid, exp] : term.powers) {
+                if (vid == it->second) {
+                    maxDeg = std::max(maxDeg, exp);
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (found) {
+        return maxDeg;
+    }
+    // Variable does not appear in any term.
+    return 0;
 }
 
 std::optional<std::vector<mpz_class>> LibPolyKernel::getIntegerCoefficients(
@@ -395,6 +407,116 @@ std::optional<PolyId> LibPolyKernel::pseudoRemainder(PolyId p, PolyId divisor) {
     } catch (...) {
         return std::nullopt;
     }
+}
+
+PolynomialKernel::PseudoRemainderResult LibPolyKernel::pseudoRemainderWithScale(
+    PolyId dividend, PolyId divisor, VarId mainVar) {
+
+    auto remOpt = pseudoRemainder(dividend, divisor);
+    if (!remOpt) {
+        return {NullPoly, NullPoly, 0};
+    }
+
+    auto degDividend = degree(dividend, varName(mainVar));
+    auto degDivisor  = degree(divisor, varName(mainVar));
+
+    if (!degDivisor) {
+        return {NullPoly, NullPoly, 0};
+    }
+
+    if (!degDividend) {
+        return {*remOpt, NullPoly, 0};
+    }
+
+    int k = *degDividend - *degDivisor + 1;
+    if (k <= 0) {
+        return {*remOpt, NullPoly, 0};
+    }
+
+    auto lcOpt = leadingCoefficient(divisor);
+    if (!lcOpt) {
+        return {*remOpt, NullPoly, 0};
+    }
+
+    // Check if libpoly's prem used the correct variable.
+    // If the dividend's main variable is NOT mainVar, poly::prem may have
+    // computed with respect to the wrong variable, producing an incorrect
+    // remainder (often 0). In that case we recompute the pseudo-remainder
+    // manually by iterating over terms.
+    const auto& pp = get(dividend);
+    auto it = nameToVar_.find(std::string(varName(mainVar)));
+    if (it != nameToVar_.end()) {
+        poly::Variable pv = varIdToPolyVar_[it->second];
+        if (poly::main_variable(pp) != pv && *degDividend >= *degDivisor) {
+            // Manual pseudo-remainder with respect to mainVar.
+            PolyId current = dividend;
+            for (int iter = 0; iter < 100; ++iter) {
+                auto curDegOpt = degree(current, varName(mainVar));
+                if (!curDegOpt || *curDegOpt < *degDivisor) break;
+
+                // Extract leading coefficient w.r.t. mainVar from terms
+                auto termsOpt = terms(current);
+                if (!termsOpt) break;
+
+                int maxDeg = -1;
+                mpq_class lcCoeff(0);
+                std::vector<std::pair<VarId, int>> lcPowers;
+                for (const auto& term : *termsOpt) {
+                    int varDeg = 0;
+                    for (const auto& [vid, exp] : term.powers) {
+                        if (vid == mainVar) {
+                            varDeg = exp;
+                            break;
+                        }
+                    }
+                    if (varDeg > maxDeg) {
+                        maxDeg = varDeg;
+                        lcCoeff = term.coefficient;
+                        lcPowers.clear();
+                        for (const auto& [vid, exp] : term.powers) {
+                            if (vid != mainVar) lcPowers.push_back({vid, exp});
+                        }
+                    }
+                }
+                if (maxDeg < *degDivisor) break;
+
+                int d = maxDeg - *degDivisor;
+
+                // scaledCurrent = lcDivisor * current
+                PolyId scaledCurrent = mul(*lcOpt, current);
+
+                // subtrahend = lcCurrent * var^d * divisor
+                PolyId lcCurrent = mkConst(lcCoeff);
+                for (const auto& [vid, exp] : lcPowers) {
+                    lcCurrent = mul(lcCurrent, pow(mkVar(vid), exp));
+                }
+                PolyId varPow = pow(mkVar(mainVar), d);
+                PolyId subtrahend = mul(lcCurrent, mul(varPow, divisor));
+
+                current = sub(scaledCurrent, subtrahend);
+
+                auto newDegOpt = degree(current, varName(mainVar));
+                if (!newDegOpt) break;
+                if (*newDegOpt >= maxDeg) {
+                    // Degree did not decrease: stop to avoid infinite loop
+                    break;
+                }
+            }
+            // Build scale factor = lc(divisor)^k
+            PolyId scaleFactor = mkOne();
+            for (int i = 0; i < k; ++i) {
+                scaleFactor = mul(scaleFactor, *lcOpt);
+            }
+            return {current, scaleFactor, k};
+        }
+    }
+
+    PolyId scaleFactor = mkOne();
+    for (int i = 0; i < k; ++i) {
+        scaleFactor = mul(scaleFactor, *lcOpt);
+    }
+
+    return {*remOpt, scaleFactor, k};
 }
 
 std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
