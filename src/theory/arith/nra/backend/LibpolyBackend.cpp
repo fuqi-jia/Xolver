@@ -70,9 +70,11 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
     UniPolyId polyToIsolate = sqfResult.ok() ? sqfResult.squarefree : p;
 
     const auto& coeffs = getUni(polyToIsolate);
+#ifndef NDEBUG
     std::cerr << "[CDCAC]       isolateRealRoots: polyToIsolate id=" << polyToIsolate << " coeffs=";
     for (auto c : coeffs) std::cerr << c.get_str() << " ";
     std::cerr << std::endl;
+#endif
     if (coeffs.empty()) return RootSet{};
 
     // Convert coefficients (high-to-low) to libpoly format (low-to-high)
@@ -369,18 +371,24 @@ Sign LibpolyBackend::signAtOneAlgebraic(PolyId p, const SamplePoint& sample) {
     // Specialize polynomial to univariate in algVar
     UniPolyId g = specializeToUnivariate(p, rationalPrefix, algVar);
     if (g == NullUniPolyId) {
+#ifndef NDEBUG
         std::cerr << "[CDCAC]       signAtOneAlgebraic: specializeToUnivariate failed" << std::endl;
+#endif
         return Sign::Unknown;
     }
 
+#ifndef NDEBUG
     std::cerr << "[CDCAC]       signAtOneAlgebraic: g=";
     for (auto c : getUni(g)) std::cerr << c.get_str() << " ";
     std::cerr << "alpha=[" << sample.values[algIdx].root.lower.get_str() << "," << sample.values[algIdx].root.upper.get_str() << "]"
               << " defPoly=" << sample.values[algIdx].root.definingPoly
               << " rootIdx=" << sample.values[algIdx].root.rootIndex << std::endl;
+#endif
 
     Sign s = signUnivariateAtAlgebraic(g, sample.values[algIdx].root);
+#ifndef NDEBUG
     std::cerr << "[CDCAC]       signAtOneAlgebraic: result=" << (int)s << std::endl;
+#endif
     return s;
 }
 
@@ -418,7 +426,9 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         // Patch 6 + 8: pseudo-remainder with scale tracking
         auto pr = kernel_->pseudoRemainderWithScale(current, definingPoly, var);
         if (!pr.ok()) {
+#ifndef NDEBUG
             std::cerr << "[CDCAC]       signAtTower: prem failed" << std::endl;
+#endif
             return Sign::Unknown;
         }
         current = pr.remainder;
@@ -525,23 +535,31 @@ PolyId LibpolyBackend::univariateToPoly(const std::vector<mpz_class>& coeffs, Va
 
 UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& prefix, VarId mainVar) {
     PolyId current = p;
+#ifndef NDEBUG
     std::cerr << "[CDCAC]       specializeToUnivariate: input=" << kernel_->toString(p) << std::endl;
+#endif
 
     // Apply rational prefix substitutions one variable at a time.
     // Algebraic prefix values are not supported in P2a.
     for (size_t i = 0; i < prefix.numVars(); ++i) {
         if (!prefix.values[i].isRational()) {
+#ifndef NDEBUG
             std::cerr << "[CDCAC]       specializeToUnivariate: algebraic prefix, fail" << std::endl;
+#endif
             return NullUniPolyId;
         }
         VarId vid = prefix.varOrder[i];
         auto nextOpt = kernel_->substituteRational(current, vid, prefix.values[i].rational);
         if (!nextOpt) {
+#ifndef NDEBUG
             std::cerr << "[CDCAC]       specializeToUnivariate: substituteRational failed for var=" << kernel_->varName(vid) << std::endl;
+#endif
             return NullUniPolyId;
         }
         current = *nextOpt;
+#ifndef NDEBUG
         std::cerr << "[CDCAC]       specializeToUnivariate: after sub " << kernel_->varName(vid) << "=" << prefix.values[i].rational.get_str() << " -> " << kernel_->toString(current) << std::endl;
+#endif
     }
 
     // Convert to RationalPolynomial to handle any variable order and rational coefficients.
@@ -906,12 +924,6 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
     if (gCoeffs.empty() || (gCoeffs.size() == 1 && gCoeffs[0] == 0)) {
         return Sign::Zero;
     }
-
-    // Interval sign evaluation
-    mpq_class loVal = evalUniAtRational(gCoeffs, alpha.lower);
-    mpq_class hiVal = evalUniAtRational(gCoeffs, alpha.upper);
-    int loSgn = (loVal > 0) ? 1 : (loVal < 0) ? -1 : 0;
-    int hiSgn = (hiVal > 0) ? 1 : (hiVal < 0) ? -1 : 0;
 
 #ifndef NLCOLVER_HAS_LIBPOLY
     return Sign::Unknown;

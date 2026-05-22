@@ -49,6 +49,12 @@ public:
     // Refine the isolating interval of an algebraic root
     bool refineRootInterval(AlgebraicRoot& root) override;
 
+    // --- P2a univariate algebraic helpers ---
+
+    // Sign of univariate polynomial g at algebraic root alpha.
+    // Kept public for unit testing (Test A: endpoint shortcut killer).
+    Sign signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot& alpha);
+
 private:
     PolynomialKernel* kernel_;
     LibPolyKernel* libKernel_ = nullptr;  // null if kernel is not LibPolyKernel
@@ -61,11 +67,6 @@ private:
 
     // Helper: evaluate univariate polynomial at a rational point
     mpq_class evalUniAtRational(const std::vector<mpz_class>& coeffs, const mpq_class& q) const;
-
-    // --- P2a univariate algebraic helpers ---
-
-    // Sign of univariate polynomial g at algebraic root alpha
-    Sign signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot& alpha);
 
     // P2d: signAt layers
     Sign signAtRational(PolyId p, const SamplePoint& sample);

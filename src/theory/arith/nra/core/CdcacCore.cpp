@@ -249,11 +249,12 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
                 if (!okCurr) break;
             }
             if (q >= curr.lower) {
-                // Rational root lies inside algebraic interval: they are equal.
-                // Keep the rational root and discard the algebraic one.
-                merged.erase(merged.begin() + i);
-                --i;
-                continue;
+                // Cannot separate rational from algebraic interval after max
+                // refinement.  If they were equal (defPoly(q)==0), the
+                // insertion sort in compareRealAlg would already have merged
+                // them.  Any remaining overlap means we cannot guarantee a
+                // positive-width sector → fail conservatively.
+                return std::nullopt;
             }
         } else {
             // prev is algebraic, curr is rational
@@ -265,11 +266,10 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
                 if (!okPrev) break;
             }
             if (prev.upper >= q) {
-                // Rational root lies inside algebraic interval: they are equal.
-                // Keep the rational root and discard the algebraic one.
-                merged.erase(merged.begin() + i - 1);
-                --i;
-                continue;
+                // Same reasoning as above: insertion sort already handles
+                // true equality (defPoly(q)==0).  Remaining overlap = unsound
+                // to discard → fail conservatively.
+                return std::nullopt;
             }
         }
     }
@@ -278,7 +278,9 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
 }
 
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
+#ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
+#endif
     SamplePoint prefix;
     return solveLevel(0, prefix, input);
 }
@@ -298,7 +300,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
 
     VarId var = input.varOrder[k];
+#ifndef NDEBUG
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var) << std::endl;
+#endif
 
     // V2-7: nullification check before specialization
     {
@@ -486,10 +490,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     // 2. Merge all roots
     auto mergedOpt = mergeRoots(rootSets);
     if (!mergedOpt) {
+#ifndef NDEBUG
         std::cerr << "[CDCAC] mergeRoots failed (Unknown comparison)" << std::endl;
+#endif
         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
     }
     RootSet allRoots = std::move(*mergedOpt);
+#ifndef NDEBUG
     std::cerr << "[CDCAC] allRoots=" << allRoots.numRoots() << std::endl;
     for (int i = 0; i < allRoots.numRoots(); ++i) {
         const auto& r = allRoots.roots[i];
@@ -500,6 +507,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                       << " upper=" << r.root.upper.get_d() << std::endl;
         }
     }
+#endif
 
     // 3. Helper: test a sample and recurse to deeper levels
     auto testAndRecurse = [&](const RealAlg& sample) -> CdcacResult {
@@ -636,7 +644,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         cover.cells.push_back(cc.cell);  // copy
     }
 
+#ifndef NDEBUG
     std::cerr << "[CDCAC] final cells=" << cover.cells.size() << std::endl;
+#endif
     CoverageResult cov = CoveringManager::coversAllLine(algebra_, cover);
     if (cov == CoverageResult::DoesNotCover) {
         std::cerr << "[CDCAC] coversAllLine: does not cover" << std::endl;
