@@ -1,0 +1,11 @@
+; Chain: x ≤ y² ≤ z³ ≤ 8 with x ≥ 1, witness exists.
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (>= x 1))
+(assert (<= x (* y y)))
+(assert (<= (* y y) (* z (* z z))))
+(assert (<= (* z (* z z)) 8))
+(check-sat)

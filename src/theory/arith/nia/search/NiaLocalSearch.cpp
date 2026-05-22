@@ -192,11 +192,11 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
                     if (vNext == 0) {
                         return next;
                     }
-                    if (vNext < curViol) {
+                    if (vNext <= curViol) {
                         cur = next;
                         curViol = vNext;
                         improved = true;
-                        break; // accept first improving move
+                        break; // accept first improving or equal move
                     }
                 }
                 if (improved) break;

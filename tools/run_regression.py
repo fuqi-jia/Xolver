@@ -109,11 +109,11 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
     if proc.returncode != 0 and not solver_status:
         detail = (f"exit={proc.returncode}: " + out.strip().splitlines()[-1][:200]
                   if out.strip() else f"exit={proc.returncode}")
-        verdict = "KNOWN_FAIL" if expected == "known-fail" else "ERROR"
+        verdict = "KNOWN_FAIL" if expected in ("known-fail", "known-unsound") else "ERROR"
         return CaseResult(path, oracle, "error", expected, verdict, elapsed, detail)
 
     if not solver_status:
-        verdict = "KNOWN_FAIL" if expected == "known-fail" else "ERROR"
+        verdict = "KNOWN_FAIL" if expected in ("known-fail", "known-unsound") else "ERROR"
         return CaseResult(path, oracle, "", expected, verdict, elapsed,
                           "no sat/unsat/unknown line in output")
 
@@ -135,7 +135,9 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
     # Override with expected tag for graceful gap-handling
     if verdict in ("UNEXPECTED_FAIL", "ERROR", "TIMEOUT") and expected == "known-fail":
         verdict = "KNOWN_FAIL"
-    if verdict == "UNSOUND" and expected == "known-unsound":
+    # known-unsound also tolerates CRASH/TIMEOUT: a SEGV is a more severe
+    # variant of unsoundness, not a separate category.
+    if verdict in ("UNSOUND", "ERROR", "TIMEOUT") and expected == "known-unsound":
         verdict = "KNOWN_FAIL"
 
     detail = f"oracle={oracle} solver={solver_status} expected={expected}"

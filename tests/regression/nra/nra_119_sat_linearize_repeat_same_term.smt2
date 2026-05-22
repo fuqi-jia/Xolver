@@ -1,0 +1,10 @@
+; Same nonlinear term `x*x` in 4 constraints — linearization cache must reuse.
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(assert (>= x 0)) (assert (<= x 3))
+(assert (>= (* x x) 0))
+(assert (<= (* x x) 9))
+(assert (>= (+ (* x x) 1) 1))
+(assert (>= (* 2 (* x x)) 0))
+(check-sat)

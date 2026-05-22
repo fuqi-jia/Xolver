@@ -1,0 +1,11 @@
+; 5-mod CRT: x mod {2,3,5,7,11} = {1,1,1,1,1}. x = 1 satisfies trivially.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(assert (>= x 1)) (assert (<= x 2310))
+(assert (= (mod x 2) 1))
+(assert (= (mod x 3) 1))
+(assert (= (mod x 5) 1))
+(assert (= (mod x 7) 1))
+(assert (= (mod x 11) 1))
+(check-sat)

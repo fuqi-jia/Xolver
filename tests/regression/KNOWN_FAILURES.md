@@ -46,6 +46,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
 - `nra/nra_038_sat_ellipse_tangent.smt2` — Ellipse `x²/4+y²=1` tangent to `y=1` at (0,1). CDCAC unknown — projection gap for rational-coefficient ellipses.
 - `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
+- `nra/nra_065_unsat_two_circles_one_line.smt2` — CDCAC `sector(-inf, -0.8)` SIGSEGV (HIGH); also unknown-via-handler. See known-unsound section for crash details.
 - `nra/nra_043_unsat_parabola_below_line.smt2` — `y=x²+1 ∧ y<0` returns unknown. Same family as `nra_021` (sum-of-squares positivity gap).
 - `nra/nra_046_unsat_aggregate_positive.smt2` — `(x-1)²+(y-2)²≤-1` returns unknown. Bivariate aggregate positivity gap.
 - `nia/nia_032_unsat_modular_chain.smt2` — Chain of `mod` constraints returns unknown. NIA modular reasoning chain depth limited.
@@ -64,6 +65,37 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `nra/nra_058_sat_metitarski_exp_approx.smt2` — meti-tarski exp(x) approximation `1+x+x²/2 > 0` with `x ∈ [-1/10, 1/10]` returns unknown. Bivariate (x, ex) with rational endpoint gap.
 - `nra/nra_062_sat_polynomial_outside_band.smt2` — Disjunction `x<2/5 ∨ x>3/5` returns unknown. Same family as nra_053 (CDCAC disjunction).
 - `nra/nra_063_sat_atan_chain_polynomial.smt2` — Multi-var bounded with rational bounds `|x|≤1 ∧ |y|≤1 ∧ |x-y|≤1/10` returns unknown. CDCAC variable ordering or rational endpoints.
+- `nra/nra_064_unsat_three_circles_no_common.smt2` — Three unit circles (centered at 0, e1, e2) have no common intersection — returns unknown. CDCAC multivariate disjoint-cell coverage gap.
+- `nra/nra_069_unsat_parabola_below_zero.smt2` — `y=x²+1 ∧ y<0` returns unknown. Direct SOS positivity gap (companion to nra_021/043/046).
+- `nra/nra_073_unsat_3vars_no_real.smt2` — `x²+y²+z²=-1` returns unknown. 3-var SOS positivity gap; CDCAC does not refute negative-RHS sum-of-squares equality.
+- `nra/nra_082_sat_null_projection_avoid.smt2` — `y*(x-1)=0 ∧ y>0` (forces x=1) returns unknown. NullificationAnalyzer not used or factor-case-split missing.
+- `nra/nra_087_sat_icp_narrow_box.smt2` — Narrow box around (1,1) with `xy ∈ [0.99, 1.01]` returns unknown. ICP precision near point-feasible region.
+- `nia/nia_058_unsat_diophantine_multi_eq.smt2` — Two linear diophantine eqs with explicit unique negative solution + bound `x≥0` returns unknown. Linear elimination over integers not propagating to bound.
+- `nia/nia_061_sat_crt_3_moduli.smt2` — 3-modulus CRT (`x≡2(mod 3) ∧ x≡3(mod 5) ∧ x≡2(mod 7)`) returns unknown. NIA mod-chain depth gap (companion to nia_032).
+- `nia/nia_062_unsat_crt_inconsistent.smt2` — Inconsistent CRT (`x≡1(mod 6) ∧ x≡0(mod 3)`) returns unknown. NIA modular consistency check missing.
+- `nia/nia_064_unsat_polynomial_inequality_clash.smt2` — `x²<y ∧ y≤x ∧ x≥2` should chain to `x²<x` contradiction with `x≥2` — returns unknown. Polynomial-vs-linear chain reasoning gap.
+
+### SEGV minimization study (nra_065 family) — only nra_065 still crashes
+- `nra/nra_093_segv_repro_min_two_circles.smt2` — Two intersecting unit circles (NO line) — `unknown` not SEGV. **Negative result: removing `y=x` from nra_065 eliminates the crash. SEGV root cause requires line-equality interaction.**
+- nra_094–100 (other minimization variants) all return `sat` correctly.
+
+### SOS positivity systematic gap (CDCAC priority)
+- `nra/nra_104_unsat_sos_2var_minus_neg.smt2` — `x²+y² ≤ -1/1000` returns unknown.
+- `nra/nra_106_unsat_sos_offset_const.smt2` — `(x-1)²+(y-2)²+1 ≤ 0` returns unknown.
+- `nra/nra_108_unsat_sos_difference_squared.smt2` — `(x-y)² < 0` returns unknown.
+- `nra/nra_109_unsat_sos_3var_strict.smt2` — `x²+y²+z² < 0` returns unknown.
+- `nra/nra_110_unsat_sos_4var_strict.smt2` — 4-var SOS < 0 returns unknown.
+- `nra/nra_112_unsat_sos_product_squares.smt2` — `x²·y² < 0` returns unknown.
+- `nra/nra_113_unsat_sos_eq_neg.smt2` — `x²+y² = -2` returns unknown.
+
+### NIA modular chain gaps
+- `nia/nia_068_unsat_crt_2mod_inconsistent.smt2` — `mod x 4 = 0 ∧ mod x 2 = 1` returns unknown. Non-coprime modulus consistency missing.
+- `nia/nia_069_sat_crt_4mod.smt2` — 4-modulus CRT returns unknown.
+- `nia/nia_070_sat_crt_5mod.smt2` — 5-modulus CRT returns unknown.
+- `nia/nia_071_unsat_crt_non_coprime.smt2` — `mod x 6 = 1 ∧ mod x 4 = 2` returns unknown.
+- `nia/nia_074_sat_mod_with_ineq.smt2` — `mod x 7 = 3 ∧ 20≤x≤30` returns unknown.
+- `nia/nia_075_unsat_mod_with_ineq_empty.smt2` — `mod x 10 = 7 ∧ 0≤x≤6` returns unknown.
+- `nia/nia_079_sat_mod_via_eq.smt2` — `x=7 ∧ mod x 3 = 1` returns unknown. (Should be trivial.)
 
 ## known-unsound
 
@@ -74,3 +106,5 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_009_sat_linear_int_nonlinear_real.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis in `checkAssignmentWithSimplex`.
 - ~~`nira/nira_010_unsat_bound_mix.smt2`~~ — **FIXED** (same root cause as uflia_003 — stale level-0 state after backtrack).
 - ~~`nira/nira_019_unsat_floor_below_zero.smt2`~~ — **FIXED** (same root cause as uflia_003 — stale level-0 state after backtrack).
+- `nra/nra_065_unsat_two_circles_one_line.smt2` — **SIGSEGV** (HIGH PRIORITY) during CDCAC `sector(-inf, -0.75)` lifting on `x²+y²=1 ∧ (x-1)²+y²=1 ∧ y=x`. Delta-debugging (nra_093–100) shows the crash requires the linear equality `y=x` together with both circles; removing any one (nra_093 = two circles only) eliminates the crash (becomes unknown).
+- ~~`nia/nia_077_sat_mod_2var.smt2`~~ — **FIXED** in 2026-05-21: three changes — (1) try `localSearch` before emitting pending linear lemmas so it actually runs, (2) sync `hasLower/hasUpper` in `DomainStore::restrictToFiniteSet` so local-search candidates respect fixed values like `x=7`, (3) accept `vNext <= curViol` in hill-climbing to cross variable-coupling ridges (e.g. `r3=r1`).

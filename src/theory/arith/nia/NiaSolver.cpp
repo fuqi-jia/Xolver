@@ -394,18 +394,18 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         // UnknownBudget / UnknownUnsupported: continue pipeline
     }
 
-    if (!pendingLinLemmas_.empty()) {
-        auto lemma = std::move(pendingLinLemmas_.front());
-        pendingLinLemmas_.pop_front();
-        return TheoryCheckResult::mkLemma(lemma);
-    }
-
-    // 10. Local search SAT finder
+    // 10. Local search SAT finder (try before emitting pending linear lemmas)
     if (auto model = localSearch_.tryFindModel(normalized, domains_)) {
         if (validator_.validate(*model, normalized)) {
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
         }
+    }
+
+    if (!pendingLinLemmas_.empty()) {
+        auto lemma = std::move(pendingLinLemmas_.front());
+        pendingLinLemmas_.pop_front();
+        return TheoryCheckResult::mkLemma(lemma);
     }
 
     // 11. Branch split or Unknown

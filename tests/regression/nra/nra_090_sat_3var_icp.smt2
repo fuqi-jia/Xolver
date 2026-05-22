@@ -1,0 +1,13 @@
+; 3-var ICP test: each var bounded and product of pairs bounded.
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (>= x 1)) (assert (<= x 2))
+(assert (>= y 1)) (assert (<= y 2))
+(assert (>= z 1)) (assert (<= z 2))
+(assert (<= (* x y) 4))
+(assert (<= (* y z) 4))
+(assert (<= (* x z) 4))
+(check-sat)

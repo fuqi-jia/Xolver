@@ -1,0 +1,12 @@
+; Same diamond + force corner-only: x*y < 0 (forces 2nd/4th quadrant)
+; combined with x > 0 AND y > 0 — unsat.
+(set-logic QF_NRA)
+(set-info :status unsat)
+(declare-const x Real)
+(declare-const y Real)
+(assert (<= (+ x y) 1))
+(assert (<= (- x y) 1))
+(assert (< (* x y) 0))
+(assert (> x 0))
+(assert (> y 0))
+(check-sat)

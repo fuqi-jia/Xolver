@@ -21,6 +21,24 @@ void DomainStore::restrictToFiniteSet(const std::string& var,
                               std::inserter(intersection, intersection.begin()));
         *d.finiteValues = std::move(intersection);
     }
+    // Sync bounds with finite set so that downstream engines (e.g. local search)
+    // see the narrowed interval.
+    if (d.finiteValues && !d.finiteValues->empty()) {
+        mpz_class newLb = *d.finiteValues->begin();
+        mpz_class newUb = *d.finiteValues->rbegin();
+        if (!d.hasLower || newLb > d.lower.value) {
+            d.lower.value = newLb;
+            d.lower.reasons.clear();
+            d.lower.reasons.push_back(reason);
+            d.hasLower = true;
+        }
+        if (!d.hasUpper || newUb < d.upper.value) {
+            d.upper.value = newUb;
+            d.upper.reasons.clear();
+            d.upper.reasons.push_back(reason);
+            d.hasUpper = true;
+        }
+    }
 }
 
 void DomainStore::addLowerBound(const std::string& var, const mpz_class& lb, SatLit reason) {

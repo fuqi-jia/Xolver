@@ -1,0 +1,11 @@
+; 1+1+1 = 3, so x²+y²+z² = 3 has solution (1,1,1).
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (>= x 0)) (assert (<= x 3))
+(assert (>= y 0)) (assert (<= y 3))
+(assert (>= z 0)) (assert (<= z 3))
+(assert (= (+ (* x x) (* y y) (* z z)) 3))
+(check-sat)

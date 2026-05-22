@@ -1,0 +1,11 @@
+; Diamond region: |x| + |y| ≤ 1 encoded as 4 linear ineqs + nonlinear x*y > 0.
+(set-logic QF_NRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(assert (<= (+ x y) 1))
+(assert (<= (- x y) 1))
+(assert (<= (+ (- x) y) 1))
+(assert (<= (- (- x) y) 1))
+(assert (> (* x y) 0))
+(check-sat)

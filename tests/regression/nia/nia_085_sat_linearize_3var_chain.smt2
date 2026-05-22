@@ -1,0 +1,13 @@
+; Three nonlinear terms x*y, y*z, x*z appear separately — 3 different abstractions.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (>= x 0)) (assert (<= x 2))
+(assert (>= y 0)) (assert (<= y 2))
+(assert (>= z 0)) (assert (<= z 2))
+(assert (>= (* x y) 0))
+(assert (>= (* y z) 0))
+(assert (>= (* x z) 0))
+(check-sat)

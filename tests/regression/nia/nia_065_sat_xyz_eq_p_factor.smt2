@@ -1,0 +1,10 @@
+; x*y*z = 12 ∧ x+y+z = 7 — sat with (1, 2, 6) or (1, 3, 4) etc.
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int)
+(declare-const y Int)
+(declare-const z Int)
+(assert (>= x 1)) (assert (>= y 1)) (assert (>= z 1))
+(assert (= (* x (* y z)) 12))
+(assert (= (+ x y z) 7))
+(check-sat)
