@@ -13,6 +13,7 @@ option(NLCOLVER_BUILD_TOOLS "Build CLI tools and utilities" ON)
 option(NLCOLVER_ENABLE_PROOFS "Enable proof production infrastructure" ON)
 option(NLCOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
 option(NLCOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
+option(NLCOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)
 option(NLCOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
 option(NLCOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
 option(NLCOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
@@ -107,10 +108,22 @@ if(EXISTS "${LIBPOLY_SOURCE_DIR}/CMakeLists.txt")
     set(LIBPOLY_BUILD_PYTHON_API OFF CACHE BOOL "" FORCE)
     set(LIBPOLY_BUILD_STATIC     ON  CACHE BOOL "" FORCE)
     set(LIBPOLY_BUILD_STATIC_PIC ON  CACHE BOOL "" FORCE)
-    # Disable libpoly's own tests to keep ctest output clean
-    set(BUILD_TESTING OFF)
-    add_subdirectory("${LIBPOLY_SOURCE_DIR}" third_party/libpoly EXCLUDE_FROM_ALL)
-    set(BUILD_TESTING ON)  # re-enable for NLColver's own tests
+    if(NLCOLVER_BUILD_LIBPOLY_TESTS)
+        # Build libpoly tests normally (remove EXCLUDE_FROM_ALL so test binaries compile)
+        # libpoly test CMakeLists use ${CMAKE_SOURCE_DIR}/include which resolves to
+        # NLColver root, not libpoly root. Add the correct include path so tests compile.
+        include_directories("${LIBPOLY_SOURCE_DIR}/include")
+        add_subdirectory("${LIBPOLY_SOURCE_DIR}" third_party/libpoly)
+    else()
+        # Disable libpoly's own tests to keep ctest output clean.
+        # Must override the CACHE variable because BUILD_TESTING=ON in CMakeCache
+        # takes precedence over a plain set().
+        set(_NLCOLVER_SAVED_BUILD_TESTING ${BUILD_TESTING})
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+        add_subdirectory("${LIBPOLY_SOURCE_DIR}" third_party/libpoly EXCLUDE_FROM_ALL)
+        set(BUILD_TESTING ${_NLCOLVER_SAVED_BUILD_TESTING} CACHE BOOL "" FORCE)
+        unset(_NLCOLVER_SAVED_BUILD_TESTING)
+    endif()
     set(LIBPOLY_FOUND TRUE)
     set(LIBPOLY_INCLUDE_DIRS "${LIBPOLY_SOURCE_DIR}/include")
     message(STATUS "libpoly: building from third_party/libpoly")
