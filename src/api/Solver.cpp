@@ -241,6 +241,9 @@ public:
     bool parseFile(std::string_view filename) {
         parser = std::make_unique<SOMTParser::Parser>();
         parser->setOption("expand_functions", true);
+        // Disable SOMTParser's preserving-let mode to avoid expandLet corrupting
+        // UFApply node names (kindToString replaces "f1" with "UF_APPLY").
+        parser->getOptions()->setKeepLet(false);
         if (!parser->parse(std::string(filename))) {
             return false;
         }
