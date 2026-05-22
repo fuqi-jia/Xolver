@@ -1,4 +1,6 @@
+#include "util/MpqUtils.h"
 #include "theory/arith/lra/LraSolver.h"
+#include "util/MpqUtils.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -327,7 +329,7 @@ static std::optional<mpq_class> getConstantRationalValue(const CoreIr& ir, const
     }
     if (expr.kind == Kind::ConstReal) {
         if (auto* str = std::get_if<std::string>(&expr.payload.value)) {
-            return mpq_class(*str);
+            return mpqFromString(*str);
         }
     }
     return std::nullopt;

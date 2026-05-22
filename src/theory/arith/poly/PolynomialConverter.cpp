@@ -1,4 +1,6 @@
+#include "util/MpqUtils.h"
 #include "theory/arith/poly/PolynomialConverter.h"
+#include "util/MpqUtils.h"
 #include "expr/payload.h"
 #include <cassert>
 #include <gmpxx.h>
@@ -77,7 +79,7 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
         }
         case Kind::ConstReal: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                result = RationalPolynomial::fromConstant(mpq_class(*s));
+                result = RationalPolynomial::fromConstant(mpqFromString(*s));
             }
             break;
         }

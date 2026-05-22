@@ -1,4 +1,5 @@
 #include "frontend/preprocess/ArithCastNormalizer.h"
+#include "util/MpqUtils.h"
 #include <gmpxx.h>
 
 namespace nlcolver {
@@ -11,70 +12,155 @@ CastNormalizeResult ArithCastNormalizer::run() {
     return result;
 }
 
-ExprId ArithCastNormalizer::rewriteRec(ExprId e) {
-    auto it = memo_.find(e);
-    if (it != memo_.end()) return it->second;
+ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
+    // Fast path: already memoized
+    auto memoIt = memo_.find(root);
+    if (memoIt != memo_.end()) return memoIt->second;
 
-    // Copy node because recursive rewriteRec() may call ir_.add(), which can
-    // reallocate the internal exprs_ vector and invalidate references.
-    const auto node = ir_.get(e);
-    ExprId result = e;
+    // Iterative DFS to avoid stack overflow on deeply nested chains
+    struct Frame {
+        ExprId e;
+        bool processed;  // false = first visit, true = children done
+    };
+    std::vector<Frame> stack;
+    stack.reserve(64);
+    stack.push_back({root, false});
 
-    if (node.kind == Kind::ToReal && node.children.size() == 1) {
-        const auto& arg = ir_.get(node.children[0]);
-        if (arg.kind == Kind::ConstInt) {
-            if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
-                CoreExpr ne;
-                ne.kind = Kind::ConstReal;
-                ne.sort = node.sort;
-                ne.payload = Payload(mpq_class(*v).get_str());
-                result = ir_.add(std::move(ne));
-            }
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+
+        // If already memoized, pop and continue
+        if (memo_.find(e) != memo_.end()) {
+            stack.pop_back();
+            continue;
         }
-    } else if (node.kind == Kind::ToInt && node.children.size() == 1) {
-        const auto& arg = ir_.get(node.children[0]);
-        if (arg.kind == Kind::ConstReal) {
-            if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
-                mpq_class q(*s);
-                mpz_class z = q.get_num() / q.get_den();
-                if (q < 0 && q.get_num() % q.get_den() != 0) z -= 1;
-                // Only fold if the result fits in int64_t
-                if (z.fits_slong_p()) {
+
+        if (!frame.processed) {
+            // First visit: mark as processed, then push children
+            frame.processed = true;
+
+            const auto& node = ir_.get(e);
+
+            // Fast path: to_int(to_real(Int)) chain — just jump to inner
+            if (node.kind == Kind::ToInt && node.children.size() == 1) {
+                const auto& arg = ir_.get(node.children[0]);
+                if (arg.kind == Kind::ToReal && arg.children.size() == 1) {
+                    const auto& inner = ir_.get(arg.children[0]);
+                    if (inner.sort == ir_.intSortId()) {
+                        // to_int(to_real(x)) -> x, but x may need rewriting too
+                        ExprId innerId = arg.children[0];
+                        if (memo_.find(innerId) != memo_.end()) {
+                            memo_[e] = memo_[innerId];
+                            stack.pop_back();
+                            continue;
+                        }
+                        // Replace current frame with inner node
+                        frame.e = innerId;
+                        frame.processed = false;
+                        continue;
+                    }
+                }
+            }
+
+            // Try constant folding on first visit
+            bool folded = false;
+            if (node.kind == Kind::ToReal && node.children.size() == 1) {
+                const auto& arg = ir_.get(node.children[0]);
+                if (arg.kind == Kind::ConstInt) {
+                    if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
+                        CoreExpr ne;
+                        ne.kind = Kind::ConstReal;
+                        ne.sort = node.sort;
+                        ne.payload = Payload(mpq_class(*v).get_str());
+                        memo_[e] = ir_.add(std::move(ne));
+                        folded = true;
+                    }
+                }
+            } else if (node.kind == Kind::ToInt && node.children.size() == 1) {
+                const auto& arg = ir_.get(node.children[0]);
+                if (arg.kind == Kind::ConstReal) {
+                    if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                        mpq_class q = mpqFromString(*s);
+                        mpz_class z = q.get_num() / q.get_den();
+                        if (q < 0 && q.get_num() % q.get_den() != 0) z -= 1;
+                        if (z.fits_slong_p()) {
+                            CoreExpr ne;
+                            ne.kind = Kind::ConstInt;
+                            ne.sort = node.sort;
+                            ne.payload = Payload(static_cast<int64_t>(z.get_si()));
+                            memo_[e] = ir_.add(std::move(ne));
+                            folded = true;
+                        }
+                    }
+                }
+            }
+
+            if (folded) {
+                stack.pop_back();
+                continue;
+            }
+
+            // Push children (right-to-left so left is processed first)
+            if (!node.children.empty()) {
+                for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                    ExprId c = node.children[i];
+                    if (memo_.find(c) == memo_.end()) {
+                        stack.push_back({c, false});
+                    }
+                }
+            } else {
+                // Leaf node
+                memo_[e] = e;
+                stack.pop_back();
+            }
+        } else {
+            // Second visit: all children are memoized, build result
+            const auto& node = ir_.get(e);
+            ExprId result = e;
+
+            // Check to_int(to_real(Int)) again (child may have changed)
+            if (node.kind == Kind::ToInt && node.children.size() == 1) {
+                const auto& arg = ir_.get(node.children[0]);
+                if (arg.kind == Kind::ToReal && arg.children.size() == 1) {
+                    const auto& inner = ir_.get(arg.children[0]);
+                    if (inner.sort == ir_.intSortId()) {
+                        auto it = memo_.find(arg.children[0]);
+                        if (it != memo_.end()) {
+                            memo_[e] = it->second;
+                            stack.pop_back();
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            if (!node.children.empty()) {
+                SmallVector<ExprId, 4> newChildren;
+                bool changed = false;
+                for (ExprId c : node.children) {
+                    auto it = memo_.find(c);
+                    ExprId rc = (it != memo_.end()) ? it->second : c;
+                    newChildren.push_back(rc);
+                    if (rc != c) changed = true;
+                }
+                if (changed) {
                     CoreExpr ne;
-                    ne.kind = Kind::ConstInt;
+                    ne.kind = node.kind;
                     ne.sort = node.sort;
-                    ne.payload = Payload(static_cast<int64_t>(z.get_si()));
+                    ne.children = std::move(newChildren);
+                    ne.payload = node.payload;
                     result = ir_.add(std::move(ne));
                 }
             }
-        } else if (arg.kind == Kind::ToReal && arg.children.size() == 1) {
-            const auto& inner = ir_.get(arg.children[0]);
-            if (inner.sort == ir_.intSortId()) {
-                result = rewriteRec(arg.children[0]); // to_int(to_real(IntTerm)) -> IntTerm
-            }
+
+            memo_[e] = result;
+            stack.pop_back();
         }
     }
 
-    if (result == e && !node.children.empty()) {
-        SmallVector<ExprId, 4> newChildren;
-        bool changed = false;
-        for (ExprId c : node.children) {
-            ExprId rc = rewriteRec(c);
-            newChildren.push_back(rc);
-            if (rc != c) changed = true;
-        }
-        if (changed) {
-            CoreExpr ne;
-            ne.kind = node.kind;
-            ne.sort = node.sort;
-            ne.children = std::move(newChildren);
-            ne.payload = node.payload;
-            result = ir_.add(std::move(ne));
-        }
-    }
-
-    memo_[e] = result;
-    return result;
+    auto it = memo_.find(root);
+    return (it != memo_.end()) ? it->second : root;
 }
 
 } // namespace nlcolver

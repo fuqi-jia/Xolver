@@ -1,4 +1,6 @@
+#include "util/MpqUtils.h"
 #include "frontend/preprocess/LinearToIntPurifier.h"
+#include "util/MpqUtils.h"
 #include <gmpxx.h>
 
 namespace nlcolver {
@@ -195,7 +197,7 @@ bool LinearToIntPurifier::isNonZeroRationalConstant(ExprId e) const {
     const auto& node = ir_.get(e);
     if (node.kind == Kind::ConstReal) {
         if (auto* s = std::get_if<std::string>(&node.payload.value))
-            return mpq_class(*s) != 0;
+            return mpqFromString(*s) != 0;
     }
     if (node.kind == Kind::ConstInt) {
         if (auto* v = std::get_if<int64_t>(&node.payload.value))

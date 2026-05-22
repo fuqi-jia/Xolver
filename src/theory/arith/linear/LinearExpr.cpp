@@ -1,4 +1,6 @@
+#include "util/MpqUtils.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "util/MpqUtils.h"
 #include "expr/payload.h"
 #include <cassert>
 #include <algorithm>
@@ -19,7 +21,7 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
         }
         case Kind::ConstReal: {
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                constant += mul * mpq_class(*s);
+                constant += mul * mpqFromString(*s);
             }
             return true;
         }
@@ -52,14 +54,14 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             if (a.isConst()) {
                 mpq_class c;
                 if (auto* iv = std::get_if<int64_t>(&a.payload.value)) c = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) c = mpq_class(*sv);
+                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) c = mpqFromString(*sv);
                 else return false;
                 return extractLinearExpr(e.children[1], ir, coeffs, constant, mul * c);
             }
             if (b.isConst()) {
                 mpq_class c;
                 if (auto* iv = std::get_if<int64_t>(&b.payload.value)) c = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) c = mpq_class(*sv);
+                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) c = mpqFromString(*sv);
                 else return false;
                 return extractLinearExpr(e.children[0], ir, coeffs, constant, mul * c);
             }
@@ -72,10 +74,10 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             if (a.isConst() && b.isConst()) {
                 mpq_class num, den;
                 if (auto* iv = std::get_if<int64_t>(&a.payload.value)) num = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) num = mpq_class(*sv);
+                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) num = mpqFromString(*sv);
                 else return false;
                 if (auto* iv = std::get_if<int64_t>(&b.payload.value)) den = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) den = mpq_class(*sv);
+                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) den = mpqFromString(*sv);
                 else return false;
                 if (den == 0) return false;
                 constant += mul * (num / den);

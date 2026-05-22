@@ -1,4 +1,6 @@
+#include "util/MpqUtils.h"
 #include "theory/arith/lia/LiaSolver.h"
+#include "util/MpqUtils.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomTypes.h"
@@ -605,7 +607,7 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
             if (exprA.isConst()) {
                 aIsConst = true;
                 if (auto* i = std::get_if<int64_t>(&exprA.payload.value)) aVal = mpq_class(*i);
-                else if (auto* s = std::get_if<std::string>(&exprA.payload.value)) aVal = mpq_class(*s);
+                else if (auto* s = std::get_if<std::string>(&exprA.payload.value)) aVal = mpqFromString(*s);
             }
         }
         if (const auto* stB = sharedTermRegistry_->get(b)) {
@@ -613,7 +615,7 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
             if (exprB.isConst()) {
                 bIsConst = true;
                 if (auto* i = std::get_if<int64_t>(&exprB.payload.value)) bVal = mpq_class(*i);
-                else if (auto* s = std::get_if<std::string>(&exprB.payload.value)) bVal = mpq_class(*s);
+                else if (auto* s = std::get_if<std::string>(&exprB.payload.value)) bVal = mpqFromString(*s);
             }
         }
     }
