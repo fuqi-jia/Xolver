@@ -1,5 +1,6 @@
 ; Dense polynomial system: 8 constraints on 3 vars, all consistent at (1,1,1).
 (set-logic QF_NRA)
+(set-info :status sat)
 (declare-const x Real)
 (declare-const y Real)
 (declare-const z Real)

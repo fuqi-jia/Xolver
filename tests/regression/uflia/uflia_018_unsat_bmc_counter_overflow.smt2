@@ -1,0 +1,15 @@
+; BMC-style unrolling: counter c0, c1, ..., c5 with c_{i+1} = c_i + 1.
+; Assert c0=0 and c5≥10 ⇒ unsat (max is 5).
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-const c0 Int) (declare-const c1 Int)
+(declare-const c2 Int) (declare-const c3 Int)
+(declare-const c4 Int) (declare-const c5 Int)
+(assert (= c0 0))
+(assert (= c1 (+ c0 1)))
+(assert (= c2 (+ c1 1)))
+(assert (= c3 (+ c2 1)))
+(assert (= c4 (+ c3 1)))
+(assert (= c5 (+ c4 1)))
+(assert (>= c5 10))
+(check-sat)

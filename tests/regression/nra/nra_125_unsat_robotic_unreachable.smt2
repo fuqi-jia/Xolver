@@ -1,5 +1,6 @@
 ; 2-link arm cannot reach (10, 0) (max reach 2 < 10).
 (set-logic QF_NRA)
+(set-info :status unsat)
 (declare-const c1 Real) (declare-const s1 Real)
 (declare-const c2 Real) (declare-const s2 Real)
 (assert (= (+ (* c1 c1) (* s1 s1)) 1))

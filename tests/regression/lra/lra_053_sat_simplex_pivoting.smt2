@@ -1,0 +1,13 @@
+; Triggers many Simplex pivots: tight bounds forcing visit to multiple vertices.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x Real) (declare-const y Real) (declare-const z Real)
+(assert (>= (+ x y) 1))
+(assert (<= (+ x y) 5))
+(assert (>= (- x y) (- 5)))
+(assert (<= (- x y) 5))
+(assert (>= z 0)) (assert (<= z 10))
+(assert (>= (+ x z) 3))
+(assert (>= (+ y z) 3))
+(assert (<= (+ x y z) 10))
+(check-sat)

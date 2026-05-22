@@ -1,6 +1,7 @@
 ; Function congruence in reals: f(x) > f(y) but x = y
 (set-logic QF_UFLRA)
 (set-info :status unsat)
+(set-info :status unsat)
 (declare-fun f (Real) Real)
 (declare-fun x () Real)
 (declare-fun y () Real)

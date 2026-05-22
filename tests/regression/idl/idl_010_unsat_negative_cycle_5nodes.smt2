@@ -1,0 +1,11 @@
+; 5-node negative cycle.
+(set-logic QF_IDL)
+(set-info :status unsat)
+(declare-const a Int) (declare-const b Int) (declare-const c Int)
+(declare-const d Int) (declare-const e Int)
+(assert (<= (- a b) (- 1)))
+(assert (<= (- b c) (- 1)))
+(assert (<= (- c d) (- 1)))
+(assert (<= (- d e) (- 1)))
+(assert (<= (- e a) (- 1)))
+(check-sat)

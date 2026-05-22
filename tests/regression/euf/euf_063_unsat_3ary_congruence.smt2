@@ -1,0 +1,10 @@
+; 3-ary function congruence: a=b, c=d, e=f ⇒ g(a,c,e) = g(b,d,f). Assert distinct.
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-sort U 0)
+(declare-fun g (U U U) U)
+(declare-const a U) (declare-const b U) (declare-const c U)
+(declare-const d U) (declare-const e U) (declare-const f U)
+(assert (= a b)) (assert (= c d)) (assert (= e f))
+(assert (distinct (g a c e) (g b d f)))
+(check-sat)

@@ -1,0 +1,11 @@
+; Array sat: sum of 5 entries = 15.
+(set-logic QF_UFLIA)
+(set-info :status sat)
+(declare-fun arr (Int) Int)
+(assert (= (arr 0) 1))
+(assert (= (arr 1) 2))
+(assert (= (arr 2) 3))
+(assert (= (arr 3) 4))
+(assert (= (arr 4) 5))
+(assert (= (+ (arr 0) (arr 1) (arr 2) (arr 3) (arr 4)) 15))
+(check-sat)

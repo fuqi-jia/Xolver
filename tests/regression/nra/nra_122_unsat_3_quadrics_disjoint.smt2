@@ -1,5 +1,6 @@
 ; Three quadrics, pairwise disjoint witness sets — no triple intersection.
 (set-logic QF_NRA)
+(set-info :status unsat)
 (declare-const x Real)
 (declare-const y Real)
 (declare-const z Real)

@@ -1,0 +1,12 @@
+; Array-as-fun with real values: 5-element "array" with sum constraint.
+(set-logic QF_UFLRA)
+(set-info :status sat)
+(set-info :status sat)
+(declare-fun a (Int) Real)
+(assert (= (a 0) (/ 1 5)))
+(assert (= (a 1) (/ 1 5)))
+(assert (= (a 2) (/ 1 5)))
+(assert (= (a 3) (/ 1 5)))
+(assert (= (a 4) (/ 1 5)))
+(assert (= (+ (a 0) (a 1) (a 2) (a 3) (a 4)) 1))
+(check-sat)

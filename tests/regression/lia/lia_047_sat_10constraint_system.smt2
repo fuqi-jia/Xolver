@@ -1,0 +1,13 @@
+; 10-constraint LIA system with witness (1,2,3,4,5).
+(set-logic QF_LIA)
+(set-info :status sat)
+(declare-const a Int) (declare-const b Int) (declare-const c Int)
+(declare-const d Int) (declare-const e Int)
+(assert (>= a 1)) (assert (<= a 10))
+(assert (>= b 1)) (assert (<= b 10))
+(assert (>= c 1)) (assert (<= c 10))
+(assert (>= d 1)) (assert (<= d 10))
+(assert (>= e 1)) (assert (<= e 10))
+(assert (= (+ a b c d e) 15))
+(assert (<= a b)) (assert (<= b c)) (assert (<= c d)) (assert (<= d e))
+(check-sat)

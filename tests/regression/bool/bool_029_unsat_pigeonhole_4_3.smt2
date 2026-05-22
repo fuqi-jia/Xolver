@@ -1,0 +1,20 @@
+; Pigeonhole 4→3 in Bool: 4 pigeons (p_i_j = pigeon i in hole j), 3 holes, no two same hole.
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-const p11 Bool) (declare-const p12 Bool) (declare-const p13 Bool)
+(declare-const p21 Bool) (declare-const p22 Bool) (declare-const p23 Bool)
+(declare-const p31 Bool) (declare-const p32 Bool) (declare-const p33 Bool)
+(declare-const p41 Bool) (declare-const p42 Bool) (declare-const p43 Bool)
+; Each pigeon in some hole
+(assert (or p11 p12 p13))
+(assert (or p21 p22 p23))
+(assert (or p31 p32 p33))
+(assert (or p41 p42 p43))
+; No two pigeons in same hole
+(assert (not (and p11 p21))) (assert (not (and p11 p31))) (assert (not (and p11 p41)))
+(assert (not (and p21 p31))) (assert (not (and p21 p41))) (assert (not (and p31 p41)))
+(assert (not (and p12 p22))) (assert (not (and p12 p32))) (assert (not (and p12 p42)))
+(assert (not (and p22 p32))) (assert (not (and p22 p42))) (assert (not (and p32 p42)))
+(assert (not (and p13 p23))) (assert (not (and p13 p33))) (assert (not (and p13 p43)))
+(assert (not (and p23 p33))) (assert (not (and p23 p43))) (assert (not (and p33 p43)))
+(check-sat)

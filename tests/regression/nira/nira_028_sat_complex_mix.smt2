@@ -1,0 +1,11 @@
+; 6-constraint NIRA with explicit witness (i=2, r=1.5).
+(set-logic QF_NIRA)
+(set-info :status sat)
+(declare-const i Int) (declare-const r Real)
+(assert (>= i 1)) (assert (<= i 5))
+(assert (>= r 0)) (assert (<= r 3))
+(assert (= i 2))
+(assert (= r (/ 3 2)))
+(assert (>= (* (to_real i) r) 3))
+(assert (<= (* (to_real i) r) 4))
+(check-sat)

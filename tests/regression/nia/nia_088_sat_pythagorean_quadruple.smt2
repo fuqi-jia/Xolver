@@ -1,0 +1,11 @@
+; Pythagorean quadruple: x² + y² + z² = w², small witness (1,2,2,3).
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-const x Int) (declare-const y Int)
+(declare-const z Int) (declare-const w Int)
+(assert (>= x 1)) (assert (<= x 5))
+(assert (>= y 1)) (assert (<= y 5))
+(assert (>= z 1)) (assert (<= z 5))
+(assert (>= w 1)) (assert (<= w 10))
+(assert (= (+ (* x x) (* y y) (* z z)) (* w w)))
+(check-sat)

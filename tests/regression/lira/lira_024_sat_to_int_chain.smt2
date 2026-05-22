@@ -1,0 +1,12 @@
+; Chain: r0 ∈ [0,10), i1 = to_int r0, r1 = to_real i1 — i1 ∈ {0..9}. Witness r0 = 5.5.
+(set-logic QF_LIRA)
+(set-info :status sat)
+(declare-const r0 Real)
+(declare-const i1 Int)
+(declare-const r1 Real)
+(assert (>= r0 0)) (assert (< r0 10))
+(assert (= i1 (to_int r0)))
+(assert (= r1 (to_real i1)))
+(assert (>= i1 0)) (assert (<= i1 9))
+(assert (>= r0 r1))
+(check-sat)

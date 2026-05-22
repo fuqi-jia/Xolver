@@ -1,6 +1,7 @@
 ; Chain of real inequalities with function
 (set-logic QF_UFLRA)
 (set-info :status sat)
+(set-info :status sat)
 (declare-fun f (Real) Real)
 (declare-fun x () Real)
 (assert (< (f x) 10.0))

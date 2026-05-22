@@ -1,6 +1,7 @@
 ; Five conic curves: 2 circles + 2 ellipses + 1 hyperbola sharing common region only outside their pairwise intersection.
 ; All 5 simultaneously is provably unsat.
 (set-logic QF_NRA)
+(set-info :status unsat)
 (declare-const x Real)
 (declare-const y Real)
 (assert (= (+ (* x x) (* y y)) 1))                 ; unit circle

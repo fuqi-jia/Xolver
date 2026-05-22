@@ -1,0 +1,13 @@
+; Deep push, each layer locally conflicting but never check until top.
+(set-logic QF_LRA)
+(set-info :status sat)
+(declare-const x Real)
+(declare-const y Real)
+(assert (= x 0))
+(assert (= y 0))
+(push 1) (assert (> x 1))
+(push 1) (assert (> x 2))
+(pop 2)
+(push 1) (assert (> y 1))
+(pop 1)
+(check-sat)

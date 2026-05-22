@@ -1,0 +1,13 @@
+; Knapsack-style: 5 items with weights {3,5,7,9,11}, capacity 10, exact value 25 — impossible.
+(set-logic QF_LIA)
+(set-info :status unsat)
+(declare-const x1 Int) (declare-const x2 Int) (declare-const x3 Int)
+(declare-const x4 Int) (declare-const x5 Int)
+(assert (or (= x1 0) (= x1 1)))
+(assert (or (= x2 0) (= x2 1)))
+(assert (or (= x3 0) (= x3 1)))
+(assert (or (= x4 0) (= x4 1)))
+(assert (or (= x5 0) (= x5 1)))
+(assert (<= (+ (* 3 x1) (* 5 x2) (* 7 x3) (* 9 x4) (* 11 x5)) 10))
+(assert (>= (+ (* 3 x1) (* 5 x2) (* 7 x3) (* 9 x4) (* 11 x5)) 25))
+(check-sat)

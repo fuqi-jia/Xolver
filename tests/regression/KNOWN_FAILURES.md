@@ -108,3 +108,30 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_019_unsat_floor_below_zero.smt2`~~ — **FIXED** (same root cause as uflia_003 — stale level-0 state after backtrack).
 - `nra/nra_065_unsat_two_circles_one_line.smt2` — **SIGSEGV** (HIGH PRIORITY) during CDCAC `sector(-inf, -0.75)` lifting on `x²+y²=1 ∧ (x-1)²+y²=1 ∧ y=x`. Delta-debugging (nra_093–100) shows the crash requires the linear equality `y=x` together with both circles; removing any one (nra_093 = two circles only) eliminates the crash (becomes unknown).
 - ~~`nia/nia_077_sat_mod_2var.smt2`~~ — **FIXED** in 2026-05-21: three changes — (1) try `localSearch` before emitting pending linear lemmas so it actually runs, (2) sync `hasLower/hasUpper` in `DomainStore::restrictToFiniteSet` so local-search candidates respect fixed values like `x=7`, (3) accept `vNext <= curViol` in hill-climbing to cross variable-coupling ridges (e.g. `r3=r1`).
+
+### J-batch findings (SMT-COMP grade, complex multi-constraint systems)
+- `nra/nra_120_unsat_5conic_intersection.smt2` — 5 conic curves with disjoint feasibility — unknown.
+- `nra/nra_121_sat_kinematics_orbit.smt2` — orbital kinematics 3-poly system — unknown.
+- `nra/nra_122_unsat_3_quadrics_disjoint.smt2` — 3 disjoint spheres — unknown.
+- `nra/nra_124_sat_robotic_workspace.smt2` — 2-link robot arm reachability — unknown.
+- `nra/nra_126_sat_polynomial_lyapunov.smt2` — Lyapunov decrease in annulus — unknown.
+- `nra/nra_128_sat_geometric_packing.smt2` — 2-disk packing — unknown.
+- `nra/nra_131_sat_brown_2001_relaxed.smt2` — Brown'01 dim-3 relaxed — unknown.
+- `nra/nra_134_unsat_metitarski_negation.smt2` — meti-tarski exp negation — unknown.
+- `nra/nra_135_unsat_amzi_classic.smt2` — Cauchy-Schwarz refutation — unknown.
+- `nra/nra_136_sat_amzi_tight.smt2` — CS equality at (1,1,1) — unknown.
+- `nra/nra_137_unsat_strict_cs_violation.smt2` — strict CS violation — unknown.
+- `nra/nra_138_sat_huge_coeff.smt2` — huge rational coefficient — unknown.
+- `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
+- `nia/nia_095_unsat_collatz_step_wrong.smt2` — Collatz step ITE-based — unknown.
+- `nia/nia_097_unsat_squares_chain.smt2` — squares chain inequality — unknown.
+- `nia/nia_098_sat_huge_modulus.smt2` — huge modulus (10^15) — unknown.
+- `uflra/uflra_008_sat_array_with_real.smt2` — array-as-fun 5-element sum of fractions — unknown.
+
+### K-batch: SOTA-grade depth findings (2026-05-22)
+- `lia/lia_050_sat_sudoku_row.smt2` — Sudoku row (9 distinct 1-9) returns unknown. LIA n-ary distinct (n=9) gap (extension of lia_015 family).
+- `ufnra/ufnra_006_sat_circle_fn.smt2` — `f(x)²+x²=1 ∧ x=0` returns unknown. UFNRA nonlinear-real + UF combination.
+- `ufnra/ufnra_007_unsat_circle_fn_conflict.smt2` — Same circle with `x=2` should be unsat (x²+f(x)²≥4>1) returns unknown.
+
+### K-batch unsound (high priority)
+- `nra/nra_127_sat_swap_compatible.smt2` — **UNSOUND**: `a+b=c+d ∧ ab=cd ∧ distinct(a+c, b+d) ∧ all>0` is SAT (witness (1,2,1,2)) but solver returns unsat. Twin oracle (z3+cvc5) agrees sat. NRA polynomial-system soundness bug.

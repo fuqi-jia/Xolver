@@ -1,0 +1,10 @@
+; Meti-tarski negation: 1+x > exp_approx for x in [0,1]. Always false.
+(set-logic QF_NRA)
+(set-info :status unsat)
+(declare-const x Real)
+(declare-const exp_x Real)
+(assert (>= x 0))
+(assert (<= x 1))
+(assert (= exp_x (+ 1 x (/ (* x x) 2) (/ (* x (* x x)) 6))))
+(assert (> (+ 1 x) exp_x))
+(check-sat)

@@ -1,0 +1,12 @@
+; Long equality chain x0=x1=...=x9, then distinct(x0, x9) ⇒ unsat.
+(set-logic QF_UF)
+(set-info :status unsat)
+(declare-sort U 0)
+(declare-const x0 U) (declare-const x1 U) (declare-const x2 U)
+(declare-const x3 U) (declare-const x4 U) (declare-const x5 U)
+(declare-const x6 U) (declare-const x7 U) (declare-const x8 U) (declare-const x9 U)
+(assert (= x0 x1)) (assert (= x1 x2)) (assert (= x2 x3))
+(assert (= x3 x4)) (assert (= x4 x5)) (assert (= x5 x6))
+(assert (= x6 x7)) (assert (= x7 x8)) (assert (= x8 x9))
+(assert (distinct x0 x9))
+(check-sat)

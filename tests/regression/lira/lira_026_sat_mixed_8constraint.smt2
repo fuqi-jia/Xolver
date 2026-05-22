@@ -1,0 +1,13 @@
+; Mixed 8-constraint LIRA system.
+(set-logic QF_LIRA)
+(set-info :status sat)
+(declare-const r1 Real) (declare-const r2 Real)
+(declare-const i1 Int) (declare-const i2 Int)
+(assert (= i1 (to_int r1)))
+(assert (= i2 (to_int r2)))
+(assert (>= r1 0)) (assert (<= r1 10))
+(assert (>= r2 0)) (assert (<= r2 10))
+(assert (>= (+ i1 i2) 3))
+(assert (<= (+ r1 r2) 8))
+(assert (= (+ i1 i2) 5))
+(check-sat)

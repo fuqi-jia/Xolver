@@ -1,0 +1,13 @@
+; Swap test: a[i]:=a[j]; a[j]:=a[i]_old. Equivalent to no swap if same.
+(set-logic QF_UFLIA)
+(set-info :status sat)
+(declare-fun a (Int) Int)
+(declare-fun b (Int) Int)
+(assert (= (a 0) 7))
+(assert (= (a 1) 11))
+; b = swap(a, 0, 1)
+(assert (= (b 0) (a 1)))
+(assert (= (b 1) (a 0)))
+(assert (= (b 0) 11))
+(assert (= (b 1) 7))
+(check-sat)

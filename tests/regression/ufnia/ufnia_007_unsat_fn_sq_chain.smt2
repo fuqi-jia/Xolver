@@ -1,0 +1,10 @@
+; f(x) = x², so f(2) = 4 ∧ f(3) = 9 ∧ f(2) = f(3) ⇒ unsat.
+(set-logic QF_UFNIA)
+(set-info :status unsat)
+(declare-fun f (Int) Int)
+(declare-const a Int) (declare-const b Int)
+(assert (= a 2)) (assert (= b 3))
+(assert (= (f a) (* a a)))
+(assert (= (f b) (* b b)))
+(assert (= (f a) (f b)))
+(check-sat)
