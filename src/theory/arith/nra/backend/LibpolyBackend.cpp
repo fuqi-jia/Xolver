@@ -77,6 +77,18 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
 #endif
     if (coeffs.empty()) return RootSet{};
 
+    // Handle linear polynomials exactly to avoid libpoly returning loose
+    // isolating intervals (e.g. [-1/8, 0] for 8*y+1 where root is -1/8).
+    if (coeffs.size() == 2) {
+        mpq_class a(coeffs[0]);
+        mpq_class b(coeffs[1]);
+        if (a != 0) {
+            RootSet result;
+            result.roots.push_back(RealAlg::fromRational(-b / a));
+            return result;
+        }
+    }
+
     // Convert coefficients (high-to-low) to libpoly format (low-to-high)
     std::vector<poly::Integer> lpCoeffs;
     lpCoeffs.reserve(coeffs.size());
@@ -500,9 +512,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                     pa.set(pv, poly::Value(*algOpt));
                 }
             }
-            std::cerr << "[CDCAC]       signAtTower: hasRemainingAlg, current=" << kernel_->toString(current) << std::endl;
             int s = poly::sgn(libKernel_->getPolynomial(current), pa);
-            std::cerr << "[CDCAC]       signAtTower: libpoly sgn=" << s << std::endl;
             if (s < 0) return multiplySigns(scaleSign, Sign::Neg);
             if (s > 0) return multiplySigns(scaleSign, Sign::Pos);
             return multiplySigns(scaleSign, Sign::Zero);
@@ -551,9 +561,6 @@ UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& pr
         VarId vid = prefix.varOrder[i];
         auto nextOpt = kernel_->substituteRational(current, vid, prefix.values[i].rational);
         if (!nextOpt) {
-#ifndef NDEBUG
-            std::cerr << "[CDCAC]       specializeToUnivariate: substituteRational failed for var=" << kernel_->varName(vid) << std::endl;
-#endif
             return NullUniPolyId;
         }
         current = *nextOpt;
@@ -565,25 +572,23 @@ UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& pr
     // Convert to RationalPolynomial to handle any variable order and rational coefficients.
     // This bypasses the libpoly main_variable restriction in getIntegerCoefficients().
     auto rpOpt = RationalPolynomial::fromPolyId(current, *kernel_);
-    if (!rpOpt) return NullUniPolyId;
+    if (!rpOpt) {
+        std::cerr << "[CDCAC]       specializeToUnivariate: fromPolyId failed" << std::endl;
+        return NullUniPolyId;
+    }
 
     rpOpt->normalize();
     auto norm = rpOpt->toPrimitiveInteger(*kernel_);
-    if (!norm.ok()) return NullUniPolyId;
+    if (!norm.ok()) {
+        std::cerr << "[CDCAC]       specializeToUnivariate: toPrimitiveInteger failed" << std::endl;
+        return NullUniPolyId;
+    }
 
     // Extract univariate coefficients in mainVar from the normalized polynomial
     auto termsOpt = kernel_->terms(norm.poly);
-    if (!termsOpt) return NullUniPolyId;
-
-    std::cerr << "[CDCAC]       specializeToUnivariate: norm.poly=" << kernel_->toString(norm.poly) << " terms=";
-    for (const auto& term : *termsOpt) {
-        std::cerr << "[" << term.coefficient.get_str() << ":";
-        for (const auto& [vid, exp] : term.powers) {
-            std::cerr << kernel_->varName(vid) << "^" << exp << " ";
-        }
-        std::cerr << "] ";
+    if (!termsOpt) {
+        return NullUniPolyId;
     }
-    std::cerr << std::endl;
 
     // Find maximum degree of mainVar and check for other variables
     int maxDegree = -1;
@@ -1030,6 +1035,18 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             const auto& fCoeffs = getUni(b.root.definingPoly);
             mpq_class val = evalUniAtRational(fCoeffs, a.rational);
             if (val == 0) return CompareResult::Equal;
+
+            // P2a-sign-fallback: when bisection refinement cannot move the bound
+            // (e.g. lower bound is exactly a rational that is not the root),
+            // use sign comparison to determine order.
+            // For a squarefree polynomial with one root in [lower, upper],
+            // if f(q) and f(lower) have the same sign, q and lower are on the
+            // same side of the root, so q < root.
+            mpq_class valLo = evalUniAtRational(fCoeffs, b.root.lower);
+            if (valLo != 0) {
+                bool sameSignAsLo = (val > 0) == (valLo > 0);
+                return sameSignAsLo ? CompareResult::Less : CompareResult::Greater;
+            }
         }
 
         AlgebraicRoot mutableB = b.root;
@@ -1047,6 +1064,14 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             const auto& fCoeffs = getUni(a.root.definingPoly);
             mpq_class val = evalUniAtRational(fCoeffs, b.rational);
             if (val == 0) return CompareResult::Equal;
+
+            // P2a-sign-fallback: same reasoning as above.
+            mpq_class valLo = evalUniAtRational(fCoeffs, a.root.lower);
+            if (valLo != 0) {
+                bool sameSignAsLo = (val > 0) == (valLo > 0);
+                // same sign as lower bound => rational < root => root > rational => a > b
+                return sameSignAsLo ? CompareResult::Greater : CompareResult::Less;
+            }
         }
 
         AlgebraicRoot mutableA = a.root;

@@ -80,9 +80,13 @@ CoverageResult CoveringManager::coversAllLine(AlgebraBackend* algebra, const Cov
     });
 
     // First cell must start at -inf
-    if (!cells.front().lower.isNegInf()) return CoverageResult::DoesNotCover;
+    if (!cells.front().lower.isNegInf()) {
+        return CoverageResult::DoesNotCover;
+    }
     // Last cell must end at +inf
-    if (!cells.back().upper.isPosInf()) return CoverageResult::DoesNotCover;
+    if (!cells.back().upper.isPosInf()) {
+        return CoverageResult::DoesNotCover;
+    }
 
     // Check coverage by sweeping left to right.
     // Track the rightmost point that is DEFINITELY covered.

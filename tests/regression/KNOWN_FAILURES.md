@@ -25,9 +25,8 @@ Lines that don't match this format are ignored — feel free to add prose.
 ## known-fail
 
 - `euf/euf_025_pred_trans.smt2` — Test file uses Int sort under (set-logic QF_UF); LogicFeatureDetector strictly flags the mismatch. Either retype the test as QF_UFLIA or relax the detector.
-- `euf/euf_028_sat_bool_fun.smt2` — Bool-codomain function symbols (`P : Bool → Bool`) yield `Theory: unknown (no reason)`. Gap in EUF + Bool-result handling.
-- `lira/lira_009_unknown_nonlinear_to_int.smt2` — `(to_int (* x x))` is nonlinear-in-real; LIRA path returns unknown. Expected gap per plan.md §5.
-- `nra/nra_001_cubic.smt2` — Univariate cubic with strict `>` and `<` returns unknown. Suspected CDCAC projection / section-lifting gap.
+- `lira/lira_009_sat_nonlinear_to_int.smt2` — `(to_int (* x x))` is nonlinear-in-real; LIRA path returns unknown. Expected gap per plan.md §5.
+- `nra/nra_001_sat_cubic.smt2` — Univariate cubic with strict `>` and `<` returns unknown. Suspected CDCAC projection / section-lifting gap.
 - `uflia/uflia_004_unknown_or_x.smt2` — Disjunction `(or (= x 0) (= x 1))` returns unknown. Mixed UF+LIA combination boundary.
 - `lra/lra_010_unsat_eq_chain_break.smt2` — Eq chain `x=y, y=z` + `distinct x z`: solver returns unknown. Transitive disequality not propagated in LRA.
 - `lra/lra_021_sat_distinct_3vars.smt2` — n-ary distinct (n≥3) on Reals returns unknown. Likely missing pairwise expansion for distinct on Real sort.
@@ -44,7 +43,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `nira/nira_018_sat_nonlinear_real_to_int.smt2` — `to_int(r²+1) ≥ 1` returns unknown.
 - `nira/nira_020_sat_three_vars.smt2` — `r = to_real(i)/to_real(j)` returns unknown.
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
-- `nra/nra_038_sat_ellipse_tangent.smt2` — Ellipse `x²/4+y²=1` tangent to `y=1` at (0,1). CDCAC unknown — projection gap for rational-coefficient ellipses.
+- ~~`nra/nra_038_sat_ellipse_tangent.smt2`~~ — **FIXED** in 2026-05-23: pseudoRemainder bug fix + level-0 projection trigger (`RationalPolynomial::pseudoRemainder` was using post-multiplication leading coefficient instead of pre-multiplication, causing SubresultantEngine to never reduce degree when divisor's leading coefficient was non-constant; this broke all CDCAC projection for non-trivial cases).
 - `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
 - ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
 - `nra/nra_043_unsat_parabola_below_line.smt2` — `y=x²+1 ∧ y<0` returns unknown. Same family as `nra_021` (sum-of-squares positivity gap).
@@ -56,20 +55,19 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `lra/lra_045_unsat_neg_eq.smt2` — Negated equality `not(= x y)` with bounds returns unknown. Disequality handling gap in LRA.
 - `nia/nia_043_sat_mod_witness.smt2` — `mod` witness existence returns unknown. NIA modular reasoning incomplete.
 - `nia/nia_045_sat_mixed_lin_nonlin.smt2` — Mixed linear/nonlinear integer returns unknown. NIA branch lemma generation gap.
-- `nra/nra_048_sat_metitarski_polynomial.smt2` — High-degree polynomial sat returns unknown. CDCAC projection gap.
+- ~~`nra/nra_048_sat_metitarski_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix as nra_038).
 - `nra/nra_050_sat_close_to_root.smt2` — Polynomial with root very close to rational boundary returns unknown. CDCAC interval precision gap.
 - `nra/nra_053_sat_polynomial_disjunction.smt2` — Disjunction of polynomial constraints returns unknown. CDCAC covering incomplete for disjunctions.
 - `nia/nia_048_sat_verymax_nested_strict.smt2` — VeryMax-style nested strict inequalities `(x>y ∧ y>z ∧ z≥1 ∧ x*z>0)` returns unknown. Likely the AlgebraicIntegerReasoner doesn't handle strict + multiplicative product witness search.
-- `nra/nra_054_sat_metitarski_atan_approx.smt2` — meti-tarski atan approximation polynomial returns unknown. CDCAC degree-5 univariate gap with rational endpoints.
 - `nra/nra_057_sat_polynomial_band.smt2` — Thin band `y=x² ∧ 1/100 ≤ y ≤ 1/99` returns unknown. CDCAC precision-sensitive rational endpoints.
-- `nra/nra_058_sat_metitarski_exp_approx.smt2` — meti-tarski exp(x) approximation `1+x+x²/2 > 0` with `x ∈ [-1/10, 1/10]` returns unknown. Bivariate (x, ex) with rational endpoint gap.
-- `nra/nra_062_sat_polynomial_outside_band.smt2` — Disjunction `x<2/5 ∨ x>3/5` returns unknown. Same family as nra_053 (CDCAC disjunction).
-- `nra/nra_063_sat_atan_chain_polynomial.smt2` — Multi-var bounded with rational bounds `|x|≤1 ∧ |y|≤1 ∧ |x-y|≤1/10` returns unknown. CDCAC variable ordering or rational endpoints.
-- `nra/nra_064_unsat_three_circles_no_common.smt2` — Three unit circles (centered at 0, e1, e2) have no common intersection — returns unknown. CDCAC multivariate disjoint-cell coverage gap.
+- ~~`nra/nra_058_sat_metitarski_exp_approx.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
+- ~~`nra/nra_062_sat_polynomial_outside_band.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
+- ~~`nra/nra_063_sat_atan_chain_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
+- ~~`nra/nra_064_unsat_three_circles_no_common.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
 - `nra/nra_069_unsat_parabola_below_zero.smt2` — `y=x²+1 ∧ y<0` returns unknown. Direct SOS positivity gap (companion to nra_021/043/046).
 - `nra/nra_073_unsat_3vars_no_real.smt2` — `x²+y²+z²=-1` returns unknown. 3-var SOS positivity gap; CDCAC does not refute negative-RHS sum-of-squares equality.
 - `nra/nra_082_sat_null_projection_avoid.smt2` — `y*(x-1)=0 ∧ y>0` (forces x=1) returns unknown. NullificationAnalyzer not used or factor-case-split missing.
-- `nra/nra_087_sat_icp_narrow_box.smt2` — Narrow box around (1,1) with `xy ∈ [0.99, 1.01]` returns unknown. ICP precision near point-feasible region.
+- ~~`nra/nra_087_sat_icp_narrow_box.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
 - `nia/nia_058_unsat_diophantine_multi_eq.smt2` — Two linear diophantine eqs with explicit unique negative solution + bound `x≥0` returns unknown. Linear elimination over integers not propagating to bound.
 - `nia/nia_061_sat_crt_3_moduli.smt2` — 3-modulus CRT (`x≡2(mod 3) ∧ x≡3(mod 5) ∧ x≡2(mod 7)`) returns unknown. NIA mod-chain depth gap (companion to nia_032).
 - `nia/nia_062_unsat_crt_inconsistent.smt2` — Inconsistent CRT (`x≡1(mod 6) ∧ x≡0(mod 3)`) returns unknown. NIA modular consistency check missing.
@@ -99,6 +97,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 
 ## known-unsound
 
+- ~~`nra/nra_054_sat_metitarski_atan_approx.smt2`~~ — **FIXED** in 2026-05-23: root cause was `RationalPolynomial::pseudoRemainder` reading post-multiplication leading coefficient instead of pre-multiplication, so SubresultantEngine never reduced degree when divisor's lc was non-constant in the elimination variable. CDCAC projection silently produced wrong polynomials, leading to incomplete level-0 root sets and over-generalised sector cells. Fixed by capturing `lcRem` before scaling rem by `lcQ` in `RationalPolynomial::pseudoRemainder`, plus adding a level-0 `needsProjection` trigger in `CdcacCore::solveLevel`. Solver now returns sat. This fix also resolved nra_038/048/058/062/063/064/087/124/127/128.
 - ~~`uflia/uflia_003_unsat_bridge_linear.smt2`~~ — **FIXED** in 2026-05-21: `backtrackToLevel(0)` now fully resets LIA/LRA solver state, preventing stale bounds from previous model checks.
 - ~~`lira/lira_012_unsat_is_int_strict_open.smt2`~~ — **FIXED** in 2026-05-21: `FrontendAdapter` now maps `NT_IS_INT` and `LinearToIntPurifier` lowers `IsInt(r)` to `Eq(r, ToReal(k))` with floor lemmas.
 - ~~`lira/lira_020_unsat_is_int_variant_eq.smt2`~~ — **FIXED** (same root cause as lira_012).
@@ -113,9 +112,9 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `nra/nra_120_unsat_5conic_intersection.smt2` — 5 conic curves with disjoint feasibility — unknown.
 - `nra/nra_121_sat_kinematics_orbit.smt2` — orbital kinematics 3-poly system — unknown.
 - `nra/nra_122_unsat_3_quadrics_disjoint.smt2` — 3 disjoint spheres — unknown.
-- `nra/nra_124_sat_robotic_workspace.smt2` — 2-link robot arm reachability — unknown.
+- ~~`nra/nra_124_sat_robotic_workspace.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - `nra/nra_126_sat_polynomial_lyapunov.smt2` — Lyapunov decrease in annulus — unknown.
-- `nra/nra_128_sat_geometric_packing.smt2` — 2-disk packing — unknown.
+- ~~`nra/nra_128_sat_geometric_packing.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - `nra/nra_131_sat_brown_2001_relaxed.smt2` — Brown'01 dim-3 relaxed — unknown.
 - `nra/nra_134_unsat_metitarski_negation.smt2` — meti-tarski exp negation — unknown.
 - `nra/nra_135_unsat_amzi_classic.smt2` — Cauchy-Schwarz refutation — unknown.
@@ -134,4 +133,4 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `ufnra/ufnra_007_unsat_circle_fn_conflict.smt2` — Same circle with `x=2` should be unsat (x²+f(x)²≥4>1) returns unknown.
 
 ### K-batch unsound (high priority)
-- `nra/nra_127_sat_swap_compatible.smt2` — **UNSOUND**: `a+b=c+d ∧ ab=cd ∧ distinct(a+c, b+d) ∧ all>0` is SAT (witness (1,2,1,2)) but solver returns unsat. Twin oracle (z3+cvc5) agrees sat. NRA polynomial-system soundness bug.
+- ~~`nra/nra_127_sat_swap_compatible.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix). The root cause was the same wrong pseudo-remainder feeding incorrect projection polynomials, leading to unsound unsat. Solver now correctly returns sat.

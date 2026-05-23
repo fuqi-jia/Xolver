@@ -467,13 +467,21 @@ RationalPolynomial RationalPolynomial::pseudoRemainder(VarId v, const RationalPo
         }
         if (remDeg < degQ) break;
 
+        // Capture the pre-multiplication leading coefficient. After scaling
+        // rem by lc(q), the new leading coefficient is lc(q)*originalLc;
+        // the correct pseudo-remainder step subtracts originalLc*q (not the
+        // post-multiplication coefficient), giving cancellation when lc(q)
+        // is non-constant in v. Reading lcRem after the multiplication
+        // (the previous behaviour) caused the degree to never drop for
+        // polynomials whose leading coefficient depends on other variables.
+        RationalPolynomial lcRem = rem[remDeg];
+
         // r = lc(q) * r
         for (auto& c : rem) {
             c = c * lcQ;
         }
 
-        // r = r - lc(r) * q * x^(remDeg - degQ)
-        RationalPolynomial lcRem = rem[remDeg];
+        // r = r - originalLc * q * x^(remDeg - degQ)
         int shift = remDeg - degQ;
         for (size_t j = 0; j < qCoeffs.size(); ++j) {
             int idx = shift + static_cast<int>(j);

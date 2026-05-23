@@ -249,11 +249,42 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
                 if (!okCurr) break;
             }
             if (q >= curr.lower) {
-                // Cannot separate rational from algebraic interval after max
-                // refinement.  If they were equal (defPoly(q)==0), the
-                // insertion sort in compareRealAlg would already have merged
-                // them.  Any remaining overlap means we cannot guarantee a
-                // positive-width sector → fail conservatively.
+                // Cannot separate by refinement alone.  Use compareRealAlg
+                // sign-fallback to determine order.
+                RealAlg qAlg = RealAlg::fromRational(q);
+                RealAlg rootAlg = RealAlg::fromAlgebraic(curr);
+                CompareResult c = algebra_->compareRealAlg(qAlg, rootAlg);
+                if (c == CompareResult::Less) {
+                    // q < root, but curr.lower may still equal q.
+                    // Bisect to push curr.lower strictly above q so the sector
+                    // loop can construct a non-empty rational sector.
+                    mpq_class lo = q;
+                    mpq_class hi = curr.upper;
+                    for (int bisect = 0; bisect < 40; ++bisect) {
+                        if (lo >= hi) break;
+                        mpq_class mid = (lo + hi) / 2;
+                        RealAlg midAlg = RealAlg::fromRational(mid);
+                        CompareResult mc = algebra_->compareRealAlg(midAlg, rootAlg);
+                        if (mc == CompareResult::Equal) {
+                            lo = mid;
+                            break;
+                        }
+                        if (mc == CompareResult::Less) {
+                            lo = mid;
+                        } else if (mc == CompareResult::Greater) {
+                            hi = mid;
+                        } else {
+                            break;
+                        }
+                    }
+                    curr.lower = lo;
+                    continue;
+                }
+                if (c == CompareResult::Greater) {
+                    // q > root: inconsistent with insertion sort ordering
+                    return std::nullopt;
+                }
+                // Still Unknown: fail conservatively
                 return std::nullopt;
             }
         } else {
@@ -266,9 +297,38 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
                 if (!okPrev) break;
             }
             if (prev.upper >= q) {
-                // Same reasoning as above: insertion sort already handles
-                // true equality (defPoly(q)==0).  Remaining overlap = unsound
-                // to discard → fail conservatively.
+                // Same fallback as above
+                RealAlg rootAlg = RealAlg::fromAlgebraic(prev);
+                RealAlg qAlg = RealAlg::fromRational(q);
+                CompareResult c = algebra_->compareRealAlg(rootAlg, qAlg);
+                if (c == CompareResult::Less) {
+                    // root < q, but prev.upper may still equal q.
+                    // Bisect to push prev.upper strictly below q.
+                    mpq_class lo = prev.lower;
+                    mpq_class hi = q;
+                    for (int bisect = 0; bisect < 40; ++bisect) {
+                        if (lo >= hi) break;
+                        mpq_class mid = (lo + hi) / 2;
+                        RealAlg midAlg = RealAlg::fromRational(mid);
+                        CompareResult mc = algebra_->compareRealAlg(rootAlg, midAlg);
+                        if (mc == CompareResult::Equal) {
+                            hi = mid;
+                            break;
+                        }
+                        if (mc == CompareResult::Less) {
+                            lo = mid;
+                        } else if (mc == CompareResult::Greater) {
+                            hi = mid;
+                        } else {
+                            break;
+                        }
+                    }
+                    prev.upper = hi;
+                    continue;
+                }
+                if (c == CompareResult::Greater) {
+                    return std::nullopt;
+                }
                 return std::nullopt;
             }
         }
@@ -288,9 +348,6 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& input) {
     int n = static_cast<int>(input.varOrder.size());
     if (k == n) {
-        if (n == 0) {
-            std::cerr << "[CDCAC] empty varOrder, checkFullSample" << std::endl;
-        }
         return checkFullSample(prefix, input);
     }
 
@@ -311,10 +368,8 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             auto analysis = na.analyzeConstraint(c, prefix, var);
             switch (analysis.action) {
                 case NullificationAnalyzer::Action::SkipConstraintAsTrue:
-                    std::cerr << "[CDCAC]   nullification: skip constraint " << c.id << " (true)" << std::endl;
                     continue;
                 case NullificationAnalyzer::Action::ReturnFullLineConflict:
-                    std::cerr << "[CDCAC]   nullification: FullLine conflict for constraint " << c.id << std::endl;
                     if (analysis.conflictCell) {
                         Cell cell = *analysis.conflictCell;
                         Cell cellCopy = cell;  // copy for certificate
@@ -365,15 +420,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     // V4: nullification repair is not yet fully wired.
                     // Treat as ContinueNormally for now; obligations are recorded
                     // in analysis.repair for future certificate use.
-                    std::cerr << "[CDCAC]   nullification: NeedsRepair for constraint " << c.id
-                              << ", continuing with obligations" << std::endl;
                     break;
                 case NullificationAnalyzer::Action::Unknown:
                     // V2-7: nullification check is best-effort.
                     // If we can't determine nullification (e.g. algebraic prefix),
                     // continue with normal specialization rather than aborting.
-                    std::cerr << "[CDCAC]   nullification: Unknown for constraint " << c.id
-                              << ", continuing normally" << std::endl;
                     break;
                 case NullificationAnalyzer::Action::ContinueNormally:
                     break;
@@ -393,8 +444,16 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
     }
 
+    // V5: when any local poly has var-k plus higher-level vars that aren't in
+    // the prefix, the level-k root set is incomplete without Collins projection.
+    // Skipping projection here causes sector cells to over-generalize the
+    // unsat verdict from deeper levels (cf. nra_054 unsoundness).
+    bool needsProjection = false;
+
     for (PolyId p : polys) {
-        if (kernel_->isConstant(p)) continue;
+        if (kernel_->isConstant(p)) {
+            continue;
+        }
         // Skip polynomials that do not contain the current variable at all.
         // They cannot contribute roots for this level.
         {
@@ -406,65 +465,56 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     break;
                 }
             }
-            if (!containsVar) continue;
+            if (!containsVar) {
+                continue;
+            }
         }
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
         if (up == NullUniPolyId) {
+            // Detect unassigned-deep-vars once and reuse for both the
+            // algebraic-isolation guard and the projection trigger.
+            bool hasFreeVars = false;
+            {
+                std::string_view mainVarName = kernel_->varName(var);
+                for (const auto& vname : kernel_->variables(p)) {
+                    if (vname == mainVarName) continue;
+                    bool inPrefix = false;
+                    for (size_t i = 0; i < prefix.numVars(); ++i) {
+                        if (kernel_->varName(prefix.varOrder[i]) == vname) {
+                            inPrefix = true;
+                            break;
+                        }
+                    }
+                    if (!inPrefix) {
+                        hasFreeVars = true;
+                        break;
+                    }
+                }
+            }
             // If specialization failed due to algebraic prefix, try algebraic
             // root isolation — but only when the prefix has at most one
             // algebraic variable.  libpoly's lp_polynomial_roots_isolate crashes
             // with SIGSEGV on nested algebraic coefficients (multiple algebraic
             // vars in the assignment), so we conservatively skip deeper towers.
-            if (hasAlgebraicPrefix) {
+            if (hasAlgebraicPrefix && !hasFreeVars) {
                 int algCount = 0;
                 for (const auto& v : prefix.values) {
                     if (v.isAlgebraic()) ++algCount;
                 }
                 if (algCount <= 1) {
-                    // Also skip if the polynomial still contains variables
-                    // other than 'var' that are not in the prefix.
-                    bool hasFreeVars = false;
-                    std::string_view mainVarName = kernel_->varName(var);
-                    std::cerr << "[CDCAC]     vars in poly:";
-                    for (const auto& vname : kernel_->variables(p)) {
-                        std::cerr << " " << vname;
-                    }
-                    std::cerr << " | mainVar=" << mainVarName << " | prefixVars=";
-                    for (size_t i = 0; i < prefix.numVars(); ++i) {
-                        std::cerr << " " << kernel_->varName(prefix.varOrder[i]);
-                    }
-                    std::cerr << "\n";
-                    for (const auto& vname : kernel_->variables(p)) {
-                        if (vname == mainVarName) continue;
-                        bool inPrefix = false;
-                        for (size_t i = 0; i < prefix.numVars(); ++i) {
-                            if (kernel_->varName(prefix.varOrder[i]) == vname) {
-                                inPrefix = true;
-                                break;
-                            }
-                        }
-                        if (!inPrefix) {
-                            hasFreeVars = true;
-                            break;
-                        }
-                    }
-                    if (!hasFreeVars) {
-                        std::cerr << "[CDCAC]   trying algebraic isolation (algCount=" << algCount << ") for poly=" << kernel_->toString(p) << std::endl;
-                        RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
-                        std::cerr << "[CDCAC]   algebraic roots=" << roots.numRoots() << std::endl;
-                        if (roots.numRoots() > 0) {
-                            rootSets.push_back(std::move(roots));
-                        }
+                    RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
+                    if (roots.numRoots() > 0) {
+                        rootSets.push_back(std::move(roots));
                     }
                 }
             }
+            if (hasFreeVars) {
+                needsProjection = true;
+            }
             continue;
         }
-        std::cerr << "[CDCAC]   specialize poly=" << kernel_->toString(p) << std::endl;
         RootSet roots = algebra_->isolateRealRoots(up);
-        std::cerr << "[CDCAC]   roots=" << roots.numRoots() << std::endl;
         if (!algebra_->validateRootIsolation(up, roots)) {
-            std::cerr << "[CDCAC]   validate failed" << std::endl;
             return CdcacResult::mkUnknown(CdcacUnknownReason::RootIsolationInvalid);
         }
         // P2c: fill provenance metadata for algebraic roots
@@ -477,12 +527,16 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         rootSets.push_back(std::move(roots));
     }
 
-    // 1b. If no local univariate polynomials, try local projection
-    if (uniPolys.empty() && rootSets.empty() && k + 1 < n) {
-        std::cerr << "[CDCAC]   no local polys, trying projection" << std::endl;
+    // 1b. Trigger local projection. We restrict the needsProjection branch to
+    // level 0: there, the existing `uniPolys.empty() && rootSets.empty()`
+    // guard misses cases where some constraints specialize and others do not
+    // (e.g. nra_054). At deeper levels k>0 the local projection routine
+    // currently produces spurious roots from prefix-degenerate projection
+    // polynomials (cf. nra_125 unsoundness), so we keep the conservative
+    // guard there until the deeper-projection path is hardened.
+    if (((needsProjection && k == 0) || (uniPolys.empty() && rootSets.empty())) && k + 1 < n) {
         auto projRoots = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_, policy_.get());
         for (auto& rs : projRoots) {
-            std::cerr << "[CDCAC]   projection roots=" << rs.numRoots() << std::endl;
             rootSets.push_back(std::move(rs));
         }
     }
@@ -554,7 +608,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // Has uniPolys but no roots: entire line is one cell
         RealAlg sample = RealAlg::fromRational(mpq_class(0));
         CdcacResult res = testAndRecurse(sample);
-        std::cerr << "[CDCAC]   full-line sample result=" << (int)res.status << std::endl;
         if (res.status == CdcacStatus::Sat) return res;
         if (res.status == CdcacStatus::Unknown) return res;
         auto bcr = buildConflictCell(k, sample, res, input, allRoots);
@@ -579,7 +632,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     mpq_class sampleQ = pickRationalSample(sectorLo, sectorHi);
                     RealAlg sample = RealAlg::fromRational(sampleQ);
                     CdcacResult res = testAndRecurse(sample);
-                    std::cerr << "[CDCAC]   sector(" << sectorLo.get_d() << "," << sectorHi.get_d() << ") result=" << (int)res.status << std::endl;
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
                     auto bcr = buildConflictCell(k, sample, res, input, allRoots);
@@ -591,23 +643,31 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             } else {
                 // First sector: (-inf, r0)
                 mpq_class sectorHi = rootVal;
-                mpq_class sampleQ = sectorHi - 1;
-                RealAlg sample = RealAlg::fromRational(sampleQ);
-                CdcacResult res = testAndRecurse(sample);
-                std::cerr << "[CDCAC]   sector(-inf," << sectorHi.get_d() << ") result=" << (int)res.status << std::endl;
-                if (res.status == CdcacStatus::Sat) return res;
-                if (res.status == CdcacStatus::Unknown) return res;
-                auto bcr = buildConflictCell(k, sample, res, input, allRoots);
-                if (bcr.status == BuildCellStatus::Unknown) {
-                    return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                bool firstConflictRecorded = false;
+                CertifiedCell firstConflictCell;
+                for (int attempt = 0; attempt < 3; ++attempt) {
+                    mpq_class sampleQ = sectorHi - (attempt + 1);
+                    RealAlg sample = RealAlg::fromRational(sampleQ);
+                    CdcacResult res = testAndRecurse(sample);
+                    if (res.status == CdcacStatus::Sat) return res;
+                    if (res.status == CdcacStatus::Unknown) return res;
+                    if (!firstConflictRecorded) {
+                        auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                        if (bcr.status == BuildCellStatus::Unknown) {
+                            return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        }
+                        firstConflictCell = std::move(*bcr.conflictCell);
+                        firstConflictRecorded = true;
+                    }
                 }
-                certifiedCells.push_back(std::move(*bcr.conflictCell));
+                if (firstConflictRecorded) {
+                    certifiedCells.push_back(std::move(firstConflictCell));
+                }
             }
 
             // Section at this root
             {
                 CdcacResult res = testAndRecurse(root);
-                std::cerr << "[CDCAC]   section[" << rootVal.get_d() << "] result=" << (int)res.status << std::endl;
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
                 auto bcr = buildConflictCell(k, root, res, input, allRoots);
@@ -623,17 +683,27 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // Final sector (lastRoot, +inf)
         if (prevRoot) {
             mpq_class sectorLo = prevRoot->isRational() ? prevRoot->rational : prevRoot->root.upper;
-            mpq_class sampleQ = sectorLo + 1;
-            RealAlg sample = RealAlg::fromRational(sampleQ);
-            CdcacResult res = testAndRecurse(sample);
-            std::cerr << "[CDCAC]   sector(" << sectorLo.get_d() << ",+inf) result=" << (int)res.status << std::endl;
-            if (res.status == CdcacStatus::Sat) return res;
-            if (res.status == CdcacStatus::Unknown) return res;
-            auto bcr = buildConflictCell(k, sample, res, input, allRoots);
-            if (bcr.status == BuildCellStatus::Unknown) {
-                return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+            bool firstConflictRecorded = false;
+            CertifiedCell firstConflictCell;
+            // Try up to 3 samples in the infinite sector before declaring unsat
+            for (int attempt = 0; attempt < 3; ++attempt) {
+                mpq_class sampleQ = sectorLo + (attempt + 1);
+                RealAlg sample = RealAlg::fromRational(sampleQ);
+                CdcacResult res = testAndRecurse(sample);
+                if (res.status == CdcacStatus::Sat) return res;
+                if (res.status == CdcacStatus::Unknown) return res;
+                if (!firstConflictRecorded) {
+                    auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                    }
+                    firstConflictCell = std::move(*bcr.conflictCell);
+                    firstConflictRecorded = true;
+                }
             }
-            certifiedCells.push_back(std::move(*bcr.conflictCell));
+            if (firstConflictRecorded) {
+                certifiedCells.push_back(std::move(firstConflictCell));
+            }
         }
     }
 
@@ -649,11 +719,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 #endif
     CoverageResult cov = CoveringManager::coversAllLine(algebra_, cover);
     if (cov == CoverageResult::DoesNotCover) {
-        std::cerr << "[CDCAC] coversAllLine: does not cover" << std::endl;
         return CdcacResult::mkUnknown(CdcacUnknownReason::InternalInvariantViolation);
     }
     if (cov == CoverageResult::Unknown) {
-        std::cerr << "[CDCAC] coversAllLine: unknown (comparison inconclusive)" << std::endl;
         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
     }
 
@@ -706,8 +774,6 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         if (sign == Sign::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::SignEvaluationInconclusive);
         }
-        std::cerr << "[CDCAC]     checkFullSample: poly=" << kernel_->toString(c.poly)
-                  << " sign=" << (int)sign << " rel=" << (int)c.rel << std::endl;
         if (!relationHolds(sign, c.rel)) {
             conflictLits.push_back(c.reason);
 
