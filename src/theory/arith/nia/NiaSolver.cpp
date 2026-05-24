@@ -2,6 +2,7 @@
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
+#include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <unordered_set>
 
@@ -146,6 +147,19 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             }
             if (pr.kind == PresolveResult::Kind::Lemma) {
                 return TheoryCheckResult::mkLemma(pr.lemma);
+            }
+            // Cap. 9: complete finite-domain enumeration over the presolve's
+            // derived bounds + substitutions.  SAT is validator-gated; UNSAT
+            // is a complete sweep.  NotApplicable falls through to the legacy
+            // pipeline.
+            auto fd = CompleteFiniteDomainEnumerator::run(
+                presolve.state(), normalized, validator_, *kernel_);
+            if (fd.status == FiniteDomainResult::Status::Sat) {
+                currentModel_ = fd.model;
+                return TheoryCheckResult::consistent();
+            }
+            if (fd.status == FiniteDomainResult::Status::UnsatComplete) {
+                return TheoryCheckResult::mkConflict(fd.conflict);
             }
         }
     }
