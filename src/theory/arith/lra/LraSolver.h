@@ -1,31 +1,31 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "GeneralSimplex.h"
 #include "LraPropagationEngine.h"
 #include <gmpxx.h>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 #include <string>
 
 namespace nlcolver {
 
-class LraSolver : public TheorySolver {
+class LraSolver : public ArithSolverBase {
 public:
     LraSolver();
     ~LraSolver();
 
     TheoryId id() const override { return TheoryId::LRA; }
 
-    void push() override;
-    void pop(uint32_t n) override;
+    // LRA keeps its own incremental cursor trail (theoryTrail_ +
+    // appliedCursor_) with simplex-specific entry data, so it overrides
+    // assertLit and routes push/pop/backtrack/reset through the base
+    // hooks. check() is the base default driving a single core reasoner.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
-    void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
-    void reset() override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -44,7 +44,18 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+protected:
+    void onPush() override;
+    void onPop(uint32_t n) override;
+    void onBacktrack(int targetLevel) override;
+    void onReset() override;
+
 private:
+    // Single core reasoner stage (Phase 2): incremental replay + interface
+    // equalities + simplex + disequality split + propagation. Always
+    // yields a verdict (never nullopt-continue).
+    std::optional<TheoryCheckResult> stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+
     GeneralSimplex gs_;
     LinearAtomManager manager_;
 

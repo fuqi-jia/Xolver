@@ -1,12 +1,13 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/arith/linear/LinearModelValidator.h"
 #include "theory/arith/integer/IntegerReasoner.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include <gmpxx.h>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -16,19 +17,19 @@ namespace nlcolver {
 
 class TheoryAtomRegistry;
 
-class LiaSolver : public TheorySolver {
+class LiaSolver : public ArithSolverBase {
 public:
     LiaSolver();
     ~LiaSolver() override;
 
     TheoryId id() const override { return TheoryId::LIA; }
 
-    void push() override;
-    void pop(uint32_t n) override;
+    // LIA keeps its own incremental cursor trail (theoryTrail_ +
+    // appliedCursor_) with simplex/integrality-specific entry data, so it
+    // overrides assertLit and routes push/pop/backtrack/reset through the
+    // base hooks. check() is the base default driving a single core
+    // reasoner.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
-    void backtrackToLevel(int level) override;
-    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
-    void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg) {
         registry_ = reg;
@@ -64,7 +65,17 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+protected:
+    void onPush() override;
+    void onPop(uint32_t n) override;
+    void onBacktrack(int targetLevel) override;
+    void onReset() override;
+
 private:
+    // Single core reasoner stage (Phase 2): incremental replay + interface
+    // equalities + simplex + integrality + branch. Always yields a verdict.
+    std::optional<TheoryCheckResult> stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+
     GeneralSimplex gs_;
     LinearAtomManager manager_;
     TheoryAtomRegistry* registry_ = nullptr;

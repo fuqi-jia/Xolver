@@ -1,6 +1,7 @@
 #include "util/MpqUtils.h"
 #include "theory/arith/lra/LraSolver.h"
 #include "util/MpqUtils.h"
+#include "theory/arith/Reasoner.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -14,7 +15,13 @@
 
 namespace nlcolver {
 
-LraSolver::LraSolver() = default;
+LraSolver::LraSolver() {
+    // Phase 2: single core reasoner (incremental replay + interface eqs +
+    // simplex + disequality split + propagation).
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "lra.core",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCore(db, e); }));
+}
 
 LraSolver::~LraSolver() {
 #ifdef NLCOLVER_LRA_PROFILE
@@ -24,17 +31,17 @@ LraSolver::~LraSolver() {
 #endif
 }
 
-void LraSolver::push() {
+void LraSolver::onPush() {
     gs_.push();
 }
 
-void LraSolver::pop(uint32_t n) {
+void LraSolver::onPop(uint32_t n) {
     for (uint32_t i = 0; i < n; ++i) {
         gs_.pop();
     }
 }
 
-void LraSolver::reset() {
+void LraSolver::onReset() {
 #ifdef NLCOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
@@ -78,7 +85,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     }
 }
 
-void LraSolver::backtrackToLevel(int level) {
+void LraSolver::onBacktrack(int level) {
     currentLevel_ = level;
 
     if (level == 0) {
@@ -130,7 +137,7 @@ bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
     return manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
 }
 
-TheoryCheckResult LraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
 
 #ifdef NLCOLVER_LRA_PROFILE

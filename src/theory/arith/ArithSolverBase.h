@@ -83,7 +83,7 @@ public:
     // `reasoners_` and no override would always report Consistent, so the
     // pipeline is only the verdict when reasoners_ is non-empty.
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb,
-                            TheoryEffort effort) override;
+                            TheoryEffort effort = TheoryEffort::Standard) override;
 
 protected:
     // ----- Reasoner pipeline (Phase 2) -----

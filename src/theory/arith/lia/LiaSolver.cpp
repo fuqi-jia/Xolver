@@ -4,6 +4,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomTypes.h"
+#include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include <cassert>
 #include <algorithm>
@@ -21,6 +22,11 @@ LiaSolver::LiaSolver() {
     if (env) {
         dumpCounter_ = 0;
     }
+    // Phase 2: single core reasoner (incremental replay + interface eqs +
+    // simplex + integrality + branch).
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "lia.core",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCore(db, e); }));
 }
 
 LiaSolver::~LiaSolver() {
@@ -31,17 +37,17 @@ LiaSolver::~LiaSolver() {
 #endif
 }
 
-void LiaSolver::push() {
+void LiaSolver::onPush() {
     gs_.push();
 }
 
-void LiaSolver::pop(uint32_t n) {
+void LiaSolver::onPop(uint32_t n) {
     for (uint32_t i = 0; i < n; ++i) {
         gs_.pop();
     }
 }
 
-void LiaSolver::reset() {
+void LiaSolver::onReset() {
     theoryTrail_.clear();
     appliedCursor_ = 0;
     activeAtoms_.clear();
@@ -86,7 +92,7 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     }
 }
 
-void LiaSolver::backtrackToLevel(int level) {
+void LiaSolver::onBacktrack(int level) {
     currentLevel_ = level;
     if (level == 0) {
         gs_.resetActiveBounds();
@@ -129,7 +135,7 @@ void LiaSolver::backtrackToLevel(int level) {
     }
 }
 
-TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     pendingConflict_.reset();
 
 #ifdef NLCOLVER_LIA_PROFILE
