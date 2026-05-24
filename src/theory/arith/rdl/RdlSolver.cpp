@@ -32,32 +32,10 @@ static Relation negateRel(Relation r) {
 
 RdlSolver::RdlSolver() = default;
 
-void RdlSolver::push() {}
-
-void RdlSolver::pop(uint32_t n) { (void)n; }
-
-void RdlSolver::reset() {
-    activeAssignments_.clear();
+void RdlSolver::onReset() {
+    // Base clears the trail; clear RDL-specific graph state here.
     disequalities_.clear();
     graph_.clear();
-    pendingConflict_.reset();
-    pendingLemma_.reset();
-}
-
-void RdlSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
-    for (auto& a : activeAssignments_) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
-            return;
-        }
-    }
-    activeAssignments_.push_back({level, assertedLit, atom, value});
-}
-
-void RdlSolver::backtrackToLevel(int level) {
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
 }
 
 RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a) {
@@ -150,21 +128,12 @@ TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
 }
 
 TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    if (pendingConflict_) {
-        auto c = *pendingConflict_;
-        pendingConflict_.reset();
-        return TheoryCheckResult::mkConflict(c);
-    }
-    if (pendingLemma_) {
-        auto l = *pendingLemma_;
-        pendingLemma_.reset();
-        return TheoryCheckResult::mkLemma(l);
-    }
+    if (hasPending()) return drainPending();
 
     graph_.clear();
     disequalities_.clear();
 
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         auto r = normalizeAndAdd(a);
         switch (r) {
             case NormalizeResult::Unsupported:

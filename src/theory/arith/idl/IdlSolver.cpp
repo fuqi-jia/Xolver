@@ -48,32 +48,10 @@ static bool isInteger(const mpq_class& q) {
 
 IdlSolver::IdlSolver() = default;
 
-void IdlSolver::push() {}
-
-void IdlSolver::pop(uint32_t n) { (void)n; }
-
-void IdlSolver::reset() {
-    activeAssignments_.clear();
+void IdlSolver::onReset() {
+    // Base clears the trail; clear IDL-specific graph state here.
     disequalities_.clear();
     graph_.clear();
-    pendingConflict_.reset();
-    pendingLemma_.reset();
-}
-
-void IdlSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
-    for (auto& a : activeAssignments_) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
-            return;
-        }
-    }
-    activeAssignments_.push_back({level, assertedLit, atom, value});
-}
-
-void IdlSolver::backtrackToLevel(int level) {
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
 }
 
 IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a) {
@@ -193,22 +171,13 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
 }
 
 TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    if (pendingConflict_) {
-        auto c = *pendingConflict_;
-        pendingConflict_.reset();
-        return TheoryCheckResult::mkConflict(c);
-    }
-    if (pendingLemma_) {
-        auto l = *pendingLemma_;
-        pendingLemma_.reset();
-        return TheoryCheckResult::mkLemma(l);
-    }
+    if (hasPending()) return drainPending();
 
     // V1: full rebuild of graph and disequalities from active assignments.
     graph_.clear();
     disequalities_.clear();
 
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         auto r = normalizeAndAdd(a);
         switch (r) {
             case NormalizeResult::Unsupported:
