@@ -262,6 +262,8 @@ void Purifier::run() {
         purified.push_back(p);
     }
 
+    // Debug removed
+
     ir_.replaceAssertions(purified);
 
     for (ExprId bridge : bridgeAssertions_) {

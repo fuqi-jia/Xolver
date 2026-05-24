@@ -327,6 +327,27 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         auto mr = egraph_.merge(req.a, req.b, req.reason, mergeQueue_);
         if (!mr.merged) continue;
 
+        // Evaluate builtin constants in affected parent terms
+        std::vector<EufTermId> toEval;
+        auto addParents = [&](EufTermId t) {
+            for (EufTermId p : termManager_.parentsOf(t)) {
+                toEval.push_back(p);
+            }
+        };
+        addParents(req.a);
+        addParents(req.b);
+        for (EufTermId member : egraph_.classMembers(mr.kept)) {
+            addParents(member);
+        }
+        for (EufTermId member : egraph_.classMembers(mr.killed)) {
+            addParents(member);
+        }
+        std::sort(toEval.begin(), toEval.end());
+        toEval.erase(std::unique(toEval.begin(), toEval.end()), toEval.end());
+        for (EufTermId p : toEval) {
+            tryEvaluateBuiltin(p);
+        }
+
         // ITE metadata：只 enqueue，不递归 merge
         onEclassMerged(mr.kept, mr.killed);
         if (pendingConflict_) {
@@ -478,6 +499,94 @@ EufSolver::getDeducedSharedEqualities() {
     }
 
     return result;
+}
+
+void EufSolver::tryEvaluateBuiltin(EufTermId t) {
+    if (!coreIr_) return;
+    const auto& node = termManager_.node(t);
+    if (node.args.empty()) return;
+
+    std::string symName = termManager_.symbolName(node.symbol);
+    if (symName.empty() || symName[0] != '#') return;
+
+    // Collect constant argument values from the equivalence class of each arg
+    std::vector<mpq_class> values;
+    values.reserve(node.args.size());
+    for (EufTermId arg : node.args) {
+        EClassId cid = egraph_.rep(arg);
+        bool found = false;
+        mpq_class val;
+        for (EufTermId member : egraph_.classMembers(cid)) {
+            const auto& mnode = termManager_.node(member);
+            if (mnode.origin == NullExpr) continue;
+            const auto& expr = coreIr_->get(mnode.origin);
+            if (!expr.isConst()) continue;
+            if (auto* i = std::get_if<int64_t>(&expr.payload.value)) {
+                val = mpq_class(*i);
+                found = true;
+                break;
+            } else if (auto* s = std::get_if<std::string>(&expr.payload.value)) {
+                try {
+                    val = mpq_class(*s);
+                    found = true;
+                    break;
+                } catch (...) {
+                    continue;
+                }
+            }
+        }
+        if (!found) return;
+        values.push_back(val);
+    }
+
+    mpq_class result;
+    bool ok = false;
+    if (symName == "#builtin.Add") {
+        if (values.size() != 2) return;
+        result = values[0] + values[1];
+        ok = true;
+    } else if (symName == "#builtin.Sub") {
+        if (values.size() != 2) return;
+        result = values[0] - values[1];
+        ok = true;
+    } else if (symName == "#builtin.Neg") {
+        if (values.size() != 1) return;
+        result = -values[0];
+        ok = true;
+    } else if (symName == "#builtin.Mul") {
+        if (values.size() != 2) return;
+        result = values[0] * values[1];
+        ok = true;
+    } else if (symName == "#builtin.Div") {
+        if (values.size() != 2) return;
+        if (values[1] == 0) return;
+        result = values[0] / values[1];
+        ok = true;
+    } else if (symName == "#builtin.Mod") {
+        if (values.size() != 2) return;
+        if (values[1] == 0) return;
+        // mpq_class doesn't have mod; use integer mod if both are integers
+        if (values[0].get_den() == 1 && values[1].get_den() == 1) {
+            mpz_class r = values[0].get_num() % values[1].get_num();
+            result = mpq_class(r);
+            ok = true;
+        }
+    } else if (symName == "#builtin.Abs") {
+        if (values.size() != 1) return;
+        result = abs(values[0]);
+        ok = true;
+    }
+
+    if (!ok) return;
+
+    std::string resultStr = result.get_str();
+    EufTermId constTerm = termManager_.internConstant(resultStr, node.sort);
+    if (constTerm != NullEufTerm && !egraph_.same(t, constTerm)) {
+        MergeReason mr;
+        mr.kind = MergeReasonKind::BuiltinEval;
+        mr.lit = SatLit();
+        mergeQueue_.push_back({t, constTerm, mr});
+    }
 }
 
 } // namespace nlcolver

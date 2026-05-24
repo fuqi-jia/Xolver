@@ -377,14 +377,14 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
         terms.push_back({manager_.getOrCreateVar(gs_, va), mpq_class(1)});
     } else {
         if (!ca) return -1;
-        rhs += *ca;
+        rhs -= *ca;
     }
 
     if (!vb.empty()) {
         terms.push_back({manager_.getOrCreateVar(gs_, vb), mpq_class(-1)});
     } else {
         if (!cb) return -1;
-        rhs -= *cb;
+        rhs += *cb;
     }
 
     int aux = gs_.addConstraint(terms, rhs);

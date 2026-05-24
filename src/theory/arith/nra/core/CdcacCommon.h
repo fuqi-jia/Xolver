@@ -43,6 +43,7 @@ enum class CdcacUnknownReason {
     UnsupportedAlgebraicSection,
     AlgebraicComparisonInconclusive,
     MissingDefiningPoly,
+    AlgebraicIsolationCrash,
 
     // Polynomial arithmetic
     ExactDivisionFailed,

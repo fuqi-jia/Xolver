@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <sstream>
+#include <map>
 
 namespace nlcolver {
 
@@ -316,13 +317,14 @@ TheoryCheckResult LiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     }
 
     // P3: Check interface disequalities. LIA is non-convex; if any
-    // interface disequality is violated by the simplex model, we cannot
+    // interface disequality is provably fixed to 0, we cannot
     // emit a split lemma without arrangement. Return Unknown conservatively.
+    // But if aux is not fixed (free variable), LIA has no opinion — let EUF handle it.
     for (const auto& ieq : interfaceDisequalities_) {
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
         if (aux >= 0) {
-            auto val = gs_.value(aux);
-            if (val.isZero()) {
+            auto fixedOpt = gs_.proveFixedValue(aux);
+            if (fixedOpt && fixedOpt->first.isZero()) {
                 return TheoryCheckResult::unknown();
             }
         }
@@ -687,9 +689,61 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 LiaSolver::getDeducedSharedEqualities() {
-    // P3: LIA is non-convex; deducing single equalities from a convex
-    // simplex model is unsound without arrangement. Return empty.
-    return {};
+    if (!sharedTermRegistry_) return {};
+
+    // Build name -> simplex var map
+    std::unordered_map<std::string, int> nameToVar;
+    for (int i = 0; i < gs_.numVars(); ++i) {
+        nameToVar[gs_.varName(i)] = i;
+    }
+
+    // Map fixed-value shared terms
+    using GroupEntry = std::pair<SharedTermId, std::vector<SatLit>>;
+    std::map<DeltaRational, std::vector<GroupEntry>> groups;
+
+    for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        std::string name = getVarNameForSharedTerm(stId);
+        if (name.empty()) continue;
+        auto it = nameToVar.find(name);
+        if (it == nameToVar.end()) continue;
+        int var = it->second;
+
+        auto fixedOpt = gs_.proveFixedValue(var);
+        if (!fixedOpt) continue;
+
+        const DeltaRational& val = fixedOpt->first;
+        std::vector<SatLit> reasons;
+        for (const auto& br : fixedOpt->second) {
+            reasons.push_back(br.reason);
+        }
+        std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+            return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), reasons.end());
+        groups[val].push_back({stId, std::move(reasons)});
+    }
+
+    std::vector<TheorySolver::SharedEqualityPropagation> result;
+    for (auto& [valKey, terms] : groups) {
+        if (terms.size() < 2) continue;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            for (size_t j = i + 1; j < terms.size(); ++j) {
+                std::vector<SatLit> reasons;
+                reasons.insert(reasons.end(), terms[i].second.begin(), terms[i].second.end());
+                reasons.insert(reasons.end(), terms[j].second.begin(), terms[j].second.end());
+                std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+                    return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), reasons.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{terms[i].first, terms[j].first, std::move(reasons)});
+            }
+        }
+    }
+    return result;
 }
 
 std::vector<SatLit> LiaSolver::allActiveReasons() const {

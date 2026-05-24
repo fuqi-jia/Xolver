@@ -24,12 +24,13 @@ struct LogicFeatures {
     bool hasRealVar = false;         // Real-sort variable (not constant)
     bool hasNonlinear = false;       // Mul of two non-constants, Pow, etc.
     bool hasMixedIntReal = false;    // Both Int and Real variables appear
+    bool hasInterpretedArithmetic = false; // Add, Mul, Lt, etc. on arithmetic sorts
     bool hasUnsupported = false;     // Anything we cannot soundly handle
 
     bool isEmpty() const {
         return !hasBool && !hasInt && !hasReal && !hasUF && !hasBV &&
                !hasQuantifier && !hasArray && !hasFP && !hasNonlinear &&
-               !hasMixedIntReal && !hasUnsupported;
+               !hasMixedIntReal && !hasInterpretedArithmetic && !hasUnsupported;
     }
 };
 

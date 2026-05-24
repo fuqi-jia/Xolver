@@ -3,8 +3,11 @@
 #include "expr/ir.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
+#include "frontend/preprocess/BoolSubtermPurifier.h"
+#include "frontend/preprocess/UfInArithPurifier.h"
 #include "frontend/preprocess/LinearToIntPurifier.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -365,6 +368,27 @@ public:
             dmLowerer.commit();
         }
 
+        // Lower n-ary distinct to pairwise binary distinct
+        {
+            NaryDistinctLowerer distinctLowerer(*ir);
+            distinctLowerer.run();
+            distinctLowerer.commit();
+        }
+
+        // Purify boolean composites in argument positions
+        {
+            BoolSubtermPurifier boolPurifier(*ir);
+            boolPurifier.run();
+            boolPurifier.commit();
+        }
+
+        // Bridge UF applications inside arithmetic expressions
+        {
+            UfInArithPurifier ufPurifier(*ir);
+            ufPurifier.run();
+            ufPurifier.commit();
+        }
+
         // Normalize arithmetic casts (fold constant to_int/to_real)
         {
             ArithCastNormalizer normalizer(*ir);
@@ -439,7 +463,7 @@ public:
         } else if (logic == "QF_RDL" || logic == "RDL") {
             if (features.hasIntVar || features.hasNonlinear || features.hasMixedIntReal) logicMismatch = true;
         } else if (logic == "QF_UF" || logic == "UF") {
-            if (features.hasIntVar || features.hasRealVar || features.hasMixedIntReal) logicMismatch = true;
+            if (features.hasInterpretedArithmetic) logicMismatch = true;
         } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
             if (features.hasIntVar || features.hasMixedIntReal) logicMismatch = true;
         } else if (logic == "QF_LIRA" || logic == "LIRA") {

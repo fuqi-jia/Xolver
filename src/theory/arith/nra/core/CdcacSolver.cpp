@@ -5,14 +5,20 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include <unordered_set>
 #include <algorithm>
+#include <iostream>
 
 namespace nlcolver {
 
 CdcacSolver::CdcacSolver(PolynomialKernel* kernel)
     : kernel_(kernel) {
 #ifdef NLCOLVER_HAS_LIBPOLY
+    std::cerr << "[CDCAC-SOLVER] constructing with libpoly" << std::endl;
     algebra_ = std::make_unique<LibpolyBackend>(kernel_);
     core_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
+    std::cerr << "[CDCAC-SOLVER] core_=" << (core_ ? "yes" : "no")
+              << " algebra_=" << (algebra_ ? "yes" : "no") << std::endl;
+#else
+    std::cerr << "[CDCAC-SOLVER] constructing WITHOUT libpoly" << std::endl;
 #endif
 }
 
@@ -136,7 +142,10 @@ TheoryCheckResult CdcacSolver::check() {
         input.varOrder.push_back(kernel_->getOrCreateVar(name));
     }
 
+    std::cerr << "[CDCAC-SOLVER] solving with " << input.constraints.size()
+              << " constraints, " << input.varOrder.size() << " vars" << std::endl;
     CdcacResult result = core_->solve(input);
+    std::cerr << "[CDCAC-SOLVER] result status=" << (int)result.status << std::endl;
 
     switch (result.status) {
         case CdcacStatus::Sat:

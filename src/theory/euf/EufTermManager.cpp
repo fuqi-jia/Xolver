@@ -65,6 +65,20 @@ EufTermId EufTermManager::internFalseConstant() {
     return falseConstant_;
 }
 
+EufTermId EufTermManager::internConstant(const std::string& name, SortId sort) {
+    FuncSymbolId sym = internSymbol(name, {}, sort);
+    TermKey key{sym, {}};
+    auto it = termMap_.find(key);
+    if (it != termMap_.end()) return it->second;
+    EufTermId id = static_cast<EufTermId>(nodes_.size());
+    nodes_.push_back(ENode{id, sym, {}, sort, NullExpr});
+    termMap_.emplace(std::move(key), id);
+    if (parents_.size() <= id) {
+        parents_.resize(id + 1);
+    }
+    return id;
+}
+
 
 std::string EufTermManager::symbolName(FuncSymbolId sym) const {
     for (const auto& [key, id] : symbols_) {

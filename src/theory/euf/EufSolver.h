@@ -108,6 +108,9 @@ private:
     // P2: Separate interface-constant interning from original EUF expr interning
     EufTermId internSharedConstant(SharedTermId s);
     EufTermId internEufExpr(ExprId eid);
+
+    // Constant arithmetic evaluation for #builtin terms
+    void tryEvaluateBuiltin(EufTermId t);
 };
 
 } // namespace nlcolver

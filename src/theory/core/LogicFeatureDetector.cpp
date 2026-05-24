@@ -107,12 +107,16 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         case Kind::Xor:
             f.hasBool = true;
             break;
+        case Kind::Add:
+        case Kind::Sub:
+        case Kind::Neg:
         case Kind::Mod:
         case Kind::Abs:
-            f.hasInt = true;
+            f.hasInterpretedArithmetic = true;
             break;
         case Kind::Pow:
             f.hasNonlinear = true;
+            f.hasInterpretedArithmetic = true;
             if (e.children.size() >= 1) {
                 auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
                 if (sk == SortKind::Int) f.hasInt = true;
@@ -120,6 +124,7 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
             }
             break;
         case Kind::Mul: {
+            f.hasInterpretedArithmetic = true;
             if (e.children.size() >= 2) {
                 bool leftNonConst = isNonConstantExpr(e.children[0], visited);
                 bool rightNonConst = isNonConstantExpr(e.children[1], visited);
@@ -131,6 +136,7 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         }
         case Kind::Div: {
             // Integer div vs real div: use sort of result
+            f.hasInterpretedArithmetic = true;
             auto sk = ir_.sortKind(e.sort);
             if (sk == SortKind::Int) {
                 f.hasInt = true;
@@ -151,9 +157,12 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
             f.hasBV = true;
             break;
         case Kind::ToReal:
+            f.hasInterpretedArithmetic = true;
             scanExpr(e.children[0], f, visited);
             return;
         case Kind::ToInt:
+        case Kind::IsInt:
+            f.hasInterpretedArithmetic = true;
             f.hasUnsupported = true;
             break;
         default:
@@ -165,6 +174,10 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         auto sk = ir_.sortKind(ir_.get(e.children[0]).sort);
         if (sk == SortKind::Int) f.hasInt = true;
         else if (sk == SortKind::Real) f.hasReal = true;
+        if (e.kind == Kind::Lt || e.kind == Kind::Leq ||
+            e.kind == Kind::Gt || e.kind == Kind::Geq) {
+            f.hasInterpretedArithmetic = true;
+        }
     }
 
     // Recurse into children

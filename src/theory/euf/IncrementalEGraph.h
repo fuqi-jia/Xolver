@@ -62,6 +62,12 @@ public:
     void setFalseTerm(EufTermId t) { falseTerm_ = t; }
     bool hasTrueFalseConflict() const;
 
+    // Access members of an equivalence class (for constant evaluation)
+    const std::vector<EufTermId>& classMembers(EClassId c) const {
+        static const std::vector<EufTermId> empty;
+        return c < members_.size() ? members_[c] : empty;
+    }
+
 #ifndef NDEBUG
     // Verify that every app term has a registered signature matching its
     // canonical signature, and all terms with the same canonical signature

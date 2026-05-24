@@ -1,5 +1,6 @@
 #include "theory/arith/nra/NraSolver.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include <iostream>
 
 namespace nlcolver {
 
@@ -75,7 +76,10 @@ void NraSolver::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult NraSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
-    return engine_.check();
+    std::cerr << "[NRA-CHECK] entering check" << std::endl;
+    auto r = engine_.check();
+    std::cerr << "[NRA-CHECK] engine returned kind=" << (int)r.kind << std::endl;
+    return r;
 }
 
 TheoryCheckResult NraSolver::assertInterfaceEquality(

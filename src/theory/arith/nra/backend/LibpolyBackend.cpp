@@ -228,7 +228,9 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     std::signal(SIGSEGV, g_oldSegvHandler);
     std::signal(SIGFPE,  g_oldFpeHandler);
     if (jumped != 0) {
-        return RootSet{};
+        RootSet result;
+        result.crashOccurred = true;
+        return result;
     }
 
     RootSet result;

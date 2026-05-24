@@ -138,9 +138,53 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             if (!node.children.empty()) {
                 SmallVector<ExprId, 4> newChildren;
                 bool changed = false;
+
+                // Detect Real context for integer-constant coercion.
+                // For Eq/Distinct/comparisons: if any sibling is Real, coerce Int constants.
+                // For arithmetic ops: if parent sort is Real, coerce Int constants.
+                bool realContext = false;
+                if (ir_.realSortId() != NullSort) {
+                    realContext = (node.sort == ir_.realSortId());
+                    if (!realContext && (node.kind == Kind::Eq || node.kind == Kind::Distinct ||
+                                         node.kind == Kind::Lt || node.kind == Kind::Leq ||
+                                         node.kind == Kind::Gt || node.kind == Kind::Geq)) {
+                        for (ExprId sib : node.children) {
+                            if (ir_.get(sib).sort == ir_.realSortId()) {
+                                realContext = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 for (ExprId c : node.children) {
                     auto it = memo_.find(c);
                     ExprId rc = (it != memo_.end()) ? it->second : c;
+
+                    // Coerce integer constant to real when in a Real context
+                    const auto& childNode = ir_.get(c);
+                    if (realContext && childNode.kind == Kind::ConstInt) {
+                        if (auto* v = std::get_if<int64_t>(&childNode.payload.value)) {
+                            CoreExpr ne;
+                            ne.kind = Kind::ConstReal;
+                            ne.sort = ir_.realSortId();
+                            ne.payload = Payload(mpq_class(*v).get_str());
+                            rc = ir_.add(std::move(ne));
+                            changed = true;
+                        }
+                    } else if (realContext && childNode.kind == Kind::ConstReal &&
+                               childNode.sort == ir_.intSortId()) {
+                        // ConstReal node that was classified as Int (e.g. IntOrReal parser constant)
+                        if (auto* s = std::get_if<std::string>(&childNode.payload.value)) {
+                            CoreExpr ne;
+                            ne.kind = Kind::ConstReal;
+                            ne.sort = ir_.realSortId();
+                            ne.payload = Payload(*s);
+                            rc = ir_.add(std::move(ne));
+                            changed = true;
+                        }
+                    }
+
                     newChildren.push_back(rc);
                     if (rc != c) changed = true;
                 }

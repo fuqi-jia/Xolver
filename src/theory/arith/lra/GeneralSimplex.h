@@ -9,6 +9,7 @@
 #include <optional>
 #include <unordered_map>
 #include <deque>
+#include <unordered_set>
 #include <cassert>
 
 namespace nlcolver {
@@ -309,6 +310,9 @@ private:
 
     // Row of a basic var
     int rowOfBasic(int var) const;
+
+    std::optional<std::pair<DeltaRational, std::vector<BoundReason>>>
+    proveFixedValueImpl(int var, std::unordered_set<int>& visited) const;
 
 #ifdef NLCOLVER_LRA_PROFILE
 public:

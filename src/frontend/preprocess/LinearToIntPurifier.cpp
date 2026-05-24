@@ -62,42 +62,40 @@ ExprId LinearToIntPurifier::purifyRec(ExprId e, ScopeLevel level) {
     if (node.kind == Kind::ToInt && node.children.size() == 1) {
         ExprId r = purifyRec(node.children[0], level);
 
-        if (isLinearRealExpr(r)) {
-            CacheKey key{r, level};
-            auto it = toIntCache_.find(key);
-            if (it != toIntCache_.end()) return it->second;
-
-            ExprId k = ir_.makeFreshVariable(ir_.intSortId(), "__nlc_floor");
-            toIntCache_[key] = k;
-            infos_.push_back({e, r, k, level});
-            return k;
-        } else {
+        if (!isLinearRealExpr(r)) {
             hasUnsupportedNonlinearToInt_ = true;
-            return e;
         }
+
+        CacheKey key{r, level};
+        auto it = toIntCache_.find(key);
+        if (it != toIntCache_.end()) return it->second;
+
+        ExprId k = ir_.makeFreshVariable(ir_.intSortId(), "__nlc_floor");
+        toIntCache_[key] = k;
+        infos_.push_back({e, r, k, level});
+        return k;
     }
 
     if (node.kind == Kind::IsInt && node.children.size() == 1) {
         ExprId r = purifyRec(node.children[0], level);
 
-        if (isLinearRealExpr(r)) {
-            CacheKey key{r, level};
-            auto it = toIntCache_.find(key);
-            ExprId k;
-            if (it != toIntCache_.end()) {
-                k = it->second;
-            } else {
-                k = ir_.makeFreshVariable(ir_.intSortId(), "__nlc_floor");
-                toIntCache_[key] = k;
-                infos_.push_back({e, r, k, level});
-            }
-            // is_int(r)  <=>  r = to_real(k)  where k = floor(r)
-            ExprId toRealK = ir_.add(CoreExpr{Kind::ToReal, ir_.realSortId(), {k}, {}});
-            return ir_.add(CoreExpr{Kind::Eq, ir_.boolSortId(), {r, toRealK}, {}});
-        } else {
+        if (!isLinearRealExpr(r)) {
             hasUnsupportedNonlinearToInt_ = true;
-            return e;
         }
+
+        CacheKey key{r, level};
+        auto it = toIntCache_.find(key);
+        ExprId k;
+        if (it != toIntCache_.end()) {
+            k = it->second;
+        } else {
+            k = ir_.makeFreshVariable(ir_.intSortId(), "__nlc_floor");
+            toIntCache_[key] = k;
+            infos_.push_back({e, r, k, level});
+        }
+        // is_int(r)  <=>  r = to_real(k)  where k = floor(r)
+        ExprId toRealK = ir_.add(CoreExpr{Kind::ToReal, ir_.realSortId(), {k}, {}});
+        return ir_.add(CoreExpr{Kind::Eq, ir_.boolSortId(), {r, toRealK}, {}});
     }
 
     if (node.children.empty()) return e;

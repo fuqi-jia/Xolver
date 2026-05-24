@@ -77,7 +77,12 @@ static FiberCellCoverage cellToFiberCoverage(const Cell& cell, size_t index) {
 
 // Helper: try local projection to get univariate polynomials for current level
 // V4: uses ProjectionPolicy instead of raw LocalProjectionEngine.
-static std::vector<RootSet> tryLocalProjection(
+struct TryLocalProjectionResult {
+    std::vector<RootSet> rootSets;
+    bool generatedProjectionPolys = false;
+};
+
+static TryLocalProjectionResult tryLocalProjection(
     const std::vector<CdcacConstraint>& constraints,
     const SamplePoint& prefix,
     VarId var,
@@ -86,7 +91,7 @@ static std::vector<RootSet> tryLocalProjection(
     AlgebraBackend* algebra,
     ProjectionPolicy* policy) {
 
-    std::vector<RootSet> result;
+    TryLocalProjectionResult result;
 
     // Convert constraints to RationalPolynomial
     std::vector<ReasonedPolynomial> rpConstraints;
@@ -133,6 +138,7 @@ static std::vector<RootSet> tryLocalProjection(
         // Try to convert projected polynomials to univariate in current var
         for (const auto& rp : projResult.projectionPolys) {
             if (!rp.poly.contains(var)) continue;
+            result.generatedProjectionPolys = true;
 
             // Convert to PolyId
             PolyId polyId = rp.poly.toPolyId(*kernel);
@@ -144,7 +150,7 @@ static std::vector<RootSet> tryLocalProjection(
 
             RootSet roots = algebra->isolateRealRoots(up);
             if (roots.numRoots() > 0) {
-                result.push_back(std::move(roots));
+                result.rootSets.push_back(std::move(roots));
             }
         }
     }
@@ -357,6 +363,8 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
 
     VarId var = input.varOrder[k];
+    std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var)
+              << " n=" << n << " constraints=" << input.constraints.size() << std::endl;
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var) << std::endl;
 #endif
@@ -513,6 +521,14 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             }
             continue;
         }
+        // Skip zero polynomials: they are constant (zero) w.r.t. current var
+        // and will be handled by checkFullSample.
+        {
+            auto vanish = algebra_->vanishesAtPrefix(p, prefix, var);
+            if (vanish == VanishResult::Vanishes) {
+                continue;
+            }
+        }
         RootSet roots = algebra_->isolateRealRoots(up);
         if (!algebra_->validateRootIsolation(up, roots)) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::RootIsolationInvalid);
@@ -534,11 +550,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     // currently produces spurious roots from prefix-degenerate projection
     // polynomials (cf. nra_125 unsoundness), so we keep the conservative
     // guard there until the deeper-projection path is hardened.
+    bool projectionSucceeded = false;
     if (((needsProjection && k == 0) || (uniPolys.empty() && rootSets.empty())) && k + 1 < n) {
-        auto projRoots = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_, policy_.get());
-        for (auto& rs : projRoots) {
+        auto projResult = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_, policy_.get());
+        for (auto& rs : projResult.rootSets) {
             rootSets.push_back(std::move(rs));
         }
+        projectionSucceeded = projResult.generatedProjectionPolys;
     }
 
     // 2. Merge all roots
@@ -589,7 +607,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     // 4. Generate and test cells
     if (allRoots.roots.empty()) {
-        if (uniPolys.empty()) {
+        if (uniPolys.empty() && !projectionSucceeded) {
             // No local constraints at all for this variable
             mpq_class defaultSample(0);
             if (input.seed && input.seed->values.count(var)) {
@@ -770,7 +788,11 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
     std::vector<CertificateReasonLit> certReasons;
 
     for (const auto& c : input.constraints) {
+        std::cerr << "[CDCAC-FULL] poly=" << kernel_->toString(c.poly)
+                  << " rel=" << (int)c.rel
+                  << " sampleVars=" << sample.numVars() << std::endl;
         Sign sign = algebra_->signAt(c.poly, sample);
+        std::cerr << "[CDCAC-FULL]   sign=" << (int)sign << std::endl;
         if (sign == Sign::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::SignEvaluationInconclusive);
         }

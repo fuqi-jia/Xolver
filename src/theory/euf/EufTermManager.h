@@ -71,6 +71,7 @@ public:
     EufTermId falseConstant() const { return falseConstant_; }
     EufTermId internTrueConstant();
     EufTermId internFalseConstant();
+    EufTermId internConstant(const std::string& name, SortId sort);
 
     const std::vector<EufTermId>& parentsOf(EufTermId t) const {
         static const std::vector<EufTermId> empty;

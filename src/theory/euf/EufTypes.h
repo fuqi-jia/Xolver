@@ -29,7 +29,8 @@ struct EufAtom {
 
 enum class MergeReasonKind {
     AssertedEquality,
-    Congruence
+    Congruence,
+    BuiltinEval
 };
 
 struct MergeReason {

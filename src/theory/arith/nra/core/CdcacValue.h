@@ -61,6 +61,7 @@ struct RootSet {
     std::vector<RealAlg> roots;
     int numRoots() const { return static_cast<int>(roots.size()); }
     bool empty() const { return roots.empty(); }
+    bool crashOccurred = false;
 };
 
 struct Bound {

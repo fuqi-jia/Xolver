@@ -1,6 +1,6 @@
 ; Predicate transitivity
 (set-logic QF_UF)
-(set-info :status sat)
+(set-info :status unsat)
 (declare-fun P (Int) Bool)
 (declare-fun a () Int)
 (declare-fun b () Int)

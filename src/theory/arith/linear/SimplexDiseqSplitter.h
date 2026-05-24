@@ -35,10 +35,9 @@ TheoryCheckResult handleSimplexDisequalities(
         auto result = buildSplit(d);
         if (result.kind == TheoryCheckResult::Kind::Consistent) continue;
         if (result.kind == TheoryCheckResult::Kind::Lemma && result.lemmaOpt) {
-            if (lemmaDb.contains(*result.lemmaOpt)) {
+            if (lemmaDb.isInstalled(*result.lemmaOpt)) {
                 return TheoryCheckResult::unknown();
             }
-            lemmaDb.insertIfNew(*result.lemmaOpt);
         }
         return result;
     }

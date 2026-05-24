@@ -807,22 +807,21 @@ std::vector<GeneralSimplex::BoundReason> GeneralSimplex::explainFixedValue(int v
     return reasons;
 }
 
-static thread_local int proveFixedValueDepth = 0;
-static constexpr int MAX_PROVE_FIXED_VALUE_DEPTH = 10000;
-
 std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
 GeneralSimplex::proveFixedValue(int var) const {
+    std::unordered_set<int> visited;
+    return proveFixedValueImpl(var, visited);
+}
+
+std::optional<std::pair<DeltaRational, std::vector<GeneralSimplex::BoundReason>>>
+GeneralSimplex::proveFixedValueImpl(int var, std::unordered_set<int>& visited) const {
     if (var < 0 || var >= static_cast<int>(vars_.size())) {
         return std::nullopt;
     }
-    if (++proveFixedValueDepth > MAX_PROVE_FIXED_VALUE_DEPTH) {
-        --proveFixedValueDepth;
+    if (visited.count(var)) {
         return std::nullopt;
     }
-
-    struct DepthGuard {
-        ~DepthGuard() { --proveFixedValueDepth; }
-    } guard;
+    visited.insert(var);
 
     // Direct bound fix
     auto direct = fixedValue(var);
@@ -832,35 +831,88 @@ GeneralSimplex::proveFixedValue(int var) const {
 
     // If var is basic, check whether all non-basic entries in its row are fixed.
     int row = basicRowOfVar(var);
-    if (row < 0 || row >= tableau().numRows()) {
-        return std::nullopt;
-    }
-
-    const auto& tabRow = tableau().row(row);
-    DeltaRational value(tabRow.rhs);
-    std::vector<BoundReason> reasons;
-    for (const auto& e : tabRow.entries) {
-        if (e.col < 0 || e.col >= static_cast<int>(vars_.size())) {
-            return std::nullopt;
+    if (row >= 0 && row < tableau().numRows()) {
+        const auto& tabRow = tableau().row(row);
+        DeltaRational value(tabRow.rhs);
+        std::vector<BoundReason> reasons;
+        for (const auto& e : tabRow.entries) {
+            if (e.col < 0 || e.col >= static_cast<int>(vars_.size())) {
+                return std::nullopt;
+            }
+            auto sub = proveFixedValueImpl(e.col, visited);
+            if (!sub) return std::nullopt;
+            value += e.coeff * sub->first;
+            reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
         }
-        auto sub = proveFixedValue(e.col);
-        if (!sub) return std::nullopt;
-        value += e.coeff * sub->first;
-        reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
+
+        // Deduplicate reasons
+        std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+            if (a.var != b.var) return a.var < b.var;
+            if (a.isLower != b.isLower) return a.isLower < b.isLower;
+            if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
+            return a.reason.sign < b.reason.sign;
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+            return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
+        }), reasons.end());
+
+        return std::make_pair(value, std::move(reasons));
     }
 
-    // Deduplicate reasons
-    std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-        if (a.var != b.var) return a.var < b.var;
-        if (a.isLower != b.isLower) return a.isLower < b.isLower;
-        if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
-        return a.reason.sign < b.reason.sign;
-    });
-    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
-        return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
-    }), reasons.end());
+    // Non-basic variable: check if its value is determined by a fixed basic variable.
+    // If var appears in basic row b = RHS + sum(c_i * v_i), and b is fixed,
+    // and all non-basic entries except var are fixed, then var is fixed.
+    for (int r = 0; r < tableau().numRows(); ++r) {
+        const auto& tabRow = tableau().row(r);
+        int b = tabRow.basicVar;
+        if (b < 0) continue;
 
-    return std::make_pair(value, std::move(reasons));
+        // Find var in this row
+        int foundIdx = -1;
+        for (size_t i = 0; i < tabRow.entries.size(); ++i) {
+            if (tabRow.entries[i].col == var) {
+                foundIdx = static_cast<int>(i);
+                break;
+            }
+        }
+        if (foundIdx < 0) continue;
+
+        // Check if basic var b is fixed
+        auto basicFixed = proveFixedValueImpl(b, visited);
+        if (!basicFixed) continue;
+
+        // Check if all other non-basic entries are fixed
+        DeltaRational value = basicFixed->first;
+        std::vector<BoundReason> reasons = basicFixed->second;
+        bool allFixed = true;
+        for (size_t i = 0; i < tabRow.entries.size(); ++i) {
+            if (static_cast<int>(i) == foundIdx) continue;
+            const auto& e = tabRow.entries[i];
+            auto sub = proveFixedValueImpl(e.col, visited);
+            if (!sub) { allFixed = false; break; }
+            value -= e.coeff * sub->first;
+            reasons.insert(reasons.end(), sub->second.begin(), sub->second.end());
+        }
+        if (!allFixed) continue;
+
+        // var = (b_value - RHS - sum(c_i * v_i)) / c_var
+        value = (value - DeltaRational(tabRow.rhs)) / tabRow.entries[foundIdx].coeff;
+
+        // Deduplicate reasons
+        std::sort(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+            if (a.var != b.var) return a.var < b.var;
+            if (a.isLower != b.isLower) return a.isLower < b.isLower;
+            if (a.reason.var != b.reason.var) return a.reason.var < b.reason.var;
+            return a.reason.sign < b.reason.sign;
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(), [](const BoundReason& a, const BoundReason& b) {
+            return a.var == b.var && a.isLower == b.isLower && a.reason.var == b.reason.var && a.reason.sign == b.reason.sign;
+        }), reasons.end());
+
+        return std::make_pair(value, std::move(reasons));
+    }
+
+    return std::nullopt;
 }
 
 // ============================================================================
