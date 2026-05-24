@@ -39,7 +39,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_012_unsat_product_lower_bound.smt2`~~ — **FIXED** in 2026-05-21: hardened `GeneralSimplex::explainLowerConflict` / `explainUpperConflict` against missing bound `reason` optional.
 - ~~`nira/nira_013_sat_polynomial_int_coeff_real_var.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation routes the univariate quadratic `2r²-3r+1=0` to CDCAC, which finds roots r ∈ {1/2, 1}).
 - `nira/nira_018_sat_nonlinear_real_to_int.smt2` — `to_int(r²+1) ≥ 1` returns unknown.
-- `nira/nira_020_sat_three_vars.smt2` — `r = to_real(i)/to_real(j)` returns unknown.
+- ~~`nira/nira_020_sat_three_vars.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8a `UnconditionalConstantPropagation` (collect `i=2, j=3` from top-level unconditional conjuncts and substitute globally — but never under UF applications, to preserve EUF congruence) + Cap. 8b `ToRealLiteralFold` (`(to_real 2) → 2`, `(/ 2 3) → 2/3`).
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
 - ~~`nra/nra_038_sat_ellipse_tangent.smt2`~~ — **FIXED** in 2026-05-23: pseudoRemainder bug fix + level-0 projection trigger (`RationalPolynomial::pseudoRemainder` was using post-multiplication leading coefficient instead of pre-multiplication, causing SubresultantEngine to never reduce degree when divisor's leading coefficient was non-constant; this broke all CDCAC projection for non-trivial cases).
 - `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
@@ -120,7 +120,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_137_unsat_strict_cs_violation.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
 - ~~`nra/nra_138_sat_huge_coeff.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: addTerm canonicalization handles big coefficients (3335d5e)).
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
-- `nia/nia_095_unsat_collatz_step_wrong.smt2` — Collatz step ITE-based — unknown.
+- ~~`nia/nia_095_unsat_collatz_step_wrong.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8a `UnconditionalConstantPropagation` + constant-folder bonus path. `n=5` is collected from the top-level unconditional conjunct; substitution into the ITE's arithmetic arguments produces `(mod 5 2) → 1`, `(div 5 2) → 2`, `(+ (* 3 5) 1) → 16` after the arithmetic / relation / boolean constant fold; the guard `(= 1 0)` collapses to `false`; the else branch wins; `n_next = 16` together with `n_next = 8` collapses to `(= 16 8) → false`, which the constant-folder strips into a `ConstBool false` assertion. SAT layer reads `false` → UNSAT.
 - `nia/nia_097_unsat_squares_chain.smt2` — squares chain inequality — unknown.
 - ~~`nia/nia_098_sat_huge_modulus.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker handles mpz_class moduli of arbitrary size).
 - ~~`uflra/uflra_008_sat_array_with_real.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: frontend purifier improvements (1cedd97)).

@@ -9,6 +9,8 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
+#include "frontend/preprocess/ToRealLiteralFold.h"
+#include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -323,6 +325,35 @@ public:
             for (const auto& [level, a] : loweredScoped) {
                 ir->addAssertion(a, level);
             }
+        }
+
+        // Cap. 8a — UnconditionalConstantPropagation.
+        // Collect (= var ConstNumeric) from top-level unconditional
+        // conjuncts; substitute the variable by the constant globally
+        // (including under ite / or / => / mod / div / to_real / to_int).
+        // This is sound: an unconditional binding holds in every model.
+        // On contradictory bindings the Solver short-circuits to UNSAT.
+        {
+            UnconditionalConstantPropagation cprop(*ir);
+            cprop.run();
+            if (cprop.hadContradiction()) {
+#ifdef NLCOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                return Result::Unsat;
+            }
+            cprop.commit();
+        }
+
+        // Cap. 8b — ToRealLiteralFold.
+        // Pure constant folding: (to_real ConstInt k) -> ConstReal k,
+        // (to_real ConstReal r) unwrapped, and (/ ConstReal a ConstReal b)
+        // folded to ConstReal (a/b) when b != 0. Runs after Cap. 8a so
+        // it sees the constant-propagated to_real arguments.
+        {
+            ToRealLiteralFold fold(*ir);
+            fold.run();
+            fold.commit();
         }
 
         // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.
