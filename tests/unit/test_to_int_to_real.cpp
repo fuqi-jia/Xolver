@@ -1,23 +1,32 @@
 #include <doctest/doctest.h>
 #include "expr/ir.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
-#include "frontend/preprocess/LinearToIntPurifier.h"
+#include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "expr/Smt2Dumper.h"
 #include <iostream>
 
 using namespace nlcolver;
 
-TEST_CASE("ArithCastNormalizer: to_real(ConstInt)") {
-    CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
+namespace {
+
+void setupBasicSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& realSort) {
+    boolSort = ir.allocateSortId();
     ir.registerSort(boolSort, SortKind::Bool);
     ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
+    intSort = ir.allocateSortId();
     ir.registerSort(intSort, SortKind::Int);
     ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
+    realSort = ir.allocateSortId();
     ir.registerSort(realSort, SortKind::Real);
     ir.setRealSortId(realSort);
+}
+
+} // namespace
+
+TEST_CASE("ArithCastNormalizer: to_real(ConstInt)") {
+    CoreIr ir;
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
 
     ExprId three = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
     ExprId toRealThree = ir.add(CoreExpr{Kind::ToReal, realSort, {three}, {}});
@@ -29,7 +38,6 @@ TEST_CASE("ArithCastNormalizer: to_real(ConstInt)") {
     REQUIRE(result.assertions.size() == 1);
 
     const auto& lowered = ir.get(result.assertions[0].second);
-    // to_real(3) should be folded to ConstReal "3"
     REQUIRE(lowered.kind == Kind::Eq);
     REQUIRE(lowered.children.size() == 2);
     const auto& lhs = ir.get(lowered.children[0]);
@@ -38,15 +46,8 @@ TEST_CASE("ArithCastNormalizer: to_real(ConstInt)") {
 
 TEST_CASE("ArithCastNormalizer: to_int(ConstReal)") {
     CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
-    ir.registerSort(intSort, SortKind::Int);
-    ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
-    ir.registerSort(realSort, SortKind::Real);
-    ir.setRealSortId(realSort);
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
 
     ExprId threePointSeven = ir.add(CoreExpr{Kind::ConstReal, realSort, {}, Payload(std::string("37/10"))});
     ExprId toInt = ir.add(CoreExpr{Kind::ToInt, intSort, {threePointSeven}, {}});
@@ -67,17 +68,10 @@ TEST_CASE("ArithCastNormalizer: to_int(ConstReal)") {
     REQUIRE(*v == 3);
 }
 
-TEST_CASE("LinearToIntPurifier: detectOnly linear to_int") {
+TEST_CASE("ToIntDefinitionalLowerer: linear to_int succeeds and emits bridge") {
     CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
-    ir.registerSort(intSort, SortKind::Int);
-    ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
-    ir.registerSort(realSort, SortKind::Real);
-    ir.setRealSortId(realSort);
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
 
     ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
     ExprId toInt = ir.add(CoreExpr{Kind::ToInt, intSort, {x}, {}});
@@ -85,22 +79,32 @@ TEST_CASE("LinearToIntPurifier: detectOnly linear to_int") {
     ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {toInt, three}, {}});
     ir.addAssertion(eq);
 
-    LinearToIntPurifier purifier(ir);
-    auto detect = purifier.detectOnly();
-    REQUIRE(!detect.hasUnsupportedNonlinearToInt);
+    ToIntDefinitionalLowerer t2i(ir);
+    REQUIRE(t2i.run());
+    REQUIRE(t2i.didLower());
+    REQUIRE_FALSE(t2i.hadNonlinearBridge());
+    t2i.commit();
+
+    // After commit, assertion list = [rewritten eq, bridge, lower, upper].
+    auto scoped = ir.getScopedAssertions();
+    REQUIRE(scoped.size() == 4);
+    const auto& rewritten = ir.get(scoped[0].second);
+    REQUIRE(rewritten.kind == Kind::Eq);
+    const auto& lhs = ir.get(rewritten.children[0]);
+    REQUIRE(lhs.kind == Kind::Variable);
+    REQUIRE(lhs.sort == intSort);
+    // bridge equality r_t = x
+    const auto& bridge = ir.get(scoped[1].second);
+    REQUIRE(bridge.kind == Kind::Eq);
+    // floor sandwich
+    REQUIRE(ir.get(scoped[2].second).kind == Kind::Leq);
+    REQUIRE(ir.get(scoped[3].second).kind == Kind::Lt);
 }
 
-TEST_CASE("LinearToIntPurifier: detectOnly nonlinear to_int") {
+TEST_CASE("ToIntDefinitionalLowerer: nonlinear to_int succeeds and flags bridge") {
     CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
-    ir.registerSort(intSort, SortKind::Int);
-    ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
-    ir.registerSort(realSort, SortKind::Real);
-    ir.setRealSortId(realSort);
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
 
     ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
     ExprId mul = ir.add(CoreExpr{Kind::Mul, realSort, {x, x}, {}});
@@ -109,71 +113,31 @@ TEST_CASE("LinearToIntPurifier: detectOnly nonlinear to_int") {
     ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {toInt, three}, {}});
     ir.addAssertion(eq);
 
-    LinearToIntPurifier purifier(ir);
-    auto detect = purifier.detectOnly();
-    REQUIRE(detect.hasUnsupportedNonlinearToInt);
+    ToIntDefinitionalLowerer t2i(ir);
+    REQUIRE(t2i.run());
+    REQUIRE(t2i.didLower());
+    REQUIRE(t2i.hadNonlinearBridge());
 }
 
-TEST_CASE("LinearToIntPurifier: run creates floor lemmas") {
+TEST_CASE("ToIntDefinitionalLowerer: shared to_int(x) reuses i_t") {
     CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
-    ir.registerSort(intSort, SortKind::Int);
-    ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
-    ir.registerSort(realSort, SortKind::Real);
-    ir.setRealSortId(realSort);
-
-    ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
-    ExprId toInt = ir.add(CoreExpr{Kind::ToInt, intSort, {x}, {}});
-    ExprId three = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(3))});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {toInt, three}, {}});
-    ir.addAssertion(eq);
-
-    LinearToIntPurifier purifier(ir);
-    auto result = purifier.run();
-
-    REQUIRE(!result.hasUnsupportedNonlinearToInt);
-    REQUIRE(result.purifiedAssertions.size() == 1);
-    REQUIRE(result.floorLemmas.size() == 2);
-    REQUIRE(result.infos.size() == 1);
-
-    // Check purified assertion is (= k 3)
-    const auto& pa = ir.get(result.purifiedAssertions[0].second);
-    REQUIRE(pa.kind == Kind::Eq);
-    const auto& lhs = ir.get(pa.children[0]);
-    REQUIRE(lhs.kind == Kind::Variable);
-    REQUIRE(lhs.sort == intSort);
-
-    // Check floor lemmas
-    const auto& lower = ir.get(result.floorLemmas[0].second);
-    const auto& upper = ir.get(result.floorLemmas[1].second);
-    REQUIRE(lower.kind == Kind::Leq);
-    REQUIRE(upper.kind == Kind::Lt);
-}
-
-TEST_CASE("LinearToIntPurifier: cache dedup same to_int") {
-    CoreIr ir;
-    SortId boolSort = ir.allocateSortId();
-    ir.registerSort(boolSort, SortKind::Bool);
-    ir.setBoolSortId(boolSort);
-    SortId intSort = ir.allocateSortId();
-    ir.registerSort(intSort, SortKind::Int);
-    ir.setIntSortId(intSort);
-    SortId realSort = ir.allocateSortId();
-    ir.registerSort(realSort, SortKind::Real);
-    ir.setRealSortId(realSort);
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
 
     ExprId x = ir.add(CoreExpr{Kind::Variable, realSort, {}, Payload(std::string("x"))});
     ExprId toInt1 = ir.add(CoreExpr{Kind::ToInt, intSort, {x}, {}});
     ExprId toInt2 = ir.add(CoreExpr{Kind::ToInt, intSort, {x}, {}});
     ExprId add = ir.add(CoreExpr{Kind::Add, intSort, {toInt1, toInt2}, {}});
-    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {add, add}, {}});
+    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(0))});
+    ExprId eq = ir.add(CoreExpr{Kind::Eq, boolSort, {add, zero}, {}});
     ir.addAssertion(eq);
 
-    LinearToIntPurifier purifier(ir);
-    auto result = purifier.run();
-    REQUIRE(result.infos.size() == 1); // same x should share same k
+    ToIntDefinitionalLowerer t2i(ir);
+    REQUIRE(t2i.run());
+    REQUIRE(t2i.didLower());
+    t2i.commit();
+
+    // Should emit a single bridge + sandwich (3 side assertions), not two.
+    auto scoped = ir.getScopedAssertions();
+    REQUIRE(scoped.size() == 4);  // 1 rewritten + 3 side
 }

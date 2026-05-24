@@ -54,7 +54,10 @@ TEST_CASE("End-to-end: to_int linear Real variable = unsat") {
     REQUIRE(resultCode(result) == resultCode(Result::Unsat));
 }
 
-TEST_CASE("End-to-end: to_int nonlinear = unknown") {
+TEST_CASE("End-to-end: to_int nonlinear = sat (Cap. 8c lowers nonlinear to_int)") {
+    // (= (to_int (* x x)) 3) means 3 <= x*x < 4, so x = sqrt(3) works.
+    // ToIntDefinitionalLowerer (Cap. 8c) introduces a bridge r_t = x*x and
+    // upgrades the logic from QF_LIRA to QF_NIRA so NRA-CDCAC can solve it.
     Solver solver;
     std::string smt2 = R"(
 (set-logic QF_LIRA)
@@ -65,7 +68,7 @@ TEST_CASE("End-to-end: to_int nonlinear = unknown") {
     auto path = writeTempSmt2(smt2);
     REQUIRE(solver.parseFile(path));
     auto result = solver.checkSat();
-    REQUIRE(resultCode(result) == resultCode(Result::Unknown));
+    REQUIRE(resultCode(result) == resultCode(Result::Sat));
 }
 
 TEST_CASE("End-to-end: to_int negative floor") {

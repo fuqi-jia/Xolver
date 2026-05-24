@@ -18,7 +18,7 @@ struct CastNormalizeResult {
  *   to_int(to_real(x))  -> x  (when x is Int-sorted)
  *
  * Does NOT eliminate non-constant to_int / to_real.
- * Those are handled by LinearToIntPurifier.
+ * Those are handled by ToIntDefinitionalLowerer.
  */
 class ArithCastNormalizer {
 public:

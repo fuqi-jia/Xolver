@@ -5,7 +5,8 @@
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include "frontend/preprocess/UfInArithPurifier.h"
-#include "frontend/preprocess/LinearToIntPurifier.h"
+#include "frontend/preprocess/ToIntDefinitionalLowerer.h"
+#include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -74,8 +75,8 @@ public:
             lastUnknownComponent_ = "IntDivModLowerer";
             lastUnknownCode_ = "FRONTEND_UNSUPPORTED_DIVMOD";
             caseStats_.failureStage = "frontend";
-        } else if (prefix == "LinearToIntPurifier") {
-            lastUnknownComponent_ = "LinearToIntPurifier";
+        } else if (prefix == "ToIntDefinitionalLowerer") {
+            lastUnknownComponent_ = "ToIntDefinitionalLowerer";
             lastUnknownCode_ = "FRONTEND_UNSUPPORTED_TO_INT";
             caseStats_.failureStage = "frontend";
         } else if (prefix == "LogicFeatureDetector") {
@@ -365,6 +366,17 @@ public:
             crt.run();
         }
 
+        // Cap. 8e' — IntDivModConstantFold.
+        // Fold (div ConstInt a ConstInt b) and (mod ConstInt a ConstInt b)
+        // to literal ConstInt results under SMT-LIB integer-division
+        // semantics. Runs BEFORE IntDivModLowerer so that constant-only
+        // div/mod do not allocate fresh quotient/remainder variables.
+        {
+            IntDivModConstantFold dmFold(*ir);
+            dmFold.run();
+            dmFold.commit();
+        }
+
         // Lower integer div/mod before arithmetic extraction.
         {
             IntDivModLowerer dmLowerer(*ir);
@@ -440,24 +452,55 @@ public:
             }
         }
 
-        // Purify linear to_int applications into fresh Int variables + floor lemmas
+        // Cap. 8c — ToIntDefinitionalLowerer (replaces LinearToIntPurifier).
+        // Lowers every (to_int t) into fresh Int i_t and fresh Real r_t,
+        // emitting (= r_t t) plus the floor sandwich
+        //   (<= (to_real i_t) r_t)  and  (< r_t (+ (to_real i_t) 1)).
+        // Unlike LinearToIntPurifier this pass succeeds on NONLINEAR `t`;
+        // the bridge equality is routed to NRA/NIRA by the atomizer. If
+        // the introduced bridges are nonlinear, the declared logic is
+        // upgraded (QF_LIA -> QF_NIA, QF_LRA -> QF_NRA, QF_LIRA -> QF_NIRA,
+        // etc.) so the LogicFeatureDetector mismatch guard does not fire.
         {
-            LinearToIntPurifier purifier(*ir);
-            auto detectResult = purifier.detectOnly();
-            if (detectResult.hasUnsupportedNonlinearToInt) {
-                lastUnknownReason_ = "LinearToIntPurifier: unsupported nonlinear to_int";
-#ifdef NLCOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Unknown, 0.0);
-#endif
-                return Result::Unknown;
-            }
-            auto purifyResult = purifier.run();
-            ir->clearAssertions();
-            for (const auto& [level, a] : purifyResult.purifiedAssertions) {
-                ir->addAssertion(a, level);
-            }
-            for (const auto& [level, lemma] : purifyResult.floorLemmas) {
-                ir->addAssertion(lemma, level);
+            ToIntDefinitionalLowerer t2i(*ir);
+            t2i.run();
+            t2i.commit();
+
+            if (t2i.hadNonlinearBridge()) {
+                // Upgrade declared logic to the nonlinear counterpart.
+                // The new bridge equality `r_t = nonlinear_t` cannot be
+                // handled by a linear theory, so we widen the theory scope.
+                // NIRA subsumes NIA/NRA/LIA/LRA/LIRA. Any logic that
+                // already permits nonlinear (NRA/NIA/NIRA) stays unchanged.
+                auto upgrade = [](const std::string& l) -> std::string {
+                    if (l == "QF_LIA")   return "QF_NIA";
+                    if (l == "LIA")      return "NIA";
+                    if (l == "QF_LRA")   return "QF_NRA";
+                    if (l == "LRA")      return "NRA";
+                    if (l == "QF_LIRA")  return "QF_NIRA";
+                    if (l == "LIRA")     return "NIRA";
+                    if (l == "QF_UFLIA") return "QF_UFNIA";
+                    if (l == "UFLIA")    return "UFNIA";
+                    if (l == "QF_UFLRA") return "QF_UFNRA";
+                    if (l == "UFLRA")    return "UFNRA";
+                    return l;
+                };
+                logic = upgrade(logic);
+            } else if (t2i.hadIntBridge() && t2i.hadRealBridge()) {
+                // Bridge is linear but mixed Int/Real: widen pure-Real or
+                // pure-Int linear logics to the mixed LIRA family.
+                auto upgrade = [](const std::string& l) -> std::string {
+                    if (l == "QF_LRA")  return "QF_LIRA";
+                    if (l == "LRA")     return "LIRA";
+                    if (l == "QF_LIA")  return "QF_LIRA";
+                    if (l == "LIA")     return "LIRA";
+                    if (l == "QF_NRA")  return "QF_NIRA";
+                    if (l == "NRA")     return "NIRA";
+                    if (l == "QF_NIA")  return "QF_NIRA";
+                    if (l == "NIA")     return "NIRA";
+                    return l;
+                };
+                logic = upgrade(logic);
             }
         }
 

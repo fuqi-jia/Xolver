@@ -24,7 +24,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 
 ## known-fail
 
-- `lira/lira_009_sat_nonlinear_to_int.smt2` — `(to_int (* x x))` is nonlinear-in-real; LIRA path returns unknown. Expected gap per plan.md §5.
+- ~~`lira/lira_009_sat_nonlinear_to_int.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8c `ToIntDefinitionalLowerer` + logic upgrade `QF_LIRA → QF_NIRA`. The lowerer lifts `(to_int (* x x))` to a fresh `i_t` plus the bridge `r_t = (* x x)` and floor sandwich `(<= (to_real i_t) r_t)`, `(< r_t (+ (to_real i_t) 1))`; the upgrade routes the nonlinear bridge to NRA-CDCAC.
 - ~~`nra/nra_001_sat_cubic.smt2`~~ — **FIXED** in 2026-05-25: `PolynomialConverter::collectRec` now accepts `Kind::ConstReal` integer-valued exponents in `Kind::Pow` (SOMTParser emits `(^ x 3)`'s exponent as ConstReal with denominator 1, so the previous ConstInt-only check silently failed every nontrivial power atom).
 - ~~`lra/lra_010_unsat_eq_chain_break.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer + LRA disequality propagation (b8bc81f)).
 - ~~`lra/lra_021_sat_distinct_3vars.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
@@ -38,7 +38,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_011_sat_bounded_product.smt2`~~ — **FIXED** in 2026-05-24 (single-point pin heuristic — `i = 1` paired with the simplex check is a witness for `i*r ≤ 1`).
 - ~~`nira/nira_012_unsat_product_lower_bound.smt2`~~ — **FIXED** in 2026-05-21: hardened `GeneralSimplex::explainLowerConflict` / `explainUpperConflict` against missing bound `reason` optional.
 - ~~`nira/nira_013_sat_polynomial_int_coeff_real_var.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation routes the univariate quadratic `2r²-3r+1=0` to CDCAC, which finds roots r ∈ {1/2, 1}).
-- `nira/nira_018_sat_nonlinear_real_to_int.smt2` — `to_int(r²+1) ≥ 1` returns unknown.
+- ~~`nira/nira_018_sat_nonlinear_real_to_int.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8c `ToIntDefinitionalLowerer`. The lowerer accepts nonlinear `to_int` arguments unconditionally (the previous `LinearToIntPurifier` rejected them) and routes `r_t = (+ (* r r) 1)` to NIRA.
 - ~~`nira/nira_020_sat_three_vars.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8a `UnconditionalConstantPropagation` (collect `i=2, j=3` from top-level unconditional conjuncts and substitute globally — but never under UF applications, to preserve EUF congruence) + Cap. 8b `ToRealLiteralFold` (`(to_real 2) → 2`, `(/ 2 3) → 2/3`).
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
 - ~~`nra/nra_038_sat_ellipse_tangent.smt2`~~ — **FIXED** in 2026-05-23: pseudoRemainder bug fix + level-0 projection trigger (`RationalPolynomial::pseudoRemainder` was using post-multiplication leading coefficient instead of pre-multiplication, causing SubresultantEngine to never reduce degree when divisor's leading coefficient was non-constant; this broke all CDCAC projection for non-trivial cases).
