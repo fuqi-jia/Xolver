@@ -6,7 +6,26 @@ RHS / tableau / conflicts) consume. Line numbers are as of base commit
 `ba53c3d` (post-ArithSolverBase migration). **Re-grep before editing — the
 architecture-refactor agent may move these.**
 
-## Representation B → RealValue (CDCAC `RealAlg`/`AlgebraicRoot`) — Phase 1
+## Implementation status
+
+- **Phase 0** (skeleton + red tests + this audit): DONE.
+- **Phase 1 core** (implement `RealValue` + `ExtendedRealValue`, make the 12
+  tests pass): DONE. `src/util/RealValue.{h,cpp}` is fully implemented —
+  rational fast-path in pure GMP, algebraic arithmetic/compare/sign/floor/ceil
+  delegated to `src/theory/arith/nra/backend/LibpolyAlgebraic.cpp` (libpoly).
+  `tests/unit/test_realvalue.cpp` runs by default (skip removed): 12/12 pass.
+- **Phase 1 migration** (everything below): NOT STARTED — intentionally
+  deferred until the parallel ArithSolverBase **Phase 2** (Reasoner extraction)
+  merges, because the model-output and CDCAC edits below overlap the solver
+  files that Phase 2 rewrites. Doing them concurrently = merge hell. Resume
+  these once `main` has the Reasoner refactor.
+
+Key libpoly contract learned (record for the migrator): `lp_algebraic_number_op`
+(used by add/sub/mul/div/neg) **destructs its output operand before assigning**,
+so the result `lp_algebraic_number_t` MUST be pre-constructed
+(`lp_algebraic_number_construct_zero`) — passing it uninitialized crashes.
+
+## Representation B → RealValue (CDCAC `RealAlg`/`AlgebraicRoot`) — Phase 1 migration
 
 `RealAlg` is used in (grep `RealAlg`):
 
