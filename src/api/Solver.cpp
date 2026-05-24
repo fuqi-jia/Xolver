@@ -7,6 +7,7 @@
 #include "frontend/preprocess/UfInArithPurifier.h"
 #include "frontend/preprocess/LinearToIntPurifier.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
@@ -322,6 +323,15 @@ public:
             for (const auto& [level, a] : loweredScoped) {
                 ir->addAssertion(a, level);
             }
+        }
+
+        // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.
+        // Closes UNSAT cases by direct contradiction and pins SAT cases with
+        // a unique witness in a finite bound. Mod patterns hidden inside
+        // boolean composites are deferred to the standard pipeline.
+        {
+            ModularConsistencyChecker crt(*ir);
+            crt.run();
         }
 
         // Lower integer div/mod before arithmetic extraction.

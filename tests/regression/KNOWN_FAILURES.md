@@ -48,7 +48,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
 - ~~`nra/nra_043_unsat_parabola_below_line.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_046_unsat_aggregate_positive.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
-- `nia/nia_032_unsat_modular_chain.smt2` — Chain of `mod` constraints returns unknown. NIA modular reasoning chain depth limited.
+- ~~`nia/nia_032_unsat_modular_chain.smt2`~~ — **FIXED** in 2026-05-24: new `ModularConsistencyChecker` preprocessing pass detects `(= (mod x N) c)` patterns + integer bounds, runs CRT to combine residues and either emit `false` (CRT-inconsistent or finite-range-empty) or pin `x = candidate` (single witness in range). Runs before `IntDivModLowerer` so the mod structure is still inspectable. Same pass also resolves nia_061/062/068/069/071/074/075/098.
 - `nira/nira_027_sat_split_nl_lin.smt2` — Mixed `r²≥1 ∧ i≤5 ∧ r≤10` returns unknown. Atomizer routing fails when nonlinear-real and pure-linear-int both present.
 - `uflia/uflia_017_unsat_purify_violation.smt2` — `f(x+1)` and `f(2)` under `x=1` should congruence-merge but solver returns unknown. Atomizer purification of `(+ x 1)` inside UF arg missing.
 - `lra/lra_044_unsat_distinct_eq_chain.smt2` — `distinct` + eq chain returns unknown. Missing disequality propagation for distinct on Real.
@@ -69,8 +69,8 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_082_sat_null_projection_avoid.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_087_sat_icp_narrow_box.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
 - `nia/nia_058_unsat_diophantine_multi_eq.smt2` — Two linear diophantine eqs with explicit unique negative solution + bound `x≥0` returns unknown. Linear elimination over integers not propagating to bound.
-- `nia/nia_061_sat_crt_3_moduli.smt2` — 3-modulus CRT (`x≡2(mod 3) ∧ x≡3(mod 5) ∧ x≡2(mod 7)`) returns unknown. NIA mod-chain depth gap (companion to nia_032).
-- `nia/nia_062_unsat_crt_inconsistent.smt2` — Inconsistent CRT (`x≡1(mod 6) ∧ x≡0(mod 3)`) returns unknown. NIA modular consistency check missing.
+- ~~`nia/nia_061_sat_crt_3_moduli.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_062_unsat_crt_inconsistent.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
 - `nia/nia_064_unsat_polynomial_inequality_clash.smt2` — `x²<y ∧ y≤x ∧ x≥2` should chain to `x²<x` contradiction with `x≥2` — returns unknown. Polynomial-vs-linear chain reasoning gap.
 
 ### SEGV minimization study (nra_065 family) — RESOLVED (2026-05-22)
@@ -87,13 +87,13 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_113_unsat_sos_eq_neg.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 
 ### NIA modular chain gaps
-- `nia/nia_068_unsat_crt_2mod_inconsistent.smt2` — `mod x 4 = 0 ∧ mod x 2 = 1` returns unknown. Non-coprime modulus consistency missing.
-- `nia/nia_069_sat_crt_4mod.smt2` — 4-modulus CRT returns unknown.
-- `nia/nia_070_sat_crt_5mod.smt2` — 5-modulus CRT returns unknown.
-- `nia/nia_071_unsat_crt_non_coprime.smt2` — `mod x 6 = 1 ∧ mod x 4 = 2` returns unknown.
-- `nia/nia_074_sat_mod_with_ineq.smt2` — `mod x 7 = 3 ∧ 20≤x≤30` returns unknown.
-- `nia/nia_075_unsat_mod_with_ineq_empty.smt2` — `mod x 10 = 7 ∧ 0≤x≤6` returns unknown.
-- `nia/nia_079_sat_mod_via_eq.smt2` — `x=7 ∧ mod x 3 = 1` returns unknown. (Should be trivial.)
+- ~~`nia/nia_068_unsat_crt_2mod_inconsistent.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_069_sat_crt_4mod.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_070_sat_crt_5mod.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_071_unsat_crt_non_coprime.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_074_sat_mod_with_ineq.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_075_unsat_mod_with_ineq_empty.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
+- ~~`nia/nia_079_sat_mod_via_eq.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass — bound `x = 7` plus `mod x 3 = 1` pins via the single-candidate branch).
 
 ## known-unsound
 
@@ -124,7 +124,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
 - `nia/nia_095_unsat_collatz_step_wrong.smt2` — Collatz step ITE-based — unknown.
 - `nia/nia_097_unsat_squares_chain.smt2` — squares chain inequality — unknown.
-- `nia/nia_098_sat_huge_modulus.smt2` — huge modulus (10^15) — unknown.
+- ~~`nia/nia_098_sat_huge_modulus.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker handles mpz_class moduli of arbitrary size).
 - `uflra/uflra_008_sat_array_with_real.smt2` — array-as-fun 5-element sum of fractions — unknown.
 
 ### K-batch: SOTA-grade depth findings (2026-05-22)
