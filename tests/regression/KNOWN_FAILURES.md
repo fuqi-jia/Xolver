@@ -26,12 +26,12 @@ Lines that don't match this format are ignored — feel free to add prose.
 
 - `euf/euf_025_pred_trans.smt2` — Test file uses Int sort under (set-logic QF_UF); LogicFeatureDetector strictly flags the mismatch. Either retype the test as QF_UFLIA or relax the detector.
 - `lira/lira_009_sat_nonlinear_to_int.smt2` — `(to_int (* x x))` is nonlinear-in-real; LIRA path returns unknown. Expected gap per plan.md §5.
-- `nra/nra_001_sat_cubic.smt2` — Univariate cubic with strict `>` and `<` returns unknown. Suspected CDCAC projection / section-lifting gap.
+- ~~`nra/nra_001_sat_cubic.smt2`~~ — **FIXED** in 2026-05-25: `PolynomialConverter::collectRec` now accepts `Kind::ConstReal` integer-valued exponents in `Kind::Pow` (SOMTParser emits `(^ x 3)`'s exponent as ConstReal with denominator 1, so the previous ConstInt-only check silently failed every nontrivial power atom).
 - `uflia/uflia_004_unknown_or_x.smt2` — Disjunction `(or (= x 0) (= x 1))` returns unknown. Mixed UF+LIA combination boundary.
-- `lra/lra_010_unsat_eq_chain_break.smt2` — Eq chain `x=y, y=z` + `distinct x z`: solver returns unknown. Transitive disequality not propagated in LRA.
-- `lra/lra_021_sat_distinct_3vars.smt2` — n-ary distinct (n≥3) on Reals returns unknown. Likely missing pairwise expansion for distinct on Real sort.
-- `lia/lia_015_sat_distinct_3_int.smt2` — n-ary distinct (n≥3) on Ints returns unknown. Same gap as LRA — distinct pairwise expansion missing for arithmetic theories.
-- `lia/lia_016_unsat_distinct_too_many.smt2` — n-ary distinct (n≥3) on Ints with tight bounds returns unknown. Same gap.
+- ~~`lra/lra_010_unsat_eq_chain_break.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer + LRA disequality propagation (b8bc81f)).
+- ~~`lra/lra_021_sat_distinct_3vars.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
+- ~~`lia/lia_015_sat_distinct_3_int.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
+- ~~`lia/lia_016_unsat_distinct_too_many.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
 - ~~`nra/nra_021_unsat_sum_of_squares_plus_one.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nira/nira_004_sat_int_times_real_pos.smt2`~~ — **FIXED** in 2026-05-24: NiraSolver bounded-complete enumeration now pins half-bounded integer variables to their single available bound (single-point heuristic), so `i > 0 ∧ r > 0 ∧ i*r > 0` finds the witness at `i = 1`. Non-exhaustive — return Unknown rather than UNSAT if pin fails.
 - ~~`nira/nira_006_sat_real_sq_eq_int.smt2`~~ — **FIXED** in 2026-05-24 (pure-real subproblem delegated to CDCAC after substituting `i = to_int(r)` does not bind, plus heuristic pin).
@@ -50,16 +50,16 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_046_unsat_aggregate_positive.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nia/nia_032_sat_modular_chain.smt2`~~ — **FIXED** in 2026-05-24: new `ModularConsistencyChecker` preprocessing pass detects `(= (mod x N) c)` patterns + integer bounds, runs CRT to combine residues and either emit `false` (CRT-inconsistent or finite-range-empty) or pin `x = candidate` (single witness in range). Runs before `IntDivModLowerer` so the mod structure is still inspectable. Same pass also resolves nia_061/062/068/069/071/074/075/098.
 - ~~`nira/nira_027_sat_split_nl_lin.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation: `r² ≥ 1` is purely real after `i ≤ 5` is excluded from the polynomial set; CDCAC returns sat, NIRA forwards).
-- `uflia/uflia_017_unsat_purify_violation.smt2` — `f(x+1)` and `f(2)` under `x=1` should congruence-merge but solver returns unknown. Atomizer purification of `(+ x 1)` inside UF arg missing.
-- `lra/lra_044_unsat_distinct_eq_chain.smt2` — `distinct` + eq chain returns unknown. Missing disequality propagation for distinct on Real.
-- `lra/lra_045_unsat_neg_eq.smt2` — Negated equality `not(= x y)` with bounds returns unknown. Disequality handling gap in LRA.
+- ~~`uflia/uflia_017_unsat_purify_violation.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: BoolSubtermPurifier + UfInArithPurifier (1cedd97)).
+- ~~`lra/lra_044_unsat_distinct_eq_chain.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
+- ~~`lra/lra_045_unsat_neg_eq.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: LRA disequality propagation (b8bc81f)).
 - `nia/nia_043_sat_mod_witness.smt2` — `mod` witness existence returns unknown. NIA modular reasoning incomplete.
 - `nia/nia_045_sat_mixed_lin_nonlin.smt2` — Mixed linear/nonlinear integer returns unknown. NIA branch lemma generation gap.
 - ~~`nra/nra_048_sat_metitarski_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix as nra_038).
-- `nra/nra_050_sat_close_to_root.smt2` — Polynomial with root very close to rational boundary returns unknown. CDCAC interval precision gap.
-- `nra/nra_053_sat_polynomial_disjunction.smt2` — Disjunction of polynomial constraints returns unknown. CDCAC covering incomplete for disjunctions.
+- ~~`nra/nra_050_sat_close_to_root.smt2`~~ — **FIXED** in 2026-05-25: two coordinated fixes — (1) `LibpolyBackend::refineRootInterval` now refines the bracketing interval _within_ a single call instead of just one libpoly step (it was re-isolating from scratch each entry, so caller-driven loops never made progress past the initial bracket); (2) `LibpolyBackend::validateRootIsolation` retries refinement when adjacent algebraic intervals touch (libpoly emits `[3/4..1]` and `[1..5/4]` for the roots 99/100 and 101/100, which are correct but abutting). Solves the "root near rational boundary" precision case.
+- ~~`nra/nra_053_sat_polynomial_disjunction.smt2`~~ — **FIXED** in 2026-05-25 (rolled in via the validateRootIsolation/refineRootInterval pair: disjunction tests routed through CDCAC now survive the touching-interval guard).
 - `nia/nia_048_sat_verymax_nested_strict.smt2` — VeryMax-style nested strict inequalities `(x>y ∧ y>z ∧ z≥1 ∧ x*z>0)` returns unknown. Likely the AlgebraicIntegerReasoner doesn't handle strict + multiplicative product witness search.
-- `nra/nra_057_sat_polynomial_band.smt2` — Thin band `y=x² ∧ 1/100 ≤ y ≤ 1/99` returns unknown. CDCAC precision-sensitive rational endpoints.
+- ~~`nra/nra_057_sat_polynomial_band.smt2`~~ — **FIXED** in 2026-05-25 (same refineRootInterval + validateRootIsolation pair as nra_050).
 - ~~`nra/nra_058_sat_metitarski_exp_approx.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
 - ~~`nra/nra_062_sat_polynomial_outside_band.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
 - ~~`nra/nra_063_sat_atan_chain_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
@@ -109,28 +109,28 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nia/nia_077_sat_mod_2var.smt2`~~ — **FIXED** in 2026-05-21: three changes — (1) try `localSearch` before emitting pending linear lemmas so it actually runs, (2) sync `hasLower/hasUpper` in `DomainStore::restrictToFiniteSet` so local-search candidates respect fixed values like `x=7`, (3) accept `vNext <= curViol` in hill-climbing to cross variable-coupling ridges (e.g. `r3=r1`).
 
 ### J-batch findings (SMT-COMP grade, complex multi-constraint systems)
-- `nra/nra_120_unsat_5conic_intersection.smt2` — 5 conic curves with disjoint feasibility — unknown.
-- `nra/nra_121_sat_kinematics_orbit.smt2` — orbital kinematics 3-poly system — unknown.
+- ~~`nra/nra_120_unsat_5conic_intersection.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
+- ~~`nra/nra_121_sat_kinematics_orbit.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - `nra/nra_122_unsat_3_quadrics_disjoint.smt2` — 3 disjoint spheres — unknown.
 - ~~`nra/nra_124_sat_robotic_workspace.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - `nra/nra_126_sat_polynomial_lyapunov.smt2` — Lyapunov decrease in annulus — unknown.
 - ~~`nra/nra_128_sat_geometric_packing.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
-- `nra/nra_131_sat_brown_2001_relaxed.smt2` — Brown'01 dim-3 relaxed — unknown.
-- `nra/nra_134_unsat_metitarski_negation.smt2` — meti-tarski exp negation — unknown.
+- ~~`nra/nra_131_sat_brown_2001_relaxed.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
+- ~~`nra/nra_134_unsat_metitarski_negation.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - ~~`nra/nra_135_unsat_amzi_classic.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
 - `nra/nra_136_sat_amzi_tight.smt2` — CS equality at (1,1,1) — unknown.
 - ~~`nra/nra_137_unsat_strict_cs_violation.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
-- `nra/nra_138_sat_huge_coeff.smt2` — huge rational coefficient — unknown.
+- ~~`nra/nra_138_sat_huge_coeff.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: addTerm canonicalization handles big coefficients (3335d5e)).
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
 - `nia/nia_095_unsat_collatz_step_wrong.smt2` — Collatz step ITE-based — unknown.
 - `nia/nia_097_unsat_squares_chain.smt2` — squares chain inequality — unknown.
 - ~~`nia/nia_098_sat_huge_modulus.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker handles mpz_class moduli of arbitrary size).
-- `uflra/uflra_008_sat_array_with_real.smt2` — array-as-fun 5-element sum of fractions — unknown.
+- ~~`uflra/uflra_008_sat_array_with_real.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: frontend purifier improvements (1cedd97)).
 
 ### K-batch: SOTA-grade depth findings (2026-05-22)
-- `lia/lia_050_sat_sudoku_row.smt2` — Sudoku row (9 distinct 1-9) returns unknown. LIA n-ary distinct (n=9) gap (extension of lia_015 family).
-- `ufnra/ufnra_006_sat_circle_fn.smt2` — `f(x)²+x²=1 ∧ x=0` returns unknown. UFNRA nonlinear-real + UF combination.
-- `ufnra/ufnra_007_unsat_circle_fn_conflict.smt2` — Same circle with `x=2` should be unsat (x²+f(x)²≥4>1) returns unknown.
+- ~~`lia/lia_050_sat_sudoku_row.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
+- ~~`ufnra/ufnra_006_sat_circle_fn.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: frontend purifier + UfInArithPurifier (1cedd97)).
+- ~~`ufnra/ufnra_007_unsat_circle_fn_conflict.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: frontend purifier + UfInArithPurifier (1cedd97)).
 
 ### K-batch unsound (high priority)
 - ~~`nra/nra_127_sat_swap_compatible.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix). The root cause was the same wrong pseudo-remainder feeding incorrect projection polynomials, leading to unsound unsat. Solver now correctly returns sat.

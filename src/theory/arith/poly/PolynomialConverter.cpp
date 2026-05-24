@@ -175,16 +175,31 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 auto base = collectRec(e.children[0], ir);
                 if (!base) { result = std::nullopt; break; }
                 const CoreExpr& expNode = ir.get(e.children[1]);
+                std::optional<int64_t> expInt;
                 if (expNode.kind == Kind::ConstInt) {
                     if (auto* i = std::get_if<int64_t>(&expNode.payload.value)) {
-                        if (*i >= 0) {
-                            result = base->pow(static_cast<uint32_t>(*i));
-                        } else {
-                            result = std::nullopt; // negative exponent unsupported
+                        expInt = *i;
+                    }
+                } else if (expNode.kind == Kind::ConstReal) {
+                    // SOMTParser frequently emits integer literals as ConstReal
+                    // (sort = IntOrReal). Accept those whose denominator is 1.
+                    if (auto* s = std::get_if<std::string>(&expNode.payload.value)) {
+                        try {
+                            mpq_class q = mpqFromString(*s);
+                            if (q.get_den() == 1 && q.get_num().fits_slong_p()) {
+                                expInt = q.get_num().get_si();
+                            }
+                        } catch (...) {
+                            // leave expInt unset; we fall through to "unsupported"
                         }
                     }
+                }
+                if (!expInt) {
+                    result = std::nullopt;  // non-integer or non-constant exponent
+                } else if (*expInt < 0) {
+                    result = std::nullopt;  // negative exponent unsupported in polynomial ring
                 } else {
-                    result = std::nullopt; // non-constant exponent unsupported
+                    result = base->pow(static_cast<uint32_t>(*expInt));
                 }
             }
             break;

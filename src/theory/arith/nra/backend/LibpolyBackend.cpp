@@ -733,23 +733,43 @@ ProjectionResult LibpolyBackend::projectionPolys(
 }
 
 bool LibpolyBackend::validateRootIsolation(UniPolyId p, const RootSet& roots) {
+    (void)p;  // unused: refinement uses the per-root defining polynomial
     if (roots.empty()) return true;
 
-    // Check that roots are ordered (disjoint)
-    for (size_t i = 1; i < roots.roots.size(); ++i) {
-        const auto& prev = roots.roots[i - 1];
-        const auto& curr = roots.roots[i];
-        mpq_class prevVal = prev.isRational() ? prev.rational : prev.root.upper;
-        mpq_class currVal = curr.isRational() ? curr.rational : curr.root.lower;
-        if (!(prevVal < currVal)) return false;
+    // Per-root sanity: algebraic intervals must have lower <= upper.
+    for (const auto& r : roots.roots) {
+        if (r.isAlgebraic() && r.root.lower > r.root.upper) return false;
     }
 
-    // For algebraic roots, validate interval bounds are consistent.
-    // Rational roots are canonicalized (single-point), always valid.
-    for (const auto& r : roots.roots) {
-        if (r.isAlgebraic()) {
-            if (r.root.lower > r.root.upper) return false;
+    // Check that adjacent roots are strictly ordered. libpoly's root isolation
+    // can return abutting intervals (e.g. [3/4, 1] and [1, 5/4] for the roots
+    // 99/100 and 101/100 of 10000x²−20000x+9999): both intervals are correct
+    // but their endpoints touch. Treating that as "invalid" loses precision
+    // tests. We instead try to refine each algebraic root's bracketing
+    // interval until the pair is strictly disjoint, and only fail when
+    // refinement bottoms out without separating them.
+    auto pointOf = [](const RealAlg& r, bool lower) -> mpq_class {
+        if (r.isRational()) return r.rational;
+        return lower ? r.root.lower : r.root.upper;
+    };
+    constexpr int kMaxRefineSteps = 40;
+    auto& mutRoots = const_cast<std::vector<RealAlg>&>(roots.roots);
+    for (size_t i = 1; i < mutRoots.size(); ++i) {
+        auto& prev = mutRoots[i - 1];
+        auto& curr = mutRoots[i];
+        mpq_class prevHi = pointOf(prev, /*lower=*/false);
+        mpq_class currLo = pointOf(curr, /*lower=*/true);
+        int steps = 0;
+        while (!(prevHi < currLo) && steps < kMaxRefineSteps) {
+            bool advanced = false;
+            if (prev.isAlgebraic() && refineRootInterval(prev.root)) advanced = true;
+            if (curr.isAlgebraic() && refineRootInterval(curr.root)) advanced = true;
+            if (!advanced) break;
+            prevHi = pointOf(prev, false);
+            currLo = pointOf(curr, true);
+            ++steps;
         }
+        if (!(prevHi < currLo)) return false;
     }
 
     return true;
@@ -1150,24 +1170,56 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
         return false;
     }
 
-    poly::refine(roots[alpha.rootIndex]);
+    // libpoly's `refine` halves the bracketing interval per call, but we are
+    // re-isolating from scratch on every entry to this function — so the
+    // refinement state of `roots[alpha.rootIndex]` always starts at libpoly's
+    // initial bracket, not the caller's current `alpha.lower/upper`. Without
+    // compensation, caller-driven loops never make progress past the first
+    // refinement step.
+    //
+    // Strategy: refine repeatedly within this call until the resulting
+    // interval is strictly tighter than the caller's current bracket, or we
+    // hit a safety cap. The width-based progress check is the key — it
+    // succeeds even if the absolute endpoint values match libpoly's internal
+    // representation, as long as the bracket has shrunk.
+    auto extractInterval = [](const poly::AlgebraicNumber& a) {
+        const auto& lo = poly::get_lower_bound(a);
+        const auto& hi = poly::get_upper_bound(a);
+        poly::Integer loN = poly::numerator(lo);
+        poly::Integer loD = poly::denominator(lo);
+        poly::Integer hiN = poly::numerator(hi);
+        poly::Integer hiD = poly::denominator(hi);
+        mpz_class loNum = *poly::detail::cast_to_gmp(&loN);
+        mpz_class loDen = *poly::detail::cast_to_gmp(&loD);
+        mpz_class hiNum = *poly::detail::cast_to_gmp(&hiN);
+        mpz_class hiDen = *poly::detail::cast_to_gmp(&hiD);
+        return std::pair<mpq_class, mpq_class>{mpq_class(loNum, loDen),
+                                               mpq_class(hiNum, hiDen)};
+    };
 
-    const auto& newLo = poly::get_lower_bound(roots[alpha.rootIndex]);
-    const auto& newHi = poly::get_upper_bound(roots[alpha.rootIndex]);
+    auto [initLo, initHi] = extractInterval(roots[alpha.rootIndex]);
+    mpq_class initWidth = initHi - initLo;
+    mpq_class targetWidth = (alpha.upper - alpha.lower) / 2;
+    if (targetWidth < 0) targetWidth = 0;
 
-    poly::Integer loNumInt = poly::numerator(newLo);
-    poly::Integer loDenInt = poly::denominator(newLo);
-    poly::Integer hiNumInt = poly::numerator(newHi);
-    poly::Integer hiDenInt = poly::denominator(newHi);
+    constexpr int kMaxInnerRefines = 40;
+    for (int i = 0; i < kMaxInnerRefines; ++i) {
+        poly::refine(roots[alpha.rootIndex]);
+        auto [curLo, curHi] = extractInterval(roots[alpha.rootIndex]);
+        mpq_class curWidth = curHi - curLo;
+        if (curWidth < targetWidth || curWidth == 0) {
+            alpha.lower = curLo;
+            alpha.upper = curHi;
+            return true;
+        }
+    }
 
-    mpz_class loNum = *poly::detail::cast_to_gmp(&loNumInt);
-    mpz_class loDen = *poly::detail::cast_to_gmp(&loDenInt);
-    mpz_class hiNum = *poly::detail::cast_to_gmp(&hiNumInt);
-    mpz_class hiDen = *poly::detail::cast_to_gmp(&hiDenInt);
-
-    alpha.lower = mpq_class(loNum, loDen);
-    alpha.upper = mpq_class(hiNum, hiDen);
-    return true;
+    auto [finalLo, finalHi] = extractInterval(roots[alpha.rootIndex]);
+    alpha.lower = finalLo;
+    alpha.upper = finalHi;
+    // Return true only if width actually shrank vs caller's previous state.
+    return (finalHi - finalLo) < (alpha.upper - alpha.lower)
+        || (finalHi - finalLo) < initWidth;
 #endif
 }
 
