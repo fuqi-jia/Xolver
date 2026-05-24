@@ -55,9 +55,10 @@ public:
     // ActiveLiteralSet for dedup and flags opposite-polarity as a
     // pending Unknown, neither of which the base default does. The
     // override still drives the shared `state_.trail`.
+    // check() is the base default (runReasonerPipeline over the stages
+    // registered in the constructor).
     void assertLit(const TheoryAtomRecord& atom, bool value,
                    int level, SatLit assertedLit) override;
-    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
@@ -119,6 +120,31 @@ private:
     NiaLocalSearch localSearch_;
 
     std::optional<IntegerModel> currentModel_;
+
+    // Phase 2: the normalized active constraints, produced by the
+    // normalize stage and consumed by every downstream stage. Lives as a
+    // member (rather than a check()-local) so the pipeline stages can be
+    // separate units.
+    std::vector<NormalizedNiaConstraint> normalized_;
+
+    // Reasoner pipeline stages (Phase 2). Each returns nullopt to advance
+    // to the next stage, or a verdict to stop. Registered as
+    // CallbackReasoners in the constructor, in this order.
+    std::optional<TheoryCheckResult> stagePending(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageNormalize(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageUnivariate(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageAlgebraic(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;

@@ -1,4 +1,5 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/Reasoner.h"
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
@@ -29,7 +30,33 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       intervalEvaluator_(*kernel_),
       algebraic_(*kernel_),
       bounded_(*kernel_),
-      localSearch_(*kernel_) {}
+      localSearch_(*kernel_) {
+    // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
+    // the original linear check() exactly: normalize first, then the
+    // presolve fixpoint, then the legacy NIA-Core engines in sequence,
+    // then bounded enumeration / local search / branch. `normalized_`
+    // and `domains_` are the shared state threaded across stages.
+    auto add = [this](const char* nm,
+                      std::optional<TheoryCheckResult> (NiaSolver::*m)(TheoryLemmaStorage&, TheoryEffort)) {
+        reasoners_.push_back(std::make_unique<CallbackReasoner>(
+            nm, [this, m](TheoryLemmaStorage& db, TheoryEffort e) { return (this->*m)(db, e); }));
+    };
+    add("nia.pending",        &NiaSolver::stagePending);
+    add("nia.normalize",      &NiaSolver::stageNormalize);
+    add("nia.presolve",       &NiaSolver::stagePresolveFixpoint);
+    add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
+    add("nia.domain",         &NiaSolver::stageDomainInference);
+    add("nia.square-bound",   &NiaSolver::stageSquareBound);
+    add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
+    add("nia.univariate",     &NiaSolver::stageUnivariate);
+    add("nia.algebraic",      &NiaSolver::stageAlgebraic);
+    add("nia.interval",       &NiaSolver::stageInterval);
+    add("nia.linearize",      &NiaSolver::stageLinearization);
+    add("nia.bounded",        &NiaSolver::stageBounded);
+    add("nia.local-search",   &NiaSolver::stageLocalSearch);
+    add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
+    add("nia.branch",         &NiaSolver::stageBranch);
+}
 
 void NiaSolver::onReset() {
     // Base clears state_.trail + its pending slot; NIA clears its own
@@ -116,57 +143,65 @@ static std::unordered_set<std::string> collectVars(
     return vars;
 }
 
-TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+// ---------------------------------------------------------------------------
+// Reasoner pipeline stages (Phase 2). Verbatim decomposition of the former
+// linear check() body. Each stage returns nullopt to fall through to the
+// next, or a TheoryCheckResult to stop. `normalized_` and `domains_` are the
+// shared state threaded across stages.
+// ---------------------------------------------------------------------------
+
+std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, TheoryEffort) {
     if (pendingUnknown_) return TheoryCheckResult::unknown("NIA: pending unknown (opposite polarity asserted)");
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     if (active_.empty()) return TheoryCheckResult::consistent();
+    return std::nullopt;
+}
 
-    // 1. Normalize
+std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
     auto normalizedOpt = normalizer_.normalize(active_);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
-    const auto& normalized = *normalizedOpt;
+    normalized_ = std::move(*normalizedOpt);
+    return std::nullopt;
+}
 
-    // 1b. Theory-check presolve fixpoint (Capabilities 1–7, 11).
-    //     Sound, equivalence-preserving derivations over the active atoms.
-    //     May return a Conflict (UNSAT direction) or a case-split Lemma; it
-    //     never returns SAT directly.  Otherwise it falls through, having
-    //     populated derived bounds/substitutions consumed below.
-    {
-        PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
-        bool feasible = true;
-        for (const auto& c : normalized) {
-            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
-            if (!rp) { feasible = false; break; }
-            presolve.addAtom(*rp, c.rel, c.reason);
+std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort) {
+    // Theory-check presolve fixpoint (Capabilities 1–7, 11). Sound,
+    // equivalence-preserving derivations over the active atoms. May return a
+    // Conflict (UNSAT) or a case-split Lemma; never SAT directly. Otherwise
+    // falls through, having populated derived bounds/substitutions consumed
+    // below, then Cap. 9 attempts complete finite-domain enumeration.
+    PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
+    bool feasible = true;
+    for (const auto& c : normalized_) {
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) { feasible = false; break; }
+        presolve.addAtom(*rp, c.rel, c.reason);
+    }
+    if (feasible) {
+        auto pr = presolve.run();
+        if (pr.kind == PresolveResult::Kind::Conflict) {
+            return TheoryCheckResult::mkConflict(pr.conflict);
         }
-        if (feasible) {
-            auto pr = presolve.run();
-            if (pr.kind == PresolveResult::Kind::Conflict) {
-                return TheoryCheckResult::mkConflict(pr.conflict);
-            }
-            if (pr.kind == PresolveResult::Kind::Lemma) {
-                return TheoryCheckResult::mkLemma(pr.lemma);
-            }
-            // Cap. 9: complete finite-domain enumeration over the presolve's
-            // derived bounds + substitutions.  SAT is validator-gated; UNSAT
-            // is a complete sweep.  NotApplicable falls through to the legacy
-            // pipeline.
-            auto fd = CompleteFiniteDomainEnumerator::run(
-                presolve.state(), normalized, validator_, *kernel_);
-            if (fd.status == FiniteDomainResult::Status::Sat) {
-                currentModel_ = fd.model;
-                return TheoryCheckResult::consistent();
-            }
-            if (fd.status == FiniteDomainResult::Status::UnsatComplete) {
-                return TheoryCheckResult::mkConflict(fd.conflict);
-            }
+        if (pr.kind == PresolveResult::Kind::Lemma) {
+            return TheoryCheckResult::mkLemma(pr.lemma);
+        }
+        auto fd = CompleteFiniteDomainEnumerator::run(
+            presolve.state(), normalized_, validator_, *kernel_);
+        if (fd.status == FiniteDomainResult::Status::Sat) {
+            currentModel_ = fd.model;
+            return TheoryCheckResult::consistent();
+        }
+        if (fd.status == FiniteDomainResult::Status::UnsatComplete) {
+            return TheoryCheckResult::mkConflict(fd.conflict);
         }
     }
+    return std::nullopt;
+}
 
-    // 2. Trivial constants
+std::optional<TheoryCheckResult> NiaSolver::stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort) {
     std::vector<SatLit> conflictLits;
     bool hasNonConstant = false;
-    for (const auto& c : normalized) {
+    for (const auto& c : normalized_) {
         if (!kernel_->isConstant(c.poly)) {
             hasNonConstant = true;
             continue;
@@ -180,26 +215,29 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::mkConflict(TheoryConflict{conflictLits});
     }
     if (!hasNonConstant) {
-    return TheoryCheckResult::consistent();
+        return TheoryCheckResult::consistent();
     }
+    return std::nullopt;
+}
 
+std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStorage&, TheoryEffort) {
     // 3. Reset domains
     domains_.reset();
 
     // 4. Linear domain inference
-    auto lr = linearDomain_.run(normalized, domains_);
+    auto lr = linearDomain_.run(normalized_, domains_);
     if (lr.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*lr.conflict);
     }
     if (lr.kind == NiaReasoningKind::FatalUnknown) {
-    return TheoryCheckResult::unknown("NIA: linear domain reasoning fatal unknown");
+        return TheoryCheckResult::unknown("NIA: linear domain reasoning fatal unknown");
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
 
     // 4.5 Product bound propagation: from a*b = c and a,b > 0 derive upper bounds
-    for (const auto& c : normalized) {
+    for (const auto& c : normalized_) {
         if (c.rel != Relation::Eq) continue;
         auto termsOpt = kernel_->terms(c.poly);
         if (!termsOpt) {
@@ -240,7 +278,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     }
 
     // 4.6 Propagate bounds through equalities (after product bounds)
-    for (const auto& c : normalized) {
+    for (const auto& c : normalized_) {
         if (c.rel != Relation::Eq) continue;
         auto termsOpt = kernel_->terms(c.poly);
         if (!termsOpt) continue;
@@ -288,9 +326,11 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                 domains_.addUpperBound(v1, d2->upper.value, c.reason);
         }
     }
+    return std::nullopt;
+}
 
-    // 5. Square bound reasoning
-    auto sr = squareBound_.run(normalized, domains_);
+std::optional<TheoryCheckResult> NiaSolver::stageSquareBound(TheoryLemmaStorage&, TheoryEffort) {
+    auto sr = squareBound_.run(normalized_, domains_);
     if (sr.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*sr.conflict);
     }
@@ -300,9 +340,11 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
+    return std::nullopt;
+}
 
-    // 6. Sum-of-squares bound reasoning
-    auto ssr = sumOfSquaresBound_.run(normalized, domains_);
+std::optional<TheoryCheckResult> NiaSolver::stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort) {
+    auto ssr = sumOfSquaresBound_.run(normalized_, domains_);
     if (ssr.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*ssr.conflict);
     }
@@ -312,9 +354,11 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
+    return std::nullopt;
+}
 
-    // 7. Univariate reasoning
-    auto ur = univariate_.run(normalized, domains_, lemmaDb);
+std::optional<TheoryCheckResult> NiaSolver::stageUnivariate(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    auto ur = univariate_.run(normalized_, domains_, lemmaDb);
     if (ur.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*ur.conflict);
     }
@@ -327,9 +371,11 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
+    return std::nullopt;
+}
 
-    // 8. Algebraic reasoning
-    auto ar = algebraic_.run(normalized, domains_, lemmaDb);
+std::optional<TheoryCheckResult> NiaSolver::stageAlgebraic(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    auto ar = algebraic_.run(normalized_, domains_, lemmaDb);
     if (ar.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*ar.conflict);
     }
@@ -342,10 +388,13 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
+    return std::nullopt;
+}
 
-    // 9. Interval evaluation (single-variable only, via common framework)
+std::optional<TheoryCheckResult> NiaSolver::stageInterval(TheoryLemmaStorage&, TheoryEffort) {
+    // Interval evaluation (single-variable only, via common framework)
     ReasonedBoxZ box;
-    for (const auto& c : normalized) {
+    for (const auto& c : normalized_) {
         for (const auto& var : kernel_->variables(c.poly)) {
             if (box.get(var)) continue; // already set
             const IntDomain* d = domains_.getDomain(var);
@@ -357,7 +406,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             }
         }
     }
-    for (const auto& c : normalized) {
+    for (const auto& c : normalized_) {
         IntervalConstraint ic{c.poly, c.rel, c.reason};
         auto ir = intervalEvaluator_.run(ic, box);
         if (ir.status == IntervalEvalStatus::DefinitelyViolated) {
@@ -372,7 +421,10 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
+    return std::nullopt;
+}
 
+std::optional<TheoryCheckResult> NiaSolver::stageLinearization(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // 9.4: Mirror effective active linear bounds to LIA
     if (pendingLinLemmas_.empty() && registry_ && linAdapter_) {
         std::vector<LinearizerActiveAssignment> laas;
@@ -401,7 +453,7 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         cfg.maxLemmas = 10;
         cfg.maxCutsPerTerm = 4;
 
-        auto lr = linAdapter_->runLinearizer(normalized, domains_, lemmaDb, cfg);
+        auto lr = linAdapter_->runLinearizer(normalized_, domains_, lemmaDb, cfg);
         if (lr.status == LinearizationStatus::Lemma) {
             for (auto& item : lr.lemmas) {
                 if (!lemmaDb.contains(item.lemma)) {
@@ -414,14 +466,16 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             }
         }
     }
+    return std::nullopt;
+}
 
-    // 10. Bounded complete solver
-    auto allVars = collectVars(normalized, *kernel_);
+std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    auto allVars = collectVars(normalized_, *kernel_);
     bool allFinite = domains_.allFinite(allVars);
     if (allFinite) {
         // Domain is finite: bounded solver is authoritative; skip linear lemmas
         pendingLinLemmas_.clear();
-        auto br = bounded_.solve(normalized, domains_, validator_, lemmaDb);
+        auto br = bounded_.solve(normalized_, domains_, validator_, lemmaDb);
         if (br.status == BoundedSolveStatus::Sat) {
             currentModel_ = br.model;
             return TheoryCheckResult::consistent();
@@ -431,26 +485,33 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
         // UnknownBudget / UnknownUnsupported: continue pipeline
     }
+    return std::nullopt;
+}
 
-    // 10. Local search SAT finder (try before emitting pending linear lemmas)
-    if (auto model = localSearch_.tryFindModel(normalized, domains_)) {
-        if (validator_.validate(*model, normalized)) {
+std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
+    // Local search SAT finder (try before emitting pending linear lemmas)
+    if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
+        if (validator_.validate(*model, normalized_)) {
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
         }
     }
+    return std::nullopt;
+}
 
+std::optional<TheoryCheckResult> NiaSolver::stagePendingLemma(TheoryLemmaStorage&, TheoryEffort) {
     if (!pendingLinLemmas_.empty()) {
         auto lemma = std::move(pendingLinLemmas_.front());
         pendingLinLemmas_.pop_front();
         return TheoryCheckResult::mkLemma(lemma);
     }
+    return std::nullopt;
+}
 
-    // 11. Branch split or Unknown
-    if (auto lemma = buildBranchLemma(normalized, domains_, lemmaDb)) {
+std::optional<TheoryCheckResult> NiaSolver::stageBranch(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    if (auto lemma = buildBranchLemma(normalized_, domains_, lemmaDb)) {
         return TheoryCheckResult::mkLemma(*lemma);
     }
-
     return TheoryCheckResult::unknown("NIA: no progress (finite domain not closed, branch lemma failed, local search failed)");
 }
 
