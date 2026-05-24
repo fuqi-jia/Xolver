@@ -8,30 +8,14 @@ namespace nlcolver {
 LiraSolver::LiraSolver() = default;
 LiraSolver::~LiraSolver() = default;
 
-void LiraSolver::push() {
+void LiraSolver::onPush() {
     milpEngine_.push();
 }
 
-void LiraSolver::pop(uint32_t n) {
+void LiraSolver::onPop(uint32_t n) {
     for (uint32_t i = 0; i < n; ++i) {
         milpEngine_.pop();
     }
-}
-
-void LiraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
-    for (auto& a : activeAssignments_) {
-        if (a.atom.satVar == atom.satVar) {
-            a = {level, assertedLit, atom, value};
-            return;
-        }
-    }
-    activeAssignments_.push_back({level, assertedLit, atom, value});
-}
-
-void LiraSolver::backtrackToLevel(int level) {
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
 }
 
 TheoryCheckResult LiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -62,7 +46,7 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
     disequalities_.clear();
     std::unordered_map<std::string, int> nameToIdx;
 
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
         const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
@@ -167,7 +151,7 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
     disequalities_.clear();
     std::unordered_map<std::string, int> nameToIdx;
 
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
         const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
@@ -249,8 +233,8 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
     }
 }
 
-void LiraSolver::reset() {
-    activeAssignments_.clear();
+void LiraSolver::onReset() {
+    // Base clears the trail; clear LIRA-specific state here.
     disequalities_.clear();
     milpEngine_.clear();
 }
@@ -283,7 +267,7 @@ std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
 
 std::vector<SatLit> LiraSolver::allActiveReasons() const {
     std::vector<SatLit> reasons;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         reasons.push_back(a.lit);
     }
     std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {

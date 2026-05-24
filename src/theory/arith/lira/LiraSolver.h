@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include "theory/arith/lia/InternalMilpEngine.h"
@@ -22,24 +22,24 @@ class TheoryAtomRegistry;
  *     may return NeedBranch for lemma generation).
  *   - Full effort: Complete mode (exhaustive branch-and-bound final decision).
  */
-class LiraSolver : public TheorySolver {
+class LiraSolver : public ArithSolverBase {
 public:
     LiraSolver();
     ~LiraSolver();
 
     TheoryId id() const override { return TheoryId::LIRA; }
 
-    void push() override;
-    void pop(uint32_t n) override;
-    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
-    void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
-    void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
     void setCoreIr(const CoreIr* ir);
 
     std::optional<TheoryModel> getModel() const override;
+
+protected:
+    void onPush() override;
+    void onPop(uint32_t n) override;
+    void onReset() override;
 
 private:
     // Legacy fields kept to avoid breaking compilation of other TU references.
@@ -66,14 +66,6 @@ private:
         SatLit lit;
     };
     std::vector<DiseqInfo> disequalities_;
-
-    struct ActiveAssignment {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-    };
-    std::vector<ActiveAssignment> activeAssignments_;
 
     // Check sub-stages
     TheoryCheckResult checkStandardEffort(TheoryLemmaStorage& lemmaDb);

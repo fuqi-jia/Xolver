@@ -31,13 +31,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       bounded_(*kernel_),
       localSearch_(*kernel_) {}
 
-void NiaSolver::push() {}
-void NiaSolver::pop(uint32_t) {}
-
-void NiaSolver::reset() {
+void NiaSolver::onReset() {
+    // Base clears state_.trail + its pending slot; NIA clears its own
+    // polynomial stack, active literal set, level-tagged pendings, and
+    // combination state.
     active_.clear();
     trail_.clear();
-    activeAssignments_.clear();
     activeSet_.reset();
     pendingConflict_.reset();
     pendingUnknown_.reset();
@@ -60,7 +59,8 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
 
-    activeAssignments_.push_back({level, assertedLit, atom, value});
+    state_.trail.push_back({level, assertedLit, atom, value});
+    if (level > state_.currentLevel) state_.currentLevel = level;
 
     const auto* payload = std::get_if<PolynomialAtomPayload>(&atom.payload);
     if (!payload) {
@@ -82,14 +82,13 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     trail_.push_back({level, oldSize});
 }
 
-void NiaSolver::backtrackToLevel(int level) {
+void NiaSolver::onBacktrack(int level) {
+    // Base already removed state_.trail entries with level > target.
+    // Roll back the polynomial constraint stack in lockstep.
     while (!trail_.empty() && trail_.back().level > level) {
         active_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
     }
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
     activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
@@ -377,8 +376,8 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // 9.4: Mirror effective active linear bounds to LIA
     if (pendingLinLemmas_.empty() && registry_ && linAdapter_) {
         std::vector<LinearizerActiveAssignment> laas;
-        laas.reserve(activeAssignments_.size());
-        for (const auto& a : activeAssignments_) {
+        laas.reserve(trail().size());
+        for (const auto& a : trail()) {
             laas.push_back({a.level, a.lit, a.atom, a.value});
         }
         auto mirrorLemmas = linAdapter_->mirrorActiveLinearBounds(laas, TheoryId::LIA);

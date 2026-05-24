@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/lra/GeneralSimplex.h"
@@ -22,19 +22,14 @@ class TheoryAtomRegistry;
  * Not generally complete. Uses LIRA relaxation, NIA/NRA subproblem delegation,
  * and bounded-complete mode for coverage.
  */
-class NiraSolver : public TheorySolver {
+class NiraSolver : public ArithSolverBase {
 public:
     explicit NiraSolver(std::unique_ptr<PolynomialKernel> kernel);
     ~NiraSolver();
 
     TheoryId id() const override { return TheoryId::NIRA; }
 
-    void push() override;
-    void pop(uint32_t n) override;
-    void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
-    void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
-    void reset() override;
 
     void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) override {
         activeLinearContext_ = context;
@@ -44,6 +39,12 @@ public:
     void setCoreIr(const CoreIr* ir);
 
     std::optional<TheoryModel> getModel() const override;
+
+protected:
+    void onPush() override;
+    void onPop(uint32_t n) override;
+    void onBacktrack(int targetLevel) override;
+    void onReset() override;
 
 private:
     const CoreIr* coreIr_ = nullptr;
@@ -55,13 +56,6 @@ private:
     GeneralSimplex gsRelax_;
     LinearAtomManager managerRelax_;
 
-    struct ActiveAssignment {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-    };
-    std::vector<ActiveAssignment> activeAssignments_;
     const std::vector<ActiveLinearConstraint>* activeLinearContext_ = nullptr;
 
     // Check sub-stages

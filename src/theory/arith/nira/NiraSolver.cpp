@@ -19,31 +19,25 @@ NiraSolver::NiraSolver(std::unique_ptr<PolynomialKernel> kernel)
 
 NiraSolver::~NiraSolver() = default;
 
-void NiraSolver::push() {
+void NiraSolver::onPush() {
     gsRelax_.push();
 }
 
-void NiraSolver::pop(uint32_t n) {
+void NiraSolver::onPop(uint32_t n) {
     for (uint32_t i = 0; i < n; ++i) {
         gsRelax_.pop();
     }
 }
 
-void NiraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
-    activeAssignments_.push_back({level, assertedLit, atom, value});
-}
-
-void NiraSolver::backtrackToLevel(int level) {
-    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
-        [level](const auto& a) { return a.level > level; });
-    activeAssignments_.erase(it, activeAssignments_.end());
-    gsRelax_.backtrackToLevel(level);
+void NiraSolver::onBacktrack(int targetLevel) {
+    // Base already rolled back the trail; sync the relaxation simplex.
+    gsRelax_.backtrackToLevel(targetLevel);
 }
 
 TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     // Check if there are any active polynomial constraints
     bool hasPoly = false;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (a.value && std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
             hasPoly = true;
             break;
@@ -64,7 +58,7 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
         std::unordered_map<std::string, mpq_class> fixedValues;
 
         // Step 1a: collect fixed values from active NIRA linear equalities
-        for (const auto& a : activeAssignments_) {
+        for (const auto& a : trail()) {
             if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
             if (!a.value) continue;
 
@@ -91,7 +85,7 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
         }
 
         // Step 2: substitute into polynomial constraints
-        for (const auto& a : activeAssignments_) {
+        for (const auto& a : trail()) {
             if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
             if (!a.value) continue;
 
@@ -182,7 +176,7 @@ TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb
         if (coeff == 0) return;
         fixedValues[name] = p.rhs / coeff;
     };
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) collectFixed(*p);
     }
@@ -199,7 +193,7 @@ TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb
     };
     std::vector<RealConstraint> realPolys;
     bool sawMixed = false;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
         const auto& payload = std::get<PolynomialAtomPayload>(a.atom.payload);
@@ -578,7 +572,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     std::unordered_map<std::string, BoundInfo> bounds;
 
     // 1a: from active NIRA linear atoms
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
@@ -662,7 +656,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
 
     // Step 2: Identify if there are any polynomial constraints at all.
     bool hasPolynomialPayload = false;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
             hasPolynomialPayload = true;
@@ -675,7 +669,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
 
     // Step 2b: Identify integer variables appearing in polynomial constraints
     std::unordered_set<std::string> polyIntVars;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
 
@@ -695,7 +689,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
             if (isIntegerVar(coreIr_, name)) allIntVars.insert(name);
         }
     };
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (!a.value) continue;
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
         collectIntVarsFromLinear(std::get<LinearAtomPayload>(a.atom.payload));
@@ -766,7 +760,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
 
     std::function<bool(int)> enumerate = [&](int idx) -> bool {
         if (idx == (int)enumVars.size()) {
-            auto r = NiraSolver::checkAssignmentWithSimplex(activeAssignments_, activeLinearContext_, fixedValues, kernel_.get());
+            auto r = NiraSolver::checkAssignmentWithSimplex(trail(), activeLinearContext_, fixedValues, kernel_.get());
             if (r == AssignmentCheckResult::Sat) return true;
             if (r == AssignmentCheckResult::Unknown) {
                 sawUnknown = true;
@@ -808,7 +802,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     // All enumerated combinations lead to contradiction.
     // Build a conflict clause from the active nonlinear atoms.
     std::vector<SatLit> conflictReasons;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         if (a.value && std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) {
             conflictReasons.push_back(a.lit);
         }
@@ -823,8 +817,8 @@ bool NiraSolver::validateOriginalConstraints() const {
     return true;
 }
 
-void NiraSolver::reset() {
-    activeAssignments_.clear();
+void NiraSolver::onReset() {
+    // Base clears the trail; reset the relaxation simplex here.
     gsRelax_.reset();
 }
 
@@ -842,7 +836,7 @@ std::optional<TheorySolver::TheoryModel> NiraSolver::getModel() const {
 
 std::vector<SatLit> NiraSolver::allActiveReasons() const {
     std::vector<SatLit> reasons;
-    for (const auto& a : activeAssignments_) {
+    for (const auto& a : trail()) {
         reasons.push_back(a.lit);
     }
     return reasons;

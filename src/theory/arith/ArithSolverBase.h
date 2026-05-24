@@ -51,11 +51,18 @@ namespace nlcolver {
  */
 class ArithSolverBase : public TheorySolver {
 public:
-    // ----- TheorySolver interface (finalized) -----
+    // ----- TheorySolver interface -----
+    // push/pop/backtrackToLevel/reset are finalized: every arith solver
+    // shares the trail roll-back + scope semantics, and customizes via
+    // the onX hooks. assertLit is VIRTUAL (not final): most solvers use
+    // the default dedup-by-satVar insert, but NIA needs a different
+    // admission policy (ActiveLiteralSet dedup + opposite-polarity
+    // detection), so it overrides assertLit while still driving the
+    // shared `state_.trail`.
     void push() final;
     void pop(uint32_t n) final;
     void assertLit(const TheoryAtomRecord& atom, bool value,
-                   int level, SatLit assertedLit) final;
+                   int level, SatLit assertedLit) override;
     void backtrackToLevel(int level) final;
     void reset() final;
 

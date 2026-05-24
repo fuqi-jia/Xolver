@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nia/core/NiaNormalizer.h"
@@ -44,20 +44,20 @@ class NiaLinearizationAdapter;
  *   9. Local search heuristic
  *  10. Branch split lemma or Unknown
  */
-class NiaSolver : public TheorySolver {
+class NiaSolver : public ArithSolverBase {
 public:
     explicit NiaSolver(std::unique_ptr<PolynomialKernel> kernel);
     ~NiaSolver();
 
     TheoryId id() const override { return TheoryId::NIA; }
 
-    void push() override;
-    void pop(uint32_t n) override;
+    // NIA overrides assertLit: its admission policy uses an
+    // ActiveLiteralSet for dedup and flags opposite-polarity as a
+    // pending Unknown, neither of which the base default does. The
+    // override still drives the shared `state_.trail`.
     void assertLit(const TheoryAtomRecord& atom, bool value,
                    int level, SatLit assertedLit) override;
-    void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
-    void reset() override;
 
     void setRegistry(TheoryAtomRegistry* reg);
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
@@ -72,6 +72,14 @@ public:
 
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
+
+protected:
+    // Base rolls back state_.trail and clears its (unused-by-NIA)
+    // pending slot; NIA syncs its polynomial constraint stack, active
+    // literal set, its own level-tagged pendings, and interface
+    // equalities here.
+    void onBacktrack(int targetLevel) override;
+    void onReset() override;
 
 private:
     struct NiaTrailEntry {
@@ -88,19 +96,11 @@ private:
         int level;
     };
 
-    struct ActiveAssignment {
-        int level;
-        SatLit lit;
-        TheoryAtomRecord atom;
-        bool value;
-    };
-
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
 
     std::vector<ActiveNiaConstraint> active_;
     std::vector<NiaTrailEntry> trail_;
-    std::vector<ActiveAssignment> activeAssignments_;
     ActiveLiteralSet activeSet_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
