@@ -1,0 +1,8 @@
+src/theory/arith/lra/LraSolver.cpp: check() lines=183
+src/theory/arith/lia/LiaSolver.cpp: check() lines=262
+src/theory/arith/nra/NraSolver.cpp: check() lines=24
+src/theory/arith/nia/NiaSolver.cpp: check() lines=337
+src/theory/arith/nira/NiraSolver.cpp: check() lines=109
+src/theory/arith/lira/LiraSolver.cpp: check() lines=6
+src/theory/arith/idl/IdlSolver.cpp: check() lines=73
+src/theory/arith/rdl/RdlSolver.cpp: check() lines=66

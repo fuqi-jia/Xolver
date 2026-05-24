@@ -1,0 +1,12 @@
+## NIA
+    NiaNormalizer normalizer_;
+    IntegerModelValidator validator_;
+    DomainStore domains_;
+    UnivariateIntegerReasoner univariate_;
+    LinearNiaDomainReasoner linearDomain_;
+    SquareBoundReasoner squareBound_;
+    SumOfSquaresBoundReasoner sumOfSquaresBound_;
+    IntervalEvaluator intervalEvaluator_;
+    AlgebraicIntegerReasoner algebraic_;
+    BoundedNiaSolver bounded_;
+    NiaLocalSearch localSearch_;

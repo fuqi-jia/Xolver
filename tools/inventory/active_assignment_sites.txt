@@ -1,0 +1,56 @@
+src/theory/arith/idl/IdlSolver.h:18:// V1: full rebuild from activeAssignments_ on every check().
+src/theory/arith/idl/IdlSolver.h:36:    struct ActiveAssignment {
+src/theory/arith/idl/IdlSolver.h:42:    std::vector<ActiveAssignment> activeAssignments_;
+src/theory/arith/idl/IdlSolver.cpp:56:    activeAssignments_.clear();
+src/theory/arith/idl/IdlSolver.cpp:64:    for (auto& a : activeAssignments_) {
+src/theory/arith/idl/IdlSolver.cpp:70:    activeAssignments_.push_back({level, assertedLit, atom, value});
+src/theory/arith/idl/IdlSolver.cpp:74:    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+src/theory/arith/idl/IdlSolver.cpp:76:    activeAssignments_.erase(it, activeAssignments_.end());
+src/theory/arith/idl/IdlSolver.cpp:211:    for (const auto& a : activeAssignments_) {
+src/theory/arith/lira/LiraSolver.cpp:22:    for (auto& a : activeAssignments_) {
+src/theory/arith/lira/LiraSolver.cpp:28:    activeAssignments_.push_back({level, assertedLit, atom, value});
+src/theory/arith/lira/LiraSolver.cpp:32:    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+src/theory/arith/lira/LiraSolver.cpp:34:    activeAssignments_.erase(it, activeAssignments_.end());
+src/theory/arith/lira/LiraSolver.cpp:65:    for (const auto& a : activeAssignments_) {
+src/theory/arith/lira/LiraSolver.cpp:170:    for (const auto& a : activeAssignments_) {
+src/theory/arith/lira/LiraSolver.cpp:253:    activeAssignments_.clear();
+src/theory/arith/lira/LiraSolver.cpp:286:    for (const auto& a : activeAssignments_) {
+src/theory/arith/lira/LiraSolver.h:70:    struct ActiveAssignment {
+src/theory/arith/lira/LiraSolver.h:76:    std::vector<ActiveAssignment> activeAssignments_;
+src/theory/arith/nia/NiaSolver.h:91:    struct ActiveAssignment {
+src/theory/arith/nia/NiaSolver.h:103:    std::vector<ActiveAssignment> activeAssignments_;
+src/theory/arith/nia/NiaSolver.cpp:40:    activeAssignments_.clear();
+src/theory/arith/nia/NiaSolver.cpp:63:    activeAssignments_.push_back({level, assertedLit, atom, value});
+src/theory/arith/nia/NiaSolver.cpp:90:    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+src/theory/arith/nia/NiaSolver.cpp:92:    activeAssignments_.erase(it, activeAssignments_.end());
+src/theory/arith/nia/NiaSolver.cpp:380:        laas.reserve(activeAssignments_.size());
+src/theory/arith/nia/NiaSolver.cpp:381:        for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.h:58:    struct ActiveAssignment {
+src/theory/arith/nira/NiraSolver.h:64:    std::vector<ActiveAssignment> activeAssignments_;
+src/theory/arith/nira/NiraSolver.h:80:        const std::vector<ActiveAssignment>& assignments,
+src/theory/arith/nira/NiraSolver.cpp:33:    activeAssignments_.push_back({level, assertedLit, atom, value});
+src/theory/arith/nira/NiraSolver.cpp:37:    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+src/theory/arith/nira/NiraSolver.cpp:39:    activeAssignments_.erase(it, activeAssignments_.end());
+src/theory/arith/nira/NiraSolver.cpp:46:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:67:        for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:94:        for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:185:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:202:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:400:    const std::vector<ActiveAssignment>& activeAssignments,
+src/theory/arith/nira/NiraSolver.cpp:581:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:665:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:678:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:698:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:769:            auto r = NiraSolver::checkAssignmentWithSimplex(activeAssignments_, activeLinearContext_, fixedValues, kernel_.get());
+src/theory/arith/nira/NiraSolver.cpp:811:    for (const auto& a : activeAssignments_) {
+src/theory/arith/nira/NiraSolver.cpp:827:    activeAssignments_.clear();
+src/theory/arith/nira/NiraSolver.cpp:845:    for (const auto& a : activeAssignments_) {
+src/theory/arith/rdl/RdlSolver.h:19:// V1: full rebuild from activeAssignments_ on every check().
+src/theory/arith/rdl/RdlSolver.h:37:    struct ActiveAssignment {
+src/theory/arith/rdl/RdlSolver.h:43:    std::vector<ActiveAssignment> activeAssignments_;
+src/theory/arith/rdl/RdlSolver.cpp:40:    activeAssignments_.clear();
+src/theory/arith/rdl/RdlSolver.cpp:48:    for (auto& a : activeAssignments_) {
+src/theory/arith/rdl/RdlSolver.cpp:54:    activeAssignments_.push_back({level, assertedLit, atom, value});
+src/theory/arith/rdl/RdlSolver.cpp:58:    auto it = std::remove_if(activeAssignments_.begin(), activeAssignments_.end(),
+src/theory/arith/rdl/RdlSolver.cpp:60:    activeAssignments_.erase(it, activeAssignments_.end());
+src/theory/arith/rdl/RdlSolver.cpp:167:    for (const auto& a : activeAssignments_) {

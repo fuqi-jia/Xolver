@@ -1,0 +1,56 @@
+src/theory/arith/idl/IdlSolver.h:56:    std::optional<TheoryConflict> pendingConflict_;
+src/theory/arith/idl/IdlSolver.cpp:59:    pendingConflict_.reset();
+src/theory/arith/idl/IdlSolver.cpp:196:    if (pendingConflict_) {
+src/theory/arith/idl/IdlSolver.cpp:197:        auto c = *pendingConflict_;
+src/theory/arith/idl/IdlSolver.cpp:198:        pendingConflict_.reset();
+src/theory/arith/lia/LiaSolver.cpp:49:    pendingConflict_.reset();
+src/theory/arith/lia/LiaSolver.cpp:133:    pendingConflict_.reset();
+src/theory/arith/lia/LiaSolver.cpp:168:                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
+src/theory/arith/lia/LiaSolver.cpp:185:                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
+src/theory/arith/lia/LiaSolver.cpp:194:    if (pendingConflict_) {
+src/theory/arith/lia/LiaSolver.cpp:198:        int sz = static_cast<int>(pendingConflict_->conflict.clause.size());
+src/theory/arith/lia/LiaSolver.cpp:203:        bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
+src/theory/arith/lia/LiaSolver.cpp:212:        return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
+src/theory/arith/lia/LiaSolver.h:97:    struct PendingConflict {
+src/theory/arith/lia/LiaSolver.h:101:    std::optional<PendingConflict> pendingConflict_;
+src/theory/arith/lra/LraSolver.cpp:46:    pendingConflict_.reset();
+src/theory/arith/lra/LraSolver.cpp:118:    pendingConflict_.reset();
+src/theory/arith/lra/LraSolver.cpp:146:    if (pendingConflict_) {
+src/theory/arith/lra/LraSolver.cpp:147:        return *pendingConflict_;
+src/theory/arith/lra/LraSolver.cpp:172:            pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
+src/theory/arith/lra/LraSolver.cpp:173:            return *pendingConflict_;
+src/theory/arith/lra/LraSolver.cpp:207:                pendingConflict_ = TheoryCheckResult::mkConflict(std::move(tc));
+src/theory/arith/lra/LraSolver.cpp:208:                return *pendingConflict_;
+src/theory/arith/lra/LraSolver.h:64:    std::optional<TheoryCheckResult> pendingConflict_;
+src/theory/arith/nia/NiaSolver.cpp:42:    pendingConflict_.reset();
+src/theory/arith/nia/NiaSolver.cpp:43:    pendingUnknown_.reset();
+src/theory/arith/nia/NiaSolver.cpp:59:        pendingUnknown_ = PendingUnknown{level};
+src/theory/arith/nia/NiaSolver.cpp:67:        pendingUnknown_ = PendingUnknown{level};
+src/theory/arith/nia/NiaSolver.cpp:94:    if (pendingConflict_ && pendingConflict_->level > level) {
+src/theory/arith/nia/NiaSolver.cpp:95:        pendingConflict_.reset();
+src/theory/arith/nia/NiaSolver.cpp:97:    if (pendingUnknown_ && pendingUnknown_->level > level) {
+src/theory/arith/nia/NiaSolver.cpp:98:        pendingUnknown_.reset();
+src/theory/arith/nia/NiaSolver.cpp:121:    if (pendingUnknown_) return TheoryCheckResult::unknown("NIA: pending unknown (opposite polarity asserted)");
+src/theory/arith/nia/NiaSolver.cpp:122:    if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
+src/theory/arith/nia/NiaSolver.h:82:    struct PendingConflict {
+src/theory/arith/nia/NiaSolver.h:87:    struct PendingUnknown {
+src/theory/arith/nia/NiaSolver.h:105:    std::optional<PendingConflict> pendingConflict_;
+src/theory/arith/nia/NiaSolver.h:106:    std::optional<PendingUnknown> pendingUnknown_;
+src/theory/arith/nra/core/CdcacSolver.h:66:    struct PendingConflict {
+src/theory/arith/nra/core/CdcacSolver.h:72:    struct PendingUnknown {
+src/theory/arith/nra/core/CdcacSolver.h:81:    std::optional<PendingConflict> pendingConflict_;
+src/theory/arith/nra/core/CdcacSolver.h:82:    std::optional<PendingUnknown> pendingUnknown_;
+src/theory/arith/nra/core/CdcacSolver.cpp:31:    pendingConflict_.reset();
+src/theory/arith/nra/core/CdcacSolver.cpp:32:    pendingUnknown_.reset();
+src/theory/arith/nra/core/CdcacSolver.cpp:62:    if (pendingConflict_ && pendingConflict_->level > level) {
+src/theory/arith/nra/core/CdcacSolver.cpp:63:        pendingConflict_.reset();
+src/theory/arith/nra/core/CdcacSolver.cpp:65:    if (pendingUnknown_ && pendingUnknown_->level > level) {
+src/theory/arith/nra/core/CdcacSolver.cpp:66:        pendingUnknown_.reset();
+src/theory/arith/nra/core/CdcacSolver.cpp:71:    if (pendingConflict_) {
+src/theory/arith/nra/core/CdcacSolver.cpp:72:        return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
+src/theory/arith/nra/core/CdcacSolver.cpp:75:    if (pendingUnknown_) {
+src/theory/arith/rdl/RdlSolver.h:57:    std::optional<TheoryConflict> pendingConflict_;
+src/theory/arith/rdl/RdlSolver.cpp:43:    pendingConflict_.reset();
+src/theory/arith/rdl/RdlSolver.cpp:153:    if (pendingConflict_) {
+src/theory/arith/rdl/RdlSolver.cpp:154:        auto c = *pendingConflict_;
+src/theory/arith/rdl/RdlSolver.cpp:155:        pendingConflict_.reset();
