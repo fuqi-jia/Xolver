@@ -39,6 +39,51 @@ int totalDegree(const RationalPolynomial& p) {
     return maxd;
 }
 
+bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
+                          const ReasonNode& reasons) {
+    value.normalize();
+    // Reduce by existing substitutions so `value` is over non-eliminated vars.
+    for (const auto& [ev, entry] : st.substMap) {
+        if (value.contains(ev)) value = substituteVar(value, ev, entry.value);
+    }
+    value.normalize();
+
+    DerivedFact f;
+    if (value.isConstant()) f.payload = DerivedFixedValue{v, value.constantValue()};
+    else                    f.payload = DerivedSubst{v, value};
+    f.reasons = reasons;
+    size_t fidx = st.ledger.append(f);
+
+    st.substMap[v] = PresolveState::SubstEntry{value, fidx};
+    if (value.isConstant()) st.fixedValues[v] = FixedVal{value.constantValue(), reasons};
+
+    // Apply to every live atom containing v.
+    for (auto& B : st.atoms) {
+        if (!B.live || !B.poly.contains(v)) continue;
+        B.poly = substituteVar(B.poly, v, value);
+        B.poly.normalize();
+        B.reasons.upstreamIndices.push_back(fidx);
+        if (B.poly.isConstant()) {
+            if (!relationHoldsForConstant(B.poly.constantValue(), B.rel)) {
+                st.hasConflict = true;
+                st.conflict.clause = st.ledger.flattenReasons(B.reasons);
+                return true;
+            }
+            B.live = false;  // satisfied
+        }
+    }
+
+    // Compose backward: eliminate v from earlier substitution values.
+    for (auto& [ev, entry] : st.substMap) {
+        if (ev == v) continue;
+        if (entry.value.contains(v)) {
+            entry.value = substituteVar(entry.value, v, value);
+            entry.value.normalize();
+        }
+    }
+    return true;
+}
+
 bool relationHoldsForConstant(const mpq_class& c, Relation rel) {
     switch (rel) {
         case Relation::Eq:  return c == 0;

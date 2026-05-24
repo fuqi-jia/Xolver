@@ -66,7 +66,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_073_unsat_3vars_no_real.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_082_sat_null_projection_avoid.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_087_sat_icp_narrow_box.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
-- `nia/nia_058_unsat_diophantine_multi_eq.smt2` — Two linear diophantine eqs with explicit unique negative solution + bound `x≥0` returns unknown. Linear elimination over integers not propagating to bound.
+- ~~`nia/nia_058_unsat_diophantine_multi_eq.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 5 `IntLinearEqualityCoreHNF` (Smith Normal Form). System `[[2,3],[5,7]]·(x,y)=(5,11)` has SNF `D=diag(1,1)`; particular integer solution `x=-2, y=3`, both parameter-free ⇒ `DerivedFixedValue`. Substituting `x=-2` into `x≥0` ⇒ `-2≥0` ⇒ `DerivedConflict {2x+3y=5, 5x+7y=11, x≥0}`. UNSAT.
 - ~~`nia/nia_061_sat_crt_3_moduli.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
 - ~~`nia/nia_062_unsat_crt_inconsistent.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
 - `nia/nia_064_unsat_polynomial_inequality_clash.smt2` — `x²<y ∧ y≤x ∧ x≥2` should chain to `x²<x` contradiction with `x≥2` — returns unknown. Polynomial-vs-linear chain reasoning gap.

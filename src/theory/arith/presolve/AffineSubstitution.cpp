@@ -22,6 +22,7 @@ bool AffineSubstitution::run(PresolveState& st) {
             }
         }
         if (chosen == NullVar) continue;
+        if (st.substMap.count(chosen)) continue;  // already eliminated
 
         // Int discipline: every coefficient must be integral so the affine RHS
         // is integer-valued whenever the other Int variables are integers.
@@ -35,54 +36,17 @@ bool AffineSubstitution::run(PresolveState& st) {
         }
 
         // value = -(poly - chosenCoeff*chosen) / chosenCoeff
-        RationalPolynomial value = st.atoms[ai].poly - RationalPolynomial::fromVar(chosen, 1, chosenCoeff);
+        RationalPolynomial value =
+            st.atoms[ai].poly - RationalPolynomial::fromVar(chosen, 1, chosenCoeff);
         value.normalize();
         value *= (mpq_class(-1) / chosenCoeff);
         value.normalize();
 
-        // Reduce by existing substitutions so value is over non-eliminated vars.
-        for (const auto& [ev, entry] : st.substMap) {
-            if (value.contains(ev)) value = substituteVar(value, ev, entry.value);
-        }
-        value.normalize();
-
-        // Record the substitution fact.
-        DerivedFact f;
-        f.payload = DerivedSubst{chosen, value};
-        f.reasons = st.atoms[ai].reasons;
-        size_t fidx = st.ledger.append(f);
-        st.substMap[chosen] = PresolveState::SubstEntry{value, fidx};
-
-        // Apply to every other live atom.
-        for (size_t bi = 0; bi < st.atoms.size(); ++bi) {
-            if (bi == ai) continue;
-            PresolveAtom& B = st.atoms[bi];
-            if (!B.live || !B.poly.contains(chosen)) continue;
-            B.poly = substituteVar(B.poly, chosen, value);
-            B.poly.normalize();
-            B.reasons.upstreamIndices.push_back(fidx);
-            if (B.poly.isConstant()) {
-                mpq_class cval = B.poly.constantValue();
-                if (!relationHoldsForConstant(cval, B.rel)) {
-                    st.hasConflict = true;
-                    st.conflict.clause = st.ledger.flattenReasons(B.reasons);
-                    return true;
-                }
-                B.live = false;  // satisfied
-            }
-        }
-
-        // Compose backward: eliminate `chosen` from earlier substitution values.
-        for (auto& [ev, entry] : st.substMap) {
-            if (ev == chosen) continue;
-            if (entry.value.contains(chosen)) {
-                entry.value = substituteVar(entry.value, chosen, value);
-                entry.value.normalize();
-            }
-        }
-
+        ReasonNode reasons = st.atoms[ai].reasons;
         st.atoms[ai].live = false;  // equality consumed
+        registerSubstitution(st, chosen, value, reasons);
         made = true;
+        if (st.hasConflict) return true;
     }
 
     return made;

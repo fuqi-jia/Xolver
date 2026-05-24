@@ -49,6 +49,10 @@ struct PresolveState {
     std::map<VarId, FixedVal> fixedValues;
     std::map<VarId, BoundVal> bounds;
 
+    // var ≡ residue (mod modulus), from Cap. 5 (SNF lattice) or Cap. 6.
+    struct CongruenceVal { mpz_class modulus; mpz_class residue; ReasonNode reasons; };
+    std::map<VarId, CongruenceVal> congruences;
+
     DerivationLedger ledger;
 
     // Terminal outputs.
@@ -75,6 +79,15 @@ public:
 // Substitute variable v by the polynomial `value` throughout p (exact).
 RationalPolynomial substituteVar(const RationalPolynomial& p, VarId v,
                                  const RationalPolynomial& value);
+
+// Eliminate variable v by substituting `value` (which must not contain v) into
+// every live atom, recording the derivation in the ledger.  Records a
+// DerivedFixedValue when `value` is constant, else a DerivedSubst, and updates
+// st.substMap / st.fixedValues.  Sets st.hasConflict when a collapsed-constant
+// atom violates its relation.  Returns true (progress).  The caller must ensure
+// v is not already in st.substMap.  Shared by Cap. 1 and Cap. 5.
+bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
+                          const ReasonNode& reasons);
 
 // Maximum total degree of any monomial (constant => 0; zero poly => 0).
 int totalDegree(const RationalPolynomial& p);
