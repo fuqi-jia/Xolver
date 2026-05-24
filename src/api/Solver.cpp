@@ -12,6 +12,7 @@
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
+#include "theory/arith/search/CandidateModelSearch.h"
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -768,10 +769,24 @@ public:
         } else if (result == SatSolver::SolveResult::Unsat) {
             ret = Result::Unsat;
         } else {
-            if (lastUnknownReason_.empty()) {
-                lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+            // Cap. 10 — Validated CandidateModelSearch (SAT-only last
+            // resort). The legacy complete engines returned Unknown for
+            // this query (or hit a recovered SIGSEGV). Try a small set of
+            // deterministic candidate assignments and accept the first
+            // one that the arithmetic evaluator confirms satisfies every
+            // original assertion. This NEVER returns UNSAT/Conflict/Lemma
+            // — at worst it reports `found=false` and we keep Unknown.
+            CandidateModelSearch cms(*ir, logic);
+            auto cmsResult = cms.run();
+            if (cmsResult.found) {
+                lastModel_ = cmsResult.model;
+                ret = Result::Sat;
+            } else {
+                if (lastUnknownReason_.empty()) {
+                    lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+                }
+                ret = Result::Unknown;
             }
-            ret = Result::Unknown;
         }
 
 #ifdef NLCOLVER_ENABLE_CASESTATS

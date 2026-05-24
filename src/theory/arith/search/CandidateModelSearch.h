@@ -1,0 +1,166 @@
+#pragma once
+
+#include "expr/ir.h"
+#include "theory/core/TheorySolver.h"
+#include <gmpxx.h>
+#include <chrono>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+namespace nlcolver {
+
+/**
+ * CandidateModelSearch (Capability 10 of the close-all-known-fails plan).
+ *
+ * SAT-only validated witness search. Last resort after every legacy
+ * complete engine returns Unknown.
+ *
+ * **Soundness contract**: this class never produces UNSAT, Conflict, or
+ * Lemma. It generates candidate assignments using a small set of
+ * deterministic strategies, then accepts a candidate only if a complete
+ * arithmetic evaluator over the original assertions reports that every
+ * assertion holds.
+ *
+ * Strategies (executed in this order):
+ *
+ *   10a. Low-height rational enumeration over a per-variable priority
+ *        list (0, 1, -1, 1/2, -1/2, 2, -2, ...). The Cartesian product
+ *        is explored in increasing total-height order so simple
+ *        witnesses (e.g. (1, 0, 0)) appear within the per-strategy
+ *        budget.
+ *
+ *   10d. Symmetric diagonal: detect syntactic permutation symmetry over
+ *        the variables and try x = y = ... = c for c in
+ *        {-2, -1, 0, 1, 2}.
+ *
+ *   10c. Boundary points: for each integer variable with an active
+ *        interval [L, U] (detected by a lightweight syntactic scan
+ *        of the assertions), try L, L+1, U, U-1.
+ *
+ *   10b. Linear-skeleton feasibility witness (delegated to
+ *        GeneralSimplex if available; otherwise the strategy yields
+ *        no candidate).
+ *
+ * Budgets:
+ *   - candidates per strategy:        200
+ *   - rational denominator bound:     12
+ *   - absolute numerator bound:       10
+ *   - wall-clock per invocation:      50 ms
+ *
+ * Validation:
+ *   - Construct a complete assignment over every free numeric variable
+ *     (defaulting unconstrained variables to 0 or the midpoint of an
+ *     active bound).
+ *   - Recursively evaluate every original assertion under the
+ *     assignment. Each atom must evaluate to a definite boolean; any
+ *     unresolvable construct (UF outside whitelist, division by an
+ *     unpinned divisor) discards the candidate.
+ *   - Returns the complete assignment for the first candidate that
+ *     evaluates every assertion to `true`.
+ *
+ * Pure arithmetic logics are enabled by default. UF-bearing logics
+ * (QF_UFNIA / QF_UFNRA / etc.) are disabled until the arithmetic
+ * evaluator's UF interpretation is extended; this guards against
+ * unsoundness from inconsistent UF interpretations in a candidate
+ * extension.
+ */
+class CandidateModelSearch {
+public:
+    struct Result {
+        bool found = false;
+        TheorySolver::TheoryModel model;
+        std::string strategy;
+    };
+
+    struct Config {
+        // Per-strategy candidate budget. The wall-clock budget is the
+        // hard real-time limit; the candidate budget is a soft cap to
+        // protect against pathological symmetric assertions where every
+        // height is reachable from the same triple. 5000 lets the Int
+        // enumeration reach total height 6 (cumulative ~370 triples),
+        // which covers nia_048's (3, 2, 1) witness.
+        size_t maxCandidatesPerStrategy = 5000;
+        int64_t denominatorBound = 12;
+        int64_t numeratorBound = 10;
+        std::chrono::milliseconds wallClockBudget{200};
+        Config() = default;
+    };
+
+    CandidateModelSearch(const CoreIr& ir, std::string_view logic);
+    CandidateModelSearch(const CoreIr& ir, std::string_view logic,
+                         const Config& cfg);
+
+    // Returns a validated SAT witness or `Result{found=false}`.
+    Result run();
+
+private:
+    struct VarRecord {
+        ExprId exprId;
+        std::string name;
+        SortId sort;
+    };
+
+    void collectFreeVariables();
+    void buildPriorityList();
+    void detectActiveBounds();
+    bool isLogicEnabled() const;
+
+    // Strategies. Each appends candidate assignments to candidates_ until
+    // the per-strategy budget is exhausted or the wall-clock deadline is
+    // reached. Validation happens after each candidate is generated, and
+    // the first valid candidate short-circuits the whole search.
+    bool runStrategy10a();
+    bool runStrategy10c();
+    bool runStrategy10d();
+
+    // Evaluate the assertion list against `assignment`. Returns Yes/No/
+    // Indeterminate.
+    enum class EvalVerdict { True, False, Indeterminate };
+    EvalVerdict evaluateAssertions(
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
+
+    enum class TermVerdict { Bool, Number, Indeterminate };
+    struct TermResult {
+        TermVerdict kind = TermVerdict::Indeterminate;
+        bool boolValue = false;
+        mpq_class numValue = 0;
+    };
+    TermResult evalTerm(
+        ExprId eid,
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
+
+    bool detectSymmetry() const;
+    static int64_t heightOf(const mpq_class& q);
+
+    // Acceptance: validate a candidate (extending unspecified variables
+    // to a default value) and, on success, record the model in result_.
+    bool tryAcceptCandidate(
+        const std::unordered_map<std::string, mpq_class>& partial,
+        const std::string& strategyName);
+
+    const CoreIr& ir_;
+    std::string logic_;
+    Config cfg_;
+    std::chrono::steady_clock::time_point deadline_;
+
+    std::vector<VarRecord> vars_;
+    std::unordered_map<std::string, size_t> varIndexByName_;
+    std::vector<mpq_class> priority_;            // shared priority list
+    std::vector<std::vector<mpq_class>> perVar_; // per-variable values
+
+    struct BoundInfo {
+        std::optional<mpq_class> lower;
+        std::optional<mpq_class> upper;
+        bool lowerStrict = false;
+        bool upperStrict = false;
+    };
+    std::unordered_map<std::string, BoundInfo> activeBounds_;
+
+    Result result_;
+    size_t totalCandidatesTried_ = 0;
+};
+
+} // namespace nlcolver

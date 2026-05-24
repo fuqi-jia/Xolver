@@ -42,7 +42,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nira/nira_020_sat_three_vars.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8a `UnconditionalConstantPropagation` (collect `i=2, j=3` from top-level unconditional conjuncts and substitute globally — but never under UF applications, to preserve EUF congruence) + Cap. 8b `ToRealLiteralFold` (`(to_real 2) → 2`, `(/ 2 3) → 2/3`).
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
 - ~~`nra/nra_038_sat_ellipse_tangent.smt2`~~ — **FIXED** in 2026-05-23: pseudoRemainder bug fix + level-0 projection trigger (`RationalPolynomial::pseudoRemainder` was using post-multiplication leading coefficient instead of pre-multiplication, causing SubresultantEngine to never reduce degree when divisor's leading coefficient was non-constant; this broke all CDCAC projection for non-trivial cases).
-- `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
+- ~~`nra/nra_040_sat_3vars_sphere.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10a's low-height rational enumeration finds the witness `(x=1, y=0, z=0)` and the arithmetic evaluator confirms it satisfies the sphere and `x ≥ 9/10`. Closed by validator-gated SAT witness search, not by complete NRA reasoning.
 - ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
 - ~~`nra/nra_043_unsat_parabola_below_line.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_046_unsat_aggregate_positive.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
@@ -52,11 +52,11 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`lra/lra_044_unsat_distinct_eq_chain.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer expansion (b8bc81f)).
 - ~~`lra/lra_045_unsat_neg_eq.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: LRA disequality propagation (b8bc81f)).
 - `nia/nia_043_sat_mod_witness.smt2` — `mod` witness existence returns unknown. NIA modular reasoning incomplete.
-- `nia/nia_045_sat_mixed_lin_nonlin.smt2` — Mixed linear/nonlinear integer returns unknown. NIA branch lemma generation gap.
+- ~~`nia/nia_045_sat_mixed_lin_nonlin.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10a finds the integer witness `(x=2, y=3, z=6)` (or another permutation) and the arithmetic evaluator confirms `z = x*y`, `x+y=5`, `z≥0`. Closed by validator-gated SAT witness search, not by complete NIA reasoning.
 - ~~`nra/nra_048_sat_metitarski_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix as nra_038).
 - ~~`nra/nra_050_sat_close_to_root.smt2`~~ — **FIXED** in 2026-05-25: two coordinated fixes — (1) `LibpolyBackend::refineRootInterval` now refines the bracketing interval _within_ a single call instead of just one libpoly step (it was re-isolating from scratch each entry, so caller-driven loops never made progress past the initial bracket); (2) `LibpolyBackend::validateRootIsolation` retries refinement when adjacent algebraic intervals touch (libpoly emits `[3/4..1]` and `[1..5/4]` for the roots 99/100 and 101/100, which are correct but abutting). Solves the "root near rational boundary" precision case.
 - ~~`nra/nra_053_sat_polynomial_disjunction.smt2`~~ — **FIXED** in 2026-05-25 (rolled in via the validateRootIsolation/refineRootInterval pair: disjunction tests routed through CDCAC now survive the touching-interval guard).
-- `nia/nia_048_sat_verymax_nested_strict.smt2` — VeryMax-style nested strict inequalities `(x>y ∧ y>z ∧ z≥1 ∧ x*z>0)` returns unknown. Likely the AlgebraicIntegerReasoner doesn't handle strict + multiplicative product witness search.
+- ~~`nia/nia_048_sat_verymax_nested_strict.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10a's low-height integer enumeration finds the witness `(x=3, y=2, z=1)` and the arithmetic evaluator confirms it satisfies every original assertion. Closed by validator-gated SAT witness search, not by complete NIA reasoning.
 - ~~`nra/nra_057_sat_polynomial_band.smt2`~~ — **FIXED** in 2026-05-25 (same refineRootInterval + validateRootIsolation pair as nra_050).
 - ~~`nra/nra_058_sat_metitarski_exp_approx.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
 - ~~`nra/nra_062_sat_polynomial_outside_band.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
@@ -111,12 +111,12 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_121_sat_kinematics_orbit.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - `nra/nra_122_unsat_3_quadrics_disjoint.smt2` — 3 disjoint spheres — unknown.
 - ~~`nra/nra_124_sat_robotic_workspace.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
-- `nra/nra_126_sat_polynomial_lyapunov.smt2` — Lyapunov decrease in annulus — unknown.
+- ~~`nra/nra_126_sat_polynomial_lyapunov.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10a finds a small-height rational witness on the annulus (e.g. `(x=0, y=1/2)`) and the arithmetic evaluator confirms the three Lyapunov-decrease atoms. Closed by validator-gated SAT witness search, not by complete NRA reasoning.
 - ~~`nra/nra_128_sat_geometric_packing.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - ~~`nra/nra_131_sat_brown_2001_relaxed.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - ~~`nra/nra_134_unsat_metitarski_negation.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - ~~`nra/nra_135_unsat_amzi_classic.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
-- `nra/nra_136_sat_amzi_tight.smt2` — CS equality at (1,1,1) — unknown.
+- ~~`nra/nra_136_sat_amzi_tight.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10d's symmetric-diagonal trial with `c=1` yields `(x=y=z=1)`, which the arithmetic evaluator confirms satisfies `x²+y²+z²=3 ≤ 3` and `x+y+z=3 ≥ 3`. Closed by validator-gated SAT witness search, not by complete NRA reasoning.
 - ~~`nra/nra_137_unsat_strict_cs_violation.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
 - ~~`nra/nra_138_sat_huge_coeff.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: addTerm canonicalization handles big coefficients (3335d5e)).
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.

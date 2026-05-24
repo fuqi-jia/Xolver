@@ -93,7 +93,12 @@ TEST_CASE("IDL: single variable bounds SAT") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("IDL: unsupported non-difference atom returns Unknown") {
+TEST_CASE("IDL: non-difference atom is satisfiable via Cap. 10 fallback") {
+    // `x + y <= 3` is not a difference-logic atom (it has two unknowns on
+    // one side instead of a difference). The IDL theory returns Unknown
+    // for the atom itself, but the validated CandidateModelSearch
+    // (Cap. 10) finds an integer witness — e.g. (x=0, y=0) — and the
+    // Solver returns Sat. This is sound: the formula IS satisfiable.
     std::string path = writeTempSmt2(
         "(set-logic QF_IDL)\n"
         "(declare-const x Int)\n"
@@ -105,7 +110,7 @@ TEST_CASE("IDL: unsupported non-difference atom returns Unknown") {
     solver.setLogic("QF_IDL");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
 TEST_CASE("IDL: equality with non-integer RHS is UNSAT") {

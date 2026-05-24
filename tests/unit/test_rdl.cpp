@@ -91,7 +91,12 @@ TEST_CASE("RDL: Div constant strict bound") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("RDL: unsupported non-difference atom returns Unknown") {
+TEST_CASE("RDL: non-difference atom is satisfiable via Cap. 10 fallback") {
+    // `x + y <= 3` is not a difference-logic atom. The RDL theory
+    // returns Unknown for the atom itself, but the validated
+    // CandidateModelSearch (Cap. 10) finds a rational witness
+    // (e.g. x=0, y=0) and the Solver returns Sat. This is sound: the
+    // formula IS satisfiable.
     std::string path = writeTempSmt2(
         "(set-logic QF_RDL)\n"
         "(declare-const x Real)\n"
@@ -103,5 +108,5 @@ TEST_CASE("RDL: unsupported non-difference atom returns Unknown") {
     solver.setLogic("QF_RDL");
     CHECK(solver.parseFile(path));
     Result r = solver.checkSat();
-    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
