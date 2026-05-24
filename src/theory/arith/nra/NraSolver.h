@@ -31,9 +31,9 @@ public:
     // NRA is a facade over CdcacSolver with its own active-literal
     // tracking (activeLits_/trail_/activeSet_), so it overrides
     // assertLit and routes push/pop/backtrack/reset through the base
-    // hooks rather than using the shared state_.trail.
+    // hooks rather than using the shared state_.trail. check() is the
+    // base default (runReasonerPipeline over the two stages below).
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
-    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -57,6 +57,10 @@ protected:
     void onReset() override;
 
 private:
+    // Reasoner pipeline stages (Phase 2). nullopt = continue.
+    std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+
     struct NraTrailEntry {
         int level;
         size_t activeSizeBefore;

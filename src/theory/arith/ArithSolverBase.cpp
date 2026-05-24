@@ -1,6 +1,35 @@
 #include "theory/arith/ArithSolverBase.h"
+#include "theory/arith/Reasoner.h"
+#include <cassert>
 
 namespace nlcolver {
+
+ArithSolverBase::ArithSolverBase() = default;
+ArithSolverBase::~ArithSolverBase() = default;
+
+TheoryCheckResult ArithSolverBase::check(TheoryLemmaStorage& lemmaDb,
+                                         TheoryEffort effort) {
+    return runReasonerPipeline(lemmaDb, effort);
+}
+
+TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
+                                                       TheoryEffort effort) {
+    if (hasPending()) return drainPending();
+    for (auto& r : reasoners_) {
+        if (!r->runsAt(effort)) continue;
+#ifndef NDEBUG
+        size_t trailBefore = state_.trail.size();
+#endif
+        auto res = r->run(lemmaDb, effort);
+        // Reasoners must not mutate the shared trail; only assertLit does.
+        assert(state_.trail.size() == trailBefore && "Reasoner mutated trail");
+        // nullopt = continue to next stage; a value = stop with that verdict
+        // (Consistent here means "theory state is consistent, stop", NOT
+        // "continue").
+        if (res.has_value()) return std::move(*res);
+    }
+    return TheoryCheckResult::consistent();
+}
 
 void ArithSolverBase::push() {
     ++state_.scopeLevel;

@@ -1,4 +1,5 @@
 #include "theory/arith/nra/NraSolver.h"
+#include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/poly/RationalPolynomial.h"
@@ -9,7 +10,15 @@ namespace nlcolver {
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
-      engine_(kernel_.get()) {}
+      engine_(kernel_.get()) {
+    // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.presolve",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); }));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.cdcac",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
+}
 
 void NraSolver::onPush() {
     scopeStack_.push_back(activeLits_.size());
@@ -85,29 +94,33 @@ void NraSolver::onBacktrack(int level) {
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
-TheoryCheckResult NraSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
-    // Theory-check presolve fixpoint (Caps. 1–5, 7, with Real domain).  May
-    // return a Conflict (UNSAT direction) via exact linear/sign reasoning; it
-    // never returns SAT directly.  Otherwise the CDCAC engine runs as before.
-    {
-        PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
-        bool feasible = true;
-        for (const auto& c : presolveConstraints_) {
-            if (c.poly == NullPoly) continue;  // non-polynomial placeholder
-            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
-            if (!rp) { feasible = false; break; }
-            presolve.addAtom(*rp, c.rel, c.reason);
-        }
-        if (feasible) {
-            auto pr = presolve.run();
-            if (pr.kind == PresolveResult::Kind::Conflict)
-                return TheoryCheckResult::mkConflict(pr.conflict);
-            if (pr.kind == PresolveResult::Kind::Lemma)
-                return TheoryCheckResult::mkLemma(pr.lemma);
-        }
+// Stage 1: theory-check presolve fixpoint (Caps. 1–5, 7, with Real domain).
+// May return a Conflict (UNSAT direction) via exact linear/sign reasoning,
+// or a Lemma; it never returns SAT directly. nullopt → continue to CDCAC.
+std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*lemmaDb*/,
+                                                          TheoryEffort /*effort*/) {
+    PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
+    bool feasible = true;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;  // non-polynomial placeholder
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) { feasible = false; break; }
+        presolve.addAtom(*rp, c.rel, c.reason);
     }
-    auto r = engine_.check();
-    return r;
+    if (feasible) {
+        auto pr = presolve.run();
+        if (pr.kind == PresolveResult::Kind::Conflict)
+            return TheoryCheckResult::mkConflict(pr.conflict);
+        if (pr.kind == PresolveResult::Kind::Lemma)
+            return TheoryCheckResult::mkLemma(pr.lemma);
+    }
+    return std::nullopt;
+}
+
+// Stage 2: the CDCAC engine. Always yields a definite verdict.
+std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
+                                                       TheoryEffort /*effort*/) {
+    return engine_.check();
 }
 
 TheoryCheckResult NraSolver::assertInterfaceEquality(

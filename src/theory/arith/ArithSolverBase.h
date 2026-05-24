@@ -2,10 +2,13 @@
 
 #include "theory/core/TheorySolver.h"
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <vector>
 
 namespace nlcolver {
+
+class Reasoner;
 
 /**
  * ArithSolverBase — shared base for the arithmetic theory solvers
@@ -51,6 +54,12 @@ namespace nlcolver {
  */
 class ArithSolverBase : public TheorySolver {
 public:
+    // Out-of-line dtor: `reasoners_` is a vector<unique_ptr<Reasoner>>
+    // over a forward-declared Reasoner, so the destructor must be defined
+    // in the .cpp (where Reasoner.h is complete).
+    ArithSolverBase();
+    ~ArithSolverBase() override;
+
     // ----- TheorySolver interface -----
     // push/pop/backtrackToLevel/reset are finalized: every arith solver
     // shares the trail roll-back + scope semantics, and customizes via
@@ -66,7 +75,28 @@ public:
     void backtrackToLevel(int level) final;
     void reset() final;
 
+    // Default check(): drain any pending result, then walk the reasoner
+    // pipeline (Phase 2). A solver that has populated `reasoners_` in its
+    // constructor gets a uniform check() for free — the first stage
+    // returning a non-Consistent verdict wins. Solvers not yet decomposed
+    // into reasoners override check() as before. A solver with an empty
+    // `reasoners_` and no override would always report Consistent, so the
+    // pipeline is only the verdict when reasoners_ is non-empty.
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb,
+                            TheoryEffort effort) override;
+
 protected:
+    // ----- Reasoner pipeline (Phase 2) -----
+    // Populated in a subclass constructor; walked by the default check().
+    std::vector<std::unique_ptr<Reasoner>> reasoners_;
+
+    // Walk reasoners_ in order: drain pending first, then run each stage
+    // whose runsAt(effort) holds; return the first non-Consistent verdict,
+    // else Consistent. Exposed so a solver that needs custom pre/post
+    // logic can call it from its own check() override.
+    TheoryCheckResult runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
+                                          TheoryEffort effort);
+
     // ----- Shared trail entry (was duplicated 56× across solvers) -----
     struct ActiveAssignment {
         int level;
