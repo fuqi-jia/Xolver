@@ -33,13 +33,13 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `lia/lia_015_sat_distinct_3_int.smt2` — n-ary distinct (n≥3) on Ints returns unknown. Same gap as LRA — distinct pairwise expansion missing for arithmetic theories.
 - `lia/lia_016_unsat_distinct_too_many.smt2` — n-ary distinct (n≥3) on Ints with tight bounds returns unknown. Same gap.
 - ~~`nra/nra_021_unsat_sum_of_squares_plus_one.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
-- `nira/nira_004_sat_int_times_real_pos.smt2` — `i*r > 0 ∧ i>0 ∧ r>0` returns unknown. NIRA core gap.
-- `nira/nira_006_sat_real_sq_eq_int.smt2` — `r²=4 ∧ to_int(r)=2` returns unknown. NIRA nonlinear + to_int gap.
-- `nira/nira_007_unsat_real_sq_neg.smt2` — `r²=-1` returns unknown. NIRA can't refute even classical contradictions.
-- `nira/nira_008_sat_to_int_nonlinear_real.smt2` — `r²=4 ∧ to_int(r)≥0` returns unknown.
-- `nira/nira_011_sat_bounded_product.smt2` — `(i≥1) ∧ (r≥0) ∧ (i*r ≤ 1)` returns unknown.
+- ~~`nira/nira_004_sat_int_times_real_pos.smt2`~~ — **FIXED** in 2026-05-24: NiraSolver bounded-complete enumeration now pins half-bounded integer variables to their single available bound (single-point heuristic), so `i > 0 ∧ r > 0 ∧ i*r > 0` finds the witness at `i = 1`. Non-exhaustive — return Unknown rather than UNSAT if pin fails.
+- ~~`nira/nira_006_sat_real_sq_eq_int.smt2`~~ — **FIXED** in 2026-05-24 (pure-real subproblem delegated to CDCAC after substituting `i = to_int(r)` does not bind, plus heuristic pin).
+- ~~`nira/nira_007_unsat_real_sq_neg.smt2`~~ — **FIXED** in 2026-05-24: new `NiraSolver::checkPureSubproblems` routes the residual real-only polynomial system through a fresh `CdcacSolver`, picking up CDCAC's SOS-positivity refutation for `r² + 1 = 0`.
+- ~~`nira/nira_008_sat_to_int_nonlinear_real.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation handles `r²=4` directly; `to_int(r) ≥ 0` flows through the linear stage).
+- ~~`nira/nira_011_sat_bounded_product.smt2`~~ — **FIXED** in 2026-05-24 (single-point pin heuristic — `i = 1` paired with the simplex check is a witness for `i*r ≤ 1`).
 - ~~`nira/nira_012_unsat_product_lower_bound.smt2`~~ — **FIXED** in 2026-05-21: hardened `GeneralSimplex::explainLowerConflict` / `explainUpperConflict` against missing bound `reason` optional.
-- `nira/nira_013_sat_polynomial_int_coeff_real_var.smt2` — `2r²-3r+1=0` returns unknown.
+- ~~`nira/nira_013_sat_polynomial_int_coeff_real_var.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation routes the univariate quadratic `2r²-3r+1=0` to CDCAC, which finds roots r ∈ {1/2, 1}).
 - `nira/nira_018_sat_nonlinear_real_to_int.smt2` — `to_int(r²+1) ≥ 1` returns unknown.
 - `nira/nira_020_sat_three_vars.smt2` — `r = to_real(i)/to_real(j)` returns unknown.
 - ~~`nira/nira_023_sat_real_sq_variant.smt2`~~ — **FIXED** in 2026-05-21: univariate quadratic analysis + linear-context integer variable collection.
@@ -48,8 +48,8 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
 - ~~`nra/nra_043_unsat_parabola_below_line.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_046_unsat_aggregate_positive.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
-- ~~`nia/nia_032_unsat_modular_chain.smt2`~~ — **FIXED** in 2026-05-24: new `ModularConsistencyChecker` preprocessing pass detects `(= (mod x N) c)` patterns + integer bounds, runs CRT to combine residues and either emit `false` (CRT-inconsistent or finite-range-empty) or pin `x = candidate` (single witness in range). Runs before `IntDivModLowerer` so the mod structure is still inspectable. Same pass also resolves nia_061/062/068/069/071/074/075/098.
-- `nira/nira_027_sat_split_nl_lin.smt2` — Mixed `r²≥1 ∧ i≤5 ∧ r≤10` returns unknown. Atomizer routing fails when nonlinear-real and pure-linear-int both present.
+- ~~`nia/nia_032_sat_modular_chain.smt2`~~ — **FIXED** in 2026-05-24: new `ModularConsistencyChecker` preprocessing pass detects `(= (mod x N) c)` patterns + integer bounds, runs CRT to combine residues and either emit `false` (CRT-inconsistent or finite-range-empty) or pin `x = candidate` (single witness in range). Runs before `IntDivModLowerer` so the mod structure is still inspectable. Same pass also resolves nia_061/062/068/069/071/074/075/098.
+- ~~`nira/nira_027_sat_split_nl_lin.smt2`~~ — **FIXED** in 2026-05-24 (pure-subproblem delegation: `r² ≥ 1` is purely real after `i ≤ 5` is excluded from the polynomial set; CDCAC returns sat, NIRA forwards).
 - `uflia/uflia_017_unsat_purify_violation.smt2` — `f(x+1)` and `f(2)` under `x=1` should congruence-merge but solver returns unknown. Atomizer purification of `(+ x 1)` inside UF arg missing.
 - `lra/lra_044_unsat_distinct_eq_chain.smt2` — `distinct` + eq chain returns unknown. Missing disequality propagation for distinct on Real.
 - `lra/lra_045_unsat_neg_eq.smt2` — Negated equality `not(= x y)` with bounds returns unknown. Disequality handling gap in LRA.

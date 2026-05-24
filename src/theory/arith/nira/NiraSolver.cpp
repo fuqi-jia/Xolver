@@ -2,6 +2,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/arith/linear/LinearAtomManager.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/nra/core/CdcacSolver.h"
 #include "expr/ir.h"
 #include <algorithm>
 #include <functional>
@@ -122,6 +123,17 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
         }
     }
 
+    // --- Pure-subproblem delegation (cheap; runs at Full effort).
+    // If, after fixed-value substitution, every remaining polynomial
+    // constraint involves only real variables, route them through NRA's
+    // CDCAC engine directly instead of trying bounded integer enumeration.
+    if (effort == TheoryEffort::Full) {
+        auto pure = checkPureSubproblems(lemmaDb);
+        if (pure.kind == TheoryCheckResult::Kind::Consistent) return pure;
+        if (pure.kind == TheoryCheckResult::Kind::Conflict)   return pure;
+        // Otherwise (Unknown — mixed int/real polys remain) fall through.
+    }
+
     // --- Full effort: bounded-complete enumeration ---
     if (effort == TheoryEffort::Full) {
         auto r = checkBoundedComplete(lemmaDb);
@@ -138,8 +150,95 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
     return TheoryCheckResult::unknown("NIRA: polynomial payload needs Full effort");
 }
 
+namespace {
+// Forward declaration; the body is in the anonymous namespace further down.
+bool isIntegerVar(const CoreIr* coreIr, const std::string& name);
+} // namespace
+
 TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb*/) {
-    return TheoryCheckResult::consistent();
+    // After substituting fixed integer values into polynomial constraints,
+    // some polynomials may collapse into pure-real form (no integer variables
+    // remaining). For those, NIRA's bounded-complete enumeration over integer
+    // assignments is the wrong tool — we just need NRA on the residual
+    // polynomial system. Spin up a fresh CdcacSolver, push the surviving
+    // real-only constraints, and forward its verdict.
+    //
+    // The path is needed for:
+    //   * inputs that are pure-NRA in disguise (`r²=-1`, `2r²-3r+1=0`),
+    //   * NIRA inputs whose integer variables vanish post-substitution
+    //     (`r² ≥ 1 ∧ i ≤ 5`, where i is otherwise irrelevant).
+    if (!coreIr_ || !kernel_) {
+        return TheoryCheckResult::unknown(
+            "NIRA: pure-subproblem delegation requires kernel and coreIr");
+    }
+
+    // Step 1: collect fixed-value substitutions (single-variable linear
+    // equalities, from active NIRA atoms and the LIRA linear context).
+    std::unordered_map<std::string, mpq_class> fixedValues;
+    auto collectFixed = [&](const LinearAtomPayload& p) {
+        if (p.rel != Relation::Eq) return;
+        if (p.lhs.terms.size() != 1) return;
+        const auto& [name, coeff] = p.lhs.terms[0];
+        if (coeff == 0) return;
+        fixedValues[name] = p.rhs / coeff;
+    };
+    for (const auto& a : activeAssignments_) {
+        if (!a.value) continue;
+        if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) collectFixed(*p);
+    }
+    if (activeLinearContext_) {
+        for (const auto& alc : *activeLinearContext_) collectFixed(alc.payload);
+    }
+
+    // Step 2: substitute into each polynomial constraint and classify.
+    struct RealConstraint {
+        PolyId poly;
+        Relation rel;
+        SatLit reason;
+        int level;
+    };
+    std::vector<RealConstraint> realPolys;
+    bool sawMixed = false;
+    for (const auto& a : activeAssignments_) {
+        if (!a.value) continue;
+        if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;
+        const auto& payload = std::get<PolynomialAtomPayload>(a.atom.payload);
+        PolyId current = payload.poly;
+        for (const auto& [name, value] : fixedValues) {
+            auto varIdOpt = kernel_->findVar(name);
+            if (!varIdOpt) continue;
+            if (auto sub = kernel_->substituteRational(current, *varIdOpt, value)) {
+                current = *sub;
+            }
+        }
+        // Constant polynomials are already covered by check()'s presolve.
+        if (kernel_->isConstant(current)) continue;
+
+        bool hasInt = false;
+        for (const auto& v : kernel_->variables(current)) {
+            if (isIntegerVar(coreIr_, v)) { hasInt = true; break; }
+        }
+        if (hasInt) {
+            sawMixed = true;
+            continue;
+        }
+        realPolys.push_back({current, payload.rel, a.lit, a.level});
+    }
+
+    if (sawMixed) {
+        return TheoryCheckResult::unknown("NIRA: mixed int/real polys remain");
+    }
+
+    if (realPolys.empty()) {
+        return TheoryCheckResult::consistent();
+    }
+
+    // Step 3: delegate to a fresh CDCAC engine on the real-only residual.
+    CdcacSolver cdcac(kernel_.get());
+    for (const auto& rp : realPolys) {
+        cdcac.assertConstraint(rp.poly, rp.rel, rp.reason, rp.level);
+    }
+    return cdcac.check();
 }
 
 TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -624,6 +723,38 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         }
     }
 
+    // Heuristic SAT-search for half-bounded integer variables: when an int
+    // var has exactly one bound, pin the trial value to that bound (so the
+    // bound is realized) and add it to the enumeration set as a single-point
+    // range. This is sound for SAT (the value really does satisfy the bound
+    // and any satisfying combination becomes a model) but the resulting
+    // enumeration is no longer exhaustive — if every pinned trial fails we
+    // must NOT emit UNSAT, only Unknown. Catches SAT-side patterns like
+    //     i > 0 ∧ r > 0 ∧ i*r > 0           (nira_004)
+    //     i ≥ 1 ∧ r ≥ 0 ∧ i*r ≤ 1           (nira_011)
+    // where the lower-bound corner — i = 1, paired with the simplex check on
+    // the residual real-only fragment — is already a witness.
+    bool usedHeuristicPin = false;
+    for (const auto& name : unboundedVars) {
+        auto it = bounds.find(name);
+        if (it == bounds.end()) {
+            usedHeuristicPin = true;  // truly free var, can't pin
+            continue;
+        }
+        BoundInfo& bi = it->second;
+        if (bi.lower && !bi.upper) {
+            bi.upper = bi.lower;  // pin to lower
+            enumVars.push_back(name);
+            usedHeuristicPin = true;
+        } else if (bi.upper && !bi.lower) {
+            bi.lower = bi.upper;  // pin to upper
+            enumVars.push_back(name);
+            usedHeuristicPin = true;
+        } else {
+            usedHeuristicPin = true;
+        }
+    }
+
     if (enumVars.empty()) {
         // No bounded variables to enumerate; cannot make progress.
         return TheoryCheckResult::unknown("NIRA: unbounded integer variable(s)");
@@ -664,6 +795,14 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
     if (sawUnknown) {
         return TheoryCheckResult::unknown(
             "NIRA: bounded-complete enumeration hit non-linear real residual");
+    }
+
+    if (usedHeuristicPin) {
+        // We pinned at least one unbounded var to a single value; an
+        // exhaustive UNSAT proof requires every possible integer value to
+        // have been refuted. Return Unknown — the SAT solver will continue.
+        return TheoryCheckResult::unknown(
+            "NIRA: heuristic pin exhausted without SAT, true range unexplored");
     }
 
     // All enumerated combinations lead to contradiction.
