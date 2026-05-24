@@ -69,7 +69,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nia/nia_058_unsat_diophantine_multi_eq.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 5 `IntLinearEqualityCoreHNF` (Smith Normal Form). System `[[2,3],[5,7]]·(x,y)=(5,11)` has SNF `D=diag(1,1)`; particular integer solution `x=-2, y=3`, both parameter-free ⇒ `DerivedFixedValue`. Substituting `x=-2` into `x≥0` ⇒ `-2≥0` ⇒ `DerivedConflict {2x+3y=5, 5x+7y=11, x≥0}`. UNSAT.
 - ~~`nia/nia_061_sat_crt_3_moduli.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
 - ~~`nia/nia_062_unsat_crt_inconsistent.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker preprocessing pass).
-- `nia/nia_064_unsat_polynomial_inequality_clash.smt2` — `x²<y ∧ y≤x ∧ x≥2` should chain to `x²<x` contradiction with `x≥2` — returns unknown. Polynomial-vs-linear chain reasoning gap.
+- ~~`nia/nia_064_unsat_polynomial_inequality_clash.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 7 `BoundChainComposer` + Cap. 4 `UnivariatePolySignAnalyzer`. `x²<y` (lower-bounds y) and `y≤x` (upper-bounds y) compose to `x²<x` (`x²−x<0`); root isolation gives roots {0,1}, negative on the open interval (0,1), which contains no integer ⇒ `DerivedConflict {x²<y, y≤x}`. UNSAT.
 
 ### SEGV minimization study (nra_065 family) — RESOLVED (2026-05-22)
 - ~~`nra/nra_093_segv_repro_min_two_circles.smt2`~~ — delta-debug control case; was `unknown`, now resolved by the same nra_065 fix bundle (root coprimality + rational-algebraic merge).

@@ -1,6 +1,8 @@
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/presolve/AffineSubstitution.h"
 #include "theory/arith/presolve/IntLinearEqualityCoreHNF.h"
+#include "theory/arith/presolve/BoundChainComposer.h"
+#include "theory/arith/presolve/UnivariatePolySignAnalyzer.h"
 
 namespace nlcolver {
 
@@ -12,8 +14,10 @@ PresolveEngine::PresolveEngine(PolynomialKernel* kernel, bool integerDomain) {
     //   5 (linear cores) → 3 → 1 → 2 → 11 → 7 → 4 → 6.
     // Capabilities are appended as they are implemented; the fixpoint runs them
     // in this order until no new fact is derived.
-    caps_.push_back(std::make_unique<IntLinearEqualityCoreHNF>());  // Cap. 5 (Int)
-    caps_.push_back(std::make_unique<AffineSubstitution>());        // Cap. 1
+    caps_.push_back(std::make_unique<IntLinearEqualityCoreHNF>());   // Cap. 5 (Int)
+    caps_.push_back(std::make_unique<AffineSubstitution>());         // Cap. 1
+    caps_.push_back(std::make_unique<BoundChainComposer>());         // Cap. 7
+    caps_.push_back(std::make_unique<UnivariatePolySignAnalyzer>()); // Cap. 4
 }
 
 void PresolveEngine::addAtom(const RationalPolynomial& poly, Relation rel, SatLit reason) {

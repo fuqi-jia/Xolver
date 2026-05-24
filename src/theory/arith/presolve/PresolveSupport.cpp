@@ -1,5 +1,7 @@
 #include "theory/arith/presolve/Presolve.h"
 
+#include <algorithm>
+
 namespace nlcolver {
 
 RationalPolynomial substituteVar(const RationalPolynomial& p, VarId v,
@@ -82,6 +84,61 @@ bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
         }
     }
     return true;
+}
+
+namespace {
+bool endpointEqual(const BoundEndpoint& a, const BoundEndpoint& b) {
+    if (a.kind != b.kind) return false;
+    if (a.kind == BoundEndpoint::Kind::Rational) return a.rationalValue == b.rationalValue;
+    return true;  // ±Inf same kind; algebraic treated as equal (approximate)
+}
+bool sameSet(const IntervalSet& a, const IntervalSet& b) {
+    if (a.intervals.size() != b.intervals.size()) return false;
+    for (size_t i = 0; i < a.intervals.size(); ++i) {
+        const auto& x = a.intervals[i];
+        const auto& y = b.intervals[i];
+        if (x.lowerOpen != y.lowerOpen || x.upperOpen != y.upperOpen) return false;
+        if (!endpointEqual(x.lower, y.lower) || !endpointEqual(x.upper, y.upper)) return false;
+    }
+    return true;
+}
+}  // namespace
+
+bool addBound(PresolveState& st, VarId v, const IntervalSet& incoming,
+              const ReasonNode& reasons) {
+    auto dom = st.integerDomain ? IntervalSet::Domain::Int : IntervalSet::Domain::Real;
+    IntervalSet cur = st.bounds.count(v) ? st.bounds[v].set : IntervalSet::universe(dom);
+    IntervalSet next = incoming.intersect(cur);
+
+    // Combine reasons: flattened incoming literals + existing bound's literals.
+    ReasonNode combined;
+    {
+        std::vector<SatLit> lits = st.ledger.flattenReasons(reasons);
+        if (st.bounds.count(v)) {
+            const auto& prev = st.bounds[v].reasons.baseLiterals;
+            lits.insert(lits.end(), prev.begin(), prev.end());
+        }
+        std::sort(lits.begin(), lits.end(), [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+        lits.erase(std::unique(lits.begin(), lits.end(), [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), lits.end());
+        combined.baseLiterals = std::move(lits);
+    }
+
+    bool empty = st.integerDomain ? !next.hasIntegerPoint() : next.isEmpty();
+    if (empty) {
+        st.hasConflict = true;
+        st.conflict.clause = combined.baseLiterals;
+        return true;
+    }
+    if (!st.bounds.count(v) || !sameSet(next, st.bounds[v].set)) {
+        st.bounds[v] = BoundVal{next, combined};
+        return true;
+    }
+    return false;
 }
 
 bool relationHoldsForConstant(const mpq_class& c, Relation rel) {

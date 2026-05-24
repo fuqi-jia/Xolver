@@ -89,6 +89,12 @@ RationalPolynomial substituteVar(const RationalPolynomial& p, VarId v,
 bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
                           const ReasonNode& reasons);
 
+// Intersect a derived interval into st.bounds[v], merging reasons.  Sets
+// st.hasConflict when the intersection becomes empty (Real) or admits no
+// integer (Int).  Returns true iff the stored bound changed (progress).
+bool addBound(PresolveState& st, VarId v, const IntervalSet& incoming,
+              const ReasonNode& reasons);
+
 // Maximum total degree of any monomial (constant => 0; zero poly => 0).
 int totalDegree(const RationalPolynomial& p);
 

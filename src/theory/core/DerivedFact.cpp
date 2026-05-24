@@ -157,6 +157,37 @@ std::vector<mpz_class> IntervalSet::integerPoints() const {
     return pts;
 }
 
+bool IntervalSet::hasIntegerPoint() const {
+    for (const auto& iv : intervals) {
+        // Algebraic / unbounded endpoints: an unbounded side always admits
+        // integers; an algebraic endpoint is treated as admitting one (sound
+        // for the no-false-UNSAT direction).
+        bool loInf = iv.lower.isNegInf();
+        bool hiInf = iv.upper.isPosInf();
+        if (loInf || hiInf) return true;
+        if (iv.lower.isAlgebraic() || iv.upper.isAlgebraic()) return true;
+        const mpq_class& lo = iv.lower.rationalValue;
+        const mpq_class& hi = iv.upper.rationalValue;
+        mpz_class loInt;
+        {
+            mpz_class fl;
+            mpz_fdiv_q(fl.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t());
+            bool loIsInt = (lo.get_den() == 1);
+            mpz_class ceilLo = loIsInt ? fl : (fl + 1);
+            loInt = (iv.lowerOpen && loIsInt) ? (ceilLo + 1) : ceilLo;
+        }
+        mpz_class hiInt;
+        {
+            mpz_class fl;
+            mpz_fdiv_q(fl.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t());
+            bool hiIsInt = (hi.get_den() == 1);
+            hiInt = (iv.upperOpen && hiIsInt) ? (fl - 1) : fl;
+        }
+        if (loInt <= hiInt) return true;
+    }
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // DerivationLedger
 // ---------------------------------------------------------------------------
