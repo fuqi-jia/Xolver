@@ -2,6 +2,7 @@
 #include "theory/arith/presolve/AffineSubstitution.h"
 #include "theory/arith/presolve/IntLinearEqualityCoreHNF.h"
 #include "theory/arith/presolve/PolynomialDefSubstitution.h"
+#include "theory/arith/presolve/NonnegativePolynomialBoundExtractor.h"
 #include "theory/arith/presolve/BoundChainComposer.h"
 #include "theory/arith/presolve/UnivariatePolySignAnalyzer.h"
 
@@ -17,8 +18,9 @@ PresolveEngine::PresolveEngine(PolynomialKernel* kernel, bool integerDomain) {
     // in this order until no new fact is derived.
     caps_.push_back(std::make_unique<IntLinearEqualityCoreHNF>());    // Cap. 5 (Int)
     caps_.push_back(std::make_unique<AffineSubstitution>());          // Cap. 1
-    caps_.push_back(std::make_unique<PolynomialDefSubstitution>());   // Cap. 2
-    caps_.push_back(std::make_unique<BoundChainComposer>());          // Cap. 7
+    caps_.push_back(std::make_unique<PolynomialDefSubstitution>());        // Cap. 2
+    caps_.push_back(std::make_unique<NonnegativePolynomialBoundExtractor>()); // Cap. 11
+    caps_.push_back(std::make_unique<BoundChainComposer>());               // Cap. 7
     caps_.push_back(std::make_unique<UnivariatePolySignAnalyzer>());  // Cap. 4
 }
 
