@@ -1,5 +1,7 @@
 #include "theory/arith/nra/NraSolver.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/presolve/Presolve.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 #include <iostream>
 
 namespace nlcolver {
@@ -22,6 +24,7 @@ void NraSolver::pop(uint32_t n) {
     }
     trail_.clear();  // V5: rebuild trail from activeLits on next backtrack
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
+    presolveConstraints_.resize(activeLits_.size());
     engine_.pop(n);
 }
 
@@ -29,6 +32,7 @@ void NraSolver::reset() {
     engine_.reset();
     activeLits_.clear();
     trail_.clear();
+    presolveConstraints_.clear();
     scopeStack_.clear();
     activeSet_.reset();
     interfaceEqualities_.clear();
@@ -52,11 +56,16 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     if (!payload) {
         // Payload mismatch is an internal routing error, NOT a theory conflict.
         // Engine will see this as unsupported and return Unknown.
+        presolveConstraints_.push_back({NullPoly, Relation::Eq, reason});  // keep aligned
         engine_.reset();
         return;
     }
 
     Relation rel = value ? payload->rel : negateRelation(payload->rel);
+    // Presolve sees the constraint in `p rel 0` form (subtract rhs if present).
+    PolyId diff = payload->poly;
+    if (payload->rhs != 0) diff = kernel_->sub(payload->poly, kernel_->mkConst(payload->rhs));
+    presolveConstraints_.push_back({diff, rel, reason});
     engine_.assertConstraint(payload->poly, rel, reason, level);
 }
 
@@ -66,6 +75,7 @@ void NraSolver::backtrackToLevel(int level) {
         trail_.pop_back();
     }
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
+    presolveConstraints_.resize(activeLits_.size());
     engine_.backtrack(level);
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
@@ -76,9 +86,27 @@ void NraSolver::backtrackToLevel(int level) {
 }
 
 TheoryCheckResult NraSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
-    std::cerr << "[NRA-CHECK] entering check" << std::endl;
+    // Theory-check presolve fixpoint (Caps. 1–5, 7, with Real domain).  May
+    // return a Conflict (UNSAT direction) via exact linear/sign reasoning; it
+    // never returns SAT directly.  Otherwise the CDCAC engine runs as before.
+    {
+        PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
+        bool feasible = true;
+        for (const auto& c : presolveConstraints_) {
+            if (c.poly == NullPoly) continue;  // non-polynomial placeholder
+            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+            if (!rp) { feasible = false; break; }
+            presolve.addAtom(*rp, c.rel, c.reason);
+        }
+        if (feasible) {
+            auto pr = presolve.run();
+            if (pr.kind == PresolveResult::Kind::Conflict)
+                return TheoryCheckResult::mkConflict(pr.conflict);
+            if (pr.kind == PresolveResult::Kind::Lemma)
+                return TheoryCheckResult::mkLemma(pr.lemma);
+        }
+    }
     auto r = engine_.check();
-    std::cerr << "[NRA-CHECK] engine returned kind=" << (int)r.kind << std::endl;
     return r;
 }
 

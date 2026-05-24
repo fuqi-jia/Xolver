@@ -70,6 +70,13 @@ bool UnivariatePolySignAnalyzer::run(PresolveState& st) {
         VarId x = *vars.begin();
         if (totalDegree(A.poly) < 1) continue;
 
+        // Skip atoms already analyzed with identical content (pure function of
+        // poly+rel); prevents re-isolation and spurious fixpoint progress.
+        auto sig = std::make_pair(A.rel, A.poly.terms());
+        auto memoIt = analyzed_.find(i);
+        if (memoIt != analyzed_.end() && memoIt->second == sig) continue;
+        analyzed_[i] = sig;
+
         // Build integer coefficients high-to-low (clear denominators).
         auto lowToHigh = A.poly.coefficients(x);
         bool ok = true;

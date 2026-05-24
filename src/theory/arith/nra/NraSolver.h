@@ -64,6 +64,12 @@ private:
     std::vector<NraTrailEntry> trail_;
     ActiveLiteralSet activeSet_;
 
+    // Active polynomial constraints (poly - rhs) rel 0, aligned 1:1 with
+    // activeLits_, for the theory-check presolve fixpoint.  NullPoly entries
+    // are non-polynomial placeholders (kept aligned, skipped by presolve).
+    struct PresolveCstr { PolyId poly; Relation rel; SatLit reason; };
+    std::vector<PresolveCstr> presolveConstraints_;
+
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
 

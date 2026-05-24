@@ -109,7 +109,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 ### J-batch findings (SMT-COMP grade, complex multi-constraint systems)
 - ~~`nra/nra_120_unsat_5conic_intersection.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
 - ~~`nra/nra_121_sat_kinematics_orbit.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: pseudoRemainder + multivariate exactDivide (43361cf, 3335d5e)).
-- `nra/nra_122_unsat_3_quadrics_disjoint.smt2` — 3 disjoint spheres — unknown.
+- ~~`nra/nra_122_unsat_3_quadrics_disjoint.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 3 `PolynomialEqualityCombination` + Cap. 1 + Cap. 4 (NRA presolve). The three sphere equalities share high-order row `[1,1,1]`; the left null-space basis `(−1,1,0),(−1,0,1)` yields linear consequences `6x−9=0`, `10y−25=0`; Cap. 1 substitutes `x=3/2, y=5/2` into sphere 1 ⇒ `z²+15/2=0`, whose real-root set is empty ⇒ `DerivedConflict {sphere1, sphere2, sphere3}`. UNSAT.
 - ~~`nra/nra_124_sat_robotic_workspace.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - ~~`nra/nra_126_sat_polynomial_lyapunov.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 10 `CandidateModelSearch` (validator-gated). Strategy 10a finds a small-height rational witness on the annulus (e.g. `(x=0, y=1/2)`) and the arithmetic evaluator confirms the three Lyapunov-decrease atoms. Closed by validator-gated SAT witness search, not by complete NRA reasoning.
 - ~~`nra/nra_128_sat_geometric_packing.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).

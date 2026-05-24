@@ -62,19 +62,25 @@ bool NonnegativePolynomialBoundExtractor::run(PresolveState& st) {
                 return true;
             }
 
-            // Per single-var even-power term c·x^e: x^e ≤ C/c ⇒ |x| ≤ ⌊(C/c)^(1/e)⌋.
-            for (const auto& [key, c] : cand.terms()) {
-                if (key.size() != 1) continue;
-                VarId x = key[0].first;
-                int e = key[0].second;
-                if (e < 2 || e % 2 != 0 || c <= 0) continue;
-                mpz_class n = floorRoot(C / c, static_cast<unsigned long>(e));
-                if (n < 0) continue;
-                mpq_class nb(n);
-                IntervalSet bound = IntervalSet::fromRational(
-                    IntervalSet::Domain::Int, -nb, false, nb, false);  // [-n, n]
-                if (addBound(st, x, bound, A.reasons)) made = true;
-                if (st.hasConflict) return true;
+            // Per single-var even-power term c·x^e: x^e ≤ C/c ⇒ |x| ≤ (C/c)^(1/e).
+            // Only the Int domain gets a variable bound here: the integer e-th
+            // root ⌊(C/c)^(1/e)⌋ is exact for integers but would *tighten* the
+            // true real bound (excluding valid reals between ⌊·⌋ and the real
+            // root), so the Real case is left to Cap. 4's algebraic endpoints.
+            if (st.integerDomain) {
+                for (const auto& [key, c] : cand.terms()) {
+                    if (key.size() != 1) continue;
+                    VarId x = key[0].first;
+                    int e = key[0].second;
+                    if (e < 2 || e % 2 != 0 || c <= 0) continue;
+                    mpz_class n = floorRoot(C / c, static_cast<unsigned long>(e));
+                    if (n < 0) continue;
+                    mpq_class nb(n);
+                    IntervalSet bound = IntervalSet::fromRational(
+                        IntervalSet::Domain::Int, -nb, false, nb, false);  // [-n, n]
+                    if (addBound(st, x, bound, A.reasons)) made = true;
+                    if (st.hasConflict) return true;
+                }
             }
             break;  // one valid orientation suffices
         }

@@ -11,6 +11,7 @@
 //     DerivedBound, integer-interpreted by IntervalSet's integer helpers.
 
 #include "theory/arith/presolve/Presolve.h"
+#include <map>
 #include <memory>
 
 namespace nlcolver {
@@ -26,6 +27,12 @@ public:
 
 private:
     std::unique_ptr<LibpolyBackend> backend_;  // lazily constructed from st.kernel
+
+    // Memo of (atom index → analyzed (rel, poly terms)).  The satisfying set is
+    // a pure function of (poly, rel); re-analyzing an unchanged atom is both
+    // wasted root isolation and (for irrational/algebraic bounds) a source of
+    // spurious fixpoint progress.  Skip atoms whose content is unchanged.
+    std::map<size_t, std::pair<Relation, std::map<MonomialKey, mpq_class>>> analyzed_;
 };
 
 } // namespace nlcolver
