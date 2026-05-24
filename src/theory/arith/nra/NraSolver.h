@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/core/TheorySolver.h"
+#include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nra/core/CdcacSolver.h"
@@ -19,7 +19,7 @@ namespace nlcolver {
  * multiple NRA backends (e.g., local search, MCSAT) selected
  * dynamically.
  */
-class NraSolver : public TheorySolver {
+class NraSolver : public ArithSolverBase {
 public:
     explicit NraSolver(std::unique_ptr<PolynomialKernel> kernel);
 
@@ -28,12 +28,12 @@ public:
     // Expose kernel so Atomizer can share the same instance.
     PolynomialKernel* kernel() const { return kernel_.get(); }
 
-    void push() override;
-    void pop(uint32_t n) override;
+    // NRA is a facade over CdcacSolver with its own active-literal
+    // tracking (activeLits_/trail_/activeSet_), so it overrides
+    // assertLit and routes push/pop/backtrack/reset through the base
+    // hooks rather than using the shared state_.trail.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
-    void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
-    void reset() override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -49,6 +49,12 @@ public:
     getDeducedSharedEqualities() override;
 
     std::optional<TheoryModel> getModel() const override;
+
+protected:
+    void onPush() override;
+    void onPop(uint32_t n) override;
+    void onBacktrack(int targetLevel) override;
+    void onReset() override;
 
 private:
     struct NraTrailEntry {

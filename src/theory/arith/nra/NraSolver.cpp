@@ -11,12 +11,12 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       engine_(kernel_.get()) {}
 
-void NraSolver::push() {
+void NraSolver::onPush() {
     scopeStack_.push_back(activeLits_.size());
     engine_.push();
 }
 
-void NraSolver::pop(uint32_t n) {
+void NraSolver::onPop(uint32_t n) {
     for (uint32_t i = 0; i < n && !scopeStack_.empty(); ++i) {
         size_t targetSize = scopeStack_.back();
         scopeStack_.pop_back();
@@ -28,7 +28,7 @@ void NraSolver::pop(uint32_t n) {
     engine_.pop(n);
 }
 
-void NraSolver::reset() {
+void NraSolver::onReset() {
     engine_.reset();
     activeLits_.clear();
     trail_.clear();
@@ -69,7 +69,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     engine_.assertConstraint(payload->poly, rel, reason, level);
 }
 
-void NraSolver::backtrackToLevel(int level) {
+void NraSolver::onBacktrack(int level) {
     while (!trail_.empty() && trail_.back().level > level) {
         activeLits_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
