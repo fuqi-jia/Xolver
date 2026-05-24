@@ -121,7 +121,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_138_sat_huge_coeff.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: addTerm canonicalization handles big coefficients (3335d5e)).
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
 - ~~`nia/nia_095_unsat_collatz_step_wrong.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8a `UnconditionalConstantPropagation` + constant-folder bonus path. `n=5` is collected from the top-level unconditional conjunct; substitution into the ITE's arithmetic arguments produces `(mod 5 2) → 1`, `(div 5 2) → 2`, `(+ (* 3 5) 1) → 16` after the arithmetic / relation / boolean constant fold; the guard `(= 1 0)` collapses to `false`; the else branch wins; `n_next = 16` together with `n_next = 8` collapses to `(= 16 8) → false`, which the constant-folder strips into a `ConstBool false` assertion. SAT layer reads `false` → UNSAT.
-- `nia/nia_097_unsat_squares_chain.smt2` — squares chain inequality — unknown.
+- ~~`nia/nia_097_unsat_squares_chain.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 1 `AffineSubstitution` (theory-check presolve fixpoint). The unit-coefficient integer-affine equalities `b=a+1`, `c=a+2`, `d=a+3` are substituted into `a·d − b·c`, which collapses to the constant `−2`; the strict atom `a·d > b·c` becomes `−2 > 0` → `DerivedConflict` with reasons `{a·d>b·c, b=a+1, c=a+2, d=a+3}`. UNSAT.
 - ~~`nia/nia_098_sat_huge_modulus.smt2`~~ — **FIXED** in 2026-05-24 (ModularConsistencyChecker handles mpz_class moduli of arbitrary size).
 - ~~`uflra/uflra_008_sat_array_with_real.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: frontend purifier improvements (1cedd97)).
 

@@ -1,6 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/presolve/Presolve.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <unordered_set>
 
@@ -124,6 +125,30 @@ TheoryCheckResult NiaSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     auto normalizedOpt = normalizer_.normalize(active_);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     const auto& normalized = *normalizedOpt;
+
+    // 1b. Theory-check presolve fixpoint (Capabilities 1–7, 11).
+    //     Sound, equivalence-preserving derivations over the active atoms.
+    //     May return a Conflict (UNSAT direction) or a case-split Lemma; it
+    //     never returns SAT directly.  Otherwise it falls through, having
+    //     populated derived bounds/substitutions consumed below.
+    {
+        PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
+        bool feasible = true;
+        for (const auto& c : normalized) {
+            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+            if (!rp) { feasible = false; break; }
+            presolve.addAtom(*rp, c.rel, c.reason);
+        }
+        if (feasible) {
+            auto pr = presolve.run();
+            if (pr.kind == PresolveResult::Kind::Conflict) {
+                return TheoryCheckResult::mkConflict(pr.conflict);
+            }
+            if (pr.kind == PresolveResult::Kind::Lemma) {
+                return TheoryCheckResult::mkLemma(pr.lemma);
+            }
+        }
+    }
 
     // 2. Trivial constants
     std::vector<SatLit> conflictLits;
