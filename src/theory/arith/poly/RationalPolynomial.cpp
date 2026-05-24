@@ -1,8 +1,40 @@
 #include "theory/arith/poly/RationalPolynomial.h"
-#include <numeric>
+#include <algorithm>
 #include <functional>
+#include <numeric>
 
 namespace nlcolver {
+
+// Canonicalize a MonomialKey so map lookups behave correctly:
+//   * sort by VarId ascending (lex-canonical form used elsewhere),
+//   * merge duplicate VarId entries by summing exponents,
+//   * drop entries whose final exponent is <= 0 (var^0 = 1, var^neg disallowed).
+// Returning a fresh vector keeps the function copy-friendly.
+static MonomialKey canonicalizeMonomialKey(MonomialKey key) {
+    if (key.size() > 1) {
+        std::sort(key.begin(), key.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+        // Merge duplicates produced by callers that listed the same VarId twice.
+        auto write = key.begin();
+        for (auto read = key.begin(); read != key.end(); ) {
+            auto next = read + 1;
+            int exp = read->second;
+            while (next != key.end() && next->first == read->first) {
+                exp += next->second;
+                ++next;
+            }
+            if (exp > 0) {
+                *write = {read->first, exp};
+                ++write;
+            }
+            read = next;
+        }
+        key.erase(write, key.end());
+    } else if (key.size() == 1 && key[0].second <= 0) {
+        key.clear();
+    }
+    return key;
+}
 
 // ============================================================================
 // Static helpers
@@ -59,9 +91,17 @@ RationalPolynomial RationalPolynomial::fromVar(VarId v, int exp,
 
 void RationalPolynomial::addTerm(const MonomialKey& key,
                                  const mpq_class& coeff) {
-    if (coeff != 0) {
-        terms_[key] += coeff;
-    }
+    if (coeff == 0) return;
+    // Defensive canonicalization: callers (e.g. fromPolyId pulling terms
+    // through the libpoly traversal callback, or GcdEngine reconstructing
+    // an exact-division quotient) can pass keys that are unsorted or carry
+    // an explicit var^0 factor. Inserting them as-is would create distinct
+    // map entries for what is mathematically the same monomial — silently
+    // breaking term-by-term polynomial equality (e.g. the verification
+    // multiplication in GcdEngine::gcdCandidateBySubresultant would fail
+    // for any case requiring canonical compare).
+    MonomialKey canonical = canonicalizeMonomialKey(key);
+    terms_[std::move(canonical)] += coeff;
 }
 
 void RationalPolynomial::addConstant(const mpq_class& coeff) {

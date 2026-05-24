@@ -32,7 +32,7 @@ Lines that don't match this format are ignored — feel free to add prose.
 - `lra/lra_021_sat_distinct_3vars.smt2` — n-ary distinct (n≥3) on Reals returns unknown. Likely missing pairwise expansion for distinct on Real sort.
 - `lia/lia_015_sat_distinct_3_int.smt2` — n-ary distinct (n≥3) on Ints returns unknown. Same gap as LRA — distinct pairwise expansion missing for arithmetic theories.
 - `lia/lia_016_unsat_distinct_too_many.smt2` — n-ary distinct (n≥3) on Ints with tight bounds returns unknown. Same gap.
-- `nra/nra_021_unsat_sum_of_squares_plus_one.smt2` — `x²+y²+1 ≤ 0` returns unknown. CDCAC missing sum-of-squares positivity reasoning.
+- ~~`nra/nra_021_unsat_sum_of_squares_plus_one.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - `nira/nira_004_sat_int_times_real_pos.smt2` — `i*r > 0 ∧ i>0 ∧ r>0` returns unknown. NIRA core gap.
 - `nira/nira_006_sat_real_sq_eq_int.smt2` — `r²=4 ∧ to_int(r)=2` returns unknown. NIRA nonlinear + to_int gap.
 - `nira/nira_007_unsat_real_sq_neg.smt2` — `r²=-1` returns unknown. NIRA can't refute even classical contradictions.
@@ -46,8 +46,8 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_038_sat_ellipse_tangent.smt2`~~ — **FIXED** in 2026-05-23: pseudoRemainder bug fix + level-0 projection trigger (`RationalPolynomial::pseudoRemainder` was using post-multiplication leading coefficient instead of pre-multiplication, causing SubresultantEngine to never reduce degree when divisor's leading coefficient was non-constant; this broke all CDCAC projection for non-trivial cases).
 - `nra/nra_040_sat_3vars_sphere.smt2` — CDCAC algebraic isolation of `y²+z²+x²-1` with nested algebraic coefficients returns `unknown` (SIGSEGV recovered via signal handler). Still a gap — proper tower reduction for multivariate sphere needed.
 - ~~`nra/nra_065_unsat_two_circles_one_line.smt2`~~ — **FIXED** in 2026-05-22: 4 coordinated fixes in LibpolyBackend (`rootBelongsTo` replaced with sign+gcd two-tier check), LibPolyKernel (`pseudoRemainderWithScale` and `degree` corrected for non-main variables), and CdcacCore (`mergeRoots` now refines rational-algebraic adjacency to avoid zero-width sectors). Solver now correctly returns `unsat`.
-- `nra/nra_043_unsat_parabola_below_line.smt2` — `y=x²+1 ∧ y<0` returns unknown. Same family as `nra_021` (sum-of-squares positivity gap).
-- `nra/nra_046_unsat_aggregate_positive.smt2` — `(x-1)²+(y-2)²≤-1` returns unknown. Bivariate aggregate positivity gap.
+- ~~`nra/nra_043_unsat_parabola_below_line.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_046_unsat_aggregate_positive.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - `nia/nia_032_unsat_modular_chain.smt2` — Chain of `mod` constraints returns unknown. NIA modular reasoning chain depth limited.
 - `nira/nira_027_sat_split_nl_lin.smt2` — Mixed `r²≥1 ∧ i≤5 ∧ r≤10` returns unknown. Atomizer routing fails when nonlinear-real and pure-linear-int both present.
 - `uflia/uflia_017_unsat_purify_violation.smt2` — `f(x+1)` and `f(2)` under `x=1` should congruence-merge but solver returns unknown. Atomizer purification of `(+ x 1)` inside UF arg missing.
@@ -64,9 +64,9 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_062_sat_polynomial_outside_band.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
 - ~~`nra/nra_063_sat_atan_chain_polynomial.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
 - ~~`nra/nra_064_unsat_three_circles_no_common.smt2`~~ — **FIXED** in 2026-05-23 (same fix).
-- `nra/nra_069_unsat_parabola_below_zero.smt2` — `y=x²+1 ∧ y<0` returns unknown. Direct SOS positivity gap (companion to nra_021/043/046).
-- `nra/nra_073_unsat_3vars_no_real.smt2` — `x²+y²+z²=-1` returns unknown. 3-var SOS positivity gap; CDCAC does not refute negative-RHS sum-of-squares equality.
-- `nra/nra_082_sat_null_projection_avoid.smt2` — `y*(x-1)=0 ∧ y>0` (forces x=1) returns unknown. NullificationAnalyzer not used or factor-case-split missing.
+- ~~`nra/nra_069_unsat_parabola_below_zero.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_073_unsat_3vars_no_real.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_082_sat_null_projection_avoid.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 - ~~`nra/nra_087_sat_icp_narrow_box.smt2`~~ — **FIXED** in 2026-05-23 (same pseudoRemainder + level-0 projection fix).
 - `nia/nia_058_unsat_diophantine_multi_eq.smt2` — Two linear diophantine eqs with explicit unique negative solution + bound `x≥0` returns unknown. Linear elimination over integers not propagating to bound.
 - `nia/nia_061_sat_crt_3_moduli.smt2` — 3-modulus CRT (`x≡2(mod 3) ∧ x≡3(mod 5) ∧ x≡2(mod 7)`) returns unknown. NIA mod-chain depth gap (companion to nia_032).
@@ -78,13 +78,13 @@ Lines that don't match this format are ignored — feel free to add prose.
 - nra_094–100 (other minimization variants) all return `sat` correctly.
 
 ### SOS positivity systematic gap (CDCAC priority)
-- `nra/nra_104_unsat_sos_2var_minus_neg.smt2` — `x²+y² ≤ -1/1000` returns unknown.
-- `nra/nra_106_unsat_sos_offset_const.smt2` — `(x-1)²+(y-2)²+1 ≤ 0` returns unknown.
-- `nra/nra_108_unsat_sos_difference_squared.smt2` — `(x-y)² < 0` returns unknown.
-- `nra/nra_109_unsat_sos_3var_strict.smt2` — `x²+y²+z² < 0` returns unknown.
-- `nra/nra_110_unsat_sos_4var_strict.smt2` — 4-var SOS < 0 returns unknown.
-- `nra/nra_112_unsat_sos_product_squares.smt2` — `x²·y² < 0` returns unknown.
-- `nra/nra_113_unsat_sos_eq_neg.smt2` — `x²+y² = -2` returns unknown.
+- ~~`nra/nra_104_unsat_sos_2var_minus_neg.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_106_unsat_sos_offset_const.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_108_unsat_sos_difference_squared.smt2`~~ — **FIXED** in 2026-05-24: required two further low-level fixes — (1) `RationalPolynomial::addTerm` now canonicalizes the monomial key (sort by VarId, drop var^0 factors), without which GcdEngine's `pCheck.terms() != pNorm.terms()` verification was spuriously failing on multivariate quotients; (2) `tryExactDivide` was generalized into a recursive multivariate exact-division routine that handles non-constant lc(divisor) by delegating leading-coefficient divisions to `polyExactDivide`, which recurses on the structure of the divisor.
+- ~~`nra/nra_109_unsat_sos_3var_strict.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_110_unsat_sos_4var_strict.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
+- ~~`nra/nra_112_unsat_sos_product_squares.smt2`~~ — **FIXED** in 2026-05-24 (same multivariate exact-division generalization as nra_108; the divisor's leading coefficient `2x²` was non-constant, so the previous algorithm bailed out).
+- ~~`nra/nra_113_unsat_sos_eq_neg.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection bundle).
 
 ### NIA modular chain gaps
 - `nia/nia_068_unsat_crt_2mod_inconsistent.smt2` — `mod x 4 = 0 ∧ mod x 2 = 1` returns unknown. Non-coprime modulus consistency missing.
@@ -117,9 +117,9 @@ Lines that don't match this format are ignored — feel free to add prose.
 - ~~`nra/nra_128_sat_geometric_packing.smt2`~~ — **FIXED** in 2026-05-23 (pseudoRemainder + level-0 projection fix).
 - `nra/nra_131_sat_brown_2001_relaxed.smt2` — Brown'01 dim-3 relaxed — unknown.
 - `nra/nra_134_unsat_metitarski_negation.smt2` — meti-tarski exp negation — unknown.
-- `nra/nra_135_unsat_amzi_classic.smt2` — Cauchy-Schwarz refutation — unknown.
+- ~~`nra/nra_135_unsat_amzi_classic.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
 - `nra/nra_136_sat_amzi_tight.smt2` — CS equality at (1,1,1) — unknown.
-- `nra/nra_137_unsat_strict_cs_violation.smt2` — strict CS violation — unknown.
+- ~~`nra/nra_137_unsat_strict_cs_violation.smt2`~~ — **FIXED** in 2026-05-24 (multivariate exact-division generalization in GcdEngine).
 - `nra/nra_138_sat_huge_coeff.smt2` — huge rational coefficient — unknown.
 - `nia/nia_090_unsat_partition_sum_no_solution.smt2` — 3-square-distinct partition — unknown.
 - `nia/nia_095_unsat_collatz_step_wrong.smt2` — Collatz step ITE-based — unknown.
