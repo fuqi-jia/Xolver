@@ -40,6 +40,17 @@ struct LazardProjectionConfig {
     LazardProjectionConfig() = default;
 };
 
+// Provenance of a closure entry (LAZARD.md [H7]): the op that produced it and
+// the interned-entry indices of its parents (-1 if absent). The entry's own
+// index is its "output", so it is not duplicated here. eliminatedVar is the
+// variable whose projection produced this poly (NullVar for an Input).
+struct LazardProjectionSource {
+    LazardProjectionOpKind op = LazardProjectionOpKind::Input;
+    int parent1 = -1;
+    int parent2 = -1;
+    VarId eliminatedVar = NullVar;
+};
+
 // One generated projection polynomial with its provenance parents (by value;
 // the closure resolves them to interned entry indices). Output polynomials are
 // in lower variables (do not contain v); the SquarefreeFactor items remain in v
