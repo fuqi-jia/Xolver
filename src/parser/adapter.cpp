@@ -201,6 +201,16 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
     else if (sort->isArray()) kind = SortKind::Array;
     ir_->registerSort(id, kind);
 
+    // Record (index, elem) sorts for Array sorts so the array theory and model
+    // output can recover them (SortId is otherwise opaque). Safe to recurse:
+    // this sort is already memoized above, so a self-referential nesting cannot
+    // loop.
+    if (sort->isArray()) {
+        SortId idxId = mapSort(sort->getIndexSort());
+        SortId elemId = mapSort(sort->getElemSort());
+        ir_->registerArraySort(id, idxId, elemId);
+    }
+
     return id;
 }
 
@@ -243,6 +253,9 @@ Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
         case NODE_KIND::NT_TO_INT:      return Kind::ToInt;
         case NODE_KIND::NT_TO_REAL:     return Kind::ToReal;
         case NODE_KIND::NT_IS_INT:      return Kind::IsInt;
+        case NODE_KIND::NT_SELECT:      return Kind::Select;
+        case NODE_KIND::NT_STORE:       return Kind::Store;
+        case NODE_KIND::NT_CONST_ARRAY: return Kind::ConstArray;
         default:                        return Kind::Unknown;
     }
 }
