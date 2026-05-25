@@ -14,6 +14,12 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
     return anyIndeterminate ? Verdict::Indeterminate : Verdict::Satisfied;
 }
 
+std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
+    TR r = eval(e);
+    if (r.kind == Kind2::Number) return r.n;
+    return std::nullopt;
+}
+
 ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
     if (eid >= ir_.size()) return {};
     const CoreExpr& n = ir_.get(eid);

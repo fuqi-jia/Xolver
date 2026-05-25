@@ -37,6 +37,9 @@
 
 #include <iostream>
 #include <unordered_map>
+#include <map>
+#include <functional>
+#include <optional>
 #include <chrono>
 
 namespace nlcolver {
@@ -62,6 +65,20 @@ public:
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
+
+    // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
+    // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
+    // extension at undefined inputs, built from the final model (see
+    // buildPartialFuncModel) and emitted as define-fun shadows in dumpModel.
+    std::vector<DivModOrigin> divModOrigins_;
+    struct PartialFuncModel {
+        std::map<mpq_class, mpq_class> divZero;  // a -> chosen (div a 0)
+        std::map<mpq_class, mpq_class> modZero;  // a -> chosen (mod a 0)
+        bool inconsistent = false;   // same input -> two outputs (safety net)
+        bool realDivByZero = false;  // a Real `/` had a 0 denominator (round-1 gate)
+    };
+    PartialFuncModel partialFuncModel_;
+
     std::string lastUnknownReason_;
     std::string lastUnknownCode_;
     std::string lastUnknownComponent_;
@@ -89,6 +106,81 @@ public:
         ArithModelValidator validator(*ir, numAsg, boolAsg);
         return validator.validate(originalAssertions_)
                == ArithModelValidator::Verdict::Violated;
+    }
+
+    // Build the partial-function (div/mod-by-zero) model from the final model.
+    // For each lowered div/mod whose divisor is 0 under the model, record the
+    // chosen result (the value of the fresh quotient q / remainder r) keyed by
+    // the dividend value a. A FuncInterp is a function, so re-encountering the
+    // same input with a different output signals a model-extraction bug
+    // (partialFuncModel_.inconsistent). Also gates Real `/` by a 0 denominator,
+    // which round 1 does not emit.
+    void buildPartialFuncModel() {
+        partialFuncModel_ = PartialFuncModel{};
+        if (!ir || !lastModel_) return;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  continue; }
+            if (val == "false") { boolAsg[name] = false; continue; }
+            try { numAsg[name] = mpq_class(val); } catch (...) {}
+        }
+        // Mirror dumpModel's defaulting of unconstrained user variables (0 /
+        // false) so the partial-function table agrees with the printed model:
+        // a dividend the theory left unassigned is emitted as 0, so it must
+        // evaluate to 0 here too.
+        if (parser) {
+            for (const auto& var : parser->getDeclaredVariables()) {
+                if (!var) continue;
+                std::string nm = var->getName();
+                if (var->isVBool()) { if (!boolAsg.count(nm)) boolAsg[nm] = false; }
+                else if (var->isVInt() || var->isVReal()) {
+                    if (!numAsg.count(nm)) numAsg[nm] = mpq_class(0);
+                }
+            }
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg);
+
+        auto recordInto = [](std::map<mpq_class, mpq_class>& tbl, const mpq_class& in,
+                             const mpq_class& out, bool& inconsistent) {
+            auto it = tbl.find(in);
+            if (it != tbl.end()) { if (it->second != out) inconsistent = true; }
+            else tbl.emplace(in, out);
+        };
+
+        for (const auto& o : divModOrigins_) {
+            auto bv = validator.evalNumber(o.b);
+            if (!bv || *bv != 0) continue;          // divisor nonzero under model
+            auto av = validator.evalNumber(o.a);
+            if (!av) continue;                       // input undetermined -> leave gap
+            if (auto qv = validator.evalNumber(o.q))
+                recordInto(partialFuncModel_.divZero, *av, *qv, partialFuncModel_.inconsistent);
+            if (auto rv = validator.evalNumber(o.r))
+                recordInto(partialFuncModel_.modZero, *av, *rv, partialFuncModel_.inconsistent);
+        }
+
+        partialFuncModel_.realDivByZero = realDivisionByZeroUnderModel(validator);
+    }
+
+    // True iff some Real `/` in the original assertions has a 0 denominator
+    // under the model (round-1 gate: such a model is downgraded to Unknown
+    // because we do not yet emit a `define-fun /` shadow).
+    bool realDivisionByZeroUnderModel(const ArithModelValidator& v) const {
+        if (!ir) return false;
+        std::unordered_map<ExprId, bool> seen;
+        std::function<bool(ExprId)> walk = [&](ExprId e) -> bool {
+            if (e == NullExpr || e >= ir->size()) return false;
+            if (!seen.emplace(e, true).second) return false;
+            const CoreExpr& n = ir->get(e);
+            if (n.kind == Kind::Div && n.children.size() == 2 &&
+                ir->sortKind(n.sort) == SortKind::Real) {
+                if (auto d = v.evalNumber(n.children[1])) if (*d == 0) return true;
+            }
+            for (ExprId c : n.children) if (walk(c)) return true;
+            return false;
+        };
+        for (ExprId a : originalAssertions_) if (walk(a)) return true;
+        return false;
     }
 
 #ifdef NLCOLVER_ENABLE_CASESTATS
@@ -267,6 +359,8 @@ public:
         lastModel_.reset();
         lastAssumptions_.clear();
         originalAssertions_.clear();
+        divModOrigins_.clear();
+        partialFuncModel_ = PartialFuncModel{};
         lastUnknownReason_.clear();
         lastUnknownCode_.clear();
         lastUnknownComponent_.clear();
@@ -457,6 +551,9 @@ public:
                 return Result::Unknown;
             }
             dmLowerer.commit();
+            // Retain div/mod origins so the model dump can emit define-fun
+            // shadows giving our chosen value at undefined (divisor-0) inputs.
+            divModOrigins_ = dmLowerer.origins();
         }
 
         // Lower n-ary distinct to pairwise binary distinct
@@ -866,6 +963,26 @@ public:
             }
         }
 
+        // Partial-function (div/mod-by-zero) extension + soundness gate, applied
+        // to EVERY Sat path (main propagator, model-repair, and CMS fallback).
+        // Only relevant when a model is requested (Model-Validation track):
+        // verdict soundness is unaffected. If the chosen extension is internally
+        // inconsistent, or a Real `/` is applied at a 0 denominator (not emitted
+        // in round 1), the printed model would be incomplete/unsound — downgrade
+        // Sat -> Unknown rather than emit it.
+        if (ret == Result::Sat && modelRequestedImpl()) {
+            buildPartialFuncModel();
+            if (partialFuncModel_.inconsistent || partialFuncModel_.realDivByZero) {
+                lastUnknownReason_ =
+                    partialFuncModel_.inconsistent
+                        ? "partial-function model: inconsistent total extension"
+                        : "partial-function model: Real division by zero (unsupported in model output)";
+                lastModel_.reset();
+                partialFuncModel_ = PartialFuncModel{};
+                ret = Result::Unknown;
+            }
+        }
+
 #ifdef NLCOLVER_ENABLE_CASESTATS
         finalizeCaseStats(ret, solveDurMs, &propagator, &theoryManager,
                           cadicalBackend, &atomizer, &registry);
@@ -1190,6 +1307,10 @@ void Solver::dumpModel(std::ostream& os) const {
             return SortKind::Real;
         };
         for (const auto& [fname, fi] : tm->functionInterps) {
+            // Internal div/mod-by-zero carriers are re-expressed as `div`/`mod`
+            // define-fun shadows below; never emit the __undef_* symbols, which
+            // the model validator does not recognize.
+            if (fname.rfind("__undef", 0) == 0) continue;
             os << "  (define-fun " << fname << " (";
             for (size_t i = 0; i < fi.argSorts.size(); ++i) {
                 if (i) os << " ";
@@ -1216,6 +1337,34 @@ void Solver::dumpModel(std::ostream& os) const {
                        formatModelValue(retKind, it->value) + " " + body + ")";
             }
             os << body << ")\n";
+        }
+    }
+
+    // Partial theory functions (div/mod by zero): emit define-fun shadows that
+    // give our chosen value at the undefined (divisor-0) inputs and otherwise
+    // call the original theory function. The body may call the same-named
+    // theory function — this is shadowing, not recursion (SMT-COMP 2026 model
+    // format). The zero-branch is a nested-ite over the dividend a; any unlisted
+    // zero-divisor input falls through to 0 (free choice for unconstrained
+    // inputs).
+    {
+        const auto& pfm = pImpl->partialFuncModel_;
+        auto zeroBranch = [](const std::map<mpq_class, mpq_class>& tbl) -> std::string {
+            std::string body = "0";
+            for (auto it = tbl.rbegin(); it != tbl.rend(); ++it) {
+                body = "(ite (= a " + formatModelValue(SortKind::Int, it->first.get_str()) +
+                       ") " + formatModelValue(SortKind::Int, it->second.get_str()) +
+                       " " + body + ")";
+            }
+            return body;
+        };
+        if (!pfm.divZero.empty()) {
+            os << "  (define-fun div ((a Int) (b Int)) Int (ite (= b 0) "
+               << zeroBranch(pfm.divZero) << " (div a b)))\n";
+        }
+        if (!pfm.modZero.empty()) {
+            os << "  (define-fun mod ((a Int) (b Int)) Int (ite (= b 0) "
+               << zeroBranch(pfm.modZero) << " (mod a b)))\n";
         }
     }
     os << ")\n";

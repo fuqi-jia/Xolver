@@ -2,6 +2,7 @@
 
 #include "expr/ir.h"
 #include <gmpxx.h>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,6 +46,11 @@ public:
 
     // Validate the given assertion roots (original-formula ExprIds).
     Verdict validate(const std::vector<ExprId>& assertions) const;
+
+    // Evaluate one expression to a rational under the model, if fully
+    // determined (else nullopt). Public wrapper over the internal evaluator,
+    // used by the partial-function (div/mod-by-zero) model builder.
+    std::optional<mpq_class> evalNumber(ExprId e) const;
 
 private:
     enum class Kind2 { Bool, Number, Indeterminate };
