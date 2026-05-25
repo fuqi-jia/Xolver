@@ -76,4 +76,85 @@ bool TowerKernel::equal(const TowerElement& a, const TowerElement& b) const {
     return d.isZero();
 }
 
+RationalPolynomial TowerKernel::reduceUpTo(RationalPolynomial p, int count) const {
+    p.normalize();
+    for (int i = count - 1; i >= 0; --i)
+        p = reduceByMonic(std::move(p), ctx_.extensionVars[i], ctx_.minimalPolys[i]);
+    p.normalize();
+    return p;
+}
+
+// Univariate long division in v, with coefficients in the field F_coeffLevel
+// (a poly in A_0..A_{coeffLevel-1}). Leading-coefficient inverse via invRec.
+std::optional<TowerKernel::DivMod> TowerKernel::polyDivMod(
+    RationalPolynomial a, RationalPolynomial b, VarId v, int coeffLevel) const {
+    if (b.isZero()) return std::nullopt;
+    int db = b.degree(v);
+    if (db < 0) return std::nullopt;
+    auto lcbInv = invRec(b.leadingCoefficient(v), coeffLevel);
+    if (!lcbInv) return std::nullopt;
+
+    RationalPolynomial quot;            // zero
+    RationalPolynomial rem = reduceUpTo(std::move(a), coeffLevel);
+    int guard = 0;
+    while (true) {
+        rem.normalize();
+        int dr = rem.degree(v);
+        if (rem.isZero() || dr < db) break;
+        if (++guard > 100000) return std::nullopt;
+        RationalPolynomial factor = reduceUpTo(rem.leadingCoefficient(v) * (*lcbInv), coeffLevel);
+        RationalPolynomial mono = (dr - db == 0)
+            ? RationalPolynomial::fromConstant(mpq_class(1))
+            : RationalPolynomial::fromVar(v, dr - db, mpq_class(1));
+        RationalPolynomial term = factor * mono;
+        quot = quot + term;
+        rem = reduceUpTo(rem - reduceUpTo(term * b, coeffLevel), coeffLevel);
+    }
+    return DivMod{reduceUpTo(std::move(quot), coeffLevel), rem};
+}
+
+std::optional<RationalPolynomial> TowerKernel::invRec(RationalPolynomial e, int level) const {
+    e = reduceUpTo(std::move(e), level);
+    if (e.isZero()) return std::nullopt;
+    if (level == 0) {
+        if (!e.isConstant()) return std::nullopt;
+        mpq_class c = e.constantValue();
+        if (c == 0) return std::nullopt;
+        return RationalPolynomial::fromConstant(mpq_class(1) / c);
+    }
+    VarId v = ctx_.extensionVars[level - 1];
+    const RationalPolynomial& m = ctx_.minimalPolys[level - 1];
+    int cf = level - 1;
+
+    // Extended Euclid over F_cf: r0 = m, r1 = e; s_i tracks the cofactor of e.
+    RationalPolynomial r0 = m, r1 = e;
+    RationalPolynomial s0 = RationalPolynomial::fromConstant(mpq_class(0));
+    RationalPolynomial s1 = RationalPolynomial::fromConstant(mpq_class(1));
+    int guard = 0;
+    while (!r1.isZero()) {
+        if (++guard > 100000) return std::nullopt;
+        auto dm = polyDivMod(r0, r1, v, cf);
+        if (!dm) return std::nullopt;
+        RationalPolynomial s2 = reduceUpTo(s0 - dm->quot * s1, level);
+        r0 = r1; r1 = dm->rem;
+        s0 = s1; s1 = std::move(s2);
+    }
+    if (r0.degree(v) > 0) return std::nullopt;   // gcd non-constant => m reducible (contract broken)
+    auto ginv = invRec(r0, cf);                  // invert the F_cf constant gcd
+    if (!ginv) return std::nullopt;
+    return reduceUpTo(s0 * (*ginv), level);      // e^{-1} = cofactor(e) * gcd^{-1} (mod m)
+}
+
+std::optional<TowerElement> TowerKernel::inverse(const TowerElement& e) const {
+    auto r = invRec(e.value, numGenerators());
+    if (!r) return std::nullopt;
+    return TowerElement{reducePoly(*r)};
+}
+
+std::optional<TowerElement> TowerKernel::div(const TowerElement& a, const TowerElement& b) const {
+    auto bi = inverse(b);
+    if (!bi) return std::nullopt;
+    return mul(a, *bi);
+}
+
 }  // namespace nlcolver

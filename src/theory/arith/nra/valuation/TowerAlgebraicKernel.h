@@ -3,6 +3,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/core/CdcacValue.h"   // RealAlg
 #include "expr/types.h"
+#include <optional>
 #include <vector>
 
 namespace nlcolver {
@@ -58,14 +59,31 @@ public:
     bool isZero(const TowerElement& a) const { return a.value.isZero(); }
     bool equal(const TowerElement& a, const TowerElement& b) const;
 
+    // Exact field inverse / division: recursive extended-Euclid modulo each
+    // minimal poly. nullopt iff e == 0 OR a minimal poly turns out reducible
+    // (a Euclid gcd is non-constant) — i.e. the irreducible-min-poly contract
+    // is violated; callers then degrade to Unsupported/Unknown (never UNSAT).
+    std::optional<TowerElement> inverse(const TowerElement& e) const;
+    std::optional<TowerElement> div(const TowerElement& a, const TowerElement& b) const;
+
 private:
     TowerContext ctx_;
 
     // Triangular reduction modulo <m_0,...,m_{k-1}>, highest generator first.
     RationalPolynomial reducePoly(RationalPolynomial p) const;
+    // Reduce p modulo only the first `count` minimal polys (lower-tower coeffs).
+    RationalPolynomial reduceUpTo(RationalPolynomial p, int count) const;
     // Exact monic reduction of p modulo a single m_i in variable A_i.
     static RationalPolynomial reduceByMonic(RationalPolynomial p, VarId Ai,
                                             const RationalPolynomial& mi);
+
+    // Invert e in the field F_level = Q(A_0..A_{level-1}); recursion bottoms at
+    // level 0 (rationals). level == numGenerators() is the full-tower inverse.
+    std::optional<RationalPolynomial> invRec(RationalPolynomial e, int level) const;
+    // Univariate (in v) division over the coefficient field F_coeffLevel.
+    struct DivMod { RationalPolynomial quot, rem; };
+    std::optional<DivMod> polyDivMod(RationalPolynomial a, RationalPolynomial b,
+                                     VarId v, int coeffLevel) const;
 };
 
 }  // namespace nlcolver
