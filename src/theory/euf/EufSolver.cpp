@@ -60,6 +60,7 @@ void EufSolver::pop(uint32_t n) {
 }
 
 void EufSolver::reset() {
+    modelSnapshot_.reset();
     trail_.clear();
     scopeLimits_.clear();
     scopeSnapshots_.clear();
@@ -508,6 +509,14 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         }
     }
 
+    // Capture the array/scalar model NOW, while the egraph reflects this
+    // satisfying assignment. After solve() returns, the egraph is rolled back
+    // and select/bridge merges are lost, so getModel() reads this snapshot.
+    // Only at Full effort (a complete model check) is the state authoritative.
+    if (arrayMode_ && effort == TheoryEffort::Full) {
+        modelSnapshot_ = buildModel();
+    }
+
     return TheoryCheckResult::consistent();
 }
 
@@ -630,6 +639,17 @@ EufSolver::getDeducedSharedEqualities() {
 }
 
 std::optional<TheorySolver::TheoryModel> EufSolver::getModel() const {
+    // The array/scalar model must be read off the egraph WHILE it reflects the
+    // satisfying assignment. By the time the Solver calls getModel() (after
+    // solve() returns), the egraph has been rolled back, so select/bridge
+    // merges no longer hold. We therefore return the snapshot captured at the
+    // last consistent Full-effort check. Fall back to a live build only if no
+    // snapshot exists (defensive — e.g. a non-array EUF problem).
+    if (modelSnapshot_) return modelSnapshot_;
+    return buildModel();
+}
+
+std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
     if (!arrayMode_ || !coreIr_) return std::nullopt;
 
     TheoryModel model;

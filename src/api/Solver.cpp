@@ -36,6 +36,8 @@
 #include <somtparser/frontend/parser.h>
 
 #include <iostream>
+#include <sstream>
+#include <set>
 #include <unordered_map>
 #include <map>
 #include <functional>
@@ -1367,27 +1369,191 @@ void Solver::dumpModel(std::ostream& os) const {
     const TheorySolver::TheoryModel* tm =
         pImpl->lastModel_ ? &*pImpl->lastModel_ : nullptr;
 
+    // -----------------------------------------------------------------------
+    // Array model token resolution (QF_AX + combination array logics).
+    //
+    // EufSolver::getModel() emits each array as an ArrayInterp over opaque
+    // equality TOKENS for index/element values:
+    //   "#n:<rational>" — a concrete number (combination logics: the bridged
+    //                     select/index value flowing from the arith model);
+    //   "#b:1"/"#b:0"   — a concrete bool;
+    //   "@e..."/"@def..." — an opaque uninterpreted-sort element (QF_AX) or an
+    //                     unconstrained index/element with no numeric pin.
+    // The egraph compares these by EQUALITY ONLY, so the printed model must
+    // assign each DISTINCT token a DISTINCT concrete value (preserving
+    // disequalities) and each occurrence of the SAME token the SAME value
+    // (preserving the asserted reads). We mint concrete values here:
+    //   - numeric/bool tokens print as themselves;
+    //   - opaque tokens in an Int/Real sort get a fresh integer (chosen to
+    //     avoid colliding with any explicit numeric token in that array);
+    //   - opaque tokens in an uninterpreted sort get an abstract constant
+    //     "@<sort>!<n>" declared as a 0-arity symbol of that sort (z3-style,
+    //     replayable). One namespace per uninterpreted sort.
+    // This block computes tokenSmt(token, smtSort) -> printable SMT term and
+    // collects the abstract-constant declarations to emit first.
+    // -----------------------------------------------------------------------
+    struct ArrayModelEmitter {
+        // smtSort string -> kind classification.
+        enum class SK { Int, Real, Bool, Uninterp };
+        // Per-uninterpreted-sort: token -> abstract constant name.
+        std::map<std::string, std::map<std::string, std::string>> uninterpConsts;
+        // Per-uninterpreted-sort emission counter.
+        std::map<std::string, int> uninterpCounter;
+        // Int/Real opaque token -> chosen integer (global; Int values are
+        // globally distinct so one namespace is fine), avoiding used numbers.
+        std::map<std::string, std::string> numericOpaque;
+        std::set<long long> usedNums;        // explicit numbers seen anywhere
+        long long nextFreeNum = 0;
+
+        static SK classify(const std::string& smtSort) {
+            if (smtSort == "Int")  return SK::Int;
+            if (smtSort == "Real") return SK::Real;
+            if (smtSort == "Bool") return SK::Bool;
+            return SK::Uninterp;
+        }
+
+        // Pre-scan: record every explicit numeric token so minted integers
+        // never collide with a real value the formula constrained.
+        void noteToken(const std::string& tok) {
+            if (tok.rfind("#n:", 0) == 0) {
+                try {
+                    mpq_class q(tok.substr(3));
+                    if (q.get_den() == 1 && q.get_num().fits_slong_p())
+                        usedNums.insert(q.get_num().get_si());
+                } catch (...) {}
+            }
+        }
+
+        std::string freshNum() {
+            while (usedNums.count(nextFreeNum)) ++nextFreeNum;
+            long long v = nextFreeNum++;
+            usedNums.insert(v);
+            return std::to_string(v);
+        }
+
+        // Resolve a token to a printable SMT term of the given sort.
+        std::string resolve(const std::string& tok, const std::string& smtSort) {
+            SK k = classify(smtSort);
+            if (tok.rfind("#b:", 0) == 0) return tok.substr(3) == "1" ? "true" : "false";
+            if (tok.rfind("#n:", 0) == 0) {
+                std::string body = tok.substr(3);
+                return formatModelValue(k == SK::Real ? SortKind::Real : SortKind::Int, body);
+            }
+            // Opaque token.
+            if (k == SK::Bool) return "false";  // unconstrained bool
+            if (k == SK::Int || k == SK::Real) {
+                auto it = numericOpaque.find(tok);
+                std::string n;
+                if (it != numericOpaque.end()) n = it->second;
+                else { n = freshNum(); numericOpaque[tok] = n; }
+                return formatModelValue(k == SK::Real ? SortKind::Real : SortKind::Int, n);
+            }
+            // Uninterpreted sort: abstract constant per token.
+            auto& byTok = uninterpConsts[smtSort];
+            auto it = byTok.find(tok);
+            if (it != byTok.end()) return it->second;
+            int idx = uninterpCounter[smtSort]++;
+            std::string cname = "@" + smtSort + "!" + std::to_string(idx);
+            byTok[tok] = cname;
+            return cname;
+        }
+    } emit;
+
+    // Build name -> declared array Sort (index/element SMT sort strings) for
+    // every declared array variable, and pre-scan tokens for numeric collisions.
+    struct ArrSorts { std::string idxSmt, elemSmt; };
+    std::map<std::string, ArrSorts> arrSorts;
+    if (pImpl->parser) {
+        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+            if (!var || !var->isArray()) continue;
+            auto s = var->getSort();
+            if (!s) continue;
+            auto is = s->getIndexSort(), es = s->getElemSort();
+            if (!is || !es) continue;
+            arrSorts[var->getName()] = {is->toString(), es->toString()};
+        }
+    }
+    if (tm) {
+        for (const auto& [aname, ai] : tm->arrayInterps) {
+            emit.noteToken(ai.defaultVal);
+            for (const auto& [ix, vl] : ai.entries) { emit.noteToken(ix); emit.noteToken(vl); }
+        }
+    }
+
+    // Map each scalar (index/element) variable name to the SMT sort of any
+    // array position it tokenizes into, so its opaque token resolves in the
+    // SAME namespace the array entries use. We learn the sort from the parser
+    // declaration of the scalar itself.
+    auto scalarSmtSort = [&](const std::shared_ptr<SOMTParser::DAGNode>& v) -> std::string {
+        if (v->isVBool()) return "Bool";
+        if (v->isVInt())  return "Int";
+        if (v->isVReal()) return "Real";
+        auto s = v->getSort();
+        return s ? s->toString() : "";
+    };
+
     os << "(\n";
+
+    // First emit array define-funs (so the scalar index/element values they
+    // reference are resolved into emit's token maps before we print scalars,
+    // keeping the two consistent). EVERY declared array variable must get a
+    // define-fun (get-model completeness), even those absent from the theory
+    // model (e.g. an array eliminated by read-over-write simplification, which
+    // is then unconstrained → any const array is a valid witness).
+    std::ostringstream arrayBuf;
+    if (pImpl->parser) {
+        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+            if (!var || !var->isArray()) continue;
+            std::string name = var->getName();
+            auto sortsIt = arrSorts.find(name);
+            std::string idxSmt = sortsIt != arrSorts.end() ? sortsIt->second.idxSmt : "Int";
+            std::string elemSmt = sortsIt != arrSorts.end() ? sortsIt->second.elemSmt : "Int";
+            std::string arrSmt = "(Array " + idxSmt + " " + elemSmt + ")";
+
+            std::string body;
+            auto itAi = tm ? tm->arrayInterps.find(name)
+                           : std::unordered_map<std::string,
+                                 TheorySolver::TheoryModel::ArrayInterp>::const_iterator{};
+            if (tm && itAi != tm->arrayInterps.end()) {
+                const auto& ai = itAi->second;
+                body = "((as const " + arrSmt + ") " +
+                       emit.resolve(ai.defaultVal, elemSmt) + ")";
+                std::string defv = emit.resolve(ai.defaultVal, elemSmt);
+                for (const auto& [ix, vl] : ai.entries) {
+                    // Skip entries that equal the default (no-op store).
+                    std::string ixv = emit.resolve(ix, idxSmt);
+                    std::string vlv = emit.resolve(vl, elemSmt);
+                    if (vlv == defv) continue;
+                    body = "(store " + body + " " + ixv + " " + vlv + ")";
+                }
+            } else {
+                // Unconstrained array: a const array over a fresh element value.
+                body = "((as const " + arrSmt + ") " +
+                       emit.resolve("@unconstrained_arr_default:" + name, elemSmt) + ")";
+            }
+            arrayBuf << "  (define-fun " << name << " () " << arrSmt << " "
+                     << body << ")\n";
+        }
+    }
+
+    // Scalar variables (Int/Real/Bool AND uninterpreted index/element vars).
+    std::ostringstream scalarBuf;
     if (pImpl->parser) {
         for (const auto& var : pImpl->parser->getDeclaredVariables()) {
             if (!var) continue;
+            if (var->isArray()) continue;  // handled above
             std::string name = var->getName();
-            SortKind kind;
-            const char* sortName;
-            if (var->isVBool())      { kind = SortKind::Bool; sortName = "Bool"; }
-            else if (var->isVInt())  { kind = SortKind::Int;  sortName = "Int";  }
-            else if (var->isVReal()) { kind = SortKind::Real; sortName = "Real"; }
-            else continue;  // only Int/Real/Bool 0-arity symbols are emitted
+            std::string smtSort = scalarSmtSort(var);
+            if (smtSort.empty()) continue;
+            ArrayModelEmitter::SK kind = ArrayModelEmitter::classify(smtSort);
 
-            // Algebraic values (irrational roots) live in the typed
-            // RealValue channel; emit their exact SMT-COMP root-of-with-interval
-            // form directly. formatModelValue is rational-only and would mangle
-            // the root term that the string channel also holds.
-            if (tm && kind == SortKind::Real) {
+            // Algebraic values (irrational roots) live in the typed RealValue
+            // channel; emit their exact root-of form directly.
+            if (tm && kind == ArrayModelEmitter::SK::Real) {
                 auto rvIt = tm->numericAssignments.find(name);
                 if (rvIt != tm->numericAssignments.end() && rvIt->second.isAlgebraic()) {
-                    os << "  (define-fun " << name << " () Real "
-                       << rvIt->second.toSmtLib2() << ")\n";
+                    scalarBuf << "  (define-fun " << name << " () Real "
+                              << rvIt->second.toSmtLib2() << ")\n";
                     continue;
                 }
             }
@@ -1397,14 +1563,44 @@ void Solver::dumpModel(std::ostream& os) const {
                 auto it = tm->assignments.find(name);
                 if (it != tm->assignments.end()) raw = it->second;
             }
+            std::string valTerm;
             if (raw.empty()) {
-                // Unconstrained: any value in-sort is valid; pick a default.
-                raw = (kind == SortKind::Bool) ? "false" : "0";
+                // Unconstrained.
+                if (kind == ArrayModelEmitter::SK::Bool) valTerm = "false";
+                else if (kind == ArrayModelEmitter::SK::Uninterp)
+                    valTerm = emit.resolve("@unconstrained:" + name, smtSort);
+                else valTerm = formatModelValue(
+                    kind == ArrayModelEmitter::SK::Real ? SortKind::Real : SortKind::Int, "0");
+            } else if (raw == "true" || raw == "false") {
+                valTerm = raw;
+            } else {
+                // May be a plain number (arith model) or a token (EUF model).
+                if (raw.rfind("#n:", 0) == 0 || raw.rfind("#b:", 0) == 0 ||
+                    raw.rfind("@", 0) == 0) {
+                    valTerm = emit.resolve(raw, smtSort);
+                } else if (kind == ArrayModelEmitter::SK::Uninterp) {
+                    valTerm = emit.resolve(raw, smtSort);
+                } else {
+                    valTerm = formatModelValue(
+                        kind == ArrayModelEmitter::SK::Real ? SortKind::Real :
+                        kind == ArrayModelEmitter::SK::Int  ? SortKind::Int  :
+                        SortKind::Bool, raw);
+                }
             }
-            os << "  (define-fun " << name << " () " << sortName << " "
-               << formatModelValue(kind, raw) << ")\n";
+            scalarBuf << "  (define-fun " << name << " () " << smtSort << " "
+                      << valTerm << ")\n";
         }
     }
+
+    // Emit abstract-constant declarations for uninterpreted-sort elements
+    // FIRST (they are referenced by the array/scalar define-funs that follow).
+    for (const auto& [sortName, byTok] : emit.uninterpConsts) {
+        for (const auto& [tok, cname] : byTok) {
+            os << "  (declare-fun " << cname << " () " << sortName << ")\n";
+        }
+    }
+    os << arrayBuf.str();
+    os << scalarBuf.str();
 
     // Uninterpreted function interpretations: a finite table emitted as a
     // nested ite over the asserted argument tuples, with a default for any

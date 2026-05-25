@@ -51,6 +51,14 @@ public:
     std::optional<TheoryModel> getModel() const override;
 
 private:
+    // Build the array/scalar model from the LIVE egraph state. Must be called
+    // when the egraph reflects the satisfying assignment (i.e. at a consistent
+    // Full-effort check), since merges are rolled back after solve() returns.
+    std::optional<TheoryModel> buildModel() const;
+    // Snapshot captured at the last consistent Full-effort check, when the
+    // egraph still reflects the satisfying assignment. getModel() returns this.
+    mutable std::optional<TheoryModel> modelSnapshot_;
+
     struct ActiveAssignment {
         int level;
         SatLit lit;
