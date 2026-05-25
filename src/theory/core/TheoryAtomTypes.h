@@ -4,6 +4,7 @@
 #include "expr/ir.h"
 #include "sat/SatSolver.h"
 #include "theory/core/LinearFormKey.h"
+#include "util/RealValue.h"
 #include <vector>
 #include <optional>
 #include <variant>
@@ -43,7 +44,7 @@ struct LinearAtomPayload {
 struct PolynomialAtomPayload {
     PolyId poly;
     Relation rel;
-    mpq_class rhs;
+    RealValue rhs;
 };
 
 struct SharedEqualityPayload {

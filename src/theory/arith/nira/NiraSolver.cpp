@@ -478,7 +478,7 @@ NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
     // Use the *original* poly id for deduplication — two active assignments
     // with the same original polynomial, relation and rhs are the same atom
     // registered twice (e.g. by different theory solvers).
-    std::set<std::tuple<PolyId, Relation, mpq_class>> distinctNonlinearPolys;
+    std::set<std::tuple<PolyId, Relation, RealValue>> distinctNonlinearPolys;
     for (const auto& a : activeAssignments) {
         if (!a.value) continue;
         if (!std::holds_alternative<PolynomialAtomPayload>(a.atom.payload)) continue;

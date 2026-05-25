@@ -95,13 +95,23 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
 
+    // An algebraic RHS cannot be represented in the rational polynomial kernel
+    // (it would need an algebraic constant term).  This never arises from
+    // rational SMT inputs; if it ever does, fall back to Unknown rather than
+    // silently dropping the bound.
+    auto rhsQ = payload->rhs.tryAsRational();
+    if (!rhsQ) {
+        pendingUnknown_ = PendingUnknown{level};
+        return;
+    }
+
     size_t oldSize = active_.size();
     Relation rel = value ? payload->rel : negateRelation(payload->rel);
 
     // Normalize (poly - rhs) rel 0 form
     PolyId diff = payload->poly;
-    if (payload->rhs != 0) {
-        PolyId rhsPoly = kernel_->mkConst(payload->rhs);
+    if (*rhsQ != 0) {
+        PolyId rhsPoly = kernel_->mkConst(*rhsQ);
         diff = kernel_->sub(payload->poly, rhsPoly);
     }
 

@@ -118,7 +118,7 @@ bool ArithAtomExtractor::extractPolynomialConstraint(ExprId eid, const CoreIr& i
             if (registry_) {
                 registry_->registerParsedTheoryAtom(
                     v, eid, theory,
-                    PolynomialAtomPayload{cc.diff, rel, mpq_class(0)});
+                    PolynomialAtomPayload{cc.diff, rel, RealValue::fromInt(0)});
             }
             return true;
         default:

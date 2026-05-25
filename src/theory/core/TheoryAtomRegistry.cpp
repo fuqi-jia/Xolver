@@ -74,7 +74,8 @@ SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
     SatLit lit = registrar_->registerDynamicAtom(expr, theory);
 
     size_t idx = records_.size();
-    records_.push_back({lit.var, theory, true, expr, PolynomialAtomPayload{poly, rel, rhs}});
+    records_.push_back({lit.var, theory, true, expr,
+                        PolynomialAtomPayload{poly, rel, RealValue::fromMpq(rhs)}});
     satVarToIdx_[lit.var] = idx;
     polyLookup_[key] = idx;
     observeIfNeeded(lit.var);

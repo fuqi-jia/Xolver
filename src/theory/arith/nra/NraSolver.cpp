@@ -70,10 +70,19 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
 
+    // Algebraic RHS is not representable in the rational polynomial kernel;
+    // it never arises from rational inputs. Treat as unsupported → Unknown.
+    auto rhsQ = payload->rhs.tryAsRational();
+    if (!rhsQ) {
+        presolveConstraints_.push_back({NullPoly, Relation::Eq, reason});  // keep aligned
+        engine_.reset();
+        return;
+    }
+
     Relation rel = value ? payload->rel : negateRelation(payload->rel);
     // Presolve sees the constraint in `p rel 0` form (subtract rhs if present).
     PolyId diff = payload->poly;
-    if (payload->rhs != 0) diff = kernel_->sub(payload->poly, kernel_->mkConst(payload->rhs));
+    if (*rhsQ != 0) diff = kernel_->sub(payload->poly, kernel_->mkConst(*rhsQ));
     presolveConstraints_.push_back({diff, rel, reason});
     engine_.assertConstraint(payload->poly, rel, reason, level);
 }
