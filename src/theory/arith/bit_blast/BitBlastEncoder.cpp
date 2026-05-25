@@ -128,4 +128,35 @@ SatLit BitBlastEncoder::isZero(const BitVec& a) {
     return acc.negated();
 }
 
+BitVec BitBlastEncoder::mul(const BitVec& a, const BitVec& b) {
+    unsigned w = a.width() + b.width();
+    BitVec ea = signExtend(a, w), eb = signExtend(b, w);
+    BitVec acc = mkConst(mpz_class(0), w);
+    for (unsigned i = 0; i < w; ++i) {
+        BitVec partial; partial.bits.resize(w);
+        for (unsigned j = 0; j < w; ++j) {
+            partial.bits[j] = (j >= i) ? andGate(ea.bits[j - i], eb.bits[i]) : false_;
+        }
+        acc = addFixed(acc, partial, w);    // low w bits = exact signed product
+    }
+    return acc;
+}
+
+BitVec BitBlastEncoder::mulConst(const mpz_class& c, const BitVec& a) {
+    if (c == 0) return mkConst(mpz_class(0), 1);
+    if (a.isConst) return mkConst(c * a.constValue);
+    return mul(mkConst(c), a);
+}
+
+BitVec BitBlastEncoder::powConst(const BitVec& a, unsigned e) {
+    if (e == 0) return mkConst(mpz_class(1));
+    BitVec r = a;
+    for (unsigned i = 1; i < e; ++i) r = mul(r, a);
+    return r;
+}
+
+SatLit BitBlastEncoder::eq(const BitVec& a, const BitVec& b) {
+    return isZero(sub(a, b));
+}
+
 } // namespace nlcolver::bitblast

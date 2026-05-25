@@ -72,3 +72,23 @@ TEST_CASE("Encoder: sub and a free variable solve to a target") {
     REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
     CHECK(readBitVec(*sat, x) == mpz_class(10));
 }
+
+TEST_CASE("Encoder: mul of two constants (signed)") {
+    for (auto pr : std::vector<std::pair<long,long>>{{3,4},{-3,4},{-5,-6},{0,9},{7,-8}}) {
+        auto sat = createSatSolver();
+        BitBlastEncoder enc(*sat);
+        BitVec r = enc.mul(enc.mkConst(mpz_class(pr.first)), enc.mkConst(mpz_class(pr.second)));
+        REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+        CHECK(readBitVec(*sat, r) == mpz_class(pr.first) * mpz_class(pr.second));
+    }
+}
+
+TEST_CASE("Encoder: powConst x^3 with x forced to -2") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    BitVec x = enc.mkVar(5);
+    enc.assertLit(enc.eq(x, enc.mkConst(mpz_class(-2))));
+    BitVec c = enc.powConst(x, 3);                 // x^3
+    REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+    CHECK(readBitVec(*sat, c) == mpz_class(-8));
+}
