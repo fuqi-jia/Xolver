@@ -2,6 +2,7 @@
 
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/core/CdcacTypes.h"
+#include <optional>
 
 namespace nlcolver {
 
@@ -38,6 +39,15 @@ public:
         const RationalPolynomial& p,
         const RationalPolynomial& q,
         VarId var);
+
+    /**
+     * Exact multivariate division: returns Q with p == g * Q in Q[X], or
+     * nullopt if g does not divide p exactly (g == 0 also returns nullopt).
+     * Decision procedure (not heuristic). Used by the Lazard Squarefree basis.
+     */
+    static std::optional<RationalPolynomial> exactDivide(
+        const RationalPolynomial& p,
+        const RationalPolynomial& g);
 };
 
 } // namespace nlcolver

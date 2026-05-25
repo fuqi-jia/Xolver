@@ -183,4 +183,9 @@ GcdEngine::Result GcdEngine::gcdCandidateBySubresultant(
     return result;
 }
 
+std::optional<RationalPolynomial> GcdEngine::exactDivide(
+    const RationalPolynomial& p, const RationalPolynomial& g) {
+    return polyExactDivide(p, g);
+}
+
 } // namespace nlcolver
