@@ -34,12 +34,18 @@ struct TowerNormResult {
 TowerNormResult towerNorm(const RationalPolynomial& F, VarId mainVar,
                           const TowerContext& ctx, int maxMatrixDim = 12);
 
-// [H2] full real-root isolation over a tower. B.2.b will implement the exact
-// filter (needs tower field division + irreducible minimal polys). Until then
-// this is intentionally unsupported (sound: caller => Unknown).
+// [H2] full real-root isolation over a tower: Norm candidates -> exact
+// root-membership oracle (RootMembershipOracle). `supported` is true ONLY when
+// every candidate was exactly decided Keep/Drop; any Unknown => supported=false
+// (caller => Unknown, never UNSAT). When supported, `rootIntervals` are the
+// kept real roots of F at the embedding, each an isolating interval [lo,hi]
+// (lo==hi for a rational root) over the rational defining polynomial `norm`.
+// RealAlg construction (needs a kernel for the UniPolyId defining poly) is left
+// to the caller (the lifter).
 struct TowerRootResult {
     bool supported = false;
-    RootSet roots;
+    RationalPolynomial norm;                                    // Q defining poly of the roots
+    std::vector<std::pair<mpq_class, mpq_class>> rootIntervals;  // kept real roots, ascending
 };
 TowerRootResult isolateRealRootsInTower(const RationalPolynomial& F, VarId mainVar,
                                         const TowerContext& ctx);

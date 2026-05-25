@@ -1,6 +1,7 @@
-// Step 3: interval fast-filter in isolateRealRootsInTower. Soundly proves
-// "F has NO real roots at the embedding" (dropping conjugate/extraneous Norm
-// roots), else reports unsupported (=> caller Unknown; exact placement is step 4).
+// isolateRealRootsInTower: Norm candidates -> exact root-membership oracle.
+// supported+roots when every candidate is decided (Keep placed / Drop discarded);
+// supported+empty proves NO real roots (conjugates dropped); unsupported on any
+// Unknown candidate (=> caller Unknown, never UNSAT).
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
@@ -21,47 +22,51 @@ static TowerContext sqrt2Ctx() {
     return ctx;
 }
 
-TEST_CASE("Filter k=0: x^2+1 has no real roots => supported, empty") {
+TEST_CASE("Isolate k=0: x^2+1 has no real roots => supported, empty") {
     RationalPolynomial F; F.addVar(X, 2, 1); F.addConstant(1); F.normalize();
     auto r = isolateRealRootsInTower(F, X, TowerContext{});
     CHECK(r.supported);
-    CHECK(r.roots.empty());
+    CHECK(r.rootIntervals.empty());
 }
 
-TEST_CASE("Filter k=0: x^2-2 has real roots => unsupported (deferred to step 4)") {
+TEST_CASE("Isolate k=0: x^2-2 places its two real roots (oracle keeps both)") {
     RationalPolynomial F; F.addVar(X, 2, 1); F.addConstant(-2); F.normalize();
     auto r = isolateRealRootsInTower(F, X, TowerContext{});
-    CHECK_FALSE(r.supported);
+    CHECK(r.supported);
+    CHECK(r.rootIntervals.size() == 2);
 }
 
-TEST_CASE("Filter: x^2 + sqrt2 has NO real roots; Norm x^4-2 conjugate roots dropped") {
-    // F = X^2 + A0; at alpha=+sqrt2 this is X^2+sqrt2 > 0 (no real root). The Norm
-    // x^4-2 has real roots +-2^{1/4} (the conjugate alpha=-sqrt2 branch), which the
-    // interval filter must DROP.
+TEST_CASE("Isolate: x^2 + sqrt2 has NO real roots; Norm x^4-2 conjugate roots dropped") {
+    // At alpha=+sqrt2, X^2+sqrt2 > 0. Norm x^4-2 has real roots +-2^{1/4} (the
+    // alpha=-sqrt2 branch); the oracle must DROP both => empty.
     RationalPolynomial F; F.addVar(X, 2, 1); F.addVar(A0, 1, 1); F.normalize();
     auto r = isolateRealRootsInTower(F, X, sqrt2Ctx());
     CHECK(r.supported);
-    CHECK(r.roots.empty());
+    CHECK(r.rootIntervals.empty());
 }
 
-TEST_CASE("Filter: x^2 - sqrt2 HAS real roots (+-2^{1/4}) => unsupported") {
-    // F = X^2 - A0; at alpha=+sqrt2 this is X^2-sqrt2 = 0 => X = +-2^{1/4} (real).
+TEST_CASE("Isolate: x^2 - sqrt2 => Unknown (degree-2 proper factor needs Trager)") {
+    // F=X^2-A0 has real roots +-2^{1/4}; gcd_K(F, x^4-2) = X^2-A0 is a degree-2
+    // proper factor (not linear, not full), so the oracle returns Unknown =>
+    // isolation unsupported. Sound (never UNSAT); placement awaits Trager.
     RationalPolynomial F; F.addVar(X, 2, 1); F.addVar(A0, 1, -1); F.normalize();
     auto r = isolateRealRootsInTower(F, X, sqrt2Ctx());
     CHECK_FALSE(r.supported);
 }
 
-TEST_CASE("Filter: x^2 + 1 over Q(sqrt2) (no generator dependence) => no real roots") {
+TEST_CASE("Isolate: t - alpha over Q(sqrt2) places the single root +sqrt2") {
+    // F = X - A0; Norm = x^2-2, candidates +-sqrt2; oracle keeps +sqrt2, drops -sqrt2.
+    RationalPolynomial F; F.addVar(X, 1, 1); F.addVar(A0, 1, -1); F.normalize();
+    auto r = isolateRealRootsInTower(F, X, sqrt2Ctx());
+    CHECK(r.supported);
+    REQUIRE(r.rootIntervals.size() == 1);
+    // the kept root is +sqrt2 (in (1,2), positive)
+    CHECK(r.rootIntervals[0].second > mpq_class(0));
+}
+
+TEST_CASE("Isolate: x^2 + 1 over Q(sqrt2) => no real roots") {
     RationalPolynomial F; F.addVar(X, 2, 1); F.addConstant(1); F.normalize();
     auto r = isolateRealRootsInTower(F, X, sqrt2Ctx());
     CHECK(r.supported);
-    CHECK(r.roots.empty());
-}
-
-TEST_CASE("Filter: (x^2+sqrt2)+1 strictly positive => no real roots") {
-    // X^2 + A0 + 1; at alpha=sqrt2 ~ 2.414 + X^2 > 0.
-    RationalPolynomial F; F.addVar(X, 2, 1); F.addVar(A0, 1, 1); F.addConstant(1); F.normalize();
-    auto r = isolateRealRootsInTower(F, X, sqrt2Ctx());
-    CHECK(r.supported);
-    CHECK(r.roots.empty());
+    CHECK(r.rootIntervals.empty());
 }
