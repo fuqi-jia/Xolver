@@ -193,3 +193,100 @@ TEST_CASE("SpaceEstimator: boxIsComplete only when all vars hard-bounded") {
     CHECK(plan2.boxIsComplete == true);
     CHECK(plan2.width.at("y") == SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(15)));
 }
+
+#include "theory/arith/bit_blast/BitBlastSolver.h"
+#include "theory/arith/nia/search/IntegerModelValidator.h"
+
+// SOUNDNESS REGRESSION (reviewer's counterexample): bounds live ONLY in
+// DomainStore, NOT in cs. The solver must still confine the search to the box
+// (explicit bound encoding) and reject out-of-box models (modelInDomains).
+// A naive "encode cs + validate cs" would wrongly accept x=-1,y=-6.
+TEST_CASE("BitBlastSolver: SAT respects DomainStore bounds even when cs omits them") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId prod = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
+    std::vector<NormalizedNiaConstraint> cs{{prod, Relation::Eq, SatLit{10, true}}}; // ONLY x*y-6==0
+    DomainStore d;   // bounds ONLY here — never added to cs
+    for (auto n : {"x","y"}) { d.addLowerBound(n, mpz_class(0), SatLit{11,true});
+                               d.addUpperBound(n, mpz_class(6), SatLit{12,true}); }
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    REQUIRE(r.status == bitblast::BitBlastResult::Status::Sat);
+    CHECK(r.model.at("x") * r.model.at("y") == 6);
+    CHECK(r.model.at("x") >= 0); CHECK(r.model.at("x") <= 6);   // box enforced, not just x*y=6
+    CHECK(r.model.at("y") >= 0); CHECK(r.model.at("y") <= 6);   // would FAIL if x=-1,y=-6 accepted
+}
+
+TEST_CASE("BitBlastSolver: complete box UNSAT carries nonlinear AND bound reasons") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    // x*x = 2 has no integer root; x in [-3,3] (DomainStore) is the whole feasible box.
+    PolyId sq = kernel->sub(kernel->pow(kernel->mkVar(vx), 2), kernel->mkConst(2));
+    std::vector<NormalizedNiaConstraint> cs{{sq, Relation::Eq, SatLit{20, true}}}; // ONLY x*x-2==0
+    DomainStore d;
+    d.addLowerBound("x", mpz_class(-3), SatLit{21,true});
+    d.addUpperBound("x", mpz_class(3),  SatLit{22,true});
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    REQUIRE(r.status == bitblast::BitBlastResult::Status::UnsatComplete);
+    REQUIRE(r.conflict.has_value());
+    bool hasNonlinear = false, hasLower = false, hasUpper = false;
+    for (const auto& l : r.conflict->clause) {
+        if (l.var == 20) hasNonlinear = true;
+        if (l.var == 21) hasLower = true;
+        if (l.var == 22) hasUpper = true;
+    }
+    CHECK(hasNonlinear); CHECK(hasLower); CHECK(hasUpper);
+}
+
+TEST_CASE("BitBlastSolver: unbounded UNSAT returns Unknown, never UNSAT") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    PolyId p = kernel->sub(kernel->pow(kernel->mkVar(vx), 2), kernel->mkConst(2));
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{30, true}}};
+    DomainStore d;   // x unbounded => boxIsComplete is false
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    solver.setMaxIterations(2);   // keep the test fast; verdict is mode-invariant
+    auto r = solver.solve(cs, d, validator);
+    CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);
+}
+
+// Point 1/3: a bound that was ENCODED but lacks a usable reason must force
+// Unknown — never a partial (unsound) conflict.
+TEST_CASE("BitBlastSolver: missing reason on an encoded bound => Unknown, not a bad conflict") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    PolyId p = kernel->sub(kernel->mkVar(vx), kernel->mkConst(5));      // x - 5
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{40, true}}}; // x == 5
+    DomainStore d;
+    d.addLowerBound("x", mpz_class(0), SatLit{41, true});
+    d.addUpperBound("x", mpz_class(3), SatLit{});   // upper bound has NO usable reason (var 0)
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);
+}
+
+// Point 2: a variable that appears ONLY in DomainStore (not in cs) is still
+// encoded; a contradictory domain-only var must be detected (no spurious SAT).
+TEST_CASE("BitBlastSolver: domain-only variable inconsistency is detected") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId prod = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
+    std::vector<NormalizedNiaConstraint> cs{{prod, Relation::Eq, SatLit{50, true}}}; // only x,y in cs
+    DomainStore d;
+    for (auto n : {"x","y"}) { d.addLowerBound(n, mpz_class(0), SatLit{51,true});
+                               d.addUpperBound(n, mpz_class(6), SatLit{52,true}); }
+    // z appears ONLY in domains, with an empty interval [5,3] => whole state UNSAT.
+    d.addLowerBound("z", mpz_class(5), SatLit{53,true});
+    d.addUpperBound("z", mpz_class(3), SatLit{54,true});
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    CHECK(r.status != bitblast::BitBlastResult::Status::Sat);
+}
