@@ -86,6 +86,14 @@ public:
         int64_t denominatorBound = 12;
         int64_t numeratorBound = 10;
         std::chrono::milliseconds wallClockBudget{200};
+        // When non-empty, the search collects variables, bounds, and
+        // validates against THESE assertion roots instead of ir.assertions().
+        // Used by the Solver's validated model-repair to search over the
+        // ORIGINAL (pre-lowering) assertions — the lowered form introduces
+        // __nlc_ auxiliaries (to_int floor vars, etc.) that the search skips
+        // but the lowered assertions still reference, leaving every candidate
+        // indeterminate.
+        std::vector<ExprId> assertionRootsOverride;
         Config() = default;
     };
 
@@ -107,6 +115,10 @@ private:
     void buildPriorityList();
     void detectActiveBounds();
     bool isLogicEnabled() const;
+
+    // The assertion roots to search over: cfg_.assertionRootsOverride when
+    // set, otherwise ir_.assertions().
+    std::vector<ExprId> assertionRoots() const;
 
     // Strategies. Each appends candidate assignments to candidates_ until
     // the per-strategy budget is exhausted or the wall-clock deadline is

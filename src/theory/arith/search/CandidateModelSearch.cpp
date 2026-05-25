@@ -34,6 +34,11 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     return result_;
 }
 
+std::vector<ExprId> CandidateModelSearch::assertionRoots() const {
+    if (!cfg_.assertionRootsOverride.empty()) return cfg_.assertionRootsOverride;
+    return ir_.assertions();
+}
+
 bool CandidateModelSearch::isLogicEnabled() const {
     // Default-enabled for pure arithmetic logics. UF-bearing logics are
     // disabled until the evaluator supports congruence checking for UF
@@ -60,7 +65,7 @@ void CandidateModelSearch::collectFreeVariables() {
     std::unordered_set<std::string> seen;
     std::vector<bool> visited(ir_.size(), false);
     std::vector<ExprId> stack;
-    for (ExprId a : ir_.assertions()) stack.push_back(a);
+    for (ExprId a : assertionRoots()) stack.push_back(a);
     while (!stack.empty()) {
         ExprId e = stack.back();
         stack.pop_back();
@@ -213,7 +218,7 @@ void CandidateModelSearch::detectActiveBounds() {
         }
     };
 
-    for (ExprId aid : ir_.assertions()) {
+    for (ExprId aid : assertionRoots()) {
         const auto& a = ir_.get(aid);
         if (a.kind == Kind::And) {
             for (ExprId c : a.children) {
@@ -377,7 +382,7 @@ CandidateModelSearch::evaluateAssertions(
     const std::unordered_map<std::string, mpq_class>& assignment) const
 {
     bool anyIndeterminate = false;
-    for (ExprId aid : ir_.assertions()) {
+    for (ExprId aid : assertionRoots()) {
         TermResult tr = evalTerm(aid, assignment);
         if (tr.kind == TermVerdict::Indeterminate) {
             anyIndeterminate = true;

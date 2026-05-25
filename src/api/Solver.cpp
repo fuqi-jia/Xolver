@@ -67,6 +67,30 @@ public:
     std::string lastUnknownComponent_;
     std::string lastUnknownDetail_;
 
+    // True iff the SMT-LIB input set :produce-models / issued (get-model).
+    bool modelRequestedImpl() const {
+        if (!parser) return false;
+        auto opts = parser->getOptions();
+        return opts && opts->get_model;
+    }
+
+    // True only on a DEFINITE violation of an original (pre-lowering)
+    // assertion by the current lastModel_ (mirrors the negation of
+    // Solver::modelMatchesOriginal). Drives the validated model-repair.
+    bool modelViolatesOriginal() const {
+        if (!ir || !lastModel_) return false;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  continue; }
+            if (val == "false") { boolAsg[name] = false; continue; }
+            try { numAsg[name] = mpq_class(val); } catch (...) {}
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg);
+        return validator.validate(originalAssertions_)
+               == ArithModelValidator::Verdict::Violated;
+    }
+
 #ifdef NLCOLVER_ENABLE_CASESTATS
     void parseUnknownReasonIntoStats() {
         // Derive structured unknown fields from the free-text reason.
@@ -791,6 +815,33 @@ public:
             // exists to self-check the *printed* model for the
             // Model-Validation track and to back the model-check tool —
             // not to override the verdict. See modelMatchesOriginal().
+            //
+            // Validated model repair (Model-Validation track only). When a
+            // model is requested and the extracted one DEFINITELY violates an
+            // original assertion — e.g. Nelson-Oppen combination collapsing
+            // a != b, or a NIRA witness whose real root is coupled to an Int
+            // via to_int and could not be forwarded — fall back to the
+            // SAT-only validated candidate search and adopt its model iff it
+            // is found and not itself violated. This never changes the
+            // verdict (already Sat); it only replaces a provably-wrong model
+            // with a validated one.
+            if (modelRequestedImpl() && modelViolatesOriginal()) {
+                // Search over the ORIGINAL assertions, not the lowered IR:
+                // lowering introduces __nlc_ auxiliaries (to_int floor vars,
+                // ITE selectors) that the search skips but the lowered
+                // assertions still reference, leaving every candidate
+                // indeterminate. The original form has only user variables
+                // and CMS evaluates to_int/ite directly.
+                CandidateModelSearch::Config cfg;
+                cfg.assertionRootsOverride = originalAssertions_;
+                CandidateModelSearch cms(*ir, logic, cfg);
+                auto repaired = cms.run();
+                if (repaired.found) {
+                    auto saved = std::move(lastModel_);
+                    lastModel_ = repaired.model;
+                    if (modelViolatesOriginal()) lastModel_ = std::move(saved);
+                }
+            }
         } else if (result == SatSolver::SolveResult::Unsat) {
             ret = Result::Unsat;
         } else {
