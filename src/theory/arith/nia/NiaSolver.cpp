@@ -30,7 +30,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       intervalEvaluator_(*kernel_),
       algebraic_(*kernel_),
       bounded_(*kernel_),
-      localSearch_(*kernel_) {
+      localSearch_(*kernel_),
+      bitBlast_(*kernel_) {
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -40,6 +41,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
                       std::optional<TheoryCheckResult> (NiaSolver::*m)(TheoryLemmaStorage&, TheoryEffort)) {
         reasoners_.push_back(std::make_unique<CallbackReasoner>(
             nm, [this, m](TheoryLemmaStorage& db, TheoryEffort e) { return (this->*m)(db, e); }));
+    };
+    auto addFull = [this](const char* nm,
+                      std::optional<TheoryCheckResult> (NiaSolver::*m)(TheoryLemmaStorage&, TheoryEffort)) {
+        reasoners_.push_back(std::make_unique<CallbackReasoner>(
+            nm, [this, m](TheoryLemmaStorage& db, TheoryEffort e) { return (this->*m)(db, e); },
+            /*fullEffortOnly=*/true));
     };
     add("nia.pending",        &NiaSolver::stagePending);
     add("nia.normalize",      &NiaSolver::stageNormalize);
@@ -53,6 +60,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
+    addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     add("nia.local-search",   &NiaSolver::stageLocalSearch);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     add("nia.branch",         &NiaSolver::stageBranch);
@@ -494,6 +502,21 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
             return TheoryCheckResult::mkConflict(*br.conflict);
         }
         // UnknownBudget / UnknownUnsupported: continue pipeline
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableBitBlast_) return std::nullopt;
+    auto res = bitBlast_.solve(normalized_, domains_, validator_);
+    switch (res.status) {
+        case bitblast::BitBlastResult::Status::Sat:
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        case bitblast::BitBlastResult::Status::UnsatComplete:
+            return TheoryCheckResult::mkConflict(*res.conflict);
+        case bitblast::BitBlastResult::Status::Unknown:
+            return std::nullopt;
     }
     return std::nullopt;
 }

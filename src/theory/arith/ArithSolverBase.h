@@ -1,14 +1,14 @@
 #pragma once
 
 #include "theory/core/TheorySolver.h"
+#include "theory/arith/Reasoner.h"
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace nlcolver {
-
-class Reasoner;
 
 /**
  * ArithSolverBase — shared base for the arithmetic theory solvers
@@ -84,6 +84,15 @@ public:
     // pipeline is only the verdict when reasoners_ is non-empty.
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb,
                             TheoryEffort effort = TheoryEffort::Standard) override;
+
+    // Names of the registered reasoner stages, in pipeline order. For testing
+    // and diagnostics; reflects the order stages run in check().
+    std::vector<std::string> reasonerNames() const {
+        std::vector<std::string> names;
+        names.reserve(reasoners_.size());
+        for (const auto& r : reasoners_) names.push_back(r->name());
+        return names;
+    }
 
 protected:
     // ----- Reasoner pipeline (Phase 2) -----

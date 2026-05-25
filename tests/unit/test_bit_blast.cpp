@@ -290,3 +290,24 @@ TEST_CASE("BitBlastSolver: domain-only variable inconsistency is detected") {
     auto r = solver.solve(cs, d, validator);
     CHECK(r.status != bitblast::BitBlastResult::Status::Sat);
 }
+
+#include "theory/arith/nia/NiaSolver.h"
+#include <algorithm>
+
+// Real registration check: the bit-blast stage must appear by name in the NIA
+// reasoner pipeline, immediately AFTER "nia.bounded" and BEFORE
+// "nia.local-search". A construct-and-check-id() test would pass even without
+// the stage, so we introspect the pipeline order instead.
+TEST_CASE("NiaSolver: bit-blast stage registered between bounded and local-search") {
+    auto kernel = createPolynomialKernel();
+    NiaSolver solver(std::move(kernel));
+    auto names = solver.reasonerNames();
+    auto bb = std::find(names.begin(), names.end(), "nia.bit-blast");
+    auto bd = std::find(names.begin(), names.end(), "nia.bounded");
+    auto ls = std::find(names.begin(), names.end(), "nia.local-search");
+    REQUIRE(bb != names.end());
+    REQUIRE(bd != names.end());
+    REQUIRE(ls != names.end());
+    CHECK(bd < bb);    // after bounded
+    CHECK(bb < ls);    // before local-search
+}
