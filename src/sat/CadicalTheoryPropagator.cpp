@@ -162,15 +162,21 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
     // not just Combination atoms, otherwise legacy single-theory paths
     // see an empty active state after backtrack.
+    // Re-assert at a single fixed level (1). This is a one-shot full-model
+    // consistency check after backtrackToLevel(0); the original SAT decision
+    // levels (varToLevel_) are non-monotonic in model order, which violates the
+    // theory solvers' snapshot invariant (ensureSnapshotForLevel assumes
+    // non-decreasing levels) and corrupts e-graph rollback -> stale merges ->
+    // spurious interface-disequality conflicts -> false UNSAT. A uniform level
+    // keeps the per-check state monotonic and is fully cleared by the next
+    // backtrackToLevel(0). Conflict reasons are SAT literals, independent of level.
+    constexpr int kModelCheckLevel = 1;
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
-        int level = 0;
-        auto it = varToLevel_.find(var);
-        if (it != varToLevel_.end()) level = it->second;
-        tm_.assertTheoryLit(*atom, SatLit{var, sign}, level);
+        tm_.assertTheoryLit(*atom, SatLit{var, sign}, kModelCheckLevel);
     }
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
