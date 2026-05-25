@@ -155,3 +155,41 @@ TEST_CASE("PolyBitBlaster: Greedy-Addition narrows max intermediate width") {
     unsigned w = blaster.encodePolyWidth(sum);   // test-only accessor
     CHECK(w <= 5u);   // balanced GA tree, not the 6 of a linear chain
 }
+
+#include "theory/arith/bit_blast/SpaceEstimator.h"
+#include "theory/arith/nia/core/DomainStore.h"
+
+TEST_CASE("SpaceEstimator: bitsToCover") {
+    using bitblast::SpaceEstimator;
+    CHECK(SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(0)) == 1u);   // {0}
+    CHECK(SpaceEstimator::bitsToCover(mpz_class(-1), mpz_class(0)) == 1u);  // {-1,0}
+    CHECK(SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(7)) == 4u);   // 0..7 needs sign+3
+    CHECK(SpaceEstimator::bitsToCover(mpz_class(-8), mpz_class(7)) == 4u);
+}
+
+TEST_CASE("SpaceEstimator: boxIsComplete only when all vars hard-bounded") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId p = kernel->add(kernel->mkVar(vx), kernel->mkVar(vy));   // x + y
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{}}};
+
+    bitblast::SpaceEstimator est(*kernel);
+
+    DomainStore d1;     // only x bounded
+    d1.addLowerBound("x", mpz_class(-4), SatLit{1, true});
+    d1.addUpperBound("x", mpz_class(4),  SatLit{2, true});
+    auto plan1 = est.estimate(cs, d1);
+    CHECK(plan1.boxIsComplete == false);
+    CHECK(plan1.width.count("x") == 1);
+    CHECK(plan1.width.count("y") == 1);
+
+    DomainStore d2;     // both bounded
+    d2.addLowerBound("x", mpz_class(-4), SatLit{1, true});
+    d2.addUpperBound("x", mpz_class(4),  SatLit{2, true});
+    d2.addLowerBound("y", mpz_class(0),  SatLit{3, true});
+    d2.addUpperBound("y", mpz_class(15), SatLit{4, true});
+    auto plan2 = est.estimate(cs, d2);
+    CHECK(plan2.boxIsComplete == true);
+    CHECK(plan2.width.at("y") == SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(15)));
+}
