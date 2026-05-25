@@ -153,11 +153,15 @@ bool extractLinearConstraint(ExprId eid, const CoreIr& ir,
 
     // Canonicalize: ensure the first non-zero coefficient (by var name) is positive.
     // This guarantees that e.g. "x >= 0" and "0 <= x" map to the same canonical form.
+    // Use sorted order to ensure determinism (unordered_map iteration is non-deterministic).
     bool needFlip = false;
+    std::string firstVar;
     for (const auto& [name, coeff] : coeffs) {
         if (coeff != 0) {
-            needFlip = (coeff < 0);
-            break;
+            if (firstVar.empty() || name < firstVar) {
+                firstVar = name;
+                needFlip = (coeff < 0);
+            }
         }
     }
     if (needFlip) {
