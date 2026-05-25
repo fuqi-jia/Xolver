@@ -94,6 +94,24 @@ public:
     }
 
     /**
+     * SAFE algebraic-prefix root isolation (single algebraic coordinate) via
+     * resultant Norm + exact rational interval filter. Does NOT use the
+     * crash-prone libpoly algebraic root isolation. `supported` is set true
+     * only when a certified isolation completed (0 roots is then a valid
+     * answer); false on the tower / unsupported / degenerate cases (caller
+     * must treat as Unknown, never UNSAT).
+     */
+    virtual RootSet isolateRealRootsViaNorm(
+        PolyId p,
+        const SamplePoint& prefix,
+        VarId mainVar,
+        bool& supported) {
+        (void)p; (void)prefix; (void)mainVar;
+        supported = false;
+        return RootSet{};
+    }
+
+    /**
      * Refine the isolating interval of an algebraic root.
      * Returns true if refinement succeeded (interval was narrowed).
      * Returns false if refinement failed or the root is rational.

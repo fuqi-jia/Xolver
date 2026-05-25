@@ -31,6 +31,12 @@ public:
     RootSet isolateRealRootsAlgebraic(
         PolyId p, const SamplePoint& prefix, VarId mainVar) override;
 
+    // SAFE algebraic-prefix root isolation (single algebraic coordinate) via
+    // resultant Norm over Q + exact rational interval filter. Never invokes
+    // libpoly's crash-prone algebraic root isolation. See AlgebraBackend.
+    RootSet isolateRealRootsViaNorm(
+        PolyId p, const SamplePoint& prefix, VarId mainVar, bool& supported) override;
+
     // --- V2-1: univariate polynomial pool access (public for engines) ---
 
     UniPolyId allocUni(std::vector<mpz_class> coeffs);

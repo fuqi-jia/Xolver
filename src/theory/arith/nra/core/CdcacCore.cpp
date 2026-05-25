@@ -343,10 +343,38 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
     return RootSet{std::move(merged)};
 }
 
+void CdcacCore::buildClosure(const CdcacInput& input) {
+    unsatTrustworthy_ = true;
+    int n = static_cast<int>(input.varOrder.size());
+    levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
+
+    std::vector<RationalPolynomial> rps;
+    for (const auto& c : input.constraints) {
+        if (kernel_->isConstant(c.poly)) continue;   // constants pre-handled by caller
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) { unsatTrustworthy_ = false; continue; }
+        rps.push_back(std::move(*rp));
+    }
+
+    auto reason = closure_.build(rps, input.varOrder);
+    if (reason != ProjectionIncompleteReason::None) {
+        unsatTrustworthy_ = false;   // incomplete projection ⇒ no UNSAT may rest on it
+    }
+
+    for (int k = 0; k < n; ++k) {
+        for (int id : closure_.levelPolys(k)) {
+            PolyId pid = closure_.entries()[id].poly.toPolyId(*kernel_);
+            if (pid == NullPoly) { unsatTrustworthy_ = false; continue; }
+            levelPolyIds_[k].push_back(pid);
+        }
+    }
+}
+
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif
+    buildClosure(input);
     SamplePoint prefix;
     return solveLevel(0, prefix, input);
 }
@@ -379,6 +407,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     continue;
                 case NullificationAnalyzer::Action::ReturnFullLineConflict:
                     if (analysis.conflictCell) {
+                        // A nullification full-line conflict is a generalization;
+                        // it may only conclude UNSAT under a complete closure.
+                        if (!unsatTrustworthy_) {
+                            return CdcacResult::mkUnknown(
+                                CdcacUnknownReason::ProjectionClosureIncomplete);
+                        }
                         Cell cell = *analysis.conflictCell;
                         Cell cellCopy = cell;  // copy for certificate
                         Covering cover;
@@ -440,124 +474,70 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
     }
 
-    // 1. Collect polynomials that become univariate in 'var' after prefix substitution
-    std::vector<PolyId> polys = collectPolys(input.constraints);
+    // 1. Collect delineating roots for `var` from the COMPLETE projection
+    // closure (built once in solve()). closure_.levelPolys(k) holds every
+    // coefficient/PSC polynomial whose real roots partition var's axis so that
+    // every original constraint is sign-invariant within each resulting cell.
+    // Using the closure (not the old single-step tryLocalProjection) is what
+    // lets a deep conflict generalize to a SOUND cell instead of the whole
+    // axis. When the closure is incomplete OR a specialization is uncertified,
+    // unsatTrustworthy_ becomes false and any UNSAT here is downgraded to
+    // Unknown at the covering exit.
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
     bool hasAlgebraicPrefix = false;
     for (const auto& v : prefix.values) {
-        if (v.isAlgebraic()) {
-            hasAlgebraicPrefix = true;
-            break;
-        }
+        if (v.isAlgebraic()) { hasAlgebraicPrefix = true; break; }
     }
 
-    // V5: when any local poly has var-k plus higher-level vars that aren't in
-    // the prefix, the level-k root set is incomplete without Collins projection.
-    // Skipping projection here causes sector cells to over-generalize the
-    // unsat verdict from deeper levels (cf. nra_054 unsoundness).
-    bool needsProjection = false;
-
-    for (PolyId p : polys) {
-        if (kernel_->isConstant(p)) {
-            continue;
-        }
-        // Skip polynomials that do not contain the current variable at all.
-        // They cannot contribute roots for this level.
-        {
-            bool containsVar = false;
-            std::string_view varName = kernel_->varName(var);
-            for (const auto& vname : kernel_->variables(p)) {
-                if (vname == varName) {
-                    containsVar = true;
-                    break;
-                }
-            }
-            if (!containsVar) {
-                continue;
-            }
-        }
+    for (PolyId p : levelPolyIds_[k]) {
+        if (kernel_->isConstant(p)) continue;
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
         if (up == NullUniPolyId) {
-            // Detect unassigned-deep-vars once and reuse for both the
-            // algebraic-isolation guard and the projection trigger.
-            bool hasFreeVars = false;
-            {
-                std::string_view mainVarName = kernel_->varName(var);
-                for (const auto& vname : kernel_->variables(p)) {
-                    if (vname == mainVarName) continue;
-                    bool inPrefix = false;
-                    for (size_t i = 0; i < prefix.numVars(); ++i) {
-                        if (kernel_->varName(prefix.varOrder[i]) == vname) {
-                            inPrefix = true;
-                            break;
-                        }
-                    }
-                    if (!inPrefix) {
-                        hasFreeVars = true;
-                        break;
-                    }
+            // Specialization to a univariate failed (algebraic prefix). Use the
+            // SAFE Norm/resultant isolation (single algebraic coordinate),
+            // which eliminates the algebraic variable via a rational resultant
+            // and isolates over Q — never touching libpoly's crash-prone
+            // algebraic root isolation. Unsupported (tower / residual var /
+            // degenerate Norm) ⇒ cannot certify ⇒ not trustworthy for UNSAT
+            // (SAT still samples + validates). Anti-corruption rule: an
+            // unreliable/unsupported backend op yields Unknown, never a crash
+            // or a false UNSAT.
+            if (hasAlgebraicPrefix) {
+                bool supported = false;
+                RootSet roots = algebra_->isolateRealRootsViaNorm(p, prefix, var, supported);
+                if (supported) {
+                    if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                    continue;
                 }
             }
-            // If specialization failed due to algebraic prefix, try algebraic
-            // root isolation — but only when the prefix has at most one
-            // algebraic variable.  libpoly's lp_polynomial_roots_isolate crashes
-            // with SIGSEGV on nested algebraic coefficients (multiple algebraic
-            // vars in the assignment), so we conservatively skip deeper towers.
-            if (hasAlgebraicPrefix && !hasFreeVars) {
-                int algCount = 0;
-                for (const auto& v : prefix.values) {
-                    if (v.isAlgebraic()) ++algCount;
-                }
-                if (algCount <= 1) {
-                    RootSet roots = algebra_->isolateRealRootsAlgebraic(p, prefix, var);
-                    if (roots.numRoots() > 0) {
-                        rootSets.push_back(std::move(roots));
-                    }
-                }
-            }
-            if (hasFreeVars) {
-                needsProjection = true;
-            }
+            unsatTrustworthy_ = false;
             continue;
         }
-        // Skip zero polynomials: they are constant (zero) w.r.t. current var
-        // and will be handled by checkFullSample.
-        {
-            auto vanish = algebra_->vanishesAtPrefix(p, prefix, var);
-            if (vanish == VanishResult::Vanishes) {
-                continue;
-            }
-        }
+        // A poly that vanishes (≡0 in var) at this prefix contributes no
+        // boundary here. Under a COMPLETE Collins closure this is sound to
+        // skip — the poly's coefficients (all in the closure) already delineate
+        // the lower levels. An UNDECIDED vanish ⇒ cannot certify ⇒ Unknown.
+        auto vanish = algebra_->vanishesAtPrefix(p, prefix, var);
+        if (vanish == VanishResult::Vanishes) continue;
+        if (vanish == VanishResult::Unknown) { unsatTrustworthy_ = false; continue; }
+
         RootSet roots = algebra_->isolateRealRoots(up);
         if (!algebra_->validateRootIsolation(up, roots)) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::RootIsolationInvalid);
         }
-        // P2c: fill provenance metadata for algebraic roots
         for (auto& r : roots.roots) {
-            if (r.isAlgebraic()) {
-                r.root.origins.push_back({p, var, static_cast<VarId>(k)});
-            }
+            if (r.isAlgebraic()) r.root.origins.push_back({p, var, static_cast<VarId>(k)});
         }
         uniPolys.push_back(up);
         rootSets.push_back(std::move(roots));
     }
 
-    // 1b. Trigger local projection. We restrict the needsProjection branch to
-    // level 0: there, the existing `uniPolys.empty() && rootSets.empty()`
-    // guard misses cases where some constraints specialize and others do not
-    // (e.g. nra_054). At deeper levels k>0 the local projection routine
-    // currently produces spurious roots from prefix-degenerate projection
-    // polynomials (cf. nra_125 unsoundness), so we keep the conservative
-    // guard there until the deeper-projection path is hardened.
-    bool projectionSucceeded = false;
-    if (((needsProjection && k == 0) || (uniPolys.empty() && rootSets.empty())) && k + 1 < n) {
-        auto projResult = tryLocalProjection(input.constraints, prefix, var, k, kernel_, algebra_, policy_.get());
-        for (auto& rs : projResult.rootSets) {
-            rootSets.push_back(std::move(rs));
-        }
-        projectionSucceeded = projResult.generatedProjectionPolys;
-    }
+    // Always route through the covering (incl. the empty-roots full-line cell);
+    // its UNSAT conclusion is gated by unsatTrustworthy_. (Replaces the old
+    // "no local polys ⇒ CoveringDidNotGrow" early-out and tryLocalProjection.)
+    bool projectionSucceeded = true;
+    (void)projectionSucceeded;
 
     // 2. Merge all roots
     auto mergedOpt = mergeRoots(rootSets);
@@ -741,6 +721,15 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
     if (cov == CoverageResult::Unknown) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+    }
+
+    // PROOF-CARRYING GATE: the cells geometrically cover the line, but this is
+    // a sound UNSAT only if the projection closure underpinning every level's
+    // boundaries was complete (no degeneracy / budget / uncertified
+    // specialization). Otherwise the covering may over-generalize a deeper
+    // conflict — report Unknown rather than a possibly-false UNSAT.
+    if (!unsatTrustworthy_) {
+        return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
 
     auto reasons = ReasonManager::minimize(cover);

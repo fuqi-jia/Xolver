@@ -6,6 +6,7 @@
 #include "theory/arith/nra/engine/CoveringManager.h"
 #include "theory/arith/nra/engine/ReasonManager.h"
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
+#include "theory/arith/nra/projection/ProjectionClosure.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 #include <memory>
@@ -52,10 +53,22 @@ private:
 
     std::optional<RootSet> mergeRoots(const std::vector<RootSet>& rootSets);
 
+    // Build the (sample-independent) Collins projection closure for this
+    // solve's active constraints; sets unsatTrustworthy_ false if incomplete.
+    void buildClosure(const CdcacInput& input);
+
 private:
     PolynomialKernel* kernel_;
     AlgebraBackend* algebra_;
     std::unique_ptr<ProjectionPolicy> policy_;  // V4: configurable projection policy
+
+    // Proof-carrying projection state (rebuilt per solve()).
+    ProjectionClosure closure_;
+    std::vector<std::vector<PolyId>> levelPolyIds_;  // closure polys per level, as PolyId
+    // True iff every UNSAT-relevant projection step this solve was complete; a
+    // generalized-UNSAT exit is downgraded to Unknown when false — the binding
+    // "no UNSAT without a complete projection-certified covering".
+    bool unsatTrustworthy_ = true;
 };
 
 } // namespace nlcolver

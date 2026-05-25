@@ -1,8 +1,11 @@
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/nra/preprocess/SquarefreeEngine.h"
+#include "theory/arith/nra/projection/LocalProjection.h"   // resultant()
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
+#include <algorithm>
+#include <functional>
 
 #include <iostream>
 #include <map>
@@ -1299,6 +1302,143 @@ RootLocateResult LibpolyBackend::locateRootInPolynomial(const AlgebraicRoot& alp
             return {RootLocateStatus::Unknown, -1};
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// SAFE algebraic-prefix root isolation via resultant Norm + exact interval
+// filter. Replaces the crash-prone libpoly algebraic root isolation.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct QInterval { mpq_class lo, hi; };
+
+QInterval qiMul(const QInterval& a, const QInterval& b) {
+    mpq_class c1 = a.lo * b.lo, c2 = a.lo * b.hi, c3 = a.hi * b.lo, c4 = a.hi * b.hi;
+    return { std::min({c1, c2, c3, c4}), std::max({c1, c2, c3, c4}) };
+}
+QInterval qiPow(const QInterval& a, int e) {
+    QInterval r{ mpq_class(1), mpq_class(1) };
+    for (int i = 0; i < e; ++i) r = qiMul(r, a);
+    return r;
+}
+
+// Bisect an isolating interval [lo,hi] of `coeffs` (high-to-low) once, keeping
+// the sub-interval that still brackets a sign change. No-op once it collapses.
+void bisectInterval(const std::vector<mpz_class>& coeffs,
+                    mpq_class& lo, mpq_class& hi,
+                    const std::function<mpq_class(const std::vector<mpz_class>&, const mpq_class&)>& eval) {
+    if (hi <= lo) return;
+    mpq_class mid = (lo + hi) / 2;
+    mpq_class fmid = eval(coeffs, mid);
+    if (fmid == 0) { lo = mid; hi = mid; return; }
+    mpq_class flo = eval(coeffs, lo);
+    if (flo == 0) { hi = lo; return; }
+    bool loPos = flo > 0, midPos = fmid > 0;
+    if (loPos != midPos) hi = mid; else lo = mid;
+}
+
+} // namespace
+
+RootSet LibpolyBackend::isolateRealRootsViaNorm(
+    PolyId p, const SamplePoint& prefix, VarId mainVar, bool& supported) {
+
+    supported = false;   // set true only once we reach the certified isolation
+    RootSet empty;
+
+    // 1. Require exactly one algebraic prefix coordinate (single extension).
+    int algIdx = -1, algCount = 0;
+    for (size_t i = 0; i < prefix.values.size(); ++i) {
+        if (prefix.values[i].isAlgebraic()) { ++algCount; algIdx = static_cast<int>(i); }
+    }
+    if (algCount != 1) return empty;     // tower / none → caller Unknown (follow-up)
+    VarId algVar = prefix.varOrder[algIdx];
+    const AlgebraicRoot& alpha = prefix.values[algIdx].root;
+    if (alpha.definingPoly == NullUniPolyId) return empty;
+
+    // 2. p as RationalPolynomial; substitute the rational prefix coordinates.
+    auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
+    if (!rpOpt) return empty;
+    RationalPolynomial p1 = *rpOpt;
+    for (size_t i = 0; i < prefix.values.size(); ++i) {
+        if (static_cast<int>(i) == algIdx) continue;
+        if (prefix.values[i].isRational())
+            p1 = p1.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
+    }
+    p1.normalize();
+    if (p1.isZero() || p1.isConstant()) return empty;
+    for (VarId v : p1.variables()) {
+        if (v != algVar && v != mainVar) return empty;   // residual var → Unknown
+    }
+    if (!p1.contains(mainVar)) return empty;
+
+    // 3. m(A) as a RationalPolynomial in algVar (coeffs are high-to-low).
+    RationalPolynomial mA;
+    {
+        const auto& mco = getUni(alpha.definingPoly);
+        int deg = static_cast<int>(mco.size()) - 1;
+        for (size_t i = 0; i < mco.size(); ++i) {
+            int power = deg - static_cast<int>(i);
+            if (mco[i] == 0) continue;
+            if (power == 0) mA.addConstant(mpq_class(mco[i]));
+            else mA.addVar(algVar, power, mpq_class(mco[i]));
+        }
+        mA.normalize();
+    }
+    if (mA.degree(algVar) < 1) return empty;
+
+    // 4. N(mainVar) = Res_A(m, p1) — eliminate the algebraic coordinate.
+    RationalPolynomial N = resultant(mA, p1, algVar);
+    N.normalize();
+    if (N.isZero() || N.isConstant()) return empty;
+    for (VarId v : N.variables()) if (v != mainVar) return empty;
+
+    // 5. Isolate N's real roots via the SAFE rational univariate path.
+    UniPolyId Nuni = specializeToUnivariate(N.toPolyId(*kernel_), SamplePoint{}, mainVar);
+    if (Nuni == NullUniPolyId) return empty;
+    RootSet candidates = isolateRealRoots(Nuni);
+
+    // 6. Exact filter: keep β with p1(a, β) = 0, decided by rational interval
+    //    refinement of a's and β's isolating intervals (fully rational; cannot
+    //    crash).
+    const auto& aco = getUni(alpha.definingPoly);
+    auto evalUni = [this](const std::vector<mpz_class>& c, const mpq_class& q) {
+        return evalUniAtRational(c, q);
+    };
+
+    RootSet out;
+    for (const auto& beta : candidates.roots) {
+        mpq_class aLo = alpha.lower, aHi = alpha.upper;
+        bool bRational = beta.isRational();
+        mpq_class bLo, bHi;
+        std::vector<mpz_class> bco;
+        if (bRational) { bLo = bHi = beta.rational; }
+        else {
+            if (beta.root.definingPoly == NullUniPolyId) continue;
+            bco = getUni(beta.root.definingPoly);
+            bLo = beta.root.lower; bHi = beta.root.upper;
+        }
+
+        bool isRoot = true;
+        for (int d = 0; d < 80; ++d) {
+            QInterval V{ mpq_class(0), mpq_class(0) };
+            for (const auto& [mon, coeff] : p1.terms()) {
+                QInterval term{ coeff, coeff };
+                for (const auto& [v, e] : mon) {
+                    QInterval vi = (v == algVar) ? QInterval{aLo, aHi}
+                                                 : QInterval{bLo, bHi};
+                    term = qiMul(term, qiPow(vi, e));
+                }
+                V.lo += term.lo; V.hi += term.hi;
+            }
+            if (V.lo > 0 || V.hi < 0) { isRoot = false; break; }   // 0 ∉ V ⇒ not a root
+            bisectInterval(aco, aLo, aHi, evalUni);
+            if (!bRational) bisectInterval(bco, bLo, bHi, evalUni);
+            if (aHi <= aLo && (bRational || bHi <= bLo)) break;
+        }
+        if (isRoot) out.roots.push_back(beta);
+    }
+    supported = true;   // certified isolation completed (0 roots is a valid answer)
+    return out;
 }
 
 } // namespace nlcolver

@@ -63,6 +63,11 @@ enum class CdcacUnknownReason {
     GeneralizedCellDoesNotContainSample,
     MalformedCell,
     CoveringDidNotGrow,
+    // The projection closure underpinning this level's covering is not
+    // complete (degeneracy / budget / an uncertified algebraic specialization),
+    // so a UNSAT covering would over-generalize. Reported instead of unsound
+    // UNSAT.
+    ProjectionClosureIncomplete,
 
     // Reason / proof
     ReasonReplayFailed,
