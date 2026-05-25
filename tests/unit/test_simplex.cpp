@@ -19,7 +19,7 @@ static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const CoreIr& ir, 
     }
     std::sort(lhs.terms.begin(), lhs.terms.end(),
               [](auto& a, auto& b) { return a.first < b.first; });
-    return TheoryAtomRecord{sv, theory, false, eid, LinearAtomPayload{lhs, rel, rhs}};
+    return TheoryAtomRecord{sv, theory, false, eid, LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)}};
 }
 
 TEST_CASE("LraSolver: single variable bound conflict") {

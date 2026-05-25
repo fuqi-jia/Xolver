@@ -38,7 +38,7 @@ struct EufAtomPayload {
 struct LinearAtomPayload {
     LinearFormKey lhs;
     Relation rel;
-    mpq_class rhs;
+    RealValue rhs;
 };
 
 struct PolynomialAtomPayload {

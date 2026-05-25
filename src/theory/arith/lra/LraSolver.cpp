@@ -58,8 +58,10 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     if (!std::holds_alternative<LinearAtomPayload>(atom.payload)) return;
 
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
-    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
-    auxFormInfo_[auxVar] = {payload.lhs, payload.rhs};
+    // LRA bounds are rational; an algebraic RHS never arises from inputs.
+    const mpq_class& rhs = payload.rhs.asRational();
+    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
+    auxFormInfo_[auxVar] = {payload.lhs, rhs};
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -73,7 +75,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
             }
             e = {level, assertedLit, atom, value, auxVar, isDiseq};
             if (isDiseq) {
-                activeDisequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit, level});
+                activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
             }
             return;
         }
@@ -81,7 +83,7 @@ void LraSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
 
     if (isDiseq) {
-        activeDisequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit, level});
+        activeDisequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit, level});
     }
 }
 

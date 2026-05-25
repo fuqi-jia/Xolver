@@ -123,7 +123,7 @@ TEST_CASE("LIA: model validation passes for integer model") {
     LiaSolver solver;
     solver.setRegistry(&registry);
     solver.push();
-    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, eq0, LinearAtomPayload{lhs, rel, rhs}}, true, 0, SatLit{1, true});
+    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, eq0, LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)}}, true, 0, SatLit{1, true});
     TheoryLemmaDatabase lemmaDb;
     auto r = solver.check(lemmaDb);
     CHECK(r.kind == TheoryCheckResult::Kind::Consistent);
@@ -156,8 +156,8 @@ TEST_CASE("LIA: model validation fails for fractional integer var") {
     LiaSolver solver;
     solver.setRegistry(&registry);
     solver.push();
-    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, le2, LinearAtomPayload{lhs1, rel1, rhs1}}, true, 0, SatLit{1, true});
-    solver.assertLit(TheoryAtomRecord{2, TheoryId::LIA, false, ge0, LinearAtomPayload{lhs2, rel2, rhs2}}, true, 0, SatLit{2, true});
+    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, le2, LinearAtomPayload{lhs1, rel1, RealValue::fromMpq(rhs1)}}, true, 0, SatLit{1, true});
+    solver.assertLit(TheoryAtomRecord{2, TheoryId::LIA, false, ge0, LinearAtomPayload{lhs2, rel2, RealValue::fromMpq(rhs2)}}, true, 0, SatLit{2, true});
     TheoryLemmaDatabase lemmaDb;
     auto r = solver.check(lemmaDb);
     CHECK((r.kind == TheoryCheckResult::Kind::Consistent ||

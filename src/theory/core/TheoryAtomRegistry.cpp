@@ -46,7 +46,8 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     SatLit lit = registrar_->registerDynamicAtom(expr, theory);
 
     size_t idx = records_.size();
-    records_.push_back({lit.var, theory, true, expr, LinearAtomPayload{lhs, rel, rhs}});
+    records_.push_back({lit.var, theory, true, expr,
+                        LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)}});
     satVarToIdx_[lit.var] = idx;
     linearLookup_[key] = idx;
     observeIfNeeded(lit.var);
@@ -89,9 +90,11 @@ bool TheoryAtomRegistry::findByExprId(ExprId expr, LinearFormKey& outLhs,
         if (rec.exprId == expr) {
             if (std::holds_alternative<LinearAtomPayload>(rec.payload)) {
                 const auto& p = std::get<LinearAtomPayload>(rec.payload);
+                auto rhsQ = p.rhs.tryAsRational();
+                if (!rhsQ) return false;  // algebraic RHS: caller wants mpq
                 outLhs = p.lhs;
                 outRel = p.rel;
-                outRhs = p.rhs;
+                outRhs = *rhsQ;
                 return true;
             }
         }

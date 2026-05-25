@@ -60,7 +60,10 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     if (!std::holds_alternative<LinearAtomPayload>(atom.payload)) return;
 
     const auto& payload = std::get<LinearAtomPayload>(atom.payload);
-    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, payload.rhs);
+    // LIA bounds are rational (integer-theory inputs never produce algebraic
+    // RHS); asRational() is the standard conversion at this boundary.
+    const mpq_class& rhs = payload.rhs.asRational();
+    int auxVar = manager_.getOrCreateAuxVar(gs_, payload.lhs, rhs);
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
@@ -77,18 +80,18 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
             }
             e = {level, assertedLit, atom, value, auxVar, isDiseq};
             if (isDiseq) {
-                disequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit});
+                disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
             } else {
-                activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, payload.rhs, assertedLit});
+                activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
             }
             return;
         }
     }
     theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
     if (isDiseq) {
-        disequalities_.push_back({auxVar, payload.lhs, payload.rhs, assertedLit});
+        disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
     } else {
-        activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, payload.rhs, assertedLit});
+        activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
     }
 }
 

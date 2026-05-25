@@ -59,7 +59,9 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     if (!payload) return NormalizeResult::Unsupported;
 
     Relation rel = a.value ? payload->rel : negateRel(payload->rel);
-    mpq_class rhs = payload->rhs;
+    auto rhsQ = payload->rhs.tryAsRational();
+    if (!rhsQ) return NormalizeResult::Unsupported;  // algebraic RHS: never from inputs
+    mpq_class rhs = *rhsQ;
     const auto& terms = payload->lhs.terms;
 
     std::cerr << "[IDL-ASSERT-LIT] sat_var=" << a.atom.satVar

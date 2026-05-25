@@ -50,7 +50,7 @@ bool ArithAtomExtractor::extractAndRegister(ExprId eid, const CoreIr& ir, SatVar
                     // Register linear constraints as LIRA so LiraSolver handles them.
                     // NiraSolver reads the active linear context via TheoryManager.
                     registry_->registerParsedTheoryAtom(
-                        v, eid, TheoryId::LIRA, LinearAtomPayload{lhs, rel, rhs});
+                        v, eid, TheoryId::LIRA, LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)});
                 }
                 return true;
             } else if (polyKernel_ && extractPolynomialConstraint(eid, ir, v, targetTheory)) {
@@ -85,7 +85,7 @@ bool ArithAtomExtractor::extractAndRegister(ExprId eid, const CoreIr& ir, SatVar
                   [](auto& a, auto& b) { return a.first < b.first; });
         if (registry_) {
             registry_->registerParsedTheoryAtom(
-                v, eid, targetTheory, LinearAtomPayload{lhs, rel, rhs});
+                v, eid, targetTheory, LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)});
         }
         return true;
     }

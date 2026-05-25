@@ -141,7 +141,7 @@ TEST_CASE("LinearConstraintNormalizer: effective false assignment x <= 4 -> x >=
     LinearAtomPayload payload;
     payload.lhs.terms.push_back({"x", mpq_class(1)});
     payload.rel = Relation::Leq;
-    payload.rhs = 4;
+    payload.rhs = RealValue::fromInt(4);
 
     auto opt = LinearConstraintNormalizer::makeEffectiveConstraint(payload, false, SortKind::Int);
     REQUIRE(opt.has_value());
@@ -154,7 +154,7 @@ TEST_CASE("LinearConstraintNormalizer: effective false assignment x = 4 -> nullo
     LinearAtomPayload payload;
     payload.lhs.terms.push_back({"x", mpq_class(1)});
     payload.rel = Relation::Eq;
-    payload.rhs = 4;
+    payload.rhs = RealValue::fromInt(4);
 
     auto opt = LinearConstraintNormalizer::makeEffectiveConstraint(payload, false, SortKind::Int);
     CHECK(!opt.has_value());
@@ -164,7 +164,7 @@ TEST_CASE("LinearConstraintNormalizer: effective true assignment x <= 4 unchange
     LinearAtomPayload payload;
     payload.lhs.terms.push_back({"x", mpq_class(1)});
     payload.rel = Relation::Leq;
-    payload.rhs = 4;
+    payload.rhs = RealValue::fromInt(4);
 
     auto opt = LinearConstraintNormalizer::makeEffectiveConstraint(payload, true, SortKind::Int);
     REQUIRE(opt.has_value());

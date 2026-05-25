@@ -50,6 +50,10 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
         const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+        // LIRA linear bounds are rational; algebraic RHS never arises from inputs.
+        auto pRhsQ = p.rhs.tryAsRational();
+        if (!pRhsQ) continue;  // skip un-representable algebraic bound (defensive)
+        const mpq_class& pRhs = *pRhsQ;
 
         // Compute effective relation (handle negated literals)
         Relation effRel = p.rel;
@@ -76,13 +80,13 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
         }
 
         if (effRel == Relation::Neq) {
-            disequalities_.push_back({p.lhs, p.rhs, a.lit});
+            disequalities_.push_back({p.lhs, pRhs, a.lit});
         } else {
             InternalMilpEngine::LinearConstraint c;
             for (const auto& [name, coeff] : p.lhs.terms) {
                 c.terms.push_back({nameToIdx[name], coeff});
             }
-            c.rhs = p.rhs;
+            c.rhs = pRhs;
             c.rel = effRel;
             c.reason = a.lit;
             milpEngine_.addConstraint(c);
@@ -155,6 +159,9 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
 
         const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+        auto pRhsQ = p.rhs.tryAsRational();
+        if (!pRhsQ) continue;  // algebraic RHS never arises from inputs
+        const mpq_class& pRhs = *pRhsQ;
 
         Relation effRel = p.rel;
         if (!a.value) {
@@ -179,13 +186,13 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
         }
 
         if (effRel == Relation::Neq) {
-            disequalities_.push_back({p.lhs, p.rhs, a.lit});
+            disequalities_.push_back({p.lhs, pRhs, a.lit});
         } else {
             InternalMilpEngine::LinearConstraint c;
             for (const auto& [name, coeff] : p.lhs.terms) {
                 c.terms.push_back({nameToIdx[name], coeff});
             }
-            c.rhs = p.rhs;
+            c.rhs = pRhs;
             c.rel = effRel;
             c.reason = a.lit;
             milpEngine_.addConstraint(c);

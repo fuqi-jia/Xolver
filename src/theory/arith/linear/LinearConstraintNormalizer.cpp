@@ -114,6 +114,11 @@ std::optional<ZeroLinearConstraint> LinearConstraintNormalizer::makeEffectiveCon
         return std::nullopt;
     }
 
+    // Linear-form constants are rational; an algebraic RHS (never from inputs)
+    // cannot be a linear-form constant, so bail to "no effective constraint".
+    auto rhsQ = payload.rhs.tryAsRational();
+    if (!rhsQ) return std::nullopt;
+
     ZeroLinearConstraint z;
     z.rel = effRel;
     z.sort = sort;
@@ -123,7 +128,7 @@ std::optional<ZeroLinearConstraint> LinearConstraintNormalizer::makeEffectiveCon
     for (const auto& t : payload.lhs.terms) {
         z.expr.terms.push_back({t.first, t.second});
     }
-    z.expr.constant = -payload.rhs;
+    z.expr.constant = -*rhsQ;
     z.expr = canonicalize(std::move(z.expr));
 
     return z;

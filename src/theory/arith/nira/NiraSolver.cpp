@@ -68,7 +68,9 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
 
             const auto& term = payload.lhs.terms[0];
             if (term.second == 0) continue;
-            fixedValues[term.first] = payload.rhs / term.second;
+            auto rq = payload.rhs.tryAsRational();
+            if (!rq) continue;
+            fixedValues[term.first] = *rq / term.second;
         }
 
         // Step 1b: collect fixed values from active LIRA linear equalities
@@ -80,7 +82,9 @@ TheoryCheckResult NiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
 
                 const auto& term = p.lhs.terms[0];
                 if (term.second == 0) continue;
-                fixedValues[term.first] = p.rhs / term.second;
+                auto rq = p.rhs.tryAsRational();
+                if (!rq) continue;
+                fixedValues[term.first] = *rq / term.second;
             }
         }
 
@@ -174,7 +178,9 @@ TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb
         if (p.lhs.terms.size() != 1) return;
         const auto& [name, coeff] = p.lhs.terms[0];
         if (coeff == 0) return;
-        fixedValues[name] = p.rhs / coeff;
+        auto rq = p.rhs.tryAsRational();
+        if (!rq) return;
+        fixedValues[name] = *rq / coeff;
     };
     for (const auto& a : trail()) {
         if (!a.value) continue;
@@ -421,7 +427,8 @@ NiraSolver::AssignmentCheckResult NiraSolver::checkAssignmentWithSimplex(
     // Helper to process a LinearAtomPayload with substitution
     auto processLinearPayload = [&](const LinearAtomPayload& p) -> AssignmentCheckResult {
         LinearFormKey newLhs;
-        mpq_class newRhs = p.rhs;
+        // Linear RHS is rational (algebraic never arises from inputs).
+        mpq_class newRhs = p.rhs.asRational();
         for (const auto& [name, coeff] : p.lhs.terms) {
             auto it = fixedValues.find(name);
             if (it != fixedValues.end()) {
@@ -582,7 +589,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
         const auto& [name, coeff] = p.lhs.terms[0];
         if (!isIntegerVar(coreIr_, name)) continue;
 
-        mpq_class rawBound = p.rhs / coeff;
+        mpq_class rawBound = p.rhs.asRational() / coeff;
         if (rawBound.get_den() != 1) continue;
 
         mpz_class boundVal = rawBound.get_num();
@@ -622,7 +629,7 @@ TheoryCheckResult NiraSolver::checkBoundedComplete(TheoryLemmaStorage& /*lemmaDb
             const auto& [name, coeff] = p.lhs.terms[0];
             if (!isIntegerVar(coreIr_, name)) continue;
 
-            mpq_class rawBound = p.rhs / coeff;
+            mpq_class rawBound = p.rhs.asRational() / coeff;
             if (rawBound.get_den() != 1) continue;
 
             mpz_class boundVal = rawBound.get_num();
