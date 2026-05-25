@@ -261,6 +261,14 @@ bool ExtendedRealValue::isNegInf() const { return kind_ == Kind::NegInf; }
 bool ExtendedRealValue::isPosInf() const { return kind_ == Kind::PosInf; }
 const RealValue& ExtendedRealValue::asFinite() const { return finite_; }
 
+} // namespace nlcolver
+
+std::size_t std::hash<nlcolver::RealValue>::operator()(const nlcolver::RealValue& v) const {
+    return std::hash<std::string>{}(v.floor().get_str());
+}
+
+namespace nlcolver {
+
 int ExtendedRealValue::compare(const ExtendedRealValue& o) const {
     // -Inf < Finite < +Inf; finites compare by RealValue::compare.
     auto rank = [](Kind k) { return k == Kind::NegInf ? -1 : (k == Kind::PosInf ? 1 : 0); };

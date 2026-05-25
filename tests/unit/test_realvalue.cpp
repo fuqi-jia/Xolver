@@ -10,6 +10,7 @@
 #include <doctest/doctest.h>
 #include "util/RealValue.h"
 
+#include <functional>
 #include <gmpxx.h>
 #include <stdexcept>
 #include <vector>
@@ -205,6 +206,25 @@ TEST_CASE("RealValue property: associativity and distributivity") {
             }
         }
     }
+}
+
+TEST_CASE("RealValue property: hash consistent with equality") {
+    std::hash<RealValue> h;
+    // Cross-kind: fromInt(5) == fromAlgebraic(root of x-5) ⇒ equal hashes.
+    RealValue five_rat = RealValue::fromInt(5);
+    RealValue five_alg = RealValue::fromAlgebraic(five());
+    REQUIRE(five_rat.compare(five_alg) == 0);
+    CHECK(h(five_rat) == h(five_alg));
+    // Any equal pair in the pool hashes equal.
+    auto p = pool();
+    for (const auto& a : p) {
+        for (const auto& b : p) {
+            if (a.compare(b) == 0) CHECK(h(a) == h(b));
+        }
+    }
+    // Equal rationals reached by different arithmetic hash equal.
+    CHECK(h(RealValue::fromMpq(mpq_class(1, 2)) + RealValue::fromMpq(mpq_class(1, 2)))
+          == h(RealValue::fromInt(1)));
 }
 
 TEST_CASE("RealValue property: collapse-to-rational identities") {

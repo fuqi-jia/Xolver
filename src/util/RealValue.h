@@ -146,3 +146,16 @@ private:
 };
 
 } // namespace nlcolver
+
+namespace std {
+// Hash consistent with RealValue::operator== (soundness invariant 5): equal
+// values must hash equal, even across the Rational/Algebraic kind boundary
+// (e.g. fromInt(5) == fromAlgebraic(root of x-5)).  Hashing on floor() is the
+// uniform fingerprint that any two equal reals share regardless of
+// representation.  Coarse (values in [n,n+1) collide) but provably sound;
+// unordered containers resolve collisions via operator==.
+template <>
+struct hash<nlcolver::RealValue> {
+    size_t operator()(const nlcolver::RealValue& v) const;
+};
+} // namespace std
