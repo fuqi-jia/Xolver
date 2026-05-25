@@ -205,12 +205,16 @@ std::string rationalToSmtLib2(const mpq_class& q) {
 
 std::string RealValue::toSmtLib2() const {
     if (isRational()) return rationalToSmtLib2(asRational());
-    // Default (non --algebraic-model) mode: rational midpoint approximation of
-    // the isolation interval.  (Exact (root-obj ...) output is a later mode.)
+    // Exact structural form: the defining polynomial (coefficients low-to-high)
+    // plus the isolation interval uniquely identify the root — no precision is
+    // lost (unlike a decimal/midpoint approximation).  A libpoly-backed decimal
+    // approximation mode and the SMT-LIB (root-obj ...) form are CLI concerns.
     const AlgebraicNumber& a = asAlgebraic();
-    mpq_class mid = (a.lower + a.upper) / 2;
-    mid.canonicalize();
-    return rationalToSmtLib2(mid);
+    std::ostringstream os;
+    os << "(root-obj (poly";
+    for (const auto& c : a.coefficients) os << " " << c.get_str();
+    os << ") (lower " << a.lower.get_str() << ") (upper " << a.upper.get_str() << "))";
+    return os.str();
 }
 
 std::string RealValue::toDebugString() const {
