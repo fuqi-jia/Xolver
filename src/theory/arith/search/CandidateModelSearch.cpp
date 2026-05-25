@@ -20,6 +20,7 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (!isLogicEnabled()) return result_;
 
     collectFreeVariables();
+    if (cfg_.allowUF) collectApplicationSlots();
     if (vars_.empty()) return result_;
 
     buildPriorityList();
@@ -52,6 +53,18 @@ bool CandidateModelSearch::isLogicEnabled() const {
         logic_ == "QF_LIRA" || logic_ == "LIRA" ||
         logic_ == "QF_IDL" || logic_ == "IDL" ||
         logic_ == "QF_RDL" || logic_ == "RDL") {
+        return true;
+    }
+    // UF-bearing arithmetic logics are enabled only when the caller opted in
+    // (allowUF): the search then models each application as a value slot and
+    // enforces functional consistency, so a validated candidate is a sound
+    // model including the function table.
+    if (cfg_.allowUF &&
+        (logic_ == "QF_UFLRA" || logic_ == "QF_UFLIA" ||
+         logic_ == "QF_UFNRA" || logic_ == "QF_UFNIA" ||
+         logic_ == "QF_UFIDL" || logic_ == "QF_UF" ||
+         logic_ == "UFLRA" || logic_ == "UFLIA" ||
+         logic_ == "UFNRA" || logic_ == "UFNIA")) {
         return true;
     }
     return false;
@@ -87,6 +100,114 @@ void CandidateModelSearch::collectFreeVariables() {
             }
         }
         for (ExprId c : n.children) stack.push_back(c);
+    }
+}
+
+namespace {
+// Synthetic assignment-map key for the value of a UF application node.
+std::string appSlotName(ExprId eid) {
+    return "__ufapp#" + std::to_string(eid);
+}
+}  // namespace
+
+void CandidateModelSearch::collectApplicationSlots() {
+    // Each distinct (hash-consed) numeric-sorted application node f(args)
+    // becomes a value slot, enumerated like a variable. Equal applications
+    // share an ExprId and thus one slot (consistency for free); distinct
+    // applications of the same f are reconciled by functionallyConsistent().
+    std::unordered_set<ExprId> seen;
+    std::vector<bool> visited(ir_.size(), false);
+    std::vector<ExprId> stack;
+    for (ExprId a : assertionRoots()) stack.push_back(a);
+    while (!stack.empty()) {
+        ExprId e = stack.back();
+        stack.pop_back();
+        if (e >= ir_.size() || visited[e]) continue;
+        visited[e] = true;
+        const auto& n = ir_.get(e);
+        if (n.kind == Kind::UFApply &&
+            (n.sort == ir_.intSortId() || n.sort == ir_.realSortId())) {
+            if (seen.insert(e).second) {
+                if (auto* fn = std::get_if<std::string>(&n.payload.value)) {
+                    VarRecord rec;
+                    rec.exprId = e;
+                    rec.name = appSlotName(e);
+                    rec.sort = n.sort;
+                    rec.isApp = true;
+                    rec.funcName = *fn;
+                    varIndexByName_[rec.name] = vars_.size();
+                    vars_.push_back(std::move(rec));
+                }
+            }
+        }
+        for (ExprId c : n.children) stack.push_back(c);
+    }
+}
+
+bool CandidateModelSearch::functionallyConsistent(
+    const std::unordered_map<std::string, mpq_class>& full) const
+{
+    // For each function symbol, two applications with equal argument-value
+    // tuples must carry equal slot values.
+    std::unordered_map<std::string,
+        std::vector<std::pair<std::vector<mpq_class>, mpq_class>>> tables;
+    for (const auto& v : vars_) {
+        if (!v.isApp) continue;
+        const auto& node = ir_.get(v.exprId);
+        std::vector<mpq_class> args;
+        bool ok = true;
+        for (ExprId c : node.children) {
+            TermResult cr = evalTerm(c, full);
+            if (cr.kind != TermVerdict::Number) { ok = false; break; }
+            args.push_back(cr.numValue);
+        }
+        if (!ok) continue;  // unevaluable args -> skip (validation will reject)
+        auto sv = full.find(v.name);
+        if (sv == full.end()) continue;
+        auto& entries = tables[v.funcName];
+        for (const auto& [prevArgs, prevVal] : entries) {
+            if (prevArgs == args && prevVal != sv->second) return false;
+        }
+        entries.emplace_back(std::move(args), sv->second);
+    }
+    return true;
+}
+
+void CandidateModelSearch::buildFunctionInterps(
+    const std::unordered_map<std::string, mpq_class>& full)
+{
+    auto sortName = [&](SortId s) -> std::string {
+        if (s == ir_.intSortId()) return "Int";
+        if (s == ir_.realSortId()) return "Real";
+        if (s == ir_.boolSortId()) return "Bool";
+        return "Real";
+    };
+    for (const auto& v : vars_) {
+        if (!v.isApp) continue;
+        const auto& node = ir_.get(v.exprId);
+        auto sv = full.find(v.name);
+        if (sv == full.end()) continue;
+        std::vector<mpq_class> args;
+        bool ok = true;
+        for (ExprId c : node.children) {
+            TermResult cr = evalTerm(c, full);
+            if (cr.kind != TermVerdict::Number) { ok = false; break; }
+            args.push_back(cr.numValue);
+        }
+        if (!ok) continue;
+        auto& fi = result_.model.functionInterps[v.funcName];
+        if (fi.argSorts.empty() && !node.children.empty()) {
+            for (ExprId c : node.children) fi.argSorts.push_back(sortName(ir_.get(c).sort));
+            fi.retSort = sortName(node.sort);
+            fi.deflt = sv->second.get_str();  // any in-range value is fine
+        }
+        TheorySolver::TheoryModel::FuncEntry entry;
+        for (const auto& a : args) entry.args.push_back(a.get_str());
+        entry.value = sv->second.get_str();
+        // Deduplicate identical arg tuples (consistency already guaranteed).
+        bool dup = false;
+        for (const auto& ex : fi.entries) { if (ex.args == entry.args) { dup = true; break; } }
+        if (!dup) fi.entries.push_back(std::move(entry));
     }
 }
 
@@ -271,15 +392,23 @@ bool CandidateModelSearch::tryAcceptCandidate(
             full[v.name] = def;
         }
     }
+    // Reject candidates that would make a function multi-valued before we
+    // bother evaluating the assertions.
+    if (cfg_.allowUF && !functionallyConsistent(full)) return false;
+
     auto verdict = evaluateAssertions(full);
     if (verdict != EvalVerdict::True) return false;
 
-    // Accept: record model.
+    // Accept: record model. App slots go into the function table, not the
+    // variable assignment.
     result_.found = true;
     result_.strategy = strategyName;
-    for (const auto& [name, val] : full) {
-        result_.model.assignments[name] = val.get_str();
+    for (const auto& v : vars_) {
+        if (v.isApp) continue;
+        auto it = full.find(v.name);
+        if (it != full.end()) result_.model.assignments[v.name] = it->second.get_str();
     }
+    if (cfg_.allowUF) buildFunctionInterps(full);
     return true;
 }
 
@@ -425,6 +554,18 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
                     r.numValue = it->second;
                     return r;
                 }
+            }
+            return r;
+        }
+        case Kind::UFApply: {
+            // The value of a numeric application is its enumerated slot
+            // (present only with UF modeling enabled). Functional consistency
+            // across applications is enforced separately in
+            // functionallyConsistent(). Otherwise indeterminate.
+            auto it = assignment.find(appSlotName(eid));
+            if (it != assignment.end()) {
+                r.kind = TermVerdict::Number;
+                r.numValue = it->second;
             }
             return r;
         }

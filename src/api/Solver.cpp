@@ -834,6 +834,7 @@ public:
                 // and CMS evaluates to_int/ite directly.
                 CandidateModelSearch::Config cfg;
                 cfg.assertionRootsOverride = originalAssertions_;
+                cfg.allowUF = true;  // model UF apps + emit function tables
                 CandidateModelSearch cms(*ir, logic, cfg);
                 auto repaired = cms.run();
                 if (repaired.found) {
@@ -1176,6 +1177,45 @@ void Solver::dumpModel(std::ostream& os) const {
             }
             os << "  (define-fun " << name << " () " << sortName << " "
                << formatModelValue(kind, raw) << ")\n";
+        }
+    }
+
+    // Uninterpreted function interpretations: a finite table emitted as a
+    // nested ite over the asserted argument tuples, with a default for any
+    // other input. Populated by the validated candidate search (QF_UF*).
+    if (tm && !tm->functionInterps.empty()) {
+        auto kindOf = [](const std::string& s) -> SortKind {
+            if (s == "Int")  return SortKind::Int;
+            if (s == "Bool") return SortKind::Bool;
+            return SortKind::Real;
+        };
+        for (const auto& [fname, fi] : tm->functionInterps) {
+            os << "  (define-fun " << fname << " (";
+            for (size_t i = 0; i < fi.argSorts.size(); ++i) {
+                if (i) os << " ";
+                os << "(x!" << i << " " << fi.argSorts[i] << ")";
+            }
+            SortKind retKind = kindOf(fi.retSort);
+            os << ") " << fi.retSort << " ";
+            std::string body =
+                formatModelValue(retKind, fi.deflt.empty() ? "0" : fi.deflt);
+            for (auto it = fi.entries.rbegin(); it != fi.entries.rend(); ++it) {
+                std::string cond;
+                if (it->args.size() == 1) {
+                    cond = "(= x!0 " +
+                           formatModelValue(kindOf(fi.argSorts[0]), it->args[0]) + ")";
+                } else {
+                    cond = "(and";
+                    for (size_t i = 0; i < it->args.size(); ++i) {
+                        cond += " (= x!" + std::to_string(i) + " " +
+                                formatModelValue(kindOf(fi.argSorts[i]), it->args[i]) + ")";
+                    }
+                    cond += ")";
+                }
+                body = "(ite " + cond + " " +
+                       formatModelValue(retKind, it->value) + " " + body + ")";
+            }
+            os << body << ")\n";
         }
     }
     os << ")\n";

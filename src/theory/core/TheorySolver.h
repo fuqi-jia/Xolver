@@ -79,6 +79,22 @@ public:
         // variables and fall back to `assignments` otherwise. Lets NRA export
         // exact algebraic models (e.g. √2) instead of a lossy string.
         std::unordered_map<std::string, RealValue> numericAssignments;
+
+        // Interpretation of an uninterpreted function symbol as a finite
+        // table plus a default. Each entry maps a concrete argument tuple to
+        // a value; arguments not in the table take `deflt`. Populated by the
+        // validated candidate search for QF_UF* model output (get-model).
+        struct FuncEntry {
+            std::vector<std::string> args;  // one value string per argument
+            std::string value;
+        };
+        struct FuncInterp {
+            std::vector<std::string> argSorts;  // "Int"/"Real"/"Bool" per arg
+            std::string retSort;
+            std::vector<FuncEntry> entries;
+            std::string deflt;                  // value for unlisted tuples
+        };
+        std::unordered_map<std::string, FuncInterp> functionInterps;
     };
     virtual std::optional<TheoryModel>
     getModel() const { return std::nullopt; }

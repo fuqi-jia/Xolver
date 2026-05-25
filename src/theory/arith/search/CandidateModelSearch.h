@@ -94,6 +94,14 @@ public:
         // but the lowered assertions still reference, leaving every candidate
         // indeterminate.
         std::vector<ExprId> assertionRootsOverride;
+        // When true, the search also models uninterpreted functions: each
+        // numeric-sorted application f(args) becomes a value slot, functional
+        // consistency (equal arg tuples -> equal value) is enforced during
+        // validation, and a function table is emitted in the model. Enables
+        // QF_UF* logics. Off by default so the verdict-path invocation (Cap.
+        // 10 last resort) keeps its conservative UF-free behavior; only the
+        // Solver's sat-model repair turns it on.
+        bool allowUF = false;
         Config() = default;
     };
 
@@ -109,6 +117,12 @@ private:
         ExprId exprId;
         std::string name;
         SortId sort;
+        // Set for a synthetic value slot standing in for a UF application
+        // f(args). exprId is the application node; funcName is f. The slot is
+        // enumerated like a variable but written to the function table, not
+        // the variable assignment, on accept.
+        bool isApp = false;
+        std::string funcName;
     };
 
     void collectFreeVariables();
@@ -146,6 +160,15 @@ private:
 
     bool detectSymmetry() const;
     static int64_t heightOf(const mpq_class& q);
+
+    // UF support (only active when cfg_.allowUF). Collect numeric-sorted
+    // application nodes as value slots, reject candidates that break
+    // functional consistency, and emit a function table for an accepted one.
+    void collectApplicationSlots();
+    bool functionallyConsistent(
+        const std::unordered_map<std::string, mpq_class>& full) const;
+    void buildFunctionInterps(
+        const std::unordered_map<std::string, mpq_class>& full);
 
     // Acceptance: validate a candidate (extending unspecified variables
     // to a default value) and, on success, record the model in result_.
