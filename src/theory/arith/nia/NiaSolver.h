@@ -74,6 +74,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    std::optional<TheoryModel> getModel() const override;
+
 protected:
     // Base rolls back state_.trail and clears its (unused-by-NIA)
     // pending slot; NIA syncs its polynomial constraint stack, active

@@ -678,4 +678,15 @@ NiaSolver::getDeducedSharedEqualities() {
     return {};
 }
 
+std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
+    if (!currentModel_) return std::nullopt;
+    TheoryModel model;
+    for (const auto& [name, value] : *currentModel_) {
+        model.assignments[name] = value.get_str();
+        model.numericAssignments.insert({name, RealValue::fromMpz(value)});
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
+}
+
 } // namespace nlcolver

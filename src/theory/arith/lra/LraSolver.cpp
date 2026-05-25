@@ -497,6 +497,8 @@ std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
         DeltaRational val = gs_.value(i);
         mpq_class concrete = val.a + val.b * delta;  // a + bδ
         model.assignments[name] = concrete.get_str();
+        // Typed channel carries the same concrete rational value.
+        model.numericAssignments.insert({name, RealValue::fromMpq(concrete)});
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;

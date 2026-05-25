@@ -260,6 +260,7 @@ std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
         } else {
             model.assignments[name] = val.get_str();
         }
+        model.numericAssignments.insert({name, RealValue::fromMpq(val)});
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;

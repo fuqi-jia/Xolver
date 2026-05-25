@@ -788,6 +788,7 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
         } else {
             model.assignments[name] = val.a.get_str();
         }
+        model.numericAssignments.insert({name, RealValue::fromMpq(val.a)});
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;
