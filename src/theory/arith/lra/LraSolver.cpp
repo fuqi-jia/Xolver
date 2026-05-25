@@ -484,17 +484,19 @@ std::optional<TheoryLemma> LraSolver::tryConvertDerivedBound(
 }
 
 std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
+    // Instantiate the infinitesimal δ to a concrete positive rational so the
+    // model is a plain rational assignment — otherwise a strict-inequality
+    // value like `1/2 + 1/2δ` would leak into get-model output. Any δ in
+    // (0, computeSafeDelta()] preserves all active bounds.
+    mpq_class delta = gs_.computeSafeDelta();
     TheoryModel model;
     for (int i = 0; i < gs_.numVars(); ++i) {
         std::string name = manager_.getVarName(i);
         if (name.empty()) continue;
         if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
         DeltaRational val = gs_.value(i);
-        if (val.b == 0) {
-            model.assignments[name] = val.a.get_str();
-        } else {
-            model.assignments[name] = val.toString();
-        }
+        mpq_class concrete = val.a + val.b * delta;  // a + bδ
+        model.assignments[name] = concrete.get_str();
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;

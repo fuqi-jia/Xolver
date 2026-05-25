@@ -107,6 +107,15 @@ public:
     /** Get current assignment (valid after Sat). */
     DeltaRational value(int var) const;
 
+    /**
+     * Compute a single concrete δ > 0 such that substituting it into every
+     * variable's DeltaRational value (a + bδ) keeps all active bounds
+     * satisfied (Dutertre & de Moura 2006). Valid after Sat. Used to turn
+     * the symbolic-infinitesimal model into a concrete rational model for
+     * get-model output. Returns a positive rational; 1 if unconstrained.
+     */
+    mpq_class computeSafeDelta() const;
+
     // -------------------------------------------------------------------------
     // Conflict explanation (valid after Unsat)
     // -------------------------------------------------------------------------

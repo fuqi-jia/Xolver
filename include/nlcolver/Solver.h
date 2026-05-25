@@ -8,6 +8,7 @@
 #include "nlcolver/Statistics.h"
 #include <cstdint>
 #include <memory>
+#include <ostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -86,6 +87,16 @@ public:
     std::vector<Term> getUnsatCore() const;
     Proof getProof() const;
     Statistics getStatistics() const;
+
+    // SMT-COMP Model-Validation track: true iff the parsed input contained
+    // a (get-model) command. After a `sat` result on such input, print the
+    // model with dumpModel.
+    bool modelRequested() const;
+    // Write the model as an SMT-LIB 2.6 get-model response —
+    //   ( (define-fun <sym> () <Sort> <value>) ... )
+    // for every user-declared 0-arity symbol. Only meaningful after
+    // checkSat() returned Sat.
+    void dumpModel(std::ostream& os) const;
 
     // If the last checkSat returned Unknown, this gives a human-readable reason.
     std::string lastUnknownReason() const;

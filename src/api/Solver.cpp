@@ -983,6 +983,79 @@ std::vector<Term> Solver::getUnsatCore() const {
     if (!pImpl) return {};
     return pImpl->lastAssumptions_;
 }
+
+bool Solver::modelRequested() const {
+    if (!pImpl || !pImpl->parser) return false;
+    auto opts = pImpl->parser->getOptions();
+    return opts && opts->get_model;
+}
+
+namespace {
+// Format a model value string (as stored by the theory model — e.g. "5",
+// "-3", "3/2", "true") into an SMT-LIB term of the given sort.
+std::string formatModelValue(SortKind kind, const std::string& raw) {
+    if (kind == SortKind::Bool) {
+        return (raw == "true" || raw == "1") ? "true" : "false";
+    }
+    // Numeric: split optional sign and optional p/q.
+    std::string s = raw;
+    bool neg = false;
+    if (!s.empty() && s[0] == '-') { neg = true; s = s.substr(1); }
+    auto slash = s.find('/');
+    std::string body;
+    if (slash != std::string::npos) {
+        std::string num = s.substr(0, slash);
+        std::string den = s.substr(slash + 1);
+        if (kind == SortKind::Int) {
+            // An Int model value should be integral; if a denominator slipped
+            // through, fall back to the numerator (defensive — shouldn't happen).
+            body = (den == "1") ? num : num;
+        } else {
+            body = (den == "1") ? (num + ".0") : ("(/ " + num + " " + den + ")");
+        }
+    } else {
+        body = (kind == SortKind::Real) ? (s + ".0") : s;
+    }
+    return neg ? ("(- " + body + ")") : body;
+}
+} // namespace
+
+void Solver::dumpModel(std::ostream& os) const {
+    // SMT-LIB 2.6 get-model response: a bare list of define-fun bindings,
+    // one per user-declared 0-arity symbol. Values come from the last
+    // theory model; unconstrained symbols get a sort-appropriate default.
+    if (!pImpl) { os << "(\n)\n"; return; }
+
+    const TheorySolver::TheoryModel* tm =
+        pImpl->lastModel_ ? &*pImpl->lastModel_ : nullptr;
+
+    os << "(\n";
+    if (pImpl->parser) {
+        for (const auto& var : pImpl->parser->getDeclaredVariables()) {
+            if (!var) continue;
+            std::string name = var->getName();
+            SortKind kind;
+            const char* sortName;
+            if (var->isVBool())      { kind = SortKind::Bool; sortName = "Bool"; }
+            else if (var->isVInt())  { kind = SortKind::Int;  sortName = "Int";  }
+            else if (var->isVReal()) { kind = SortKind::Real; sortName = "Real"; }
+            else continue;  // only Int/Real/Bool 0-arity symbols are emitted
+
+            std::string raw;
+            if (tm) {
+                auto it = tm->assignments.find(name);
+                if (it != tm->assignments.end()) raw = it->second;
+            }
+            if (raw.empty()) {
+                // Unconstrained: any value in-sort is valid; pick a default.
+                raw = (kind == SortKind::Bool) ? "false" : "0";
+            }
+            os << "  (define-fun " << name << " () " << sortName << " "
+               << formatModelValue(kind, raw) << ")\n";
+        }
+    }
+    os << ")\n";
+}
 Proof Solver::getProof() const { return Proof{}; }
 Statistics Solver::getStatistics() const { return Statistics{}; }
 

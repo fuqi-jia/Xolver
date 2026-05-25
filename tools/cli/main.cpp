@@ -87,6 +87,11 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // same reason — use `--verbose` / stderr for debugging instead.
     nlcolver::Result r = solver.checkSat();
     std::cout << toString(r) << "\n";
+    // Model-Validation track: if the input requested a model and we found
+    // one, emit the SMT-LIB get-model response on stdout right after `sat`.
+    if (r == nlcolver::Result::Sat && solver.modelRequested()) {
+        solver.dumpModel(std::cout);
+    }
     std::cout.flush();
     if (r == nlcolver::Result::Unknown) {
         auto reason = solver.lastUnknownReason();

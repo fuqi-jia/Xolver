@@ -924,6 +924,41 @@ DeltaRational GeneralSimplex::value(int var) const {
     return vars_[var].beta;
 }
 
+mpq_class GeneralSimplex::computeSafeDelta() const {
+    // For each variable x with β(x) = a + bδ and a finite bound c + dδ that
+    // x satisfies, substituting a concrete δ must preserve the inequality.
+    // The only binding case is when the real parts differ and the δ-parts
+    // push the wrong way:
+    //   lower l = lₐ + l_b·δ, need a + bδ ≥ lₐ + l_b·δ:
+    //     if a > lₐ and b < l_b  →  δ ≤ (a − lₐ) / (l_b − b)
+    //   upper u = uₐ + u_b·δ, need a + bδ ≤ uₐ + u_b·δ:
+    //     if a < uₐ and b > u_b  →  δ ≤ (uₐ − a) / (b − u_b)
+    // (When real parts are equal, feasibility already fixed the δ-ordering,
+    // so any δ > 0 works.) Take half the tightest bound, or 1 if none.
+    mpq_class delta = 1;
+    bool bounded = false;
+    auto tighten = [&](const mpq_class& cand) {
+        if (cand <= 0) return;  // defensive; feasibility should preclude this
+        if (!bounded || cand < delta) { delta = cand; bounded = true; }
+    };
+    for (const auto& v : vars_) {
+        const DeltaRational& beta = v.beta;
+        if (v.lower.bound.kind == BoundKind::Finite) {
+            const DeltaRational& l = v.lower.bound.value;
+            if (beta.a > l.a && beta.b < l.b) {
+                tighten((beta.a - l.a) / (l.b - beta.b));
+            }
+        }
+        if (v.upper.bound.kind == BoundKind::Finite) {
+            const DeltaRational& u = v.upper.bound.value;
+            if (beta.a < u.a && beta.b > u.b) {
+                tighten((u.a - beta.a) / (beta.b - u.b));
+            }
+        }
+    }
+    return bounded ? delta / 2 : mpq_class(1);
+}
+
 bool GeneralSimplex::isBasic(int var) const {
     assert(var >= 0 && var < static_cast<int>(vars_.size()));
     return vars_[var].basicRow != -1;
