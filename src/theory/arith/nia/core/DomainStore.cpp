@@ -1,5 +1,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -42,26 +44,34 @@ void DomainStore::restrictToFiniteSet(const std::string& var,
 }
 
 void DomainStore::addLowerBound(const std::string& var, const mpz_class& lb, SatLit reason) {
-    IntDomain& d = domains_[var];
-    if (!d.hasLower || lb > d.lower.value) {
-        d.lower.value = lb;
-        d.lower.reasons.clear();
-        d.lower.reasons.push_back(reason);
-        d.hasLower = true;
-    } else if (lb == d.lower.value) {
-        d.lower.reasons.push_back(reason);
-    }
+    addLowerBound(var, lb, std::vector<SatLit>{reason});
 }
 
 void DomainStore::addUpperBound(const std::string& var, const mpz_class& ub, SatLit reason) {
+    addUpperBound(var, ub, std::vector<SatLit>{reason});
+}
+
+void DomainStore::addLowerBound(const std::string& var, const mpz_class& lb,
+                                const std::vector<SatLit>& reasons) {
+    IntDomain& d = domains_[var];
+    if (!d.hasLower || lb > d.lower.value) {
+        d.lower.value = lb;
+        d.lower.reasons = reasons;
+        d.hasLower = true;
+    } else if (lb == d.lower.value) {
+        d.lower.reasons.insert(d.lower.reasons.end(), reasons.begin(), reasons.end());
+    }
+}
+
+void DomainStore::addUpperBound(const std::string& var, const mpz_class& ub,
+                                const std::vector<SatLit>& reasons) {
     IntDomain& d = domains_[var];
     if (!d.hasUpper || ub < d.upper.value) {
         d.upper.value = ub;
-        d.upper.reasons.clear();
-        d.upper.reasons.push_back(reason);
+        d.upper.reasons = reasons;
         d.hasUpper = true;
     } else if (ub == d.upper.value) {
-        d.upper.reasons.push_back(reason);
+        d.upper.reasons.insert(d.upper.reasons.end(), reasons.begin(), reasons.end());
     }
 }
 
@@ -229,9 +239,21 @@ std::vector<SatLit> DomainStore::collectEmptyReasons(const IntDomain& d) const {
 }
 
 TheoryConflict DomainStore::buildEmptyDomainConflict() const {
+    static const bool domDiag = std::getenv("NIA_DOM_DIAG") != nullptr;
     std::vector<SatLit> clause;
     for (const auto& [var, d] : domains_) {
         if (isDomainEmpty(d)) {
+            if (domDiag) {
+                std::cerr << "[NIA-DOM] EMPTY var=" << var
+                          << " hasLower=" << d.hasLower << " lower=" << (d.hasLower ? d.lower.value.get_str() : "-")
+                          << " hasUpper=" << d.hasUpper << " upper=" << (d.hasUpper ? d.upper.value.get_str() : "-")
+                          << " lowerReasons=";
+                for (auto l : d.lower.reasons) std::cerr << (l.sign?"":"-") << l.var << " ";
+                std::cerr << " upperReasons=";
+                for (auto l : d.upper.reasons) std::cerr << (l.sign?"":"-") << l.var << " ";
+                std::cerr << " nFinite=" << (d.finiteValues ? (int)d.finiteValues->size() : -1)
+                          << " nExcluded=" << d.excludedValues.size() << "\n";
+            }
             auto reasons = collectEmptyReasons(d);
             clause.insert(clause.end(), reasons.begin(), reasons.end());
             break; // Only report first empty domain
