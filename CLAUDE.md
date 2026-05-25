@@ -6,11 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NLColver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The repository has progressed beyond initial bootstrap:
 
-- **Stage A (Core IR + SAT)**: Complete — CoreExpr, CoreIr, CaDiCaL SAT backend, Atomizer
+- **Stage A (Core IR + SAT)**: Complete — CoreExpr, CoreIr, CaDiCaL SAT backend, Atomizer, frontend lowering worklist (ToInt/div-mod/ITE lowering, constant propagation)
 - **Stage C/E (LRA/LIA)**: Functional — Simplex-based LRA, branch-and-bound LIA with disequality
-- **Stage D (NRA)**: MVP — Grid sampling, univariate/bivariate polynomial constraints
-- **Stage I (NIA-Core)**: MVP — Univariate RRT, algebraic reasoning (square rules, GCD, modular), bounded enumeration, sound conflict generation
+- **Stage D (NRA)**: Functional — CDCAC engine + theory-check presolve fixpoint (exact linear/sign reasoning)
+- **Stage I (NIA-Core)**: Functional — univariate RRT, algebraic reasoning (square rules, GCD, modular), bounded enumeration, presolve fixpoint, sound conflict generation
+- **Shared arith infrastructure**: `ArithSolverBase` + `Reasoner` pipeline (all 8 solvers); a theory-check presolve fixpoint (`theory/arith/presolve/`); validated candidate search + complete finite-domain enumeration (`theory/arith/search/`)
 - **Stages F, G, H, J, K**: Skeleton interfaces exist, not yet functional
+
+All 15 historical known-fails are closed; the regression suite is fully green
+(see Build/test/run below).
 
 The frontend is **SOMTParser**, vendored as a git submodule at `third_party/SOMTParser`. After cloning, run `git submodule update --init --recursive` before building.
 
@@ -34,15 +38,24 @@ mkdir build && cd build
 cmake ..                    # Release by default
 cmake --build . -j
 
-# Tests — 88 unit tests (doctest-based)
-ctest                       # all tests
+# Tests — doctest unit suite (~523 cases) + 14 per-logic regression suites
+ctest                       # all tests (unit + per-logic regression)
 ./tests/nlcolver_unit_tests                          # all units, direct
 ./tests/nlcolver_unit_tests --test-case="<name>"     # single test
 ./tests/nlcolver_unit_tests -ltc                     # list test cases
 
+# Regression: 577 SMT2 cases vs z3+cvc5 oracle, KNOWN_FAILURES.md gates leniency
+python3 tools/run_regression.py --root tests/regression --solver build/bin/nlcolver --timeout 20 -j 2
+
 # CLI
 ./bin/nlcolver solve path/to/input.smt2
 ```
+
+> **WSL build note:** `cmake --build . -j` (unlimited parallelism) can OOM and
+> crash WSL on this tree. Use a bounded `-j 2` there.
+
+Current baseline (main): **ctest 15/15, unit 523/523, regression 577/577, 0
+KNOWN_FAIL, 0 UNSOUND.** All 15 historical known-fails are closed.
 
 CMake build options (defaults shown):
 
@@ -91,6 +104,42 @@ These are non-negotiable per `plan.md` §0 and are easy to violate by accident:
 
 7. **NIA soundness over completeness.** NIA is undecidable. SAT requires exact integer validation. UNSAT requires sound proof (constant contradiction, empty roots, modular contradiction, GCD contradiction, or finite-domain exhaustion). Unknown is acceptable for unbounded cases. Never emit UNSAT from incomplete reasoning.
 
+## Arithmetic solver architecture: `ArithSolverBase` + `Reasoner`
+
+All 8 arithmetic theory solvers (LRA, LIA, NRA, NIA, NIRA, LIRA, IDL, RDL)
+share a common base, `src/theory/arith/ArithSolverBase.{h,cpp}`. **Read
+`src/theory/arith/README.md` before touching any arith solver.** Summary:
+
+1. **`ArithSolverBase` owns the lifecycle.** `state_.trail`
+   (`vector<ActiveAssignment>` of `{level, lit, atom, value}`), scope
+   counters, `currentLevel`, and an optional level-tagged pending slot all
+   live in the base. `push` / `pop` / `backtrackToLevel` / `reset` are
+   **finalized**; subclasses customize via `onAssertLit` / `onBacktrack` /
+   `onReset` / `onPush` / `onPop` hooks. `assertLit` is **virtual** — most
+   solvers use the base default (dedup-by-satVar insert), but NIA overrides
+   it (ActiveLiteralSet + opposite-polarity detection) and LRA/LIA/NRA
+   override it to drive their own simplex/cursor trail. Do **not**
+   reintroduce a per-solver `struct ActiveAssignment`; it was deduplicated
+   from 5 copies into the base.
+
+2. **`check()` is a `Reasoner` pipeline.** `src/theory/arith/Reasoner.h`
+   defines a stage interface returning `std::optional<TheoryCheckResult>`:
+   `nullopt` = continue to the next stage, a value = stop with that verdict
+   (`Consistent` here means "consistent, stop" — **not** "continue"). The
+   base `check()` drains any pending result, then walks `reasoners_` and
+   returns the first non-`nullopt`. Populate `reasoners_` in the solver
+   constructor; `CallbackReasoner` wraps a `std::function` so each stage can
+   be a `this`-capturing lambda over a per-stage method (no subclass per
+   stage). Decomposed today: NRA (2 stages), NIA (15), LRA (1), LIA (1).
+   **A reasoner must never mutate `state_.trail`** (only `assertLit` does;
+   a debug assertion enforces this).
+
+3. **Per-theory directory convention.** `core/` (data types), `preprocess/`
+   (normalizers, e.g. `nia/preprocess/NiaNormalizer`), `reasoners/`
+   (Reasoner-shaped engines), `engine/` (low-level non-reasoner engines),
+   `backend/` (external-lib shims). Cross-cutting linear utilities live in
+   `theory/arith/linear/`, not in a single theory's directory.
+
 ## Code conventions observed in the existing source
 
 - `namespace nlcolver { ... }` for all library code.
@@ -104,16 +153,23 @@ These are non-negotiable per `plan.md` §0 and are easy to violate by accident:
 
 The `src/` subdirectories map to sections of `plan.md`:
 
+All `theory/arith/<theory>/` solvers inherit `ArithSolverBase` and drive a
+`Reasoner` pipeline (see the architecture section above).
+
 | Directory | plan.md section | Stage | Status |
 |---|---|---|---|
 | `expr/` | §2 (CoreExpr, Rewriter) | A | ✅ Functional |
 | `parser/` | §2 (SOMTParser adapter) | A | ✅ Functional |
 | `sat/` | §4 (CaDiCaL wrapper) | A | ✅ Functional |
-| `theory/arith/lra/` | §5 (LRA) | C/E | ✅ MVP |
-| `theory/arith/lia/` | §5 (LIA) | C/E | ✅ Phase 1 |
-| `theory/arith/nra/` | §8, §9, §10 (NRA) | D | ✅ MVP |
-| `theory/arith/nia/` | §12 (NIA) | I | ✅ MVP |
+| `theory/arith/` | — (`ArithSolverBase`, `Reasoner`) | — | ✅ Shared base + pipeline |
+| `theory/arith/lra/` | §5 (LRA) | C/E | ✅ Functional |
+| `theory/arith/lia/` | §5 (LIA) | C/E | ✅ Functional |
+| `theory/arith/nra/` | §8, §9, §10 (NRA) | D | ✅ CDCAC + presolve fixpoint |
+| `theory/arith/nia/` | §12 (NIA) | I | ✅ NIA-Core + presolve fixpoint |
+| `theory/arith/presolve/` | theory-check presolve (Caps. 1–11) | — | ✅ Functional |
+| `theory/arith/search/` | finite-domain enum + validated candidate search | — | ✅ Functional |
 | `theory/arith/poly/` | §3 (PolynomialKernel) | B | ✅ Functional |
+| `frontend/preprocess/` | §2 (lowering passes) | A | ✅ Functional |
 | `mcsat/` | §10 (MCSAT-NRA) | H | 🏗️ Skeleton |
 | `search/` | §11 (Advisor) | G | 🏗️ Skeleton |
 | `omt/` | §14 | K | 🏗️ Skeleton |
@@ -124,15 +180,20 @@ When implementing a new subsystem or extending an existing one, look up the sect
 
 ## Key files for NIA work
 
+Paths reflect the per-theory subdir convention; `NiaSolver`'s `check()` is a
+15-stage `Reasoner` pipeline (`stagePending` … `stageBranch`) registered in
+its constructor — add/reorder stages there, not by hand-editing a monolithic
+`check()`.
+
 | File | Purpose |
 |---|---|
-| `src/theory/arith/nia/NiaSolver.h/.cpp` | Facade — owns kernel, delegates to engines |
-| `src/theory/arith/nia/DomainStore.h/.cpp` | Per-variable integer domains (intervals, finite sets, exclusions) |
-| `src/theory/arith/nia/UnivariateIntegerReasoner.h/.cpp` | RRT-based integer root finding |
-| `src/theory/arith/nia/LinearNiaDomainReasoner.h/.cpp` | Single-variable linear bound inference |
-| `src/theory/arith/nia/AlgebraicIntegerReasoner.h/.cpp` | Square rules, GCD conflict, modular reasoning |
-| `src/theory/arith/nia/BoundedNiaSolver.h/.cpp` | Finite-domain complete enumeration |
-| `src/theory/arith/nia/NiaNormalizer.h/.cpp` | Clear denominators, strict → non-strict |
+| `src/theory/arith/nia/NiaSolver.h/.cpp` | Facade — owns kernel, registers the 15 reasoner stages, delegates to engines |
+| `src/theory/arith/nia/core/DomainStore.h/.cpp` | Per-variable integer domains (intervals, finite sets, exclusions) |
+| `src/theory/arith/nia/reasoners/UnivariateIntegerReasoner.h/.cpp` | RRT-based integer root finding |
+| `src/theory/arith/nia/core/LinearNiaDomainReasoner.h/.cpp` | Single-variable linear bound inference |
+| `src/theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h/.cpp` | Square rules, GCD conflict, modular reasoning |
+| `src/theory/arith/nia/reasoners/BoundedNiaSolver.h/.cpp` | Finite-domain complete enumeration |
+| `src/theory/arith/nia/preprocess/NiaNormalizer.h/.cpp` | Clear denominators, strict → non-strict (moved from `core/` in Phase 4) |
 | `src/theory/arith/poly/LibPolyKernel.h/.cpp` | libpoly backend — polynomial operations |
 | `src/theory/arith/poly/PolynomialConverter.h/.cpp` | CoreIr → PolyId conversion |
 
