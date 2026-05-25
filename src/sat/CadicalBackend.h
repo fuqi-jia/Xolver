@@ -42,7 +42,9 @@ private:
     SatVar declaredVars_ = 0;
     bool terminateRequested_ = false;
     bool propagatorConnected_ = false;
+    bool inSolving_ = false;
     std::vector<SatLit> lastAssumptions_;
+    std::vector<bool> observedVars_;
 };
 
 } // namespace nlcolver

@@ -3,14 +3,52 @@
 
 namespace nlcolver {
 
-CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) {}
+CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) {
+    // Note: we do NOT set factor=0 here.  The state-aware newVar() below
+    // handles the SOLVING-state issue; disabling BVA globally hurts SAT
+    // search performance and caused NRA regression failures.
+}
 CadicalBackend::~CadicalBackend() = default;
 
 SatVar CadicalBackend::newVar() {
+    if (inSolving_) {
+        // Inside a SAT solve() call (e.g. theory-propagator callback).
+        // declare_more_variables() requires READY state and will fatal here.
+        // Instead we allocate a fresh variable index and immediately mark it
+        // observed so CaDiCaL's external-propagator machinery knows about it.
+        int v = static_cast<int>(maxVar_);
+        int cadicalVars = solver_->vars();
+        if (cadicalVars > v) v = cadicalVars;
+        ++v;
+        maxVar_ = static_cast<SatVar>(v);
+
+        if (propagatorConnected_) {
+            solver_->add_observed_var(v);
+            if (static_cast<size_t>(v) >= observedVars_.size()) {
+                observedVars_.resize(v + 1, false);
+            }
+            observedVars_[v] = true;
+        }
+        return maxVar_;
+    }
+
     ++maxVar_;
     if (maxVar_ > declaredVars_) {
         declaredVars_ = maxVar_ + 10000;
         solver_->declare_more_variables(declaredVars_);
+    }
+
+    // If an external propagator is already connected (pre-solve setup),
+    // observe the variable immediately so it is safe to use in lemmas.
+    if (propagatorConnected_) {
+        solver_->add_observed_var(static_cast<int>(maxVar_));
+        if (maxVar_ >= observedVars_.size()) {
+            size_t newSize = std::max(static_cast<size_t>(maxVar_) + 1,
+                                      observedVars_.size() * 2);
+            newSize = std::max(newSize, static_cast<size_t>(declaredVars_) + 1);
+            observedVars_.resize(newSize, false);
+        }
+        observedVars_[maxVar_] = true;
     }
     return maxVar_;
 }
@@ -26,7 +64,9 @@ void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 
 SatSolver::SolveResult CadicalBackend::solve() {
     terminateRequested_ = false;
+    inSolving_ = true;
     int res = solver_->solve();
+    inSolving_ = false;
 
     if (terminateRequested_) {
         terminateRequested_ = false;
@@ -69,7 +109,16 @@ bool CadicalBackend::configure(const char* name, int64_t value) {
 }
 
 void CadicalBackend::addObservedVar(SatVar v) {
-    solver_->add_observed_var(static_cast<int>(v));
+    if (static_cast<size_t>(v) >= observedVars_.size()) {
+        size_t newSize = std::max(static_cast<size_t>(v) + 1,
+                                  observedVars_.size() * 2);
+        newSize = std::max(newSize, static_cast<size_t>(declaredVars_) + 1);
+        observedVars_.resize(newSize, false);
+    }
+    if (!observedVars_[v]) {
+        solver_->add_observed_var(static_cast<int>(v));
+        observedVars_[v] = true;
+    }
 }
 
 void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
@@ -84,6 +133,7 @@ void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
 void CadicalBackend::disconnectPropagator() {
     solver_->disconnect_external_propagator();
     propagatorConnected_ = false;
+    observedVars_.clear();
 }
 
 void CadicalBackend::requestTerminate() {
