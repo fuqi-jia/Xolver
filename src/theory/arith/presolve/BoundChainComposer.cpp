@@ -75,7 +75,32 @@ bool BoundChainComposer::run(PresolveState& st) {
                         st.conflict.clause = rn.baseLiterals;
                         return true;
                     }
-                    continue;  // tautological constant
+                    // Tight bound pair: pa = -pb with both bounds non-strict ⇒
+                    // pb = 0, i.e. the two bounds force an equality (e.g.
+                    // x ≥ c ∧ x ≤ c ⇒ x = c). Emit it so substitution can
+                    // eliminate the variable everywhere — including inside
+                    // nonlinear terms — which e.g. collapses (x1-x2)²+(y1-y2)² ≥ 1
+                    // to a constant contradiction once every center is pinned.
+                    if (combo.isZero() && rr == Relation::Leq) {
+                        RationalPolynomial eqPoly = pb;
+                        eqPoly.normalize();
+                        if (!eqPoly.isZero()) {
+                            bool dupEq = false;
+                            for (const auto& E : st.atoms) {
+                                if (E.live && E.rel == Relation::Eq && polyEqual(E.poly, eqPoly)) { dupEq = true; break; }
+                            }
+                            if (!dupEq) {
+                                PresolveAtom na;
+                                na.poly = eqPoly;
+                                na.rel = Relation::Eq;
+                                na.reasons = rn;
+                                na.live = true;
+                                st.atoms.push_back(std::move(na));
+                                made = true;
+                            }
+                        }
+                    }
+                    continue;  // tautological constant (equality may have been emitted)
                 }
 
                 // Deduplicate against existing atoms.
