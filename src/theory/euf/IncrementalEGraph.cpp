@@ -264,6 +264,13 @@ EClassId IncrementalEGraph::rep(EufTermId t) const {
 }
 
 EGraphSnapshot IncrementalEGraph::snapshot() const {
+#ifndef NDEBUG
+    static int snapCount = 0;
+    ++snapCount;
+    FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+    if (dbg) { fprintf(dbg, "[SNAPSHOT] #%d terms=%zu\n", snapCount, tm_.termCount()); fclose(dbg); }
+    checkSignatureTableInvariant();
+#endif
     return {
         uf_.snapshot(),
         memberTrail_.size(),
@@ -276,11 +283,33 @@ EGraphSnapshot IncrementalEGraph::snapshot() const {
 }
 
 void IncrementalEGraph::rollback(EGraphSnapshot snap) {
+    FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+    if (dbg) {
+        fprintf(dbg, "[EGRAPH_ROLLBACK] sigSnap=%zu csSnap=%zu pfSnap=%zu ufSnap=%zu\n",
+                snap.sigTableSnap, snap.currentSigSnap, snap.proofForestSnap, snap.ufTrailSize);
+        fprintf(dbg, "  before csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
+        fclose(dbg);
+    }
     proofForest_.rollback(snap.proofForestSnap);
     mergeRecords_.resize(snap.mergeRecordSize);
     nextTermToRegister_ = snap.nextTermToRegister;
     rollbackCurrentSig(snap.currentSigSnap);
     sigTable_.rollback(snap.sigTableSnap);
+    dbg = fopen("/tmp/sig_inv_fail.log", "a");
+    if (dbg) {
+        fprintf(dbg, "  after csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
+        fclose(dbg);
+    }
+
+    // Verify rollback actually truncated the trail
+    if (sigTable_.snapshot() != snap.sigTableSnap) {
+        FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+        if (dbg) {
+            fprintf(dbg, "[ROLLBACK_BUG] sigTable trail after rollback=%zu expected=%zu\n",
+                    sigTable_.snapshot(), snap.sigTableSnap);
+            fclose(dbg);
+        }
+    }
 
     while (memberTrail_.size() > snap.memberTrailSize) {
         auto ch = memberTrail_.back();
@@ -394,8 +423,33 @@ void IncrementalEGraph::checkSignatureTableInvariant() const {
     for (EufTermId t = 0; t < currentSig_.size(); ++t) {
         if (currentSig_[t]) {
             auto it = sigTable_.find(*currentSig_[t]);
-            assert(it.has_value());
-            assert(*it == t || same(*it, t));
+            if (!it.has_value()) {
+                FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+                if (dbg) { fprintf(dbg, "[SIG_INV_FAIL] t=%u sig not in table\n", t); fclose(dbg); }
+                assert(false);
+            }
+            if (*it != t && !same(*it, t)) {
+                FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+                if (dbg) {
+                    fprintf(dbg, "[SIG_INV_FAIL] t=%u owner=%u same=%d\n", t, *it, same(*it, t));
+                    const auto& nt = tm_.node(t);
+                    const auto& no = tm_.node(*it);
+                    fprintf(dbg, "  t symbol=%u sort=%u arity=%zu\n", nt.symbol, nt.sort, nt.args.size());
+                    fprintf(dbg, "  owner symbol=%u sort=%u arity=%zu\n", no.symbol, no.sort, no.args.size());
+                    for (size_t i = 0; i < nt.args.size(); ++i) {
+                        fprintf(dbg, "  t.arg[%zu]=%u rep=%u\n", i, nt.args[i], rep(nt.args[i]));
+                    }
+                    for (size_t i = 0; i < no.args.size(); ++i) {
+                        fprintf(dbg, "  owner.arg[%zu]=%u rep=%u\n", i, no.args[i], rep(no.args[i]));
+                    }
+                    fprintf(dbg, "  ufTrailSize=%zu sigTableTrail=%zu currentSigTrail=%zu\n",
+                            uf_.snapshot(), sigTable_.internalTable().size(), currentSigTrail_.size());
+                    fprintf(dbg, "  find(t)=%u find(owner)=%u parentSize=%zu\n",
+                            uf_.find(t), uf_.find(*it), uf_.size());
+                    fclose(dbg);
+                }
+                assert(false);
+            }
         }
     }
 }

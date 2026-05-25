@@ -16,21 +16,28 @@ bool IntegerModelValidator::relationHolds(const mpz_class& val, Relation rel) co
     return false;
 }
 
-bool IntegerModelValidator::validate(
+IntegerModelValidator::Result IntegerModelValidator::validate(
     const IntegerModel& model,
     const std::vector<NormalizedNiaConstraint>& constraints) const {
 
+    bool anyIndeterminate = false;
     for (const auto& c : constraints) {
         auto valOpt = kernel_.evalInteger(c.poly, model);
         if (!valOpt) {
-            // Cannot evaluate → cannot validate
-            return false;
+            // Distinguish "missing variable in model" (indeterminate) from
+            // "evaluation produced non-integer" (also indeterminate).
+            // The caller must decide whether to trust this model.
+            anyIndeterminate = true;
+            continue;
         }
         if (!relationHolds(*valOpt, c.rel)) {
-            return false;
+            return Result::Violated;
         }
     }
-    return true;
+    if (anyIndeterminate) {
+        return Result::Indeterminate;
+    }
+    return Result::Valid;
 }
 
 } // namespace nlcolver

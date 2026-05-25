@@ -84,6 +84,8 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
     bool any = !freeVars.empty() || !st.substMap.empty();
     if (!any) return res;
 
+    bool anyIndeterminate = false;
+
     while (true) {
         std::map<VarId, mpq_class> assign;
         for (size_t i = 0; i < freeVars.size(); ++i) assign[freeVars[i]] = mpq_class(points[i][idx[i]]);
@@ -99,11 +101,20 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
         if (resolved && allInt) {
             IntegerModel model;
             for (const auto& [v, val] : assign) model[std::string(kernel.varName(v))] = val.get_num();
-            if (validator.validate(model, normalized)) {
+            auto vres = validator.validate(model, normalized);
+            if (vres == IntegerModelValidator::Result::Valid) {
                 res.status = FiniteDomainResult::Status::Sat;
                 res.model = std::move(model);
                 return res;
             }
+            if (vres == IntegerModelValidator::Result::Indeterminate) {
+                anyIndeterminate = true;
+            }
+            // Violated → continue enumeration
+        } else {
+            // Could not resolve substituted vars or non-integer assignment.
+            // Cannot validate this candidate → treat as indeterminate.
+            anyIndeterminate = true;
         }
 
         // advance odometer
@@ -117,7 +128,13 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
         if (freeVars.empty()) break;  // single (substituted-only) candidate
     }
 
-    // Exhausted with no validating candidate ⇒ complete UNSAT.
+    // If any candidate was indeterminate (could not be validated), we cannot
+    // soundly claim UNSAT — the missing validation might have been a SAT.
+    if (anyIndeterminate) {
+        return res;  // NotApplicable
+    }
+
+    // Exhausted with every candidate explicitly Violated ⇒ complete UNSAT.
     std::vector<SatLit> clause;
     for (const auto& c : normalized) clause.push_back(c.reason);
     for (VarId v : freeVars) {

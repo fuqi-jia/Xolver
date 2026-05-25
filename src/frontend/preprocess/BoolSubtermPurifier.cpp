@@ -96,10 +96,20 @@ ExprId BoolSubtermPurifier::mkDistinct(ExprId a, ExprId b) {
     return ir_.add(std::move(e));
 }
 
-ExprId BoolSubtermPurifier::purifyRec(ExprId e, bool inArgPosition) {
+ExprId BoolSubtermPurifier::purifyRec(ExprId e, bool inArgPosition, int depth) {
     auto it = memo_.find(e);
     if (it != memo_.end()) {
         return it->second;
+    }
+
+    // Defensive: deep expressions (e.g. Dartagnan nested arrays) can exhaust
+    // the C++ call stack (>29K frames observed).  Beyond the safe depth cap
+    // we return the expression unchanged: any bool-composite this deep would
+    // blow up the SAT encoding anyway, and the typical deep cases are
+    // non-bool nodes (Select/Store chains) that need no purification.
+    if (depth > kMaxRecursionDepth) {
+        memo_[e] = e;
+        return e;
     }
 
     // Value copy: ir_.add() may reallocate exprs_, invalidating references.
@@ -137,7 +147,7 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId e, bool inArgPosition) {
     newChildren.reserve(node.children.size());
     for (size_t i = 0; i < node.children.size(); ++i) {
         bool childInArg = inArgPosition || !childIsAtomicBoolPos[i];
-        newChildren.push_back(purifyRec(node.children[i], childInArg));
+        newChildren.push_back(purifyRec(node.children[i], childInArg, depth + 1));
     }
 
     ExprId rebuilt = e;
@@ -195,7 +205,7 @@ bool BoolSubtermPurifier::run() {
     std::vector<ExprId> newAssertions;
     newAssertions.reserve(assertions.size());
     for (ExprId a : assertions) {
-        newAssertions.push_back(purifyRec(a, false));
+        newAssertions.push_back(purifyRec(a, false, 0));
     }
     ir_.replaceAssertions(newAssertions);
 

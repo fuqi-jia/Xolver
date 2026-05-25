@@ -78,6 +78,14 @@ void EufSolver::reset() {
 }
 
 void EufSolver::ensureSnapshotForLevel(int level) {
+    if (!levelSnapshots_.empty() && levelSnapshots_.back().level > level) {
+        std::cerr << "[EUF_ASSERT_FAIL] ensureSnapshotForLevel level=" << level
+                  << " backLevel=" << levelSnapshots_.back().level
+                  << " snapCount=" << levelSnapshots_.size() << "\n";
+        for (size_t i = 0; i < levelSnapshots_.size(); ++i) {
+            std::cerr << "  snap[" << i << "] level=" << levelSnapshots_[i].level << "\n";
+        }
+    }
     assert(levelSnapshots_.empty() || levelSnapshots_.back().level <= level);
 
     if (levelSnapshots_.empty() || levelSnapshots_.back().level < level) {
@@ -108,6 +116,16 @@ void EufSolver::backtrackToLevel(int target) {
     }
 
     if (targetSnap) {
+        FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
+        if (dbg) {
+            fprintf(dbg, "[BACKTRACK] target=%d snapLevel=%d trailSize=%zu mergeQueue=%zu\n",
+                    target, targetSnap->level, targetSnap->trailSizeBeforeLevel, targetSnap->mergeQueueSize);
+            auto es = targetSnap->egraphSnapshotBeforeLevel;
+            fprintf(dbg, "  egraphSnap uf=%zu member=%zu mergeRec=%zu sigTable=%zu currentSig=%zu pf=%zu nextTerm=%u\n",
+                    es.ufTrailSize, es.memberTrailSize, es.mergeRecordSize, es.sigTableSnap,
+                    es.currentSigSnap, es.proofForestSnap, es.nextTermToRegister);
+            fclose(dbg);
+        }
         trail_.resize(targetSnap->trailSizeBeforeLevel);
 
         auto dit = std::remove_if(disequalities_.begin(), disequalities_.end(),
@@ -363,6 +381,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         if (er.ok) {
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
+        std::cerr << "[EUF_EXPLAIN_FAIL] true=false same=" << egraph_.same(trueTerm_, falseTerm_)
+                  << " activeReasons=" << allActiveReasons().size() << "\n";
         return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
     }
 
@@ -374,6 +394,9 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
+            std::cerr << "[EUF_EXPLAIN_FAIL] diseq lhs=" << d.lhs << " rhs=" << d.rhs
+                      << " same=" << egraph_.same(d.lhs, d.rhs)
+                      << " activeReasons=" << allActiveReasons().size() << "\n";
             auto reasons = allActiveReasons();
             reasons.push_back(d.reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});

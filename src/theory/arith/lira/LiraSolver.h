@@ -74,6 +74,13 @@ private:
     // Helpers
     bool isIntegerVar(const std::string& name) const;
     std::vector<SatLit> allActiveReasons() const;
+
+    // Cache for isIntegerVar: scanning the whole CoreIr per variable per check
+    // is O(IR x vars x checks). Build a name->isInt map once and rebuild only
+    // when the IR grows (sorts are immutable, so entries never go stale).
+    mutable std::unordered_map<std::string, bool> intVarCache_;
+    mutable size_t intVarCacheIrSize_ = 0;
+    void ensureIntVarCache() const;
 };
 
 } // namespace nlcolver

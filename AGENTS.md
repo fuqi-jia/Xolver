@@ -17,7 +17,7 @@ Repository: `https://github.com/fuqi-jia/NLColver.git`
 
 Core infrastructure (boolean, LRA, LIA, NRA, EUF, IDL, RDL) is operational. NIA-Core has a working pipeline with sound conflict generation and model validation. Stages F/G/H/J/K are skeleton interfaces only.
 
-Current baseline (as of 2026-05-25): **ctest 15/15, unit tests ~523, regression 577/577 across 15 logics, 0 known fails, 0 unsound.**
+Current baseline (as of 2026-05-25): **ctest 15/15, unit tests ~523, regression 578/578 across 15 logics, 0 known fails, 0 unsound.**
 
 ### Theory Solvers (functional)
 
@@ -148,7 +148,7 @@ NLColver/
 │   ├── regression/          # SMT-LIB 2 regression files (15 logics)
 │   │   ├── bool/ euf/ idl/ lia/ lira/ lra/ nia/ nira/ nra/ rdl/
 │   │   └── uflia/ uflra/ ufnia/ ufnra/
-│   ├── unit/                # doctest unit tests (~52 C++ files)
+│   ├── unit/                # doctest unit tests (~54 C++ files)
 │   └── CMakeLists.txt
 ├── tools/
 │   ├── cli/                 # nlcolver command-line binary (main.cpp)
@@ -171,9 +171,26 @@ NLColver/
 └── AGENTS.md                # This file
 ```
 
+### Scale
+
+- **Source code:** ~309 C++ source/header files, ~41,400 lines under `src/`.
+- **Unit tests:** ~54 C++ files, ~10,900 lines under `tests/unit/`.
+- **Regression tests:** 578 SMT-LIB 2 `.smt2` files across 15 logics.
+
 ## Build System
 
 CMake 3.16+, C++20 (standard required, extensions OFF). Default build type is `Release` (`-O3`).
+
+### Key Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `CMakeLists.txt` (root) | Project definition, options, dependency discovery (GMP/MPFR), submodule wiring (CaDiCaL external, libpoly subdir, SOMTParser subdir), FetchContent for nlohmann/json, static-build flags |
+| `src/CMakeLists.txt` | `nlcolver_core` static library via `file(GLOB_RECURSE ...)`; links CaDiCaL, libpoly, SOMTParser, GMP, MPFR, nlohmann_json; applies compile definitions for build options |
+| `tests/CMakeLists.txt` | doctest fetch, `nlcolver_unit_tests` executable, CTest regression entries (one per logic) driven by `tools/run_regression.py` |
+| `tools/CMakeLists.txt` | Delegates to `tools/cli/CMakeLists.txt` |
+| `tools/cli/CMakeLists.txt` | `nlcolver-cli` executable (output name `nlcolver`), links `nlcolver_core` |
+| `.gitmodules` | Three submodules: `third_party/SOMTParser`, `third_party/cadical`, `third_party/libpoly` |
 
 ### Build Commands
 
@@ -246,6 +263,7 @@ Compiler flags (`-Wall -Wextra -Wpedantic -Wno-unused-parameter`) are applied **
   - Public headers use `<nlcolver/...>`.
   - Internal headers use relative paths.
 - **Containers:** `SmallVector<T, 4>` (in `src/util/SmallVector.h`) is the default container for short child-lists on `CoreExpr` nodes. Use it instead of `std::vector` where N is typically small.
+- **Header guards:** All headers use `#pragma once`.
 
 ## Architecture Invariants
 

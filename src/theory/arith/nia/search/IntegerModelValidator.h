@@ -12,14 +12,16 @@ using IntegerModel = std::unordered_map<std::string, mpz_class>;
  * IntegerModelValidator: exact integer validation for SAT results.
  *
  * Uses kernel_.evalInteger() to evaluate each normalized constraint at the
- * proposed integer model. Returns true iff all constraints are satisfied.
+ * proposed integer model.
  */
 class IntegerModelValidator {
 public:
+    enum class Result { Valid, Violated, Indeterminate };
+
     explicit IntegerModelValidator(PolynomialKernel& kernel);
 
-    bool validate(const IntegerModel& model,
-                  const std::vector<NormalizedNiaConstraint>& constraints) const;
+    Result validate(const IntegerModel& model,
+                    const std::vector<NormalizedNiaConstraint>& constraints) const;
 
 private:
     PolynomialKernel& kernel_;

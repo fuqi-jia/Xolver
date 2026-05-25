@@ -501,7 +501,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
     // Local search SAT finder (try before emitting pending linear lemmas)
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
-        if (validator_.validate(*model, normalized_)) {
+        if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
         }

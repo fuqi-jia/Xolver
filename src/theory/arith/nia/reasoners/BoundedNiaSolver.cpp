@@ -50,6 +50,7 @@ BoundedSolveResult BoundedNiaSolver::enumerate(
     // Cartesian product enumeration
     std::vector<size_t> indices(vars.size(), 0);
 
+    bool anyIndeterminate = false;
     while (true) {
         // Build current assignment
         IntegerModel model;
@@ -57,8 +58,12 @@ BoundedSolveResult BoundedNiaSolver::enumerate(
             model[vars[i]] = values[i][indices[i]];
         }
 
-        if (validator.validate(model, constraints)) {
+        auto vres = validator.validate(model, constraints);
+        if (vres == IntegerModelValidator::Result::Valid) {
             return {BoundedSolveStatus::Sat, model, std::nullopt};
+        }
+        if (vres == IntegerModelValidator::Result::Indeterminate) {
+            anyIndeterminate = true;
         }
 
         // Increment indices
@@ -75,6 +80,10 @@ BoundedSolveResult BoundedNiaSolver::enumerate(
             // All combinations exhausted
             break;
         }
+    }
+
+    if (anyIndeterminate) {
+        return {BoundedSolveStatus::UnknownUnsupported, std::nullopt, std::nullopt};
     }
 
     // Collect all active reasons for conflict

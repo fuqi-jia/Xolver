@@ -25,20 +25,26 @@ TheoryCheckResult LiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort ef
     return checkFullEffort(lemmaDb);
 }
 
-bool LiraSolver::isIntegerVar(const std::string& name) const {
-    if (!coreIr_) return false;
+void LiraSolver::ensureIntVarCache() const {
+    if (!coreIr_ || coreIr_->size() == intVarCacheIrSize_) return;
+    intVarCache_.clear();
+    SortId intSort = coreIr_->intSortId();
     for (size_t i = 0; i < coreIr_->size(); ++i) {
-        ExprId eid = static_cast<ExprId>(i);
-        const auto& expr = coreIr_->get(eid);
-        if (expr.kind == Kind::Variable) {
-            if (std::holds_alternative<std::string>(expr.payload.value)) {
-                if (std::get<std::string>(expr.payload.value) == name) {
-                    return expr.sort == coreIr_->intSortId();
-                }
-            }
+        const auto& expr = coreIr_->get(static_cast<ExprId>(i));
+        if (expr.kind == Kind::Variable &&
+            std::holds_alternative<std::string>(expr.payload.value)) {
+            intVarCache_[std::get<std::string>(expr.payload.value)] =
+                (expr.sort == intSort);
         }
     }
-    return false;
+    intVarCacheIrSize_ = coreIr_->size();
+}
+
+bool LiraSolver::isIntegerVar(const std::string& name) const {
+    if (!coreIr_) return false;
+    ensureIntVarCache();
+    auto it = intVarCache_.find(name);
+    return it != intVarCache_.end() ? it->second : false;
 }
 
 TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*/) {
