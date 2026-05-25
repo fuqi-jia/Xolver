@@ -77,6 +77,55 @@ SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
 
 void BitBlastEncoder::assertLit(SatLit l) { sat_.addClause({l}); }
 
-// --- arithmetic and relations are added in later tasks ---
+BitVec BitBlastEncoder::signExtend(const BitVec& a, unsigned width) {
+    BitVec r = a;
+    SatLit s = a.sign();
+    while (r.bits.size() < width) r.bits.push_back(s);
+    return r;
+}
+
+std::pair<SatLit, SatLit> BitBlastEncoder::fullAdder(SatLit a, SatLit b, SatLit cin) {
+    SatLit axb  = xorGate(a, b);
+    SatLit sum  = xorGate(axb, cin);
+    SatLit ab   = andGate(a, b);
+    SatLit acin = andGate(axb, cin);
+    SatLit cout = orGate(ab, acin);
+    return {sum, cout};
+}
+
+BitVec BitBlastEncoder::addFixed(const BitVec& a, const BitVec& b, unsigned w) {
+    BitVec ea = signExtend(a, w), eb = signExtend(b, w);
+    BitVec r; r.bits.resize(w);
+    SatLit cin = false_;
+    for (unsigned i = 0; i < w; ++i) {
+        auto sc = fullAdder(ea.bits[i], eb.bits[i], cin);
+        r.bits[i] = sc.first;
+        cin = sc.second;
+    }
+    return r;   // final carry dropped (caller sized w to avoid overflow)
+}
+
+BitVec BitBlastEncoder::add(const BitVec& a, const BitVec& b) {
+    unsigned w = std::max(a.width(), b.width()) + 1;
+    return addFixed(a, b, w);
+}
+
+BitVec BitBlastEncoder::neg(const BitVec& a) {
+    // Two's-complement negate: invert bits, then +1, in width a.width()+1
+    // (one extra bit so that -(-2^(w-1)) = 2^(w-1) is representable).
+    BitVec inv; inv.bits.resize(a.width());
+    for (unsigned i = 0; i < a.width(); ++i) inv.bits[i] = a.bits[i].negated();
+    return addFixed(inv, mkConst(mpz_class(1)), a.width() + 1);
+}
+
+BitVec BitBlastEncoder::sub(const BitVec& a, const BitVec& b) {
+    return add(a, neg(b));
+}
+
+SatLit BitBlastEncoder::isZero(const BitVec& a) {
+    SatLit acc = a.bits[0];
+    for (unsigned i = 1; i < a.width(); ++i) acc = orGate(acc, a.bits[i]);
+    return acc.negated();
+}
 
 } // namespace nlcolver::bitblast

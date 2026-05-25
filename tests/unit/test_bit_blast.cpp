@@ -52,3 +52,23 @@ TEST_CASE("Encoder: mkConst roundtrips through readBitVec") {
         CHECK(readBitVec(*sat, bv) == mpz_class(val));
     }
 }
+
+TEST_CASE("Encoder: add of two constants") {
+    for (auto pr : std::vector<std::pair<long,long>>{{3,4},{-3,4},{-5,-9},{0,0},{7,-8}}) {
+        auto sat = createSatSolver();
+        BitBlastEncoder enc(*sat);
+        BitVec r = enc.add(enc.mkConst(mpz_class(pr.first)), enc.mkConst(mpz_class(pr.second)));
+        REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+        CHECK(readBitVec(*sat, r) == mpz_class(pr.first + pr.second));
+    }
+}
+
+TEST_CASE("Encoder: sub and a free variable solve to a target") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    BitVec x = enc.mkVar(6);                 // signed 6-bit
+    BitVec d = enc.sub(x, enc.mkConst(mpz_class(10)));   // x - 10
+    enc.assertLit(enc.isZero(d));            // force x - 10 == 0
+    REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+    CHECK(readBitVec(*sat, x) == mpz_class(10));
+}
