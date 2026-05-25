@@ -74,6 +74,27 @@ TEST_CASE("Oracle test 6/7: beta == generator; reducible defPoly over K (F=t-alp
     CHECK(lazardRootMembership(F, T, q, posLo, posHi, ctx) == RootMembership::Keep);
 }
 
+TEST_CASE("Oracle soundness: rational beta over a REDUCIBLE tower (m0=A0^2-1)") {
+    // m0 = A0^2-1 = (A0-1)(A0+1) is reducible; embedding alpha = +1 in [1/2, 3/2].
+    // F = t - A0 at t=1: sub = 1 - A0 reduces to the ring-NONZERO poly (1-A0), yet
+    // its real value 1-alpha = 0. A bare ring-nonzero DROP would be UNSOUND; the
+    // hardened path uses interval enclosure (box contains 0) => Unknown, NOT Drop.
+    TowerContext ctx;
+    ctx.extensionVars = {A0};
+    RationalPolynomial m0; m0.addVar(A0, 2, 1); m0.addConstant(-1); m0.normalize();
+    ctx.minimalPolys = {m0};
+    AlgebraicRoot ar; ar.lower = mpq_class(1, 2); ar.upper = mpq_class(3, 2);
+    ctx.generators = {RealAlg::fromAlgebraic(ar)};
+    RationalPolynomial F; F.addVar(T, 1, 1); F.addVar(A0, 1, -1); F.normalize();   // t - A0
+    RationalPolynomial q; q.addVar(T, 1, 1); q.addConstant(-1); q.normalize();      // t - 1
+    // beta = 1 (rational); F(1) = 1-alpha truly 0 but ring-nonzero => must be Unknown.
+    CHECK(lazardRootMembership(F, T, q, mpq_class(1), mpq_class(1), ctx) == RootMembership::Unknown);
+    // beta = 5 (rational); F(5) = 5-alpha, alpha in [1/2,3/2] so 5-alpha in [3.5,4.5]
+    // excludes 0 => sound DROP via enclosure.
+    RationalPolynomial q2; q2.addVar(T, 1, 1); q2.addConstant(-5); q2.normalize();
+    CHECK(lazardRootMembership(F, T, q2, mpq_class(5), mpq_class(5), ctx) == RootMembership::Drop);
+}
+
 TEST_CASE("Oracle: tower-coeff F=t-(alpha+1), keep root 1+sqrt2, drop 1-sqrt2") {
     // F = t - A0 - 1; root is 1+sqrt2 (~2.414); Norm = t^2-2t-1 with roots 1+-sqrt2.
     RationalPolynomial F; F.addVar(T, 1, 1); F.addVar(A0, 1, -1); F.addConstant(-1); F.normalize();

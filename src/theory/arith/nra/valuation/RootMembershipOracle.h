@@ -20,8 +20,16 @@ namespace nlcolver {
 //   Unknown = inconclusive (no interval-overlap heuristic proves Keep/Drop; no
 //             rational-Norm-only criterion decides branch membership)
 //
+// SOUNDNESS UNDER A REDUCIBLE TOWER: the m_i need NOT be irreducible. Every Keep
+// comes from "X is in the ideal <m_i> => X=0 at the genuine common real root";
+// every Drop comes from a real interval enclosure excluding 0 or a Bezout/gcd
+// identity holding at the real embedding. Reducibility only fails inverses (=>
+// more Unknown), never a wrong verdict. This lets callers build the tower from a
+// CDCAC sample's per-coordinate Q defining polys directly (no Trager needed).
+//
 // Decision (all exact except where it yields Unknown):
-//   (0) rational beta: substitute + tower zero-test.
+//   (0) rational beta: substitute + tower zero-test; ring-zero => Keep, else a
+//       real interval enclosure must exclude 0 to Drop (never a bare ring-nonzero).
 //   (1) interval fast-DROP: F(alpha,beta) box-interval excludes 0.
 //   (2) G = gcd_K(F, squarefree(defPoly)); G constant -> Drop; deg G == deg sf
 //       -> Keep (sf | F, so every root of sf incl. beta is a root of F).

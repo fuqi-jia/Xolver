@@ -67,15 +67,38 @@ RootMembership lazardRootMembership(const RationalPolynomial& F, VarId targetVar
                                     const TowerContext& ctx) {
     TowerKernel K(ctx);
 
+    std::vector<Ival> genBase;
+    bool haveBox = genBox(ctx, genBase);
+
     // (0) Rational beta: exact substitution + tower zero-test.
+    //   v == 0 in the ring  => F(beta) is in the ideal <m_0,..> => F(beta)=0 at the
+    //     real embedding (a genuine common root of the m_i): KEEP, sound for ANY
+    //     monic tower (even a reducible one).
+    //   v != 0 in the ring  does NOT prove F(beta)!=0 when the tower is reducible
+    //     (a ring-nonzero element can still vanish at the chosen real branch). So
+    //     witness nonzero by a real interval enclosure over the generator box;
+    //     inconclusive => Unknown (never a bare ring-nonzero DROP).
     if (betaLo == betaHi) {
         RationalPolynomial sub = F.substituteRational(targetVar, betaLo);
         TowerElement v = K.reduce(sub);
-        return v.isZero() ? RootMembership::Keep : RootMembership::Drop;
+        if (v.isZero()) return RootMembership::Keep;
+        if (haveBox) {
+            std::vector<Ival> gen = genBase;
+            for (int iter = 0; iter < 48; ++iter) {
+                std::map<VarId, Ival> asg;
+                for (size_t i = 0; i < ctx.extensionVars.size(); ++i) asg[ctx.extensionVars[i]] = gen[i];
+                Ival rv;
+                if (!evalInterval(v.value, asg, rv)) break;
+                if (iExcludesZero(rv)) return RootMembership::Drop;
+                for (size_t i = 0; i < ctx.extensionVars.size(); ++i) {
+                    std::map<VarId, Ival> lower;
+                    for (size_t j = 0; j < i; ++j) lower[ctx.extensionVars[j]] = gen[j];
+                    gen[i] = refineVar(ctx.extensionVars[i], gen[i], ctx.minimalPolys[i], lower, 1);
+                }
+            }
+        }
+        return RootMembership::Unknown;
     }
-
-    std::vector<Ival> genBase;
-    bool haveBox = genBox(ctx, genBase);
 
     auto sf = squarefreePartWrt(defPoly, targetVar);
     if (!sf.complete) return RootMembership::Unknown;
