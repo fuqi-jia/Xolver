@@ -252,6 +252,11 @@ mpq_class InternalMilpEngine::value(int var) const {
     auto dr = simplex_.value(var);
     return dr.a;
 }
+mpq_class InternalMilpEngine::concreteValue(int var) const {
+    auto dr = simplex_.value(var);
+    if (dr.b == 0) return dr.a;
+    return dr.a + dr.b * simplex_.computeSafeDelta();
+}
 
 DeltaRational InternalMilpEngine::deltaValue(int var) const {
     return simplex_.value(var);

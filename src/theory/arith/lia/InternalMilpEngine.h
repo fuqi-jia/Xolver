@@ -54,7 +54,11 @@ public:
     MilpResult solve(MilpMode mode);
 
     int numVars() const { return static_cast<int>(varNames_.size()); }
-    mpq_class value(int var) const;
+    mpq_class value(int var) const;          // real part only (for branching)
+    // Concrete value with the infinitesimal δ instantiated to a safe
+    // positive rational — for model extraction, so strict bounds (x < r)
+    // are reflected as plain rationals rather than collapsing the δ part.
+    mpq_class concreteValue(int var) const;
     DeltaRational deltaValue(int var) const;
     std::string_view varName(int var) const;
 

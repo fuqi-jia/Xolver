@@ -261,7 +261,9 @@ std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
         std::string name = std::string(milpEngine_.varName(i));
         if (name.empty()) continue;
         if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
-        mpq_class val = milpEngine_.value(i);
+        // concreteValue instantiates the infinitesimal δ so strict bounds
+        // (x < r) are reflected as plain rationals instead of collapsing.
+        mpq_class val = milpEngine_.concreteValue(i);
         if (val.get_den() == 1) {
             model.assignments[name] = val.get_num().get_str();
         } else {
