@@ -42,6 +42,24 @@ bool Atomizer::areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const {
     return true;
 }
 
+bool Atomizer::isProvablyBool(ExprId eid, const CoreIr& ir) const {
+    const auto& e = ir.get(eid);
+    if (e.sort == boolSortId_) return true;
+    auto sk = ir.sortKind(e.sort);
+    if (sk && *sk == SortKind::Bool) return true;
+    // Boolean-producing operators are Bool regardless of sort registration.
+    switch (e.kind) {
+        case Kind::Not: case Kind::And: case Kind::Or:
+        case Kind::Implies: case Kind::Xor: case Kind::ConstBool:
+        case Kind::Eq: case Kind::Distinct:
+        case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq:
+        case Kind::IsInt: case Kind::Forall: case Kind::Exists:
+            return true;
+        default:
+            return false;
+    }
+}
+
 SatLit Atomizer::encodeBoolEq(ExprId eid, const CoreIr& ir) {
     const auto& e = ir.get(eid);
     assert(e.children.size() >= 2);
@@ -234,9 +252,15 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                              e.kind == Kind::Gt || e.kind == Kind::Geq);
 
             if (isTheory && registry_) {
-                // Bool equalities/distincts are propositional regardless of target theory
+                // Bool equalities/distincts are propositional regardless of target theory.
+                // Eq/Distinct operands share a sort, so if ANY operand is provably
+                // Boolean the whole atom is Boolean — this catches cases where a
+                // declared Bool variable carries an unregistered SortId (so the
+                // strict all-children check would miss it).
                 if ((e.kind == Kind::Eq || e.kind == Kind::Distinct) &&
-                    e.children.size() >= 2 && areAllChildrenBool(e, ir)) {
+                    e.children.size() >= 2 &&
+                    (areAllChildrenBool(e, ir) || isProvablyBool(e.children[0], ir) ||
+                     isProvablyBool(e.children[1], ir))) {
                     if (e.kind == Kind::Eq) {
                         result = encodeBoolEq(eid, ir);
                     } else {
@@ -317,7 +341,6 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                     // LRA / LIA / NRA / NIA / NIRA path
                     bool handled = arithExtractor_.extractAndRegister(eid, ir, v, targetTheory);
                     if (!handled) {
-                        std::cerr << "[ATOM] unsupported kind=" << (int)e.kind << " theory=" << (int)targetTheory << "\n";
                         registry_->setUnsupportedTheorySeen();
                     }
                 }

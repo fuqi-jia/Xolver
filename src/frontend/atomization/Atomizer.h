@@ -64,6 +64,10 @@ private:
 
     static bool isFormulaPositionTerm(Kind k);
     bool areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const;
+    // True if `eid` is provably Boolean by sort registration OR by being a
+    // Boolean-producing operator. Robust to sort-registration gaps (a declared
+    // Bool variable can carry an unregistered SortId).
+    bool isProvablyBool(ExprId eid, const CoreIr& ir) const;
     SatLit encodeBoolEq(ExprId eid, const CoreIr& ir);
     SatLit encodeBoolDistinct(ExprId eid, const CoreIr& ir);
 
