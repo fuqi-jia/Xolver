@@ -38,9 +38,18 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             return true;
         }
         case Kind::Sub: {
-            if (e.children.size() != 2) return false;
+            // SMT-LIB '-' is variadic and left-associative:
+            //   (- a)        == negation
+            //   (- a b c ..) == a - b - c - ...
+            // Handle any arity so we don't depend on the frontend binarizing.
+            if (e.children.empty()) return false;
+            if (e.children.size() == 1) {
+                return extractLinearExpr(e.children[0], ir, coeffs, constant, -mul);
+            }
             if (!extractLinearExpr(e.children[0], ir, coeffs, constant, mul)) return false;
-            if (!extractLinearExpr(e.children[1], ir, coeffs, constant, -mul)) return false;
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                if (!extractLinearExpr(e.children[i], ir, coeffs, constant, -mul)) return false;
+            }
             return true;
         }
         case Kind::Neg: {
@@ -48,41 +57,47 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
             return extractLinearExpr(e.children[0], ir, coeffs, constant, -mul);
         }
         case Kind::Mul: {
-            if (e.children.size() != 2) return false;
-            const CoreExpr& a = ir.get(e.children[0]);
-            const CoreExpr& b = ir.get(e.children[1]);
-            if (a.isConst()) {
-                mpq_class c;
-                if (auto* iv = std::get_if<int64_t>(&a.payload.value)) c = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) c = mpqFromString(*sv);
-                else return false;
-                return extractLinearExpr(e.children[1], ir, coeffs, constant, mul * c);
+            // SMT-LIB '*' is variadic. Linear iff at most one factor is
+            // non-constant; the constant factors fold into the multiplier.
+            if (e.children.empty()) return false;
+            mpq_class coeff = 1;
+            bool haveNonConst = false;
+            ExprId nonConst = e.children[0];  // overwritten iff a non-const is seen
+            for (ExprId childId : e.children) {
+                const CoreExpr& c = ir.get(childId);
+                if (c.isConst()) {
+                    if (auto* iv = std::get_if<int64_t>(&c.payload.value)) coeff *= mpq_class(*iv);
+                    else if (auto* sv = std::get_if<std::string>(&c.payload.value)) coeff *= mpqFromString(*sv);
+                    else return false;
+                } else {
+                    if (haveNonConst) return false;  // two non-const factors => nonlinear
+                    haveNonConst = true;
+                    nonConst = childId;
+                }
             }
-            if (b.isConst()) {
-                mpq_class c;
-                if (auto* iv = std::get_if<int64_t>(&b.payload.value)) c = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) c = mpqFromString(*sv);
-                else return false;
-                return extractLinearExpr(e.children[0], ir, coeffs, constant, mul * c);
+            if (!haveNonConst) {
+                constant += mul * coeff;
+                return true;
             }
-            return false;
+            return extractLinearExpr(nonConst, ir, coeffs, constant, mul * coeff);
         }
         case Kind::Div: {
-            if (e.children.size() != 2) return false;
-            const CoreExpr& b = ir.get(e.children[1]);
-            // Division by a nonzero constant is linear: e / c == (1/c) * e.
-            // Recurse on the numerator with the scaled multiplier, which also
-            // subsumes the const/const case. A non-constant denominator (e.g.
-            // x / y) is genuinely nonlinear and is left for the polynomial path.
-            if (b.isConst()) {
-                mpq_class den;
-                if (auto* iv = std::get_if<int64_t>(&b.payload.value)) den = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&b.payload.value)) den = mpqFromString(*sv);
+            // SMT-LIB '/' is variadic and left-associative:
+            //   (/ a b c ..) == a / b / c / .. == a / (b*c*..)
+            // Linear iff every denominator is a nonzero constant; the numerator
+            // (children[0]) may be any linear expression. This subsumes the
+            // const/const case. A non-constant denominator (x / y) is nonlinear.
+            if (e.children.size() < 2) return false;
+            mpq_class denProd = 1;
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                const CoreExpr& d = ir.get(e.children[i]);
+                if (!d.isConst()) return false;
+                if (auto* iv = std::get_if<int64_t>(&d.payload.value)) denProd *= mpq_class(*iv);
+                else if (auto* sv = std::get_if<std::string>(&d.payload.value)) denProd *= mpqFromString(*sv);
                 else return false;
-                if (den == 0) return false;
-                return extractLinearExpr(e.children[0], ir, coeffs, constant, mul / den);
             }
-            return false;
+            if (denProd == 0) return false;
+            return extractLinearExpr(e.children[0], ir, coeffs, constant, mul / denProd);
         }
         case Kind::ToReal: {
             if (e.children.size() != 1) return false;
