@@ -1101,6 +1101,19 @@ void Solver::dumpModel(std::ostream& os) const {
             else if (var->isVReal()) { kind = SortKind::Real; sortName = "Real"; }
             else continue;  // only Int/Real/Bool 0-arity symbols are emitted
 
+            // Algebraic values (irrational roots) live in the typed
+            // RealValue channel; emit their exact SMT-LIB root-obj form
+            // directly. formatModelValue is rational-only and would mangle
+            // the root-obj text that the string channel also holds.
+            if (tm && kind == SortKind::Real) {
+                auto rvIt = tm->numericAssignments.find(name);
+                if (rvIt != tm->numericAssignments.end() && rvIt->second.isAlgebraic()) {
+                    os << "  (define-fun " << name << " () Real "
+                       << rvIt->second.toSmtLib2() << ")\n";
+                    continue;
+                }
+            }
+
             std::string raw;
             if (tm) {
                 auto it = tm->assignments.find(name);

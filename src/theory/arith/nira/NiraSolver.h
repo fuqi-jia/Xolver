@@ -58,6 +58,13 @@ private:
 
     const std::vector<ActiveLinearConstraint>* activeLinearContext_ = nullptr;
 
+    // Witness assembled when a sub-engine reports sat, returned by
+    // getModel(). NIRA used to always return nullopt, so the user-facing
+    // model fell back to the LIRA linearization helper (linear-feasible,
+    // ignores the nonlinear constraints). currentModel_ carries the real
+    // witness (rational or algebraic via RealValue) plus fixed integers.
+    std::optional<TheoryModel> currentModel_;
+
     // Check sub-stages
     TheoryCheckResult checkPureSubproblems(TheoryLemmaStorage& lemmaDb);
     TheoryCheckResult checkRelaxationAndValidate(TheoryLemmaStorage& lemmaDb);

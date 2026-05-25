@@ -229,16 +229,142 @@ TheoryCheckResult NiraSolver::checkPureSubproblems(TheoryLemmaStorage& /*lemmaDb
         return TheoryCheckResult::unknown("NIRA: mixed int/real polys remain");
     }
 
+    // Step 2b: also gather the active LINEAR constraints on the real
+    // variables, so the delegated CDCAC picks a root CONSISTENT with them
+    // (e.g. `r > 0` selects +√3 over −√3, `r ≤ 10` excludes spurious large
+    // roots). Single-variable equalities are already in fixedValues and are
+    // skipped. If a real-var linear constraint cannot be forwarded
+    // (involves an unfixed Int variable, or an algebraic rhs), we set
+    // `cannotForwardReal` and decline to publish a witness — exposing an
+    // unvalidated model would be worse than falling back.
+    std::vector<RealConstraint> realLinears;
+    bool cannotForwardReal = false;
+    auto forwardLinear = [&](const LinearAtomPayload& p) {
+        if (p.lhs.terms.size() == 1) {
+            // Single-var equality already consumed via fixedValues.
+            const auto& [nm, cf] = p.lhs.terms[0];
+            if (p.rel == Relation::Eq && cf != 0 && fixedValues.count(nm)) return;
+        }
+        auto rhsQ = p.rhs.tryAsRational();
+        if (!rhsQ) return;  // algebraic rhs on a linear atom — leave it
+        PolyId poly = kernel_->mkConst(-(*rhsQ));   // accumulate (lhs - rhs)
+        bool involvesRealVar = false;
+        bool involvesUnfixedInt = false;
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            auto fv = fixedValues.find(name);
+            if (fv != fixedValues.end()) {
+                poly = kernel_->add(poly, kernel_->mkConst(coeff * fv->second));
+                continue;
+            }
+            if (isIntegerVar(coreIr_, name)) { involvesUnfixedInt = true; continue; }
+            involvesRealVar = true;
+            VarId v = kernel_->getOrCreateVar(name);
+            poly = kernel_->add(poly, kernel_->mul(kernel_->mkConst(coeff), kernel_->mkVar(v)));
+        }
+        if (!involvesRealVar) return;       // pure-int constraint — doesn't bind the real witness
+        if (involvesUnfixedInt) {           // couples a real var to an unfixed int → can't forward
+            cannotForwardReal = true;
+            return;
+        }
+        realLinears.push_back({poly, p.rel, SatLit{}, 0});
+    };
+    for (const auto& a : trail()) {
+        if (!a.value) continue;
+        if (auto* p = std::get_if<LinearAtomPayload>(&a.atom.payload)) forwardLinear(*p);
+    }
+    if (activeLinearContext_) {
+        for (const auto& alc : *activeLinearContext_) forwardLinear(alc.payload);
+    }
+
+    // Helper: seed a model with the fixed (integer/rational) values.
+    auto seedFixed = [&](TheoryModel& m) {
+        for (const auto& [name, val] : fixedValues) {
+            m.numericAssignments.insert({name, RealValue::fromMpq(val)});
+            m.assignments.insert({name, val.get_str()});
+        }
+    };
+
+    // Only publish a witness if every real-var constraint was forwardable
+    // to CDCAC (so its model provably satisfies them). Otherwise leave
+    // currentModel_ unset — a partially-constrained CDCAC sample could
+    // violate an un-forwarded constraint (e.g. nira_008's floor relation
+    // couples r to an Int var), and an unvalidated model is worse than the
+    // fallback.
+    bool publishWitness = !cannotForwardReal;
+
     if (realPolys.empty()) {
+        // All polynomials collapsed under the fixed values; the witness is
+        // the fixed assignment (only safe when there are no un-forwardable
+        // real constraints left to satisfy).
+        if (publishWitness) {
+            TheoryModel m;
+            seedFixed(m);
+            if (!m.numericAssignments.empty()) currentModel_ = std::move(m);
+        }
         return TheoryCheckResult::consistent();
     }
 
-    // Step 3: delegate to a fresh CDCAC engine on the real-only residual.
+    // Step 3: the VERDICT comes from CDCAC on the polynomial residual only
+    // — exactly as before, so adding linear constraints can never change a
+    // sat/unsat/unknown decision.
     CdcacSolver cdcac(kernel_.get());
     for (const auto& rp : realPolys) {
         cdcac.assertConstraint(rp.poly, rp.rel, rp.reason, rp.level);
     }
-    return cdcac.check();
+    auto res = cdcac.check();
+    if (res.kind != TheoryCheckResult::Kind::Consistent || !publishWitness) {
+        return res;
+    }
+
+    // For the MODEL, solve a SEPARATE CDCAC instance that ALSO includes the
+    // forwarded linear constraints, so the chosen root is consistent with
+    // them (e.g. r > 0 → +√3). If that richer solve does not cleanly return
+    // a model (too complex, etc.), fall back to the poly-only sample, and if
+    // even that is missing, publish nothing (the aggregation keeps the
+    // linear helper's model). The verdict is unaffected either way.
+    auto extractFrom = [&](CdcacSolver& src) -> bool {
+        auto sp = src.getModel();
+        if (!sp) return false;
+        TheoryModel m;
+        seedFixed(m);
+        for (size_t i = 0; i < sp->varOrder.size(); ++i) {
+            std::string name(kernel_->varName(sp->varOrder[i]));
+            if (name.empty()) continue;
+            RealValue rv = src.sampleValueToRealValue(sp->values[i]);
+            m.numericAssignments[name] = rv;
+            // String channel holds the RAW rational (e.g. "-2") for the
+            // CLI's sort-aware formatter; algebraic values flow through the
+            // typed channel (CLI emits root-obj from it).
+            m.assignments[name] = rv.isRational()
+                ? rv.asRational().get_str()
+                : rv.toSmtLib2();
+        }
+        if (m.numericAssignments.empty()) return false;
+        currentModel_ = std::move(m);
+        return true;
+    };
+
+    if (realLinears.empty()) {
+        // No linear constraints to respect — the poly-only sample is a
+        // complete witness of the real subsystem.
+        extractFrom(cdcac);
+        return res;
+    }
+    // Linear constraints present: only publish a model the richer solve
+    // verified against them. If it doesn't cleanly solve, publish nothing
+    // (the poly-only sample could violate the linear constraints, and the
+    // aggregation's linear-helper model is at least linearly feasible).
+    CdcacSolver cdcacModel(kernel_.get());
+    for (const auto& rp : realPolys) {
+        cdcacModel.assertConstraint(rp.poly, rp.rel, rp.reason, rp.level);
+    }
+    for (const auto& rl : realLinears) {
+        cdcacModel.assertConstraint(rl.poly, rl.rel, rl.reason, rl.level);
+    }
+    if (cdcacModel.check().kind == TheoryCheckResult::Kind::Consistent) {
+        extractFrom(cdcacModel);
+    }
+    return res;
 }
 
 TheoryCheckResult NiraSolver::checkRelaxationAndValidate(TheoryLemmaStorage& /*lemmaDb*/) {
@@ -827,6 +953,7 @@ bool NiraSolver::validateOriginalConstraints() const {
 void NiraSolver::onReset() {
     // Base clears the trail; reset the relaxation simplex here.
     gsRelax_.reset();
+    currentModel_.reset();
 }
 
 void NiraSolver::setRegistry(TheoryAtomRegistry* reg) {
@@ -838,7 +965,7 @@ void NiraSolver::setCoreIr(const CoreIr* ir) {
 }
 
 std::optional<TheorySolver::TheoryModel> NiraSolver::getModel() const {
-    return std::nullopt;
+    return currentModel_;
 }
 
 std::vector<SatLit> NiraSolver::allActiveReasons() const {
