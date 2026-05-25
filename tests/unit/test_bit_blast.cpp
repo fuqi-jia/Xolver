@@ -92,3 +92,24 @@ TEST_CASE("Encoder: powConst x^3 with x forced to -2") {
     REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
     CHECK(readBitVec(*sat, c) == mpz_class(-8));
 }
+
+TEST_CASE("Encoder: relZero Leq forces value <= 0") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    BitVec x = enc.mkVar(5);
+    enc.assertLit(enc.relZero(x, Relation::Leq));     // x <= 0
+    enc.assertLit(enc.relZero(enc.add(x, enc.mkConst(mpz_class(3))), Relation::Geq)); // x+3 >= 0
+    REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+    mpz_class xv = readBitVec(*sat, x);
+    CHECK(xv <= 0);
+    CHECK(xv >= -3);
+}
+
+TEST_CASE("Encoder: relZero Geq + Leq pins value to 0 (Eq)") {
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    BitVec x = enc.mkVar(5);
+    enc.assertLit(enc.relZero(x, Relation::Eq));
+    REQUIRE(static_cast<int>(sat->solve()) == static_cast<int>(SatSolver::SolveResult::Sat));
+    CHECK(readBitVec(*sat, x) == 0);
+}

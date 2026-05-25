@@ -159,4 +159,18 @@ SatLit BitBlastEncoder::eq(const BitVec& a, const BitVec& b) {
     return isZero(sub(a, b));
 }
 
+SatLit BitBlastEncoder::relZero(const BitVec& a, Relation rel) {
+    SatLit z = isZero(a);   // a == 0
+    SatLit s = a.sign();    // a < 0  (exact, since `a` holds the value at full width)
+    switch (rel) {
+        case Relation::Eq:  return z;
+        case Relation::Neq: return z.negated();
+        case Relation::Lt:  return s;
+        case Relation::Leq: return orGate(s, z);
+        case Relation::Gt:  return andGate(s.negated(), z.negated());
+        case Relation::Geq: return s.negated();
+    }
+    return z;
+}
+
 } // namespace nlcolver::bitblast
