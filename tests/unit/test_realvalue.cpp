@@ -12,6 +12,7 @@
 
 #include <gmpxx.h>
 #include <stdexcept>
+#include <vector>
 
 using namespace nlcolver;
 
@@ -132,6 +133,93 @@ TEST_CASE("ExtendedRealValue: infinities order correctly") {
     CHECK(zero.compare(pinf) == -1);
     CHECK(ninf.compare(pinf) == -1);
     CHECK(pinf.compare(pinf) == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Field-axiom property tests (plan soundness invariant 2).  Identities are
+// checked with compare()==0 so that equal values with different
+// representations (e.g. √2·√2 vs 2) count as equal.
+// ---------------------------------------------------------------------------
+namespace {
+
+// √5 : real root of x² − 5 in [2, 3].
+AlgebraicNumber sqrt5() {
+    return AlgebraicNumber{{mpz_class(-5), mpz_class(0), mpz_class(1)},
+                           mpq_class(2), mpq_class(3), true, true};
+}
+
+// A small, mixed pool of rational + algebraic values for exhaustive identity
+// checks. Kept small because each algebraic op runs a libpoly resultant.
+std::vector<RealValue> pool() {
+    return {
+        RealValue::fromInt(0),
+        RealValue::fromInt(1),
+        RealValue::fromInt(-1),
+        RealValue::fromMpq(mpq_class(1, 2)),
+        RealValue::fromMpq(mpq_class(-3, 4)),
+        RealValue::fromAlgebraic(sqrt2()),
+        RealValue::fromAlgebraic(sqrt3()),
+        RealValue::fromAlgebraic(sqrt5()),
+    };
+}
+
+bool eq(const RealValue& a, const RealValue& b) { return a.compare(b) == 0; }
+
+}  // namespace
+
+TEST_CASE("RealValue property: commutativity of + and *") {
+    auto p = pool();
+    for (const auto& a : p) {
+        for (const auto& b : p) {
+            CHECK(eq(a + b, b + a));
+            CHECK(eq(a * b, b * a));
+        }
+    }
+}
+
+TEST_CASE("RealValue property: additive inverse and subtraction") {
+    auto p = pool();
+    RealValue zero = RealValue::fromInt(0);
+    for (const auto& a : p) {
+        CHECK(eq(a + (-a), zero));
+        for (const auto& b : p) {
+            CHECK(eq(a - b, a + (-b)));
+        }
+    }
+}
+
+TEST_CASE("RealValue property: associativity and distributivity") {
+    // Smaller pool for the cubic loops (mix of rational + algebraic).
+    std::vector<RealValue> p = {
+        RealValue::fromMpq(mpq_class(1, 2)),
+        RealValue::fromInt(-1),
+        RealValue::fromAlgebraic(sqrt2()),
+        RealValue::fromAlgebraic(sqrt3()),
+    };
+    for (const auto& a : p) {
+        for (const auto& b : p) {
+            for (const auto& c : p) {
+                CHECK(eq((a + b) + c, a + (b + c)));        // + associative
+                CHECK(eq((a * b) * c, a * (b * c)));        // * associative
+                CHECK(eq(a * (b + c), (a * b) + (a * c)));  // distributive
+            }
+        }
+    }
+}
+
+TEST_CASE("RealValue property: collapse-to-rational identities") {
+    RealValue r2 = RealValue::fromAlgebraic(sqrt2());
+    // √2 · √2 = 2 (algebraic operands, rational result).
+    RealValue two = r2 * r2;
+    CHECK(two.isRational());
+    CHECK(two.asRational() == mpq_class(2));
+    // (√2 − √2) = 0, (√2 / √2) = 1.
+    CHECK((r2 - r2).isRational());
+    CHECK(eq(r2 - r2, RealValue::fromInt(0)));
+    CHECK(eq(r2 / r2, RealValue::fromInt(1)));
+    // (1+√2)(−1+√2) = (√2)² − 1 = 1.
+    RealValue lhs = (RealValue::fromInt(1) + r2) * (RealValue::fromInt(-1) + r2);
+    CHECK(eq(lhs, RealValue::fromInt(1)));
 }
 
 }  // TEST_SUITE("realvalue")
