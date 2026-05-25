@@ -69,19 +69,18 @@ bool extractLinearExpr(ExprId eid, const CoreIr& ir,
         }
         case Kind::Div: {
             if (e.children.size() != 2) return false;
-            const CoreExpr& a = ir.get(e.children[0]);
             const CoreExpr& b = ir.get(e.children[1]);
-            if (a.isConst() && b.isConst()) {
-                mpq_class num, den;
-                if (auto* iv = std::get_if<int64_t>(&a.payload.value)) num = mpq_class(*iv);
-                else if (auto* sv = std::get_if<std::string>(&a.payload.value)) num = mpqFromString(*sv);
-                else return false;
+            // Division by a nonzero constant is linear: e / c == (1/c) * e.
+            // Recurse on the numerator with the scaled multiplier, which also
+            // subsumes the const/const case. A non-constant denominator (e.g.
+            // x / y) is genuinely nonlinear and is left for the polynomial path.
+            if (b.isConst()) {
+                mpq_class den;
                 if (auto* iv = std::get_if<int64_t>(&b.payload.value)) den = mpq_class(*iv);
                 else if (auto* sv = std::get_if<std::string>(&b.payload.value)) den = mpqFromString(*sv);
                 else return false;
                 if (den == 0) return false;
-                constant += mul * (num / den);
-                return true;
+                return extractLinearExpr(e.children[0], ir, coeffs, constant, mul / den);
             }
             return false;
         }
