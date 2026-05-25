@@ -27,4 +27,9 @@ struct RationalRootResult {
 
 RationalRootResult isolateRationalRoots(const RationalPolynomial& p, VarId x);
 
+// Number of DISTINCT real roots of p (univariate in x) in the half-open
+// interval (lo, hi], via Sturm. Returns -1 if p is not univariate in x.
+int countRealRootsIn(const RationalPolynomial& p, VarId x,
+                     const mpq_class& lo, const mpq_class& hi);
+
 }  // namespace nlcolver

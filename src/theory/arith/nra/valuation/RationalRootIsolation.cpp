@@ -173,4 +173,27 @@ RationalRootResult isolateRationalRoots(const RationalPolynomial& p, VarId x) {
     return out;
 }
 
+int countRealRootsIn(const RationalPolynomial& p, VarId x,
+                     const mpq_class& lo, const mpq_class& hi) {
+    RationalPolynomial pn = p; pn.normalize();
+    if (pn.isZero() || pn.isConstant()) return 0;
+    for (VarId v : pn.variables()) if (v != x) return -1;
+    int d = pn.degree(x);
+    auto coeffs = pn.coefficients(x);
+    UniQ a(d + 1, mpq_class(0));
+    for (int i = 0; i <= d && i < static_cast<int>(coeffs.size()); ++i) {
+        RationalPolynomial c = coeffs[i]; c.normalize();
+        a[i] = c.isZero() ? mpq_class(0) : c.constantValue();
+    }
+    utrim(a);
+    if (udeg(a) < 1) return 0;
+    UniQ g = ugcd(a, uderiv(a));
+    UniQ sf = (udeg(g) >= 1) ? udiv(a, g) : a;
+    utrim(sf);
+    if (udeg(sf) < 1) return 0;
+    auto chain = sturmChain(sf);
+    // distinct real roots in (lo, hi] = V(lo) - V(hi)
+    return signVariations(chain, lo) - signVariations(chain, hi);
+}
+
 }  // namespace nlcolver
