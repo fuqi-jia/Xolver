@@ -14,11 +14,27 @@ architecture-refactor agent may move these.**
   rational fast-path in pure GMP, algebraic arithmetic/compare/sign/floor/ceil
   delegated to `src/theory/arith/nra/backend/LibpolyAlgebraic.cpp` (libpoly).
   `tests/unit/test_realvalue.cpp` runs by default (skip removed): 12/12 pass.
-- **Phase 1 migration** (everything below): NOT STARTED — intentionally
-  deferred until the parallel ArithSolverBase **Phase 2** (Reasoner extraction)
-  merges, because the model-output and CDCAC edits below overlap the solver
-  files that Phase 2 rewrites. Doing them concurrently = merge hell. Resume
-  these once `main` has the Reasoner refactor.
+- **Phase 1 migration — model-output funnel (additive channel): IN PROGRESS.**
+  Architecture Phase 2 is merged (main `4e97c7e`), so this is unblocked.
+  Done so far (additive RealValue channel, string channel retained):
+  * `CdcacSolver::sampleValueToRealValue(RealAlg)` — the bridge from the CDCAC
+    number system to `RealValue` (rational→fromMpq, algebraic→fromAlgebraic via
+    the backend's defining-poly coefficients + isolation interval).
+  * `TheoryModel::numericAssignments` (string→RealValue typed channel);
+    `TheoryManager::getModel` aggregates it.
+  * `NraSolver::getModel` populates it (NRA now exports exact algebraic models).
+  * `Solver::getValue` prefers the typed channel (exact; falls back to string).
+  * Regression `nra/nra_140_sat_root_2.smt2` (x²=2 → sat).
+  Still TODO in the funnel: migrate the other 7 getModel overrides to the typed
+  channel; `Kind::ConstAlgebraic` + `mkAlgebraicReal` + exact `root-obj`
+  get-value output (currently algebraic serializes as a rational midpoint
+  approximation); then retire the legacy string channel + bool/numeric
+  segregation. Public `Model` stays string-only (keeps gmpxx out of the public
+  API); the exact RealValue lives on the internal `TheoryModel`.
+
+- **Phase 1 migration — CDCAC RealAlg→RealValue + Phase 2 (atom RHS):** still
+  pending. `RealAlg` flows through `SamplePoint` into the reasoner pipeline; do
+  the full type unification after the funnel settles.
 
 Key libpoly contract learned (record for the migrator): `lp_algebraic_number_op`
 (used by add/sub/mul/div/neg) **destructs its output operand before assigning**,

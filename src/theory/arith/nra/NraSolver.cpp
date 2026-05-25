@@ -182,6 +182,9 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
         VarId v = sample.varOrder[i];
         const auto& val = sample.values[i];
         std::string name(kernel_->varName(v));
+        // Typed channel: exact RealValue (rational or algebraic).
+        model.numericAssignments.insert({name, engine_.sampleValueToRealValue(val)});
+        // Legacy string channel (retained during the funnel migration).
         std::string valueStr;
         if (val.kind == RealAlg::Kind::Rational) {
             valueStr = val.rational.get_str();

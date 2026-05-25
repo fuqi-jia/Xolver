@@ -960,12 +960,31 @@ Model Solver::getModel() const {
 }
 Term Solver::getValue(Term t) {
     if (!pImpl || !pImpl->ir) return Term{};
-    Model m = getModel();
-    const std::string* val = m.getValue(t.id());
-    if (!val) return Term{};
 
     const auto& expr = pImpl->ir->get(t.id());
     auto sortKind = pImpl->ir->sortKind(expr.sort);
+
+    // Prefer the typed numeric channel (RealValue) when available: it carries
+    // exact values including algebraic ones (e.g. √2 for x²=2), which the
+    // legacy string channel cannot represent losslessly.
+    if (pImpl->lastModel_ && std::holds_alternative<std::string>(expr.payload.value)) {
+        const std::string& name = std::get<std::string>(expr.payload.value);
+        const auto& num = pImpl->lastModel_->numericAssignments;
+        auto nit = num.find(name);
+        if (nit != num.end()) {
+            const RealValue& rv = nit->second;
+            if (sortKind == SortKind::Int && rv.isExactInteger()) {
+                mpz_class fl = rv.floor();
+                if (fl.fits_slong_p()) return mkInt(static_cast<int64_t>(fl.get_si()));
+            }
+            return mkReal(rv.toSmtLib2());
+        }
+    }
+
+    // Legacy string channel.
+    Model m = getModel();
+    const std::string* val = m.getValue(t.id());
+    if (!val) return Term{};
 
     if (sortKind == SortKind::Int) {
         int64_t v = std::stoll(*val);

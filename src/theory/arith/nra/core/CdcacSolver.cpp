@@ -191,4 +191,27 @@ std::string CdcacSolver::formatAlgebraicRoot(const AlgebraicRoot& root) const {
     return result;
 }
 
+RealValue CdcacSolver::sampleValueToRealValue(const RealAlg& v) const {
+    if (v.kind == RealAlg::Kind::Rational) {
+        return RealValue::fromMpq(v.rational);
+    }
+    const AlgebraicRoot& root = v.root;
+    if (!algebra_ || root.definingPoly == NullUniPolyId) {
+        // Degenerate (no defining polynomial): fall back to a rational
+        // midpoint approximation of the isolation interval.
+        mpq_class mid = (root.lower + root.upper) / 2;
+        return RealValue::fromMpq(mid);
+    }
+    // The backend stores coefficients high-to-low; AlgebraicNumber wants
+    // low-to-high (coefficients[i] = coeff of x^i).
+    const auto& hiToLo = algebra_->getUni(root.definingPoly);
+    AlgebraicNumber an;
+    an.coefficients.assign(hiToLo.rbegin(), hiToLo.rend());
+    an.lower = root.lower;
+    an.upper = root.upper;
+    an.lowerOpen = true;
+    an.upperOpen = true;
+    return RealValue::fromAlgebraic(std::move(an));
+}
+
 } // namespace nlcolver

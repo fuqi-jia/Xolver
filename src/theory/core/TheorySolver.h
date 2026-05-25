@@ -1,6 +1,7 @@
 #pragma once
 
 #include "theory/core/TheoryAtomTypes.h"
+#include "util/RealValue.h"
 #include <vector>
 #include <optional>
 #include <unordered_map>
@@ -70,8 +71,14 @@ public:
     getDeducedSharedEqualities() { return {}; }
 
     struct TheoryModel {
-        // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4")
+        // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4").
+        // Legacy channel; carries both numeric and boolean values as strings.
         std::unordered_map<std::string, std::string> assignments;
+        // Typed numeric channel (RealValue unification, Phase 1). Solvers that
+        // have migrated populate this; consumers prefer it for arithmetic
+        // variables and fall back to `assignments` otherwise. Lets NRA export
+        // exact algebraic models (e.g. √2) instead of a lossy string.
+        std::unordered_map<std::string, RealValue> numericAssignments;
     };
     virtual std::optional<TheoryModel>
     getModel() const { return std::nullopt; }

@@ -4,6 +4,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include "theory/arith/nra/core/CdcacConstraint.h"
 #include "theory/core/TheorySolver.h"
+#include "util/RealValue.h"
 #include <gmpxx.h>
 #include <vector>
 #include <optional>
@@ -45,6 +46,13 @@ public:
 
     // Format an algebraic root as (AlgebraicNumber (poly ...) (lower ...) (upper ...))
     std::string formatAlgebraicRoot(const AlgebraicRoot& root) const;
+
+    // Convert a CDCAC sample value (rational or algebraic root) to the unified
+    // RealValue type — the bridge from the CDCAC number system to the rest of
+    // the solver / model output.  Rational → RealValue::fromMpq; AlgebraicRoot
+    // → RealValue::fromAlgebraic (defining-poly coefficients + isolation
+    // interval pulled from the libpoly backend).
+    RealValue sampleValueToRealValue(const RealAlg& v) const;
 
 private:
     struct ActiveConstraint {

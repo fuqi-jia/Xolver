@@ -342,9 +342,13 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             for (const auto& [name, value] : m->assignments) {
                 aggregated.assignments[name] = value;
             }
+            for (const auto& [name, value] : m->numericAssignments) {
+                aggregated.numericAssignments.insert({name, value});
+            }
         }
     }
-    if (aggregated.assignments.empty()) return std::nullopt;
+    if (aggregated.assignments.empty() && aggregated.numericAssignments.empty())
+        return std::nullopt;
     return aggregated;
 }
 
