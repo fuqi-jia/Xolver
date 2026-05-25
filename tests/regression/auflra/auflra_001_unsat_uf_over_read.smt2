@@ -1,0 +1,8 @@
+(set-logic QF_AUFLRA)
+(set-info :status unsat)
+(declare-fun f (Real) Real)
+(declare-const a (Array Real Real))
+(declare-const i Real)
+(declare-const v Real)
+(assert (not (= (f (select (store a i v) i)) (f v))))
+(check-sat)

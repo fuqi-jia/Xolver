@@ -2,6 +2,7 @@
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/core/TheoryAtomRegistry.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include "expr/ir.h"
 #include <cassert>
 
@@ -22,6 +23,25 @@ void ArrayReasoner::reset() {
 ExprId ArrayReasoner::originExpr(EufTermId t) const {
     if (t == NullEufTerm) return NullExpr;
     return tm_->node(t).origin;
+}
+
+SatLit ArrayReasoner::makeRow2IndexEqLit(ExprId iExpr, ExprId jExpr) {
+    // Combination path: if BOTH indices are registered shared (arith) terms,
+    // the (i=j) antecedent must be a shared-equality atom so that an arith
+    // fact (e.g. i = j+0 deduced by LIA/LRA) and the Row2 case split refer to
+    // the SAME SAT literal. Routing it through getOrCreateEufEqualityAtom
+    // would create an EUF-only literal disconnected from arith's notion of
+    // i=j, making the lemma incomplete (and, combined with the bridge,
+    // potentially unsound). See CRITICAL soundness point #1.
+    if (sharedTermRegistry_) {
+        auto sa = sharedTermRegistry_->findByExprId(iExpr);
+        auto sb = sharedTermRegistry_->findByExprId(jExpr);
+        if (sa && sb) {
+            return registry_->getOrCreateSharedEqualityAtom(*sa, *sb);
+        }
+    }
+    // Pure QF_AX (uninterpreted indices) or one side not shared: EUF equality.
+    return registry_->getOrCreateEufEqualityAtom(iExpr, jExpr);
 }
 
 bool ArrayReasoner::symIsSelect(EufTermId t) const {
@@ -193,7 +213,10 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
             if (selAJExpr == NullExpr) continue;
 
             // Lemma:  (i=j)  OR  (select(store(a,i,v),j) = select(a,j))
-            SatLit ijEq = registry_->getOrCreateEufEqualityAtom(iExpr, jExpr);
+            // The (i=j) antecedent is a shared-equality atom when the indices
+            // are arith (combination); the read equality stays EUF-internal
+            // (its operands are select terms, owned only by EUF/arrays).
+            SatLit ijEq = makeRow2IndexEqLit(iExpr, jExpr);
             SatLit readEq = registry_->getOrCreateEufEqualityAtom(selStoreExpr, selAJExpr);
             return std::vector<SatLit>{ijEq, readEq};
         }

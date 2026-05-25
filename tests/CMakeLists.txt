@@ -49,7 +49,8 @@ endif()
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
     set(REGRESSION_LOGICS
-        ax bool euf idl lia lira lra nia nira nra rdl uflia uflra ufnia ufnra)
+        ax alia alra auflia auflra
+        bool euf idl lia lira lra nia nira nra rdl uflia uflra ufnia ufnra)
 
     foreach(logic ${REGRESSION_LOGICS})
         if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/tests/regression/${logic}")

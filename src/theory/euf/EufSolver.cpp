@@ -86,6 +86,10 @@ void EufSolver::ensureArrayContext() {
     if (!arrayMode_ || !coreIr_) return;
     if (!arrayReasoner_.active()) {
         arrayReasoner_.setContext(&termManager_, &egraph_, coreIr_, arrayRegistry_);
+        // In combination logics the indices/elements are shared arith terms;
+        // hand the reasoner the SharedTermRegistry so Row2 builds (i=j) as a
+        // shared-equality atom. Null in pure QF_AX.
+        arrayReasoner_.setSharedTermRegistry(sharedTermRegistry_);
     }
 }
 

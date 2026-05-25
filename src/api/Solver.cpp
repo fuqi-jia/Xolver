@@ -121,6 +121,13 @@ public:
         // route EVERY scalar variable through the token channel (already in the
         // validator's canonical namespaced form, as emitted by getModel) and
         // leave numAsg empty. Bool vars go through both channels.
+        //
+        // For the COMBINATION array logics (QF_ALIA/ALRA/AUFLIA/AUFLRA) the
+        // index/element values are concrete NUMBERS coming from the arith
+        // model: getModel() coerces them to "#n:<rational>" tokens (so they
+        // compare equal to a number's token inside an array interp). We
+        // additionally peel "#n:" back into numAsg so arithmetic atoms like
+        // (> i 5) evaluate to a definite truth value rather than Indeterminate.
         ArithModelValidator::NumAssignment numAsg;
         ArithModelValidator::BoolAssignment boolAsg;
         ArithModelValidator::TokenAssignment tokAsg;
@@ -128,6 +135,12 @@ public:
             if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
             if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
             tokAsg[name] = val;  // canonical token from getModel
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                // Bare numeric (defensive: some paths may not namespace).
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
@@ -549,13 +562,22 @@ public:
             const auto& req = dmLowerer.requirement();
             bool hasEuf = (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
                            logic == "QF_UFNIA" || logic == "UFNIA" ||
-                           logic == "QF_UFNRA" || logic == "UFNRA");
+                           logic == "QF_UFNRA" || logic == "UFNRA" ||
+                           logic == "QF_AX" ||
+                           logic == "QF_ALIA" || logic == "ALIA" ||
+                           logic == "QF_ALRA" || logic == "ALRA" ||
+                           logic == "QF_AUFLIA" || logic == "AUFLIA" ||
+                           logic == "QF_AUFLRA" || logic == "AUFLRA");
             bool isLinearOnly = (logic == "QF_LIA" || logic == "LIA" ||
                                  logic == "QF_LIRA" || logic == "LIRA" ||
                                  logic == "QF_IDL" || logic == "IDL" ||
                                  logic == "QF_RDL" || logic == "RDL" ||
                                  logic == "QF_UFLIA" || logic == "UFLIA" ||
-                                 logic == "QF_UFLRA" || logic == "UFLRA");
+                                 logic == "QF_UFLRA" || logic == "UFLRA" ||
+                                 logic == "QF_ALIA" || logic == "ALIA" ||
+                                 logic == "QF_ALRA" || logic == "ALRA" ||
+                                 logic == "QF_AUFLIA" || logic == "AUFLIA" ||
+                                 logic == "QF_AUFLRA" || logic == "AUFLRA");
             if (req.unsupported) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported divisor";
 #ifdef NLCOLVER_ENABLE_CASESTATS
@@ -716,6 +738,18 @@ public:
             if (features.hasNonlinear || features.hasUF) logicMismatch = true;
         } else if (logic == "QF_NIRA" || logic == "NIRA") {
             if (features.hasUF) logicMismatch = true;
+        } else if (logic == "QF_ALIA" || logic == "ALIA") {
+            if (features.hasRealVar || features.hasMixedIntReal ||
+                features.hasNonlinear || features.hasUF) logicMismatch = true;
+        } else if (logic == "QF_ALRA" || logic == "ALRA") {
+            if (features.hasIntVar || features.hasMixedIntReal ||
+                features.hasNonlinear || features.hasUF) logicMismatch = true;
+        } else if (logic == "QF_AUFLIA" || logic == "AUFLIA") {
+            if (features.hasRealVar || features.hasMixedIntReal ||
+                features.hasNonlinear) logicMismatch = true;
+        } else if (logic == "QF_AUFLRA" || logic == "AUFLRA") {
+            if (features.hasIntVar || features.hasMixedIntReal ||
+                features.hasNonlinear) logicMismatch = true;
         }
 
         if (logicMismatch) {
@@ -743,9 +777,17 @@ public:
             return Result::Unknown;
         }
 
-        // Arrays are only handled by the array logics (currently QF_AX). Any
-        // other logic that contains arrays is gated to Unknown (sound).
-        if (features.hasArray && logic != "QF_AX") {
+        // Arrays are only handled by the array logics: pure QF_AX and the
+        // combination logics QF_ALIA/QF_ALRA/QF_AUFLIA/QF_AUFLRA. Any other
+        // logic that contains arrays is gated to Unknown (sound).
+        auto isArrayLogic = [](const std::string& l) {
+            return l == "QF_AX" ||
+                   l == "QF_ALIA" || l == "ALIA" ||
+                   l == "QF_ALRA" || l == "ALRA" ||
+                   l == "QF_AUFLIA" || l == "AUFLIA" ||
+                   l == "QF_AUFLRA" || l == "AUFLRA";
+        };
+        if (features.hasArray && !isArrayLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
 #ifdef NLCOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
@@ -852,6 +894,16 @@ public:
             atomizer.setDefaultTheory(TheoryId::EUF);
         } else if (logic == "QF_AX") {
             atomizer.setDefaultTheory(TheoryId::EUF);
+        } else if (logic == "QF_ALRA" || logic == "ALRA" ||
+                   logic == "QF_AUFLRA" || logic == "AUFLRA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::LRA);
+        } else if (logic == "QF_ALIA" || logic == "ALIA" ||
+                   logic == "QF_AUFLIA" || logic == "AUFLIA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::LIA);
         } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
             atomizer.setDefaultTheory(TheoryId::Combination);
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());

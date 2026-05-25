@@ -1,0 +1,10 @@
+(set-logic QF_ALIA)
+(set-info :status unsat)
+; arith fact i = j+0 must drive Row2 across the shared-equality bridge
+(declare-const a (Array Int Int))
+(declare-const i Int)
+(declare-const j Int)
+(declare-const v Int)
+(assert (= i (+ j 0)))
+(assert (not (= (select (store a i v) j) v)))
+(check-sat)
