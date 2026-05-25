@@ -1,0 +1,8 @@
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (>= x 0)) (assert (<= x 150))
+(assert (>= y 0)) (assert (<= y 150))
+(assert (= (* x y) 8051))
+(check-sat)
