@@ -235,9 +235,13 @@ TEST_CASE("BitBlastSolver: complete box UNSAT carries nonlinear AND bound reason
     REQUIRE(r.conflict.has_value());
     bool hasNonlinear = false, hasLower = false, hasUpper = false;
     for (const auto& l : r.conflict->clause) {
-        if (l.var == 20) hasNonlinear = true;
-        if (l.var == 21) hasLower = true;
-        if (l.var == 22) hasUpper = true;
+        // POLARITY: reasons must be in asserted (true-under-model) form — the
+        // reasons were supplied with sign=true, and TheoryManager negates them
+        // into the falsified clause. Storing l.negated() here would double-
+        // negate and make the propagator reject the conflict (UnsatComplete lost).
+        if (l.var == 20) { hasNonlinear = true; CHECK(l.sign == true); }
+        if (l.var == 21) { hasLower = true;     CHECK(l.sign == true); }
+        if (l.var == 22) { hasUpper = true;     CHECK(l.sign == true); }
     }
     CHECK(hasNonlinear); CHECK(hasLower); CHECK(hasUpper);
 }

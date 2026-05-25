@@ -72,19 +72,25 @@ std::optional<TheoryConflict> BitBlastSolver::buildCompleteConflict(
     // silently dropping it would yield an UNSOUND conflict (e.g. "¬A ∨ ¬B" when
     // the real infeasibility also needed an unjustified bound). So we bail to
     // Unknown rather than emit a partial conflict.
+    //
+    // POLARITY: reasons are stored in their *asserted* (true-under-model) form,
+    // matching the NIA convention (see DomainStore::buildEmptyDomainConflict).
+    // TheoryManager::makeFalsifiedConflict negates them into the falsified
+    // clause `⋁ ¬reason`. Negating here would double-negate and produce an
+    // all-true clause the propagator rejects (UnsatComplete → silently lost).
     TheoryConflict cf;
 
     auto pushAll = [&](const std::vector<SatLit>& reasons) -> bool {
         if (reasons.empty()) return false;
         for (const auto& l : reasons) {
             if (l.var == 0) return false;
-            cf.clause.push_back(l.negated());
+            cf.clause.push_back(l);
         }
         return true;
     };
     auto pushOne = [&](SatLit l) -> bool {
         if (l.var == 0) return false;
-        cf.clause.push_back(l.negated());
+        cf.clause.push_back(l);
         return true;
     };
 
