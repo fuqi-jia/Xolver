@@ -425,12 +425,21 @@ PolynomialKernel::PseudoRemainderResult LibPolyKernel::pseudoRemainderWithScale(
     }
 
     if (!degDividend) {
-        return {*remOpt, NullPoly, 0};
+        // Dividend is constant in mainVar: reducing it modulo a polynomial in
+        // mainVar leaves it unchanged, so the pseudo-remainder is the dividend.
+        return {dividend, NullPoly, 0};
     }
 
     int k = *degDividend - *degDivisor + 1;
     if (k <= 0) {
-        return {*remOpt, NullPoly, 0};
+        // deg(dividend, mainVar) < deg(divisor, mainVar): no reduction w.r.t.
+        // mainVar is possible, so the pseudo-remainder w.r.t. mainVar is the
+        // dividend itself. The plain pseudoRemainder above may reduce w.r.t. the
+        // wrong main variable (libpoly's prem uses each operand's own largest
+        // variable), producing a spurious 0 — this caused signAtTower to report
+        // Sign::Zero for polynomials constant in the algebraic var (nra_092's
+        // false witness x=1/2 satisfying x>=1).
+        return {dividend, NullPoly, 0};
     }
 
     auto lcOpt = leadingCoefficient(divisor);
