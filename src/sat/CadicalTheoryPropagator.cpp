@@ -151,20 +151,6 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     NO_DBG << "[CaDiCaL] cb_check_found_model modelSize=" << model.size() << "\n";
 
-    // --- DEBUG: print all theory literals in current model ---
-    std::cerr << "[SAT-MODEL] theory lits in model:\n";
-    for (int lit : model) {
-        SatVar var = static_cast<SatVar>(std::abs(lit));
-        bool sign = lit > 0;
-        const auto* atom = registry_.findBySatVar(var);
-        if (!atom) continue;
-        std::cerr << "[SAT-MODEL]  var=" << var
-                  << " sign=" << (sign ? "T" : "F")
-                  << " theory=" << (int)atom->theory
-                  << " expr=" << atom->exprId
-                  << " lit=" << lit << "\n";
-    }
-
     // Reset theory state to level 0 before rebuilding from current model.
     // Without this, stale assignments from previous model checks accumulate
     // in solver trails and cause malformed conflict clauses (explain returns
@@ -208,10 +194,10 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     updateCaseStatsSearch();
 #endif
 
-    std::cerr << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
-    if (!tr.reason.empty()) std::cerr << " reason=" << tr.reason;
-    std::cerr << " us=" << dur.count();
-    std::cerr << "\n";
+    NO_DBG << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
+    if (!tr.reason.empty()) NO_DBG << " reason=" << tr.reason;
+    NO_DBG << " us=" << dur.count();
+    NO_DBG << "\n";
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;
@@ -219,14 +205,14 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     if (tr.kind == TheoryCheckResult::Kind::Conflict) {
         if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
-            std::cerr << "[PROP] conflict clause = ";
+            NO_DBG << "[PROP] conflict clause = ";
             for (SatLit lit : tr.conflictOpt->clause) {
-                std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+                NO_DBG << (lit.sign ? "" : "-") << lit.var << " ";
             }
-            std::cerr << "\n";
+            NO_DBG << "\n";
 
             if (!isClauseFalsifiedByCurrentModel(tr.conflictOpt->clause)) {
-                std::cerr << "[PROP][BUG] malformed external conflict clause. "
+                NO_DBG << "[PROP][BUG] malformed external conflict clause. "
                              "Rejecting it to avoid infinite modelCheck loop.\n";
                 abortWithUnknown_ = true;
                 terminateSolve();
@@ -321,15 +307,15 @@ int CadicalTheoryPropagator::cb_propagate() {
                 }
             }
             if (!allAssigned) {
-                std::cerr << "[PROP] cb_propagate skip conflict with unassigned literals ("
+                NO_DBG << "[PROP] cb_propagate skip conflict with unassigned literals ("
                           << clause.size() << " lits)\n";
                 return 0;
             }
-            std::cerr << "[PROP] cb_propagate conflict clause = ";
+            NO_DBG << "[PROP] cb_propagate conflict clause = ";
             for (SatLit lit : clause) {
-                std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+                NO_DBG << (lit.sign ? "" : "-") << lit.var << " ";
             }
-            std::cerr << " us=" << dur.count() << "\n";
+            NO_DBG << " us=" << dur.count() << "\n";
             enqueuePendingClause(clause);
             return 0;
         }
@@ -398,11 +384,11 @@ void CadicalTheoryPropagator::enqueuePendingClause(const std::vector<SatLit>& li
         currentPendingClause_ = lits;
         currentPendingClausePos_ = 0;
     }
-    std::cerr << "[PROP] enqueuePendingClause: ";
+    NO_DBG << "[PROP] enqueuePendingClause: ";
     for (SatLit lit : lits) {
-        std::cerr << (lit.sign ? "" : "-") << lit.var << " ";
+        NO_DBG << (lit.sign ? "" : "-") << lit.var << " ";
     }
-    std::cerr << "(queue_size=" << pendingClauses_.size() << ")\n";
+    NO_DBG << "(queue_size=" << pendingClauses_.size() << ")\n";
 }
 
 void CadicalTheoryPropagator::enqueuePendingClause(const TheoryLemma& lemma) {
@@ -448,7 +434,7 @@ bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<
         LitValue v = assignmentView_.value(lit);
         if (v != LitValue::False) {
             ok = false;
-            std::cerr << "[PROP][BAD CLAUSE] lit not false under model: "
+            NO_DBG << "[PROP][BAD CLAUSE] lit not false under model: "
                       << (lit.sign ? "" : "-") << lit.var
                       << " value=" << (v == LitValue::True ? "True" : "Unknown")
                       << "\n";
