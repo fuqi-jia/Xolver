@@ -80,17 +80,20 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         solver.setLogic(*logicOpt);
     }
 
-    solver.dumpSMT2(std::cout);
-
+    // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
+    // tokens (sat / unsat / unknown). Diagnostics go to stderr so the
+    // competition harness (which greps stdout) is not confused. The old
+    // `dumpSMT2(std::cout)` echo of the parsed formula is removed for the
+    // same reason — use `--verbose` / stderr for debugging instead.
     nlcolver::Result r = solver.checkSat();
-    std::cout << toString(r);
+    std::cout << toString(r) << "\n";
+    std::cout.flush();
     if (r == nlcolver::Result::Unknown) {
         auto reason = solver.lastUnknownReason();
         if (!reason.empty()) {
-            std::cout << " (reason=" << reason << ")";
+            std::cerr << "(unknown-reason " << reason << ")\n";
         }
     }
-    std::cout << "\n";
     return EXIT_SUCCESS;
 }
 
