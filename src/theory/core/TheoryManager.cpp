@@ -335,15 +335,23 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
 }
 
 std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
+    // First-registered solver wins per variable. Solvers are registered with
+    // the PRIMARY theory first (e.g. NIA before the LIA-linearization helper
+    // for QF_NIA), so the authoritative theory's validated witness is kept
+    // and helper solvers (whose models are linear-only / incomplete and can
+    // violate nonlinear constraints) only fill in variables the primary did
+    // not assign. Without this, the LIA mirror's linear-feasible point
+    // overrode NIA's witness, producing models that satisfy the linear part
+    // but not the nonlinear constraints (e.g. nia_089: sum=20 ok, product<100).
     TheorySolver::TheoryModel aggregated;
     for (const auto& solver : solvers_) {
         auto m = solver->getModel();
         if (m) {
             for (const auto& [name, value] : m->assignments) {
-                aggregated.assignments[name] = value;
+                aggregated.assignments.insert({name, value});  // first wins
             }
             for (const auto& [name, value] : m->numericAssignments) {
-                aggregated.numericAssignments.insert({name, value});
+                aggregated.numericAssignments.insert({name, value});  // first wins
             }
         }
     }
