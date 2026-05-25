@@ -20,6 +20,17 @@ std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
     return std::nullopt;
 }
 
+// Coerce a value into a canonical equality token. Numbers and bools are given
+// disjoint namespaces so they never alias an uninterpreted token by accident.
+std::optional<std::string> ArithModelValidator::asToken(const TR& r) const {
+    switch (r.kind) {
+        case Kind2::Number: return "#n:" + r.n.get_str();
+        case Kind2::Bool:   return std::string("#b:") + (r.b ? "1" : "0");
+        case Kind2::Token:  return r.tok;
+        default:            return std::nullopt;
+    }
+}
+
 ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
     if (eid >= ir_.size()) return {};
     const CoreExpr& n = ir_.get(eid);
@@ -38,6 +49,17 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             return r;
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                // Array-sorted variable → look up its interpretation.
+                if (arr_ && ir_.arraySortParams(n.sort)) {
+                    auto it = arr_->find(*s);
+                    if (it == arr_->end()) return r;  // indeterminate
+                    TR t; t.kind = Kind2::Array;
+                    t.arr.deflt = it->second.defaultVal;
+                    for (const auto& [idx, val] : it->second.entries) {
+                        t.arr.overrides[idx] = val;
+                    }
+                    return t;
+                }
                 if (n.sort == ir_.boolSortId()) {
                     auto it = boolAsg_.find(*s);
                     if (it != boolAsg_.end()) return bl(it->second);
@@ -45,6 +67,13 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
                 }
                 auto it = num_.find(*s);
                 if (it != num_.end()) return num(it->second);
+                // Uninterpreted-sort scalar (index/element): opaque token.
+                if (tok_) {
+                    auto tit = tok_->find(*s);
+                    if (tit != tok_->end()) {
+                        TR t; t.kind = Kind2::Token; t.tok = tit->second; return t;
+                    }
+                }
             }
             return r;
         }
@@ -154,8 +183,39 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind == Kind2::Indeterminate || b.kind == Kind2::Indeterminate) return r;
-            if (a.kind != b.kind) return r;
-            return bl(a.kind == Kind2::Bool ? (a.b == b.b) : (a.n == b.n));
+            // Array equality: equal defaults AND equal at every read index of
+            // the union. a != b iff some explicit read index differs (no
+            // default-distinctness shortcut: if defaults differ but no read
+            // witnesses it, that alone does NOT prove inequality here).
+            if (a.kind == Kind2::Array && b.kind == Kind2::Array) {
+                // Witness inequality ONLY at an explicit read index where the
+                // two applies differ (no default-distinctness shortcut). The
+                // union of override indices is the set of indices the formula
+                // can observe; extensionality witnesses appear here.
+                auto applyAt = [](const ArrVal& v, const std::string& idx) {
+                    auto it = v.overrides.find(idx);
+                    return it != v.overrides.end() ? it->second : v.deflt;
+                };
+                bool anyReadDiffers = false;
+                for (const auto& [idx, val] : a.arr.overrides) {
+                    if (applyAt(a.arr, idx) != applyAt(b.arr, idx)) anyReadDiffers = true;
+                }
+                for (const auto& [idx, val] : b.arr.overrides) {
+                    if (applyAt(a.arr, idx) != applyAt(b.arr, idx)) anyReadDiffers = true;
+                }
+                if (anyReadDiffers) return bl(false);
+                // No read distinguishes them. If defaults AND all observed
+                // applies agree, they are equal over everything the formula
+                // can see → equal. If defaults differ but no read witnesses
+                // it, we cannot soundly claim either way → indeterminate.
+                if (a.arr.deflt == b.arr.deflt) return bl(true);
+                return r;  // indeterminate (no default-distinctness shortcut)
+            }
+            if (a.kind == Kind2::Array || b.kind == Kind2::Array) return r;
+            // Scalar equality via canonical tokens (covers Number/Bool/Token).
+            auto at = asToken(a), bt = asToken(b);
+            if (!at || !bt) return r;
+            return bl(*at == *bt);
         }
         case Kind::Distinct: {
             std::vector<TR> vals;
@@ -165,14 +225,33 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
                 if (cr.kind == Kind2::Indeterminate) return r;
                 vals.push_back(cr);
             }
+            bool anyIndet = false;
             for (size_t i = 0; i < vals.size(); ++i)
                 for (size_t j = i + 1; j < vals.size(); ++j) {
-                    if (vals[i].kind != vals[j].kind) continue;
-                    bool same = vals[i].kind == Kind2::Bool
-                        ? (vals[i].b == vals[j].b) : (vals[i].n == vals[j].n);
-                    if (same) return bl(false);
+                    // Array distinctness: only collapse to false if provably
+                    // equal (defaults+reads agree); otherwise indeterminate
+                    // unless a read witnesses a difference.
+                    if (vals[i].kind == Kind2::Array && vals[j].kind == Kind2::Array) {
+                        auto applyAt = [](const ArrVal& v, const std::string& idx) {
+                            auto it = v.overrides.find(idx);
+                            return it != v.overrides.end() ? it->second : v.deflt;
+                        };
+                        bool differs = false;
+                        for (const auto& [idx, val] : vals[i].arr.overrides)
+                            if (applyAt(vals[i].arr, idx) != applyAt(vals[j].arr, idx)) differs = true;
+                        for (const auto& [idx, val] : vals[j].arr.overrides)
+                            if (applyAt(vals[i].arr, idx) != applyAt(vals[j].arr, idx)) differs = true;
+                        if (!differs) {
+                            if (vals[i].arr.deflt == vals[j].arr.deflt) return bl(false);
+                            anyIndet = true;  // cannot prove distinct
+                        }
+                        continue;
+                    }
+                    auto ti = asToken(vals[i]), tj = asToken(vals[j]);
+                    if (!ti || !tj) { anyIndet = true; continue; }
+                    if (*ti == *tj) return bl(false);
                 }
-            return bl(true);
+            return anyIndet ? r : bl(true);
         }
         case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
             if (n.children.size() != 2) return r;
@@ -232,6 +311,43 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             TR c = eval(n.children[0]);
             if (c.kind != Kind2::Bool) return r;
             return eval(c.b ? n.children[1] : n.children[2]);
+        }
+        case Kind::ConstArray: {
+            // const(v): λi.v. Default = token of v, no overrides.
+            if (n.children.size() != 1) return r;
+            TR vr = eval(n.children[0]);
+            auto vt = asToken(vr);
+            if (!vt) return r;
+            TR t; t.kind = Kind2::Array; t.arr.deflt = *vt;
+            return t;
+        }
+        case Kind::Store: {
+            // store(a,i,v): override a at index-token(i) with token(v).
+            if (n.children.size() != 3) return r;
+            TR ar = eval(n.children[0]);
+            if (ar.kind != Kind2::Array) return r;
+            TR ir2 = eval(n.children[1]);
+            TR vr = eval(n.children[2]);
+            auto it = asToken(ir2);
+            auto vt = asToken(vr);
+            if (!it || !vt) return r;
+            TR t = ar;  // copy underlying array value
+            t.arr.overrides[*it] = *vt;
+            return t;
+        }
+        case Kind::Select: {
+            // select(a,i): apply a's interpretation at index-token(i).
+            if (n.children.size() != 2) return r;
+            TR ar = eval(n.children[0]);
+            if (ar.kind != Kind2::Array) return r;
+            TR ir2 = eval(n.children[1]);
+            auto it = asToken(ir2);
+            if (!it) return r;
+            auto ov = ar.arr.overrides.find(*it);
+            std::string elem = (ov != ar.arr.overrides.end()) ? ov->second : ar.arr.deflt;
+            // Result is an opaque element token.
+            TR t; t.kind = Kind2::Token; t.tok = elem;
+            return t;
         }
         default:
             return r;  // UFApply, quantifiers, BV/FP, … → indeterminate

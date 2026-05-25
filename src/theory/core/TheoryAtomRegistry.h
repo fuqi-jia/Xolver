@@ -47,6 +47,15 @@ public:
     // Canonical key ensures Eq(a,b) and Eq(b,a) share one SatVar.
     SatLit getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b);
 
+    // Dynamic EUF equality atom Eq(lhs, rhs) over CoreIr ExprIds. Used by the
+    // ArrayReasoner to emit Row2/Extensionality lemmas whose literals are NEW
+    // equalities between array/select/index terms. Returns the positive
+    // literal for (= lhs rhs); the negated literal denotes (distinct lhs rhs).
+    // The created SAT var is observed so the propagator routes its assignment
+    // back to the EUF solver as an EufAtomPayload before the clause is used.
+    // Canonical key (min,max) ensures Eq(a,b) and Eq(b,a) share one SatVar.
+    SatLit getOrCreateEufEqualityAtom(ExprId lhs, ExprId rhs);
+
 private:
     SatSolver* sat_ = nullptr;
     DynamicAtomRegistrar* registrar_ = nullptr;
@@ -91,6 +100,8 @@ private:
     };
     std::unordered_map<PolyLookupKey, size_t, PolyLookupKeyHash> polyLookup_;
     std::unordered_map<uint64_t, size_t> sharedEqLookup_;
+    // EUF equality dedup keyed by canonical (min,max) ExprId pair.
+    std::unordered_map<uint64_t, size_t> eufEqLookup_;
 
     ExprId nextSyntheticExprId_ = static_cast<ExprId>(0x80000000);
     bool unsupportedTheorySeen_ = false;

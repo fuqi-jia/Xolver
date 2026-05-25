@@ -108,6 +108,33 @@ public:
                == ArithModelValidator::Verdict::Violated;
     }
 
+    // QF_AX: re-validate the extracted array model against the ORIGINAL
+    // assertions. Returns true only if the model is present and the validator
+    // does NOT report a definite violation. A missing model or an
+    // Indeterminate result is treated as "cannot confirm" → false (gate to
+    // Unknown), so we never emit an unvalidated array sat.
+    bool arrayModelValidates() const {
+        if (!ir || !lastModel_) return false;
+        if (lastModel_->arrayInterps.empty()) return false;  // nothing to stand on
+
+        // QF_AX is arithmetic-free: index/element vars are opaque tokens, so we
+        // route EVERY scalar variable through the token channel (already in the
+        // validator's canonical namespaced form, as emitted by getModel) and
+        // leave numAsg empty. Bool vars go through both channels.
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;  // canonical token from getModel
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                      lastModel_->arrayInterps, tokAsg);
+        return validator.validate(originalAssertions_)
+               != ArithModelValidator::Verdict::Violated;
+    }
+
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the
     // chosen result (the value of the fresh quotient q / remainder r) keyed by
@@ -709,7 +736,17 @@ public:
         }
 
         if (features.hasUnsupported) {
-            lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/array/FP/BV)";
+            lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/FP/BV)";
+#ifdef NLCOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+            return Result::Unknown;
+        }
+
+        // Arrays are only handled by the array logics (currently QF_AX). Any
+        // other logic that contains arrays is gated to Unknown (sound).
+        if (features.hasArray && logic != "QF_AX") {
+            lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
 #ifdef NLCOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
@@ -812,6 +849,8 @@ public:
         } else if (logic == "QF_RDL" || logic == "RDL") {
             atomizer.setDefaultTheory(TheoryId::RDL);
         } else if (logic == "QF_UF") {
+            atomizer.setDefaultTheory(TheoryId::EUF);
+        } else if (logic == "QF_AX") {
             atomizer.setDefaultTheory(TheoryId::EUF);
         } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
             atomizer.setDefaultTheory(TheoryId::Combination);
@@ -979,6 +1018,24 @@ public:
                         : "partial-function model: Real division by zero (unsupported in model output)";
                 lastModel_.reset();
                 partialFuncModel_ = PartialFuncModel{};
+                ret = Result::Unknown;
+            }
+        }
+
+        // QF_AX array soundness gate (Model-Validation track only): when a
+        // model is requested for an array problem, re-validate the extracted
+        // array model against the ORIGINAL assertions. If it DEFINITELY
+        // violates one, or we cannot build it, downgrade Sat -> Unknown rather
+        // than emit an unvalidated array sat. The UNSAT verdict (sound axioms)
+        // is never affected. Verdict soundness for SAT is independent of this
+        // (the QF_AX theory check is complete); this only protects the printed
+        // model and never returns sat without a validated model.
+        if (ret == Result::Sat && modelRequestedImpl() && features.hasArray) {
+            bool ok = arrayModelValidates();
+            if (!ok) {
+                lastUnknownReason_ =
+                    "QF_AX: array model construction/validation incomplete (gated to Unknown)";
+                lastModel_.reset();
                 ret = Result::Unknown;
             }
         }

@@ -25,6 +25,7 @@ enum class Kind : uint16_t {
     BvNot, BvAnd, BvOr, BvAdd, BvMul,
     Forall, Exists,
     ToInt, ToReal, IsInt,
+    Select, Store, ConstArray,
     Unknown,
 };
 
@@ -119,6 +120,17 @@ public:
         return std::nullopt;
     }
 
+    // Array sort parameters: (Array index elem). SortId is otherwise opaque to
+    // the index/element sorts, which the array theory and model output need.
+    void registerArraySort(SortId arr, SortId index, SortId elem) {
+        arraySortParams_[arr] = {index, elem};
+    }
+    std::optional<std::pair<SortId, SortId>> arraySortParams(SortId arr) const {
+        auto it = arraySortParams_.find(arr);
+        if (it != arraySortParams_.end()) return it->second;
+        return std::nullopt;
+    }
+
     SortId boolSortId() const { return boolSortId_; }
     void setBoolSortId(SortId id) { boolSortId_ = id; }
 
@@ -167,6 +179,7 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;
     std::unordered_map<SortId, SortKind> sortKinds_;
+    std::unordered_map<SortId, std::pair<SortId, SortId>> arraySortParams_;
     SortId boolSortId_ = NullSort;
     SortId intSortId_ = NullSort;
     SortId realSortId_ = NullSort;

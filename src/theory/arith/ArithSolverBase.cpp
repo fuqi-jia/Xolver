@@ -1,6 +1,8 @@
 #include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/Reasoner.h"
 #include <cassert>
+#include <cstdlib>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -33,7 +35,20 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
         // nullopt = continue to next stage; a value = stop with that verdict
         // (Consistent here means "theory state is consistent, stop", NOT
         // "continue").
-        if (res.has_value()) return std::move(*res);
+        if (res.has_value()) {
+            static const bool stageDiag = std::getenv("ARITH_STAGE_DIAG") != nullptr;
+            if (stageDiag && res->kind == TheoryCheckResult::Kind::Conflict) {
+                std::cerr << "[STAGE-CONFLICT] stage=" << r->name()
+                          << " size=" << (res->conflictOpt ? res->conflictOpt->clause.size() : 0)
+                          << " lits=";
+                if (res->conflictOpt) {
+                    for (const auto& l : res->conflictOpt->clause)
+                        std::cerr << (l.sign ? "" : "-") << l.var << " ";
+                }
+                std::cerr << "\n";
+            }
+            return std::move(*res);
+        }
     }
     return TheoryCheckResult::consistent();
 }

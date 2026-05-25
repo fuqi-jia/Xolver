@@ -137,4 +137,32 @@ SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedT
     return lit;
 }
 
+SatLit TheoryAtomRegistry::getOrCreateEufEqualityAtom(ExprId lhs, ExprId rhs) {
+    assert(sat_ != nullptr && registrar_ != nullptr);
+
+    // Canonical key: min(lhs,rhs), max(lhs,rhs). The EUF solver treats Eq(a,b)
+    // and Eq(b,a) identically, so they must share one SAT var.
+    ExprId lo = lhs < rhs ? lhs : rhs;
+    ExprId hi = lhs < rhs ? rhs : lhs;
+    uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+
+    auto it = eufEqLookup_.find(key);
+    if (it != eufEqLookup_.end()) {
+        const auto& rec = records_[it->second];
+        return SatLit::positive(rec.satVar);
+    }
+
+    ExprId synthetic = nextSyntheticExprId_++;
+    SatLit lit = registrar_->registerDynamicAtom(synthetic, TheoryId::EUF);
+
+    size_t idx = records_.size();
+    records_.push_back({lit.var, TheoryId::EUF, true, synthetic,
+                        EufAtomPayload{lo, hi, Relation::Eq, EufAtomKind::Equality}});
+    satVarToIdx_[lit.var] = idx;
+    eufEqLookup_[key] = idx;
+    observeIfNeeded(lit.var);
+
+    return lit;
+}
+
 } // namespace nlcolver

@@ -353,9 +353,16 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             for (const auto& [name, value] : m->numericAssignments) {
                 aggregated.numericAssignments.insert({name, value});  // first wins
             }
+            for (const auto& [name, interp] : m->functionInterps) {
+                aggregated.functionInterps.insert({name, interp});  // first wins
+            }
+            for (const auto& [name, interp] : m->arrayInterps) {
+                aggregated.arrayInterps.insert({name, interp});  // first wins
+            }
         }
     }
-    if (aggregated.assignments.empty() && aggregated.numericAssignments.empty())
+    if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
+        aggregated.functionInterps.empty() && aggregated.arrayInterps.empty())
         return std::nullopt;
     return aggregated;
 }
