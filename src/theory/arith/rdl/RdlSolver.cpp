@@ -48,26 +48,48 @@ RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a)
     mpq_class rhs = *rhsQ;
     const auto& terms = payload->lhs.terms;
 
-    // Identify +1 and -1 variables.
+    // Orient + scale. Accept any difference constraint a*p - a*q (rel) rhs,
+    // including non-unit (a != 1) and single-variable scaled forms, by dividing
+    // through by the common magnitude. Orienting the positive-coefficient var as
+    // plusVar and the negative as minusVar absorbs the sign, so the relation is
+    // never flipped. Real domain: exact rational division, no rounding. All
+    // arithmetic is exact mpq_class.
     std::string plusVar, minusVar;
+    mpq_class plusCoeff(0), minusCoeff(0);
     for (const auto& [name, coeff] : terms) {
-        if (coeff == 1) plusVar = name;
-        else if (coeff == -1) minusVar = name;
-        else return NormalizeResult::Unsupported;
-    }
-
-    // Single-variable forms map ZERO as the other side.
-    if (terms.size() == 1) {
-        if (!plusVar.empty()) {
-            minusVar = "__ZERO__";
+        if (coeff == 0) continue;
+        if (coeff > 0) {
+            if (!plusVar.empty()) return NormalizeResult::Unsupported;  // >1 positive var
+            plusVar = name; plusCoeff = coeff;
         } else {
-            plusVar = "__ZERO__";
+            if (!minusVar.empty()) return NormalizeResult::Unsupported; // >1 negative var
+            minusVar = name; minusCoeff = coeff;
         }
     }
 
-    if (plusVar.empty() || minusVar.empty()) {
+    // All-zero / empty: not a difference constraint. Bail explicitly before any
+    // node creation so we never build an illegal zero-node edge.
+    if (plusVar.empty() && minusVar.empty()) {
         return NormalizeResult::Unsupported;
     }
+
+    mpq_class mag;
+    if (!plusVar.empty() && !minusVar.empty()) {
+        // Two vars: require the antisymmetric form a*p - a*q (exact comparison).
+        if (plusCoeff + minusCoeff != 0) return NormalizeResult::Unsupported;
+        mag = plusCoeff;            // > 0
+    } else if (!plusVar.empty()) {
+        // Single positive var a*p: plus = p, minus = ZERO.
+        mag = plusCoeff;            // > 0
+        minusVar = "__ZERO__";
+    } else {
+        // Single negative var -a*q: plus = ZERO, minus = q.
+        mag = -minusCoeff;          // > 0
+        plusVar = "__ZERO__";
+    }
+
+    // Divide through by the positive magnitude; relation stays as-is.
+    rhs /= mag;
 
     int plusNode = graph_.getOrCreateNode(plusVar);
     int minusNode = graph_.getOrCreateNode(minusVar);
