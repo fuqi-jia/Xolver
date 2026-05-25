@@ -82,7 +82,19 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
-            if (b.n == 0) return r;  // (/ x 0) underspecified → indeterminate
+            if (b.n == 0) return r;  // div/0 underspecified → indeterminate
+            // SMT-LIB `div` on Int is EUCLIDEAN integer division (result in
+            // Z, remainder 0 ≤ r < |b|); `/` on Real is rational division.
+            // Distinguish by the node's sort.
+            if (n.sort == ir_.intSortId()) {
+                if (a.n.get_den() != 1 || b.n.get_den() != 1) return r;
+                mpz_class ai = a.n.get_num(), bi = b.n.get_num();
+                mpz_class absB = abs(bi), qAbs, rem;
+                mpz_fdiv_qr(qAbs.get_mpz_t(), rem.get_mpz_t(),
+                            ai.get_mpz_t(), absB.get_mpz_t());  // 0 ≤ rem < |b|
+                mpz_class q = (bi > 0) ? qAbs : -qAbs;
+                return num(mpq_class(q));
+            }
             return num(a.n / b.n);
         }
         case Kind::Pow: {

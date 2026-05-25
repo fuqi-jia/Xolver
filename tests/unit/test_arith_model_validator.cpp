@@ -72,6 +72,26 @@ TEST_CASE("ArithModelValidator: indeterminate on missing variable") {
     CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Indeterminate);
 }
 
+TEST_CASE("ArithModelValidator: Int div/mod use Euclidean semantics") {
+    Fix f;
+    ExprId x = f.var("x", f.intS);
+    // (= (div x 3) 2) ∧ (= (mod x 3) 1) — x=7 satisfies (7/3=2, 7%3=1).
+    CoreExpr dv; dv.kind = Kind::Div; dv.sort = f.intS;
+    dv.children.push_back(x); dv.children.push_back(f.cint(3));
+    ExprId divv = f.ir.add(std::move(dv));
+    CoreExpr md; md.kind = Kind::Mod; md.sort = f.intS;
+    md.children.push_back(x); md.children.push_back(f.cint(3));
+    ExprId modv = f.ir.add(std::move(md));
+    ExprId a1 = f.bin(Kind::Eq, divv, f.cint(2), f.boolS);
+    ExprId a2 = f.bin(Kind::Eq, modv, f.cint(1), f.boolS);
+
+    ArithModelValidator::NumAssignment num{{"x", 7}};
+    ArithModelValidator v(f.ir, num, {});
+    // Must be Satisfied — a rational-division reading of `div` would wrongly
+    // report Violated (7/3 ≠ 2).
+    CHECK(v.validate({a1, a2}) == ArithModelValidator::Verdict::Satisfied);
+}
+
 TEST_CASE("ArithModelValidator: indeterminate on uninterpreted function") {
     Fix f;
     // (= (f x) 3) — UFApply is unsupported → indeterminate, not Violated

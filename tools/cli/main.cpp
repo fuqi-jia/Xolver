@@ -38,9 +38,10 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     }
 
     nlcolver::Solver solver;
-    
+
     // Parse options after the file path
     std::optional<std::string> logicOpt;
+    bool checkModel = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--logic" && i + 1 < argc) {
@@ -65,6 +66,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             solver.setOption("lia-enable-eq-gcd-normalization", nlcolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
             // TODO: enable verbose output
+        } else if (arg == "--check-model") {
+            checkModel = true;
         } else {
             std::cerr << "Warning: unknown option " << arg << "\n";
         }
@@ -93,6 +96,10 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         solver.dumpModel(std::cout);
     }
     std::cout.flush();
+    // Diagnostic: independent model self-check against original assertions.
+    if (checkModel && r == nlcolver::Result::Sat && !solver.modelMatchesOriginal()) {
+        std::cerr << "MODEL_MISMATCH\n";
+    }
     if (r == nlcolver::Result::Unknown) {
         auto reason = solver.lastUnknownReason();
         if (!reason.empty()) {
