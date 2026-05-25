@@ -1,6 +1,7 @@
 #include "util/RealValue.h"
 #include "util/RealAlgebraicOps.h"
 
+#include <cassert>
 #include <cctype>
 #include <sstream>
 #include <stdexcept>
@@ -191,6 +192,8 @@ mpz_class RealValue::ceil() const {
 // Serialization
 // ---------------------------------------------------------------------------
 namespace {
+// Internal / get-value rational printing: integer form ("5", "(- 3)", "(/ 3 4)").
+// Parseable by RealValue::parse. NOT a Real-sort model value (no decimals).
 std::string rationalToSmtLib2(const mpq_class& q) {
     if (q.get_den() == 1) {
         if (q < 0) return "(- " + mpz_class(-q.get_num()).get_str() + ")";
@@ -201,19 +204,76 @@ std::string rationalToSmtLib2(const mpq_class& q) {
     }
     return "(/ " + q.get_num().get_str() + " " + q.get_den().get_str() + ")";
 }
+
+// An integer as a polynomial coefficient inside `(coeffs ...)`: bare integer,
+// negatives wrapped as `(- n)`.  e.g. -2 -> "(- 2)", 0 -> "0", 1 -> "1".
+std::string intCoeff(const mpz_class& n) {
+    if (n < 0) return "(- " + mpz_class(-n).get_str() + ")";
+    return n.get_str();
+}
+
+// An integer as a Real-sort model value: decimal literal.  5 -> "5.0",
+// -2 -> "(- 2.0)".
+std::string intToRealModelValue(const mpz_class& n) {
+    if (n < 0) return "(- " + mpz_class(-n).get_str() + ".0)";
+    return n.get_str() + ".0";
+}
+
+// A rational as a Real-sort model value (SMT-COMP model format): decimals, with
+// negatives carried in the numerator.  Matches the spec examples: 1 -> "1.0",
+// 3/2 -> "(/ 3.0 2.0)", -1 -> "(- 1.0)", -1/2 -> "(/ (- 1.0) 2.0)".
+std::string rationalToRealModelValue(const mpq_class& in) {
+    mpq_class q = in;
+    q.canonicalize();  // den > 0
+    if (q.get_den() == 1) return intToRealModelValue(q.get_num());
+    return "(/ " + intToRealModelValue(q.get_num()) + " " +
+           q.get_den().get_str() + ".0)";
+}
+
+// Content (GCD of |coefficients|) — used only by the debug validity check.
+mpz_class coeffContent(const std::vector<mpz_class>& coeffs) {
+    mpz_class g = 0;
+    for (const auto& c : coeffs) mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), c.get_mpz_t());
+    return g;
+}
 }  // namespace
 
 std::string RealValue::toSmtLib2() const {
     if (isRational()) return rationalToSmtLib2(asRational());
-    // Exact structural form: the defining polynomial (coefficients low-to-high)
-    // plus the isolation interval uniquely identify the root — no precision is
-    // lost (unlike a decimal/midpoint approximation).  A libpoly-backed decimal
-    // approximation mode and the SMT-LIB (root-obj ...) form are CLI concerns.
     const AlgebraicNumber& a = asAlgebraic();
+
+    // Rational-singleton fallback: a degree ≤ 1 defining polynomial (root
+    // -c0/c1), or a collapsed isolation interval, denotes a rational number.
+    // Emit it as a Real-sort model value — an interval form with no genuine
+    // irrational root (or lower == upper) has no well-defined "unique root
+    // between min and max" and the validator may reject it.
+    if (a.coefficients.size() <= 2 || a.lower == a.upper) {
+        if (a.coefficients.size() == 2 && a.coefficients[1] != 0) {
+            mpq_class root(-a.coefficients[0], a.coefficients[1]);
+            root.canonicalize();
+            return rationalToRealModelValue(root);
+        }
+        return rationalToRealModelValue(a.lower);
+    }
+
+    // SMT-COMP 2026 Model-Validation form:
+    //   (root-of-with-interval (coeffs c0 c1 ... cn) min max)
+    // integer coefficients ascending (constant first); the isolating interval
+    // endpoints are bare Real-sort model values.  Canonical-form invariants are
+    // asserted in debug builds (compiled out under NDEBUG).
+    assert(!a.coefficients.empty() && a.coefficients.back() != 0 &&
+           "algebraic: leading coefficient must be nonzero");
+    assert(a.coefficients.back() > 0 &&
+           "algebraic: leading coefficient must be positive (canonical form)");
+    assert(coeffContent(a.coefficients) == 1 &&
+           "algebraic: coefficients must be coprime (canonical form)");
+    assert(a.lower < a.upper && "algebraic: isolation interval must be non-empty");
+
     std::ostringstream os;
-    os << "(root-obj (poly";
-    for (const auto& c : a.coefficients) os << " " << c.get_str();
-    os << ") (lower " << a.lower.get_str() << ") (upper " << a.upper.get_str() << "))";
+    os << "(root-of-with-interval (coeffs";
+    for (const auto& c : a.coefficients) os << " " << intCoeff(c);
+    os << ") " << rationalToRealModelValue(a.lower) << " "
+       << rationalToRealModelValue(a.upper) << ")";
     return os.str();
 }
 

@@ -126,6 +126,39 @@ TEST_CASE("RealValue: toSmtLib2 round-trips via parse (rational)") {
     CHECK(back.compare(q) == 0);
 }
 
+// --- SMT-COMP 2026 Model-Validation: algebraic numbers -----------------------
+// Algebraic Reals must serialize as the spec's `root-of-with-interval` form:
+// coefficients ascending (constant first) wrapped in `coeffs` with negatives as
+// `(- n)`, and bare Real-sort model values for the isolating interval [min,max].
+TEST_CASE("RealValue: toSmtLib2 algebraic emits root-of-with-interval") {
+    // √2 : root of x²−2 isolated in [1, 2].
+    RealValue r2 = RealValue::fromAlgebraic(sqrt2());
+    CHECK(r2.toSmtLib2() == "(root-of-with-interval (coeffs (- 2) 0 1) 1.0 2.0)");
+}
+
+TEST_CASE("RealValue: toSmtLib2 algebraic with fractional interval endpoint") {
+    // √2 isolated in [1, 3/2]; the 3/2 endpoint is a Real-sort model value.
+    AlgebraicNumber a{{mpz_class(-2), mpz_class(0), mpz_class(1)},
+                      mpq_class(1), mpq_class(3, 2), true, true};
+    CHECK(RealValue::fromAlgebraic(a).toSmtLib2() ==
+          "(root-of-with-interval (coeffs (- 2) 0 1) 1.0 (/ 3.0 2.0))");
+}
+
+TEST_CASE("RealValue: toSmtLib2 algebraic with negative interval") {
+    // −√2 : root of x²−2 isolated in [−2, −1].
+    AlgebraicNumber a{{mpz_class(-2), mpz_class(0), mpz_class(1)},
+                      mpq_class(-2), mpq_class(-1), true, true};
+    CHECK(RealValue::fromAlgebraic(a).toSmtLib2() ==
+          "(root-of-with-interval (coeffs (- 2) 0 1) (- 2.0) (- 1.0))");
+}
+
+TEST_CASE("RealValue: toSmtLib2 algebraic rational-singleton falls back to Real value") {
+    // Root of x−5: degree ≤ 1 ⇒ rational; must emit a Real-sort model value
+    // (5.0), NOT an interval form and NOT the internal integer form (5).
+    RealValue v = RealValue::fromAlgebraic(five());
+    CHECK(v.toSmtLib2() == "5.0");
+}
+
 TEST_CASE("ExtendedRealValue: infinities order correctly") {
     ExtendedRealValue ninf = ExtendedRealValue::negInf();
     ExtendedRealValue pinf = ExtendedRealValue::posInf();

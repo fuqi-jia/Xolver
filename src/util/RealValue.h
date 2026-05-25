@@ -102,9 +102,11 @@ public:
     mpz_class ceil() const;
 
     // -- Serialization --------------------------------------------------------
-    // toSmtLib2(): for (get-value ...).  Rationals → "n" / "(/ n d)" /
-    //   "(- ...)".  Algebraics → cvc5-style (root-obj ...) or a decimal
-    //   approximation with provenance, per output mode.
+    // toSmtLib2(): rationals → internal integer form "n" / "(/ n d)" / "(- ...)"
+    //   (parseable by parse()).  Algebraics → the SMT-COMP 2026 Model-Validation
+    //   form (root-of-with-interval (coeffs c0..cn) min max) with Real-sort model
+    //   values for the interval; a rational-singleton algebraic falls back to a
+    //   Real-sort model value ("5.0").
     // toDebugString(): always defined, never throws; for logs/diagnostics.
     std::string toSmtLib2() const;
     std::string toDebugString() const;
