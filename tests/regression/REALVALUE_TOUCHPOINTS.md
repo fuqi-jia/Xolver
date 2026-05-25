@@ -32,9 +32,28 @@ architecture-refactor agent may move these.**
   segregation. Public `Model` stays string-only (keeps gmpxx out of the public
   API); the exact RealValue lives on the internal `TheoryModel`.
 
-- **Phase 1 migration — CDCAC RealAlg→RealValue + Phase 2 (atom RHS):** still
-  pending. `RealAlg` flows through `SamplePoint` into the reasoner pipeline; do
-  the full type unification after the funnel settles.
+- **Phase 2 — atom-RHS payload widening: DONE.** `std::hash<RealValue>` (sound
+  via floor()); `LinearAtomPayload.rhs` and `PolynomialAtomPayload.rhs` are now
+  `RealValue`. The simplex/MILP/graph INTERNALS stay rational — each consumer
+  converts the RealValue RHS to mpq at its boundary (tryAsRational/asRational;
+  guarded sites bail to Unsupported/Unknown). Updated: TheoryAtomRegistry,
+  ArithAtomExtractor, LinearConstraintNormalizer, all 6 arith solvers' assert
+  paths, NIRA bound arithmetic. ctest 15/15, regression 578 PASS, 0 UNSOUND.
+
+- **Phase 2 — simplex/tableau/MILP INTERNAL widening: DEFERRED (recommended).**
+  Making GeneralSimplex/SparseTableau/InternalMilpEngine carry RealValue bounds
+  end-to-end (so an *algebraic* bound like x ≤ √2 flows through the rational
+  simplex) is the plan's remaining "RealValue end-to-end" goal. It is
+  soundness-critical (every bound comparison must stay a total order on R) yet
+  has ZERO current payoff — no input or upstream produces an algebraic linear
+  bound. Recommend doing it only when a producer exists (e.g. Cap.10 harvesting
+  CDCAC bracket midpoints as candidates), with the full LRA/LIA regression as
+  the per-commit gate. Same for Cap.10's evalTerm widening.
+
+- **CDCAC RealAlg→RealValue full unification:** still optional cleanup;
+  `CdcacValue.h` could become a thin re-export of RealValue. The
+  CdcacSolver::sampleValueToRealValue bridge already connects the two systems
+  where it matters (model output).
 
 Key libpoly contract learned (record for the migrator): `lp_algebraic_number_op`
 (used by add/sub/mul/div/neg) **destructs its output operand before assigning**,
