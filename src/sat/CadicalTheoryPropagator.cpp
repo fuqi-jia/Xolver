@@ -3,6 +3,8 @@
 #include <cassert>
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
+#include <vector>
 
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
@@ -162,21 +164,33 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     // This must include *all* theory atoms (LRA, LIA, EUF, Combination),
     // not just Combination atoms, otherwise legacy single-theory paths
     // see an empty active state after backtrack.
-    // Re-assert at a single fixed level (1). This is a one-shot full-model
-    // consistency check after backtrackToLevel(0); the original SAT decision
-    // levels (varToLevel_) are non-monotonic in model order, which violates the
-    // theory solvers' snapshot invariant (ensureSnapshotForLevel assumes
-    // non-decreasing levels) and corrupts e-graph rollback -> stale merges ->
-    // spurious interface-disequality conflicts -> false UNSAT. A uniform level
-    // keeps the per-check state monotonic and is fully cleared by the next
-    // backtrackToLevel(0). Conflict reasons are SAT literals, independent of level.
-    constexpr int kModelCheckLevel = 1;
-    for (int lit : model) {
+    //
+    // Re-assert each atom at its REAL SAT decision level (varToLevel_), but in
+    // ASCENDING-LEVEL ORDER. The model vector is in trail/model order, whose
+    // levels are non-monotonic; feeding that directly violates the theory
+    // solvers' snapshot invariant (ensureSnapshotForLevel assumes non-decreasing
+    // levels) and corrupts e-graph rollback. Sorting by level restores
+    // monotonicity WHILE preserving the level<->trail correspondence, so the
+    // rebuilt state matches the actual trail: a subsequent notify_backtrack(N)
+    // rolls the theory back to exactly the level-N search state. Using a single
+    // fixed level instead (an earlier workaround) broke that correspondence,
+    // leaving model-check merges stale in continued search -> spurious
+    // interface-disequality conflicts -> false UNSAT.
+    auto levelOf = [this](SatVar v) -> int {
+        auto it = varToLevel_.find(v);
+        return it != varToLevel_.end() ? it->second : 0;
+    };
+    std::vector<int> ordered(model.begin(), model.end());
+    std::stable_sort(ordered.begin(), ordered.end(), [&](int a, int b) {
+        return levelOf(static_cast<SatVar>(std::abs(a)))
+             < levelOf(static_cast<SatVar>(std::abs(b)));
+    });
+    for (int lit : ordered) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
-        tm_.assertTheoryLit(*atom, SatLit{var, sign}, kModelCheckLevel);
+        tm_.assertTheoryLit(*atom, SatLit{var, sign}, levelOf(var));
     }
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));

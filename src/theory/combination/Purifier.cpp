@@ -205,7 +205,7 @@ ExprId Purifier::purifyRec(ExprId root) {
                 newArgs.push_back(p);
             }
             ExprId purifiedApply = changed
-                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), Payload{}})
+                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), e.payload})
                 : f.eid;
             ExprId fresh = makeFreshVar(e.sort);
             ExprId bridge = makeEq(fresh, purifiedApply);
