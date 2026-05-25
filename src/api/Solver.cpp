@@ -13,6 +13,8 @@
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include "theory/arith/search/CandidateModelSearch.h"
+#include "proof/ArithModelValidator.h"
+#include <gmpxx.h>
 #include "expr/Smt2Dumper.h"
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
@@ -57,6 +59,9 @@ public:
     std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
     std::optional<TheorySolver::TheoryModel> lastModel_;
     std::vector<Term> lastAssumptions_;
+    // Original (pre-lowering) assertion roots, snapshotted each checkSat for
+    // the independent model self-check (modelMatchesOriginal).
+    std::vector<ExprId> originalAssertions_;
     std::string lastUnknownReason_;
     std::string lastUnknownCode_;
     std::string lastUnknownComponent_;
@@ -237,6 +242,7 @@ public:
         realSortId_ = NullSort;
         lastModel_.reset();
         lastAssumptions_.clear();
+        originalAssertions_.clear();
         lastUnknownReason_.clear();
         lastUnknownCode_.clear();
         lastUnknownComponent_.clear();
@@ -305,6 +311,13 @@ public:
         if (ir->assertions().empty()) {
             return Result::Sat;
         }
+
+        // Snapshot the ORIGINAL (pre-lowering) assertion roots for the
+        // independent model self-check (modelMatchesOriginal). Lowering
+        // passes only APPEND CoreExpr nodes (CoreIr::add never mutates), so
+        // these ExprIds keep referencing the original formula even after
+        // the assertion list is rewritten by lowering.
+        originalAssertions_ = ir->assertions();
 
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
@@ -766,6 +779,18 @@ public:
         if (result == SatSolver::SolveResult::Sat) {
             lastModel_ = theoryManager.getModel();
             ret = Result::Sat;
+            // NOTE: we intentionally do NOT gate the SAT verdict on
+            // re-validating the extracted model against the original
+            // assertions. Verdict soundness ("a model exists", derived by
+            // the theory) is a separate concern from model-extraction
+            // correctness ("our printed model satisfies"). Some paths
+            // (Nelson-Oppen combination, parts of NRA/NIRA) currently
+            // extract a model that can violate an original assertion even
+            // though the SAT verdict is correct; downgrading those to
+            // Unknown would discard correct verdicts. `ArithModelValidator`
+            // exists to self-check the *printed* model for the
+            // Model-Validation track and to back the model-check tool —
+            // not to override the verdict. See modelMatchesOriginal().
         } else if (result == SatSolver::SolveResult::Unsat) {
             ret = Result::Unsat;
         } else {
@@ -1007,6 +1032,22 @@ bool Solver::modelRequested() const {
     if (!pImpl || !pImpl->parser) return false;
     auto opts = pImpl->parser->getOptions();
     return opts && opts->get_model;
+}
+
+bool Solver::modelMatchesOriginal() const {
+    if (!pImpl || !pImpl->ir || !pImpl->lastModel_) return true;  // nothing to disprove
+    ArithModelValidator::NumAssignment numAsg;
+    ArithModelValidator::BoolAssignment boolAsg;
+    for (const auto& [name, val] : pImpl->lastModel_->assignments) {
+        if (val == "true")  { boolAsg[name] = true;  continue; }
+        if (val == "false") { boolAsg[name] = false; continue; }
+        try { numAsg[name] = mpq_class(val); }
+        catch (...) { /* unparseable → leave unassigned (indeterminate) */ }
+    }
+    ArithModelValidator validator(*pImpl->ir, numAsg, boolAsg);
+    // Only a DEFINITE violation counts as "does not match".
+    return validator.validate(pImpl->originalAssertions_)
+           != ArithModelValidator::Verdict::Violated;
 }
 
 namespace {

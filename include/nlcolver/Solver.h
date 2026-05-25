@@ -98,6 +98,15 @@ public:
     // checkSat() returned Sat.
     void dumpModel(std::ostream& os) const;
 
+    // Independent self-check: does the last model satisfy the ORIGINAL
+    // (pre-lowering) assertions? Uses a validator that shares no code with
+    // the solver's own evaluators (defense-in-depth). Returns false ONLY on
+    // a definite violation; an indeterminate result (UF, missing var,
+    // unsupported construct) returns true ("not disproven"). This does NOT
+    // affect the SAT verdict — it is a diagnostic for the Model-Validation
+    // track and for tests. Meaningful only after checkSat() returned Sat.
+    bool modelMatchesOriginal() const;
+
     // If the last checkSat returned Unknown, this gives a human-readable reason.
     std::string lastUnknownReason() const;
 
