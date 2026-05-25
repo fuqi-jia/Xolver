@@ -15,7 +15,7 @@
 //     un-substituted, or the product exceeds the size cap).
 
 #include "theory/arith/presolve/Presolve.h"
-#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 
 #include <vector>

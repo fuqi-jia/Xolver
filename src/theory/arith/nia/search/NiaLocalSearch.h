@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>

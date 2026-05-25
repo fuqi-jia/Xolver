@@ -3,7 +3,7 @@
 #include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
-#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"

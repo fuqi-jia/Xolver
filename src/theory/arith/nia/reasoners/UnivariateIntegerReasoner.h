@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/nia/NiaTypes.h"
-#include "theory/arith/nia/core/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/core/TheorySolver.h"
 #include <set>
