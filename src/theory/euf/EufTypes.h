@@ -30,7 +30,13 @@ struct EufAtom {
 enum class MergeReasonKind {
     AssertedEquality,
     Congruence,
-    BuiltinEval
+    BuiltinEval,
+    // Array axiom merges with NO governing SAT literal. Like BuiltinEval, they
+    // contribute zero literals to a conflict explanation (the equality is a
+    // theory tautology). ArrayRow1: select(store(a,i,v),i) = v.
+    // ArrayConst: select(const(v),i) = v.
+    ArrayRow1,
+    ArrayConst
 };
 
 struct MergeReason {

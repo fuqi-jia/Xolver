@@ -162,6 +162,16 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
             case Kind::Pow:    return "#builtin.Pow";
             case Kind::ToInt:  return "#builtin.ToInt";
             case Kind::ToReal: return "#builtin.ToReal";
+            // Array operations are interned as ordinary application nodes so
+            // that array congruence is free on the shared egraph. The symbol
+            // names are reserved (#array.*) so they cannot collide with a user
+            // function. Store(a,i,v) and Select(a,i) are uninterpreted
+            // applications; the ArrayReasoner instantiates the array axioms.
+            // ConstArray(v) carries the element value as its single argument,
+            // so two const-arrays are congruent iff their values are equal.
+            case Kind::Select: return "#array.select";
+            case Kind::Store:  return "#array.store";
+            case Kind::ConstArray: return "#array.const";
             default:           return "";
         }
     };

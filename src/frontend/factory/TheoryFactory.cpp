@@ -96,6 +96,13 @@ SolverSetupResult setupSolvers(
         auto euf = std::make_unique<EufSolver>();
         euf->setCoreIr(ir);
         theoryManager.registerSolver(std::move(euf));
+    } else if (logic == "QF_AX") {
+        // Pure array theory (arrays + EUF, uninterpreted/Int indices+elements,
+        // no arithmetic). One shared egraph; ArrayReasoner adds the axioms.
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->enableArrays(&registry);
+        theoryManager.registerSolver(std::move(euf));
     } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
         sharedTermRegistry->setCoreIr(ir);

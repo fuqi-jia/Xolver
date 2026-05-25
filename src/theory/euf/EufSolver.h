@@ -4,6 +4,7 @@
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/combination/SharedTermRegistry.h"
+#include "theory/array/ArrayReasoner.h"
 #include "util/SmallVector.h"
 #include <vector>
 #include <optional>
@@ -28,6 +29,14 @@ public:
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
+    // Enable QF_AX array reasoning. `registry` is needed so Row2/Ext lemmas
+    // can create observed dynamic equality atoms before placing them in a
+    // clause. Must be called before any assertLit/check.
+    void enableArrays(TheoryAtomRegistry* registry) {
+        arrayMode_ = true;
+        arrayRegistry_ = registry;
+    }
+
     // Nelson-Oppen combination hooks
     bool supportsCombination() const override { return true; }
 
@@ -38,6 +47,8 @@ public:
 
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
+
+    std::optional<TheoryModel> getModel() const override;
 
 private:
     struct ActiveAssignment {
@@ -111,6 +122,14 @@ private:
 
     // Constant arithmetic evaluation for #builtin terms
     void tryEvaluateBuiltin(EufTermId t);
+
+    // QF_AX array support (layered on the shared egraph).
+    bool arrayMode_ = false;
+    TheoryAtomRegistry* arrayRegistry_ = nullptr;
+    ArrayReasoner arrayReasoner_;
+    void ensureArrayContext();
+    // Active array-sort disequalities (for Extensionality lemmas).
+    std::vector<ArrayReasoner::ArrayDiseq> activeArrayDiseqs() const;
 };
 
 } // namespace nlcolver

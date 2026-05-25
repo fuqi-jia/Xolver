@@ -161,7 +161,37 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
-    auto makeFalsifiedConflict = [](const std::vector<SatLit>& rawReasons) {
+    auto makeFalsifiedConflict = [this](const std::vector<SatLit>& rawReasons) {
+        if (std::getenv("Z3PIN") && registry_) {
+            static const std::map<std::string,int> kPin = {
+                {"x1",3},{"x2",1},{"x3",2},{"4",4},{"0",0},
+                {"__nlc_ite_0",3},{"__nlc_ite_1",3},
+                {"bridge_0",2},{"bridge_1",3},{"bridge_2",2},
+                {"bridge_3",2},{"bridge_4",3},{"bridge_5",2},
+                {"bridge_6",1},{"bridge_7",2},{"bridge_8",1},{"bridge_9",3},
+                {"bridge_10",3},{"bridge_11",2},{"bridge_12",3},
+                {"bridge_13",1},{"bridge_14",2}};
+            bool allRawTrue = !rawReasons.empty();
+            std::string desc;
+            for (auto lit : rawReasons) {
+                const auto* rec = registry_->findBySatVar(lit.var);
+                if (rec) {
+                    if (auto* se = std::get_if<SharedEqualityPayload>(&rec->payload)) {
+                        std::string na = stName(sharedTermRegistry_, se->a);
+                        std::string nb = stName(sharedTermRegistry_, se->b);
+                        auto ia = kPin.find(na), ib = kPin.find(nb);
+                        desc += (lit.sign?"+":"-") + na + "=" + nb + " ";
+                        if (ia != kPin.end() && ib != kPin.end()) {
+                            bool eq = ia->second == ib->second;
+                            if (!(lit.sign ? eq : !eq)) allRawTrue = false;
+                        } else allRawTrue = false;
+                    } else allRawTrue = false;
+                } else allRawTrue = false;
+            }
+            if (allRawTrue) {
+                std::cerr << "  [UNSOUND-RAW] clause excludes z3 model: " << desc << "\n";
+            }
+        }
         TheoryConflict fc;
         fc.clause.reserve(rawReasons.size());
         for (auto lit : rawReasons) {
@@ -266,6 +296,60 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 std::cerr << debug::fmtLit(lit) << " ";
             }
             std::cerr << "\n";
+            if (std::getenv("EUF_DIAG") && registry_) {
+                // Z3PIN: hash_sat_03_03 z3 model. unsound conflict <=> every raw
+                // reason literal is TRUE under this model.
+                static const std::map<std::string,int> kPin = {
+                    {"x1",3},{"x2",1},{"x3",2},{"4",4},{"0",0},
+                    {"__nlc_ite_0",3},{"__nlc_ite_1",3},
+                    {"bridge_0",2},{"bridge_1",3},{"bridge_2",2},
+                    {"bridge_3",2},{"bridge_4",3},{"bridge_5",2},
+                    {"bridge_6",1},{"bridge_7",2},{"bridge_8",1},{"bridge_9",3},
+                    {"bridge_10",3},{"bridge_11",2},{"bridge_12",3},
+                    {"bridge_13",1},{"bridge_14",2}};
+                bool doPin = std::getenv("Z3PIN") != nullptr;
+                bool allRawTrueUnderZ3 = doPin;
+                for (auto lit : tr.conflictOpt->clause) {
+                    const auto* rec = registry_->findBySatVar(lit.var);
+                    std::cerr << "  [DECODE] " << debug::fmtLit(lit) << " = ";
+                    if (!rec) { std::cerr << "<no record>\n"; allRawTrueUnderZ3=false; continue; }
+                    if (auto* se = std::get_if<SharedEqualityPayload>(&rec->payload)) {
+                        std::string na = stName(sharedTermRegistry_, se->a);
+                        std::string nb = stName(sharedTermRegistry_, se->b);
+                        std::cerr << "SHAREDEQ(" << na << "[st" << se->a << "] == "
+                                  << nb << "[st" << se->b << "])";
+                        if (doPin) {
+                            auto ia = kPin.find(na), ib = kPin.find(nb);
+                            if (ia != kPin.end() && ib != kPin.end()) {
+                                bool eq = (ia->second == ib->second);
+                                bool rawTrue = lit.sign ? eq : !eq;
+                                std::cerr << " z3:" << na << "=" << ia->second << " " << nb << "=" << ib->second
+                                          << " raw=" << (rawTrue?"T":"F");
+                                if (!rawTrue) allRawTrueUnderZ3 = false;
+                            } else { std::cerr << " z3:?"; allRawTrueUnderZ3=false; }
+                        }
+                        std::cerr << "\n";
+                    } else if (std::get_if<LinearAtomPayload>(&rec->payload)) {
+                        auto* la = std::get_if<LinearAtomPayload>(&rec->payload);
+                        std::cerr << "LINEAR[";
+                        for (auto& [nm, c] : la->lhs.terms) std::cerr << c.get_str() << "*" << nm << " ";
+                        std::cerr << "] rel=" << (int)la->rel << " rhs="
+                                  << (la->rhs.isRational() ? la->rhs.asRational().get_str() : "?") << "\n";
+                        allRawTrueUnderZ3 = false;
+                    } else if (auto* ea = std::get_if<EufAtomPayload>(&rec->payload)) {
+                        std::cerr << "EUF(expr" << ea->lhs << " rel=" << (int)ea->rel
+                                  << " expr" << ea->rhs << " kind=" << (int)ea->kind << ")\n";
+                        allRawTrueUnderZ3 = false;
+                    } else {
+                        std::cerr << "POLY/other expr=" << rec->exprId << "\n";
+                        allRawTrueUnderZ3 = false;
+                    }
+                }
+                if (doPin && allRawTrueUnderZ3) {
+                    std::cerr << "  [UNSOUND-CONFLICT] every raw reason TRUE under z3 model "
+                                 "=> this learned clause excludes the valid model!\n";
+                }
+            }
             // Defensive: every raw reason should be true in the current model.
             if (assignmentView_) {
                 for (auto lit : tr.conflictOpt->clause) {
@@ -353,9 +437,16 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             for (const auto& [name, value] : m->numericAssignments) {
                 aggregated.numericAssignments.insert({name, value});  // first wins
             }
+            for (const auto& [name, interp] : m->functionInterps) {
+                aggregated.functionInterps.insert({name, interp});  // first wins
+            }
+            for (const auto& [name, interp] : m->arrayInterps) {
+                aggregated.arrayInterps.insert({name, interp});  // first wins
+            }
         }
     }
-    if (aggregated.assignments.empty() && aggregated.numericAssignments.empty())
+    if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
+        aggregated.functionInterps.empty() && aggregated.arrayInterps.empty())
         return std::nullopt;
     return aggregated;
 }

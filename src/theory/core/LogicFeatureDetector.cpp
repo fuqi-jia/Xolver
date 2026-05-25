@@ -18,8 +18,11 @@ LogicFeatures LogicFeatureDetector::detect() const {
         f.hasMixedIntReal = true;
     }
 
-    // Quantifiers and arrays are currently unsupported for sound solving.
-    if (f.hasQuantifier || f.hasArray || f.hasFP || f.hasBV) {
+    // Quantifiers, FP, and BV are currently unsupported for sound solving.
+    // Arrays are supported in the array logics (QF_AX, ...); the per-logic
+    // gate in Solver.cpp decides whether `hasArray` is acceptable, so we do
+    // NOT fold it into `hasUnsupported` here.
+    if (f.hasQuantifier || f.hasFP || f.hasBV) {
         f.hasUnsupported = true;
     }
 
@@ -164,6 +167,11 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         case Kind::IsInt:
             f.hasInterpretedArithmetic = true;
             f.hasUnsupported = true;
+            break;
+        case Kind::Select:
+        case Kind::Store:
+        case Kind::ConstArray:
+            f.hasArray = true;
             break;
         default:
             break;
