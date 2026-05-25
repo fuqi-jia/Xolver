@@ -5,8 +5,12 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <map>
+#include <gmpxx.h>
 
 namespace nlcolver {
+
+class CoreIr;
 
 struct SharedTerm {
     SharedTermId id;
@@ -20,6 +24,12 @@ struct SharedTerm {
 class SharedTermRegistry {
 public:
     SharedTermRegistry() = default;
+
+    // Optional CoreIr, used to dedup numeric-constant shared terms by value so
+    // that e.g. ConstReal("1") and ConstInt(1) map to a single shared term
+    // (they are the same value; EUF interns them identically, and treating them
+    // as distinct shared terms produces spurious interface (dis)equalities).
+    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
 
     // Get or create a shared term for an expression.
     // If the expression is already registered, return existing id.
@@ -43,6 +53,8 @@ public:
 private:
     std::vector<SharedTerm> terms_;
     std::unordered_map<ExprId, SharedTermId> exprToId_;
+    const CoreIr* coreIr_ = nullptr;
+    std::map<mpq_class, SharedTermId> constValueToId_;  // numeric-constant dedup by value
 };
 
 } // namespace nlcolver

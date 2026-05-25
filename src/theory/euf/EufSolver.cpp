@@ -414,7 +414,19 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
         if (egraph_.same(d.lhs, d.rhs)) {
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
             if (std::getenv("EUF_DIAG")) {
-                std::cerr << "[EUF-DIAG] SHARED-DISEQ-conflict lhs=" << d.lhs << " rhs=" << d.rhs
+                auto exprOf = [&](EufTermId t) -> int {
+                    for (auto& kv : sharedTermToEufTerm_) {
+                        if (kv.second == t && sharedTermRegistry_) {
+                            const auto* s = sharedTermRegistry_->get(kv.first);
+                            if (s) return (int)s->coreExpr;
+                        }
+                    }
+                    return -1;
+                };
+                auto kindOf = [&](int ex) -> int { return (ex >= 0 && coreIr_) ? (int)coreIr_->get((ExprId)ex).kind : -99; };
+                int ea = exprOf(d.lhs), eb = exprOf(d.rhs);
+                std::cerr << "[EUF-DIAG] SHARED-DISEQ-conflict lhs=" << d.lhs << "(expr" << ea << ",k" << kindOf(ea) << ")"
+                          << " rhs=" << d.rhs << "(expr" << eb << ",k" << kindOf(eb) << ")"
                           << " ok=" << er.ok << " chain=" << er.reasons.size() << " reasons=";
                 for (auto l : er.reasons) std::cerr << (l.sign?"":"-") << l.var << " ";
                 std::cerr << " diseqReason=" << (d.reason.sign?"":"-") << d.reason.var << "\n";
@@ -500,8 +512,23 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
     if (egraph_.same(ta, tb)) {
         auto er = egraph_.explainEquality(ta, tb);
         if (std::getenv("EUF_DIAG")) {
-            std::cerr << "[EUF-DIAG] IFACE-DISEQ-IMMEDIATE ta=" << ta << " tb=" << tb
-                      << " ok=" << er.ok << " chain=" << er.reasons.size() << "\n";
+            const auto* sa = sharedTermRegistry_ ? sharedTermRegistry_->get(a) : nullptr;
+            const auto* sb = sharedTermRegistry_ ? sharedTermRegistry_->get(b) : nullptr;
+            auto dump = [&](const char* tag, auto s) {
+                std::cerr << " " << tag << "{";
+                if (s && coreIr_) {
+                    const auto& e = coreIr_->get(s->coreExpr);
+                    std::cerr << "expr=" << (int)s->coreExpr << " kind=" << (int)e.kind;
+                    if (auto* iv = std::get_if<int64_t>(&e.payload.value)) std::cerr << " int=" << *iv;
+                    else if (auto* sv = std::get_if<std::string>(&e.payload.value)) std::cerr << " sym=" << *sv;
+                    std::cerr << " nch=" << e.children.size();
+                }
+                std::cerr << "}";
+            };
+            std::cerr << "[EUF-DIAG] IFACE-DISEQ-IMMEDIATE sharedA=" << a << " sharedB=" << b
+                      << " ta=" << ta << " tb=" << tb << " sameSharedId=" << (a == b);
+            dump("A", sa); dump("B", sb);
+            std::cerr << " ok=" << er.ok << " chain=" << er.reasons.size() << "\n";
         }
         if (er.ok) {
             er.reasons.push_back(reason);

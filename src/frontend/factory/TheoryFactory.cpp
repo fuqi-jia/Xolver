@@ -98,6 +98,7 @@ SolverSetupResult setupSolvers(
         theoryManager.registerSolver(std::move(euf));
     } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
         {
             Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
             purifier.run();
@@ -119,6 +120,7 @@ SolverSetupResult setupSolvers(
             result.logicMismatch = true;
         } else {
             sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+            sharedTermRegistry->setCoreIr(ir);
             {
                 Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
                 purifier.setArithTheory(TheoryId::LIA);
@@ -141,6 +143,7 @@ SolverSetupResult setupSolvers(
         }
     } else if (logic == "QF_UFNIA" || logic == "UFNIA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
         {
             Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
             purifier.setArithTheory(TheoryId::NIA);
@@ -169,6 +172,7 @@ SolverSetupResult setupSolvers(
         theoryManager.setNonConvexMode(true);
     } else if (logic == "QF_UFNRA" || logic == "UFNRA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
         {
             Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
             purifier.setArithTheory(TheoryId::NRA);
