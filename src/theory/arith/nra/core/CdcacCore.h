@@ -69,6 +69,12 @@ private:
     // generalized-UNSAT exit is downgraded to Unknown when false — the binding
     // "no UNSAT without a complete projection-certified covering".
     bool unsatTrustworthy_ = true;
+
+    // Opt-in (NLCOLVER_NRA_LAZARD_LIFT): try Lazard tower root isolation for the
+    // genuine-tower lift case (>=2 algebraic prefix coords) that ViaNorm punts
+    // on. Default off; only adds certified isolations, never changes the Collins
+    // path. Read once in the constructor.
+    bool lazardLiftEnabled_ = false;
 };
 
 } // namespace nlcolver

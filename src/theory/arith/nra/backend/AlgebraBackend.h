@@ -112,6 +112,27 @@ public:
     }
 
     /**
+     * Lazard tower root isolation (MULTI algebraic coordinate / genuine tower) —
+     * the case isolateRealRootsViaNorm punts on. Builds the field tower from the
+     * algebraic prefix coordinates (each coord's defining poly as a monic
+     * minimal poly), computes the rational Norm, isolates its roots over Q, and
+     * keeps exactly those that are roots of p at the real embedding via the exact
+     * three-state membership oracle (sound on a reducible tower). `supported` is
+     * true only when EVERY candidate was decided Keep/Drop; any Unknown / Norm
+     * degeneracy => supported=false (caller treats as Unknown, never UNSAT).
+     * Default: unsupported (only LibpolyBackend implements it).
+     */
+    virtual RootSet isolateRealRootsViaTower(
+        PolyId p,
+        const SamplePoint& prefix,
+        VarId mainVar,
+        bool& supported) {
+        (void)p; (void)prefix; (void)mainVar;
+        supported = false;
+        return RootSet{};
+    }
+
+    /**
      * Refine the isolating interval of an algebraic root.
      * Returns true if refinement succeeded (interval was narrowed).
      * Returns false if refinement failed or the root is rational.

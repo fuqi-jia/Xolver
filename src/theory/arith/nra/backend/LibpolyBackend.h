@@ -37,6 +37,11 @@ public:
     RootSet isolateRealRootsViaNorm(
         PolyId p, const SamplePoint& prefix, VarId mainVar, bool& supported) override;
 
+    // Lazard tower root isolation for the MULTI algebraic-coordinate case (the
+    // tower that ViaNorm punts on). See AlgebraBackend::isolateRealRootsViaTower.
+    RootSet isolateRealRootsViaTower(
+        PolyId p, const SamplePoint& prefix, VarId mainVar, bool& supported) override;
+
     // --- V2-1: univariate polynomial pool access (public for engines) ---
 
     UniPolyId allocUni(std::vector<mpz_class> coeffs);

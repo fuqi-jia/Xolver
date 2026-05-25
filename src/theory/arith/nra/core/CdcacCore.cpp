@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
+#include <cstdlib>
 
 namespace nlcolver {
 
@@ -163,7 +164,14 @@ static TryLocalProjectionResult tryLocalProjection(
 // ------------------------------------------------------------------
 
 CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
-    : kernel_(kernel), algebra_(algebra) {}
+    : kernel_(kernel), algebra_(algebra) {
+    // Lazard tower lifting is OFF by default (the projection stage stays Collins).
+    // Opt in with NLCOLVER_NRA_LAZARD_LIFT=1; it only ADDS certified root
+    // isolations for genuine towers (>=2 algebraic prefix coords) that ViaNorm
+    // punts on — flag-off behaviour is byte-identical to the Collins baseline.
+    if (const char* e = std::getenv("NLCOLVER_NRA_LAZARD_LIFT"))
+        lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+}
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
     policy_ = std::move(policy);
@@ -506,6 +514,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             if (hasAlgebraicPrefix) {
                 bool supported = false;
                 RootSet roots = algebra_->isolateRealRootsViaNorm(p, prefix, var, supported);
+                if (!supported && lazardLiftEnabled_) {
+                    // ViaNorm only certifies a single algebraic coordinate; for a
+                    // genuine tower (>=2 algebraic coords) try the Lazard tower
+                    // isolation. Still sound: unsupported/Unknown => fall through.
+                    roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
+                }
                 if (supported) {
                     if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
                     continue;

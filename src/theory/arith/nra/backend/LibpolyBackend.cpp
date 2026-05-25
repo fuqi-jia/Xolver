@@ -1,6 +1,8 @@
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/nra/preprocess/SquarefreeEngine.h"
 #include "theory/arith/nra/projection/LocalProjection.h"   // resultant()
+#include "theory/arith/nra/valuation/TowerRootIsolation.h"     // towerNorm, TowerContext
+#include "theory/arith/nra/valuation/RootMembershipOracle.h"   // lazardRootMembership
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
@@ -1438,6 +1440,82 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
         if (isRoot) out.roots.push_back(beta);
     }
     supported = true;   // certified isolation completed (0 roots is a valid answer)
+    return out;
+}
+
+RootSet LibpolyBackend::isolateRealRootsViaTower(
+    PolyId p, const SamplePoint& prefix, VarId mainVar, bool& supported) {
+
+    supported = false;
+    RootSet empty;
+
+    // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
+    //    coordinates are substituted into p). Each algebraic coordinate becomes
+    //    a tower generator in its OWN prefix variable, with its defining poly as
+    //    a MONIC minimal poly (TowerKernel requires monic). Soundness does NOT
+    //    require the m_i to be irreducible (see RootMembershipOracle.h).
+    auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
+    if (!rpOpt) return empty;
+    RationalPolynomial p1 = *rpOpt;
+
+    TowerContext ctx;
+    int algCount = 0;
+    for (size_t i = 0; i < prefix.values.size(); ++i) {
+        const RealAlg& val = prefix.values[i];
+        VarId v = prefix.varOrder[i];
+        if (val.isRational()) { p1 = p1.substituteRational(v, val.rational); continue; }
+        ++algCount;
+        if (val.root.definingPoly == NullUniPolyId) return empty;
+        const auto& mco = getUni(val.root.definingPoly);   // high-to-low integer coeffs
+        int deg = static_cast<int>(mco.size()) - 1;
+        if (deg < 1 || mco[0] == 0) return empty;
+        mpq_class lead(mco[0]);
+        RationalPolynomial mi;
+        for (size_t j = 0; j < mco.size(); ++j) {
+            int power = deg - static_cast<int>(j);
+            if (mco[j] == 0) continue;
+            mpq_class c = mpq_class(mco[j]) / lead;        // monic-normalize
+            if (power == 0) mi.addConstant(c);
+            else mi.addVar(v, power, c);
+        }
+        mi.normalize();
+        ctx.extensionVars.push_back(v);
+        ctx.minimalPolys.push_back(std::move(mi));
+        ctx.generators.push_back(val);
+    }
+    if (algCount < 1) return empty;                        // no tower => not our case
+
+    p1.normalize();
+    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return empty;
+    {
+        std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
+        for (VarId v : p1.variables())
+            if (v != mainVar && !ext.count(v)) return empty;   // residual var => Unknown
+    }
+
+    // 2. Norm over Q eliminates the generators; isolate its roots via the SAFE
+    //    rational univariate path (never libpoly's crash-prone algebraic path).
+    auto nr = towerNorm(p1, mainVar, ctx);
+    if (!nr.ok) return empty;
+    if (nr.norm.isConstant()) { supported = true; return empty; }   // no candidate roots
+
+    UniPolyId Nuni = specializeToUnivariate(nr.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
+    if (Nuni == NullUniPolyId) return empty;
+    RootSet candidates = isolateRealRoots(Nuni);
+
+    // 3. Keep exactly the candidates that are roots of p1 at the real embedding,
+    //    via the exact three-state oracle. Any Unknown => not certifiable.
+    RootSet out;
+    for (const auto& beta : candidates.roots) {
+        mpq_class lo, hi;
+        if (beta.isRational()) { lo = hi = beta.rational; }
+        else { lo = beta.root.lower; hi = beta.root.upper; }
+        RootMembership m = lazardRootMembership(p1, mainVar, nr.norm, lo, hi, ctx);
+        if (m == RootMembership::Keep) out.roots.push_back(beta);
+        else if (m == RootMembership::Unknown) return empty;   // => caller Unknown
+        // Drop => conjugate/extraneous, discard
+    }
+    supported = true;
     return out;
 }
 
