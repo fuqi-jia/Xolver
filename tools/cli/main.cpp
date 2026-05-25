@@ -30,6 +30,20 @@ static void printUsage(const char* prog) {
 
 #include <nlcolver/Solver.h>
 
+// Discards everything written to it. Installed as std::cerr's buffer in the
+// default (non-verbose) mode so the solver's internal diagnostics never reach
+// the terminal/logs. This matters at benchmark scale: a single hard NRA case
+// can emit tens of thousands of [CDCAC-FULL]/etc. lines, which (a) balloon any
+// harness that captures stderr and (b) add enough write I/O to push otherwise-
+// solvable cases over the timeout. The SMT-COMP contract only reads stdout
+// (sat/unsat/unknown), so discarding stderr is safe; `--verbose` keeps it.
+namespace {
+struct NullStreambuf : std::streambuf {
+    int overflow(int c) override { return c; }  // pretend success, write nothing
+    std::streamsize xsputn(const char*, std::streamsize n) override { return n; }
+};
+}  // namespace
+
 static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     int fileIdx = defaultMode ? 1 : 2;
     if (argc < fileIdx + 1) {
@@ -42,6 +56,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // Parse options after the file path
     std::optional<std::string> logicOpt;
     bool checkModel = false;
+    bool verbose = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--logic" && i + 1 < argc) {
@@ -65,12 +80,20 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         } else if (arg == "--lia-enable-eq-gcd-normalization") {
             solver.setOption("lia-enable-eq-gcd-normalization", nlcolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
-            // TODO: enable verbose output
+            verbose = true;
         } else if (arg == "--check-model") {
             checkModel = true;
         } else {
             std::cerr << "Warning: unknown option " << arg << "\n";
         }
+    }
+
+    // Silence the solver's internal stderr diagnostics by default. Kept live
+    // for --verbose (debugging) and --check-model (whose MODEL_MISMATCH report
+    // goes to stderr). The buffer must outlive every write, so it is static.
+    static NullStreambuf nullCerr;
+    if (!verbose && !checkModel) {
+        std::cerr.rdbuf(&nullCerr);
     }
 
     if (!solver.parseFile(argv[fileIdx])) {
