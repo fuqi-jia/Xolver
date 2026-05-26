@@ -96,6 +96,8 @@ private:
     // V5: cache
     CdcacCache* cache_ = nullptr;
 
+    bool simplexVarOrder_ = false;   // ZOLVER_NRA_VARORDER_SIMPLEX
+
     // Last SAT model from CDCAC core
     std::optional<SamplePoint> lastModel_;
 };

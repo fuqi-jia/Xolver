@@ -243,3 +243,28 @@ TEST_CASE("varorder: all-linear input is a valid deterministic permutation") {
     std::set<std::string> got(order.begin(), order.end());
     CHECK(got == std::set<std::string>{"x", "y"});
 }
+
+#include "theory/arith/nra/core/CdcacSolver.h"
+#include <cstdlib>
+
+TEST_CASE("cdcac varorder flag: same verdict on/off for xy + x^2 - 2 = 0 and y>=1") {
+    auto run = [](bool on) {
+        if (on) setenv("ZOLVER_NRA_VARORDER_SIMPLEX", "1", 1);
+        else    unsetenv("ZOLVER_NRA_VARORDER_SIMPLEX");
+        auto kernel = createPolynomialKernel();
+        CdcacSolver solver(kernel.get());
+        PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+        PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+        PolyId one = kernel->mkConst(mpq_class(1)), two = kernel->mkConst(mpq_class(2));
+        PolyId core = kernel->sub(kernel->add(kernel->mul(x, y), kernel->pow(x, 2)), two);
+        PolyId ym1 = kernel->sub(y, one);
+        solver.assertConstraint(core, Relation::Eq,  SatLit::positive(1), 0);
+        solver.assertConstraint(ym1,  Relation::Geq, SatLit::positive(2), 0);
+        auto r = solver.check(CdcacEffort::Full, nullptr);
+        return r.kind;
+    };
+    auto off = run(false);
+    auto on  = run(true);
+    unsetenv("ZOLVER_NRA_VARORDER_SIMPLEX");
+    CHECK(off == on);   // order must not change the verdict on a decidable case
+}
