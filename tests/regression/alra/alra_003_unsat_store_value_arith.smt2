@@ -1,0 +1,8 @@
+(set-logic QF_ALRA)
+(set-info :status unsat)
+(declare-const a (Array Real Real))
+(declare-const i Real)
+(declare-const x Real)
+(assert (= (select (store a i 7.0) i) x))
+(assert (not (= x 7.0)))
+(check-sat)

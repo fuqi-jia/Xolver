@@ -6,6 +6,8 @@
 #include "sat/SatSolver.h"
 #include <cassert>
 #include <algorithm>
+#include <unordered_map>
+#include <gmpxx.h>
 
 namespace nlcolver {
 
@@ -211,6 +213,26 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // 1. Process pending SAT-assigned shared equalities/disequalities
     for (auto& ev : pendingSharedEqEvents_) {
         if (ev.isEquality) {
+            // Distinct numeric constants are implicitly disequal. An interface
+            // equality between two numeric-constant shared terms with different
+            // values (e.g. the array Row2 split asserting (1 = 2)) is an
+            // immediate contradiction that no arith solver constrains when both
+            // sides are constants — getOrCreateInterfaceEqAuxVar returns -1 for
+            // const/const pairs. Refute it here so the false disjunct cannot be
+            // chosen to satisfy a Row2/Ext lemma. The reason is the equality
+            // literal alone: (c1 = c2) is unconditionally false.
+            if (sharedTermRegistry_ && ev.a != ev.b) {
+                auto va = sharedTermRegistry_->constValue(ev.a);
+                auto vb = sharedTermRegistry_->constValue(ev.b);
+                if (va && vb && *va != *vb) {
+                    pendingSharedEqEvents_.clear();
+                    TheoryConflict fc;
+                    fc.clause.push_back(ev.reasonLit.negated());
+                    NO_DBG << "[NO-RET-CONST] distinct-const IEQ refuted: "
+                           << debug::fmtClause(fc.clause) << "\n";
+                    return TheoryCheckResult::mkConflict(std::move(fc));
+                }
+            }
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
@@ -344,6 +366,30 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     // overrode NIA's witness, producing models that satisfy the linear part
     // but not the nonlinear constraints (e.g. nia_089: sum=20 ok, product<100).
     TheorySolver::TheoryModel aggregated;
+    // For array-combination logics (QF_ALIA/ALRA/AUFLIA/AUFLRA) the array
+    // theory (EUF) and the arithmetic theory each model the index/element
+    // scalars differently: EUF assigns opaque equality tokens ("@e..."), arith
+    // assigns concrete numbers. EUF's array interps reference those tokens, but
+    // the index/element scalar's TRUE value (subject to arith bounds like
+    // i > 1) lives in the arith model. We must reconcile: a token's numeric
+    // value is the arith value of any scalar EUF placed in that token's class.
+    // Collect the arith numeric assignments separately so we can rewrite the
+    // EUF tokens to those numbers before aggregating. Without this, dumping an
+    // EUF opaque token as a freshly-minted number can violate an arith bound
+    // (unsound printed model) while the validator sees Indeterminate and lets
+    // it through.
+    std::unordered_map<std::string, std::string> arithNum;  // var -> numeric str
+    for (const auto& solver : solvers_) {
+        auto m = solver->getModel();
+        if (!m) continue;
+        if (solver->id() == TheoryId::EUF) continue;  // tokens, not numbers
+        for (const auto& [name, value] : m->assignments) {
+            if (value == "true" || value == "false") continue;
+            if (value.empty() || value[0] == '@') continue;  // not a number
+            arithNum.emplace(name, value);  // first arith wins
+        }
+    }
+
     for (const auto& solver : solvers_) {
         auto m = solver->getModel();
         if (m) {
@@ -361,6 +407,55 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             }
         }
     }
+
+    // Build token -> "#n:<rational>" using each scalar that has BOTH an EUF
+    // token and an arith numeric value. (Numeric tokens "#n:.." already carry
+    // their value and need no remap.)
+    std::unordered_map<std::string, std::string> tokenToNum;
+    for (const auto& [name, tok] : aggregated.assignments) {
+        if (tok.empty() || tok[0] != '@') continue;     // only opaque tokens
+        auto it = arithNum.find(name);
+        if (it == arithNum.end()) continue;
+        std::string canon;
+        try { canon = "#n:" + mpq_class(it->second).get_str(); } catch (...) { continue; }
+        // If a token already maps to a DIFFERENT number, the model is
+        // internally inconsistent (two arith values in one EUF class). Leave
+        // it opaque so the validator/gate can catch the violation rather than
+        // silently picking one — soundness over a guessed model.
+        auto e = tokenToNum.find(tok);
+        if (e != tokenToNum.end()) { if (e->second != canon) e->second = "@CONFLICT"; }
+        else tokenToNum.emplace(tok, canon);
+    }
+
+    // Preserve EUF DISTINCTNESS: distinct tokens are distinct array indices /
+    // elements (an asserted/extensionality-witnessed disequality). If two
+    // distinct tokens would map to the SAME arith number, that number is a
+    // spurious default (the arith theory left those vars unconstrained and
+    // happened to pick the same value) — remapping would collapse i != j into
+    // i = j and produce an unsound printed model. Drop the remap for any
+    // number claimed by >1 distinct token; those tokens stay opaque and
+    // dumpModel mints distinct concrete values for them. (A constrained var
+    // with a unique arith value still remaps, e.g. i > 1 -> i = 2.)
+    {
+        std::unordered_map<std::string, int> numCount;
+        for (const auto& [tok, num] : tokenToNum)
+            if (num != "@CONFLICT") ++numCount[num];
+        for (auto& [tok, num] : tokenToNum)
+            if (num != "@CONFLICT" && numCount[num] > 1) num = "@CONFLICT";
+    }
+
+    auto remap = [&](std::string& v) {
+        auto it = tokenToNum.find(v);
+        if (it != tokenToNum.end() && it->second != "@CONFLICT") v = it->second;
+    };
+
+    // Rewrite scalar assignments and array interp index/element tokens.
+    for (auto& [name, val] : aggregated.assignments) remap(val);
+    for (auto& [name, ai] : aggregated.arrayInterps) {
+        remap(ai.defaultVal);
+        for (auto& [idx, elem] : ai.entries) { remap(idx); remap(elem); }
+    }
+
     if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
         aggregated.functionInterps.empty() && aggregated.arrayInterps.empty())
         return std::nullopt;

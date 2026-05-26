@@ -1,0 +1,10 @@
+(set-logic QF_ALIA)
+(set-info :status sat)
+; arith index disequality + read fall-through is satisfiable
+(declare-const a (Array Int Int))
+(declare-const i Int)
+(declare-const j Int)
+(declare-const v Int)
+(assert (not (= i j)))
+(assert (= (select (store a i v) j) (select a j)))
+(check-sat)

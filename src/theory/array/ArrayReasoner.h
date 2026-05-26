@@ -16,6 +16,7 @@ class EufTermManager;
 class IncrementalEGraph;
 class CoreIr;
 class TheoryAtomRegistry;
+class SharedTermRegistry;
 struct PendingMerge;
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,14 @@ public:
         ir_ = ir;
         registry_ = registry;
     }
+
+    // In Nelson-Oppen combination logics (QF_ALIA/ALRA/AUFLIA/AUFLRA) the
+    // array index/element terms are arithmetic and shared with the arith
+    // theory. Supplying the SharedTermRegistry lets Row2 build the (i=j)
+    // antecedent as a SHARED-equality atom (observed by BOTH arith and EUF)
+    // instead of an EUF-only equality, so an arith fact like (= i (+ j 0))
+    // actually drives the Row2 case split. Null in pure QF_AX.
+    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
     bool active() const { return tm_ != nullptr && egraph_ != nullptr; }
 
@@ -89,6 +98,13 @@ private:
     IncrementalEGraph* egraph_ = nullptr;
     const CoreIr* ir_ = nullptr;
     TheoryAtomRegistry* registry_ = nullptr;
+    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    // Build the Row2 index-equality literal (i=j). If both index exprs are
+    // registered shared arith terms, route through the shared-equality
+    // mechanism (observed by arith AND EUF); otherwise fall back to an
+    // EUF-only equality atom (pure QF_AX with uninterpreted indices).
+    SatLit makeRow2IndexEqLit(ExprId iExpr, ExprId jExpr);
 
     // Reserved array symbol names (mirror EufTermManager::builtinName).
     bool symIsSelect(EufTermId t) const;

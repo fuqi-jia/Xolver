@@ -1,0 +1,10 @@
+(set-logic QF_ALIA)
+(set-info :status unsat)
+; arith index equality drives Row2: i=j forces select(store(a,i,v),j)=v
+(declare-const a (Array Int Int))
+(declare-const i Int)
+(declare-const j Int)
+(declare-const v Int)
+(assert (= i j))
+(assert (not (= (select (store a i v) j) v)))
+(check-sat)

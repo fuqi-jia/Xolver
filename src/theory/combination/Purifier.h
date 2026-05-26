@@ -40,6 +40,14 @@ private:
     bool containsUfApply(ExprId eid) const;
     bool containsArithmetic(ExprId eid) const;
 
+    // True if `eid` is an array operator (select/store/const-array).
+    static bool isArrayOp(const CoreExpr& e);
+    // True if `eid` is a compound arithmetic term (Add/Sub/Mul/...) — i.e. NOT
+    // a bare variable or numeric constant. Such terms in array index/element
+    // positions must be replaced by a fresh shared bridge variable so EUF and
+    // the arith theory agree on the same shared leaf.
+    bool isCompoundArith(ExprId eid) const;
+
     ExprId makeFreshVar(SortId sort);
     ExprId makeEq(ExprId lhs, ExprId rhs);
 
