@@ -49,4 +49,34 @@ struct StrategyConfig {
 // Pick a strategy for (logic, features). Pure: no side effects.
 StrategyConfig selectStrategy(const std::string& logic, const LogicFeatures& features);
 
+/**
+ * Portfolio (ZOLVER_STRAT_PORTFOLIO) — an ORDERED list of strategy arms tried
+ * until one returns a definitive (Sat/Unsat) verdict.
+ *
+ * This is the assembly seam for the campaign: as each cross-agent technique
+ * flag passes its double gate, the master adds a differentiated arm here (e.g.
+ * "NIA: bit-blast first, then local-search"). The executor (Solver) runs the
+ * arms in order from PRISTINE state (full reset + re-parse per arm), so trying
+ * several configurations is sound — any arm's Sat/Unsat is already
+ * ModelValidator-backed (invariant 1), and arms can only differ in COMPLETENESS,
+ * never in soundness. The FIRST definitive answer wins; an arm that returns
+ * Unknown falls through to the next.
+ *
+ * Phase 1: a single "base" arm (== selectStrategy), so a portfolio run is
+ * behavior-neutral until the master populates more arms.
+ */
+struct PortfolioArm {
+    StrategyConfig config;
+    std::string label;       // human-readable, for tracing/telemetry
+    int budgetMs = 0;        // per-arm soft time budget (0 = no limit). Seam for
+                             // the anytime executor; not yet enforced in Phase 1.
+};
+
+// Build the ordered portfolio for (logic, features). Always returns >= 1 arm;
+// arm[0] is the base strategy. Pure except for an explicit test hook:
+// ZOLVER_STRAT_PORTFOLIO_TEST_ARMS=N (N>=1) replicates the base arm N times so
+// the multi-arm executor path can be exercised without a promoted flag yet.
+std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
+                                          const LogicFeatures& features);
+
 } // namespace zolver

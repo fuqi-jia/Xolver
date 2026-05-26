@@ -1,5 +1,7 @@
 #include "frontend/factory/StrategyPresets.h"
 
+#include <cstdlib>
+
 namespace zolver {
 
 // Helper: normalize "QF_X" / "X" comparisons.
@@ -63,6 +65,30 @@ StrategyConfig selectStrategy(const std::string& logic, const LogicFeatures& fea
     // Default (LRA/LIRA/NIRA/IDL/RDL/combination/unset): rewriter on.
 
     return c;
+}
+
+std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
+                                          const LogicFeatures& features) {
+    StrategyConfig base = selectStrategy(logic, features);
+
+    // Phase-1 portfolio is the single base arm. Differentiated arms (e.g. a
+    // bit-blast-first arm then a local-search arm for QF_NIA) are appended here
+    // by the master as each underlying flag passes its gate; each is just a
+    // StrategyConfig with a different envFlags set.
+    std::vector<PortfolioArm> arms;
+    arms.push_back({base, "base", /*budgetMs=*/0});
+
+    // Test-only hook: replicate the base arm so the multi-arm executor path is
+    // exercised by the unit suite without depending on a not-yet-promoted flag.
+    // Replicating an IDENTICAL arm must leave the verdict unchanged (proves the
+    // per-arm pristine re-entry is sound), so it is safe to gate tests on.
+    if (const char* n = std::getenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS")) {
+        int extra = std::atoi(n) - 1;
+        for (int i = 0; i < extra && i < 7; ++i)
+            arms.push_back({base, "test-replica", 0});
+    }
+
+    return arms;
 }
 
 } // namespace zolver
