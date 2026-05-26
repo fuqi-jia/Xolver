@@ -208,6 +208,16 @@ public:
                 try { numAsg[name] = mpq_class(val); } catch (...) {}
             }
         }
+        // Prefer the typed numeric channel (RealValue) over the lossy string
+        // channel: it carries exact rationals AND is the place combination
+        // logics put a shared scalar's true arithmetic value (the string
+        // `assignments` may instead hold an opaque EUF equality token like
+        // "@e6", which would otherwise default to 0 and spuriously collapse
+        // i==j). Algebraic values (e.g. √2) have no rational form -> left for
+        // the validator to report Indeterminate (it cannot evaluate them).
+        for (const auto& [name, rv] : lastModel_->numericAssignments) {
+            if (auto q = rv.tryAsRational()) numAsg[name] = *q;
+        }
         // Mirror dumpModel's defaulting of unconstrained user variables so the
         // validated model matches the printed one (a var the theory left
         // unassigned is emitted as 0 / false).

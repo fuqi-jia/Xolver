@@ -38,14 +38,32 @@ recovery target for the theory agents.
 
 ## Flips by owning agent (completeness recovery)
 
-### A3 (EUF + arrays) — uninterpreted-sort UF/array, no interp CMS can build (20)
-The model's satisfaction depends on `f(...)`/`select`/`store` over UNINTERPRETED
-sorts (sort U), so the value isn't numeric and CMS (numeric search) cannot build
-an interp. Recovery: `EufSolver::getModel` should emit a function/array
-interpretation from the e-graph (eclass-rep tables); the validator already
-consumes `functionInterps` (numeric) and `arrayInterps` — extend its arg/return
-encoding to opaque tokens for uninterpreted sorts.
-- euf (15): 001, 008, 022, 024, 026, 028, 029, 042, 043, 044, 050, 052, 053, 058, 062
+### A3/A4 (EUF + arrays + combination) — model-extraction, not a validator gap (20)
+ROOT-CAUSED (A5, this round): these flip because the extracted model is
+INCONSISTENT/INCOMPLETE, and the validator correctly refuses it — not because
+the validator can't evaluate the construct (it already evaluates UFApply via
+interp and select/store via arrayInterp).
+
+The combination model stores a SHARED SCALAR as an opaque EUF equality token in
+`assignments` (e.g. `i -> "@e6"`); the arith NUMBER is lost (EUF is registered
+first and wins the `TheoryManager::getModel` first-wins aggregation, and the
+token→number remap there does not fire for these scalars; LIA does not populate
+the typed `numericAssignments` channel either). So when the validator reads the
+model, `mpq_class("@e6")` fails and the scalar DEFAULTS to 0 — which collapses
+`i != j` into `0 = 0` → `(not (= i j))` evaluates false → Violated. (Verified
+verdict=Violated via diag on alia_005.) `dumpModel` papers over this by MINTING
+fresh distinct values per token at print time, but that resolution isn't shared
+with validation.
+
+Recovery (A3/A4 lane): make the extracted model self-consistent — a shared
+scalar must carry its arith numeric value (fix the `getModel` remap, or have LIA
+populate `numericAssignments`), and the array-interp index/element tokens must
+live in the SAME token space as the scalar assignments. A5 has already wired the
+consuming side: the validator prefers `numericAssignments` (RealValue→rational)
+over the lossy string channel, so these auto-recover the moment the model is
+consistent. A5 alternative (heavier): share `dumpModel`'s token-resolution with
+`modelPositivelyValidates` so the validator checks the resolved (printed) model.
+- euf (15, pure QF_UF, uninterpreted sort): 001, 008, 022, 024, 026, 028, 029, 042, 043, 044, 050, 052, 053, 058, 062 — need `EufSolver::getModel` to emit eclass-rep function tables (uninterpreted-sort interp); validator's UFApply arg/return encoding then extends to opaque tokens.
 - arrays (5): ax_010, alia_005, alra_010, auflia_004, auflra_003
 
 ### A2 (nonlinear) — algebraic-number witnesses (14)
