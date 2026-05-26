@@ -19,7 +19,9 @@ does **not** merge to `main` — the master integrates the branches.
 | Agent | Bible | Branch | Owns | Area |
 |---|---|---|---|---|
 | [A1](agent-1-linear.md) | `1.chatgpt.lra.md`, `2.chatgpt.lia.md` | `agent/a1-linear` | `theory/arith/{lra,lia,idl,rdl,linear,integer}` | Linear arithmetic full stack |
-| [A2](agent-2-nonlinear.md) | `3.chatgpt.nra.md`, `4.chatgpt.nia.md` | `agent/a2-nonlinear` | `theory/arith/{nra,nia,nira,lira,icp,interval,linearizer,bit_blast,poly,search}` | Nonlinear arithmetic full stack |
+| [A2](agent-2-nonlinear.md) | `3.chatgpt.nra.md` | `agent/a2-nonlinear` | `theory/arith/{nra,nira,lira,icp,interval,linearizer}` + `poly` (primary) | Real nonlinear (NRA/NIRA) full stack |
+| [A6](agent-6-nia.md) | `4.chatgpt.nia.md` | `agent/a6-nia` | `theory/arith/bit_blast` (BLAN backend) | NIA bit-blast — faithful BLAN port only (split 2026-05-27) |
+| [A7](agent-7-nia-reasoning.md) | `4.chatgpt.nia.md` | `agent/a7-nia-reasoning` | `theory/arith/{nia,search}` + `nia.bit-blast` stage wiring | NIA reasoning stack — 357 recovery, UFNIA conflict, presolve, SLS (split from A6 2026-05-27) |
 | [A3](agent-3-uf-arrays.md) | `5.chatgpt.uf.md`, `6.chatgpt.ax.md` | `agent/a3-uf-arrays` | `theory/{euf,array}` | EUF + Arrays full stack |
 | [A4](agent-4-combination-cdclt.md) | cross-cutting §§ of all 6 | `agent/a4-combination-cdclt` | `theory/combination`, `theory/core/{TheoryManager,TheoryLemmaDatabase}`, `sat/` | Theory combination + CDCL(T) integration |
 | [A5](agent-5-strategy-preprocessing-infra.md) | portfolio/preproc/cache/model §§ of all 6 | `agent/a5-strategy-infra` | `frontend/{factory,preprocess,atomization}`, `expr/rewriter`, `api/Solver`, `util/` | Strategy/portfolio + rewriter/preprocessing + shared infra |
