@@ -77,6 +77,15 @@ LOGIC_ALIASES = {
     "ufnia": "QF_UFNIA",
     "ufnra": "QF_UFNRA",
     "bool": "QF_BOOL",
+    # Array logics (array theory +/- arith +/- UF). Registering them here means a
+    # logic missing on a given machine is gracefully skipped, not a hard abort.
+    "ax": "QF_AX",
+    "alia": "QF_ALIA",
+    "alra": "QF_ALRA",
+    "auflia": "QF_AUFLIA",
+    "auflra": "QF_AUFLRA",
+    "ania": "QF_ANIA",
+    "aufnia": "QF_AUFNIA",
 }
 
 
