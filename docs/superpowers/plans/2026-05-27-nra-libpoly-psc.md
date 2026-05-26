@@ -101,3 +101,22 @@ tests/unit/test_nra_libpoly_psc.cpp            NEW: round-trip conversion + psc-
 - `budgetExceeded` removal is a *recovery* (more complete projection), validated against z3 (gate 3) — never a contradiction.
 - Conversion churn is measured (Task 4 Step 5), with a defined escalation path, not pre-optimized.
 - Flag default-OFF; OFF path byte-identical; promotion gated on the three hard checks + panda2 A/B.
+
+---
+
+## Results (2026-05-27) — SOUND but NET-NEGATIVE; do NOT promote
+
+Commits on `agent/a2-nonlinear`: `f5878d6` (plan) · `f4701fe` (Task1 pscChain) · `cb0dfd1` (Task2 differential oracle) · `fd911e3` (Task3 gate). Flag stays **default-OFF**.
+
+| Gate | Result |
+|---|---|
+| Differential equivalence (Task 2) | 713 (pair,var) comparisons, **0 mismatch**, 0 budget-skips — psc ≡ determinant up-to-rational-scale |
+| Unit suite (OFF) | 727/727 |
+| Regression OFF | 633/633, 0 UNSOUND |
+| Regression ON (`ZOLVER_NRA_LIBPOLY_PSC=1`) | **632/633, 0 UNSOUND, 0 contradiction** — `nra_124` correct-sat→timeout (confirmed: OFF 5.7s sat, ON 22.7s no-verdict) |
+| z3 differential, 95 hard cases | 88 identical, **0 contradiction**, 0 recovery, 4 regressions (kissing_2_2/2_3/2_4, heartdipole-0047, all correct-sat→clean-timeout) + 3 soft (hong_5/6/7 fast-unknown→timeout) |
+| Re-profile hong_10 (ON) | `(anonymous namespace)::determinant` = **0 (gone)**; new hot path = libpoly's own psc/subresultant arithmetic (`coefficient_mul`/`coefficient_add_mul`) + GMP malloc churn; still times out |
+
+**Verdict: the swap is sound (CAD-equivalent — the differential oracle held end-to-end) but a net performance REGRESSION (−5 solved, 0 recovered).** Why: the `maxMatrixDim≈9` budget already caps the determinant's O(n!) blowup, so in the *reachable* matrix-size range the determinant is cheap; libpoly's full-chain `lp_polynomial_psc` over its heavier coefficient representation is slower per call. Eliminating the determinant did not help because per-PSC speed was not the true bottleneck — the *number and size* of PSC computations (projection-set size) is.
+
+**Recommendation:** do NOT promote `ZOLVER_NRA_LIBPOLY_PSC`. Keep it default-OFF (harmless; `pscChain` + the differential oracle are proven-correct, reusable infrastructure). The real NRA lever is reducing the projection *set* — the **reduced/McCallum projection** (audit §325: currently unimplemented stubs that just call Collins → compute the full PSC set) computes *fewer* subresultants — and/or RationalPolynomial allocation/arithmetic efficiency (surgery #2), which is engine-independent. hong-class cases (hong_10) appear genuinely PSC-bound under either engine and may be intractable for this projection without set reduction.
