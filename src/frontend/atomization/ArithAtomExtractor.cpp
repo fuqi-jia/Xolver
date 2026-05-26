@@ -111,9 +111,16 @@ bool ArithAtomExtractor::extractPolynomialConstraint(ExprId eid, const CoreIr& i
     auto cc = polyConverter_->convertConstraint(e.children[0], e.children[1], rel, ir);
     switch (cc.status) {
         case PolyConstraintStatus::Tautology:
-            return true;  // caller handles tautology
+            // Always-true atom (e.g. 0 = 0): pin its SAT literal true. Leaving it
+            // free is unsound — SAT could falsify a provably-true atom.
+            if (registry_) registry_->pinLiteral(v, true);
+            return true;
         case PolyConstraintStatus::Conflict:
-            return true;  // caller handles conflict
+            // Always-false atom (e.g. 0 != 0 after constant propagation): pin its
+            // SAT literal false. Leaving it free let SAT satisfy a provably-false
+            // atom vacuously → false-SAT (meti-tarski atan equality+disequality).
+            if (registry_) registry_->pinLiteral(v, false);
+            return true;
         case PolyConstraintStatus::Constraint:
             if (registry_) {
                 registry_->registerParsedTheoryAtom(

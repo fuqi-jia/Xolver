@@ -26,6 +26,11 @@ void TheoryAtomRegistry::registerParsedTheoryAtom(
     observeIfNeeded(satVar);
 }
 
+void TheoryAtomRegistry::pinLiteral(SatVar satVar, bool value) {
+    if (!sat_) return;
+    sat_->addClause({value ? SatLit::positive(satVar) : SatLit::negative(satVar)});
+}
+
 SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     const LinearFormKey& lhs,
     Relation rel,
