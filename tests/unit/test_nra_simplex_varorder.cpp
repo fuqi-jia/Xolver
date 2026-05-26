@@ -181,3 +181,65 @@ TEST_CASE("structure: x*y^2 -> fixing y linearizes, fixing x does not") {
     CHECK(f.linearizationGain(xv) == 0);
     CHECK(f.maxDegree(yv) == 2);
 }
+
+#include "theory/arith/nra/simplex/VarOrderSelector.h"
+
+static int posOf(const std::vector<std::string>& v, const std::string& n) {
+    return (int)(std::find(v.begin(), v.end(), n) - v.begin());
+}
+
+TEST_CASE("varorder: highest total degree goes last (projected first)") {
+    auto kernel = createPolynomialKernel();
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    PolyId z = kernel->mkVar(kernel->getOrCreateVar("z"));
+    PolyId three = kernel->mkConst(mpq_class(3)), two = kernel->mkConst(mpq_class(2));
+    PolyId core = kernel->sub(kernel->add(kernel->mul(x, y), kernel->mul(x, z)), three);
+    PolyId ym2 = kernel->sub(y, two), zm2 = kernel->sub(z, two);
+    // Integer constant only: libpoly's integer-ring polynomials cannot represent a
+    // non-integer rational (mkConst(1/2) returns NullPoly -> sub() derefs null -> SIGSEGV).
+    // x-1 still makes degree(x) contribute, so x ties on total-degree with y,z, then
+    // wins the frontScore tie-break (x linearizes xy+xz) to land LAST.
+    PolyId xm1 = kernel->sub(x, kernel->mkConst(mpq_class(1)));
+    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
+    std::vector<CdcacConstraint> cons = {
+        C(core, Relation::Eq, 1), C(ym2, Relation::Geq, 2),
+        C(zm2, Relation::Geq, 3), C(xm1, Relation::Leq, 4) };
+    std::vector<std::string> names = {"x", "y", "z"};
+    auto order = computeCdcacVarOrder(*kernel, cons, names);
+    REQUIRE(order.size() == 3);
+    CHECK(order.back() == "x");                               // x has the highest degSum
+    std::set<std::string> got(order.begin(), order.end());
+    CHECK(got == std::set<std::string>{"x", "y", "z"});
+}
+
+TEST_CASE("varorder: within equal degree, higher linearization-gain var is later") {
+    auto kernel = createPolynomialKernel();
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    PolyId a = kernel->mkVar(kernel->getOrCreateVar("a"));
+    PolyId b = kernel->mkVar(kernel->getOrCreateVar("b"));
+    PolyId one = kernel->mkConst(mpq_class(1));
+    PolyId c1 = kernel->sub(kernel->mul(a, x), one);                       // a*x - 1  (fixing a linearizes)
+    PolyId c2 = kernel->sub(kernel->mul(kernel->mul(b, x), y), one);       // b*x*y - 1 (fixing b leaves x*y)
+    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
+    std::vector<CdcacConstraint> cons = { C(c1, Relation::Eq, 1), C(c2, Relation::Eq, 2) };
+    std::vector<std::string> names = {"a", "b", "x", "y"};                  // a,b,y degSum 1; x degSum 2
+    auto order = computeCdcacVarOrder(*kernel, cons, names);
+    CHECK(order.back() == "x");                                            // highest degree last
+    CHECK(posOf(order, "a") > posOf(order, "b"));                          // a linearizes -> later than b
+    std::set<std::string> got(order.begin(), order.end());
+    CHECK(got == std::set<std::string>{"a","b","x","y"});
+}
+
+TEST_CASE("varorder: all-linear input is a valid deterministic permutation") {
+    auto kernel = createPolynomialKernel();
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    auto C = [](PolyId p, Relation r, int l){ CdcacConstraint c; c.poly=p; c.rel=r; c.reason=SatLit::positive(l); return c; };
+    std::vector<CdcacConstraint> cons = { C(x, Relation::Geq, 1), C(y, Relation::Leq, 2) };
+    std::vector<std::string> names = {"x", "y"};
+    auto order = computeCdcacVarOrder(*kernel, cons, names);
+    std::set<std::string> got(order.begin(), order.end());
+    CHECK(got == std::set<std::string>{"x", "y"});
+}
