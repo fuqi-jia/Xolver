@@ -3,6 +3,8 @@
 #include <iostream>
 #include <string>
 #include <optional>
+#include <functional>
+#include <pthread.h>
 
 static void printUsage(const char* prog) {
     std::cout << "Usage: " << prog << " <command> [options]\n"
@@ -42,6 +44,36 @@ struct NullStreambuf : std::streambuf {
     int overflow(int c) override { return c; }  // pretend success, write nothing
     std::streamsize xsputn(const char*, std::streamsize n) override { return n; }
 };
+
+// Defense-in-depth net for deep-input stack overflow. The frontend preprocess
+// passes and the SOMTParser rewriter are iterative, but other recursive
+// walkers remain downstream (e.g. PolynomialConverter::collectRec, the
+// atomizer, theory term builders). Running parse+solve on a thread with a
+// large stack lets those survive deeply-nested benchmarks rather than
+// SIGSEGV. Single worker; the caller blocks on join, so stdout/stderr writes
+// are not concurrent. Falls back to inline execution if the thread cannot be
+// created. Stack reservation is virtual (lazily committed), not RSS.
+struct LargeStackCtx { std::function<int()> fn; int ret; };
+extern "C" inline void* largeStackTrampoline(void* p) {
+    auto* c = static_cast<LargeStackCtx*>(p);
+    c->ret = c->fn();
+    return nullptr;
+}
+inline int runWithLargeStack(std::function<int()> fn) {
+    constexpr size_t kStackBytes = 512UL * 1024 * 1024;  // 512 MB
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) != 0) return fn();
+    LargeStackCtx ctx{std::move(fn), EXIT_FAILURE};
+    pthread_t tid;
+    if (pthread_attr_setstacksize(&attr, kStackBytes) == 0 &&
+        pthread_create(&tid, &attr, largeStackTrampoline, &ctx) == 0) {
+        pthread_join(tid, nullptr);
+        pthread_attr_destroy(&attr);
+        return ctx.ret;
+    }
+    pthread_attr_destroy(&attr);
+    return ctx.fn();  // fallback: run on the current thread
+}
 }  // namespace
 
 static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
@@ -96,40 +128,51 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         std::cerr.rdbuf(&nullCerr);
     }
 
-    if (!solver.parseFile(argv[fileIdx])) {
-        std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
-        return EXIT_FAILURE;
-    }
-
-    // Command-line --logic overrides file-declared logic
-    if (logicOpt) {
-        solver.setLogic(*logicOpt);
-    }
-
-    // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
-    // tokens (sat / unsat / unknown). Diagnostics go to stderr so the
-    // competition harness (which greps stdout) is not confused. The old
-    // `dumpSMT2(std::cout)` echo of the parsed formula is removed for the
-    // same reason — use `--verbose` / stderr for debugging instead.
-    zolver::Result r = solver.checkSat();
-    std::cout << toString(r) << "\n";
-    // Model-Validation track: if the input requested a model and we found
-    // one, emit the SMT-LIB get-model response on stdout right after `sat`.
-    if (r == zolver::Result::Sat && solver.modelRequested()) {
-        solver.dumpModel(std::cout);
-    }
-    std::cout.flush();
-    // Diagnostic: independent model self-check against original assertions.
-    if (checkModel && r == zolver::Result::Sat && !solver.modelMatchesOriginal()) {
-        std::cerr << "MODEL_MISMATCH\n";
-    }
-    if (r == zolver::Result::Unknown) {
-        auto reason = solver.lastUnknownReason();
-        if (!reason.empty()) {
-            std::cerr << "(unknown-reason " << reason << ")\n";
+    // Parse + solve + emit on a large-stack worker thread so deeply-nested
+    // inputs survive any remaining recursive walker (see runWithLargeStack).
+    auto body = [&]() -> int {
+      try {
+        if (!solver.parseFile(argv[fileIdx])) {
+            std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
+            return EXIT_FAILURE;
         }
-    }
-    return EXIT_SUCCESS;
+
+        // Command-line --logic overrides file-declared logic
+        if (logicOpt) {
+            solver.setLogic(*logicOpt);
+        }
+
+        // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
+        // tokens (sat / unsat / unknown). Diagnostics go to stderr so the
+        // competition harness (which greps stdout) is not confused.
+        zolver::Result r = solver.checkSat();
+        std::cout << toString(r) << "\n";
+        // Model-Validation track: if the input requested a model and we found
+        // one, emit the SMT-LIB get-model response on stdout right after `sat`.
+        if (r == zolver::Result::Sat && solver.modelRequested()) {
+            solver.dumpModel(std::cout);
+        }
+        std::cout.flush();
+        // Diagnostic: independent model self-check against original assertions.
+        if (checkModel && r == zolver::Result::Sat && !solver.modelMatchesOriginal()) {
+            std::cerr << "MODEL_MISMATCH\n";
+        }
+        if (r == zolver::Result::Unknown) {
+            auto reason = solver.lastUnknownReason();
+            if (!reason.empty()) {
+                std::cerr << "(unknown-reason " << reason << ")\n";
+            }
+        }
+        return EXIT_SUCCESS;
+      } catch (const std::exception& ex) {
+        // Graceful degradation: emit a valid SMT-LIB token instead of crashing.
+        std::cout << "unknown\n";
+        std::cout.flush();
+        std::cerr << "(error " << ex.what() << ")\n";
+        return EXIT_FAILURE;
+      }
+    };
+    return runWithLargeStack(body);
 }
 
 static int cmdBench(int argc, char* argv[]) {

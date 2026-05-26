@@ -4,7 +4,8 @@ add_executable(zolver-cli
     main.cpp
 )
 
-target_link_libraries(zolver-cli PRIVATE zolver_core)
+find_package(Threads REQUIRED)
+target_link_libraries(zolver-cli PRIVATE zolver_core Threads::Threads)
 
 set_target_properties(zolver-cli PROPERTIES
     OUTPUT_NAME zolver
