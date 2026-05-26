@@ -283,6 +283,7 @@ EGraphSnapshot IncrementalEGraph::snapshot() const {
 }
 
 void IncrementalEGraph::rollback(EGraphSnapshot snap) {
+#ifndef NDEBUG
     FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
     if (dbg) {
         fprintf(dbg, "[EGRAPH_ROLLBACK] sigSnap=%zu csSnap=%zu pfSnap=%zu ufSnap=%zu\n",
@@ -290,11 +291,13 @@ void IncrementalEGraph::rollback(EGraphSnapshot snap) {
         fprintf(dbg, "  before csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
         fclose(dbg);
     }
+#endif
     proofForest_.rollback(snap.proofForestSnap);
     mergeRecords_.resize(snap.mergeRecordSize);
     nextTermToRegister_ = snap.nextTermToRegister;
     rollbackCurrentSig(snap.currentSigSnap);
     sigTable_.rollback(snap.sigTableSnap);
+#ifndef NDEBUG
     dbg = fopen("/tmp/sig_inv_fail.log", "a");
     if (dbg) {
         fprintf(dbg, "  after csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
@@ -303,13 +306,14 @@ void IncrementalEGraph::rollback(EGraphSnapshot snap) {
 
     // Verify rollback actually truncated the trail
     if (sigTable_.snapshot() != snap.sigTableSnap) {
-        FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
-        if (dbg) {
-            fprintf(dbg, "[ROLLBACK_BUG] sigTable trail after rollback=%zu expected=%zu\n",
+        FILE* dbg2 = fopen("/tmp/sig_inv_fail.log", "a");
+        if (dbg2) {
+            fprintf(dbg2, "[ROLLBACK_BUG] sigTable trail after rollback=%zu expected=%zu\n",
                     sigTable_.snapshot(), snap.sigTableSnap);
-            fclose(dbg);
+            fclose(dbg2);
         }
     }
+#endif
 
     while (memberTrail_.size() > snap.memberTrailSize) {
         auto ch = memberTrail_.back();

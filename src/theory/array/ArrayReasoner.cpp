@@ -5,8 +5,39 @@
 #include "theory/combination/SharedTermRegistry.h"
 #include "expr/ir.h"
 #include <cassert>
+#include <cstdlib>
+#include <string>
 
 namespace zolver {
+
+ArrayReasoner::ArrayReasoner() {
+    row2ConstEnabled_ = std::getenv("ZOLVER_AX_ROW2_CONST") != nullptr;
+}
+
+std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
+    ExprId e = originExpr(t);
+    if (e == NullExpr || !ir_) return std::nullopt;
+    const auto& expr = ir_->get(e);
+    // isConst() ⇒ an INTERPRETED constant (Int/Real/Bool/BV), so distinct
+    // canonical tokens imply distinct values. Uninterpreted-sort constants are
+    // Kind::Variable (not isConst), so they correctly return nullopt: two
+    // distinct uninterpreted names do NOT imply distinct values.
+    if (!expr.isConst()) return std::nullopt;
+    const auto& v = expr.payload.value;
+    if (auto* b = std::get_if<bool>(&v))       return std::string("b:") + (*b ? "1" : "0");
+    if (auto* i = std::get_if<int64_t>(&v))    return "i:" + std::to_string(*i);
+    if (auto* u = std::get_if<uint64_t>(&v))   return "u:" + std::to_string(*u);
+    if (auto* s = std::get_if<std::string>(&v)) return "s:" + *s;
+    return std::nullopt;
+}
+
+bool ArrayReasoner::provablyDistinctConstIndices(EufTermId i, EufTermId j) const {
+    auto ti = constToken(i);
+    if (!ti) return false;
+    auto tj = constToken(j);
+    if (!tj) return false;
+    return *ti != *tj;
+}
 
 void ArrayReasoner::reset() {
     selectTerms_.clear();
@@ -155,6 +186,53 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
             break;  // one const witness per class suffices
         }
     }
+
+    // --- Row2 for distinct constant indices (ZOLVER_AX_ROW2_CONST) ----------
+    // For select(arr,j) where arr's class holds a store(a,i,v) and i,j are
+    // syntactically distinct numeric/bool constants: i != j holds
+    // unconditionally, so the Row2 conclusion
+    //   select(store(a,i,v),j) = select(a,j)
+    // is a zero-literal theorem. Merge it eagerly — no SAT split. Congruence
+    // then links select(arr,j) to select(a,j) automatically. This avoids the
+    // Row2 case-split lemma for the common constant-index case.
+    if (row2ConstEnabled_) {
+        size_t nSel = selectTerms_.size();
+        for (size_t k = 0; k < nSel; ++k) {
+            EufTermId selTerm = selectTerms_[k];
+            const auto& seln = tm_->node(selTerm);
+            if (seln.args.size() != 2) continue;
+            EufTermId arrArg = seln.args[0];
+            EufTermId jTerm = seln.args[1];
+            EClassId arrClass = egraph_->rep(arrArg);
+            for (EufTermId member : egraph_->classMembers(arrClass)) {
+                if (!symIsStore(member)) continue;
+                const auto& stn = tm_->node(member);
+                if (stn.args.size() != 3) continue;
+                EufTermId aTerm = stn.args[0];   // underlying array
+                EufTermId iTerm = stn.args[1];   // write index
+                if (egraph_->same(iTerm, jTerm)) continue;
+                if (!provablyDistinctConstIndices(iTerm, jTerm)) continue;
+
+                ExprId jExpr = originExpr(jTerm);
+                ExprId aExpr = originExpr(aTerm);
+                ExprId storeExpr = originExpr(member);
+                if (jExpr == NullExpr || aExpr == NullExpr || storeExpr == NullExpr) continue;
+
+                // Build the read terms over the ACTUAL store member (see the
+                // soundness note in instantiateLemma): select(store(a,i,v),j)
+                // and select(a,j). Merging them is a genuine Row2 tautology.
+                EufTermId selStore = internSelect(storeExpr, jExpr, outQueue);
+                EufTermId selAJ = internSelect(aExpr, jExpr, outQueue);
+                if (selStore == NullEufTerm || selAJ == NullEufTerm) continue;
+                if (!egraph_->same(selStore, selAJ)) {
+                    MergeReason mr;
+                    mr.kind = MergeReasonKind::ArrayRow2;
+                    mr.lit = SatLit();
+                    outQueue.push_back({selStore, selAJ, mr});
+                }
+            }
+        }
+    }
 }
 
 std::optional<std::vector<SatLit>>
@@ -232,6 +310,11 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
             //  these terms are registered; ensureTermRegistered already wired
             //  them into the signature table.)
             if (selStore == NullEufTerm || selAJ == NullEufTerm) continue;
+            // If the Row2 conclusion already holds in the egraph (e.g. the
+            // eager distinct-constant Row2 merge above derived it), the lemma is
+            // redundant — skip the SAT split. Sound regardless; gated to keep
+            // the flag-OFF path byte-identical.
+            if (row2ConstEnabled_ && egraph_->same(selStore, selAJ)) continue;
             ExprId selStoreExpr = originExpr(selStore);  // select(store(a,i,v),j)
             ExprId selAJExpr = originExpr(selAJ);
             if (selStoreExpr == NullExpr || selAJExpr == NullExpr) continue;

@@ -5,6 +5,7 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
 
 using namespace zolver;
 
@@ -847,4 +848,86 @@ TEST_CASE("EUF incremental: late term interning triggers congruence") {
     solver.assertLit(makeEufRecord(f_a, f_b), false, 0, SatLit{2, true});
     auto r = solver.check(lemmaDb);
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
+}
+
+// ---------------------------------------------------------------------------
+// Flag-gated SOTA techniques: verify the flag-ON path preserves verdicts.
+// The env var is read in the relevant solver's constructor, so it must be set
+// before the Solver builds its theory solvers (i.e. before checkSat()).
+// ---------------------------------------------------------------------------
+
+namespace {
+struct ScopedEnv {
+    const char* key;
+    explicit ScopedEnv(const char* k) : key(k) { setenv(key, "1", 1); }
+    ~ScopedEnv() { unsetenv(key); }
+};
+} // namespace
+
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-const c U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (= b c))\n"
+        "(assert (distinct (f a) (f c)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (distinct a (f a)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
+    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_ALIA)\n"
+        "(declare-const a (Array Int Int))\n"
+        "(declare-const v Int)\n"
+        "(assert (not (= (select (store a 1 v) 2) (select a 2))))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_ALIA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index read-through SAT") {
+    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_ALIA)\n"
+        "(declare-const a (Array Int Int))\n"
+        "(assert (= (select (store a 1 10) 1) 10))\n"
+        "(assert (= (select (store a 1 10) 2) (select a 2)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_ALIA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }

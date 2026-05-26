@@ -129,6 +129,22 @@ private:
     // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
     std::vector<SatLit> allActiveReasons() const;
 
+    // Build the conflict clause for a disequality (a != b) whose two sides have
+    // become equal in the egraph: explainEquality(a,b) + the diseq's own reason.
+    // Falls back to allActiveReasons() if the explanation is unavailable (keeps
+    // UNSAT sound). Shared by the eager watch and the post-loop diseq scan.
+    TheoryConflict buildDiseqConflict(const ActiveDisequality& d);
+
+    // ZOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
+    // after each merge in the saturation loop we check only the disequalities
+    // that touch the just-merged (loser) class, catching the conflict the moment
+    // it forms (shorter explanation, no wasted further congruence). Read once.
+    bool diseqWatchEnabled_ = false;
+    // Scratch index rebuilt per check() when the watch is on: diseq endpoint
+    // term -> list of (index into the vector, 0=local diseq / 1=shared diseq).
+    std::unordered_map<EufTermId, std::vector<std::pair<uint32_t, uint8_t>>> diseqByTerm_;
+    void rebuildDiseqIndex();
+
     void initializeBoolConstants();
     void onEclassMerged(EClassId kept, EClassId killed);
     void enqueueMerge(EufTermId a, EufTermId b, const MergeReason& reason);

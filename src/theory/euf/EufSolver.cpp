@@ -11,7 +11,27 @@
 namespace zolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
+    diseqWatchEnabled_ = std::getenv("ZOLVER_UF_DISEQ_WATCH") != nullptr;
     initializeBoolConstants();
+}
+
+void EufSolver::rebuildDiseqIndex() {
+    diseqByTerm_.clear();
+    for (uint32_t i = 0; i < disequalities_.size(); ++i) {
+        diseqByTerm_[disequalities_[i].lhs].push_back({i, 0});
+        diseqByTerm_[disequalities_[i].rhs].push_back({i, 0});
+    }
+    for (uint32_t i = 0; i < sharedDisequalities_.size(); ++i) {
+        diseqByTerm_[sharedDisequalities_[i].lhs].push_back({i, 1});
+        diseqByTerm_[sharedDisequalities_[i].rhs].push_back({i, 1});
+    }
+}
+
+TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
+    auto er = egraph_.explainEquality(d.lhs, d.rhs);
+    std::vector<SatLit> reasons = er.ok ? std::move(er.reasons) : allActiveReasons();
+    reasons.push_back(d.reason);
+    return TheoryConflict{std::move(reasons)};
 }
 
 void EufSolver::push() {
@@ -387,6 +407,13 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // has already been merged) are visible to congruence detection.
     egraph_.registerPendingSignatures(mergeQueue_);
 
+    // ZOLVER_UF_DISEQ_WATCH: index active disequalities by endpoint term so the
+    // saturation loop can check, after each merge, only the disequalities that
+    // touch the just-merged class (instead of re-scanning all of them).
+    if (diseqWatchEnabled_) {
+        rebuildDiseqIndex();
+    }
+
     // 唯一 saturation loop：drain SAT decisions + congruence
     while (!mergeQueue_.empty()) {
         auto req = mergeQueue_.back();
@@ -430,6 +457,25 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         if (pendingConflict_) {
             return TheoryCheckResult::mkConflict(*pendingConflict_);
         }
+
+        // ZOLVER_UF_DISEQ_WATCH: only the members of the loser class (mr.killed)
+        // had their representative change to mr.kept, so a disequality can become
+        // violated only if one of its endpoint terms lives in that loser class.
+        // Check those eagerly — the conflict is reported the moment it forms.
+        if (diseqWatchEnabled_) {
+            for (EufTermId t : egraph_.classMembers(mr.killed)) {
+                auto it = diseqByTerm_.find(t);
+                if (it == diseqByTerm_.end()) continue;
+                for (const auto& [idx, which] : it->second) {
+                    const ActiveDisequality& d =
+                        (which == 0) ? disequalities_[idx] : sharedDisequalities_[idx];
+                    if (egraph_.same(d.lhs, d.rhs)) {
+                        pendingConflict_ = buildDiseqConflict(d);
+                        return TheoryCheckResult::mkConflict(*pendingConflict_);
+                    }
+                }
+            }
+        }
         // refreshCongruence is now handled inside merge()
     }
 
@@ -444,8 +490,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         if (er.ok) {
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        std::cerr << "[EUF_EXPLAIN_FAIL] true=false same=" << egraph_.same(trueTerm_, falseTerm_)
-                  << " activeReasons=" << allActiveReasons().size() << "\n";
+        if (std::getenv("EUF_DIAG")) {
+            std::cerr << "[EUF_EXPLAIN_FAIL] true=false same=" << egraph_.same(trueTerm_, falseTerm_)
+                      << " activeReasons=" << allActiveReasons().size() << "\n";
+        }
         return TheoryCheckResult::mkConflict(TheoryConflict{allActiveReasons()});
     }
 
@@ -463,9 +511,11 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            std::cerr << "[EUF_EXPLAIN_FAIL] diseq lhs=" << d.lhs << " rhs=" << d.rhs
-                      << " same=" << egraph_.same(d.lhs, d.rhs)
-                      << " activeReasons=" << allActiveReasons().size() << "\n";
+            if (std::getenv("EUF_DIAG")) {
+                std::cerr << "[EUF_EXPLAIN_FAIL] diseq lhs=" << d.lhs << " rhs=" << d.rhs
+                          << " same=" << egraph_.same(d.lhs, d.rhs)
+                          << " activeReasons=" << allActiveReasons().size() << "\n";
+            }
             auto reasons = allActiveReasons();
             reasons.push_back(d.reason);
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});

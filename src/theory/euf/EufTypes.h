@@ -35,8 +35,12 @@ enum class MergeReasonKind {
     // contribute zero literals to a conflict explanation (the equality is a
     // theory tautology). ArrayRow1: select(store(a,i,v),i) = v.
     // ArrayConst: select(const(v),i) = v.
+    // ArrayRow2: select(store(a,i,v),j) = select(a,j) when i,j are distinct
+    // constants (i != j is built into the literals, so the Row2 conclusion is
+    // unconditional — zero literals, no SAT split needed).
     ArrayRow1,
-    ArrayConst
+    ArrayConst,
+    ArrayRow2
 };
 
 struct MergeReason {
