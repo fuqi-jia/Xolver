@@ -70,6 +70,11 @@ public:
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
+    // Path of the file this problem was parsed from, retained so the portfolio
+    // executor (ZOLVER_STRAT_PORTFOLIO) can re-establish PRISTINE state per arm
+    // via reset()+parseFile. Cleared by a programmatic assertFormula (which
+    // would be lost on re-parse), which forces the executor to single-arm.
+    std::string sourcePath_;
 
     // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
     // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
@@ -498,6 +503,7 @@ public:
         lastModel_.reset();
         lastAssumptions_.clear();
         originalAssertions_.clear();
+        sourcePath_.clear();
         divModOrigins_.clear();
         partialFuncModel_ = PartialFuncModel{};
         lastUnknownReason_.clear();
@@ -525,6 +531,7 @@ public:
         boolSortId_ = adapter.getBoolSortId();
         intSortId_ = ir->intSortId();
         realSortId_ = ir->realSortId();
+        sourcePath_ = std::string(filename);  // re-parseable source (portfolio)
         return true;
     }
 
@@ -558,6 +565,64 @@ public:
         cir.registerSort(realSortId_, SortKind::Real);
         cir.setRealSortId(realSortId_);
         return realSortId_;
+    }
+
+    // Portfolio executor (ZOLVER_STRAT_PORTFOLIO). Runs the ordered arms from
+    // selectPortfolio until one returns a definitive (Sat/Unsat) verdict. Each
+    // arm is run from PRISTINE state — the first arm uses the already-parsed
+    // problem; subsequent arms reset()+re-parse the source file — so trying
+    // several configurations is sound (any arm's Sat/Unsat is already
+    // ModelValidator-backed; arms differ only in completeness). Multi-arm needs
+    // a re-parseable file source; otherwise (programmatic input) it degrades to
+    // a single arm. Phase 1 has one arm == ZOLVER_STRAT_PRESETS, so a portfolio
+    // run is behavior-neutral until the master populates differentiated arms.
+    Result checkSatPortfolio() {
+        const std::string path = sourcePath_;  // reset() clears it; capture first
+        std::vector<PortfolioArm> arms = selectPortfolio(logic, LogicFeatures{});
+        if (arms.empty()) return checkSatInternal();
+        // Multi-arm requires a re-parseable file source.
+        const bool canReparse = !path.empty();
+        const size_t nArms = (canReparse ? arms.size() : 1);
+
+        // Snapshot the user's env for every flag any arm touches, so that
+        // between arms we can restore it and each arm sees (user env + its own
+        // flags), with the user's explicit env always winning (overwrite=0).
+        std::set<std::string> names;
+        for (size_t i = 0; i < nArms; ++i) {
+            if (arms[i].config.enableRewrite) names.insert("ZOLVER_PP_REWRITE");
+            for (const auto& f : arms[i].config.envFlags) names.insert(f.first);
+        }
+        std::map<std::string, std::optional<std::string>> baseline;
+        for (const auto& n : names) {
+            const char* v = std::getenv(n.c_str());
+            baseline[n] = v ? std::optional<std::string>(v) : std::nullopt;
+        }
+        auto restoreEnv = [&]() {
+            for (const auto& [n, v] : baseline) {
+                if (v) setenv(n.c_str(), v->c_str(), 1);
+                else   unsetenv(n.c_str());
+            }
+        };
+        auto applyArm = [&](const PortfolioArm& a) {
+            restoreEnv();  // back to the user's baseline, then layer this arm's
+            // flags WITHOUT overriding an explicit user env (overwrite=0).
+            if (a.config.enableRewrite) setenv("ZOLVER_PP_REWRITE", "1", 0);
+            for (const auto& [n, val] : a.config.envFlags)
+                setenv(n.c_str(), val.c_str(), 0);
+        };
+
+        Result r = Result::Unknown;
+        for (size_t i = 0; i < nArms; ++i) {
+            if (i > 0) {                       // pristine state for arm 2..N
+                reset();
+                if (!parseFile(path)) break;   // source vanished -> stop, keep best
+            }
+            applyArm(arms[i]);
+            r = checkSatInternal();
+            if (r == Result::Sat || r == Result::Unsat) break;  // definitive wins
+        }
+        restoreEnv();  // leave the process env as the user had it
+        return r;
     }
 
     Result checkSatInternal() {
@@ -1507,9 +1572,14 @@ Term Solver::mkOp(uint32_t kind, std::vector<Term> args) {
 
 void Solver::assertFormula(Term t) {
     pImpl->ensureIr().addAssertion(t.id());
+    // A programmatic assertion would be lost on a portfolio re-parse, so it
+    // taints re-parseability: the portfolio executor must stay single-arm.
+    pImpl->sourcePath_.clear();
 }
 
 Result Solver::checkSat() {
+    if (std::getenv("ZOLVER_STRAT_PORTFOLIO"))
+        return pImpl->checkSatPortfolio();
     return pImpl->checkSatInternal();
 }
 
