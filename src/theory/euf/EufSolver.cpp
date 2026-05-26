@@ -109,6 +109,71 @@ bool EufSolver::satComplete(std::string* reason) const {
     return true;
 }
 
+std::vector<std::pair<SharedTermId, SharedTermId>>
+EufSolver::collectArrangeableUfArgPairs(
+    const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
+    std::vector<std::pair<SharedTermId, SharedTermId>> pairs;
+    // Reverse map: EufTermId -> SharedTermId (interface constants/bridge vars).
+    std::unordered_map<EufTermId, SharedTermId> eufToShared;
+    eufToShared.reserve(sharedTermToEufTerm_.size());
+    for (const auto& [s, t] : sharedTermToEufTerm_) eufToShared.emplace(t, s);
+
+    // Application terms grouped by (symbol, arity), skipping arithmetic builtins
+    // (#builtin.*) — interpreted by the arith solver, not EUF congruence. User
+    // UF + #array.select/store are congruence-relevant.
+    std::unordered_map<uint64_t, std::vector<EufTermId>> byKind;
+    for (EufTermId t = 0; t < static_cast<EufTermId>(termManager_.termCount()); ++t) {
+        const auto& n = termManager_.node(t);
+        if (n.args.empty()) continue;
+        if (termManager_.symbolName(n.symbol).rfind("#builtin.", 0) == 0) continue;
+        uint64_t key = (static_cast<uint64_t>(n.symbol) << 8) | (n.args.size() & 0xff);
+        byKind[key].push_back(t);
+    }
+    auto sharedOf = [&](EufTermId t) -> SharedTermId {
+        auto it = eufToShared.find(t);
+        return it == eufToShared.end() ? static_cast<SharedTermId>(-1) : it->second;
+    };
+    for (auto& [key, apps] : byKind) {
+        (void)key;
+        for (size_t p = 0; p < apps.size(); ++p) {
+            for (size_t q = p + 1; q < apps.size(); ++q) {
+                EufTermId t1 = apps[p], t2 = apps[q];
+                if (egraph_.same(t1, t2)) continue;
+                const auto& a1 = termManager_.node(t1).args;
+                const auto& a2 = termManager_.node(t2).args;
+                if (a1.size() != a2.size()) continue;
+                // Every differing position must be a SHARED, value-equal pair for
+                // arranging to force congruence; otherwise the pair is not
+                // arrangeable and we skip it (do not split).
+                std::vector<std::pair<SharedTermId, SharedTermId>> diff;
+                bool arrangeable = true;
+                for (size_t i = 0; i < a1.size(); ++i) {
+                    if (egraph_.same(a1[i], a2[i])) continue;
+                    SharedTermId s1 = sharedOf(a1[i]), s2 = sharedOf(a2[i]);
+                    if (s1 == static_cast<SharedTermId>(-1) ||
+                        s2 == static_cast<SharedTermId>(-1) ||
+                        !valueEqual(s1, s2)) { arrangeable = false; break; }
+                    diff.emplace_back(s1, s2);
+                }
+                if (arrangeable && !diff.empty())
+                    for (auto& d : diff) pairs.push_back(d);
+            }
+        }
+    }
+    return pairs;
+}
+
+bool EufSolver::hasUnarrangedUfCongruence(
+    const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+    std::string* reason) const {
+    if (!collectArrangeableUfArgPairs(valueEqual).empty()) {
+        if (reason) *reason = "combination: unarranged UF-argument congruence "
+                              "(shared bridge-var/arg value-equal but not merged)";
+        return true;
+    }
+    return false;
+}
+
 void EufSolver::push() {
     scopeLimits_.push_back(trail_.size());
     scopeSnapshots_.push_back(egraph_.snapshot());

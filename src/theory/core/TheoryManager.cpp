@@ -1,3 +1,4 @@
+#include <cstdio>
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -589,6 +590,53 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // Phase 1 (ZOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
+    // congruences the scalar loop above cannot reach — the bridge-vars/const
+    // args (internal or constant shared terms used as UF/select arguments) that
+    // are value-equal to a sibling argument but not yet merged. EUF reports the
+    // value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split per
+    // pair. TERMINATION: the UF applications and (purification-created) bridge
+    // vars are fixed pre-solve and arranging spawns no new pairs, so the
+    // candidate set is finite and emittedArrangementSplits_ dedup bounds it.
+    if (effort == TheoryEffort::Full && combinationMode_ && sharedTermRegistry_ &&
+        registry_ && std::getenv("ZOLVER_COMB_UFARG_ARRANGE")) {
+        TheorySolver* eufS = nullptr;
+        auto it = solverByTheory_.find(TheoryId::EUF);
+        if (it != solverByTheory_.end()) eufS = it->second;
+        if (eufS) {
+            auto valueEqual = [&](SharedTermId a, SharedTermId b) -> bool {
+                if (a == b) return true;
+                std::optional<RealValue> va, vb;
+                for (auto& solver : solvers_) {
+                    if (solver->id() == TheoryId::EUF) continue;
+                    if (!solver->supportsCombination()) continue;
+                    if (!va) va = solver->sharedTermArithValue(a);
+                    if (!vb) vb = solver->sharedTermArithValue(b);
+                }
+                return va && vb && (*va == *vb);
+            };
+            for (auto& pr : eufS->collectArrangeableUfArgPairs(valueEqual)) {
+                SharedTermId a = pr.first, b = pr.second;
+                if (a == b) continue;
+                if (sharedEqMgr_.same(a, b) || sharedEqMgr_.diseqKnown(a, b)) continue;
+                SharedTermId lo = a < b ? a : b, hi = a < b ? b : a;
+                uint64_t key = (static_cast<uint64_t>(lo) << 32) |
+                               static_cast<uint64_t>(hi);
+                if (!emittedArrangementSplits_.insert(key).second) continue;
+                for (auto* owner : solversOwning(a, b))
+                    owner->allowInterfaceDiseqModelBranch(a, b);
+                SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(a, b);
+                TheoryLemma lemma;
+                lemma.lits.push_back(eqLit);
+                lemma.lits.push_back(eqLit.negated());
+                NO_DBG << "[NO-UFARG] split "
+                       << stName(sharedTermRegistry_, a) << " = "
+                       << stName(sharedTermRegistry_, b) << "\n";
+                return TheoryCheckResult::mkLemma(std::move(lemma));
+            }
+        }
+    }
+
     NO_DBG << "[NO-RET-9] Consistent\n";
     return TheoryCheckResult::consistent();
 }
@@ -605,10 +653,45 @@ bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
             return false;
         }
     }
-    // NOTE (Phase 1): the combination-level "no unarranged same-value shared
-    // UF-argument pair" detector is added with the Wisa bridge-arrangement work
-    // — it reuses this same entry point. Until then, an unarranged bridge-var
-    // congruence (Wisa) is not yet detected here.
+    // Phase 1 combination-arrangement conjunct: per-theory completeness is NOT
+    // combination completeness. A shared bridge-var / UF-argument that is
+    // value-equal to another but not merged leaves an undischarged application
+    // congruence (Wisa select_format(fmt1) ≅ select_format(k)). Compare shared
+    // terms by their arith-model value (from whichever arith solver owns them)
+    // and ask EUF whether any same-function application pair is left unarranged.
+    auto valueEqual = [this](SharedTermId a, SharedTermId b) -> bool {
+        if (a == b) return true;
+        std::optional<RealValue> va, vb;
+        for (const auto& solver : solvers_) {
+            if (solver->id() == TheoryId::EUF) continue;
+            if (!solver->supportsCombination()) continue;
+            if (!va) va = solver->sharedTermArithValue(a);
+            if (!vb) vb = solver->sharedTermArithValue(b);
+        }
+        return va && vb && (*va == *vb);
+    };
+    for (const auto& solver : solvers_) {
+        for (auto& pr : solver->collectArrangeableUfArgPairs(valueEqual)) {
+            // A pair the combination has already ARRANGED — committed equal or
+            // DISEQUAL — is NOT pending. The decisive signal is the SAT
+            // assignment of the pair's shared-equality atom: a DECIDED value
+            // (True = arranged equal, False = arranged disequal, e.g. an asserted
+            // (distinct a b) whose atom is assigned false) means the pair is
+            // resolved. (sharedEqMgr only tracks interface (dis)eqs, missing an
+            // arith-internal/SAT-level (distinct a b) — that over-floored
+            // uflra_007.) Only an UNASSIGNED shared-eq atom is a genuine
+            // undischarged arrangement obligation that blocks completeness.
+            if (sharedEqMgr_.same(pr.first, pr.second)) continue;
+            if (sharedEqMgr_.diseqKnown(pr.first, pr.second)) continue;
+            if (assignmentView_ && registry_) {
+                SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(pr.first, pr.second);
+                if (assignmentView_->value(eqLit) != LitValue::Unknown) continue;
+            }
+            if (reason) *reason = "combination: unarranged UF-argument congruence "
+                                  "(shared bridge-var/arg value-equal but not merged)";
+            return false;
+        }
+    }
     return true;
 }
 

@@ -65,6 +65,27 @@ public:
 
     bool satComplete(std::string* reason = nullptr) const override;
 
+    // Phase 1 combination-arrangement detector. Returns true iff there exist two
+    // applications of the SAME function symbol that are NOT in the same egraph
+    // class, yet every argument position is either already merged OR a pair of
+    // SHARED terms the caller reports value-equal (valueEqual) — i.e. arranging
+    // those shared args equal would force the applications congruent. Such a
+    // pending arrangement means the combination model is NOT complete (the Wisa
+    // select_format(fmt1) ≅ select_format(k) obligation). `valueEqual` is the
+    // arith-model value comparison supplied by the combination layer.
+    bool hasUnarrangedUfCongruence(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        std::string* reason = nullptr) const override;
+
+    // Phase 1 arrangement (recovery). Collects the shared-term argument pairs to
+    // split (a=b ∨ a≠b): the differing-but-value-equal-and-not-merged arguments
+    // of same-function applications that arranging would make congruent. The
+    // combination layer emits a one-time split per pair at Full effort. Finite +
+    // fixed (UF apps + bridge vars are created pre-solve; arranging spawns no new
+    // pairs) -> provably terminating. Shares logic with the detector above.
+    std::vector<std::pair<SharedTermId, SharedTermId>> collectArrangeableUfArgPairs(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const override;
+
     // Diagnostic / test hook: count active AssertedEquality merges whose
     // justifying literal is no longer on the trail (stale merges left by an
     // inconsistent backtrack). Must be 0 after any backtrack — exposed so tests

@@ -5,6 +5,8 @@
 #include <vector>
 #include <optional>
 #include <unordered_map>
+#include <functional>
+#include <string>
 
 namespace zolver {
 
@@ -121,6 +123,28 @@ public:
     virtual bool satComplete(std::string* reason = nullptr) const {
         if (reason) *reason = "theory has no completeness certificate";
         return false;
+    }
+
+    // Phase 1 combination-arrangement detector (EUF override). True iff a pending
+    // UF-argument arrangement (shared bridge-vars/args value-equal but not merged,
+    // so an application congruence is undischarged) blocks completeness. Default
+    // false (only EUF owns congruence). `valueEqual` compares two shared terms'
+    // arith-model values, supplied by the combination layer.
+    virtual bool hasUnarrangedUfCongruence(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        std::string* reason = nullptr) const {
+        (void)valueEqual; (void)reason;
+        return false;
+    }
+
+    // Phase 1 arrangement (recovery): the shared-term argument pairs to split
+    // (a=b ∨ a≠b) so an undischarged UF-application congruence is resolved.
+    // Default empty (only EUF owns congruence). See EufSolver override.
+    virtual std::vector<std::pair<SharedTermId, SharedTermId>>
+    collectArrangeableUfArgPairs(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
+        (void)valueEqual;
+        return {};
     }
 
     struct TheoryModel {
