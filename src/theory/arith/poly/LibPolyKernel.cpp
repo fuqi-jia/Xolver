@@ -3,6 +3,12 @@
 
 #ifdef ZOLVER_HAS_LIBPOLY
 
+// NB: the libpoly C declarations we use below (lp_variable_order_*,
+// lp_variable_list_*, lp_polynomial_ensure_order / _new_copy) are pulled in
+// transitively by polyxx.h (via LibPolyKernel.h). Do NOT add <poly/...>
+// includes here — that resolves to the system headers and clashes with the
+// vendored third_party/libpoly headers (duplicate typedefs / enums).
+
 #include <algorithm>
 #include <functional>
 #include <optional>
@@ -537,6 +543,103 @@ std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
     } catch (...) {
         return std::nullopt;
     }
+}
+
+std::vector<PolyId> LibPolyKernel::pscChain(PolyId a, PolyId b, VarId v) {
+    // Degenerate: a side with degree < 1 in v has no subresultant chain.
+    // (degree() works for non-main variables too, via term inspection.)
+    auto degA = degree(a, varName(v));
+    auto degB = degree(b, varName(v));
+    if (!degA || !degB || *degA < 1 || *degB < 1) {
+        return {};
+    }
+
+    poly::Variable elimVar = resolvePolyVar(v);
+    lp_variable_order_t* order = ctx_.get_variable_order();
+
+    // --- Snapshot the current variable order so we can restore it. --------
+    // Zolver leaves the libpoly order empty by default (main_variable is then
+    // tie-broken by creation order), so this is normally a no-op snapshot, but
+    // we restore exactly what was there to be robust against any future state.
+    std::vector<lp_variable_t> saved;
+    {
+        const lp_variable_list_t* list = lp_variable_order_get_list(order);
+        size_t n = lp_variable_list_size(list);
+        saved.resize(n);
+        if (n > 0) {
+            lp_variable_list_copy_into(list, saved.data());
+        }
+    }
+
+    // --- Install an order that makes v the TOP (main) variable. -----------
+    // Collect every variable appearing in a or b except v, push them first
+    // (any relative order among them is fine — they all stay below v), then
+    // push v last so it becomes the highest / main variable.
+    lp_variable_order_clear(order);
+    std::set<lp_variable_t> pushed;
+    auto pushOthers = [&](PolyId id) {
+        for (const std::string& name : variables(id)) {
+            auto vidOpt = findVar(name);
+            if (!vidOpt) continue;
+            if (*vidOpt == v) continue;
+            lp_variable_t lv = resolvePolyVar(*vidOpt).get_internal();
+            if (pushed.insert(lv).second) {
+                lp_variable_order_push(order, lv);
+            }
+        }
+    };
+    pushOthers(a);
+    pushOthers(b);
+    lp_variable_order_push(order, elimVar.get_internal());
+
+    auto restoreOrder = [&]() {
+        lp_variable_order_clear(order);
+        for (lp_variable_t lv : saved) {
+            lp_variable_order_push(order, lv);
+        }
+    };
+
+    // --- Re-order copies of a, b to the new order, then compute psc. ------
+    // ensure_order rewrites the recursive representation so v is the top
+    // variable; without this the precomputed pool_ polynomials keep their
+    // construction-time ordering and psc would eliminate the wrong variable.
+    std::vector<PolyId> result;
+    try {
+        lp_polynomial_t* rawA =
+            lp_polynomial_new_copy(get(a).get_internal());
+        lp_polynomial_t* rawB =
+            lp_polynomial_new_copy(get(b).get_internal());
+        lp_polynomial_ensure_order(rawA);
+        lp_polynomial_ensure_order(rawB);
+        poly::Polynomial pa(rawA);  // adopts ownership
+        poly::Polynomial pb(rawB);
+
+        // Defensive: both must now have v as their main variable, otherwise
+        // psc would eliminate the wrong variable. (Can only fail if v does not
+        // actually occur, which the degree guard above already excludes.)
+        if (poly::main_variable(pa) != elimVar ||
+            poly::main_variable(pb) != elimVar) {
+            restoreOrder();
+            return {};
+        }
+
+        std::vector<poly::Polynomial> chain = poly::psc(pa, pb);
+
+        // poly::psc returns min(deg_v a, deg_v b)+1 entries; the determinant
+        // reference returns exactly min entries (index j = psc_j, j<min). Drop
+        // the trailing entry to keep the chains index-for-index aligned.
+        size_t keep = chain.empty() ? 0 : chain.size() - 1;
+        result.reserve(keep);
+        for (size_t j = 0; j < keep; ++j) {
+            result.push_back(alloc(std::move(chain[j])));
+        }
+    } catch (...) {
+        restoreOrder();
+        return {};
+    }
+
+    restoreOrder();
+    return result;
 }
 
 std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {

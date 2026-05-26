@@ -63,6 +63,11 @@ public:
     std::optional<PolyId> leadingCoefficient(PolyId p) override;
     std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) override;
 
+    // Principal subresultant coefficient chain of a, b w.r.t. v, eliminating v
+    // (guaranteed via a scoped variable-order push so v is the libpoly main
+    // variable). See PolynomialKernel::pscChain for the index convention.
+    std::vector<PolyId> pscChain(PolyId a, PolyId b, VarId v) override;
+
     // Public accessor for variable id resolution (used by C traverse callback)
     std::optional<VarId> resolveVariableId(lp_variable_t v) const;
 
