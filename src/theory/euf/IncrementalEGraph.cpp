@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <queue>
 #include <iostream>
+#include <cstdlib>
 
 namespace zolver {
 
@@ -11,7 +12,9 @@ struct ExplainContext {
     std::unordered_set<uint64_t> activePairs;
 };
 
-IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {}
+IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {
+    fastMerge_ = std::getenv("ZOLVER_UF_FAST_CC") != nullptr;
+}
 
 void IncrementalEGraph::clear() {
     uf_ = RollbackUnionFind();
@@ -209,13 +212,18 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
         return {false, NullEClass, NullEClass};
     }
 
-    // CRITICAL: collect affected parents BEFORE union, while both roots
-    // are still valid representatives.
-    std::vector<EufTermId> affected = collectParents(ra);
-    auto affectedB = collectParents(rb);
-    affected.insert(affected.end(), affectedB.begin(), affectedB.end());
-    std::sort(affected.begin(), affected.end());
-    affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    // CRITICAL: in the default path, collect affected parents BEFORE union,
+    // while both roots are still valid representatives. In fast-CC mode we
+    // instead collect only the LOSER class's parents AFTER union (below), since
+    // only those members' representative changes.
+    std::vector<EufTermId> affected;
+    if (!fastMerge_) {
+        affected = collectParents(ra);
+        auto affectedB = collectParents(rb);
+        affected.insert(affected.end(), affectedB.begin(), affectedB.end());
+        std::sort(affected.begin(), affected.end());
+        affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    }
 
     MergeRecord rec;
     rec.id = static_cast<MergeId>(mergeRecords_.size());
@@ -240,6 +248,19 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
     mergeRecords_.push_back(rec);
 
     proofForest_.addEdge(a, b, reason);
+
+    // Fast-CC: collect the LOSER class's parents now (before the member append
+    // below — members_[src] still holds exactly the loser's pre-merge members,
+    // whose representative just changed to dst). Only these parents can acquire
+    // a new canonical signature; the winner's parents are unchanged.
+    if (fastMerge_) {
+        for (EufTermId m : members_[src]) {
+            const auto& ps = tm_.parentsOf(m);
+            affected.insert(affected.end(), ps.begin(), ps.end());
+        }
+        std::sort(affected.begin(), affected.end());
+        affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    }
 
     memberTrail_.push_back({dst, src, members_[dst].size()});
     members_[dst].insert(members_[dst].end(),

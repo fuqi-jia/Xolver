@@ -431,25 +431,31 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         auto mr = egraph_.merge(req.a, req.b, req.reason, mergeQueue_);
         if (!mr.merged) continue;
 
-        // Evaluate builtin constants in affected parent terms
-        std::vector<EufTermId> toEval;
-        auto addParents = [&](EufTermId t) {
-            for (EufTermId p : termManager_.parentsOf(t)) {
-                toEval.push_back(p);
+        // Evaluate builtin constants in affected parent terms. Skip entirely
+        // when no "#builtin.*" symbol exists (e.g. pure QF_UF): the loop below
+        // can never fold anything, and collecting the whole merged-class
+        // membership × parents on every merge is otherwise an O(class·parents)
+        // cost per merge — a primary cause of the QF_UF scaling cliff.
+        if (termManager_.hasBuiltinSymbols()) {
+            std::vector<EufTermId> toEval;
+            auto addParents = [&](EufTermId t) {
+                for (EufTermId p : termManager_.parentsOf(t)) {
+                    toEval.push_back(p);
+                }
+            };
+            addParents(req.a);
+            addParents(req.b);
+            for (EufTermId member : egraph_.classMembers(mr.kept)) {
+                addParents(member);
             }
-        };
-        addParents(req.a);
-        addParents(req.b);
-        for (EufTermId member : egraph_.classMembers(mr.kept)) {
-            addParents(member);
-        }
-        for (EufTermId member : egraph_.classMembers(mr.killed)) {
-            addParents(member);
-        }
-        std::sort(toEval.begin(), toEval.end());
-        toEval.erase(std::unique(toEval.begin(), toEval.end()), toEval.end());
-        for (EufTermId p : toEval) {
-            tryEvaluateBuiltin(p);
+            for (EufTermId member : egraph_.classMembers(mr.killed)) {
+                addParents(member);
+            }
+            std::sort(toEval.begin(), toEval.end());
+            toEval.erase(std::unique(toEval.begin(), toEval.end()), toEval.end());
+            for (EufTermId p : toEval) {
+                tryEvaluateBuiltin(p);
+            }
         }
 
         // ITE metadata：只 enqueue，不递归 merge

@@ -7,6 +7,8 @@ namespace zolver {
 
 class ProofForest {
 public:
+    ProofForest();
+
     void addEdge(EufTermId u, EufTermId v, const MergeReason& reason);
     size_t snapshot() const;
     void rollback(size_t snap);
@@ -29,6 +31,12 @@ private:
     std::vector<Edge> edges_;
     std::vector<std::vector<std::pair<EufTermId, size_t>>> adj_;
     size_t activeEdgeCount_ = 0;
+
+    // ZOLVER_UF_FAST_CC: O(k) rollback (pop trailing edges) instead of an
+    // O(k·degree) remove_if scan. Sound because edges are appended in
+    // increasing id and rolled back LIFO, so removed edges sit at each
+    // adjacency list's tail. Read once at construction.
+    bool fastRollback_ = false;
 };
 
 } // namespace zolver

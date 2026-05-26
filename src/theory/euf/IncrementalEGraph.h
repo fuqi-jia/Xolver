@@ -80,6 +80,12 @@ private:
     EufTermManager& tm_;
     RollbackUnionFind uf_;
 
+    // ZOLVER_UF_FAST_CC: after a merge, refresh signatures for parents of the
+    // LOSER class only (their members' representative changed). The winner
+    // class's parents keep the same representative, so their canonical
+    // signatures are unchanged — re-scanning them is wasted work. Read once.
+    bool fastMerge_ = false;
+
     std::vector<std::vector<EufTermId>> members_;
     std::vector<MemberChange> memberTrail_;
     std::vector<MergeRecord> mergeRecords_;

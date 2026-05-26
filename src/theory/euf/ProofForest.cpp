@@ -2,8 +2,13 @@
 #include <algorithm>
 #include <queue>
 #include <unordered_map>
+#include <cstdlib>
 
 namespace zolver {
+
+ProofForest::ProofForest() {
+    fastRollback_ = std::getenv("ZOLVER_UF_FAST_CC") != nullptr;
+}
 
 void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
     size_t edgeId = edges_.size();
@@ -23,6 +28,22 @@ size_t ProofForest::snapshot() const {
 }
 
 void ProofForest::rollback(size_t snap) {
+    if (fastRollback_) {
+        // Edges are appended in increasing id; adj_[x] is therefore sorted by
+        // edge id. Removing in DESCENDING id order, the edge being removed is
+        // the current tail of each of its endpoints' adjacency lists, so we can
+        // pop_back in O(1) instead of scanning. O(k) total for k removed edges.
+        for (size_t eid = edges_.size(); eid-- > snap; ) {
+            const auto& e = edges_[eid];
+            if (e.u < adj_.size() && !adj_[e.u].empty() && adj_[e.u].back().second == eid)
+                adj_[e.u].pop_back();
+            if (e.v < adj_.size() && !adj_[e.v].empty() && adj_[e.v].back().second == eid)
+                adj_[e.v].pop_back();
+        }
+        edges_.resize(snap);
+        activeEdgeCount_ = snap;
+        return;
+    }
     // Remove edges with edgeId >= snap from adjacency lists.
     for (size_t eid = snap; eid < edges_.size(); ++eid) {
         const auto& e = edges_[eid];
