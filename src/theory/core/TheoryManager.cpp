@@ -4,11 +4,13 @@
 #include "theory/core/DebugTrace.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "sat/SatSolver.h"
+#include "expr/ir.h"
 #include <cassert>
 #include <algorithm>
 #include <unordered_map>
 #include <gmpxx.h>
 #include <cstdlib>
+#include <cctype>
 #include <map>
 #include <functional>
 
@@ -689,6 +691,95 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     for (auto& [name, ai] : aggregated.arrayInterps) {
         remap(ai.defaultVal);
         for (auto& [idx, elem] : ai.entries) { remap(idx); remap(elem); }
+    }
+
+    // ---- Unconstrained-scalar model completion (numericAssignments backfill) ----
+    // A shared scalar that EUF tracks but no arith theory constrains stays an
+    // opaque EUF token ("@e..") after the arith-backed remap above. The validator
+    // does mpq_class on the string channel (fails -> defaults the scalar to 0,
+    // collapsing i != j into 0 = 0 -> Violated) and the typed numericAssignments
+    // channel it PREFERS is empty for them -> strict-validation flips
+    // (auflia_004 / alia_005 class). Mint a DISTINCT integer per distinct token
+    // into BOTH channels, and rewrite the SAME tokens in the array interps, so a
+    // scalar and the array slot it indexes share one token space.
+    //
+    // Sound: minted values respect every EUF (dis)equality — same token -> same
+    // value (preserves equalities), distinct tokens -> distinct values and the
+    // mint avoids every already-assigned number (preserves disequalities, incl.
+    // with arith-constrained scalars) — so no spurious (dis)equality is added.
+    // The validator then confirms instead of seeing Indeterminate. Numeric sorts
+    // only; uninterpreted/Bool tokens keep their own model channels (A3 lane).
+    //
+    // Gated by ZOLVER_COMB_SCALAR_BACKFILL (default OFF, intent default-ON at
+    // integration): a RECOVERY change validated against A5's strict-validation
+    // build. Flag OFF => getModel byte-identical to before.
+    if (sharedTermRegistry_ && std::getenv("ZOLVER_COMB_SCALAR_BACKFILL")) {
+        const CoreIr* ir = sharedTermRegistry_->coreIr();
+        std::unordered_map<std::string, bool> numericScalar;
+        if (ir) {
+            for (SharedTermId st : sharedTermRegistry_->allSharedTerms()) {
+                const auto* s = sharedTermRegistry_->get(st);
+                if (!s || s->name.empty()) continue;
+                auto sk = ir->sortKind(s->sort);
+                if (sk && (*sk == SortKind::Int || *sk == SortKind::Real))
+                    numericScalar[s->name] = true;
+            }
+        }
+
+        // Integers already claimed by a resolved number (plain arith form "3" or
+        // canonical "#n:3"); minted values must avoid these to keep disequalities
+        // with constrained scalars.
+        std::unordered_set<long long> usedNums;
+        auto noteNum = [&](const std::string& v) {
+            std::string body;
+            if (v.rfind("#n:", 0) == 0) body = v.substr(3);
+            else if (!v.empty() && (std::isdigit((unsigned char)v[0]) || v[0] == '-')) body = v;
+            else return;
+            try {
+                mpq_class q(body);
+                if (q.get_den() == 1 && q.get_num().fits_slong_p())
+                    usedNums.insert(q.get_num().get_si());
+            } catch (...) {}
+        };
+        for (auto& [n, v] : aggregated.assignments) { (void)n; noteNum(v); }
+        for (auto& [n, ai] : aggregated.arrayInterps) {
+            (void)n; noteNum(ai.defaultVal);
+            for (auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+
+        long long nextFree = 0;
+        std::unordered_map<std::string, std::string> mint;  // token -> "#n:<int>"
+        auto mintFor = [&](const std::string& tok) -> const std::string& {
+            auto it = mint.find(tok);
+            if (it != mint.end()) return it->second;
+            while (usedNums.count(nextFree)) ++nextFree;
+            long long v = nextFree++;
+            usedNums.insert(v);
+            return mint.emplace(tok, "#n:" + std::to_string(v)).first->second;
+        };
+
+        // Numeric scalars carrying an opaque token: backfill ONLY the typed
+        // numericAssignments channel (which A5's validator prefers). We do NOT
+        // rewrite the string `assignments` channel nor the array-interp tokens:
+        // feeding minted concrete values into those exposed an invalid model for
+        // genuinely array-axiom-constrained "unconstrained" scalars (self-store
+        // cases like alra_010: i0/e0 are pinned by a=store(a,i0,e0), so distinct
+        // minting violates Row2 and the array soundness gate correctly downgrades
+        // to Unknown — a sat->unknown regression). Restricting to the typed
+        // channel lets the validator confirm scalar (dis)equalities (e.g. i!=j)
+        // without perturbing the array-read evaluation. Recovering the self-store
+        // array reads needs real array-aware model construction (A3 lane), not
+        // scalar minting.
+        for (auto& [name, val] : aggregated.assignments) {
+            if (val.empty() || val[0] != '@') continue;      // opaque tokens only
+            if (!numericScalar.count(name)) continue;         // numeric sorts only
+            if (aggregated.numericAssignments.count(name)) continue;  // already typed
+            const std::string& num = mintFor(val);
+            try {
+                aggregated.numericAssignments.emplace(
+                    name, RealValue::fromMpq(mpq_class(num.substr(3))));
+            } catch (...) {}
+        }
     }
 
     if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&
