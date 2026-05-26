@@ -13,6 +13,7 @@
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include "frontend/preprocess/FormulaRewriter.h"
+#include "frontend/factory/StrategyPresets.h"
 #include <cstdlib>
 #include "theory/arith/search/CandidateModelSearch.h"
 #include "proof/ArithModelValidator.h"
@@ -521,7 +522,14 @@ public:
         // referencing the original formula for ModelValidator. A top-level
         // assertion that simplifies to the boolean constant false makes the
         // assertion conjunction unsatisfiable.
-        if (std::getenv("ZOLVER_PP_REWRITE")) {
+        // Rewriter activation: explicit ZOLVER_PP_REWRITE, or chosen by the
+        // per-logic strategy preset (ZOLVER_STRAT_PRESETS). enableRewrite is
+        // logic-only here, so empty features suffice this early in the pipeline.
+        bool enableRewrite = (std::getenv("ZOLVER_PP_REWRITE") != nullptr);
+        if (!enableRewrite && std::getenv("ZOLVER_STRAT_PRESETS")) {
+            enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
+        }
+        if (enableRewrite) {
             FormulaRewriter rewriter(*ir, boolSortId_);
             if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
 #ifdef ZOLVER_ENABLE_CASESTATS
@@ -858,6 +866,22 @@ public:
         bool liaEnableSingleVar = false;
         bool liaEnableGcdIneq = false;
         bool liaEnableEqGcdNorm = false;
+        // Strategy preset (ZOLVER_STRAT_PRESETS) provides the BASE knob values
+        // keyed on logic + detected features; explicit user options below still
+        // override. Phase 1 leaves LIA flags at defaults and envFlags empty, so
+        // this is behavior-neutral until the table is tuned / cross-agent flags
+        // merge. envFlags use setenv(...,overwrite=0): explicit user env wins.
+        if (std::getenv("ZOLVER_STRAT_PRESETS")) {
+            StrategyConfig sc = selectStrategy(logic, features);
+            liaSafeMode = sc.liaSafeMode;
+            liaUltraSafeMode = sc.liaUltraSafeMode;
+            liaEnableSingleVar = sc.liaEnableSingleVar;
+            liaEnableGcdIneq = sc.liaEnableGcdIneq;
+            liaEnableEqGcdNorm = sc.liaEnableEqGcdNorm;
+            for (const auto& [name, val] : sc.envFlags) {
+                setenv(name.c_str(), val.c_str(), 0);
+            }
+        }
         auto itOpt = options.find("lia-safe-mode");
         if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
             liaSafeMode = itOpt->second.b;
