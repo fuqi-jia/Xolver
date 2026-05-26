@@ -5,6 +5,37 @@ As-of 2026-05-26. The five agent branches are all **default-OFF for their flags*
 order that (1) lands soundness first, (2) minimizes shared-file merge pain, (3) re-runs the
 double gate after each step. It's a living doc — update tips/status as rounds land.
 
+## Critical path to a sound merge (master tally — current)
+
+**Wound down / integration-ready** (mandatory work done, parked):
+- **A1** — soundness on main (bool-sort, IDL/RDL getModel); Gomory cuts done; 4 flags await panda A/B;
+  Cotton-Maler deferred past the soundness phase.
+- **A4** — combination floor + scalar-backfill shipped; UFNIA + self-store recovery gated on A3.
+
+**The ONE truly-ungated hole** (no floor catches it):
+- **A5 `fb_var_27_8`** — AUFLIA false-UNSAT, 0 theory checks; A4's floor can't catch it; strict-validation
+  is sat-side only. **Highest soundness priority — needs a fix, not a floor.**
+
+**Floored-sound but the floor isn't shippable-default-on yet:**
+- **A2 NRA 16 false-UNSAT** — blunt floor is break-glass (guts NRA if on); needs the **precise per-cell
+  verifier** (default-on, ~0 flips). **The long pole.**
+
+**Floored-sound, floor promotable:**
+- **A4 UFNIA 2 false-UNSAT** — `ZOLVER_SAT_DEFER_EARLY_CONFLICT`, precise (2 cases), promotable. Recovery on A3.
+- **All false-SAT** (357 NIA + array/combination + ite model) — A5 `ZOLVER_PP_STRICT_VALIDATION` floors
+  sat→unknown; promotable once the recovery shrinks the flip cost.
+
+**Recovery (unknown→correct; for score, gated by the promotion rule):**
+- **A3** EUF level-snapshot backtrack fix → unblocks DISEQ_WATCH + FAST_CC + A4 UFNIA (the shared lever; next round).
+- **A5** BoolSubtermPurifier-link + validator-eval (arrays/algebraic) → the 357 + array flips.
+- **A2** 20 algebraic-model flips (NIA false-SAT now → A5 purifier, not A2).
+- **A4** scalar-backfill A/B + array-model (self-store).
+
+**Net:**
+- **Shippable SOUND (0 wrong)** = fix `fb_var_27_8` (A5) + precise NRA verifier (A2) + promote A5
+  strict-validation & A4 defer-conflict default-on. Floors handle the rest at a completeness cost.
+- **SOUND + COMPLETE (techniques on)** = the above + the recoveries + per-flag panda A/B.
+
 ## Branch state
 
 | Branch | tip | Default-ON (soundness / behavior-neutral) | Flags (default-OFF) | In-flight (gates completion) |
