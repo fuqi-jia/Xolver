@@ -65,6 +65,14 @@ bool TheoryManager::useSatMin() {
     return satMinEnabled_;
 }
 
+bool TheoryManager::useModelBased() {
+    if (!modelBasedEnvChecked_) {
+        modelBasedEnabled_ = (std::getenv("ZOLVER_COMB_MODEL_BASED") != nullptr);
+        modelBasedEnvChecked_ = true;
+    }
+    return modelBasedEnabled_;
+}
+
 std::vector<std::string> TheoryManager::activeTheoryNames() const {
     std::vector<std::string> names;
     names.reserve(solvers_.size());
@@ -449,25 +457,49 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // 4. Model-based arrangement splitting (array combination logics only).
+    // 4. Model-based arrangement splitting.
     //
     // The per-theory models can be each-consistent yet globally inconsistent
     // because the Nelson-Oppen ARRANGEMENT over shared scalars is incomplete:
     // arith freely picks values for unconstrained shared index/element terms
     // (e.g. i0 = i1 = 0), but that implied equality is never decided by SAT, so
     // EUF/the array reasoner never sees it and cannot fire Row1/congruence. The
-    // combined point validates per-theory but the model-validation gate then
-    // downgrades Sat -> Unknown.
+    // combined point validates per-theory but the combination then returns a
+    // globally-inconsistent model:
+    //   - array logics: model-validation downgrades Sat -> Unknown;
+    //   - QF_UFLIA/UFNIA/UFNRA: a genuinely UNSAT formula (e.g. a UF pigeonhole
+    //     over a bounded integer domain) is reported SAT because the arrangement
+    //     that would expose the congruence conflict was never closed (the
+    //     existing combination false-SAT class).
     //
     // Fix (only at Full effort): when two USER (non-internal) shared scalar
     // terms have the SAME arith-model value but are NOT yet merged in EUF and
     // their interface (dis)equality is still undecided, emit ONE arrangement
     // SPLIT lemma  (a = b) OR (not (a = b))  over the shared-equality atom that
-    // both theories observe. The SAT solver must commit; the array reasoner
-    // then refutes the bad arrangement (forcing i0 != i1) and arith honors a
-    // decided interface disequality, yielding a valid model. Deduped by stable
-    // pair key (finite #pairs => terminates).
-    if (arrayCombinationMode_ && effort == TheoryEffort::Full &&
+    // both theories observe. The split is a tautology, so it is sound by
+    // construction; the SAT solver must commit, and EUF/arith then react through
+    // the validated interface (dis)equality paths (EUF refutes a bad merge;
+    // arith honors a decided disequality via allowInterfaceDiseqModelBranch).
+    // Once every same-value pair is decided, the arrangement is CLOSED and the
+    // model read off is globally faithful. Deduped by stable pair key (finite
+    // #pairs => terminates).
+    //
+    // Scope: array combination logics always (arrayCombinationMode_); under
+    // ZOLVER_COMB_MODEL_BASED, additionally the LIA-based non-convex combined
+    // logic QF_UFLIA. Excluded:
+    //   - UFLRA (convex: deduced-equality sharing is already complete);
+    //   - UFNIA/UFNRA: their nonlinear solver (NIA/NRA) does not expose
+    //     sharedTermArithValue and the arrangement+nonlinear-branch interaction
+    //     does not converge (the LIA/LRA mirror's value drives a split that NIA
+    //     keeps re-opening -> non-termination). NIA/NRA model extraction is a
+    //     separate (A2) workstream; gating it out here keeps this fix sound AND
+    //     terminating for the bucket it actually fixes.
+    bool hasNonlinearArith = solverByTheory_.count(TheoryId::NIA) ||
+                             solverByTheory_.count(TheoryId::NRA) ||
+                             solverByTheory_.count(TheoryId::NIRA);
+    bool modelArrange = arrayCombinationMode_ ||
+                        (useModelBased() && nonConvexMode_ && !hasNonlinearArith);
+    if (modelArrange && effort == TheoryEffort::Full &&
         sharedTermRegistry_ && registry_) {
         // Identify the EUF (array) solver to consult for "already merged?".
         TheorySolver* eufSolver = nullptr;

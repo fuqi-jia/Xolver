@@ -107,6 +107,18 @@ private:
     bool satMinEnvChecked_ = false;
     bool useSatMin();
 
+    // Model-based theory combination for the non-convex combined logics
+    // (ZOLVER_COMB_MODEL_BASED, default OFF). Extends the array-only arrangement
+    // splitting to QF_UFLIA/UFNIA/UFNRA: at Full effort, force the Nelson-Oppen
+    // arrangement over shared scalars to be CLOSED before reporting Sat, so the
+    // combination cannot return a per-theory-consistent-but-globally-inconsistent
+    // model (the existing false-SAT class). The split is a tautology over a
+    // shared-equality atom, so it is sound by construction; the theories react
+    // through the already-validated interface (dis)equality paths.
+    bool modelBasedEnabled_ = false;
+    bool modelBasedEnvChecked_ = false;
+    bool useModelBased();
+
     struct PendingSharedEqEvent {
         SharedTermId a;
         SharedTermId b;
