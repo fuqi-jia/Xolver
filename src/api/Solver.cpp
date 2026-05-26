@@ -13,6 +13,8 @@
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include "frontend/preprocess/FormulaRewriter.h"
+#include "frontend/preprocess/SolveEqs.h"
+#include "frontend/preprocess/ModelConverter.h"
 #include "frontend/factory/StrategyPresets.h"
 #include <cstdlib>
 #include "theory/arith/search/CandidateModelSearch.h"
@@ -70,6 +72,12 @@ public:
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
+
+    // Records variables eliminated by solve-eqs (ZOLVER_PP_SOLVE_EQS) so their
+    // values can be replayed onto the final model (↔SAT replay correctness).
+    // Reset at the start of each checkSat's preprocessing; empty when the pass
+    // did not run (flag off / incremental scope).
+    ModelConverter modelConverter_;
 
     // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
     // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
@@ -610,6 +618,28 @@ public:
                 return Result::Unsat;
             }
             rewriter.commit();
+        }
+
+        // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
+        // linear equalities (x = t), substituting globally and recording the
+        // (x, t) substitution in modelConverter_ for replay onto the final
+        // model. Default-OFF (ZOLVER_PP_SOLVE_EQS). Restricted to base scope:
+        // the elimination is global and not roll-back-able, so it is gated off
+        // under incremental push/pop. Also gated off for real-nonlinear logics
+        // (NRA/NIRA/UFNRA): their models carry algebraic (irrational) values
+        // that the linear rational reconstructor cannot evaluate, which would
+        // soundly but needlessly downgrade Sat -> Unknown (completeness loss).
+        modelConverter_ = ModelConverter{};
+        const bool algebraicModelLogic =
+            logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
+        if (std::getenv("ZOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
+            !algebraicModelLogic) {
+            SolveEqs solveEqs(*ir, modelConverter_);
+            if (solveEqs.run()) {
+                solveEqs.commit();
+                std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
+                          << " variable(s)\n";
+            }
         }
 
         // Reset SAT solver for fresh query.
@@ -1386,6 +1416,20 @@ public:
                     lastModel_.reset();
                     ret = Result::Unknown;
                 }
+            }
+        }
+
+        // Replay solve-eqs eliminations onto the final model so it satisfies
+        // the ORIGINAL assertions (which still reference the eliminated vars).
+        // If any eliminated var cannot be reconstructed, we cannot vouch for
+        // the model: downgrade Sat -> Unknown (sound floor) rather than emit an
+        // unvalidatable model (invariant 1).
+        if (ret == Result::Sat && lastModel_ && !modelConverter_.empty()) {
+            if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                             lastModel_->assignments, *ir)) {
+                lastUnknownReason_ = "solve-eqs: eliminated variable not reconstructable";
+                lastModel_.reset();
+                ret = Result::Unknown;
             }
         }
 
