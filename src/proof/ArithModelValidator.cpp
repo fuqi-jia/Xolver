@@ -16,7 +16,7 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
 std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
     TR r = eval(e);
-    if (r.kind == Kind2::Number) return r.n;
+    if (r.kind == Kind2::Number) return r.n.tryAsRational();  // algebraic → nullopt
     return std::nullopt;
 }
 
@@ -24,7 +24,11 @@ std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
 // disjoint namespaces so they never alias an uninterpreted token by accident.
 std::optional<std::string> ArithModelValidator::asToken(const TR& r) const {
     switch (r.kind) {
-        case Kind2::Number: return "#n:" + r.n.get_str();
+        case Kind2::Number:
+            // Rational → canonical token; algebraic has no rational token here
+            // (it cannot appear as an array index/element in practice).
+            if (auto q = r.n.tryAsRational()) return "#n:" + q->get_str();
+            return std::nullopt;
         case Kind2::Bool:   return std::string("#b:") + (r.b ? "1" : "0");
         case Kind2::Token:  return r.tok;
         default:            return std::nullopt;
@@ -35,17 +39,17 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
     if (eid >= ir_.size()) return {};
     const CoreExpr& n = ir_.get(eid);
     TR r;
-    auto num = [](mpq_class v) { TR t; t.kind = Kind2::Number; t.n = std::move(v); return t; };
+    auto num = [](RealValue v) { TR t; t.kind = Kind2::Number; t.n = std::move(v); return t; };
     auto bl  = [](bool v)      { TR t; t.kind = Kind2::Bool;   t.b = v; return t; };
 
     switch (n.kind) {
         case Kind::ConstBool:
             return bl(std::get<bool>(n.payload.value));
         case Kind::ConstInt:
-            if (auto* v = std::get_if<int64_t>(&n.payload.value)) return num(mpq_class(*v));
+            if (auto* v = std::get_if<int64_t>(&n.payload.value)) return num(RealValue::fromInt(*v));
             return r;
         case Kind::ConstReal:
-            if (auto* s = std::get_if<std::string>(&n.payload.value)) return num(mpq_class(*s));
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) return num(RealValue::fromMpq(mpq_class(*s)));
             return r;
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&n.payload.value)) {
@@ -75,8 +79,14 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
                     if (bit != boolAsg_.end()) return bl(bit->second);
                     return r;  // bool var, unassigned -> indeterminate
                 }
+                // Prefer the exact typed channel (real-algebraic witnesses),
+                // then the rational channel.
+                if (real_) {
+                    auto rit = real_->find(*s);
+                    if (rit != real_->end()) return num(rit->second);
+                }
                 auto it = num_.find(*s);
-                if (it != num_.end()) return num(it->second);
+                if (it != num_.end()) return num(RealValue::fromMpq(it->second));
                 // Uninterpreted-sort scalar (index/element): opaque token.
                 if (tok_) {
                     auto tit = tok_->find(*s);
@@ -88,11 +98,11 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             return r;
         }
         case Kind::Add: {
-            mpq_class acc(0);
+            RealValue acc;  // 0
             for (ExprId c : n.children) {
                 TR cr = eval(c);
                 if (cr.kind != Kind2::Number) return r;
-                acc += cr.n;
+                acc = acc + cr.n;
             }
             return num(acc);
         }
@@ -100,11 +110,11 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.empty()) return r;
             TR f = eval(n.children[0]);
             if (f.kind != Kind2::Number) return r;
-            mpq_class acc = f.n;
+            RealValue acc = f.n;
             for (size_t i = 1; i < n.children.size(); ++i) {
                 TR cr = eval(n.children[i]);
                 if (cr.kind != Kind2::Number) return r;
-                acc -= cr.n;
+                acc = acc - cr.n;
             }
             return num(acc);
         }
@@ -115,11 +125,11 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             return num(-cr.n);
         }
         case Kind::Mul: {
-            mpq_class acc(1);
+            RealValue acc = RealValue::fromInt(1);
             for (ExprId c : n.children) {
                 TR cr = eval(c);
                 if (cr.kind != Kind2::Number) return r;
-                acc *= cr.n;
+                acc = acc * cr.n;
             }
             return num(acc);
         }
@@ -127,18 +137,17 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
-            if (b.n == 0) return r;  // div/0 underspecified → indeterminate
-            // SMT-LIB `div` on Int is EUCLIDEAN integer division (result in
-            // Z, remainder 0 ≤ r < |b|); `/` on Real is rational division.
-            // Distinguish by the node's sort.
+            if (b.n.isZero()) return r;  // div/0 underspecified → indeterminate
+            // SMT-LIB `div` on Int is EUCLIDEAN integer division; `/` on Real is
+            // real division. Distinguish by the node's sort.
             if (n.sort == ir_.intSortId()) {
-                if (a.n.get_den() != 1 || b.n.get_den() != 1) return r;
-                mpz_class ai = a.n.get_num(), bi = b.n.get_num();
+                if (!a.n.isExactInteger() || !b.n.isExactInteger()) return r;
+                mpz_class ai = a.n.floor(), bi = b.n.floor();
                 mpz_class absB = abs(bi), qAbs, rem;
                 mpz_fdiv_qr(qAbs.get_mpz_t(), rem.get_mpz_t(),
                             ai.get_mpz_t(), absB.get_mpz_t());  // 0 ≤ rem < |b|
                 mpz_class q = (bi > 0) ? qAbs : -qAbs;
-                return num(mpq_class(q));
+                return num(RealValue::fromMpz(q));
             }
             return num(a.n / b.n);
         }
@@ -146,30 +155,30 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.size() != 2) return r;
             TR base = eval(n.children[0]), exp = eval(n.children[1]);
             if (base.kind != Kind2::Number || exp.kind != Kind2::Number) return r;
-            if (exp.n.get_den() != 1) return r;
-            mpz_class e = exp.n.get_num();
+            if (!exp.n.isExactInteger()) return r;
+            mpz_class e = exp.n.floor();
             if (!e.fits_slong_p()) return r;
             long ev = e.get_si();
-            if (ev < 0) { if (base.n == 0) return r; }
-            mpq_class val(1);
-            for (long i = 0; i < (ev < 0 ? -ev : ev); ++i) val *= base.n;
-            if (ev < 0) return num(mpq_class(1) / val);
+            if (ev < 0 && base.n.isZero()) return r;
+            RealValue val = RealValue::fromInt(1);
+            for (long i = 0; i < (ev < 0 ? -ev : ev); ++i) val = val * base.n;
+            if (ev < 0) return num(RealValue::fromInt(1) / val);
             return num(val);
         }
         case Kind::Abs: {
             if (n.children.size() != 1) return r;
             TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
-            return num(abs(cr.n));
+            return num(cr.n.sign() < 0 ? -cr.n : cr.n);
         }
         case Kind::Mod: {
             if (n.children.size() != 2) return r;
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind != Kind2::Number || b.kind != Kind2::Number) return r;
-            if (a.n.get_den() != 1 || b.n.get_den() != 1 || b.n == 0) return r;
-            mpz_class ai = a.n.get_num(), bi = b.n.get_num(), absB = abs(bi), q, rem;
+            if (!a.n.isExactInteger() || !b.n.isExactInteger() || b.n.isZero()) return r;
+            mpz_class ai = a.n.floor(), bi = b.n.floor(), absB = abs(bi), q, rem;
             mpz_fdiv_qr(q.get_mpz_t(), rem.get_mpz_t(), ai.get_mpz_t(), absB.get_mpz_t());
-            return num(mpq_class(rem));
+            return num(RealValue::fromMpz(rem));
         }
         case Kind::ToReal: {
             if (n.children.size() != 1) return r;
@@ -179,15 +188,13 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             if (n.children.size() != 1) return r;
             TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
-            mpz_class q;
-            mpz_fdiv_q(q.get_mpz_t(), cr.n.get_num().get_mpz_t(), cr.n.get_den().get_mpz_t());
-            return num(mpq_class(q));
+            return num(RealValue::fromMpz(cr.n.floor()));  // floor (Euclidean)
         }
         case Kind::IsInt: {
             if (n.children.size() != 1) return r;
             TR cr = eval(n.children[0]);
             if (cr.kind != Kind2::Number) return r;
-            return bl(cr.n.get_den() == 1);
+            return bl(cr.n.isExactInteger());
         }
         case Kind::Eq: {
             if (n.children.size() != 2) return r;
@@ -222,7 +229,9 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
                 return r;  // indeterminate (no default-distinctness shortcut)
             }
             if (a.kind == Kind2::Array || b.kind == Kind2::Array) return r;
-            // Scalar equality via canonical tokens (covers Number/Bool/Token).
+            // Numbers (rational OR real-algebraic) compare EXACTLY via RealValue.
+            if (a.kind == Kind2::Number && b.kind == Kind2::Number) return bl(a.n == b.n);
+            // Otherwise canonical tokens (Bool/Token).
             auto at = asToken(a), bt = asToken(b);
             if (!at || !bt) return r;
             return bl(*at == *bt);
@@ -255,6 +264,10 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
                             if (vals[i].arr.deflt == vals[j].arr.deflt) return bl(false);
                             anyIndet = true;  // cannot prove distinct
                         }
+                        continue;
+                    }
+                    if (vals[i].kind == Kind2::Number && vals[j].kind == Kind2::Number) {
+                        if (vals[i].n == vals[j].n) return bl(false);
                         continue;
                     }
                     auto ti = asToken(vals[i]), tj = asToken(vals[j]);
@@ -377,7 +390,11 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             for (ExprId c : n.children) {
                 TR cr = eval(c);
                 if (cr.kind != Kind2::Number) return r;
-                argKeys.push_back(cr.n.get_str());
+                // The interp keys on rational arg-strings (CMS get_str()); an
+                // algebraic arg cannot match a tabulated entry.
+                auto q = cr.n.tryAsRational();
+                if (!q) return r;
+                argKeys.push_back(q->get_str());
             }
             const std::string* valStr = &fi.deflt;
             for (const auto& e : fi.entries) {
@@ -385,7 +402,7 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             }
             if (valStr->empty()) return r;
             if (fi.retSort == "Bool") return bl(*valStr == "true" || *valStr == "1");
-            try { return num(mpq_class(*valStr)); } catch (...) {}
+            try { return num(RealValue::fromMpq(mpq_class(*valStr))); } catch (...) {}
             // Non-numeric (uninterpreted-sort) result: an opaque equality token.
             TR t; t.kind = Kind2::Token; t.tok = *valStr; return t;
         }

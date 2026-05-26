@@ -236,10 +236,12 @@ public:
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
+            validator.setRealAssignments(&lastModel_->numericAssignments);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
+            validator.setRealAssignments(&lastModel_->numericAssignments);
             v = validator.validate(originalAssertions_);
         }
         return v == ArithModelValidator::Verdict::Satisfied;

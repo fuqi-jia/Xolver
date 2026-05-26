@@ -2,6 +2,7 @@
 
 #include "expr/ir.h"
 #include "theory/core/TheorySolver.h"
+#include "util/RealValue.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>
@@ -70,6 +71,13 @@ public:
     // this validator.
     void setFunctionInterps(const FuncInterpMap* fi) { funcInterps_ = fi; }
 
+    using RealAssignment = std::unordered_map<std::string, RealValue>;
+    // Provide EXACT real-algebraic values (e.g. √2) for variables, from the
+    // theory's typed model channel (numericAssignments). Consulted before the
+    // rational `num_` map, so NRA/NIRA algebraic witnesses validate instead of
+    // being Indeterminate. Optional; pointer must outlive this validator.
+    void setRealAssignments(const RealAssignment* ra) { real_ = ra; }
+
     // Validate the given assertion roots (original-formula ExprIds).
     Verdict validate(const std::vector<ExprId>& assertions) const;
 
@@ -90,7 +98,9 @@ private:
     struct TR {
         Kind2 kind = Kind2::Indeterminate;
         bool b = false;
-        mpq_class n = 0;
+        RealValue n;         // Number kind — RealValue subsumes rational AND
+                             // real-algebraic (e.g. √2), so NRA/NIRA algebraic
+                             // witnesses are evaluable, not just rationals.
         std::string tok;     // Token kind
         ArrVal arr;          // Array kind
     };
@@ -109,6 +119,7 @@ private:
     const ArrayAssignment* arr_ = nullptr;
     const TokenAssignment* tok_ = nullptr;
     const FuncInterpMap* funcInterps_ = nullptr;
+    const RealAssignment* real_ = nullptr;
 };
 
 } // namespace zolver
