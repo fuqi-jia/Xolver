@@ -200,6 +200,7 @@ public:
 #ifdef ZOLVER_LRA_PROFILE
     int pivotCount() const { return pivotCount_; }
     void resetPivotCount() { pivotCount_ = 0; }
+    int degeneratePivotCount() const { return degeneratePivots_; }
 #endif
 
 private:
@@ -249,6 +250,7 @@ private:
 
 #ifdef ZOLVER_LRA_PROFILE
     int pivotCount_ = 0;
+    int degeneratePivots_ = 0;  // theta == 0 pivots (stalling / cycling signal)
 #endif
 
     // ========================================================================

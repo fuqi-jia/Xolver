@@ -20,6 +20,7 @@
 #include "sat/SatSolver.h"
 #include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryManager.h"
+#include "theory/arith/linear/BoundAxiomGenerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
@@ -997,6 +998,13 @@ public:
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
+
+        // ZOLVER_LRA_BOUND_AXIOMS (default OFF): emit theory-tautology clauses
+        // relating same-form linear bound atoms (e.g. (L<=3)=>(L<=5),
+        // ¬((L<=3)∧(L>=5))) so CaDiCaL's BCP propagates bound implications the
+        // SAT core can't otherwise see — collapsing the immediate-bound-conflict
+        // churn at the root. Branch-independent tautologies: sound by construction.
+        BoundAxiomGenerator::generate(registry, *sat);
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,
