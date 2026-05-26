@@ -237,9 +237,10 @@ TEST_CASE("SpaceEstimator: distinct graph raises width to hold the clique") {
 
 TEST_CASE("SpaceEstimator: vote unifies unbounded widths when one dominates") {
     auto kernel = createPolynomialKernel();
-    // 8 small-coefficient vars (width = base 6) + 2 huge-coefficient vars
-    // (CM -> clipped to 16). 6 covers 8/10 > Gamma(0.5)*10, so Vote unifies ALL
-    // unbounded vars to 6 (the dominant width), lowering the two outliers.
+    // 8 small-coefficient vars (width = base B_MA = 7 for m=0 multiplications) +
+    // 2 huge-coefficient vars (CM -> clipped to 16). 7 covers 8/10 > Gamma(0.5)*10,
+    // so Vote unifies ALL unbounded vars to 7 (the dominant width), lowering the
+    // two outliers.
     std::vector<NormalizedNiaConstraint> cs;
     uint32_t r = 2000;
     for (int i = 0; i < 8; ++i) {
@@ -259,9 +260,9 @@ TEST_CASE("SpaceEstimator: vote unifies unbounded widths when one dominates") {
     bitblast::SpaceEstimator est(*kernel);
     auto plan = est.estimate(cs, d);
     CHECK(plan.boxIsComplete == false);
-    CHECK(plan.width.at("a0") == 6u);
-    CHECK(plan.width.at("b0") == 6u);   // was 16, unified down by Vote
-    CHECK(plan.width.at("b1") == 6u);
+    CHECK(plan.width.at("a0") == 7u);
+    CHECK(plan.width.at("b0") == 7u);   // was 16, unified down by Vote
+    CHECK(plan.width.at("b1") == 7u);
 }
 
 #include "theory/arith/bit_blast/BitBlastSolver.h"

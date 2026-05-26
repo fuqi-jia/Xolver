@@ -66,8 +66,13 @@ private:
 
     PolynomialKernel& kernel_;
     SpaceEstimator estimator_;
-    unsigned maxBW_ = 256;     // QF_NIA: large solutions need headroom
-    unsigned maxIters_ = 6;    // with doubling growth, reaches up to maxBW_
+    unsigned maxBW_ = 128;     // bit-width ceiling U: BLAN's paper default is 32,
+                               // competition runs use >=128 to cover large
+                               // solutions. 256 (the prior value) over-widens and,
+                               // combined with high-degree products, blows up the
+                               // SAT encoding. With the BLAN-faithful multiplier
+                               // (varmin partials + constant folding) 128 is safe.
+    unsigned maxIters_ = 6;    // doubling growth from the base reaches U in ~4 iters
 };
 
 } // namespace zolver::bitblast
