@@ -161,6 +161,19 @@ private:
 
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
 
+    // ZOLVER_LIA_CUTS: Gomory fractional cuts. Read once at construction.
+    // generateGomoryCut derives a cut from the fractional basic integer var's
+    // tableau row (GomoryCut.h), re-expresses it over original variables, and
+    // returns an explanation-aware lemma {¬(bound reasons used), cutLit} — valid
+    // for all integer-feasible points (sound regardless of branch). cutsThisSolve_
+    // caps cut generation per solve so branch-and-bound still terminates.
+    bool cutsEnabled_ = false;
+    int cutsThisSolve_ = 0;
+    std::optional<TheoryLemma> generateGomoryCut(int basicVar);
+    // True iff the simplex variable is provably integer-valued (original integer
+    // var, or an aux whose defining form has integer coeffs/rhs over integer vars).
+    bool isSimplexVarInteger(int idx) const;
+
     void dumpState(const std::string& tag) const;
     static std::string linearFormToSmtLib(const LinearFormKey& form);
     static std::string mpqToSmtLib(const mpq_class& q);

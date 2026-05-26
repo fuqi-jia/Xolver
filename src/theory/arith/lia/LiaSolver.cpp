@@ -6,6 +6,7 @@
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
+#include "theory/arith/lia/GomoryCut.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
@@ -24,6 +25,8 @@ LiaSolver::LiaSolver() {
     }
     const char* repairEnv = std::getenv("ZOLVER_LIA_REPAIR");
     repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
+    const char* cutsEnv = std::getenv("ZOLVER_LIA_CUTS");
+    cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -57,6 +60,7 @@ void LiaSolver::onReset() {
     pendingConflict_.reset();
     diseqBranchAuthorized_.clear();
     repairModel_.reset();
+    cutsThisSolve_ = 0;
     gs_.resetActiveBounds();
 }
 
@@ -549,7 +553,9 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
         });
 }
 
-TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    // Cap Gomory cuts per solve so branch-and-bound still terminates.
+    static constexpr int kMaxCutsPerSolve = 64;
     int bestVar = -1;
     mpq_class bestFrac(-1);
 
@@ -601,6 +607,18 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/, T
             interfaceEqualities_.empty() && interfaceDisequalities_.empty() &&
             tryIntegralityRepair()) {
             return TheoryCheckResult::consistent();
+        }
+        // ZOLVER_LIA_CUTS: try a Gomory fractional cut before splitting. A cut
+        // tightens the relaxation without branching; capped per solve so
+        // branch-and-bound still terminates. Only at Full effort (a real model).
+        if (cutsEnabled_ && effort == TheoryEffort::Full &&
+            cutsThisSolve_ < kMaxCutsPerSolve) {
+            if (auto cut = generateGomoryCut(bestVar)) {
+                if (!lemmaDb.contains(*cut)) {
+                    ++cutsThisSolve_;
+                    return TheoryCheckResult::mkLemma(std::move(*cut));
+                }
+            }
         }
         assert(registry_ != nullptr);
         return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
@@ -705,6 +723,116 @@ bool LiaSolver::tryIntegralityRepair() {
         }
     }
     return ok;
+}
+
+// ---------------------------------------------------------------------------
+// ZOLVER_LIA_CUTS: Gomory fractional cuts
+// ---------------------------------------------------------------------------
+
+bool LiaSolver::isSimplexVarInteger(int idx) const {
+    std::string nm = manager_.getVarName(idx);
+    if (!nm.empty()) {
+        // Original variable: integer iff registered as an integer variable.
+        return integerVars_.count(idx) > 0;
+    }
+    // Auxiliary variable s = Σ c_k * v_k - rhs: integer iff every c_k and rhs
+    // are integers and every v_k is an integer variable.
+    LinearFormKey form;
+    mpq_class auxRhs;
+    if (!manager_.auxForm(idx, form, auxRhs)) return false;
+    if (auxRhs.get_den() != 1) return false;
+    for (const auto& [vn, c] : form.terms) {
+        if (c.get_den() != 1) return false;
+        int vi = manager_.findVarIndex(vn);
+        if (vi < 0 || integerVars_.count(vi) == 0) return false;
+    }
+    return true;
+}
+
+std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
+    if (!registry_) return std::nullopt;
+    if (!gs_.isBasic(xi)) return std::nullopt;     // need a tableau row
+    int r = gs_.basicRowOfVar(xi);
+    const SparseRow& row = gs_.tableau().row(r);
+
+    DeltaRational beta = gs_.value(xi);
+    if (beta.b != 0) return std::nullopt;          // delta-valued: skip
+    mpq_class f0 = gmiFractionalPart(beta.a);
+    if (f0 == 0) return std::nullopt;              // not actually fractional
+
+    // x_i = beta_i + Σ_j chat_j y_j, y_j = (x_j - bound_j), each nonbasic at a
+    // bound. chat_j = +a_ij at lower, -a_ij at upper.
+    struct NbInfo { int var; bool atLower; mpq_class bound; SatLit reason; };
+    std::vector<GmiNonbasicTerm> terms;
+    std::vector<NbInfo> nb;
+    for (const auto& e : row.entries) {
+        int xj = e.col;
+        const mpq_class& aij = e.coeff;
+        if (aij == 0) continue;
+        auto st = gs_.varState(xj);
+        DeltaRational vj = gs_.value(xj);
+        bool atLower = st.lower.bound.isFinite() && vj == st.lower.bound.value;
+        bool atUpper = !atLower && st.upper.bound.isFinite() && vj == st.upper.bound.value;
+        if (!atLower && !atUpper) return std::nullopt;       // free nonbasic: no y >= 0
+        const BoundInfo& bi = atLower ? st.lower : st.upper;
+        if (bi.bound.value.b != 0) return std::nullopt;      // strict/delta bound: skip
+        if (!bi.reason.has_value()) return std::nullopt;     // need reason for explanation
+        mpq_class boundVal = bi.bound.value.a;
+        mpq_class chat = atLower ? aij : -aij;
+        bool yInt = isSimplexVarInteger(xj) && (boundVal.get_den() == 1);
+        terms.push_back({chat, yInt});
+        nb.push_back({xj, atLower, boundVal, *bi.reason});
+    }
+    if (terms.empty()) return std::nullopt;
+
+    auto cutOpt = deriveGomoryCut(f0, terms);
+    if (!cutOpt) return std::nullopt;              // non-integer term / vacuous
+
+    // Re-express Σ gamma_j y_j >= R over original variables:
+    //   Σ tau_j x_j >= R + Σ tau_j bound_j (+ aux form-constant adjustment),
+    //   tau_j = +gamma_j (at lower) / -gamma_j (at upper).
+    std::unordered_map<std::string, mpq_class> coeff;
+    mpq_class rhsFinal = cutOpt->rhs;
+    std::vector<SatLit> reasons;
+    for (size_t j = 0; j < nb.size(); ++j) {
+        const mpq_class& gamma = cutOpt->gamma[j];
+        if (gamma == 0) continue;                  // absent term: bound not needed
+        mpq_class tau = nb[j].atLower ? gamma : mpq_class(-gamma);
+        rhsFinal += tau * nb[j].bound;
+        std::string nm = manager_.getVarName(nb[j].var);
+        if (!nm.empty()) {
+            coeff[nm] += tau;
+        } else {
+            LinearFormKey form;
+            mpq_class auxRhs;
+            if (!manager_.auxForm(nb[j].var, form, auxRhs)) return std::nullopt;
+            for (const auto& [vn, c] : form.terms) coeff[vn] += tau * c;
+            rhsFinal += tau * auxRhs;
+        }
+        reasons.push_back(nb[j].reason);
+    }
+
+    LinearFormKey cutForm;
+    for (const auto& [vn, c] : coeff) if (c != 0) cutForm.terms.push_back({vn, c});
+    if (cutForm.terms.empty()) return std::nullopt;  // degenerate constant cut
+    std::sort(cutForm.terms.begin(), cutForm.terms.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    SatLit cutLit = registry_->getOrCreateLinearBoundAtom(
+        cutForm, Relation::Geq, rhsFinal, TheoryId::LIA);
+
+    // Explanation-aware lemma: (Σ reasons) -> cut, i.e. clause {¬reasons, cutLit}.
+    std::vector<SatLit> clause;
+    clause.reserve(reasons.size() + 1);
+    for (SatLit rr : reasons) clause.push_back(rr.negated());
+    clause.push_back(cutLit);
+    std::sort(clause.begin(), clause.end(), [](SatLit a, SatLit b) {
+        return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+    });
+    clause.erase(std::unique(clause.begin(), clause.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), clause.end());
+    return TheoryLemma{clause};
 }
 
 TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) {

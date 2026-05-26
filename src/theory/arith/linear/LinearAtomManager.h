@@ -65,6 +65,12 @@ public:
     // the name has never been registered. Does NOT create a variable.
     int findVarIndex(const std::string& name) const;
 
+    // Reverse of getOrCreateAuxVar: if `aux` is an auxiliary variable created
+    // for some constraint, recover its defining form (aux = Σ lhs - rhs over
+    // ORIGINAL variable names). Returns false for original (non-aux) vars. Used
+    // by Gomory-cut generation to re-express a cut over original variables.
+    bool auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const;
+
 private:
     // Canonical (lhs, rhs) -> aux var (solver-local)
     struct FormKey {
@@ -82,6 +88,9 @@ private:
         }
     };
     std::unordered_map<FormKey, int, FormKeyHash> formToAux_;
+
+    // Reverse map: aux var index -> its defining (lhs, rhs).
+    std::unordered_map<int, FormKey> auxToForm_;
 
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;
