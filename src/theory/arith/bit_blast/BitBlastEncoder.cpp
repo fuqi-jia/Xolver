@@ -143,6 +143,17 @@ BitVec BitBlastEncoder::negFixed(const BitVec& a, unsigned w) {
     return addFixed(inv, mkConst(mpz_class(1)), w);   // ~a + 1, truncated to w
 }
 
+// Bit-identical operands: same SAT literal at every position. Distinct encoded
+// variables never share literals, so this holds iff a and b denote the SAME
+// value (the x*x square case, where powConst passes one BitVec as both args).
+static bool sameBits(const BitVec& a, const BitVec& b) {
+    if (a.width() != b.width()) return false;
+    for (unsigned i = 0; i < a.width(); ++i)
+        if (a.bits[i].var != b.bits[i].var || a.bits[i].sign != b.bits[i].sign)
+            return false;
+    return true;
+}
+
 // Variable * variable.  Faithful port of BLAN's Multiply structure onto the
 // two's-complement BitVec: partial products are generated ONLY over the NARROWER
 // operand's bits (BLAN's `varmin`), not over the sign-extended sum width — so a
@@ -167,6 +178,11 @@ BitVec BitBlastEncoder::mul(const BitVec& a, const BitVec& b) {
         if (i + 1 == wy) addend = negFixed(addend, w);   // sign bit: subtract
         acc = addFixed(acc, addend, w);
     }
+    // BLAN square optimisation (Multiply: var1==var2 -> signBit=0). x*x is a
+    // perfect square, hence >= 0. With w = wa+wb we have x^2 < 2^(w-1), so the
+    // result's sign bit is 0 in every model; pinning it to 0 prunes the
+    // spurious-negative half of the search and can never remove a valid model.
+    if (sameBits(a, b)) assertLit(acc.sign().negated());
     return acc;
 }
 

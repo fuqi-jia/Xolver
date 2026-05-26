@@ -24,6 +24,14 @@ void BitBlastSolver::encodeDomainBounds(
         const IntDomain* d = domains.getDomain(kv.first);
         if (!d) continue;
         const BitVec& x = kv.second;
+        // Sign fixing (BLAN): a strictly-negative domain pins the sign bit to 1,
+        // a non-negative domain pins it to 0. Redundant with the bound
+        // subtractors below, but a direct unit the SAT solver sees immediately
+        // (reuses the existing sign-bit literal — no new constant is minted).
+        if (x.width() > 0) {
+            if (d->hasUpper && d->upper.value < 0)       enc.assertLit(x.sign());
+            else if (d->hasLower && d->lower.value >= 0) enc.assertLit(x.sign().negated());
+        }
         if (d->hasLower) {  // x >= lb  <=>  (x - lb) >= 0
             enc.assertLit(enc.relZero(enc.sub(x, enc.mkConst(d->lower.value)), Relation::Geq));
         }
