@@ -31,20 +31,27 @@ NullificationAnalyzer::Analysis NullificationAnalyzer::analyzeConstraint(
         return analysis;
     }
 
-    // Polynomial vanishes at prefix
+    // Polynomial vanishes at prefix (evaluates to exactly 0 there).
     switch (c.rel) {
         case Relation::Eq:
-            // 0 = 0 is always true → skip constraint
+        case Relation::Leq:
+        case Relation::Geq:
+            // 0 = 0, 0 ≤ 0, 0 ≥ 0 are all TRUE → the constraint is satisfied at
+            // this prefix → skip it.
+            // BUG FIX: Leq/Geq were previously lumped with the strict/disequality
+            // cases below and turned into a spurious FullLine conflict. That
+            // dropped the satisfiable SECTION where a NON-STRICT bound polynomial
+            // is exactly 0 (e.g. y-1≤0 at the section y=1), producing a false
+            // UNSAT on meti-tarski polypaver bilinear cases (a section never
+            // reached a satisfying leaf).
             analysis.action = Action::SkipConstraintAsTrue;
             analysis.repair.kind = NullificationRepairKind::ConstraintDropped;
             return analysis;
 
         case Relation::Neq:
         case Relation::Lt:
-        case Relation::Leq:
         case Relation::Gt:
-        case Relation::Geq:
-            // 0 ≠ 0, 0 < 0, etc. are always false → FullLine conflict
+            // 0 ≠ 0, 0 < 0, 0 > 0 are always false → FullLine conflict
             analysis.action = Action::ReturnFullLineConflict;
             {
                 Cell cell;
