@@ -52,6 +52,8 @@ void IdlSolver::onReset() {
     // Base clears the trail; clear IDL-specific graph state here.
     disequalities_.clear();
     graph_.clear();
+    haveModel_ = false;
+    lastDist_.clear();
 }
 
 IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a) {
@@ -183,6 +185,7 @@ TheoryLemma IdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
 }
 
 TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    haveModel_ = false;
     if (hasPending()) return drainPending();
 
     // V1: full rebuild of graph and disequalities from active assignments.
@@ -244,7 +247,38 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         return TheoryCheckResult::unknown();
     }
 
+    // Consistent: keep the feasible potentials for model read-off.
+    lastDist_ = bfResult.dist;
+    haveModel_ = true;
     return TheoryCheckResult::consistent();
+}
+
+void IdlSolver::onBacktrack(int targetLevel) {
+    (void)targetLevel;
+    // The stored model is only valid for the assignment that produced it.
+    haveModel_ = false;
+}
+
+std::optional<IdlSolver::TheoryModel> IdlSolver::getModel() const {
+    if (!haveModel_ || lastDist_.empty()) return std::nullopt;
+    const int zero = graph_.zeroNode();
+    if (zero < 0 || zero >= static_cast<int>(lastDist_.size())) return std::nullopt;
+    const mpz_class& base = lastDist_[zero];
+
+    TheoryModel model;
+    for (int node = 0; node < graph_.numNodes(); ++node) {
+        if (node == zero) continue;
+        const std::string& name = graph_.nodeName(node);
+        if (name.empty()) continue;
+        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;  // internal
+        if (node >= static_cast<int>(lastDist_.size())) continue;
+        // value(v) = dist[v] - dist[__ZERO__]  (anchor __ZERO__ at 0)
+        mpz_class val = lastDist_[node] - base;
+        model.assignments[name] = val.get_str();
+        model.numericAssignments.insert({name, RealValue::fromMpq(mpq_class(val))});
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
 }
 
 } // namespace zolver

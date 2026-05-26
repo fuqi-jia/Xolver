@@ -27,8 +27,19 @@ public:
 
     void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
 
+    // Model read-off from the Bellman-Ford potentials of the last consistent
+    // check. A difference-logic model is determined up to a constant, so each
+    // variable is anchored relative to the special __ZERO__ node:
+    //   value(v) = dist[v] - dist[__ZERO__].
+    // The potentials are feasible by construction, so this satisfies every
+    // difference constraint. Without it the model builder defaults all IDL
+    // variables to 0, which breaks the constraints (model-extraction
+    // incompleteness — strict-validation flips idl_009/011/012/015).
+    std::optional<TheoryModel> getModel() const override;
+
 protected:
     void onReset() override;
+    void onBacktrack(int targetLevel) override;
 
 private:
     struct DiseqInfo {
@@ -48,6 +59,11 @@ private:
     NormalizeResult normalizeAndAdd(const ActiveAssignment& a);
     bool validateModel(const std::vector<mpz_class>& dist);
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
+
+    // Potentials of the last consistent check (indexed by graph node id), used
+    // by getModel(). haveModel_ is false until a check() returns Consistent.
+    std::vector<mpz_class> lastDist_;
+    bool haveModel_ = false;
 };
 
 } // namespace zolver

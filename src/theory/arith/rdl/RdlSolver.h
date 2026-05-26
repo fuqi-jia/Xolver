@@ -28,8 +28,17 @@ public:
 
     void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
 
+    // Model read-off: buildRdlModel already instantiates the infinitesimal δ to
+    // a concrete ε and returns a full rational assignment (anchored at
+    // __ZERO__=0). check() computes it for the disequality split; we keep it for
+    // getModel() so the printed model satisfies every difference constraint.
+    // Without it the model builder defaults all RDL variables to 0
+    // (model-extraction incompleteness — strict-validation flips rdl_007/009/012).
+    std::optional<TheoryModel> getModel() const override;
+
 protected:
     void onReset() override;
+    void onBacktrack(int targetLevel) override;
 
 private:
     struct DiseqInfo {
@@ -49,6 +58,11 @@ private:
     NormalizeResult normalizeAndAdd(const ActiveAssignment& a);
     bool validateModel(const std::vector<RdlWeight>& dist);
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
+
+    // Concrete rational model of the last consistent check (name -> value,
+    // includes __ZERO__=0), used by getModel(). Valid only while haveModel_.
+    std::unordered_map<std::string, mpq_class> lastModel_;
+    bool haveModel_ = false;
 };
 
 } // namespace zolver
