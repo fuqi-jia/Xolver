@@ -11,7 +11,8 @@ Zolver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The
 - **Stage D (NRA)**: Functional — CDCAC engine + theory-check presolve fixpoint (exact linear/sign reasoning)
 - **Stage I (NIA-Core)**: Functional — univariate RRT, algebraic reasoning (square rules, GCD, modular), bounded enumeration, presolve fixpoint, sound conflict generation
 - **Shared arith infrastructure**: `ArithSolverBase` + `Reasoner` pipeline (all 8 solvers); a theory-check presolve fixpoint (`theory/arith/presolve/`); validated candidate search + complete finite-domain enumeration (`theory/arith/search/`)
-- **Stages F, G, H, J, K**: Skeleton interfaces exist, not yet functional
+- **EUF + arrays + combination**: Functional — congruence-closure `EufSolver` (e-graph, rollback union-find, proof forest), extensional array theory (`ArrayReasoner` layered on the e-graph), and Nelson-Oppen combination (`Purifier` + `SharedTermRegistry`). Covers QF_UF, QF_AX, the combined logics (QF_UFLRA/UFLIA/UFNIA/UFNRA), and the array-combination logics (QF_ALRA/ALIA/AUFLRA/AUFLIA).
+- **Stages F, G, J, K + MCSAT**: Skeleton interfaces only (relocated under `src/experimental/`, plus top-level `src/proof/`).
 
 All 15 historical known-fails are closed; the regression suite is fully green
 (see Build/test/run below).
@@ -38,13 +39,14 @@ mkdir build && cd build
 cmake ..                    # Release by default
 cmake --build . -j
 
-# Tests — doctest unit suite (~523 cases) + 14 per-logic regression suites
-ctest                       # all tests (unit + per-logic regression)
+# Tests — doctest unit suite (~702 cases) + per-logic regression suites (one CTest target each)
+ctest                       # all tests (unit + per-logic regression), 20 targets total
 ./tests/zolver_unit_tests                          # all units, direct
 ./tests/zolver_unit_tests --test-case="<name>"     # single test
 ./tests/zolver_unit_tests -ltc                     # list test cases
+./tests/zolver_unit_tests --count                  # current case count
 
-# Regression: 577 SMT2 cases vs z3+cvc5 oracle, KNOWN_FAILURES.md gates leniency
+# Regression: 632 SMT2 cases vs z3+cvc5 oracle, KNOWN_FAILURES.md gates leniency
 python3 tools/run_regression.py --root tests/regression --solver build/bin/zolver --timeout 20 -j 2
 
 # CLI
@@ -54,8 +56,10 @@ python3 tools/run_regression.py --root tests/regression --solver build/bin/zolve
 > **WSL build note:** `cmake --build . -j` (unlimited parallelism) can OOM and
 > crash WSL on this tree. Use a bounded `-j 2` there.
 
-Current baseline (main): **ctest 15/15, unit 523/523, regression 577/577, 0
-KNOWN_FAIL, 0 UNSOUND.** All 15 historical known-fails are closed.
+Current baseline (main): **ctest 20/20, unit 702/702, regression 632/632, 0
+KNOWN_FAIL, 0 UNSOUND.** `tests/regression/KNOWN_FAILURES.md` currently lists
+zero entries — keep it that way (delete a line when a bug is fixed, add one
+when a new gap is found).
 
 CMake build options (defaults shown):
 
@@ -104,6 +108,39 @@ These are non-negotiable per `plan.md` §0 and are easy to violate by accident:
 
 7. **NIA soundness over completeness.** NIA is undecidable. SAT requires exact integer validation. UNSAT requires sound proof (constant contradiction, empty roots, modular contradiction, GCD contradiction, or finite-domain exhaustion). Unknown is acceptable for unbounded cases. Never emit UNSAT from incomplete reasoning.
 
+## Solver dispatch and theory combination
+
+The entry point is `src/api/Solver.cpp` (the `pImpl` public API). It parses
+with SOMTParser, lowers to `CoreIr`, then runs `LogicFeatureDetector`
+(`src/theory/core/`) to scan the actual formula and **guard against
+logic/feature mismatch** (e.g. a real variable in a declared QF_UFLIA file, or
+an array op outside an array logic → `unknown` rather than an unsound answer).
+
+Which theory solvers get built is decided by **`src/frontend/factory/TheoryFactory.cpp`**
+(`setupSolvers`), a switch on the logic string. This is the file to read/edit
+when adding logic support — not `Solver.cpp`. Three shapes:
+
+- **Single-theory** (QF_LIA/LRA/IDL/RDL/LIRA/UF, …): register one solver.
+  NRA/NIA/NIRA also register their linear sibling (LRA/LIA/LIRA) alongside.
+- **Combined logics** (QF_UFLRA/UFLIA/UFNIA/UFNRA): build a `SharedTermRegistry`,
+  run the **`Purifier`** (`src/theory/combination/`) to split mixed terms across
+  theory boundaries, register an `EufSolver` + an arith solver against that
+  shared registry, then `theoryManager.setCombinationMode(true)`. Non-convex
+  arith (LIA/NIA, which produce disequalities) additionally sets
+  `setNonConvexMode(true)`.
+- **Array logics** (QF_AX pure; QF_ALRA/ALIA/AUFLRA/AUFLIA combined): arrays are
+  **not** a standalone solver. `EufSolver::enableArrays()` reuses the single
+  e-graph and `ArrayReasoner` (`src/theory/array/`) layers the read-over-write
+  axioms on top. Combined array logics additionally set
+  `setArrayCombinationMode(true)`, which scopes model-based arrangement
+  splitting to those logics.
+
+`TheoryManager` (`src/theory/core/`) owns the registered solvers, drives the
+CDCL(T) loop against the SAT core, and — in combination mode — exchanges shared
+(dis)equalities (Nelson-Oppen) via `SharedEqualityManager`. `EufSolver`
+(`src/theory/euf/`) is congruence closure over a rollback union-find +
+signature table, with a `ProofForest` for explanations.
+
 ## Arithmetic solver architecture: `ArithSolverBase` + `Reasoner`
 
 All 8 arithmetic theory solvers (LRA, LIA, NRA, NIA, NIRA, LIRA, IDL, RDL)
@@ -130,7 +167,7 @@ share a common base, `src/theory/arith/ArithSolverBase.{h,cpp}`. **Read
    returns the first non-`nullopt`. Populate `reasoners_` in the solver
    constructor; `CallbackReasoner` wraps a `std::function` so each stage can
    be a `this`-capturing lambda over a per-stage method (no subclass per
-   stage). Decomposed today: NRA (2 stages), NIA (15), LRA (1), LIA (1).
+   stage). Decomposed today: NRA (2 stages), NIA (16), LRA (1), LIA (1).
    **A reasoner must never mutate `state_.trail`** (only `assertLit` does;
    a debug assertion enforces this).
 
@@ -158,36 +195,46 @@ All `theory/arith/<theory>/` solvers inherit `ArithSolverBase` and drive a
 
 | Directory | plan.md section | Stage | Status |
 |---|---|---|---|
+| `api/` | §1 (public `Solver` pImpl) | A | ✅ Functional |
 | `expr/` | §2 (CoreExpr, Rewriter) | A | ✅ Functional |
 | `parser/` | §2 (SOMTParser adapter) | A | ✅ Functional |
+| `frontend/preprocess/` | §2 (lowering passes) | A | ✅ Functional |
+| `frontend/factory/` | — (`TheoryFactory` solver dispatch) | — | ✅ Functional |
 | `sat/` | §4 (CaDiCaL wrapper) | A | ✅ Functional |
+| `theory/core/` | — (`TheoryManager`, `LogicFeatureDetector`, atom registry) | — | ✅ Functional |
+| `theory/euf/` | §6 (congruence closure, e-graph, proof forest) | — | ✅ Functional |
+| `theory/array/` | §6 (`ArrayReasoner`, read-over-write axioms) | — | ✅ Functional |
+| `theory/combination/` | §6 (`Purifier`, `SharedTermRegistry`, Nelson-Oppen) | — | ✅ Functional |
 | `theory/arith/` | — (`ArithSolverBase`, `Reasoner`) | — | ✅ Shared base + pipeline |
-| `theory/arith/lra/` | §5 (LRA) | C/E | ✅ Functional |
-| `theory/arith/lia/` | §5 (LIA) | C/E | ✅ Functional |
+| `theory/arith/lra/`, `lia/` | §5 (LRA, LIA) | C/E | ✅ Functional |
+| `theory/arith/idl/`, `rdl/` | §5 (difference logic) | C/E | ✅ Functional |
+| `theory/arith/lira/`, `nira/` | §5/§12 (mixed int/real) | — | ✅ Functional |
 | `theory/arith/nra/` | §8, §9, §10 (NRA) | D | ✅ CDCAC + presolve fixpoint |
 | `theory/arith/nia/` | §12 (NIA) | I | ✅ NIA-Core + presolve fixpoint |
 | `theory/arith/presolve/` | theory-check presolve (Caps. 1–11) | — | ✅ Functional |
 | `theory/arith/search/` | finite-domain enum + validated candidate search | — | ✅ Functional |
 | `theory/arith/poly/` | §3 (PolynomialKernel) | B | ✅ Functional |
-| `frontend/preprocess/` | §2 (lowering passes) | A | ✅ Functional |
-| `mcsat/` | §10 (MCSAT-NRA) | H | 🏗️ Skeleton |
-| `search/` | §11 (Advisor) | G | 🏗️ Skeleton |
-| `omt/` | §14 | K | 🏗️ Skeleton |
 | `proof/` | §15 | J | 🏗️ Skeleton |
-| `learning/` | §16 (trace, advisor plugins) | continuous | 🏗️ Skeleton |
+| `experimental/mcsat/` | §10 (MCSAT-NRA) | H | 🏗️ Skeleton |
+| `experimental/search/` | §11 (Advisor / local search) | G | 🏗️ Skeleton |
+| `experimental/omt/` | §14 (optimization) | K | 🏗️ Skeleton |
+| `experimental/learning/` | §16 (trace, advisor plugins) | continuous | 🏗️ Skeleton |
 
 When implementing a new subsystem or extending an existing one, look up the section, copy the data-structure shapes (they're prescribed in detail), and check that subsystem's "verification criteria" (`plan.md` §21) for what must pass before claiming the stage done.
 
 ## Key files for NIA work
 
 Paths reflect the per-theory subdir convention; `NiaSolver`'s `check()` is a
-15-stage `Reasoner` pipeline (`stagePending` … `stageBranch`) registered in
+16-stage `Reasoner` pipeline (`stagePending` … `stageBranch`) registered in
 its constructor — add/reorder stages there, not by hand-editing a monolithic
-`check()`.
+`check()`. The `nia.bit-blast` stage (a full-effort-only bit-blasting backend,
+`src/theory/arith/bit_blast/`) is enabled by default and validated by the exact
+kernel — its results are candidates, never returned directly (invariant 1).
 
 | File | Purpose |
 |---|---|
-| `src/theory/arith/nia/NiaSolver.h/.cpp` | Facade — owns kernel, registers the 15 reasoner stages, delegates to engines |
+| `src/theory/arith/nia/NiaSolver.h/.cpp` | Facade — owns kernel, registers the 16 reasoner stages, delegates to engines |
+| `src/theory/arith/bit_blast/BitBlastSolver.h/.cpp` | Bit-blasting backend for bounded NIA (`nia.bit-blast` stage); candidate results only |
 | `src/theory/arith/nia/core/DomainStore.h/.cpp` | Per-variable integer domains (intervals, finite sets, exclusions) |
 | `src/theory/arith/nia/reasoners/UnivariateIntegerReasoner.h/.cpp` | RRT-based integer root finding |
 | `src/theory/arith/nia/core/LinearNiaDomainReasoner.h/.cpp` | Single-variable linear bound inference |

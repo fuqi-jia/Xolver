@@ -99,3 +99,8 @@ bin/zolver
 
 # test results
 panda-results/
+test_results/
+
+# local tooling / agent state
+.claude/
+.claire/
