@@ -128,29 +128,76 @@ SatLit BitBlastEncoder::isZero(const BitVec& a) {
     return acc.negated();
 }
 
+BitVec BitBlastEncoder::shiftLeft(const BitVec& a, unsigned k) {
+    if (k == 0) return a;
+    BitVec r;
+    r.bits.reserve(a.width() + k);
+    for (unsigned i = 0; i < k; ++i) r.bits.push_back(false_);   // low k bits = 0
+    for (unsigned i = 0; i < a.width(); ++i) r.bits.push_back(a.bits[i]);
+    return r;   // exact a * 2^k (two's-complement, no truncation)
+}
+
+BitVec BitBlastEncoder::negFixed(const BitVec& a, unsigned w) {
+    BitVec inv; inv.bits.resize(a.width());
+    for (unsigned i = 0; i < a.width(); ++i) inv.bits[i] = a.bits[i].negated();
+    return addFixed(inv, mkConst(mpz_class(1)), w);   // ~a + 1, truncated to w
+}
+
+// Variable * variable.  Faithful port of BLAN's Multiply structure onto the
+// two's-complement BitVec: partial products are generated ONLY over the NARROWER
+// operand's bits (BLAN's `varmin`), not over the sign-extended sum width — so a
+// chained product like (X:2w)*(a:w) costs w partials, not 3w.  The multiplier's
+// sign bit (MSB) carries negative weight, so that one partial is subtracted.
 BitVec BitBlastEncoder::mul(const BitVec& a, const BitVec& b) {
-    unsigned w = a.width() + b.width();
-    BitVec ea = signExtend(a, w), eb = signExtend(b, w);
+    // Constant folding (BLAN Multiply special-cases + MultiplyInt).
+    if (a.isConst) return mulConst(a.constValue, b);
+    if (b.isConst) return mulConst(b.constValue, a);
+
+    const BitVec& X = (a.width() >= b.width()) ? a : b;   // multiplicand (wider)
+    const BitVec& Y = (a.width() >= b.width()) ? b : a;   // multiplier  (narrower)
+    unsigned w  = a.width() + b.width();
+    unsigned wy = Y.width();
+    BitVec ex  = signExtend(X, w);
     BitVec acc = mkConst(mpz_class(0), w);
-    for (unsigned i = 0; i < w; ++i) {
-        BitVec partial; partial.bits.resize(w);
-        for (unsigned j = 0; j < w; ++j) {
-            partial.bits[j] = (j >= i) ? andGate(ea.bits[j - i], eb.bits[i]) : false_;
-        }
-        acc = addFixed(acc, partial, w);    // low w bits = exact signed product
+    for (unsigned i = 0; i < wy; ++i) {
+        // addend = (Y[i] ? (X << i) : 0); bits [0,i) are structurally zero.
+        BitVec addend; addend.bits.resize(w);
+        for (unsigned j = 0; j < w; ++j)
+            addend.bits[j] = (j >= i) ? andGate(ex.bits[j - i], Y.bits[i]) : false_;
+        if (i + 1 == wy) addend = negFixed(addend, w);   // sign bit: subtract
+        acc = addFixed(acc, addend, w);
     }
     return acc;
 }
 
+// Constant * variable.  BLAN MultiplyInt: shift-add over the SET BITS of |c|
+// (one pure shift of `a` per set bit, no multiplier circuit), negate if c<0.
+// This is the dominant win for polynomial bodies full of `coeff * monomial`.
 BitVec BitBlastEncoder::mulConst(const mpz_class& c, const BitVec& a) {
     if (c == 0) return mkConst(mpz_class(0), 1);
     if (a.isConst) return mkConst(c * a.constValue);
-    return mul(mkConst(c), a);
+    if (c == 1)  return a;
+    if (c == -1) return neg(a);
+    mpz_class ac = abs(c);
+    BitVec acc;
+    bool first = true;
+    size_t nbits = mpz_sizeinbase(ac.get_mpz_t(), 2);
+    for (size_t k = 0; k < nbits; ++k) {
+        if (mpz_tstbit(ac.get_mpz_t(), k)) {
+            BitVec sh = shiftLeft(a, static_cast<unsigned>(k));   // a * 2^k
+            acc = first ? sh : add(acc, sh);
+            first = false;
+        }
+    }
+    if (c < 0) acc = neg(acc);
+    return acc;
 }
 
 BitVec BitBlastEncoder::powConst(const BitVec& a, unsigned e) {
     if (e == 0) return mkConst(mpz_class(1));
     BitVec r = a;
+    // Each step multiplies the growing accumulator by the narrow base `a`, so
+    // mul() uses a's width as the partial-product count (BLAN varmin behaviour).
     for (unsigned i = 1; i < e; ++i) r = mul(r, a);
     return r;
 }

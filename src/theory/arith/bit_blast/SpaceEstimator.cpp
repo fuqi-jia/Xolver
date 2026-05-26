@@ -84,8 +84,11 @@ BitWidthPlan SpaceEstimator::estimate(const std::vector<NormalizedNiaConstraint>
         if (restricted) vars.insert(entry.first);
     }
 
-    // Multiplication-Adaptation: shrink the heuristic base as products multiply.
-    unsigned base = (mulCount > 64) ? 3u : (mulCount > 16 ? 4u : 6u);
+    // Multiplication Adaptation (BLAN): B_MA = max(7 - ceil(m/1536), 2).
+    // Larger global width when few multiplications; shrinks as products multiply
+    // to curb encoding blowup. (alpha=1/1536, beta=7, L=2 from the BLAN paper.)
+    int bmaRaw = 7 - static_cast<int>((mulCount + 1535u) / 1536u);
+    unsigned base = static_cast<unsigned>(std::max(2, bmaRaw));
 
     bool complete = true;
     std::vector<std::string> unboundedVars;   // heuristic-sized; eligible for Vote

@@ -51,6 +51,8 @@ private:
     BitVec signExtend(const BitVec& a, unsigned width);
     std::pair<SatLit, SatLit> fullAdder(SatLit a, SatLit b, SatLit cin);
     BitVec addFixed(const BitVec& a, const BitVec& b, unsigned w); // truncates to w
+    BitVec shiftLeft(const BitVec& a, unsigned k);                 // a * 2^k (exact, width +k)
+    BitVec negFixed(const BitVec& a, unsigned w);                  // -a in width w
 };
 
 } // namespace zolver::bitblast

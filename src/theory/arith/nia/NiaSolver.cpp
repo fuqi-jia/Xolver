@@ -535,6 +535,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("ZOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag: isolate non-bit-blast NIA reasoning
     auto res = bitBlast_.solve(normalized_, domains_, validator_);
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
