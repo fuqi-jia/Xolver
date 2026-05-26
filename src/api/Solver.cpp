@@ -458,6 +458,18 @@ public:
         FrontendAdapter adapter(*parser);
         ir = adapter.importProblem();
         boolSortId_ = adapter.getBoolSortId();
+        // Propagate the Bool sort id into the CoreIr now, before any
+        // preprocessing pass creates Bool-sorted variables. Otherwise
+        // ir->boolSortId() stays NullSort (getOrCreateBoolSort short-circuits
+        // when the Solver member is already set, skipping cir.setBoolSortId),
+        // so BoolSubtermPurifier creates `boolpur` vars with NullSort. The
+        // Atomizer then fails to recognize those vars as Boolean and routes
+        // boolean (= / distinct) iffs over them into the arithmetic theory as
+        // difference (dis)equalities — an unbounded relaxation that yields
+        // unsound SAT in QF_IDL/QF_LIA (Averest false-SAT cluster).
+        if (boolSortId_ != NullSort) {
+            ir->setBoolSortId(boolSortId_);
+        }
         intSortId_ = ir->intSortId();
         realSortId_ = ir->realSortId();
         return true;
