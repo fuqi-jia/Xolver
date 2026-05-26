@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <unordered_map>
 #include <gmpxx.h>
+#include <map>
+#include <functional>
 
 namespace nlcolver {
 
@@ -172,6 +174,48 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         return fc;
     };
 
+    // Soundness guard for interface-(dis)equality conflicts.
+    // A conflict over shared-equality atoms is genuine iff the positive
+    // equalities entail every negated equality (i.e. for each asserted
+    // disequality a!=b in the conflict, a and b are connected by the positive
+    // equalities). The EUF explanation occasionally returns a reason set that
+    // does not actually entail the merge (incomplete proof-forest explanation),
+    // yielding an UNSOUND conflict that excludes valid models -> false UNSAT
+    // (e.g. QF_UFLIA hash_sat_03_08). Independently re-verify with a union-find
+    // over the conflict's own shared-equality reasons. Conflicts containing any
+    // non-shared-equality literal are trusted (theory bounds are sound and not
+    // checkable here). Returns true if genuine (or unverifiable), false if the
+    // reasons provably do not entail the contradiction.
+    auto conflictIsGenuine = [this](const std::vector<SatLit>& rawReasons) -> bool {
+        if (!registry_) return true;
+        std::map<SharedTermId, SharedTermId> parent;
+        std::function<SharedTermId(SharedTermId)> find =
+            [&](SharedTermId x) {
+                auto it = parent.find(x);
+                if (it == parent.end()) { parent[x] = x; return x; }
+                if (it->second == x) return x;
+                SharedTermId r = find(it->second);
+                parent[x] = r;
+                return r;
+            };
+        auto unite = [&](SharedTermId a, SharedTermId b) {
+            parent[find(a)] = find(b);
+        };
+        std::vector<std::pair<SharedTermId, SharedTermId>> negPairs;
+        for (auto lit : rawReasons) {
+            const auto* rec = registry_->findBySatVar(lit.var);
+            if (!rec) return true;  // unknown atom -> trust
+            auto* se = std::get_if<SharedEqualityPayload>(&rec->payload);
+            if (!se) return true;   // non-shared-eq literal -> trust
+            if (lit.sign) unite(se->a, se->b);     // positive: a = b
+            else negPairs.push_back({se->a, se->b}); // negative: a != b asserted
+        }
+        for (auto& [a, b] : negPairs) {
+            if (find(a) != find(b)) return false;  // positives do NOT entail a=b
+        }
+        return true;
+    };
+
     auto recordCheckResult = [this](const TheoryCheckResult& tr) {
         ++aggStats_.checkCalls;
         if (tr.kind == TheoryCheckResult::Kind::Conflict) {
@@ -236,6 +280,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
+                if (!conflictIsGenuine(c->clause))
+                    return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
                 auto fc = makeFalsifiedConflict(c->clause);
                 NO_DBG << "[NO-RET-3] SEM conflict after EQ: "
                        << debug::fmtClause(fc.clause) << "\n";
@@ -244,6 +290,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             for (auto* solver : solversOwning(ev.a, ev.b)) {
                 auto r = solver->assertInterfaceEquality(ev.a, ev.b, ev.reasonLit, ev.decisionLevel);
                 if (r.kind == TheoryCheckResult::Kind::Conflict && r.conflictOpt) {
+                    if (!conflictIsGenuine(r.conflictOpt->clause)) {
+                        pendingSharedEqEvents_.clear();
+                        return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
+                    }
                     r.conflictOpt = makeFalsifiedConflict(r.conflictOpt->clause);
                 }
                 if (r.kind != TheoryCheckResult::Kind::Consistent) {
@@ -257,6 +307,8 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             sharedEqMgr_.assertDisequality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
+                if (!conflictIsGenuine(c->clause))
+                    return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
                 auto fc = makeFalsifiedConflict(c->clause);
                 NO_DBG << "[NO-RET-5] SEM conflict after NEQ: "
                        << debug::fmtClause(fc.clause) << "\n";
@@ -265,6 +317,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             for (auto* solver : solversOwning(ev.a, ev.b)) {
                 auto r = solver->assertInterfaceDisequality(ev.a, ev.b, ev.reasonLit, ev.decisionLevel);
                 if (r.kind == TheoryCheckResult::Kind::Conflict && r.conflictOpt) {
+                    if (!conflictIsGenuine(r.conflictOpt->clause)) {
+                        pendingSharedEqEvents_.clear();
+                        return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
+                    }
                     r.conflictOpt = makeFalsifiedConflict(r.conflictOpt->clause);
                 }
                 if (r.kind != TheoryCheckResult::Kind::Consistent) {
@@ -283,19 +339,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
-            std::cerr << "[TM-CONFLICT] solver=" << (int)solver->id() << " clause=";
-            for (auto lit : tr.conflictOpt->clause) {
-                std::cerr << debug::fmtLit(lit) << " ";
-            }
-            std::cerr << "\n";
-            // Defensive: every raw reason should be true in the current model.
-            if (assignmentView_) {
-                for (auto lit : tr.conflictOpt->clause) {
-                    if (assignmentView_->value(lit) != LitValue::True) {
-                        std::cerr << "[BUG] Theory conflict contains non-true raw reason: "
-                                  << debug::fmtLit(lit) << "\n";
-                    }
-                }
+            if (!conflictIsGenuine(tr.conflictOpt->clause)) {
+                // Spurious interface-(dis)equality conflict: the reasons do not
+                // entail the merged equality (incomplete EUF explanation). Never
+                // emit a false UNSAT from it — report Unknown (sound).
+                return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
             }
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
         }
