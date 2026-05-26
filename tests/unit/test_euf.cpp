@@ -1,15 +1,15 @@
 #include <doctest/doctest.h>
-#include "nlcolver/Solver.h"
+#include "zolver/Solver.h"
 #include "expr/ir.h"
 #include "theory/euf/EufSolver.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static std::string writeTempSmt2(const std::string& content) {
-    std::string path = std::filesystem::temp_directory_path() / "nlcolver_euf.smt2";
+    std::string path = std::filesystem::temp_directory_path() / "zolver_euf.smt2";
     std::ofstream ofs(path);
     ofs << content;
     return path;

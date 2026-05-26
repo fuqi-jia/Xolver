@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 CoreIteLowerer::CoreIteLowerer(CoreIr& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
@@ -332,4 +332,4 @@ ExprId CoreIteLowerer::lowerAssertion(ExprId assertion) {
     return boolMemo_.at(assertion);
 }
 
-} // namespace nlcolver
+} // namespace zolver

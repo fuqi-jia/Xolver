@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ContractorFactoryZ: builds V1 contractors from IcpConstraints.
@@ -30,4 +30,4 @@ public:
         PolynomialKernel& kernel);
 };
 
-} // namespace nlcolver
+} // namespace zolver

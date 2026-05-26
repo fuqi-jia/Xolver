@@ -4,7 +4,7 @@
 #include "theory/arith/nra/preprocess/EquationalConstraintManager.h"
 #include "theory/arith/nra/preprocess/NullificationAnalyzer.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("V4: CollinsConservativePolicy produces non-degenerate result for empty input") {
     ProjectionInput input;

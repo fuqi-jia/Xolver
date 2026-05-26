@@ -2,7 +2,7 @@
 #include "theory/core/DebugTrace.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 uint64_t SharedEqualityManager::pairKey(SharedTermId a, SharedTermId b) {
     if (a > b) std::swap(a, b);
@@ -86,4 +86,4 @@ void SharedEqualityManager::clear() {
     disequalities_.clear();
 }
 
-} // namespace nlcolver
+} // namespace zolver

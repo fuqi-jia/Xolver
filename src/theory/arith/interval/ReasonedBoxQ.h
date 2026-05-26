@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ReasonedIntervalQ: an IntervalQ together with SAT literal reasons.
@@ -33,4 +33,4 @@ private:
     std::unordered_map<std::string, ReasonedIntervalQ> box_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

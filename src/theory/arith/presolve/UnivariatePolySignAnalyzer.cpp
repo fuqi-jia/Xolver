@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 UnivariatePolySignAnalyzer::UnivariatePolySignAnalyzer() = default;
 UnivariatePolySignAnalyzer::~UnivariatePolySignAnalyzer() = default;
@@ -175,4 +175,4 @@ bool UnivariatePolySignAnalyzer::run(PresolveState& st) {
     return made;
 }
 
-} // namespace nlcolver
+} // namespace zolver

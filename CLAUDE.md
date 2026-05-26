@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project context
 
-NLColver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The repository has progressed beyond initial bootstrap:
+Zolver is a research-grade SMT/OMT solver platform for nonlinear arithmetic. The repository has progressed beyond initial bootstrap:
 
 - **Stage A (Core IR + SAT)**: Complete — CoreExpr, CoreIr, CaDiCaL SAT backend, Atomizer, frontend lowering worklist (ToInt/div-mod/ITE lowering, constant propagation)
 - **Stage C/E (LRA/LIA)**: Functional — Simplex-based LRA, branch-and-bound LIA with disequality
@@ -40,15 +40,15 @@ cmake --build . -j
 
 # Tests — doctest unit suite (~523 cases) + 14 per-logic regression suites
 ctest                       # all tests (unit + per-logic regression)
-./tests/nlcolver_unit_tests                          # all units, direct
-./tests/nlcolver_unit_tests --test-case="<name>"     # single test
-./tests/nlcolver_unit_tests -ltc                     # list test cases
+./tests/zolver_unit_tests                          # all units, direct
+./tests/zolver_unit_tests --test-case="<name>"     # single test
+./tests/zolver_unit_tests -ltc                     # list test cases
 
 # Regression: 577 SMT2 cases vs z3+cvc5 oracle, KNOWN_FAILURES.md gates leniency
-python3 tools/run_regression.py --root tests/regression --solver build/bin/nlcolver --timeout 20 -j 2
+python3 tools/run_regression.py --root tests/regression --solver build/bin/zolver --timeout 20 -j 2
 
 # CLI
-./bin/nlcolver solve path/to/input.smt2
+./bin/zolver solve path/to/input.smt2
 ```
 
 > **WSL build note:** `cmake --build . -j` (unlimited parallelism) can OOM and
@@ -61,10 +61,10 @@ CMake build options (defaults shown):
 
 | Option | Default | Effect |
 |---|---|---|
-| `NLCOLVER_BUILD_TESTS` | ON | Enable doctest unit tests |
-| `NLCOLVER_BUILD_TOOLS` | ON | Build `nlcolver-cli`, trace-viewer, benchmark-runner, model-checker, proof-checker |
-| `NLCOLVER_ENABLE_PROOFS` | ON | Defines `NLCOLVER_ENABLE_PROOFS`, builds `proof-checker` tool |
-| `NLCOLVER_ENABLE_TRACING` | ON | Defines `NLCOLVER_ENABLE_TRACING`, builds `trace-viewer` tool |
+| `ZOLVER_BUILD_TESTS` | ON | Enable doctest unit tests |
+| `ZOLVER_BUILD_TOOLS` | ON | Build `zolver-cli`, trace-viewer, benchmark-runner, model-checker, proof-checker |
+| `ZOLVER_ENABLE_PROOFS` | ON | Defines `ZOLVER_ENABLE_PROOFS`, builds `proof-checker` tool |
+| `ZOLVER_ENABLE_TRACING` | ON | Defines `ZOLVER_ENABLE_TRACING`, builds `trace-viewer` tool |
 
 Default `CMAKE_BUILD_TYPE` is `Release` (`-O3`). For asserts/debugging use `cmake -DCMAKE_BUILD_TYPE=Debug ..` (`-g -O0`).
 
@@ -74,11 +74,11 @@ Default `CMAKE_BUILD_TYPE` is `Release` (`-O3`). For asserts/debugging use `cmak
 |---|---|---|
 | GMP, MPFR | pkg-config / `find_library` | **FATAL_ERROR** |
 | CaDiCaL (SAT, headers expose `cadical.hpp`) | `find_library`/`find_path` | **FATAL_ERROR** |
-| libpoly (`poly/poly.h`) | `find_library`/`find_path` | Warning + `NLCOLVER_HAS_LIBPOLY` undefined → polynomial kernel stubbed |
+| libpoly (`poly/poly.h`) | `find_library`/`find_path` | Warning + `ZOLVER_HAS_LIBPOLY` undefined → polynomial kernel stubbed |
 | nlohmann/json v3.11.3 | FetchContent (network) | Build fails |
 | doctest v2.4.11 | FetchContent (network) | Tests skip |
 
-When wiring code into `poly/`, gate it behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
+When wiring code into `poly/`, gate it behind `#ifdef ZOLVER_HAS_LIBPOLY` and provide a stub fallback.
 
 `src/CMakeLists.txt` uses `file(GLOB_RECURSE ... CONFIGURE_DEPENDS)` over each subsystem directory: new `.cpp`/`.h` files under `src/<subsystem>/` are picked up automatically — no need to edit any CMakeLists.
 
@@ -142,9 +142,9 @@ share a common base, `src/theory/arith/ArithSolverBase.{h,cpp}`. **Read
 
 ## Code conventions observed in the existing source
 
-- `namespace nlcolver { ... }` for all library code.
+- `namespace zolver { ... }` for all library code.
 - Typed `uint32_t` IDs for everything that is hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/expr/types.h`. Reuse these — don't introduce parallel ID schemes.
-- `pImpl` pattern at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/nlcolver/`.
+- `pImpl` pattern at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/zolver/`.
 - C++17 only (`set(CMAKE_CXX_STANDARD 17)`, extensions OFF). No GCC-isms.
 - Warnings on (`-Wall -Wextra -Wpedantic`); `-Wno-unused-parameter` is the only exception. Don't suppress others — fix the root cause.
 - `SmallVector<T, 4>` (in `src/util/`) is the default container for short child-lists on `CoreExpr` nodes. Use it instead of `std::vector` where N is typically small.
@@ -199,4 +199,4 @@ its constructor — add/reorder stages there, not by hand-editing a monolithic
 
 ## Reference solvers
 
-`reference/` contains in-tree copies of `cvc5/` and `z3/` for reading, **not** for linking — they are not in any CMake target. Use them when the plan references "cvc5 does X" or when researching how a known-good solver implemented a particular algorithm. Do not copy code; the licensing posture of NLColver vs. those projects has not been settled.
+`reference/` contains in-tree copies of `cvc5/` and `z3/` for reading, **not** for linking — they are not in any CMake target. Use them when the plan references "cvc5 does X" or when researching how a known-good solver implemented a particular algorithm. Do not copy code; the licensing posture of Zolver vs. those projects has not been settled.

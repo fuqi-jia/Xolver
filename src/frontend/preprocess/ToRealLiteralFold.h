@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ToRealLiteralFold (Capability 8b of the close-all-known-fails plan).
@@ -48,4 +48,4 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> folded_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 NiaSolver::~NiaSolver() = default;
 
@@ -749,4 +749,4 @@ std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
     return model;
 }
 
-} // namespace nlcolver
+} // namespace zolver

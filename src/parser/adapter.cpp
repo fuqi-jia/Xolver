@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 using namespace SOMTParser;
 
@@ -18,7 +18,7 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     // Stage A: run SOMTParser rewriter before conversion.
     SOMTParser::Rewriter rewriter(parser_.getNodeManager());
     SOMTParser::installDefaultRewriteRules(rewriter);
-    installNlcolverRewriteRules(rewriter);
+    installZolverRewriteRules(rewriter);
 
     for (Node assertion : parser_.getAssertions()) {
         Node rewritten = rewriter.rewrite(assertion);
@@ -317,4 +317,4 @@ Payload FrontendAdapter::extractPayload(SOMTParser::Node node) {
     return {};
 }
 
-} // namespace nlcolver
+} // namespace zolver

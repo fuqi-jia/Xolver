@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Helpers
@@ -209,4 +209,4 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::consistent();
 }
 
-} // namespace nlcolver
+} // namespace zolver

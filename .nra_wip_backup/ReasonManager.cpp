@@ -1,7 +1,7 @@
 #include "theory/arith/nra/ReasonManager.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 std::vector<SatLit> ReasonManager::minimize(const Covering& cover) {
     std::vector<SatLit> reasons;
@@ -31,4 +31,4 @@ std::vector<SatLit> ReasonManager::deduplicate(std::vector<SatLit> lits) {
     return lits;
 }
 
-} // namespace nlcolver
+} // namespace zolver

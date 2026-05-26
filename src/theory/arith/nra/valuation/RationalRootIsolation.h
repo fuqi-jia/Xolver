@@ -5,7 +5,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // Exact real-root isolation of a UNIVARIATE rational polynomial via Sturm
 // sequences (self-contained exact ℚ arithmetic; no libpoly). Used by the Lazard
@@ -32,4 +32,4 @@ RationalRootResult isolateRationalRoots(const RationalPolynomial& p, VarId x);
 int countRealRootsIn(const RationalPolynomial& p, VarId x,
                      const mpq_class& lo, const mpq_class& hi);
 
-}  // namespace nlcolver
+}  // namespace zolver

@@ -2,7 +2,7 @@
 #include "theory/arith/icp/contractors/RelationContractorZ.h"
 #include "theory/arith/icp/contractors/SquareContractorZ.h"
 
-namespace nlcolver {
+namespace zolver {
 
 ContractorFactoryZ::BuildResult ContractorFactoryZ::build(
     const std::vector<IcpConstraint>& constraints,
@@ -79,4 +79,4 @@ ContractorFactoryZ::BuildResult ContractorFactoryZ::build(
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

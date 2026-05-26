@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // BoundValue comparison
@@ -270,7 +270,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
     for (int x : nonBasicVars_) {
@@ -290,7 +290,7 @@ void GeneralSimplex::recomputeBeta() {
 
     betaDirty_ = false;
     rebuildViolationQueue();
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
 #endif
@@ -343,7 +343,7 @@ bool GeneralSimplex::atUpper(int var) const {
 }
 
 void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
     assert(vars_[nonBasicVar].basicRow == -1);
@@ -363,7 +363,7 @@ void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
     }
 
     vars_[nonBasicVar].beta = value;
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
 #endif
@@ -426,7 +426,7 @@ GeneralSimplex::Result GeneralSimplex::check() {
         recomputeBeta();
     }
     auto r = checkInternal();
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     if (r == Result::Sat) {
         // Sample coefficient bit sizes from tableau
         for (int row = 0; row < tab_.numRows(); ++row) {
@@ -566,7 +566,7 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 }
 
 void GeneralSimplex::pivot(int leaving, int entering) {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     ++pivotCount_;
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
@@ -635,7 +635,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
     // Invariant: entering is now basic, so its column must be empty
     assert(tab_.col(entering).entries.empty());
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
 #endif
@@ -974,4 +974,4 @@ int GeneralSimplex::rowOfBasic(int var) const {
     return vars_[var].basicRow;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,7 +1,7 @@
 #include "expr/Smt2Dumper.h"
 #include <sstream>
 
-namespace nlcolver {
+namespace zolver {
 
 static const char* kindToSMT2(Kind k) {
     switch (k) {
@@ -105,4 +105,4 @@ std::string dumpExprToSMT2(ExprId id, const CoreIr& ir) {
     return oss.str();
 }
 
-} // namespace nlcolver
+} // namespace zolver

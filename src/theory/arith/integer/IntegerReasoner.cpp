@@ -1,7 +1,7 @@
 #include "theory/arith/integer/IntegerReasoner.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Helpers
@@ -290,4 +290,4 @@ std::optional<TheoryLemma> IntegerReasoner::normalizeEquality(
     return TheoryLemma{{lit.negated(), normLit}};
 }
 
-} // namespace nlcolver
+} // namespace zolver

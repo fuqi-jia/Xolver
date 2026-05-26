@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 // Lowers a normalized NIA constraint `p rel 0` to CNF: decomposes p into
 // monomials (kernel.terms), encodes each as coeff * prod(var^exp), then sums
@@ -33,4 +33,4 @@ private:
     const std::unordered_map<std::string, BitVec>& varBits_;
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast

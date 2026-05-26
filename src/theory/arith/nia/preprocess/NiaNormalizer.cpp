@@ -2,7 +2,7 @@
 #include "theory/arith/nia/NiaSolver.h"
 #include <numeric>
 
-namespace nlcolver {
+namespace zolver {
 
 NiaNormalizer::NiaNormalizer(PolynomialKernel& kernel) : kernel_(kernel) {}
 
@@ -88,4 +88,4 @@ NiaNormalizer::normalize(const std::vector<ActiveNiaConstraint>& active) {
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -15,7 +15,7 @@
 // V3: ReasonedPolynomial depends on RationalPolynomial
 #include "theory/arith/poly/RationalPolynomial.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // Forward declarations (used by V4 types)
 class AlgebraBackend;
@@ -221,4 +221,4 @@ struct RootOrigin {
 // Real algebraic number: rational or algebraic root
 // ------------------------------------------------------------------
 
-} // namespace nlcolver
+} // namespace zolver

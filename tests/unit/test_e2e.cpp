@@ -1,4 +1,4 @@
-#include "nlcolver/Solver.h"
+#include "zolver/Solver.h"
 #include <doctest/doctest.h>
 #include <fstream>
 #include <iostream>
@@ -8,7 +8,7 @@
 #include <set>
 #include <sstream>
 
-using namespace nlcolver;
+using namespace zolver;
 
 // Read tests/regression/KNOWN_FAILURES.md and return the set of relative paths
 // (under tests/regression/) listed as known-fail or known-unsound. Used to
@@ -43,7 +43,7 @@ static std::set<std::string> loadKnownFailures() {
 }
 
 static std::string writeTempSmt2(const std::string& content) {
-    std::string path = std::filesystem::temp_directory_path() / "nlcolver_test.smt2";
+    std::string path = std::filesystem::temp_directory_path() / "zolver_test.smt2";
     std::ofstream ofs(path);
     ofs << content;
     return path;

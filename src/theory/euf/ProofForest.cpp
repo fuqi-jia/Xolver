@@ -3,7 +3,7 @@
 #include <queue>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
     size_t edgeId = edges_.size();
@@ -86,4 +86,4 @@ std::vector<size_t> ProofForest::path(EufTermId u, EufTermId v) const {
     return {};
 }
 
-} // namespace nlcolver
+} // namespace zolver

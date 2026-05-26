@@ -4,7 +4,7 @@
 #include "theory/arith/nra/valuation/TowerAlgebraicKernel.h"
 #include "expr/types.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // GCD over the tower field K = Q(alpha_0,...) of two polynomials f, g viewed as
 // UNIVARIATE in targetVar with tower-element coefficients (each f, g is a
@@ -26,4 +26,4 @@ struct TowerGcdResult {
 TowerGcdResult towerPolyGcd(const RationalPolynomial& f, const RationalPolynomial& g,
                             VarId targetVar, const TowerKernel& K);
 
-}  // namespace nlcolver
+}  // namespace zolver

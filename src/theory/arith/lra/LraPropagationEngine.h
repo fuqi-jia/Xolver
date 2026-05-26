@@ -9,7 +9,7 @@
 #include <queue>
 #include <chrono>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // PropagationBudget: controls how much work propagateAll() does
@@ -100,4 +100,4 @@ private:
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

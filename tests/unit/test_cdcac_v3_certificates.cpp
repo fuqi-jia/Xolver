@@ -6,7 +6,7 @@
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 static CdcacInput makeUnivariateInput(PolynomialKernel* kernel, PolyId poly, Relation rel, SatLit reason) {
     CdcacInput input;

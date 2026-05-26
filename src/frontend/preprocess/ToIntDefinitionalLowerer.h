@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ToIntDefinitionalLowerer (Capability 8c of the close-all-known-fails plan).
@@ -97,4 +97,4 @@ private:
     bool didLower_ = false;
 };
 
-} // namespace nlcolver
+} // namespace zolver

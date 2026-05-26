@@ -4,7 +4,7 @@
 #include <queue>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 struct ExplainContext {
     std::unordered_map<uint64_t, ExplainResult> memo;
@@ -489,4 +489,4 @@ bool IncrementalEGraph::congruenceClosed() const {
 }
 #endif
 
-} // namespace nlcolver
+} // namespace zolver

@@ -80,7 +80,7 @@ make `CdcacValue.h` a thin re-export; `Bound`/`ExtRealAlg`→`ExtendedRealValue`
 | File | Line | Current | Target |
 |---|---|---|---|
 | `src/theory/core/TheorySolver.h` | 72–74 | `struct TheoryModel { unordered_map<string,string> assignments; }` | `unordered_map<string,RealValue> numericAssignments;` + `unordered_map<string,bool> boolAssignments;` |
-| `include/nlcolver/Model.h` | 26, 31 | `unordered_map<uint32_t,string> values_` | `unordered_map<uint32_t,RealValue>` |
+| `include/zolver/Model.h` | 26, 31 | `unordered_map<uint32_t,string> values_` | `unordered_map<uint32_t,RealValue>` |
 | `src/api/Solver.cpp` | getValue/getModel | string reconstruct via `std::stoll`/`mkReal(string)` | serialize via `RealValue::toSmtLib2`; add `mkAlgebraicReal` |
 | getModel() overrides | — | per-solver string build | construct `RealValue` |
 
@@ -146,12 +146,12 @@ Phase 1 routes `RealValue` algebraic arithmetic/compare through a
 
 1. **Tests skipped, not failing in CI.** The plan's Phase-0 gate says
    `test_realvalue.cpp` should *run and fail*. But `tests/unit/*.cpp` is
-   `GLOB_RECURSE`'d into the single `nlcolver_unit_tests` binary = the `unit`
+   `GLOB_RECURSE`'d into the single `zolver_unit_tests` binary = the `unit`
    ctest label, so failing cases would turn shared `main` red and break the
    parallel agent's "ctest 15/15" gate. Resolution: every case is
    `* doctest::skip()` inside `TEST_SUITE("realvalue")`. Default `ctest` stays
    green; the designed-failure is observable on demand with
-   `nlcolver_unit_tests --no-skip -ts=realvalue`. **Phase 1 deletes the skip
+   `zolver_unit_tests --no-skip -ts=realvalue`. **Phase 1 deletes the skip
    decorators** so the suite runs by default and must pass.
 
 2. **`void* libpolyHandle` omitted from `AlgebraicNumber`.** A raw non-owning

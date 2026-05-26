@@ -10,7 +10,7 @@
 #include <variant>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // IDs
@@ -317,4 +317,4 @@ struct CdcacResult {
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

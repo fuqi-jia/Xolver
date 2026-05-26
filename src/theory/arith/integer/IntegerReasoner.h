@@ -8,7 +8,7 @@
 #include <vector>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * NormalizedConstraint: integer-coefficient constraint in standard form.
@@ -100,4 +100,4 @@ private:
     static void clearDenominators(LinearFormKey& lhs, mpq_class& rhs);
 };
 
-} // namespace nlcolver
+} // namespace zolver

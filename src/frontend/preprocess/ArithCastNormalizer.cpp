@@ -2,7 +2,7 @@
 #include "util/MpqUtils.h"
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 CastNormalizeResult ArithCastNormalizer::run() {
     CastNormalizeResult result;
@@ -207,4 +207,4 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
     return (it != memo_.end()) ? it->second : root;
 }
 
-} // namespace nlcolver
+} // namespace zolver

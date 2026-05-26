@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 struct BitBlastResult {
     enum class Status { Sat, UnsatComplete, Unknown };
@@ -70,4 +70,4 @@ private:
     unsigned maxIters_ = 6;    // with doubling growth, reaches up to maxBW_
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast

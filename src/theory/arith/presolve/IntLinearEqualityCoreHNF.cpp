@@ -4,7 +4,7 @@
 #include <map>
 #include <set>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -137,4 +137,4 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
     return made;
 }
 
-} // namespace nlcolver
+} // namespace zolver

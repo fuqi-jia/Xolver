@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // LazardProjectionClosure — the Lazard projection of a constraint set, composed
@@ -77,4 +77,4 @@ private:
     void projectLevel(const std::vector<int>& inputIds, VarId elimVar);
 };
 
-}  // namespace nlcolver
+}  // namespace zolver

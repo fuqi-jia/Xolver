@@ -1,5 +1,5 @@
-#include "nlcolver/Solver.h"
-#include "nlcolver/Result.h"
+#include "zolver/Solver.h"
+#include "zolver/Result.h"
 #include "expr/ir.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
@@ -24,8 +24,8 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
 #include "theory/core/LogicFeatureDetector.h"
-#ifdef NLCOLVER_ENABLE_CASESTATS
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
 #endif
 #endif
@@ -44,7 +44,7 @@
 #include <optional>
 #include <chrono>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // Solver::Impl
@@ -257,7 +257,7 @@ public:
         return false;
     }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     void parseUnknownReasonIntoStats() {
         // Derive structured unknown fields from the free-text reason.
         const std::string& r = lastUnknownReason_;
@@ -415,7 +415,7 @@ public:
         }
     }
 #endif
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     CaseStats caseStats_;
     std::string dumpStatsPath_;
 #endif
@@ -439,7 +439,7 @@ public:
         lastUnknownCode_.clear();
         lastUnknownComponent_.clear();
         lastUnknownDetail_.clear();
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
         caseStats_ = CaseStats{};
 #endif
     }
@@ -544,7 +544,7 @@ public:
             UnconditionalConstantPropagation cprop(*ir);
             cprop.run();
             if (cprop.hadContradiction()) {
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unsat, 0.0);
 #endif
                 return Result::Unsat;
@@ -588,7 +588,7 @@ public:
             IntDivModLowerer dmLowerer(*ir);
             if (!dmLowerer.run()) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported or internal error";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
@@ -614,21 +614,21 @@ public:
                                  logic == "QF_AUFLRA" || logic == "AUFLRA");
             if (req.unsupported) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported divisor";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
                 lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
             }
             if (req.needsNonlinearInt && isLinearOnly) {
                 lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
@@ -732,7 +732,7 @@ public:
         auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
         if (!cadicalBackend) {
             lastUnknownReason_ = "SAT: CadicalBackend cast failed";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0);
 #endif
             return Result::Unknown;
@@ -797,7 +797,7 @@ public:
                       << " Mixed=" << features.hasMixedIntReal
                       << "). Returning Unknown.\n";
             lastUnknownReason_ = "LogicFeatureDetector: logic mismatch (declared=" + logic + ")";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -805,7 +805,7 @@ public:
 
         if (features.hasUnsupported) {
             lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/FP/BV)";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -823,7 +823,7 @@ public:
         };
         if (features.hasArray && !isArrayLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -866,7 +866,7 @@ public:
 
         if (!setupResult.success) {
             lastUnknownReason_ = "TheoryFactory: solver setup failed (unsupported logic=" + logic + ")";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -880,7 +880,7 @@ public:
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
         propagator.setUnknownReasonSink(&lastUnknownReason_);
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
         propagator.setCaseStats(&caseStats_);
         if (!dumpStatsPath_.empty()) {
             // Base path without extension for heartbeat
@@ -1006,7 +1006,7 @@ public:
         if (registry.hasUnsupportedTheoryAtom()) {
             std::cerr << "[Solver] unsupported theory atom detected\n";
             lastUnknownReason_ = "Atomizer: unsupported theory atom";
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, &theoryManager,
                               cadicalBackend, &atomizer, &registry);
 #endif
@@ -1145,7 +1145,7 @@ public:
             }
         }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
         finalizeCaseStats(ret, solveDurMs, &propagator, &theoryManager,
                           cadicalBackend, &atomizer, &registry);
 #endif
@@ -1733,7 +1733,7 @@ std::string Solver::lastUnknownCode() const { return pImpl->lastUnknownCode_; }
 std::string Solver::lastUnknownComponent() const { return pImpl->lastUnknownComponent_; }
 std::string Solver::lastUnknownDetail() const { return pImpl->lastUnknownDetail_; }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
 void Solver::setDumpStatsPath(std::string_view path) {
     pImpl->dumpStatsPath_ = std::string(path);
 }
@@ -1753,4 +1753,4 @@ void Solver::dumpSMT2(std::ostream& os) {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

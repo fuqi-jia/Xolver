@@ -9,7 +9,7 @@ static mpz_class mpz_gcd(mpz_class a, mpz_class b) {
     return result;
 }
 
-namespace nlcolver {
+namespace zolver {
 
 AlgebraicIntegerReasoner::AlgebraicIntegerReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -284,4 +284,4 @@ NiaReasoningResult AlgebraicIntegerReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -3,7 +3,7 @@
 #include "theory/arith/linearizer/LinearizationTypes.h"
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 class LinearizationCache {
 public:
@@ -23,4 +23,4 @@ private:
     std::unordered_set<CutCacheKey, CutCacheKeyHash> emitted_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

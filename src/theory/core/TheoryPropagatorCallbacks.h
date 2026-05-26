@@ -3,7 +3,7 @@
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/core/TheoryAssignmentView.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // Thin lookup interface for querying theory atoms by SAT variable.
@@ -42,4 +42,4 @@ public:
     virtual TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

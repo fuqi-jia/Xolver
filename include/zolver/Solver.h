@@ -1,11 +1,11 @@
 #pragma once
 
-#include "nlcolver/Result.h"
-#include "nlcolver/Term.h"
-#include "nlcolver/Sort.h"
-#include "nlcolver/Model.h"
-#include "nlcolver/Proof.h"
-#include "nlcolver/Statistics.h"
+#include "zolver/Result.h"
+#include "zolver/Term.h"
+#include "zolver/Sort.h"
+#include "zolver/Model.h"
+#include "zolver/Proof.h"
+#include "zolver/Statistics.h"
 #include <cstdint>
 #include <memory>
 #include <ostream>
@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Value type for solver options.
@@ -126,4 +126,4 @@ private:
     std::unique_ptr<Impl> pImpl;
 };
 
-} // namespace nlcolver
+} // namespace zolver

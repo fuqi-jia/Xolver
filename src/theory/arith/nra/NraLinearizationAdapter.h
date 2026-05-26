@@ -6,7 +6,7 @@
 #include "theory/core/TheorySolver.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // Generic active assignment for mirror step
 struct GenericActiveAssignment {
@@ -36,4 +36,4 @@ private:
     TheoryAtomRegistry* registry_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

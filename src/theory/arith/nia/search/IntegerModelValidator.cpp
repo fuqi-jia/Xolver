@@ -1,6 +1,6 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 
-namespace nlcolver {
+namespace zolver {
 
 IntegerModelValidator::IntegerModelValidator(PolynomialKernel& kernel) : kernel_(kernel) {}
 
@@ -40,4 +40,4 @@ IntegerModelValidator::Result IntegerModelValidator::validate(
     return Result::Valid;
 }
 
-} // namespace nlcolver
+} // namespace zolver

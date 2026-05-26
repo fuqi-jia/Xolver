@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Migrate BLAN's QF_NIA bit-blasting (space sizing + CNF encoding with Greedy-Addition chain sorting) into NLColver as `src/theory/arith/bit_blast/`, wired in as one full-effort stage of the NIA `Reasoner` pipeline.
+**Goal:** Migrate BLAN's QF_NIA bit-blasting (space sizing + CNF encoding with Greedy-Addition chain sorting) into Zolver as `src/theory/arith/bit_blast/`, wired in as one full-effort stage of the NIA `Reasoner` pipeline.
 
 **Architecture:** A self-contained `bit_blast` module: `BitVec` (two's-complement bit-vector over `SatLit`), `BitBlastEncoder` (CNF gates + width-growing add/sub/mul/pow + `relZero` comparisons), `PolyBitBlaster` (PolyId monomials → BitVec with Greedy-Addition sorting), `SpaceEstimator` (per-variable bit-width plan + `boxIsComplete`), and `BitBlastSolver` (owns an independent CaDiCaL, runs encode→solve→validate→refine). `NiaSolver::stageBitBlast` maps results into the pipeline. SAT is always re-validated by `IntegerModelValidator`; UNSAT is emitted only when the box is provably complete (all vars hard-bounded, so width-growing arithmetic is exact).
 
@@ -10,7 +10,7 @@
 
 **Design spec:** `docs/superpowers/specs/2026-05-26-nia-bit-blast-design.md`
 
-**Per-task build/test note (WSL):** build with bounded parallelism — `cmake --build build -j 2` (unlimited `-j` can OOM WSL on this tree). Run a single unit test group with `./build/tests/nlcolver_unit_tests --test-case="<name>"`.
+**Per-task build/test note (WSL):** build with bounded parallelism — `cmake --build build -j 2` (unlimited `-j` can OOM WSL on this tree). Run a single unit test group with `./build/tests/zolver_unit_tests --test-case="<name>"`.
 
 ---
 
@@ -31,8 +31,8 @@ Create `tests/unit/test_bit_blast.cpp`:
 #include "sat/SatSolver.h"
 #include "theory/arith/bit_blast/BitVec.h"
 
-using namespace nlcolver;
-using namespace nlcolver::bitblast;
+using namespace zolver;
+using namespace zolver::bitblast;
 
 TEST_CASE("BitVec: litValue reads polarity") {
     auto sat = createSatSolver();
@@ -76,7 +76,7 @@ Create `src/theory/arith/bit_blast/BitVec.h`:
 #include <gmpxx.h>
 #include <vector>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 // Two's-complement bit-vector. bits[0] = LSB, bits.back() = MSB (sign bit,
 // weight -2^(width-1)). Each bit is a SatLit in the owning SAT instance.
@@ -107,12 +107,12 @@ inline mpz_class readBitVec(const SatSolver& sat, const BitVec& bv) {
     return v;
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="BitVec:*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="BitVec:*"`
 Expected: PASS (2 test cases).
 
 - [ ] **Step 5: Commit**
@@ -177,7 +177,7 @@ Create `src/theory/arith/bit_blast/BitBlastEncoder.h`:
 #include <gmpxx.h>
 #include <utility>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 // CNF encoder over an independent SAT instance. Two's-complement, width-growing
 // arithmetic: add -> max(wa,wb)+1, mul -> wa+wb, so the encoded value is exact
@@ -224,7 +224,7 @@ private:
     BitVec addFixed(const BitVec& a, const BitVec& b, unsigned w); // truncates to w
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 Create `src/theory/arith/bit_blast/BitBlastEncoder.cpp`:
@@ -233,7 +233,7 @@ Create `src/theory/arith/bit_blast/BitBlastEncoder.cpp`:
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include <algorithm>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
     SatVar t = sat_.newVar();
@@ -311,12 +311,12 @@ void BitBlastEncoder::assertLit(SatLit l) { sat_.addClause({l}); }
 
 // --- arithmetic and relations are added in later tasks ---
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="Encoder:*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="Encoder:*"`
 Expected: PASS (2 cases; CMake auto-globs the new `.cpp`).
 
 - [ ] **Step 5: Commit**
@@ -424,7 +424,7 @@ SatLit BitBlastEncoder::isZero(const BitVec& a) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="Encoder: add*,Encoder: sub*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="Encoder: add*,Encoder: sub*"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -512,7 +512,7 @@ SatLit BitBlastEncoder::eq(const BitVec& a, const BitVec& b) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="Encoder: mul*,Encoder: powConst*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="Encoder: mul*,Encoder: powConst*"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -584,7 +584,7 @@ SatLit BitBlastEncoder::relZero(const BitVec& a, Relation rel) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="Encoder: relZero*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="Encoder: relZero*"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -669,7 +669,7 @@ Create `src/theory/arith/bit_blast/PolyBitBlaster.h`:
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 // Lowers a normalized NIA constraint `p rel 0` to CNF: decomposes p into
 // monomials (kernel.terms), encodes each as coeff * prod(var^exp), then sums
@@ -696,7 +696,7 @@ private:
     const std::unordered_map<std::string, BitVec>& varBits_;
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 Create `src/theory/arith/bit_blast/PolyBitBlaster.cpp`:
@@ -705,7 +705,7 @@ Create `src/theory/arith/bit_blast/PolyBitBlaster.cpp`:
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include <algorithm>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 PolyBitBlaster::PolyBitBlaster(BitBlastEncoder& enc, PolynomialKernel& kernel,
                                const std::unordered_map<std::string, BitVec>& varBits)
@@ -749,12 +749,12 @@ void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
     enc_.assertLit(enc_.relZero(value, c.rel));
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="PolyBitBlaster:*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="PolyBitBlaster:*"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -837,7 +837,7 @@ Create `src/theory/arith/bit_blast/SpaceEstimator.h`:
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 struct BitWidthPlan {
     std::unordered_map<std::string, unsigned> width;
@@ -871,7 +871,7 @@ private:
     PolynomialKernel& kernel_;
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 Create `src/theory/arith/bit_blast/SpaceEstimator.cpp`:
@@ -881,7 +881,7 @@ Create `src/theory/arith/bit_blast/SpaceEstimator.cpp`:
 #include <algorithm>
 #include <unordered_set>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 unsigned SpaceEstimator::bitsToCover(const mpz_class& lo, const mpz_class& hi) {
     unsigned w = 1;
@@ -960,12 +960,12 @@ BitWidthPlan SpaceEstimator::estimate(const std::vector<NormalizedNiaConstraint>
     return plan;
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="SpaceEstimator:*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="SpaceEstimator:*"`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -1116,7 +1116,7 @@ Create `src/theory/arith/bit_blast/BitBlastSolver.h`:
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 struct BitBlastResult {
     enum class Status { Sat, UnsatComplete, Unknown };
@@ -1174,7 +1174,7 @@ private:
     unsigned maxIters_ = 6;    // with doubling growth, reaches up to maxBW_
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 Create `src/theory/arith/bit_blast/BitBlastSolver.cpp`:
@@ -1187,7 +1187,7 @@ Create `src/theory/arith/bit_blast/BitBlastSolver.cpp`:
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 bool BitBlastSolver::applicable(const std::vector<NormalizedNiaConstraint>& cs) const {
     for (const auto& c : cs) {
@@ -1343,12 +1343,12 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     return out;               // Unknown
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="BitBlastSolver:*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="BitBlastSolver:*"`
 Expected: PASS (3 cases).
 
 - [ ] **Step 5: Commit**
@@ -1485,9 +1485,9 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cmake --build build -j 2 && ./build/tests/nlcolver_unit_tests --test-case="NiaSolver: bit-blast*"`
+Run: `cmake --build build -j 2 && ./build/tests/zolver_unit_tests --test-case="NiaSolver: bit-blast*"`
 Expected: PASS. Then run the full unit suite to confirm no regression:
-Run: `./build/tests/nlcolver_unit_tests`
+Run: `./build/tests/zolver_unit_tests`
 Expected: all cases pass (≥523 pre-existing + the new bit_blast cases).
 
 - [ ] **Step 5: Behavioral smoke check through the CLI**
@@ -1504,7 +1504,7 @@ cat > /tmp/bb_smoke.smt2 <<'EOF'
 (assert (= (* x y) 6))
 (check-sat)
 EOF
-./build/bin/nlcolver solve /tmp/bb_smoke.smt2
+./build/bin/zolver solve /tmp/bb_smoke.smt2
 ```
 Expected: prints `sat` (no crash, no `unknown`). Formal per-stage soundness is gated in Task 10.
 
@@ -1578,7 +1578,7 @@ Create `tests/regression/nia/nia_<NNN+2>_sat_bitblast_addchain.smt2`:
 Run:
 ```bash
 python3 tools/run_regression.py --root tests/regression --logic nia \
-    --solver build/bin/nlcolver --timeout 20 -j 2
+    --solver build/bin/zolver --timeout 20 -j 2
 ```
 Expected: the three new cases match the z3/cvc5 oracle (`sat`, `unsat`, `sat`); **0 UNSOUND**; no previously-passing NIA case regresses. If a new case shows `unknown`, that is acceptable (not unsound) but investigate width sizing; if it shows the *wrong* verdict, STOP — that is an UNSOUND result and must be fixed before commit.
 
@@ -1592,7 +1592,7 @@ true;` to `false`, rebuild, and re-run the three new cases:
 ```bash
 # with enableBitBlast_ = false (temporary):
 cmake --build build -j 2
-for f in tests/regression/nia/nia_*_bitblast_*.smt2; do echo "$f:"; ./build/bin/nlcolver solve "$f"; done
+for f in tests/regression/nia/nia_*_bitblast_*.smt2; do echo "$f:"; ./build/bin/zolver solve "$f"; done
 ```
 Expected: at least one of the three flips to `unknown` (or a slower verdict),
 demonstrating the stage contributes. **Restore `enableBitBlast_ = true`** and
@@ -1622,6 +1622,6 @@ git commit -m "test(nia): bit-blast regression cases (sat product, unsat square,
 - **Spec coverage:** Part 1 (space sizing) = Task 7; Part 2 (bit-blast + Greedy-Addition) = Tasks 1–6; orchestration/soundness contract = Task 8; pipeline wiring = Task 9; soundness gate = Task 10. The excluded scope (Resolver/ICP/extra comparison modes) is intentionally absent.
 - **Self-contained encoding (spec §2.0):** `BitBlastSolver` encodes BOTH every constraint in `cs` AND the `DomainStore` restrictions (`encodeDomainBounds`), over the variable set `vars(cs) ∪ restricted-domain-vars`, so the SAT search space EQUALS `[lb,ub]ⁿ ∩ cs` and domain-only variables are encoded too. A SAT model is accepted only if `validate(model, cs) == Valid` AND `modelInDomains(model, domains)`. Task 8 tests prove: bounds-only-in-`DomainStore` is still enforced (rejects `x=-1,y=-6`), and a domain-only contradictory `z` is detected (no spurious SAT).
 - **Soundness invariants:** SAT requires both acceptance checks (exact `cs` validation + in-box). UNSAT is emitted only when `plan.boxIsComplete` AND a conflict can be built. The conflict (`buildCompleteConflict(cs, domains)`) is `⋁ ¬reason` over **every encoded justification** — all `cs` constraints (incl. nonlinear atoms) AND every encoded `DomainStore` restriction (lower/upper/finite/exclusion). **If ANY encoded justification lacks a usable reason it bails to Unknown — it never silently drops a reason** (that would make a partial, unsound conflict like `¬A∨¬B`). Empty/self-contradictory clause ⇒ Unknown. Never returns UNSAT from a heuristic box.
-- **Type consistency:** `BitVec`, `BitBlastEncoder`, `PolyBitBlaster`, `BitWidthPlan`/`SpaceEstimator`, `BitBlastResult`/`BitBlastSolver` names and signatures are used identically across tasks; all live in `namespace nlcolver::bitblast`. `NiaSolver` refers to them as `bitblast::BitBlastSolver` / `bitblast::BitBlastResult`.
+- **Type consistency:** `BitVec`, `BitBlastEncoder`, `PolyBitBlaster`, `BitWidthPlan`/`SpaceEstimator`, `BitBlastResult`/`BitBlastSolver` names and signatures are used identically across tasks; all live in `namespace zolver::bitblast`. `NiaSolver` refers to them as `bitblast::BitBlastSolver` / `bitblast::BitBlastResult`.
 - **Build:** no CMake edits — `src/CMakeLists.txt` globs `theory/**/*.cpp` and `tests/CMakeLists.txt` globs `unit/*.cpp`.
 - **WSL:** always build with `-j 2`.

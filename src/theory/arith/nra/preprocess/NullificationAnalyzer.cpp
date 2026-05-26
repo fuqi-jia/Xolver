@@ -1,7 +1,7 @@
 #include "theory/arith/nra/preprocess/NullificationAnalyzer.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace nlcolver {
+namespace zolver {
 
 NullificationAnalyzer::NullificationAnalyzer(AlgebraBackend* algebra)
     : algebra_(algebra) {}
@@ -97,4 +97,4 @@ NullificationRepair NullificationAnalyzer::attemptRepair(
     return repair;
 }
 
-} // namespace nlcolver
+} // namespace zolver

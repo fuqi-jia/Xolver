@@ -331,10 +331,10 @@ Seven test cases:
 
 ```bash
 cd build && cmake --build . -j$(nproc)
-./tests/nlcolver_unit_tests --test-case="NRA*"
-./bin/nlcolver solve /tmp/test_nra_const_unsat.smt2   # expect: unsat
-./bin/nlcolver solve /tmp/test_nra_nonconst.smt2      # expect: unknown (not blocked)
-./bin/nlcolver solve /tmp/test_nra_rational.smt2      # expect: unknown (rejected)
+./tests/zolver_unit_tests --test-case="NRA*"
+./bin/zolver solve /tmp/test_nra_const_unsat.smt2   # expect: unsat
+./bin/zolver solve /tmp/test_nra_nonconst.smt2      # expect: unknown (not blocked)
+./bin/zolver solve /tmp/test_nra_rational.smt2      # expect: unknown (rejected)
 ```
 
 ---

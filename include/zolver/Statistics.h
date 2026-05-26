@@ -1,6 +1,6 @@
 #pragma once
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Statistics (stub for Stage A).
@@ -9,4 +9,4 @@ class Statistics {
 public:
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -5,15 +5,15 @@
 #include <iostream>
 #include <map>
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 #include <polyxx.h>
 #endif
 
-namespace nlcolver {
+namespace zolver {
 
 LibpolyBackend::LibpolyBackend(PolynomialKernel* kernel)
     : kernel_(kernel) {
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
     libKernel_ = dynamic_cast<LibPolyKernel*>(kernel);
 #endif
 }
@@ -29,7 +29,7 @@ const std::vector<mpz_class>& LibpolyBackend::getUni(UniPolyId id) const {
 }
 
 RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     (void)p;
     return RootSet{};
 #else
@@ -90,7 +90,7 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
 #endif
 }
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 static std::optional<poly::DyadicRational> mpqToDyadicRational(const mpq_class& q) {
     mpz_class num = q.get_num();
     mpz_class den = q.get_den();
@@ -149,7 +149,7 @@ static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
 
 RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     PolyId p, const SamplePoint& prefix, const std::string& mainVar) {
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     (void)p; (void)prefix; (void)mainVar;
     return RootSet{};
 #else
@@ -429,7 +429,7 @@ mpq_class LibpolyBackend::evalUniAtRational(const std::vector<mpz_class>& coeffs
 // ------------------------------------------------------------------
 
 UniPolyId LibpolyBackend::gcdUni(UniPolyId a, UniPolyId b) {
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     (void)a; (void)b;
     return NullUniPolyId;
 #else
@@ -518,7 +518,7 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
         return (loSgn > 0) ? Sign::Pos : Sign::Neg;
     }
 
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     return Sign::Unknown;
 #else
     if (!libKernel_) return Sign::Unknown;
@@ -657,7 +657,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
     }
 
     // From here: need refinement (rational inside interval, or overlapping alg-alg)
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     return CompareResult::Unknown;
 #else
     if (!libKernel_) return CompareResult::Unknown;
@@ -740,7 +740,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
 // ------------------------------------------------------------------
 
 bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     return false;
 #else
     if (!libKernel_) return false;
@@ -779,7 +779,7 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
 }
 
 int LibpolyBackend::countRealRootsInInterval(UniPolyId h, const mpq_class& lo, const mpq_class& hi) {
-#ifndef NLCOLVER_HAS_LIBPOLY
+#ifndef ZOLVER_HAS_LIBPOLY
     return -1;
 #else
     if (!libKernel_) return -1;
@@ -856,4 +856,4 @@ RootLocateResult LibpolyBackend::locateRootInPolynomial(const AlgebraicRoot& alp
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

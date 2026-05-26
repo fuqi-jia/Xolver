@@ -16,7 +16,7 @@
 
 #include "theory/arith/presolve/Presolve.h"
 
-namespace nlcolver {
+namespace zolver {
 
 class AffineSubstitution : public PresolveCapability {
 public:
@@ -24,4 +24,4 @@ public:
     bool run(PresolveState& st) override;
 };
 
-} // namespace nlcolver
+} // namespace zolver

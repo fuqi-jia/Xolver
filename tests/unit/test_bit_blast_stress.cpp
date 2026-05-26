@@ -8,8 +8,8 @@
 #include "sat/SatSolver.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 
-using namespace nlcolver;
-using namespace nlcolver::bitblast;
+using namespace zolver;
+using namespace zolver::bitblast;
 
 // Allocate a fresh variable bit-vector of the given width and pin it to `val`.
 static BitVec forcedVar(BitBlastEncoder& enc, unsigned w, const mpz_class& val) {

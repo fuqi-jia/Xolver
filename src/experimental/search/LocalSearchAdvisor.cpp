@@ -1,6 +1,6 @@
 #include "experimental/search/LocalSearchAdvisor.h"
 
-namespace nlcolver {
+namespace zolver {
 
 void LocalSearchAdvisor::init(const CoreIr&) {}
 
@@ -11,4 +11,4 @@ LocalSearchAdvisor::ModelProposal LocalSearchAdvisor::propose() {
 void LocalSearchAdvisor::feedback(bool, double) {}
 void LocalSearchAdvisor::restart() {}
 
-} // namespace nlcolver
+} // namespace zolver

@@ -11,7 +11,7 @@
 #include <vector>
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * CDCAC recursive covering/search algorithm core.
@@ -70,11 +70,11 @@ private:
     // "no UNSAT without a complete projection-certified covering".
     bool unsatTrustworthy_ = true;
 
-    // Opt-in (NLCOLVER_NRA_LAZARD_LIFT): try Lazard tower root isolation for the
+    // Opt-in (ZOLVER_NRA_LAZARD_LIFT): try Lazard tower root isolation for the
     // genuine-tower lift case (>=2 algebraic prefix coords) that ViaNorm punts
     // on. Default off; only adds certified isolations, never changes the Collins
     // path. Read once in the constructor.
     bool lazardLiftEnabled_ = false;
 };
 
-} // namespace nlcolver
+} // namespace zolver

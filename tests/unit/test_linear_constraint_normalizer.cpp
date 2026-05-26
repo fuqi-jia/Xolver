@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("LinearConstraintNormalizer: canonicalize merges and sorts") {
     LinearExpr e;

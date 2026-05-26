@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-NLColver Benchmark Runner
+Zolver Benchmark Runner
 
-One-click benchmark runner for NLColver with optional cross-checking against Z3.
+One-click benchmark runner for Zolver with optional cross-checking against Z3.
 
 Usage:
-    # Run NLColver on QF_LRA with 8 threads, 30s timeout per instance
+    # Run Zolver on QF_LRA with 8 threads, 30s timeout per instance
     python tools/run_benchmark.py --logic QF_LRA -j 8 -t 30
 
     # Run and compare with Z3
@@ -53,7 +53,7 @@ _benchmark_root_override: Optional[Path] = None
 
 def get_benchmark_root() -> Path:
     return _benchmark_root_override if _benchmark_root_override else BENCHMARK_ROOT
-DEFAULT_SOLVER = "./build/bin/nlcolver"
+DEFAULT_SOLVER = "./build/bin/zolver"
 RESULT_PATTERNS = [
     (r"\bunsat\b", "unsat"),
     (r"\bunknown\b", "unknown"),
@@ -106,7 +106,7 @@ class RunResult:
     max_rss_mb: Optional[float] = None
     stdout_path: str = ""
     stderr_path: str = ""
-    solver: str = "nlcolver"
+    solver: str = "zolver"
     stats: Optional[Dict] = None
     stats_source: str = "none"
 
@@ -114,8 +114,8 @@ class RunResult:
 @dataclass
 class ComparisonRow:
     file: str
-    nlcolver_result: str
-    nlcolver_time: float
+    zolver_result: str
+    zolver_time: float
     compare_result: str
     compare_time: float
     match: str           # MATCH | MISMATCH | DIFF | SKIP
@@ -126,15 +126,15 @@ class ComparisonRow:
 class Statistics:
     logic: str
     total_files: int
-    nlcolver: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    zolver: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     compare: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     mismatches: int = 0
     diffs: int = 0
-    total_time_nlcolver: float = 0.0
+    total_time_zolver: float = 0.0
     total_time_compare: float = 0.0
-    avg_time_nlcolver: float = 0.0
+    avg_time_zolver: float = 0.0
     avg_time_compare: float = 0.0
-    max_time_nlcolver: float = 0.0
+    max_time_zolver: float = 0.0
     max_time_compare: float = 0.0
     category_stats: Dict[str, Dict] = field(default_factory=dict)
 
@@ -297,7 +297,7 @@ def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str
                 f.write(str(stderr_data))
 
 
-def run_nlcolver(file_path: Path, solver_path: str, timeout: float,
+def run_zolver(file_path: Path, solver_path: str, timeout: float,
                  logic: Optional[str] = None,
                  dump_stats_path: Optional[str] = None,
                  log_dir: Optional[Path] = None) -> RunResult:
@@ -307,7 +307,7 @@ def run_nlcolver(file_path: Path, solver_path: str, timeout: float,
         extra += ["--logic", logic]
     if dump_stats_path:
         extra += ["--dump-stats", dump_stats_path]
-    return run_solver(cmd, file_path, timeout, solver_name="nlcolver", extra_args=extra or None, log_dir=log_dir)
+    return run_solver(cmd, file_path, timeout, solver_name="zolver", extra_args=extra or None, log_dir=log_dir)
 
 
 def run_compare(file_path: Path, compare_solver: str, timeout: float) -> RunResult:
@@ -315,12 +315,12 @@ def run_compare(file_path: Path, compare_solver: str, timeout: float) -> RunResu
     return run_solver(cmd, file_path, timeout, solver_name=compare_solver)
 
 
-def compare_results(nlcolver: RunResult, compare: RunResult) -> Tuple[str, str]:
+def compare_results(zolver: RunResult, compare: RunResult) -> Tuple[str, str]:
     """
     Compare two results.
     Returns: (match_status, note)
     """
-    n = nlcolver.result
+    n = zolver.result
     c = compare.result
 
     # Exact match
@@ -335,15 +335,15 @@ def compare_results(nlcolver: RunResult, compare: RunResult) -> Tuple[str, str]:
     # One is definitive, the other is not
     definitive = {"sat", "unsat"}
     if n in definitive and c in no_answer:
-        return "DIFF", f"nlcolver={n}, compare={c}"
+        return "DIFF", f"zolver={n}, compare={c}"
     if c in definitive and n in no_answer:
-        return "DIFF", f"nlcolver={n}, compare={c}"
+        return "DIFF", f"zolver={n}, compare={c}"
 
     # sat vs unsat -> serious mismatch
     if (n == "sat" and c == "unsat") or (n == "unsat" and c == "sat"):
-        return "MISMATCH", f"nlcolver={n}, compare={c}"
+        return "MISMATCH", f"zolver={n}, compare={c}"
 
-    return "DIFF", f"nlcolver={n}, compare={c}"
+    return "DIFF", f"zolver={n}, compare={c}"
 
 
 # =============================================================================
@@ -354,12 +354,12 @@ def write_summary(output_dir: Path, stats: Statistics, args, duration: float):
     summary_path = output_dir / "summary.txt"
     with open(summary_path, "w") as f:
         f.write("=" * 70 + "\n")
-        f.write("NLColver Benchmark Report\n")
+        f.write("Zolver Benchmark Report\n")
         f.write("=" * 70 + "\n\n")
         f.write(f"Date:           {datetime.now().isoformat()}\n")
         f.write(f"Logic:          {stats.logic}\n")
         f.write(f"Benchmark root: {get_benchmark_root()}\n")
-        f.write(f"NLColver:       {args.solver}\n")
+        f.write(f"Zolver:       {args.solver}\n")
         if args.compare_with:
             f.write(f"Compare with:   {args.compare_with}\n")
         f.write(f"Jobs:           {args.jobs}\n")
@@ -369,15 +369,15 @@ def write_summary(output_dir: Path, stats: Statistics, args, duration: float):
         f.write("\n")
 
         f.write("-" * 70 + "\n")
-        f.write("NLColver Results\n")
+        f.write("Zolver Results\n")
         f.write("-" * 70 + "\n")
         for res in ["sat", "unsat", "unknown", "timeout", "error", "killed"]:
-            cnt = stats.nlcolver.get(res, 0)
+            cnt = stats.zolver.get(res, 0)
             pct = cnt / stats.total_files * 100 if stats.total_files else 0
             f.write(f"  {res:12s}: {cnt:6d} ({pct:5.1f}%)\n")
-        f.write(f"  {'Total time':12s}: {stats.total_time_nlcolver:10.2f}s\n")
-        f.write(f"  {'Avg time':12s}: {stats.avg_time_nlcolver:10.2f}s\n")
-        f.write(f"  {'Max time':12s}: {stats.max_time_nlcolver:10.2f}s\n")
+        f.write(f"  {'Total time':12s}: {stats.total_time_zolver:10.2f}s\n")
+        f.write(f"  {'Avg time':12s}: {stats.avg_time_zolver:10.2f}s\n")
+        f.write(f"  {'Max time':12s}: {stats.max_time_zolver:10.2f}s\n")
         f.write("\n")
 
         if args.compare_with:
@@ -410,12 +410,12 @@ def write_csv(output_dir: Path, rows: List[ComparisonRow]):
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "file", "nlcolver_result", "nlcolver_time",
+            "file", "zolver_result", "zolver_time",
             "compare_result", "compare_time", "match", "note"
         ])
         for r in rows:
             writer.writerow([
-                r.file, r.nlcolver_result, f"{r.nlcolver_time:.3f}",
+                r.file, r.zolver_result, f"{r.zolver_time:.3f}",
                 r.compare_result, f"{r.compare_time:.3f}", r.match, r.note
             ])
     print(f"[CSV written to {csv_path}]")
@@ -432,7 +432,7 @@ def write_discrepancies(output_dir: Path, rows: List[ComparisonRow]):
         f.write("=" * 70 + "\n")
         for r in mismatches:
             f.write(f"\n{r.file}\n")
-            f.write(f"  nlcolver: {r.nlcolver_result} ({r.nlcolver_time:.3f}s)\n")
+            f.write(f"  zolver: {r.zolver_result} ({r.zolver_time:.3f}s)\n")
             f.write(f"  compare:  {r.compare_result} ({r.compare_time:.3f}s)\n")
             f.write(f"  note:     {r.note}\n")
 
@@ -441,19 +441,19 @@ def write_discrepancies(output_dir: Path, rows: List[ComparisonRow]):
         f.write("=" * 70 + "\n")
         for r in diffs:
             f.write(f"\n{r.file}\n")
-            f.write(f"  nlcolver: {r.nlcolver_result} ({r.nlcolver_time:.3f}s)\n")
+            f.write(f"  zolver: {r.zolver_result} ({r.zolver_time:.3f}s)\n")
             f.write(f"  compare:  {r.compare_result} ({r.compare_time:.3f}s)\n")
             f.write(f"  note:     {r.note}\n")
     print(f"[Discrepancies written to {path}]")
 
 
-def write_errors(output_dir: Path, nlcolver_results: List[RunResult], compare_results: Optional[List[RunResult]]):
+def write_errors(output_dir: Path, zolver_results: List[RunResult], compare_results: Optional[List[RunResult]]):
     path = output_dir / "errors.txt"
     with open(path, "w") as f:
         f.write("=" * 70 + "\n")
-        f.write("NLColver Errors / Timeouts / Killed\n")
+        f.write("Zolver Errors / Timeouts / Killed\n")
         f.write("=" * 70 + "\n")
-        for r in nlcolver_results:
+        for r in zolver_results:
             if r.result in ("error", "timeout", "killed"):
                 f.write(f"\n{r.file}\n")
                 f.write(f"  result: {r.result} ({r.elapsed:.3f}s)\n")
@@ -474,26 +474,26 @@ def write_errors(output_dir: Path, nlcolver_results: List[RunResult], compare_re
 
 
 def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonRow],
-                       nlcolver_map: Optional[dict] = None):
+                       zolver_map: Optional[dict] = None):
     path = output_dir / "statistics.json"
     # Build stats dict manually because asdict() cannot serialize defaultdict
     stats_dict = {
         "logic": stats.logic,
         "total_files": stats.total_files,
-        "nlcolver": dict(stats.nlcolver),
+        "zolver": dict(stats.zolver),
         "compare": dict(stats.compare),
         "mismatches": stats.mismatches,
         "diffs": stats.diffs,
-        "total_time_nlcolver": stats.total_time_nlcolver,
+        "total_time_zolver": stats.total_time_zolver,
         "total_time_compare": stats.total_time_compare,
-        "avg_time_nlcolver": stats.avg_time_nlcolver,
+        "avg_time_zolver": stats.avg_time_zolver,
         "avg_time_compare": stats.avg_time_compare,
-        "max_time_nlcolver": stats.max_time_nlcolver,
+        "max_time_zolver": stats.max_time_zolver,
         "max_time_compare": stats.max_time_compare,
         "category_stats": {
             cat: {
                 "count": cstat["count"],
-                "nlcolver": dict(cstat["nlcolver"]),
+                "zolver": dict(cstat["zolver"]),
                 "compare": dict(cstat.get("compare", {})),
                 "mismatches": cstat["mismatches"],
                 "diffs": cstat["diffs"],
@@ -504,8 +504,8 @@ def write_json_stats(output_dir: Path, stats: Statistics, rows: List[ComparisonR
     result_rows = []
     for r in rows:
         d = asdict(r)
-        if nlcolver_map and r.file in nlcolver_map:
-            n = nlcolver_map[r.file]
+        if zolver_map and r.file in zolver_map:
+            n = zolver_map[r.file]
             d["stats"] = n.stats if n.stats else {}
             d["stats_source"] = n.stats_source
             d["returncode"] = n.returncode
@@ -532,11 +532,11 @@ def write_top_slow(output_dir: Path, rows: List[ComparisonRow], n: int = 50):
     path = output_dir / "top_slow.txt"
     with open(path, "w") as f:
         f.write("=" * 70 + "\n")
-        f.write(f"Top {n} Slowest NLColver Runs\n")
+        f.write(f"Top {n} Slowest Zolver Runs\n")
         f.write("=" * 70 + "\n")
-        sorted_rows = sorted(rows, key=lambda r: r.nlcolver_time, reverse=True)
+        sorted_rows = sorted(rows, key=lambda r: r.zolver_time, reverse=True)
         for i, r in enumerate(sorted_rows[:n], 1):
-            f.write(f"{i:3d}. {r.nlcolver_time:8.3f}s  {r.file}\n")
+            f.write(f"{i:3d}. {r.zolver_time:8.3f}s  {r.file}\n")
 
         f.write("\n" + "=" * 70 + "\n")
         f.write(f"Top {n} Slowest Compare Runs\n")
@@ -552,7 +552,7 @@ def write_html_report(output_dir: Path, stats: Statistics, rows: List[Comparison
 
     # Prepare data payload for JS
     top_n = 50
-    sorted_nlc = sorted(rows, key=lambda r: r.nlcolver_time, reverse=True)[:top_n]
+    sorted_nlc = sorted(rows, key=lambda r: r.zolver_time, reverse=True)[:top_n]
     sorted_cmp = sorted(rows, key=lambda r: r.compare_time, reverse=True)[:top_n]
 
     data = {
@@ -567,16 +567,16 @@ def write_html_report(output_dir: Path, stats: Statistics, rows: List[Comparison
             "wallTime": round(wall_time, 2),
             "hasCompare": bool(args.compare_with),
         },
-        "nlcolver": {
-            "sat": stats.nlcolver.get("sat", 0),
-            "unsat": stats.nlcolver.get("unsat", 0),
-            "unknown": stats.nlcolver.get("unknown", 0),
-            "timeout": stats.nlcolver.get("timeout", 0),
-            "error": stats.nlcolver.get("error", 0),
-            "killed": stats.nlcolver.get("killed", 0),
-            "totalTime": round(stats.total_time_nlcolver, 2),
-            "avgTime": round(stats.avg_time_nlcolver, 3),
-            "maxTime": round(stats.max_time_nlcolver, 3),
+        "zolver": {
+            "sat": stats.zolver.get("sat", 0),
+            "unsat": stats.zolver.get("unsat", 0),
+            "unknown": stats.zolver.get("unknown", 0),
+            "timeout": stats.zolver.get("timeout", 0),
+            "error": stats.zolver.get("error", 0),
+            "killed": stats.zolver.get("killed", 0),
+            "totalTime": round(stats.total_time_zolver, 2),
+            "avgTime": round(stats.avg_time_zolver, 3),
+            "maxTime": round(stats.max_time_zolver, 3),
         },
         "compare": {
             "sat": stats.compare.get("sat", 0),
@@ -594,8 +594,8 @@ def write_html_report(output_dir: Path, stats: Statistics, rows: List[Comparison
         "rows": [
             {
                 "file": r.file,
-                "nlcolverResult": r.nlcolver_result,
-                "nlcolverTime": round(r.nlcolver_time, 3),
+                "zolverResult": r.zolver_result,
+                "zolverTime": round(r.zolver_time, 3),
                 "compareResult": r.compare_result,
                 "compareTime": round(r.compare_time, 3),
                 "match": r.match,
@@ -607,7 +607,7 @@ def write_html_report(output_dir: Path, stats: Statistics, rows: List[Comparison
             {
                 "name": cat,
                 "count": cstat["count"],
-                "nlcolver": dict(cstat["nlcolver"]),
+                "zolver": dict(cstat["zolver"]),
                 "compare": dict(cstat.get("compare", {})),
                 "mismatches": cstat.get("mismatches", 0),
                 "diffs": cstat.get("diffs", 0),
@@ -615,7 +615,7 @@ def write_html_report(output_dir: Path, stats: Statistics, rows: List[Comparison
             for cat, cstat in sorted(stats.category_stats.items())
         ],
         "topSlowNlc": [
-            {"file": r.file, "time": round(r.nlcolver_time, 3)}
+            {"file": r.file, "time": round(r.zolver_time, 3)}
             for r in sorted_nlc
         ],
         "topSlowCmp": [
@@ -636,7 +636,7 @@ _HTML_TEMPLATE = r'''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NLColver Benchmark Report</title>
+<title>Zolver Benchmark Report</title>
 <style>
 :root {
   --c-sat: #10b981; --c-unsat: #ef4444; --c-unknown: #9ca3af;
@@ -707,7 +707,7 @@ tr:hover td { background:#f8fafc; }
 </head>
 <body>
 <header>
-  <h1>NLColver Benchmark Report</h1>
+  <h1>Zolver Benchmark Report</h1>
   <p id="subtitle">Loading...</p>
 </header>
 
@@ -755,7 +755,7 @@ tr:hover td { background:#f8fafc; }
   <section class="section" id="topslow"></section>
 </main>
 
-<div class="footer">Generated by NLColver Benchmark Runner</div>
+<div class="footer">Generated by Zolver Benchmark Runner</div>
 
 <script>
 const DATA = __DATA_JSON__;
@@ -769,7 +769,7 @@ function badge(cls, text) { return `<span class="badge badge-${cls}">${text}</sp
 
 function renderOverview() {
   const m = DATA.meta;
-  const n = DATA.nlcolver;
+  const n = DATA.zolver;
   const c = DATA.compare;
   let html = '';
 
@@ -779,8 +779,8 @@ function renderOverview() {
     <div class="stat-item"><div class="value">${m.jobs}</div><div class="label">Threads</div></div>
     <div class="stat-item"><div class="value">${m.timeout}s</div><div class="label">Timeout</div></div></div></div>`;
 
-  // NLColver summary
-  html += `<div class="card"><h2><span class="dot" style="background:#3b82f6"></span>NLColver</h2>
+  // Zolver summary
+  html += `<div class="card"><h2><span class="dot" style="background:#3b82f6"></span>Zolver</h2>
     <div class="stat-grid">
       <div class="stat-item"><div class="value" style="color:${COLORS.sat}">${n.sat}</div><div class="label">SAT</div></div>
       <div class="stat-item"><div class="value" style="color:${COLORS.unsat}">${n.unsat}</div><div class="label">UNSAT</div></div>
@@ -848,15 +848,15 @@ function renderPie(containerId, data, title) {
 function renderCharts() {
   const container = document.getElementById('charts');
   container.innerHTML = `<div id="pie-nlc"></div><div id="pie-cmp"></div>`;
-  renderPie('pie-nlc', makePieData(DATA.nlcolver), 'NLColver Results');
+  renderPie('pie-nlc', makePieData(DATA.zolver), 'Zolver Results');
   if (DATA.compare) renderPie('pie-cmp', makePieData(DATA.compare), `${DATA.meta.compareWith} Results`);
   else document.getElementById('pie-cmp').innerHTML = '';
 }
 
 function renderMetrics() {
-  const n = DATA.nlcolver;
+  const n = DATA.zolver;
   const c = DATA.compare;
-  let html = `<div class="card"><h2>⏱ NLColver Timing</h2>`;
+  let html = `<div class="card"><h2>⏱ Zolver Timing</h2>`;
   html += `<div class="metric-row"><span>Total Time</span><strong>${n.totalTime}s</strong></div>`;
   html += `<div class="metric-row"><span>Average Time</span><strong>${n.avgTime}s</strong></div>`;
   html += `<div class="metric-row"><span>Max Time</span><strong>${n.maxTime}s</strong></div>`;
@@ -876,7 +876,7 @@ function renderMetrics() {
 function renderTable() {
   const thead = document.getElementById('table-head');
   const hasCmp = DATA.meta.hasCompare;
-  let h = `<th>File</th><th>NLColver</th><th>Time</th>`;
+  let h = `<th>File</th><th>Zolver</th><th>Time</th>`;
   if (hasCmp) h += `<th>${DATA.meta.compareWith}</th><th>Time</th><th>Match</th>`;
   thead.innerHTML = h;
   updateTable('all');
@@ -885,8 +885,8 @@ function renderTable() {
 function rowHtml(r) {
   const hasCmp = DATA.meta.hasCompare;
   let s = `<td title="${r.file}">${r.file.length>90?r.file.slice(0,40)+'...'+r.file.slice(-45):r.file}</td>`;
-  s += `<td>${badge(r.nlcolverResult, r.nlcolverResult)}</td>`;
-  s += `<td>${r.nlcolverTime}s</td>`;
+  s += `<td>${badge(r.zolverResult, r.zolverResult)}</td>`;
+  s += `<td>${r.zolverTime}s</td>`;
   if (hasCmp) {
     s += `<td>${badge(r.compareResult, r.compareResult)}</td>`;
     s += `<td>${r.compareTime}s</td>`;
@@ -901,7 +901,7 @@ function updateTable(filter, search='') {
     if (search && !r.file.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === 'all') return true;
     if (filter === 'MATCH' || filter === 'MISMATCH' || filter === 'DIFF') return r.match === filter;
-    return r.nlcolverResult === filter || r.compareResult === filter;
+    return r.zolverResult === filter || r.compareResult === filter;
   });
   document.getElementById('table-count').textContent = `(${rows.length})`;
   if (rows.length === 0) { tbody.innerHTML = `<tr><td colspan="7" class="empty">No matching results</td></tr>`; return; }
@@ -918,16 +918,16 @@ function renderAnomalies() {
   html += `<div class="card"><h2>🔴 Mismatches (${mism.length})</h2>`;
   if (mism.length === 0) html += `<div class="empty">None</div>`;
   else mism.forEach(r => {
-    html += `<div class="mismatch-card"><div class="title">${r.file}</div><div class="sub">NLColver: ${r.nlcolverResult} · ${DATA.meta.compareWith}: ${r.compareResult}</div></div>`;
+    html += `<div class="mismatch-card"><div class="title">${r.file}</div><div class="sub">Zolver: ${r.zolverResult} · ${DATA.meta.compareWith}: ${r.compareResult}</div></div>`;
   });
   html += `</div>`;
 
-  // Timeouts / Errors for NLColver
-  const nlcBad = DATA.rows.filter(r => r.nlcolverResult === 'timeout' || r.nlcolverResult === 'error' || r.nlcolverResult === 'killed');
-  html += `<div class="card"><h2>🟠 NLColver Timeout / Error (${nlcBad.length})</h2>`;
+  // Timeouts / Errors for Zolver
+  const nlcBad = DATA.rows.filter(r => r.zolverResult === 'timeout' || r.zolverResult === 'error' || r.zolverResult === 'killed');
+  html += `<div class="card"><h2>🟠 Zolver Timeout / Error (${nlcBad.length})</h2>`;
   if (nlcBad.length === 0) html += `<div class="empty">None</div>`;
   else html += `<div class="scroll-table" style="max-height:300px"><table><thead><tr><th>File</th><th>Result</th><th>Time</th></tr></thead><tbody>`
-    + nlcBad.slice(0,100).map(r => `<tr><td title="${r.file}">${r.file.length>60?r.file.slice(0,30)+'...'+r.file.slice(-25):r.file}</td><td>${badge(r.nlcolverResult, r.nlcolverResult)}</td><td>${r.nlcolverTime}s</td></tr>`).join('')
+    + nlcBad.slice(0,100).map(r => `<tr><td title="${r.file}">${r.file.length>60?r.file.slice(0,30)+'...'+r.file.slice(-25):r.file}</td><td>${badge(r.zolverResult, r.zolverResult)}</td><td>${r.zolverTime}s</td></tr>`).join('')
     + `</tbody></table></div>`;
   html += `</div>`;
 
@@ -943,8 +943,8 @@ function renderAnomalies() {
     const diffs = DATA.rows.filter(r => r.match === 'DIFF');
     html += `<div class="card"><h2>🟡 Diffs (${diffs.length})</h2>`;
     if (diffs.length === 0) html += `<div class="empty">None</div>`;
-    else html += `<div class="scroll-table" style="max-height:300px"><table><thead><tr><th>File</th><th>NLColver</th><th>${DATA.meta.compareWith}</th><th>Note</th></tr></thead><tbody>`
-      + diffs.slice(0,100).map(r => `<tr><td title="${r.file}">${r.file.length>50?r.file.slice(0,25)+'...'+r.file.slice(-20):r.file}</td><td>${badge(r.nlcolverResult, r.nlcolverResult)}</td><td>${badge(r.compareResult, r.compareResult)}</td><td>${r.note}</td></tr>`).join('')
+    else html += `<div class="scroll-table" style="max-height:300px"><table><thead><tr><th>File</th><th>Zolver</th><th>${DATA.meta.compareWith}</th><th>Note</th></tr></thead><tbody>`
+      + diffs.slice(0,100).map(r => `<tr><td title="${r.file}">${r.file.length>50?r.file.slice(0,25)+'...'+r.file.slice(-20):r.file}</td><td>${badge(r.zolverResult, r.zolverResult)}</td><td>${badge(r.compareResult, r.compareResult)}</td><td>${r.note}</td></tr>`).join('')
       + `</tbody></table></div>`;
     html += `</div>`;
   }
@@ -956,11 +956,11 @@ function renderCategories() {
   const container = document.getElementById('categories');
   const cats = DATA.categoryStats;
   if (cats.length === 0) { container.innerHTML = ''; return; }
-  let html = `<div class="section-title">📂 Category Statistics</div><div class="card"><div class="scroll-table"><table><thead><tr><th>Category</th><th>Count</th><th>NLColver SAT</th><th>NLColver UNSAT</th><th>NLColver T/O</th><th>NLColver Err</th>`;
+  let html = `<div class="section-title">📂 Category Statistics</div><div class="card"><div class="scroll-table"><table><thead><tr><th>Category</th><th>Count</th><th>Zolver SAT</th><th>Zolver UNSAT</th><th>Zolver T/O</th><th>Zolver Err</th>`;
   if (DATA.meta.hasCompare) html += `<th>${DATA.meta.compareWith} SAT</th><th>${DATA.meta.compareWith} UNSAT</th><th>${DATA.meta.compareWith} T/O</th><th>Mismatches</th>`;
   html += `</tr></thead><tbody>`;
   cats.forEach(c => {
-    const n = c.nlcolver;
+    const n = c.zolver;
     html += `<tr><td><strong>${c.name}</strong></td><td>${c.count}</td>`;
     html += `<td style="color:${COLORS.sat}">${n.sat||0}</td><td style="color:${COLORS.unsat}">${n.unsat||0}</td><td style="color:${COLORS.timeout}">${n.timeout||0}</td><td style="color:${COLORS.error}">${n.error||0}</td>`;
     if (DATA.meta.hasCompare) {
@@ -977,8 +977,8 @@ function renderCategories() {
 function renderTopSlow() {
   const container = document.getElementById('topslow');
   let html = `<div class="section-title">🐌 Top 50 Slowest</div><div class="grid cols-2">`;
-  // NLColver
-  html += `<div class="card"><h2>NLColver</h2><div class="scroll-table" style="max-height:400px"><table><thead><tr><th>#</th><th>Time</th><th>File</th></tr></thead><tbody>`;
+  // Zolver
+  html += `<div class="card"><h2>Zolver</h2><div class="scroll-table" style="max-height:400px"><table><thead><tr><th>#</th><th>Time</th><th>File</th></tr></thead><tbody>`;
   DATA.topSlowNlc.forEach((r,i) => {
     html += `<tr><td>${i+1}</td><td><strong>${r.time}s</strong></td><td title="${r.file}">${r.file.length>70?r.file.slice(0,35)+'...'+r.file.slice(-30):r.file}</td></tr>`;
   });
@@ -1035,7 +1035,7 @@ def _run_one_task(f: Path, solver: str, timeout: float, logic: str,
     if dump_stats_dir:
         h = hashlib.sha256(str(f).encode()).hexdigest()[:16]
         stats_path = str(dump_stats_dir / f"{h}.json")
-    res = run_nlcolver(f, solver, timeout, logic,
+    res = run_zolver(f, solver, timeout, logic,
                        dump_stats_path=stats_path, log_dir=log_dir)
     # Try to read stats JSON after solve
     if dump_stats_dir and stats_path:
@@ -1107,10 +1107,10 @@ def run_single_logic(args, logic: str, output_dir: Path):
     start_time = time.time()
 
     # -------------------------------------------------------------------------
-    # Run NLColver
+    # Run Zolver
     # -------------------------------------------------------------------------
-    nlcolver_results: List[RunResult] = []
-    print(f"\n[1/2] Running NLColver on {total} files ...")
+    zolver_results: List[RunResult] = []
+    print(f"\n[1/2] Running Zolver on {total} files ...")
 
     dump_stats_dir = Path(args.dump_stats_dir) if args.dump_stats_dir else None
     log_dir = Path(args.log_dir) if args.log_dir else None
@@ -1123,9 +1123,9 @@ def run_single_logic(args, logic: str, output_dir: Path):
         for i, f in enumerate(files, 1):
             res = _run_one_task(f, args.solver, args.timeout, logic,
                                 dump_stats_dir, log_dir)
-            nlcolver_results.append(res)
+            zolver_results.append(res)
             if args.verbose or i % 100 == 0 or i == total:
-                print(f"  NLColver: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
+                print(f"  Zolver: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
     else:
         with ProcessPoolExecutor(max_workers=args.jobs) as executor:
             futures = {
@@ -1136,10 +1136,10 @@ def run_single_logic(args, logic: str, output_dir: Path):
             completed = 0
             for future in as_completed(futures):
                 res = future.result()
-                nlcolver_results.append(res)
+                zolver_results.append(res)
                 completed += 1
                 if args.verbose or completed % 100 == 0 or completed == total:
-                    print(f"  NLColver: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
+                    print(f"  Zolver: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
 
     # -------------------------------------------------------------------------
     # Run comparison solver (if requested)
@@ -1173,7 +1173,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
     # -------------------------------------------------------------------------
     # Build comparison rows & statistics
     # -------------------------------------------------------------------------
-    nlcolver_map = {r.file: r for r in nlcolver_results}
+    zolver_map = {r.file: r for r in zolver_results}
     compare_map = {r.file: r for r in compare_res_list}
 
     rows: List[ComparisonRow] = []
@@ -1181,12 +1181,12 @@ def run_single_logic(args, logic: str, output_dir: Path):
 
     for f in files:
         fstr = str(f)
-        n = nlcolver_map[fstr]
+        n = zolver_map[fstr]
         c = compare_map.get(fstr, RunResult(file=fstr, result="skip", elapsed=0.0, solver="none"))
 
-        stats.nlcolver[n.result] += 1
-        stats.total_time_nlcolver += n.elapsed
-        stats.max_time_nlcolver = max(stats.max_time_nlcolver, n.elapsed)
+        stats.zolver[n.result] += 1
+        stats.total_time_zolver += n.elapsed
+        stats.max_time_zolver = max(stats.max_time_zolver, n.elapsed)
 
         if args.compare_with:
             stats.compare[c.result] += 1
@@ -1217,13 +1217,13 @@ def run_single_logic(args, logic: str, output_dir: Path):
         if cat not in stats.category_stats:
             stats.category_stats[cat] = {
                 "count": 0,
-                "nlcolver": defaultdict(int),
+                "zolver": defaultdict(int),
                 "compare": defaultdict(int),
                 "mismatches": 0,
                 "diffs": 0,
             }
         stats.category_stats[cat]["count"] += 1
-        stats.category_stats[cat]["nlcolver"][n.result] += 1
+        stats.category_stats[cat]["zolver"][n.result] += 1
         if args.compare_with:
             stats.category_stats[cat]["compare"][c.result] += 1
             if match == "MISMATCH":
@@ -1233,8 +1233,8 @@ def run_single_logic(args, logic: str, output_dir: Path):
 
         rows.append(ComparisonRow(
             file=fstr,
-            nlcolver_result=n.result,
-            nlcolver_time=n.elapsed,
+            zolver_result=n.result,
+            zolver_time=n.elapsed,
             compare_result=c.result,
             compare_time=c.elapsed,
             match=match,
@@ -1242,7 +1242,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
         ))
 
     if total > 0:
-        stats.avg_time_nlcolver = stats.total_time_nlcolver / total
+        stats.avg_time_zolver = stats.total_time_zolver / total
         if args.compare_with:
             stats.avg_time_compare = stats.total_time_compare / total
 
@@ -1255,11 +1255,11 @@ def run_single_logic(args, logic: str, output_dir: Path):
 
     write_summary(output_dir, stats, args, wall_time)
     write_csv(output_dir, rows)
-    write_errors(output_dir, nlcolver_results, compare_res_list if args.compare_with else None)
+    write_errors(output_dir, zolver_results, compare_res_list if args.compare_with else None)
     write_top_slow(output_dir, rows)
     if args.compare_with:
         write_discrepancies(output_dir, rows)
-    write_json_stats(output_dir, stats, rows, nlcolver_map)
+    write_json_stats(output_dir, stats, rows, zolver_map)
 
     # Write manifest
     if args.manifest_out:
@@ -1281,7 +1281,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
         f.write("=" * 70 + "\n\n")
         for cat, cstat in sorted(stats.category_stats.items()):
             f.write(f"[{cat}]  count={cstat['count']}\n")
-            f.write(f"  nlcolver: {dict(cstat['nlcolver'])}\n")
+            f.write(f"  zolver: {dict(cstat['zolver'])}\n")
             if args.compare_with:
                 f.write(f"  compare:  {dict(cstat['compare'])}\n")
                 f.write(f"  mismatches: {cstat['mismatches']}  diffs: {cstat['diffs']}\n")
@@ -1295,9 +1295,9 @@ def run_single_logic(args, logic: str, output_dir: Path):
     print(f"Logic:           {logic}")
     print(f"Files processed: {total}")
     print(f"Wall-clock time: {wall_time:.2f}s")
-    print(f"NLColver:")
+    print(f"Zolver:")
     for res in ["sat", "unsat", "unknown", "timeout", "error", "killed"]:
-        cnt = stats.nlcolver.get(res, 0)
+        cnt = stats.zolver.get(res, 0)
         print(f"  {res:12s}: {cnt:6d}")
     if args.compare_with:
         print(f"{args.compare_with}:")
@@ -1317,7 +1317,7 @@ def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args
     summary_path = output_dir / "all_logics_summary.txt"
     with open(summary_path, "w") as f:
         f.write("=" * 70 + "\n")
-        f.write("NLColver All-Logics Benchmark Report\n")
+        f.write("Zolver All-Logics Benchmark Report\n")
         f.write("=" * 70 + "\n\n")
         f.write(f"Date:     {datetime.now().isoformat()}\n")
         f.write(f"Solver:   {args.solver}\n")
@@ -1331,7 +1331,7 @@ def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args
         total_mismatches = 0
         total_diffs = 0
         for stats in all_stats:
-            n = stats.nlcolver
+            n = stats.zolver
             mism = stats.mismatches if args.compare_with else 0
             diff = stats.diffs if args.compare_with else 0
             total_mismatches += mism
@@ -1343,11 +1343,11 @@ def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args
 
         f.write("-" * 70 + "\n")
         f.write(f"{'TOTAL':<15} {sum(s.total_files for s in all_stats):>6} "
-                f"{sum(s.nlcolver.get('sat', 0) for s in all_stats):>6} "
-                f"{sum(s.nlcolver.get('unsat', 0) for s in all_stats):>6} "
-                f"{sum(s.nlcolver.get('unknown', 0) for s in all_stats):>6} "
-                f"{sum(s.nlcolver.get('timeout', 0) for s in all_stats):>6} "
-                f"{sum(s.nlcolver.get('error', 0) for s in all_stats):>6} "
+                f"{sum(s.zolver.get('sat', 0) for s in all_stats):>6} "
+                f"{sum(s.zolver.get('unsat', 0) for s in all_stats):>6} "
+                f"{sum(s.zolver.get('unknown', 0) for s in all_stats):>6} "
+                f"{sum(s.zolver.get('timeout', 0) for s in all_stats):>6} "
+                f"{sum(s.zolver.get('error', 0) for s in all_stats):>6} "
                 f"{total_mismatches:>6} {total_diffs:>6}\n")
         f.write("\n")
         if total_mismatches > 0:
@@ -1359,7 +1359,7 @@ def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args
 
 def main():
     parser = argparse.ArgumentParser(
-        description="NLColver Benchmark Runner",
+        description="Zolver Benchmark Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1374,7 +1374,7 @@ Examples:
     parser.add_argument("--all-logics", action="store_true", help="Run on all available logics in benchmark dir")
     parser.add_argument("-j", "--jobs", type=int, default=1, help="Number of parallel jobs (default: 1)")
     parser.add_argument("-t", "--timeout", type=float, default=30, help="Timeout per instance in seconds (default: 30)")
-    parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to nlcolver binary")
+    parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to zolver binary")
     parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
@@ -1399,7 +1399,7 @@ Examples:
 
     # Validate solver binary
     if not os.path.isfile(args.solver):
-        print(f"ERROR: NLColver binary not found: {args.solver}")
+        print(f"ERROR: Zolver binary not found: {args.solver}")
         sys.exit(1)
 
     if args.compare_with and not shutil.which(args.compare_with):

@@ -1,7 +1,7 @@
 #include "theory/euf/RollbackUnionFind.h"
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 EClassId RollbackUnionFind::addNode() {
     EClassId id = static_cast<EClassId>(parent_.size());
@@ -61,4 +61,4 @@ uint32_t RollbackUnionFind::classSize(EClassId root) const {
     return size_[r];
 }
 
-} // namespace nlcolver
+} // namespace zolver

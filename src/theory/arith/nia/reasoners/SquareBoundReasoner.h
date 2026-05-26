@@ -5,7 +5,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/core/TheorySolver.h"
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * SquareBoundReasoner: handles univariate square constraints of the form
@@ -38,4 +38,4 @@ private:
     NiaReasoningResult handleConstraint(const NormalizedNiaConstraint& c, DomainStore& domains);
 };
 
-} // namespace nlcolver
+} // namespace zolver

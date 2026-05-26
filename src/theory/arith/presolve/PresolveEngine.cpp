@@ -7,7 +7,7 @@
 #include "theory/arith/presolve/BoundChainComposer.h"
 #include "theory/arith/presolve/UnivariatePolySignAnalyzer.h"
 
-namespace nlcolver {
+namespace zolver {
 
 PresolveEngine::PresolveEngine(PolynomialKernel* kernel, bool integerDomain) {
     st_.kernel = kernel;
@@ -65,4 +65,4 @@ PresolveResult PresolveEngine::run() {
     return r;
 }
 
-} // namespace nlcolver
+} // namespace zolver

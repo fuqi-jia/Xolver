@@ -5,7 +5,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
@@ -206,4 +206,4 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
     return model;
 }
 
-} // namespace nlcolver
+} // namespace zolver

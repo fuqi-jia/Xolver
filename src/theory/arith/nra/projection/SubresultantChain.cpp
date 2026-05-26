@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -104,4 +104,4 @@ PscChainResult principalSubresultantCoefficients(
     return out;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <string>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Build an integer model from Bellman-Ford potentials.
@@ -91,4 +91,4 @@ buildRdlModel(const std::vector<RdlWeight>& dist,
     return model;
 }
 
-} // namespace nlcolver
+} // namespace zolver

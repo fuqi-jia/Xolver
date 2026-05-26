@@ -1,15 +1,15 @@
-<!-- AGENTS.md for NLColver — maintained for AI coding agents. -->
+<!-- AGENTS.md for Zolver — maintained for AI coding agents. -->
 <!-- Last updated: 2026-05-25 after full project exploration. -->
 
-# NLColver — AI Agent Notes
+# Zolver — AI Agent Notes
 
 ## Project Overview
 
-NLColver (**N**on**L**inear **Co**nstraint So**lver**) is a research-grade SMT/OMT solver platform with dual-engine architecture:
+Zolver (**N**on**L**inear **Co**nstraint So**lver**) is a research-grade SMT/OMT solver platform with dual-engine architecture:
 - **CDCL(T) / MCSAT** exact kernel for sound SAT/UNSAT reasoning
 - **Local Search Advisor** for heuristic guidance and OMT optimization
 
-Repository: `https://github.com/fuqi-jia/NLColver.git`
+Repository: `https://github.com/fuqi-jia/Zolver.git`
 
 ## Current Status
 
@@ -92,12 +92,12 @@ Branch lemma or Unknown
 ## Directory Layout
 
 ```
-NLColver/
+Zolver/
 ├── third_party/
 │   ├── SOMTParser/          # Git submodule — SMT/OMT parser + typed DAG IR
 │   ├── cadical/             # Git submodule — SAT backend (CaDiCaL)
 │   └── libpoly/             # Git submodule — polynomial kernel (SRI)
-├── include/nlcolver/        # Public C++ API headers (pImpl boundary)
+├── include/zolver/        # Public C++ API headers (pImpl boundary)
 │   ├── Result.h
 │   ├── Solver.h
 │   ├── Sort.h
@@ -151,7 +151,7 @@ NLColver/
 │   ├── unit/                # doctest unit tests (~54 C++ files)
 │   └── CMakeLists.txt
 ├── tools/
-│   ├── cli/                 # nlcolver command-line binary (main.cpp)
+│   ├── cli/                 # zolver command-line binary (main.cpp)
 │   ├── run_benchmark.py     # Python benchmark runner (HTML reports, Z3 cross-check)
 │   ├── run_regression.py    # Regression test runner (CTest-integrated)
 │   ├── analyze_benchmark.py # Post-process benchmark results
@@ -186,10 +186,10 @@ CMake 3.16+, C++20 (standard required, extensions OFF). Default build type is `R
 | File | Purpose |
 |------|---------|
 | `CMakeLists.txt` (root) | Project definition, options, dependency discovery (GMP/MPFR), submodule wiring (CaDiCaL external, libpoly subdir, SOMTParser subdir), FetchContent for nlohmann/json, static-build flags |
-| `src/CMakeLists.txt` | `nlcolver_core` static library via `file(GLOB_RECURSE ...)`; links CaDiCaL, libpoly, SOMTParser, GMP, MPFR, nlohmann_json; applies compile definitions for build options |
-| `tests/CMakeLists.txt` | doctest fetch, `nlcolver_unit_tests` executable, CTest regression entries (one per logic) driven by `tools/run_regression.py` |
+| `src/CMakeLists.txt` | `zolver_core` static library via `file(GLOB_RECURSE ...)`; links CaDiCaL, libpoly, SOMTParser, GMP, MPFR, nlohmann_json; applies compile definitions for build options |
+| `tests/CMakeLists.txt` | doctest fetch, `zolver_unit_tests` executable, CTest regression entries (one per logic) driven by `tools/run_regression.py` |
 | `tools/CMakeLists.txt` | Delegates to `tools/cli/CMakeLists.txt` |
-| `tools/cli/CMakeLists.txt` | `nlcolver-cli` executable (output name `nlcolver`), links `nlcolver_core` |
+| `tools/cli/CMakeLists.txt` | `zolver-cli` executable (output name `zolver`), links `zolver_core` |
 | `.gitmodules` | Three submodules: `third_party/SOMTParser`, `third_party/cadical`, `third_party/libpoly` |
 
 ### Build Commands
@@ -223,15 +223,15 @@ ctest
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `NLCOLVER_BUILD_TESTS` | ON | Build unit tests and regression suite |
-| `NLCOLVER_BUILD_TOOLS` | ON | Build CLI tools |
-| `NLCOLVER_ENABLE_PROOFS` | ON | Enable proof production infrastructure |
-| `NLCOLVER_ENABLE_TRACING` | ON | Enable trace/recording for learning |
-| `NLCOLVER_ENABLE_LRA_PROFILE` | OFF | LRA solver profiling |
-| `NLCOLVER_ENABLE_LIA_PROFILE` | OFF | LIA solver profiling |
-| `NLCOLVER_ENABLE_CASESTATS` | OFF | Per-case statistics collection |
-| `NLCOLVER_BUILD_LIBPOLY_TESTS` | OFF | Build libpoly's own tests (slower) |
-| `NLCOLVER_STATIC_BUILD` | OFF | Static linking (`-static -pthread`) |
+| `ZOLVER_BUILD_TESTS` | ON | Build unit tests and regression suite |
+| `ZOLVER_BUILD_TOOLS` | ON | Build CLI tools |
+| `ZOLVER_ENABLE_PROOFS` | ON | Enable proof production infrastructure |
+| `ZOLVER_ENABLE_TRACING` | ON | Enable trace/recording for learning |
+| `ZOLVER_ENABLE_LRA_PROFILE` | OFF | LRA solver profiling |
+| `ZOLVER_ENABLE_LIA_PROFILE` | OFF | LIA solver profiling |
+| `ZOLVER_ENABLE_CASESTATS` | OFF | Per-case statistics collection |
+| `ZOLVER_BUILD_LIBPOLY_TESTS` | OFF | Build libpoly's own tests (slower) |
+| `ZOLVER_STATIC_BUILD` | OFF | Static linking (`-static -pthread`) |
 
 ### Automatic File Discovery
 
@@ -249,18 +249,18 @@ ctest
 | nlohmann/json | ✅ | FetchContent (GitHub) | v3.11.3. Fatal if network unavailable. |
 | doctest | ✅ (for tests) | FetchContent (GitHub) | v2.4.11. Tests skip if unavailable. |
 
-When wiring code into `poly/`, gate it behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback.
+When wiring code into `poly/`, gate it behind `#ifdef ZOLVER_HAS_LIBPOLY` and provide a stub fallback.
 
-Compiler flags (`-Wall -Wextra -Wpedantic -Wno-unused-parameter`) are applied **only** to `nlcolver_core`, not vendor code. Do not suppress other warnings — fix the root cause.
+Compiler flags (`-Wall -Wextra -Wpedantic -Wno-unused-parameter`) are applied **only** to `zolver_core`, not vendor code. Do not suppress other warnings — fix the root cause.
 
 ## Code Style Guidelines
 
 - **C++20 minimum.** `set(CMAKE_CXX_STANDARD 20)`, extensions OFF. No GCC-isms.
-- **Namespace:** All library code lives in `namespace nlcolver { ... }`.
+- **Namespace:** All library code lives in `namespace zolver { ... }`.
 - **Typed IDs:** Use `uint32_t` IDs for everything hash-consed: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId`. Each has a `NullX` sentinel in `src/expr/types.h`. Do not introduce parallel ID schemes.
-- **pImpl pattern:** Used at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/nlcolver/`.
+- **pImpl pattern:** Used at the public-API boundary (`Solver::Impl`). Keep heavy includes (libpoly, CaDiCaL) out of `include/zolver/`.
 - **Includes:**
-  - Public headers use `<nlcolver/...>`.
+  - Public headers use `<zolver/...>`.
   - Internal headers use relative paths.
 - **Containers:** `SmallVector<T, 4>` (in `src/util/SmallVector.h`) is the default container for short child-lists on `CoreExpr` nodes. Use it instead of `std::vector` where N is typically small.
 - **Header guards:** All headers use `#pragma once`.
@@ -316,13 +316,13 @@ ctest
 ctest -R unit
 
 # Run unit test binary directly
-./build/tests/nlcolver_unit_tests
+./build/tests/zolver_unit_tests
 
 # Single test case
-./build/tests/nlcolver_unit_tests --test-case="NIA-Core: x^2 = 4 -> sat"
+./build/tests/zolver_unit_tests --test-case="NIA-Core: x^2 = 4 -> sat"
 
 # List all test cases
-./build/tests/nlcolver_unit_tests -ltc
+./build/tests/zolver_unit_tests -ltc
 ```
 
 ### Regression Tests
@@ -352,12 +352,12 @@ When a bug is fixed, **delete the corresponding line** from `KNOWN_FAILURES.md`.
 
 ```bash
 # Explicit solve subcommand
-./build/bin/nlcolver solve tests/regression/nia/nia_001_sat_x2_eq_4.smt2
-./build/bin/nlcolver solve tests/regression/nia/nia_002_unsat_x2_eq_2.smt2
-./build/bin/nlcolver solve tests/regression/euf/euf_001_sat_basic_eq.smt2
+./build/bin/zolver solve tests/regression/nia/nia_001_sat_x2_eq_4.smt2
+./build/bin/zolver solve tests/regression/nia/nia_002_unsat_x2_eq_2.smt2
+./build/bin/zolver solve tests/regression/euf/euf_001_sat_basic_eq.smt2
 
 # Default mode (no subcommand)
-./build/bin/nlcolver tests/regression/nia/nia_001_sat_x2_eq_4.smt2
+./build/bin/zolver tests/regression/nia/nia_001_sat_x2_eq_4.smt2
 ```
 
 ### Benchmark Runner
@@ -377,13 +377,13 @@ Outputs `summary.txt`, `results.csv`, `report.html`, `discrepancies.txt`, `error
 
 ## Deployment
 
-The project produces a standalone CLI binary (`nlcolver`). A pre-built binary is occasionally kept in `bin/nlcolver` and packaged as `nlcolver-dist.tar.gz`. The `tools/deploy_and_run.sh` script supports remote execution. `run_euf_validation.sh` runs cross-logic benchmark validation with Z3 comparison.
+The project produces a standalone CLI binary (`zolver`). A pre-built binary is occasionally kept in `bin/zolver` and packaged as `zolver-dist.tar.gz`. The `tools/deploy_and_run.sh` script supports remote execution. `run_euf_validation.sh` runs cross-logic benchmark validation with Z3 comparison.
 
 ## Security Considerations
 
 - Public repository on GitHub — no secrets, credentials, or proprietary data.
 - No CI/CD pipeline configured yet.
-- `reference/cvc5/` and `reference/z3/` contain upstream source copies for reading only; they are not linked into the build and must not be copied into NLColver source.
+- `reference/cvc5/` and `reference/z3/` contain upstream source copies for reading only; they are not linked into the build and must not be copied into Zolver source.
 
 ## Notes for Agents
 
@@ -395,7 +395,7 @@ The project produces a standalone CLI binary (`nlcolver`). A pre-built binary is
 
 4. **SOMTParser is a git submodule.** If it appears empty, run `git submodule update --init --recursive`.
 
-5. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `NLCOLVER_HAS_CADICAL` / `NLCOLVER_HAS_LIBPOLY` macros.
+5. **CaDiCaL and libpoly are vendored submodules.** The build system builds them automatically and defines `ZOLVER_HAS_CADICAL` / `ZOLVER_HAS_LIBPOLY` macros.
 
 6. **Directory structure is intentionally flat.** `theory/arith/` aggregates all arithmetic; `search/` aggregates local search + strategy; `expr/` aggregates core IR. Do not reintroduce fine-grained top-level directories.
 

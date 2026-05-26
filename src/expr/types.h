@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace nlcolver {
+namespace zolver {
 
 using ExprId  = uint32_t;
 using SortId  = uint32_t;
@@ -40,4 +40,4 @@ enum class SortKind : uint8_t {
     Bool, Int, Real, BV, FP, Array, Other
 };
 
-} // namespace nlcolver
+} // namespace zolver

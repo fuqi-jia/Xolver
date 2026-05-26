@@ -3,7 +3,7 @@
 #include "theory/arith/nra/valuation/RootMembershipOracle.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"
 
-namespace nlcolver {
+namespace zolver {
 
 TowerNormResult towerNorm(const RationalPolynomial& F, VarId mainVar,
                           const TowerContext& ctx, int maxMatrixDim) {
@@ -60,4 +60,4 @@ TowerRootResult isolateRealRootsInTower(const RationalPolynomial& F, VarId mainV
     return out;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

@@ -11,7 +11,7 @@
 #include <map>
 #include <functional>
 
-namespace nlcolver {
+namespace zolver {
 
 static int noDebugModelCheckId = 0;
 
@@ -510,4 +510,4 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     return aggregated;
 }
 
-} // namespace nlcolver
+} // namespace zolver

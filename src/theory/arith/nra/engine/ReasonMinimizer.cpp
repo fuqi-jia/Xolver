@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Validation
@@ -100,4 +100,4 @@ std::vector<SatLit> ReasonMinimizer::minimize(
     return minimizeL0(reasons);
 }
 
-} // namespace nlcolver
+} // namespace zolver

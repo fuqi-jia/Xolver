@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 RationalPolynomial substituteVar(const RationalPolynomial& p, VarId v,
                                  const RationalPolynomial& value) {
@@ -153,4 +153,4 @@ bool relationHoldsForConstant(const mpq_class& c, Relation rel) {
     return false;
 }
 
-} // namespace nlcolver
+} // namespace zolver

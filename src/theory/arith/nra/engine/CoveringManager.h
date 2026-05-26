@@ -3,7 +3,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 class AlgebraBackend;
 
@@ -32,4 +32,4 @@ public:
     static CellLookupResult cellContaining(AlgebraBackend* algebra, VarId var, const RealAlg& sample, const RootSet& roots);
 };
 
-} // namespace nlcolver
+} // namespace zolver

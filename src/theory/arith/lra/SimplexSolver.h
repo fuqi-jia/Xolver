@@ -3,6 +3,6 @@
 // Backward compatibility alias: SimplexSolver -> LraSolver
 #include "theory/arith/lra/LraSolver.h"
 
-namespace nlcolver {
+namespace zolver {
 using SimplexSolver = LraSolver;
-} // namespace nlcolver
+} // namespace zolver

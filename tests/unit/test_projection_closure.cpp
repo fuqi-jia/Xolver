@@ -8,7 +8,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/projection/ProjectionClosure.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 static VarId X = VarId{1}, Y = VarId{2}, Z = VarId{3};
 

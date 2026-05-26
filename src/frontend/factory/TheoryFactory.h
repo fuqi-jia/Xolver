@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * TheoryFactory: central factory for creating and registering concrete theory solvers.
@@ -37,4 +37,4 @@ SolverSetupResult setupSolvers(
     bool liaEnableGcdIneq = false,
     bool liaEnableEqGcdNorm = false);
 
-} // namespace nlcolver
+} // namespace zolver

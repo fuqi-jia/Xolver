@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "theory/arith/nra/core/CdcacObjective.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("V8: BooleanAwareConflict type exists") {
     BooleanAwareConflict bac;

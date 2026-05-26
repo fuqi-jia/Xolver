@@ -1,7 +1,7 @@
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include <stdexcept>
 
-namespace nlcolver {
+namespace zolver {
 
 UnconditionalConstantPropagation::UnconditionalConstantPropagation(CoreIr& ir)
     : ir_(ir),
@@ -592,4 +592,4 @@ void UnconditionalConstantPropagation::commit() {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,7 +2,7 @@
 
 #include "theory/arith/nra/core/CdcacTypes.h"
 
-namespace nlcolver {
+namespace zolver {
 
 class LibpolyBackend;
 
@@ -32,4 +32,4 @@ private:
     LibpolyBackend& backend_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

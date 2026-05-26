@@ -4,7 +4,7 @@
 #include <vector>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 class SquareCutGenerator {
 public:
@@ -19,4 +19,4 @@ public:
         bool emitTangent = true);
 };
 
-} // namespace nlcolver
+} // namespace zolver

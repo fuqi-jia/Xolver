@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // Principal subresultant coefficient (PSC) chain — the algebraic core of an
@@ -49,4 +49,4 @@ PscChainResult principalSubresultantCoefficients(
     VarId v,
     int maxMatrixDim = 9);
 
-} // namespace nlcolver
+} // namespace zolver

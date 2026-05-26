@@ -7,11 +7,11 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 namespace debug {
 
 inline bool noDebugEnabled() {
-    const char* v = std::getenv("NLCOLVER_NO_DEBUG");
+    const char* v = std::getenv("ZOLVER_NO_DEBUG");
     return v && std::string(v) != "0";
 }
 
@@ -33,6 +33,6 @@ inline std::string fmtClause(const std::vector<SatLit>& lits) {
 }
 
 } // namespace debug
-} // namespace nlcolver
+} // namespace zolver
 
-#define NO_DBG if (!nlcolver::debug::noDebugEnabled()) {} else std::cerr
+#define NO_DBG if (!zolver::debug::noDebugEnabled()) {} else std::cerr

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 Atomizer::Atomizer(SatSolver& sat) : sat_(sat) {}
 
@@ -376,4 +376,4 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <functional>
 
-namespace nlcolver {
+namespace zolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
     initializeBoolConstants();
@@ -922,4 +922,4 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

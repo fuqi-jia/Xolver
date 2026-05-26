@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * CoreIteLowerer: pure IR-to-IR pass that eliminates ExprKind::Ite.
@@ -70,4 +70,4 @@ private:
     std::vector<ExprId> generatedAssertions_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

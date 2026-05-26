@@ -1,7 +1,7 @@
 #include "theory/arith/nra/valuation/LazardLifter.h"
 #include "theory/arith/nra/valuation/TowerRootIsolation.h"   // isolateRealRootsInTower
 
-namespace nlcolver {
+namespace zolver {
 
 // Increment 1 — sound but conservative. The exact oracle's gcd-based Keep test
 // assumes its defPoly is the candidate's MINIMAL rational poly (Q-irreducible).
@@ -37,4 +37,4 @@ LazardLiftResult lazardLift(const std::vector<RationalPolynomial>& polys,
     return out;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

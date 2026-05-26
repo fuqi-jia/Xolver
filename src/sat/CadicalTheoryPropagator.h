@@ -5,11 +5,11 @@
 #include <chrono>
 #include <deque>
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
 #endif
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Search statistics collected during SAT + theory solving.
@@ -95,7 +95,7 @@ public:
 
     const TheorySearchStats& stats() const { return stats_; }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     // --- CaseStats integration ---
     void setCaseStats(CaseStats* stats) { caseStats_ = stats; }
     void setDumpStatsBasePath(const std::string& path) { dumpStatsBasePath_ = path; }
@@ -123,7 +123,7 @@ private:
 
     TheorySearchStats stats_;
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     CaseStats* caseStats_ = nullptr;
     std::string dumpStatsBasePath_;
     HeartbeatWriter heartbeatWriter_;
@@ -131,7 +131,7 @@ private:
 
     CadicalAssignmentView& assignmentView() { return assignmentView_; }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     void updateCaseStatsSearch();
 #endif
 
@@ -141,4 +141,4 @@ private:
     bool isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

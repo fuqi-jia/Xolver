@@ -1,12 +1,12 @@
 #include "theory/arith/linear/LinearAtomManager.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 bool LinearAtomManager::extractLinearConstraint(ExprId eid, const CoreIr& ir,
                                                  std::unordered_map<std::string, mpq_class>& coeffs,
                                                  mpq_class& rhs, Relation& rel) const {
-    return nlcolver::extractLinearConstraint(eid, ir, coeffs, rhs, rel);
+    return zolver::extractLinearConstraint(eid, ir, coeffs, rhs, rel);
 }
 
 int LinearAtomManager::getOrCreateVar(GeneralSimplex& gs, const std::string& name) {
@@ -48,7 +48,7 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
 
 bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
                                     bool value, SatLit reasonLit, int level) {
-    Relation effective = value ? rel : nlcolver::negateRelation(rel);
+    Relation effective = value ? rel : zolver::negateRelation(rel);
 
     bool ok = true;
     switch (effective) {
@@ -88,4 +88,4 @@ TheoryConflict LinearAtomManager::translateConflict(const GeneralSimplex& gs) co
     return tc;
 }
 
-} // namespace nlcolver
+} // namespace zolver

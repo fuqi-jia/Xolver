@@ -11,7 +11,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace nlcolver {
+namespace zolver {
 
 struct PendingMerge {
     EufTermId a;
@@ -123,4 +123,4 @@ private:
 #endif
 };
 
-} // namespace nlcolver
+} // namespace zolver

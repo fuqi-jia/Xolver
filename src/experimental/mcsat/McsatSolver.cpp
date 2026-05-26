@@ -1,6 +1,6 @@
 #include "experimental/mcsat/McsatSolver.h"
 
-namespace nlcolver {
+namespace zolver {
 
 McsatSolver::McsatSolver() = default;
 
@@ -25,4 +25,4 @@ void McsatSolver::setAdvisor(std::shared_ptr<LocalSearchAdvisor> advisor) {
     advisor_ = std::move(advisor);
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -13,7 +13,7 @@
 #include <fstream>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 LraSolver::LraSolver() {
     // Phase 2: single core reasoner (incremental replay + interface eqs +
@@ -24,7 +24,7 @@ LraSolver::LraSolver() {
 }
 
 LraSolver::~LraSolver() {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -42,7 +42,7 @@ void LraSolver::onPop(uint32_t n) {
 }
 
 void LraSolver::onReset() {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -142,7 +142,7 @@ bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
 std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     NO_DBG << "[LRA] check begin\n";
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     profile_.checkCalls++;
     int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
     profile_.totalActiveLiterals += currentActive;
@@ -172,7 +172,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (!ok) {
             auto tc = manager_.translateConflict(gs_);
             NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -183,7 +183,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
     auto prof_t2 = prof_t1;
@@ -207,7 +207,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
                 NO_DBG << "[LRA] IEQ immediate conflict reasons: " << debug::fmtClause(tc.clause) << "\n";
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
                 int sz = static_cast<int>(tc.clause.size());
                 profile_.totalConflictSize += sz;
                 if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -221,7 +221,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto r = gs_.check();
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     auto prof_t3 = std::chrono::steady_clock::now();
     profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
     profile_.totalPivotCount += gs_.pivotCount();
@@ -249,7 +249,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             assert(ok && "complementary literal in theory conflict clause");
             (void)ok;
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -262,7 +262,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         } else {
             tc.clause = allActiveReasons();
             NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -317,7 +317,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     std::vector<DiseqInfo> disequalities = activeDisequalities_;
 
     if (!disequalities.empty()) {
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif
         return handleSimplexDisequalities(
@@ -606,7 +606,7 @@ std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
     return model;
 }
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
 void LraSolver::ProfileStats::dump() const {
     int totalConflicts = fallbackConflictCount + immediateConflictCount + rowConflictCount;
     std::ofstream ofs("/tmp/lra_profile.log", std::ios::app);
@@ -634,4 +634,4 @@ void LraSolver::ProfileStats::dump() const {
 }
 #endif
 
-} // namespace nlcolver
+} // namespace zolver

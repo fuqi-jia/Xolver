@@ -3,7 +3,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // V7: Proof IDs (index-based, serializable)
@@ -88,4 +88,4 @@ struct CdcacProof {
     std::vector<CellSignInvariantProof> cellSignProofs;
 };
 
-} // namespace nlcolver
+} // namespace zolver

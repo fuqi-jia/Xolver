@@ -1,7 +1,7 @@
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -196,4 +196,4 @@ int countRealRootsIn(const RationalPolynomial& p, VarId x,
     return signVariations(chain, lo) - signVariations(chain, hi);
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

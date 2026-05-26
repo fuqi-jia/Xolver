@@ -22,7 +22,7 @@
 #include <memory>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // One working atom: poly rel 0, with its reason DAG node.
 struct PresolveAtom {
@@ -131,4 +131,4 @@ private:
     std::vector<std::unique_ptr<PresolveCapability>> caps_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

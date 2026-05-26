@@ -3,7 +3,7 @@
 #include <string>
 #include <ostream>
 
-namespace nlcolver {
+namespace zolver {
 
 enum class Result {
     Sat,
@@ -24,4 +24,4 @@ inline std::ostream& operator<<(std::ostream& os, Result r) {
     return os << toString(r);
 }
 
-} // namespace nlcolver
+} // namespace zolver

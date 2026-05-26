@@ -4,7 +4,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * SquareContractorZ: recognizes x^2 - c rel 0 pattern for NIA.
@@ -29,4 +29,4 @@ private:
     bool recognizePattern(int& sign, mpz_class& c) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

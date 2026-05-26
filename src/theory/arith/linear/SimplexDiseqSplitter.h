@@ -5,7 +5,7 @@
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Unified disequality handler for simplex-based solvers (LRA, LIA).
@@ -44,4 +44,4 @@ TheoryCheckResult handleSimplexDisequalities(
     return TheoryCheckResult::consistent();
 }
 
-} // namespace nlcolver
+} // namespace zolver

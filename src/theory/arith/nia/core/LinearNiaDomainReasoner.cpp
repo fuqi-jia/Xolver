@@ -1,6 +1,6 @@
 #include "theory/arith/nia/core/LinearNiaDomainReasoner.h"
 
-namespace nlcolver {
+namespace zolver {
 
 LinearNiaDomainReasoner::LinearNiaDomainReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -215,4 +215,4 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace nlcolver
+} // namespace zolver

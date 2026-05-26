@@ -7,7 +7,7 @@
 #include <vector>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ActiveLinearAtom: record of an asserted theory literal for validation.
@@ -60,4 +60,4 @@ private:
     bool satisfiesRelation(const DeltaRational& val, Relation rel, bool value);
 };
 
-} // namespace nlcolver
+} // namespace zolver

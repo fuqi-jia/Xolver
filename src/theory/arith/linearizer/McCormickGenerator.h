@@ -3,7 +3,7 @@
 #include "theory/arith/linearizer/LinearizationTypes.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 class McCormickGenerator {
 public:
@@ -16,4 +16,4 @@ public:
         SatLit nonlinearReason);
 };
 
-} // namespace nlcolver
+} // namespace zolver

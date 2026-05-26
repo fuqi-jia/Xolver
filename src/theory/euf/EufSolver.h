@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 class EufSolver : public TheorySolver {
 public:
@@ -140,4 +140,4 @@ private:
     std::vector<ArrayReasoner::ArrayDiseq> activeArrayDiseqs() const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

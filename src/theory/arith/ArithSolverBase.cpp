@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 ArithSolverBase::ArithSolverBase() = default;
 ArithSolverBase::~ArithSolverBase() = default;
@@ -102,4 +102,4 @@ void ArithSolverBase::reset() {
     onReset();
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -223,4 +223,4 @@ std::vector<SatLit> DerivationLedger::flattenReasons(size_t index) const {
     return flattenReasons(facts_[index].reasons);
 }
 
-} // namespace nlcolver
+} // namespace zolver

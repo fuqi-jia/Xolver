@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 using EdgeId = size_t;
 
@@ -95,4 +95,4 @@ private:
     std::vector<std::vector<EdgeId>> outgoing_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

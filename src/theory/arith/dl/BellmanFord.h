@@ -4,7 +4,7 @@
 #include <vector>
 #include <limits>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Bellman-Ford result: potentials or a negative cycle.
@@ -77,4 +77,4 @@ private:
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

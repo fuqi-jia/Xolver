@@ -6,7 +6,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * NiaIcpAdapter: bridges DomainStore/NiaSolver to IcpEngineZ.
@@ -26,4 +26,4 @@ private:
     DomainStore& store_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

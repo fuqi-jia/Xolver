@@ -11,7 +11,7 @@
 #include <unordered_set>
 #include <deque>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry;
 class SatSolver;
@@ -116,4 +116,4 @@ private:
     void discardSnapshotsAbove(int level);
 };
 
-} // namespace nlcolver
+} // namespace zolver

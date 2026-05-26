@@ -1,10 +1,10 @@
 ---
-description: "Implement a NLColver subsystem from plan.md. Use when adding a new src/ component, stubbing an interface, or fleshing out an existing skeleton following the Stage A–K roadmap."
+description: "Implement a Zolver subsystem from plan.md. Use when adding a new src/ component, stubbing an interface, or fleshing out an existing skeleton following the Stage A–K roadmap."
 agent: "agent"
 argument-hint: "Subsystem name or plan.md section, e.g. 'expr/Rewriter §2.3' or 'sat/CaDiCaL wrapper §4'"
 ---
 
-# Implement NLColver Subsystem
+# Implement Zolver Subsystem
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ This populates `third_party/SOMTParser/`. If the directory is empty, run this co
 
 ## Context
 
-You are implementing a component of **NLColver**, a research-grade C++17 SMT/OMT solver platform.
+You are implementing a component of **Zolver**, a research-grade C++17 SMT/OMT solver platform.
 The canonical design document is [plan.md](../../plan.md).
 Code conventions and architectural invariants are in [CLAUDE.md](../../CLAUDE.md).
 
@@ -55,12 +55,12 @@ Before writing any code:
 
 ## Step 3 — Code conventions
 
-- Namespace: `namespace nlcolver { ... }` for all library code.
+- Namespace: `namespace zolver { ... }` for all library code.
 - Typed IDs: `ExprId`, `SortId`, `VarId`, `AtomId`, `PolyId`, `ClauseId`, `ProofId` — all `uint32_t`, defined in `src/expr/types.h`. Null sentinels: `NullExpr`, `NullSort`, etc.
 - `pImpl` at public-API boundary (`Solver::Impl`). Keep libpoly / CaDiCaL headers out of `include/`.
 - Standard: C++17 only, no GCC-isms, no compiler extensions.
 - Containers: prefer `SmallVector<T, N>` (from `src/util/SmallVector.h`) for short child-lists.
-- Optional backend: gate libpoly code behind `#ifdef NLCOLVER_HAS_LIBPOLY` and provide a stub fallback. CaDiCaL is mandatory (build fails if missing).
+- Optional backend: gate libpoly code behind `#ifdef ZOLVER_HAS_LIBPOLY` and provide a stub fallback. CaDiCaL is mandatory (build fails if missing).
 - Warnings: code must compile clean under `-Wall -Wextra -Wpedantic`. Only `-Wno-unused-parameter` is whitelisted.
 - No new CMakeLists edits needed: `src/CMakeLists.txt` uses `GLOB_RECURSE CONFIGURE_DEPENDS`, so new `.cpp`/`.h` files are picked up automatically.
 
@@ -70,7 +70,7 @@ Before writing any code:
 
 For each file you create or modify:
 
-1. **Header** (`.h` under `src/<subsystem>/` or `include/nlcolver/`):
+1. **Header** (`.h` under `src/<subsystem>/` or `include/zolver/`):
    - Forward-declare types; keep includes minimal.
    - Document each public type/function with a one-line comment stating its role.
 

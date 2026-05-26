@@ -1,7 +1,7 @@
 #pragma once
 #include "theory/arith/nra/core/CdcacCommon.h"
 
-namespace nlcolver {
+namespace zolver {
 
 struct AlgebraicRoot {
     UniPolyId definingPoly = NullUniPolyId;
@@ -110,4 +110,4 @@ struct ExtRealAlg {
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

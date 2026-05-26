@@ -8,7 +8,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 enum class PolyConstraintStatus {
     Constraint,            // normal polynomial constraint
@@ -19,7 +19,7 @@ enum class PolyConstraintStatus {
 };
 
 /**
- * Convert NLColver CoreIr arithmetic expressions into PolyId polynomials
+ * Convert Zolver CoreIr arithmetic expressions into PolyId polynomials
  * via a PolynomialKernel.
  *
  * Design: two-phase conversion.
@@ -69,4 +69,4 @@ private:
     std::optional<RationalPolynomial> collectRec(ExprId eid, const CoreIr& ir);
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -15,10 +15,10 @@
 #include <sstream>
 #include <map>
 
-namespace nlcolver {
+namespace zolver {
 
 LiaSolver::LiaSolver() {
-    const char* env = std::getenv("NLCOLVER_LIA_DUMP_DIR");
+    const char* env = std::getenv("ZOLVER_LIA_DUMP_DIR");
     if (env) {
         dumpCounter_ = 0;
     }
@@ -30,7 +30,7 @@ LiaSolver::LiaSolver() {
 }
 
 LiaSolver::~LiaSolver() {
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -141,7 +141,7 @@ void LiaSolver::onBacktrack(int level) {
 std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     pendingConflict_.reset();
 
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
     profile_.checkCalls++;
     int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
     profile_.totalActiveLiterals += currentActive;
@@ -151,7 +151,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
 
-#ifndef NLCOLVER_LIA_INCREMENTAL
+#ifndef ZOLVER_LIA_INCREMENTAL
     // -------------------------------------------------------------------------
     // Full-rebuild mode (baseline for comparison)
     // -------------------------------------------------------------------------
@@ -201,7 +201,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 #endif
 
     if (pendingConflict_) {
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
         auto prof_t1 = std::chrono::steady_clock::now();
         profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
         int sz = static_cast<int>(pendingConflict_->conflict.clause.size());
@@ -221,13 +221,13 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
 
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
     auto prof_t2 = prof_t1;
 #endif
 
-#ifdef NLCOLVER_LIA_INCREMENTAL
+#ifdef ZOLVER_LIA_INCREMENTAL
     // Rebuild integerVars_ from activeAtoms_ and disequalities_ (low overhead)
     integerVars_.clear();
     for (const auto& a : activeAtoms_) {
@@ -256,7 +256,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
                 auto prof_t3 = std::chrono::steady_clock::now();
                 profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
                 int sz = static_cast<int>(tc.clause.size());
@@ -274,7 +274,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto r = gs_.check();
 
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
     auto prof_t3 = std::chrono::steady_clock::now();
     profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
     profile_.totalPivotCount += gs_.pivotCount();
@@ -297,7 +297,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             for (const auto& cr : conflict) {
                 tc.clause.push_back(cr.reason);
             }
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -309,7 +309,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 #endif
         } else {
             tc.clause = allActiveReasons();
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -376,7 +376,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (effort == TheoryEffort::Full && !disequalities_.empty()) {
             auto dr = handleDisequalities(lemmaDb);
             if (dr.kind != TheoryCheckResult::Kind::Consistent) {
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
                 if (dr.kind == TheoryCheckResult::Kind::Lemma) {
                     profile_.disequalitySplitCount++;
                 }
@@ -388,7 +388,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb);
 
-#ifdef NLCOLVER_LIA_PROFILE
+#ifdef ZOLVER_LIA_PROFILE
     auto prof_t5 = std::chrono::steady_clock::now();
     profile_.integralityCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t5 - prof_t4).count();
     if (ir.kind == TheoryCheckResult::Kind::Lemma) {
@@ -981,7 +981,7 @@ std::string LiaSolver::linearFormToSmtLib(const LinearFormKey& form) {
 }
 
 void LiaSolver::dumpState(const std::string& tag) const {
-    const char* env = std::getenv("NLCOLVER_LIA_DUMP_DIR");
+    const char* env = std::getenv("ZOLVER_LIA_DUMP_DIR");
     if (!env || !*env) return;
     std::filesystem::path dir(env);
     if (!std::filesystem::exists(dir)) {
@@ -1040,11 +1040,11 @@ void LiaSolver::dumpState(const std::string& tag) const {
 }
 
 std::optional<bool> LiaSolver::z3CheckCurrentState() const {
-    const char* env = std::getenv("NLCOLVER_LIA_Z3_CHECK");
+    const char* env = std::getenv("ZOLVER_LIA_Z3_CHECK");
     if (!env || !*env) return std::nullopt;
 
     std::filesystem::path tmpDir = std::filesystem::temp_directory_path();
-    std::string base = "nlcolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
+    std::string base = "zolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
     std::filesystem::path smtPath = tmpDir / (base + ".smt2");
     std::filesystem::path outPath = tmpDir / (base + ".out");
 
@@ -1106,4 +1106,4 @@ std::optional<bool> LiaSolver::z3CheckCurrentState() const {
     return isSat;
 }
 
-} // namespace nlcolver
+} // namespace zolver

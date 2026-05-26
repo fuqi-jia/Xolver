@@ -1,8 +1,8 @@
-# EUF Solver Enhancement Plan for NLColver
+# EUF Solver Enhancement Plan for Zolver
 
 ## Context
 
-NLColver currently has a **working EUF V1 skeleton** with:
+Zolver currently has a **working EUF V1 skeleton** with:
 - `EufTermManager`: hash-consed term interning (Variable, UFApply, ConstBool)
 - `EGraph`: union-find + full-rebuild congruence closure via repeated appTable scan
 - `EufSolver`: CDCL(T) TheorySolver interface, full-rebuild `check()`, conflict generation
@@ -92,7 +92,7 @@ Algorithm:
 - `getModel()` should return class assignments for user-visible constants and function interpretations.
 
 **Acceptance**: 
-- `nlcolver solve --produce-models` on `euf_001_sat_basic_eq.smt2` outputs a model with class assignments.
+- `zolver solve --produce-models` on `euf_001_sat_basic_eq.smt2` outputs a model with class assignments.
 - Model respects congruence: if `a=b`, they have the same value.
 
 ---

@@ -2,7 +2,7 @@
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 // Helper: create a Bound from a RealAlg (preserves exactness for algebraic roots)
 static Bound boundFromRealAlg(const RealAlg& ra, bool isOpen) {
@@ -207,4 +207,4 @@ CellLookupResult CoveringManager::cellContaining(
     return {CellLookupStatus::Found, std::move(cell)};
 }
 
-} // namespace nlcolver
+} // namespace zolver

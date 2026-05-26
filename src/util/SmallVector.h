@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * SmallVector: inline storage for N elements, heap fallback.
@@ -222,4 +222,4 @@ private:
     T* capacity_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

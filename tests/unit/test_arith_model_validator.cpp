@@ -2,7 +2,7 @@
 #include "proof/ArithModelValidator.h"
 #include "expr/ir.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 namespace {
 struct Fix {

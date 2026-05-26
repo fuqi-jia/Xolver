@@ -9,7 +9,7 @@
 #include <gmpxx.h>
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("PolyCanon: x*y == y*x (commutativity)") {
     auto k = createPolynomialKernel();

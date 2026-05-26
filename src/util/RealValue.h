@@ -1,7 +1,7 @@
 #pragma once
 
 // RealValue — a single canonical representation for Real-sorted values,
-// unifying NLColver's two parallel numeric types (rational `mpq_class` and the
+// unifying Zolver's two parallel numeric types (rational `mpq_class` and the
 // CDCAC algebraic `RealAlg`).  Modeled on cvc5's RealAlgebraicNumber: a value is
 // either an exact rational or a real algebraic number (defining polynomial +
 // isolation interval).  Rational⊕Rational stays Rational; an Algebraic operand
@@ -23,7 +23,7 @@
 #include <variant>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // A real algebraic number: a real root of `defining polynomial`, pinned by an
 // isolation interval that contains exactly that one root.  Owns its own integer
@@ -147,7 +147,7 @@ private:
     RealValue finite_;
 };
 
-} // namespace nlcolver
+} // namespace zolver
 
 namespace std {
 // Hash consistent with RealValue::operator== (soundness invariant 5): equal
@@ -157,7 +157,7 @@ namespace std {
 // representation.  Coarse (values in [n,n+1) collide) but provably sound;
 // unordered containers resolve collisions via operator==.
 template <>
-struct hash<nlcolver::RealValue> {
-    size_t operator()(const nlcolver::RealValue& v) const;
+struct hash<zolver::RealValue> {
+    size_t operator()(const zolver::RealValue& v) const;
 };
 } // namespace std

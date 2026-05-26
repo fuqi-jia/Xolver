@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Build a split lemma for a difference-logic disequality  x - y != rhs.
@@ -56,4 +56,4 @@ inline TheoryLemma buildDiffLogicDiseqSplitLemma(
     return TheoryLemma{{lit.negated(), litLo, litHi}};
 }
 
-} // namespace nlcolver
+} // namespace zolver

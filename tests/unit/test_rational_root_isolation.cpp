@@ -5,7 +5,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 static VarId X = VarId{1};
 

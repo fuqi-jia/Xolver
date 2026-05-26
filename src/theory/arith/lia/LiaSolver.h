@@ -13,7 +13,7 @@
 #include <vector>
 #include <string>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry;
 
@@ -157,4 +157,4 @@ private:
     std::vector<SatLit> allActiveReasons() const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

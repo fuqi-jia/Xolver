@@ -26,7 +26,7 @@
 #include <unordered_set>
 #include <deque>
 
-namespace nlcolver {
+namespace zolver {
 
 class NiaLinearizationAdapter;
 
@@ -193,4 +193,4 @@ private:
         TheoryLemmaStorage& lemmaDb);
 };
 
-} // namespace nlcolver
+} // namespace zolver

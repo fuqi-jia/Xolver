@@ -3,7 +3,7 @@
 #include "theory/core/LogicFeatureDetector.h"
 #include <doctest/doctest.h>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static bool containsKind(const CoreIr& ir, ExprId eid, Kind kind) {
     if (eid == NullExpr) return false;

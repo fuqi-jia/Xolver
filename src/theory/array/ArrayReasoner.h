@@ -10,7 +10,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace nlcolver {
+namespace zolver {
 
 class EufTermManager;
 class IncrementalEGraph;
@@ -141,4 +141,4 @@ private:
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

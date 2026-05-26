@@ -2,7 +2,7 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/linearizer/BoundStore.h"
 
-namespace nlcolver {
+namespace zolver {
 
 NraLinearizationAdapter::NraLinearizationAdapter(PolynomialKernel& kernel,
                                                    TheoryAtomRegistry* registry)
@@ -55,4 +55,4 @@ void NraLinearizationAdapter::markEmitted(const CutCacheKey& key) {
     linearizer_.markEmitted(key);
 }
 
-} // namespace nlcolver
+} // namespace zolver

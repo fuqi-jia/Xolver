@@ -1,6 +1,6 @@
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -268,4 +268,4 @@ void ModularConsistencyChecker::run() {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry;
 class SharedTermRegistry;
@@ -100,4 +100,4 @@ private:
     EufAtomExtractor eufExtractor_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

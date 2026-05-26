@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 void ArithAtomExtractor::setPolynomialKernel(PolynomialKernel* kernel) {
     polyKernel_ = kernel;
@@ -126,4 +126,4 @@ bool ArithAtomExtractor::extractPolynomialConstraint(ExprId eid, const CoreIr& i
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

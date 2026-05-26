@@ -9,7 +9,7 @@
 #include <string>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * LinearAtomManager: solver-local helper for linear constraint management.
@@ -86,4 +86,4 @@ private:
 
 };
 
-} // namespace nlcolver
+} // namespace zolver

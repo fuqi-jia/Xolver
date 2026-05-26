@@ -25,16 +25,16 @@ endif()
 file(GLOB_RECURSE UNIT_TEST_SOURCES CONFIGURE_DEPENDS "unit/*.cpp")
 
 if(UNIT_TEST_SOURCES)
-    add_executable(nlcolver_unit_tests ${UNIT_TEST_SOURCES})
-    target_link_libraries(nlcolver_unit_tests
+    add_executable(zolver_unit_tests ${UNIT_TEST_SOURCES})
+    target_link_libraries(zolver_unit_tests
         PRIVATE
-            nlcolver_core
+            zolver_core
             doctest::doctest
             ${GMP_LIBRARIES}
             gmpxx
     )
-    target_include_directories(nlcolver_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    add_test(NAME unit COMMAND nlcolver_unit_tests)
+    target_include_directories(zolver_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME unit COMMAND zolver_unit_tests)
     set_tests_properties(unit PROPERTIES LABELS "unit")
 endif()
 
@@ -44,7 +44,7 @@ endif()
 #     ctest -L euf            # all EUF regression
 #     ctest -L regression     # everything
 # UNEXPECTED_FAIL counts non-zero exit; KNOWN_FAIL (tagged via
-#     (set-info :nlcolver-expected known-fail) ) does not.
+#     (set-info :zolver-expected known-fail) ) does not.
 # ---------------------------------------------------------------------------
 find_package(Python3 COMPONENTS Interpreter)
 if(Python3_FOUND)
@@ -60,7 +60,7 @@ if(Python3_FOUND)
                     ${CMAKE_SOURCE_DIR}/tools/run_regression.py
                     --root ${CMAKE_SOURCE_DIR}/tests/regression
                     --logic ${logic}
-                    --solver $<TARGET_FILE:nlcolver-cli>
+                    --solver $<TARGET_FILE:zolver-cli>
                     --timeout 20
                     -j 2
             )

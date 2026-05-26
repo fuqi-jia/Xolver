@@ -6,7 +6,7 @@
 #include <string>
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Proof / Certificate Manager.
@@ -41,4 +41,4 @@ private:
     std::vector<LemmaRecord> theoryLemmas_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

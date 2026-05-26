@@ -5,8 +5,8 @@
 #include "theory/arith/bit_blast/BitVec.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 
-using namespace nlcolver;
-using namespace nlcolver::bitblast;
+using namespace zolver;
+using namespace zolver::bitblast;
 
 TEST_CASE("BitVec: litValue reads polarity") {
     auto sat = createSatSolver();

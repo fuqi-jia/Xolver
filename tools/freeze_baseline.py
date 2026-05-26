@@ -59,8 +59,8 @@ def main():
         if not fpath:
             continue
         frozen["results"][fpath] = {
-            "result": row.get("compare_result", row.get("nlcolver_result", "unknown")),
-            "time": row.get("compare_time", row.get("nlcolver_time", 0.0)),
+            "result": row.get("compare_result", row.get("zolver_result", "unknown")),
+            "time": row.get("compare_time", row.get("zolver_time", 0.0)),
         }
 
     with open(args.output, "w") as f:

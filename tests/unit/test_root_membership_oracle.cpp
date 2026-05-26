@@ -6,7 +6,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/valuation/RootMembershipOracle.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 static VarId A0 = VarId{100}, T = VarId{1};
 

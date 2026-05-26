@@ -3,14 +3,14 @@
 // assumption-based unsat core, empty clause, single-literal clauses, etc.).
 //
 // Note: the createSatSolver() factory returns the CaDiCaL backend when
-// NLCOLVER_HAS_CADICAL is defined, else a stub. These tests are written for
+// ZOLVER_HAS_CADICAL is defined, else a stub. These tests are written for
 // the CaDiCaL path; stub-mode runs may show degraded behavior but should
 // not crash. We assert the cross-backend minimal contract.
 
 #include <doctest/doctest.h>
 #include "sat/SatSolver.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("SAT: empty solver returns sat") {
     auto s = createSatSolver();

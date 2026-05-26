@@ -3,7 +3,7 @@
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 
-using namespace nlcolver;
+using namespace zolver;
 
 // Helper: create a positive SatLit as a dummy reason
 static SatLit reason(SatVar v) { return SatLit::positive(v); }

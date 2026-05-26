@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 struct IcpConstraint {
     std::optional<ExprId> expr; // original expression DAG (optional, for V2 backward contractors)
@@ -31,4 +31,4 @@ struct SplitSuggestion {
     std::string splitPointDesc; // descriptive, adapter decides exact lemma
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,7 +2,7 @@
 #include "theory/arith/nra/AlgebraBackend.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 void CoveringManager::addCell(Covering& cover, Cell cell) {
     cover.cells.push_back(std::move(cell));
@@ -77,4 +77,4 @@ Cell CoveringManager::cellContaining(const std::string& /*var*/, const RealAlg& 
     return Cell{};
 }
 
-} // namespace nlcolver
+} // namespace zolver

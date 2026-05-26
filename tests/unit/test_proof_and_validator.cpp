@@ -13,7 +13,7 @@
 #include "expr/ir.h"
 #include "expr/types.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 // -----------------------------------------------------------------------
 // ProofManager
@@ -44,7 +44,7 @@ TEST_CASE("Proof: recordTheoryLemma stores multiple lemmas") {
 TEST_CASE("Proof: setSatProofFile is settable to empty and non-empty path") {
     ProofManager m;
     CHECK_NOTHROW(m.setSatProofFile(""));
-    CHECK_NOTHROW(m.setSatProofFile("/tmp/nlcolver_proof.drat"));
+    CHECK_NOTHROW(m.setSatProofFile("/tmp/zolver_proof.drat"));
 }
 
 // -----------------------------------------------------------------------

@@ -8,7 +8,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Helpers
@@ -247,4 +247,4 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     return TheoryCheckResult::consistent();
 }
 
-} // namespace nlcolver
+} // namespace zolver

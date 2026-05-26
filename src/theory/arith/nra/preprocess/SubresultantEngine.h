@@ -3,7 +3,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * SubresultantEngine: subresultant polynomial remainder sequence (PRS).
@@ -35,4 +35,4 @@ public:
                       VarId var);
 };
 
-} // namespace nlcolver
+} // namespace zolver

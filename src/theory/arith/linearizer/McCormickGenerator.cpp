@@ -1,6 +1,6 @@
 #include "theory/arith/linearizer/McCormickGenerator.h"
 
-namespace nlcolver {
+namespace zolver {
 
 std::vector<LinearCut> McCormickGenerator::generate(
     const AuxTerm& t,
@@ -87,4 +87,4 @@ std::vector<LinearCut> McCormickGenerator::generate(
     return cuts;
 }
 
-} // namespace nlcolver
+} // namespace zolver

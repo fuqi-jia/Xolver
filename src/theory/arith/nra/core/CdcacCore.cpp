@@ -8,10 +8,10 @@
 #include <iostream>
 #include <cstdlib>
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
-// Helpers (free functions in nlcolver namespace)
+// Helpers (free functions in zolver namespace)
 // ------------------------------------------------------------------
 
 // Helper: collect all distinct polynomials from constraints
@@ -166,10 +166,10 @@ static TryLocalProjectionResult tryLocalProjection(
 CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     : kernel_(kernel), algebra_(algebra) {
     // Lazard tower lifting is OFF by default (the projection stage stays Collins).
-    // Opt in with NLCOLVER_NRA_LAZARD_LIFT=1; it only ADDS certified root
+    // Opt in with ZOLVER_NRA_LAZARD_LIFT=1; it only ADDS certified root
     // isolations for genuine towers (>=2 algebraic prefix coords) that ViaNorm
     // punts on — flag-off behaviour is byte-identical to the Collins baseline.
-    if (const char* e = std::getenv("NLCOLVER_NRA_LAZARD_LIFT"))
+    if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_LIFT"))
         lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
 }
 
@@ -1009,4 +1009,4 @@ bool CdcacCore::relationHolds(Sign s, Relation rel) const {
     return false;
 }
 
-} // namespace nlcolver
+} // namespace zolver

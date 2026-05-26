@@ -17,13 +17,13 @@
 
 #include <stdexcept>
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 
 #include <polyxx.h>
 #include <gmpxx.h>
 #include <vector>
 
-namespace nlcolver::realalg {
+namespace zolver::realalg {
 
 namespace {
 
@@ -195,14 +195,14 @@ mpz_class ceilOf(const RealValue& a) {
     return result;
 }
 
-} // namespace nlcolver::realalg
+} // namespace zolver::realalg
 
-#else  // !NLCOLVER_HAS_LIBPOLY — stub fallback (algebraic unsupported)
+#else  // !ZOLVER_HAS_LIBPOLY — stub fallback (algebraic unsupported)
 
-namespace nlcolver::realalg {
+namespace zolver::realalg {
 namespace {
 [[noreturn]] void unsupported() {
-    throw std::logic_error("RealValue: algebraic arithmetic requires libpoly (NLCOLVER_HAS_LIBPOLY)");
+    throw std::logic_error("RealValue: algebraic arithmetic requires libpoly (ZOLVER_HAS_LIBPOLY)");
 }
 }
 RealValue add(const RealValue&, const RealValue&) { unsupported(); }
@@ -215,6 +215,6 @@ int sign(const RealValue&)                        { unsupported(); }
 bool isExactInteger(const RealValue&)             { unsupported(); }
 mpz_class floorOf(const RealValue&)               { unsupported(); }
 mpz_class ceilOf(const RealValue&)                { unsupported(); }
-} // namespace nlcolver::realalg
+} // namespace zolver::realalg
 
 #endif

@@ -3,7 +3,7 @@
 #include "theory/arith/nra/core/CdcacCore.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 // ------------------------------------------------------------------
 // Test A: Endpoint same-sign shortcut is unsound (reviewer counterexample)

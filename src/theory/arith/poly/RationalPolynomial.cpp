@@ -3,7 +3,7 @@
 #include <functional>
 #include <numeric>
 
-namespace nlcolver {
+namespace zolver {
 
 // Canonicalize a MonomialKey so map lookups behave correctly:
 //   * sort by VarId ascending (lex-canonical form used elsewhere),
@@ -653,4 +653,4 @@ RationalPolynomial RationalPolynomial::primitivePart(VarId v) const {
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

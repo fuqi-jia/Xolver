@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 class Reasoner;
 
@@ -163,4 +163,4 @@ protected:
     const std::vector<ActiveAssignment>& trail() const { return state_.trail; }
 };
 
-} // namespace nlcolver
+} // namespace zolver

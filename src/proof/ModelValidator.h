@@ -3,7 +3,7 @@
 #include "expr/ir.h"
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ModelValidator: independently verify that a model satisfies all assertions.
@@ -23,4 +23,4 @@ public:
     bool eval(ExprId eid, const CoreIr& ir, const BoolAssignment& assignment);
 };
 
-} // namespace nlcolver
+} // namespace zolver

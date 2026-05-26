@@ -5,7 +5,7 @@
 #include "expr/Smt2Dumper.h"
 #include <iostream>
 
-using namespace nlcolver;
+using namespace zolver;
 
 namespace {
 

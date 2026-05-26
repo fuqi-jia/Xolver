@@ -11,7 +11,7 @@
 #include "theory/combination/Purifier.h"
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 SolverSetupResult setupSolvers(
     const std::string& logic,
@@ -304,4 +304,4 @@ SolverSetupResult setupSolvers(
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

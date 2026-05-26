@@ -1,6 +1,6 @@
 #include "theory/arith/nra/preprocess/SubresultantEngine.h"
 
-namespace nlcolver {
+namespace zolver {
 
 SubresultantEngine::Result SubresultantEngine::run(
     const RationalPolynomial& p,
@@ -56,4 +56,4 @@ SubresultantEngine::Result SubresultantEngine::run(
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -9,7 +9,7 @@
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // TheorySearchStats implementation
@@ -210,7 +210,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     int conflictSize = (tr.conflictOpt && !tr.conflictOpt->clause.empty())
                            ? static_cast<int>(tr.conflictOpt->clause.size()) : 0;
     stats_.recordModelCheckResult(tr.kind, conflictSize);
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     updateCaseStatsSearch();
 #endif
 
@@ -305,7 +305,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     bool isConflict = (tr.kind == TheoryCheckResult::Kind::Conflict);
     bool isLemma = (tr.kind == TheoryCheckResult::Kind::Lemma);
     stats_.recordPropagateCheck(isConflict, isLemma, conflictSize, dur);
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
     updateCaseStatsSearch();
     if (!dumpStatsBasePath_.empty()) {
         heartbeatWriter_.maybeWrite(*caseStats_, dumpStatsBasePath_);
@@ -419,7 +419,7 @@ void CadicalTheoryPropagator::terminateSolve() {
     backend_.requestTerminate();
 }
 
-#ifdef NLCOLVER_ENABLE_CASESTATS
+#ifdef ZOLVER_ENABLE_CASESTATS
 void CadicalTheoryPropagator::updateCaseStatsSearch() {
     if (!caseStats_) return;
     caseStats_->search.modelCheckCalls = stats_.modelCheckCount;
@@ -463,4 +463,4 @@ bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<
     return ok;
 }
 
-} // namespace nlcolver
+} // namespace zolver

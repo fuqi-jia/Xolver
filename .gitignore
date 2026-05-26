@@ -93,7 +93,7 @@ benchmark_meta.txt
 bench-results/
 
 # Deployment artifacts
-bin/nlcolver
+bin/zolver
 *.tar.gz
 
 

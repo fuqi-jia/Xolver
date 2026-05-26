@@ -5,7 +5,7 @@
 #include <cassert>
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Public API
@@ -242,4 +242,4 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

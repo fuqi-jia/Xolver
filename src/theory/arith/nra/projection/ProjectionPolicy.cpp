@@ -2,7 +2,7 @@
 #include "theory/arith/nra/projection/LocalProjection.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // CollinsConservativePolicy
@@ -184,4 +184,4 @@ ValidationResult HybridAdaptivePolicy::validateObligations(
     return reducedPolicy_->validateObligations(result, baseCell, algebra);
 }
 
-} // namespace nlcolver
+} // namespace zolver

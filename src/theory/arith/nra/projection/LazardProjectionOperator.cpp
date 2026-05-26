@@ -2,7 +2,7 @@
 #include "theory/arith/nra/projection/Squarefree.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -102,4 +102,4 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
     return r;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

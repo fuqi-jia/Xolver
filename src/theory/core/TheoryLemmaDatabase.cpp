@@ -1,7 +1,7 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 uint64_t TheoryLemmaDatabase::computeKey(const TheoryLemma& lemma) {
     uint64_t key = 0x9e3779b97f4a7c15ULL;
@@ -33,4 +33,4 @@ void TheoryLemmaDatabase::markInstalled(const TheoryLemma& lemma) {
     installed_.insert(computeKey(lemma));
 }
 
-} // namespace nlcolver
+} // namespace zolver

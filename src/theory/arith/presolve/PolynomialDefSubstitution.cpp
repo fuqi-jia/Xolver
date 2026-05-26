@@ -1,6 +1,6 @@
 #include "theory/arith/presolve/PolynomialDefSubstitution.h"
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -71,4 +71,4 @@ bool PolynomialDefSubstitution::run(PresolveState& st) {
     return made;
 }
 
-} // namespace nlcolver
+} // namespace zolver

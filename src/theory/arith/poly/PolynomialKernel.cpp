@@ -1,18 +1,18 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 #include "theory/arith/poly/LibPolyKernel.h"
 #endif
 
-namespace nlcolver {
+namespace zolver {
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 
 std::unique_ptr<PolynomialKernel> createPolynomialKernel() {
     return std::make_unique<LibPolyKernel>();
 }
 
-#else // !NLCOLVER_HAS_LIBPOLY
+#else // !ZOLVER_HAS_LIBPOLY
 
 // Stub implementation: no polynomial support without libpoly.
 class StubPolyKernel : public PolynomialKernel {
@@ -70,4 +70,4 @@ std::unique_ptr<PolynomialKernel> createPolynomialKernel() {
 
 #endif
 
-} // namespace nlcolver
+} // namespace zolver

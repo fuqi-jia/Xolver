@@ -10,7 +10,7 @@
 #include <optional>
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 class CdcacCore;
 class LibpolyBackend;
@@ -100,4 +100,4 @@ private:
     std::optional<SamplePoint> lastModel_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

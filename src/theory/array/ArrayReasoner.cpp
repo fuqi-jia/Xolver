@@ -6,7 +6,7 @@
 #include "expr/ir.h"
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 void ArrayReasoner::reset() {
     selectTerms_.clear();
@@ -286,4 +286,4 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
     return std::nullopt;
 }
 
-} // namespace nlcolver
+} // namespace zolver

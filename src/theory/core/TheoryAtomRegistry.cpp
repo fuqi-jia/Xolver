@@ -1,7 +1,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 void TheoryAtomRegistry::setContext(SatSolver* sat, DynamicAtomRegistrar* registrar) {
     sat_ = sat;
@@ -165,4 +165,4 @@ SatLit TheoryAtomRegistry::getOrCreateEufEqualityAtom(ExprId lhs, ExprId rhs) {
     return lit;
 }
 
-} // namespace nlcolver
+} // namespace zolver

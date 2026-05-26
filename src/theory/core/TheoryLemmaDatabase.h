@@ -4,7 +4,7 @@
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryLemmaDatabase : public TheoryLemmaStorage {
 public:
@@ -19,4 +19,4 @@ private:
     static uint64_t computeKey(const TheoryLemma& lemma);
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -4,7 +4,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // Resultant of two multivariate polynomials w.r.t. a variable
@@ -36,4 +36,4 @@ private:
         const std::vector<ReasonedPolynomial>& input);
 };
 
-} // namespace nlcolver
+} // namespace zolver

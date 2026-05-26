@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace nlcolver {
+namespace zolver {
 
 class ProofForest {
 public:
@@ -31,4 +31,4 @@ private:
     size_t activeEdgeCount_ = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

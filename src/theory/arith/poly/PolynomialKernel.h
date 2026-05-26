@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Abstract interface for a polynomial kernel.
@@ -212,4 +212,4 @@ public:
  */
 std::unique_ptr<PolynomialKernel> createPolynomialKernel();
 
-} // namespace nlcolver
+} // namespace zolver

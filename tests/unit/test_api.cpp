@@ -1,11 +1,11 @@
 #include <doctest/doctest.h>
-#include <nlcolver/Solver.h>
-#include <nlcolver/Result.h>
+#include <zolver/Solver.h>
+#include <zolver/Result.h>
 #include "expr/ir.h"
 #include <sstream>
 #include <iostream>
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("API: sort creation") {
     Solver s;

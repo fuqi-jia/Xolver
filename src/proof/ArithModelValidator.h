@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ArithModelValidator — independent end-to-end model check.
@@ -99,4 +99,4 @@ private:
     const TokenAssignment* tok_ = nullptr;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,7 +1,7 @@
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
 
 #include <algorithm>
 #include <functional>
@@ -9,7 +9,7 @@
 #include <set>
 #include <sstream>
 
-namespace nlcolver {
+namespace zolver {
 
 LibPolyKernel::LibPolyKernel() = default;
 
@@ -569,6 +569,6 @@ std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const
     return norm.poly;
 }
 
-} // namespace nlcolver
+} // namespace zolver
 
-#endif // NLCOLVER_HAS_LIBPOLY
+#endif // ZOLVER_HAS_LIBPOLY

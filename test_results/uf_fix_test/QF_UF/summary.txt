@@ -1,11 +1,11 @@
 ======================================================================
-NLColver Benchmark Report
+Zolver Benchmark Report
 ======================================================================
 
 Date:           2026-05-21T07:57:50.637922
 Logic:          QF_UF
 Benchmark root: benchmark/non-incremental
-NLColver:       ./build_static/bin/nlcolver
+Zolver:       ./build_static/bin/zolver
 Compare with:   z3
 Jobs:           2
 Timeout:        30.0s
@@ -13,7 +13,7 @@ Total files:    100
 Wall-clock:     35.50s
 
 ----------------------------------------------------------------------
-NLColver Results
+Zolver Results
 ----------------------------------------------------------------------
   sat         :     79 ( 79.0%)
   unsat       :     21 ( 21.0%)

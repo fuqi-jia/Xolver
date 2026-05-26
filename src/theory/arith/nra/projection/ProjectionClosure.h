@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // ProjectionClosure — the unconditionally-sound (Collins) projection of a
@@ -107,4 +107,4 @@ private:
     void projectLevel(const std::vector<int>& inputIds, VarId elimVar, int elimLevel);
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,16 +2,16 @@
 
 #include <somtparser/passes/rewriter.h>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
- * Install NLColver-specific rewrite rules on top of SOMTParser defaults.
+ * Install Zolver-specific rewrite rules on top of SOMTParser defaults.
  *
  * Stage A rules:
  *   - Flip > / >= to < / <= (by negating RHS)
  *   - Flatten associative AND/OR/ADD/MUL
  *   - Normalize arithmetic comparisons to p - q ⋈ 0
  */
-void installNlcolverRewriteRules(SOMTParser::Rewriter& r);
+void installZolverRewriteRules(SOMTParser::Rewriter& r);
 
-} // namespace nlcolver
+} // namespace zolver

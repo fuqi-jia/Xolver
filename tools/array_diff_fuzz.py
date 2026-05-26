@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-# Differential fuzzer for NLColver array logics vs z3 + cvc5.
-# Generates random small QF array formulas; flags any nlcolver verdict that
+# Differential fuzzer for Zolver array logics vs z3 + cvc5.
+# Generates random small QF array formulas; flags any zolver verdict that
 # DISAGREES with z3/cvc5 (unknown is allowed = sound-incomplete).
 import random, subprocess, sys, tempfile, os
 
 import os
-NLC = os.environ.get("NLCOLVER", "build/bin/nlcolver")
+NLC = os.environ.get("ZOLVER", "build/bin/zolver")
 Z3 = "/usr/local/bin/z3"
 CVC5 = "/usr/bin/cvc5"
 
@@ -111,7 +111,7 @@ def main():
             skipped += 1
     print(f"agree={agree} unknown={unk} skipped={skipped} UNSOUND={len(unsound)}")
     for (logic, nlc, oracle, smt) in unsound[:8]:
-        print(f"\n===== UNSOUND ({logic}): nlcolver={nlc} oracle={oracle} =====")
+        print(f"\n===== UNSOUND ({logic}): zolver={nlc} oracle={oracle} =====")
         print(smt)
     sys.exit(1 if unsound else 0)
 

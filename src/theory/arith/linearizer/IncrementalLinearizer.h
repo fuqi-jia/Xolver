@@ -11,7 +11,7 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 struct LinearizationConfig {
     bool emitAllMcCormick = true;
@@ -54,4 +54,4 @@ private:
                                SatLit cutLit);
 };
 
-} // namespace nlcolver
+} // namespace zolver

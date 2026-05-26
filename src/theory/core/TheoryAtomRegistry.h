@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry : public TheoryAtomLookup {
 public:
@@ -109,4 +109,4 @@ private:
     void observeIfNeeded(SatVar v);
 };
 
-} // namespace nlcolver
+} // namespace zolver

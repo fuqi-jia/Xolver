@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * ReasonedBoxZ: a box of per-variable integer intervals, each carrying SAT literal reasons.
@@ -39,4 +39,4 @@ private:
     std::unordered_map<std::string, ReasonedInterval> box_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

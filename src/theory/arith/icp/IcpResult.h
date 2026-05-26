@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 enum class IcpStatus {
     Conflict,
@@ -55,4 +55,4 @@ struct IcpResultQ {
     std::optional<SplitSuggestion> split;
 };
 
-} // namespace nlcolver
+} // namespace zolver

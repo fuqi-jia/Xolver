@@ -5,7 +5,7 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/core/TheorySolver.h"
 
-namespace nlcolver {
+namespace zolver {
 
 enum class BoundedSolveStatus {
     Sat,              // exact model found and validated
@@ -46,4 +46,4 @@ private:
                                   const std::vector<std::string>& vars);
 };
 
-} // namespace nlcolver
+} // namespace zolver

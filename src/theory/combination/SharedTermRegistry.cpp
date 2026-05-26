@@ -2,7 +2,7 @@
 #include "expr/ir.h"
 #include "util/MpqUtils.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // Rational value of a numeric-constant expression, if it is one.
 static std::optional<mpq_class> constValueOf(const CoreIr& ir, ExprId expr) {
@@ -101,4 +101,4 @@ void SharedTermRegistry::clear() {
     constValueToId_.clear();
 }
 
-} // namespace nlcolver
+} // namespace zolver

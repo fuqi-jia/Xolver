@@ -5,7 +5,7 @@
 #include <functional>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
     : ir_(ir), registry_(registry), boolSortId_(boolSort) {}
@@ -421,4 +421,4 @@ void Purifier::run() {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,4 +1,4 @@
-# NLColver Smoke Test Manifest
+# Zolver Smoke Test Manifest
 # Fixed file list for deterministic smoke testing
 
 QF_IDL/20210312-Bouvier/vlsat3_c00.smt2

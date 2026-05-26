@@ -19,7 +19,7 @@ static void printUsage(const char* prog) {
               << "  --produce-proofs       Enable proof production\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
-              << "  --dump-stats <file>    Dump per-case stats JSON (requires NLCOLVER_ENABLE_CASESTATS)\n"
+              << "  --dump-stats <file>    Dump per-case stats JSON (requires ZOLVER_ENABLE_CASESTATS)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
@@ -28,7 +28,7 @@ static void printUsage(const char* prog) {
               << "  -v, --verbose          Verbose output\n";
 }
 
-#include <nlcolver/Solver.h>
+#include <zolver/Solver.h>
 
 // Discards everything written to it. Installed as std::cerr's buffer in the
 // default (non-verbose) mode so the solver's internal diagnostics never reach
@@ -51,7 +51,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         return EXIT_FAILURE;
     }
 
-    nlcolver::Solver solver;
+    zolver::Solver solver;
 
     // Parse options after the file path
     std::optional<std::string> logicOpt;
@@ -62,7 +62,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         if (arg == "--logic" && i + 1 < argc) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
-            solver.setOption("seed", nlcolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+            solver.setOption("seed", zolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
         } else if (arg == "--produce-models") {
@@ -70,15 +70,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         } else if (arg == "--produce-proofs") {
             // TODO: enable proof production
         } else if (arg == "--lia-safe-mode") {
-            solver.setOption("lia-safe-mode", nlcolver::OptionValue(true));
+            solver.setOption("lia-safe-mode", zolver::OptionValue(true));
         } else if (arg == "--lia-ultra-safe-mode") {
-            solver.setOption("lia-ultra-safe-mode", nlcolver::OptionValue(true));
+            solver.setOption("lia-ultra-safe-mode", zolver::OptionValue(true));
         } else if (arg == "--lia-enable-single-var-tightening") {
-            solver.setOption("lia-enable-single-var-tightening", nlcolver::OptionValue(true));
+            solver.setOption("lia-enable-single-var-tightening", zolver::OptionValue(true));
         } else if (arg == "--lia-enable-gcd-ineq-tightening") {
-            solver.setOption("lia-enable-gcd-ineq-tightening", nlcolver::OptionValue(true));
+            solver.setOption("lia-enable-gcd-ineq-tightening", zolver::OptionValue(true));
         } else if (arg == "--lia-enable-eq-gcd-normalization") {
-            solver.setOption("lia-enable-eq-gcd-normalization", nlcolver::OptionValue(true));
+            solver.setOption("lia-enable-eq-gcd-normalization", zolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;
         } else if (arg == "--check-model") {
@@ -111,19 +111,19 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // competition harness (which greps stdout) is not confused. The old
     // `dumpSMT2(std::cout)` echo of the parsed formula is removed for the
     // same reason — use `--verbose` / stderr for debugging instead.
-    nlcolver::Result r = solver.checkSat();
+    zolver::Result r = solver.checkSat();
     std::cout << toString(r) << "\n";
     // Model-Validation track: if the input requested a model and we found
     // one, emit the SMT-LIB get-model response on stdout right after `sat`.
-    if (r == nlcolver::Result::Sat && solver.modelRequested()) {
+    if (r == zolver::Result::Sat && solver.modelRequested()) {
         solver.dumpModel(std::cout);
     }
     std::cout.flush();
     // Diagnostic: independent model self-check against original assertions.
-    if (checkModel && r == nlcolver::Result::Sat && !solver.modelMatchesOriginal()) {
+    if (checkModel && r == zolver::Result::Sat && !solver.modelMatchesOriginal()) {
         std::cerr << "MODEL_MISMATCH\n";
     }
-    if (r == nlcolver::Result::Unknown) {
+    if (r == zolver::Result::Unknown) {
         auto reason = solver.lastUnknownReason();
         if (!reason.empty()) {
             std::cerr << "(unknown-reason " << reason << ")\n";
@@ -147,7 +147,7 @@ static int cmdBench(int argc, char* argv[]) {
 }
 
 static int cmdTrace(int argc, char* argv[]) {
-    std::cout << "[NLColver trace] (stub)\n";
+    std::cout << "[Zolver trace] (stub)\n";
     return EXIT_SUCCESS;
 }
 
@@ -165,21 +165,21 @@ static int cmdModelCheck(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    nlcolver::Solver solver;
+    zolver::Solver solver;
     if (logicOpt) solver.setLogic(*logicOpt);
     if (!solver.parseFile(argv[fileIdx])) {
         std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
         return EXIT_FAILURE;
     }
 
-    nlcolver::Result r = solver.checkSat();
-    if (r == nlcolver::Result::Sat) {
+    zolver::Result r = solver.checkSat();
+    if (r == zolver::Result::Sat) {
         std::cout << "sat\n";
         auto model = solver.getModel();
         for (const auto& [varId, value] : model.values()) {
             std::cout << "  v" << varId << " = " << value << "\n";
         }
-    } else if (r == nlcolver::Result::Unsat) {
+    } else if (r == zolver::Result::Unsat) {
         std::cout << "unsat\n";
     } else {
         std::cout << "unknown\n";
@@ -188,13 +188,13 @@ static int cmdModelCheck(int argc, char* argv[]) {
 }
 
 static int cmdProofCheck(int argc, char* argv[]) {
-    std::cout << "[NLColver proof-check] (stub)\n";
+    std::cout << "[Zolver proof-check] (stub)\n";
     return EXIT_SUCCESS;
 }
 
 static int cmdVersion() {
-    std::cout << "NLColver " << NLCOLVER_VERSION_MAJOR << "."
-              << NLCOLVER_VERSION_MINOR << "." << NLCOLVER_VERSION_PATCH
+    std::cout << "Zolver " << ZOLVER_VERSION_MAJOR << "."
+              << ZOLVER_VERSION_MINOR << "." << ZOLVER_VERSION_PATCH
               << " — NonLinear Constraint Solver\n"
               << "Stage: A (bootstrap)\n";
     return EXIT_SUCCESS;

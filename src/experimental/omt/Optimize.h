@@ -1,12 +1,12 @@
 #pragma once
 
 #include "expr/ir.h"
-#include "nlcolver/Result.h"
+#include "zolver/Result.h"
 #include <string>
 #include <vector>
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * OMT (Optimization Modulo Theories) Engine.
@@ -43,4 +43,4 @@ private:
     //       binary search / gradient descent / CAD-based refinement
 };
 
-} // namespace nlcolver
+} // namespace zolver

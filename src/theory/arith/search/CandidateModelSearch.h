@@ -10,7 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * CandidateModelSearch (Capability 10 of the close-all-known-fails plan).
@@ -198,4 +198,4 @@ private:
     size_t totalCandidatesTried_ = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================================
-# NLColver 极简部署脚本
+# Zolver 极简部署脚本
 #
 # 默认目录结构（上传后保持这样）：
 #   部署目录/
-#   ├── nlcolver-dist/          <- 本脚本 + binary + Python 工具
-#   │   ├── bin/nlcolver
+#   ├── zolver-dist/          <- 本脚本 + binary + Python 工具
+#   │   ├── bin/zolver
 #   │   └── tools/
 #   │       ├── deploy_and_run.sh
 #   │       ├── run_benchmark.py
@@ -18,15 +18,15 @@
 #           └── ...
 #
 # 用法（在"部署目录"下执行）：
-#   ./nlcolver-dist/tools/deploy_and_run.sh build
-#   ./nlcolver-dist/tools/deploy_and_run.sh run "lia,nia" -j 200 -t 100
+#   ./zolver-dist/tools/deploy_and_run.sh build
+#   ./zolver-dist/tools/deploy_and_run.sh run "lia,nia" -j 200 -t 100
 # ============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BIN="${DIST_DIR}/bin/nlcolver"
+BIN="${DIST_DIR}/bin/zolver"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -56,39 +56,39 @@ cmd_build() {
 
     cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
-        -DNLCOLVER_STATIC_BUILD=ON \
-        -DNLCOLVER_ENABLE_CASESTATS=ON \
-        -DNLCOLVER_BUILD_TESTS=OFF
+        -DZOLVER_STATIC_BUILD=ON \
+        -DZOLVER_ENABLE_CASESTATS=ON \
+        -DZOLVER_BUILD_TESTS=OFF
 
     cmake --build . -j$(nproc)
     cd ..
 
-    BIN_BUILT="$(pwd)/build_static/bin/nlcolver"
+    BIN_BUILT="$(pwd)/build_static/bin/zolver"
     [[ -f "$BIN_BUILT" ]] || err "Binary 未生成"
     file "$BIN_BUILT" | grep -q "statically linked" || err "不是静态链接"
 
     mkdir -p "${DIST_DIR}/bin"
-    cp "$BIN_BUILT" "${DIST_DIR}/bin/nlcolver"
-    log "编译完成: ${DIST_DIR}/bin/nlcolver ($(du -h ${DIST_DIR}/bin/nlcolver | cut -f1))"
+    cp "$BIN_BUILT" "${DIST_DIR}/bin/zolver"
+    log "编译完成: ${DIST_DIR}/bin/zolver ($(du -h ${DIST_DIR}/bin/zolver | cut -f1))"
 }
 
 # ---------------------------------------------------------------------------
-# package: 把 nlcolver-dist/ 打包成 tar.gz，方便上传
+# package: 把 zolver-dist/ 打包成 tar.gz，方便上传
 # ---------------------------------------------------------------------------
 cmd_package() {
     [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build。"
 
-    PKG="$(pwd)/nlcolver-dist.tar.gz"
+    PKG="$(pwd)/zolver-dist.tar.gz"
     log "打包: ${BIN} + tools/ -> ${PKG}"
 
     TMPDIR=$(mktemp -d)
     trap "rm -rf ${TMPDIR}" EXIT
 
-    mkdir -p "${TMPDIR}/nlcolver-dist/bin"
-    cp "$BIN" "${TMPDIR}/nlcolver-dist/bin/nlcolver"
-    chmod +x "${TMPDIR}/nlcolver-dist/bin/nlcolver"
+    mkdir -p "${TMPDIR}/zolver-dist/bin"
+    cp "$BIN" "${TMPDIR}/zolver-dist/bin/zolver"
+    chmod +x "${TMPDIR}/zolver-dist/bin/zolver"
 
-    mkdir -p "${TMPDIR}/nlcolver-dist/tools"
+    mkdir -p "${TMPDIR}/zolver-dist/tools"
     for script in \
         deploy_and_run.sh \
         run_benchmark.py \
@@ -100,11 +100,11 @@ cmd_package() {
         run_lia_ablation.sh; do
         src="${SCRIPT_DIR}/${script}"
         if [[ -f "$src" ]]; then
-            cp "$src" "${TMPDIR}/nlcolver-dist/tools/"
+            cp "$src" "${TMPDIR}/zolver-dist/tools/"
         fi
     done
 
-    tar czf "$PKG" -C "$TMPDIR" nlcolver-dist
+    tar czf "$PKG" -C "$TMPDIR" zolver-dist
 
     log "打包完成: ${PKG} ($(du -h ${PKG} | cut -f1))"
     log "上传命令示例: scp ${PKG} user@server:/data/"
@@ -117,8 +117,8 @@ cmd_package() {
 cmd_run() {
     shift  # 去掉 "run"
 
-    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build，或把 nlcolver-dist 目录放完整。"
-    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia"
+    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build，或把 zolver-dist 目录放完整。"
+    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./zolver-dist/tools/deploy_and_run.sh run lia,nia"
 
     LOGIC="$1"
     shift
@@ -129,7 +129,7 @@ cmd_run() {
         warn "默认 benchmark 路径不存在: $BENCH_DIR"
         warn "请确保目录结构如下:"
         warn "  当前目录/"
-        warn "  ├── nlcolver-dist/"
+        warn "  ├── zolver-dist/"
         warn "  └── benchmark/non-incremental/QF_*/"
     fi
 
@@ -171,7 +171,7 @@ cmd_pack() {
     [[ -n "$RUN_DIR" ]] || err "results 目录下没有 run_* 文件夹"
 
     RUN_NAME=$(basename "$RUN_DIR")
-    OUT="$HOME/nlcolver-$(hostname)-$RUN_NAME.tar.gz"
+    OUT="$HOME/zolver-$(hostname)-$RUN_NAME.tar.gz"
 
     log "打包: $RUN_NAME -> $OUT"
 
@@ -211,12 +211,12 @@ case "${1:-}" in
         ;;
     *)
         cat << 'EOF'
-NLColver 极简部署脚本
+Zolver 极简部署脚本
 
 默认目录结构:
   部署目录/
-  ├── nlcolver-dist/          <- 本脚本 + binary + 工具
-  │   ├── bin/nlcolver
+  ├── zolver-dist/          <- 本脚本 + binary + 工具
+  │   ├── bin/zolver
   │   └── tools/
   │       ├── deploy_and_run.sh
   │       ├── run_benchmark.py
@@ -228,19 +228,19 @@ NLColver 极简部署脚本
           └── ...
 
 用法:
-  ./nlcolver-dist/tools/deploy_and_run.sh build
-    编译静态 binary（在源码仓库里执行，产出到 nlcolver-dist/bin/）
+  ./zolver-dist/tools/deploy_and_run.sh build
+    编译静态 binary（在源码仓库里执行，产出到 zolver-dist/bin/）
 
-  ./nlcolver-dist/tools/deploy_and_run.sh run <logic> [选项...]
+  ./zolver-dist/tools/deploy_and_run.sh run <logic> [选项...]
     后台运行 benchmark（nohup，终端断开不停止）
 
     示例:
-      ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia
-      ./nlcolver-dist/tools/deploy_and_run.sh run lia,nia,lra,nra -j 200 -t 100
-      ./nlcolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
+      ./zolver-dist/tools/deploy_and_run.sh run lia,nia
+      ./zolver-dist/tools/deploy_and_run.sh run lia,nia,lra,nra -j 200 -t 100
+      ./zolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
 
-  ./nlcolver-dist/tools/deploy_and_run.sh pack
-    打包最新 benchmark 结果到 ~/nlcolver-<hostname>-<run>.tar.gz
+  ./zolver-dist/tools/deploy_and_run.sh pack
+    打包最新 benchmark 结果到 ~/zolver-<hostname>-<run>.tar.gz
 
     常用选项（透传给 run_benchmark.py）:
       -j N         并行数

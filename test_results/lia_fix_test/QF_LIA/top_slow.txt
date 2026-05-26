@@ -1,5 +1,5 @@
 ======================================================================
-Top 50 Slowest NLColver Runs
+Top 50 Slowest Zolver Runs
 ======================================================================
   1.   30.054s  benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-60/c60_problem__004.smt2.slack.smt2
   2.   30.012s  benchmark/non-incremental/QF_LIA/20180326-Bromberger/more_slacked/CAV_2009_benchmarks/coef-size/smt/size-10/c10_problem__006.smt2.slack.smt2

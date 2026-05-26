@@ -10,17 +10,17 @@
 // require either a validated model or a sound Unknown gate (never an
 // unvalidated sat).
 
-#include "nlcolver/Solver.h"
+#include "zolver/Solver.h"
 #include <doctest/doctest.h>
 #include <fstream>
 #include <filesystem>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static std::string writeArrSmt2(const std::string& content) {
     static int counter = 0;
     std::string path = std::filesystem::temp_directory_path() /
-        ("nlcolver_array_test_" + std::to_string(counter++) + ".smt2");
+        ("zolver_array_test_" + std::to_string(counter++) + ".smt2");
     std::ofstream ofs(path);
     ofs << content;
     return path;

@@ -2,7 +2,7 @@
 #include "theory/arith/ArithSolverBase.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 namespace {
 

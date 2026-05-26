@@ -2,7 +2,7 @@
 #include "theory/arith/nra/core/CdcacCache.h"
 #include "theory/arith/nra/preprocess/ActiveConstraintSet.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("V5: CdcacCache sign cache get/set") {
     CdcacCache cache;

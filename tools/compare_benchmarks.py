@@ -46,10 +46,10 @@ def compare(old_results, new_results):
     for f in sorted(common):
         old = old_results[f]
         new = new_results[f]
-        old_res = old['nlcolver_result']
-        new_res = new['nlcolver_result']
-        old_time = float(old['nlcolver_time'])
-        new_time = float(new['nlcolver_time'])
+        old_res = old['zolver_result']
+        new_res = new['zolver_result']
+        old_time = float(old['zolver_time'])
+        new_time = float(new['zolver_time'])
 
         if old_res == 'timeout':
             old_timeouts += 1

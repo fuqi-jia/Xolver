@@ -4,7 +4,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * GcdEngine: compute GCD candidate of two multivariate polynomials
@@ -50,4 +50,4 @@ public:
         const RationalPolynomial& g);
 };
 
-} // namespace nlcolver
+} // namespace zolver

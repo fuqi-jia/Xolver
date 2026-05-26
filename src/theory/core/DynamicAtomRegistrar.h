@@ -3,7 +3,7 @@
 #include "expr/types.h"
 #include "sat/SatSolver.h"
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Thin interface for registering dynamically created theory atoms.
@@ -19,4 +19,4 @@ public:
     virtual SatLit registerDynamicAtom(ExprId expr, TheoryId theory) = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

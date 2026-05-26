@@ -5,7 +5,7 @@
 #include "theory/arith/nra/projection/LocalProjection.h"
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 class AlgebraBackend;
 
@@ -68,4 +68,4 @@ private:
     AlgebraBackend* algebra_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

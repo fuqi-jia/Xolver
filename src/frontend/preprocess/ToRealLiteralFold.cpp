@@ -1,7 +1,7 @@
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -128,4 +128,4 @@ ExprId ToRealLiteralFold::mkConstReal(const mpq_class& value) {
     return ir_.add(std::move(fresh));
 }
 
-} // namespace nlcolver
+} // namespace zolver

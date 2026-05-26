@@ -1,7 +1,7 @@
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include <algorithm>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 PolyBitBlaster::PolyBitBlaster(BitBlastEncoder& enc, PolynomialKernel& kernel,
                                const std::unordered_map<std::string, BitVec>& varBits)
@@ -47,4 +47,4 @@ void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
     enc_.assertLit(enc_.relZero(value, c.rel));
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast

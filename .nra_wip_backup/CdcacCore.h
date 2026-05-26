@@ -8,7 +8,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * CDCAC recursive covering/search algorithm core.
@@ -39,4 +39,4 @@ private:
     AlgebraBackend* algebra_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

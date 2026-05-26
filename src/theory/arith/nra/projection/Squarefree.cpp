@@ -3,7 +3,7 @@
 #include "theory/arith/nra/projection/LocalProjection.h"  // resultant()
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -156,4 +156,4 @@ SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v) {
     return {normalizeUpToUnit(r.pQuot), true};
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

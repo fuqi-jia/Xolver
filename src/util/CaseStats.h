@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * CaseStats: unified per-case solver statistics.
@@ -141,4 +141,4 @@ private:
     int64_t lastWriteMs_ = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * InternalMilpEngine: Mixed Integer-Linear Programming engine without CDCL coupling.
@@ -122,4 +122,4 @@ private:
     void computeFloorCeil(const DeltaRational& val, mpq_class& floorVal, mpq_class& ceilVal) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

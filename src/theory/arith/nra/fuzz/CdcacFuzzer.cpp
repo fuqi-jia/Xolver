@@ -1,6 +1,6 @@
 #include "theory/arith/nra/fuzz/CdcacFuzzer.h"
 
-namespace nlcolver {
+namespace zolver {
 
 CdcacFuzzer::CdcacFuzzer(uint64_t seed)
     : rng_(seed) {}
@@ -57,4 +57,4 @@ FuzzCase CdcacFuzzer::knownUnsat(int numVars) {
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

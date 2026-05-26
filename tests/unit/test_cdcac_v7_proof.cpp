@@ -3,7 +3,7 @@
 #include "theory/arith/nra/proof/CdcacProofChecker.h"
 #include "theory/arith/nra/fuzz/CdcacFuzzer.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("V7: CdcacProof types are value-based and serializable") {
     CdcacProof proof;

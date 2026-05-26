@@ -14,7 +14,7 @@
 #include <map>
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 class LibpolyBackend;
 
@@ -35,4 +35,4 @@ private:
     std::map<size_t, std::pair<Relation, std::map<MonomialKey, mpq_class>>> analyzed_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

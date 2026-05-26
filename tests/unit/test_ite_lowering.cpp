@@ -2,7 +2,7 @@
 #include "expr/CoreIteLowerer.h"
 #include <doctest/doctest.h>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static bool containsIte(const CoreIr& ir, ExprId eid) {
     if (eid == NullExpr) return false;

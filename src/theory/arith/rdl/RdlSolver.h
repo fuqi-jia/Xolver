@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry;
 
@@ -51,4 +51,4 @@ private:
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "nlcolver/Solver.h"
+#include "zolver/Solver.h"
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/atomization/Atomizer.h"
@@ -9,10 +9,10 @@
 #include <fstream>
 #include <filesystem>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static std::string writeTempSmt2(const std::string& content) {
-    std::string path = std::filesystem::temp_directory_path() / "nlcolver_lia.smt2";
+    std::string path = std::filesystem::temp_directory_path() / "zolver_lia.smt2";
     std::ofstream ofs(path);
     ofs << content;
     return path;

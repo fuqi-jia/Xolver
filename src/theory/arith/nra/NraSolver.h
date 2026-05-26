@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -96,4 +96,4 @@ private:
     std::vector<size_t> scopeStack_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -1,7 +1,7 @@
 #pragma once
 #include "theory/arith/nra/core/CdcacCertificate.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // V3: Validation result for certificate validator
@@ -63,4 +63,4 @@ struct CdcacResult {
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

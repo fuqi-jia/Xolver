@@ -4,7 +4,7 @@
 #include <string>
 #include <variant>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Leaf payload for CoreExpr: constant values and symbol names.
@@ -32,4 +32,4 @@ struct Payload {
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

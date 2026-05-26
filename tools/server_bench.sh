@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# NLColver Distributed Benchmark — Server Deployment Script
+# Zolver Distributed Benchmark — Server Deployment Script
 #
 # Run this ONCE from the compile host (Panda6, Ubuntu 22.04) after building.
 # It distributes the binary and launches benchmarks across all 6 servers.
@@ -14,7 +14,7 @@ COMPILE_HOST="Panda6"
 BUILD_DIR="${BUILD_DIR:-build}"
 JOBS="${JOBS:-128}"
 TIMEOUT="${TIMEOUT:-100}"
-REMOTE_DIR="${REMOTE_DIR:-/data/nlcolver}"
+REMOTE_DIR="${REMOTE_DIR:-/data/zolver}"
 LOCAL_BUILD="$(pwd)/${BUILD_DIR}"
 
 # Logic assignment per server (adjust as needed)
@@ -27,7 +27,7 @@ declare -A LOGICS=(
     [Panda6]="uflia,ufnia,ufnra"
 )
 
-echo "=== NLColver Server Benchmark Deploy ==="
+echo "=== Zolver Server Benchmark Deploy ==="
 echo "Build dir: ${LOCAL_BUILD}"
 echo "Servers: ${SERVERS[*]}"
 echo "Jobs per server: ${JOBS}"
@@ -35,8 +35,8 @@ echo "Timeout: ${TIMEOUT}s"
 echo ""
 
 # Step 1: Verify binary exists
-if [[ ! -f "${LOCAL_BUILD}/bin/nlcolver" ]]; then
-    echo "ERROR: Binary not found at ${LOCAL_BUILD}/bin/nlcolver"
+if [[ ! -f "${LOCAL_BUILD}/bin/zolver" ]]; then
+    echo "ERROR: Binary not found at ${LOCAL_BUILD}/bin/zolver"
     echo "Run: mkdir build && cd build && cmake .. && cmake --build . -j\$(nproc)"
     exit 1
 fi
@@ -46,19 +46,19 @@ echo "[1/5] Packaging binary and scripts..."
 TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
-mkdir -p "${TMPDIR}/nlcolver-dist/bin"
-cp "${LOCAL_BUILD}/bin/nlcolver" "${TMPDIR}/nlcolver-dist/bin/"
-chmod +x "${TMPDIR}/nlcolver-dist/bin/nlcolver"
+mkdir -p "${TMPDIR}/zolver-dist/bin"
+cp "${LOCAL_BUILD}/bin/zolver" "${TMPDIR}/zolver-dist/bin/"
+chmod +x "${TMPDIR}/zolver-dist/bin/zolver"
 
-mkdir -p "${TMPDIR}/nlcolver-dist/tools"
+mkdir -p "${TMPDIR}/zolver-dist/tools"
 for f in run_benchmark.py analyze_benchmark.py bench_server.py freeze_baseline.py; do
     if [[ -f "tools/${f}" ]]; then
-        cp "tools/${f}" "${TMPDIR}/nlcolver-dist/tools/"
+        cp "tools/${f}" "${TMPDIR}/zolver-dist/tools/"
     fi
 done
 
-PKG="${TMPDIR}/nlcolver-dist.tar.gz"
-tar czf "${PKG}" -C "${TMPDIR}" nlcolver-dist
+PKG="${TMPDIR}/zolver-dist.tar.gz"
+tar czf "${PKG}" -C "${TMPDIR}" zolver-dist
 echo "Package: ${PKG} ($(du -h ${PKG} | cut -f1))"
 echo ""
 
@@ -76,7 +76,7 @@ done
 wait
 
 for host in "${SERVERS[@]}"; do
-    ssh "${host}" "cd ${REMOTE_DIR} && tar xzf nlcolver-dist.tar.gz" &
+    ssh "${host}" "cd ${REMOTE_DIR} && tar xzf zolver-dist.tar.gz" &
 done
 wait
 echo "Distribution complete."
@@ -91,9 +91,9 @@ for host in "${SERVERS[@]}"; do
     logic="${LOGICS[$host]}"
     echo "  ${host}: ${logic}"
     ssh -n "${host}" "
-        cd ${REMOTE_DIR}/nlcolver-dist && \
+        cd ${REMOTE_DIR}/zolver-dist && \
         python3 tools/run_benchmark.py \
-            --solver ./bin/nlcolver \
+            --solver ./bin/zolver \
             --logic '${logic}' \
             -j ${JOBS} \
             -t ${TIMEOUT} \

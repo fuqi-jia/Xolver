@@ -1,4 +1,4 @@
-# NLColver Regression — Known Failures
+# Zolver Regression — Known Failures
 
 This file is the **single source of truth** for which regression SMT2 files
 are currently expected to fail. The regression runner (`tools/run_regression.py`)

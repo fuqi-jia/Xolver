@@ -2,7 +2,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "expr/ir.h"
 
-namespace nlcolver {
+namespace zolver {
 
 SatLit EufAtomExtractor::getOrCreateAtom(
     const EufAtomPayload& payload,
@@ -117,4 +117,4 @@ SatLit EufAtomExtractor::atomizeNaryDistinct(
     return SatLit::positive(andVar);
 }
 
-} // namespace nlcolver
+} // namespace zolver

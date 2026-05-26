@@ -26,7 +26,7 @@
 #include <variant>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // BoundEndpoint — a single endpoint of an interval.
@@ -205,4 +205,4 @@ private:
     std::vector<DerivedFact> facts_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

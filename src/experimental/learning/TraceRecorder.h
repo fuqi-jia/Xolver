@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * TraceRecorder: captures solver events for learning / replay.
@@ -31,4 +31,4 @@ private:
     nlohmann::json trace_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

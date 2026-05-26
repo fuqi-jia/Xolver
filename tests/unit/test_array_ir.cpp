@@ -9,7 +9,7 @@
 #include "parser/adapter.h"
 #include "expr/ir.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_SUITE("array_ir") {
 

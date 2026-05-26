@@ -1,6 +1,6 @@
 #include "theory/arith/nra/valuation/LazardValuationEngine.h"
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -67,4 +67,4 @@ LazardValuationResult lazardEvaluateToUnivariate(const RationalPolynomial& p,
     return out;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

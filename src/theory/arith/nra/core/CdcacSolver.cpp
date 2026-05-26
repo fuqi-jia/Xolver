@@ -7,11 +7,11 @@
 #include <algorithm>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 CdcacSolver::CdcacSolver(PolynomialKernel* kernel)
     : kernel_(kernel) {
-#ifdef NLCOLVER_HAS_LIBPOLY
+#ifdef ZOLVER_HAS_LIBPOLY
     std::cerr << "[CDCAC-SOLVER] constructing with libpoly" << std::endl;
     algebra_ = std::make_unique<LibpolyBackend>(kernel_);
     core_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
@@ -214,4 +214,4 @@ RealValue CdcacSolver::sampleValueToRealValue(const RealAlg& v) const {
     return RealValue::fromAlgebraic(std::move(an));
 }
 
-} // namespace nlcolver
+} // namespace zolver

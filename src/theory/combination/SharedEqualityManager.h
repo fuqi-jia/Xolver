@@ -7,7 +7,7 @@
 #include <optional>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 struct SharedEqualitySnapshot {
     size_t ufTrailSize = 0;
@@ -47,4 +47,4 @@ private:
     static uint64_t pairKey(SharedTermId a, SharedTermId b);
 };
 
-} // namespace nlcolver
+} // namespace zolver

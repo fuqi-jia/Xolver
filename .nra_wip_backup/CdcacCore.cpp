@@ -4,10 +4,10 @@
 #include <iostream>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
-// Helpers (free functions in nlcolver namespace)
+// Helpers (free functions in zolver namespace)
 // ------------------------------------------------------------------
 
 // Helper: collect all distinct polynomials from constraints
@@ -367,4 +367,4 @@ bool CdcacCore::relationHolds(Sign s, Relation rel) const {
     return false;
 }
 
-} // namespace nlcolver
+} // namespace zolver

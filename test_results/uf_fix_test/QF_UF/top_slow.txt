@@ -1,5 +1,5 @@
 ======================================================================
-Top 50 Slowest NLColver Runs
+Top 50 Slowest Zolver Runs
 ======================================================================
   1.   22.599s  benchmark/non-incremental/QF_UF/2018-Goel-hwbench/QF_UF_blocks.3.prop1_ab_fp_max.smt2
   2.   10.277s  benchmark/non-incremental/QF_UF/2018-Goel-hwbench/QF_UF_Huffman_dec_ab_reg_max.smt2

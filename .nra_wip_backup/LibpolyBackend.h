@@ -2,7 +2,7 @@
 
 #include "theory/arith/nra/AlgebraBackend.h"
 
-namespace nlcolver {
+namespace zolver {
 
 class PolynomialKernel;
 class LibPolyKernel;
@@ -80,4 +80,4 @@ private:
 
 };
 
-} // namespace nlcolver
+} // namespace zolver

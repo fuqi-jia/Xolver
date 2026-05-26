@@ -1,4 +1,4 @@
-# NLColver
+# Zolver
 
 **N**on**L**inear **Co**nstraint So**lver**
 
@@ -17,7 +17,7 @@ Core infrastructure (boolean, LRA, LIA, NRA) is operational. NIA-Core (Nonlinear
 ```
 SOMTParser (frontend)
        ↓
-NLColver Core
+Zolver Core
 ├── Expr / Sort / Rewriter          (DAG-safe term layer)
 ├── Atomizer                         (theory atom extraction)
 ├── SAT Engine (CaDiCaL)             (CDCL boolean reasoning)
@@ -76,13 +76,13 @@ ctest
   ./tools/deploy_and_run.sh build
 
   # panda3: NIA 独占（25,452， unavoidable 大头）
-  ./nlcolver-dist/tools/deploy_and_run.sh run uf,uflra,uflia,ufnia,ufnra,lira,nira -j 200 -t 100 --compare-with z3
+  ./zolver-dist/tools/deploy_and_run.sh run uf,uflra,uflia,ufnia,ufnra,lira,nira -j 200 -t 100 --compare-with z3
 
   # panda4: 整数族（16,089）
-  ./nlcolver-dist/tools/deploy_and_run.sh run lia,idl,rdl -j 200 -t 100 --compare-with z3
+  ./zolver-dist/tools/deploy_and_run.sh run lia,idl,rdl -j 200 -t 100 --compare-with z3
 
   # panda5: 实数族（13,907）
-  ./nlcolver-dist/tools/deploy_and_run.sh run nra,lra -j 200 -t 100 --compare-with z3
+  ./zolver-dist/tools/deploy_and_run.sh run nra,lra -j 200 -t 100 --compare-with z3
 
   # panda6: UF 族 + 极小 logic（10,320）
-  ./nlcolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 100 --compare-with z3
+  ./zolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 100 --compare-with z3

@@ -1,7 +1,7 @@
 #include "theory/arith/nra/valuation/TowerPolyGcd.h"
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -85,4 +85,4 @@ TowerGcdResult towerPolyGcd(const RationalPolynomial& f, const RationalPolynomia
     return res;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

@@ -1,7 +1,7 @@
 #include "sat/CadicalBackend.h"
 #include "sat/CadicalTheoryPropagator.h"
 
-namespace nlcolver {
+namespace zolver {
 
 CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) {
     // Note: we do NOT set factor=0 here.  The state-aware newVar() below
@@ -155,4 +155,4 @@ std::unique_ptr<SatSolver> createSatSolver() {
     return std::make_unique<CadicalBackend>();
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace nlcolver {
+namespace zolver {
 
 BoolSubtermPurifier::BoolSubtermPurifier(CoreIr& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {}
@@ -218,4 +218,4 @@ void BoolSubtermPurifier::commit() {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

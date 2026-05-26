@@ -1,17 +1,17 @@
-# NLColver Milestone — 2026-05-13
+# Zolver Milestone — 2026-05-13
 
-> 本里程碑文档记录截至 2026-05-13 NLColver 的实现状态，包括已完成的模块、关键设计决策、验证用例，以及待实现的 Stage 骨架和 TODO。
+> 本里程碑文档记录截至 2026-05-13 Zolver 的实现状态，包括已完成的模块、关键设计决策、验证用例，以及待实现的 Stage 骨架和 TODO。
 
 ---
 
 ## 1. 项目概览
 
-NLColver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OMT 求解器平台，采用双引擎架构：
+Zolver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OMT 求解器平台，采用双引擎架构：
 
 - **CDCL(T) / MCSAT** 精确内核 —— 用于可靠的 SAT/UNSAT 推理
 - **Local Search Advisor** —— 用于启发式指导和 OMT 优化
 
-**仓库**: `https://github.com/fuqi-jia/NLColver.git`
+**仓库**: `https://github.com/fuqi-jia/Zolver.git`
 
 **当前阶段**: Stages A–E 功能完备，Stage I (NIA-Core) MVP 完成，F/G/H/J/K 为骨架状态。
 
@@ -34,7 +34,7 @@ NLColver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OM
 | **Statistics** | `src/util/Statistics.h` | 统计骨架 |
 
 **关键设计决策**:
-- SOMTParser 已提供 hash-consing、rewriter、visitor，NLColver 不重新实现
+- SOMTParser 已提供 hash-consing、rewriter、visitor，Zolver 不重新实现
 - CoreIr 是轻量级稠密数组，用于 solver 专属元数据（literal IDs、proof IDs、scope levels），不替代 SOMTParser 的 DAG
 - pImpl 模式用于公共 API 边界 (`Solver::Impl`)，避免在 public header 中暴露 libpoly/CaDiCaL 重头文件
 
@@ -47,7 +47,7 @@ NLColver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OM
 | **CaDiCaL Wrapper** | `src/sat/CadicalBackend.cpp` | CaDiCaL (vendored submodule) 封装，理论传播接口 |
 | **Theory Propagation** | `src/sat/CadicalTheoryPropagator.cpp` | CDCL(T) 回调：理论检查、冲突解释、引理注入 |
 
-**编译宏**: `NLCOLVER_HAS_CADICAL` — 始终定义（CaDiCaL 为必需依赖）。
+**编译宏**: `ZOLVER_HAS_CADICAL` — 始终定义（CaDiCaL 为必需依赖）。
 
 ---
 
@@ -129,7 +129,7 @@ NLColver (**N**on**L**inear **Co**nstraint So**lver**) 是一个研究级 SMT/OM
 
 ### 2.6 Stage I — NIA-Core Solver ✅
 
-NIA-Core 是 NLColver 最新完成的 MVP 模块，具备**完整的求解管道**和**可靠的冲突生成**。
+NIA-Core 是 Zolver 最新完成的 MVP 模块，具备**完整的求解管道**和**可靠的冲突生成**。
 
 #### 2.6.1 求解管道
 
@@ -171,7 +171,7 @@ Branch lemma or Unknown
 
 #### 2.6.3 冲突类型（Soundness 保证）
 
-NIA 是不可判定问题。NLColver 的 UNSAT 结论基于以下**可靠冲突**：
+NIA 是不可判定问题。Zolver 的 UNSAT 结论基于以下**可靠冲突**：
 - 常数矛盾
 - 空根集
 - 模运算矛盾
@@ -342,7 +342,7 @@ NIA 是不可判定问题。NLColver 的 UNSAT 结论基于以下**可靠冲突*
 |------|------|------|
 | Unit Tests | doctest | `tests/unit/`，涵盖 bool/LRA/LIA/NRA/NIA 核心用例 |
 | Regression | SMT2 | `tests/regression/nia/`，NIA 端到端 SMT2 文件 |
-| CLI 测试 | 手动 | `nlcolver solve file.smt2` 已验证 QF_BOOL/QF_LRA/QF_LIA/QF_NRA/QF_NIA/QF_UF |
+| CLI 测试 | 手动 | `zolver solve file.smt2` 已验证 QF_BOOL/QF_LRA/QF_LIA/QF_NRA/QF_NIA/QF_UF |
 
 ---
 

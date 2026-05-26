@@ -1,7 +1,7 @@
 #include "proof/ModelValidator.h"
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 bool ModelValidator::validate(const CoreIr& ir, const BoolAssignment& assignment) {
     for (ExprId assertion : ir.assertions()) {
@@ -54,4 +54,4 @@ bool ModelValidator::eval(ExprId eid, const CoreIr& ir, const BoolAssignment& as
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

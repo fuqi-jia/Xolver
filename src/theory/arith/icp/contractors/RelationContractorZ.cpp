@@ -1,7 +1,7 @@
 #include "theory/arith/icp/contractors/RelationContractorZ.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 RelationContractorZ::RelationContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel)
     : constraint_(constraint), kernel_(kernel) {
@@ -85,4 +85,4 @@ bool RelationContractorZ::isDefinitelyViolated(const IntervalZ& polyInterval, Re
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

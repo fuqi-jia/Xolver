@@ -5,7 +5,7 @@
 #include "theory/arith/nra/core/CdcacValue.h"   // RootSet, RealAlg
 #include "expr/types.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // TowerRootIsolation — real roots over a tower (LAZARD.md [H2]).
@@ -50,4 +50,4 @@ struct TowerRootResult {
 TowerRootResult isolateRealRootsInTower(const RationalPolynomial& F, VarId mainVar,
                                         const TowerContext& ctx);
 
-}  // namespace nlcolver
+}  // namespace zolver

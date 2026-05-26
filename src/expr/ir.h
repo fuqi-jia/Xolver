@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Expression kind.
@@ -189,4 +189,4 @@ private:
     std::unordered_set<std::string> freshVarNames_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

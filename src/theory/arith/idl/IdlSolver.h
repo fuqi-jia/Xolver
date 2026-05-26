@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryAtomRegistry;
 
@@ -50,4 +50,4 @@ private:
     TheoryLemma buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStorage& lemmaDb);
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -4,7 +4,7 @@
 #include "experimental/search/LocalSearchAdvisor.h"
 #include <memory>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * MCSAT / NLSAT Solver.
@@ -36,4 +36,4 @@ private:
     // TODO: theory trail, value decisions, feasible sets
 };
 
-} // namespace nlcolver
+} // namespace zolver

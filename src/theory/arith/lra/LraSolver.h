@@ -12,7 +12,7 @@
 #include <vector>
 #include <string>
 
-namespace nlcolver {
+namespace zolver {
 
 class LraSolver : public ArithSolverBase {
 public:
@@ -140,7 +140,7 @@ private:
     std::optional<TheoryLemma> tryConvertDerivedBound(
         const LraPropagationEngine::ExplainedBound& eb) const;
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     struct ProfileStats {
         int solveCount = 0;
         int checkCalls = 0;
@@ -189,4 +189,4 @@ private:
 #endif
 };
 
-} // namespace nlcolver
+} // namespace zolver

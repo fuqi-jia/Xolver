@@ -1,6 +1,6 @@
 #include "proof/ProofManager.h"
 
-namespace nlcolver {
+namespace zolver {
 
 void ProofManager::setSatProofFile(const std::string& path) {
     satProofPath_ = path;
@@ -21,4 +21,4 @@ std::string ProofManager::exportLFSC() const {
     return "; LFSC proof export not yet implemented\n";
 }
 
-} // namespace nlcolver
+} // namespace zolver

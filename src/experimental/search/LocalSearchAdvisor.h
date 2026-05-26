@@ -5,7 +5,7 @@
 #include <string>
 #include <functional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Local Search Advisor: proposes candidate models for MCSAT / NIA.
@@ -39,4 +39,4 @@ private:
     // TODO: cost function, move generator, tabu list, restart policy
 };
 
-} // namespace nlcolver
+} // namespace zolver

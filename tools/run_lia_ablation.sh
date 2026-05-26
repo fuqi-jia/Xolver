@@ -6,7 +6,7 @@
 #   ./tools/run_lia_ablation.sh \
 #       --discrepancies panda-results/2026-05-21/lia/discrepancies.txt \
 #       --category convert \
-#       --nlcolver ./build/bin/nlcolver \
+#       --zolver ./build/bin/zolver \
 #       --output-base ./lia_ablation_results
 #
 # Output structure:
@@ -26,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Defaults
 DISCREPANCIES=""
 CATEGORY=""
-NLCOLVER="./build/bin/nlcolver"
+ZOLVER="./build/bin/zolver"
 Z3="z3"
 LIMIT=""
 TIMEOUT=""
@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --discrepancies) DISCREPANCIES="$2"; shift 2 ;;
         --category) CATEGORY="$2"; shift 2 ;;
-        --nlcolver) NLCOLVER="$2"; shift 2 ;;
+        --zolver) ZOLVER="$2"; shift 2 ;;
         --z3) Z3="$2"; shift 2 ;;
         --limit) LIMIT="$2"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
@@ -78,10 +78,10 @@ for entry in "${MODES[@]}"; do
     cmd=(
         python3 "$SCRIPT_DIR/lia_mismatch_replay.py"
         --discrepancies "$DISCREPANCIES"
-        --nlcolver "$NLCOLVER"
+        --zolver "$ZOLVER"
         --z3 "$Z3"
         --mode-name "$dir_name"
-        --nlcolver-extra="$extra_flags"
+        --zolver-extra="$extra_flags"
         --out "$outdir/report.json"
     )
 

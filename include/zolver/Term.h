@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Opaque handle for a solver term.
@@ -23,4 +23,4 @@ private:
     uint32_t id_ = 0;
 };
 
-} // namespace nlcolver
+} // namespace zolver

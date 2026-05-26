@@ -1,7 +1,7 @@
 #include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
 #include <cmath>
 
-namespace nlcolver {
+namespace zolver {
 
 SquareBoundReasoner::SquareBoundReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -129,4 +129,4 @@ NiaReasoningResult SquareBoundReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace nlcolver
+} // namespace zolver

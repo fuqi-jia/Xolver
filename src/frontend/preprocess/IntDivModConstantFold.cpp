@@ -2,7 +2,7 @@
 #include <gmpxx.h>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 IntDivModConstantFold::IntDivModConstantFold(CoreIr& ir)
     : ir_(ir), intSortId_(ir.intSortId()) {}
@@ -120,4 +120,4 @@ ExprId IntDivModConstantFold::mkConstInt(int64_t v) {
     return ir_.add(std::move(e));
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,7 +2,7 @@
 #include <cassert>
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Public API
@@ -294,4 +294,4 @@ std::vector<SatLit> LraPropagationEngine::collectReasons(
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

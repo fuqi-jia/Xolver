@@ -1,7 +1,7 @@
 #pragma once
 #include "theory/arith/nra/core/CdcacCell.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // ------------------------------------------------------------------
 // V3: Normalized atom representation for certificates
@@ -342,4 +342,4 @@ struct CoveringCertificate {
     CoverageCertificate coverage;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 
@@ -162,4 +162,4 @@ std::vector<mpz_class> matVec(const IntMatrix& M, const std::vector<mpz_class>& 
     return out;
 }
 
-} // namespace nlcolver
+} // namespace zolver

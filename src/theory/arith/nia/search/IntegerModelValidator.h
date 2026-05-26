@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 using IntegerModel = std::unordered_map<std::string, mpz_class>;
 
@@ -29,4 +29,4 @@ private:
     bool relationHolds(const mpz_class& val, Relation rel) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

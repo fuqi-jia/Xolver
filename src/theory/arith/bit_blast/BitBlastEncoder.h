@@ -6,7 +6,7 @@
 #include <gmpxx.h>
 #include <utility>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 // CNF encoder over an independent SAT instance. Two's-complement, width-growing
 // arithmetic: add -> max(wa,wb)+1, mul -> wa+wb, so the encoded value is exact
@@ -53,4 +53,4 @@ private:
     BitVec addFixed(const BitVec& a, const BitVec& b, unsigned w); // truncates to w
 };
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast

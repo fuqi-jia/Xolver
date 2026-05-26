@@ -5,7 +5,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * NiaLocalSearch: heuristic SAT finder for NIA.
@@ -27,4 +27,4 @@ private:
                         const std::vector<NormalizedNiaConstraint>& constraints) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

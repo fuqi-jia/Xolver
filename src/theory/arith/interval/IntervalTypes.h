@@ -4,7 +4,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * IntervalZ: integer interval [lo, hi] (inclusive).
@@ -27,4 +27,4 @@ struct ReasonedInterval {
     std::vector<SatLit> reasons; // all SAT literals contributing to this bound
 };
 
-} // namespace nlcolver
+} // namespace zolver

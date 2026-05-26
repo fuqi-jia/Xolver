@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 inline IntervalQ intervalQAdd(const IntervalQ& a, const IntervalQ& b) {
     return {a.lo + b.lo, a.hi + b.hi};
@@ -69,4 +69,4 @@ inline IntervalQ intervalQPow(const IntervalQ& a, uint32_t k) {
     }
 }
 
-} // namespace nlcolver
+} // namespace zolver

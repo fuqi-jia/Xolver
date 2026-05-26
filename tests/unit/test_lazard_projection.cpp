@@ -8,7 +8,7 @@
 #include "theory/arith/nra/projection/LazardProjectionOperator.h"
 #include "theory/arith/nra/projection/LazardProjectionClosure.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 static VarId VX = VarId{1}, VY = VarId{2}, VZ = VarId{3};
 

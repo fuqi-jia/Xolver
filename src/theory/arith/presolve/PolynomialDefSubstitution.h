@@ -10,7 +10,7 @@
 
 #include "theory/arith/presolve/Presolve.h"
 
-namespace nlcolver {
+namespace zolver {
 
 class PolynomialDefSubstitution : public PresolveCapability {
 public:
@@ -20,4 +20,4 @@ public:
     static constexpr size_t kMaxTermBudget = 256;
 };
 
-} // namespace nlcolver
+} // namespace zolver

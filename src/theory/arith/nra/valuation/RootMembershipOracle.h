@@ -5,7 +5,7 @@
 #include "expr/types.h"
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 // Exact root-membership oracle (LAZARD.md step 4). Decides whether the real
 // algebraic number beta — a real root of the rational polynomial `defPoly`,
@@ -43,4 +43,4 @@ RootMembership lazardRootMembership(const RationalPolynomial& F, VarId targetVar
                                     const mpq_class& betaLo, const mpq_class& betaHi,
                                     const TowerContext& ctx);
 
-}  // namespace nlcolver
+}  // namespace zolver

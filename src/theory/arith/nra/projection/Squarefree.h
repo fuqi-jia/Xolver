@@ -3,7 +3,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "expr/types.h"
 
-namespace nlcolver {
+namespace zolver {
 
 // Multivariate content / primitive part / squarefree part w.r.t. an explicit
 // variable v, with coefficients in Q[lower vars]. See LAZARD.md [H4]. These are
@@ -30,4 +30,4 @@ SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v);
 // primitivePart_v(p) / gcd_v(pp, d pp / dv): the squarefree part w.r.t. v.
 SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v);
 
-}  // namespace nlcolver
+}  // namespace zolver

@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <queue>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Rollback union-find with sound per-edge explanations.
@@ -177,4 +177,4 @@ private:
     std::vector<Change> changes_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

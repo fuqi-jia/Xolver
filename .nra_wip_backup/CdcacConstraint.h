@@ -5,7 +5,7 @@
 #include <vector>
 #include <optional>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * Public constraint type shared between CdcacSolver (facade) and CdcacCore.
@@ -25,4 +25,4 @@ struct CdcacInput {
     std::optional<ModelSeed> seed;
 };
 
-} // namespace nlcolver
+} // namespace zolver

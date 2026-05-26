@@ -7,17 +7,17 @@
 // a shared-equality atom observed by BOTH arith and EUF, so an arith fact like
 // (= i (+ j 0)) drives the Row2 case split. Verdicts cross-checked vs z3+cvc5.
 
-#include "nlcolver/Solver.h"
+#include "zolver/Solver.h"
 #include <doctest/doctest.h>
 #include <fstream>
 #include <filesystem>
 
-using namespace nlcolver;
+using namespace zolver;
 
 static std::string writeComboSmt2(const std::string& content) {
     static int counter = 0;
     std::string path = std::filesystem::temp_directory_path() /
-        ("nlcolver_array_combo_test_" + std::to_string(counter++) + ".smt2");
+        ("zolver_array_combo_test_" + std::to_string(counter++) + ".smt2");
     std::ofstream ofs(path);
     ofs << content;
     return path;

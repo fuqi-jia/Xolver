@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * BoolSubtermPurifier: eliminates boolean composite expressions from
@@ -50,4 +50,4 @@ private:
     bool changed_ = false;
 };
 
-} // namespace nlcolver
+} // namespace zolver

@@ -3,7 +3,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/projection/LocalProjection.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("resultant: y - x^2 and y w.r.t. y") {
     VarId x = 1, y = 2;

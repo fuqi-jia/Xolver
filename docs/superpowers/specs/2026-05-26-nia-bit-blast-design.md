@@ -1,14 +1,14 @@
 # NIA Bit-Blasting Module — Design Spec
 
 **Date:** 2026-05-26
-**Author:** fuqi-jia (migration of the BLAN solver into NLColver)
+**Author:** fuqi-jia (migration of the BLAN solver into Zolver)
 **Status:** Approved for planning
 
 ## 1. Goal
 
 Migrate the core algorithms of the standalone **BLAN** QF_NIA solver
 (`/mnt/d/D_Study/BUAA/projects/BLAN`, paper DOI `10.1145/3597926.3598034`) into
-NLColver as a new subsystem `src/theory/arith/bit_blast/`, wired in as one stage
+Zolver as a new subsystem `src/theory/arith/bit_blast/`, wired in as one stage
 of the NIA `Reasoner` pipeline. The migration covers the **two named parts**:
 
 1. **Space sizing** — compute *where solutions can be*: per-variable bit-width
@@ -25,7 +25,7 @@ comparison abstractions (we ship one sound signed-compare encoding).
 
 ## 2. Non-negotiable soundness contract
 
-NLColver invariant: *NIA is soundness-over-completeness; never emit UNSAT from
+Zolver invariant: *NIA is soundness-over-completeness; never emit UNSAT from
 incomplete reasoning; every `Sat` is validated by exact integer arithmetic.*
 
 ### 2.0 What gets encoded (self-contained, no hidden dependency on `cs`)
@@ -129,7 +129,7 @@ bit_blast/
 ### 4.1 `BitVec` (replaces BLAN `blast_variable`)
 
 ```cpp
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 struct BitVec {
     std::vector<SatLit> bits;   // bits[0]=LSB ... bits.back()=MSB (sign), two's complement
     bool     isConst = false;

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Package NLColver benchmark distribution for server deployment.
+Package Zolver benchmark distribution for server deployment.
 
 Produces a self-contained tar.gz with:
-- nlcolver binary
+- zolver binary
 - Python benchmark/analyzer scripts
 - CaseStats schema compatibility wrapper
 
 Usage:
-    python3 tools/package_dist.py --build-dir build_old --output nlcolver-dist.tar.gz
+    python3 tools/package_dist.py --build-dir build_old --output zolver-dist.tar.gz
 
 Server requirements (Ubuntu 22.04+):
     sudo apt-get install -y libgmp10 libmpfr6 python3
@@ -46,13 +46,13 @@ def check_binary(binary: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Package NLColver for server deployment")
-    parser.add_argument("--build-dir", default="build_old", help="Build directory containing nlcolver binary")
-    parser.add_argument("--output", default="nlcolver-dist.tar.gz", help="Output tar.gz path")
+    parser = argparse.ArgumentParser(description="Package Zolver for server deployment")
+    parser.add_argument("--build-dir", default="build_old", help="Build directory containing zolver binary")
+    parser.add_argument("--output", default="zolver-dist.tar.gz", help="Output tar.gz path")
     args = parser.parse_args()
 
     build_dir = Path(args.build_dir)
-    binary = build_dir / "bin" / "nlcolver"
+    binary = build_dir / "bin" / "zolver"
     externals = check_binary(binary)
 
     # Warn about glibc compatibility
@@ -64,13 +64,13 @@ def main():
     print()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        dist = Path(tmpdir) / "nlcolver-dist"
+        dist = Path(tmpdir) / "zolver-dist"
         dist.mkdir()
 
         # Binary
         (dist / "bin").mkdir()
-        subprocess.run(["cp", str(binary), str(dist / "bin" / "nlcolver")], check=True)
-        subprocess.run(["chmod", "+x", str(dist / "bin" / "nlcolver")], check=True)
+        subprocess.run(["cp", str(binary), str(dist / "bin" / "zolver")], check=True)
+        subprocess.run(["chmod", "+x", str(dist / "bin" / "zolver")], check=True)
 
         # Python scripts
         (dist / "tools").mkdir()
@@ -89,14 +89,14 @@ def main():
 
         # README
         readme = dist / "README.txt"
-        readme.write_text(f"""NLColver Benchmark Distribution
+        readme.write_text(f"""Zolver Benchmark Distribution
 ================================
 
 Server setup:
     sudo apt-get install -y libgmp10 libmpfr6 python3
 
 Run benchmark:
-    python3 tools/run_benchmark.py --solver ./bin/nlcolver --logic QF_LIA -j 128 -t 100
+    python3 tools/run_benchmark.py --solver ./bin/zolver --logic QF_LIA -j 128 -t 100
 
 Analyze results:
     python3 tools/analyze_benchmark.py --current <run_dir> --output <analysis_dir>
@@ -110,7 +110,7 @@ Build host glibc: {glibc_ver}
         # Create tar.gz
         output_path = Path(args.output).resolve()
         with tarfile.open(output_path, "w:gz") as tar:
-            tar.add(dist, arcname="nlcolver-dist")
+            tar.add(dist, arcname="zolver-dist")
 
         size_mb = output_path.stat().st_size / (1024 * 1024)
         print(f"Created: {output_path} ({size_mb:.2f} MB)")

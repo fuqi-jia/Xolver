@@ -2,7 +2,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <sstream>
 
-namespace nlcolver {
+namespace zolver {
 
 PolynomialNormalizer::PolynomialNormalizer(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -34,4 +34,4 @@ PolynomialNormalizer::CanonicalKey PolynomialNormalizer::canonicalKey(const Rati
     return oss.str();
 }
 
-} // namespace nlcolver
+} // namespace zolver

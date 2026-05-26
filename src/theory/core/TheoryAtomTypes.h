@@ -10,7 +10,7 @@
 #include <variant>
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 // Forward declaration
 class TheoryLemmaDatabase;
@@ -161,4 +161,4 @@ struct TheoryCheckResult {
     }
 };
 
-} // namespace nlcolver
+} // namespace zolver

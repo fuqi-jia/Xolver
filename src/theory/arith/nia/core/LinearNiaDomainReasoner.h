@@ -5,7 +5,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/core/TheorySolver.h"
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * LinearNiaDomainReasoner: extracts domain updates from single-variable
@@ -25,4 +25,4 @@ private:
     bool extractLinearForm(PolyId poly, mpz_class& a, mpz_class& c, std::string& var) const;
 };
 
-} // namespace nlcolver
+} // namespace zolver

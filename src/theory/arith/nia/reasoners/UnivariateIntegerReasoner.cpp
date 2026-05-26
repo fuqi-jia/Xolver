@@ -2,7 +2,7 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <cmath>
 
-namespace nlcolver {
+namespace zolver {
 
 UnivariateIntegerReasoner::UnivariateIntegerReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -197,4 +197,4 @@ NiaReasoningResult UnivariateIntegerReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace nlcolver
+} // namespace zolver

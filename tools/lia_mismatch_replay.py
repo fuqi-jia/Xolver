@@ -6,7 +6,7 @@ Usage:
     python tools/lia_mismatch_replay.py \
         --discrepancies panda-results/2026-05-21/lia/discrepancies.txt \
         --category convert \
-        --nlcolver ./build/bin/nlcolver \
+        --zolver ./build/bin/zolver \
         --z3 z3 \
         --limit 20 \
         --dump-dir /tmp/lia_dump \
@@ -14,9 +14,9 @@ Usage:
 
 This script:
 1. Reads discrepancies.txt and extracts mismatch cases for a given category.
-2. For each case, runs Z3, NLColver (normal), and NLColver (safe-mode).
+2. For each case, runs Z3, Zolver (normal), and Zolver (safe-mode).
 3. Compares results and reports which mismatches disappear in safe-mode.
-4. If --dump-dir is set, sets NLCOLVER_LIA_DUMP_DIR so NLColver dumps state.
+4. If --dump-dir is set, sets ZOLVER_LIA_DUMP_DIR so Zolver dumps state.
 """
 
 import argparse
@@ -63,7 +63,7 @@ def parse_discrepancies(path: str, category: Optional[str] = None):
             m = re.match(r"^(\S+\.smt2)\s*$", line.strip())
             if m:
                 filepath = m.group(1)
-            m = re.match(r"^\s*nlcolver:\s+(\w+)\s*\(", line)
+            m = re.match(r"^\s*zolver:\s+(\w+)\s*\(", line)
             if m:
                 nl_result = m.group(1).lower()
             m = re.match(r"^\s*compare:\s+(\w+)\s*\(", line)
@@ -107,13 +107,13 @@ def main():
     parser = argparse.ArgumentParser(description="LIA mismatch replay harness")
     parser.add_argument("--discrepancies", required=True, help="Path to discrepancies.txt")
     parser.add_argument("--category", default=None, help="Filter by category (e.g., convert)")
-    parser.add_argument("--nlcolver", default="./build/bin/nlcolver", help="Path to nlcolver binary")
+    parser.add_argument("--zolver", default="./build/bin/zolver", help="Path to zolver binary")
     parser.add_argument("--z3", default="z3", help="Path to z3 binary")
     parser.add_argument("--limit", type=int, default=20, help="Max cases to run")
     parser.add_argument("--timeout", type=float, default=30.0, help="Per-case timeout (seconds)")
     parser.add_argument("--dump-dir", default=None, help="Directory for LIA state dumps")
     parser.add_argument("--out", default="lia_replay_report.json", help="Output JSON report")
-    parser.add_argument("--nlcolver-extra", default=None, help="Extra flags passed to nlcolver (e.g. '--lia-safe-mode')")
+    parser.add_argument("--zolver-extra", default=None, help="Extra flags passed to zolver (e.g. '--lia-safe-mode')")
     parser.add_argument("--mode-name", default="safe", help="Name for the extra mode in reports")
     args = parser.parse_args()
 
@@ -129,7 +129,7 @@ def main():
 
     env_normal = os.environ.copy()
     env_safe = os.environ.copy()
-    env_safe["NLCOLVER_LIA_DUMP_DIR"] = args.dump_dir or ""
+    env_safe["ZOLVER_LIA_DUMP_DIR"] = args.dump_dir or ""
 
     for i, (filepath, nl_orig, cmp_orig) in enumerate(cases, 1):
         print(f"\n[{i}/{len(cases)}] {filepath}")
@@ -140,14 +140,14 @@ def main():
         z3_res, z3_time = run_solver(z3_cmd, args.timeout)
         print(f"  Z3:        {z3_res}  ({z3_time:.1f}ms)")
 
-        # Run NLColver normal mode
-        nl_cmd = [args.nlcolver, filepath]
+        # Run Zolver normal mode
+        nl_cmd = [args.zolver, filepath]
         nl_res, nl_time = run_solver(nl_cmd, args.timeout)
         print(f"  NL normal: {nl_res}  ({nl_time:.1f}ms)")
 
-        # Run NLColver extra mode (safe-mode by default, or user-specified)
-        extra_flags = shlex.split(args.nlcolver_extra) if args.nlcolver_extra else ["--lia-safe-mode"]
-        nl_extra_cmd = [args.nlcolver, filepath] + extra_flags
+        # Run Zolver extra mode (safe-mode by default, or user-specified)
+        extra_flags = shlex.split(args.zolver_extra) if args.zolver_extra else ["--lia-safe-mode"]
+        nl_extra_cmd = [args.zolver, filepath] + extra_flags
         nl_extra_res, nl_extra_time = run_solver(nl_extra_cmd, args.timeout)
         print(f"  NL {args.mode_name}:   {nl_extra_res}  ({nl_extra_time:.1f}ms)")
 

@@ -1,7 +1,7 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include <gmpxx.h>
 
-namespace nlcolver {
+namespace zolver {
 
 ToIntDefinitionalLowerer::ToIntDefinitionalLowerer(CoreIr& ir)
     : ir_(ir),
@@ -260,4 +260,4 @@ bool ToIntDefinitionalLowerer::refersToRealVar(ExprId e) const {
     return false;
 }
 
-} // namespace nlcolver
+} // namespace zolver

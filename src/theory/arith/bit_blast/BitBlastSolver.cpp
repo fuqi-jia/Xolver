@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace nlcolver::bitblast {
+namespace zolver::bitblast {
 
 bool BitBlastSolver::applicable(const std::vector<NormalizedNiaConstraint>& cs) const {
     for (const auto& c : cs) {
@@ -162,4 +162,4 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     return out;               // Unknown
 }
 
-} // namespace nlcolver::bitblast
+} // namespace zolver::bitblast

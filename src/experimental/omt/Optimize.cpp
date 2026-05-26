@@ -1,6 +1,6 @@
 #include "experimental/omt/Optimize.h"
 
-namespace nlcolver {
+namespace zolver {
 
 void Optimize::setObjective(ExprId objectiveExpr, const CoreIr&) {
     objectiveExpr_ = objectiveExpr;
@@ -11,4 +11,4 @@ Optimize::Result Optimize::solve(const CoreIr&) {
     return Result{Status::Unknown, mpq_class(0), {}};
 }
 
-} // namespace nlcolver
+} // namespace zolver

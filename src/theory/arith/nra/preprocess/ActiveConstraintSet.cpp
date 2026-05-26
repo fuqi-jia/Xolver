@@ -1,7 +1,7 @@
 #include "theory/arith/nra/preprocess/ActiveConstraintSet.h"
 #include <algorithm>
 
-namespace nlcolver {
+namespace zolver {
 
 static uint32_t litKey(SatLit lit) {
     return (static_cast<uint32_t>(lit.var) << 1) | (lit.sign ? 0u : 1u);
@@ -93,4 +93,4 @@ std::vector<ActiveConstraintEntry> ActiveConstraintSet::equationalConstraints() 
     return result;
 }
 
-} // namespace nlcolver
+} // namespace zolver

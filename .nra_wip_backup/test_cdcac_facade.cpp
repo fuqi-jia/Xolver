@@ -5,7 +5,7 @@
 #include "theory/arith/nra/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace nlcolver;
+using namespace zolver;
 
 TEST_CASE("CDCAC facade: constant unsat conflict") {
     auto kernel = createPolynomialKernel();

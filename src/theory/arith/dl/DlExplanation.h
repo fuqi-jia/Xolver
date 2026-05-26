@@ -5,7 +5,7 @@
 #include <vector>
 #include <unordered_set>
 
-namespace nlcolver {
+namespace zolver {
 
 // ============================================================================
 // Convert a negative cycle into a TheoryConflict clause.
@@ -27,4 +27,4 @@ inline TheoryConflict buildConflict(const std::vector<EdgeId>& cycle,
     return TheoryConflict{std::move(lits)};
 }
 
-} // namespace nlcolver
+} // namespace zolver

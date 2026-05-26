@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <functional>
 
-namespace nlcolver {
+namespace zolver {
 
 NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel) : kernel_(kernel) {}
 
@@ -209,4 +209,4 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     return std::nullopt;
 }
 
-} // namespace nlcolver
+} // namespace zolver

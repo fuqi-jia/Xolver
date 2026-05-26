@@ -6,11 +6,11 @@
 #include <somtparser/ir/node.h>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 /**
  * FrontendAdapter: converts SOMTParser AST (Node = shared_ptr<DAGNode>)
- * into NLColver internal CoreIr (ExprId-based dense array).
+ * into Zolver internal CoreIr (ExprId-based dense array).
  *
  * Uses unordered_map<Node, ExprId, NodeHash, NodeEqual> for memoization,
  * leveraging SOMTParser's existing hash-consing.
@@ -63,4 +63,4 @@ private:
     > sortMemo_;
 };
 
-} // namespace nlcolver
+} // namespace zolver

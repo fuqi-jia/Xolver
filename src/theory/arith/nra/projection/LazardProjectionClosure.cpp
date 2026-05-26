@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace nlcolver {
+namespace zolver {
 
 namespace {
 std::string polyKey(const RationalPolynomial& p) {
@@ -128,4 +128,4 @@ LazardIncompleteReason LazardProjectionClosure::build(
     return reason_;
 }
 
-}  // namespace nlcolver
+}  // namespace zolver

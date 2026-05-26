@@ -1,6 +1,6 @@
 #include "theory/arith/linearizer/SquareCutGenerator.h"
 
-namespace nlcolver {
+namespace zolver {
 
 std::vector<LinearCut> SquareCutGenerator::generate(
     const AuxTerm& s,
@@ -70,4 +70,4 @@ std::vector<LinearCut> SquareCutGenerator::generate(
     return cuts;
 }
 
-} // namespace nlcolver
+} // namespace zolver

@@ -6,7 +6,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace nlcolver {
+namespace zolver {
 
 class TheoryLemmaStorage;
 
@@ -120,4 +120,4 @@ struct TheoryAtom {
     ExprId exprId;
 };
 
-} // namespace nlcolver
+} // namespace zolver

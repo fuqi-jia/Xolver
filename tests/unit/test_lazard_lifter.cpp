@@ -8,7 +8,7 @@
 #include "theory/arith/nra/valuation/LazardLifter.h"
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"   // countRealRootsIn
 
-using namespace nlcolver;
+using namespace zolver;
 
 static VarId A0 = VarId{100}, X = VarId{1};
 

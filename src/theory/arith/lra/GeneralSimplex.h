@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <cassert>
 
-namespace nlcolver {
+namespace zolver {
 
 // ---------------------------------------------------------------------------
 // BoundValue: -inf, finite, or +inf
@@ -197,7 +197,7 @@ public:
     /** Verify all sparse tableau invariants. Returns true, or asserts in debug. */
     bool debugCheckInvariants() const;
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     int pivotCount() const { return pivotCount_; }
     void resetPivotCount() { pivotCount_ = 0; }
 #endif
@@ -241,7 +241,7 @@ private:
     std::vector<BoundReason> conflict_;
     bool hasImmediateConflict_ = false;
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
     int pivotCount_ = 0;
 #endif
 
@@ -323,7 +323,7 @@ private:
     std::optional<std::pair<DeltaRational, std::vector<BoundReason>>>
     proveFixedValueImpl(int var, std::unordered_set<int>& visited) const;
 
-#ifdef NLCOLVER_LRA_PROFILE
+#ifdef ZOLVER_LRA_PROFILE
 public:
     struct CoeffStats {
         int64_t mpqOpTimeUs = 0;
@@ -351,4 +351,4 @@ private:
 #endif
 };
 
-} // namespace nlcolver
+} // namespace zolver

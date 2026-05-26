@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace nlcolver {
+namespace zolver {
 
 // Lazard projection — provenance + incompleteness types (shared with the
 // closure; see LAZARD.md [H7]). The Lazard projection set for eliminating v
@@ -76,4 +76,4 @@ struct LazardOpResult {
 LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId v,
                                  const LazardProjectionConfig& cfg = LazardProjectionConfig());
 
-}  // namespace nlcolver
+}  // namespace zolver

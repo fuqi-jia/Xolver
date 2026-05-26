@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(NLColver VERSION 0.1.0 LANGUAGES CXX)
+project(Zolver VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,15 +8,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------------
 # Build options
 # ---------------------------------------------------------------------------
-option(NLCOLVER_BUILD_TESTS "Build unit tests and regression suite" ON)
-option(NLCOLVER_BUILD_TOOLS "Build CLI tools and utilities" ON)
-option(NLCOLVER_ENABLE_PROOFS "Enable proof production infrastructure" ON)
-option(NLCOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
-option(NLCOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
-option(NLCOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)
-option(NLCOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
-option(NLCOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
-option(NLCOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
+option(ZOLVER_BUILD_TESTS "Build unit tests and regression suite" ON)
+option(ZOLVER_BUILD_TOOLS "Build CLI tools and utilities" ON)
+option(ZOLVER_ENABLE_PROOFS "Enable proof production infrastructure" ON)
+option(ZOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
+option(ZOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
+option(ZOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)
+option(ZOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
+option(ZOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
+option(ZOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -26,12 +26,12 @@ endif()
 # Compiler flags
 # ---------------------------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    # Save flags for NLColver targets only (not propagated to submodules)
-    set(NLCOLVER_CXX_FLAGS -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+    # Save flags for Zolver targets only (not propagated to submodules)
+    set(ZOLVER_CXX_FLAGS -Wall -Wextra -Wpedantic -Wno-unused-parameter)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        list(APPEND NLCOLVER_CXX_FLAGS -g -O0)
+        list(APPEND ZOLVER_CXX_FLAGS -g -O0)
     else()
-        list(APPEND NLCOLVER_CXX_FLAGS -O3)
+        list(APPEND ZOLVER_CXX_FLAGS -O3)
     endif()
 endif()
 
@@ -108,21 +108,21 @@ if(EXISTS "${LIBPOLY_SOURCE_DIR}/CMakeLists.txt")
     set(LIBPOLY_BUILD_PYTHON_API OFF CACHE BOOL "" FORCE)
     set(LIBPOLY_BUILD_STATIC     ON  CACHE BOOL "" FORCE)
     set(LIBPOLY_BUILD_STATIC_PIC ON  CACHE BOOL "" FORCE)
-    if(NLCOLVER_BUILD_LIBPOLY_TESTS)
+    if(ZOLVER_BUILD_LIBPOLY_TESTS)
         # Build libpoly tests normally (remove EXCLUDE_FROM_ALL so test binaries compile)
         # libpoly test CMakeLists use ${CMAKE_SOURCE_DIR}/include which resolves to
-        # NLColver root, not libpoly root. Add the correct include path so tests compile.
+        # Zolver root, not libpoly root. Add the correct include path so tests compile.
         include_directories("${LIBPOLY_SOURCE_DIR}/include")
         add_subdirectory("${LIBPOLY_SOURCE_DIR}" third_party/libpoly)
     else()
         # Disable libpoly's own tests to keep ctest output clean.
         # Must override the CACHE variable because BUILD_TESTING=ON in CMakeCache
         # takes precedence over a plain set().
-        set(_NLCOLVER_SAVED_BUILD_TESTING ${BUILD_TESTING})
+        set(_ZOLVER_SAVED_BUILD_TESTING ${BUILD_TESTING})
         set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
         add_subdirectory("${LIBPOLY_SOURCE_DIR}" third_party/libpoly EXCLUDE_FROM_ALL)
-        set(BUILD_TESTING ${_NLCOLVER_SAVED_BUILD_TESTING} CACHE BOOL "" FORCE)
-        unset(_NLCOLVER_SAVED_BUILD_TESTING)
+        set(BUILD_TESTING ${_ZOLVER_SAVED_BUILD_TESTING} CACHE BOOL "" FORCE)
+        unset(_ZOLVER_SAVED_BUILD_TESTING)
     endif()
     set(LIBPOLY_FOUND TRUE)
     set(LIBPOLY_INCLUDE_DIRS "${LIBPOLY_SOURCE_DIR}/include")
@@ -135,7 +135,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Static build configuration
 # ---------------------------------------------------------------------------
-if(NLCOLVER_STATIC_BUILD)
+if(ZOLVER_STATIC_BUILD)
     message(STATUS "Static build enabled: -static -pthread")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -pthread")
     set(CMAKE_SHARED_LINKER_FLAGS "")
@@ -167,9 +167,9 @@ add_subdirectory(third_party/SOMTParser)
 # Version macros
 # ---------------------------------------------------------------------------
 add_compile_definitions(
-    NLCOLVER_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
-    NLCOLVER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
-    NLCOLVER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+    ZOLVER_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    ZOLVER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    ZOLVER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
 
 # ---------------------------------------------------------------------------
@@ -177,11 +177,11 @@ add_compile_definitions(
 # ---------------------------------------------------------------------------
 add_subdirectory(src)
 
-if(NLCOLVER_BUILD_TESTS)
+if(ZOLVER_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-if(NLCOLVER_BUILD_TOOLS)
+if(ZOLVER_BUILD_TOOLS)
     add_subdirectory(tools)
 endif()

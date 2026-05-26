@@ -5,7 +5,7 @@
 
 set -e
 
-SOLVER="./build/bin/nlcolver"
+SOLVER="./build/bin/zolver"
 JOBS=8
 TIMEOUT=30
 COMPARE="z3"

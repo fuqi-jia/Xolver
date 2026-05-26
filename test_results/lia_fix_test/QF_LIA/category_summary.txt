@@ -3,7 +3,7 @@ Per-Category Summary
 ======================================================================
 
 [20180326-Bromberger]  count=50
-  nlcolver: {'sat': 38, 'unsat': 8, 'timeout': 4}
+  zolver: {'sat': 38, 'unsat': 8, 'timeout': 4}
   compare:  {'sat': 40, 'unsat': 8, 'timeout': 2}
   mismatches: 0  diffs: 2
 
