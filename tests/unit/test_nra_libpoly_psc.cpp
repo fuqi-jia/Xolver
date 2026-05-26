@@ -36,6 +36,10 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
+#include <array>
+#include <random>
+#include <sstream>
+
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"
@@ -240,6 +244,161 @@ TEST_CASE("pscChain: degenerate (deg_v < 1 on a side) returns empty chain") {
     // Symmetric: also empty when the first side has deg_v < 1.
     std::vector<PolyId> chain2 = kernel.pscChain(c, a, x);
     CHECK(chain2.empty());
+}
+
+// ---------------------------------------------------------------------------
+// Task 2: Randomized differential CAD-equivalence oracle.
+//
+// The soundness keystone. For ~300 random RationalPolynomial pairs (p,q) over a
+// small integer-coefficient grid with modest degrees, and for each variable v
+// shared by both with deg_v >= 1 on both sides, we compare:
+//   det = principalSubresultantCoefficients(p,q,v,maxMatrixDim)   [reference,
+//                                                                  O(n!) determinant]
+//   lib = kernel.pscChain(pId, qId, v)                            [libpoly path]
+// and assert det.psc.size()==lib.size() and each index equal up to a nonzero
+// rational scale. A mismatch means the libpoly path is NOT CAD-equivalent
+// (main-variable / index-alignment / normalization bug) — a STOP-and-report
+// finding, never weaken the assertion to pass.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Human-readable rendering of a RationalPolynomial for failure diagnostics.
+std::string showRp(const RationalPolynomial& rp,
+                   const std::array<VarId, 3>& vars,
+                   const std::array<const char*, 3>& names) {
+    if (rp.isZero()) return "0";
+    std::ostringstream os;
+    bool first = true;
+    for (const auto& [key, coeff] : rp.terms()) {
+        if (!first) os << " + ";
+        first = false;
+        os << coeff.get_str();
+        for (const auto& [vid, exp] : key) {
+            const char* nm = "?";
+            for (size_t i = 0; i < vars.size(); ++i)
+                if (vars[i] == vid) nm = names[i];
+            os << "*" << nm << "^" << exp;
+        }
+    }
+    return os.str();
+}
+
+}  // namespace
+
+TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~300 pairs)") {
+    auto kernelPtr = createPolynomialKernel();
+    PolynomialKernel& kernel = *kernelPtr;
+
+    // Three candidate variables. Creation order fixes libpoly's default main
+    // variable (z, created last) — exercising pscChain's main-variable
+    // reordering when we eliminate x or y.
+    VarId x = mkVarId(kernel, "x");
+    VarId y = mkVarId(kernel, "y");
+    VarId z = mkVarId(kernel, "z");
+    std::array<VarId, 3> vars{x, y, z};
+    std::array<const char*, 3> names{"x", "y", "z"};
+
+    // Deterministic, reproducible RNG (fixed seed).
+    std::mt19937 rng(12345);
+    std::uniform_int_distribution<int> coeffDist(-3, 3);     // small integer coeffs
+    std::uniform_int_distribution<int> nVarsDist(2, 3);      // 2 or 3 variables active
+    std::uniform_int_distribution<int> nMonomialsDist(2, 5); // a handful of monomials
+    std::uniform_int_distribution<int> degDist(0, 3);        // per-variable degree 0..3
+
+    // Build one random RationalPolynomial over the first `nv` variables.
+    auto randomPoly = [&](int nv) {
+        RationalPolynomial p;
+        int nMon = nMonomialsDist(rng);
+        for (int m = 0; m < nMon; ++m) {
+            int c = coeffDist(rng);
+            if (c == 0) c = 1;  // avoid all-zero monomials
+            MonomialKey key;
+            for (int vi = 0; vi < nv; ++vi) {
+                int e = degDist(rng);
+                if (e > 0) key.emplace_back(vars[vi], e);
+            }
+            // MonomialKey must be sorted by varId; vars[] is already in creation
+            // order, but emplace order matches that, so it's already sorted.
+            p.addTerm(key, mpq_class(c));
+        }
+        p.normalize();
+        return p;
+    };
+
+    const int kNumPairs = 300;
+    const int kMaxMatrixDim = 12;
+
+    int pairsTested = 0;
+    int comparisons = 0;       // (pair, var) combinations actually compared
+    int skippedBudget = 0;     // skipped because determinant bailed
+    int mismatches = 0;
+
+    for (int iter = 0; iter < kNumPairs; ++iter) {
+        int nv = nVarsDist(rng);
+        RationalPolynomial p = randomPoly(nv);
+        RationalPolynomial q = randomPoly(nv);
+        ++pairsTested;
+
+        for (size_t vi = 0; vi < vars.size(); ++vi) {
+            VarId v = vars[vi];
+            int dp = p.degree(v);
+            int dq = q.degree(v);
+            // Both sides must have degree >= 1 in v for a nondegenerate chain.
+            if (dp < 1 || dq < 1) continue;
+
+            auto det = principalSubresultantCoefficients(p, q, v, kMaxMatrixDim);
+            if (det.budgetExceeded) {
+                ++skippedBudget;
+                continue;  // no reference to compare against
+            }
+
+            PolyId pId = rpToPolyId(p, kernel);
+            PolyId qId = rpToPolyId(q, kernel);
+            std::vector<PolyId> lib = kernel.pscChain(pId, qId, v);
+
+            ++comparisons;
+
+            // (a) chain length must match.
+            if (lib.size() != det.psc.size()) {
+                ++mismatches;
+                CHECK_MESSAGE(lib.size() == det.psc.size(),
+                              "CHAIN LENGTH MISMATCH iter=" << iter
+                              << " var=" << names[vi]
+                              << " p=[" << showRp(p, vars, names) << "]"
+                              << " q=[" << showRp(q, vars, names) << "]"
+                              << " lib.size=" << lib.size()
+                              << " det.size=" << det.psc.size());
+                continue;
+            }
+
+            // (b) each index equal up to a nonzero rational scale.
+            for (size_t j = 0; j < lib.size(); ++j) {
+                auto libRpOpt = RationalPolynomial::fromPolyId(lib[j], kernel);
+                REQUIRE(libRpOpt.has_value());
+                bool eq = equalUpToRationalScale(*libRpOpt, det.psc[j], kernel);
+                if (!eq) {
+                    ++mismatches;
+                    CHECK_MESSAGE(eq,
+                                  "PSC MISMATCH iter=" << iter
+                                  << " var=" << names[vi]
+                                  << " index=" << j
+                                  << " p=[" << showRp(p, vars, names) << "]"
+                                  << " q=[" << showRp(q, vars, names) << "]"
+                                  << " lib[" << j << "]=[" << showRp(*libRpOpt, vars, names) << "]"
+                                  << " det[" << j << "]=[" << showRp(det.psc[j], vars, names) << "]");
+                }
+            }
+        }
+    }
+
+    MESSAGE("differential: pairs=" << pairsTested
+            << " (pair,var) comparisons=" << comparisons
+            << " skipped(budgetExceeded)=" << skippedBudget
+            << " mismatches=" << mismatches);
+
+    // Must actually have exercised the path on a meaningful number of cases.
+    REQUIRE(comparisons > 50);
+    CHECK(mismatches == 0);
 }
 
 #endif  // ZOLVER_HAS_LIBPOLY
