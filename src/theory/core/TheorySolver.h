@@ -37,6 +37,12 @@ public:
     // Reset ONCE per fresh check-sat initialization
     virtual void reset() = 0;
 
+    // Drain ENTAILMENT-class propagations buffered during the most recent
+    // check() (theory tautologies: reasons ⟹ impliedBound). Default: none.
+    // Used by the SAT propagator to install sound bound-propagations during
+    // search. Must never return Guess/branch lemmas.
+    virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
+
     // -----------------------------------------------------------------------
     // Active linear context for nonlinear solvers (optional; default = no-op)
     // -----------------------------------------------------------------------

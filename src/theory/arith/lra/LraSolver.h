@@ -49,6 +49,11 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+    // ZOLVER_LRA_PROP (default OFF): drain sound Farkas row-propagations
+    // (reasons ⟹ impliedBound) buffered during the last check() so the SAT
+    // propagator can install them during search. Entailment-tagged only.
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
+
 protected:
     void onPush() override;
     void onPop(uint32_t n) override;
@@ -150,6 +155,17 @@ private:
 
     std::optional<TheoryLemma> tryConvertDerivedBound(
         const LraPropagationEngine::ExplainedBound& eb) const;
+
+    // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
+    // the Farkas reasons, tagged Entailment. Unlike tryConvertDerivedBound
+    // (which drops reasons -> bare unit, only safe for the dead lemmaDb path),
+    // this is safe to give the SAT solver during search.
+    std::optional<TheoryLemma> buildEntailmentLemma(
+        const LraPropagationEngine::ExplainedBound& eb) const;
+
+    // ZOLVER_LRA_PROP gate (read once) + this-check buffer of entailment props.
+    bool lraPropEnabled_ = false;
+    std::vector<TheoryLemma> entailmentProps_;
 
 #ifdef ZOLVER_LRA_PROFILE
     struct ProfileStats {

@@ -351,6 +351,31 @@ int CadicalTheoryPropagator::cb_propagate() {
     // Early conflicts are still returned because they are sound pruning.
     (void)isLemma;
 
+    // Lift ENTAILMENT-class theory propagations (e.g. LRA Farkas row-props,
+    // clause = ¬reasons ∨ implied). These are unconditional theory tautologies,
+    // sound to learn in any branch. Two guardrails before installing each:
+    //   - kind == Entailment (semantics, not theory);
+    //   - the clause is UNIT or FALSIFIED under the current assignment, i.e. all
+    //     but at most one literal is currently false. This verifies every
+    //     reason is actually asserted (reasons ⊆ trail) — a stale/unasserted
+    //     reason would leave >1 non-false literal and be skipped. A falsified
+    //     clause acts as a sound conflict; a unit clause propagates `implied`.
+    auto props = tm_.takeEntailmentPropagations();
+    for (auto& lemma : props) {
+        if (lemma.kind != LemmaKind::Entailment || lemma.lits.empty()) continue;
+        int nonFalse = 0;
+        for (SatLit lit : lemma.lits) {
+            auto it = currentAssignment_.find(lit.var);
+            bool isFalse = (it != currentAssignment_.end() && it->second != lit.sign);
+            if (!isFalse) ++nonFalse;
+            if (nonFalse > 1) break;
+        }
+        if (nonFalse > 1) continue;                 // reasons not all asserted
+        if (lemmaDb_.isInstalled(TheoryLemma{lemma.lits})) continue;
+        lemmaDb_.markInstalled(TheoryLemma{lemma.lits});
+        enqueuePendingClause(lemma.lits);
+    }
+
     return 0;
 }
 

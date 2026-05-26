@@ -40,6 +40,14 @@ public:
     virtual void backtrackToLevel(int level) = 0;
     virtual void setAssignmentView(TheoryAssignmentView* view) = 0;
     virtual TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) = 0;
+
+    // Drain ENTAILMENT-class theory propagations buffered during the most recent
+    // check() (e.g. LRA Farkas row-propagations). Default empty. Implementations
+    // must return ONLY unconditional entailments (never Guess/branch lemmas) and
+    // must return nothing in combination mode (shared-bus interaction is out of
+    // scope). The propagator additionally verifies each clause is unit/falsified
+    // under the current assignment before installing it.
+    virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
 };
 
 } // namespace zolver

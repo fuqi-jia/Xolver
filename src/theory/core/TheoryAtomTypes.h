@@ -84,11 +84,21 @@ struct TheoryConflict {
     std::vector<SatLit> clause;
 };
 
+// Semantic class of a lemma (master guardrail: tag by semantics, not theory).
+//   Entailment: an unconditional logical consequence (e.g. an LRA Farkas
+//               row-propagation reasons ⟹ impliedBound) — a theory tautology,
+//               sound to give the SAT solver in ANY branch.
+//   Guess:      a branch/case-split lemma (e.g. an NIA partial-assignment
+//               branch) that may prune valid models — only sound at a full
+//               model check, NOT during search.
+enum class LemmaKind : uint8_t { Guess, Entailment };
+
 // TheoryLemma stores a propagation lemma in the form:
 //   (¬reason₁ ∨ ¬reason₂ ∨ ... ∨ implied)
 // where each literal is expressed in its SAT-polarity form.
 struct TheoryLemma {
     std::vector<SatLit> lits;
+    LemmaKind kind = LemmaKind::Guess;  // conservative default
 };
 
 /**
