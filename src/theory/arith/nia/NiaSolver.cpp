@@ -66,6 +66,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.local-search",   &NiaSolver::stageLocalSearch);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     add("nia.branch",         &NiaSolver::stageBranch);
+
+    // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
+    // reasoning path. The backend is uncapped on this base and OOMs on dense
+    // AProVE inputs before any reasoning verdict, masking 357-refutation work.
+    // Default-on preserved; only an explicit non-empty/non-"0" value turns it off.
+    if (const char* e = std::getenv("ZOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
+        enableBitBlast_ = false;
 }
 
 void NiaSolver::onReset() {
