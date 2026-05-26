@@ -237,6 +237,46 @@ TEST_CASE("EqCancel fixpoint: [a*c-1>=0, b*a-a=0] with a,b,c>=0 -> a>=1,c>=1,b=1
     CHECK(ds.getDomain("b")->upper.value == 1);
 }
 
+// --- closer 2 (milestone 3): substitution of domain-FIXED vars into monomials.
+//     v fixed to val (lower==upper) ==> replace v by val in every poly. ---
+
+TEST_CASE("Substitution: b*a*c - b >= 0 with b fixed=1 -> a>=1, c>=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("c", mpz_class(0), mkReason(2));
+    ds.addLowerBound("b", mpz_class(1), mkReason(3));
+    ds.addUpperBound("b", mpz_class(1), mkReason(4));   // b fixed to 1
+
+    // b*a*c - b >= 0 ; substitute b=1 => a*c - 1 >= 0 => a,c >= 1
+    PolyId bac = mkMonomial(*kernel, {"b", "a", "c"});
+    PolyId poly = kernel->sub(bac, kernel->mkVar(kernel->getOrCreateVar("b")));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(5)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("c")->lower.value == 1);
+}
+
+TEST_CASE("Substitution: a - b = 0 with b>=1 (NOT fixed) -> a NOT pinned") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("b", mpz_class(1), mkReason(1));   // b >= 1 but NO upper -> not fixed
+    ds.addLowerBound("a", mpz_class(0), mkReason(2));
+
+    // a - b = 0 ; b is not fixed, so substituting b=1 (wrongly) would pin a=1.
+    PolyId poly = kernel->sub(kernel->mkVar(kernel->getOrCreateVar("a")),
+                              kernel->mkVar(kernel->getOrCreateVar("b")));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Eq, mkReason(3)};
+
+    auto r = reasoner.run({cc}, ds);
+    const IntDomain* da = ds.getDomain("a");
+    CHECK((da == nullptr || !da->hasUpper));   // a must NOT be pinned to a value
+}
+
 TEST_CASE("ProductPositivity: multi-monomial a*b + c - 1 >= 0 -> NoChange (milestone 1)") {
     auto kernel = createPolynomialKernel();
     ProductPositivityReasoner reasoner(*kernel);

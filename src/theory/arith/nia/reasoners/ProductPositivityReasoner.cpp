@@ -1,6 +1,7 @@
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include <gmpxx.h>
 #include <string>
+#include <algorithm>
 #include <unordered_set>
 
 namespace zolver {
@@ -9,9 +10,25 @@ namespace {
 
 using MonomialTerm = PolynomialKernel::MonomialTerm;
 
-// True iff every factor variable of `mono` is known-nonnegative in `domains`.
-// Appends each factor's nonneg lower-bound reasons to `reasons` (needed so the
-// derived bound's eventual empty-domain conflict clause is not over-strong).
+// Working constraint: `poly` may be rewritten by substitution; `extra`
+// accumulates the reasons of every fixed-variable equality substituted into it,
+// so any bound derived from this constraint carries a sound justification.
+struct WorkC {
+    PolyId poly;
+    Relation rel;
+    SatLit reason;
+    std::vector<SatLit> extra;
+};
+
+std::vector<SatLit> baseReasons(const WorkC& wc) {
+    std::vector<SatLit> r;
+    r.push_back(wc.reason);
+    r.insert(r.end(), wc.extra.begin(), wc.extra.end());
+    return r;
+}
+
+// True iff every factor variable of `mono` is known-nonnegative; appends each
+// factor's nonneg lower-bound reasons to `reasons`.
 bool factorsNonneg(const PolynomialKernel& kernel, const MonomialTerm& mono,
                    const DomainStore& domains, std::vector<SatLit>& reasons) {
     for (const auto& pe : mono.powers) {
@@ -23,8 +40,8 @@ bool factorsNonneg(const PolynomialKernel& kernel, const MonomialTerm& mono,
     return true;
 }
 
-// True iff `v` is established strictly positive (>= 1, hence != 0) in domains.
-// Appends the justifying reasons.
+// True iff `v` is established strictly positive (>= 1, hence != 0). Appends the
+// justifying reasons.
 bool establishedNonzero(const PolynomialKernel& kernel, VarId v,
                         const DomainStore& domains, std::vector<SatLit>& reasons) {
     std::string vname(kernel.varName(v));
@@ -34,8 +51,6 @@ bool establishedNonzero(const PolynomialKernel& kernel, VarId v,
     return true;
 }
 
-// Set `var` to the fixed value `val`. Returns true iff this tightened the
-// domain (so the fixpoint makes progress only on real change).
 bool fixVar(DomainStore& domains, const std::string& var, const mpz_class& val,
             const std::vector<SatLit>& reasons, bool& change) {
     const IntDomain* d = domains.getDomain(var);
@@ -48,17 +63,66 @@ bool fixVar(DomainStore& domains, const std::string& var, const mpz_class& val,
     return true;
 }
 
+// ---- Closer 2: substitute domain-FIXED variables into every working poly. --
+// v fixed (lower==upper==val) is a proven equality v=val; substituting it is
+// always sound. The fixed-var's reasons are carried onto each constraint it is
+// substituted into. (A var is substituted at most once per constraint -- after
+// substitution it no longer appears -- so `extra` cannot grow unboundedly.)
+void substituteFixedVars(PolynomialKernel& kernel, std::vector<WorkC>& work,
+                         const DomainStore& domains, bool& change) {
+    for (const auto& kv : domains.getAllDomains()) {
+        const std::string& name = kv.first;
+        const IntDomain& dom = kv.second;
+        if (!(dom.hasLower && dom.hasUpper && dom.lower.value == dom.upper.value)) continue;
+        auto vOpt = kernel.findVar(name);
+        if (!vOpt) continue;
+        mpq_class val(dom.lower.value);
+        std::vector<SatLit> rs = dom.lower.reasons;
+        rs.insert(rs.end(), dom.upper.reasons.begin(), dom.upper.reasons.end());
+        for (auto& wc : work) {
+            auto vars = kernel.variables(wc.poly);
+            if (std::find(vars.begin(), vars.end(), name) == vars.end()) continue;
+            auto np = kernel.substituteRational(wc.poly, *vOpt, val);
+            if (np && *np != wc.poly) {
+                wc.poly = *np;
+                wc.extra.insert(wc.extra.end(), rs.begin(), rs.end());
+                change = true;
+            }
+        }
+    }
+}
+
+// ---- Constant contradiction: a (substituted) constraint whose poly is a -----
+// constant k violating its relation (e.g. -1 >= 0, or 1 = 0) is an immediate
+// sound UNSAT; the conflict clause is the constraint plus the substitutions
+// that produced the constant.
+std::optional<NiaReasoningResult> checkConstantContradiction(
+    PolynomialKernel& kernel, const std::vector<WorkC>& work) {
+    for (const auto& c : work) {
+        if (!kernel.isConstant(c.poly)) continue;
+        mpq_class k = kernel.toConstant(c.poly);
+        bool violated = false;
+        switch (c.rel) {
+            case Relation::Geq: violated = (k < 0); break;
+            case Relation::Eq:  violated = (k != 0); break;
+            case Relation::Leq: violated = (k > 0); break;
+            case Relation::Neq: violated = (k == 0); break;
+            default: break;
+        }
+        if (violated) {
+            return NiaReasoningResult{NiaReasoningKind::Conflict,
+                                      TheoryConflict{baseReasons(c)}, std::nullopt};
+        }
+    }
+    return std::nullopt;
+}
+
 // ---- Rule A: sign-absorption / product-positivity -------------------------
-// Geq sum(ci*mi)+d>=0 with exactly one positive-coeff monomial M+ and every
-// other non-constant monomial negative-coeff with nonneg factors: the negatives
-// are absorbed, so c+*M+ >= -d, hence M+ >= ceil(-d/c+). If >= 1 and every
-// factor of M+ is known-nonneg, each factor >= 1. Eq handles only the single
-// (positive) monomial case. Sets `change`; returns a Conflict result or nullopt.
 std::optional<NiaReasoningResult> applySignAbsorption(
-    PolynomialKernel& kernel, const std::vector<NormalizedNiaConstraint>& constraints,
+    PolynomialKernel& kernel, const std::vector<WorkC>& work,
     DomainStore& domains, bool& change) {
 
-    for (const auto& c : constraints) {
+    for (const auto& c : work) {
         if (c.rel != Relation::Geq && c.rel != Relation::Eq) continue;
         auto termsOpt = kernel.terms(c.poly);
         if (!termsOpt) continue;
@@ -79,8 +143,7 @@ std::optional<NiaReasoningResult> applySignAbsorption(
             if (posCount != 1 || pos == nullptr) continue;
         }
 
-        std::vector<SatLit> reasons;
-        reasons.push_back(c.reason);
+        std::vector<SatLit> reasons = baseReasons(c);
 
         if (c.rel == Relation::Geq) {
             bool ok = true;
@@ -118,28 +181,22 @@ std::optional<NiaReasoningResult> applySignAbsorption(
     return std::nullopt;
 }
 
-// ---- Rule B (closer 1): equality common-factor cancellation ---------------
-// a*f = 0 with a established != 0  ==>  f = 0.  Concretely: an Eq whose every
-// monomial shares a variable v that is established nonzero (v>=1); cancel one
-// power of v from each monomial. If the quotient is linear-univariate c*w + d,
-// derive w = -d/c. Sound only because v != 0 is *established*, never assumed.
+// ---- Closer 1: equality common-factor cancellation ------------------------
 std::optional<NiaReasoningResult> applyEqCancellation(
-    PolynomialKernel& kernel, const std::vector<NormalizedNiaConstraint>& constraints,
+    PolynomialKernel& kernel, const std::vector<WorkC>& work,
     DomainStore& domains, bool& change) {
 
-    for (const auto& c : constraints) {
+    for (const auto& c : work) {
         if (c.rel != Relation::Eq) continue;
         auto termsOpt = kernel.terms(c.poly);
         if (!termsOpt) continue;
         const auto& terms = *termsOpt;
         if (terms.size() < 2) continue;
 
-        // A constant term cannot share a variable factor -> no common var.
         bool hasConst = false;
         for (const auto& t : terms) if (t.powers.empty()) { hasConst = true; break; }
         if (hasConst) continue;
 
-        // Common variables = present (exp>=1) in EVERY monomial.
         std::unordered_set<VarId> common;
         for (const auto& pe : terms[0].powers) common.insert(pe.first);
         for (size_t i = 1; i < terms.size() && !common.empty(); ++i) {
@@ -151,13 +208,10 @@ std::optional<NiaReasoningResult> applyEqCancellation(
         if (common.empty()) continue;
 
         for (VarId v : common) {
-            std::vector<SatLit> reasons;
-            reasons.push_back(c.reason);
+            std::vector<SatLit> reasons = baseReasons(c);
             if (!establishedNonzero(kernel, v, domains, reasons)) continue;
 
-            // Quotient poly/v: decrement one power of v in each monomial.
             mpz_class qConst = 0;
-            std::vector<const MonomialTerm*> qNonConst;
             std::vector<MonomialTerm> reduced;
             reduced.reserve(terms.size());
             for (const auto& t : terms) {
@@ -174,12 +228,12 @@ std::optional<NiaReasoningResult> applyEqCancellation(
                 }
                 reduced.push_back(std::move(rt));
             }
+            std::vector<const MonomialTerm*> qNonConst;
             for (const auto& rt : reduced) {
                 if (rt.powers.empty()) qConst += rt.coefficient;
                 else qNonConst.push_back(&rt);
             }
 
-            // Only the linear-univariate quotient  cw*w + d = 0  is handled.
             if (qNonConst.size() != 1) continue;
             const MonomialTerm& m = *qNonConst[0];
             if (m.powers.size() != 1 || m.powers[0].second != 1) continue;
@@ -193,7 +247,7 @@ std::optional<NiaReasoningResult> applyEqCancellation(
                 return NiaReasoningResult{NiaReasoningKind::Conflict,
                                           domains.buildEmptyDomainConflict(), std::nullopt};
             }
-            break;  // one cancellation per constraint per sweep
+            break;
         }
     }
     return std::nullopt;
@@ -207,12 +261,18 @@ ProductPositivityReasoner::ProductPositivityReasoner(PolynomialKernel& kernel)
 NiaReasoningResult ProductPositivityReasoner::run(
     const std::vector<NormalizedNiaConstraint>& constraints, DomainStore& domains) {
 
+    std::vector<WorkC> work;
+    work.reserve(constraints.size());
+    for (const auto& c : constraints) work.push_back({c.poly, c.rel, c.reason, {}});
+
     bool anyChange = false;
-    constexpr int kMaxIters = 32;   // bounded fixpoint (monotone bound tightening)
+    constexpr int kMaxIters = 32;
     for (int iter = 0; iter < kMaxIters; ++iter) {
         bool iterChange = false;
-        if (auto r = applySignAbsorption(kernel_, constraints, domains, iterChange)) return *r;
-        if (auto r = applyEqCancellation(kernel_, constraints, domains, iterChange)) return *r;
+        substituteFixedVars(kernel_, work, domains, iterChange);
+        if (auto r = checkConstantContradiction(kernel_, work)) return *r;
+        if (auto r = applySignAbsorption(kernel_, work, domains, iterChange)) return *r;
+        if (auto r = applyEqCancellation(kernel_, work, domains, iterChange)) return *r;
         anyChange |= iterChange;
         if (!iterChange) break;
     }
