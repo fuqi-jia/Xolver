@@ -172,6 +172,71 @@ TEST_CASE("SignAbsorption: 2*a*b - c - 3 >= 0 with a,b,c>=0 -> a>=1, b>=1") {
     CHECK(ds.getDomain("b")->lower.value == 1);
 }
 
+// --- closer 1 (milestone 3): equality common-factor cancellation.
+//     a*f = 0 with a != 0 (established a >= 1) ==> f = 0. ---
+
+TEST_CASE("EqCancel: b*a - a = 0 with a>=1 -> b fixed to 1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(1), mkReason(1));   // a >= 1 (established nonzero)
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+
+    // b*a - a = 0  <=>  a*(b-1) = 0 ; a != 0  =>  b = 1
+    PolyId ba = mkMonomial(*kernel, {"b", "a"});
+    PolyId poly = kernel->sub(ba, kernel->mkVar(kernel->getOrCreateVar("a")));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Eq, mkReason(3)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    REQUIRE(ds.getDomain("b") != nullptr);
+    CHECK(ds.getDomain("b")->hasLower);
+    CHECK(ds.getDomain("b")->hasUpper);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+    CHECK(ds.getDomain("b")->upper.value == 1);
+}
+
+TEST_CASE("EqCancel: b*a - a = 0 with a possibly 0 (a>=0) -> b NOT fixed (guard)") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));   // a >= 0, could be 0
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+
+    PolyId ba = mkMonomial(*kernel, {"b", "a"});
+    PolyId poly = kernel->sub(ba, kernel->mkVar(kernel->getOrCreateVar("a")));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Eq, mkReason(3)};
+
+    auto r = reasoner.run({cc}, ds);
+    // a may be 0 -> cancellation unsound -> b must NOT be pinned.
+    const IntDomain* db = ds.getDomain("b");
+    CHECK((db == nullptr || !db->hasUpper));
+}
+
+TEST_CASE("EqCancel fixpoint: [a*c-1>=0, b*a-a=0] with a,b,c>=0 -> a>=1,c>=1,b=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    for (const char* v : {"a", "b", "c"}) ds.addLowerBound(v, mpz_class(0), mkReason(1));
+
+    // sign-absorption on a*c-1>=0 gives a>=1,c>=1; THEN eq-cancel on b*a-a=0
+    // (now a>=1) gives b=1 -- requires the rules to chain within one run().
+    PolyId ac = mkMonomial(*kernel, {"a", "c"});
+    PolyId c1 = kernel->sub(ac, kernel->mkConst(mpq_class(1)));
+    PolyId ba = mkMonomial(*kernel, {"b", "a"});
+    PolyId c2 = kernel->sub(ba, kernel->mkVar(kernel->getOrCreateVar("a")));
+
+    auto r = reasoner.run({{c1, Relation::Geq, mkReason(2)},
+                           {c2, Relation::Eq,  mkReason(3)}}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("c")->lower.value == 1);
+    REQUIRE(ds.getDomain("b") != nullptr);
+    CHECK(ds.getDomain("b")->hasUpper);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+    CHECK(ds.getDomain("b")->upper.value == 1);
+}
+
 TEST_CASE("ProductPositivity: multi-monomial a*b + c - 1 >= 0 -> NoChange (milestone 1)") {
     auto kernel = createPolynomialKernel();
     ProductPositivityReasoner reasoner(*kernel);
