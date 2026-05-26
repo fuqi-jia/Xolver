@@ -1155,6 +1155,18 @@ public:
         if (result == SatSolver::SolveResult::Sat) {
             lastModel_ = theoryManager.getModel();
             ret = Result::Sat;
+            // Merge the boolean-variable values captured from the live SAT
+            // assignment into the model OUTPUT. Pure-boolean variables are not
+            // theory-tracked, so without this the model builder defaults them
+            // to false even when they were asserted true (e.g. ite_nested_sat:
+            // `(assert c1)(assert c2)` printed c1=c2=false). emplace = first
+            // wins, so any authoritative theory value is preserved.
+            if (!boolVarVals.empty()) {
+                if (!lastModel_) lastModel_ = TheorySolver::TheoryModel{};
+                for (const auto& [name, val] : boolVarVals) {
+                    lastModel_->assignments.emplace(name, val);
+                }
+            }
             // NOTE: we intentionally do NOT gate the SAT verdict on
             // re-validating the extracted model against the original
             // assertions. Verdict soundness ("a model exists", derived by
