@@ -66,12 +66,16 @@ consistent. A5 alternative (heavier): share `dumpModel`'s token-resolution with
 - euf (15, pure QF_UF, uninterpreted sort): 001, 008, 022, 024, 026, 028, 029, 042, 043, 044, 050, 052, 053, 058, 062 — need `EufSolver::getModel` to emit eclass-rep function tables (uninterpreted-sort interp); validator's UFApply arg/return encoding then extends to opaque tokens.
 - arrays (5): ax_010, alia_005, alra_010, auflia_004, auflra_003
 
-### A2 (nonlinear) — algebraic-number witnesses (14)
+### A2 (nonlinear) — algebraic-number witnesses (14) — RECOVERED (0f01f60)
 NRA/NIRA witnesses are real-algebraic (e.g. √2); the string channel can't carry
-them and CMS's rational search can't hit them. Recovery: forward the exact
-`RealValue`/algebraic witness into the model so the validator can evaluate it.
-- nra (12): 003, 014, 022, 036, 047, 057, 066, 093, 094, 097, 138, 140
-- nira (2): 009, 023
+them and CMS's rational search can't hit them. **Fixed (Agent 5, 0f01f60):**
+ArithModelValidator now evaluates over `RealValue` (rational ⊕ algebraic) and
+reads the exact typed witness from `numericAssignments` via
+`setRealAssignments` (consulted before the rational `num_` map). All 14 recover
+`unknown → sat` under `ZOLVER_PP_VALIDATE_NONLINEAR_SAT`; rational inputs
+round-trip losslessly so the default 632/632 path is unchanged.
+- nra (12): 003, 014, 022, 036, 047, 057, 066, 093, 094, 097, 138, 140 ✅
+- nira (2): 009, 023 ✅
 
 ### Residual numeric-UF / mixed (12) — harder cases CMS didn't solve+validate
 CMS is an incomplete candidate search; these numeric-UF / mixed models aren't
