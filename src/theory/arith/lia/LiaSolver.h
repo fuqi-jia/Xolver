@@ -63,6 +63,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    void setCareGraph(const CareGraph* cg) override { careGraph_ = cg; }
+
     std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
 
     void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;
@@ -117,6 +119,7 @@ private:
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    const CareGraph* careGraph_ = nullptr;  // ZOLVER_COMB_CAREGRAPH
 
     std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
 

@@ -1,6 +1,7 @@
 #include "util/MpqUtils.h"
 #include "theory/arith/lra/LraSolver.h"
 #include "util/MpqUtils.h"
+#include "theory/combination/CareGraph.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -577,6 +578,13 @@ LraSolver::getDeducedSharedEqualities() {
     std::vector<TheorySolver::SharedEqualityPropagation> result;
     for (size_t i = 0; i < sharedVars.size(); ++i) {
         for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+            // Care-graph prune (ZOLVER_COMB_CAREGRAPH): only propagate an
+            // implied equality to EUF if some theory cares about the pair (a
+            // UF/array arg or Eq/Distinct operand). Skipping an inert pair loses
+            // nothing EUF could use, and not propagating a fact never creates a
+            // conflict, so it cannot cause a wrong UNSAT.
+            if (careGraph_ && !careGraph_->caresPair(sharedVars[i], sharedVars[j]))
+                continue;
             auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
             if (reasons.empty()) continue;
             result.push_back(TheorySolver::SharedEqualityPropagation{

@@ -1,6 +1,7 @@
 #include "util/MpqUtils.h"
 #include "theory/arith/lia/LiaSolver.h"
 #include "util/MpqUtils.h"
+#include "theory/combination/CareGraph.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomTypes.h"
@@ -878,6 +879,11 @@ LiaSolver::getDeducedSharedEqualities() {
         if (terms.size() < 2) continue;
         for (size_t i = 0; i < terms.size(); ++i) {
             for (size_t j = i + 1; j < terms.size(); ++j) {
+                // Care-graph prune (ZOLVER_COMB_CAREGRAPH): skip same-value
+                // pairs no theory cares about. Sound (under-propagation cannot
+                // cause wrong UNSAT).
+                if (careGraph_ && !careGraph_->caresPair(terms[i].first, terms[j].first))
+                    continue;
                 std::vector<SatLit> reasons;
                 reasons.insert(reasons.end(), terms[i].second.begin(), terms[i].second.end());
                 reasons.insert(reasons.end(), terms[j].second.begin(), terms[j].second.end());
@@ -915,6 +921,11 @@ LiaSolver::getDeducedSharedEqualities() {
         }
         for (size_t i = 0; i < sharedVars.size(); ++i) {
             for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+                // Care-graph prune (ZOLVER_COMB_CAREGRAPH): only propagate to
+                // EUF for pairs some theory cares about. Sound: under-propagation
+                // loses completeness (caught by ModelValidator), never UNSAT.
+                if (careGraph_ && !careGraph_->caresPair(sharedVars[i], sharedVars[j]))
+                    continue;
                 auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
                 if (reasons.empty()) continue;
                 result.push_back(TheorySolver::SharedEqualityPropagation{

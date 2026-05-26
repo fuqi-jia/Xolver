@@ -5,6 +5,8 @@
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/combination/SharedEqualityManager.h"
+#include "theory/combination/CareGraph.h"
+#include "theory/combination/ConflictMinimizer.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -22,7 +24,7 @@ public:
     void clearSolvers();
 
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
-    bool isCombinationMode() const { return combinationMode_; }
+    bool isCombinationMode() const override { return combinationMode_; }
 
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }
@@ -87,6 +89,35 @@ private:
     AggregateStats aggStats_;
 
     SharedEqualityManager sharedEqMgr_;
+
+    // Demand-driven care graph (ZOLVER_COMB_CAREGRAPH, default OFF). Built once
+    // per solve from the purified IR; prunes the O(n^2) shared-pair loops
+    // (deduced-equality propagation + model-based arrangement splitting) to
+    // pairs that can actually fire a theory inference. Under-approximation =>
+    // sound (lost completeness caught by ModelValidator, never wrong UNSAT).
+    CareGraph careGraph_;
+    bool careGraphEnabled_ = false;
+    bool careGraphEnvChecked_ = false;
+    void ensureCareGraph();
+
+    // Theory-agnostic combination conflict/lemma minimization (ZOLVER_SAT_MIN,
+    // default OFF). Dedups literals in interface/theory conflicts and lemmas.
+    // Always sound (dedup preserves the clause's literal set).
+    bool satMinEnabled_ = false;
+    bool satMinEnvChecked_ = false;
+    bool useSatMin();
+
+    // Model-based theory combination for the non-convex combined logics
+    // (ZOLVER_COMB_MODEL_BASED, default OFF). Extends the array-only arrangement
+    // splitting to QF_UFLIA/UFNIA/UFNRA: at Full effort, force the Nelson-Oppen
+    // arrangement over shared scalars to be CLOSED before reporting Sat, so the
+    // combination cannot return a per-theory-consistent-but-globally-inconsistent
+    // model (the existing false-SAT class). The split is a tautology over a
+    // shared-equality atom, so it is sound by construction; the theories react
+    // through the already-validated interface (dis)equality paths.
+    bool modelBasedEnabled_ = false;
+    bool modelBasedEnvChecked_ = false;
+    bool useModelBased();
 
     struct PendingSharedEqEvent {
         SharedTermId a;

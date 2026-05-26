@@ -40,6 +40,11 @@ public:
     virtual void backtrackToLevel(int level) = 0;
     virtual void setAssignmentView(TheoryAssignmentView* view) = 0;
     virtual TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) = 0;
+
+    // Whether the theory stack runs in Nelson-Oppen combination mode. Lets the
+    // SAT propagator scope combination-only policies (e.g. the Standard-effort
+    // early-conflict deferral floor) without depending on TheoryManager.
+    virtual bool isCombinationMode() const { return false; }
 };
 
 } // namespace zolver
