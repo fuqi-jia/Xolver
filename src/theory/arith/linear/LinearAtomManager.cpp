@@ -48,7 +48,16 @@ int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
 
     int auxVar = gs.addConstraint(gsTerms, rhs);
     formToAux_[key] = auxVar;
+    auxToForm_[auxVar] = key;
     return auxVar;
+}
+
+bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOut) const {
+    auto it = auxToForm_.find(aux);
+    if (it == auxToForm_.end()) return false;
+    lhsOut = it->second.lhs;
+    rhsOut = it->second.rhs;
+    return true;
 }
 
 bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
