@@ -24,3 +24,18 @@
 
   # panda7: 其余全部（可判定/快速逻辑 + UF/array 组合 + 差分逻辑，≈42,313）
   ./zolver-dist/tools/deploy_and_run.sh run lia,nra,lra,uf,uflra,uflia,ufnia,ufnra,lira,nira,idl,rdl,ax,alia,auflia -j 200 -t 30 --compare-with z3
+
+  # ==========================================================================
+  # 3-机方案（panda1 + panda2 + panda7）— 当前方案。按"计算量级"分配而非纯数量：
+  #   NIA 独占（最重、最常 timeout）/ 非线性实数+混合 / 线性整数+UF+数组+差分（快、量大）
+  # timeout 仍取 30s，重点查 soundness bug（与 z3 对比找不一致）；多一台机后可酌情调到 -t 60。
+  # ==========================================================================
+
+  # panda1: NIA 独占（≈25,452，undecidable，最重、最易 timeout、最易出 soundness bug）
+  ./zolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 30 --compare-with z3
+
+  # panda2: 非线性实数 + 混合（NRA/LRA/NIRA/LIRA，量约 14k 但单例计算重）
+  ./zolver-dist/tools/deploy_and_run.sh run nra,lra,nira,lira -j 200 -t 30 --compare-with z3
+
+  # panda7: 线性整数 + 差分 + UF/array 组合（≈28k，多数可判定、收敛快）
+  ./zolver-dist/tools/deploy_and_run.sh run lia,idl,rdl,uf,uflra,uflia,ufnia,ufnra,ax,alia,auflia -j 200 -t 30 --compare-with z3
