@@ -225,9 +225,11 @@ public:
         if (!lastModel_->arrayInterps.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
+            validator.setFunctionInterps(&lastModel_->functionInterps);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
+            validator.setFunctionInterps(&lastModel_->functionInterps);
             v = validator.validate(originalAssertions_);
         }
         return v == ArithModelValidator::Verdict::Satisfied;
@@ -1294,11 +1296,38 @@ public:
                 lastModel_->assignments.emplace(name, val);
             }
             if (!modelPositivelyValidates()) {
-                lastUnknownReason_ =
-                    "strict-validation: model not positively confirmed "
-                    "(Indeterminate) — gated to Unknown (sound)";
-                lastModel_.reset();
-                ret = Result::Unknown;
+                // RECOVERY (unknown -> correct sat): the theory's extracted
+                // model could not be positively confirmed, but the verdict is
+                // sat, so a satisfying model exists. Search for a complete one
+                // (CandidateModelSearch builds full numeric models AND function
+                // interps), then INDEPENDENTLY re-validate it. We keep sat only
+                // if the independent validator now confirms Satisfied — so this
+                // recovers genuine sats without ever trusting an unconfirmed
+                // model. Cases the search/validator still cannot confirm
+                // (uninterpreted-sort UF, algebraic NRA witnesses, …) remain
+                // the genuinely-hard residual and stay unknown.
+                auto saved = std::move(lastModel_);
+                CandidateModelSearch::Config cfg;
+                cfg.assertionRootsOverride = originalAssertions_;
+                cfg.allowUF = true;
+                CandidateModelSearch cms(*ir, logic, cfg);
+                auto rec = cms.run();
+                bool recovered = false;
+                if (rec.found) {
+                    lastModel_ = rec.model;
+                    for (const auto& [name, val] : boolVarVals) {
+                        lastModel_->assignments.emplace(name, val);
+                    }
+                    recovered = modelPositivelyValidates();
+                }
+                if (!recovered) {
+                    lastModel_ = std::move(saved);
+                    lastUnknownReason_ =
+                        "strict-validation: model not positively confirmed "
+                        "(Indeterminate) — gated to Unknown (sound)";
+                    lastModel_.reset();
+                    ret = Result::Unknown;
+                }
             }
         }
 

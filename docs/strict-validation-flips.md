@@ -12,47 +12,59 @@ Promotion to default-on waits until model extraction lets the validator confirm
 these.
 
 ## Result (632-case regression)
-- Flag **OFF**: 632/632 PASS, 0 unsound (the non-gated validator fixes —
-  by-value assignment maps + robust bool-var detection — do not regress).
-- Flag **ON**: 555 PASS, **77 sat→unknown**, **0 unsound**.
+- Flag **OFF**: 632/632 PASS, 0 unsound.
+- Flag **ON, before recovery**: 555 PASS, 77 sat→unknown, 0 unsound.
+- Flag **ON, after recovery (current)**: **586 PASS, 46 sat→unknown, 0 unsound** —
+  **31 flips recovered to CORRECT sat**.
 
-Pure-boolean / linear-arith cases with complete models confirm and stay `sat`
-(the gate populates boolean-variable values from the live SAT assignment). The
-77 below are genuine **model-extraction incompleteness** — the verdict is
-correct but the produced model cannot be positively re-validated.
+## Recovery mechanism (the unknown → correct-answer layer)
+Two additions turn unknown back into correct sat without ever trusting an
+unconfirmed model:
+1. `ArithModelValidator` now evaluates `UFApply` by table lookup against a
+   function interpretation (numeric-arg tuples, matching CMS's `get_str()`
+   encoding).
+2. When the theory's extracted model is not positively confirmed, the strict
+   gate falls back to `CandidateModelSearch` — which builds a COMPLETE numeric
+   model AND function interps — then **independently re-validates** it. `sat` is
+   kept only if the independent validator confirms `Satisfied`. Sound: still
+   sat→unknown-only; never trusts an unconfirmed model.
+
+Recovered (31): all of rdl(3), lira(1); most of ufnia(5/6), uflra(4/6),
+uflia(6/11); idl(2/4); nira(2/4); the rational-root nra(4/16).
+
+## Residual (46) — genuinely-hard, routed to owning agents
+The 46 below cannot be confirmed by CMS+validator yet. They are the true
+recovery target for the theory agents.
 
 ## Flips by owning agent (completeness recovery)
 
-### A3 (EUF + arrays) / A4 (combination) — no function/array interp to evaluate (42)
-The validator has no UF-application or array interpretation, so any model whose
-satisfaction depends on `f(...)`/`select`/`store` is Indeterminate. Recovery:
-extract complete function/array interpretations into the model AND/OR extend
-`ArithModelValidator` to evaluate `UFApply` against `functionInterps`.
-- euf: 001, 008, 022, 024, 026, 028, 029, 042, 043, 044, 050, 052, 053, 058, 062 (15)
-- uflia: 001, 005, 007, 008, 012, 014, 016, 019, 021, 023, 025 (11)
-- uflra: 001(fun_real), 003, 004, 007(fn_diseq — the known a=b extraction bug), 008, 010 (6)
-- ufnia: 001, 003, 004, 006, 008, divzero_001 (6)
-- ufnra: 001, 003, 005, 006 (4)
-- arrays: ax_010, alia_005, alra_010, auflia_004, auflra_003 (5)
+### A3 (EUF + arrays) — uninterpreted-sort UF/array, no interp CMS can build (20)
+The model's satisfaction depends on `f(...)`/`select`/`store` over UNINTERPRETED
+sorts (sort U), so the value isn't numeric and CMS (numeric search) cannot build
+an interp. Recovery: `EufSolver::getModel` should emit a function/array
+interpretation from the e-graph (eclass-rep tables); the validator already
+consumes `functionInterps` (numeric) and `arrayInterps` — extend its arg/return
+encoding to opaque tokens for uninterpreted sorts.
+- euf (15): 001, 008, 022, 024, 026, 028, 029, 042, 043, 044, 050, 052, 053, 058, 062
+- arrays (5): ax_010, alia_005, alra_010, auflia_004, auflra_003
 
-### A2 (nonlinear) — algebraic-number models (20)
-NRA/NIRA witnesses are real-algebraic (e.g. √2); the string assignment channel
-cannot represent them losslessly, so the validator gets Indeterminate. Recovery:
-forward the exact `RealValue`/algebraic witness into validation (numericAssignments).
-- nra: 003, 014, 022, 036, 040, 047, 050, 057, 059, 066, 072, 093, 094, 097, 138, 140 (16)
-- nira: 002, 008, 009, 023 (4)
+### A2 (nonlinear) — algebraic-number witnesses (14)
+NRA/NIRA witnesses are real-algebraic (e.g. √2); the string channel can't carry
+them and CMS's rational search can't hit them. Recovery: forward the exact
+`RealValue`/algebraic witness into the model so the validator can evaluate it.
+- nra (12): 003, 014, 022, 036, 047, 057, 066, 093, 094, 097, 138, 140
+- nira (2): 009, 023
 
-### A1 (linear) + mixed-ite — incomplete difference-logic / mixed models (8 + 2)
-IDL/RDL/LIRA models leave some variables unassigned (defaults break a difference
-constraint) or to_int/ite couplings aren't reflected. Recovery: complete the
-model so all original variables get consistent values.
-- idl: 009, 011, 012, 015 (4)
-- rdl: 007, 009, 012 (3)
-- lira: 009_nonlinear_to_int (1)
-- root: ite_nested_sat, uflra_001_sat_ite_mixed (2)
+### Residual numeric-UF / mixed (12) — harder cases CMS didn't solve+validate
+CMS is an incomplete candidate search; these numeric-UF / mixed models aren't
+found within budget. Recovery: stronger combination model extraction (A4) or a
+deeper search, so the PRIMARY extracted model validates directly.
+- uflia (5): 005, 019, 021, 023, 025   uflra (2): 001_fun_real, 008
+- ufnia (1): divzero_001   idl (2): 009, 011
+- mixed-ite (2): ite_nested_sat, uflra_001_sat_ite_mixed
 
 ## Note
-Each flip is a place where the verdict is right but the *printed model* would not
-satisfy the original formula — i.e. exactly the Model-Validation-track soundness
-risk. Fixing the model extraction (above) both removes the flip AND makes the
-printed model trustworthy.
+Each remaining flip is a place where the verdict is right but the *printed model*
+would not satisfy the original formula. Fixing the extraction both removes the
+flip AND makes the printed model trustworthy. The strict gate is the sound floor;
+this list is the recovery target — the destination of each is a CORRECT sat.

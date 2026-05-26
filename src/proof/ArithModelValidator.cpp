@@ -359,8 +359,38 @@ ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
             TR t; t.kind = Kind2::Token; t.tok = elem;
             return t;
         }
+        case Kind::UFApply: {
+            // Evaluate an uninterpreted-function application by table lookup
+            // against a supplied interpretation. Without an interpretation the
+            // application is Indeterminate (the default below). The interp's
+            // entries key on numeric argument tuples encoded as mpq get_str()
+            // (the format CandidateModelSearch emits), so only numeric-argument
+            // applications are evaluable; a non-numeric argument leaves the
+            // application Indeterminate.
+            if (!funcInterps_) return r;
+            if (!std::holds_alternative<std::string>(n.payload.value)) return r;
+            auto fit = funcInterps_->find(std::get<std::string>(n.payload.value));
+            if (fit == funcInterps_->end()) return r;
+            const auto& fi = fit->second;
+            std::vector<std::string> argKeys;
+            argKeys.reserve(n.children.size());
+            for (ExprId c : n.children) {
+                TR cr = eval(c);
+                if (cr.kind != Kind2::Number) return r;
+                argKeys.push_back(cr.n.get_str());
+            }
+            const std::string* valStr = &fi.deflt;
+            for (const auto& e : fi.entries) {
+                if (e.args == argKeys) { valStr = &e.value; break; }
+            }
+            if (valStr->empty()) return r;
+            if (fi.retSort == "Bool") return bl(*valStr == "true" || *valStr == "1");
+            try { return num(mpq_class(*valStr)); } catch (...) {}
+            // Non-numeric (uninterpreted-sort) result: an opaque equality token.
+            TR t; t.kind = Kind2::Token; t.tok = *valStr; return t;
+        }
         default:
-            return r;  // UFApply, quantifiers, BV/FP, … → indeterminate
+            return r;  // quantifiers, BV/FP, … → indeterminate
     }
 }
 
