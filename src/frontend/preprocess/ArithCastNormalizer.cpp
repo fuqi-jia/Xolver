@@ -40,7 +40,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             // First visit: mark as processed, then push children
             frame.processed = true;
 
-            const auto& node = ir_.get(e);
+            const auto node = ir_.get(e);  // value copy: ir_.add() in recursion reallocates exprs_
 
             // Fast path: to_int(to_real(Int)) chain — just jump to inner
             if (node.kind == Kind::ToInt && node.children.size() == 1) {
@@ -116,7 +116,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             }
         } else {
             // Second visit: all children are memoized, build result
-            const auto& node = ir_.get(e);
+            const auto node = ir_.get(e);  // value copy: ir_.add() in recursion reallocates exprs_
             ExprId result = e;
 
             // Check to_int(to_real(Int)) again (child may have changed)

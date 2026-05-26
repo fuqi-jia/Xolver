@@ -55,7 +55,9 @@ ExprId UfInArithPurifier::purifyRec(ExprId e, bool inArithContext) {
         return it->second;
     }
 
-    const auto& node = ir_.get(e);
+    // Value copy: ir_.add() (via makeFreshVariable/mkEq/rebuildLike in the
+    // recursion below) may reallocate exprs_, invalidating a reference.
+    const auto node = ir_.get(e);
 
     // Leaf nodes: nothing to do
     if (node.isLeaf()) {
@@ -63,33 +65,21 @@ ExprId UfInArithPurifier::purifyRec(ExprId e, bool inArithContext) {
         return e;
     }
 
-    // Determine which child positions are arithmetic contexts
-    bool childInArith[4] = {false, false, false, false};
-    if (isArithKind(node.kind)) {
-        for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-            childInArith[i] = true;
-        }
-    } else if (node.kind == Kind::Eq) {
-        // Eq is an arithmetic context if the arguments are Int or Real
-        if (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()) {
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-                childInArith[i] = true;
-            }
-        }
-    } else if (node.kind == Kind::Distinct) {
-        // Distinct over Int/Real args is also an arithmetic context
-        if (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()) {
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-                childInArith[i] = true;
-            }
-        }
-    }
+    // Whether the children sit in an arithmetic context. This is uniform across
+    // all children (every operand of an arith op / arith-sorted Eq/Distinct is
+    // arithmetic), so it is a single flag — not a fixed-size per-child array,
+    // which was read out of bounds for nodes with more than 4 children (large
+    // And/Or/arith terms in LassoRanker) -> stack-buffer-overflow.
+    bool childrenInArith =
+        isArithKind(node.kind) ||
+        ((node.kind == Kind::Eq || node.kind == Kind::Distinct) &&
+         (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()));
 
     // Recursively process children
     std::vector<ExprId> newChildren;
     newChildren.reserve(node.children.size());
     for (size_t i = 0; i < node.children.size(); ++i) {
-        newChildren.push_back(purifyRec(node.children[i], childInArith[i]));
+        newChildren.push_back(purifyRec(node.children[i], childrenInArith));
     }
 
     ExprId rebuilt = e;
