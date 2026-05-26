@@ -35,6 +35,15 @@ private:
     std::unique_ptr<CoreIr> ir_;
     SortId boolSortId_ = NullSort;
 
+    // ZOLVER_PP_LET_ELIM: eliminate residual let nodes at import time. SOMTParser
+    // preserves lets and its expandLet only expands the outermost one, so a let
+    // nested in a binding VALUE or an operand position survives as a let_chain
+    // that mapKind cannot map (-> Unknown -> unknown verdict). When set, a
+    // let_bind_var is imported as its bound value and a let/let_chain as its
+    // body, which collapses arbitrary nesting via the node memo. Read once from
+    // the environment in importProblem.
+    bool letElim_ = false;
+
     // Memo: each SOMTParser Node maps to exactly one ExprId.
     std::unordered_map<
         SOMTParser::Node,

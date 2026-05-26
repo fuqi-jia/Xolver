@@ -2,6 +2,7 @@
 #include "expr/rewriter.h"
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 
 namespace zolver {
@@ -14,6 +15,7 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     ir_ = std::make_unique<CoreIr>();
     memo_.clear();
     sortMemo_.clear();
+    letElim_ = (std::getenv("ZOLVER_PP_LET_ELIM") != nullptr);
 
     // Stage A: run SOMTParser rewriter before conversion.
     SOMTParser::Rewriter rewriter(parser_.getNodeManager());
@@ -82,6 +84,39 @@ ExprId FrontendAdapter::importNode(Node node) {
             auto memoIt = memo_.find(c);
             if (memoIt != memo_.end()) {
                 childIds.push_back(memoIt->second);
+            }
+        }
+
+        // Import-time let elimination (ZOLVER_PP_LET_ELIM). Substitution by node
+        // identity: a let_bind_var IS its bound value (child 0); a let/let_chain
+        // IS its body (child 0 / last child). The body references each bound var
+        // as the SAME shared node, so this single post-order pass collapses
+        // arbitrary nesting that SOMTParser::expandLet left behind. Capture-free
+        // (SOMTParser binds by node, not by name).
+        if (letElim_) {
+            SOMTParser::NODE_KIND lk = kind(n);
+            if (lk == SOMTParser::NODE_KIND::NT_LET_BIND_VAR) {
+                Node v = (numChildren(n) > 0) ? child(n, 0) : nullptr;
+                ExprId vid = NullExpr;
+                if (v) { auto mi = memo_.find(v); if (mi != memo_.end()) vid = mi->second; }
+                memo_[n] = vid;
+                continue;
+            }
+            if (lk == SOMTParser::NODE_KIND::NT_LET ||
+                lk == SOMTParser::NODE_KIND::NT_LET_CHAIN) {
+                ExprId bid = NullExpr;
+                size_t nc = numChildren(n);
+                if (nc > 0) {
+                    size_t bi = (lk == SOMTParser::NODE_KIND::NT_LET) ? 0 : (nc - 1);
+                    Node b = child(n, bi);
+                    if (b) { auto mi = memo_.find(b); if (mi != memo_.end()) bid = mi->second; }
+                }
+                memo_[n] = bid;
+                continue;
+            }
+            if (lk == SOMTParser::NODE_KIND::NT_LET_BIND_VAR_LIST) {
+                memo_[n] = NullExpr;  // structural; never used as a value
+                continue;
             }
         }
 
