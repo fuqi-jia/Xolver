@@ -86,6 +86,14 @@ public:
     // used by the partial-function (div/mod-by-zero) model builder.
     std::optional<mpq_class> evalNumber(ExprId e) const;
 
+    // ZOLVER_PP_VALIDATOR_MEMO: memoize eval over ExprId. eval is a pure
+    // function of (ExprId, fixed model), so on a shared-subterm (DAG) formula
+    // the un-memoized recursion re-evaluates shared nodes exponentially; the
+    // cache makes validation linear in the DAG. Transparent — identical
+    // verdicts, only faster. Off by default (it can shift floor timing, so the
+    // master A/Bs it before default-on).
+    void setEvalMemo(bool on) { memoEnabled_ = on; }
+
 private:
     // Array value: a default element token plus an ordered set of overrides.
     // A std::map keeps later stores overriding earlier ones deterministically.
@@ -105,7 +113,8 @@ private:
         ArrVal arr;          // Array kind
     };
 
-    TR eval(ExprId e) const;
+    TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
+    TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
 
     // Coerce a fully-evaluated TR into an opaque equality token (Number/Bool/
     // Token). Returns nullopt if not coercible (e.g. Array or Indeterminate).
@@ -120,6 +129,11 @@ private:
     const TokenAssignment* tok_ = nullptr;
     const FuncInterpMap* funcInterps_ = nullptr;
     const RealAssignment* real_ = nullptr;
+
+    // eval memo (ZOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime
+    // (the model is fixed), keyed by original-formula ExprId.
+    bool memoEnabled_ = false;
+    mutable std::unordered_map<ExprId, TR> evalMemo_;
 };
 
 } // namespace zolver

@@ -36,6 +36,15 @@ std::optional<std::string> ArithModelValidator::asToken(const TR& r) const {
 }
 
 ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
+    if (!memoEnabled_) return evalImpl(eid);
+    auto it = evalMemo_.find(eid);
+    if (it != evalMemo_.end()) return it->second;
+    TR r = evalImpl(eid);                 // recurses via eval() -> fills the cache
+    evalMemo_.emplace(eid, r);
+    return r;
+}
+
+ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
     if (eid >= ir_.size()) return {};
     const CoreExpr& n = ir_.get(eid);
     TR r;
