@@ -147,3 +147,43 @@ TEST_CASE("ArithModelValidator: indeterminate on uninterpreted function") {
     ArithModelValidator v(f.ir, num, {});
     CHECK(v.validate({eq}) == ArithModelValidator::Verdict::Indeterminate);
 }
+
+// --- ZOLVER_PP_VALIDATOR_MEMO (eval memoization) ---
+
+TEST_CASE("ArithModelValidator: eval memo yields identical verdicts") {
+    Fix f;
+    ExprId x = f.var("x", f.intS), y = f.var("y", f.intS);
+    ExprId sum = f.bin(Kind::Add, x, y, f.intS);
+    ExprId satA = f.bin(Kind::Eq, sum, f.cint(5), f.boolS);    // x+y=5
+    ExprId vioA = f.bin(Kind::Eq, sum, f.cint(9), f.boolS);    // x+y=9 (false at 3,2)
+    ExprId indetA = f.bin(Kind::Geq, f.var("z", f.intS), f.cint(0), f.boolS);  // z unassigned
+
+    ArithModelValidator::NumAssignment num{{"x", 3}, {"y", 2}};
+    auto verdict = [&](ExprId a, bool memo) {
+        ArithModelValidator v(f.ir, num, {});
+        v.setEvalMemo(memo);
+        return v.validate({a});
+    };
+    // Memo must not change the verdict for any of the three outcomes.
+    CHECK(verdict(satA, false)   == verdict(satA, true));
+    CHECK(verdict(vioA, false)   == verdict(vioA, true));
+    CHECK(verdict(indetA, false) == verdict(indetA, true));
+    CHECK(verdict(satA, true)   == ArithModelValidator::Verdict::Satisfied);
+    CHECK(verdict(vioA, true)   == ArithModelValidator::Verdict::Violated);
+    CHECK(verdict(indetA, true) == ArithModelValidator::Verdict::Indeterminate);
+}
+
+TEST_CASE("ArithModelValidator: eval memo prevents shared-DAG blowup") {
+    Fix f;
+    // n = x doubled 50 times: a 50-node DAG whose tree unfolding is 2^50.
+    // Without the memo this evaluation is infeasible; with it, it is O(50), so
+    // this test completing at all is the proof the memo collapses the DAG.
+    ExprId n = f.var("x", f.intS);
+    for (int i = 0; i < 50; ++i) n = f.bin(Kind::Add, n, n, f.intS);
+    ExprId assertion = f.bin(Kind::Geq, n, f.cint(0), f.boolS);  // x*2^50 >= 0
+
+    ArithModelValidator::NumAssignment num{{"x", 1}};
+    ArithModelValidator v(f.ir, num, {});
+    v.setEvalMemo(true);
+    CHECK(v.validate({assertion}) == ArithModelValidator::Verdict::Satisfied);
+}

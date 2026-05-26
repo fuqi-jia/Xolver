@@ -243,17 +243,20 @@ public:
                 }
             }
         }
+        const bool validatorMemo = std::getenv("ZOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         }
         return v == ArithModelValidator::Verdict::Satisfied;
