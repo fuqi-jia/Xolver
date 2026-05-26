@@ -294,8 +294,22 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
-    // Stage A: skip interface disequality checking against current model value.
-    (void)interfaceDisequalities_;
+    // Interface disequality vs. an entailed equality: if an asserted 2-var
+    // equality atom or two complementary inequalities pin (x - y) to 0, then
+    // x = y is entailed and an interface disequality x != y is a hard conflict
+    // (proof-carrying: pinning reasons + diseq reason). Catches the
+    // QF_ALRA/AUFLRA analogs of R4/e6. Other interface disequalities are left
+    // to the convex LRA model (Stage A).
+    for (const auto& ieq : interfaceDisequalities_) {
+        auto eqReasons = assertedVarEqualityReason(ieq.a, ieq.b);
+        if (eqReasons.empty()) continue;
+        TheoryConflict tc;
+        for (auto l : eqReasons) tc.clause.push_back(l);
+        tc.clause.push_back(ieq.reason);
+        if (normalizeTheoryClause(tc.clause)) {
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Disequalities: use incremental cache (subset of active trail entries)
@@ -401,6 +415,69 @@ int LraSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     return aux;
 }
 
+std::vector<SatLit>
+LraSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
+    if (!sharedTermRegistry_ || !coreIr_) return {};
+    auto nameOf = [&](SharedTermId s) -> std::string {
+        if (const auto* st = sharedTermRegistry_->get(s)) {
+            if (coreIr_->get(st->coreExpr).isConst()) return "";
+            auto it = sharedTermToVarName_.find(s);
+            if (it != sharedTermToVarName_.end()) return it->second;
+            const auto& e = coreIr_->get(st->coreExpr);
+            if (e.kind == Kind::Variable &&
+                std::holds_alternative<std::string>(e.payload.value)) {
+                return std::get<std::string>(e.payload.value);
+            }
+        }
+        return "";
+    };
+    std::string na = nameOf(a), nb = nameOf(b);
+    if (na.empty() || nb.empty() || na == nb) return {};
+
+    // Aggregate asserted 2-var difference (in)equalities into an interval on
+    // d = (na - nb); if pinned to 0, na = nb is entailed (covers an explicit
+    // equality atom and two complementary inequalities). See LiaSolver.
+    bool haveLo = false, haveUp = false;
+    mpq_class lo = 0, up = 0;
+    SatLit loLit{}, upLit{};
+    for (const auto& e : theoryTrail_) {
+        if (e.isDiseq) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        if (payload.lhs.terms.size() != 2) continue;
+        const auto& t0 = payload.lhs.terms[0];
+        const auto& t1 = payload.lhs.terms[1];
+        if (t0.second == 0 || t0.second != -t1.second) continue;
+        mpq_class c0;
+        if (t0.first == na && t1.first == nb)      c0 = t0.second;
+        else if (t0.first == nb && t1.first == na) c0 = t1.second;
+        else continue;
+        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
+        const mpq_class& rhs = payload.rhs.asRational();
+        mpq_class bnd = rhs / c0;
+        bool flip = (c0 < 0);
+        auto addLower = [&](const mpq_class& v, SatLit lit) {
+            if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+        };
+        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+            if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+        };
+        switch (rel) {
+            case Relation::Eq: addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+            case Relation::Leq: if (!flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+            case Relation::Geq: if (!flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+            default: break;  // strict bounds don't pin an equality
+        }
+    }
+    if (haveLo && haveUp && lo == 0 && up == 0) {
+        std::vector<SatLit> reasons;
+        reasons.push_back(loLit);
+        if (!(upLit == loLit)) reasons.push_back(upLit);
+        return reasons;
+    }
+    return {};
+}
+
 TheoryCheckResult LraSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
@@ -439,7 +516,30 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 LraSolver::getDeducedSharedEqualities() {
-    return {};
+    if (!sharedTermRegistry_) return {};
+    // Variable-variable implied equalities: an asserted 2-var equality atom or
+    // two complementary inequalities pin the difference of two shared variables
+    // to 0, making them equal. Propagate to EUF so array Row1/congruence fires
+    // (QF_ALRA/AUFLRA analogs of R4/e6). Sound: assertedVarEqualityReason only
+    // fires on a genuine pin. Bounded by #distinct shared variables.
+    std::vector<SharedTermId> sharedVars;
+    for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        if (const auto* st = sharedTermRegistry_->get(stId)) {
+            if (coreIr_ && coreIr_->get(st->coreExpr).isConst()) continue;
+        }
+        if (getVarNameForSharedTerm(stId).empty()) continue;
+        sharedVars.push_back(stId);
+    }
+    std::vector<TheorySolver::SharedEqualityPropagation> result;
+    for (size_t i = 0; i < sharedVars.size(); ++i) {
+        for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+            auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
+            if (reasons.empty()) continue;
+            result.push_back(TheorySolver::SharedEqualityPropagation{
+                sharedVars[i], sharedVars[j], std::move(reasons)});
+        }
+    }
+    return result;
 }
 
 std::vector<SatLit> LraSolver::allActiveReasons() const {

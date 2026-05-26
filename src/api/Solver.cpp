@@ -150,6 +150,38 @@ public:
                != ArithModelValidator::Verdict::Violated;
     }
 
+    // Array SAT soundness safety net (ALL tracks, incl. Single-Query). Builds
+    // the array model internally and runs ArithModelValidator over the ORIGINAL
+    // assertions, returning true ONLY when the verdict is a DEFINITE Violated.
+    // Unlike arrayModelValidates() this is conservative in the SOUND direction:
+    //   - a missing model / empty interps / Indeterminate -> false (do NOT
+    //     downgrade — never spuriously reject a genuine sat);
+    //   - only a definite Violated -> true (downgrade Sat -> Unknown).
+    // This guards against a missed Row2/Ext instance escaping as a spurious sat
+    // even when no model was requested. It must never fire for a genuinely-sat
+    // case (the recently-fixed model construction produces valid store/const
+    // models that validate).
+    bool arrayModelDefinitelyViolates() const {
+        if (!ir || !lastModel_) return false;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                      lastModel_->arrayInterps, tokAsg);
+        return validator.validate(originalAssertions_)
+               == ArithModelValidator::Verdict::Violated;
+    }
+
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the
     // chosen result (the value of the fresh quotient q / remainder r) keyed by
@@ -1089,6 +1121,25 @@ public:
             if (!ok) {
                 lastUnknownReason_ =
                     "QF_AX: array model construction/validation incomplete (gated to Unknown)";
+                lastModel_.reset();
+                ret = Result::Unknown;
+            }
+        }
+
+        // Array SAT soundness safety net (ALWAYS, incl. Single-Query track).
+        // Even without :produce-models, build the array model internally and
+        // validate. Only a DEFINITE violation downgrades Sat -> Unknown — this
+        // catches a spurious array sat from a missed Row2/Ext instance that
+        // would otherwise escape unvalidated. Indeterminate / no-model stays sat
+        // (conservative: never spuriously reject a genuine sat). The build
+        // happens here independently of modelRequestedImpl() so the same
+        // validator runs on every array sat verdict.
+        if (ret == Result::Sat && features.hasArray) {
+            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            if (arrayModelDefinitelyViolates()) {
+                lastUnknownReason_ =
+                    "array: SAT model violates an original assertion "
+                    "(missed array axiom instance) — gated to Unknown (sound)";
                 lastModel_.reset();
                 ret = Result::Unknown;
             }

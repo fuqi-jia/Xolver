@@ -90,6 +90,11 @@ std::optional<SharedTermId> SharedTermRegistry::findByExprId(ExprId expr) const 
     return std::nullopt;
 }
 
+std::optional<mpq_class> SharedTermRegistry::constValue(SharedTermId id) const {
+    if (!coreIr_ || id >= terms_.size()) return std::nullopt;
+    return constValueOf(*coreIr_, terms_[id].coreExpr);
+}
+
 void SharedTermRegistry::clear() {
     terms_.clear();
     exprToId_.clear();

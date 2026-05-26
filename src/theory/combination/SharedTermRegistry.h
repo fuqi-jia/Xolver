@@ -48,6 +48,13 @@ public:
     bool hasTerm(ExprId expr) const;
     std::optional<SharedTermId> findByExprId(ExprId expr) const;
 
+    // Numeric (Int/Real) constant value of a shared term, if it is one. Used
+    // by the combination layer to refute an interface equality asserted between
+    // two distinct numeric constants (e.g. the array Row2 split picking
+    // (1 = 2)), which no arith solver constrains when neither side is a
+    // simplex variable. Requires setCoreIr() to have been called.
+    std::optional<mpq_class> constValue(SharedTermId id) const;
+
     void clear();
 
 private:

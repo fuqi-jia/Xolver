@@ -213,6 +213,26 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // 1. Process pending SAT-assigned shared equalities/disequalities
     for (auto& ev : pendingSharedEqEvents_) {
         if (ev.isEquality) {
+            // Distinct numeric constants are implicitly disequal. An interface
+            // equality between two numeric-constant shared terms with different
+            // values (e.g. the array Row2 split asserting (1 = 2)) is an
+            // immediate contradiction that no arith solver constrains when both
+            // sides are constants — getOrCreateInterfaceEqAuxVar returns -1 for
+            // const/const pairs. Refute it here so the false disjunct cannot be
+            // chosen to satisfy a Row2/Ext lemma. The reason is the equality
+            // literal alone: (c1 = c2) is unconditionally false.
+            if (sharedTermRegistry_ && ev.a != ev.b) {
+                auto va = sharedTermRegistry_->constValue(ev.a);
+                auto vb = sharedTermRegistry_->constValue(ev.b);
+                if (va && vb && *va != *vb) {
+                    pendingSharedEqEvents_.clear();
+                    TheoryConflict fc;
+                    fc.clause.push_back(ev.reasonLit.negated());
+                    NO_DBG << "[NO-RET-CONST] distinct-const IEQ refuted: "
+                           << debug::fmtClause(fc.clause) << "\n";
+                    return TheoryCheckResult::mkConflict(std::move(fc));
+                }
+            }
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
