@@ -357,7 +357,6 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
 
 void CdcacCore::buildClosure(const CdcacInput& input) {
     unsatTrustworthy_ = true;
-    coveringUsedAlgebraicBoundary_ = false;
     int n = static_cast<int>(input.varOrder.size());
     levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
 
@@ -391,14 +390,18 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
 
-    // Soundness FLOOR (ZOLVER_NRA_UNSAT_CERT): a CDCAC UNSAT is only trusted when
-    // the whole covering rested on exact rational boundaries. If any algebraic
-    // (irrational) boundary was used, the inter-root sector handling can drop a
-    // satisfiable region (meti-tarski sqrt false-UNSAT) — we cannot positively
-    // certify the refutation, so downgrade to Unknown rather than risk a wrong
-    // UNSAT. SAT/Unknown pass through unchanged.
-    if (unsatCertEnabled_ && result.status == CdcacStatus::Unsat &&
-        coveringUsedAlgebraicBoundary_) {
+    // Soundness FLOOR (ZOLVER_NRA_UNSAT_CERT), INTERIM CONSERVATIVE form: a CDCAC
+    // covering-based UNSAT is not yet independently certifiable (the covering can
+    // silently drop a satisfiable region — meti-tarski sqrt false-UNSAT — via a
+    // subtle close-root / bilinear-section defect we have not yet pinned to a
+    // cheap positive check). Until the recursive per-cell sign-invariance + tiling
+    // verifier lands, we DOWNGRADE every CDCAC covering-UNSAT to Unknown rather
+    // than risk a wrong UNSAT. This is sound-now (never a trusted false UNSAT) at
+    // a measured completeness cost (legit CDCAC UNSAT → Unknown); the precise
+    // verifier then recovers those. SAT/Unknown pass through unchanged. Note: only
+    // CdcacCore-internal (covering) UNSAT is gated here — presolve/linear UNSAT in
+    // NraSolver never reaches CDCAC, so it is unaffected.
+    if (unsatCertEnabled_ && result.status == CdcacStatus::Unsat) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
     return result;
@@ -579,14 +582,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
     }
     RootSet allRoots = std::move(*mergedOpt);
-    // Floor bookkeeping: an algebraic (irrational) cell boundary means the
-    // inter-root sectoring relies on isolating-interval refinement that can skip
-    // a satisfiable sector; mark the covering uncertifiable for the UNSAT floor.
-    if (unsatCertEnabled_) {
-        for (const auto& r : allRoots.roots) {
-            if (r.isAlgebraic()) { coveringUsedAlgebraicBoundary_ = true; break; }
-        }
-    }
 #ifndef NDEBUG
     std::cerr << "[CDCAC] allRoots=" << allRoots.numRoots() << std::endl;
     for (int i = 0; i < allRoots.numRoots(); ++i) {
