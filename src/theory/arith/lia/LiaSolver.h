@@ -55,6 +55,8 @@ public:
 
     bool supportsCombination() const override { return true; }
 
+    bool satComplete(std::string* reason = nullptr) const override;
+
     TheoryCheckResult assertInterfaceEquality(
         SharedTermId a, SharedTermId b, SatLit reason, int level) override;
     TheoryCheckResult assertInterfaceDisequality(

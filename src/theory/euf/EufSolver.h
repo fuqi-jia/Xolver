@@ -63,6 +63,8 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+    bool satComplete(std::string* reason = nullptr) const override;
+
     // Diagnostic / test hook: count active AssertedEquality merges whose
     // justifying literal is no longer on the trail (stale merges left by an
     // inconsistent backtrack). Must be 0 after any backtrack — exposed so tests

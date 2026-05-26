@@ -542,6 +542,24 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
         });
 }
 
+bool LiaSolver::satComplete(std::string* reason) const {
+    auto fail = [&](const char* r) { if (reason) *reason = r; return false; };
+    // LIA over the linear integer system is a COMPLETE decision procedure
+    // (simplex + branch-and-bound + interface-diseq branch). A positive
+    // completeness proof: no pending conflict and every integer variable is
+    // integral in the current simplex model (a fractional integer var means
+    // branch-and-bound has not finished, so the model is not yet a complete
+    // integer assignment). Interface disequalities are honored during check()
+    // via the model-violated-diseq branch (ZOLVER_LIA_DISEQ_BRANCH).
+    if (pendingConflict_) return fail("lia: pending conflict");
+    for (int v : integerVars_) {
+        auto val = gs_.value(v);
+        if (val.b != 0 || val.a.get_den() != 1)
+            return fail("lia: fractional integer variable (branch-and-bound incomplete)");
+    }
+    return true;
+}
+
 TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/) {
     int bestVar = -1;
     mpq_class bestFrac(-1);

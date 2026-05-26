@@ -50,6 +50,65 @@ int EufSolver::debugCountStaleMerges() const {
     return stale;
 }
 
+bool EufSolver::satComplete(std::string* reason) const {
+    auto fail = [&](const char* r) { if (reason) *reason = r; return false; };
+    // EUF base: congruence closure is a COMPLETE decision procedure, so a
+    // congruence-closed egraph with all asserted (dis)equalities satisfied and
+    // nothing pending IS a positive completeness proof — even over opaque sorts.
+    // After a Consistent check the saturation loop has drained: an empty merge
+    // queue with no pending verdict means congruence is closed by construction
+    // (the explicit congruenceClosed() check is debug-only / NDEBUG-gated).
+    if (pendingConflict_) return fail("euf: pending conflict");
+    if (pendingUnknown_)  return fail("euf: pending unknown");
+    if (!mergeQueue_.empty()) return fail("euf: pending merges");
+    for (const auto& d : disequalities_)
+        if (egraph_.same(d.lhs, d.rhs)) return fail("euf: asserted disequality violated");
+    for (const auto& d : sharedDisequalities_)
+        if (egraph_.same(d.lhs, d.rhs)) return fail("euf: shared disequality violated");
+
+    // Array obligation detector (Phase 0). EUF congruence closure does NOT
+    // discharge the array axioms; an undischarged obligation leaves a model EUF
+    // locally accepts but that violates extensionality (array_incompleteness1).
+    if (arrayMode_) {
+        std::vector<EufTermId> stores;
+        for (EufTermId t = 0; t < static_cast<EufTermId>(termManager_.termCount()); ++t) {
+            const auto& n = termManager_.node(t);
+            if (n.args.empty()) continue;
+            if (termManager_.symbolName(n.symbol) == "#array.store") stores.push_back(t);
+        }
+        // Store-equality-decomposition obligation: two store terms that are
+        // congruent (same egraph class) but whose (base,index,value) are not all
+        // congruent encode store(a,i,v)=store(a',j,w), entailing extensional
+        // consequences the reasoner has NOT applied -> cannot certify completeness.
+        for (size_t p = 0; p < stores.size(); ++p) {
+            for (size_t q = p + 1; q < stores.size(); ++q) {
+                EufTermId s1 = stores[p], s2 = stores[q];
+                if (!egraph_.same(s1, s2)) continue;
+                const auto& a1 = termManager_.node(s1).args;
+                const auto& a2 = termManager_.node(s2).args;
+                if (a1.size() != 3 || a2.size() != 3) continue;
+                if (!(egraph_.same(a1[0], a2[0]) && egraph_.same(a1[1], a2[1]) &&
+                      egraph_.same(a1[2], a2[2])))
+                    return fail("euf/array: undischarged store-equality decomposition");
+            }
+        }
+        // Any array-sort disequality requires an extensionality witness (a
+        // differing select); we do not yet track witnesses, so it cannot be
+        // positively certified -> floor.
+        auto isArraySort = [&](EufTermId t) {
+            if (t == NullEufTerm || !coreIr_) return false;
+            return coreIr_->arraySortParams(termManager_.node(t).sort).has_value();
+        };
+        for (const auto& d : disequalities_)
+            if (isArraySort(d.lhs) && isArraySort(d.rhs))
+                return fail("euf/array: array disequality without extensionality witness");
+        for (const auto& d : sharedDisequalities_)
+            if (isArraySort(d.lhs) && isArraySort(d.rhs))
+                return fail("euf/array: shared array disequality without witness");
+    }
+    return true;
+}
+
 void EufSolver::push() {
     scopeLimits_.push_back(trail_.size());
     scopeSnapshots_.push_back(egraph_.snapshot());

@@ -182,6 +182,30 @@ public:
                == ArithModelValidator::Verdict::Violated;
     }
 
+    // Phase 0 (ZOLVER_COMB_SAT_FLOOR): 3-valued strict validation of the
+    // combination SAT model against the ORIGINAL assertions. Returns the full
+    // verdict (Satisfied / Violated / Indeterminate) so the fail-closed gate can
+    // treat anything other than Satisfied as "not certified" -> Unknown.
+    ArithModelValidator::Verdict combinationSatVerdict() const {
+        if (!ir || !lastModel_) return ArithModelValidator::Verdict::Indeterminate;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                      lastModel_->arrayInterps, tokAsg);
+        return validator.validate(originalAssertions_);
+    }
+
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the
     // chosen result (the value of the fresh quotient q / remainder r) keyed by
@@ -1147,6 +1171,42 @@ public:
                 lastUnknownReason_ =
                     "array: SAT model violates an original assertion "
                     "(missed array axiom instance) — gated to Unknown (sound)";
+                lastModel_.reset();
+                ret = Result::Unknown;
+            }
+        }
+
+        // Phase 0 (ZOLVER_COMB_SAT_FLOOR): fail-closed combination SAT gate.
+        // In a combined logic the per-theory "no conflict" verdict is NOT a
+        // complete SAT certificate (incomplete arrangement / array DP /
+        // bridge-var congruence can leave a globally-inconsistent model that
+        // each theory locally accepts -> false SAT). Only return SAT if the
+        // extracted model strictly validates (Satisfied) or a complete
+        // combination certificate holds; otherwise downgrade to sound Unknown.
+        // Default OFF while the certificate is built; intent default-ON (0
+        // UNSOUND is the hard gate).
+        // Scoped to LINEAR combination logics (UFLIA/AUFLIA/ALIA/ALRA/...): there
+        // ArithModelValidator can decide Satisfied vs Violated, so Indeterminate
+        // genuinely means an incomplete combination model. Nonlinear combination
+        // (UFNIA/UFNRA) is EXCLUDED — its genuine-sat models validate as
+        // Indeterminate (UF over nonlinear is not evaluable) and are certified by
+        // the nonlinear theory's own exact sat-validation (invariant 1), so the
+        // strict-validator floor must not downgrade them.
+        bool nonlinearLogic = logic.find("NIA") != std::string::npos ||
+                              logic.find("NRA") != std::string::npos ||
+                              logic.find("NIRA") != std::string::npos;
+        if (ret == Result::Sat && theoryManager.isCombinationMode() &&
+            !features.hasNonlinear && !nonlinearLogic &&
+            std::getenv("ZOLVER_COMB_SAT_FLOOR")) {
+            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            auto v = combinationSatVerdict();
+            std::string certReason;
+            bool certified = (v == ArithModelValidator::Verdict::Satisfied) ||
+                             theoryManager.hasCompleteSatCertificate(&certReason);
+            if (!certified) {
+                lastUnknownReason_ =
+                    "combination: SAT model not certified [" + certReason +
+                    "] — gated to Unknown (sound)";
                 lastModel_.reset();
                 ret = Result::Unknown;
             }

@@ -109,6 +109,20 @@ public:
         (void)a; (void)b;
     }
 
+    // Phase 0 combination SAT certificate (positive-completeness proof). Returns
+    // true ONLY if this solver can POSITIVELY certify that its current state is a
+    // COMPLETE, consistent SAT model — every obligation discharged (EUF: congruence
+    // closed + all asserted (dis)equalities hold + no pending merge/array obligation;
+    // LIA: simplex consistent + integral + all interface (dis)equalities honored).
+    // FAIL-CLOSED: the default is `false` — a solver that cannot prove completeness
+    // (e.g. an undetected obligation type) must NOT be trusted, so the combination
+    // floor downgrades to sound Unknown. `reason` (optional) names what blocked the
+    // certificate, for diagnostics.
+    virtual bool satComplete(std::string* reason = nullptr) const {
+        if (reason) *reason = "theory has no completeness certificate";
+        return false;
+    }
+
     struct TheoryModel {
         // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4").
         // Legacy channel; carries both numeric and boolean values as strings.

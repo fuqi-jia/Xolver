@@ -35,6 +35,15 @@ public:
     // Nelson-Oppen combination hooks
     bool supportsCombination() const override { return true; }
 
+    // Phase 0 combination SAT certificate: LRA over the rationals is a COMPLETE,
+    // convex decision procedure — a consistent simplex with no pending conflict
+    // IS a complete model (no integrality obligation, unlike LIA). Interface
+    // disequalities are honored during check() via the model-branch.
+    bool satComplete(std::string* reason = nullptr) const override {
+        if (pendingConflict_) { if (reason) *reason = "lra: pending conflict"; return false; }
+        return true;
+    }
+
     TheoryCheckResult assertInterfaceEquality(
         SharedTermId a, SharedTermId b, SatLit reason, int level) override;
     TheoryCheckResult assertInterfaceDisequality(

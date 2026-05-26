@@ -593,6 +593,25 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     return TheoryCheckResult::consistent();
 }
 
+bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
+    // Positive completeness proof, fail-closed: certify only if EVERY registered
+    // solver positively certifies its own completeness. A solver that cannot
+    // (default satComplete()==false, or a fired obligation detector) blocks the
+    // certificate, so the api floor downgrades the combination SAT to Unknown.
+    for (const auto& solver : solvers_) {
+        std::string r;
+        if (!solver->satComplete(&r)) {
+            if (reason) *reason = r;
+            return false;
+        }
+    }
+    // NOTE (Phase 1): the combination-level "no unarranged same-value shared
+    // UF-argument pair" detector is added with the Wisa bridge-arrangement work
+    // — it reuses this same entry point. Until then, an unarranged bridge-var
+    // congruence (Wisa) is not yet detected here.
+    return true;
+}
+
 std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     // First-registered solver wins per variable. Solvers are registered with
     // the PRIMARY theory first (e.g. NIA before the LIA-linearization helper

@@ -65,6 +65,14 @@ public:
     /** Aggregate models from all registered theory solvers. */
     std::optional<TheorySolver::TheoryModel> getModel() const;
 
+    // Phase 0 combination SAT certificate (positive completeness proof). Returns
+    // true ONLY if every registered solver positively certifies completeness
+    // (satComplete) AND the combination layer has no pending arrangement
+    // obligation (no same-value shared UF-argument pair left unarranged). Used by
+    // the api floor to decide whether a combination SAT verdict is trustworthy or
+    // must be downgraded to sound Unknown. `reason` (optional) names the blocker.
+    bool hasCompleteSatCertificate(std::string* reason = nullptr) const;
+
     /**
      * Collect all linear atoms whose current SAT assignment makes them
      * effectively true (including negated atoms, whose effective relation
