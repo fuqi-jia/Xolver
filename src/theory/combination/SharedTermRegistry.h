@@ -30,6 +30,7 @@ public:
     // (they are the same value; EUF interns them identically, and treating them
     // as distinct shared terms produces spurious interface (dis)equalities).
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    const CoreIr* coreIr() const { return coreIr_; }
 
     // Get or create a shared term for an expression.
     // If the expression is already registered, return existing id.

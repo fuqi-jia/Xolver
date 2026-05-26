@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <gmpxx.h>
+#include <cstdlib>
 #include <map>
 #include <functional>
 
@@ -37,7 +38,28 @@ void TheoryManager::clearSolvers() {
     snapshots_.clear();
     deducedEqCache_.clear();
     emittedArrangementSplits_.clear();
+    careGraph_.clear();
     aggStats_ = AggregateStats{};
+}
+
+void TheoryManager::ensureCareGraph() {
+    if (!careGraphEnvChecked_) {
+        careGraphEnabled_ = (std::getenv("ZOLVER_COMB_CAREGRAPH") != nullptr);
+        careGraphEnvChecked_ = true;
+    }
+    if (!careGraphEnabled_ || careGraph_.built()) return;
+    if (!sharedTermRegistry_) return;
+    const CoreIr* ir = sharedTermRegistry_->coreIr();
+    if (!ir) return;
+    careGraph_.build(*ir, *sharedTermRegistry_);
+}
+
+bool TheoryManager::useSatMin() {
+    if (!satMinEnvChecked_) {
+        satMinEnabled_ = (std::getenv("ZOLVER_SAT_MIN") != nullptr);
+        satMinEnvChecked_ = true;
+    }
+    return satMinEnabled_;
 }
 
 std::vector<std::string> TheoryManager::activeTheoryNames() const {
@@ -166,12 +188,17 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
-    auto makeFalsifiedConflict = [](const std::vector<SatLit>& rawReasons) {
+    bool satMin = useSatMin();
+    auto makeFalsifiedConflict = [satMin](const std::vector<SatLit>& rawReasons) {
         TheoryConflict fc;
         fc.clause.reserve(rawReasons.size());
         for (auto lit : rawReasons) {
             fc.clause.push_back(lit.negated());
         }
+        // Theory-agnostic minimization (ZOLVER_SAT_MIN): dedup the negated
+        // reasons. Sound — dedup preserves the literal set, so falsified-ness
+        // is unchanged — and strictly shortens the learned clause.
+        if (satMin) ConflictMinimizer::dedup(fc.clause);
         return fc;
     };
 
@@ -254,6 +281,9 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
 
     // ---- Nelson-Oppen combination path ----
+
+    // Build the demand-driven care graph once (no-op unless ZOLVER_COMB_CAREGRAPH).
+    ensureCareGraph();
 
     // 1. Process pending SAT-assigned shared equalities/disequalities
     for (auto& ev : pendingSharedEqEvents_) {
@@ -349,7 +379,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
         }
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
-            std::cerr << "[TM-CHECK] solver=" << (int)solver->id()
+            NO_DBG << "[TM-CHECK] solver=" << (int)solver->id()
                    << " kind=" << (int)tr.kind;
             if (tr.conflictOpt) {
                 NO_DBG << " clause=" << debug::fmtClause(tr.conflictOpt->clause);
@@ -370,6 +400,17 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
         for (auto& prop : props) {
+            // Care-graph prune: a deduced equality between two terms that
+            // neither appears in a function/array-arg nor an Eq/Distinct cannot
+            // fire any EUF inference, so skip materializing its atom/lemma. Not
+            // propagating a sound fact can never create a conflict (no wrong
+            // UNSAT); at worst it loses a refinement caught by ModelValidator.
+            if (careGraphEnabled_ && !careGraph_.caresPair(prop.a, prop.b)) {
+                NO_DBG << "[NO] care-graph skip deduced EQ "
+                       << stName(sharedTermRegistry_, prop.a) << " = "
+                       << stName(sharedTermRegistry_, prop.b) << "\n";
+                continue;
+            }
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
             NO_DBG << "[NO] deduced EQ " << stName(sharedTermRegistry_, prop.a)
                    << " = " << stName(sharedTermRegistry_, prop.b)
@@ -393,6 +434,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             for (auto& reason : prop.reasons) {
                 lemma.lits.push_back(reason.negated());
             }
+            // Minimize (ZOLVER_SAT_MIN) the reason side before appending the
+            // implied-equality literal, then re-append: dedup must not drop the
+            // (unique) consequent. Sound — the lemma's literal set is preserved.
+            if (satMin) ConflictMinimizer::dedup(lemma.lits);
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
@@ -456,6 +501,12 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 const auto& B = valued[j];
                 if (A.sort != B.sort) continue;         // only same-sort scalars
                 if (!(A.val == B.val)) continue;        // arith disagrees -> no split
+                // Care-graph prune (demand-driven arrangement): only split a
+                // pair some theory cares about (index/element/UF-arg or an
+                // Eq/Distinct operand). Skipping an inert pair cannot fire any
+                // array axiom, so it is sound (an unsplit globally-inconsistent
+                // model is caught by ModelValidator, never wrong UNSAT).
+                if (careGraphEnabled_ && !careGraph_.caresPair(A.id, B.id)) continue;
                 // Already arranged on the interface? (SAT committed eq/diseq.)
                 if (sharedEqMgr_.same(A.id, B.id)) continue;
                 if (sharedEqMgr_.diseqKnown(A.id, B.id)) continue;

@@ -5,6 +5,8 @@
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/combination/SharedEqualityManager.h"
+#include "theory/combination/CareGraph.h"
+#include "theory/combination/ConflictMinimizer.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -87,6 +89,23 @@ private:
     AggregateStats aggStats_;
 
     SharedEqualityManager sharedEqMgr_;
+
+    // Demand-driven care graph (ZOLVER_COMB_CAREGRAPH, default OFF). Built once
+    // per solve from the purified IR; prunes the O(n^2) shared-pair loops
+    // (deduced-equality propagation + model-based arrangement splitting) to
+    // pairs that can actually fire a theory inference. Under-approximation =>
+    // sound (lost completeness caught by ModelValidator, never wrong UNSAT).
+    CareGraph careGraph_;
+    bool careGraphEnabled_ = false;
+    bool careGraphEnvChecked_ = false;
+    void ensureCareGraph();
+
+    // Theory-agnostic combination conflict/lemma minimization (ZOLVER_SAT_MIN,
+    // default OFF). Dedups literals in interface/theory conflicts and lemmas.
+    // Always sound (dedup preserves the clause's literal set).
+    bool satMinEnabled_ = false;
+    bool satMinEnvChecked_ = false;
+    bool useSatMin();
 
     struct PendingSharedEqEvent {
         SharedTermId a;
