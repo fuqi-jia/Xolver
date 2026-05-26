@@ -21,6 +21,13 @@ public:
         const TheoryAtomPayload& payload
     );
 
+    // Force a theory atom's SAT literal to a constant truth value via a unit
+    // clause. Used for arithmetic atoms that the polynomial converter proves are
+    // always-true (Tautology) or always-false (Conflict) — e.g. `0 != 0` after
+    // constant propagation. Without this the literal is left free and SAT may
+    // satisfy a provably-false atom vacuously (false-SAT).
+    void pinLiteral(SatVar satVar, bool value);
+
     SatLit getOrCreateLinearBoundAtom(
         const LinearFormKey& lhs,
         Relation rel,
