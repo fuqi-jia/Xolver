@@ -47,49 +47,65 @@ void ToRealLiteralFold::commit() {
     }
 }
 
-ExprId ToRealLiteralFold::foldRec(ExprId e) {
-    if (auto it = memo_.find(e); it != memo_.end()) return it->second;
-    const auto& node = ir_.get(e);
-    if (node.children.empty()) {
-        memo_[e] = e;
-        return e;
+ExprId ToRealLiteralFold::foldRec(ExprId root) {
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
+
+    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
+    // deeply nested terms. Behavior-identical to the former recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+
+        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+
+        if (!frame.processed) {
+            frame.processed = true;
+            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            }
+            continue;
+        }
+
+        stack.pop_back();
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool changed = false;
+        for (ExprId c : node.children) {
+            ExprId rc = memo_.at(c);
+            if (rc != c) changed = true;
+            newChildren.push_back(rc);
+        }
+
+        ExprId rebuilt = e;
+        if (changed) {
+            CoreExpr fresh;
+            fresh.kind = node.kind;
+            fresh.sort = node.sort;
+            for (ExprId c : newChildren) fresh.children.push_back(c);
+            fresh.payload = node.payload;
+            rebuilt = ir_.add(std::move(fresh));
+        }
+
+        // After rebuilding children, try to fold this node itself.
+        const Kind rk = ir_.get(rebuilt).kind;
+        const SortId rs = ir_.get(rebuilt).sort;
+        if (rk == Kind::ToReal) {
+            memo_[e] = tryFoldToReal(rebuilt);
+        } else if (rk == Kind::Div && rs == realSortId_) {
+            memo_[e] = tryFoldDivOfConsts(rebuilt);
+        } else {
+            memo_[e] = rebuilt;
+        }
     }
 
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    bool changed = false;
-    for (ExprId c : node.children) {
-        ExprId rc = foldRec(c);
-        if (rc != c) changed = true;
-        newChildren.push_back(rc);
-    }
-
-    ExprId rebuilt;
-    if (!changed) {
-        rebuilt = e;
-    } else {
-        CoreExpr fresh;
-        fresh.kind = node.kind;
-        fresh.sort = node.sort;
-        for (ExprId c : newChildren) fresh.children.push_back(c);
-        fresh.payload = node.payload;
-        rebuilt = ir_.add(std::move(fresh));
-    }
-
-    // After rebuilding children, try to fold this node itself.
-    if (ir_.get(rebuilt).kind == Kind::ToReal) {
-        ExprId folded = tryFoldToReal(rebuilt);
-        memo_[e] = folded;
-        return folded;
-    }
-    if (ir_.get(rebuilt).kind == Kind::Div
-        && ir_.get(rebuilt).sort == realSortId_) {
-        ExprId folded = tryFoldDivOfConsts(rebuilt);
-        memo_[e] = folded;
-        return folded;
-    }
-    memo_[e] = rebuilt;
-    return rebuilt;
+    return memo_.at(root);
 }
 
 ExprId ToRealLiteralFold::tryFoldToReal(ExprId node) {

@@ -92,38 +92,51 @@ void FormulaRewriter::commit() {
 
 ExprId FormulaRewriter::rewrite(ExprId e) { return rewriteRec(e); }
 
-ExprId FormulaRewriter::rewriteRec(ExprId e) {
-    if (e == NullExpr) return e;
-    if (auto it = memo_.find(e); it != memo_.end()) return it->second;
+ExprId FormulaRewriter::rewriteRec(ExprId root) {
+    if (root == NullExpr) return root;
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
 
-    {
-        const CoreExpr& node = ir_.get(e);
-        if (node.children.empty()) {
-            memo_[e] = e;
-            return e;
+    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
+    // deeply nested terms. simplifyNode()/mk() call ir_.add(), which reallocates
+    // CoreIr's exprs_ vector — so all node fields are copied per step before any
+    // add. Behavior-identical to the former recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+
+        if (!frame.processed) {
+            frame.processed = true;
+            const CoreExpr& node = ir_.get(e);
+            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (c != NullExpr && memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            }
+            continue;
         }
+
+        stack.pop_back();
+        Kind kind;
+        SortId sort;
+        Payload payload;
+        std::vector<ExprId> kids;
+        {
+            const CoreExpr& node = ir_.get(e);
+            kind = node.kind;
+            sort = node.sort;
+            payload = node.payload;
+            kids.reserve(node.children.size());
+            for (ExprId c : node.children) kids.push_back(c == NullExpr ? NullExpr : memo_.at(c));
+        }
+        memo_[e] = simplifyNode(kind, sort, std::move(kids), payload);
     }
 
-    // Copy the fields we need BEFORE recursing. rewriteRec()/simplifyNode()
-    // call ir_.add(), which reallocates CoreIr's exprs_ vector and would dangle
-    // any reference into it. (The EUF term manager documents the same hazard.)
-    Kind kind;
-    SortId sort;
-    Payload payload;
-    std::vector<ExprId> kids;
-    {
-        const CoreExpr& node = ir_.get(e);
-        kind = node.kind;
-        sort = node.sort;
-        payload = node.payload;
-        kids.reserve(node.children.size());
-        for (ExprId c : node.children) kids.push_back(c);
-    }
-    for (ExprId& c : kids) c = rewriteRec(c);
-
-    ExprId r = simplifyNode(kind, sort, std::move(kids), payload);
-    memo_[e] = r;
-    return r;
+    return memo_.at(root);
 }
 
 // ---------------------------------------------------------------------------

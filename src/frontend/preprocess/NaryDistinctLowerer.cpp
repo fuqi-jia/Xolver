@@ -27,45 +27,58 @@ void NaryDistinctLowerer::commit() {
     }
 }
 
-ExprId NaryDistinctLowerer::lowerRec(ExprId e) {
-    if (auto it = memo_.find(e); it != memo_.end()) {
-        return it->second;
+ExprId NaryDistinctLowerer::lowerRec(ExprId root) {
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
+
+    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
+    // deeply nested terms. Behavior-identical to the former recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+
+        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+
+        if (!frame.processed) {
+            frame.processed = true;
+            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            }
+            continue;
+        }
+
+        stack.pop_back();
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool changed = false;
+        for (ExprId c : node.children) {
+            ExprId lc = memo_.at(c);
+            if (lc != c) changed = true;
+            newChildren.push_back(lc);
+        }
+
+        // n-ary distinct -> pairwise binary distinct using lowered children.
+        if (node.kind == Kind::Distinct && newChildren.size() > 2) {
+            memo_[e] = lowerDistinct(newChildren);
+        } else if (!changed) {
+            memo_[e] = e;
+        } else {
+            CoreExpr ne;
+            ne.kind = node.kind;
+            ne.sort = node.sort;
+            for (ExprId c : newChildren) ne.children.push_back(c);
+            ne.payload = node.payload;
+            memo_[e] = ir_.add(std::move(ne));
+        }
     }
 
-    const auto node = ir_.get(e);
-
-    // Rebuild children first (post-order)
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    bool changed = false;
-    for (ExprId c : node.children) {
-        ExprId lc = lowerRec(c);
-        if (lc != c) changed = true;
-        newChildren.push_back(lc);
-    }
-
-    // Handle n-ary distinct: lower to pairwise binary distinct using lowered children
-    if (node.kind == Kind::Distinct && newChildren.size() > 2) {
-        ExprId result = lowerDistinct(newChildren);
-        memo_[e] = result;
-        return result;
-    }
-
-    // If no child changed and not n-ary distinct, keep original
-    if (!changed) {
-        memo_[e] = e;
-        return e;
-    }
-
-    // Rebuild node with lowered children
-    CoreExpr ne;
-    ne.kind = node.kind;
-    ne.sort = node.sort;
-    for (ExprId c : newChildren) ne.children.push_back(c);
-    ne.payload = node.payload;
-    ExprId rebuilt = ir_.add(std::move(ne));
-    memo_[e] = rebuilt;
-    return rebuilt;
+    return memo_.at(root);
 }
 
 ExprId NaryDistinctLowerer::lowerDistinct(const std::vector<ExprId>& children) {

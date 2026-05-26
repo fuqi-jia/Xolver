@@ -28,8 +28,7 @@ public:
     void commit();
 
 private:
-    static constexpr int kMaxRecursionDepth = 5000;
-    ExprId purifyRec(ExprId e, bool inArgPosition, int depth = 0);
+    ExprId purifyRec(ExprId root, bool inArgPosition);
     bool isBoolComposite(ExprId e) const;
 
     // Rebuild node with new children

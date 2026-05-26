@@ -43,53 +43,64 @@ void IntDivModLowerer::commit() {
     }
 }
 
-ExprId IntDivModLowerer::lowerRec(ExprId e, ScopeLevel level) {
-    if (auto it = memo_.find(e); it != memo_.end()) {
-        return it->second;
+ExprId IntDivModLowerer::lowerRec(ExprId root, ScopeLevel level) {
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
+
+    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
+    // deeply nested terms. `level` is constant down the whole walk (the former
+    // recursion passed it unchanged). Behavior-identical otherwise.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+
+        // Value copy: lowerRec()/rebuildLike()/lowerDiv()/lowerMod() call
+        // ir_.add(), which can reallocate exprs_ and invalidate references.
+        const auto node = ir_.get(e);
+
+        if (!frame.processed) {
+            frame.processed = true;
+            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            }
+            continue;
+        }
+
+        stack.pop_back();
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool changed = false;
+        for (ExprId c : node.children) {
+            ExprId lc = memo_.at(c);
+            if (lc != c) changed = true;
+            newChildren.push_back(lc);
+        }
+
+        ExprId rebuilt = changed ? rebuildLike(e, newChildren) : e;
+
+        if (node.kind == Kind::Div && node.sort == intSortId_) {
+            assert(newChildren.size() == 2);
+            memo_[e] = lowerDiv(newChildren[0], newChildren[1], level);
+        } else if (node.kind == Kind::Mod && node.sort == intSortId_) {
+            assert(newChildren.size() == 2);
+            memo_[e] = lowerMod(newChildren[0], newChildren[1], level);
+        } else {
+            if (node.kind == Kind::Ite) {
+                // ITE should have been eliminated by CoreIteLowerer.
+                std::cerr << "[IntDivModLowerer] ERROR: Kind::Ite not lowered before div/mod lowering\n";
+                assert(false && "ITE should be eliminated before IntDivModLowerer");
+            }
+            memo_[e] = rebuilt;
+        }
     }
 
-    // Copy node because recursive lowerRec() and rebuildLike() may call
-    // ir_.add(), which can reallocate the internal exprs_ vector and
-    // invalidate references.
-    const auto node = ir_.get(e);
-
-    // Rebuild children first (post-order)
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    bool changed = false;
-    for (ExprId c : node.children) {
-        ExprId lc = lowerRec(c, level);
-        if (lc != c) changed = true;
-        newChildren.push_back(lc);
-    }
-
-    ExprId rebuilt = changed ? rebuildLike(e, newChildren) : e;
-
-    // Handle div/mod
-    if (node.kind == Kind::Div && node.sort == intSortId_) {
-        assert(newChildren.size() == 2);
-        // Div lowering
-        ExprId result = lowerDiv(newChildren[0], newChildren[1], level);
-        memo_[e] = result;
-        return result;
-    }
-
-    if (node.kind == Kind::Mod && node.sort == intSortId_) {
-        assert(newChildren.size() == 2);
-        // Mod lowering
-        ExprId result = lowerMod(newChildren[0], newChildren[1], level);
-        memo_[e] = result;
-        return result;
-    }
-
-    if (node.kind == Kind::Ite) {
-        // ITE should have been eliminated by CoreIteLowerer
-        std::cerr << "[IntDivModLowerer] ERROR: Kind::Ite not lowered before div/mod lowering\n";
-        assert(false && "ITE should be eliminated before IntDivModLowerer");
-    }
-
-    memo_[e] = rebuilt;
-    return rebuilt;
+    return memo_.at(root);
 }
 
 ExprId IntDivModLowerer::lowerDiv(ExprId a, ExprId b, ScopeLevel level) {

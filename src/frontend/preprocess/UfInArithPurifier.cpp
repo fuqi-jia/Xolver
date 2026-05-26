@@ -49,74 +49,79 @@ ExprId UfInArithPurifier::mkEq(ExprId a, ExprId b) {
     return ir_.add(std::move(e));
 }
 
-ExprId UfInArithPurifier::purifyRec(ExprId e, bool inArithContext) {
-    auto it = memo_.find(e);
-    if (it != memo_.end()) {
-        return it->second;
-    }
+ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
 
-    const auto& node = ir_.get(e);
+    // Iterative post-order (two-visit work-stack) carrying the per-node
+    // arithmetic-context flag in the frame. memo_ is keyed by ExprId only, so
+    // the first DFS visit of a shared node fixes its purified form — exactly
+    // matching the former left-to-right recursion. Stack-safe on deep terms.
+    struct Frame { ExprId e; bool inArithContext; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, rootInArithContext, false});
 
-    // Leaf nodes: nothing to do
-    if (node.isLeaf()) {
-        memo_[e] = e;
-        return e;
-    }
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-    // Determine which child positions are arithmetic contexts
-    bool childInArith[4] = {false, false, false, false};
-    if (isArithKind(node.kind)) {
-        for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-            childInArith[i] = true;
-        }
-    } else if (node.kind == Kind::Eq) {
-        // Eq is an arithmetic context if the arguments are Int or Real
-        if (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()) {
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-                childInArith[i] = true;
+        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+
+        if (!frame.processed) {
+            frame.processed = true;  // do NOT touch `frame` after a push_back
+
+            if (node.isLeaf()) { memo_[e] = e; stack.pop_back(); continue; }
+
+            // Which child positions are arithmetic contexts.
+            bool childInArith[4] = {false, false, false, false};
+            const bool arithNode =
+                isArithKind(node.kind) ||
+                ((node.kind == Kind::Eq || node.kind == Kind::Distinct) &&
+                 (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()));
+            if (arithNode) {
+                for (size_t i = 0; i < node.children.size() && i < 4; ++i) childInArith[i] = true;
             }
-        }
-    } else if (node.kind == Kind::Distinct) {
-        // Distinct over Int/Real args is also an arithmetic context
-        if (node.sort == ir_.intSortId() || node.sort == ir_.realSortId()) {
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i) {
-                childInArith[i] = true;
+
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (memo_.find(c) == memo_.end()) {
+                    bool ctx = (i < 4) ? childInArith[i] : false;
+                    stack.push_back({c, ctx, false});
+                }
             }
+            continue;
+        }
+
+        const bool inArithContext = frame.inArithContext;
+        stack.pop_back();
+
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool childrenChanged = false;
+        for (ExprId c : node.children) {
+            ExprId rc = memo_.at(c);
+            if (rc != c) childrenChanged = true;
+            newChildren.push_back(rc);
+        }
+
+        ExprId rebuilt = e;
+        if (childrenChanged) {
+            rebuilt = rebuildLike(e, newChildren);
+            changed_ = true;
+        }
+
+        if (node.kind == Kind::UFApply && inArithContext) {
+            ExprId fresh = ir_.makeFreshVariable(node.sort, "ufbridge");
+            ExprId eq = mkEq(fresh, rebuilt);
+            generatedAssertions_.push_back(eq);
+            memo_[e] = fresh;
+            changed_ = true;
+        } else {
+            memo_[e] = rebuilt;
         }
     }
 
-    // Recursively process children
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    for (size_t i = 0; i < node.children.size(); ++i) {
-        newChildren.push_back(purifyRec(node.children[i], childInArith[i]));
-    }
-
-    ExprId rebuilt = e;
-    bool childrenChanged = false;
-    for (size_t i = 0; i < node.children.size(); ++i) {
-        if (newChildren[i] != node.children[i]) {
-            childrenChanged = true;
-            break;
-        }
-    }
-    if (childrenChanged) {
-        rebuilt = rebuildLike(e, newChildren);
-        changed_ = true;
-    }
-
-    // If this expression is a UFApply in an arithmetic context, bridge it
-    if (node.kind == Kind::UFApply && inArithContext) {
-        ExprId fresh = ir_.makeFreshVariable(node.sort, "ufbridge");
-        ExprId eq = mkEq(fresh, rebuilt);
-        generatedAssertions_.push_back(eq);
-        memo_[e] = fresh;
-        changed_ = true;
-        return fresh;
-    }
-
-    memo_[e] = rebuilt;
-    return rebuilt;
+    return memo_.at(root);
 }
 
 bool UfInArithPurifier::run() {

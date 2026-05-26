@@ -96,103 +96,100 @@ ExprId BoolSubtermPurifier::mkDistinct(ExprId a, ExprId b) {
     return ir_.add(std::move(e));
 }
 
-ExprId BoolSubtermPurifier::purifyRec(ExprId e, bool inArgPosition, int depth) {
-    auto it = memo_.find(e);
-    if (it != memo_.end()) {
-        return it->second;
-    }
-
-    // Defensive: deep expressions (e.g. Dartagnan nested arrays) can exhaust
-    // the C++ call stack (>29K frames observed).  Beyond the safe depth cap
-    // we return the expression unchanged: any bool-composite this deep would
-    // blow up the SAT encoding anyway, and the typical deep cases are
-    // non-bool nodes (Select/Store chains) that need no purification.
-    if (depth > kMaxRecursionDepth) {
-        memo_[e] = e;
-        return e;
-    }
-
-    // Value copy: ir_.add() may reallocate exprs_, invalidating references.
-    const auto node = ir_.get(e);
-
-    // Leaf nodes: nothing to do
-    if (node.isLeaf()) {
-        memo_[e] = e;
-        return e;
-    }
-
-    // Determine which child positions are "atomic bool positions"
-    // (i.e. standard places where bool composites are allowed without purification)
-    bool childIsAtomicBoolPos[4] = {false, false, false, false};
-    switch (node.kind) {
-        case Kind::Not:
-            if (node.children.size() >= 1) childIsAtomicBoolPos[0] = true;
-            break;
+// True iff child position @p i of a node of kind @p k is an "atomic bool
+// position" — a place where a bool composite is allowed without purification.
+// Index-correct (no fixed 4-cap), so n-ary And/Or with >4 children behave
+// like the first four rather than reading past a fixed array (former UB).
+static bool isAtomicBoolPos(Kind k, size_t i) {
+    switch (k) {
+        case Kind::Not:     return i == 0;
         case Kind::And:
         case Kind::Or:
         case Kind::Implies:
-        case Kind::Xor:
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i)
-                childIsAtomicBoolPos[i] = true;
-            break;
-        case Kind::Ite:
-            if (node.children.size() >= 1) childIsAtomicBoolPos[0] = true;
-            break;
-        default:
-            break;
+        case Kind::Xor:     return true;        // every operand is a bool position
+        case Kind::Ite:     return i == 0;      // only the condition
+        default:            return false;
     }
+}
 
-    // Recursively process children
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    for (size_t i = 0; i < node.children.size(); ++i) {
-        bool childInArg = inArgPosition || !childIsAtomicBoolPos[i];
-        newChildren.push_back(purifyRec(node.children[i], childInArg, depth + 1));
-    }
+ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
+    if (auto it = memo_.find(root); it != memo_.end()) return it->second;
 
-    ExprId rebuilt = e;
-    bool childrenChanged = false;
-    for (size_t i = 0; i < node.children.size(); ++i) {
-        if (newChildren[i] != node.children[i]) {
-            childrenChanged = true;
-            break;
+    // Iterative post-order (two-visit work-stack) carrying the per-node
+    // inArgPosition flag in the frame. memo_ is keyed by ExprId only, so the
+    // first DFS visit of a shared node fixes its purified form — matching the
+    // former left-to-right recursion. Stack-safe at any depth, so the previous
+    // kMaxRecursionDepth bail-out (which silently skipped purification on deep
+    // terms) is no longer needed.
+    struct Frame { ExprId e; bool inArgPosition; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, rootInArgPosition, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
+
+        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+
+        if (!frame.processed) {
+            frame.processed = true;  // do NOT touch `frame` after a push_back
+            if (node.isLeaf()) { memo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (memo_.find(c) == memo_.end()) {
+                    bool childInArg = frame.inArgPosition ||
+                                      !isAtomicBoolPos(node.kind, static_cast<size_t>(i));
+                    stack.push_back({c, childInArg, false});
+                }
+            }
+            continue;
         }
-    }
-    if (childrenChanged) {
-        rebuilt = rebuildLike(e, newChildren);
-        changed_ = true;
-    }
 
-    // If this expression itself sits in an argument position and is a bool composite,
-    // replace it with a fresh variable and emit an equivalence constraint.
-    if (inArgPosition && isBoolComposite(rebuilt)) {
-        const auto& rebuiltNode = ir_.get(rebuilt);
+        const bool inArgPosition = frame.inArgPosition;
+        stack.pop_back();
 
-        // Special case: Not(a) in Bool is equivalent to a != fresh,
-        // which EUF can handle as a disequality.
-        if (rebuiltNode.kind == Kind::Not && rebuiltNode.children.size() == 1) {
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool childrenChanged = false;
+        for (ExprId c : node.children) {
+            ExprId rc = memo_.at(c);
+            if (rc != c) childrenChanged = true;
+            newChildren.push_back(rc);
+        }
+
+        ExprId rebuilt = e;
+        if (childrenChanged) {
+            rebuilt = rebuildLike(e, newChildren);
+            changed_ = true;
+        }
+
+        // If this expression sits in an argument position and is a bool
+        // composite, replace it with a fresh variable + equivalence constraint.
+        if (inArgPosition && isBoolComposite(rebuilt)) {
+            // Capture fields BEFORE makeFreshVariable()/mk*() call ir_.add()
+            // (which may relocate exprs_ and dangle any reference).
+            const Kind rebuiltKind = ir_.get(rebuilt).kind;
+            ExprId notChild = NullExpr;
+            if (rebuiltKind == Kind::Not && ir_.get(rebuilt).children.size() == 1) {
+                notChild = ir_.get(rebuilt).children[0];
+            }
+
             ExprId fresh = ir_.makeFreshVariable(boolSortId_, "boolpur");
-            ExprId distinct = mkDistinct(fresh, rebuiltNode.children[0]);
-            generatedAssertions_.push_back(distinct);
+            if (notChild != NullExpr) {
+                // Not(a) in Bool ≡ a != fresh, which EUF handles as a disequality.
+                generatedAssertions_.push_back(mkDistinct(fresh, notChild));
+            } else {
+                generatedAssertions_.push_back(mkEq(fresh, rebuilt));
+            }
             memo_[e] = fresh;
             changed_ = true;
-            return fresh;
+        } else {
+            memo_[e] = rebuilt;
         }
-
-        ExprId fresh = ir_.makeFreshVariable(boolSortId_, "boolpur");
-
-        // Encode  fresh ↔ rebuilt
-        // For bool sorts, equality is sufficient:  fresh = rebuilt
-        ExprId eq = mkEq(fresh, rebuilt);
-        generatedAssertions_.push_back(eq);
-
-        memo_[e] = fresh;
-        changed_ = true;
-        return fresh;
     }
 
-    memo_[e] = rebuilt;
-    return rebuilt;
+    return memo_.at(root);
 }
 
 bool BoolSubtermPurifier::run() {
@@ -205,7 +202,7 @@ bool BoolSubtermPurifier::run() {
     std::vector<ExprId> newAssertions;
     newAssertions.reserve(assertions.size());
     for (ExprId a : assertions) {
-        newAssertions.push_back(purifyRec(a, false, 0));
+        newAssertions.push_back(purifyRec(a, false));
     }
     ir_.replaceAssertions(newAssertions);
 
