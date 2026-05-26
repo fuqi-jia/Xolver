@@ -140,7 +140,24 @@ private:
     mutable int dumpCounter_ = 0;
 
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
-    TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb);
+    TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+
+    // ZOLVER_LIA_REPAIR: rounding-based LRA->LIA integrality repair. Read once
+    // at construction. When set, checkIntegrality tries rounding the LRA
+    // relaxation to a nearby integer point and exact-validating it before
+    // branching; a validated point yields SAT immediately.
+    bool repairEnabled_ = false;
+    // Holds the repaired integer model (var name -> integer value) when a repair
+    // succeeded this check. Set only by checkIntegrality, consumed by getModel /
+    // the SAT path in stageCore, cleared at the start of each stageCore and on
+    // reset/backtrack.
+    std::optional<std::unordered_map<std::string, mpq_class>> repairModel_;
+    // Try the round-to-nearest integer point of the current LRA model; if it
+    // satisfies every active atom and disequality exactly, store it in
+    // repairModel_ and return true.
+    bool tryIntegralityRepair();
+    // Exact evaluation of all active atoms + disequalities at an integer point.
+    bool pointSatisfiesAll(const std::unordered_map<std::string, mpq_class>& pt) const;
 
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
 

@@ -1,0 +1,18 @@
+(set-logic QF_LRA)
+(set-info :status sat)
+; Multi-row feasible system that exercises a non-trivial pivot sequence —
+; the verdict must agree with ZOLVER_LRA_PIVOT_HEUR on and off.
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(declare-const w Real)
+(assert (<= (+ x y z w) 10))
+(assert (>= (+ x y z w) 4))
+(assert (<= (- x y) 2))
+(assert (>= (- x y) -2))
+(assert (<= (- z w) 1))
+(assert (>= (- z w) -1))
+(assert (<= (+ (* 2 x) z) 8))
+(assert (>= y 0))
+(assert (>= w 0))
+(check-sat)

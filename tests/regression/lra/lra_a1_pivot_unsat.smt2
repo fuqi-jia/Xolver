@@ -1,0 +1,15 @@
+(set-logic QF_LRA)
+(set-info :status unsat)
+; Infeasible system — the Farkas conflict must be produced regardless of the
+; entering-var pivot rule (ZOLVER_LRA_PIVOT_HEUR on or off).
+(declare-const x Real)
+(declare-const y Real)
+(declare-const z Real)
+(assert (<= (+ x y z) 3))
+(assert (>= (- x y) 5))
+(assert (>= y 0))
+(assert (>= z 0))
+(assert (>= x 0))
+(assert (<= x 4))
+(assert (>= (+ x y z) 12))
+(check-sat)
