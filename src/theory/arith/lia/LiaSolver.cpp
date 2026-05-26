@@ -23,6 +23,12 @@ LiaSolver::LiaSolver() {
     if (env) {
         dumpCounter_ = 0;
     }
+    // ZOLVER_LIA_DISEQ_BRANCH: branch on ANY asserted interface disequality the
+    // convex model violates (a=b in the model), not only those the model-based
+    // arrangement loop authorized. Without it, a KNOWN integer interface diseq
+    // (e.g. flash != nf) whose model equates the pair is silently accepted ->
+    // combination false-SAT on integer-infeasibility-via-diseq (Rodin/UFLIA).
+    liaDiseqBranch_ = std::getenv("ZOLVER_LIA_DISEQ_BRANCH") != nullptr;
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -376,7 +382,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             uint64_t authKey = (static_cast<uint64_t>(loK) << 32) |
                                static_cast<uint64_t>(hiK);
             if (effort == TheoryEffort::Full && registry_ &&
-                !fixedOpt && diseqBranchAuthorized_.count(authKey)) {
+                !fixedOpt && (diseqBranchAuthorized_.count(authKey) || liaDiseqBranch_)) {
                 std::string va = getVarNameForSharedTerm(ieq.a);
                 std::string vb = getVarNameForSharedTerm(ieq.b);
                 if (!va.empty() && !vb.empty() && va != vb &&

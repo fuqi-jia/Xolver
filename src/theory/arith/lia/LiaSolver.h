@@ -138,6 +138,10 @@ private:
     // model-branch (authorized by the combination arrangement split). Static
     // per-solve property; cleared only on reset.
     std::unordered_set<uint64_t> diseqBranchAuthorized_;
+    // ZOLVER_LIA_DISEQ_BRANCH: branch on any model-violated asserted interface
+    // disequality (not just arrangement-authorized pairs). Fixes combination
+    // false-SAT on integer-infeasibility-via-diseq.
+    bool liaDiseqBranch_ = false;
     bool safeMode_ = false;
     bool ultraSafeMode_ = false;
     mutable int dumpCounter_ = 0;
