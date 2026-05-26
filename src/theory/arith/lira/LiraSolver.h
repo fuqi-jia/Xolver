@@ -55,6 +55,17 @@ private:
 
     // Active MILP engine
     InternalMilpEngine milpEngine_;
+    // Persistent var-name -> engine-index map. Vars and simplex rows are built
+    // once and reused across check() calls (resetConstraints keeps them); only
+    // the active bound set is re-specified each check. Cleared on reset.
+    std::unordered_map<std::string, int> nameToIdx_;
+    // How many registry records we've already pre-registered as engine row
+    // forms. Front-loading every atom's row form on the first (clean) check
+    // means later checks almost never hit a new form (which forces a clean
+    // rebuild). Reset to 0 whenever the engine is cleared.
+    size_t registeredRecordCount_ = 0;
+    int engineVarIndex(const std::string& name);
+    void preRegisterAtomRows();
 
     // CDCL state
     TheoryAtomRegistry* registry_ = nullptr;

@@ -9,13 +9,19 @@ LiraSolver::LiraSolver() = default;
 LiraSolver::~LiraSolver() = default;
 
 void LiraSolver::onPush() {
-    milpEngine_.push();
+    // No engine action: the active constraint set is rebuilt from the trail on
+    // the next check(). (Scope push/pop is incompatible with the persistent
+    // row cache, which would leave stale aux indices after a simplex pop.)
 }
 
-void LiraSolver::onPop(uint32_t n) {
-    for (uint32_t i = 0; i < n; ++i) {
-        milpEngine_.pop();
-    }
+void LiraSolver::onPop(uint32_t /*n*/) {
+    // Full reset; the next check() rebuilds vars/rows/bounds from the (already
+    // scope-truncated) trail. Correct regardless of nesting; the single-query
+    // competition path never calls push/pop, so this costs nothing there.
+    milpEngine_.clear();
+    nameToIdx_.clear();
+    registeredRecordCount_ = 0;
+    disequalities_.clear();
 }
 
 TheoryCheckResult LiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -47,10 +53,48 @@ bool LiraSolver::isIntegerVar(const std::string& name) const {
     return it != intVarCache_.end() ? it->second : false;
 }
 
+int LiraSolver::engineVarIndex(const std::string& name) {
+    auto it = nameToIdx_.find(name);
+    if (it != nameToIdx_.end()) return it->second;
+    auto kind = isIntegerVar(name) ? InternalMilpEngine::VarKind::Int
+                                   : InternalMilpEngine::VarKind::Real;
+    int idx = milpEngine_.addVar(name, kind);
+    nameToIdx_[name] = idx;
+    return idx;
+}
+
+// Front-load the row form of every LIRA linear atom in the registry. On the
+// first (clean) check this declares all static atom rows up front, so the rows
+// are created in one clean pass instead of provoking a clean rebuild each time
+// a new atom is first asserted later. Processes only newly-added records.
+void LiraSolver::preRegisterAtomRows() {
+    if (!registry_) return;
+    const auto& recs = registry_->records();
+    for (size_t i = registeredRecordCount_; i < recs.size(); ++i) {
+        const auto& rec = recs[i];
+        if (rec.theory != TheoryId::LIRA) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
+        const auto& p = std::get<LinearAtomPayload>(rec.payload);
+        auto rhsQ = p.rhs.tryAsRational();
+        if (!rhsQ) continue;
+        std::vector<std::pair<int, mpq_class>> terms;
+        terms.reserve(p.lhs.terms.size());
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            terms.push_back({engineVarIndex(name), coeff});
+        }
+        milpEngine_.registerForm(terms, *rhsQ);
+    }
+    registeredRecordCount_ = recs.size();
+}
+
 TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*/) {
-    milpEngine_.clear();
+    // Keep vars + simplex rows across checks (built once, cached); only the
+    // active constraint set is re-specified here. Bounds are fully re-asserted
+    // by solve(), so the verdict is identical to a clear()+rebuild.
+    milpEngine_.resetConstraints();
+    preRegisterAtomRows();
     disequalities_.clear();
-    std::unordered_map<std::string, int> nameToIdx;
+    auto& nameToIdx = nameToIdx_;
 
     for (const auto& a : trail()) {
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
@@ -157,9 +201,10 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
 }
 
 TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
-    milpEngine_.clear();
+    milpEngine_.resetConstraints();
+    preRegisterAtomRows();
     disequalities_.clear();
-    std::unordered_map<std::string, int> nameToIdx;
+    auto& nameToIdx = nameToIdx_;
 
     for (const auto& a : trail()) {
         if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
@@ -250,6 +295,8 @@ void LiraSolver::onReset() {
     // Base clears the trail; clear LIRA-specific state here.
     disequalities_.clear();
     milpEngine_.clear();
+    nameToIdx_.clear();
+    registeredRecordCount_ = 0;
 }
 
 void LiraSolver::setRegistry(TheoryAtomRegistry* reg) {

@@ -9,6 +9,62 @@ void InternalMilpEngine::clear() {
     varKinds_.clear();
     constraints_.clear();
     integerVars_.clear();
+    rowCache_.clear();
+    allForms_.clear();
+    knownFormKeys_.clear();
+    clean_ = true;
+    needsRebuild_ = false;
+}
+
+void InternalMilpEngine::resetConstraints() {
+    // Keep vars, simplex rows, rowCache_, allForms_; only forget the active set.
+    constraints_.clear();
+}
+
+std::string InternalMilpEngine::formKey(const LinearConstraint& c) {
+    std::string key;
+    key.reserve(c.terms.size() * 8 + 16);
+    for (const auto& [idx, coeff] : c.terms) {
+        key += std::to_string(idx);
+        key += ':';
+        key += coeff.get_str();
+        key += ';';
+    }
+    key += '|';
+    key += c.rhs.get_str();
+    return key;
+}
+
+// Recreate every accumulated row on a freshly reset (clean, un-pivoted) basis.
+// This is the ONLY place a row may be created after a check() has pivoted, and
+// it is safe precisely because reset() restores a clean basis first.
+void InternalMilpEngine::rebuildOnCleanBasis() {
+    simplex_.reset();
+    rowCache_.clear();
+    // Re-register user vars in their original order so indices stay stable
+    // (form keys and integerVars_ reference these indices).
+    for (const auto& name : varNames_) {
+        simplex_.addVar(name);
+    }
+    for (const auto& form : allForms_) {
+        int aux = simplex_.addConstraint(form.terms, form.rhs);
+        rowCache_[formKey(form)] = aux;
+    }
+    clean_ = true;
+    needsRebuild_ = false;
+}
+
+int InternalMilpEngine::getOrCreateRow(const LinearConstraint& c) {
+    std::string key = formKey(c);
+    auto it = rowCache_.find(key);
+    if (it != rowCache_.end()) return it->second;
+    // Reached only on a clean basis: either the very first solve since a reset
+    // (clean_ == true), or right after rebuildOnCleanBasis(). A genuinely new
+    // form arriving on a DIRTY basis sets needsRebuild_ in addConstraint, so the
+    // row is created during the clean rebuild before this point — never here.
+    int aux = simplex_.addConstraint(c.terms, c.rhs);
+    rowCache_[key] = aux;
+    return aux;
 }
 
 void InternalMilpEngine::push() {
@@ -35,12 +91,40 @@ std::string_view InternalMilpEngine::varName(int var) const {
     return varNames_[var];
 }
 
+void InternalMilpEngine::noteForm(const LinearConstraint& c) {
+    if (knownFormKeys_.insert(formKey(c)).second) {
+        // First time we ever see this form. Remember it for clean rebuilds.
+        allForms_.push_back(c);
+        // If the basis is already dirty (a check() has pivoted since the last
+        // reset), its row cannot be created safely now — defer to a clean rebuild.
+        if (!clean_) needsRebuild_ = true;
+    }
+}
+
 void InternalMilpEngine::addConstraint(const LinearConstraint& c) {
     constraints_.push_back(c);
+    noteForm(c);
+}
+
+void InternalMilpEngine::registerForm(
+    const std::vector<std::pair<int, mpq_class>>& terms, const mpq_class& rhs) {
+    // Pre-declare a row form WITHOUT making it an active constraint. Lets the
+    // caller front-load every atom's row on the first (clean) check so that
+    // later checks rarely hit a new form (which would force a clean rebuild).
+    LinearConstraint c;
+    c.terms = terms;
+    c.rhs = rhs;
+    c.rel = Relation::Eq;     // placeholder: only terms+rhs define the row
+    c.reason = SatLit{0, true};
+    noteForm(c);
 }
 
 InternalMilpEngine::MilpResult InternalMilpEngine::solve(MilpMode mode) {
+    if (needsRebuild_) rebuildOnCleanBasis();
     auto r = solveLpRelaxation();
+    // solveLpRelaxation()'s check() pivots the basis: it is now dirty until the
+    // next reset/rebuild. New forms arriving from here on need a clean rebuild.
+    clean_ = false;
     if (r.kind != MilpResult::Kind::Sat) return r;
 
     switch (mode) {
@@ -64,7 +148,7 @@ InternalMilpEngine::MilpResult InternalMilpEngine::solveLpRelaxation() {
     simplex_.resetActiveBounds();
 
     for (const auto& c : constraints_) {
-        int aux = simplex_.addConstraint(c.terms, c.rhs);
+        int aux = getOrCreateRow(c);
         if (aux < 0) continue;
 
         SatLit reason = c.reason;
