@@ -7,6 +7,8 @@
 
 namespace zolver {
 
+class PolynomialKernel;
+
 // ---------------------------------------------------------------------------
 // Principal subresultant coefficient (PSC) chain — the algebraic core of an
 // UNCONDITIONALLY SOUND (Collins) projection operator.
@@ -43,10 +45,18 @@ struct PscChainResult {
 // Returns the PSC chain of p, q w.r.t. v, or budgetExceeded=true if any
 // required Sylvester submatrix exceeds `maxMatrixDim`. Degenerate inputs (a
 // side with degree < 1 in v) yield an empty chain.
+//
+// `kernel` is OPTIONAL. When it is non-null AND the env flag
+// ZOLVER_NRA_LIBPOLY_PSC is ON, the chain is computed via the libpoly
+// `pscChain` (no matrix-dimension bound, so budgetExceeded is never set). When
+// `kernel` is null OR the flag is OFF, the definitional Sylvester-submatrix
+// determinant below is used — byte-identical to the historical behaviour (the
+// determinant path is the reference oracle and is never deleted).
 PscChainResult principalSubresultantCoefficients(
     const RationalPolynomial& p,
     const RationalPolynomial& q,
     VarId v,
-    int maxMatrixDim = 9);
+    int maxMatrixDim = 9,
+    PolynomialKernel* kernel = nullptr);
 
 } // namespace zolver

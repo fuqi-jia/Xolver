@@ -409,7 +409,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         rps.push_back(std::move(*rp));
     }
 
-    auto reason = closure_.build(rps, input.varOrder);
+    auto reason = closure_.build(rps, input.varOrder, ProjectionClosure::Config(), kernel_);
     if (reason != ProjectionIncompleteReason::None) {
         unsatTrustworthy_ = false;   // incomplete projection ⇒ no UNSAT may rest on it
     }

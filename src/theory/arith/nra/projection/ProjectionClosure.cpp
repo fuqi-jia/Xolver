@@ -81,7 +81,7 @@ void ProjectionClosure::projectLevel(const std::vector<int>& inputIds,
 
         RationalPolynomial fp = f.derivative(elimVar);
         if (!fp.isZero()) {
-            auto chain = principalSubresultantCoefficients(f, fp, elimVar, cfg_.maxMatrixDim);
+            auto chain = principalSubresultantCoefficients(f, fp, elimVar, cfg_.maxMatrixDim, kernel_);
             if (chain.budgetExceeded) { reason_ = ProjectionIncompleteReason::BudgetExceeded; return; }
             for (size_t j = 0; j < chain.psc.size(); ++j) {
                 RationalPolynomial s = chain.psc[j];
@@ -106,7 +106,7 @@ void ProjectionClosure::projectLevel(const std::vector<int>& inputIds,
         for (size_t b = a + 1; b < inputIds.size(); ++b) {
             const RationalPolynomial f = entries_[inputIds[a]].poly;
             const RationalPolynomial g = entries_[inputIds[b]].poly;
-            auto chain = principalSubresultantCoefficients(f, g, elimVar, cfg_.maxMatrixDim);
+            auto chain = principalSubresultantCoefficients(f, g, elimVar, cfg_.maxMatrixDim, kernel_);
             if (chain.budgetExceeded) { reason_ = ProjectionIncompleteReason::BudgetExceeded; return; }
             for (size_t j = 0; j < chain.psc.size(); ++j) {
                 RationalPolynomial s = chain.psc[j];
@@ -131,12 +131,14 @@ void ProjectionClosure::projectLevel(const std::vector<int>& inputIds,
 ProjectionIncompleteReason ProjectionClosure::build(
     const std::vector<RationalPolynomial>& constraints,
     const std::vector<VarId>& varOrder,
-    const Config& cfg) {
+    const Config& cfg,
+    PolynomialKernel* kernel) {
 
     entries_.clear();
     dedup_.clear();
     varOrder_ = varOrder;
     cfg_ = cfg;
+    kernel_ = kernel;
     reason_ = ProjectionIncompleteReason::None;
     int n = static_cast<int>(varOrder.size());
     levelPolys_.assign(static_cast<size_t>(std::max(0, n)), {});

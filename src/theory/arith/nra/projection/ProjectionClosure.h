@@ -10,6 +10,8 @@
 
 namespace zolver {
 
+class PolynomialKernel;
+
 // ---------------------------------------------------------------------------
 // ProjectionClosure — the unconditionally-sound (Collins) projection of a
 // constraint set, computed ONCE per solve (projection is sample-independent).
@@ -76,14 +78,20 @@ public:
     // Build the closure. constraints must be non-constant in varOrder (caller
     // resolves constant-zero atoms by relation BEFORE this). Returns the
     // incompleteness reason (None == complete).
+    //
+    // `kernel` is OPTIONAL and only consulted on the PSC path: when non-null
+    // AND the env flag ZOLVER_NRA_LIBPOLY_PSC is ON, the per-level PSC chains
+    // route through libpoly instead of the determinant. Null kernel or flag
+    // OFF => the determinant path, byte-identical to historical behaviour.
     ProjectionIncompleteReason build(
         const std::vector<RationalPolynomial>& constraints,
         const std::vector<VarId>& varOrder,
-        const Config& cfg);
+        const Config& cfg,
+        PolynomialKernel* kernel = nullptr);
     ProjectionIncompleteReason build(
         const std::vector<RationalPolynomial>& constraints,
         const std::vector<VarId>& varOrder) {
-        return build(constraints, varOrder, Config());
+        return build(constraints, varOrder, Config(), nullptr);
     }
 
     bool complete() const { return reason_ == ProjectionIncompleteReason::None; }
@@ -98,6 +106,7 @@ private:
     std::vector<std::vector<int>> levelPolys_;
     std::vector<VarId> varOrder_;
     Config cfg_;
+    PolynomialKernel* kernel_ = nullptr;   // optional; PSC libpoly-path handle
     ProjectionIncompleteReason reason_ = ProjectionIncompleteReason::None;
     std::unordered_map<std::string, int> dedup_;
     std::vector<int> emptyLevel_;

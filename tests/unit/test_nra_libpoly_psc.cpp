@@ -37,6 +37,7 @@
 #include <gmpxx.h>
 
 #include <array>
+#include <cstdlib>
 #include <random>
 #include <sstream>
 
@@ -399,6 +400,64 @@ TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~30
     // Must actually have exercised the path on a meaningful number of cases.
     REQUIRE(comparisons > 50);
     CHECK(mismatches == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Task 3: the gated public entry point principalSubresultantCoefficients.
+//
+// The flag ZOLVER_NRA_LIBPOLY_PSC selects the libpoly path ONLY when a non-null
+// kernel is also supplied (`kernel != nullptr && flag ON`). The flag is read
+// once per process via a function-local `static const bool`, so we set the env
+// var ON for the whole process and exploit the kernel-null short-circuit to get
+// both paths in a single run:
+//   * kernel = &kernel  + flag ON  -> libpoly psc path
+//   * kernel = nullptr             -> determinant path (the flag is never even
+//                                      consulted; this is the byte-identical
+//                                      OFF reference)
+// The two out.psc chains must be equal up to a nonzero rational scale per entry.
+// Any non-equivalence is a STOP-and-report soundness finding.
+// ---------------------------------------------------------------------------
+TEST_CASE("principalSubresultantCoefficients: gated ON (libpoly) == OFF (determinant) up to scale") {
+    // Set the flag ON before the first call so the process-static read sees it.
+    setenv("ZOLVER_NRA_LIBPOLY_PSC", "1", /*overwrite=*/1);
+
+    auto kernelPtr = createPolynomialKernel();
+    PolynomialKernel& kernel = *kernelPtr;
+    VarId y = mkVarId(kernel, "y");
+    VarId x = mkVarId(kernel, "x");
+
+    // Integer-coefficient polynomials only (libpoly is an integer ring;
+    // mkConst(mpq_class(1,2)) returns a NULL poly and crashes).
+    // f = x^3 + 2x + (y - 1),  g = 2x^3 + x^2 + 5
+    RationalPolynomial f;
+    f.addVar(x, 3, 1);
+    f.addVar(x, 1, 2);
+    f.addVar(y, 1, 1);
+    f.addConstant(-1);
+    f.normalize();
+    RationalPolynomial g;
+    g.addVar(x, 3, 2);
+    g.addVar(x, 2, 1);
+    g.addConstant(5);
+    g.normalize();
+
+    // OFF reference: kernel == nullptr forces the determinant path regardless
+    // of the env flag (the flag is gated behind the non-null kernel check).
+    auto off = principalSubresultantCoefficients(f, g, x, /*maxMatrixDim=*/12, nullptr);
+    // ON: non-null kernel + flag ON -> libpoly psc path.
+    auto on  = principalSubresultantCoefficients(f, g, x, /*maxMatrixDim=*/12, &kernel);
+
+    REQUIRE_FALSE(off.budgetExceeded);
+    REQUIRE_FALSE(on.budgetExceeded);          // libpoly path never bails on budget
+    REQUIRE(on.psc.size() == off.psc.size());  // both min(3,3) = 3
+
+    for (size_t j = 0; j < off.psc.size(); ++j) {
+        CHECK_MESSAGE(equalUpToRationalScale(on.psc[j], off.psc[j], kernel),
+                      "gated psc index " << j
+                      << ": libpoly path differs from determinant");
+    }
+
+    unsetenv("ZOLVER_NRA_LIBPOLY_PSC");
 }
 
 #endif  // ZOLVER_HAS_LIBPOLY
