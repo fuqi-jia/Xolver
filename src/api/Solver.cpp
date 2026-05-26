@@ -12,6 +12,8 @@
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
+#include "frontend/preprocess/FormulaRewriter.h"
+#include <cstdlib>
 #include "theory/arith/search/CandidateModelSearch.h"
 #include "proof/ArithModelValidator.h"
 #include <gmpxx.h>
@@ -510,6 +512,25 @@ public:
         // these ExprIds keep referencing the original formula even after
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
+
+        // ZOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
+        // formula rewriter. Runs BEFORE ITE lowering so its simplifications
+        // (boolean identities/absorption, const-fold, relational const-eval)
+        // shrink the formula for every downstream pass. Sound: it only APPENDS
+        // CoreExpr nodes, so the originalAssertions_ snapshot above keeps
+        // referencing the original formula for ModelValidator. A top-level
+        // assertion that simplifies to the boolean constant false makes the
+        // assertion conjunction unsatisfiable.
+        if (std::getenv("ZOLVER_PP_REWRITE")) {
+            FormulaRewriter rewriter(*ir, boolSortId_);
+            if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef ZOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                return Result::Unsat;
+            }
+            rewriter.commit();
+        }
 
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
