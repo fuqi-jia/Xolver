@@ -117,27 +117,49 @@ bool encodeAndSolveIsSat(CoreIr& ir, ExprId root, SortId boolS, bool pg) {
 } // namespace
 
 TEST_CASE("PG-CNF: equisatisfiable with ground truth (random boolean formulas)") {
+    // PG cannot lean on the model validator as a backstop (it does not catch
+    // QF_UF false-SATs on the default path), so PG must be correct BY ITSELF.
+    // This is the primary guarantee: a broad ground-truth differential. The
+    // generator deliberately builds a DAG (re-using subexpressions) and n-ary
+    // And/Or so subformulas are reached at MULTIPLE polarities — the exact
+    // stress for the polarity-union logic that PG relies on.
     std::mt19937 rng(0x9E3779B9);
-    const int K = 3;  // vars a,b,c -> brute force over 8 assignments
-    int sawSat = 0, sawUnsat = 0;
+    const int K = 4;  // a,b,c,d -> brute force over 16 assignments
+    int sawSat = 0, sawUnsat = 0, sawShared = 0;
 
-    for (int iter = 0; iter < 600; ++iter) {
+    for (int iter = 0; iter < 2000; ++iter) {
         BoolHarness h(K);
+        std::vector<ExprId> pool(h.varIds);  // shareable subexpressions (DAG)
 
         std::function<ExprId(int)> gen = [&](int d) -> ExprId {
+            // ~1/4 of the time, REUSE an existing node -> DAG sharing, so the
+            // same subformula occurs under different parents/polarities.
+            if (pool.size() > K && rng() % 4 == 0) {
+                ++sawShared;
+                return pool[rng() % pool.size()];
+            }
+            ExprId e;
             if (d <= 0 || rng() % 3 == 0) {
-                // leaf: a variable, optionally a constant
                 int r = rng() % (K + 2);
-                if (r < K) return h.varIds[r];
-                return h.mk(Kind::ConstBool, {}, Payload(r == K));
+                e = (r < K) ? h.varIds[r]
+                            : h.mk(Kind::ConstBool, {}, Payload(r == K));
+            } else {
+                switch (rng() % 5) {
+                    case 0: e = h.mk(Kind::Not, {gen(d - 1)}); break;
+                    case 1:
+                    case 2: {
+                        int nc = 2 + static_cast<int>(rng() % 3);  // n-ary 2..4
+                        std::vector<ExprId> ch;
+                        for (int i = 0; i < nc; ++i) ch.push_back(gen(d - 1));
+                        e = h.mk((rng() % 2) ? Kind::And : Kind::Or, ch);
+                        break;
+                    }
+                    case 3: e = h.mk(Kind::Implies, {gen(d - 1), gen(d - 1)}); break;
+                    default: e = h.mk(Kind::Xor, {gen(d - 1), gen(d - 1)}); break;
+                }
             }
-            switch (rng() % 5) {
-                case 0: return h.mk(Kind::Not, {gen(d - 1)});
-                case 1: return h.mk(Kind::And, {gen(d - 1), gen(d - 1)});
-                case 2: return h.mk(Kind::Or,  {gen(d - 1), gen(d - 1)});
-                case 3: return h.mk(Kind::Implies, {gen(d - 1), gen(d - 1)});
-                default: return h.mk(Kind::Xor, {gen(d - 1), gen(d - 1)});
-            }
+            pool.push_back(e);
+            return e;
         };
 
         ExprId root = gen(4);
@@ -152,9 +174,11 @@ TEST_CASE("PG-CNF: equisatisfiable with ground truth (random boolean formulas)")
         CHECK(off == truth);
         CHECK(on == truth);
     }
-    // Make sure the corpus exercised both verdicts (else the test is vacuous).
+    // The corpus must exercise both verdicts AND actual DAG sharing, else it is
+    // weaker than it looks.
     CHECK(sawSat > 0);
     CHECK(sawUnsat > 0);
+    CHECK(sawShared > 0);
 }
 
 TEST_CASE("PG-CNF: nested single-polarity contradiction stays unsat") {
