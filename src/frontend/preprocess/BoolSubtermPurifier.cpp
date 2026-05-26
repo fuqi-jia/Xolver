@@ -121,32 +121,29 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId e, bool inArgPosition, int depth) {
         return e;
     }
 
-    // Determine which child positions are "atomic bool positions"
-    // (i.e. standard places where bool composites are allowed without purification)
-    bool childIsAtomicBoolPos[4] = {false, false, false, false};
-    switch (node.kind) {
-        case Kind::Not:
-            if (node.children.size() >= 1) childIsAtomicBoolPos[0] = true;
-            break;
-        case Kind::And:
-        case Kind::Or:
-        case Kind::Implies:
-        case Kind::Xor:
-            for (size_t i = 0; i < node.children.size() && i < 4; ++i)
-                childIsAtomicBoolPos[i] = true;
-            break;
-        case Kind::Ite:
-            if (node.children.size() >= 1) childIsAtomicBoolPos[0] = true;
-            break;
-        default:
-            break;
-    }
+    // Whether child position i is an "atomic bool position" (a standard place
+    // where a bool composite is allowed without purification). Computed PER
+    // INDEX: an And/Or/Implies/Xor can have arbitrarily many children (large
+    // conjunctions are common, e.g. arctic-matrix), so a fixed-size array would
+    // be read out of bounds for the 5th+ child — a stack-buffer-overflow that
+    // crashed/hung intermittently on big formulas.
+    auto childIsAtomicBoolPos = [&](size_t i) -> bool {
+        switch (node.kind) {
+            case Kind::Not:     return i == 0;
+            case Kind::And:
+            case Kind::Or:
+            case Kind::Implies:
+            case Kind::Xor:     return true;   // every child is an atomic bool position
+            case Kind::Ite:     return i == 0; // only the condition
+            default:            return false;
+        }
+    };
 
     // Recursively process children
     std::vector<ExprId> newChildren;
     newChildren.reserve(node.children.size());
     for (size_t i = 0; i < node.children.size(); ++i) {
-        bool childInArg = inArgPosition || !childIsAtomicBoolPos[i];
+        bool childInArg = inArgPosition || !childIsAtomicBoolPos(i);
         newChildren.push_back(purifyRec(node.children[i], childInArg, depth + 1));
     }
 
