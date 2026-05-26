@@ -49,7 +49,16 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
 
     // Detect sort-based features for variables
     if (e.kind == Kind::Variable) {
-        auto sk = ir_.sortKind(e.sort);
+        // Skip solver-internal/synthetic variables (e.g. ITE-lowering aux
+        // "__nlc_ite_*"): their sort is an artifact of lowering — an ITE over
+        // Real branches can be assigned an Int-sorted aux — not part of the
+        // user's declared logic. The mismatch guard must reflect the USER's
+        // formula, so a genuine (declare-fun x () Int) in QF_LRA is still
+        // flagged, while spurious synthetic Int aux are not (their underlying
+        // user terms already contribute the real Int/Real features).
+        bool synthetic = std::holds_alternative<std::string>(e.payload.value) &&
+                         std::get<std::string>(e.payload.value).rfind("__", 0) == 0;
+        auto sk = synthetic ? std::nullopt : ir_.sortKind(e.sort);
         if (sk) {
             switch (*sk) {
                 case SortKind::Bool:  f.hasBool = true; break;
