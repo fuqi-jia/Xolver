@@ -458,6 +458,13 @@ public:
         FrontendAdapter adapter(*parser);
         ir = adapter.importProblem();
         boolSortId_ = adapter.getBoolSortId();
+        // Keep CoreIr's own bool-sort id in sync. Passes that query ir->boolSortId()
+        // directly (e.g. BoolSubtermPurifier) would otherwise see NullSort and mint
+        // fresh boolpur variables WITHOUT a Bool sort — those untyped vars defeat the
+        // Atomizer's "provably Bool" check, so an Eq/Distinct whose BOTH operands are
+        // boolpur vars is mis-routed to EUF as an uninterpreted-sort (dis)equality
+        // that never constrains the boolean truth-atom -> false SAT (cnf-iff class).
+        ir->setBoolSortId(boolSortId_);
         intSortId_ = ir->intSortId();
         realSortId_ = ir->realSortId();
         return true;
