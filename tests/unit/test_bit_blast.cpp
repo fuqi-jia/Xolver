@@ -194,6 +194,76 @@ TEST_CASE("SpaceEstimator: boxIsComplete only when all vars hard-bounded") {
     CHECK(plan2.width.at("y") == SpaceEstimator::bitsToCover(mpz_class(0), mpz_class(15)));
 }
 
+TEST_CASE("SpaceEstimator: bitsToHold = ceil(log2 n) (distinct-group sizing)") {
+    using bitblast::SpaceEstimator;
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(1)) == 1u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(2)) == 1u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(3)) == 2u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(7)) == 3u);   // distinct(x1..x7): 7 values -> 3 bits
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(8)) == 3u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(9)) == 4u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(64)) == 6u);
+    CHECK(SpaceEstimator::bitsToHold(mpz_class(65)) == 7u);
+}
+
+TEST_CASE("SpaceEstimator: distinct graph raises width to hold the clique") {
+    auto kernel = createPolynomialKernel();
+    // A 70-way distinct clique: each var must differ from 69 others, so its
+    // closed distinct-set has 70 members -> needs ceil(log2 70) = 7 bits, which
+    // EXCEEDS the heuristic base (6). All vars unbounded so DG is the binding signal.
+    const int N = 70;
+    std::vector<VarId> vs;
+    std::vector<std::string> names;
+    for (int i = 0; i < N; ++i) {
+        names.push_back("d" + std::to_string(i));
+        vs.push_back(kernel->getOrCreateVar(names.back()));
+    }
+    std::vector<NormalizedNiaConstraint> cs;
+    uint32_t r = 1000;
+    for (int i = 0; i < N; ++i)
+        for (int j = i + 1; j < N; ++j) {
+            PolyId diff = kernel->sub(kernel->mkVar(vs[i]), kernel->mkVar(vs[j])); // di - dj
+            cs.push_back({diff, Relation::Neq, SatLit{r++, true}});
+        }
+    DomainStore d;   // all unbounded
+    bitblast::SpaceEstimator est(*kernel);
+    auto plan = est.estimate(cs, d);
+    CHECK(plan.boxIsComplete == false);
+    for (const auto& n : names) {
+        REQUIRE(plan.width.count(n) == 1);
+        CHECK(plan.width.at(n) == 7u);   // DG (7) beats base (6)
+    }
+}
+
+TEST_CASE("SpaceEstimator: vote unifies unbounded widths when one dominates") {
+    auto kernel = createPolynomialKernel();
+    // 8 small-coefficient vars (width = base 6) + 2 huge-coefficient vars
+    // (CM -> clipped to 16). 6 covers 8/10 > Gamma(0.5)*10, so Vote unifies ALL
+    // unbounded vars to 6 (the dominant width), lowering the two outliers.
+    std::vector<NormalizedNiaConstraint> cs;
+    uint32_t r = 2000;
+    for (int i = 0; i < 8; ++i) {
+        VarId a = kernel->getOrCreateVar("a" + std::to_string(i));
+        PolyId p = kernel->sub(kernel->mkVar(a), kernel->mkConst(mpz_class(i)));  // a_i - i
+        cs.push_back({p, Relation::Eq, SatLit{r++, true}});
+    }
+    mpz_class big = mpz_class(1) << 20;
+    std::vector<std::string> bnames = {"b0", "b1"};
+    for (const auto& bn : bnames) {
+        VarId b = kernel->getOrCreateVar(bn);
+        PolyId p = kernel->sub(kernel->mul(kernel->mkConst(big), kernel->mkVar(b)),
+                               kernel->mkConst(mpz_class(1)));                     // 2^20*b - 1
+        cs.push_back({p, Relation::Eq, SatLit{r++, true}});
+    }
+    DomainStore d;   // all unbounded
+    bitblast::SpaceEstimator est(*kernel);
+    auto plan = est.estimate(cs, d);
+    CHECK(plan.boxIsComplete == false);
+    CHECK(plan.width.at("a0") == 6u);
+    CHECK(plan.width.at("b0") == 6u);   // was 16, unified down by Vote
+    CHECK(plan.width.at("b1") == 6u);
+}
+
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 
