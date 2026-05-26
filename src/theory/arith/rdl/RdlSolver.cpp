@@ -36,6 +36,26 @@ void RdlSolver::onReset() {
     // Base clears the trail; clear RDL-specific graph state here.
     disequalities_.clear();
     graph_.clear();
+    haveModel_ = false;
+    lastModel_.clear();
+}
+
+void RdlSolver::onBacktrack(int targetLevel) {
+    (void)targetLevel;
+    haveModel_ = false;  // model is valid only for the assignment that built it
+}
+
+std::optional<RdlSolver::TheoryModel> RdlSolver::getModel() const {
+    if (!haveModel_) return std::nullopt;
+    TheoryModel model;
+    for (const auto& [name, val] : lastModel_) {
+        if (name.empty()) continue;
+        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;  // __ZERO__ / internal
+        model.assignments[name] = val.get_str();
+        model.numericAssignments.insert({name, RealValue::fromMpq(val)});
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
 }
 
 RdlSolver::NormalizeResult RdlSolver::normalizeAndAdd(const ActiveAssignment& a) {
@@ -152,6 +172,7 @@ TheoryLemma RdlSolver::buildDiseqSplitLemma(const DiseqInfo& d, TheoryLemmaStora
 }
 
 TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    haveModel_ = false;
     if (hasPending()) return drainPending();
 
     graph_.clear();
@@ -206,6 +227,9 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
 
+    // Consistent: keep the concrete rational model for read-off.
+    lastModel_ = std::move(*modelOpt);
+    haveModel_ = true;
     return TheoryCheckResult::consistent();
 }
 
