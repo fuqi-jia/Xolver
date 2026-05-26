@@ -91,11 +91,17 @@ private:
         BoolConstMark boolMark = BoolConstMark::None;
     };
 
-    struct LevelSnapshot {
+    // Egraph state at a decision-level boundary: egraphBefore is the egraph
+    // snapshot captured the moment check() begins processing merges of `level`
+    // (i.e. AFTER all lower-level merges are applied). Recorded only for levels
+    // that actually produce merges; entries are kept sorted ascending by level.
+    // Backtrack to target restores the boundary of the SMALLEST level > target
+    // (whose egraphBefore == state after all level-≤target merges), which works
+    // because the saturation applies merges in ascending level order so the
+    // egraph's size-based undo trail is level-monotonic.
+    struct EgraphBoundary {
         int level;
-        size_t trailSizeBeforeLevel;
-        EGraphSnapshot egraphSnapshotBeforeLevel;
-        size_t mergeQueueSize;
+        EGraphSnapshot egraphBefore;
     };
 
     const CoreIr* coreIr_ = nullptr;
@@ -112,7 +118,7 @@ private:
     std::vector<ActiveAssignment> trail_;
     std::vector<size_t> scopeLimits_;
     std::vector<EGraphSnapshot> scopeSnapshots_;
-    std::vector<LevelSnapshot> levelSnapshots_;
+    std::vector<EgraphBoundary> egraphBoundaries_;
 
     std::vector<ActiveDisequality> disequalities_;
 
@@ -124,7 +130,9 @@ private:
     EufTermId trueTerm_ = NullEufTerm;
     EufTermId falseTerm_ = NullEufTerm;
 
-    void ensureSnapshotForLevel(int level);
+    // Record an egraph boundary for `level` (state before its merges) if not
+    // already recorded. Called from check() at each level transition.
+    void recordEgraphBoundary(int level);
 
     // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
     std::vector<SatLit> allActiveReasons() const;

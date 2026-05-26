@@ -7,6 +7,7 @@
 #include <cassert>
 #include <algorithm>
 #include <functional>
+#include <climits>
 
 namespace zolver {
 
@@ -63,10 +64,9 @@ void EufSolver::pop(uint32_t n) {
         pendingConflict_.reset();
         pendingUnknown_ = false;
 
-        // also clean up levelSnapshots that are now past current trail
-        while (!levelSnapshots_.empty() && levelSnapshots_.back().trailSizeBeforeLevel >= limit) {
-            levelSnapshots_.pop_back();
-        }
+        // Decision-level egraph boundaries are scoped to a single solve; a scope
+        // pop returns to the assertion stack (decision level 0), so discard them.
+        egraphBoundaries_.clear();
 
         scopeLimits_.pop_back();
         scopeSnapshots_.pop_back();
@@ -78,7 +78,7 @@ void EufSolver::reset() {
     trail_.clear();
     scopeLimits_.clear();
     scopeSnapshots_.clear();
-    levelSnapshots_.clear();
+    egraphBoundaries_.clear();
     disequalities_.clear();
     pendingConflict_.reset();
     pendingUnknown_ = false;
@@ -123,64 +123,51 @@ std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
     return out;
 }
 
-void EufSolver::ensureSnapshotForLevel(int level) {
-    if (!levelSnapshots_.empty() && levelSnapshots_.back().level > level) {
-        if (std::getenv("EUF_DIAG")) {
-            std::cerr << "[EUF_ASSERT_FAIL] ensureSnapshotForLevel level=" << level
-                      << " backLevel=" << levelSnapshots_.back().level
-                      << " snapCount=" << levelSnapshots_.size() << "\n";
-        }
-    }
-    assert(levelSnapshots_.empty() || levelSnapshots_.back().level <= level);
-
-    if (levelSnapshots_.empty() || levelSnapshots_.back().level < level) {
-        levelSnapshots_.push_back({
-            level,
-            trail_.size(),
-            egraph_.snapshot(),
-            mergeQueue_.size()
-        });
-    }
+void EufSolver::recordEgraphBoundary(int level) {
+    // Record the egraph snapshot as the boundary for `level` (state before this
+    // level's merges) the first time check() begins processing merges at this
+    // level. Boundaries are kept sorted ascending; since check() processes
+    // merges in ascending level order, levels arrive non-decreasing.
+    if (!egraphBoundaries_.empty() && egraphBoundaries_.back().level >= level) return;
+    egraphBoundaries_.push_back({level, egraph_.snapshot()});
 }
 
 void EufSolver::backtrackToLevel(int target) {
     currentLevel_ = target;
 
-    // Find the rightmost snapshot with level <= target
-    const LevelSnapshot* targetSnap = nullptr;
-    for (auto it = levelSnapshots_.rbegin(); it != levelSnapshots_.rend(); ++it) {
-        if (it->level <= target) {
-            targetSnap = &*it;
-            break;
-        }
+    // Trail: keep entries with level <= target. The SAT decision trail is
+    // level-ordered (ascending), so the kept entries are a prefix.
+    size_t keep = trail_.size();
+    for (size_t i = 0; i < trail_.size(); ++i) {
+        if (trail_[i].level > target) { keep = i; break; }
     }
+    trail_.resize(keep);
 
-    // Pop all snapshots above target
-    while (!levelSnapshots_.empty() && levelSnapshots_.back().level > target) {
-        levelSnapshots_.pop_back();
-    }
-
-    if (targetSnap) {
-        trail_.resize(targetSnap->trailSizeBeforeLevel);
-
-        auto dit = std::remove_if(disequalities_.begin(), disequalities_.end(),
-            [targetSnap](const auto& d) { return d.trailIndex >= targetSnap->trailSizeBeforeLevel; });
-        disequalities_.erase(dit, disequalities_.end());
-
-        mergeQueue_.resize(targetSnap->mergeQueueSize);
-
-        egraph_.rollback(targetSnap->egraphSnapshotBeforeLevel);
-    } else {
-        // No snapshot at or below target - clear everything
-        trail_.clear();
-        disequalities_.clear();
-        mergeQueue_.clear();
-        egraph_.rollback({0, 0, 0, 0, 0, 0});
-    }
+    // Drop disequalities / shared disequalities / queued merges above target.
+    auto dit = std::remove_if(disequalities_.begin(), disequalities_.end(),
+        [target](const auto& d) { return d.level > target; });
+    disequalities_.erase(dit, disequalities_.end());
 
     auto sdIt = std::remove_if(sharedDisequalities_.begin(), sharedDisequalities_.end(),
         [target](const auto& d) { return d.level > target; });
     sharedDisequalities_.erase(sdIt, sharedDisequalities_.end());
+
+    auto mqIt = std::remove_if(mergeQueue_.begin(), mergeQueue_.end(),
+        [target](const auto& m) { return m.level > target; });
+    mergeQueue_.erase(mqIt, mergeQueue_.end());
+
+    // Egraph: restore the boundary of the SMALLEST level > target — its
+    // egraphBefore is the state after all level-<=target merges (boundaries are
+    // recorded in level order, and the saturation applies merges level-ordered,
+    // so the size-based undo is level-monotonic). If no level > target produced
+    // merges, the egraph is already at the target state.
+    const EgraphBoundary* restore = nullptr;
+    for (const auto& b : egraphBoundaries_) {
+        if (b.level > target) { restore = &b; break; }
+    }
+    if (restore) egraph_.rollback(restore->egraphBefore);
+    while (!egraphBoundaries_.empty() && egraphBoundaries_.back().level > target)
+        egraphBoundaries_.pop_back();
 
     // clean scope stack if needed
     while (!scopeLimits_.empty() && scopeLimits_.back() > trail_.size()) {
@@ -311,7 +298,15 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     if (!std::holds_alternative<EufAtomPayload>(atom.payload)) return;
     const auto& payload = std::get<EufAtomPayload>(atom.payload);
 
-    ensureSnapshotForLevel(level);
+    currentLevel_ = std::max(currentLevel_, level);
+
+    // Everything this assertLit queues (term-registration congruences + the
+    // asserted merge) belongs to `level`; tag from here so the level-ordered
+    // saturation and the level-aware backtrack treat it consistently.
+    size_t mqBefore = mergeQueue_.size();
+    auto tagFromHere = [&]() {
+        for (size_t i = mqBefore; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = level;
+    };
 
     // Lazily intern true/false constants
     EufTermId trueTerm = termManager_.internTrueConstant();
@@ -336,6 +331,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     EufTermId rhs = termManager_.intern(payload.rhs, *coreIr_);
     if (lhs == NullEufTerm || rhs == NullEufTerm) {
         pendingUnknown_ = true;
+        tagFromHere();
         return;
     }
 
@@ -349,6 +345,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
         mr.kind = MergeReasonKind::AssertedEquality;
         mr.lit = reason;
         mergeQueue_.push_back({lhs, target, mr});
+        tagFromHere();
         return;
     }
 
@@ -358,6 +355,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     } else if (payload.rel == Relation::Neq) {
         isEq = !value;
     } else {
+        tagFromHere();
         return;
     }
 
@@ -372,6 +370,7 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     } else {
         disequalities_.push_back({lhs, rhs, reason, level, trailIdx});
     }
+    tagFromHere();
 }
 
 // ---------------------------------------------------------------------------
@@ -393,25 +392,38 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                     stale, egraph_.mergeRecordCount(), trail_.size());
     }
 
-    // Array Row1/Const eager merges (tautological; re-enqueued after backtrack
-    // since the egraph rolls these merges back). Must happen before the
-    // saturation loop so the consequences propagate via congruence.
+    // Array Row1/Const eager merges + signature registration produce
+    // tautological / congruence consequences at the current decision level.
+    // Tag them with currentLevel_ so the level-ordered saturation places them
+    // after all lower-level merges.
+    size_t mqTagFrom = mergeQueue_.size();
     if (arrayMode_) {
         ensureArrayContext();
         if (arrayReasoner_.active()) {
             arrayReasoner_.enqueueEagerMerges(mergeQueue_);
         }
     }
-
     // Register signatures for all newly interned terms before entering the
     // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
     // has already been merged) are visible to congruence detection.
     egraph_.registerPendingSignatures(mergeQueue_);
+    for (size_t i = mqTagFrom; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = currentLevel_;
 
-    // 唯一 saturation loop：drain SAT decisions + congruence
+    // Saturation loop, processed in ASCENDING decision-level order so the
+    // egraph's size-based undo trail stays level-monotonic (interface-equality
+    // merges can be injected out of record order; level order is the invariant
+    // backtrack relies on). At each level transition we record an egraph
+    // boundary = the state before that level's merges, which backtrack restores.
+    int processingLevel = INT_MIN;
     while (!mergeQueue_.empty()) {
-        auto req = mergeQueue_.back();
-        mergeQueue_.pop_back();
+        // Pick the minimum-level pending merge.
+        size_t mi = 0;
+        for (size_t i = 1; i < mergeQueue_.size(); ++i)
+            if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
+        PendingMerge req = mergeQueue_[mi];
+        mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+        int L = req.level;
+
         if (egraph_.same(req.a, req.b)) continue;
 
         // sort check
@@ -422,7 +434,16 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             return TheoryCheckResult::unknown();
         }
 
-        auto mr = egraph_.merge(req.a, req.b, req.reason, mergeQueue_);
+        if (L != processingLevel) {
+            recordEgraphBoundary(L);
+            processingLevel = L;
+        }
+
+        // Apply the merge into a fresh side-queue so the congruences it spawns
+        // can be tagged with this merge's level before re-entering the queue.
+        std::deque<PendingMerge> cong;
+        auto mr = egraph_.merge(req.a, req.b, req.reason, cong);
+        for (auto& c : cong) { c.level = L; mergeQueue_.push_back(c); }
         if (!mr.merged) continue;
 
         // Evaluate builtin constants in affected parent terms. Skip entirely
@@ -607,11 +628,16 @@ EufTermId EufSolver::internEufExpr(ExprId eid) {
 TheoryCheckResult EufSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
-    ensureSnapshotForLevel(level);
+    currentLevel_ = std::max(currentLevel_, level);
+    size_t mqBefore = mergeQueue_.size();
+    auto tagFromHere = [&]() {
+        for (size_t i = mqBefore; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = level;
+    };
 
     EufTermId ta = internSharedConstant(a);
     EufTermId tb = internSharedConstant(b);
     if (ta == NullEufTerm || tb == NullEufTerm) {
+        tagFromHere();
         return TheoryCheckResult::unknown();
     }
 
@@ -619,16 +645,19 @@ TheoryCheckResult EufSolver::assertInterfaceEquality(
     mr.kind = MergeReasonKind::AssertedEquality;
     mr.lit = reason;
     mergeQueue_.push_back({ta, tb, mr});
+    tagFromHere();
     return TheoryCheckResult::consistent();
 }
 
 TheoryCheckResult EufSolver::assertInterfaceDisequality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
-    ensureSnapshotForLevel(level);
+    currentLevel_ = std::max(currentLevel_, level);
+    size_t mqBefore = mergeQueue_.size();
 
     EufTermId ta = internSharedConstant(a);
     EufTermId tb = internSharedConstant(b);
+    for (size_t i = mqBefore; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = level;
     if (ta == NullEufTerm || tb == NullEufTerm) {
         return TheoryCheckResult::unknown();
     }

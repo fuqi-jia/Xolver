@@ -17,6 +17,14 @@ struct PendingMerge {
     EufTermId a;
     EufTermId b;
     MergeReason reason;
+    // Decision level this merge belongs to. Asserted/interface merges carry
+    // their literal's level; congruence/array merges generated during saturation
+    // inherit the level of the merge that triggered them. The EUF saturation
+    // processes merges in ascending level order, so the egraph's size-based undo
+    // trail stays aligned with decision-level backtrack boundaries. (Interface
+    // equalities can be injected out of record order, so record order alone is
+    // not a reliable proxy for level — A4's combination note.)
+    int level = 0;
 };
 
 struct ExplainContext;
