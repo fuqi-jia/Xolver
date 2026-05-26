@@ -32,10 +32,11 @@
   # ==========================================================================
 
   # panda1: NIA 独占（≈25,452，undecidable，最重、最易 timeout、最易出 soundness bug）
-  ./zolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 30 --compare-with z3
+  ./zolver-dist/tools/deploy_and_run.sh run nia -j 220 -t 30 --compare-with z3
 
-  # panda2: 非线性实数 + 混合（NRA/LRA/NIRA/LIRA，量约 14k 但单例计算重）
-  ./zolver-dist/tools/deploy_and_run.sh run nra,lra,nira,lira -j 200 -t 30 --compare-with z3
+  # panda2: 非线性实数 + 混合 + LIA（panda2 之前太轻，吸收 lia）
+  ./zolver-dist/tools/deploy_and_run.sh run nra,lra,nira,lira,lia -j 220 -t 30 --compare-with z3
 
-  # panda7: 线性整数 + 差分 + UF/array 组合（≈28k，多数可判定、收敛快）
-  ./zolver-dist/tools/deploy_and_run.sh run lia,idl,rdl,uf,uflra,uflia,ufnia,ufnra,ax,alia,auflia -j 200 -t 30 --compare-with z3
+  # panda7: 差分 + UF + 全部 7 个数组逻辑（ax/alia/alra/auflia/auflra/ania/aufnia）+ bool
+  #   注意：alra/auflra/ania/aufnia 之前一直漏掉了——务必带上，否则数组-非线性逻辑零覆盖
+  ./zolver-dist/tools/deploy_and_run.sh run idl,rdl,bool,uf,uflra,uflia,ufnia,ufnra,ax,alia,alra,auflia,auflra,ania,aufnia -j 220 -t 30 --compare-with z3
