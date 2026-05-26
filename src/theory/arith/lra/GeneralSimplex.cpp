@@ -435,6 +435,17 @@ int GeneralSimplex::pickViolatedBasic() {
     return -1;
 }
 
+int GeneralSimplex::pickViolatedBasicBland() const {
+    int best = -1;
+    for (int xb : basicVars_) {
+        if (xb < 0) continue;
+        if (violatesLower(xb) || violatesUpper(xb)) {
+            if (best == -1 || xb < best) best = xb;
+        }
+    }
+    return best;
+}
+
 void GeneralSimplex::rebuildViolationQueue() {
     violatedQueue_.clear();
     std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
@@ -490,22 +501,30 @@ GeneralSimplex::Result GeneralSimplex::check() {
 }
 
 GeneralSimplex::Result GeneralSimplex::checkInternal() {
-    const int MAX_ITERATIONS = 10000;
-    // Heuristic pivoting (ZOLVER_LRA_PIVOT_HEUR) is allowed only for the first
-    // kHeuristicPivotBudget pivots; after that we fall back to Bland's smallest-
-    // index entering rule, which guarantees termination (Dutertre–de Moura). The
-    // remaining MAX_ITERATIONS - budget iterations are Bland-driven, so the
-    // termination bound is unchanged relative to the Bland-only path.
+    // LRA is decidable: check() must never self-return Unknown from an internal
+    // iteration cap (that would be giving up on a solvable, decidable instance —
+    // only the external wall-clock may stop a solve). Termination is guaranteed
+    // instead by Bland's anti-cycling rule:
+    //   - iter < kHeuristicPivotBudget: heuristic entering (if ZOLVER_LRA_PIVOT_HEUR).
+    //   - iter >= kHeuristicPivotBudget: Bland entering (smallest index).
+    //   - iter >= kStrictBlandThreshold: STRICT Bland — smallest-index leaving AND
+    //     entering, which provably terminates (Dutertre–de Moura). The fast queue
+    //     leaving is used before that, so default performance is unchanged.
+    // The huge guard below is a last-resort against a genuine non-termination
+    // bug, not a normal exit; under strict Bland it is unreachable in practice.
     const int kHeuristicPivotBudget = 4000;
+    const long long kStrictBlandThreshold = 10000;
+    const long long kSafetyGuard = 1LL << 34;  // ~1.7e10 pivots; external timeout fires first
 
-    for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
-        int xi = pickViolatedBasic();
+    for (long long iter = 0; iter < kSafetyGuard; ++iter) {
+        bool strictBland = iter >= kStrictBlandThreshold;
+        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
         if (xi == -1) {
             conflict_.clear();
             return Result::Sat;
         }
 
-        bool useBland = !useHeuristicPivot_ || iter >= kHeuristicPivotBudget;
+        bool useBland = strictBland || !useHeuristicPivot_ || iter >= kHeuristicPivotBudget;
 
         if (violatesLower(xi)) {
             int xj = findEnteringVarToIncrease(xi, useBland);
@@ -524,7 +543,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
         }
     }
 
-    std::cerr << "[GeneralSimplex] Warning: iteration limit reached" << std::endl;
+    std::cerr << "[GeneralSimplex] safety guard hit (probable non-termination bug)" << std::endl;
     conflict_.clear();
     return Result::Unknown;
 }

@@ -304,6 +304,11 @@ private:
     // Violation queue
     void refreshViolationStatus(int var);
     int pickViolatedBasic();
+    // Strict-Bland leaving selection: smallest-index violated basic var. Used
+    // (with Bland entering) as the anti-cycling fallback so check() is
+    // guaranteed to terminate on a decidable LRA instance and never has to
+    // self-return Unknown from an iteration cap.
+    int pickViolatedBasicBland() const;
     void rebuildViolationQueue();
 
     // Core check loop
