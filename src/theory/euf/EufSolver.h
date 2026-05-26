@@ -48,6 +48,17 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    // Nelson-Oppen arrangement query: are the two shared terms currently in the
+    // SAME EUF equivalence class? Used by the combination layer (model-based
+    // arrangement splitting) to decide whether an arith-equal pair of shared
+    // scalars is already merged on the EUF side. Returns false (not-merged) when
+    // either term is not interned as a shared constant — conservative, never
+    // claims a merge that does not hold. Const because it only reads the egraph.
+    bool areSharedTermsMerged(SharedTermId a, SharedTermId b) const;
+    bool sharedTermsMerged(SharedTermId a, SharedTermId b) const override {
+        return areSharedTermsMerged(a, b);
+    }
+
     std::optional<TheoryModel> getModel() const override;
 
 private:

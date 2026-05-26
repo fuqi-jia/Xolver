@@ -61,6 +61,9 @@ public:
     // -------------------------------------------------------------------------
     int getOrCreateVar(GeneralSimplex& gs, const std::string& name);
     std::string getVarName(int idx) const;
+    // Const lookup of an already-created variable's simplex index, or -1 if
+    // the name has never been registered. Does NOT create a variable.
+    int findVarIndex(const std::string& name) const;
 
 private:
     // Canonical (lhs, rhs) -> aux var (solver-local)

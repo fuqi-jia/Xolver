@@ -9,6 +9,7 @@
 #include <gmpxx.h>
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <string>
 
@@ -41,6 +42,10 @@ public:
 
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
+
+    std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
+
+    void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;
 
     std::optional<TheoryModel> getModel() const override;
 
@@ -104,6 +109,12 @@ private:
 
     // Map from (a,b) canonical key to auxiliary var index for x - y
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
+
+    // Canonical (a,b) keys whose decided interface disequality this solver is
+    // authorized to model-branch (set by the combination layer's arrangement
+    // split). Persists across backtrack/reset — it is a static property of the
+    // pair, not of the search state.
+    std::unordered_set<uint64_t> diseqBranchAuthorized_;
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;

@@ -636,6 +636,21 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
     return TheoryCheckResult::consistent();
 }
 
+bool EufSolver::areSharedTermsMerged(SharedTermId a, SharedTermId b) const {
+    if (a == b) return true;
+    // Only consult terms that have ALREADY been interned as shared constants.
+    // Interning is a mutating operation (registers signatures / enqueues
+    // merges), so a const observer must not trigger it. If a shared scalar has
+    // never been interned, it cannot be merged with anything on the EUF side
+    // yet -> report not-merged (conservative).
+    auto ia = sharedTermToEufTerm_.find(a);
+    auto ib = sharedTermToEufTerm_.find(b);
+    if (ia == sharedTermToEufTerm_.end() || ib == sharedTermToEufTerm_.end())
+        return false;
+    if (ia->second == NullEufTerm || ib->second == NullEufTerm) return false;
+    return egraph_.same(ia->second, ib->second);
+}
+
 std::vector<TheorySolver::SharedEqualityPropagation>
 EufSolver::getDeducedSharedEqualities() {
     std::vector<SharedEqualityPropagation> result;

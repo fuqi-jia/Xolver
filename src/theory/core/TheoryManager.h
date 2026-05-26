@@ -30,6 +30,13 @@ public:
     void setArrangementComplete(bool v) { arrangementComplete_ = v; }
     bool isArrangementComplete() const { return arrangementComplete_; }
 
+    // Scopes model-based arrangement splitting to the array combination logics
+    // (QF_ALRA/ALIA/AUFLRA/AUFLIA). Off by default to limit blast radius — the
+    // splitting only fires when both an EUF (array) solver and an arith solver
+    // share scalar index/element terms.
+    void setArrayCombinationMode(bool v) { arrayCombinationMode_ = v; }
+    bool isArrayCombinationMode() const { return arrayCombinationMode_; }
+
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) override;
     void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
@@ -70,6 +77,10 @@ private:
     bool combinationMode_ = false;
     bool nonConvexMode_ = false;
     bool arrangementComplete_ = true;
+    bool arrayCombinationMode_ = false;
+    // Stable dedup of arrangement splits already emitted (per canonical pair
+    // key). Bounded by #shared-scalar pairs -> guarantees termination.
+    std::unordered_set<uint64_t> emittedArrangementSplits_;
     TheoryAtomRegistry* registry_ = nullptr;
     TheoryAssignmentView* assignmentView_ = nullptr;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;

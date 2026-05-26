@@ -128,6 +128,7 @@ SolverSetupResult setupSolvers(
         theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
         theoryManager.setRegistry(&registry);
         theoryManager.setCombinationMode(true);
+        theoryManager.setArrayCombinationMode(true);
     } else if (logic == "QF_ALIA" || logic == "ALIA" ||
                logic == "QF_AUFLIA" || logic == "AUFLIA") {
         // Arrays + LIA (+ UF). Same shape as the LRA array branch but over
@@ -155,6 +156,7 @@ SolverSetupResult setupSolvers(
         theoryManager.setRegistry(&registry);
         theoryManager.setCombinationMode(true);
         theoryManager.setNonConvexMode(true);
+        theoryManager.setArrayCombinationMode(true);
     } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
         sharedTermRegistry->setCoreIr(ir);

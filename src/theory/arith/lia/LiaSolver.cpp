@@ -53,6 +53,7 @@ void LiaSolver::onReset() {
     activeAtoms_.clear();
     disequalities_.clear();
     pendingConflict_.reset();
+    diseqBranchAuthorized_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -362,6 +363,38 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
                 // complementary pair slipped in), fall back to the previous
                 // sound-but-incomplete Unknown.
                 return TheoryCheckResult::unknown();
+            }
+            // Honor a DECIDED interface disequality the convex model violates:
+            // (a != b) decided but the simplex point happens to set a = b
+            // (both free -> defaulted equal). Branch the integer model apart:
+            //   (a != b) => (a - b <= -1) OR (a - b >= 1).
+            // Only at Full effort (a real model is in hand) and only when both
+            // shared terms resolve to simplex variables.
+            SharedTermId loK = ieq.a < ieq.b ? ieq.a : ieq.b;
+            SharedTermId hiK = ieq.a < ieq.b ? ieq.b : ieq.a;
+            uint64_t authKey = (static_cast<uint64_t>(loK) << 32) |
+                               static_cast<uint64_t>(hiK);
+            if (effort == TheoryEffort::Full && registry_ &&
+                !fixedOpt && diseqBranchAuthorized_.count(authKey)) {
+                std::string va = getVarNameForSharedTerm(ieq.a);
+                std::string vb = getVarNameForSharedTerm(ieq.b);
+                if (!va.empty() && !vb.empty() && va != vb &&
+                    va.rfind("__const_", 0) != 0 && vb.rfind("__const_", 0) != 0) {
+                    DeltaRational d = gs_.value(aux);
+                    if (d.a == 0 && d.b == 0) {
+                        LinearFormKey form;
+                        form.terms.push_back({va, mpq_class(1)});
+                        form.terms.push_back({vb, mpq_class(-1)});
+                        SatLit litLe = registry_->getOrCreateLinearBoundAtom(
+                            form, Relation::Leq, mpq_class(-1), TheoryId::LIA);
+                        SatLit litGe = registry_->getOrCreateLinearBoundAtom(
+                            form, Relation::Geq, mpq_class(1), TheoryId::LIA);
+                        TheoryLemma lemma{{ieq.reason.negated(), litLe, litGe}};
+                        if (!lemmaDb.contains(lemma)) {
+                            return TheoryCheckResult::mkLemma(std::move(lemma));
+                        }
+                    }
+                }
             }
         }
     }
@@ -913,6 +946,39 @@ std::vector<SatLit> LiaSolver::allActiveReasons() const {
         return a.var == b.var && a.sign == b.sign;
     }), rs.end());
     return rs;
+}
+
+void LiaSolver::allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {
+    SharedTermId lo = a < b ? a : b;
+    SharedTermId hi = a < b ? b : a;
+    uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+    diseqBranchAuthorized_.insert(key);
+}
+
+std::optional<RealValue> LiaSolver::sharedTermArithValue(SharedTermId s) const {
+    if (!sharedTermRegistry_ || !coreIr_) return std::nullopt;
+    const auto* st = sharedTermRegistry_->get(s);
+    if (!st) return std::nullopt;
+    const auto& expr = coreIr_->get(st->coreExpr);
+    if (expr.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&expr.payload.value))
+            return RealValue::fromMpq(mpq_class(*iv));
+    }
+    if (expr.kind == Kind::ConstReal) {
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value))
+            return RealValue::fromMpq(mpqFromString(*sv));
+    }
+    if (expr.kind != Kind::Variable ||
+        !std::holds_alternative<std::string>(expr.payload.value)) {
+        return std::nullopt;
+    }
+    const std::string& name = std::get<std::string>(expr.payload.value);
+    int idx = manager_.findVarIndex(name);
+    if (idx < 0) return std::nullopt;
+    DeltaRational val = gs_.value(idx);
+    // Integer model values are integral after check(); the delta part is an
+    // infinitesimal that does not affect the integer comparison.
+    return RealValue::fromMpq(val.a);
 }
 
 std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {

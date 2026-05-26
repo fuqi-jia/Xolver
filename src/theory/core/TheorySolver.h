@@ -70,6 +70,36 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // Nelson-Oppen arrangement support: the current arith-model value of a
+    // shared scalar term, if this solver owns it and has a concrete value.
+    // Used by model-based arrangement splitting to detect when two shared
+    // scalars are assigned the same value by arith but are not merged in EUF.
+    // Default: no value (non-arith solvers).
+    virtual std::optional<RealValue> sharedTermArithValue(SharedTermId s) const {
+        (void)s;
+        return std::nullopt;
+    }
+
+    // Nelson-Oppen arrangement support: are the two shared terms currently in
+    // the same equivalence class on this solver's side? Only the EUF solver
+    // answers meaningfully; default false (not-merged / cannot tell).
+    virtual bool sharedTermsMerged(SharedTermId a, SharedTermId b) const {
+        (void)a; (void)b;
+        return false;
+    }
+
+    // Nelson-Oppen arrangement support: the combination layer calls this on the
+    // arith solver when it emits a model-based arrangement SPLIT over (a,b). It
+    // authorizes the arith solver to MODEL-BRANCH a later DECIDED interface
+    // disequality on exactly this pair — i.e. to split the convex model apart
+    // when it equates two terms the SAT solver decided unequal. Scoping the
+    // model-branch to arrangement-split pairs keeps it from perturbing array
+    // disequalities the array reasoner itself manages (those are NOT authorized
+    // and the convex model is left to the existing machinery). Default: no-op.
+    virtual void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {
+        (void)a; (void)b;
+    }
+
     struct TheoryModel {
         // variable name -> value string (e.g. "x" -> "42", "y" -> "3/4").
         // Legacy channel; carries both numeric and boolean values as strings.

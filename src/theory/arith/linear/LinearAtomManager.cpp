@@ -24,6 +24,11 @@ std::string LinearAtomManager::getVarName(int idx) const {
     return "";
 }
 
+int LinearAtomManager::findVarIndex(const std::string& name) const {
+    auto it = varToIndex_.find(name);
+    return it != varToIndex_.end() ? it->second : -1;
+}
+
 int LinearAtomManager::getOrCreateAuxVar(GeneralSimplex& gs,
                                           const LinearFormKey& lhs,
                                           const mpq_class& rhs) {

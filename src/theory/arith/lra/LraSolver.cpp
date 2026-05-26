@@ -51,6 +51,7 @@ void LraSolver::onReset() {
     theoryTrail_.clear();
     appliedCursor_ = 0;
     pendingConflict_.reset();
+    diseqBranchAuthorized_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -139,7 +140,7 @@ bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
     return manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
 }
 
-std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "[LRA] check begin\n";
 
 #ifdef ZOLVER_LRA_PROFILE
@@ -320,7 +321,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
 #ifdef ZOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif
-        return handleSimplexDisequalities(
+        auto dr = handleSimplexDisequalities(
             disequalities, gs_, lemmaDb,
             [this](const DiseqInfo& d) -> TheoryCheckResult {
                 if (!registry_) return TheoryCheckResult::consistent();
@@ -331,6 +332,49 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 return TheoryCheckResult::mkLemma(
                     TheoryLemma{{d.lit.negated(), litLt, litGt}});
             });
+        if (dr.kind != TheoryCheckResult::Kind::Consistent) return dr;
+    }
+
+    // Honor a DECIDED interface disequality the convex model violates. When the
+    // SAT solver has committed (a != b) but the simplex point happens to set
+    // a = b (both unconstrained -> both pinned to a default), the per-theory
+    // model is globally inconsistent. Branch the model apart:
+    //   (a != b) => (a - b < 0) OR (a - b > 0).
+    // Only at Full effort (a real model is in hand), only when both shared
+    // terms resolve to simplex variables (the constant cases are already
+    // handled by getOrCreateInterfaceEqAuxVar's const-vs-const refutation), and
+    // only after the regular disequality split has nothing left to do — so this
+    // is a genuine last-resort separation, not a perturbation of an otherwise
+    // resolvable search state.
+    if (effort == TheoryEffort::Full && registry_ && !diseqBranchAuthorized_.empty()) {
+        for (const auto& ieq : interfaceDisequalities_) {
+            // Only model-branch pairs the arrangement split authorized.
+            SharedTermId lo = ieq.a < ieq.b ? ieq.a : ieq.b;
+            SharedTermId hi = ieq.a < ieq.b ? ieq.b : ieq.a;
+            uint64_t key = (static_cast<uint64_t>(lo) << 32) |
+                           static_cast<uint64_t>(hi);
+            if (!diseqBranchAuthorized_.count(key)) continue;
+            std::string va = getVarNameForSharedTerm(ieq.a);
+            std::string vb = getVarNameForSharedTerm(ieq.b);
+            if (va.empty() || vb.empty() || va == vb) continue;
+            int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
+            if (aux < 0) continue;
+            DeltaRational d = gs_.value(aux);
+            if (!(d.a == 0 && d.b == 0)) continue;  // model already separates them
+            NO_DBG << "[LRA-DISEQ-BRANCH] " << va << " != " << vb
+                   << " but model equates them; branching\n";
+            LinearFormKey form;
+            form.terms.push_back({va, mpq_class(1)});
+            form.terms.push_back({vb, mpq_class(-1)});
+            SatLit litLt = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Lt, mpq_class(0), TheoryId::LRA);
+            SatLit litGt = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Gt, mpq_class(0), TheoryId::LRA);
+            TheoryLemma lemma{{ieq.reason.negated(), litLt, litGt}};
+            if (!lemmaDb.contains(lemma)) {
+                return TheoryCheckResult::mkLemma(std::move(lemma));
+            }
+        }
     }
 
     NO_DBG << "[LRA] Consistent\n";
@@ -583,6 +627,35 @@ std::optional<TheoryLemma> LraSolver::tryConvertDerivedBound(
     SatLit lit = registry_->getOrCreateLinearBoundAtom(
         info.lhs, rel, boundRhs, TheoryId::LRA);
     return TheoryLemma{{lit}};
+}
+
+void LraSolver::allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {
+    SharedTermId lo = a < b ? a : b;
+    SharedTermId hi = a < b ? b : a;
+    uint64_t key = (static_cast<uint64_t>(lo) << 32) | static_cast<uint64_t>(hi);
+    diseqBranchAuthorized_.insert(key);
+}
+
+std::optional<RealValue> LraSolver::sharedTermArithValue(SharedTermId s) const {
+    if (!sharedTermRegistry_ || !coreIr_) return std::nullopt;
+    const auto* st = sharedTermRegistry_->get(s);
+    if (!st) return std::nullopt;
+    const auto& expr = coreIr_->get(st->coreExpr);
+    // Numeric constants carry their value directly.
+    if (auto cv = getConstantRationalValue(*coreIr_, *sharedTermRegistry_, s)) {
+        return RealValue::fromMpq(*cv);
+    }
+    if (expr.kind != Kind::Variable ||
+        !std::holds_alternative<std::string>(expr.payload.value)) {
+        return std::nullopt;
+    }
+    const std::string& name = std::get<std::string>(expr.payload.value);
+    int idx = manager_.findVarIndex(name);
+    if (idx < 0) return std::nullopt;
+    mpq_class delta = gs_.computeSafeDelta();
+    DeltaRational val = gs_.value(idx);
+    mpq_class concrete = val.a + val.b * delta;
+    return RealValue::fromMpq(concrete);
 }
 
 std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {

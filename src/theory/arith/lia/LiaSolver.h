@@ -63,6 +63,10 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
+
+    void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;
+
     std::optional<TheoryModel> getModel() const override;
 
 protected:
@@ -127,6 +131,10 @@ private:
     int currentLevel_ = 0;
 
     std::unordered_map<uint64_t, int> interfaceEqAuxVars_;
+    // Canonical (a,b) keys whose decided interface disequality this solver may
+    // model-branch (authorized by the combination arrangement split). Static
+    // per-solve property; cleared only on reset.
+    std::unordered_set<uint64_t> diseqBranchAuthorized_;
     bool safeMode_ = false;
     bool ultraSafeMode_ = false;
     mutable int dumpCounter_ = 0;

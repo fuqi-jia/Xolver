@@ -36,6 +36,7 @@ void TheoryManager::clearSolvers() {
     pendingSharedEqEvents_.clear();
     snapshots_.clear();
     deducedEqCache_.clear();
+    emittedArrangementSplits_.clear();
     aggStats_ = AggregateStats{};
 }
 
@@ -395,6 +396,95 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
+                return TheoryCheckResult::mkLemma(std::move(lemma));
+            }
+        }
+    }
+
+    // 4. Model-based arrangement splitting (array combination logics only).
+    //
+    // The per-theory models can be each-consistent yet globally inconsistent
+    // because the Nelson-Oppen ARRANGEMENT over shared scalars is incomplete:
+    // arith freely picks values for unconstrained shared index/element terms
+    // (e.g. i0 = i1 = 0), but that implied equality is never decided by SAT, so
+    // EUF/the array reasoner never sees it and cannot fire Row1/congruence. The
+    // combined point validates per-theory but the model-validation gate then
+    // downgrades Sat -> Unknown.
+    //
+    // Fix (only at Full effort): when two USER (non-internal) shared scalar
+    // terms have the SAME arith-model value but are NOT yet merged in EUF and
+    // their interface (dis)equality is still undecided, emit ONE arrangement
+    // SPLIT lemma  (a = b) OR (not (a = b))  over the shared-equality atom that
+    // both theories observe. The SAT solver must commit; the array reasoner
+    // then refutes the bad arrangement (forcing i0 != i1) and arith honors a
+    // decided interface disequality, yielding a valid model. Deduped by stable
+    // pair key (finite #pairs => terminates).
+    if (arrayCombinationMode_ && effort == TheoryEffort::Full &&
+        sharedTermRegistry_ && registry_) {
+        // Identify the EUF (array) solver to consult for "already merged?".
+        TheorySolver* eufSolver = nullptr;
+        auto eufIt = solverByTheory_.find(TheoryId::EUF);
+        if (eufIt != solverByTheory_.end()) eufSolver = eufIt->second;
+
+        // Collect user (non-internal) shared SCALAR terms together with their
+        // current arith-model value (from whichever arith solver owns them).
+        struct ValuedTerm { SharedTermId id; SortId sort; RealValue val; };
+        std::vector<ValuedTerm> valued;
+        for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+            const auto* st = sharedTermRegistry_->get(stId);
+            if (!st || st->isInternal) continue;   // scope to user terms only
+            // Skip numeric-constant shared terms: a constant-vs-variable
+            // arrangement is not needed (the variable's value already coincides
+            // with the constant in this model, but they are NOT required equal),
+            // and splitting on it destabilizes array axiom instantiation. Only
+            // genuine variable-variable arrangements need a split.
+            if (sharedTermRegistry_->constValue(stId)) continue;
+            std::optional<RealValue> v;
+            for (auto& solver : solvers_) {
+                if (solver->id() == TheoryId::EUF) continue;
+                if (!solver->supportsCombination()) continue;
+                v = solver->sharedTermArithValue(stId);
+                if (v) break;
+            }
+            if (!v) continue;
+            valued.push_back({stId, st->sort, std::move(*v)});
+        }
+
+        for (size_t i = 0; i < valued.size(); ++i) {
+            for (size_t j = i + 1; j < valued.size(); ++j) {
+                const auto& A = valued[i];
+                const auto& B = valued[j];
+                if (A.sort != B.sort) continue;         // only same-sort scalars
+                if (!(A.val == B.val)) continue;        // arith disagrees -> no split
+                // Already arranged on the interface? (SAT committed eq/diseq.)
+                if (sharedEqMgr_.same(A.id, B.id)) continue;
+                if (sharedEqMgr_.diseqKnown(A.id, B.id)) continue;
+                // Already merged in EUF (congruence / Row1) -> consistent.
+                if (eufSolver && eufSolver->sharedTermsMerged(A.id, B.id)) continue;
+
+                SharedTermId lo = A.id < B.id ? A.id : B.id;
+                SharedTermId hi = A.id < B.id ? B.id : A.id;
+                uint64_t key = (static_cast<uint64_t>(lo) << 32) |
+                               static_cast<uint64_t>(hi);
+                if (!emittedArrangementSplits_.insert(key).second) continue;
+
+                // Authorize the owning arith solver(s) to honor (model-branch)
+                // a DECIDED interface disequality on this exact pair: this split
+                // is the one that may force (a != b), and arith must then keep
+                // the convex model from re-equating them. Scoped to this pair so
+                // array-reasoner-managed disequalities are unaffected.
+                for (auto* owner : solversOwning(A.id, B.id)) {
+                    owner->allowInterfaceDiseqModelBranch(A.id, B.id);
+                }
+
+                SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A.id, B.id);
+                TheoryLemma lemma;
+                lemma.lits.push_back(eqLit);
+                lemma.lits.push_back(eqLit.negated());
+                NO_DBG << "[NO-ARRANGE] split "
+                       << stName(sharedTermRegistry_, A.id) << " = "
+                       << stName(sharedTermRegistry_, B.id) << " : "
+                       << debug::fmtClause(lemma.lits) << "\n";
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
