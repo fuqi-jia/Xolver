@@ -4,6 +4,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "expr/ir.h"
+#include "util/MpqUtils.h"
 #include <cassert>
 #include <cstdlib>
 #include <string>
@@ -18,17 +19,36 @@ std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
     ExprId e = originExpr(t);
     if (e == NullExpr || !ir_) return std::nullopt;
     const auto& expr = ir_->get(e);
-    // isConst() ⇒ an INTERPRETED constant (Int/Real/Bool/BV), so distinct
-    // canonical tokens imply distinct values. Uninterpreted-sort constants are
-    // Kind::Variable (not isConst), so they correctly return nullopt: two
-    // distinct uninterpreted names do NOT imply distinct values.
-    if (!expr.isConst()) return std::nullopt;
     const auto& v = expr.payload.value;
-    if (auto* b = std::get_if<bool>(&v))       return std::string("b:") + (*b ? "1" : "0");
-    if (auto* i = std::get_if<int64_t>(&v))    return "i:" + std::to_string(*i);
-    if (auto* u = std::get_if<uint64_t>(&v))   return "u:" + std::to_string(*u);
-    if (auto* s = std::get_if<std::string>(&v)) return "s:" + *s;
-    return std::nullopt;
+    // SOUNDNESS: the token must satisfy "distinct tokens ⇒ distinct VALUES".
+    // String equality is NOT value equality for numerics: ConstInt/ConstReal
+    // payloads are stored as raw parser text (adapter.cpp), so "1", "1.0" and
+    // "2/2" are the same value but different strings. We therefore CANONICALIZE
+    // numeric literals to a reduced rational before tokenizing. Uninterpreted
+    // constants are Kind::Variable (not handled here) ⇒ nullopt: two distinct
+    // uninterpreted names do NOT imply distinct values. ConstBV/ConstFP are out
+    // of the validated scope and have no guaranteed canonical form ⇒ nullopt,
+    // so Row2 falls back to the complete SAT-split lemma.
+    switch (expr.kind) {
+        case Kind::ConstBool:
+            if (auto* b = std::get_if<bool>(&v)) return std::string("b:") + (*b ? "1" : "0");
+            return std::nullopt;
+        case Kind::ConstInt:
+        case Kind::ConstReal: {
+            try {
+                mpq_class q;
+                if (auto* i = std::get_if<int64_t>(&v)) q = mpq_class(*i);
+                else if (auto* s = std::get_if<std::string>(&v)) q = mpqFromString(*s);
+                else return std::nullopt;
+                q.canonicalize();   // "2/2" -> "1", reduce num/den
+                return "n:" + q.get_str();
+            } catch (...) {
+                return std::nullopt;  // unparseable ⇒ do not claim distinctness
+            }
+        }
+        default:
+            return std::nullopt;
+    }
 }
 
 bool ArrayReasoner::provablyDistinctConstIndices(EufTermId i, EufTermId j) const {
