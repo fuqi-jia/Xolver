@@ -99,6 +99,21 @@ public:
         return false;
     }
 
+    // Nelson-Oppen arrangement support: are the two shared terms ACTIVELY
+    // DISEQUAL on this solver's side — i.e. does it hold an asserted/derived
+    // disequality (a-b != 0, e.g. a native (distinct a b))? The combination
+    // certificate uses this to EXCLUDE a model-coinciding shared-arg pair from
+    // being a congruence obligation: if a != b is asserted, the coincidence is a
+    // model artifact (a valid model separates them), not an undischarged
+    // congruence — so the SAT verdict is recoverable (this is the uflra_007
+    // over-floor fix). SUFFICIENT only (may miss a derived disequality); a miss
+    // merely keeps the conservative floor, never removes a real obligation, so it
+    // is sound. Default false.
+    virtual bool sharedTermsActivelyDisequal(SharedTermId a, SharedTermId b) const {
+        (void)a; (void)b;
+        return false;
+    }
+
     // Nelson-Oppen arrangement support: the combination layer calls this on the
     // arith solver when it emits a model-based arrangement SPLIT over (a,b). It
     // authorizes the arith solver to MODEL-BRANCH a later DECIDED interface

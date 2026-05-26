@@ -133,12 +133,29 @@ EufSolver::collectArrangeableUfArgPairs(
         auto it = eufToShared.find(t);
         return it == eufToShared.end() ? static_cast<SharedTermId>(-1) : it->second;
     };
+    // Two applications are a genuine arrangement obligation only if they are
+    // KNOWN-DISEQUAL (an asserted (distinct ...) puts their classes apart): then
+    // arranging their args equal would force a congruence that contradicts the
+    // disequality. If the apps are merely forced apart by ARITH (e.g. f(a)<f(b)
+    // on the bridged results, which EUF does not see), the coincidence of the
+    // args is breakable by the arith model (arrange args unequal) -> NOT an
+    // obligation, and flooring it would over-floor a satisfiable formula.
+    auto appsKnownDisequal = [&](EufTermId t1, EufTermId t2) -> bool {
+        auto match = [&](const ActiveDisequality& d) {
+            return (egraph_.same(t1, d.lhs) && egraph_.same(t2, d.rhs)) ||
+                   (egraph_.same(t1, d.rhs) && egraph_.same(t2, d.lhs));
+        };
+        for (const auto& d : disequalities_)       if (match(d)) return true;
+        for (const auto& d : sharedDisequalities_) if (match(d)) return true;
+        return false;
+    };
     for (auto& [key, apps] : byKind) {
         (void)key;
         for (size_t p = 0; p < apps.size(); ++p) {
             for (size_t q = p + 1; q < apps.size(); ++q) {
                 EufTermId t1 = apps[p], t2 = apps[q];
                 if (egraph_.same(t1, t2)) continue;
+                if (!appsKnownDisequal(t1, t2)) continue;
                 const auto& a1 = termManager_.node(t1).args;
                 const auto& a2 = termManager_.node(t2).args;
                 if (a1.size() != a2.size()) continue;

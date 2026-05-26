@@ -4,8 +4,19 @@
 #include <unordered_set>
 #include <functional>
 #include <iostream>
+#include <cstdlib>
 
 namespace zolver {
+
+// Phase 1 (ZOLVER_COMB_UFARG_ARRANGE / ZOLVER_COMB_SAT_FLOOR): whether to bridge
+// a COMPOUND arith argument of a UF application into a fresh shared leaf. Gated
+// so the default purified form is unchanged; active when either the certificate
+// floor (needs the bridge var to SEE the obligation) or the arrangement (needs
+// it to SPLIT and recover) is enabled.
+static bool ufArgBridgeEnabled() {
+    return std::getenv("ZOLVER_COMB_SAT_FLOOR") != nullptr ||
+           std::getenv("ZOLVER_COMB_UFARG_ARRANGE") != nullptr;
+}
 
 Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
     : ir_(ir), registry_(registry), boolSortId_(boolSort) {}
@@ -243,8 +254,28 @@ ExprId Purifier::purifyRec(ExprId root) {
             std::vector<ExprId> newArgs;
             newArgs.reserve(e.children.size());
             bool changed = false;
+            bool bridgeArgs = ufArgBridgeEnabled();
             for (ExprId arg : e.children) {
                 ExprId p = done.at(arg);
+                // Phase 1: a COMPOUND arith argument (e.g. f(i+1)) is bridged
+                // into a fresh SHARED leaf — fresh = (i+1) routed to arith,
+                // f(fresh) to EUF — mirroring the array-op path below. Without
+                // this the arg stays an arith compound EUF cannot reason about,
+                // so a congruence f(i+1) ≅ f(k) (k provably = i+1) stays
+                // undischarged and the combination reports a false SAT. With the
+                // bridge it becomes the same shape as f over two shared scalars,
+                // which the certificate detector and arrangement handle.
+                if (bridgeArgs && isCompoundArith(p)) {
+                    auto cit = ufArgBridgeCache_.find(p);
+                    if (cit != ufArgBridgeCache_.end()) {
+                        p = cit->second;  // reuse the bridge var for an identical arg
+                    } else {
+                        ExprId fresh = makeFreshVar(ir_.get(p).sort);
+                        bridgeAssertions_.push_back(makeEq(fresh, p));
+                        ufArgBridgeCache_[p] = fresh;
+                        p = fresh;
+                    }
+                }
                 if (p != arg) changed = true;
                 newArgs.push_back(p);
             }
@@ -360,6 +391,7 @@ void Purifier::run() {
     std::vector<ExprId> purified;
     bridgeAssertions_.clear();
     cache_.clear();
+    ufArgBridgeCache_.clear();
     freshCounter_ = 0;
 
     for (ExprId eid : original) {

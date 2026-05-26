@@ -69,6 +69,8 @@ public:
 
     std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
 
+    bool sharedTermsActivelyDisequal(SharedTermId a, SharedTermId b) const override;
+
     void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;
 
     std::optional<TheoryModel> getModel() const override;

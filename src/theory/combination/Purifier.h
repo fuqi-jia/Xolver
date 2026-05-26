@@ -36,6 +36,11 @@ private:
     std::vector<ExprId> bridgeAssertions_;
     uint32_t freshCounter_ = 0;
     std::unordered_map<ExprId, ExprId> cache_;
+    // Phase 1: compound UF-argument -> its bridge variable, so identical compound
+    // args (hash-consed to the same ExprId) reuse ONE shared leaf. Without this,
+    // f(t)=f(t) becomes f(b0)=f(b1) with distinct bridge vars that merely coincide
+    // -> a spurious congruence obligation (over-floor of a trivially-sat formula).
+    std::unordered_map<ExprId, ExprId> ufArgBridgeCache_;
 
     bool containsUfApply(ExprId eid) const;
     bool containsArithmetic(ExprId eid) const;

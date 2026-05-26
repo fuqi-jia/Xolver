@@ -604,18 +604,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto it = solverByTheory_.find(TheoryId::EUF);
         if (it != solverByTheory_.end()) eufS = it->second;
         if (eufS) {
-            auto valueEqual = [&](SharedTermId a, SharedTermId b) -> bool {
-                if (a == b) return true;
-                std::optional<RealValue> va, vb;
-                for (auto& solver : solvers_) {
-                    if (solver->id() == TheoryId::EUF) continue;
-                    if (!solver->supportsCombination()) continue;
-                    if (!va) va = solver->sharedTermArithValue(a);
-                    if (!vb) vb = solver->sharedTermArithValue(b);
-                }
-                return va && vb && (*va == *vb);
-            };
-            for (auto& pr : eufS->collectArrangeableUfArgPairs(valueEqual)) {
+            for (auto& pr : eufS->collectArrangeableUfArgPairs(
+                     [this](SharedTermId a, SharedTermId b) {
+                         return sharedArgsArrangeable(a, b);
+                     })) {
                 SharedTermId a = pr.first, b = pr.second;
                 if (a == b) continue;
                 if (sharedEqMgr_.same(a, b) || sharedEqMgr_.diseqKnown(a, b)) continue;
@@ -641,6 +633,36 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     return TheoryCheckResult::consistent();
 }
 
+bool TheoryManager::sharedArgsArrangeable(SharedTermId a, SharedTermId b) const {
+    if (a == b) return false;
+    // DISEQUAL exclusion (the uflra_007 recovery): a (distinct a b) makes the
+    // model coincidence a recoverable artifact, not a congruence obligation. In
+    // combination mode such a disequality lives either as a shared-equality atom
+    // decided FALSE (the usual route for Eq/Distinct over two shared terms) or in
+    // sharedEqMgr_, OR — rarely — as a native arith disequality. Check all.
+    // DISEQUAL exclusion (the uflra_007 recovery): the pair carries an asserted
+    // disequality, so the model coincidence is a recoverable artifact (a valid
+    // model separates them), not a congruence obligation. Sources, in order of
+    // reliability at certificate time: a per-solver interface disequality
+    // (sharedTermsActivelyDisequal — set for a combination (distinct a b)),
+    // sharedEqMgr_, or a decided shared-eq atom (only if the assignment view is
+    // available — it is not on the post-solve certificate path).
+    bool disequal = sharedEqMgr_.diseqKnown(a, b);
+    if (!disequal && registry_ && assignmentView_) {
+        SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(a, b);
+        if (assignmentView_->value(eqLit) == LitValue::False) disequal = true;
+    }
+    std::optional<RealValue> va, vb;
+    for (const auto& solver : solvers_) {
+        if (solver->id() == TheoryId::EUF) continue;
+        if (!solver->supportsCombination()) continue;
+        if (!va) va = solver->sharedTermArithValue(a);
+        if (!vb) vb = solver->sharedTermArithValue(b);
+        if (solver->sharedTermsActivelyDisequal(a, b)) disequal = true;
+    }
+    return va && vb && (*va == *vb) && !disequal;
+}
+
 bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
     // Positive completeness proof, fail-closed: certify only if EVERY registered
     // solver positively certifies its own completeness. A solver that cannot
@@ -654,24 +676,19 @@ bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
         }
     }
     // Phase 1 combination-arrangement conjunct: per-theory completeness is NOT
-    // combination completeness. A shared bridge-var / UF-argument that is
-    // value-equal to another but not merged leaves an undischarged application
-    // congruence (Wisa select_format(fmt1) ≅ select_format(k)). Compare shared
-    // terms by their arith-model value (from whichever arith solver owns them)
-    // and ask EUF whether any same-function application pair is left unarranged.
-    auto valueEqual = [this](SharedTermId a, SharedTermId b) -> bool {
-        if (a == b) return true;
-        std::optional<RealValue> va, vb;
-        for (const auto& solver : solvers_) {
-            if (solver->id() == TheoryId::EUF) continue;
-            if (!solver->supportsCombination()) continue;
-            if (!va) va = solver->sharedTermArithValue(a);
-            if (!vb) vb = solver->sharedTermArithValue(b);
-        }
-        return va && vb && (*va == *vb);
-    };
+    // combination completeness. A same-function application pair whose differing
+    // shared args COINCIDE in the model but are not merged leaves an undischarged
+    // congruence (Wisa select_format(fmt1) ≅ select_format(k)) -> the model is
+    // globally inconsistent (functional consistency forces the apps equal) ->
+    // cannot certify. The arrangeability test is model-coincidence MINUS native
+    // disequality (sharedArgsArrangeable): a pair carrying an asserted (distinct
+    // a b) is excluded — the coincidence is a model artifact a valid model
+    // separates, so the SAT verdict is recoverable (uflra_007 over-floor fix).
     for (const auto& solver : solvers_) {
-        for (auto& pr : solver->collectArrangeableUfArgPairs(valueEqual)) {
+        for (auto& pr : solver->collectArrangeableUfArgPairs(
+                 [this](SharedTermId a, SharedTermId b) {
+                     return sharedArgsArrangeable(a, b);
+                 })) {
             // A pair the combination has already ARRANGED — committed equal or
             // DISEQUAL — is NOT pending. The decisive signal is the SAT
             // assignment of the pair's shared-equality atom: a DECIDED value

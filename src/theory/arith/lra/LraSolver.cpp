@@ -666,6 +666,18 @@ std::optional<RealValue> LraSolver::sharedTermArithValue(SharedTermId s) const {
     return RealValue::fromMpq(concrete);
 }
 
+bool LraSolver::sharedTermsActivelyDisequal(SharedTermId a, SharedTermId b) const {
+    if (a == b) return false;
+    // A combination (distinct a b) is asserted to this solver as an interface
+    // disequality (SharedTermId pair). That is the reliable signal — independent
+    // of the SAT assignment view, which is not available at certificate time.
+    for (const auto& ieq : interfaceDisequalities_) {
+        if ((ieq.a == a && ieq.b == b) || (ieq.a == b && ieq.b == a))
+            return true;
+    }
+    return false;
+}
+
 std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
     // Instantiate the infinitesimal δ to a concrete positive rational so the
     // model is a plain rational assignment — otherwise a strict-inequality

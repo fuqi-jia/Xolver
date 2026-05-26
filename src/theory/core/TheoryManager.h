@@ -161,6 +161,17 @@ private:
     std::unordered_set<ReportedPropKey, ReportedPropKeyHash> deducedEqCache_;
 
     std::vector<TheorySolver*> solversOwning(SharedTermId a, SharedTermId b) const;
+
+    // Phase 1: is a differing same-function UF-argument pair a genuine
+    // arrangement obligation? True iff the two shared args COINCIDE in the
+    // current arith model (so functional consistency forces the apps equal)
+    // and NEITHER arith solver holds a native disequality between them (an
+    // asserted (distinct a b) makes the coincidence a recoverable model
+    // artifact, not an obligation). Conservative on the model side (floors when
+    // unsure), sufficient on the disequality side (a missed disequality only
+    // keeps the floor) -> sound for the certificate, harmless for arrangement.
+    bool sharedArgsArrangeable(SharedTermId a, SharedTermId b) const;
+
     void ensureSnapshotForLevel(int level);
     LevelSnapshot& snapshotForLevel(int level);
     void discardSnapshotsAbove(int level);
