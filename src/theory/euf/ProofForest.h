@@ -5,38 +5,62 @@
 
 namespace zolver {
 
+// ---------------------------------------------------------------------------
+// ProofForest — Nieuwenhuis-Oliveras proof-producing congruence forest.
+//
+// Each term node has at most one parent (a true FOREST, never a general graph),
+// with the edge labelled by the MergeReason that justified node == parent. A
+// merge of two DISTINCT classes calls addEdge(u,v,r): we first re-root u's tree
+// (reverse the u→root chain so u becomes a root) and then point u at v. This
+// keeps the structure a forest in which the path between any two same-tree nodes
+// is UNIQUE, so explaining a==b = collecting the edge labels along a→NCA→b is a
+// sound, complete derivation. (The previous implementation stored bidirectional
+// edges in a general graph and used BFS, which is not a sound proof producer —
+// it could return an explanation that did not entail the equality, yielding
+// false UNSAT. See the QG-classification differential.)
+//
+// Rollback is a trail of parent-pointer changes (the part that bites): snapshot
+// records trail length; rollback undoes parent/label changes in LIFO order,
+// restoring the forest exactly. Label storage is an append-only pool; entries
+// whose edges are rolled back simply become unreferenced (never read).
+// ---------------------------------------------------------------------------
 class ProofForest {
 public:
-    ProofForest();
-
+    // addEdge is only ever called to merge two DISTINCT classes (the caller
+    // checks union-find first), so u and v are always in different trees here.
     void addEdge(EufTermId u, EufTermId v, const MergeReason& reason);
-    size_t snapshot() const;
+
+    size_t snapshot() const { return trail_.size(); }
     void rollback(size_t snap);
     void clear();
 
-    // Returns edge IDs along the path u→v in the active forest.
-    // Empty if no path (should not happen for same-class terms).
+    // Label indices along the unique tree path u → NCA → v. Empty if u == v or
+    // u and v are in different trees (the latter must not happen for terms the
+    // union-find reports as same-class).
     std::vector<size_t> path(EufTermId u, EufTermId v) const;
 
-    size_t activeEdgeCount() const { return activeEdgeCount_; }
+    const MergeReason& edgeReason(size_t labelIdx) const { return labels_[labelIdx]; }
 
-    const MergeReason& edgeReason(size_t edgeId) const { return edges_[edgeId].reason; }
+    // Accessors (also used by unit tests). A root satisfies parentOf(t) == t.
+    EufTermId parentOf(EufTermId t) const { return t < parent_.size() ? parent_[t] : t; }
+    size_t labelIdxOf(EufTermId t) const { return t < edgeLabelIdx_.size() ? edgeLabelIdx_[t] : 0; }
+    size_t nodeCount() const { return parent_.size(); }
 
 private:
-    struct Edge {
-        EufTermId u;
-        EufTermId v;
-        MergeReason reason;
-    };
-    std::vector<Edge> edges_;
-    std::vector<std::vector<std::pair<EufTermId, size_t>>> adj_;
-    size_t activeEdgeCount_ = 0;
+    std::vector<EufTermId> parent_;     // parent_[t]; t is a root iff parent_[t]==t
+    std::vector<size_t> edgeLabelIdx_;  // label of the edge t → parent_[t]
+    std::vector<MergeReason> labels_;   // append-only reason pool
 
-    // ZOLVER_UF_FAST_CC: O(k) rollback (pop trailing edges) instead of an
-    // O(k·degree) remove_if scan. Sound because edges are appended in
-    // increasing id and rolled back LIFO, so removed edges sit at each
-    // adjacency list's tail. Read once at construction.
-    bool fastRollback_ = false;
+    struct ParentChange {
+        EufTermId node;
+        EufTermId oldParent;
+        size_t oldLabelIdx;
+    };
+    std::vector<ParentChange> trail_;
+
+    void ensureNode(EufTermId t);
+    void setParent(EufTermId node, EufTermId newParent, size_t newLabelIdx);
+    void makeRoot(EufTermId u);
 };
 
 } // namespace zolver
