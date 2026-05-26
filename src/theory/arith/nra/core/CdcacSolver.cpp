@@ -4,7 +4,9 @@
 #include "theory/arith/nra/core/CdcacCache.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 
 namespace zolver {
@@ -136,8 +138,28 @@ TheoryCheckResult CdcacSolver::check() {
         }
     }
 
-    // Sort variables lexicographically for deterministic order
+    // Sort variables lexicographically for a deterministic base order.
     std::sort(varOrderNames.begin(), varOrderNames.end());
+    // ZOLVER_NRA_VARORDER: degree-based ordering with the highest-degree
+    // variable LAST (i.e. projected first). CDCAC is highly order-sensitive;
+    // projecting the high-degree variable first keeps the outer lifting levels
+    // on lower-degree axes with better-behaved (often rational) cell
+    // boundaries, avoiding close-irrational-root cell-decomposition failures.
+    // stable_sort over the lexicographic base keeps ties deterministic.
+    static const bool kDegreeVarOrder = std::getenv("ZOLVER_NRA_VARORDER") != nullptr;
+    if (kDegreeVarOrder && varOrderNames.size() > 1) {
+        std::unordered_map<std::string, int> degSum;
+        for (const auto& name : varOrderNames) degSum[name] = 0;
+        for (const auto& c : active_) {
+            for (const auto& name : varOrderNames) {
+                if (auto d = kernel_->degree(c.poly, name)) degSum[name] += *d;
+            }
+        }
+        std::stable_sort(varOrderNames.begin(), varOrderNames.end(),
+            [&degSum](const std::string& a, const std::string& b) {
+                return degSum[a] < degSum[b];  // lower degree first => highest LAST
+            });
+    }
     for (const auto& name : varOrderNames) {
         input.varOrder.push_back(kernel_->getOrCreateVar(name));
     }
