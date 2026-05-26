@@ -27,6 +27,17 @@ struct PortfolioEnv {
         unsetenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS");
     }
 };
+struct BudgetEnv {
+    explicit BudgetEnv(int budgetMs) {
+        setenv("ZOLVER_STRAT_PORTFOLIO", "1", 1);
+        setenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS",
+               std::to_string(budgetMs).c_str(), 1);
+    }
+    ~BudgetEnv() {
+        unsetenv("ZOLVER_STRAT_PORTFOLIO");
+        unsetenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS");
+    }
+};
 Result solveFile(const std::string& smt, const std::string& tag) {
     std::string path = (std::filesystem::temp_directory_path() /
                         ("zolver_pf_" + tag + ".smt2")).string();
@@ -83,4 +94,32 @@ TEST_CASE("portfolio: single base arm is behavior-neutral") {
         "(set-logic QF_LIA)(declare-const x Int)(declare-const y Int)"
         "(assert (= (+ x y) 4))(assert (= x 1))(check-sat)\n", "neutral"))
         == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("portfolio: generous per-arm budget returns the correct verdict") {
+    // A large budget spawns+joins the watchdog thread but the solve finishes
+    // well before the deadline, so the verdict is exact -- this exercises the
+    // full threaded path (spawn -> done -> join) without an interrupt firing.
+    BudgetEnv guard(60000);
+    CHECK(static_cast<int>(solveFile(
+        "(set-logic QF_LIA)(declare-const x Int)(assert (> x 5))(check-sat)\n", "bsat"))
+        == static_cast<int>(Result::Sat));
+    CHECK(static_cast<int>(solveFile(
+        "(set-logic QF_LIA)(declare-const x Int)"
+        "(assert (and (> x 5) (< x 2)))(check-sat)\n", "bunsat"))
+        == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("portfolio: per-arm budget is sound (timeout -> unknown, never wrong)") {
+    // A 1ms budget may or may not interrupt the solve; either way the result
+    // must be the correct verdict OR unknown -- a budget can only relax a
+    // verdict to unknown, never flip it.
+    BudgetEnv guard(1);
+    Result rs = solveFile(
+        "(set-logic QF_LIA)(declare-const x Int)(assert (> x 5))(check-sat)\n", "tsat");
+    CHECK((rs == Result::Sat || rs == Result::Unknown));
+    Result ru = solveFile(
+        "(set-logic QF_LIA)(declare-const x Int)"
+        "(assert (and (> x 5) (< x 2)))(check-sat)\n", "tunsat");
+    CHECK((ru == Result::Unsat || ru == Result::Unknown));
 }

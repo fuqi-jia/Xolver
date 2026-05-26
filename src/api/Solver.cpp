@@ -46,6 +46,8 @@
 #include <functional>
 #include <optional>
 #include <chrono>
+#include <thread>
+#include <atomic>
 
 namespace zolver {
 
@@ -75,6 +77,11 @@ public:
     // via reset()+parseFile. Cleared by a programmatic assertFormula (which
     // would be lost on re-parse), which forces the executor to single-arm.
     std::string sourcePath_;
+    // The CaDiCaL backend of the in-flight checkSatInternal, published so the
+    // portfolio's per-arm budget watchdog can async-interrupt a running solve
+    // (CaDiCaL terminate() is thread-safe). nullptr whenever no solve is live;
+    // an RAII guard in checkSatInternal clears it on every exit path.
+    std::atomic<CadicalBackend*> activeBackend_{nullptr};
 
     // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
     // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
@@ -618,10 +625,40 @@ public:
                 if (!parseFile(path)) break;   // source vanished -> stop, keep best
             }
             applyArm(arms[i]);
-            r = checkSatInternal();
+            r = runArmWithBudget(arms[i].budgetMs);
             if (r == Result::Sat || r == Result::Unsat) break;  // definitive wins
         }
         restoreEnv();  // leave the process env as the user had it
+        return r;
+    }
+
+    // Run one already-applied arm, optionally under a wall-clock budget. With a
+    // positive budget, a watchdog thread async-interrupts the SAT solve once the
+    // deadline passes (-> Unknown), so the portfolio falls through to the next
+    // arm. budget <= 0 runs the arm to completion thread-free (the default /
+    // Phase-1 path, so the common case takes no thread). Interrupting only ever
+    // turns a verdict into Unknown, so it can never change a sat/unsat answer.
+    Result runArmWithBudget(int budgetMs) {
+        if (budgetMs <= 0) return checkSatInternal();
+
+        std::atomic<bool> done{false};
+        std::thread watchdog([this, budgetMs, &done]() {
+            const auto deadline = std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(budgetMs);
+            while (!done.load(std::memory_order_acquire)) {
+                if (std::chrono::steady_clock::now() >= deadline) {
+                    if (CadicalBackend* b =
+                            activeBackend_.load(std::memory_order_acquire)) {
+                        b->requestTerminate();  // thread-safe async interrupt
+                    }
+                    return;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+        });
+        Result r = checkSatInternal();
+        done.store(true, std::memory_order_release);
+        watchdog.join();
         return r;
     }
 
@@ -893,6 +930,14 @@ public:
 #endif
             return Result::Unknown;
         }
+
+        // Publish the live backend for the portfolio budget watchdog; the guard
+        // clears it on every exit path so the watchdog never sees a stale ptr.
+        activeBackend_.store(cadicalBackend, std::memory_order_release);
+        struct BackendPublishGuard {
+            std::atomic<CadicalBackend*>& slot;
+            ~BackendPublishGuard() { slot.store(nullptr, std::memory_order_release); }
+        } backendPublishGuard{activeBackend_};
 
         // Fresh per-check-sat instances
         TheoryAtomRegistry registry;
