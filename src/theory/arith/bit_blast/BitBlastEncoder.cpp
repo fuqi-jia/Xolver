@@ -10,6 +10,17 @@ BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
     false_ = SatLit::negative(t);
 }
 
+// One fresh SAT variable, capped by maxVars_. Once the budget is exhausted we
+// stop creating variables and return the constant-false literal, setting over_;
+// the resulting encoding is incomplete and MUST NOT be solved (the caller
+// checks overflowed() and bails to Unknown). This is what turns a degree-5
+// QF_NIA encoding blow-up into a clean Unknown instead of an OOM abort.
+SatLit BitBlastEncoder::freshVar() {
+    if (maxVars_ != 0 && varCount_ >= maxVars_) { over_ = true; return false_; }
+    ++varCount_;
+    return SatLit::positive(sat_.newVar());
+}
+
 unsigned BitBlastEncoder::bitsForValue(const mpz_class& v) {
     unsigned w = 1;
     while (true) {
@@ -37,12 +48,13 @@ BitVec BitBlastEncoder::mkConst(const mpz_class& v, unsigned minWidth) {
 BitVec BitBlastEncoder::mkVar(unsigned width) {
     BitVec bv;
     bv.bits.resize(width);
-    for (unsigned i = 0; i < width; ++i) bv.bits[i] = SatLit::positive(sat_.newVar());
+    for (unsigned i = 0; i < width; ++i) bv.bits[i] = freshVar();
     return bv;
 }
 
 SatLit BitBlastEncoder::andGate(SatLit a, SatLit b) {
-    SatLit c = SatLit::positive(sat_.newVar());
+    if (over_) return false_;        // budget exhausted: no more gates/clauses
+    SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c});
     sat_.addClause({a, c.negated()});
     sat_.addClause({b, c.negated()});
@@ -50,7 +62,8 @@ SatLit BitBlastEncoder::andGate(SatLit a, SatLit b) {
 }
 
 SatLit BitBlastEncoder::orGate(SatLit a, SatLit b) {
-    SatLit c = SatLit::positive(sat_.newVar());
+    if (over_) return false_;        // budget exhausted: no more gates/clauses
+    SatLit c = freshVar();
     sat_.addClause({a, b, c.negated()});
     sat_.addClause({a.negated(), c});
     sat_.addClause({b.negated(), c});
@@ -58,7 +71,8 @@ SatLit BitBlastEncoder::orGate(SatLit a, SatLit b) {
 }
 
 SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
-    SatLit c = SatLit::positive(sat_.newVar());
+    if (over_) return false_;        // budget exhausted: no more gates/clauses
+    SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c.negated()});
     sat_.addClause({a, b, c.negated()});
     sat_.addClause({a, b.negated(), c});
@@ -67,7 +81,8 @@ SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
 }
 
 SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
-    SatLit c = SatLit::positive(sat_.newVar());
+    if (over_) return false_;        // budget exhausted: no more gates/clauses
+    SatLit c = freshVar();
     sat_.addClause({s.negated(), t.negated(), c});
     sat_.addClause({s.negated(), t, c.negated()});
     sat_.addClause({s, e.negated(), c});
@@ -98,6 +113,7 @@ BitVec BitBlastEncoder::addFixed(const BitVec& a, const BitVec& b, unsigned w) {
     BitVec r; r.bits.resize(w);
     SatLit cin = false_;
     for (unsigned i = 0; i < w; ++i) {
+        if (over_) break;        // budget exhausted: stop emitting adders
         auto sc = fullAdder(ea.bits[i], eb.bits[i], cin);
         r.bits[i] = sc.first;
         cin = sc.second;
@@ -171,6 +187,7 @@ BitVec BitBlastEncoder::mul(const BitVec& a, const BitVec& b) {
     BitVec ex  = signExtend(X, w);
     BitVec acc = mkConst(mpz_class(0), w);
     for (unsigned i = 0; i < wy; ++i) {
+        if (over_) break;        // budget exhausted: stop emitting partials
         // addend = (Y[i] ? (X << i) : 0); bits [0,i) are structurally zero.
         BitVec addend; addend.bits.resize(w);
         for (unsigned j = 0; j < w; ++j)

@@ -330,6 +330,47 @@ TEST_CASE("BitBlastSolver: unbounded UNSAT returns Unknown, never UNSAT") {
     CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);
 }
 
+// Resource cap: a high-degree product would blow up the SAT encoding (the real
+// QF_NIA OOM — degree-5 monomials over dozens of vars abort inside CaDiCaL with
+// bad_alloc). With a tiny gate budget the solver must REFUSE to encode and
+// return Unknown, never attempt (and risk OOM). Confirms the OOM is the
+// bit-blast encoding, and that the cap is sound (Unknown).
+TEST_CASE("BitBlastSolver: oversized encoding bails to Unknown (gate budget)") {
+    auto kernel = createPolynomialKernel();
+    std::vector<VarId> vs;
+    for (int i = 0; i < 5; ++i) vs.push_back(kernel->getOrCreateVar("x" + std::to_string(i)));
+    PolyId prod = kernel->mkVar(vs[0]);
+    for (int i = 1; i < 5; ++i) prod = kernel->mul(prod, kernel->mkVar(vs[i]));
+    PolyId p = kernel->sub(prod, kernel->mkConst(30));   // x0*x1*x2*x3*x4 - 30 == 0
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{60, true}}};
+    DomainStore d;   // unbounded -> heuristic widths, deep multiplier chain
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    solver.setGateBudget(100);   // tiny: the degree-5 product already exceeds it
+    auto r = solver.solve(cs, d, validator);
+    CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);  // capped, not OOM-crashed
+}
+
+// The cap must not fire on small instances: x*y = 6 over [1,6]^2 is a tiny
+// encoding well under the default budget and must still be solved (Sat), so the
+// guard does not regress the curated NIA suite.
+TEST_CASE("BitBlastSolver: small instance is not falsely capped") {
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId p = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{70, true}}};
+    DomainStore d;
+    for (auto n : {"x","y"}) {
+        d.addLowerBound(n, mpz_class(1), SatLit{71,true});
+        d.addUpperBound(n, mpz_class(6), SatLit{72,true});
+    }
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);   // default budget (4M)
+    auto r = solver.solve(cs, d, validator);
+    CHECK(r.status == bitblast::BitBlastResult::Status::Sat);   // solved, not capped
+}
+
 // Point 1/3: a bound that was ENCODED but lacks a usable reason must force
 // Unknown — never a partial (unsound) conflict.
 TEST_CASE("BitBlastSolver: missing reason on an encoded bound => Unknown, not a bad conflict") {

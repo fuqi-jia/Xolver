@@ -7,6 +7,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/core/TheoryAtomTypes.h"   // TheoryConflict
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -43,6 +44,7 @@ public:
 
     void setMaxBitWidth(unsigned w) { maxBW_ = w; }
     void setMaxIterations(unsigned n) { maxIters_ = n; }
+    void setGateBudget(uint64_t b) { gateBudget_ = b; }
 
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
@@ -73,6 +75,15 @@ private:
                                // SAT encoding. With the BLAN-faithful multiplier
                                // (varmin partials + constant folding) 128 is safe.
     unsigned maxIters_ = 6;    // doubling growth from the base reaches U in ~4 iters
+
+    // Resource cap: refuse to bit-blast when the estimated SAT-encoding cost
+    // (~gate / fresh-var count, SpaceEstimator::estimateGateCost) exceeds this.
+    // High-degree QF_NIA (e.g. degree-5 monomials over dozens of vars) blows the
+    // encoding past available memory and aborts inside CaDiCaL with bad_alloc;
+    // bailing to Unknown here is sound (other NIA stages still run) and turns an
+    // OOM crash into a clean Unknown. Env-tunable via ZOLVER_NIA_BITBLAST_GATE_BUDGET.
+    uint64_t gateBudget_ = defaultGateBudget();
+    static uint64_t defaultGateBudget();
 };
 
 } // namespace zolver::bitblast

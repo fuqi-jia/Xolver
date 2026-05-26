@@ -2,10 +2,27 @@
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "sat/SatSolver.h"
+#include <cstdlib>
 #include <string>
 #include <unordered_map>
 
 namespace zolver::bitblast {
+
+uint64_t BitBlastSolver::defaultGateBudget() {
+    // Max fresh SAT variables the bit-blast encoder may allocate. Both the
+    // encoding AND the subsequent CaDiCaL solve consume memory; empirically a
+    // 2 GB process OOMs (bad_alloc) somewhere between ~0.2M and ~0.5M vars on
+    // dense high-degree QF_NIA. 200k stays safely under that, keeps the curated
+    // NIA suite (tiny encodings) unaffected, and turns the AProVE blow-ups into
+    // a clean Unknown. Env-tunable: competition runs with more RAM should raise
+    // ZOLVER_NIA_BITBLAST_GATE_BUDGET to solve larger bounded instances.
+    if (const char* e = std::getenv("ZOLVER_NIA_BITBLAST_GATE_BUDGET")) {
+        char* end = nullptr;
+        unsigned long long v = std::strtoull(e, &end, 10);
+        if (end != e && v > 0) return static_cast<uint64_t>(v);
+    }
+    return 200000ull;
+}
 
 bool BitBlastSolver::applicable(const std::vector<NormalizedNiaConstraint>& cs) const {
     for (const auto& c : cs) {
@@ -132,12 +149,19 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     for (unsigned iter = 0; iter < maxIters_; ++iter) {
         auto sat = createSatSolver();
         BitBlastEncoder enc(*sat);
+        enc.setVarBudget(gateBudget_);   // hard cap: stop encoding before OOM
         std::unordered_map<std::string, BitVec> varBits;
         for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
 
         PolyBitBlaster blaster(enc, kernel_, varBits);
         for (const auto& c : cs) blaster.assertConstraint(c);
         encodeDomainBounds(enc, varBits, domains);   // confine search to the box
+
+        // Resource guard: the encoding exceeded the variable budget (high-degree
+        // blow-up). The partial encoding is incomplete, so we must NOT solve it.
+        // Widths only grow, so larger iterations are worse — bail to Unknown
+        // (sound; other NIA stages still run).
+        if (enc.overflowed()) return out;
 
         auto res = sat->solve();
         if (res == SatSolver::SolveResult::Sat) {
