@@ -548,12 +548,23 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
     return std::nullopt;
 }
 
-std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
-    // Local search SAT finder (try before emitting pending linear lemmas)
+std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort effort) {
+    // Cheap deterministic SAT finder (seed assignments + hill-climb).
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
+        }
+    }
+    // Opt-in focused stochastic local search: full effort only, so it does not
+    // burn the time budget re-running on every check of a hard/UNSAT instance.
+    // Candidate-only — the validator below gates soundness.
+    if (localSearch_.slsEnabled() && effort == TheoryEffort::Full) {
+        if (auto model = localSearch_.tryFindModelSls(normalized_, domains_)) {
+            if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
+                currentModel_ = *model;
+                return TheoryCheckResult::consistent();
+            }
         }
     }
     return std::nullopt;
