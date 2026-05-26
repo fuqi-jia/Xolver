@@ -75,6 +75,20 @@ private:
     // on. Default off; only adds certified isolations, never changes the Collins
     // path. Read once in the constructor.
     bool lazardLiftEnabled_ = false;
+
+    // Opt-in soundness FLOOR (ZOLVER_NRA_UNSAT_CERT, intended default-ON). The
+    // CDCAC covering can be unsound when a cell rests on an algebraic (irrational)
+    // boundary whose isolating interval was not refined disjoint from a close
+    // neighbour — the inter-root sector gets skipped and a satisfiable region is
+    // dropped (meti-tarski sqrt false-UNSAT). This floor POSITIVELY certifies:
+    // emit UNSAT only when the whole covering used exact rational boundaries; if
+    // any algebraic boundary was used anywhere in the (recursive) covering, the
+    // covering is NOT certified → downgrade UNSAT to Unknown (never trusted).
+    // SAT is unaffected (still sampled + validated). Read once in the constructor.
+    bool unsatCertEnabled_ = false;
+    // Set true whenever a cell boundary used this solve() is algebraic (rational
+    // prefix levels with rational roots stay false). Reset per solve().
+    bool coveringUsedAlgebraicBoundary_ = false;
 };
 
 } // namespace zolver
