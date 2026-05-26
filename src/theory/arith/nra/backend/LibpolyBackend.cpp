@@ -1017,17 +1017,24 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             a.root.rootIndex == b.root.rootIndex) {
             return CompareResult::Equal;
         }
-        // Same isolating interval (exact match) -> Equal
+        // Same isolating interval that is a single POINT [r,r] -> both roots are
+        // exactly the rational r -> Equal.
         if (a.root.lower == a.root.upper &&
             b.root.lower == b.root.upper &&
             a.root.lower == b.root.lower) {
             return CompareResult::Equal;
         }
-        // Same non-singleton interval -> Equal (same root, different provenance)
-        if (a.root.lower == b.root.lower && a.root.upper == b.root.upper) {
-            return CompareResult::Equal;
-        }
+        // NOTE: two DISTINCT close roots from DIFFERENT defining polynomials can
+        // share the same coarse (non-singleton) isolating interval (e.g.
+        // √(5/2)≈1.5811 and √(81/32)≈1.5910 both isolated in [1.5,1.6]). Treating
+        // "same non-singleton interval ⇒ Equal" wrongly conflated them, dropping
+        // distinct roots in mergeRoots (17→9) → over-wide cells → false UNSAT
+        // (meti-tarski sqrt). Equality is decided ONLY by (same poly+index, above)
+        // or the exact gcd test in the algebraic-algebraic refinement path below;
+        // overlapping-but-distinct roots fall through to refinement there.
         // Disjoint intervals -> can determine order
+        if (a.root.upper < b.root.lower) return CompareResult::Less;
+        if (b.root.upper < a.root.lower) return CompareResult::Greater;
         if (a.root.upper < b.root.lower) return CompareResult::Less;
         if (b.root.upper < a.root.lower) return CompareResult::Greater;
     }
