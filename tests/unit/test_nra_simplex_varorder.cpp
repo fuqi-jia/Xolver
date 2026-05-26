@@ -140,3 +140,44 @@ TEST_CASE("tableau facts: an ORIGINAL variable acquires a row-derived bound (end
     CHECK(f.hasUpper(xv));
     CHECK(f.isFixed(xv));             // x = 5 - 2 = 3
 }
+
+#include "theory/arith/nra/simplex/PolyStructureFacts.h"
+
+TEST_CASE("structure: xy+xz-3 -> fixing x linearizes; fixing y/z does not") {
+    auto kernel = createPolynomialKernel();
+    VarId xv = kernel->getOrCreateVar("x"), yv = kernel->getOrCreateVar("y"), zv = kernel->getOrCreateVar("z");
+    PolyId x = kernel->mkVar(xv), y = kernel->mkVar(yv), z = kernel->mkVar(zv);
+    PolyId three = kernel->mkConst(mpq_class(3));
+    PolyId p = kernel->sub(kernel->add(kernel->mul(x, y), kernel->mul(x, z)), three); // xy+xz-3
+    CdcacConstraint c; c.poly = p; c.rel = Relation::Eq; c.reason = SatLit::positive(1);
+    PolyStructureFacts f = computeStructureFacts(*kernel, { c });
+    CHECK(f.linearizationGain(xv) == 1);
+    CHECK(f.linearizationGain(yv) == 0);
+    CHECK(f.linearizationGain(zv) == 0);
+    CHECK(f.nonlinearConnectivity(xv) == 2);
+    CHECK(f.nonlinearConnectivity(yv) == 1);
+}
+
+TEST_CASE("structure: xyz -> fixing any one variable does NOT linearize (residual degree 2)") {
+    auto kernel = createPolynomialKernel();
+    VarId xv = kernel->getOrCreateVar("x"), yv = kernel->getOrCreateVar("y"), zv = kernel->getOrCreateVar("z");
+    PolyId x = kernel->mkVar(xv), y = kernel->mkVar(yv), z = kernel->mkVar(zv);
+    PolyId p = kernel->mul(kernel->mul(x, y), z);   // x*y*z
+    CdcacConstraint c; c.poly = p; c.rel = Relation::Eq; c.reason = SatLit::positive(1);
+    PolyStructureFacts f = computeStructureFacts(*kernel, { c });
+    CHECK(f.linearizationGain(xv) == 0);
+    CHECK(f.linearizationGain(yv) == 0);
+    CHECK(f.linearizationGain(zv) == 0);
+}
+
+TEST_CASE("structure: x*y^2 -> fixing y linearizes, fixing x does not") {
+    auto kernel = createPolynomialKernel();
+    VarId xv = kernel->getOrCreateVar("x"), yv = kernel->getOrCreateVar("y");
+    PolyId x = kernel->mkVar(xv), y = kernel->mkVar(yv);
+    PolyId p = kernel->mul(x, kernel->pow(y, 2));   // x*y^2
+    CdcacConstraint c; c.poly = p; c.rel = Relation::Eq; c.reason = SatLit::positive(1);
+    PolyStructureFacts f = computeStructureFacts(*kernel, { c });
+    CHECK(f.linearizationGain(yv) == 1);
+    CHECK(f.linearizationGain(xv) == 0);
+    CHECK(f.maxDegree(yv) == 2);
+}
