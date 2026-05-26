@@ -1,0 +1,8 @@
+(set-logic QF_NIA)
+(set-info :status sat)
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (>= x 0)) (assert (<= x 6))
+(assert (>= y 0)) (assert (<= y 6))
+(assert (= (* x y) 6))
+(check-sat)

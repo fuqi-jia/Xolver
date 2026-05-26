@@ -14,6 +14,7 @@
 #include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
+#include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/core/ActiveLiteralSet.h"
@@ -120,6 +121,8 @@ private:
     AlgebraicIntegerReasoner algebraic_;
     BoundedNiaSolver bounded_;
     NiaLocalSearch localSearch_;
+    bitblast::BitBlastSolver bitBlast_;
+    bool enableBitBlast_ = true;
 
     std::optional<IntegerModel> currentModel_;
 
@@ -144,6 +147,7 @@ private:
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageBitBlast(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);

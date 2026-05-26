@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace nlcolver {
@@ -84,6 +85,11 @@ public:
     // pipeline is only the verdict when reasoners_ is non-empty.
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb,
                             TheoryEffort effort = TheoryEffort::Standard) override;
+
+    // Names of the registered reasoner stages, in pipeline order. For testing
+    // and diagnostics; reflects the order stages run in check(). Defined in the
+    // .cpp so the header keeps only a forward declaration of Reasoner.
+    std::vector<std::string> reasonerNames() const;
 
 protected:
     // ----- Reasoner pipeline (Phase 2) -----

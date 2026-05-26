@@ -1,0 +1,6 @@
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-fun x () Int)
+(assert (>= x (- 3))) (assert (<= x 3))
+(assert (= (* x x) 2))
+(check-sat)

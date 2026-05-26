@@ -14,6 +14,13 @@ TheoryCheckResult ArithSolverBase::check(TheoryLemmaStorage& lemmaDb,
     return runReasonerPipeline(lemmaDb, effort);
 }
 
+std::vector<std::string> ArithSolverBase::reasonerNames() const {
+    std::vector<std::string> names;
+    names.reserve(reasoners_.size());
+    for (const auto& r : reasoners_) names.push_back(r->name());
+    return names;
+}
+
 TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
                                                        TheoryEffort effort) {
     if (hasPending()) return drainPending();
