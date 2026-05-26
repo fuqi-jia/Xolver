@@ -1302,7 +1302,31 @@ public:
         // extraction (theory agents) lets the validator confirm them; that
         // completeness loss is the documented trade for closing the false-sat
         // class, and promotion to default-on waits on that work.
-        if (ret == Result::Sat && std::getenv("ZOLVER_PP_STRICT_VALIDATION")) {
+        // Scoped variant (ZOLVER_PP_VALIDATE_NONLINEAR_SAT): enforce invariant 1
+        // (a Result::Sat must be ModelValidator-backed) specifically for the
+        // INCOMPLETE nonlinear theories (NIA/NRA/NIRA — features.hasNonlinear).
+        // Those return "no conflict found" = sat without a validated model, so
+        // an actually-unsat nonlinear system can escape as a false-SAT whose
+        // candidate violates an asserted (dis)equality (e.g. the AProVE NIA
+        // class: all-zero satisfies the inequalities but violates a nonlinear
+        // disequality). Validating the model (and CMS-recovering it) downgrades
+        // such an unconfirmable sat to `unknown`. Narrower than the global
+        // strict gate (leaves complete logics' sat untouched), so it is closer
+        // to promotable for QF_NIA/NRA/NIRA once the theory recovery lands.
+        // NIA (nonlinear INTEGER, no real vars) validate-sat is DEFAULT-ON: it
+        // enforces invariant 1 for an incomplete theory, and measurement shows
+        // it loses ZERO genuine NIA sats (integer models validate exactly) while
+        // flooring the false-SAT class to `unknown` — a strict wrong->unknown
+        // win with no regression on correct answers. NRA/NIRA stay behind the
+        // opt-in flag: their algebraic real witnesses are not yet evaluable by
+        // the (rational) validator, so default-on there would flip ~14 genuine
+        // sats to unknown (recovered separately via algebraic validation).
+        bool niaSatFloor = features.hasNonlinear && !features.hasRealVar;
+        bool validateSat = niaSatFloor ||
+                           (std::getenv("ZOLVER_PP_STRICT_VALIDATION") != nullptr) ||
+                           (features.hasNonlinear &&
+                            std::getenv("ZOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
+        if (ret == Result::Sat && validateSat) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
             // Theory models do not track pure-boolean VARIABLES (those values
             // live in the SAT assignment). Populate them from the SAT solver so

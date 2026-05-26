@@ -58,6 +58,21 @@ TEST_CASE("strict-validation: unconfirmable (UF) model is downgraded to unknown"
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unknown));
 }
 
+TEST_CASE("NIA validate-sat floor (DEFAULT-ON): genuine NIA sat stays sat") {
+    // No env flag: NIA (nonlinear integer) sat-validation is default-on
+    // (invariant 1). A genuine NIA sat with a fully-evaluable integer model
+    // (x in {2,3}) must stay sat — the integer model validates, so the floor
+    // does NOT over-flip it.
+    CHECK(static_cast<int>(solveStr(
+        "(set-logic QF_NIA)(declare-fun x () Int)"
+        "(assert (and (> x 1) (< x 4) (>= (* x x) 4)))(check-sat)\n", "nia_sat"))
+        == static_cast<int>(Result::Sat));
+    // A pure-linear QF_LIA sat is not nonlinear, so the floor leaves it alone.
+    CHECK(static_cast<int>(solveStr(
+        "(set-logic QF_LIA)(declare-fun y () Int)(assert (> y 5))(check-sat)\n", "lia_sat"))
+        == static_cast<int>(Result::Sat));
+}
+
 TEST_CASE("strict-validation: unsat is unaffected") {
     StrictEnv guard;
     // The gate only ever touches a Sat verdict; unsat passes through.
