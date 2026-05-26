@@ -185,6 +185,54 @@ public:
                == ArithModelValidator::Verdict::Violated;
     }
 
+    // STRICT model validation (ZOLVER_PP_STRICT_VALIDATION). Returns true ONLY
+    // when the extracted model POSITIVELY satisfies every original assertion
+    // (Verdict::Satisfied). Unlike the *Violates helpers (which act only on a
+    // DEFINITE violation), this is the trust gate: an unconfirmed model
+    // (Indeterminate — missing assignment, uninterpreted function, construct the
+    // validator cannot evaluate) is NOT accepted as sat. We populate declared
+    // user variables with the same 0/false defaults dumpModel emits, so the
+    // model checked here is exactly the one that would be printed.
+    bool modelPositivelyValidates() const {
+        if (!ir || !lastModel_) return false;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
+        }
+        // Mirror dumpModel's defaulting of unconstrained user variables so the
+        // validated model matches the printed one (a var the theory left
+        // unassigned is emitted as 0 / false).
+        if (parser) {
+            for (const auto& var : parser->getDeclaredVariables()) {
+                if (!var) continue;
+                std::string nm = var->getName();
+                if (var->isVBool()) { if (!boolAsg.count(nm)) boolAsg[nm] = false; }
+                else if (var->isVInt() || var->isVReal()) {
+                    if (!numAsg.count(nm)) numAsg[nm] = mpq_class(0);
+                }
+            }
+        }
+        ArithModelValidator::Verdict v;
+        if (!lastModel_->arrayInterps.empty()) {
+            ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                          lastModel_->arrayInterps, tokAsg);
+            v = validator.validate(originalAssertions_);
+        } else {
+            ArithModelValidator validator(*ir, numAsg, boolAsg);
+            v = validator.validate(originalAssertions_);
+        }
+        return v == ArithModelValidator::Verdict::Satisfied;
+    }
+
     // Build the partial-function (div/mod-by-zero) model from the final model.
     // For each lowered div/mod whose divisor is 0 under the model, record the
     // chosen result (the value of the fresh quotient q / remainder r) keyed by
@@ -1063,6 +1111,31 @@ public:
         auto result = sat->solve();
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
+
+        // Capture boolean VARIABLE values from the SAT assignment WHILE the
+        // model is still live (disconnecting the propagator below invalidates
+        // CaDiCaL's val()). Theory models survive disconnect because they are
+        // captured via the propagator's assignment view, but pure-boolean vars
+        // are not theory-tracked. Used by the strict-validation gate.
+        std::unordered_map<std::string, std::string> boolVarVals;
+        if (result == SatSolver::SolveResult::Sat) {
+            // An atom whose expr is a Kind::Variable is a boolean variable in
+            // formula position (numeric vars only appear inside theory atoms,
+            // whose expr is the relation node). This holds across paths: the
+            // pure-bool Variable case AND the QF_UF/combination
+            // BoolTermAsFormula case (recorded as an EUF theory atom over the
+            // bool var). Its SAT var carries the var's truth, so capture it
+            // regardless of the isTheory flag.
+            for (const auto& rec : atomizer.atoms()) {
+                if (rec.expr >= ir->size()) continue;
+                const auto& e = ir->get(rec.expr);
+                if (e.kind != Kind::Variable) continue;
+                if (!std::holds_alternative<std::string>(e.payload.value)) continue;
+                boolVarVals.emplace(std::get<std::string>(e.payload.value),
+                                    sat->value(rec.var) ? "true" : "false");
+            }
+        }
+
         cadicalBackend->disconnectPropagator();
         propagator.stats().print(std::cerr);
 
@@ -1185,6 +1258,45 @@ public:
                 lastUnknownReason_ =
                     "array: SAT model violates an original assertion "
                     "(missed array axiom instance) — gated to Unknown (sound)";
+                lastModel_.reset();
+                ret = Result::Unknown;
+            }
+        }
+
+        // STRICT model-validation gate (ZOLVER_PP_STRICT_VALIDATION, default
+        // OFF). The systemic soundness backstop: only emit `sat` when the
+        // extracted model is POSITIVELY confirmed against the original
+        // assertions. The default path downgrades only on a DEFINITE Violated,
+        // so a model the validator cannot fully evaluate (Indeterminate —
+        // uninterpreted function, missing/unsupported construct, incomplete
+        // extraction) escapes as an unvalidated sat. Under strict mode that is
+        // downgraded to `unknown` ("never trust an unconfirmed model").
+        //
+        // Soundness: this ONLY ever turns sat -> unknown; it never produces a
+        // sat or flips unsat, so it cannot introduce a wrong answer. It is
+        // EXPECTED to convert some genuine sats to unknown until model
+        // extraction (theory agents) lets the validator confirm them; that
+        // completeness loss is the documented trade for closing the false-sat
+        // class, and promotion to default-on waits on that work.
+        if (ret == Result::Sat && std::getenv("ZOLVER_PP_STRICT_VALIDATION")) {
+            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            // Theory models do not track pure-boolean VARIABLES (those values
+            // live in the SAT assignment). Populate them from the SAT solver so
+            // the validator checks the same model that would be printed and only
+            // flips genuinely-unconfirmable cases (uninterpreted functions,
+            // incomplete theory extraction) rather than every bool-containing
+            // sat. A first-wins emplace keeps any authoritative theory value.
+            if (!lastModel_) lastModel_ = TheorySolver::TheoryModel{};
+            // Merge the boolean-variable values captured from the live SAT model
+            // (theory models do not track pure-boolean vars). emplace = first
+            // wins, so an authoritative theory value is preserved.
+            for (const auto& [name, val] : boolVarVals) {
+                lastModel_->assignments.emplace(name, val);
+            }
+            if (!modelPositivelyValidates()) {
+                lastUnknownReason_ =
+                    "strict-validation: model not positively confirmed "
+                    "(Indeterminate) — gated to Unknown (sound)";
                 lastModel_.reset();
                 ret = Result::Unknown;
             }

@@ -93,8 +93,10 @@ private:
     std::optional<std::string> asToken(const TR& r) const;
 
     const CoreIr& ir_;
-    const NumAssignment& num_;
-    const BoolAssignment& boolAsg_;
+    // Held BY VALUE: callers (incl. tests) may pass temporaries, and these maps
+    // are small + the validator is one-shot. Avoids dangling-reference UB.
+    NumAssignment num_;
+    BoolAssignment boolAsg_;
     const ArrayAssignment* arr_ = nullptr;
     const TokenAssignment* tok_ = nullptr;
 };
