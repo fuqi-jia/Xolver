@@ -64,6 +64,37 @@ Regression bucket sizes (for your flag-ON focus): lra 57, lia 52, idl 15, rdl 12
 nia 109, nira 30, lira 37, euf 62, ax 10, alia 9, alra 6, auflia 5, auflra 3, uflia 25,
 uflra 10, ufnia 10, ufnra 7, bool 31.
 
+## Promotion policy — soundness floor vs answer recovery (read this)
+
+Two layers, don't confuse them:
+
+- **FLOOR** (A5's `ZOLVER_PP_STRICT_VALIDATION`, A2's NRA UNSAT-cert gate, and the combination
+  UNSAT floor still owed by A4): never emit an answer we can't confirm. A `sat` we can't validate
+  → `unknown`; an `UNSAT` we can't certify → `unknown`. This is the soundness **guarantee** and
+  defense-in-depth — latent bugs exist (e.g. A3's mid-saturation `explainEquality` false-UNSAT,
+  only reachable once the solver got fast enough). A validator/checker can only ever produce
+  *correct-or-`unknown`*; it cannot turn a wrong model into the right answer.
+- **RECOVERY** (every theory agent): `unknown` → **CORRECT answer**. This is the real work and the
+  only thing that scores. Fix model extraction / reasoning so the solver produces a correct,
+  *validatable* model (validator confirms → correct `sat`) or correctly proves `unsat`.
+
+**The destination of every false-SAT / false-UNSAT is a CORRECT answer, never `unknown`.** `unknown`
+is the safety net we stand on so we're never *wrong* while recovery lands — it is never the goal.
+
+Scoring reality: **correct > unknown > wrong.** A wrong answer is disqualifying in SMT-COMP; `unknown`
+just scores 0. So a gate that turns wrong→unknown is a strict improvement — but stopping there trades
+wrong answers for zeros, which is why RECOVERY is mandatory, not optional.
+
+**HARD PROMOTION GATE (master-enforced at integration):** no perf or soundness flag is promoted to
+default-ON until its `unknown`-flips have been driven down to only the genuinely-hard residual. We
+will **not** ship a solver that returns `unknown` more often than the current default. See
+`docs/strict-validation-flips.md` for the 77 strict-validation flips bucketed by owning agent — each
+is an "`unknown` → correct answer" task. Your Phase-2 false-SAT/false-UNSAT list is the rest.
+
+**RE-VALIDATION RULE:** any speedup/completeness gain must be re-checked differentially vs z3 on the
+cases it *newly makes reachable* — timeouts mask latent soundness bugs, so a prior "0 unsound" does
+not transfer to the faster build.
+
 ## Worktree setup (every agent runs first)
 
 ```bash
