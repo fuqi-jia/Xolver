@@ -38,3 +38,32 @@ ZOLVER_PP_STRICT_VALIDATION (leaves complete logics untouched), so it is closer
 to promotable for QF_NIA/NRA/NIRA once A2's recovery lands. Per the hard
 promotion gate it stays OFF until the false-SATs are recovered to correct UNSAT
 (promoting now would only inflate `unknown`).
+
+## boolpur sub-class (Agent 2) — SCOPED, deferred to a fresh round
+
+The 357 is **heterogeneous**. The case above (`aproveSMT1072…`) produces no
+`boolpur` vars and is pure NIA incompleteness. A separate sub-class — AProVE
+negated-conjunctions where the purifier *does* fire — has a distinct **frontend
+ordering** root cause:
+
+**Root cause:** `boolSortId_ == NullSort` for QF_NIA inputs with no Bool decls →
+`Atomizer::isProvablyBool` (Atomizer.cpp:277) doesn't recognize the purifier's
+fresh bool vars → the boolean `Distinct` is misrouted to NIA as a free integer
+`Neq` (ArithAtomExtractor.cpp:103), decoupled from the arith equalities →
+spurious SAT.
+
+**DON'T repeat (both `bad_alloc`'d in the frontend):**
+1. Not-as-iff `mkEq(fresh, ¬child)` → composite cascade.
+2. Mint a sort via `allocateSortId` in the purifier ctor → collides with
+   adapter-assigned Int/Real sort ids → type chaos.
+
+**Safe path (next round):** `Solver.cpp:472-477` *already* has a safe
+ensure-bool-sort (`allocateSortId` + `registerSort(Bool)` + `setBoolSortId`),
+used by the atomizer at `:896`. The bug is **ordering** — `BoolSubtermPurifier`
+runs at `Solver.cpp:651`, *before* `boolSortId_` is set. Fix = ensure the Bool
+sort **before** `:651` (reuse that logic; reconcile with A1's `setBoolSortId` at
+`:460`); do **not** mint in the purifier ctor. Caveat: confirm atomization of the
+now-linked negated-conjunction doesn't itself blow up; then the harder half — NIA
+must refute the linked arithmetic disequality → correct UNSAT.
+
+Soundness meanwhile: A5's floor `a2e260a` (default-on) floors all 357 → `unknown`.
