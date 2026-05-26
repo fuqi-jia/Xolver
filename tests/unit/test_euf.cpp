@@ -898,6 +898,44 @@ struct ScopedEnv {
 };
 } // namespace
 
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-const c U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (= b c))\n"
+        "(assert (distinct (f a) (f c)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (distinct a (f a)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
 TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
     ScopedEnv env("ZOLVER_AX_ROW2_CONST");
     std::string path = writeTempSmt2(
