@@ -2,6 +2,7 @@
 #include <cassert>
 #include <chrono>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 
 namespace zolver {
@@ -34,6 +35,15 @@ bool BoundValue::operator>=(const BoundValue& rhs) const {
 
 GeneralSimplex::GeneralSimplex() {
     trail_.push_back({});
+    // ZOLVER_LRA_PIVOT_HEUR (default OFF): replace the Bland-only entering-var
+    // selection with a largest-|coefficient| heuristic for the first
+    // kHeuristicPivotBudget pivots of each check(), then fall back to Bland to
+    // preserve Dutertre–de Moura's termination guarantee. Pivot selection never
+    // affects the SAT/UNSAT verdict (any eligible entering var yields a valid
+    // pivot; the Farkas conflict on Unsat is independent of the path), so this
+    // is sound regardless of the heuristic chosen.
+    const char* env = std::getenv("ZOLVER_LRA_PIVOT_HEUR");
+    useHeuristicPivot_ = (env && *env && *env != '0');
 }
 
 // ---------------------------------------------------------------------------
@@ -459,6 +469,12 @@ GeneralSimplex::Result GeneralSimplex::check() {
 
 GeneralSimplex::Result GeneralSimplex::checkInternal() {
     const int MAX_ITERATIONS = 10000;
+    // Heuristic pivoting (ZOLVER_LRA_PIVOT_HEUR) is allowed only for the first
+    // kHeuristicPivotBudget pivots; after that we fall back to Bland's smallest-
+    // index entering rule, which guarantees termination (Dutertre–de Moura). The
+    // remaining MAX_ITERATIONS - budget iterations are Bland-driven, so the
+    // termination bound is unchanged relative to the Bland-only path.
+    const int kHeuristicPivotBudget = 4000;
 
     for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
         int xi = pickViolatedBasic();
@@ -467,15 +483,17 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
             return Result::Sat;
         }
 
+        bool useBland = !useHeuristicPivot_ || iter >= kHeuristicPivotBudget;
+
         if (violatesLower(xi)) {
-            int xj = findEnteringVarToIncrease(xi);
+            int xj = findEnteringVarToIncrease(xi, useBland);
             if (xj == -1) {
                 explainLowerConflict(xi);
                 return Result::Unsat;
             }
             pivotAndUpdate(xi, xj, vars_[xi].lower.bound.value);
         } else if (violatesUpper(xi)) {
-            int xj = findEnteringVarToDecrease(xi);
+            int xj = findEnteringVarToDecrease(xi, useBland);
             if (xj == -1) {
                 explainUpperConflict(xi);
                 return Result::Unsat;
@@ -493,9 +511,10 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
 // Entering variable selection
 // ============================================================================
 
-int GeneralSimplex::findEnteringVarToIncrease(int basicVar) const {
+int GeneralSimplex::findEnteringVarToIncrease(int basicVar, bool useBland) const {
     int r = rowOfBasic(basicVar);
     int best = -1;
+    mpq_class bestMag(0);  // |coeff| of best, used only in heuristic mode
 
     for (const auto& e : tab_.row(r).entries) {
         int xj = e.col;
@@ -504,16 +523,28 @@ int GeneralSimplex::findEnteringVarToIncrease(int basicVar) const {
         bool eligible = (a > 0 && canIncrease(xj)) || (a < 0 && canDecrease(xj));
         if (!eligible) continue;
 
-        if (best == -1 || xj < best) {
-            best = xj;  // Bland's rule
+        if (best == -1) {
+            best = xj;
+            if (!useBland) bestMag = (a < 0) ? mpq_class(-a) : a;
+        } else if (useBland) {
+            if (xj < best) best = xj;  // Bland's rule: smallest index
+        } else {
+            // Heuristic: prefer the largest pivot magnitude (bigger steps,
+            // better numerical behaviour); deterministic tie-break by index.
+            mpq_class mag = (a < 0) ? mpq_class(-a) : a;
+            if (mag > bestMag || (mag == bestMag && xj < best)) {
+                best = xj;
+                bestMag = mag;
+            }
         }
     }
     return best;
 }
 
-int GeneralSimplex::findEnteringVarToDecrease(int basicVar) const {
+int GeneralSimplex::findEnteringVarToDecrease(int basicVar, bool useBland) const {
     int r = rowOfBasic(basicVar);
     int best = -1;
+    mpq_class bestMag(0);
 
     for (const auto& e : tab_.row(r).entries) {
         int xj = e.col;
@@ -522,8 +553,17 @@ int GeneralSimplex::findEnteringVarToDecrease(int basicVar) const {
         bool eligible = (a < 0 && canIncrease(xj)) || (a > 0 && canDecrease(xj));
         if (!eligible) continue;
 
-        if (best == -1 || xj < best) {
-            best = xj;  // Bland's rule
+        if (best == -1) {
+            best = xj;
+            if (!useBland) bestMag = (a < 0) ? mpq_class(-a) : a;
+        } else if (useBland) {
+            if (xj < best) best = xj;  // Bland's rule: smallest index
+        } else {
+            mpq_class mag = (a < 0) ? mpq_class(-a) : a;
+            if (mag > bestMag || (mag == bestMag && xj < best)) {
+                best = xj;
+                bestMag = mag;
+            }
         }
     }
     return best;

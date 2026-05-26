@@ -22,6 +22,8 @@ LiaSolver::LiaSolver() {
     if (env) {
         dumpCounter_ = 0;
     }
+    const char* repairEnv = std::getenv("ZOLVER_LIA_REPAIR");
+    repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -54,6 +56,7 @@ void LiaSolver::onReset() {
     disequalities_.clear();
     pendingConflict_.reset();
     diseqBranchAuthorized_.clear();
+    repairModel_.reset();
     gs_.resetActiveBounds();
 }
 
@@ -98,6 +101,7 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 
 void LiaSolver::onBacktrack(int level) {
     currentLevel_ = level;
+    repairModel_.reset();
     if (level == 0) {
         gs_.resetActiveBounds();
     } else {
@@ -141,6 +145,7 @@ void LiaSolver::onBacktrack(int level) {
 
 std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     pendingConflict_.reset();
+    repairModel_.reset();
 
 #ifdef ZOLVER_LIA_PROFILE
     profile_.checkCalls++;
@@ -419,7 +424,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
-    auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb);
+    auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb, effort);
 
 #ifdef ZOLVER_LIA_PROFILE
     auto prof_t5 = std::chrono::steady_clock::now();
@@ -429,6 +434,15 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 #endif
     if (ir.kind == TheoryCheckResult::Kind::Consistent) {
+        // A successful rounding repair (ZOLVER_LIA_REPAIR) has already
+        // exact-validated its integer point against every active atom and
+        // disequality, and stored it in repairModel_. The simplex β still holds
+        // the fractional relaxation, so the gs_-based validator below would
+        // (correctly) reject it — skip it and report SAT via the repaired model.
+        if (repairModel_) {
+            dumpState("sat_repair");
+            return TheoryCheckResult::consistent();
+        }
         std::vector<DiseqValidationInfo> diseqInfos;
         for (const auto& d : disequalities_) {
             diseqInfos.push_back({d.auxVar});
@@ -535,7 +549,7 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
         });
 }
 
-TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/) {
+TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
     int bestVar = -1;
     mpq_class bestFrac(-1);
 
@@ -574,10 +588,123 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& /*lemmaDb*/) {
     }
 
     if (bestVar != -1) {
+        // ZOLVER_LIA_REPAIR: before splitting, try to round the LRA relaxation
+        // to a nearby integer point and exact-validate it. Only at Full effort
+        // (a real, complete relaxation model is in hand). A success short-cuts
+        // potentially deep branch-and-bound to an immediate SAT.
+        // Soundness gate: repair validates only the LIA atoms + disequalities,
+        // NOT Nelson-Oppen interface (dis)equalities. In a combined logic a
+        // rounded point could violate an asserted x=y and produce a wrong SAT,
+        // so repair only fires when no interface constraints are active (always
+        // the case in pure QF_LIA).
+        if (repairEnabled_ && effort == TheoryEffort::Full &&
+            interfaceEqualities_.empty() && interfaceDisequalities_.empty() &&
+            tryIntegralityRepair()) {
+            return TheoryCheckResult::consistent();
+        }
         assert(registry_ != nullptr);
         return TheoryCheckResult::mkLemma(buildBranchSplitLemma(bestVar, gs_.value(bestVar)));
     }
     return TheoryCheckResult::consistent();
+}
+
+// ---------------------------------------------------------------------------
+// ZOLVER_LIA_REPAIR: rounding-based integrality repair
+// ---------------------------------------------------------------------------
+
+// floor(q + 1/2): round half-up to the nearest integer.
+static mpz_class roundNearest(const mpq_class& q) {
+    mpq_class h = q + mpq_class(1, 2);
+    mpz_class r;
+    mpz_fdiv_q(r.get_mpz_t(), h.get_num().get_mpz_t(), h.get_den().get_mpz_t());
+    return r;
+}
+
+bool LiaSolver::pointSatisfiesAll(
+    const std::unordered_map<std::string, mpq_class>& pt) const {
+    auto eval = [&](const LinearFormKey& lhs, mpq_class& out) -> bool {
+        out = 0;
+        for (const auto& [name, coeff] : lhs.terms) {
+            auto it = pt.find(name);
+            if (it == pt.end()) return false;  // value unknown -> cannot validate
+            out += coeff * it->second;
+        }
+        return true;
+    };
+    for (const auto& a : activeAtoms_) {
+        mpq_class f;
+        if (!eval(a.lhs, f)) return false;
+        Relation rel = a.value ? a.rel : negateRelation(a.rel);
+        bool ok;
+        switch (rel) {
+            case Relation::Eq:  ok = (f == a.rhs); break;
+            case Relation::Neq: ok = (f != a.rhs); break;
+            case Relation::Lt:  ok = (f <  a.rhs); break;
+            case Relation::Leq: ok = (f <= a.rhs); break;
+            case Relation::Gt:  ok = (f >  a.rhs); break;
+            case Relation::Geq: ok = (f >= a.rhs); break;
+            default:            ok = false; break;
+        }
+        if (!ok) return false;
+    }
+    for (const auto& d : disequalities_) {
+        mpq_class f;
+        if (!eval(d.lhs, f)) return false;
+        if (f == d.rhs) return false;  // disequality violated
+    }
+    return true;
+}
+
+bool LiaSolver::tryIntegralityRepair() {
+    // Collect (name, floor, ceil, nearest) for every original integer variable.
+    struct VarRound {
+        std::string name;
+        mpq_class lo, hi, nearest;
+    };
+    std::vector<VarRound> vr;
+    vr.reserve(integerVars_.size());
+    for (int v : integerVars_) {
+        std::string name = manager_.getVarName(v);
+        if (name.empty()) continue;            // aux/slack vars are determined
+        const mpq_class& a = gs_.value(v).a;
+        mpz_class fl, cl;
+        mpz_fdiv_q(fl.get_mpz_t(), a.get_num().get_mpz_t(), a.get_den().get_mpz_t());
+        mpz_cdiv_q(cl.get_mpz_t(), a.get_num().get_mpz_t(), a.get_den().get_mpz_t());
+        vr.push_back({name, mpq_class(fl), mpq_class(cl), mpq_class(roundNearest(a))});
+    }
+    if (vr.empty()) return false;
+
+    auto tryPoint = [&](const std::unordered_map<std::string, mpq_class>& pt) -> bool {
+        if (!pointSatisfiesAll(pt)) return false;
+        repairModel_ = pt;
+        return true;
+    };
+    auto buildUniform = [&](int which) {  // 0=nearest, 1=floor, 2=ceil
+        std::unordered_map<std::string, mpq_class> pt;
+        pt.reserve(vr.size());
+        for (const auto& r : vr) pt[r.name] = (which == 1 ? r.lo : which == 2 ? r.hi : r.nearest);
+        return pt;
+    };
+
+    bool ok = false;
+    // 1) Round-to-nearest, then the all-floor / all-ceil corners.
+    if (tryPoint(buildUniform(0)) || tryPoint(buildUniform(1)) || tryPoint(buildUniform(2))) {
+        ok = true;
+    } else {
+        // 2) One-variable flip neighbourhood around the nearest point: flip each
+        //    single variable to its other neighbour (floor<->ceil). Bounded by
+        //    #vars, catches the common "one coordinate rounded the wrong way".
+        auto base = buildUniform(0);
+        for (const auto& r : vr) {
+            mpq_class other = (base[r.name] == r.lo) ? r.hi : r.lo;
+            if (other == base[r.name]) continue;  // already integral
+            mpq_class saved = base[r.name];
+            base[r.name] = other;
+            if (tryPoint(base)) { ok = true; break; }
+            base[r.name] = saved;
+        }
+    }
+    return ok;
 }
 
 TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) {
@@ -973,6 +1100,13 @@ std::optional<RealValue> LiaSolver::sharedTermArithValue(SharedTermId s) const {
         return std::nullopt;
     }
     const std::string& name = std::get<std::string>(expr.payload.value);
+    // Keep shared-term values consistent with a repaired integer model if one
+    // was produced (defensive — repair is gated off when interface constraints
+    // are active, so this normally never differs from gs_).
+    if (repairModel_) {
+        auto it = repairModel_->find(name);
+        if (it != repairModel_->end()) return RealValue::fromMpq(it->second);
+    }
     int idx = manager_.findVarIndex(name);
     if (idx < 0) return std::nullopt;
     DeltaRational val = gs_.value(idx);
@@ -982,6 +1116,19 @@ std::optional<RealValue> LiaSolver::sharedTermArithValue(SharedTermId s) const {
 }
 
 std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
+    // If a rounding repair produced the SAT verdict, the simplex β holds the
+    // fractional relaxation, not the integer model — return the repaired point.
+    if (repairModel_) {
+        TheoryModel model;
+        for (const auto& [name, val] : *repairModel_) {
+            if (name.empty()) continue;
+            if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
+            model.assignments[name] = val.get_num().get_str();
+            model.numericAssignments.insert({name, RealValue::fromMpq(val)});
+        }
+        if (model.assignments.empty()) return std::nullopt;
+        return model;
+    }
     TheoryModel model;
     for (int i = 0; i < gs_.numVars(); ++i) {
         std::string name = manager_.getVarName(i);
