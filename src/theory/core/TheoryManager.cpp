@@ -380,6 +380,17 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
+        // Conflict-source attribution (ZOLVER_COMB_CONFLICT_TRACE): name the
+        // solver behind a combination-path conflict so we can route the eventual
+        // correctness fix (e.g. an unsound Standard-effort NIA conflict -> A2).
+        if (tr.kind != TheoryCheckResult::Kind::Consistent &&
+            std::getenv("ZOLVER_COMB_CONFLICT_TRACE")) {
+            std::cerr << "[CONFLICT-SRC] solver=" << (int)solver->id()
+                      << " effort=" << (effort == TheoryEffort::Full ? "Full" : "Standard")
+                      << " kind=" << (int)tr.kind
+                      << " size=" << (tr.conflictOpt ? tr.conflictOpt->clause.size() : 0)
+                      << "\n";
+        }
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             if (!conflictIsGenuine(tr.conflictOpt->clause)) {
                 // Spurious interface-(dis)equality conflict: the reasons do not

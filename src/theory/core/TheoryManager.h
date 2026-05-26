@@ -24,7 +24,7 @@ public:
     void clearSolvers();
 
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
-    bool isCombinationMode() const { return combinationMode_; }
+    bool isCombinationMode() const override { return combinationMode_; }
 
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }

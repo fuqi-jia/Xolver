@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <vector>
+#include <cstdlib>
 
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
@@ -91,7 +92,9 @@ CadicalTheoryPropagator::CadicalTheoryPropagator(
     TheoryPropagationCallbacks& tm,
     TheoryLemmaStorage& lemmaDb,
     CadicalBackend& backend
-) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {}
+) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {
+    deferEarlyConflict_ = (std::getenv("ZOLVER_SAT_DEFER_EARLY_CONFLICT") != nullptr);
+}
 
 void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
     unknownReasonSink_ = sink;
@@ -329,6 +332,19 @@ int CadicalTheoryPropagator::cb_propagate() {
             if (!allAssigned) {
                 NO_DBG << "[PROP] cb_propagate skip conflict with unassigned literals ("
                           << clause.size() << " lits)\n";
+                return 0;
+            }
+            // Soundness floor (ZOLVER_SAT_DEFER_EARLY_CONFLICT): in combination
+            // mode a Standard-effort theory conflict is UNVALIDATED (only pure
+            // shared-eq conflicts are re-verified by conflictIsGenuine; a
+            // mixed/theory conflict is trusted), so an unsound conflict can drive
+            // a false UNSAT (e.g. QF_UFNIA 168-lit Standard conflict, never Full-
+            // validated). Suppress it: let the search reach a complete model and
+            // the authoritative Full-effort model check arbitrate. Sound — at
+            // worst we lose early pruning; we never accept an unvalidated UNSAT.
+            if (deferEarlyConflict_ && tm_.isCombinationMode()) {
+                NO_DBG << "[PROP] defer Standard-effort early conflict ("
+                       << clause.size() << " lits) to Full check\n";
                 return 0;
             }
             NO_DBG << "[PROP] cb_propagate conflict clause = ";
