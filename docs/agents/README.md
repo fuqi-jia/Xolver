@@ -85,11 +85,22 @@ Scoring reality: **correct > unknown > wrong.** A wrong answer is disqualifying 
 just scores 0. So a gate that turns wrong→unknown is a strict improvement — but stopping there trades
 wrong answers for zeros, which is why RECOVERY is mandatory, not optional.
 
-**HARD PROMOTION GATE (master-enforced at integration):** no perf or soundness flag is promoted to
-default-ON until its `unknown`-flips have been driven down to only the genuinely-hard residual. We
-will **not** ship a solver that returns `unknown` more often than the current default. See
-`docs/strict-validation-flips.md` for the 77 strict-validation flips bucketed by owning agent — each
-is an "`unknown` → correct answer" task. Your Phase-2 false-SAT/false-UNSAT list is the rest.
+**END-STATE INTENT: every capability is meant to be default-ON.** These flags are efficiency
+improvements; default-OFF is a *temporary* safety state while correctness (and efficiency) are
+unverified, NOT the destination. A flag is never "discarded" for being imperfect — it's "not yet
+finished." The job is to verify each one and flip it on.
+
+**HARD PROMOTION GATE (master-enforced at integration) — a flag flips to default-ON when BOTH hold:**
+1. **Sound** — 0 wrong answers, and its `unknown`-flips driven down to only the genuinely-hard
+   residual (we won't ship a solver that returns `unknown` *more* than the current default); AND
+2. **Actually delivers its efficiency** — net solve-count / speed GAIN on a panda A/B, not a
+   regression. Sound-but-slower is "not finished," not "ready": e.g. `ZOLVER_LIA_CUTS` is sound
+   (0 mismatch) but currently *regresses* LIA to 47.5% timeout, so it stays OFF until cut-management
+   makes it net-positive — then it goes on.
+
+So OFF is temporary for every flag; the destination is all-on. See `docs/strict-validation-flips.md`
+for the strict-validation flips bucketed by owning agent (each an "`unknown` → correct" task), and
+each round's panda A/B for the efficiency half.
 
 **RE-VALIDATION RULE:** any speedup/completeness gain must be re-checked differentially vs z3 on the
 cases it *newly makes reachable* — timeouts mask latent soundness bugs, so a prior "0 unsound" does
