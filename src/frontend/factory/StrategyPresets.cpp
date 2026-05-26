@@ -88,6 +88,14 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
             arms.push_back({base, "test-replica", 0});
     }
 
+    // Ops/test hook: stamp a per-arm wall-clock budget (ms) on every arm so the
+    // anytime executor's timeout path can be driven without a promoted preset.
+    // A budget only ever turns an arm's verdict into Unknown (sound).
+    if (const char* b = std::getenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS")) {
+        int ms = std::atoi(b);
+        if (ms > 0) for (auto& a : arms) a.budgetMs = ms;
+    }
+
     return arms;
 }
 
