@@ -61,6 +61,15 @@ public:
                         const TokenAssignment& tok)
         : ir_(ir), num_(num), boolAsg_(boolAsg), arr_(&arr), tok_(&tok) {}
 
+    using FuncInterpMap =
+        std::unordered_map<std::string, TheorySolver::TheoryModel::FuncInterp>;
+
+    // Provide interpretations for uninterpreted functions so UFApply nodes can
+    // be evaluated by table lookup (else they are Indeterminate). Optional;
+    // when unset, UF applications remain unevaluable. The pointer must outlive
+    // this validator.
+    void setFunctionInterps(const FuncInterpMap* fi) { funcInterps_ = fi; }
+
     // Validate the given assertion roots (original-formula ExprIds).
     Verdict validate(const std::vector<ExprId>& assertions) const;
 
@@ -93,10 +102,13 @@ private:
     std::optional<std::string> asToken(const TR& r) const;
 
     const CoreIr& ir_;
-    const NumAssignment& num_;
-    const BoolAssignment& boolAsg_;
+    // Held BY VALUE: callers (incl. tests) may pass temporaries, and these maps
+    // are small + the validator is one-shot. Avoids dangling-reference UB.
+    NumAssignment num_;
+    BoolAssignment boolAsg_;
     const ArrayAssignment* arr_ = nullptr;
     const TokenAssignment* tok_ = nullptr;
+    const FuncInterpMap* funcInterps_ = nullptr;
 };
 
 } // namespace zolver

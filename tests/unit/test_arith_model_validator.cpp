@@ -72,6 +72,46 @@ TEST_CASE("ArithModelValidator: indeterminate on missing variable") {
     CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Indeterminate);
 }
 
+TEST_CASE("ArithModelValidator: UFApply evaluated via function interpretation") {
+    Fix f;
+    ExprId x = f.var("x", f.intS);
+    // (f x): UFApply "f" over Int.
+    CoreExpr app; app.kind = Kind::UFApply; app.sort = f.intS;
+    app.children.push_back(x); app.payload = Payload(std::string("f"));
+    ExprId fx = f.ir.add(std::move(app));
+    ExprId a1 = f.bin(Kind::Eq, fx, f.cint(5), f.boolS);  // (= (f x) 5)
+
+    ArithModelValidator::NumAssignment num{{"x", 2}};
+    ArithModelValidator::FuncInterpMap interps;
+    TheorySolver::TheoryModel::FuncInterp fi;
+    fi.argSorts = {"Int"}; fi.retSort = "Int"; fi.deflt = "0";
+    fi.entries.push_back({{"2"}, "5"});  // f(2) = 5
+    interps["f"] = fi;
+
+    SUBCASE("with matching interp -> satisfied") {
+        ArithModelValidator v(f.ir, num, {});
+        v.setFunctionInterps(&interps);
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Satisfied);
+    }
+    SUBCASE("no interp -> indeterminate (never Violated)") {
+        ArithModelValidator v(f.ir, num, {});
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Indeterminate);
+    }
+    SUBCASE("wrong interp value -> violated") {
+        interps["f"].entries[0].value = "7";  // f(2)=7 != 5
+        ArithModelValidator v(f.ir, num, {});
+        v.setFunctionInterps(&interps);
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Violated);
+    }
+    SUBCASE("arg not in table -> default value") {
+        ArithModelValidator::NumAssignment num2{{"x", 9}};  // f(9) -> deflt "0"
+        ArithModelValidator v(f.ir, num2, {});
+        v.setFunctionInterps(&interps);
+        // (= (f 9) 5) with f(9)=deflt=0 -> 0 != 5 -> Violated
+        CHECK(v.validate({a1}) == ArithModelValidator::Verdict::Violated);
+    }
+}
+
 TEST_CASE("ArithModelValidator: Int div/mod use Euclidean semantics") {
     Fix f;
     ExprId x = f.var("x", f.intS);

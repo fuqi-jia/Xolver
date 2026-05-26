@@ -12,6 +12,9 @@
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
+#include "frontend/preprocess/FormulaRewriter.h"
+#include "frontend/factory/StrategyPresets.h"
+#include <cstdlib>
 #include "theory/arith/search/CandidateModelSearch.h"
 #include "proof/ArithModelValidator.h"
 #include <gmpxx.h>
@@ -180,6 +183,66 @@ public:
                                       lastModel_->arrayInterps, tokAsg);
         return validator.validate(originalAssertions_)
                == ArithModelValidator::Verdict::Violated;
+    }
+
+    // STRICT model validation (ZOLVER_PP_STRICT_VALIDATION). Returns true ONLY
+    // when the extracted model POSITIVELY satisfies every original assertion
+    // (Verdict::Satisfied). Unlike the *Violates helpers (which act only on a
+    // DEFINITE violation), this is the trust gate: an unconfirmed model
+    // (Indeterminate — missing assignment, uninterpreted function, construct the
+    // validator cannot evaluate) is NOT accepted as sat. We populate declared
+    // user variables with the same 0/false defaults dumpModel emits, so the
+    // model checked here is exactly the one that would be printed.
+    bool modelPositivelyValidates() const {
+        if (!ir || !lastModel_) return false;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
+        }
+        // Prefer the typed numeric channel (RealValue) over the lossy string
+        // channel: it carries exact rationals AND is the place combination
+        // logics put a shared scalar's true arithmetic value (the string
+        // `assignments` may instead hold an opaque EUF equality token like
+        // "@e6", which would otherwise default to 0 and spuriously collapse
+        // i==j). Algebraic values (e.g. √2) have no rational form -> left for
+        // the validator to report Indeterminate (it cannot evaluate them).
+        for (const auto& [name, rv] : lastModel_->numericAssignments) {
+            if (auto q = rv.tryAsRational()) numAsg[name] = *q;
+        }
+        // Mirror dumpModel's defaulting of unconstrained user variables so the
+        // validated model matches the printed one (a var the theory left
+        // unassigned is emitted as 0 / false).
+        if (parser) {
+            for (const auto& var : parser->getDeclaredVariables()) {
+                if (!var) continue;
+                std::string nm = var->getName();
+                if (var->isVBool()) { if (!boolAsg.count(nm)) boolAsg[nm] = false; }
+                else if (var->isVInt() || var->isVReal()) {
+                    if (!numAsg.count(nm)) numAsg[nm] = mpq_class(0);
+                }
+            }
+        }
+        ArithModelValidator::Verdict v;
+        if (!lastModel_->arrayInterps.empty()) {
+            ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                          lastModel_->arrayInterps, tokAsg);
+            validator.setFunctionInterps(&lastModel_->functionInterps);
+            v = validator.validate(originalAssertions_);
+        } else {
+            ArithModelValidator validator(*ir, numAsg, boolAsg);
+            validator.setFunctionInterps(&lastModel_->functionInterps);
+            v = validator.validate(originalAssertions_);
+        }
+        return v == ArithModelValidator::Verdict::Satisfied;
     }
 
     // Build the partial-function (div/mod-by-zero) model from the final model.
@@ -523,6 +586,32 @@ public:
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
 
+        // ZOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
+        // formula rewriter. Runs BEFORE ITE lowering so its simplifications
+        // (boolean identities/absorption, const-fold, relational const-eval)
+        // shrink the formula for every downstream pass. Sound: it only APPENDS
+        // CoreExpr nodes, so the originalAssertions_ snapshot above keeps
+        // referencing the original formula for ModelValidator. A top-level
+        // assertion that simplifies to the boolean constant false makes the
+        // assertion conjunction unsatisfiable.
+        // Rewriter activation: explicit ZOLVER_PP_REWRITE, or chosen by the
+        // per-logic strategy preset (ZOLVER_STRAT_PRESETS). enableRewrite is
+        // logic-only here, so empty features suffice this early in the pipeline.
+        bool enableRewrite = (std::getenv("ZOLVER_PP_REWRITE") != nullptr);
+        if (!enableRewrite && std::getenv("ZOLVER_STRAT_PRESETS")) {
+            enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
+        }
+        if (enableRewrite) {
+            FormulaRewriter rewriter(*ir, boolSortId_);
+            if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef ZOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                return Result::Unsat;
+            }
+            rewriter.commit();
+        }
+
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
@@ -849,6 +938,22 @@ public:
         bool liaEnableSingleVar = false;
         bool liaEnableGcdIneq = false;
         bool liaEnableEqGcdNorm = false;
+        // Strategy preset (ZOLVER_STRAT_PRESETS) provides the BASE knob values
+        // keyed on logic + detected features; explicit user options below still
+        // override. Phase 1 leaves LIA flags at defaults and envFlags empty, so
+        // this is behavior-neutral until the table is tuned / cross-agent flags
+        // merge. envFlags use setenv(...,overwrite=0): explicit user env wins.
+        if (std::getenv("ZOLVER_STRAT_PRESETS")) {
+            StrategyConfig sc = selectStrategy(logic, features);
+            liaSafeMode = sc.liaSafeMode;
+            liaUltraSafeMode = sc.liaUltraSafeMode;
+            liaEnableSingleVar = sc.liaEnableSingleVar;
+            liaEnableGcdIneq = sc.liaEnableGcdIneq;
+            liaEnableEqGcdNorm = sc.liaEnableEqGcdNorm;
+            for (const auto& [name, val] : sc.envFlags) {
+                setenv(name.c_str(), val.c_str(), 0);
+            }
+        }
         auto itOpt = options.find("lia-safe-mode");
         if (itOpt != options.end() && itOpt->second.kind == OptionValue::Bool) {
             liaSafeMode = itOpt->second.b;
@@ -1030,6 +1135,31 @@ public:
         auto result = sat->solve();
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
+
+        // Capture boolean VARIABLE values from the SAT assignment WHILE the
+        // model is still live (disconnecting the propagator below invalidates
+        // CaDiCaL's val()). Theory models survive disconnect because they are
+        // captured via the propagator's assignment view, but pure-boolean vars
+        // are not theory-tracked. Used by the strict-validation gate.
+        std::unordered_map<std::string, std::string> boolVarVals;
+        if (result == SatSolver::SolveResult::Sat) {
+            // An atom whose expr is a Kind::Variable is a boolean variable in
+            // formula position (numeric vars only appear inside theory atoms,
+            // whose expr is the relation node). This holds across paths: the
+            // pure-bool Variable case AND the QF_UF/combination
+            // BoolTermAsFormula case (recorded as an EUF theory atom over the
+            // bool var). Its SAT var carries the var's truth, so capture it
+            // regardless of the isTheory flag.
+            for (const auto& rec : atomizer.atoms()) {
+                if (rec.expr >= ir->size()) continue;
+                const auto& e = ir->get(rec.expr);
+                if (e.kind != Kind::Variable) continue;
+                if (!std::holds_alternative<std::string>(e.payload.value)) continue;
+                boolVarVals.emplace(std::get<std::string>(e.payload.value),
+                                    sat->value(rec.var) ? "true" : "false");
+            }
+        }
+
         cadicalBackend->disconnectPropagator();
         propagator.stats().print(std::cerr);
 
@@ -1037,6 +1167,18 @@ public:
         if (result == SatSolver::SolveResult::Sat) {
             lastModel_ = theoryManager.getModel();
             ret = Result::Sat;
+            // Merge the boolean-variable values captured from the live SAT
+            // assignment into the model OUTPUT. Pure-boolean variables are not
+            // theory-tracked, so without this the model builder defaults them
+            // to false even when they were asserted true (e.g. ite_nested_sat:
+            // `(assert c1)(assert c2)` printed c1=c2=false). emplace = first
+            // wins, so any authoritative theory value is preserved.
+            if (!boolVarVals.empty()) {
+                if (!lastModel_) lastModel_ = TheorySolver::TheoryModel{};
+                for (const auto& [name, val] : boolVarVals) {
+                    lastModel_->assignments.emplace(name, val);
+                }
+            }
             // NOTE: we intentionally do NOT gate the SAT verdict on
             // re-validating the extracted model against the original
             // assertions. Verdict soundness ("a model exists", derived by
@@ -1154,6 +1296,96 @@ public:
                     "(missed array axiom instance) — gated to Unknown (sound)";
                 lastModel_.reset();
                 ret = Result::Unknown;
+            }
+        }
+
+        // STRICT model-validation gate (ZOLVER_PP_STRICT_VALIDATION, default
+        // OFF). The systemic soundness backstop: only emit `sat` when the
+        // extracted model is POSITIVELY confirmed against the original
+        // assertions. The default path downgrades only on a DEFINITE Violated,
+        // so a model the validator cannot fully evaluate (Indeterminate —
+        // uninterpreted function, missing/unsupported construct, incomplete
+        // extraction) escapes as an unvalidated sat. Under strict mode that is
+        // downgraded to `unknown` ("never trust an unconfirmed model").
+        //
+        // Soundness: this ONLY ever turns sat -> unknown; it never produces a
+        // sat or flips unsat, so it cannot introduce a wrong answer. It is
+        // EXPECTED to convert some genuine sats to unknown until model
+        // extraction (theory agents) lets the validator confirm them; that
+        // completeness loss is the documented trade for closing the false-sat
+        // class, and promotion to default-on waits on that work.
+        // Scoped variant (ZOLVER_PP_VALIDATE_NONLINEAR_SAT): enforce invariant 1
+        // (a Result::Sat must be ModelValidator-backed) specifically for the
+        // INCOMPLETE nonlinear theories (NIA/NRA/NIRA — features.hasNonlinear).
+        // Those return "no conflict found" = sat without a validated model, so
+        // an actually-unsat nonlinear system can escape as a false-SAT whose
+        // candidate violates an asserted (dis)equality (e.g. the AProVE NIA
+        // class: all-zero satisfies the inequalities but violates a nonlinear
+        // disequality). Validating the model (and CMS-recovering it) downgrades
+        // such an unconfirmable sat to `unknown`. Narrower than the global
+        // strict gate (leaves complete logics' sat untouched), so it is closer
+        // to promotable for QF_NIA/NRA/NIRA once the theory recovery lands.
+        // NIA (nonlinear INTEGER, no real vars) validate-sat is DEFAULT-ON: it
+        // enforces invariant 1 for an incomplete theory, and measurement shows
+        // it loses ZERO genuine NIA sats (integer models validate exactly) while
+        // flooring the false-SAT class to `unknown` — a strict wrong->unknown
+        // win with no regression on correct answers. NRA/NIRA stay behind the
+        // opt-in flag: their algebraic real witnesses are not yet evaluable by
+        // the (rational) validator, so default-on there would flip ~14 genuine
+        // sats to unknown (recovered separately via algebraic validation).
+        bool niaSatFloor = features.hasNonlinear && !features.hasRealVar;
+        bool validateSat = niaSatFloor ||
+                           (std::getenv("ZOLVER_PP_STRICT_VALIDATION") != nullptr) ||
+                           (features.hasNonlinear &&
+                            std::getenv("ZOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
+        if (ret == Result::Sat && validateSat) {
+            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            // Theory models do not track pure-boolean VARIABLES (those values
+            // live in the SAT assignment). Populate them from the SAT solver so
+            // the validator checks the same model that would be printed and only
+            // flips genuinely-unconfirmable cases (uninterpreted functions,
+            // incomplete theory extraction) rather than every bool-containing
+            // sat. A first-wins emplace keeps any authoritative theory value.
+            if (!lastModel_) lastModel_ = TheorySolver::TheoryModel{};
+            // Merge the boolean-variable values captured from the live SAT model
+            // (theory models do not track pure-boolean vars). emplace = first
+            // wins, so an authoritative theory value is preserved.
+            for (const auto& [name, val] : boolVarVals) {
+                lastModel_->assignments.emplace(name, val);
+            }
+            if (!modelPositivelyValidates()) {
+                // RECOVERY (unknown -> correct sat): the theory's extracted
+                // model could not be positively confirmed, but the verdict is
+                // sat, so a satisfying model exists. Search for a complete one
+                // (CandidateModelSearch builds full numeric models AND function
+                // interps), then INDEPENDENTLY re-validate it. We keep sat only
+                // if the independent validator now confirms Satisfied — so this
+                // recovers genuine sats without ever trusting an unconfirmed
+                // model. Cases the search/validator still cannot confirm
+                // (uninterpreted-sort UF, algebraic NRA witnesses, …) remain
+                // the genuinely-hard residual and stay unknown.
+                auto saved = std::move(lastModel_);
+                CandidateModelSearch::Config cfg;
+                cfg.assertionRootsOverride = originalAssertions_;
+                cfg.allowUF = true;
+                CandidateModelSearch cms(*ir, logic, cfg);
+                auto rec = cms.run();
+                bool recovered = false;
+                if (rec.found) {
+                    lastModel_ = rec.model;
+                    for (const auto& [name, val] : boolVarVals) {
+                        lastModel_->assignments.emplace(name, val);
+                    }
+                    recovered = modelPositivelyValidates();
+                }
+                if (!recovered) {
+                    lastModel_ = std::move(saved);
+                    lastUnknownReason_ =
+                        "strict-validation: model not positively confirmed "
+                        "(Indeterminate) — gated to Unknown (sound)";
+                    lastModel_.reset();
+                    ret = Result::Unknown;
+                }
             }
         }
 
