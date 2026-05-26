@@ -85,6 +85,21 @@ private:
     // The recursive per-cell sign-invariance + tiling verifier will replace this
     // with a precise certify-or-downgrade. Read once in the constructor.
     bool unsatCertEnabled_ = false;
+
+    // PRECISE verifier state (reset per solve). Set true when a level's covering
+    // cannot be positively certified sound — currently: the libpoly-isolated
+    // boundary set `allRoots` is INCOMPLETE vs an independent exact Sturm-over-ℚ
+    // count of the level's closure polynomials (a missed/merged root ⇒ a cell is
+    // not sign-invariant ⇒ a satisfiable region can be dropped), or the prefix is
+    // algebraic (not yet certifiable by the ℚ-Sturm oracle). A certified covering
+    // (no uncertifiable level) keeps emitting UNSAT; otherwise → Unknown.
+    bool coveringUncertifiable_ = false;
+
+    // Independent exact-Sturm sign-invariance check for level k's covering: true
+    // iff `allRoots` captured every real root of the level's closure polys
+    // (rational prefix only; algebraic prefix ⇒ false = cannot certify).
+    bool certifyLevelSignInvariance(int k, const SamplePoint& prefix,
+                                    const CdcacInput& input, const RootSet& allRoots);
 };
 
 } // namespace zolver
