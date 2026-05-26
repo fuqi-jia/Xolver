@@ -18,6 +18,56 @@ SatVar Atomizer::freshVar() {
     return v;
 }
 
+// PG-CNF polarity bits: 1 = positive, 2 = negative, 3 = both.
+static inline uint8_t flipPol(uint8_t p) { return p == 3 ? 3 : (p == 1 ? 2 : 1); }
+
+void Atomizer::computePolarities(const std::vector<ExprId>& roots, const CoreIr& ir) {
+    if (!pgEnabled_) return;
+    pol_.clear();
+    // Iterative DFS (formulas can be deep); union the polarity of each node.
+    std::vector<std::pair<ExprId, uint8_t>> stack;
+    for (ExprId r : roots) stack.push_back({r, 1});  // asserted => positive
+    while (!stack.empty()) {
+        auto [eid, p] = stack.back();
+        stack.pop_back();
+        if (eid == NullExpr || eid == TrueSentinelExpr || eid == FalseSentinelExpr) continue;
+        if (eid >= ir.size()) continue;
+        uint8_t cur = pol_[eid];
+        if ((cur & p) == p) continue;  // these polarity bits already propagated
+        pol_[eid] = static_cast<uint8_t>(cur | p);
+        const CoreExpr& e = ir.get(eid);
+        switch (e.kind) {
+            case Kind::Not:
+                if (!e.children.empty()) stack.push_back({e.children[0], flipPol(p)});
+                break;
+            case Kind::And:
+            case Kind::Or:
+                for (ExprId c : e.children) stack.push_back({c, p});
+                break;
+            case Kind::Implies:
+                if (e.children.size() == 2) {
+                    stack.push_back({e.children[0], flipPol(p)});  // antecedent flips
+                    stack.push_back({e.children[1], p});           // consequent keeps
+                }
+                break;
+            default:
+                // Non-monotone (Xor / bool Eq / Distinct) or a theory atom /
+                // leaf: any boolean operand occurs in BOTH polarities, and
+                // theory-atom operands are terms (polarity irrelevant). Mark
+                // both so no defining clause is ever dropped.
+                for (ExprId c : e.children) stack.push_back({c, 3});
+                break;
+        }
+    }
+}
+
+std::pair<bool, bool> Atomizer::pgDirs(ExprId eid) const {
+    if (!pgEnabled_) return {true, true};
+    auto it = pol_.find(eid);
+    if (it == pol_.end() || it->second == 0) return {true, true};  // defensive
+    return {(it->second & 1) != 0, (it->second & 2) != 0};
+}
+
 SatLit Atomizer::registerDynamicAtom(ExprId expr, TheoryId theory) {
     auto it = memo_.find(expr);
     if (it != memo_.end()) return it->second;
@@ -192,45 +242,64 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
             break;
         }
         case Kind::And: {
+            // x ↔ ⋀cᵢ.  PG: pos-dir = x→⋀cᵢ  {(¬x∨cᵢ)};  neg-dir = ⋀cᵢ→x {(x∨⋁¬cᵢ)}.
+            auto [needPos, needNeg] = pgDirs(eid);
             SatVar x = freshVar();
-            for (ExprId cid : e.children) {
-                SatLit c = atomizeRec(cid, ir);
-                sat_.addClause({SatLit::negative(x), c});
+            if (needPos) {
+                for (ExprId cid : e.children) {
+                    SatLit c = atomizeRec(cid, ir);
+                    sat_.addClause({SatLit::negative(x), c});
+                }
             }
-            std::vector<SatLit> clause;
-            clause.push_back(SatLit::positive(x));
-            for (ExprId cid : e.children) {
-                SatLit c = atomizeRec(cid, ir);
-                clause.push_back(c.negated());
+            if (needNeg) {
+                std::vector<SatLit> clause;
+                clause.push_back(SatLit::positive(x));
+                for (ExprId cid : e.children) {
+                    SatLit c = atomizeRec(cid, ir);
+                    clause.push_back(c.negated());
+                }
+                sat_.addClause(clause);
             }
-            sat_.addClause(clause);
             result = SatLit::positive(x);
             break;
         }
         case Kind::Or: {
+            // x ↔ ⋁cᵢ.  PG: pos-dir = x→⋁cᵢ {(¬x∨⋁cᵢ)};  neg-dir = ⋁cᵢ→x {(x∨¬cᵢ)}.
+            auto [needPos, needNeg] = pgDirs(eid);
             SatVar x = freshVar();
-            for (ExprId cid : e.children) {
-                SatLit c = atomizeRec(cid, ir);
-                sat_.addClause({SatLit::positive(x), c.negated()});
+            if (needNeg) {
+                for (ExprId cid : e.children) {
+                    SatLit c = atomizeRec(cid, ir);
+                    sat_.addClause({SatLit::positive(x), c.negated()});
+                }
             }
-            std::vector<SatLit> clause;
-            clause.push_back(SatLit::negative(x));
-            for (ExprId cid : e.children) {
-                SatLit c = atomizeRec(cid, ir);
-                clause.push_back(c);
+            if (needPos) {
+                std::vector<SatLit> clause;
+                clause.push_back(SatLit::negative(x));
+                for (ExprId cid : e.children) {
+                    SatLit c = atomizeRec(cid, ir);
+                    clause.push_back(c);
+                }
+                sat_.addClause(clause);
             }
-            sat_.addClause(clause);
             result = SatLit::positive(x);
             break;
         }
         case Kind::Implies: {
+            // x ↔ (¬a ∨ b).  PG: pos-dir = x→(¬a∨b) {(¬x∨¬a∨b)};
+            //                    neg-dir = (¬a∨b)→x {(x∨a),(x∨¬b)}.
             assert(e.children.size() == 2);
+            auto [needPos, needNeg] = pgDirs(eid);
             SatLit a = atomizeRec(e.children[0], ir);
             SatLit b = atomizeRec(e.children[1], ir);
             SatVar x = freshVar();
-            sat_.addClause({SatLit::positive(x), a});
-            sat_.addClause({SatLit::positive(x), b.negated()});
-            sat_.addClause({SatLit::negative(x), a.negated(), b});
+            if (needNeg) {
+                sat_.addClause({SatLit::positive(x), a});
+                sat_.addClause({SatLit::positive(x), b.negated()});
+            }
+            if (needPos) {
+                sat_.addClause({SatLit::negative(x), a.negated(), b});
+            }
             result = SatLit::positive(x);
             break;
         }

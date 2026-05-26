@@ -1108,6 +1108,7 @@ public:
         registry.setContext(sat.get(), &atomizer);
         atomizer.setRegistry(&registry);
         atomizer.setBoolSortId(boolSortId_);
+        atomizer.setPgCnf(std::getenv("ZOLVER_PP_PG_CNF") != nullptr);
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
@@ -1195,6 +1196,10 @@ public:
             }
         }
 
+        // PG-CNF (ZOLVER_PP_PG_CNF): pre-compute the occurrence polarity of every
+        // subformula (each assertion is a positive root) so the monotone
+        // connectives below emit only the required half of their definition.
+        atomizer.computePolarities(ir->assertions(), *ir);
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
