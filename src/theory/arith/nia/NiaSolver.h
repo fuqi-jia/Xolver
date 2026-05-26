@@ -13,6 +13,7 @@
 #include "theory/arith/interval/IntervalEvaluator.h"
 #include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
+#include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -122,7 +123,9 @@ private:
     BoundedNiaSolver bounded_;
     NiaLocalSearch localSearch_;
     bitblast::BitBlastSolver bitBlast_;
+    ProductPositivityReasoner productPositivity_;
     bool enableBitBlast_ = true;
+    bool enableRefute_ = false;   // ZOLVER_NIA_REFUTE: bound-free product-positivity refutation
 
     std::optional<IntegerModel> currentModel_;
 
@@ -144,6 +147,7 @@ private:
     std::optional<TheoryCheckResult> stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageUnivariate(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageAlgebraic(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
