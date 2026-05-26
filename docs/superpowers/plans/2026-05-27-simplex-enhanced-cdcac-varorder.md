@@ -1189,3 +1189,25 @@ git commit -m "docs(nra): record cdcac varorder validation results + promotion d
 
 **Risk note:** the only soundness-relevant edit is Task 5's added var-order branch. The primary key stays ascending-total-degree, so the new mode cannot relax the degree-safety mitigation; within-stratum reordering is heuristic and `SimplexTableauFacts` is verdict-free. Residual risk (a within-stratum order exposing the latent CDCAC bug) is contained by default-OFF + the Task 6 hard oracle gate. No verdict-bearing CDCAC code is touched.
 ```
+
+---
+
+## Results — Phase 1 execution (2026-05-27, branch `agent/a2-nonlinear`)
+
+**Commits (subagent-driven, one per task):** `0f6b241` (plan) · `f93cd30` (Task 1 NraLinearExtractor) · `fb75f7b` (Task 2 SimplexTableauFacts) · `27cb7a4` (Task 3 PolyStructureFacts) · `b65ea7c` (Task 4 VarOrderSelector) · `4f9b2b7` (Task 5 wiring). Module: `src/theory/arith/nra/simplex/` (4 `.h`/`.cpp` pairs) + `CdcacSolver` flag branch + `tests/unit/test_nra_simplex_varorder.cpp` (17 new cases).
+
+**Task 0 gate:** PASS — all 5 probes `unsat` (incl. the critical `x·y=1 ∧ x=0`), confirming the LRA sibling + CDCAC already cover the routing cases (P1 fast-path correctly subsumed).
+
+**Validation:**
+| Measure | Result |
+|---|---|
+| Unit suite (flag OFF) | 721/721 pass (3 pre-existing skips) |
+| Regression OFF | **633/633**, 0 UNSOUND, 0 KNOWN_FAIL |
+| Regression ON (`ZOLVER_NRA_VARORDER_SIMPLEX=1`) | **633/633**, **0 UNSOUND** |
+| Differential vs z3, 139 NRA cases | **0** diffs · 0 recovered · 0 regressed · **0 contradictions** |
+
+**Outcome — SOUND, verdict-neutral on this corpus.** OFF and ON agree on every regression + NRA case (no contradiction vs z3 → soundness floor confirmed), but the flag recovers nothing net here. Expected for a variable-ordering heuristic: ordering changes *search effort*, not verdicts (within the degree-stratified safety constraint), and the regression corpus is the correctness suite, not the hard-timeout bucket.
+
+**Promotion decision: stays DEFAULT-OFF.** Per the HARD PROMOTION GATE + FLOOR-vs-RECOVERY policy, no flag goes default-ON until it converts genuinely-hard residual. Promotion requires demonstrating timeout/search-effort gains on the hard NRA benchmark (panda2: 27% timeout + 24% unknown) — a heavy A/B the 139-case regression corpus cannot surface. **Next step:** panda2 A/B OFF vs ON (controller/master), measuring solved-count and wall-clock, not regression verdicts.
+
+**Implementation notes for reuse:** (1) libpoly is an integer ring — `mkConst(mpq_class(1,N))` returns NullPoly; tests must build polynomials with integer constants (production is safe: NraNormalizer clears denominators upstream). (2) The tableau row convention `value(basic) == row.rhs + Σ coeff·value(col)` held as-is (no sign flip). (3) `CdcacConstraint` lives in `core/CdcacConstraint.h` (include alongside `CdcacTypes.h`). (4) `VarId` is `uint32_t` (default `std::hash`); `getOrCreateVar` is non-const → ordering uses const `findVar`. (5) `SimplexTableauFacts` is the reusable scaffolding for the deferred **P3 residual→cover** (sound over-approximate facts, never tight, never used for pruning).
