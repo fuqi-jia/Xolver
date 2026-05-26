@@ -257,11 +257,33 @@ void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
                       << " explainTF.ok=" << er.ok << " chain=" << er.reasons.size()
                       << " trueRep=" << egraph_.rep(trueTerm_) << " falseRep=" << egraph_.rep(falseTerm_) << "\n";
         }
-        if (er.ok) {
+        if (er.ok && egraph_.same(trueTerm_, falseTerm_)) {
             pendingConflict_ = TheoryConflict{std::move(er.reasons)};
         } else {
-            NO_DBG << "[EUF] explainEquality(true,false) failed, using fallback conflict\n";
-            pendingConflict_ = TheoryConflict{allActiveReasons()};
+            // SOUNDNESS: a Both boolMark means this class is tagged as
+            // containing a term equal to `true` AND a term equal to `false`.
+            // But the mark is propagated by class-merge bookkeeping
+            // (mergeBoolMark) which, in rare orderings driven by array
+            // Row1/Row2 reasoning over compound/bridge indices, can tag a
+            // class Both even though the genuine `true` and `false` constant
+            // terms are NOT in the same egraph class (here trueRep != falseRep,
+            // so explainEquality(true,false) correctly reports !ok — there is
+            // no real true == false derivation). Emitting allActiveReasons() as
+            // a conflict in that case is UNSOUND: it asserts that the current,
+            // perfectly satisfiable assignment is contradictory, producing a
+            // spurious UNSAT (observed as an intermittent false-unsat on
+            // QF_A(UF)L(I/R)A formulas with purified compound array indices).
+            //
+            // Only emit a conflict when true and false are genuinely merged
+            // (the `ok` branch above, which carries a real reason chain). When
+            // they are not, there is no sound conflict to report; fall through
+            // without setting pendingConflict_. Congruence continues normally
+            // and the model is validated by the exact kernel before any SAT is
+            // returned, so soundness is preserved. At worst this is incomplete
+            // (the genuine conflict, if any, is found via another path or the
+            // result is Unknown) — never a wrong verdict.
+            NO_DBG << "[EUF] BOOL-BOTH mark without a real true==false merge "
+                      "(trueRep != falseRep); suppressing unsound fallback conflict\n";
         }
 
     }
