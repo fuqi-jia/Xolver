@@ -97,6 +97,81 @@ TEST_CASE("ProductPositivity: a*b*c - 1 = 0 with all>=0 -> a,b,c >= 1") {
     CHECK(ds.getDomain("c")->lower.value == 1);
 }
 
+// --- sign-absorption (milestone 2): one positive monomial, others negative
+//     with nonneg factors -> the positive monomial is bounded below. ---
+
+TEST_CASE("SignAbsorption: a*b - c - 1 >= 0 with a,b,c>=0 -> a>=1, b>=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(0), mkReason(3));
+
+    // a*b - c - 1 >= 0 : positive monomial a*b, negative c (nonneg), const -1
+    //  => a*b >= 1 + c >= 1 => a,b >= 1
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId poly = kernel->sub(kernel->sub(ab, kernel->mkVar(kernel->getOrCreateVar("c"))),
+                              kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+}
+
+TEST_CASE("SignAbsorption: a*b - x - 1 >= 0 with x sign UNKNOWN -> NoChange") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    // x has no lower bound -> -x could be large positive -> a*b need not be >= 1
+
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId poly = kernel->sub(kernel->sub(ab, kernel->mkVar(kernel->getOrCreateVar("x"))),
+                              kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::NoChange);
+}
+
+TEST_CASE("SignAbsorption: two positive monomials a*b + c*d - 1 >= 0 -> NoChange") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    for (const char* v : {"a", "b", "c", "d"}) ds.addLowerBound(v, mpz_class(0), mkReason(1));
+
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId cd = mkMonomial(*kernel, {"c", "d"});
+    PolyId poly = kernel->sub(kernel->add(ab, cd), kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::NoChange);
+}
+
+TEST_CASE("SignAbsorption: 2*a*b - c - 3 >= 0 with a,b,c>=0 -> a>=1, b>=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    for (const char* v : {"a", "b", "c"}) ds.addLowerBound(v, mpz_class(0), mkReason(1));
+
+    // 2*a*b - c - 3 >= 0 => 2*a*b >= 3 => a*b >= 2 => a,b >= 1
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId twoab = kernel->mul(kernel->mkConst(mpq_class(2)), ab);
+    PolyId poly = kernel->sub(kernel->sub(twoab, kernel->mkVar(kernel->getOrCreateVar("c"))),
+                              kernel->mkConst(mpq_class(3)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+}
+
 TEST_CASE("ProductPositivity: multi-monomial a*b + c - 1 >= 0 -> NoChange (milestone 1)") {
     auto kernel = createPolynomialKernel();
     ProductPositivityReasoner reasoner(*kernel);
