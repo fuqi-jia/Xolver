@@ -296,6 +296,249 @@ TEST_CASE("rewriter: random equivalence oracle") {
     }
 }
 
+// ===========================================================================
+// Widened soundness oracle: REALS + UF + ARRAYS.
+//
+// The bool+int oracle above does not exercise: real-valued arithmetic folding,
+// uninterpreted-function applications (which the rewriter rebuilds and whose
+// numeric args it folds), or array select/store/const-array (rebuilt, with
+// numeric index/value args folded) plus eq/distinct reflexivity over those
+// sorts. This widened oracle covers them so ZOLVER_PP_REWRITE is trustworthy
+// on QF_*RA / UF / array logics (prerequisite for default-on promotion).
+//
+// A self-contained typed value + evaluator (kept separate from the bool/int
+// oracle so as not to disturb it). UF is modelled deterministically (same name
+// + same arg values -> same result, in BOTH original and rewritten eval), so
+// arg-folding like f(2+3)=f(5) is required to agree. Arrays are Int->Int maps
+// (default + finite overrides) with extensional equality.
+// ===========================================================================
+namespace {
+
+struct WHarness {
+    CoreIr ir;
+    SortId boolS, intS, realS, arrS;  // arrS = (Array Int Int)
+    WHarness() {
+        boolS = ir.allocateSortId(); ir.registerSort(boolS, SortKind::Bool); ir.setBoolSortId(boolS);
+        intS  = ir.allocateSortId(); ir.registerSort(intS,  SortKind::Int);  ir.setIntSortId(intS);
+        realS = ir.allocateSortId(); ir.registerSort(realS, SortKind::Real); ir.setRealSortId(realS);
+        arrS  = ir.allocateSortId(); ir.registerSort(arrS,  SortKind::Array);
+        ir.registerArraySort(arrS, intS, intS);
+    }
+    ExprId mk(Kind k, SortId s, std::vector<ExprId> ch, Payload p = Payload()) {
+        CoreExpr e; e.kind = k; e.sort = s;
+        e.children = SmallVector<ExprId,4>(ch.begin(), ch.end());
+        e.payload = std::move(p);
+        return ir.add(std::move(e));
+    }
+};
+
+struct WV {
+    enum K { B, N, A } k = N;
+    bool b = false;
+    mpq_class n = 0;
+    mpq_class adef = 0;                       // array default element
+    std::map<mpq_class, mpq_class> aov;       // array overrides index->value
+};
+
+// Deterministic, consistent UF interpretation (filled lazily; same key -> same
+// value across both eval calls). retKind: 'b' bool, 'i' numeric.
+struct UFModel {
+    std::map<std::string, WV> cache;
+    WV get(const std::string& fname, const std::vector<mpq_class>& args, char retKind) {
+        std::string key = fname;
+        for (const auto& a : args) key += "#" + a.get_str();
+        auto it = cache.find(key);
+        if (it != cache.end()) return it->second;
+        std::size_t h = std::hash<std::string>{}(key);
+        WV v;
+        if (retKind == 'b') { v.k = WV::B; v.b = (h & 1u) != 0; }
+        else { v.k = WV::N; v.n = mpq_class(static_cast<long>(h % 11) - 5); }
+        cache[key] = v;
+        return v;
+    }
+};
+
+using WAsg = std::map<std::string, WV>;
+
+bool wArraysEqual(const WV& a, const WV& b) {
+    // Extensional equality. Our generator only produces finite override sets
+    // over a common default, so two arrays are equal iff their defaults match
+    // and they agree at every overridden index (a missing override = default).
+    if (a.adef != b.adef) return false;
+    auto at = [](const WV& arr, const mpq_class& i) {
+        auto it = arr.aov.find(i); return it != arr.aov.end() ? it->second : arr.adef;
+    };
+    std::map<mpq_class, mpq_class> idx;
+    for (const auto& kv : a.aov) idx[kv.first];
+    for (const auto& kv : b.aov) idx[kv.first];
+    for (const auto& kv : idx) if (at(a, kv.first) != at(b, kv.first)) return false;
+    return true;
+}
+
+std::optional<WV> weval(const CoreIr& ir, ExprId id, const WAsg& asg, UFModel& uf) {
+    const CoreExpr& e = ir.get(id);
+    auto num = [](mpq_class v){ WV w; w.k=WV::N; w.n=std::move(v); return w; };
+    auto bl  = [](bool v){ WV w; w.k=WV::B; w.b=v; return w; };
+    switch (e.kind) {
+        case Kind::ConstBool: return bl(std::get<bool>(e.payload.value));
+        case Kind::ConstInt: {
+            if (auto* i = std::get_if<int64_t>(&e.payload.value)) return num(mpq_class(*i));
+            if (auto* s = std::get_if<std::string>(&e.payload.value)) return num(mpq_class(*s));
+            return std::nullopt;
+        }
+        case Kind::ConstReal: {
+            if (auto* s = std::get_if<std::string>(&e.payload.value)) return num(mpq_class(*s));
+            if (auto* i = std::get_if<int64_t>(&e.payload.value)) return num(mpq_class(*i));
+            return std::nullopt;
+        }
+        case Kind::Variable: {
+            auto it = asg.find(std::get<std::string>(e.payload.value));
+            if (it == asg.end()) return std::nullopt;
+            return it->second;
+        }
+        case Kind::Not: { auto a=weval(ir,e.children[0],asg,uf); if(!a)return std::nullopt; return bl(!a->b); }
+        case Kind::And: { bool r=true; for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v)return std::nullopt; r=r&&v->b;} return bl(r); }
+        case Kind::Or:  { bool r=false; for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v)return std::nullopt; r=r||v->b;} return bl(r); }
+        case Kind::Implies: { auto a=weval(ir,e.children[0],asg,uf); auto b=weval(ir,e.children[1],asg,uf); if(!a||!b)return std::nullopt; return bl(!a->b||b->b); }
+        case Kind::Xor: { auto a=weval(ir,e.children[0],asg,uf); auto b=weval(ir,e.children[1],asg,uf); if(!a||!b)return std::nullopt; return bl(a->b!=b->b); }
+        case Kind::Ite: { auto c=weval(ir,e.children[0],asg,uf); if(!c)return std::nullopt; return weval(ir, c->b?e.children[1]:e.children[2], asg, uf); }
+        case Kind::Neg: { auto a=weval(ir,e.children[0],asg,uf); if(!a)return std::nullopt; return num(-a->n); }
+        case Kind::Add: { mpq_class r=0; for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v)return std::nullopt; r+=v->n;} return num(r); }
+        case Kind::Mul: { mpq_class r=1; for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v)return std::nullopt; r*=v->n;} return num(r); }
+        case Kind::Sub: { auto a=weval(ir,e.children[0],asg,uf); auto b=weval(ir,e.children[1],asg,uf); if(!a||!b)return std::nullopt; return num(a->n-b->n); }
+        case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
+            auto a=weval(ir,e.children[0],asg,uf); auto b=weval(ir,e.children[1],asg,uf); if(!a||!b)return std::nullopt;
+            const mpq_class& x=a->n; const mpq_class& y=b->n;
+            switch(e.kind){case Kind::Lt:return bl(x<y);case Kind::Leq:return bl(x<=y);case Kind::Gt:return bl(x>y);default:return bl(x>=y);}
+        }
+        case Kind::Eq: case Kind::Distinct: {
+            std::vector<WV> vs; for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v)return std::nullopt; vs.push_back(*v);}
+            auto same=[&](const WV&a,const WV&b)->bool{
+                if(a.k!=b.k)return false;
+                if(a.k==WV::B)return a.b==b.b;
+                if(a.k==WV::N)return a.n==b.n;
+                return wArraysEqual(a,b);
+            };
+            if(e.kind==Kind::Eq){bool all=true; for(size_t i=1;i<vs.size();++i) if(!same(vs[0],vs[i]))all=false; return bl(all);}
+            for(size_t i=0;i<vs.size();++i)for(size_t j=i+1;j<vs.size();++j) if(same(vs[i],vs[j])) return bl(false);
+            return bl(true);
+        }
+        case Kind::UFApply: {
+            std::vector<mpq_class> args;
+            for(ExprId c:e.children){auto v=weval(ir,c,asg,uf); if(!v||v->k!=WV::N)return std::nullopt; args.push_back(v->n);}
+            char ret = (e.sort==ir.boolSortId())?'b':'i';
+            return uf.get(std::get<std::string>(e.payload.value), args, ret);
+        }
+        case Kind::ConstArray: { auto v=weval(ir,e.children[0],asg,uf); if(!v)return std::nullopt; WV w; w.k=WV::A; w.adef=v->n; return w; }
+        case Kind::Store: {
+            auto a=weval(ir,e.children[0],asg,uf); auto i=weval(ir,e.children[1],asg,uf); auto v=weval(ir,e.children[2],asg,uf);
+            if(!a||!i||!v||a->k!=WV::A)return std::nullopt; WV w=*a; w.aov[i->n]=v->n; return w;
+        }
+        case Kind::Select: {
+            auto a=weval(ir,e.children[0],asg,uf); auto i=weval(ir,e.children[1],asg,uf);
+            if(!a||!i||a->k!=WV::A)return std::nullopt;
+            auto it=a->aov.find(i->n); return num(it!=a->aov.end()?it->second:a->adef);
+        }
+        default: return std::nullopt;
+    }
+}
+
+TEST_CASE("rewriter: random equivalence oracle over REALS + UF + ARRAYS") {
+    std::mt19937 rng(0xBADC0DE);
+    // numeric vars: int x,y ; real r,s.  array a,b.  numeric-UF fi.  bool-UF fp.
+    const std::vector<std::pair<std::string,char>> numVars = {{"x",'i'},{"y",'i'},{"r",'r'},{"s",'r'}};
+    const std::vector<std::string> arrVars = {"a","b"};
+    const std::vector<int> grid = {-1, 0, 2};            // values for int/real vars
+
+    for (int iter = 0; iter < 300; ++iter) {
+        WHarness h;
+        std::map<std::string,ExprId> V;
+        for (auto& [nm,t] : numVars) V[nm] = h.mk(Kind::Variable, t=='i'?h.intS:h.realS, {}, Payload(nm));
+        for (auto& nm : arrVars) V[nm] = h.mk(Kind::Variable, h.arrS, {}, Payload(nm));
+
+        // Mutually-recursive generators: forward-declared std::functions, all
+        // capturing by reference, so each can call the others once assigned.
+        std::function<ExprId(int)> genNum, genArr, genBool;
+        genArr = [&](int d)->ExprId {
+            if (d<=0 || rng()%2==0) return V[arrVars[rng()%arrVars.size()]];
+            if (rng()%2==0) return h.mk(Kind::ConstArray,h.arrS,{genNum(d-1)});
+            return h.mk(Kind::Store,h.arrS,{genArr(d-1),genNum(d-1),genNum(d-1)});
+        };
+        static const std::array<const char*,6> realLits = {"0","1/2","-1/2","3/2","-2","2"};
+        genNum = [&](int d)->ExprId {
+            if (d<=0 || rng()%3==0) {
+                int r=rng()%4;
+                if(r==0) return V["x"]; if(r==1) return V["r"];
+                if(r==2) return h.mk(Kind::ConstInt,h.intS,{},Payload((int64_t)((int)(rng()%5)-2)));
+                return h.mk(Kind::ConstReal,h.realS,{},Payload(std::string(realLits[rng()%realLits.size()])));
+            }
+            int r=rng()%6; SortId s=(rng()%2)?h.intS:h.realS;
+            if(r==0) return h.mk(Kind::Add,s,{genNum(d-1),genNum(d-1)});
+            if(r==1) return h.mk(Kind::Sub,s,{genNum(d-1),genNum(d-1)});
+            if(r==2) return h.mk(Kind::Mul,s,{genNum(d-1),genNum(d-1)});
+            if(r==3) return h.mk(Kind::Neg,s,{genNum(d-1)});
+            if(r==4) return h.mk(Kind::UFApply,h.intS,{genNum(d-1)},Payload(std::string("fi")));
+            return h.mk(Kind::Select,h.intS,{genArr(d-1),genNum(d-1)});
+        };
+        genBool = [&](int d)->ExprId {
+            if (d<=0 || rng()%4==0) {
+                int r=rng()%5;
+                if(r==0) return h.mk(Kind::ConstBool,h.boolS,{},Payload(rng()%2==0));
+                if(r==1) return h.mk(Kind::UFApply,h.boolS,{genNum(d-1)},Payload(std::string("fp")));  // bool UF
+                static const std::array<Kind,4> rel={Kind::Lt,Kind::Leq,Kind::Gt,Kind::Geq};
+                if(r==2) return h.mk(rel[rng()%4],h.boolS,{genNum(d-1),genNum(d-1)});
+                if(r==3) return h.mk(Kind::Eq,h.boolS,{genNum(d-1),genNum(d-1)});       // numeric eq
+                return h.mk(Kind::Eq,h.boolS,{genArr(d-1),genArr(d-1)});                // array eq (reflexivity etc.)
+            }
+            int r=rng()%6;
+            if(r==0) return h.mk(Kind::Not,h.boolS,{genBool(d-1)});
+            if(r==1) return h.mk(Kind::And,h.boolS,{genBool(d-1),genBool(d-1)});
+            if(r==2) return h.mk(Kind::Or,h.boolS,{genBool(d-1),genBool(d-1)});
+            if(r==3) return h.mk(Kind::Ite,h.boolS,{genBool(d-1),genBool(d-1),genBool(d-1)});
+            if(r==4) return h.mk(Kind::Distinct,h.boolS,{genArr(d-1),genArr(d-1)});
+            return h.mk(Kind::Eq,h.boolS,{genBool(d-1),genBool(d-1)});
+        };
+
+        ExprId orig = genBool(4);
+        FormulaRewriter rw(h.ir, h.boolS);
+        ExprId rewritten = rw.rewrite(orig);
+
+        // Enumerate assignments: numeric vars over the grid, arrays over a few
+        // shapes. Check eval(orig)==eval(rewritten) under a shared UF model.
+        std::vector<std::map<std::string,mpq_class>> numAssigns;
+        // small cartesian: int x=y over {-1,0,2}; real r=s over a RATIONAL grid
+        // (incl. 1/2) so true real folding is exercised, not just integer-valued.
+        const std::array<mpq_class,3> rgrid = {mpq_class(-1), mpq_class(1,2), mpq_class(2)};
+        for (int vx : grid) for (const mpq_class& vr : rgrid) {
+            numAssigns.push_back({{"x",mpq_class(vx)},{"y",mpq_class(vx)},
+                                  {"r",vr},{"s",vr}});
+        }
+        auto mkArr = [](mpq_class def, std::map<mpq_class,mpq_class> ov){ WV w; w.k=WV::A; w.adef=def; w.aov=std::move(ov); return w; };
+        std::vector<std::pair<WV,WV>> arrAssigns = {
+            {mkArr(0,{}), mkArr(0,{})},                       // a=b=const0
+            {mkArr(0,{{0,1}}), mkArr(0,{})},                  // a[0]=1 ; b=0
+            {mkArr(1,{{2,3}}), mkArr(1,{{2,3}})},             // a=b (same shape)
+        };
+        for (auto& na : numAssigns) {
+            for (auto& [av,bv] : arrAssigns) {
+                WAsg asg;
+                for (auto& [k,v] : na) { WV w; w.k=WV::N; w.n=v; asg[k]=w; }
+                asg["a"]=av; asg["b"]=bv;
+                UFModel uf;  // fresh per assignment, shared by both eval calls
+                auto vo = weval(h.ir, orig, asg, uf);
+                auto vr = weval(h.ir, rewritten, asg, uf);
+                REQUIRE(vo.has_value());
+                REQUIRE(vr.has_value());
+                REQUIRE(vo->k == WV::B);  // top is boolean
+                REQUIRE(vr->k == WV::B);
+                CHECK(vo->b == vr->b);
+            }
+        }
+    }
+}
+
+} // namespace
+
 // End-to-end guard: with the flag ON, rewriting deep EUF f-chains must not
 // corrupt nodes. (Regression: rewriteRec held a reference into CoreIr's exprs_
 // across a child-rewrite that called ir_.add(), reallocating the vector; the
