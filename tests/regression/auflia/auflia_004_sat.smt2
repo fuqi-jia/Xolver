@@ -1,0 +1,8 @@
+(set-logic QF_AUFLIA)
+(set-info :status sat)
+(declare-fun f (Int) Int)
+(declare-const a (Array Int Int))
+(declare-const i Int)
+(assert (= (select (store a i 4) i) 4))
+(assert (= (f i) 9))
+(check-sat)

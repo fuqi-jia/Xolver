@@ -1,0 +1,8 @@
+(set-logic QF_AUFLRA)
+(set-info :status sat)
+(declare-fun f (Real) Real)
+(declare-const a (Array Real Real))
+(declare-const i Real)
+(assert (= (select (store a i 4.0) i) 4.0))
+(assert (= (f i) 9.0))
+(check-sat)

@@ -161,16 +161,24 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
         const IntDomain* d2 = domains.getDomain(var2);
         if (!d1 && !d2) continue;
 
+        // A bound propagated through the equality x=y is justified by BOTH the
+        // equality (c.reason) AND the source bound's own reasons. Dropping the
+        // latter yields an over-strong (unsound) empty-domain conflict clause.
+        auto withEq = [&](const std::vector<SatLit>& src) {
+            std::vector<SatLit> rs = src;
+            rs.push_back(c.reason);
+            return rs;
+        };
         auto propagate = [&](const std::string& srcVar, const std::string& dstVar,
                              const IntDomain* srcDomain) {
             if (!srcDomain) return false;
             bool changed = false;
             if (srcDomain->hasLower) {
-                domains.addLowerBound(dstVar, srcDomain->lower.value, c.reason);
+                domains.addLowerBound(dstVar, srcDomain->lower.value, withEq(srcDomain->lower.reasons));
                 changed = true;
             }
             if (srcDomain->hasUpper) {
-                domains.addUpperBound(dstVar, srcDomain->upper.value, c.reason);
+                domains.addUpperBound(dstVar, srcDomain->upper.value, withEq(srcDomain->upper.reasons));
                 changed = true;
             }
             return changed;
@@ -183,19 +191,19 @@ NiaReasoningResult LinearNiaDomainReasoner::run(
         } else if (d1 && d2) {
             // Both have bounds: tighten each with the other's bounds
             if (d1->hasLower && (!d2->hasLower || d1->lower.value > d2->lower.value)) {
-                domains.addLowerBound(var2, d1->lower.value, c.reason);
+                domains.addLowerBound(var2, d1->lower.value, withEq(d1->lower.reasons));
                 updated = true;
             }
             if (d1->hasUpper && (!d2->hasUpper || d1->upper.value < d2->upper.value)) {
-                domains.addUpperBound(var2, d1->upper.value, c.reason);
+                domains.addUpperBound(var2, d1->upper.value, withEq(d1->upper.reasons));
                 updated = true;
             }
             if (d2->hasLower && (!d1->hasLower || d2->lower.value > d1->lower.value)) {
-                domains.addLowerBound(var1, d2->lower.value, c.reason);
+                domains.addLowerBound(var1, d2->lower.value, withEq(d2->lower.reasons));
                 updated = true;
             }
             if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value)) {
-                domains.addUpperBound(var1, d2->upper.value, c.reason);
+                domains.addUpperBound(var1, d2->upper.value, withEq(d2->upper.reasons));
                 updated = true;
             }
         }

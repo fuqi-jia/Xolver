@@ -330,10 +330,37 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     // emit a split lemma without arrangement. Return Unknown conservatively.
     // But if aux is not fixed (free variable), LIA has no opinion — let EUF handle it.
     for (const auto& ieq : interfaceDisequalities_) {
+        // Direct entailment: an asserted 2-var equality (e.g. (+i1)=(+j1) ⟺
+        // i - j = 0) makes i = j, so an interface disequality i != j is a hard
+        // conflict. The conflict clause is {asserted-eq-lit, diseq-reason}
+        // (both currently true). Caught here before the conservative
+        // fixed-value Unknown gate below, turning R4 into a real UNSAT.
+        if (auto eqReasons = assertedVarEqualityReason(ieq.a, ieq.b); !eqReasons.empty()) {
+            TheoryConflict tc;
+            for (auto l : eqReasons) tc.clause.push_back(l);
+            tc.clause.push_back(ieq.reason);
+            if (normalizeTheoryClause(tc.clause)) {
+                return TheoryCheckResult::mkConflict(std::move(tc));
+            }
+        }
         int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
         if (aux >= 0) {
             auto fixedOpt = gs_.proveFixedValue(aux);
             if (fixedOpt && fixedOpt->first.isZero()) {
+                // The difference x - y is provably pinned to 0 by bounds (e.g.
+                // x<=y ∧ y<=x), so x = y is entailed and the interface
+                // disequality x != y is a hard conflict. Build the conflict
+                // from the pinning bound reasons + the disequality reason
+                // (proof-carrying), instead of the old conservative Unknown.
+                TheoryConflict tc;
+                for (const auto& br : fixedOpt->second) tc.clause.push_back(br.reason);
+                tc.clause.push_back(ieq.reason);
+                if (normalizeTheoryClause(tc.clause)) {
+                    return TheoryCheckResult::mkConflict(std::move(tc));
+                }
+                // Defensive: if the conflict cannot be normalized (a
+                // complementary pair slipped in), fall back to the previous
+                // sound-but-incomplete Unknown.
                 return TheoryCheckResult::unknown();
             }
         }
@@ -659,6 +686,85 @@ int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     return aux;
 }
 
+std::vector<SatLit>
+LiaSolver::assertedVarEqualityReason(SharedTermId a, SharedTermId b) const {
+    if (!sharedTermRegistry_) return {};
+    // Names of the two (non-const) shared variables.
+    auto nameOf = [&](SharedTermId s) -> std::string {
+        if (const auto* st = sharedTermRegistry_->get(s)) {
+            if (coreIr_ && coreIr_->get(st->coreExpr).isConst()) return "";
+            auto it = sharedTermToVarName_.find(s);
+            if (it != sharedTermToVarName_.end()) return it->second;
+            const auto& e = coreIr_->get(st->coreExpr);
+            if (e.kind == Kind::Variable &&
+                std::holds_alternative<std::string>(e.payload.value)) {
+                return std::get<std::string>(e.payload.value);
+            }
+        }
+        return "";
+    };
+    std::string na = nameOf(a), nb = nameOf(b);
+    if (na.empty() || nb.empty() || na == nb) return {};
+
+    // Aggregate the asserted linear (in)equality atoms whose canonical LHS is a
+    // 2-variable difference form {(na,c),(nb,-c)} into a single interval on the
+    // normalized difference d = (na - nb). Each atom contributes a lower and/or
+    // upper bound on d (after dividing by c and flipping for negative c). If the
+    // accumulated interval pins d == 0, then na = nb is entailed and we return
+    // the reason literals of the atoms that did the pinning. This covers BOTH
+    // an explicit equality atom (na - nb = 0; both bounds 0 — repro R4) and two
+    // complementary inequalities (na <= nb and nb <= na ⟹ na = nb — repro e6).
+    bool haveLo = false, haveUp = false;
+    mpq_class lo = 0, up = 0;
+    SatLit loLit{}, upLit{};
+    for (const auto& e : theoryTrail_) {
+        if (e.isDiseq) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        if (payload.lhs.terms.size() != 2) continue;
+        const auto& t0 = payload.lhs.terms[0];
+        const auto& t1 = payload.lhs.terms[1];
+        if (t0.second == 0 || t0.second != -t1.second) continue;  // form c*x - c*y
+        // Orient so that the form reads (na - nb) * c0.
+        mpq_class c0;
+        if (t0.first == na && t1.first == nb)      c0 = t0.second;   // (na - nb)*c0
+        else if (t0.first == nb && t1.first == na) c0 = t1.second;   // (na - nb)*c0
+        else continue;
+        // payload: (form) rel rhs, asserted with polarity e.value. Effective
+        // relation on the form value F = c0*(na-nb):
+        Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
+        const mpq_class& rhs = payload.rhs.asRational();
+        // Reduce to bounds on d = na - nb: F = c0*d, F rel rhs  ⟹  d rel' rhs/c0.
+        mpq_class bnd = rhs / c0;
+        bool flip = (c0 < 0);
+        auto addLower = [&](const mpq_class& v, SatLit lit) {
+            if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+        };
+        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+            if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+        };
+        switch (rel) {
+            case Relation::Eq:
+                addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+            case Relation::Leq:
+                if (!flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+            case Relation::Geq:
+                if (!flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+            case Relation::Lt:    // integers: d < bnd  ⟺  d <= bnd-1 (only used to pin via combo; treat conservatively as <= for difference-equality detection only when integral)
+            case Relation::Gt:
+            default:
+                break;  // strict bounds don't pin an equality; skip
+        }
+    }
+    if (haveLo && haveUp && lo == 0 && up == 0) {
+        std::vector<SatLit> reasons;
+        reasons.push_back(loLit);
+        if (!(upLit == loLit)) reasons.push_back(upLit);
+        return reasons;
+    }
+    return {};
+}
+
 TheoryCheckResult LiaSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
 
@@ -752,6 +858,38 @@ LiaSolver::getDeducedSharedEqualities() {
             }
         }
     }
+
+    // Variable-variable implied equalities. The fixed-value grouping above only
+    // catches terms pinned to a constant. But asserted linear facts can make two
+    // shared variables equal WITHOUT fixing either to a value: an equality atom
+    // (+ i 1)=(+ j 1) normalizing to (i - j = 0) (repro R4), or two
+    // complementary inequalities i<=j and j<=i pinning (i - j) to 0 (repro e6).
+    // Such implied equalities must be propagated to EUF so array Row1/congruence
+    // fires (select(store(a,i,v),j) with i=j collapses to v). For each pair of
+    // NON-constant shared variables, assertedVarEqualityReason reports the
+    // proving reason literals (or empty). Sound: only fires when the asserted
+    // atoms genuinely pin the difference to 0. Bounded by #distinct shared vars.
+    {
+        std::vector<SharedTermId> sharedVars;
+        for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+            if (const auto* st = sharedTermRegistry_->get(stId)) {
+                if (coreIr_ && coreIr_->get(st->coreExpr).isConst()) continue;
+            }
+            std::string nm = getVarNameForSharedTerm(stId);
+            if (nm.empty()) continue;
+            if (nameToVar.find(nm) == nameToVar.end()) continue;
+            sharedVars.push_back(stId);
+        }
+        for (size_t i = 0; i < sharedVars.size(); ++i) {
+            for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+                auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
+                if (reasons.empty()) continue;
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    sharedVars[i], sharedVars[j], std::move(reasons)});
+            }
+        }
+    }
+
     return result;
 }
 

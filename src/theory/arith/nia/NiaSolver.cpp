@@ -6,6 +6,8 @@
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <unordered_set>
+#include <cstdlib>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -234,6 +236,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
     // 3. Reset domains
     domains_.reset();
 
+    static const bool domDiag = std::getenv("NIA_DOM_DIAG") != nullptr;
+    if (domDiag) {
+        std::cerr << "[NIA-DOM] normalized constraints (" << normalized_.size() << "):\n";
+        for (const auto& c : normalized_) {
+            std::cerr << "  reason=" << c.reason.var << " rel=" << (int)c.rel
+                      << " poly=" << kernel_->toString(c.poly) << "\n";
+        }
+    }
+
     // 4. Linear domain inference
     auto lr = linearDomain_.run(normalized_, domains_);
     if (lr.kind == NiaReasoningKind::Conflict) {
@@ -264,6 +275,13 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
             }
         }
         if (!quadTerm || !constTerm) {
+            continue;
+        }
+        // Soundness: the product value x*y = -c0/cq is entailed only when the
+        // equality is EXACTLY  cq*x*y + c0 = 0.  If any other term is present
+        // (e.g. a*z in  x*y + a*z - 6 = 0), x*y is under-determined and a tight
+        // upper bound from -c0/cq wrongly excludes valid solutions (false UNSAT).
+        if (terms.size() != 2) {
             continue;
         }
         mpz_class numer = -constTerm->coefficient;
@@ -317,23 +335,32 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
         const IntDomain* d2 = domains_.getDomain(v2);
         if (!d1 && !d2) continue;
 
+        // A bound propagated through the equality v1=v2 is justified by BOTH
+        // the equality (c.reason) AND the source bound's own reasons. Dropping
+        // the latter yields an over-strong (unsound) empty-domain conflict.
+        auto withEq = [&](const std::vector<SatLit>& srcReasons) {
+            std::vector<SatLit> rs = srcReasons;
+            rs.push_back(c.reason);
+            return rs;
+        };
         auto propagate = [&](const std::string& src, const std::string& dst, const IntDomain* srcDom) {
+            (void)src;
             if (!srcDom) return;
-            if (srcDom->hasLower) domains_.addLowerBound(dst, srcDom->lower.value, c.reason);
-            if (srcDom->hasUpper) domains_.addUpperBound(dst, srcDom->upper.value, c.reason);
+            if (srcDom->hasLower) domains_.addLowerBound(dst, srcDom->lower.value, withEq(srcDom->lower.reasons));
+            if (srcDom->hasUpper) domains_.addUpperBound(dst, srcDom->upper.value, withEq(srcDom->upper.reasons));
         };
 
         if (d1 && !d2) propagate(v1, v2, d1);
         else if (!d1 && d2) propagate(v2, v1, d2);
         else if (d1 && d2) {
             if (d1->hasLower && (!d2->hasLower || d1->lower.value > d2->lower.value))
-                domains_.addLowerBound(v2, d1->lower.value, c.reason);
+                domains_.addLowerBound(v2, d1->lower.value, withEq(d1->lower.reasons));
             if (d1->hasUpper && (!d2->hasUpper || d1->upper.value < d2->upper.value))
-                domains_.addUpperBound(v2, d1->upper.value, c.reason);
+                domains_.addUpperBound(v2, d1->upper.value, withEq(d1->upper.reasons));
             if (d2->hasLower && (!d1->hasLower || d2->lower.value > d1->lower.value))
-                domains_.addLowerBound(v1, d2->lower.value, c.reason);
+                domains_.addLowerBound(v1, d2->lower.value, withEq(d2->lower.reasons));
             if (d2->hasUpper && (!d1->hasUpper || d2->upper.value < d1->upper.value))
-                domains_.addUpperBound(v1, d2->upper.value, c.reason);
+                domains_.addUpperBound(v1, d2->upper.value, withEq(d2->upper.reasons));
         }
     }
     return std::nullopt;

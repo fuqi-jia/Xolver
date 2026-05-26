@@ -2,6 +2,8 @@
 #include "theory/core/DebugTrace.h"
 #include "expr/ir.h"
 #include <unordered_set>
+#include <functional>
+#include <iostream>
 
 namespace nlcolver {
 
@@ -46,6 +48,24 @@ bool Purifier::containsArithmetic(ExprId eid) const {
     return false;
 }
 
+bool Purifier::isArrayOp(const CoreExpr& e) {
+    return e.kind == Kind::Select || e.kind == Kind::Store ||
+           e.kind == Kind::ConstArray;
+}
+
+bool Purifier::isCompoundArith(ExprId eid) const {
+    const auto& e = ir_.get(eid);
+    switch (e.kind) {
+        case Kind::Add: case Kind::Sub: case Kind::Neg:
+        case Kind::Mul: case Kind::Div: case Kind::Mod:
+        case Kind::Abs: case Kind::Pow:
+        case Kind::ToInt: case Kind::ToReal:
+            return true;
+        default:
+            return false;
+    }
+}
+
 ExprId Purifier::makeFreshVar(SortId sort) {
     std::string name = "bridge_" + std::to_string(freshCounter_++);
     CoreExpr e;
@@ -87,6 +107,11 @@ void Purifier::registerEufVars(ExprId eid) {
         if (!visited.insert(cur).second) continue;
         const auto& e = ir_.get(cur);
         if (e.kind == Kind::Variable) {
+            // Skip array-sorted variables: they are EUF/array-internal, not
+            // arith-shared. Registering them as shared terms would make a
+            // plain array equality (= a b) look like a shared-equality atom
+            // and steal it from the array reasoner's Extensionality path.
+            if (ir_.arraySortParams(e.sort)) continue;
             if (auto* s = std::get_if<std::string>(&e.payload.value)) {
                 SharedTermId id = registry_.getOrCreate(cur, e.sort, *s, false);
                 registry_.addOwner(id, TheoryId::EUF);
@@ -184,6 +209,25 @@ ExprId Purifier::purifyRec(ExprId root) {
                 continue;
             }
 
+            // Array operator (select/store/const-array): the array argument
+            // recurses normally (it stays in EUF), but every arith index /
+            // element argument must become a shared leaf. Register all leaf
+            // index/element vars+consts as shared terms (owned by EUF AND the
+            // arith theory) here so bare-variable indices flow as interface
+            // equalities; compound arith children are bridged on the second
+            // visit below.
+            if (isArrayOp(e)) {
+                for (ExprId arg : e.children) {
+                    registerEufVars(arg);
+                }
+                for (size_t i = e.children.size(); i-- > 0; ) {
+                    if (!tryResolve(e.children[i])) {
+                        stack.push_back(Frame{e.children[i], false});
+                    }
+                }
+                continue;
+            }
+
             // Default: recurse into children
             for (size_t i = e.children.size(); i-- > 0; ) {
                 if (!tryResolve(e.children[i])) {
@@ -204,8 +248,13 @@ ExprId Purifier::purifyRec(ExprId root) {
                 if (p != arg) changed = true;
                 newArgs.push_back(p);
             }
+            // Preserve the original UFApply payload (the function NAME). A
+            // rebuilt apply with an empty payload gets a distinct EUF function
+            // symbol, so congruence between e.g. f(bridge_0) and f(5) would
+            // never fire — silently dropping the very equality combination
+            // exists to exchange.
             ExprId purifiedApply = changed
-                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), Payload{}})
+                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), e.payload})
                 : f.eid;
             ExprId fresh = makeFreshVar(e.sort);
             ExprId bridge = makeEq(fresh, purifiedApply);
@@ -214,6 +263,66 @@ ExprId Purifier::purifyRec(ExprId root) {
             done[f.eid] = fresh;
             NO_DBG << "[Purifier] bridge eid=" << f.eid << " -> eid=" << fresh
                    << " bridge=" << bridge << "\n";
+            stack.pop_back();
+            continue;
+        }
+
+        // Array operator: rebuild with purified children, and additionally
+        // bridge any child that is a COMPOUND arith term (e.g. select(a,i+1))
+        // so the index/element becomes a fresh shared leaf both EUF and the
+        // arith theory observe. Bare variables / constants are left as-is —
+        // they are already shared via registerEufVars. The array argument of a
+        // store/select is never bridged (it is array-sorted, EUF-internal).
+        if (isArrayOp(e)) {
+            std::vector<ExprId> newChildren;
+            newChildren.reserve(e.children.size());
+            bool changed = false;
+            for (size_t ci = 0; ci < e.children.size(); ++ci) {
+                ExprId child = e.children[ci];
+                ExprId p = done.at(child);   // purified subterm (alien UF lifted)
+                // Index/element positions: child 0 of ConstArray is the value;
+                // for select/store child 0 is the array (skip), the rest are
+                // index/element (Int/Real-sorted).
+                bool isArrayArg = (e.kind != Kind::ConstArray && ci == 0);
+                if (!isArrayArg && isCompoundArith(p)) {
+                    ExprId fresh = makeFreshVar(ir_.get(p).sort);
+                    ExprId bridge = makeEq(fresh, p);
+                    bridgeAssertions_.push_back(bridge);
+                    p = fresh;
+                }
+                if (p != child) changed = true;
+                newChildren.push_back(p);
+            }
+            ExprId rebuilt;
+            if (!changed) {
+                rebuilt = f.eid;
+            } else {
+                CoreExpr ne;
+                ne.kind = e.kind;
+                ne.sort = e.sort;
+                for (ExprId c : newChildren) ne.children.push_back(c);
+                rebuilt = ir_.add(ne);
+            }
+
+            // An array READ whose result is arithmetic (Int/Real) is, to the
+            // arith theory, an alien term — bridge it into a fresh SHARED
+            // variable exactly like a UFApply. `(> (select a i) 5)` thus
+            // becomes `(> selbridge 5)` with the array-read equality
+            // `(= selbridge (select a i))` routed to EUF. This couples the
+            // read value to arithmetic soundly and is context-free (so it is
+            // robust to a select appearing in both arith and non-arith
+            // positions). Store/ConstArray results stay array-sorted and are
+            // never bridged.
+            if (e.kind == Kind::Select &&
+                (e.sort == ir_.intSortId() || e.sort == ir_.realSortId())) {
+                ExprId fresh = makeFreshVar(e.sort);
+                ExprId bridge = makeEq(fresh, rebuilt);
+                bridgeAssertions_.push_back(bridge);
+                cache_[f.eid] = fresh;
+                done[f.eid] = fresh;
+            } else {
+                done[f.eid] = rebuilt;
+            }
             stack.pop_back();
             continue;
         }
@@ -268,6 +377,47 @@ void Purifier::run() {
 
     for (ExprId bridge : bridgeAssertions_) {
         ir_.addAssertion(bridge);
+    }
+
+    if (std::getenv("EUF_DIAG")) {
+        std::function<std::string(ExprId)> nameOf = [&](ExprId e) -> std::string {
+            const auto& ex = ir_.get(e);
+            if (ex.kind == Kind::Variable) {
+                if (auto* s = std::get_if<std::string>(&ex.payload.value)) return *s;
+            }
+            if (ex.isConst()) {
+                if (auto* i = std::get_if<int64_t>(&ex.payload.value)) return std::to_string(*i);
+                if (auto* s = std::get_if<std::string>(&ex.payload.value)) return *s;
+            }
+            if (ex.kind == Kind::UFApply) {
+                std::string nm = std::get_if<std::string>(&ex.payload.value)
+                                 ? std::get<std::string>(ex.payload.value) : "?fn";
+                std::string r = nm + "(";
+                for (size_t i = 0; i < ex.children.size(); ++i) {
+                    if (i) r += ",";
+                    r += nameOf(ex.children[i]);
+                }
+                return r + ")";
+            }
+            std::string r = "k" + std::to_string((int)ex.kind) + "[";
+            for (size_t i = 0; i < ex.children.size(); ++i) {
+                if (i) r += ",";
+                r += nameOf(ex.children[i]);
+            }
+            return r + "]";
+        };
+        for (ExprId bridge : bridgeAssertions_) {
+            const auto& b = ir_.get(bridge);
+            if (b.children.size() == 2) {
+                std::cerr << "[BRIDGE-DEF] " << nameOf(b.children[0]) << " := "
+                          << nameOf(b.children[1]) << "\n";
+            }
+        }
+        for (SharedTermId st : registry_.allSharedTerms()) {
+            const auto* s = registry_.get(st);
+            if (s) std::cerr << "[ST] st" << st << " = " << s->name
+                             << " expr" << s->coreExpr << "\n";
+        }
     }
 }
 

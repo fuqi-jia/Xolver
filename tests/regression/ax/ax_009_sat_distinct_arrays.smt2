@@ -1,0 +1,7 @@
+(set-logic QF_AX)
+(set-info :status sat)
+(declare-sort E 0)
+(declare-const a (Array E E))
+(declare-const b (Array E E))
+(assert (not (= a b)))
+(check-sat)

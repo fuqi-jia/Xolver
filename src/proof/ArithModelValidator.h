@@ -1,9 +1,11 @@
 #pragma once
 
 #include "expr/ir.h"
+#include "theory/core/TheorySolver.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>
+#include <map>
 #include <unordered_map>
 #include <vector>
 
@@ -38,11 +40,26 @@ public:
 
     using NumAssignment = std::unordered_map<std::string, mpq_class>;
     using BoolAssignment = std::unordered_map<std::string, bool>;
+    using ArrayAssignment =
+        std::unordered_map<std::string, TheorySolver::TheoryModel::ArrayInterp>;
 
     ArithModelValidator(const CoreIr& ir,
                         const NumAssignment& num,
                         const BoolAssignment& boolAsg)
         : ir_(ir), num_(num), boolAsg_(boolAsg) {}
+
+    using TokenAssignment = std::unordered_map<std::string, std::string>;
+
+    // Array-aware constructor (QF_AX). The array interps map each array
+    // variable name to a (default, override-list) interpretation; index/
+    // element values are opaque tokens compared by equality. `tok` carries
+    // scalar (index/element) variable -> opaque token assignments.
+    ArithModelValidator(const CoreIr& ir,
+                        const NumAssignment& num,
+                        const BoolAssignment& boolAsg,
+                        const ArrayAssignment& arr,
+                        const TokenAssignment& tok)
+        : ir_(ir), num_(num), boolAsg_(boolAsg), arr_(&arr), tok_(&tok) {}
 
     // Validate the given assertion roots (original-formula ExprIds).
     Verdict validate(const std::vector<ExprId>& assertions) const;
@@ -53,18 +70,33 @@ public:
     std::optional<mpq_class> evalNumber(ExprId e) const;
 
 private:
-    enum class Kind2 { Bool, Number, Indeterminate };
+    // Array value: a default element token plus an ordered set of overrides.
+    // A std::map keeps later stores overriding earlier ones deterministically.
+    struct ArrVal {
+        std::string deflt;
+        std::map<std::string, std::string> overrides;  // index-token -> elem-token
+    };
+
+    enum class Kind2 { Bool, Number, Token, Array, Indeterminate };
     struct TR {
         Kind2 kind = Kind2::Indeterminate;
         bool b = false;
         mpq_class n = 0;
+        std::string tok;     // Token kind
+        ArrVal arr;          // Array kind
     };
 
     TR eval(ExprId e) const;
 
+    // Coerce a fully-evaluated TR into an opaque equality token (Number/Bool/
+    // Token). Returns nullopt if not coercible (e.g. Array or Indeterminate).
+    std::optional<std::string> asToken(const TR& r) const;
+
     const CoreIr& ir_;
     const NumAssignment& num_;
     const BoolAssignment& boolAsg_;
+    const ArrayAssignment* arr_ = nullptr;
+    const TokenAssignment* tok_ = nullptr;
 };
 
 } // namespace nlcolver

@@ -145,6 +145,15 @@ private:
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
 
+    // If the asserted linear (in)equality atoms entail that the two shared
+    // terms a and b are equal — either via an explicit 2-var equality atom
+    // (c*x - c*y = 0, e.g. (+i1)=(+j1)) or via two complementary inequalities
+    // pinning the difference to 0 (x<=y ∧ y<=x) — return the reason literals of
+    // the pinning atoms. Empty if no such entailment is found. Used both to
+    // propagate implied shared equalities and to refute an interface
+    // disequality x!=y that contradicts the entailed x=y.
+    std::vector<SatLit> assertedVarEqualityReason(SharedTermId a, SharedTermId b) const;
+
     std::vector<SatLit> allActiveReasons() const;
 };
 

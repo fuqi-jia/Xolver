@@ -128,6 +128,23 @@ static bool containsUfApply(ExprId eid, const CoreIr& ir) {
     return false;
 }
 
+// True if the expression tree contains a UF application OR an array operator
+// (select/store/const-array). In combination logics these are the operators
+// that must be routed to the EUF solver (which owns the shared egraph and the
+// array reasoner); a pure-arith atom over shared index terms instead routes to
+// the arith theory / shared-equality mechanism.
+static bool containsArrayOrUf(ExprId eid, const CoreIr& ir) {
+    const auto& e = ir.get(eid);
+    if (e.kind == Kind::UFApply || e.kind == Kind::Select ||
+        e.kind == Kind::Store || e.kind == Kind::ConstArray) {
+        return true;
+    }
+    for (ExprId child : e.children) {
+        if (containsArrayOrUf(child, ir)) return true;
+    }
+    return false;
+}
+
 SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     if (eid == NullExpr) return SatLit{0, true};
 
@@ -291,10 +308,14 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                             return result;
                         }
                     }
-                    bool hasUf = containsUfApply(eid, ir);
-                    std::cerr << "[ATOM] combination eid=" << eid << " kind=" << (int)e.kind
-                              << " hasUf=" << hasUf << "\n";
-                    if (hasUf) {
+                    // Route to EUF if the atom mentions a UF application OR an
+                    // array operator (select/store/const-array): EUF owns the
+                    // shared egraph and the array reasoner. Pure-arith atoms
+                    // over shared (index/bridge) terms route to the arith
+                    // theory; equalities whose operands are both shared terms
+                    // were already handled above via the shared-eq mechanism.
+                    bool hasArrayOrUf = containsArrayOrUf(eid, ir);
+                    if (hasArrayOrUf) {
                         targetTheory = TheoryId::EUF;
                     } else {
                         targetTheory = combinationArithTheory_;

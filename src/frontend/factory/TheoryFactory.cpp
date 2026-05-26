@@ -96,6 +96,65 @@ SolverSetupResult setupSolvers(
         auto euf = std::make_unique<EufSolver>();
         euf->setCoreIr(ir);
         theoryManager.registerSolver(std::move(euf));
+    } else if (logic == "QF_AX") {
+        // Pure array theory (arrays + EUF, uninterpreted/Int indices+elements,
+        // no arithmetic). One shared egraph; ArrayReasoner adds the axioms.
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->enableArrays(&registry);
+        theoryManager.registerSolver(std::move(euf));
+    } else if (logic == "QF_ALRA" || logic == "ALRA" ||
+               logic == "QF_AUFLRA" || logic == "AUFLRA") {
+        // Arrays + LRA (+ UF). One shared EUF egraph hosts UF, the array
+        // operators, and the shared index/element terms; LRA owns the reals.
+        // Nelson-Oppen exchanges index/element (dis)equalities. UF is already
+        // provided by EUF, so QF_ALRA and QF_AUFLRA share this branch.
+        sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
+        {
+            Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+            purifier.run();
+        }
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->setSharedTermRegistry(sharedTermRegistry.get());
+        euf->enableArrays(&registry);
+        theoryManager.registerSolver(std::move(euf));
+        auto lra = std::make_unique<LraSolver>();
+        lra->setCoreIr(ir);
+        lra->setSharedTermRegistry(sharedTermRegistry.get());
+        lra->setRegistry(&registry);
+        theoryManager.registerSolver(std::move(lra));
+        theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
+        theoryManager.setRegistry(&registry);
+        theoryManager.setCombinationMode(true);
+    } else if (logic == "QF_ALIA" || logic == "ALIA" ||
+               logic == "QF_AUFLIA" || logic == "AUFLIA") {
+        // Arrays + LIA (+ UF). Same shape as the LRA array branch but over
+        // integers. LIA is non-convex (disequalities), so enable nonConvex
+        // combination mode (matching QF_UFLIA).
+        sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
+        {
+            Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+            purifier.setArithTheory(TheoryId::LIA);
+            purifier.run();
+        }
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->setSharedTermRegistry(sharedTermRegistry.get());
+        euf->enableArrays(&registry);
+        theoryManager.registerSolver(std::move(euf));
+        auto lia = std::make_unique<LiaSolver>();
+        lia->setCoreIr(ir);
+        lia->setSharedTermRegistry(sharedTermRegistry.get());
+        lia->setRegistry(&registry);
+        configureLia(*lia);
+        theoryManager.registerSolver(std::move(lia));
+        theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
+        theoryManager.setRegistry(&registry);
+        theoryManager.setCombinationMode(true);
+        theoryManager.setNonConvexMode(true);
     } else if (logic == "QF_UFLRA" || logic == "UFLRA") {
         sharedTermRegistry = std::make_unique<SharedTermRegistry>();
         sharedTermRegistry->setCoreIr(ir);

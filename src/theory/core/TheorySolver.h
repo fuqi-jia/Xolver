@@ -95,6 +95,20 @@ public:
             std::string deflt;                  // value for unlisted tuples
         };
         std::unordered_map<std::string, FuncInterp> functionInterps;
+
+        // Interpretation of an array variable: a default element plus a finite
+        // set of (index, element) overrides. Equal arrays share one interp.
+        // `defaultVal` is the value at any index not listed in `entries`.
+        // Index/element values are opaque tokens that compare by equality
+        // (e.g. eclass-rep markers like "@arr_e7"), since QF_AX indices and
+        // elements may be uninterpreted-sort. Populated by EufSolver::getModel.
+        struct ArrayInterp {
+            std::string indexSort;
+            std::string elemSort;
+            std::string defaultVal;
+            std::vector<std::pair<std::string, std::string>> entries; // (index, value)
+        };
+        std::unordered_map<std::string, ArrayInterp> arrayInterps;
     };
     virtual std::optional<TheoryModel>
     getModel() const { return std::nullopt; }

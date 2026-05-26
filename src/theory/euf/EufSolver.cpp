@@ -2,6 +2,8 @@
 #include "theory/euf/EufSolver.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "expr/ir.h"
 #include <cassert>
 #include <algorithm>
 #include <functional>
@@ -58,6 +60,7 @@ void EufSolver::pop(uint32_t n) {
 }
 
 void EufSolver::reset() {
+    modelSnapshot_.reset();
     trail_.clear();
     scopeLimits_.clear();
     scopeSnapshots_.clear();
@@ -75,7 +78,35 @@ void EufSolver::reset() {
     trueTerm_ = NullEufTerm;
     falseTerm_ = NullEufTerm;
 
+    arrayReasoner_.reset();
+
     initializeBoolConstants();
+}
+
+void EufSolver::ensureArrayContext() {
+    if (!arrayMode_ || !coreIr_) return;
+    if (!arrayReasoner_.active()) {
+        arrayReasoner_.setContext(&termManager_, &egraph_, coreIr_, arrayRegistry_);
+        // In combination logics the indices/elements are shared arith terms;
+        // hand the reasoner the SharedTermRegistry so Row2 builds (i=j) as a
+        // shared-equality atom. Null in pure QF_AX.
+        arrayReasoner_.setSharedTermRegistry(sharedTermRegistry_);
+    }
+}
+
+std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
+    std::vector<ArrayReasoner::ArrayDiseq> out;
+    if (!arrayMode_ || !coreIr_) return out;
+    auto isArraySort = [&](EufTermId t) {
+        if (t == NullEufTerm) return false;
+        return coreIr_->arraySortParams(termManager_.node(t).sort).has_value();
+    };
+    for (const auto& d : disequalities_) {
+        if (isArraySort(d.lhs) && isArraySort(d.rhs)) {
+            out.push_back({d.lhs, d.rhs});
+        }
+    }
+    return out;
 }
 
 void EufSolver::ensureSnapshotForLevel(int level) {
@@ -311,12 +342,22 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // check — 唯一 saturation loop
 // ---------------------------------------------------------------------------
 
-TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort) {
+TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }
     if (pendingConflict_) {
         return TheoryCheckResult::mkConflict(*pendingConflict_);
+    }
+
+    // Array Row1/Const eager merges (tautological; re-enqueued after backtrack
+    // since the egraph rolls these merges back). Must happen before the
+    // saturation loop so the consequences propagate via congruence.
+    if (arrayMode_) {
+        ensureArrayContext();
+        if (arrayReasoner_.active()) {
+            arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+        }
     }
 
     // Register signatures for all newly interned terms before entering the
@@ -446,6 +487,36 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort
     assert(egraph_.congruenceClosed());
 #endif
 
+    // Array Row2/Extensionality lemmas — emitted only at Full effort (complete
+    // SAT model), so the case split is over a stable assignment. The lemma
+    // literals are observed dynamic equality atoms; returning Lemma lets the
+    // SAT solver branch on them and re-enter check().
+    if (arrayMode_ && effort == TheoryEffort::Full) {
+        ensureArrayContext();
+        if (arrayReasoner_.active()) {
+            auto diseqs = activeArrayDiseqs();
+            auto lemma = arrayReasoner_.instantiateLemma(diseqs);
+            if (lemma && !lemma->empty()) {
+                TheoryLemma tl;
+                tl.lits = std::move(*lemma);
+                // Only emit if genuinely new; otherwise the same lemma would
+                // be regenerated forever (the dedup caches already gate this,
+                // but guard against a re-derivation across solver instances).
+                if (!lemmaDb.contains(tl)) {
+                    return TheoryCheckResult::mkLemma(std::move(tl));
+                }
+            }
+        }
+    }
+
+    // Capture the array/scalar model NOW, while the egraph reflects this
+    // satisfying assignment. After solve() returns, the egraph is rolled back
+    // and select/bridge merges are lost, so getModel() reads this snapshot.
+    // Only at Full effort (a complete model check) is the state authoritative.
+    if (arrayMode_ && effort == TheoryEffort::Full) {
+        modelSnapshot_ = buildModel();
+    }
+
     return TheoryCheckResult::consistent();
 }
 
@@ -565,6 +636,180 @@ EufSolver::getDeducedSharedEqualities() {
     }
 
     return result;
+}
+
+std::optional<TheorySolver::TheoryModel> EufSolver::getModel() const {
+    // The array/scalar model must be read off the egraph WHILE it reflects the
+    // satisfying assignment. By the time the Solver calls getModel() (after
+    // solve() returns), the egraph has been rolled back, so select/bridge
+    // merges no longer hold. We therefore return the snapshot captured at the
+    // last consistent Full-effort check. Fall back to a live build only if no
+    // snapshot exists (defensive — e.g. a non-array EUF problem).
+    if (modelSnapshot_) return modelSnapshot_;
+    return buildModel();
+}
+
+std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
+    if (!arrayMode_ || !coreIr_) return std::nullopt;
+
+    TheoryModel model;
+
+    // Token for an eclass, in the ArithModelValidator's CANONICAL namespaced
+    // form so the validator's asToken() and these tokens compare identically:
+    //   numeric literal  -> "#n:<canonical-rational>"
+    //   bool literal      -> "#b:1" / "#b:0"
+    //   otherwise         -> opaque per-class marker "@e<rep>"
+    // Index/element sorts may be uninterpreted; equality-by-token is exactly
+    // the QF_AX semantics.
+    auto classToken = [&](EufTermId t) -> std::string {
+        if (t == NullEufTerm) return "@nil";
+        EClassId rep = egraph_.rep(t);
+        for (EufTermId m : egraph_.classMembers(rep)) {
+            const auto& mn = termManager_.node(m);
+            if (mn.origin == NullExpr) continue;
+            if (mn.origin == TrueSentinelExpr || mn.origin == FalseSentinelExpr) continue;
+            const auto& e = coreIr_->get(mn.origin);
+            if (e.isConst()) {
+                if (auto* i = std::get_if<int64_t>(&e.payload.value))
+                    return "#n:" + mpq_class(*i).get_str();
+                if (auto* b = std::get_if<bool>(&e.payload.value))
+                    return std::string("#b:") + (*b ? "1" : "0");
+                if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                    // Numeric literal stored as string (Int/Real const).
+                    try { return "#n:" + mpq_class(*s).get_str(); } catch (...) {}
+                    return *s;
+                }
+            }
+        }
+        return "@e" + std::to_string(rep);
+    };
+
+    // Group array variables by eclass so equal arrays share one interp.
+    // Identify array variables in the CoreIr (Variable nodes with array sort).
+    struct ArrBuild {
+        std::string defaultVal;
+        bool hasConstDefault = false;
+        std::string indexSort, elemSort;
+        // index-token -> value-token, plus the index-class rep used for dedup.
+        std::vector<std::pair<std::string, std::string>> entries;
+        std::unordered_set<EClassId> seenIdxClass;
+    };
+    std::unordered_map<EClassId, ArrBuild> byClass;
+
+    auto sortName = [&](SortId s) -> std::string {
+        auto sk = coreIr_->sortKind(s);
+        if (sk == SortKind::Int) return "Int";
+        if (sk == SortKind::Real) return "Real";
+        if (sk == SortKind::Bool) return "Bool";
+        return "U" + std::to_string(s);
+    };
+
+    // Collect every array variable EufTermId.
+    std::vector<std::pair<std::string, EufTermId>> arrayVars;
+    for (ExprId id = 0; id < static_cast<ExprId>(coreIr_->size()); ++id) {
+        const auto& e = coreIr_->get(id);
+        if (e.kind != Kind::Variable) continue;
+        if (!coreIr_->arraySortParams(e.sort)) continue;
+        if (!std::holds_alternative<std::string>(e.payload.value)) continue;
+        // Intern is monotonic; the term should already exist if it was used.
+        EufTermId t = const_cast<EufTermManager&>(termManager_)
+                          .intern(id, const_cast<CoreIr&>(*coreIr_));
+        if (t == NullEufTerm) continue;
+        arrayVars.push_back({std::get<std::string>(e.payload.value), t});
+    }
+    if (arrayVars.empty()) return std::nullopt;
+
+    // Seed an ArrBuild per array class, recording sorts + const default.
+    for (const auto& [name, t] : arrayVars) {
+        EClassId rep = egraph_.rep(t);
+        auto& ab = byClass[rep];
+        const auto& tn = termManager_.node(t);
+        if (auto params = coreIr_->arraySortParams(tn.sort)) {
+            ab.indexSort = sortName(params->first);
+            ab.elemSort = sortName(params->second);
+        }
+        // const default if the class contains a const-array.
+        if (!ab.hasConstDefault) {
+            for (EufTermId m : egraph_.classMembers(rep)) {
+                if (arrayReasoner_.isConstArray(m)) {
+                    const auto& cn = termManager_.node(m);
+                    if (cn.args.size() == 1) {
+                        ab.defaultVal = classToken(cn.args[0]);
+                        ab.hasConstDefault = true;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Populate entries from select terms. select(arr,idx): the arr-class gets
+    // an entry idx-token -> value-token where value = the select term's class.
+    for (EufTermId sel : arrayReasoner_.selectTerms()) {
+        const auto& sn = termManager_.node(sel);
+        if (sn.args.size() != 2) continue;
+        EClassId arrRep = egraph_.rep(sn.args[0]);
+        auto it = byClass.find(arrRep);
+        if (it == byClass.end()) continue;  // select on a non-variable class
+        EClassId idxRep = egraph_.rep(sn.args[1]);
+        if (!it->second.seenIdxClass.insert(idxRep).second) continue;
+        it->second.entries.push_back({classToken(sn.args[1]), classToken(sel)});
+    }
+
+    // Assign a per-class default token when no const was found. Distinct
+    // classes get distinct defaults so two unconstrained arrays differ at any
+    // index not pinned by a shared read (defense; disequalities are also
+    // witnessed by Ext read indices).
+    for (auto& [rep, ab] : byClass) {
+        if (!ab.hasConstDefault) {
+            ab.defaultVal = "@def" + std::to_string(rep);
+        }
+    }
+
+    // Emit one ArrayInterp per array variable (sharing the class build).
+    for (const auto& [name, t] : arrayVars) {
+        EClassId rep = egraph_.rep(t);
+        auto it = byClass.find(rep);
+        if (it == byClass.end()) continue;
+        TheoryModel::ArrayInterp ai;
+        ai.indexSort = it->second.indexSort;
+        ai.elemSort = it->second.elemSort;
+        ai.defaultVal = it->second.defaultVal;
+        ai.entries = it->second.entries;
+        model.arrayInterps[name] = std::move(ai);
+    }
+
+    if (model.arrayInterps.empty()) return std::nullopt;
+
+    // Scalar token assignments for every non-array, non-bool variable that the
+    // egraph knows about (index/element vars). The validator needs these to
+    // evaluate select/store; tokens are the same class tokens used in the
+    // array interps, so they stay consistent. Bool vars stay in `assignments`
+    // as "true"/"false"; numeric literals stay numeric.
+    for (ExprId id = 0; id < static_cast<ExprId>(coreIr_->size()); ++id) {
+        const auto& e = coreIr_->get(id);
+        if (e.kind != Kind::Variable) continue;
+        if (coreIr_->arraySortParams(e.sort)) continue;  // arrays handled above
+        if (!std::holds_alternative<std::string>(e.payload.value)) continue;
+        const std::string& name = std::get<std::string>(e.payload.value);
+        if (model.assignments.count(name)) continue;
+        // Only emit if the variable was actually interned (used in a term).
+        EufTermId t = const_cast<EufTermManager&>(termManager_)
+                          .intern(id, const_cast<CoreIr&>(*coreIr_));
+        if (t == NullEufTerm) continue;
+        auto sk = coreIr_->sortKind(e.sort);
+        if (sk == SortKind::Bool) {
+            // Resolve against the true/false classes if forced; else default.
+            if (trueTerm_ != NullEufTerm && egraph_.same(t, trueTerm_))
+                model.assignments[name] = "true";
+            else if (falseTerm_ != NullEufTerm && egraph_.same(t, falseTerm_))
+                model.assignments[name] = "false";
+            continue;
+        }
+        model.assignments[name] = classToken(t);
+    }
+
+    return model;
 }
 
 void EufSolver::tryEvaluateBuiltin(EufTermId t) {
