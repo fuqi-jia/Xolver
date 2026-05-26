@@ -9,6 +9,7 @@
 namespace zolver {
 
 class TheoryLemmaStorage;
+class CareGraph;
 
 // ---------------------------------------------------------------------------
 // Abstract interface for theory solvers
@@ -48,6 +49,14 @@ public:
     // Nelson-Oppen combination hooks (optional; default = no-op)
     // -----------------------------------------------------------------------
     virtual bool supportsCombination() const { return false; }
+
+    // Care graph (ZOLVER_COMB_CAREGRAPH). TheoryManager hands the built care
+    // graph to each solver so the O(n^2) getDeducedSharedEqualities loops can
+    // skip shared-term pairs no theory cares about. Non-null only when the flag
+    // is on AND the graph is built; default no-op keeps the pointer null and the
+    // loops unchanged. Pruning is sound (skipping loses only completeness,
+    // caught by ModelValidator -> Unknown, never wrong UNSAT).
+    virtual void setCareGraph(const CareGraph* cg) { (void)cg; }
 
     virtual TheoryCheckResult assertInterfaceEquality(
         SharedTermId a, SharedTermId b, SatLit reason, int level) {

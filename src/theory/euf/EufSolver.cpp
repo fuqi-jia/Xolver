@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include "theory/euf/EufSolver.h"
+#include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -663,6 +664,14 @@ EufSolver::getDeducedSharedEqualities() {
         for (size_t j = i + 1; j < allShared.size(); ++j) {
             EufTermId tj = internSharedConstant(allShared[j]);
             if (tj == NullEufTerm) continue;
+            // Care-graph prune (ZOLVER_COMB_CAREGRAPH): skip pairs no theory
+            // cares about. Done AFTER interning (so egraph state is identical
+            // to the unpruned path) but before the expensive same/explain. An
+            // EUF-merged pair is always care-relevant (it was connected via an
+            // Eq/Distinct or a congruence arg), so this prunes only inert,
+            // never-equal pairs — no real propagation is lost.
+            if (careGraph_ && !careGraph_->caresPair(allShared[i], allShared[j]))
+                continue;
             if (egraph_.same(ti, tj)) {
                 auto er = egraph_.explainEquality(ti, tj);
                 if (er.ok) {

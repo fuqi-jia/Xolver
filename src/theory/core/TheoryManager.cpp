@@ -52,6 +52,9 @@ void TheoryManager::ensureCareGraph() {
     const CoreIr* ir = sharedTermRegistry_->coreIr();
     if (!ir) return;
     careGraph_.build(*ir, *sharedTermRegistry_);
+    // Hand the built care graph to every solver so their O(n^2)
+    // getDeducedSharedEqualities loops can prune inert shared-term pairs.
+    for (auto& s : solvers_) s->setCareGraph(&careGraph_);
 }
 
 bool TheoryManager::useSatMin() {

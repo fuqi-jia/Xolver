@@ -48,6 +48,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    void setCareGraph(const CareGraph* cg) override { careGraph_ = cg; }
+
     // Nelson-Oppen arrangement query: are the two shared terms currently in the
     // SAME EUF equivalence class? Used by the combination layer (model-based
     // arrangement splitting) to decide whether an arith-equal pair of shared
@@ -100,6 +102,7 @@ private:
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    const CareGraph* careGraph_ = nullptr;  // ZOLVER_COMB_CAREGRAPH, set by TheoryManager
     EufTermManager termManager_;
     IncrementalEGraph egraph_;
 
