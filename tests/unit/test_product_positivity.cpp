@@ -374,6 +374,50 @@ TEST_CASE("SignAbsorption (Leq form): -a*b + c + 1 <= 0 with a,b,c>=0 -> a>=1,b>
     CHECK(ds.getDomain("b")->lower.value == 1);
 }
 
+// --- milestone 4: sign-absorption uses absorbed monomials' LOWER bounds.
+//     M+ >= -d + sum |cj| * lb(mj)  (lb(mj) = product of factor lower bounds). ---
+
+TEST_CASE("SignAbsorptionLB: a*b - c*d >= 0 with a,b>=0, c>=1, d>=1 -> a>=1, b>=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(1), mkReason(3));
+    ds.addLowerBound("d", mpz_class(1), mkReason(4));
+
+    // a*b - c*d >= 0 : c*d >= 1 (c,d>=1) => a*b >= 1 => a,b >= 1
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId cd = mkMonomial(*kernel, {"c", "d"});
+    PolyId poly = kernel->sub(ab, cd);
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(5)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+}
+
+TEST_CASE("SignAbsorptionLB: a*b - c*d >= 0 with c>=0 (could be 0) -> no false derive") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(0), mkReason(3));   // c may be 0 -> c*d lb = 0
+    ds.addLowerBound("d", mpz_class(1), mkReason(4));
+
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId cd = mkMonomial(*kernel, {"c", "d"});
+    PolyId poly = kernel->sub(ab, cd);
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(5)};
+
+    auto r = reasoner.run({cc}, ds);
+    // c*d lower bound is 0, so only a*b >= 0 -> cannot force a,b >= 1
+    const IntDomain* da = ds.getDomain("a");
+    CHECK((da == nullptr || !da->hasLower || da->lower.value < 1));
+}
+
 TEST_CASE("ProductPositivity: multi-monomial a*b + c - 1 >= 0 -> NoChange (milestone 1)") {
     auto kernel = createPolynomialKernel();
     ProductPositivityReasoner reasoner(*kernel);

@@ -166,17 +166,30 @@ std::optional<NiaReasoningResult> applySignAbsorption(
 
         std::vector<SatLit> reasons = baseReasons(c);
 
+        // adjust = sum over absorbed monomials |cj| * lb(mj), where lb(mj) is the
+        // product of factor lower bounds. Since mj >= lb(mj) >= 0, this only
+        // strengthens the bound on the positive monomial (M+ >= -d + adjust).
+        mpz_class adjust = 0;
         if (eff == Relation::Geq) {
             bool ok = true;
             for (const auto& t : terms) {
                 if (t.powers.empty() || &t == pos) continue;
                 if (!factorsNonneg(kernel, t, domains, reasons)) { ok = false; break; }
+                mpz_class lb = 1;
+                for (const auto& pe : t.powers) {
+                    const IntDomain* d = domains.getDomain(std::string(kernel.varName(pe.first)));
+                    mpz_class p;
+                    mpz_pow_ui(p.get_mpz_t(), d->lower.value.get_mpz_t(),
+                               static_cast<unsigned long>(pe.second));
+                    lb *= p;
+                }
+                adjust += (-t.coefficient) * lb;   // |cj| * lb(mj)
             }
             if (!ok) continue;
         }
 
         const mpz_class& cM = pos->coefficient;
-        mpz_class rhs = -constTerm, L;
+        mpz_class rhs = -constTerm + adjust, L;
         if (eff == Relation::Geq) {
             mpz_cdiv_q(L.get_mpz_t(), rhs.get_mpz_t(), cM.get_mpz_t());
         } else {
