@@ -27,8 +27,15 @@ double gate after each step. It's a living doc — update tips/status as rounds 
 
 **Recovery (unknown→correct; for score, gated by the promotion rule):**
 - **A3** EUF level-snapshot backtrack fix → unblocks DISEQ_WATCH + FAST_CC + A4 UFNIA (the shared lever; next round).
-- **A5** BoolSubtermPurifier-link + validator-eval (arrays/algebraic) → the 357 + array flips.
-- **A2** 20 algebraic-model flips (NIA false-SAT now → A5 purifier, not A2).
+- **A2** owns NIA-357 recovery **wholesale** (master decision 2026-05-26 — no split): both the
+  AProVE boolpur-majority (`BoolSubtermPurifier` emits `boolpur_0 ≠ boolpur_1` unlinked) AND the
+  soft_float/SVCOMP linked-disequality class → **correct UNSAT**. A2 makes the minimal additive
+  purifier-linkage edit in `frontend/` (flagged for master merge); A5 does **not** touch the
+  purifier linkage (no dual-edit). Rationale: the directory-pure A2/A5 split was the 推诿 seam, and
+  A2 has the round's cleanest progress (16/16 NRA → correct SAT) + owns NIA end-to-end. A5's NIA
+  validate-sat floor (`a2e260a`, default-ON) is the net while recovery lands.
+- **A5** keeps validator-eval (arrays/algebraic) → array/combination flips, and maintains the floor
+  — but **not** the NIA-357 recovery.
 - **A4** scalar-backfill A/B + array-model (self-store).
 
 **Net:**
