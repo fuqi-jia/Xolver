@@ -230,8 +230,9 @@ std::string rationalToRealModelValue(const mpq_class& in) {
            q.get_den().get_str() + ".0)";
 }
 
-// Content (GCD of |coefficients|) — used only by the debug validity check.
-mpz_class coeffContent(const std::vector<mpz_class>& coeffs) {
+// Content (GCD of |coefficients|) — used only by the debug validity check
+// below, so it has no caller under NDEBUG (Release): mark maybe_unused.
+[[maybe_unused]] mpz_class coeffContent(const std::vector<mpz_class>& coeffs) {
     mpz_class g = 0;
     for (const auto& c : coeffs) mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), c.get_mpz_t());
     return g;
