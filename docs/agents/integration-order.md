@@ -20,15 +20,30 @@ double gate after each step. It's a living doc — update tips/status as rounds 
 Soundness-first: these must land (on their branches, reviewed) before we cut the integrated
 binary, because merging flag-OFF commits doesn't fix the underlying unsound defaults:
 
-1. **A4 — combination false-UNSAT floor** (AUFLIA 1, UFNIA 2). This is the *one* unsound class
-   with **no gate**: ModelValidator can't catch wrong UNSAT, A5's gate is sat→unknown only,
-   A2's cert gate is NRA-only. Until A4 ships a fix or a combination UNSAT cert→Unknown floor,
-   the merged binary is unsound on combined logics. **Highest blocker.**
+1. **Combination false-UNSAT** — split after diagnosis:
+   - **UFNIA ×2: FLOORED** by A4 `ZOLVER_SAT_DEFER_EARLY_CONFLICT` (`4caa248`, sound→unknown,
+     intent default-ON). Correctness recovery = **A3 explainEquality** (A4 traced the 168-lit
+     conflict to the combination interface = the explainEquality bug). A4 re-tests after A3 lands.
+   - **AUFLIA `fb_var_27_8`: STILL UNGATED → A5.** 0 theory checks = boolean-abstraction/atomization
+     false-UNSAT; A4's floor can't gate it (no theory conflict), A1's bool-sort fix doesn't fix it.
+     A5 soundness-priority. **Remaining highest blocker.**
 2. **A2 — NRA UNSAT-cert floor** (positively-certifying; uncertified covering → Unknown). Closes
-   the 16 NRA false-UNSAT.
-3. **A3 — explainEquality mid-saturation fix** (the false-UNSAT that FAST_CC unmasks).
-4. Recovery items (turn unknown/false → correct; not blockers for *soundness* but for *score*):
-   A5 validator-eval, A1 IDL/RDL/LIRA flips, A2 NIA false-SAT extraction.
+   the 16 NRA false-UNSAT. Interim conservative floor acceptable; precise verifier recovers later.
+3. **A3 — explainEquality / N-O proof-forest rewrite** — root-caused (unsound BFS explanations);
+   the **shared soundness lever**: fixes A3 DISEQ_WATCH + FAST_CC promotion + A4 UFNIA correctness.
+4. Recovery items (unknown/false → correct; for *score*, gated by the promotion rule):
+   A5 validator-eval (UFApply done; arrays/algebraic next), A1 IDL/RDL flips (done), A2 NIA
+   false-SAT extraction + 20 algebraic-model flips.
+
+### Cross-agent producing→consuming handoffs (this round)
+- **Combination shared-scalar model** (the `i→"@e6"` token-loss false-flip): A5 `dd7a24a` *consumes*
+  the typed `numericAssignments` channel; **A1 must POPULATE it from LIA** (cleaner) and/or **A4 fix
+  `TheoryManager::getModel` first-wins aggregation** so a shared scalar's arith value beats the EUF
+  token. Then A5's ~5 array/combination flips auto-recover.
+- **`ite_nested_sat` (QF_UF, correct verdict / wrong printed model) → A5**: default model builder must
+  populate pure-bool var values from the SAT assignment (the capture A5 wrote for the strict path).
+- Re-bucketed strict-validation flips out of A1: `ite_nested_sat→A5`, `uflra_001→A3/A4`, `lira_009→A2`
+  (A1 residual now 0). A5 maintains the live flip doc on its branch; this table is authoritative.
 
 ## Merge sequence (into an integration branch off main; whole-branch merges)
 
