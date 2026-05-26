@@ -184,33 +184,57 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
             EufTermId iTerm = stn.args[1];   // write index
             // (skip vTerm = stn.args[2])
 
-            // If i and j are already known equal, Row1/Const(/congruence)
-            // handles it; skip the case split. If known distinct, the
-            // fall-through equality is forced — still emit the lemma so the
-            // SAT solver records select(store,j)=select(a,j). Dedup by stable
-            // term ids (store member id, read index j id).
+            // SOUNDNESS: if the write index i and the read index j are ALREADY
+            // equal in the egraph (in particular when they are the same term),
+            // do NOT emit a Row2 lemma. When i = j, Row1 already gives the read
+            // value (select(store(a,i,v),j) = v), and the Row2 axiom
+            //   i != j  =>  select(store(a,i,v),j) = select(a,j)
+            // does NOT apply. Emitting the clause (i=j) OR readEq is harmful
+            // here: the (i=j) disjunct is a tautology, so the clause never
+            // constrains the readEq atom, leaving select(store(a,i,v),j) =
+            // select(a,j) as a FREE Boolean. The SAT solver may then assert it
+            // true even though it is semantically false (the correct value is
+            // v, not select(a,j)), poisoning the egraph and yielding a spurious
+            // conflict (a false UNSAT). Skipping the degenerate instance is
+            // sound and complete: the i=j read is fully covered by Row1.
+            if (egraph_->same(iTerm, jTerm)) continue;
+
+            // Dedup by stable term ids (store member id, read index j id).
             uint64_t key = pairKey(member, jTerm);
             if (!row2Done_.insert(key).second) continue;
 
             ExprId iExpr = originExpr(iTerm);
             ExprId jExpr = originExpr(jTerm);
             ExprId aExpr = originExpr(aTerm);
-            ExprId selStoreExpr = originExpr(selTerm);  // select(store(...),j)
+            ExprId storeExpr = originExpr(member);   // store(a,i,v)
             if (iExpr == NullExpr || jExpr == NullExpr ||
-                aExpr == NullExpr || selStoreExpr == NullExpr) {
+                aExpr == NullExpr || storeExpr == NullExpr) {
                 continue;
             }
 
-            // Build select(a, j) term.
+            // SOUNDNESS: the Row2 read equality MUST be built over the actual
+            // store member found in arrArg's class, NOT over `selTerm` (whose
+            // array argument may be a DIFFERENT store term that is only equal
+            // to `member` by congruence under the current SAT assumptions).
+            // Using selTerm's expr directly would assert
+            //   select(arrArg, j) = select(a, j)
+            // as an unconditional tautology, which is false whenever
+            // arrArg != store(a,i,v) syntactically (e.g. a self-store class
+            // a = store(a,i0,e0) that also contains an unrelated nested store).
+            // Building select(store(a,i,v), j) keeps the lemma a genuine Row2
+            // tautology; the egraph then connects it to select(arrArg, j) via
+            // congruence with the proper reason chain.
             std::deque<PendingMerge> dummy;  // ensureTermRegistered side queue
+            EufTermId selStore = internSelect(storeExpr, jExpr, dummy);
             EufTermId selAJ = internSelect(aExpr, jExpr, dummy);
             // (the discovered congruence merges in `dummy` are harmless to
             //  drop: they will be re-derived in the next saturation pass once
             //  these terms are registered; ensureTermRegistered already wired
             //  them into the signature table.)
-            if (selAJ == NullEufTerm) continue;
+            if (selStore == NullEufTerm || selAJ == NullEufTerm) continue;
+            ExprId selStoreExpr = originExpr(selStore);  // select(store(a,i,v),j)
             ExprId selAJExpr = originExpr(selAJ);
-            if (selAJExpr == NullExpr) continue;
+            if (selStoreExpr == NullExpr || selAJExpr == NullExpr) continue;
 
             // Lemma:  (i=j)  OR  (select(store(a,i,v),j) = select(a,j))
             // The (i=j) antecedent is a shared-equality atom when the indices
