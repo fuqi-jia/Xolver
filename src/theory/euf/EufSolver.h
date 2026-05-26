@@ -61,6 +61,12 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+    // Diagnostic / test hook: count active AssertedEquality merges whose
+    // justifying literal is no longer on the trail (stale merges left by an
+    // inconsistent backtrack). Must be 0 after any backtrack — exposed so tests
+    // can assert the level-aware backtrack invariant directly.
+    int debugCountStaleMerges() const;
+
 private:
     // Build the array/scalar model from the LIVE egraph state. Must be called
     // when the egraph reflects the satisfying assignment (i.e. at a consistent
@@ -136,12 +142,6 @@ private:
 
     // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
     std::vector<SatLit> allActiveReasons() const;
-
-    // EUF_VERIFY diagnostic: count active AssertedEquality merges whose justifying
-    // literal is no longer on the trail. Such "stale merges" mean a backtrack left
-    // the egraph inconsistent with the assignment (same() true with no asserted
-    // reason) -> unsound conflicts. RED->GREEN oracle for the backtrack fix.
-    int debugCountStaleMerges() const;
 
     void initializeBoolConstants();
     void onEclassMerged(EClassId kept, EClassId killed);

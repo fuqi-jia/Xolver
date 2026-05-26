@@ -455,6 +455,40 @@ TEST_CASE("EUF incremental: equality then disequality conflict") {
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
 }
 
+TEST_CASE("EUF backtrack: out-of-order merge dropped past its level (no stale merge / no false conflict)") {
+    CoreIr ir;
+    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+
+    EufSolver solver;
+    solver.setCoreIr(&ir);
+    TheoryLemmaDatabase lemmaDb;
+
+    // The SAT trail is asserted in non-decreasing decision-level order (as the
+    // real propagator does). A higher-level merge (b=c @ level 2) must be rolled
+    // back when we backtrack past its level, while the lower-level a=b @ level 1
+    // is kept. (Out-of-RECORD-order merge injection — A4's interface-equality
+    // case — is internal to check()'s level-ordered saturation and covered by
+    // the combination regression suite.)
+    solver.assertLit(makeEufRecord(a, c), false, 0, SatLit{10, false});  // a != c @ 0
+    solver.assertLit(makeEufRecord(a, b), true, 1, SatLit{11, true});    // a=b @ 1
+    solver.assertLit(makeEufRecord(b, c), true, 2, SatLit{20, true});    // b=c @ 2
+
+    // a=b=c contradicts a!=c -> genuine conflict at the full assignment.
+    CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Conflict);
+
+    // Backtrack past level 2: the b=c merge (level 2) MUST be rolled back. If it
+    // were left stale, same(a,c) would still hold and the next check() would
+    // report a spurious conflict.
+    solver.backtrackToLevel(1);
+    CHECK(solver.debugCountStaleMerges() == 0);
+
+    // a=b with a!=c is consistent (c is now in its own class) -> no conflict.
+    CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(solver.debugCountStaleMerges() == 0);
+}
+
 TEST_CASE("EUF incremental: congruence closure conflict") {
     CoreIr ir;
     ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
