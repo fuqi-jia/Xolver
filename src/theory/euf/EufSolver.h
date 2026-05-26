@@ -129,6 +129,12 @@ private:
     // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
     std::vector<SatLit> allActiveReasons() const;
 
+    // EUF_VERIFY diagnostic: count active AssertedEquality merges whose justifying
+    // literal is no longer on the trail. Such "stale merges" mean a backtrack left
+    // the egraph inconsistent with the assignment (same() true with no asserted
+    // reason) -> unsound conflicts. RED->GREEN oracle for the backtrack fix.
+    int debugCountStaleMerges() const;
+
     void initializeBoolConstants();
     void onEclassMerged(EClassId kept, EClassId killed);
     void enqueueMerge(EufTermId a, EufTermId b, const MergeReason& reason);

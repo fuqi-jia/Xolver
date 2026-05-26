@@ -14,6 +14,20 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     initializeBoolConstants();
 }
 
+int EufSolver::debugCountStaleMerges() const {
+    std::unordered_set<uint64_t> asserted;
+    for (const auto& e : trail_)
+        asserted.insert((uint64_t(e.lit.var) << 1) | (e.lit.sign ? 1u : 0u));
+    int stale = 0;
+    for (size_t i = 0; i < egraph_.mergeRecordCount(); ++i) {
+        const auto& rec = egraph_.mergeRecord(i);
+        if (!rec.merged || rec.reason.kind != MergeReasonKind::AssertedEquality) continue;
+        SatLit l = rec.reason.lit;
+        if (!asserted.count((uint64_t(l.var) << 1) | (l.sign ? 1u : 0u))) ++stale;
+    }
+    return stale;
+}
+
 void EufSolver::push() {
     scopeLimits_.push_back(trail_.size());
     scopeSnapshots_.push_back(egraph_.snapshot());
@@ -370,6 +384,13 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     }
     if (pendingConflict_) {
         return TheoryCheckResult::mkConflict(*pendingConflict_);
+    }
+
+    if (std::getenv("EUF_VERIFY")) {
+        int stale = debugCountStaleMerges();
+        if (stale > 0)
+            fprintf(stderr, "[STALE_MERGE@check] count=%d records=%zu trail=%zu\n",
+                    stale, egraph_.mergeRecordCount(), trail_.size());
     }
 
     // Array Row1/Const eager merges (tautological; re-enqueued after backtrack
