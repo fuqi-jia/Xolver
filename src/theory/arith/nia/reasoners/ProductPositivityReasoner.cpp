@@ -3,6 +3,7 @@
 #include <string>
 #include <algorithm>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace zolver {
 
@@ -25,6 +26,26 @@ std::vector<SatLit> baseReasons(const WorkC& wc) {
     r.push_back(wc.reason);
     r.insert(r.end(), wc.extra.begin(), wc.extra.end());
     return r;
+}
+
+// The NiaNormalizer emits constraints as `poly <= 0` (Leq) as well as `>= 0`
+// (Geq). Return the terms in a >=0 / =0 oriented form so the rules below only
+// reason about Geq: for Leq, negate every coefficient (poly<=0 <=> -poly>=0).
+// Returns {terms, effectiveRel in {Geq,Eq}} or nullopt for relations the rules
+// do not use (Neq) or when decomposition is unavailable.
+std::optional<std::pair<std::vector<MonomialTerm>, Relation>>
+geqNormalize(const PolynomialKernel& kernel, PolyId poly, Relation rel) {
+    auto termsOpt = kernel.terms(poly);
+    if (!termsOpt) return std::nullopt;
+    std::vector<MonomialTerm> terms = std::move(*termsOpt);
+    if (rel == Relation::Geq || rel == Relation::Eq) {
+        return std::make_pair(std::move(terms), rel);
+    }
+    if (rel == Relation::Leq) {
+        for (auto& t : terms) t.coefficient = -t.coefficient;
+        return std::make_pair(std::move(terms), Relation::Geq);
+    }
+    return std::nullopt;
 }
 
 // True iff every factor variable of `mono` is known-nonnegative; appends each
@@ -123,10 +144,10 @@ std::optional<NiaReasoningResult> applySignAbsorption(
     DomainStore& domains, bool& change) {
 
     for (const auto& c : work) {
-        if (c.rel != Relation::Geq && c.rel != Relation::Eq) continue;
-        auto termsOpt = kernel.terms(c.poly);
-        if (!termsOpt) continue;
-        const auto& terms = *termsOpt;
+        auto g = geqNormalize(kernel, c.poly, c.rel);
+        if (!g) continue;
+        const std::vector<MonomialTerm>& terms = g->first;
+        const Relation eff = g->second;
 
         const MonomialTerm* pos = nullptr;
         int posCount = 0, nonConstCount = 0;
@@ -137,7 +158,7 @@ std::optional<NiaReasoningResult> applySignAbsorption(
             if (t.coefficient > 0) { pos = &t; ++posCount; }
         }
 
-        if (c.rel == Relation::Eq) {
+        if (eff == Relation::Eq) {
             if (nonConstCount != 1 || posCount != 1) continue;
         } else {
             if (posCount != 1 || pos == nullptr) continue;
@@ -145,7 +166,7 @@ std::optional<NiaReasoningResult> applySignAbsorption(
 
         std::vector<SatLit> reasons = baseReasons(c);
 
-        if (c.rel == Relation::Geq) {
+        if (eff == Relation::Geq) {
             bool ok = true;
             for (const auto& t : terms) {
                 if (t.powers.empty() || &t == pos) continue;
@@ -156,7 +177,7 @@ std::optional<NiaReasoningResult> applySignAbsorption(
 
         const mpz_class& cM = pos->coefficient;
         mpz_class rhs = -constTerm, L;
-        if (c.rel == Relation::Geq) {
+        if (eff == Relation::Geq) {
             mpz_cdiv_q(L.get_mpz_t(), rhs.get_mpz_t(), cM.get_mpz_t());
         } else {
             if (!mpz_divisible_p(rhs.get_mpz_t(), cM.get_mpz_t())) continue;
@@ -253,6 +274,88 @@ std::optional<NiaReasoningResult> applyEqCancellation(
     return std::nullopt;
 }
 
+// ---- Closer 3: monomial dominance -> Conflict -----------------------------
+// Geq sum(ci*mi)+d>=0 with d<0. Pair each positive monomial P (coeff cP>0) with
+// a distinct negative monomial N (coeff -|cN|) whose monomial value equals P*E,
+// where every extra factor in E is established >=1 AND base P>=0 is established
+// AND |cN|>=cP. Then cP*P - |cN|*N = cP*P - |cN|*P*E <= (cP-|cN|)*P <= 0. If all
+// positives are dominated and every remaining negative monomial is >=0, then
+// LHS <= d < 0, contradicting >=0 -> sound UNSAT.
+// SOUNDNESS GUARD: base P>=0 is mandatory -- if P<0 then P*E<=P (the inequality
+// FLIPS) and the bound is false. Established from the domain, never assumed.
+std::optional<NiaReasoningResult> applyDominance(
+    PolynomialKernel& kernel, const std::vector<WorkC>& work, const DomainStore& domains) {
+
+    for (const auto& c : work) {
+        auto g = geqNormalize(kernel, c.poly, c.rel);
+        if (!g || g->second != Relation::Geq) continue;
+        const std::vector<MonomialTerm>& terms = g->first;
+
+        std::vector<const MonomialTerm*> pos, neg;
+        mpz_class d = 0;
+        for (const auto& t : terms) {
+            if (t.powers.empty()) { d += t.coefficient; continue; }
+            if (t.coefficient > 0) pos.push_back(&t); else neg.push_back(&t);
+        }
+        if (d >= 0) continue;  // need LHS bounded above by a negative constant
+
+        std::vector<char> used(neg.size(), 0);
+        std::vector<SatLit> reasons = baseReasons(c);
+        bool ok = true;
+
+        for (const MonomialTerm* P : pos) {
+            // GUARD: base monomial must be established >= 0.
+            if (!factorsNonneg(kernel, *P, domains, reasons)) { ok = false; break; }
+            std::unordered_map<VarId, int> pmap;
+            for (const auto& pe : P->powers) pmap[pe.first] += pe.second;
+
+            bool found = false;
+            for (size_t i = 0; i < neg.size(); ++i) {
+                if (used[i]) continue;
+                const MonomialTerm& N = *neg[i];
+                if (-N.coefficient < P->coefficient) continue;   // need |cN| >= cP
+
+                std::unordered_map<VarId, int> nmap;
+                for (const auto& pe : N.powers) nmap[pe.first] += pe.second;
+
+                bool dominates = true;                            // N's powers >= P's powers
+                for (const auto& kv : pmap) {
+                    auto it = nmap.find(kv.first);
+                    if (it == nmap.end() || it->second < kv.second) { dominates = false; break; }
+                }
+                if (!dominates) continue;
+
+                std::vector<SatLit> extra;                        // extra factors E = N \ P
+                bool extrasOk = true;
+                for (const auto& kv : nmap) {
+                    int pe = pmap.count(kv.first) ? pmap[kv.first] : 0;
+                    if (kv.second - pe > 0 &&
+                        !establishedNonzero(kernel, kv.first, domains, extra)) {
+                        extrasOk = false; break;
+                    }
+                }
+                if (!extrasOk) continue;
+
+                reasons.insert(reasons.end(), extra.begin(), extra.end());
+                used[i] = 1;
+                found = true;
+                break;
+            }
+            if (!found) { ok = false; break; }
+        }
+        if (!ok) continue;
+
+        // Every remaining (unpaired) negative monomial must be >= 0.
+        for (size_t i = 0; i < neg.size() && ok; ++i)
+            if (!used[i] && !factorsNonneg(kernel, *neg[i], domains, reasons)) ok = false;
+        if (!ok) continue;
+
+        return NiaReasoningResult{NiaReasoningKind::Conflict,
+                                  TheoryConflict{reasons}, std::nullopt};
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 ProductPositivityReasoner::ProductPositivityReasoner(PolynomialKernel& kernel)
@@ -273,6 +376,7 @@ NiaReasoningResult ProductPositivityReasoner::run(
         if (auto r = checkConstantContradiction(kernel_, work)) return *r;
         if (auto r = applySignAbsorption(kernel_, work, domains, iterChange)) return *r;
         if (auto r = applyEqCancellation(kernel_, work, domains, iterChange)) return *r;
+        if (auto r = applyDominance(kernel_, work, domains)) return *r;
         anyChange |= iterChange;
         if (!iterChange) break;
     }

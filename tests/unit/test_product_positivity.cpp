@@ -277,6 +277,103 @@ TEST_CASE("Substitution: a - b = 0 with b>=1 (NOT fixed) -> a NOT pinned") {
     CHECK((da == nullptr || !da->hasUpper));   // a must NOT be pinned to a value
 }
 
+// --- closer 3 (milestone 3): monomial dominance -> Conflict.
+//     positive M dominated by negative M'=M*E (E factors established >=1) with
+//     base M>=0 established, plus constant < 0  ==>  LHS <= d < 0  ==> UNSAT. ---
+
+TEST_CASE("Dominance: a*b - a*b*c - 1 >= 0 with a,b>=0, c>=1 -> Conflict") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(1), mkReason(3));   // c >= 1 (the extra factor)
+
+    // a*b - a*b*c - 1 >= 0 : a*b*c = (a*b)*c >= a*b (c>=1, a*b>=0)
+    //   => a*b - a*b*c <= 0 => LHS <= -1 < 0  => UNSAT
+    PolyId ab  = mkMonomial(*kernel, {"a", "b"});
+    PolyId abc = mkMonomial(*kernel, {"a", "b", "c"});
+    PolyId poly = kernel->sub(kernel->sub(ab, abc), kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::Conflict);
+}
+
+TEST_CASE("Dominance guard: base sign unknown (a no lower) -> NO false conflict") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    // a has NO lower bound: a*b could be negative, then a*b*c <= a*b (flip) and
+    // a=-2,b=1,c=2 satisfies a*b - a*b*c - 1 = -2+4-1 = 1 >= 0.  Must NOT refute.
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(1), mkReason(3));
+
+    PolyId ab  = mkMonomial(*kernel, {"a", "b"});
+    PolyId abc = mkMonomial(*kernel, {"a", "b", "c"});
+    PolyId poly = kernel->sub(kernel->sub(ab, abc), kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind != NiaReasoningKind::Conflict);
+}
+
+TEST_CASE("Dominance guard: extra factor not >=1 (c could be 0) -> NO false conflict") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(0), mkReason(3));   // c >= 0: c=0 => a*b-1>=0 satisfiable
+
+    PolyId ab  = mkMonomial(*kernel, {"a", "b"});
+    PolyId abc = mkMonomial(*kernel, {"a", "b", "c"});
+    PolyId poly = kernel->sub(kernel->sub(ab, abc), kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Geq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind != NiaReasoningKind::Conflict);
+}
+
+// The NiaNormalizer emits constraints in `poly <= 0` (Leq) form, so the rules
+// must handle Leq by negating. Same dominance contradiction, Leq-encoded.
+TEST_CASE("Dominance (Leq form): a*b*c - a*b + 1 <= 0 with a,b>=0,c>=1 -> Conflict") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    ds.addLowerBound("a", mpz_class(0), mkReason(1));
+    ds.addLowerBound("b", mpz_class(0), mkReason(2));
+    ds.addLowerBound("c", mpz_class(1), mkReason(3));
+
+    // a*b*c - a*b + 1 <= 0  ==  -(a*b - a*b*c - 1) <= 0  ==  a*b - a*b*c - 1 >= 0
+    PolyId ab  = mkMonomial(*kernel, {"a", "b"});
+    PolyId abc = mkMonomial(*kernel, {"a", "b", "c"});
+    PolyId poly = kernel->add(kernel->sub(abc, ab), kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Leq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::Conflict);
+}
+
+TEST_CASE("SignAbsorption (Leq form): -a*b + c + 1 <= 0 with a,b,c>=0 -> a>=1,b>=1") {
+    auto kernel = createPolynomialKernel();
+    ProductPositivityReasoner reasoner(*kernel);
+    DomainStore ds;
+    for (const char* v : {"a", "b", "c"}) ds.addLowerBound(v, mpz_class(0), mkReason(1));
+
+    // -a*b + c + 1 <= 0  ==  a*b - c - 1 >= 0  =>  a,b >= 1
+    PolyId ab = mkMonomial(*kernel, {"a", "b"});
+    PolyId poly = kernel->add(kernel->add(kernel->neg(ab),
+                              kernel->mkVar(kernel->getOrCreateVar("c"))),
+                              kernel->mkConst(mpq_class(1)));
+    auto cc = NormalizedNiaConstraint{poly, Relation::Leq, mkReason(4)};
+
+    auto r = reasoner.run({cc}, ds);
+    CHECK(r.kind == NiaReasoningKind::DomainUpdated);
+    CHECK(ds.getDomain("a")->lower.value == 1);
+    CHECK(ds.getDomain("b")->lower.value == 1);
+}
+
 TEST_CASE("ProductPositivity: multi-monomial a*b + c - 1 >= 0 -> NoChange (milestone 1)") {
     auto kernel = createPolynomialKernel();
     ProductPositivityReasoner reasoner(*kernel);
