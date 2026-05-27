@@ -1,6 +1,9 @@
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
 #include "theory/arith/nra/projection/LocalProjection.h"
+#include "theory/arith/nra/projection/LazardProjectionOperator.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
+
+#include <algorithm>
 
 namespace zolver {
 
@@ -75,24 +78,108 @@ ValidationResult McCallumReducedPolicy::validateObligations(
 }
 
 // ============================================================================
-// LazardStylePolicy (skeleton)
+// LazardStylePolicy — real Lazard projection operator
 // ============================================================================
+
+namespace {
+
+// Map a Lazard projection incompleteness reason onto the CDCAC unknown-reason
+// taxonomy. An incomplete Lazard step never stands alone (we fall back to the
+// Collins-conservative projection); the reason is recorded for diagnostics.
+CdcacUnknownReason lazardReasonToCdcac(LazardIncompleteReason r) {
+    switch (r) {
+        case LazardIncompleteReason::ProjectionKernelFailure:
+            return CdcacUnknownReason::SquarefreeFailed;
+        case LazardIncompleteReason::ProjectionBudgetExceeded:
+            return CdcacUnknownReason::ResourceBudgetExceeded;
+        case LazardIncompleteReason::None:
+        default:
+            return CdcacUnknownReason::None;
+    }
+}
+
+// Merge + dedup the reason literals of all input polynomials that contain the
+// eliminated variable; the Lazard operator does not thread per-item reasons, so
+// (mirroring the Collins resultant-reason merge) every projected polynomial
+// inherits the conservative union of the contributing constraints' reasons. A
+// superset reason is always sound for explanation.
+std::vector<SatLit> mergeReasonsContaining(
+    const std::vector<ReasonedPolynomial>& polys, VarId v) {
+    std::vector<SatLit> merged;
+    for (const auto& rp : polys) {
+        if (!rp.poly.contains(v)) continue;
+        merged.insert(merged.end(), rp.reasons.begin(), rp.reasons.end());
+    }
+    std::sort(merged.begin(), merged.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    merged.erase(std::unique(merged.begin(), merged.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), merged.end());
+    return merged;
+}
+
+}  // namespace
 
 PolicyProjectionResult LazardStylePolicy::project(
     const ProjectionInput& input,
     const ProjectionContext& ctx) {
 
-    CollinsConservativePolicy conservative;
-    PolicyProjectionResult result = conservative.project(input, ctx);
-    result.kind = ProjectionPolicyKind::LazardStyle;
-    result.isReduced = false;
+    // Extract the polynomial set for the Lazard operator. The operator itself
+    // filters to those containing the eliminated variable and carries the rest
+    // down implicitly (the closure / parent level still sees them via the
+    // original constraint set), so we pass them all through.
+    std::vector<RationalPolynomial> E;
+    E.reserve(input.polys.size());
+    for (const auto& rp : input.polys) {
+        if (rp.poly.isZero()) continue;
+        E.push_back(rp.poly);
+    }
 
-    if (result.hasDegeneracy) {
+    LazardProjectionConfig cfg;  // default psc budget (maxMatrixDim)
+    LazardOpResult op = lazardProjectStep(E, input.eliminateVar, cfg);
+
+    // SOUNDNESS FLOOR: an incomplete Lazard step (kernel failure / budget) must
+    // NEVER stand alone as a projection set — a missing boundary polynomial can
+    // drop a satisfiable region. Fall back to the Collins-conservative
+    // projection so the projection set is at least as rich as the baseline.
+    if (!op.complete) {
+        CollinsConservativePolicy conservative;
+        PolicyProjectionResult result = conservative.project(input, ctx);
+        result.kind = ProjectionPolicyKind::LazardStyle;
+        result.isReduced = false;
+
         FallbackCondition fb;
         fb.kind = FallbackCondition::Kind::ReducedNotValid;
         fb.fallbackTo = ProjectionPolicyKind::CollinsConservative;
-        fb.reason = result.degeneracyReason;
+        fb.reason = lazardReasonToCdcac(op.reason);
         result.fallbackCondition = std::move(fb);
+        // Surface the degeneracy reason for diagnostics without clobbering the
+        // (already-populated) Collins polys.
+        if (result.degeneracyReason == CdcacUnknownReason::None)
+            result.degeneracyReason = fb.reason;
+        return result;
+    }
+
+    PolicyProjectionResult result;
+    result.kind = ProjectionPolicyKind::LazardStyle;
+    result.isReduced = false;
+
+    std::vector<SatLit> reasons = mergeReasonsContaining(input.polys, input.eliminateVar);
+
+    // Map the Lazard items into lower-level projection polynomials, mirroring the
+    // Collins output shape: only polynomials that no longer contain the
+    // eliminated variable (and are non-constant) are projection output. The
+    // SquarefreeFactor items remain in the eliminated variable — they are the
+    // current-level boundary factors used by the lifter, NOT projection output —
+    // so they are intentionally skipped here.
+    for (const auto& it : op.items) {
+        if (it.op == LazardProjectionOpKind::SquarefreeFactor) continue;
+        if (it.poly.isZero() || it.poly.isConstant()) continue;
+        if (it.poly.contains(input.eliminateVar)) continue;
+        result.projectionPolys.push_back(
+            ReasonedPolynomial{it.poly, PolyRole::ProjectionPolynomial, reasons});
     }
 
     return result;

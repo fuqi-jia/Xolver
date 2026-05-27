@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <iostream>
 #include <cstdlib>
+#include <string>
 
 namespace zolver {
 
@@ -173,6 +174,17 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // punts on — flag-off behaviour is byte-identical to the Collins baseline.
     if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_LIFT"))
         lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+    // Projection mode selection. ZOLVER_NRA_PROJECTION=lazard installs the real
+    // Lazard projection operator as the (lazily-created) default policy; any
+    // other value / unset keeps the CollinsConservative default (byte-identical
+    // to today). An explicit setProjectionPolicy() call still overrides this.
+    // The projection SET affects completeness only — the UNSAT certification
+    // gate (unsatTrustworthy_, driven by the Collins closure_) is unchanged.
+    if (const char* e = std::getenv("ZOLVER_NRA_PROJECTION")) {
+        std::string mode(e);
+        if (mode == "lazard" || mode == "Lazard" || mode == "LAZARD")
+            projectionKind_ = ProjectionPolicyKind::LazardStyle;
+    }
     // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
     // now (interim, while completeness recovery lands); intended default-ON.
     if (const char* e = std::getenv("ZOLVER_NRA_UNSAT_CERT"))
@@ -409,6 +421,34 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         rps.push_back(std::move(*rp));
     }
 
+    // Projection-set selection. Default: the Collins closure (unconditionally
+    // sound, byte-identical to today). ZOLVER_NRA_PROJECTION=lazard builds the
+    // Lazard projection closure instead, driving the SAME root-isolation/covering
+    // path so SAT (full-model-validated) is unaffected.
+    //
+    // SOUNDNESS FLOOR (T1): the Lazard projection set is smaller than McCallum/
+    // Collins and is sound+complete for UNSAT *only with Lazard lifting* (the
+    // valuation/multiplicity recovery, [H3]) + a per-cell LazardCellCertificate
+    // ([H5]). Neither is wired yet (lifting=T2, cert=T3). Trusting an UNSAT
+    // covering built from the smaller Lazard set under the existing (non-Lazard)
+    // lifting would be a latent false-UNSAT. So lazard mode emits SAT / Unknown
+    // ONLY here — unsatTrustworthy_ is forced false unconditionally until the
+    // per-cell Lazard certificate gates UNSAT (T3). CDCAC's Collins path remains
+    // the complete UNSAT backstop.
+    if (projectionKind_ == ProjectionPolicyKind::LazardStyle) {
+        LazardProjectionClosure::Config lcfg;
+        (void)lazardClosure_.build(rps, input.varOrder, lcfg);
+        unsatTrustworthy_ = false;   // no UNSAT may rest on Lazard until [H5] cert (T3)
+        for (int k = 0; k < n; ++k) {
+            for (int id : lazardClosure_.levelPolys(k)) {
+                PolyId pid = lazardClosure_.entries()[id].poly.toPolyId(*kernel_);
+                if (pid == NullPoly) continue;
+                levelPolyIds_[k].push_back(pid);
+            }
+        }
+        return;
+    }
+
     auto reason = closure_.build(rps, input.varOrder, ProjectionClosure::Config(), kernel_);
     if (reason != ProjectionIncompleteReason::None) {
         unsatTrustworthy_ = false;   // incomplete projection ⇒ no UNSAT may rest on it
@@ -457,9 +497,14 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return checkFullSample(prefix, input);
     }
 
-    // V4: ensure a projection policy is available (default: CollinsConservative)
+    // V4: ensure a projection policy is available. Default is CollinsConservative;
+    // ZOLVER_NRA_PROJECTION=lazard selects the Lazard operator (projectionKind_).
     if (!policy_) {
-        policy_ = std::make_unique<CollinsConservativePolicy>();
+        if (projectionKind_ == ProjectionPolicyKind::LazardStyle) {
+            policy_ = std::make_unique<LazardStylePolicy>();
+        } else {
+            policy_ = std::make_unique<CollinsConservativePolicy>();
+        }
     }
 
     VarId var = input.varOrder[k];
