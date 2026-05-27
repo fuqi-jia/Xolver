@@ -607,6 +607,32 @@ RationalPolynomial RationalPolynomial::substituteRational(VarId v, const mpq_cla
     return result;
 }
 
+RationalPolynomial RationalPolynomial::substitute(VarId v,
+                                                  const RationalPolynomial& expr) const {
+    RationalPolynomial result;
+    for (const auto& [key, coeff] : terms_) {
+        int ev = 0;
+        MonomialKey rest;
+        for (const auto& [varId, exp] : key) {
+            if (varId == v) ev = exp;
+            else rest.push_back({varId, exp});
+        }
+        // term = coeff * (rest monomial) * expr^ev
+        RationalPolynomial term = RationalPolynomial::fromConstant(coeff);
+        if (!rest.empty()) {
+            RationalPolynomial restPoly;
+            restPoly.addTerm(rest, mpq_class(1));
+            term = term * restPoly;
+        }
+        if (ev > 0) {
+            term = term * expr.pow(static_cast<uint32_t>(ev));
+        }
+        result += term;
+    }
+    result.normalize();
+    return result;
+}
+
 PolyId RationalPolynomial::toPolyId(PolynomialKernel& kernel) const {
     if (terms_.empty()) return kernel.mkZero();
     auto norm = toPrimitiveInteger(kernel);

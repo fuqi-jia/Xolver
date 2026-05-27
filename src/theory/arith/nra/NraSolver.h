@@ -14,6 +14,8 @@ namespace zolver {
 
 class NraLinearizationAdapter;
 class TheoryAtomRegistry;
+class CdcacCore;       // ZOLVER_NRA_PREELIM: lazily-built reduced-CDCAC core
+class LibpolyBackend;  // ZOLVER_NRA_PREELIM: algebra backend for the pre-elim core
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -79,6 +81,14 @@ private:
     // and return one as a Lemma to defer CDCAC + re-solve. nullopt when the flag
     // is OFF or the refinement budget is exhausted (fall through to CDCAC).
     std::optional<TheoryCheckResult> stageLinearizeProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // ZOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination. Collect
+    // `v = (linear expr)` substitutions from the presolve fixpoint, substitute the
+    // eliminated vars out of every constraint poly, and run a reduced CDCAC over the
+    // remaining variables (CAD is doubly-exponential in #vars). UNSAT unions every
+    // eliminated var's defining-equality reason; SAT reconstructs the eliminated vars
+    // and validates over the ORIGINAL constraints (invariant 1). nullopt at the gate
+    // when the flag is OFF (default path byte-identical).
+    std::optional<TheoryCheckResult> stageNraPreElim(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
     struct NraTrailEntry {
@@ -131,6 +141,13 @@ private:
 
     // V5: scope stack for push/pop
     std::vector<size_t> scopeStack_;
+
+    // ZOLVER_NRA_PREELIM: gate + lazily-built reduced-CDCAC core/backend. The
+    // core is rebuilt per solve (stateless across calls except the libpoly var
+    // table), so it can persist across theory-checks; reset in onReset.
+    bool enablePreElim_ = false;
+    std::unique_ptr<LibpolyBackend> preElimAlgebra_;
+    std::unique_ptr<CdcacCore> preElimCore_;
 };
 
 } // namespace zolver
