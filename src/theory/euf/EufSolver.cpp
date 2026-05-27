@@ -814,9 +814,11 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         }
     }
 
-    // Datatype injectivity / guarded-projection lemmas (full effort). These
-    // propagate implied field equalities (a_i = b_i, sel = field) which feed
-    // back through the SAT core and can in turn surface a clash/diseq conflict.
+    // Datatype injectivity / guarded-projection / exhaustiveness-split /
+    // reconstruction lemmas (full effort). These propagate implied field
+    // equalities, force a constructor choice for an observed class, or rebuild a
+    // term from a decided tester — feeding back through the SAT core and
+    // surfacing clash/diseq conflicts (e.g. finite cardinality).
     if (dtMode_ && effort == TheoryEffort::Full) {
         ensureDtContext();
         if (dtReasoner_.active()) {
@@ -828,6 +830,20 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                     return TheoryCheckResult::mkLemma(std::move(tl));
                 }
             }
+        }
+    }
+
+    // Datatype completeness gate (the authoritative DT sat gate — satComplete is
+    // not consulted on the single-theory path). A sat is sound only when every
+    // OBSERVED datatype class (selector-read / decided-tester / finite-sort) has
+    // a determined constructor, i.e. the DT structure is a concrete ground-term
+    // model. Otherwise return Unknown: the propagator turns a Full-effort Unknown
+    // into a sound `unknown` verdict rather than an unvalidated sat.
+    if (dtMode_ && effort == TheoryEffort::Full) {
+        ensureDtContext();
+        if (dtReasoner_.active() && !dtReasoner_.modelFullyDetermined()) {
+            return TheoryCheckResult::unknown(
+                "dt: model not fully determined (observed datatype class has no constructor)");
         }
     }
 

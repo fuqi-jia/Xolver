@@ -124,4 +124,52 @@ TEST_CASE("sat enum choice: x in {red,green}, x!=blue is satisfiable") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
+// ---- Exhaustiveness split (tier-3) recovery ------------------------------
+
+TEST_CASE("finite cardinality: 4 distinct over 3-constructor enum -> unsat") {
+    Result r = solveDt(
+        "(set-logic QF_UFDT)\n"
+        "(declare-datatypes ((Color 0)) (((red) (green) (blue))))\n"
+        "(declare-const a Color)(declare-const b Color)\n"
+        "(declare-const c Color)(declare-const d Color)\n"
+        "(assert (distinct a b c d))\n"
+        "(check-sat)\n");
+    // Pigeonhole: refuted by per-branch constructor split + clash.
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("selector split: head(x)=red with unknown ctor is sat (split)") {
+    Result r = solveDt(
+        "(set-logic QF_UFDT)\n"
+        "(declare-datatypes ((Color 0)) (((red) (green) (blue))))\n"
+        "(declare-datatypes ((Lst 0)) (((cons (head Color) (tail Lst)) (nil))))\n"
+        "(declare-const x Lst)\n"
+        "(assert (= (head x) red))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("tester reconstruct: is_cons(x) and head(x)=red is sat") {
+    Result r = solveDt(
+        "(set-logic QF_UFDT)\n"
+        "(declare-datatypes ((Color 0)) (((red) (green) (blue))))\n"
+        "(declare-datatypes ((Lst 0)) (((cons (head Color) (tail Lst)) (nil))))\n"
+        "(declare-const x Lst)\n"
+        "(assert ((_ is cons) x))\n"
+        "(assert (= (head x) red))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("free infinite vars: distinct lists is sat without splitting") {
+    Result r = solveDt(
+        "(set-logic QF_UFDT)\n"
+        "(declare-datatypes ((Color 0)) (((red) (green) (blue))))\n"
+        "(declare-datatypes ((Lst 0)) (((cons (head Color) (tail Lst)) (nil))))\n"
+        "(declare-const x Lst)(declare-const y Lst)\n"
+        "(assert (distinct x y))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
 } // TEST_SUITE

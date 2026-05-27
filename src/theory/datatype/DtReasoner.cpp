@@ -21,6 +21,7 @@ void DtReasoner::reset() {
     nextTermToScan_ = 0;
     injectivityDone_.clear();
     projectionDone_.clear();
+    splitDone_.clear();
 }
 
 bool DtReasoner::symIsConstructor(EufTermId t) const {
@@ -342,6 +343,79 @@ std::optional<std::vector<SatLit>> DtReasoner::instantiateLemma() {
         }
     }
 
+    // --- Exhaustiveness split (Reynolds-Blanchette tier 3, needed-only) -------
+    // For an OBSERVED datatype class (a selector is applied to it, a tester on
+    // it is decided, or its sort is finite) that has NO determined constructor,
+    // emit the split clause  u = C1(sel..) ∨ … ∨ u = Ck(sel..)  over the sort's
+    // constructors. Exhaustiveness is a DT theorem, so the clause is sound and
+    // unconditional. The SAT solver picks one disjunct -> u gets a constructor
+    // (determined). Recursive fields are fresh selector terms NOT read by any
+    // selector, so they stay FREE and are never split -> termination; finite
+    // fields are split in turn (finite -> terminates). This both recovers
+    // observed-DT sat models and makes finite cardinality (pigeonhole) refutable
+    // (each branch determines a ctor; distinct over too few ctors -> clash).
+    {
+        std::unordered_set<EClassId> hasCtor;
+        EufTermId total = static_cast<EufTermId>(tm_->termCount());
+        for (EufTermId t = 0; t < total; ++t) {
+            if (symIsConstructor(t)) hasCtor.insert(egraph_->rep(t));
+        }
+        // rep -> a representative datatype-sorted term with a real origin.
+        std::unordered_map<EClassId, EufTermId> repTerm;
+        std::unordered_set<EClassId> needing;
+        for (EufTermId t = 0; t < total; ++t) {
+            const auto& n = tm_->node(t);
+            // record a representative datatype term (real origin) per class
+            ExprId e = n.origin;
+            if (e != NullExpr && e < static_cast<ExprId>(ir_->size())) {
+                SortId srt = ir_->get(e).sort;
+                if (ir_->datatypes().isDatatypeSort(srt)) {
+                    EClassId r = egraph_->rep(t);
+                    repTerm.emplace(r, t);
+                    std::unordered_set<SortId> visiting;
+                    if (isFiniteSort(srt, visiting)) needing.insert(r);
+                }
+            }
+            if (symIsSelector(t) && !n.args.empty()) needing.insert(egraph_->rep(n.args[0]));
+            if (symIsTester(t) && !n.args.empty()) {
+                bool decided = (trueTerm_ != NullEufTerm && egraph_->same(t, trueTerm_)) ||
+                               (falseTerm_ != NullEufTerm && egraph_->same(t, falseTerm_));
+                if (decided) needing.insert(egraph_->rep(n.args[0]));
+            }
+        }
+        for (EClassId r : needing) {
+            if (hasCtor.count(r)) continue;            // already determined
+            auto rt = repTerm.find(r);
+            if (rt == repTerm.end()) continue;
+            EufTermId u = rt->second;
+            if (!splitDone_.insert(u).second) continue;  // split once per term
+            ExprId uExpr = tm_->node(u).origin;
+            SortId S = ir.get(uExpr).sort;
+            const DatatypeInfo* dt = ir_->datatypes().datatype(S);
+            if (!dt || dt->constructors.empty()) continue;
+            std::vector<SatLit> clause;
+            for (const auto& ctor : dt->constructors) {
+                SmallVector<ExprId, 4> fields;
+                for (const auto& sel : ctor.selectors) {
+                    CoreExpr selE;
+                    selE.kind = Kind::Selector;
+                    selE.sort = sel.resultSort;
+                    selE.children.push_back(uExpr);
+                    selE.payload = Payload(sel.name);
+                    fields.push_back(ir.add(std::move(selE)));
+                }
+                CoreExpr ctorE;
+                ctorE.kind = Kind::Constructor;
+                ctorE.sort = S;
+                ctorE.children = fields;
+                ctorE.payload = Payload(ctor.name);
+                ExprId ctorExpr = ir.add(std::move(ctorE));
+                clause.push_back(registry_->getOrCreateEufEqualityAtom(uExpr, ctorExpr));
+            }
+            if (!clause.empty()) return clause;
+        }
+    }
+
     return std::nullopt;
 }
 
@@ -369,39 +443,49 @@ bool DtReasoner::isFiniteSort(SortId s, std::unordered_set<SortId>& visiting) co
 
 bool DtReasoner::modelFullyDetermined() const {
     if (!active()) return true;  // nothing DT to constrain
-    // Collect, per e-class, whether it holds a constructor term; and the set of
-    // datatype-sorted classes that appear. A class is "determined" iff it has a
-    // constructor member. The model is fully determined iff every datatype-sorted
-    // class is determined. Const scan over all interned terms (egraph reflects
-    // the current satisfying assignment when called from satComplete).
+    // A `sat` is SOUND iff every datatype class that the formula OBSERVES has a
+    // determined constructor (concrete ground term). A class is OBSERVED
+    // ("needing") iff: a selector is applied to it, a decided tester is on it,
+    // or its sort is FINITE (cardinality matters). A class that is infinite and
+    // neither read by a selector nor tested is FREE — any value works, so it
+    // need not be determined. Const scan over all interned terms (the egraph
+    // reflects the satisfying assignment when this runs at a Full-effort check).
     std::unordered_set<EClassId> hasCtor;
-    std::unordered_set<EClassId> dtClasses;
-    std::unordered_set<SortId> dtSorts;
+    std::unordered_set<EClassId> needing;
     EufTermId total = static_cast<EufTermId>(tm_->termCount());
     for (EufTermId t = 0; t < total; ++t) {
         EClassId r = egraph_->rep(t);
+        const auto& n = tm_->node(t);
         if (symIsConstructor(t)) hasCtor.insert(r);
-        // A datatype-sorted term contributes a class that must be determined.
-        ExprId e = tm_->node(t).origin;
-        if (e == NullExpr) continue;
-        SortId srt = ir_->get(e).sort;
-        if (ir_->datatypes().isDatatypeSort(srt)) {
-            dtClasses.insert(r);
-            dtSorts.insert(srt);
+        // Selector applied -> its operand's class must reveal a constructor.
+        if (symIsSelector(t) && !n.args.empty()) {
+            needing.insert(egraph_->rep(n.args[0]));
+        }
+        // Decided tester -> its operand's class must reveal a constructor.
+        if (symIsTester(t) && !n.args.empty()) {
+            bool decided = (trueTerm_ != NullEufTerm && egraph_->same(t, trueTerm_)) ||
+                           (falseTerm_ != NullEufTerm && egraph_->same(t, falseTerm_));
+            if (decided) needing.insert(egraph_->rep(n.args[0]));
+        }
+        // Finite datatype-sorted class: cardinality is observable, so require a
+        // determined constructor. In COMBINATION mode a finite datatype is not
+        // stably infinite (plan §3 Nelson-Oppen incompleteness) -> floor.
+        // Guard: internal constants (e.g. the Bool true/false terms) carry
+        // SENTINEL origins (near UINT32_MAX), which are out of range for ir_.
+        ExprId e = n.origin;
+        if (e != NullExpr && e < static_cast<ExprId>(ir_->size())) {
+            SortId srt = ir_->get(e).sort;
+            if (ir_->datatypes().isDatatypeSort(srt)) {
+                std::unordered_set<SortId> visiting;
+                if (isFiniteSort(srt, visiting)) {
+                    if (combinationMode_) return false;  // §3 finite-DT floor
+                    needing.insert(r);
+                }
+            }
         }
     }
-    // Finite-DT combination floor (plan §3): plain Nelson-Oppen is incomplete
-    // for a finite datatype combined with arithmetic (not stably infinite), so
-    // refuse to certify such a model. Pure QF_UFDT (combinationMode_ == false)
-    // is decidable on its own and is exempt.
-    if (combinationMode_) {
-        for (SortId s : dtSorts) {
-            std::unordered_set<SortId> visiting;
-            if (isFiniteSort(s, visiting)) return false;
-        }
-    }
-    for (EClassId c : dtClasses) {
-        if (hasCtor.find(c) == hasCtor.end()) return false;  // undetermined class
+    for (EClassId c : needing) {
+        if (hasCtor.find(c) == hasCtor.end()) return false;  // observed-but-undetermined
     }
     return true;
 }

@@ -118,6 +118,7 @@ private:
     // Lemma dedup keyed by stable term ids.
     std::unordered_set<uint64_t> injectivityDone_;   // (ctorTerm1, ctorTerm2) << argIndex folded in
     std::unordered_set<uint64_t> projectionDone_;     // (selectorTerm, ctorTerm)
+    std::unordered_set<EufTermId> splitDone_;         // exhaustiveness-split per representative term
 
     bool symIsConstructor(EufTermId t) const;
     bool symIsSelector(EufTermId t) const;
