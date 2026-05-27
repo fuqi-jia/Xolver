@@ -40,7 +40,9 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             // First visit: mark as processed, then push children
             frame.processed = true;
 
-            const auto& node = ir_.get(e);
+            // Value copy (not a reference): ir_.add() below reallocates exprs_,
+            // which would dangle a reference held across it (use-after-realloc).
+            const auto node = ir_.get(e);
 
             // Fast path: to_int(to_real(Int)) chain — just jump to inner
             if (node.kind == Kind::ToInt && node.children.size() == 1) {
@@ -116,7 +118,9 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             }
         } else {
             // Second visit: all children are memoized, build result
-            const auto& node = ir_.get(e);
+            // Value copy (not a reference): ir_.add() below reallocates exprs_,
+            // which would dangle a reference held across it (use-after-realloc).
+            const auto node = ir_.get(e);
             ExprId result = e;
 
             // Check to_int(to_real(Int)) again (child may have changed)
@@ -161,8 +165,10 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     auto it = memo_.find(c);
                     ExprId rc = (it != memo_.end()) ? it->second : c;
 
-                    // Coerce integer constant to real when in a Real context
-                    const auto& childNode = ir_.get(c);
+                    // Coerce integer constant to real when in a Real context.
+                    // Value copy: ir_.add() in this loop reallocates exprs_,
+                    // dangling a reference (use-after-realloc -> SIGSEGV).
+                    const auto childNode = ir_.get(c);
                     if (realContext && childNode.kind == Kind::ConstInt) {
                         if (auto* v = std::get_if<int64_t>(&childNode.payload.value)) {
                             CoreExpr ne;
