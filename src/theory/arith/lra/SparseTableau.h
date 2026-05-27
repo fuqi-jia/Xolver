@@ -60,7 +60,9 @@ public:
     // All structural mutations go through these functions only.
     // Never edit rows_[r].entries or cols_[c].entries directly.
     // -----------------------------------------------------------------------
-    mpq_class getCoeff(int row, int col) const;
+    // Returns a reference into the row (or a static zero on miss) — avoids a
+    // GMP temp allocation on every tableau read in the pivot hot path.
+    const mpq_class& getCoeff(int row, int col) const;
     void setCoeff(int row, int col, const mpq_class& value);
     void addCoeff(int row, int col, const mpq_class& delta);
     void eraseCoeff(int row, int col);

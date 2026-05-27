@@ -32,16 +32,17 @@ void SparseTableau::maybeBuildRowIndex(SparseRow& row) {
 // Coefficient access / mutation
 // ---------------------------------------------------------------------------
 
-mpq_class SparseTableau::getCoeff(int row, int col) const {
+const mpq_class& SparseTableau::getCoeff(int row, int col) const {
+    static const mpq_class kZero(0);
     const auto& r = rows_[row];
     if (r.hasIndex) {
         auto it = r.pos.find(col);
-        return it == r.pos.end() ? mpq_class(0) : r.entries[it->second].coeff;
+        return it == r.pos.end() ? kZero : r.entries[it->second].coeff;
     }
     for (const auto& e : r.entries) {
         if (e.col == col) return e.coeff;
     }
-    return mpq_class(0);
+    return kZero;
 }
 
 void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
@@ -69,13 +70,34 @@ void SparseTableau::setCoeff(int row, int col, const mpq_class& value) {
     if (r.hasIndex) {
         r.pos[col] = newRowPos;
     }
+    // Promote a row that has grown large to an O(1) col->pos index, so
+    // findRowPos/getCoeff stop linear-scanning on every pivot. Small rows stay
+    // a plain linear scan (faster than hashing). Once built, the index is
+    // maintained incrementally by setCoeff/eraseCoeff.
+    maybeBuildRowIndex(r);
 }
 
 void SparseTableau::addCoeff(int row, int col, const mpq_class& delta) {
     if (delta == 0) return;
-    mpq_class old = getCoeff(row, col);
-    mpq_class nv = old + delta;
-    setCoeff(row, col, nv);
+    auto& r = rows_[row];
+    // Single findRowPos (vs the old getCoeff+setCoeff double lookup), in the
+    // pivot inner loop.
+    int rowPos = findRowPos(r, col);
+    if (rowPos != -1) {
+        r.entries[rowPos].coeff += delta;
+        if (r.entries[rowPos].coeff == 0) eraseCoeff(row, col);
+        return;
+    }
+    // Absent: insert delta (mirror setCoeff's insert path).
+    auto& c = cols_[col];
+    int newRowPos = static_cast<int>(r.entries.size());
+    int newColPos = static_cast<int>(c.entries.size());
+    r.entries.push_back(RowEntry{col, delta, newColPos});
+    c.entries.push_back(ColEntry{row, newRowPos});
+    if (r.hasIndex) {
+        r.pos[col] = newRowPos;
+    }
+    maybeBuildRowIndex(r);
 }
 
 void SparseTableau::eraseCoeff(int row, int col) {
