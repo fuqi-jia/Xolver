@@ -7,7 +7,8 @@ std::vector<LinearCut> McCormickGenerator::generate(
     const std::string& x, const std::string& y,
     const BoundInfo& xBounds,
     const BoundInfo& yBounds,
-    SatLit nonlinearReason) {
+    SatLit nonlinearReason,
+    SortKind sort) {
 
     if (!xBounds.hasFiniteCompleteBounds() || !yBounds.hasFiniteCompleteBounds()) {
         return {};
@@ -30,7 +31,6 @@ std::vector<LinearCut> McCormickGenerator::generate(
                        yBounds.upperReasons.begin(), yBounds.upperReasons.end());
 
     std::vector<LinearCut> cuts;
-    SortKind sort = SortKind::Int;
 
     // Cut 1: -t + lx*y + ly*x - lx*ly <= 0
     {

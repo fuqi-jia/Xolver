@@ -9,6 +9,9 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
+#include <gmpxx.h>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace zolver {
@@ -33,7 +36,11 @@ public:
         const std::vector<NormalizedNiaConstraint>& constraints,
         const BoundStore& bounds,
         TheoryId owner,
-        const LinearizationConfig& config = {});
+        const LinearizationConfig& config = {},
+        // ZOLVER_NRA_LINEARIZE model-construction: optional base-var values used
+        // as the square-tangent point so cuts refine around the current model.
+        // null -> tangent at the bound midpoint (legacy behavior).
+        const std::unordered_map<std::string, mpq_class>* modelPoints = nullptr);
 
     // Cache marking (called by adapter after successful enqueue)
     void markEmitted(const CutCacheKey& key);

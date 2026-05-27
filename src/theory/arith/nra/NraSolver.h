@@ -6,10 +6,14 @@
 #include "theory/arith/nra/core/CdcacSolver.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/core/ActiveLiteralSet.h"
+#include "theory/core/TheoryAtomTypes.h"
 #include <memory>
 #include <vector>
 
 namespace zolver {
+
+class NraLinearizationAdapter;
+class TheoryAtomRegistry;
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -22,6 +26,7 @@ namespace zolver {
 class NraSolver : public ArithSolverBase {
 public:
     explicit NraSolver(std::unique_ptr<PolynomialKernel> kernel);
+    ~NraSolver() override;  // out-of-line: NraLinearizationAdapter is incomplete here
 
     TheoryId id() const override { return TheoryId::NRA; }
 
@@ -37,6 +42,15 @@ public:
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // ZOLVER_NRA_LINEARIZE: registry needed to mint mirror/cut literals for the
+    // LRA sibling. Mirrors NiaSolver::setRegistry; builds the linearization
+    // adapter lazily.
+    void setRegistry(TheoryAtomRegistry* reg);
+    // ZOLVER_NRA_LINEARIZE: pointer to the LRA sibling registered alongside NRA
+    // in the same (single-theory) TheoryManager. The linearize-probe stage reads
+    // its candidate relaxation model (getModel()) to attempt a validated SAT.
+    // Harmless when the flag is OFF (only the gated stage reads it).
+    void setLinearSibling(TheorySolver* s) { linearSibling_ = s; }
 
     bool supportsCombination() const override { return true; }
 
@@ -59,6 +73,12 @@ protected:
 private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // ZOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
+    // read the LRA sibling's relaxation model, exact-validate every original
+    // constraint (consistent()/SAT if all hold), else emit model-tangent cuts
+    // and return one as a Lemma to defer CDCAC + re-solve. nullopt when the flag
+    // is OFF or the refinement budget is exhausted (fall through to CDCAC).
+    std::optional<TheoryCheckResult> stageLinearizeProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
     struct NraTrailEntry {
@@ -80,8 +100,25 @@ private:
     struct PresolveCstr { PolyId poly; Relation rel; SatLit reason; };
     std::vector<PresolveCstr> presolveConstraints_;
 
+    // ZOLVER_NRA_LINEARIZE: full active-assignment records captured at
+    // assertLit, aligned 1:1 with activeLits_/presolveConstraints_, so the
+    // cut-feeder can mirror linear bounds to the LRA sibling. Held only to feed
+    // NraLinearizationAdapter::mirrorActiveLinearBounds (needs lit+atom+value).
+    struct ActiveRecord { SatLit lit; TheoryAtomRecord atom; bool value; };
+    std::vector<ActiveRecord> activeRecords_;
+
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+
+    // ZOLVER_NRA_LINEARIZE: registry + linearization adapter (mirror lemmas +
+    // McCormick/square cut lemmas). Built lazily by setRegistry.
+    TheoryAtomRegistry* registry_ = nullptr;
+    std::unique_ptr<NraLinearizationAdapter> linAdapter_;
+    // ZOLVER_NRA_LINEARIZE: LRA sibling (raw, non-owning) whose relaxation model
+    // we exact-validate; refinement-round counter for the incremental loop
+    // (reset on backtrack/reset so each search restarts the budget).
+    TheorySolver* linearSibling_ = nullptr;
+    int linRefineRound_ = 0;
 
     struct InterfaceEq {
         SharedTermId a;

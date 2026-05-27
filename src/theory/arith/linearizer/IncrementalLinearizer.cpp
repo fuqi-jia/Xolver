@@ -31,7 +31,8 @@ LinearizationResult IncrementalLinearizer::run(
     const std::vector<NormalizedNiaConstraint>& constraints,
     const BoundStore& bounds,
     TheoryId owner,
-    const LinearizationConfig& config) {
+    const LinearizationConfig& config,
+    const std::unordered_map<std::string, mpq_class>* modelPoints) {
 
     LinearizationResult result;
     result.status = LinearizationStatus::NoChange;
@@ -85,7 +86,7 @@ LinearizationResult IncrementalLinearizer::run(
 
                 if (!xBounds || !yBounds) continue;
 
-                auto mcCuts = mcGen_.generate(aux, x, y, *xBounds, *yBounds, c.reason);
+                auto mcCuts = mcGen_.generate(aux, x, y, *xBounds, *yBounds, c.reason, sort);
                 int idx = 0;
                 for (auto& cut : mcCuts) {
                     if (static_cast<size_t>(idx) >= config.maxCutsPerTerm) break;
@@ -177,14 +178,24 @@ LinearizationResult IncrementalLinearizer::run(
                 std::string x = std::string(kernel_.varName(xVid));
                 auto xBounds = bounds.get(x);
 
+                // Model-construction: tangent the square at the current model
+                // value of x (if provided) so the cut tightens around the
+                // candidate point; else fall back to the bound midpoint.
+                std::optional<mpq_class> modelX;
+                if (modelPoints) {
+                    auto it = modelPoints->find(x);
+                    if (it != modelPoints->end()) modelX = it->second;
+                }
+
                 auto sqCuts = sqGen_.generate(
                     aux, x,
                     xBounds ? *xBounds : BoundInfo{},
                     c.reason,
-                    std::nullopt,
+                    modelX,
                     config.emitSquareNonneg,
                     config.emitSquareSecant,
-                    config.emitSquareTangent);
+                    config.emitSquareTangent,
+                    sort);
 
                 int idx = 0;
                 for (auto& cut : sqCuts) {
