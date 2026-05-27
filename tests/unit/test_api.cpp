@@ -188,6 +188,28 @@ TEST_CASE("API: getModel for NIA") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
+TEST_CASE("API: nonlinear div/mod on pure Int never false-SATs (soft_float floor)") {
+    // (> x 0) AND (mod (* x x) x) = 5.  x*x is divisible by x, so the mod is 0
+    // for x>0 and = 5 is unsat (z3 agrees). Our nonlinear mod reasoning is
+    // incomplete and floors to unknown here. The soundness floor for the
+    // soft_float class (incomplete nonlinear div/mod) is: NEVER fabricate sat.
+    // Assert != Sat so a future regression is caught whether we floor to unknown
+    // (today) or strengthen to a proved unsat -- only a false-SAT fails.
+    Solver s;
+    s.setLogic("QF_NIA");
+    Sort intSort = s.intSort();
+    Term x = s.mkConst(intSort, "x");
+    Term xx = s.mkOp(static_cast<uint32_t>(Kind::Mul), {x, x});
+    Term m = s.mkOp(static_cast<uint32_t>(Kind::Mod), {xx, x});
+    Term eq5 = s.mkOp(static_cast<uint32_t>(Kind::Eq), {m, s.mkInt(5)});
+    Term gt0 = s.mkOp(static_cast<uint32_t>(Kind::Gt), {x, s.mkInt(0)});
+    s.assertFormula(eq5);
+    s.assertFormula(gt0);
+    Result r = s.checkSat();
+    // unsat (correct) or unknown (sound floor) are both fine; sat would be unsound.
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
+}
+
 TEST_CASE("API: getValue for LIA") {
     Solver s;
     s.setLogic("QF_LIA");

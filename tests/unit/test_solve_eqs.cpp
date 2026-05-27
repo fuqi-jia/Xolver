@@ -56,6 +56,28 @@ TEST_CASE("SolveEqs: does NOT eliminate a variable feeding a UF argument") {
     CHECK(varInAssertions(ir, "x")); // x still present
 }
 
+TEST_CASE("SolveEqs: does NOT eliminate a variable feeding an array Select index") {
+    // (= x 1) AND (distinct (select a (+ x 1)) (select a 2)).  Same Nelson-Oppen
+    // shared-term hazard as the UF case, but for array logics (QF_ALIA/AUFLIA):
+    // eliminating x severs the shared index term (+ x 1)/2 that the array/EUF
+    // congruence needs.  computeUnsafeVars guards Select/Store args identically
+    // to UFApply; x must stay.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    SortId arr = ir.allocateSortId(); ir.registerSort(arr, SortKind::Array);
+    ExprId x = var(ir, i, "x");
+    ExprId a = var(ir, arr, "a");
+    ExprId sel1 = ir.add(CoreExpr{Kind::Select, i, {a, bin(ir, Kind::Add, i, x, cint(ir, i, 1))}, {}});
+    ExprId sel2 = ir.add(CoreExpr{Kind::Select, i, {a, cint(ir, i, 2)}, {}});
+    ir.addAssertion(bin(ir, Kind::Eq, b, x, cint(ir, i, 1)));    // x = 1
+    ir.addAssertion(bin(ir, Kind::Distinct, b, sel1, sel2));     // a[x+1] != a[2]
+
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    CHECK_FALSE(se.run());            // x is pinned (feeds a Select index)
+    CHECK(mc.size() == 0);
+    CHECK(varInAssertions(ir, "x")); // x still present
+}
+
 TEST_CASE("SolveEqs: eliminates x from (and (= x (+ y 1)) (>= x 3))") {
     CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
