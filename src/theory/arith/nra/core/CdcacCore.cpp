@@ -413,6 +413,9 @@ bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
 }
 
 void CdcacCore::buildClosure(const CdcacInput& input) {
+    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+        std::cerr << "[LAZARD-CLOSURE-ENTRY] vars=" << input.varOrder.size()
+                  << " constraints=" << input.constraints.size() << std::endl;
     unsatTrustworthy_ = true;
     coveringUncertifiable_ = false;
     // Per-cell gate (Lazard): track whether the Lazard closure underpinning ALL
@@ -450,7 +453,18 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     // ⇒ Unknown at the line-892 gate. CDCAC's Collins path stays the backstop.
     if (projectionKind_ == ProjectionPolicyKind::LazardStyle) {
         LazardProjectionClosure::Config lcfg;
-        auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg);
+        // [H4]: pass the libpoly kernel so the Lazard projection's
+        // GCD/content/squarefree/resultant go through libpoly's EXACT ops
+        // (high-degree multivariate inputs blow up the hand-rolled PRS).
+        auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg, kernel_);
+        if (std::getenv("ZOLVER_NRA_LAZARD_DIAG")) {
+            std::cerr << "[LAZARD-CLOSURE] "
+                      << (lreason == LazardIncompleteReason::None ? "COMPLETE"
+                          : lreason == LazardIncompleteReason::ProjectionKernelFailure ? "KERNEL_FAILURE"
+                          : lreason == LazardIncompleteReason::ProjectionBudgetExceeded ? "BUDGET_EXCEEDED"
+                          : "OTHER")
+                      << " entries=" << lazardClosure_.entries().size() << std::endl;
+        }
         if (lreason != LazardIncompleteReason::None) {
             unsatTrustworthy_ = false;   // incomplete Lazard projection ⇒ no UNSAT
             closureComplete_ = false;    // per-cell gate: closure not complete

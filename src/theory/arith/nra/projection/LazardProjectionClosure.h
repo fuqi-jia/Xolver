@@ -10,6 +10,8 @@
 
 namespace zolver {
 
+class PolynomialKernel;
+
 // ---------------------------------------------------------------------------
 // LazardProjectionClosure — the Lazard projection of a constraint set, composed
 // ONCE per solve (projection is sample-independent), top variable down. For each
@@ -45,13 +47,17 @@ public:
         Config() = default;
     };
 
+    // `kernel` is OPTIONAL: when supplied, the Lazard projection's GCD / content
+    // / squarefree / resultant steps go through libpoly's EXACT operations (the
+    // [H4] fix). When null, the hand-rolled subresultant path is used.
     LazardIncompleteReason build(
         const std::vector<RationalPolynomial>& constraints,
-        const std::vector<VarId>& varOrder, const Config& cfg);
+        const std::vector<VarId>& varOrder, const Config& cfg,
+        PolynomialKernel* kernel = nullptr);
     LazardIncompleteReason build(
         const std::vector<RationalPolynomial>& constraints,
         const std::vector<VarId>& varOrder) {
-        return build(constraints, varOrder, Config());
+        return build(constraints, varOrder, Config(), nullptr);
     }
 
     bool complete() const { return reason_ == LazardIncompleteReason::None; }
@@ -69,6 +75,8 @@ private:
     LazardIncompleteReason reason_ = LazardIncompleteReason::None;
     std::unordered_map<std::string, int> dedup_;
     std::vector<int> emptyLevel_;
+
+    PolynomialKernel* kernel_ = nullptr;   // optional exact-op backend (set in build)
 
     int mainVarLevelOf(const RationalPolynomial& p) const;
     static std::string canonicalKey(RationalPolynomial p);   // up-to-unit normalized key

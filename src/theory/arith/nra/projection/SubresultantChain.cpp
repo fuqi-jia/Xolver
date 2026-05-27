@@ -65,7 +65,8 @@ PscChainResult principalSubresultantCoefficients(
     const RationalPolynomial& qIn,
     VarId v,
     int maxMatrixDim,
-    PolynomialKernel* kernel) {
+    PolynomialKernel* kernel,
+    bool forcePsc) {
 
     PscChainResult out;
 
@@ -83,7 +84,7 @@ PscChainResult principalSubresultantCoefficients(
     // per entry (proven by the differential oracle in test_nra_libpoly_psc).
     // Only taken when a kernel is supplied AND the flag is ON; otherwise the
     // determinant path below runs unchanged.
-    if (kernel != nullptr && libpolyPscEnabled()) {
+    if (kernel != nullptr && (forcePsc || libpolyPscEnabled())) {
         // RP -> PolyId via the proven toPrimitiveInteger conversion (clears
         // denominators; a nonzero positive rational scale is benign for CAD).
         auto pNorm = pIn.toPrimitiveInteger(*kernel);

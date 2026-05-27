@@ -46,17 +46,24 @@ struct PscChainResult {
 // required Sylvester submatrix exceeds `maxMatrixDim`. Degenerate inputs (a
 // side with degree < 1 in v) yield an empty chain.
 //
-// `kernel` is OPTIONAL. When it is non-null AND the env flag
-// ZOLVER_NRA_LIBPOLY_PSC is ON, the chain is computed via the libpoly
-// `pscChain` (no matrix-dimension bound, so budgetExceeded is never set). When
-// `kernel` is null OR the flag is OFF, the definitional Sylvester-submatrix
-// determinant below is used — byte-identical to the historical behaviour (the
-// determinant path is the reference oracle and is never deleted).
+// `kernel` is OPTIONAL. When it is non-null AND (the env flag
+// ZOLVER_NRA_LIBPOLY_PSC is ON OR `forcePsc` is set), the chain is computed via
+// the libpoly `pscChain` (no matrix-dimension bound, so budgetExceeded is never
+// set). When `kernel` is null OR neither the flag nor forcePsc is set, the
+// definitional Sylvester-submatrix determinant below is used — byte-identical
+// to the historical behaviour (the determinant path is the reference oracle and
+// is never deleted).
+//
+// `forcePsc` lets the Lazard projection operator engage the exact libpoly PSC
+// path WITHOUT requiring the global env flag (the Lazard operator always wants
+// the exact PSC when a kernel is available). The Collins path passes
+// forcePsc=false so it stays gated on the env flag — byte-identical.
 PscChainResult principalSubresultantCoefficients(
     const RationalPolynomial& p,
     const RationalPolynomial& q,
     VarId v,
     int maxMatrixDim = 9,
-    PolynomialKernel* kernel = nullptr);
+    PolynomialKernel* kernel = nullptr,
+    bool forcePsc = false);
 
 } // namespace zolver

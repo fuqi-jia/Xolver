@@ -642,6 +642,23 @@ std::vector<PolyId> LibPolyKernel::pscChain(PolyId a, PolyId b, VarId v) {
     return result;
 }
 
+PolyId LibPolyKernel::gcd(PolyId a, PolyId b) {
+    // lp_polynomial_gcd is the FULL multivariate, content-aware gcd over the
+    // recursive representation. Unlike resultant/psc (which eliminate a chosen
+    // top variable), gcd does NOT depend on the variable order — it is the gcd
+    // of a and b as elements of Z[vars]. So no order push/restore is needed.
+    //
+    // Sign/scale: libpoly returns a representative of the gcd in its integer
+    // ring; the Lazard caller treats it up to a positive rational unit (and
+    // re-verifies it via exactDivide), so the exact normalization is benign.
+    try {
+        poly::Polynomial g = poly::gcd(get(a), get(b));
+        return alloc(std::move(g));
+    } catch (...) {
+        return NullPoly;
+    }
+}
+
 std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {
     auto termsOpt = terms(p);
     if (!termsOpt) return std::nullopt;

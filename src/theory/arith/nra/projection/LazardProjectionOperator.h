@@ -7,6 +7,8 @@
 
 namespace zolver {
 
+class PolynomialKernel;
+
 // Lazard projection — provenance + incompleteness types (shared with the
 // closure; see LAZARD.md [H7]). The Lazard projection set for eliminating v
 // over a primitive squarefree basis {f} is:
@@ -73,7 +75,16 @@ struct LazardOpResult {
 // Single Lazard elimination step over E (polynomials with mainVar == v).
 // `incomplete` (complete == false) means an exact squarefree/gcd step or a psc
 // submatrix exceeded budget — caller MUST treat the closure as incomplete.
+//
+// `kernel` is OPTIONAL. When non-null, the content/squarefree gcd steps and the
+// resultant/discriminant PSC steps go through libpoly's EXACT operations
+// (gcd / psc) instead of the hand-rolled subresultant PRS + O(n!) determinant —
+// the [H4] fix for high-degree multivariate inputs. The PSC path is FORCED
+// (forcePsc) when the kernel is supplied here, so the Lazard operator does not
+// depend on the global ZOLVER_NRA_LIBPOLY_PSC env flag. When `kernel == nullptr`
+// the historical hand-rolled path runs unchanged.
 LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId v,
-                                 const LazardProjectionConfig& cfg = LazardProjectionConfig());
+                                 const LazardProjectionConfig& cfg = LazardProjectionConfig(),
+                                 PolynomialKernel* kernel = nullptr);
 
 }  // namespace zolver

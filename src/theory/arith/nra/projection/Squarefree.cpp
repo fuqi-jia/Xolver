@@ -1,6 +1,7 @@
 #include "theory/arith/nra/projection/Squarefree.h"
 #include "theory/arith/nra/preprocess/GcdEngine.h"
 #include "theory/arith/nra/projection/LocalProjection.h"  // resultant()
+#include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
 namespace zolver {
@@ -73,14 +74,60 @@ RationalPolynomial normalizeUpToUnit(const RationalPolynomial& p) {
     return r;
 }
 
-// gcd over Q[X] of two polynomials in the lower variables (no main-var here).
-// A nonzero constant operand makes the gcd a unit (1). complete=false on a
-// non-exact subresultant gcd.
-SquarefreeResult gcdTwo(const RationalPolynomial& a, const RationalPolynomial& b) {
+// EXACT multivariate gcd of a and b via libpoly (PolynomialKernel::gcd), with
+// MANDATORY exactDivide verification. Returns {gcd, true} only when libpoly's
+// gcd both round-trips back to a RationalPolynomial AND exactly divides BOTH a
+// and b (so it is a verified common divisor). Any failure (kernel unsupported,
+// conversion failure, exactDivide disagreement) returns complete=false so the
+// caller falls back / marks the closure incomplete — never an unverified gcd.
+//
+// Soundness: even if libpoly's gcd were not maximal, exactDivide guarantees it
+// is a genuine common divisor; the squarefree/content path only needs an exact
+// common-divisor division, and the up-to-rational-unit normalization (intern's
+// canonicalKey) absorbs any scale difference. A wrong (non-dividing) result is
+// rejected by exactDivide.
+SquarefreeResult gcdTwoExact(const RationalPolynomial& a, const RationalPolynomial& b,
+                             PolynomialKernel& kernel) {
     if (a.isZero()) return {b, true};
     if (b.isZero()) return {a, true};
     if (a.isConstant() || b.isConstant())
         return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+
+    // RP -> integer-primitive PolyId (clears denominators; positive scale,
+    // benign — same conversion as the proven PSC path).
+    auto aNorm = a.toPrimitiveInteger(kernel);
+    auto bNorm = b.toPrimitiveInteger(kernel);
+    if (!aNorm.ok() || !bNorm.ok()) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+
+    PolyId gId = kernel.gcd(aNorm.poly, bNorm.poly);
+    if (gId == NullPoly) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+
+    auto gOpt = RationalPolynomial::fromPolyId(gId, kernel);
+    if (!gOpt) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    RationalPolynomial g = std::move(*gOpt);
+    g.normalize();
+    if (g.isZero()) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    if (g.isConstant()) return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+
+    // MANDATORY verification: g must exactly divide BOTH a and b in Q[X].
+    if (!GcdEngine::exactDivide(a, g)) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+    if (!GcdEngine::exactDivide(b, g)) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
+
+    return {g, true};
+}
+
+// gcd over Q[X] of two polynomials in the lower variables (no main-var here).
+// A nonzero constant operand makes the gcd a unit (1). complete=false on a
+// non-exact subresultant gcd. When `kernel != nullptr` routes through the
+// EXACT libpoly gcd above; otherwise the hand-rolled subresultant PRS.
+SquarefreeResult gcdTwo(const RationalPolynomial& a, const RationalPolynomial& b,
+                        PolynomialKernel* kernel = nullptr) {
+    if (a.isZero()) return {b, true};
+    if (b.isZero()) return {a, true};
+    if (a.isConstant() || b.isConstant())
+        return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+
+    if (kernel != nullptr) return gcdTwoExact(a, b, *kernel);
 
     VarId v = NullVar;
     for (VarId x : a.variables()) v = (v == NullVar || x > v) ? x : v;
@@ -93,7 +140,7 @@ SquarefreeResult gcdTwo(const RationalPolynomial& a, const RationalPolynomial& b
 
 }  // namespace
 
-SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v) {
+SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
     if (p.isZero()) return {RationalPolynomial::fromConstant(mpq_class(0)), true};
 
     auto coeffs = p.coefficients(v);  // index i = coefficient of v^i
@@ -102,7 +149,7 @@ SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v) {
     for (auto& c : coeffs) {
         if (c.isZero()) continue;
         if (!started) { acc = c; started = true; continue; }
-        auto g = gcdTwo(acc, c);
+        auto g = gcdTwo(acc, c, kernel);
         if (!g.complete) return {RationalPolynomial::fromConstant(mpq_class(1)), false};
         acc = g.poly;
         if (acc.isConstant()) break;  // gcd is a unit => content 1
@@ -112,9 +159,9 @@ SquarefreeResult contentWrt(const RationalPolynomial& p, VarId v) {
     return {normalizeUpToUnit(acc), true};
 }
 
-SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v) {
+SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
     if (p.isZero()) return {p, true};
-    auto c = contentWrt(p, v);
+    auto c = contentWrt(p, v, kernel);
     if (!c.complete) return {p, false};
     if (c.poly.isZero() || c.poly.isConstant())
         return {normalizeUpToUnit(p), true};
@@ -123,8 +170,8 @@ SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v) {
     return {normalizeUpToUnit(*q), true};
 }
 
-SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v) {
-    auto pp = primitivePartWrt(p, v);
+SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v, PolynomialKernel* kernel) {
+    auto pp = primitivePartWrt(p, v, kernel);
     if (!pp.complete) return {p, false};
     RationalPolynomial base = pp.poly;
     if (base.degree(v) <= 0) return {base, true};  // constant in v => squarefree
@@ -140,6 +187,20 @@ SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v) {
 
     RationalPolynomial d = base.derivative(v);
     if (d.isZero()) return {base, true};
+
+    // EXACT libpoly path: gcd_v(base, base') via the verified kernel gcd, then
+    // squarefreePart = base / gcd. The gcd is already exactDivide-verified to
+    // divide `base` inside gcdTwoExact; we divide once more here for the quotient
+    // (a divisor of base, so guaranteed exact). A unit gcd ⇒ already squarefree.
+    if (kernel != nullptr) {
+        auto g = gcdTwo(base, d, kernel);
+        if (!g.complete) return {base, false};
+        if (g.poly.isZero() || g.poly.isConstant() || g.poly.degree(v) < 1)
+            return {base, true};   // gcd is a unit in v ⇒ base already squarefree
+        auto q = GcdEngine::exactDivide(base, g.poly);
+        if (!q) return {base, false};
+        return {normalizeUpToUnit(*q), true};
+    }
 
     // Coprimeness via the resultant: res(base, base') != 0 ⟺ base is squarefree
     // (no repeated factor). This is reliable for both univariate and

@@ -11,9 +11,12 @@ namespace {
 struct ResOut { RationalPolynomial poly; bool budgetExceeded = false; bool present = false; };
 
 ResOut topResultant(const RationalPolynomial& f, const RationalPolynomial& g,
-                    VarId v, int maxMatrixDim) {
+                    VarId v, int maxMatrixDim, PolynomialKernel* kernel) {
     ResOut out;
-    auto chain = principalSubresultantCoefficients(f, g, v, maxMatrixDim);
+    // forcePsc = (kernel != nullptr): the Lazard operator wants the EXACT
+    // libpoly PSC whenever a kernel is available, regardless of the env flag.
+    auto chain = principalSubresultantCoefficients(f, g, v, maxMatrixDim, kernel,
+                                                   /*forcePsc=*/kernel != nullptr);
     if (chain.budgetExceeded) { out.budgetExceeded = true; return out; }
     if (chain.psc.empty()) return out;        // degenerate (a side has degree < 1)
     out.poly = chain.psc[0];
@@ -25,7 +28,8 @@ ResOut topResultant(const RationalPolynomial& f, const RationalPolynomial& g,
 }  // namespace
 
 LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId v,
-                                 const LazardProjectionConfig& cfg) {
+                                 const LazardProjectionConfig& cfg,
+                                 PolynomialKernel* kernel) {
     LazardOpResult r;
 
     auto emit = [&](RationalPolynomial poly, LazardProjectionOpKind op,
@@ -45,7 +49,7 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         if (!p.contains(v)) continue;          // already lower-level; nothing to project here
 
         // Content_v(p): a non-constant content is a lower-level boundary poly.
-        auto c = contentWrt(p, v);
+        auto c = contentWrt(p, v, kernel);
         if (!c.complete) {
             r.complete = false;
             r.reason = LazardIncompleteReason::ProjectionKernelFailure;
@@ -54,7 +58,7 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         if (!c.poly.isZero() && !c.poly.isConstant()) emit(c.poly, LazardProjectionOpKind::Content, &p, nullptr);
 
         // Squarefree primitive part w.r.t. v — the boundary factor.
-        auto sf = squarefreePartWrt(p, v);
+        auto sf = squarefreePartWrt(p, v, kernel);
         if (!sf.complete) {
             r.complete = false;
             r.reason = LazardIncompleteReason::ProjectionKernelFailure;
@@ -75,7 +79,7 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         // Discriminant = res_v(f, f').
         RationalPolynomial fp = fref.derivative(v);
         if (!fp.isZero()) {
-            auto disc = topResultant(fref, fp, v, cfg.maxMatrixDim);
+            auto disc = topResultant(fref, fp, v, cfg.maxMatrixDim, kernel);
             if (disc.budgetExceeded) {
                 r.complete = false;
                 r.reason = LazardIncompleteReason::ProjectionBudgetExceeded;
@@ -88,7 +92,7 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
     // Pairwise resultants between distinct squarefree factors.
     for (size_t a = 0; a < factors.size(); ++a) {
         for (size_t b = a + 1; b < factors.size(); ++b) {
-            auto res = topResultant(factors[a], factors[b], v, cfg.maxMatrixDim);
+            auto res = topResultant(factors[a], factors[b], v, cfg.maxMatrixDim, kernel);
             if (res.budgetExceeded) {
                 r.complete = false;
                 r.reason = LazardIncompleteReason::ProjectionBudgetExceeded;
