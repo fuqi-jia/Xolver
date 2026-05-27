@@ -169,7 +169,9 @@ cmd_run() {
         log "scramble seed 未指定 -> 本次随机种子 $SCRAMBLE_SEED"
     fi
 
-    # --both: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（共享 --oracle-cache）
+    # --both: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（共享 --oracle-cache）。
+    # ON 默认 = --allon (bug-hunt, floors off)；若同时传 --submit，则 ON = --submit
+    # (submission config, floors on → solved-count 是 CORRECT 计数, 适合按效果裁剪 flag)。
     if [[ "$DO_BOTH" == "1" ]]; then
         SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
         TAG="${LOGIC//,/_}"
@@ -177,9 +179,10 @@ cmd_run() {
         CACHE="$(pwd)/results/oracle-${TAG}.json"
         SEQLOG="$(pwd)/both-${TAG}-seq.log"
         SCRF=""; [[ "$DO_SCRAMBLE" == "1" ]] && SCRF="--scramble"
-        log "--both: 后台顺序 OFF -> ON, z3 oracle 仅跑一遍 ($CACHE)"
+        ONFLAG="--allon"; [[ "$DO_SUBMIT" == "1" ]] && ONFLAG="--submit"
+        log "--both: 后台顺序 OFF -> ON($ONFLAG), z3 oracle 仅跑一遍 ($CACHE)"
         log "  序列日志: $SEQLOG"
-        nohup bash -c "unset BOTH ALLON SCRAMBLE; rm -f '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF --oracle-cache '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF --allon --oracle-cache '$CACHE'" > "$SEQLOG" 2>&1 &
+        nohup bash -c "unset BOTH ALLON SUBMIT SCRAMBLE; rm -f '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF --oracle-cache '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF $ONFLAG --oracle-cache '$CACHE'" > "$SEQLOG" 2>&1 &
         log "  PID=$!   查看: tail -f $SEQLOG"
         return 0
     fi
@@ -192,13 +195,15 @@ cmd_run() {
                ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
                ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
                ZOLVER_LRA_BOUND_AXIOMS=1 ZOLVER_LRA_PIVOT_HEUR=1 ZOLVER_LRA_PROP=1 \
-               ZOLVER_NIA_REFUTE=1 \
+               ZOLVER_NIA_REFUTE=1 ZOLVER_NIA_GCD=1 ZOLVER_NIA_ICP=1 \
+               ZOLVER_NIA_CDCAC=1 ZOLVER_NIA_BV_CASCADE=1 \
                ZOLVER_NRA_LAZARD_LIFT=1 ZOLVER_NRA_LIBPOLY_PSC=1 \
                ZOLVER_NRA_VARORDER=1 ZOLVER_NRA_VARORDER_SIMPLEX=1 \
                ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
+               ZOLVER_PP_PG_CNF=1 ZOLVER_PP_LET_ELIM=1 \
                ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
                ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
-        log "--allon: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
+        log "--allon: optimizations ON (incl. NIA gcd/icp/cdcac/cascade + PG-CNF/let-elim), soundness floors OFF (bug-hunt; false answers surface vs z3)"
     fi
 
     # --submit: SUBMISSION 预设 — 所有优化开关 + 全部 soundness FLOORS 都开 (= 实际参赛配置, 健全).
