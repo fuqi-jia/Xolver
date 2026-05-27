@@ -27,8 +27,6 @@ struct PendingMerge {
     int level = 0;
 };
 
-struct ExplainContext;
-
 class IncrementalEGraph {
 public:
     explicit IncrementalEGraph(EufTermManager& tm);
@@ -36,7 +34,8 @@ public:
     void clear();
 
     // Ensure term exists in UF and its canonical signature is registered.
-    // Recursively registers signatures for all UF application subterms.
+    // Registers signatures for all UF application subterms (iterative post-order
+    // over the arg DAG — must not recurse; deep UF nesting overflows the stack).
     // Enqueues any discovered congruence merges into outQueue.
     void ensureTermRegistered(EufTermId t, std::deque<PendingMerge>& outQueue);
 
@@ -126,9 +125,6 @@ private:
     void setCurrentSig(EufTermId app, std::optional<AppSignature> sig);
     void rollbackCurrentSig(size_t snap);
     std::vector<EufTermId> collectParents(EClassId root) const;
-
-    ExplainResult explainEquality(EufTermId a, EufTermId b, ExplainContext& ctx);
-    ExplainResult explainEdge(size_t edgeId, ExplainContext& ctx);
 
     static uint64_t canonicalPairKey(EufTermId a, EufTermId b);
 

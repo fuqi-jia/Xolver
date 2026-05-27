@@ -7,11 +7,6 @@
 
 namespace zolver {
 
-struct ExplainContext {
-    std::unordered_map<uint64_t, ExplainResult> memo;
-    std::unordered_set<uint64_t> activePairs;
-};
-
 IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {
     fastMerge_ = std::getenv("ZOLVER_UF_FAST_CC") != nullptr;
 }
@@ -46,15 +41,30 @@ void IncrementalEGraph::ensureNodeAllocated(EufTermId t) {
 
 void IncrementalEGraph::ensureTermRegistered(EufTermId t,
                                              std::deque<PendingMerge>& outQueue) {
+    // Iterative post-order over the argument DAG (was recursive on args, which
+    // overflowed the stack on deeply-nested UF terms — see the deep-UF test).
+    // Behavior-identical to the recursion: every node is allocated on first
+    // visit, and a node's signature is refreshed only after all its args
+    // (left-to-right post-order), with no early-out on already-registered terms.
+    // So the congruence merges pushed to outQueue come out in the same order.
+    struct Frame { EufTermId t; size_t childIdx; };
+    std::vector<Frame> stack;
     ensureNodeAllocated(t);
-
-    const auto& n = tm_.node(t);
-    for (EufTermId arg : n.args) {
-        ensureTermRegistered(arg, outQueue);
-    }
-
-    if (!n.args.empty()) {
-        refreshSignature(t, outQueue);
+    stack.push_back({t, 0});
+    while (!stack.empty()) {
+        Frame& f = stack.back();
+        const auto& n = tm_.node(f.t);
+        if (f.childIdx < n.args.size()) {
+            EufTermId arg = n.args[f.childIdx];
+            f.childIdx++;
+            ensureNodeAllocated(arg);
+            stack.push_back({arg, 0});   // f invalidated below this point
+            continue;
+        }
+        EufTermId cur = f.t;
+        bool hasArgs = !n.args.empty();
+        stack.pop_back();
+        if (hasArgs) refreshSignature(cur, outQueue);
     }
 }
 
@@ -360,81 +370,146 @@ uint64_t IncrementalEGraph::canonicalPairKey(EufTermId a, EufTermId b) {
 }
 
 ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b) {
-    ExplainContext ctx;
-    return explainEquality(a, b, ctx);
-}
+    // Iterative DFS over the proof forest. The former explainEquality<->explainEdge
+    // mutual recursion (depth = UF nesting) overflowed the stack on deeply-nested
+    // UF. This is BEHAVIOR-IDENTICAL: same success-only memoization, same on-stack
+    // cycle guard (activePairs), same per-call order-preserving dedup of reasons,
+    // and same failure propagation — so the explanation literal SET (and order) is
+    // unchanged. That equivalence is load-bearing: this is the UNSAT/conflict
+    // explanation path, where a different reason set would be a false-UNSAT.
+    //
+    // Frame model: an Eq frame explains a pair (a,b) by walking its proof-forest
+    // edge path and folding each edge's explanation; an Edge frame explains one
+    // edge — an AssertedEquality contributes its literal directly, a congruence
+    // edge folds the explanation of each arg pair. A frame pushes a child frame
+    // and suspends; when the child pops, its result is in `ret` and the parent
+    // (now on top, already initialized) folds it in and advances.
+    std::unordered_map<uint64_t, ExplainResult> memo;
+    std::unordered_set<uint64_t> activePairs;
 
-ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b,
-                                                   ExplainContext& ctx) {
-    if (a == b) return {true, {}};
-    if (!same(a, b)) return {false, {}};
+    struct Frame {
+        bool isEdge = false;
+        bool initialized = false;
+        // Eq frame
+        EufTermId a = NullEufTerm, b = NullEufTerm;
+        uint64_t key = 0;
+        bool keyInserted = false;
+        std::vector<size_t> edgeIds;
+        // Edge frame
+        size_t edgeId = 0;
+        // common
+        size_t i = 0;
+        std::vector<SatLit> acc;
+    };
 
-    uint64_t key = canonicalPairKey(a, b);
-    if (auto it = ctx.memo.find(key); it != ctx.memo.end()) {
-        return it->second;
-    }
-    if (!ctx.activePairs.insert(key).second) {
-        return {false, {}};
-    }
-
-    auto edgeIds = proofForest_.path(a, b);
-    if (edgeIds.empty()) {
-        ctx.activePairs.erase(key);
-        return {false, {}};
-    }
-
-    std::vector<SatLit> reasons;
-    for (size_t eid : edgeIds) {
-        auto sub = explainEdge(eid, ctx);
-        if (!sub.ok) {
-            ctx.activePairs.erase(key);
-            return {false, {}};
-        }
-        for (SatLit lit : sub.reasons) {
+    auto dedupAppend = [](std::vector<SatLit>& dst, const std::vector<SatLit>& src) {
+        for (SatLit lit : src) {
             bool found = false;
-            for (SatLit r : reasons) {
-                if (r.var == lit.var && r.sign == lit.sign) {
-                    found = true;
-                    break;
-                }
+            for (SatLit r : dst) {
+                if (r.var == lit.var && r.sign == lit.sign) { found = true; break; }
             }
-            if (!found) reasons.push_back(lit);
+            if (!found) dst.push_back(lit);
         }
+    };
+
+    std::vector<Frame> stack;
+    {
+        Frame root;
+        root.isEdge = false;
+        root.a = a;
+        root.b = b;
+        stack.push_back(std::move(root));
     }
 
-    ctx.activePairs.erase(key);
-    ExplainResult result{true, std::move(reasons)};
-    ctx.memo[key] = result;
-    return result;
-}
+    ExplainResult ret{false, {}};
 
-ExplainResult IncrementalEGraph::explainEdge(size_t edgeId, ExplainContext& ctx) {
-    const auto& edge = proofForest_.edgeReason(edgeId);
+    while (!stack.empty()) {
+        Frame& f = stack.back();
 
-    if (edge.kind == MergeReasonKind::AssertedEquality) {
-        return {true, {edge.lit}};
-    }
-
-
-    std::vector<SatLit> out;
-    for (const auto& [ai, bi] : edge.argPairs) {
-        if (ai == bi) continue;
-        auto sub = explainEquality(ai, bi, ctx);
-        if (!sub.ok) {
-            return {false, {}};
-        }
-        for (SatLit lit : sub.reasons) {
-            bool found = false;
-            for (SatLit existing : out) {
-                if (existing.var == lit.var && existing.sign == lit.sign) {
-                    found = true;
-                    break;
+        if (!f.initialized) {
+            f.initialized = true;
+            if (!f.isEdge) {
+                // ENTER explainEquality(f.a, f.b) — checks in the recursion's order.
+                if (f.a == f.b) { ret = {true, {}}; stack.pop_back(); continue; }
+                if (!same(f.a, f.b)) { ret = {false, {}}; stack.pop_back(); continue; }
+                f.key = canonicalPairKey(f.a, f.b);
+                if (auto it = memo.find(f.key); it != memo.end()) {
+                    ret = it->second; stack.pop_back(); continue;
                 }
+                if (!activePairs.insert(f.key).second) {
+                    // Cycle: pair already on the active path. Fail WITHOUT erasing
+                    // (the owning ancestor frame erases it when it unwinds).
+                    ret = {false, {}}; stack.pop_back(); continue;
+                }
+                f.keyInserted = true;
+                f.edgeIds = proofForest_.path(f.a, f.b);
+                if (f.edgeIds.empty()) {
+                    activePairs.erase(f.key);
+                    ret = {false, {}}; stack.pop_back(); continue;
+                }
+                f.i = 0;
+                // fall through to child dispatch
+            } else {
+                // ENTER explainEdge(f.edgeId)
+                const auto& edge = proofForest_.edgeReason(f.edgeId);
+                if (edge.kind == MergeReasonKind::AssertedEquality) {
+                    ret = {true, {edge.lit}}; stack.pop_back(); continue;
+                }
+                f.i = 0;
+                // fall through to child dispatch
             }
-            if (!found) out.push_back(lit);
+        } else {
+            // RESUME: a child frame completed; its result is in `ret`.
+            if (!ret.ok) {
+                if (!f.isEdge && f.keyInserted) activePairs.erase(f.key);
+                ret = {false, {}};
+                stack.pop_back();
+                continue;
+            }
+            dedupAppend(f.acc, ret.reasons);
+            f.i++;
+        }
+
+        // CHILD DISPATCH: push the next child, or complete this frame.
+        if (!f.isEdge) {
+            if (f.i < f.edgeIds.size()) {
+                size_t eid = f.edgeIds[f.i];
+                Frame child;
+                child.isEdge = true;
+                child.edgeId = eid;
+                stack.push_back(std::move(child));   // f invalidated below
+                continue;
+            }
+            uint64_t key = f.key;
+            bool keyInserted = f.keyInserted;
+            ExplainResult res{true, std::move(f.acc)};
+            if (keyInserted) activePairs.erase(key);
+            memo[key] = res;
+            ret = std::move(res);
+            stack.pop_back();
+            continue;
+        } else {
+            const auto& argPairs = proofForest_.edgeReason(f.edgeId).argPairs;
+            while (f.i < argPairs.size() && argPairs[f.i].first == argPairs[f.i].second) {
+                f.i++;
+            }
+            if (f.i < argPairs.size()) {
+                EufTermId ai = argPairs[f.i].first;
+                EufTermId bi = argPairs[f.i].second;
+                Frame child;
+                child.isEdge = false;
+                child.a = ai;
+                child.b = bi;
+                stack.push_back(std::move(child));   // f invalidated below
+                continue;
+            }
+            ret = {true, std::move(f.acc)};
+            stack.pop_back();
+            continue;
         }
     }
-    return {true, std::move(out)};
+
+    return ret;
 }
 
 #ifndef NDEBUG
