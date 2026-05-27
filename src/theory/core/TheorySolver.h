@@ -40,6 +40,14 @@ public:
     // Reset ONCE per fresh check-sat initialization
     virtual void reset() = 0;
 
+    // Sound Farkas bound-propagations to lift to the SAT solver as entailment
+    // lemmas (ZOLVER_LRA_PROP). Default: none. Must never return Guess/branch lemmas.
+    virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
+
+    // Heuristic eval of a bound atom at the current theory model
+    // (ZOLVER_LRA_DECIDE / cb_decide). Default: no value.
+    virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
+
     // -----------------------------------------------------------------------
     // Active linear context for nonlinear solvers (optional; default = no-op)
     // -----------------------------------------------------------------------

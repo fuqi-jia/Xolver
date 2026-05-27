@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 
@@ -21,6 +22,11 @@ LraSolver::LraSolver() {
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "lra.core",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCore(db, e); }));
+
+    // ZOLVER_LRA_PROP (default OFF): lift sound Farkas row-propagations to the
+    // SAT solver during search. Read once.
+    const char* prop = std::getenv("ZOLVER_LRA_PROP");
+    lraPropEnabled_ = (prop && *prop && *prop != '0');
 }
 
 LraSolver::~LraSolver() {
@@ -52,6 +58,7 @@ void LraSolver::onReset() {
     appliedCursor_ = 0;
     pendingConflict_.reset();
     diseqBranchAuthorized_.clear();
+    atomEvalCache_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -142,6 +149,7 @@ bool LraSolver::applyEntryToSimplex(const LraTrailEntry& e) {
 
 std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "[LRA] check begin\n";
+    entailmentProps_.clear();  // buffer holds only this check's propagations
 
 #ifdef ZOLVER_LRA_PROFILE
     profile_.checkCalls++;
@@ -290,6 +298,20 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 if (!lemmaDb.contains(*lemmaOpt)) {
                     lemmaDb.insertIfNew(*lemmaOpt);
                     ++emitted;
+                }
+            }
+        }
+
+        // ZOLVER_LRA_PROP: buffer sound entailment clauses (¬reasons ∨ implied)
+        // for the SAT propagator to install during search. Reason-carrying, so
+        // unlike the unit lemmas above they are safe to learn (the propagator
+        // also verifies each is unit/falsified under the current assignment).
+        if (lraPropEnabled_) {
+            const int kMaxProps = 64;
+            for (const auto& eb : derived) {
+                if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
+                if (auto lem = buildEntailmentLemma(eb)) {
+                    entailmentProps_.push_back(std::move(*lem));
                 }
             }
         }
@@ -627,6 +649,96 @@ std::optional<TheoryLemma> LraSolver::tryConvertDerivedBound(
     SatLit lit = registry_->getOrCreateLinearBoundAtom(
         info.lhs, rel, boundRhs, TheoryId::LRA);
     return TheoryLemma{{lit}};
+}
+
+std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
+    const LraPropagationEngine::ExplainedBound& eb) const {
+    auto it = auxFormInfo_.find(eb.var);
+    if (it == auxFormInfo_.end()) return std::nullopt;
+    const auto& info = it->second;
+    mpq_class boundRhs = info.rhs + eb.value.a;
+
+    // Sound rational reconstruction of a delta-rational bound s ~ a + bδ
+    // (δ a positive infinitesimal), translated to formValue = s + rhs:
+    //   lower s ≥ a+bδ :  b>0 ⇒ formValue > a (Gt);  b=0 ⇒ ≥ a (Geq);
+    //                     b<0 ⇒ a+bδ is just-below a, so NO rational bound ≥ a
+    //                           is sound (Geq a over-tightens) ⇒ SKIP.
+    //   upper s ≤ a+bδ :  b<0 ⇒ formValue < a (Lt);  b=0 ⇒ ≤ a (Leq);
+    //                     b>0 ⇒ just-above a ⇒ SKIP (Leq a over-tightens).
+    // The over-tight b<0-lower / b>0-upper cases are exactly the false-UNSAT bug.
+    Relation rel;
+    if (eb.isLower) {
+        if (eb.value.b > 0)      rel = Relation::Gt;
+        else if (eb.value.b == 0) rel = Relation::Geq;
+        else return std::nullopt;          // b<0 lower: not soundly representable
+    } else {
+        if (eb.value.b < 0)      rel = Relation::Lt;
+        else if (eb.value.b == 0) rel = Relation::Leq;
+        else return std::nullopt;          // b>0 upper: not soundly representable
+    }
+
+    if (!registry_) return std::nullopt;
+    SatLit implied = registry_->getOrCreateLinearBoundAtom(
+        info.lhs, rel, boundRhs, TheoryId::LRA);
+
+    // Clause (¬reason₁ ∨ ... ∨ ¬reasonₖ ∨ implied): a theory tautology, since
+    // the reasons Farkas-entail `implied`. Reasons are asserted-true literals,
+    // so their negations sit in the clause. Drop a degenerate empty-reason
+    // derivation (would be a bare unit -> not safe).
+    if (eb.reasons.empty()) return std::nullopt;
+    TheoryLemma lem;
+    lem.kind = LemmaKind::Entailment;
+    lem.lits.reserve(eb.reasons.size() + 1);
+    for (SatLit r : eb.reasons) lem.lits.push_back(r.negated());
+    lem.lits.push_back(implied);
+    return lem;
+}
+
+std::vector<TheoryLemma> LraSolver::takeEntailmentPropagations() {
+    return std::move(entailmentProps_);
+}
+
+std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
+    // Build the STATIC form once (expensive findBySatVar + payload extraction).
+    auto cit = atomEvalCache_.find(v);
+    if (cit == atomEvalCache_.end()) {
+        AtomEvalForm form;
+        const TheoryAtomRecord* rec = registry_ ? registry_->findBySatVar(v) : nullptr;
+        if (rec && std::holds_alternative<LinearAtomPayload>(rec->payload)) {
+            const auto& p = std::get<LinearAtomPayload>(rec->payload);
+            if (p.rhs.isRational()) {
+                form.isLinear = true;
+                form.rel = p.rel;
+                form.rhs = p.rhs.asRational().get_d();
+                form.terms.reserve(p.lhs.terms.size());
+                for (const auto& t : p.lhs.terms) {
+                    form.terms.push_back({t.first, t.second.get_d()});
+                }
+            }
+        }
+        cit = atomEvalCache_.emplace(v, std::move(form)).first;
+    }
+    const AtomEvalForm& f = cit->second;
+    if (!f.isLinear) return std::nullopt;
+
+    // Resolve indices FRESH (O(1) per term). A var not yet in the simplex (or
+    // gone after backtrack) -> skip O(1). Caching the name not the index keeps
+    // this crash-safe under lazy registration. double arithmetic, zero alloc.
+    double s = 0.0;
+    for (const auto& term : f.terms) {
+        int idx = manager_.findVarIndex(term.first);
+        if (idx < 0) return std::nullopt;  // pending: var not registered yet
+        s += term.second * gs_.value(idx).a.get_d();
+    }
+    switch (f.rel) {
+        case Relation::Leq: return s <= f.rhs;
+        case Relation::Lt:  return s <  f.rhs;
+        case Relation::Geq: return s >= f.rhs;
+        case Relation::Gt:  return s >  f.rhs;
+        case Relation::Eq:  return s == f.rhs;
+        case Relation::Neq: return s != f.rhs;
+        default:            return std::nullopt;
+    }
 }
 
 void LraSolver::allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {

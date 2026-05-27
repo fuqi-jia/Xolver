@@ -84,11 +84,16 @@ struct TheoryConflict {
     std::vector<SatLit> clause;
 };
 
+// Distinguishes sound entailment propagations (safe to lift to SAT) from
+// heuristic guesses (ZOLVER_LRA_PROP). Conservative default = Guess.
+enum class LemmaKind : uint8_t { Guess, Entailment };
+
 // TheoryLemma stores a propagation lemma in the form:
 //   (¬reason₁ ∨ ¬reason₂ ∨ ... ∨ implied)
 // where each literal is expressed in its SAT-polarity form.
 struct TheoryLemma {
     std::vector<SatLit> lits;
+    LemmaKind kind = LemmaKind::Guess;  // conservative default
 };
 
 /**

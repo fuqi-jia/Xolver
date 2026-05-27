@@ -554,8 +554,16 @@ TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
 }
 
 TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
-    // Cap Gomory cuts per solve so branch-and-bound still terminates.
-    static constexpr int kMaxCutsPerSolve = 64;
+    // Cap Gomory cuts per solve so branch-and-bound still terminates AND the
+    // tableau doesn't bloat into degeneracy (too many near-degenerate cut rows
+    // make the anti-cycling pivot rule blow past the iteration cap -> unknown,
+    // the CAV coef-size regression). Keep the budget small ("cut a little, then
+    // branch"); tunable for A/B.
+    static const int kMaxCutsPerSolve = []() {
+        const char* e = std::getenv("ZOLVER_LIA_CUT_MAXPERSOLVE");
+        int v = e ? std::atoi(e) : -1;
+        return v >= 0 ? v : 32;
+    }();
     int bestVar = -1;
     mpq_class bestFrac(-1);
 
@@ -817,6 +825,26 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     if (cutForm.terms.empty()) return std::nullopt;  // degenerate constant cut
     std::sort(cutForm.terms.begin(), cutForm.terms.end(),
               [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    // Cut-coefficient size cap: reject blown-up cuts. On large-coefficient
+    // instances (CAV coef-size) the Gomory fractional parts compound into huge
+    // rationals; such cuts bog down the exact-rational simplex (it hits its
+    // iteration cap -> unknown) without improving the bound. Rejecting them lets
+    // the solver fall back to branching, which is fast. Tunable for A/B.
+    {
+        static const int kMaxBits = []() {
+            const char* e = std::getenv("ZOLVER_LIA_CUT_MAXBITS");
+            int v = e ? std::atoi(e) : 0;
+            return v > 0 ? v : 8;
+        }();
+        auto bits = [](const mpq_class& q) -> size_t {
+            return std::max(mpz_sizeinbase(q.get_num().get_mpz_t(), 2),
+                            mpz_sizeinbase(q.get_den().get_mpz_t(), 2));
+        };
+        size_t mx = bits(rhsFinal);
+        for (const auto& [vn, c] : cutForm.terms) mx = std::max(mx, bits(c));
+        if (mx > static_cast<size_t>(kMaxBits)) return std::nullopt;
+    }
 
     SatLit cutLit = registry_->getOrCreateLinearBoundAtom(
         cutForm, Relation::Geq, rhsFinal, TheoryId::LIA);

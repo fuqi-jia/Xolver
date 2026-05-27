@@ -303,6 +303,28 @@ void GeneralSimplex::recomputeBeta() {
 #ifdef ZOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+    // Diagnostic: recomputeBeta is a full O(rows*nnz) rebuild fired on every
+    // backtrack (betaDirty_). Track global call count + cumulative time to see
+    // whether it (not pivoting) is the QF_LRA hot path. env ZOLVER_LRA_BETA_EVERY.
+    {
+        static int betaEvery = []() {
+            const char* e = std::getenv("ZOLVER_LRA_BETA_EVERY");
+            return (e && *e) ? std::atoi(e) : 0;
+        }();
+        static long long gBetaCalls = 0;
+        static long long gBetaUs = 0;
+        ++gBetaCalls;
+        gBetaUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
+        if (betaEvery > 0 && gBetaCalls % betaEvery == 0) {
+            long long nnz = 0;
+            for (int r = 0; r < tab_.numRows(); ++r) nnz += static_cast<long long>(tab_.row(r).entries.size());
+            std::cerr << "[LRA-BETA] calls=" << gBetaCalls
+                      << " cumUs=" << gBetaUs
+                      << " rows=" << tab_.numRows()
+                      << " vars=" << vars_.size()
+                      << " nnz=" << nnz << std::endl;
+        }
+    }
 #endif
 }
 
@@ -413,6 +435,17 @@ int GeneralSimplex::pickViolatedBasic() {
     return -1;
 }
 
+int GeneralSimplex::pickViolatedBasicBland() const {
+    int best = -1;
+    for (int xb : basicVars_) {
+        if (xb < 0) continue;
+        if (violatesLower(xb) || violatesUpper(xb)) {
+            if (best == -1 || xb < best) best = xb;
+        }
+    }
+    return best;
+}
+
 void GeneralSimplex::rebuildViolationQueue() {
     violatedQueue_.clear();
     std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
@@ -468,22 +501,30 @@ GeneralSimplex::Result GeneralSimplex::check() {
 }
 
 GeneralSimplex::Result GeneralSimplex::checkInternal() {
-    const int MAX_ITERATIONS = 10000;
-    // Heuristic pivoting (ZOLVER_LRA_PIVOT_HEUR) is allowed only for the first
-    // kHeuristicPivotBudget pivots; after that we fall back to Bland's smallest-
-    // index entering rule, which guarantees termination (Dutertre–de Moura). The
-    // remaining MAX_ITERATIONS - budget iterations are Bland-driven, so the
-    // termination bound is unchanged relative to the Bland-only path.
+    // LRA is decidable: check() must never self-return Unknown from an internal
+    // iteration cap (that would be giving up on a solvable, decidable instance —
+    // only the external wall-clock may stop a solve). Termination is guaranteed
+    // instead by Bland's anti-cycling rule:
+    //   - iter < kHeuristicPivotBudget: heuristic entering (if ZOLVER_LRA_PIVOT_HEUR).
+    //   - iter >= kHeuristicPivotBudget: Bland entering (smallest index).
+    //   - iter >= kStrictBlandThreshold: STRICT Bland — smallest-index leaving AND
+    //     entering, which provably terminates (Dutertre–de Moura). The fast queue
+    //     leaving is used before that, so default performance is unchanged.
+    // The huge guard below is a last-resort against a genuine non-termination
+    // bug, not a normal exit; under strict Bland it is unreachable in practice.
     const int kHeuristicPivotBudget = 4000;
+    const long long kStrictBlandThreshold = 10000;
+    const long long kSafetyGuard = 1LL << 34;  // ~1.7e10 pivots; external timeout fires first
 
-    for (int iter = 0; iter < MAX_ITERATIONS; ++iter) {
-        int xi = pickViolatedBasic();
+    for (long long iter = 0; iter < kSafetyGuard; ++iter) {
+        bool strictBland = iter >= kStrictBlandThreshold;
+        int xi = strictBland ? pickViolatedBasicBland() : pickViolatedBasic();
         if (xi == -1) {
             conflict_.clear();
             return Result::Sat;
         }
 
-        bool useBland = !useHeuristicPivot_ || iter >= kHeuristicPivotBudget;
+        bool useBland = strictBland || !useHeuristicPivot_ || iter >= kHeuristicPivotBudget;
 
         if (violatesLower(xi)) {
             int xj = findEnteringVarToIncrease(xi, useBland);
@@ -502,7 +543,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
         }
     }
 
-    std::cerr << "[GeneralSimplex] Warning: iteration limit reached" << std::endl;
+    std::cerr << "[GeneralSimplex] safety guard hit (probable non-termination bug)" << std::endl;
     conflict_.clear();
     return Result::Unknown;
 }
@@ -581,6 +622,10 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 
     DeltaRational theta = (target - vars_[leavingBasic].beta) / aij;
 
+#ifdef ZOLVER_LRA_PROFILE
+    if (theta.isZero()) ++degeneratePivots_;
+#endif
+
     // Update beta using snapshot of entering column
     std::vector<ColEntry> affected(tab_.col(enteringNonBasic).entries);
 
@@ -609,6 +654,53 @@ void GeneralSimplex::pivot(int leaving, int entering) {
 #ifdef ZOLVER_LRA_PROFILE
     ++pivotCount_;
     auto prof_t0 = std::chrono::steady_clock::now();
+    // Live trajectory dump (env ZOLVER_LRA_PROFILE_EVERY=N): every N pivots,
+    // report cumulative pivot count and the largest coefficient bit-widths in
+    // the tableau. Distinguishes pivot-count explosion (pivots climb, bits
+    // stay small) from rational coefficient blow-up (bits explode) on cases
+    // that time out before check() returns. Diagnostic-only, profile-gated.
+    {
+        static int dumpEvery = []() {
+            const char* e = std::getenv("ZOLVER_LRA_PROFILE_EVERY");
+            return (e && *e) ? std::atoi(e) : 0;
+        }();
+        // Process-global pivot counter so the modulo dump works across the many
+        // short check() calls of a CDCL(T) solve (per-call pivotCount_ resets).
+        static long long gTotalPivots = 0;
+        ++gTotalPivots;
+        if (dumpEvery > 0 && gTotalPivots % dumpEvery == 0) {
+            int maxNum = 0, maxDen = 0;
+            long long nnz = 0;
+            long long sumNum = 0, sumDen = 0, samples = 0;
+            for (int row = 0; row < tab_.numRows(); ++row) {
+                const auto& sr = tab_.row(row);
+                maxNum = std::max<int>(maxNum, mpz_sizeinbase(sr.rhs.get_num().get_mpz_t(), 2));
+                maxDen = std::max<int>(maxDen, mpz_sizeinbase(sr.rhs.get_den().get_mpz_t(), 2));
+                nnz += static_cast<long long>(sr.entries.size());
+                for (const auto& e : sr.entries) {
+                    int nb = mpz_sizeinbase(e.coeff.get_num().get_mpz_t(), 2);
+                    int db = mpz_sizeinbase(e.coeff.get_den().get_mpz_t(), 2);
+                    maxNum = std::max(maxNum, nb);
+                    maxDen = std::max(maxDen, db);
+                    sumNum += nb; sumDen += db; ++samples;
+                }
+            }
+            int rows = tab_.numRows();
+            double density = rows ? static_cast<double>(nnz) / rows : 0.0;
+            double avgNum = samples ? static_cast<double>(sumNum) / samples : 0.0;
+            double avgDen = samples ? static_cast<double>(sumDen) / samples : 0.0;
+            std::cerr << "[LRA-PROF] gpivots=" << gTotalPivots
+                      << " degen=" << degeneratePivots_
+                      << " rows=" << rows
+                      << " vars=" << vars_.size()
+                      << " nnz=" << nnz
+                      << " density=" << density
+                      << " maxNumBits=" << maxNum
+                      << " maxDenBits=" << maxDen
+                      << " avgNumBits=" << avgNum
+                      << " avgDenBits=" << avgDen << std::endl;
+        }
+    }
 #endif
     int r = rowOfBasic(leaving);
     mpq_class d = tab_.getCoeff(r, entering);

@@ -49,6 +49,15 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+    // ZOLVER_LRA_PROP (default OFF): drain sound Farkas row-propagations
+    // (reasons ⟹ impliedBound) buffered during the last check() so the SAT
+    // propagator can install them during search. Entailment-tagged only.
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
+
+    // cb_decide feasibility heuristic: is the bound atom `v` true at the current
+    // simplex point? double eval (allocation-free hot path); heuristic only.
+    std::optional<bool> evalAtomAtModel(SatVar v) override;
+
 protected:
     void onPush() override;
     void onPop(uint32_t n) override;
@@ -150,6 +159,32 @@ private:
 
     std::optional<TheoryLemma> tryConvertDerivedBound(
         const LraPropagationEngine::ExplainedBound& eb) const;
+
+    // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
+    // the Farkas reasons, tagged Entailment. Unlike tryConvertDerivedBound
+    // (which drops reasons -> bare unit, only safe for the dead lemmaDb path),
+    // this is safe to give the SAT solver during search.
+    std::optional<TheoryLemma> buildEntailmentLemma(
+        const LraPropagationEngine::ExplainedBound& eb) const;
+
+    // ZOLVER_LRA_PROP gate (read once) + this-check buffer of entailment props.
+    bool lraPropEnabled_ = false;
+    std::vector<TheoryLemma> entailmentProps_;
+
+    // cb_decide feasibility-eval cache (v2): per atom satVar, the STATIC linear
+    // form as (var-NAME, double coeff) pairs + double rhs + relation, resolved
+    // ONCE from the atom record (the expensive findBySatVar / payload step).
+    // Eval resolves each var's simplex index FRESH via an O(1) findVarIndex —
+    // we cache the resolution, never the index, so a lazily-registered or
+    // backtracked var can't produce a stale out-of-bounds index. Atoms whose
+    // vars aren't in the simplex yet are skipped O(1) (first missing var exits).
+    struct AtomEvalForm {
+        bool isLinear = false;  // resolvable bound atom?
+        std::vector<std::pair<std::string, double>> terms;  // (var name, coeff)
+        double rhs = 0.0;
+        Relation rel = Relation::Leq;
+    };
+    std::unordered_map<SatVar, AtomEvalForm> atomEvalCache_;
 
 #ifdef ZOLVER_LRA_PROFILE
     struct ProfileStats {
