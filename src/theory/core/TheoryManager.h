@@ -5,6 +5,8 @@
 #include "theory/core/TheoryPropagatorCallbacks.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/combination/SharedEqualityManager.h"
+#include "theory/combination/CareGraph.h"
+#include "theory/combination/ConflictMinimizer.h"
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -22,7 +24,7 @@ public:
     void clearSolvers();
 
     void setCombinationMode(bool enabled) { combinationMode_ = enabled; }
-    bool isCombinationMode() const { return combinationMode_; }
+    bool isCombinationMode() const override { return combinationMode_; }
 
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }
@@ -63,6 +65,14 @@ public:
     /** Aggregate models from all registered theory solvers. */
     std::optional<TheorySolver::TheoryModel> getModel() const;
 
+    // Phase 0 combination SAT certificate (positive completeness proof). Returns
+    // true ONLY if every registered solver positively certifies completeness
+    // (satComplete) AND the combination layer has no pending arrangement
+    // obligation (no same-value shared UF-argument pair left unarranged). Used by
+    // the api floor to decide whether a combination SAT verdict is trustworthy or
+    // must be downgraded to sound Unknown. `reason` (optional) names the blocker.
+    bool hasCompleteSatCertificate(std::string* reason = nullptr) const;
+
     /**
      * Collect all linear atoms whose current SAT assignment makes them
      * effectively true (including negated atoms, whose effective relation
@@ -87,6 +97,35 @@ private:
     AggregateStats aggStats_;
 
     SharedEqualityManager sharedEqMgr_;
+
+    // Demand-driven care graph (ZOLVER_COMB_CAREGRAPH, default OFF). Built once
+    // per solve from the purified IR; prunes the O(n^2) shared-pair loops
+    // (deduced-equality propagation + model-based arrangement splitting) to
+    // pairs that can actually fire a theory inference. Under-approximation =>
+    // sound (lost completeness caught by ModelValidator, never wrong UNSAT).
+    CareGraph careGraph_;
+    bool careGraphEnabled_ = false;
+    bool careGraphEnvChecked_ = false;
+    void ensureCareGraph();
+
+    // Theory-agnostic combination conflict/lemma minimization (ZOLVER_SAT_MIN,
+    // default OFF). Dedups literals in interface/theory conflicts and lemmas.
+    // Always sound (dedup preserves the clause's literal set).
+    bool satMinEnabled_ = false;
+    bool satMinEnvChecked_ = false;
+    bool useSatMin();
+
+    // Model-based theory combination for the non-convex combined logics
+    // (ZOLVER_COMB_MODEL_BASED, default OFF). Extends the array-only arrangement
+    // splitting to QF_UFLIA/UFNIA/UFNRA: at Full effort, force the Nelson-Oppen
+    // arrangement over shared scalars to be CLOSED before reporting Sat, so the
+    // combination cannot return a per-theory-consistent-but-globally-inconsistent
+    // model (the existing false-SAT class). The split is a tautology over a
+    // shared-equality atom, so it is sound by construction; the theories react
+    // through the already-validated interface (dis)equality paths.
+    bool modelBasedEnabled_ = false;
+    bool modelBasedEnvChecked_ = false;
+    bool useModelBased();
 
     struct PendingSharedEqEvent {
         SharedTermId a;
@@ -122,6 +161,17 @@ private:
     std::unordered_set<ReportedPropKey, ReportedPropKeyHash> deducedEqCache_;
 
     std::vector<TheorySolver*> solversOwning(SharedTermId a, SharedTermId b) const;
+
+    // Phase 1: is a differing same-function UF-argument pair a genuine
+    // arrangement obligation? True iff the two shared args COINCIDE in the
+    // current arith model (so functional consistency forces the apps equal)
+    // and NEITHER arith solver holds a native disequality between them (an
+    // asserted (distinct a b) makes the coincidence a recoverable model
+    // artifact, not an obligation). Conservative on the model side (floors when
+    // unsure), sufficient on the disequality side (a missed disequality only
+    // keeps the floor) -> sound for the certificate, harmless for arrangement.
+    bool sharedArgsArrangeable(SharedTermId a, SharedTermId b) const;
+
     void ensureSnapshotForLevel(int level);
     LevelSnapshot& snapshotForLevel(int level);
     void discardSnapshotsAbove(int level);

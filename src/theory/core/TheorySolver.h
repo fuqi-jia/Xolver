@@ -5,10 +5,13 @@
 #include <vector>
 #include <optional>
 #include <unordered_map>
+#include <functional>
+#include <string>
 
 namespace zolver {
 
 class TheoryLemmaStorage;
+class CareGraph;
 
 // ---------------------------------------------------------------------------
 // Abstract interface for theory solvers
@@ -49,6 +52,14 @@ public:
     // -----------------------------------------------------------------------
     virtual bool supportsCombination() const { return false; }
 
+    // Care graph (ZOLVER_COMB_CAREGRAPH). TheoryManager hands the built care
+    // graph to each solver so the O(n^2) getDeducedSharedEqualities loops can
+    // skip shared-term pairs no theory cares about. Non-null only when the flag
+    // is on AND the graph is built; default no-op keeps the pointer null and the
+    // loops unchanged. Pruning is sound (skipping loses only completeness,
+    // caught by ModelValidator -> Unknown, never wrong UNSAT).
+    virtual void setCareGraph(const CareGraph* cg) { (void)cg; }
+
     virtual TheoryCheckResult assertInterfaceEquality(
         SharedTermId a, SharedTermId b, SatLit reason, int level) {
         (void)a; (void)b; (void)reason; (void)level;
@@ -88,6 +99,21 @@ public:
         return false;
     }
 
+    // Nelson-Oppen arrangement support: are the two shared terms ACTIVELY
+    // DISEQUAL on this solver's side — i.e. does it hold an asserted/derived
+    // disequality (a-b != 0, e.g. a native (distinct a b))? The combination
+    // certificate uses this to EXCLUDE a model-coinciding shared-arg pair from
+    // being a congruence obligation: if a != b is asserted, the coincidence is a
+    // model artifact (a valid model separates them), not an undischarged
+    // congruence — so the SAT verdict is recoverable (this is the uflra_007
+    // over-floor fix). SUFFICIENT only (may miss a derived disequality); a miss
+    // merely keeps the conservative floor, never removes a real obligation, so it
+    // is sound. Default false.
+    virtual bool sharedTermsActivelyDisequal(SharedTermId a, SharedTermId b) const {
+        (void)a; (void)b;
+        return false;
+    }
+
     // Nelson-Oppen arrangement support: the combination layer calls this on the
     // arith solver when it emits a model-based arrangement SPLIT over (a,b). It
     // authorizes the arith solver to MODEL-BRANCH a later DECIDED interface
@@ -98,6 +124,42 @@ public:
     // and the convex model is left to the existing machinery). Default: no-op.
     virtual void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {
         (void)a; (void)b;
+    }
+
+    // Phase 0 combination SAT certificate (positive-completeness proof). Returns
+    // true ONLY if this solver can POSITIVELY certify that its current state is a
+    // COMPLETE, consistent SAT model — every obligation discharged (EUF: congruence
+    // closed + all asserted (dis)equalities hold + no pending merge/array obligation;
+    // LIA: simplex consistent + integral + all interface (dis)equalities honored).
+    // FAIL-CLOSED: the default is `false` — a solver that cannot prove completeness
+    // (e.g. an undetected obligation type) must NOT be trusted, so the combination
+    // floor downgrades to sound Unknown. `reason` (optional) names what blocked the
+    // certificate, for diagnostics.
+    virtual bool satComplete(std::string* reason = nullptr) const {
+        if (reason) *reason = "theory has no completeness certificate";
+        return false;
+    }
+
+    // Phase 1 combination-arrangement detector (EUF override). True iff a pending
+    // UF-argument arrangement (shared bridge-vars/args value-equal but not merged,
+    // so an application congruence is undischarged) blocks completeness. Default
+    // false (only EUF owns congruence). `valueEqual` compares two shared terms'
+    // arith-model values, supplied by the combination layer.
+    virtual bool hasUnarrangedUfCongruence(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        std::string* reason = nullptr) const {
+        (void)valueEqual; (void)reason;
+        return false;
+    }
+
+    // Phase 1 arrangement (recovery): the shared-term argument pairs to split
+    // (a=b ∨ a≠b) so an undischarged UF-application congruence is resolved.
+    // Default empty (only EUF owns congruence). See EufSolver override.
+    virtual std::vector<std::pair<SharedTermId, SharedTermId>>
+    collectArrangeableUfArgPairs(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
+        (void)valueEqual;
+        return {};
     }
 
     struct TheoryModel {

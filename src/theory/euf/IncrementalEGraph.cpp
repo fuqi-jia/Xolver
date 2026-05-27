@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <queue>
 #include <iostream>
+#include <cstdlib>
 
 namespace zolver {
 
@@ -11,7 +12,9 @@ struct ExplainContext {
     std::unordered_set<uint64_t> activePairs;
 };
 
-IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {}
+IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {
+    fastMerge_ = std::getenv("ZOLVER_UF_FAST_CC") != nullptr;
+}
 
 void IncrementalEGraph::clear() {
     uf_ = RollbackUnionFind();
@@ -209,13 +212,18 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
         return {false, NullEClass, NullEClass};
     }
 
-    // CRITICAL: collect affected parents BEFORE union, while both roots
-    // are still valid representatives.
-    std::vector<EufTermId> affected = collectParents(ra);
-    auto affectedB = collectParents(rb);
-    affected.insert(affected.end(), affectedB.begin(), affectedB.end());
-    std::sort(affected.begin(), affected.end());
-    affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    // CRITICAL: in the default path, collect affected parents BEFORE union,
+    // while both roots are still valid representatives. In fast-CC mode we
+    // instead collect only the LOSER class's parents AFTER union (below), since
+    // only those members' representative changes.
+    std::vector<EufTermId> affected;
+    if (!fastMerge_) {
+        affected = collectParents(ra);
+        auto affectedB = collectParents(rb);
+        affected.insert(affected.end(), affectedB.begin(), affectedB.end());
+        std::sort(affected.begin(), affected.end());
+        affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    }
 
     MergeRecord rec;
     rec.id = static_cast<MergeId>(mergeRecords_.size());
@@ -240,6 +248,19 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
     mergeRecords_.push_back(rec);
 
     proofForest_.addEdge(a, b, reason);
+
+    // Fast-CC: collect the LOSER class's parents now (before the member append
+    // below — members_[src] still holds exactly the loser's pre-merge members,
+    // whose representative just changed to dst). Only these parents can acquire
+    // a new canonical signature; the winner's parents are unchanged.
+    if (fastMerge_) {
+        for (EufTermId m : members_[src]) {
+            const auto& ps = tm_.parentsOf(m);
+            affected.insert(affected.end(), ps.begin(), ps.end());
+        }
+        std::sort(affected.begin(), affected.end());
+        affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
+    }
 
     memberTrail_.push_back({dst, src, members_[dst].size()});
     members_[dst].insert(members_[dst].end(),
@@ -283,6 +304,7 @@ EGraphSnapshot IncrementalEGraph::snapshot() const {
 }
 
 void IncrementalEGraph::rollback(EGraphSnapshot snap) {
+#ifndef NDEBUG
     FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
     if (dbg) {
         fprintf(dbg, "[EGRAPH_ROLLBACK] sigSnap=%zu csSnap=%zu pfSnap=%zu ufSnap=%zu\n",
@@ -290,11 +312,13 @@ void IncrementalEGraph::rollback(EGraphSnapshot snap) {
         fprintf(dbg, "  before csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
         fclose(dbg);
     }
+#endif
     proofForest_.rollback(snap.proofForestSnap);
     mergeRecords_.resize(snap.mergeRecordSize);
     nextTermToRegister_ = snap.nextTermToRegister;
     rollbackCurrentSig(snap.currentSigSnap);
     sigTable_.rollback(snap.sigTableSnap);
+#ifndef NDEBUG
     dbg = fopen("/tmp/sig_inv_fail.log", "a");
     if (dbg) {
         fprintf(dbg, "  after csTrail=%zu sigTrail=%zu\n", currentSigTrail_.size(), sigTable_.snapshot());
@@ -303,13 +327,14 @@ void IncrementalEGraph::rollback(EGraphSnapshot snap) {
 
     // Verify rollback actually truncated the trail
     if (sigTable_.snapshot() != snap.sigTableSnap) {
-        FILE* dbg = fopen("/tmp/sig_inv_fail.log", "a");
-        if (dbg) {
-            fprintf(dbg, "[ROLLBACK_BUG] sigTable trail after rollback=%zu expected=%zu\n",
+        FILE* dbg2 = fopen("/tmp/sig_inv_fail.log", "a");
+        if (dbg2) {
+            fprintf(dbg2, "[ROLLBACK_BUG] sigTable trail after rollback=%zu expected=%zu\n",
                     sigTable_.snapshot(), snap.sigTableSnap);
-            fclose(dbg);
+            fclose(dbg2);
         }
     }
+#endif
 
     while (memberTrail_.size() > snap.memberTrailSize) {
         auto ch = memberTrail_.back();

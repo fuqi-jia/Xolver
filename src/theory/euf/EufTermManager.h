@@ -78,11 +78,20 @@ public:
         return t < parents_.size() ? parents_[t] : empty;
     }
 
-    std::string symbolName(FuncSymbolId sym) const;
+    // O(1) reverse lookup (was an O(#symbols) linear scan over symbols_).
+    const std::string& symbolName(FuncSymbolId sym) const;
+
+    // True iff any "#builtin.*" function symbol has been interned. Lets the
+    // EUF saturation loop skip constant-folding work entirely in problems that
+    // have no arithmetic builtins (e.g. pure QF_UF), where it can never fire.
+    bool hasBuiltinSymbols() const { return hasBuiltinSymbols_; }
 
 private:
     std::vector<ENode> nodes_;
     std::unordered_map<FuncSymbolKey, FuncSymbolId, FuncSymbolKeyHash> symbols_;
+    // Dense reverse index: symbolNames_[id] == that symbol's name.
+    std::vector<std::string> symbolNames_;
+    bool hasBuiltinSymbols_ = false;
     std::unordered_map<TermKey, EufTermId, TermKeyHash> termMap_;
     std::unordered_map<ExprId, EufTermId> exprToTerm_;
 

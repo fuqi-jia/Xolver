@@ -17,6 +17,14 @@ struct PendingMerge {
     EufTermId a;
     EufTermId b;
     MergeReason reason;
+    // Decision level this merge belongs to. Asserted/interface merges carry
+    // their literal's level; congruence/array merges generated during saturation
+    // inherit the level of the merge that triggered them. The EUF saturation
+    // processes merges in ascending level order, so the egraph's size-based undo
+    // trail stays aligned with decision-level backtrack boundaries. (Interface
+    // equalities can be injected out of record order, so record order alone is
+    // not a reliable proxy for level — A4's combination note.)
+    int level = 0;
 };
 
 struct ExplainContext;
@@ -79,6 +87,12 @@ public:
 private:
     EufTermManager& tm_;
     RollbackUnionFind uf_;
+
+    // ZOLVER_UF_FAST_CC: after a merge, refresh signatures for parents of the
+    // LOSER class only (their members' representative changed). The winner
+    // class's parents keep the same representative, so their canonical
+    // signatures are unchanged — re-scanning them is wasted work. Read once.
+    bool fastMerge_ = false;
 
     std::vector<std::vector<EufTermId>> members_;
     std::vector<MemberChange> memberTrail_;

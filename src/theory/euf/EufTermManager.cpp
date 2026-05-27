@@ -7,6 +7,8 @@ namespace zolver {
 void EufTermManager::clear() {
     nodes_.clear();
     symbols_.clear();
+    symbolNames_.clear();
+    hasBuiltinSymbols_ = false;
     termMap_.clear();
     exprToTerm_.clear();
     parents_.clear();
@@ -23,6 +25,9 @@ FuncSymbolId EufTermManager::internSymbol(const std::string& name,
     if (it != symbols_.end()) return it->second;
     FuncSymbolId id = static_cast<FuncSymbolId>(symbols_.size());
     symbols_.emplace(std::move(key), id);
+    // Keep the dense reverse index aligned with the freshly-assigned id.
+    symbolNames_.push_back(name);
+    if (name.rfind("#builtin.", 0) == 0) hasBuiltinSymbols_ = true;
     return id;
 }
 
@@ -80,11 +85,10 @@ EufTermId EufTermManager::internConstant(const std::string& name, SortId sort) {
 }
 
 
-std::string EufTermManager::symbolName(FuncSymbolId sym) const {
-    for (const auto& [key, id] : symbols_) {
-        if (id == sym) return key.name;
-    }
-    return "?" + std::to_string(sym);
+const std::string& EufTermManager::symbolName(FuncSymbolId sym) const {
+    static const std::string unknown = "?";
+    if (sym < symbolNames_.size()) return symbolNames_[sym];
+    return unknown;
 }
 
 EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {

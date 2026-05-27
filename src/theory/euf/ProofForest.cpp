@@ -1,89 +1,102 @@
 #include "theory/euf/ProofForest.h"
-#include <algorithm>
-#include <queue>
-#include <unordered_map>
+#include <unordered_set>
 
 namespace zolver {
 
-void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
-    size_t edgeId = edges_.size();
-    edges_.push_back({u, v, reason});
-
-    if (u >= adj_.size()) adj_.resize(u + 1);
-    if (v >= adj_.size()) adj_.resize(v + 1);
-
-    adj_[u].push_back({v, edgeId});
-    adj_[v].push_back({u, edgeId});
-
-    activeEdgeCount_ = edges_.size();
+void ProofForest::clear() {
+    parent_.clear();
+    edgeLabelIdx_.clear();
+    labels_.clear();
+    trail_.clear();
 }
 
-size_t ProofForest::snapshot() const {
-    return activeEdgeCount_;
+void ProofForest::ensureNode(EufTermId t) {
+    if (t >= parent_.size()) {
+        size_t old = parent_.size();
+        parent_.resize(t + 1);
+        edgeLabelIdx_.resize(t + 1, 0);
+        for (size_t i = old; i <= t; ++i) {
+            parent_[i] = static_cast<EufTermId>(i);  // each new node is its own root
+        }
+    }
+}
+
+void ProofForest::setParent(EufTermId node, EufTermId newParent, size_t newLabelIdx) {
+    trail_.push_back({node, parent_[node], edgeLabelIdx_[node]});
+    parent_[node] = newParent;
+    edgeLabelIdx_[node] = newLabelIdx;
+}
+
+void ProofForest::makeRoot(EufTermId u) {
+    // Reverse the chain u → p1 → p2 → ... → root so that u becomes the root,
+    // carrying each edge's label with the edge as its direction flips.
+    EufTermId p1 = parent_[u];
+    size_t lUp1 = edgeLabelIdx_[u];   // label of edge u ↔ p1
+    setParent(u, u, 0);               // u is now a root
+    if (p1 == u) return;              // u was already a root: nothing to reverse
+
+    EufTermId cur = p1;
+    size_t edgeLabel = lUp1;          // label of the edge between cur and its (new) child
+    EufTermId newParent = u;
+    while (true) {
+        EufTermId curOldParent = parent_[cur];
+        size_t curOldLabel = edgeLabelIdx_[cur];
+        bool curIsRoot = (curOldParent == cur);
+        setParent(cur, newParent, edgeLabel);  // cur now points back toward u
+        if (curIsRoot) break;
+        newParent = cur;
+        edgeLabel = curOldLabel;
+        cur = curOldParent;
+    }
+}
+
+void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
+    ensureNode(u);
+    ensureNode(v);
+    size_t labelIdx = labels_.size();
+    labels_.push_back(reason);
+    makeRoot(u);                     // u becomes the root of its tree
+    setParent(u, v, labelIdx);       // attach u (and its reoriented tree) under v
 }
 
 void ProofForest::rollback(size_t snap) {
-    // Remove edges with edgeId >= snap from adjacency lists.
-    for (size_t eid = snap; eid < edges_.size(); ++eid) {
-        const auto& e = edges_[eid];
-        if (e.u < adj_.size()) {
-            auto& au = adj_[e.u];
-            au.erase(std::remove_if(au.begin(), au.end(),
-                [eid](const auto& p){ return p.second == eid; }), au.end());
-        }
-        if (e.v < adj_.size()) {
-            auto& av = adj_[e.v];
-            av.erase(std::remove_if(av.begin(), av.end(),
-                [eid](const auto& p){ return p.second == eid; }), av.end());
-        }
+    while (trail_.size() > snap) {
+        ParentChange c = trail_.back();
+        trail_.pop_back();
+        parent_[c.node] = c.oldParent;
+        edgeLabelIdx_[c.node] = c.oldLabelIdx;
     }
-    edges_.resize(snap);
-    activeEdgeCount_ = snap;
-}
-
-void ProofForest::clear() {
-    edges_.clear();
-    adj_.clear();
-    activeEdgeCount_ = 0;
+    // labels_ is append-only: entries added after `snap` are now unreferenced
+    // (their edges were rolled back) and are never read again.
 }
 
 std::vector<size_t> ProofForest::path(EufTermId u, EufTermId v) const {
     if (u == v) return {};
-    if (u >= adj_.size() || v >= adj_.size()) return {};
+    if (u >= parent_.size() || v >= parent_.size()) return {};
 
-    std::queue<EufTermId> q;
-    std::unordered_map<EufTermId, EufTermId> parentTerm;
-    std::unordered_map<EufTermId, size_t> parentEdge;
-
-    q.push(u);
-    parentTerm[u] = u;
-
-    while (!q.empty()) {
-        EufTermId cur = q.front();
-        q.pop();
-
-        if (cur >= adj_.size()) continue;
-        for (const auto& [next, edgeId] : adj_[cur]) {
-            if (edgeId >= activeEdgeCount_) continue;
-            if (parentTerm.count(next)) continue;
-
-            parentTerm[next] = cur;
-            parentEdge[next] = edgeId;
-
-            if (next == v) {
-                std::vector<size_t> result;
-                EufTermId node = v;
-                while (node != u) {
-                    result.push_back(parentEdge[node]);
-                    node = parentTerm[node];
-                }
-                std::reverse(result.begin(), result.end());
-                return result;
-            }
-            q.push(next);
-        }
+    // Ancestors of u (u up to its root).
+    std::unordered_set<EufTermId> uAnc;
+    for (EufTermId c = u;;) {
+        uAnc.insert(c);
+        EufTermId p = parent_[c];
+        if (p == c) break;
+        c = p;
     }
-    return {};
+
+    // Walk v up to the nearest common ancestor.
+    EufTermId nca = NullEufTerm;
+    for (EufTermId c = v;;) {
+        if (uAnc.count(c)) { nca = c; break; }
+        EufTermId p = parent_[c];
+        if (p == c) break;
+        c = p;
+    }
+    if (nca == NullEufTerm) return {};  // different trees
+
+    std::vector<size_t> out;
+    for (EufTermId c = u; c != nca; c = parent_[c]) out.push_back(edgeLabelIdx_[c]);
+    for (EufTermId c = v; c != nca; c = parent_[c]) out.push_back(edgeLabelIdx_[c]);
+    return out;
 }
 
 } // namespace zolver

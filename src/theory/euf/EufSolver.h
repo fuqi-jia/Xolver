@@ -48,6 +48,8 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    void setCareGraph(const CareGraph* cg) override { careGraph_ = cg; }
+
     // Nelson-Oppen arrangement query: are the two shared terms currently in the
     // SAME EUF equivalence class? Used by the combination layer (model-based
     // arrangement splitting) to decide whether an arith-equal pair of shared
@@ -60,6 +62,35 @@ public:
     }
 
     std::optional<TheoryModel> getModel() const override;
+
+    bool satComplete(std::string* reason = nullptr) const override;
+
+    // Phase 1 combination-arrangement detector. Returns true iff there exist two
+    // applications of the SAME function symbol that are NOT in the same egraph
+    // class, yet every argument position is either already merged OR a pair of
+    // SHARED terms the caller reports value-equal (valueEqual) — i.e. arranging
+    // those shared args equal would force the applications congruent. Such a
+    // pending arrangement means the combination model is NOT complete (the Wisa
+    // select_format(fmt1) ≅ select_format(k) obligation). `valueEqual` is the
+    // arith-model value comparison supplied by the combination layer.
+    bool hasUnarrangedUfCongruence(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        std::string* reason = nullptr) const override;
+
+    // Phase 1 arrangement (recovery). Collects the shared-term argument pairs to
+    // split (a=b ∨ a≠b): the differing-but-value-equal-and-not-merged arguments
+    // of same-function applications that arranging would make congruent. The
+    // combination layer emits a one-time split per pair at Full effort. Finite +
+    // fixed (UF apps + bridge vars are created pre-solve; arranging spawns no new
+    // pairs) -> provably terminating. Shares logic with the detector above.
+    std::vector<std::pair<SharedTermId, SharedTermId>> collectArrangeableUfArgPairs(
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const override;
+
+    // Diagnostic / test hook: count active AssertedEquality merges whose
+    // justifying literal is no longer on the trail (stale merges left by an
+    // inconsistent backtrack). Must be 0 after any backtrack — exposed so tests
+    // can assert the level-aware backtrack invariant directly.
+    int debugCountStaleMerges() const;
 
 private:
     // Build the array/scalar model from the LIVE egraph state. Must be called
@@ -91,15 +122,22 @@ private:
         BoolConstMark boolMark = BoolConstMark::None;
     };
 
-    struct LevelSnapshot {
+    // Egraph state at a decision-level boundary: egraphBefore is the egraph
+    // snapshot captured the moment check() begins processing merges of `level`
+    // (i.e. AFTER all lower-level merges are applied). Recorded only for levels
+    // that actually produce merges; entries are kept sorted ascending by level.
+    // Backtrack to target restores the boundary of the SMALLEST level > target
+    // (whose egraphBefore == state after all level-≤target merges), which works
+    // because the saturation applies merges in ascending level order so the
+    // egraph's size-based undo trail is level-monotonic.
+    struct EgraphBoundary {
         int level;
-        size_t trailSizeBeforeLevel;
-        EGraphSnapshot egraphSnapshotBeforeLevel;
-        size_t mergeQueueSize;
+        EGraphSnapshot egraphBefore;
     };
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    const CareGraph* careGraph_ = nullptr;  // ZOLVER_COMB_CAREGRAPH, set by TheoryManager
     EufTermManager termManager_;
     IncrementalEGraph egraph_;
 
@@ -112,7 +150,7 @@ private:
     std::vector<ActiveAssignment> trail_;
     std::vector<size_t> scopeLimits_;
     std::vector<EGraphSnapshot> scopeSnapshots_;
-    std::vector<LevelSnapshot> levelSnapshots_;
+    std::vector<EgraphBoundary> egraphBoundaries_;
 
     std::vector<ActiveDisequality> disequalities_;
 
@@ -124,10 +162,30 @@ private:
     EufTermId trueTerm_ = NullEufTerm;
     EufTermId falseTerm_ = NullEufTerm;
 
-    void ensureSnapshotForLevel(int level);
+    // Record an egraph boundary for `level` (state before its merges) if not
+    // already recorded. Called from check() at each level transition.
+    void recordEgraphBoundary(int level);
 
     // Fallback conflict when explainEquality fails (ensures UNSAT is proven)
     std::vector<SatLit> allActiveReasons() const;
+
+    // Build the conflict clause for a disequality (a != b) whose two sides have
+    // become equal in the egraph: explainEquality(a,b) + the diseq's own reason.
+    // Falls back to allActiveReasons() if the explanation is unavailable (keeps
+    // UNSAT sound). Shared by the eager watch and the post-loop diseq scan.
+    TheoryConflict buildDiseqConflict(const ActiveDisequality& d);
+
+    // ZOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
+    // after each merge in the saturation loop we check only the disequalities
+    // that touch the just-merged (loser) class, catching the conflict the moment
+    // it forms (shorter explanation, no wasted further congruence). Read once.
+    // Re-enabled after the N-O proof forest + level-aware backtrack made
+    // mid-saturation explainEquality sound (the bug that forced the revert).
+    bool diseqWatchEnabled_ = false;
+    // Scratch index rebuilt per check() when the watch is on: diseq endpoint
+    // term -> list of (index into the vector, 0=local diseq / 1=shared diseq).
+    std::unordered_map<EufTermId, std::vector<std::pair<uint32_t, uint8_t>>> diseqByTerm_;
+    void rebuildDiseqIndex();
 
     void initializeBoolConstants();
     void onEclassMerged(EClassId kept, EClassId killed);

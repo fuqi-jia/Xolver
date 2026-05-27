@@ -1,13 +1,17 @@
+#include <cstdio>
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "sat/SatSolver.h"
+#include "expr/ir.h"
 #include <cassert>
 #include <algorithm>
 #include <unordered_map>
 #include <gmpxx.h>
+#include <cstdlib>
+#include <cctype>
 #include <map>
 #include <functional>
 
@@ -37,7 +41,39 @@ void TheoryManager::clearSolvers() {
     snapshots_.clear();
     deducedEqCache_.clear();
     emittedArrangementSplits_.clear();
+    careGraph_.clear();
     aggStats_ = AggregateStats{};
+}
+
+void TheoryManager::ensureCareGraph() {
+    if (!careGraphEnvChecked_) {
+        careGraphEnabled_ = (std::getenv("ZOLVER_COMB_CAREGRAPH") != nullptr);
+        careGraphEnvChecked_ = true;
+    }
+    if (!careGraphEnabled_ || careGraph_.built()) return;
+    if (!sharedTermRegistry_) return;
+    const CoreIr* ir = sharedTermRegistry_->coreIr();
+    if (!ir) return;
+    careGraph_.build(*ir, *sharedTermRegistry_);
+    // Hand the built care graph to every solver so their O(n^2)
+    // getDeducedSharedEqualities loops can prune inert shared-term pairs.
+    for (auto& s : solvers_) s->setCareGraph(&careGraph_);
+}
+
+bool TheoryManager::useSatMin() {
+    if (!satMinEnvChecked_) {
+        satMinEnabled_ = (std::getenv("ZOLVER_SAT_MIN") != nullptr);
+        satMinEnvChecked_ = true;
+    }
+    return satMinEnabled_;
+}
+
+bool TheoryManager::useModelBased() {
+    if (!modelBasedEnvChecked_) {
+        modelBasedEnabled_ = (std::getenv("ZOLVER_COMB_MODEL_BASED") != nullptr);
+        modelBasedEnvChecked_ = true;
+    }
+    return modelBasedEnabled_;
 }
 
 std::vector<std::string> TheoryManager::activeTheoryNames() const {
@@ -166,12 +202,17 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
-    auto makeFalsifiedConflict = [](const std::vector<SatLit>& rawReasons) {
+    bool satMin = useSatMin();
+    auto makeFalsifiedConflict = [satMin](const std::vector<SatLit>& rawReasons) {
         TheoryConflict fc;
         fc.clause.reserve(rawReasons.size());
         for (auto lit : rawReasons) {
             fc.clause.push_back(lit.negated());
         }
+        // Theory-agnostic minimization (ZOLVER_SAT_MIN): dedup the negated
+        // reasons. Sound — dedup preserves the literal set, so falsified-ness
+        // is unchanged — and strictly shortens the learned clause.
+        if (satMin) ConflictMinimizer::dedup(fc.clause);
         return fc;
     };
 
@@ -254,6 +295,9 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
 
     // ---- Nelson-Oppen combination path ----
+
+    // Build the demand-driven care graph once (no-op unless ZOLVER_COMB_CAREGRAPH).
+    ensureCareGraph();
 
     // 1. Process pending SAT-assigned shared equalities/disequalities
     for (auto& ev : pendingSharedEqEvents_) {
@@ -339,6 +383,17 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
+        // Conflict-source attribution (ZOLVER_COMB_CONFLICT_TRACE): name the
+        // solver behind a combination-path conflict so we can route the eventual
+        // correctness fix (e.g. an unsound Standard-effort NIA conflict -> A2).
+        if (tr.kind != TheoryCheckResult::Kind::Consistent &&
+            std::getenv("ZOLVER_COMB_CONFLICT_TRACE")) {
+            std::cerr << "[CONFLICT-SRC] solver=" << (int)solver->id()
+                      << " effort=" << (effort == TheoryEffort::Full ? "Full" : "Standard")
+                      << " kind=" << (int)tr.kind
+                      << " size=" << (tr.conflictOpt ? tr.conflictOpt->clause.size() : 0)
+                      << "\n";
+        }
         if (tr.kind == TheoryCheckResult::Kind::Conflict && tr.conflictOpt) {
             if (!conflictIsGenuine(tr.conflictOpt->clause)) {
                 // Spurious interface-(dis)equality conflict: the reasons do not
@@ -349,7 +404,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
         }
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
-            std::cerr << "[TM-CHECK] solver=" << (int)solver->id()
+            NO_DBG << "[TM-CHECK] solver=" << (int)solver->id()
                    << " kind=" << (int)tr.kind;
             if (tr.conflictOpt) {
                 NO_DBG << " clause=" << debug::fmtClause(tr.conflictOpt->clause);
@@ -370,6 +425,17 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
         for (auto& prop : props) {
+            // Care-graph prune: a deduced equality between two terms that
+            // neither appears in a function/array-arg nor an Eq/Distinct cannot
+            // fire any EUF inference, so skip materializing its atom/lemma. Not
+            // propagating a sound fact can never create a conflict (no wrong
+            // UNSAT); at worst it loses a refinement caught by ModelValidator.
+            if (careGraphEnabled_ && !careGraph_.caresPair(prop.a, prop.b)) {
+                NO_DBG << "[NO] care-graph skip deduced EQ "
+                       << stName(sharedTermRegistry_, prop.a) << " = "
+                       << stName(sharedTermRegistry_, prop.b) << "\n";
+                continue;
+            }
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
             NO_DBG << "[NO] deduced EQ " << stName(sharedTermRegistry_, prop.a)
                    << " = " << stName(sharedTermRegistry_, prop.b)
@@ -393,6 +459,10 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             for (auto& reason : prop.reasons) {
                 lemma.lits.push_back(reason.negated());
             }
+            // Minimize (ZOLVER_SAT_MIN) the reason side before appending the
+            // implied-equality literal, then re-append: dedup must not drop the
+            // (unique) consequent. Sound — the lemma's literal set is preserved.
+            if (satMin) ConflictMinimizer::dedup(lemma.lits);
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
@@ -401,25 +471,49 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // 4. Model-based arrangement splitting (array combination logics only).
+    // 4. Model-based arrangement splitting.
     //
     // The per-theory models can be each-consistent yet globally inconsistent
     // because the Nelson-Oppen ARRANGEMENT over shared scalars is incomplete:
     // arith freely picks values for unconstrained shared index/element terms
     // (e.g. i0 = i1 = 0), but that implied equality is never decided by SAT, so
     // EUF/the array reasoner never sees it and cannot fire Row1/congruence. The
-    // combined point validates per-theory but the model-validation gate then
-    // downgrades Sat -> Unknown.
+    // combined point validates per-theory but the combination then returns a
+    // globally-inconsistent model:
+    //   - array logics: model-validation downgrades Sat -> Unknown;
+    //   - QF_UFLIA/UFNIA/UFNRA: a genuinely UNSAT formula (e.g. a UF pigeonhole
+    //     over a bounded integer domain) is reported SAT because the arrangement
+    //     that would expose the congruence conflict was never closed (the
+    //     existing combination false-SAT class).
     //
     // Fix (only at Full effort): when two USER (non-internal) shared scalar
     // terms have the SAME arith-model value but are NOT yet merged in EUF and
     // their interface (dis)equality is still undecided, emit ONE arrangement
     // SPLIT lemma  (a = b) OR (not (a = b))  over the shared-equality atom that
-    // both theories observe. The SAT solver must commit; the array reasoner
-    // then refutes the bad arrangement (forcing i0 != i1) and arith honors a
-    // decided interface disequality, yielding a valid model. Deduped by stable
-    // pair key (finite #pairs => terminates).
-    if (arrayCombinationMode_ && effort == TheoryEffort::Full &&
+    // both theories observe. The split is a tautology, so it is sound by
+    // construction; the SAT solver must commit, and EUF/arith then react through
+    // the validated interface (dis)equality paths (EUF refutes a bad merge;
+    // arith honors a decided disequality via allowInterfaceDiseqModelBranch).
+    // Once every same-value pair is decided, the arrangement is CLOSED and the
+    // model read off is globally faithful. Deduped by stable pair key (finite
+    // #pairs => terminates).
+    //
+    // Scope: array combination logics always (arrayCombinationMode_); under
+    // ZOLVER_COMB_MODEL_BASED, additionally the LIA-based non-convex combined
+    // logic QF_UFLIA. Excluded:
+    //   - UFLRA (convex: deduced-equality sharing is already complete);
+    //   - UFNIA/UFNRA: their nonlinear solver (NIA/NRA) does not expose
+    //     sharedTermArithValue and the arrangement+nonlinear-branch interaction
+    //     does not converge (the LIA/LRA mirror's value drives a split that NIA
+    //     keeps re-opening -> non-termination). NIA/NRA model extraction is a
+    //     separate (A2) workstream; gating it out here keeps this fix sound AND
+    //     terminating for the bucket it actually fixes.
+    bool hasNonlinearArith = solverByTheory_.count(TheoryId::NIA) ||
+                             solverByTheory_.count(TheoryId::NRA) ||
+                             solverByTheory_.count(TheoryId::NIRA);
+    bool modelArrange = arrayCombinationMode_ ||
+                        (useModelBased() && nonConvexMode_ && !hasNonlinearArith);
+    if (modelArrange && effort == TheoryEffort::Full &&
         sharedTermRegistry_ && registry_) {
         // Identify the EUF (array) solver to consult for "already merged?".
         TheorySolver* eufSolver = nullptr;
@@ -456,6 +550,12 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 const auto& B = valued[j];
                 if (A.sort != B.sort) continue;         // only same-sort scalars
                 if (!(A.val == B.val)) continue;        // arith disagrees -> no split
+                // Care-graph prune (demand-driven arrangement): only split a
+                // pair some theory cares about (index/element/UF-arg or an
+                // Eq/Distinct operand). Skipping an inert pair cannot fire any
+                // array axiom, so it is sound (an unsplit globally-inconsistent
+                // model is caught by ModelValidator, never wrong UNSAT).
+                if (careGraphEnabled_ && !careGraph_.caresPair(A.id, B.id)) continue;
                 // Already arranged on the interface? (SAT committed eq/diseq.)
                 if (sharedEqMgr_.same(A.id, B.id)) continue;
                 if (sharedEqMgr_.diseqKnown(A.id, B.id)) continue;
@@ -490,8 +590,126 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // Phase 1 (ZOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
+    // congruences the scalar loop above cannot reach — the bridge-vars/const
+    // args (internal or constant shared terms used as UF/select arguments) that
+    // are value-equal to a sibling argument but not yet merged. EUF reports the
+    // value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split per
+    // pair. TERMINATION: the UF applications and (purification-created) bridge
+    // vars are fixed pre-solve and arranging spawns no new pairs, so the
+    // candidate set is finite and emittedArrangementSplits_ dedup bounds it.
+    if (effort == TheoryEffort::Full && combinationMode_ && sharedTermRegistry_ &&
+        registry_ && std::getenv("ZOLVER_COMB_UFARG_ARRANGE")) {
+        TheorySolver* eufS = nullptr;
+        auto it = solverByTheory_.find(TheoryId::EUF);
+        if (it != solverByTheory_.end()) eufS = it->second;
+        if (eufS) {
+            for (auto& pr : eufS->collectArrangeableUfArgPairs(
+                     [this](SharedTermId a, SharedTermId b) {
+                         return sharedArgsArrangeable(a, b);
+                     })) {
+                SharedTermId a = pr.first, b = pr.second;
+                if (a == b) continue;
+                if (sharedEqMgr_.same(a, b) || sharedEqMgr_.diseqKnown(a, b)) continue;
+                SharedTermId lo = a < b ? a : b, hi = a < b ? b : a;
+                uint64_t key = (static_cast<uint64_t>(lo) << 32) |
+                               static_cast<uint64_t>(hi);
+                if (!emittedArrangementSplits_.insert(key).second) continue;
+                for (auto* owner : solversOwning(a, b))
+                    owner->allowInterfaceDiseqModelBranch(a, b);
+                SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(a, b);
+                TheoryLemma lemma;
+                lemma.lits.push_back(eqLit);
+                lemma.lits.push_back(eqLit.negated());
+                NO_DBG << "[NO-UFARG] split "
+                       << stName(sharedTermRegistry_, a) << " = "
+                       << stName(sharedTermRegistry_, b) << "\n";
+                return TheoryCheckResult::mkLemma(std::move(lemma));
+            }
+        }
+    }
+
     NO_DBG << "[NO-RET-9] Consistent\n";
     return TheoryCheckResult::consistent();
+}
+
+bool TheoryManager::sharedArgsArrangeable(SharedTermId a, SharedTermId b) const {
+    if (a == b) return false;
+    // DISEQUAL exclusion (the uflra_007 recovery): a (distinct a b) makes the
+    // model coincidence a recoverable artifact, not a congruence obligation. In
+    // combination mode such a disequality lives either as a shared-equality atom
+    // decided FALSE (the usual route for Eq/Distinct over two shared terms) or in
+    // sharedEqMgr_, OR — rarely — as a native arith disequality. Check all.
+    // DISEQUAL exclusion (the uflra_007 recovery): the pair carries an asserted
+    // disequality, so the model coincidence is a recoverable artifact (a valid
+    // model separates them), not a congruence obligation. Sources, in order of
+    // reliability at certificate time: a per-solver interface disequality
+    // (sharedTermsActivelyDisequal — set for a combination (distinct a b)),
+    // sharedEqMgr_, or a decided shared-eq atom (only if the assignment view is
+    // available — it is not on the post-solve certificate path).
+    bool disequal = sharedEqMgr_.diseqKnown(a, b);
+    if (!disequal && registry_ && assignmentView_) {
+        SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(a, b);
+        if (assignmentView_->value(eqLit) == LitValue::False) disequal = true;
+    }
+    std::optional<RealValue> va, vb;
+    for (const auto& solver : solvers_) {
+        if (solver->id() == TheoryId::EUF) continue;
+        if (!solver->supportsCombination()) continue;
+        if (!va) va = solver->sharedTermArithValue(a);
+        if (!vb) vb = solver->sharedTermArithValue(b);
+        if (solver->sharedTermsActivelyDisequal(a, b)) disequal = true;
+    }
+    return va && vb && (*va == *vb) && !disequal;
+}
+
+bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {
+    // Positive completeness proof, fail-closed: certify only if EVERY registered
+    // solver positively certifies its own completeness. A solver that cannot
+    // (default satComplete()==false, or a fired obligation detector) blocks the
+    // certificate, so the api floor downgrades the combination SAT to Unknown.
+    for (const auto& solver : solvers_) {
+        std::string r;
+        if (!solver->satComplete(&r)) {
+            if (reason) *reason = r;
+            return false;
+        }
+    }
+    // Phase 1 combination-arrangement conjunct: per-theory completeness is NOT
+    // combination completeness. A same-function application pair whose differing
+    // shared args COINCIDE in the model but are not merged leaves an undischarged
+    // congruence (Wisa select_format(fmt1) ≅ select_format(k)) -> the model is
+    // globally inconsistent (functional consistency forces the apps equal) ->
+    // cannot certify. The arrangeability test is model-coincidence MINUS native
+    // disequality (sharedArgsArrangeable): a pair carrying an asserted (distinct
+    // a b) is excluded — the coincidence is a model artifact a valid model
+    // separates, so the SAT verdict is recoverable (uflra_007 over-floor fix).
+    for (const auto& solver : solvers_) {
+        for (auto& pr : solver->collectArrangeableUfArgPairs(
+                 [this](SharedTermId a, SharedTermId b) {
+                     return sharedArgsArrangeable(a, b);
+                 })) {
+            // A pair the combination has already ARRANGED — committed equal or
+            // DISEQUAL — is NOT pending. The decisive signal is the SAT
+            // assignment of the pair's shared-equality atom: a DECIDED value
+            // (True = arranged equal, False = arranged disequal, e.g. an asserted
+            // (distinct a b) whose atom is assigned false) means the pair is
+            // resolved. (sharedEqMgr only tracks interface (dis)eqs, missing an
+            // arith-internal/SAT-level (distinct a b) — that over-floored
+            // uflra_007.) Only an UNASSIGNED shared-eq atom is a genuine
+            // undischarged arrangement obligation that blocks completeness.
+            if (sharedEqMgr_.same(pr.first, pr.second)) continue;
+            if (sharedEqMgr_.diseqKnown(pr.first, pr.second)) continue;
+            if (assignmentView_ && registry_) {
+                SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(pr.first, pr.second);
+                if (assignmentView_->value(eqLit) != LitValue::Unknown) continue;
+            }
+            if (reason) *reason = "combination: unarranged UF-argument congruence "
+                                  "(shared bridge-var/arg value-equal but not merged)";
+            return false;
+        }
+    }
+    return true;
 }
 
 std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
@@ -592,6 +810,95 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     for (auto& [name, ai] : aggregated.arrayInterps) {
         remap(ai.defaultVal);
         for (auto& [idx, elem] : ai.entries) { remap(idx); remap(elem); }
+    }
+
+    // ---- Unconstrained-scalar model completion (numericAssignments backfill) ----
+    // A shared scalar that EUF tracks but no arith theory constrains stays an
+    // opaque EUF token ("@e..") after the arith-backed remap above. The validator
+    // does mpq_class on the string channel (fails -> defaults the scalar to 0,
+    // collapsing i != j into 0 = 0 -> Violated) and the typed numericAssignments
+    // channel it PREFERS is empty for them -> strict-validation flips
+    // (auflia_004 / alia_005 class). Mint a DISTINCT integer per distinct token
+    // into BOTH channels, and rewrite the SAME tokens in the array interps, so a
+    // scalar and the array slot it indexes share one token space.
+    //
+    // Sound: minted values respect every EUF (dis)equality — same token -> same
+    // value (preserves equalities), distinct tokens -> distinct values and the
+    // mint avoids every already-assigned number (preserves disequalities, incl.
+    // with arith-constrained scalars) — so no spurious (dis)equality is added.
+    // The validator then confirms instead of seeing Indeterminate. Numeric sorts
+    // only; uninterpreted/Bool tokens keep their own model channels (A3 lane).
+    //
+    // Gated by ZOLVER_COMB_SCALAR_BACKFILL (default OFF, intent default-ON at
+    // integration): a RECOVERY change validated against A5's strict-validation
+    // build. Flag OFF => getModel byte-identical to before.
+    if (sharedTermRegistry_ && std::getenv("ZOLVER_COMB_SCALAR_BACKFILL")) {
+        const CoreIr* ir = sharedTermRegistry_->coreIr();
+        std::unordered_map<std::string, bool> numericScalar;
+        if (ir) {
+            for (SharedTermId st : sharedTermRegistry_->allSharedTerms()) {
+                const auto* s = sharedTermRegistry_->get(st);
+                if (!s || s->name.empty()) continue;
+                auto sk = ir->sortKind(s->sort);
+                if (sk && (*sk == SortKind::Int || *sk == SortKind::Real))
+                    numericScalar[s->name] = true;
+            }
+        }
+
+        // Integers already claimed by a resolved number (plain arith form "3" or
+        // canonical "#n:3"); minted values must avoid these to keep disequalities
+        // with constrained scalars.
+        std::unordered_set<long long> usedNums;
+        auto noteNum = [&](const std::string& v) {
+            std::string body;
+            if (v.rfind("#n:", 0) == 0) body = v.substr(3);
+            else if (!v.empty() && (std::isdigit((unsigned char)v[0]) || v[0] == '-')) body = v;
+            else return;
+            try {
+                mpq_class q(body);
+                if (q.get_den() == 1 && q.get_num().fits_slong_p())
+                    usedNums.insert(q.get_num().get_si());
+            } catch (...) {}
+        };
+        for (auto& [n, v] : aggregated.assignments) { (void)n; noteNum(v); }
+        for (auto& [n, ai] : aggregated.arrayInterps) {
+            (void)n; noteNum(ai.defaultVal);
+            for (auto& [ix, el] : ai.entries) { noteNum(ix); noteNum(el); }
+        }
+
+        long long nextFree = 0;
+        std::unordered_map<std::string, std::string> mint;  // token -> "#n:<int>"
+        auto mintFor = [&](const std::string& tok) -> const std::string& {
+            auto it = mint.find(tok);
+            if (it != mint.end()) return it->second;
+            while (usedNums.count(nextFree)) ++nextFree;
+            long long v = nextFree++;
+            usedNums.insert(v);
+            return mint.emplace(tok, "#n:" + std::to_string(v)).first->second;
+        };
+
+        // Numeric scalars carrying an opaque token: backfill ONLY the typed
+        // numericAssignments channel (which A5's validator prefers). We do NOT
+        // rewrite the string `assignments` channel nor the array-interp tokens:
+        // feeding minted concrete values into those exposed an invalid model for
+        // genuinely array-axiom-constrained "unconstrained" scalars (self-store
+        // cases like alra_010: i0/e0 are pinned by a=store(a,i0,e0), so distinct
+        // minting violates Row2 and the array soundness gate correctly downgrades
+        // to Unknown — a sat->unknown regression). Restricting to the typed
+        // channel lets the validator confirm scalar (dis)equalities (e.g. i!=j)
+        // without perturbing the array-read evaluation. Recovering the self-store
+        // array reads needs real array-aware model construction (A3 lane), not
+        // scalar minting.
+        for (auto& [name, val] : aggregated.assignments) {
+            if (val.empty() || val[0] != '@') continue;      // opaque tokens only
+            if (!numericScalar.count(name)) continue;         // numeric sorts only
+            if (aggregated.numericAssignments.count(name)) continue;  // already typed
+            const std::string& num = mintFor(val);
+            try {
+                aggregated.numericAssignments.emplace(
+                    name, RealValue::fromMpq(mpq_class(num.substr(3))));
+            } catch (...) {}
+        }
     }
 
     if (aggregated.assignments.empty() && aggregated.numericAssignments.empty() &&

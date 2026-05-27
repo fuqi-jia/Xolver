@@ -121,6 +121,15 @@ private:
     std::unordered_map<SatVar, bool> currentAssignment_;
     size_t lastCheckedAssignmentSize_ = 0;
 
+    // Soundness floor (ZOLVER_SAT_DEFER_EARLY_CONFLICT). In combination mode a
+    // Standard-effort cb_propagate theory conflict is UNVALIDATED (conflictIsGenuine
+    // only re-verifies pure shared-equality conflicts; a mixed/theory conflict is
+    // trusted), so an unsound theory conflict can drive a false UNSAT. When set,
+    // such early conflicts are suppressed so the search proceeds to a complete
+    // model and the authoritative Full-effort model check arbitrates. Sound on its
+    // own; intent default-ON at integration, flag for perf A/B.
+    bool deferEarlyConflict_ = false;
+
     TheorySearchStats stats_;
 
 #ifdef ZOLVER_ENABLE_CASESTATS
