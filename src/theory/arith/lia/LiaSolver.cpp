@@ -1294,6 +1294,111 @@ LiaSolver::getDeducedSharedEqualities() {
     return result;
 }
 
+std::vector<TheorySolver::SharedEqualityPropagation>
+LiaSolver::deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxTerms) {
+    std::vector<TheorySolver::SharedEqualityPropagation> result;
+    if (!sharedTermRegistry_ || idxTerms.size() < 2) return result;
+
+    // Map each shared array-index term to its simplex var NAME (skip constants).
+    std::vector<std::pair<SharedTermId, std::string>> idxVars;
+    for (SharedTermId s : idxTerms) {
+        if (const auto* st = sharedTermRegistry_->get(s)) {
+            if (coreIr_ && coreIr_->get(st->coreExpr).isConst()) continue;
+        }
+        std::string nm = getVarNameForSharedTerm(s);
+        if (!nm.empty()) idxVars.push_back({s, nm});
+    }
+    if (idxVars.size() < 2) return result;
+
+    // Coordinate space: 0 = ONE (constant), 1.. = variables by name. Each asserted
+    // equality `sum c_v v = r` becomes the homogeneous form `sum c_v v - r*ONE = 0`.
+    std::unordered_map<std::string, int> varCoord;
+    auto coordOf = [&](const std::string& nm) -> int {
+        auto it = varCoord.find(nm);
+        if (it != varCoord.end()) return it->second;
+        int c = static_cast<int>(varCoord.size()) + 1;  // 0 reserved for ONE
+        varCoord[nm] = c;
+        return c;
+    };
+
+    struct Row { std::map<int, mpq_class> coeffs; std::vector<SatLit> reason; };
+    std::vector<Row> rows;
+    for (const auto& e : theoryTrail_) {
+        if (e.isDiseq || !e.value) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+        const auto& p = std::get<LinearAtomPayload>(e.atom.payload);
+        if (p.rel != Relation::Eq) continue;
+        Row r;
+        for (const auto& t : p.lhs.terms)
+            if (t.second != 0) r.coeffs[coordOf(t.first)] += t.second;
+        const mpq_class& rhs = p.rhs.asRational();
+        if (rhs != 0) r.coeffs[0] += -rhs;   // ONE coord
+        for (auto it = r.coeffs.begin(); it != r.coeffs.end(); )
+            (it->second == 0) ? it = r.coeffs.erase(it) : ++it;
+        if (r.coeffs.empty()) continue;
+        r.reason.push_back(e.lit);
+        rows.push_back(std::move(r));
+    }
+    if (rows.empty()) return result;
+
+    // Forward-eliminate to row echelon, keyed by leading (smallest) coord; each
+    // pivot is normalized to lead-coeff 1 and carries the reasons of the atoms
+    // combined into it. reduce() subtracts pivots from a row, accumulating reasons.
+    std::map<int, Row> pivotByLead;
+    auto reduce = [&](Row& r) {
+        for (;;) {
+            int hit = -1;
+            for (const auto& kv : r.coeffs)
+                if (pivotByLead.count(kv.first)) { hit = kv.first; break; }
+            if (hit < 0) break;
+            const Row& piv = pivotByLead[hit];
+            mpq_class factor = r.coeffs[hit];   // piv lead coeff == 1
+            for (const auto& [pc, pv] : piv.coeffs) {
+                mpq_class nv = r.coeffs[pc] - factor * pv;
+                if (nv == 0) r.coeffs.erase(pc); else r.coeffs[pc] = nv;
+            }
+            r.reason.insert(r.reason.end(), piv.reason.begin(), piv.reason.end());
+        }
+    };
+    for (auto& row : rows) {
+        reduce(row);
+        if (row.coeffs.empty()) continue;  // redundant (already spanned)
+        int lc = row.coeffs.begin()->first;
+        mpq_class lcoeff = row.coeffs[lc];
+        if (lcoeff != 1) for (auto& [c, v] : row.coeffs) v /= lcoeff;
+        pivotByLead[lc] = std::move(row);
+    }
+
+    auto dedupReasons = [](std::vector<SatLit>& rs) {
+        std::sort(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+            return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+        });
+        rs.erase(std::unique(rs.begin(), rs.end(), [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), rs.end());
+    };
+
+    // For each array-index pair, test whether (a - b) reduces to the zero form:
+    // if so, a = b is entailed by the combining atoms (the accumulated reasons).
+    for (size_t i = 0; i < idxVars.size(); ++i) {
+        for (size_t j = i + 1; j < idxVars.size(); ++j) {
+            if (idxVars[i].second == idxVars[j].second) continue;
+            Row target;
+            target.coeffs[coordOf(idxVars[i].second)] += 1;
+            target.coeffs[coordOf(idxVars[j].second)] += -1;
+            for (auto it = target.coeffs.begin(); it != target.coeffs.end(); )
+                (it->second == 0) ? it = target.coeffs.erase(it) : ++it;
+            reduce(target);
+            if (!target.coeffs.empty()) continue;  // a-b not entailed 0
+            dedupReasons(target.reason);
+            if (target.reason.empty()) continue;   // defensive: need a reason
+            result.push_back(TheorySolver::SharedEqualityPropagation{
+                idxVars[i].first, idxVars[j].first, std::move(target.reason)});
+        }
+    }
+    return result;
+}
+
 std::vector<SatLit> LiaSolver::allActiveReasons() const {
     std::vector<SatLit> rs;
     rs.reserve(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());

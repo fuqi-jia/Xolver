@@ -63,6 +63,9 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    std::vector<SharedEqualityPropagation>
+    deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxTerms) override;
+
     std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
 
     void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;

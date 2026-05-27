@@ -460,6 +460,18 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
         auto props = solver->getDeducedSharedEqualities();
+        // At Full effort, augment with bounded atom-level Gaussian implied
+        // equalities over the (few) array-index shared vars — catches index
+        // equalities entailed by a linear COMBINATION of asserted equalities that
+        // the per-atom same-form/2-var detectors miss (read2). Scoped to
+        // array-index pairs + Full only (52b0510's anti-flood discipline).
+        if (effort == TheoryEffort::Full && arrayIdxSet.size() >= 2) {
+            std::vector<SharedTermId> idxVec(arrayIdxSet.begin(), arrayIdxSet.end());
+            auto gauss = solver->deduceIndexEqualitiesByGaussian(idxVec);
+            props.insert(props.end(),
+                         std::make_move_iterator(gauss.begin()),
+                         std::make_move_iterator(gauss.end()));
+        }
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
         for (auto& prop : props) {

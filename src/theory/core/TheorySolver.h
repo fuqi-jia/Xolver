@@ -91,6 +91,21 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // Bounded atom-level Gaussian implied equalities, SCOPED to the given (few)
+    // array-index shared-var pairs (the combination layer supplies them at Full
+    // effort). For each pair (a,b), tests whether a-b == 0 is entailed by the
+    // asserted linear EQUALITY atoms — i.e. whether (e_a - e_b) lies in the
+    // row-space of the equality system (a linear COMBINATION of asserted equalities
+    // yields a-b=0). This catches equalities that the per-atom same-form/2-var
+    // detectors miss (read2: bz+ba = x+y via ba=x+y-bz, distinct definitional
+    // forms). Reason = the combining atom literals (sound and complete). Done at
+    // the atom level (small Gaussian over coefficient rows), never via the simplex
+    // tableau. Default: none (only LIA/LRA implement it).
+    virtual std::vector<SharedEqualityPropagation>
+    deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxTerms) {
+        (void)idxTerms; return {};
+    }
+
     // SharedTermIds used as ARRAY INDEX terms (only the EUF/array solver answers).
     // The combination layer uses this to scope deduced-equality propagation to
     // array-index pairs at Full effort: a pending array Row1/Row2 needs the
