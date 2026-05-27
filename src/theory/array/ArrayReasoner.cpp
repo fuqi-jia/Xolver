@@ -13,6 +13,8 @@ namespace zolver {
 
 ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("ZOLVER_AX_ROW2_CONST") != nullptr;
+    // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
+    selectCompletionEnabled_ = std::getenv("ZOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
 }
 
 std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
@@ -69,6 +71,9 @@ void ArrayReasoner::reset() {
     nextTermToScan_ = 0;
     row2Done_.clear();
     extDone_.clear();
+    selectCompleteDone_.clear();
+    extWitnessIdx_.clear();
+    internalSelect_.clear();
 }
 
 ExprId ArrayReasoner::originExpr(EufTermId t) const {
@@ -146,6 +151,9 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
     EufTermId t = tm_->intern(selExpr, ir);
     if (t != NullEufTerm) {
         egraph_->ensureTermRegistered(t, outQueue);
+        // Mark as internally-synthesized (Row1/Row2/Ext/completion): its index is
+        // NOT a genuine formula read index and must not seed completion.
+        internalSelect_.insert(t);
         // Keep our registry in sync immediately so the new select participates
         // in Const/Row2 reasoning on this very check().
         if (symIsSelect(t) && selectSet_.insert(t).second) {
@@ -155,9 +163,68 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
     return t;
 }
 
+void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
+    if (!selectCompletionEnabled_) return;
+    discoverArrayTerms();
+
+    // (1) OBSERVED read indices: the index arg of every existing select whose
+    // index is NOT a fresh extensionality witness. Excluding Ext witnesses keeps
+    // the index set finite (Ext mints one per array-disequality pair) — without
+    // this, completion fans an unbounded set of witnesses across every array and
+    // destabilizes genuine sats (storecomm). Snapshot the select count first:
+    // internSelect appends to selectTerms_ as we go.
+    std::vector<EufTermId> readIdx;
+    std::unordered_set<EufTermId> seenIdx;
+    size_t nSel = selectTerms_.size();
+    for (size_t k = 0; k < nSel; ++k) {
+        EufTermId sel = selectTerms_[k];
+        if (internalSelect_.count(sel)) continue;  // only ORIGINAL formula reads seed completion
+        const auto& sn = tm_->node(sel);
+        if (sn.args.size() != 2) continue;
+        EufTermId idx = sn.args[1];
+        ExprId idxExpr = originExpr(idx);
+        if (idxExpr != NullExpr && extWitnessIdx_.count(idxExpr)) continue;  // skip Ext witness
+        if (seenIdx.insert(idx).second) readIdx.push_back(idx);
+    }
+    if (readIdx.empty()) return;
+
+    // (2) TARGET arrays = read-closure over the array component: every
+    // array-sorted term (store towers + their bases, const-arrays, array
+    // variables — i.e. array-equality endpoints and store-tower terms). Reading
+    // each at every observed index lets Row1/Row2 fix the values and EUF
+    // congruence link selects on arrays asserted EQUAL (a positive array
+    // equality used as a hypothesis), which the lazy Row2 trigger alone misses.
+    std::vector<EufTermId> arrayTerms;
+    {
+        EufTermId total = static_cast<EufTermId>(tm_->termCount());
+        for (EufTermId t = 0; t < total; ++t) {
+            if (ir_->arraySortParams(tm_->node(t).sort)) arrayTerms.push_back(t);
+        }
+    }
+
+    // select(arr, idx) for every array term x observed read index not yet done.
+    // Row1 (enqueued into outQueue) fixes i==j eagerly; Row2 (full effort) peels
+    // i!=j; congruence links equal arrays. Dedup on (arr, idx) keeps it finite
+    // and idempotent. Bounded by |arrayTerms| x |observed read indices|.
+    for (EufTermId arr : arrayTerms) {
+        ExprId arrExpr = originExpr(arr);
+        if (arrExpr == NullExpr) continue;
+        for (EufTermId idx : readIdx) {
+            uint64_t key = pairKey(arr, idx);
+            if (!selectCompleteDone_.insert(key).second) continue;
+            ExprId idxExpr = originExpr(idx);
+            if (idxExpr == NullExpr) continue;
+            internSelect(arrExpr, idxExpr, outQueue);
+        }
+    }
+}
+
 void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
     if (!active()) return;
     discoverArrayTerms();
+    // Push read indices through store towers BEFORE the Row1/Const pass so the
+    // selects they create get their Row1 eager-merge in this same saturation.
+    completeStoreSelects(outQueue);
 
     // --- Row1: select(store(a,i,v),i) = v ---------------------------------
     // For each store term s=store(a,i,v): intern select(s,i) and merge with v.
@@ -371,6 +438,7 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
         SortId idxSort = NullSort;
         if (auto params = ir.arraySortParams(an.sort)) idxSort = params->first;
         ExprId kExpr = ir.makeFreshVariable(idxSort, "__nlc_ext_idx");
+        extWitnessIdx_.insert(kExpr);  // exclude from read-closure completion
 
         std::deque<PendingMerge> dummy;
         EufTermId selAK = internSelect(aExpr, kExpr, dummy);

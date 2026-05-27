@@ -75,6 +75,21 @@ public:
     // egraph's mergeQueue; the EufSolver saturation loop drains it.
     void enqueueEagerMerges(std::deque<PendingMerge>& outQueue);
 
+    // Read-over-write completion. For each store term s and each read index idx
+    // (an index appearing in some existing select), intern select(s, idx). This
+    // makes a read index propagate THROUGH a store tower that is asserted EQUAL
+    // to another array: lazy Row2 only peels a store when a select on it already
+    // exists, so a positive array equality used as a HYPOTHESIS (e.g.
+    // store(store(store S ...)...) = store(store(store S' ...)...)) leaves the
+    // selects on the towers uninstantiated and the congruence that forces a read
+    // value undischarged -> an actually-unsat formula escapes as a false SAT (the
+    // QF_AX/QF_ALIA read2/read5 class). Creating select(s, idx) lets Row1/Row2 +
+    // congruence decide it. Bounded by |stores| x |read-indices| (the index set
+    // does not grow: created selects reuse existing read indices, and Row2 never
+    // creates new stores), so saturation stays finite. Sound: only tautological
+    // select terms are added, never new assertions.
+    void completeStoreSelects(std::deque<PendingMerge>& outQueue);
+
     // Produce one Row2 or Extensionality lemma if a fresh instance exists.
     // Returns the lemma literals (SAT polarity), or empty if none pending.
     // `disequalities` are the currently-active array-sort disequalities the
@@ -117,6 +132,28 @@ private:
     // and read indices are syntactically-distinct numeric/bool constants. Read
     // once at construction.
     bool row2ConstEnabled_ = false;
+
+    // Read-over-write completion (see completeStoreSelects). Default ON: needed
+    // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). ZOLVER_AX_NO_SELECT_COMPLETE
+    // disables it (A/B baseline only). Read once at construction.
+    bool selectCompletionEnabled_ = true;
+    // Dedup of (store-term-id, read-index-term-id) pairs already completed.
+    std::unordered_set<uint64_t> selectCompleteDone_;
+    // Origin ExprIds of FRESH extensionality witness indices. These must be
+    // EXCLUDED from the completion read-index set: Ext mints one per array
+    // disequality pair, so treating them as read indices would (a) grow the
+    // index set unboundedly and (b) fan a witness across every store for no
+    // reason (Ext already builds the two witness selects it needs). Completion
+    // is for POSITIVE array equalities; Ext owns the disequality side.
+    std::unordered_set<ExprId> extWitnessIdx_;
+    // Select terms created INTERNALLY by internSelect (Row1/Row2/Ext/completion),
+    // as opposed to the ORIGINAL formula selects interned by the EUF term path.
+    // The completion read-index set must be seeded only from ORIGINAL selects:
+    // Row1 synthesizes select(store, store-index) for every write index, so
+    // seeding from internal selects would fan completion across the (irrelevant)
+    // store-index set and blow up genuine sats (storecomm). The genuine reads are
+    // exactly the formula's own select indices.
+    std::unordered_set<EufTermId> internalSelect_;
 
     // A canonical token for t IF its origin is a numeric or boolean constant
     // literal (so distinct tokens ⇒ distinct values). Returns nullopt for
