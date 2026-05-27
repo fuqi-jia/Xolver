@@ -1189,13 +1189,23 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
     std::string symName = termManager_.symbolName(node.symbol);
     if (symName.empty() || symName[0] != '#') return;
 
-    // Collect constant argument values from the equivalence class of each arg
+    // Collect constant argument values from the equivalence class of each arg.
+    // Also record, per arg, the CONSTANT MEMBER term that supplied the value:
+    // the merge "t = eval(args)" is justified by each arg being equal to that
+    // constant (e.g. x+1 = 2 holds because x = 1). Capturing (arg, constMember)
+    // lets explainEquality recurse into explain(arg ≡ constMember) and reach the
+    // base literals — without it the BuiltinEval merge carried an empty reason,
+    // producing an INCOMPLETE conflict explanation (false-UNSAT / stale-merge
+    // dependency hidden from conflict analysis).
     std::vector<mpq_class> values;
+    std::vector<std::pair<EufTermId, EufTermId>> argConstPairs;
     values.reserve(node.args.size());
+    argConstPairs.reserve(node.args.size());
     for (EufTermId arg : node.args) {
         EClassId cid = egraph_.rep(arg);
         bool found = false;
         mpq_class val;
+        EufTermId constMember = NullEufTerm;
         for (EufTermId member : egraph_.classMembers(cid)) {
             const auto& mnode = termManager_.node(member);
             if (mnode.origin == NullExpr) continue;
@@ -1204,11 +1214,13 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
             if (auto* i = std::get_if<int64_t>(&expr.payload.value)) {
                 val = mpq_class(*i);
                 found = true;
+                constMember = member;
                 break;
             } else if (auto* s = std::get_if<std::string>(&expr.payload.value)) {
                 try {
                     val = mpq_class(*s);
                     found = true;
+                    constMember = member;
                     break;
                 } catch (...) {
                     continue;
@@ -1217,6 +1229,7 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
         }
         if (!found) return;
         values.push_back(val);
+        argConstPairs.push_back({arg, constMember});
     }
 
     mpq_class result;
@@ -1265,6 +1278,11 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
         MergeReason mr;
         mr.kind = MergeReasonKind::BuiltinEval;
         mr.lit = SatLit();
+        // Explanation = why each arg equals its constant. explainEquality folds a
+        // non-AssertedEquality edge by recursing on argPairs, so populating them
+        // makes the BuiltinEval merge's explanation complete (reaches the base
+        // literals that fixed the args to constants).
+        mr.argPairs = std::move(argConstPairs);
         mergeQueue_.push_back({t, constTerm, mr});
     }
 }
