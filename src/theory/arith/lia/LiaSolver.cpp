@@ -1219,6 +1219,78 @@ LiaSolver::getDeducedSharedEqualities() {
         }
     }
 
+    // Definitional-form implied equalities (N-variable). assertedVarEqualityReason
+    // only pins a 2-variable DIFFERENCE atom (na - nb = 0). But two shared vars
+    // each asserted equal to the SAME linear form via SEPARATE multi-variable
+    // equalities (e.g. `bridge = bz+ba` and `q = bz+ba`, two 3-var equalities)
+    // are equal by transitivity through the shared form — a linear COMBINATION the
+    // 2-var scan cannot see. This is the computed-array-index combination case
+    // (read2): the LIA-entailed index equality must reach EUF so array Row1/Row2
+    // fires. For each active equality atom and each shared var v in it, build the
+    // canonical isolated form  v = rhs/c_v - sum_{u!=v} (c_u/c_v) u ; shared vars
+    // with IDENTICAL canonical forms are entailed equal. Reason = the two defining
+    // atoms only (the other vars cancel, so they need not appear). SOUND: v1=F and
+    // v2=F entail v1=v2 from exactly those two atoms; an entailed equality only
+    // aids N-O completeness, never a wrong verdict.
+    {
+        std::unordered_map<std::string, SharedTermId> nameToShared;
+        for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+            if (const auto* st = sharedTermRegistry_->get(stId)) {
+                if (coreIr_ && coreIr_->get(st->coreExpr).isConst()) continue;  // consts handled by fixed-value grouping
+            }
+            std::string nm = getVarNameForSharedTerm(stId);
+            if (!nm.empty()) nameToShared.emplace(nm, stId);
+        }
+        // canonical isolated-form key -> [(sharedVar, defining-atom literal)]
+        std::map<std::string, std::vector<std::pair<SharedTermId, SatLit>>> byForm;
+        for (const auto& e : theoryTrail_) {
+            if (e.isDiseq || !e.value) continue;
+            if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+            const auto& p = std::get<LinearAtomPayload>(e.atom.payload);
+            if (p.rel != Relation::Eq) continue;
+            const auto& terms = p.lhs.terms;  // sorted by var name
+            if (terms.size() < 2) continue;   // 2-var handled above; need >=2 here too
+            const mpq_class& rhs = p.rhs.asRational();
+            for (size_t vi = 0; vi < terms.size(); ++vi) {
+                auto sit = nameToShared.find(terms[vi].first);
+                if (sit == nameToShared.end()) continue;   // v not shared
+                const mpq_class& cv = terms[vi].second;
+                if (cv == 0) continue;
+                // Canonical key: const rhs/cv, then (u, -c_u/cv) for u != v
+                // (terms stay name-sorted with vi removed).
+                std::string key = mpq_class(rhs / cv).get_str();
+                key.push_back('|');
+                for (size_t ui = 0; ui < terms.size(); ++ui) {
+                    if (ui == vi) continue;
+                    key += terms[ui].first;
+                    key.push_back(':');
+                    key += mpq_class(-terms[ui].second / cv).get_str();
+                    key.push_back(';');
+                }
+                byForm[key].push_back({sit->second, e.lit});
+            }
+        }
+        // REPRESENTATIVE-based emission (NOT pairwise): publish only v = rep for
+        // each non-rep bucket member, O(g) instead of O(g^2). EUF /
+        // SharedEqualityManager transitive closure derives the remaining
+        // member-member equalities (v1=rep, v2=rep => v1=v2). Each v=rep stays
+        // soundly explained by the two defining atoms. This is an interim N-O
+        // completeness step; the production design is demand-driven (Array posts
+        // a (storeIndex,readIndex) ProveEq demand, this oracle answers only that
+        // pair) — see [[project_array_reasoning]].
+        for (auto& [key, group] : byForm) {
+            (void)key;
+            if (group.size() < 2) continue;
+            const auto& rep = group.front();
+            for (size_t k = 1; k < group.size(); ++k) {
+                if (group[k].first == rep.first) continue;  // same shared term
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    group[k].first, rep.first,
+                    std::vector<SatLit>{group[k].second, rep.second}});
+            }
+        }
+    }
+
     return result;
 }
 
