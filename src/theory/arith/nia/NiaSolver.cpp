@@ -81,7 +81,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       bitBlast_(*kernel_),
       productPositivity_(*kernel_),
       gcdDivisibility_(*kernel_),
-      modularResidue_(*kernel_) {
+      modularResidue_(*kernel_),
+      groebner_(*kernel_) {
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -191,6 +192,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
+    add("nia.groebner",       &NiaSolver::stageGroebner);
     add("nia.icp",            &NiaSolver::stageIcp);
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
@@ -299,6 +301,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // L3 modular residue refutation (default-ON). Sound: only emits UNSAT,
     // and only when the system has no solution modulo a constant power-of-two
     // modulus (an integer solution would project to one) — invariant 7.
+
+    // Polynomial-ideal saturation (default-OFF). Sound: 1∈ideal ⇒ no ℂ-root ⇒
+    // no ℤ-root ⇒ UNSAT (Nullstellensatz direction); bounded Buchberger.
+    // iter-77 cherry-pick of 7afeda9 — Step 5 Gröbner-lite (env var renamed
+    // ZOLVER_* → XOLVER_* to match this branch's naming convention).
+    if (const char* e = std::getenv("XOLVER_NIA_GROBNER"); e && *e && *e != '0')
+        enableGroebner_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-ON).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
@@ -1314,6 +1323,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
         modularLastSignature_ = computeSignature();
         modularLastWasNoChange_ = true;
         modularSignatureValid_ = true;
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageGroebner(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableGroebner_) return std::nullopt;
+    auto r = groebner_.run(normalized_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
     }
     return std::nullopt;
 }

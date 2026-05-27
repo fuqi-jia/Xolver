@@ -16,6 +16,7 @@
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
+#include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -145,8 +146,10 @@ private:
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
+    GroebnerIdealReasoner groebner_;
     bool enableBitBlast_ = true;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    bool enableGroebner_ = false; // XOLVER_NIA_GROBNER: ideal saturation (1∈ideal ⇒ UNSAT) — default-OFF (iter-77 cherry-pick from 7afeda9)
     // L4.1 — modular reasoner warm-start memoization. When the active
     // normalized_ stream's signature matches modularLastSignature_ AND
     // the last run was NoChange, stageModular skips re-running the
@@ -176,6 +179,7 @@ private:
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
     bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
+    // (iter-77 cherry-pick of 7afeda9 added groebner_ field + enableGroebner_ above)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
@@ -286,6 +290,7 @@ private:
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageGroebner(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
