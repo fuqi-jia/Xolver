@@ -82,3 +82,69 @@ TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
     CHECK(r.reasons[0].var == abLit.var);
     CHECK(r.reasons[0].sign == abLit.sign);
 }
+
+// Same recursion, exercised through ARRAY (store) congruence — the shape this
+// lane actually produces (read2-style store towers). store terms are ordinary
+// app nodes on the shared egraph, so a depth-N store chain explains via the same
+// explainEquality<->explainEdge path; the array arg is the deep recursion.
+TEST_CASE("EUF: deeply-nested store-tower congruence explanation does not overflow") {
+    constexpr int kDeep = 60000;
+
+    CoreIr ir;
+    SortId idxSort = ir.allocateSortId();
+    ir.registerSort(idxSort, SortKind::Other);
+    SortId elemSort = ir.allocateSortId();
+    ir.registerSort(elemSort, SortKind::Other);
+    SortId arrSort = ir.allocateSortId();
+    ir.registerSort(arrSort, SortKind::Array);
+
+    ExprId A = ir.add(CoreExpr{Kind::Variable, arrSort, {}, Payload(std::string("A"))});
+    ExprId B = ir.add(CoreExpr{Kind::Variable, arrSort, {}, Payload(std::string("B"))});
+    ExprId i = ir.add(CoreExpr{Kind::Variable, idxSort, {}, Payload(std::string("i"))});
+    ExprId v = ir.add(CoreExpr{Kind::Variable, elemSort, {}, Payload(std::string("v"))});
+
+    // store_k = store(store_{k-1}, i, v); the same i/v at every level, so the
+    // only varying argument is the (deep) array, and A=B propagates by congruence.
+    ExprId sA = A, sB = B;
+    for (int k = 0; k < kDeep; ++k) {
+        sA = ir.add(CoreExpr{Kind::Store, arrSort, {sA, i, v}, {}});
+        sB = ir.add(CoreExpr{Kind::Store, arrSort, {sB, i, v}, {}});
+    }
+
+    EufTermManager tm;
+    EufTermId tA = tm.intern(A, ir);
+    EufTermId tB = tm.intern(B, ir);
+    EufTermId tsA = tm.intern(sA, ir);
+    EufTermId tsB = tm.intern(sB, ir);
+    REQUIRE(tA != NullEufTerm);
+    REQUIRE(tsA != NullEufTerm);
+    REQUIRE(tsB != NullEufTerm);
+
+    IncrementalEGraph eg(tm);
+    std::deque<PendingMerge> q;
+    auto drain = [&]() {
+        while (!q.empty()) {
+            PendingMerge m = q.front();
+            q.pop_front();
+            eg.merge(m.a, m.b, m.reason, q);
+        }
+    };
+    eg.ensureTermRegistered(tsA, q);
+    eg.ensureTermRegistered(tsB, q);
+    drain();
+
+    SatLit abLit(7, true);
+    MergeReason mr;
+    mr.kind = MergeReasonKind::AssertedEquality;
+    mr.lit = abLit;
+    eg.merge(tA, tB, mr, q);
+    drain();
+
+    REQUIRE(eg.same(tsA, tsB));
+
+    ExplainResult r = eg.explainEquality(tsA, tsB);
+    REQUIRE(r.ok);
+    REQUIRE(r.reasons.size() == 1);   // only A = B is asserted along the tower
+    CHECK(r.reasons[0].var == abLit.var);
+    CHECK(r.reasons[0].sign == abLit.sign);
+}
