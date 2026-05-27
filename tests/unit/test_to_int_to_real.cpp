@@ -23,6 +23,29 @@ void setupBasicSorts(CoreIr& ir, SortId& boolSort, SortId& intSort, SortId& real
 
 } // namespace
 
+TEST_CASE("ArithCastNormalizer: wide real-context node survives ir_.add realloc") {
+    // The second visit rebuilds a Real-sorted node's children, calling ir_.add()
+    // per Int-constant child to coerce it to ConstReal. The coercion loop iterated
+    // `node.children` while holding `const auto& node` into exprs_, which ir_.add()
+    // reallocates -> dangling range-for iterator (use-after-realloc SIGSEGV, the
+    // same class as UCP substituteAssertion). Value-copying `node` fixes it. A wide
+    // (zero-nesting) node can only crash via realloc, not recursion.
+    constexpr int kWide = 4000;
+    CoreIr ir;
+    SortId boolSort, intSort, realSort;
+    setupBasicSorts(ir, boolSort, intSort, realSort);
+    CoreExpr wideAdd; wideAdd.kind = Kind::Add; wideAdd.sort = realSort;  // Real context
+    for (int k = 0; k < kWide; ++k)
+        wideAdd.children.push_back(
+            ir.add(CoreExpr{Kind::ConstInt, intSort, {}, Payload(int64_t(k))}));
+    ExprId addId = ir.add(std::move(wideAdd));
+    ExprId zero = ir.add(CoreExpr{Kind::ConstReal, realSort, {}, Payload(std::string("0"))});
+    ir.addAssertion(ir.add(CoreExpr{Kind::Geq, boolSort, {addId, zero}, {}}));
+    ArithCastNormalizer norm(ir);
+    norm.run();   // former: SIGSEGV from dangling node.children iterator mid-coercion
+    CHECK(true);
+}
+
 TEST_CASE("ArithCastNormalizer: to_real(ConstInt)") {
     CoreIr ir;
     SortId boolSort, intSort, realSort;
