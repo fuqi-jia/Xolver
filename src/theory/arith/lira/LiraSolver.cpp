@@ -149,10 +149,14 @@ TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*
         case InternalMilpEngine::MilpResult::Kind::Unsat: {
             auto tc = TheoryConflict{};
             auto precise = milpEngine_.getConflictReasons();
-            if (!precise.empty()) {
-                tc.clause = precise;
-            } else {
+            // A branch-and-bound Unsat is NOT explained by the last LP leaf's
+            // conflict (the branch bounds were essential); using `precise` there
+            // is a too-narrow conflict -> false UNSAT. Only trust the leaf
+            // conflict when the LP relaxation itself was infeasible (not branched).
+            if (r.branched || precise.empty()) {
                 tc.clause = allActiveReasons();
+            } else {
+                tc.clause = precise;
             }
             return TheoryCheckResult::mkConflict(std::move(tc));
         }
@@ -279,10 +283,14 @@ TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
         case InternalMilpEngine::MilpResult::Kind::Unsat: {
             auto tc = TheoryConflict{};
             auto precise = milpEngine_.getConflictReasons();
-            if (!precise.empty()) {
-                tc.clause = precise;
-            } else {
+            // A branch-and-bound Unsat is NOT explained by the last LP leaf's
+            // conflict (the branch bounds were essential); using `precise` there
+            // is a too-narrow conflict -> false UNSAT. Only trust the leaf
+            // conflict when the LP relaxation itself was infeasible (not branched).
+            if (r.branched || precise.empty()) {
                 tc.clause = allActiveReasons();
+            } else {
+                tc.clause = precise;
             }
             return TheoryCheckResult::mkConflict(std::move(tc));
         }

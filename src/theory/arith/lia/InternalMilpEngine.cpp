@@ -329,7 +329,10 @@ InternalMilpEngine::MilpResult InternalMilpEngine::dfsCheckIntegrality(bool useB
     }
     simplex_.pop();
 
-    return {MilpResult::Kind::Unsat, -1, {}, {}};
+    // Branch-and-bound Unsat: both branches failed. The last LP leaf conflict
+    // does NOT explain global integer-infeasibility, so mark it branched so the
+    // caller falls back to the full active reason set (sound).
+    return {MilpResult::Kind::Unsat, -1, {}, {}, /*branched=*/true};
 }
 
 mpq_class InternalMilpEngine::value(int var) const {

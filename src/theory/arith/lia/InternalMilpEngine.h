@@ -45,6 +45,12 @@ public:
         int branchVar = -1;
         mpq_class floorVal;
         mpq_class ceilVal;
+        // True when an Unsat verdict was derived by branch-and-bound (branching
+        // occurred), so getConflictReasons() — the last LP leaf's conflict — does
+        // NOT explain global integer-infeasibility and must NOT be used as the
+        // conflict clause. Only an LP-relaxation-infeasible Unsat (branched=false)
+        // has a sound leaf conflict.
+        bool branched = false;
     };
 
     void clear();
