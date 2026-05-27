@@ -1,6 +1,7 @@
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
 #include <algorithm>
 #include <map>
+#include <set>
 
 namespace xolver {
 
@@ -74,6 +75,18 @@ NiaReasoningResult GroebnerIdealReasoner::run(
         reasons.push_back(c.reason);
     }
     if (G.empty()) return noChange;
+
+    // Size guard: Buchberger is exponential in #variables and O(g²)+ in the
+    // number of generators g; on large equality systems (e.g. VeryMax: 20+
+    // equalities over 50+ vars) it burns the whole time budget and REGRESSES
+    // otherwise-fast cases (measured: a 22-eq/54-var sat case goes from <10s to
+    // timeout). The 1∈ideal contradiction is also vanishingly unlikely in such
+    // large systems. Restrict to small systems where it is cheap and useful.
+    {
+        std::set<std::string> vs;
+        for (PolyId g : G) for (const auto& v : kernel_.variables(g)) vs.insert(v);
+        if (G.size() > 6 || vs.size() > 8) return noChange;
+    }
 
     auto monoOfTerm = [](const PolynomialKernel::MonomialTerm& t) -> Mono {
         Mono m(t.powers.begin(), t.powers.end());
