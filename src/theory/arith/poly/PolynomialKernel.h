@@ -177,6 +177,24 @@ public:
         return std::nullopt;
     }
 
+    // ------------------------------------------------------------------
+    // Principal subresultant coefficient (PSC) chain (for CAD projection)
+    // ------------------------------------------------------------------
+    // Principal subresultant coefficient chain of a and b with respect to
+    // variable v. The returned chain is index-aligned with the determinant
+    // reference principalSubresultantCoefficients(...).out.psc: entry j is the
+    // j-th principal subresultant coefficient (psc_0 = resultant), for
+    // j = 0 .. min(deg_v a, deg_v b) - 1.
+    //
+    // SOUNDNESS: the implementation MUST eliminate exactly v (not whichever
+    // variable happens to be the libpoly main variable). Degenerate inputs
+    // (deg_v(a) < 1 or deg_v(b) < 1) return an empty chain, matching the
+    // determinant reference's early return. Base default returns {} (unsupported).
+    virtual std::vector<PolyId> pscChain(PolyId a, PolyId b, VarId v) {
+        (void)a; (void)b; (void)v;
+        return {};
+    }
+
     // Substitute a rational value for a variable, returning a new polynomial.
     // Returns nullopt if unsupported or the decomposition fails.
     virtual std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) {

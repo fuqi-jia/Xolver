@@ -551,43 +551,37 @@ PolyId LibpolyBackend::univariateToPoly(const std::vector<mpz_class>& coeffs, Va
 }
 
 UniPolyId LibpolyBackend::specializeToUnivariate(PolyId p, const SamplePoint& prefix, VarId mainVar) {
-    PolyId current = p;
 #ifndef NDEBUG
     std::cerr << "[CDCAC]       specializeToUnivariate: input=" << kernel_->toString(p) << std::endl;
 #endif
 
-    // Apply rational prefix substitutions one variable at a time.
+    // Convert p -> RationalPolynomial ONCE, substitute every rational prefix
+    // value in RP space (no per-variable libpoly round-trip), then convert back
+    // to a primitive-integer PolyId ONCE. This collapses the old per-cell
+    // (k prefix substitutions + 1 final) = k+1 full libpoly<->RP round-trips —
+    // each allocating fresh libpoly polynomials + GMP — into a single round-trip.
+    // specializeToUnivariate is the lifting (solveLevel) hot path; the round-trip
+    // churn was the dominant _int_malloc cost / OOM source. Verdict-preserving:
+    // substitution of distinct prefix vars commutes and toPrimitiveInteger's
+    // scale is positive (same roots -> same cell boundaries). The RP detour also
+    // bypasses libpoly's main_variable restriction in coefficient extraction.
+    auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
+    if (!rpOpt) {
+        return NullUniPolyId;
+    }
+    RationalPolynomial rp = std::move(*rpOpt);
+
     // Algebraic prefix values are not supported in P2a.
     for (size_t i = 0; i < prefix.numVars(); ++i) {
         if (!prefix.values[i].isRational()) {
-#ifndef NDEBUG
-            std::cerr << "[CDCAC]       specializeToUnivariate: algebraic prefix, fail" << std::endl;
-#endif
             return NullUniPolyId;
         }
-        VarId vid = prefix.varOrder[i];
-        auto nextOpt = kernel_->substituteRational(current, vid, prefix.values[i].rational);
-        if (!nextOpt) {
-            return NullUniPolyId;
-        }
-        current = *nextOpt;
-#ifndef NDEBUG
-        std::cerr << "[CDCAC]       specializeToUnivariate: after sub " << kernel_->varName(vid) << "=" << prefix.values[i].rational.get_str() << " -> " << kernel_->toString(current) << std::endl;
-#endif
+        rp = rp.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
     }
 
-    // Convert to RationalPolynomial to handle any variable order and rational coefficients.
-    // This bypasses the libpoly main_variable restriction in getIntegerCoefficients().
-    auto rpOpt = RationalPolynomial::fromPolyId(current, *kernel_);
-    if (!rpOpt) {
-        std::cerr << "[CDCAC]       specializeToUnivariate: fromPolyId failed" << std::endl;
-        return NullUniPolyId;
-    }
-
-    rpOpt->normalize();
-    auto norm = rpOpt->toPrimitiveInteger(*kernel_);
+    rp.normalize();
+    auto norm = rp.toPrimitiveInteger(*kernel_);
     if (!norm.ok()) {
-        std::cerr << "[CDCAC]       specializeToUnivariate: toPrimitiveInteger failed" << std::endl;
         return NullUniPolyId;
     }
 

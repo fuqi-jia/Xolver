@@ -11,7 +11,7 @@
 //     DerivedBound, integer-interpreted by IntervalSet's integer helpers.
 
 #include "theory/arith/presolve/Presolve.h"
-#include <map>
+#include <unordered_map>
 #include <memory>
 
 namespace zolver {
@@ -32,7 +32,8 @@ private:
     // a pure function of (poly, rel); re-analyzing an unchanged atom is both
     // wasted root isolation and (for irrational/algebraic bounds) a source of
     // spurious fixpoint progress.  Skip atoms whose content is unchanged.
-    std::map<size_t, std::pair<Relation, std::map<MonomialKey, mpq_class>>> analyzed_;
+    // Keyed by atom index (find/insert only, never iterated in order) → unordered_map.
+    std::unordered_map<size_t, std::pair<Relation, FlatMonomialMap<mpq_class>>> analyzed_;
 };
 
 } // namespace zolver

@@ -3,6 +3,8 @@
 #include "theory/arith/nra/preprocess/NullificationAnalyzer.h"
 #include "theory/arith/nra/proof/CellCertificateValidator.h"
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
+#include "theory/arith/nra/valuation/RationalRootIsolation.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
@@ -171,6 +173,10 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // punts on — flag-off behaviour is byte-identical to the Collins baseline.
     if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_LIFT"))
         lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+    // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
+    // now (interim, while completeness recovery lands); intended default-ON.
+    if (const char* e = std::getenv("ZOLVER_NRA_UNSAT_CERT"))
+        unsatCertEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -351,8 +357,47 @@ std::optional<RootSet> CdcacCore::mergeRoots(const std::vector<RootSet>& rootSet
     return RootSet{std::move(merged)};
 }
 
+bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
+                                           const CdcacInput& input,
+                                           const RootSet& allRoots) {
+    VarId var = input.varOrder[static_cast<size_t>(k)];
+    // Product of all level-k closure polynomials, with the (rational) prefix
+    // substituted in, so the result is univariate in `var` with rational coeffs.
+    RationalPolynomial product = RationalPolynomial::fromConstant(mpq_class(1));
+    bool anyBoundary = false;
+    for (PolyId pid : levelPolyIds_[static_cast<size_t>(k)]) {
+        if (kernel_->isConstant(pid)) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(pid, *kernel_);
+        if (!rpOpt) return false;  // cannot represent exactly ⇒ cannot certify
+        RationalPolynomial rp = std::move(*rpOpt);
+        for (size_t i = 0; i < prefix.values.size(); ++i) {
+            if (!prefix.values[i].isRational()) return false;  // algebraic prefix ⇒ punt
+            rp = rp.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
+        }
+        if (rp.isConstant()) continue;  // vanished at this prefix ⇒ no boundary here
+        product = product * rp;
+        anyBoundary = true;
+        if (product.degree(var) > 64) return false;  // budget guard ⇒ punt (sound)
+    }
+    if (!anyBoundary) return allRoots.numRoots() == 0;  // full-line cell, no roots
+    auto roots = isolateRationalRoots(product, var);
+    if (!roots.ok) return false;
+    int exactDistinct = static_cast<int>(roots.roots.size());
+    int libpolyCount = allRoots.numRoots();
+    if (std::getenv("ZOLVER_NRA_CERT_DIAG")) {
+        std::cerr << "[NRA-CERT] level=" << k << " exactDistinct=" << exactDistinct
+                  << " allRoots=" << libpolyCount
+                  << (exactDistinct == libpolyCount ? " OK" : " MISMATCH") << std::endl;
+    }
+    // allRoots must capture exactly the closure's distinct real roots. Fewer ⇒ a
+    // missed/merged root ⇒ a cell spans a true root ⇒ not sign-invariant. Either
+    // direction ⇒ cannot positively certify this covering.
+    return exactDistinct == libpolyCount;
+}
+
 void CdcacCore::buildClosure(const CdcacInput& input) {
     unsatTrustworthy_ = true;
+    coveringUncertifiable_ = false;
     int n = static_cast<int>(input.varOrder.size());
     levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
 
@@ -364,7 +409,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         rps.push_back(std::move(*rp));
     }
 
-    auto reason = closure_.build(rps, input.varOrder);
+    auto reason = closure_.build(rps, input.varOrder, ProjectionClosure::Config(), kernel_);
     if (reason != ProjectionIncompleteReason::None) {
         unsatTrustworthy_ = false;   // incomplete projection ⇒ no UNSAT may rest on it
     }
@@ -384,7 +429,26 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 #endif
     buildClosure(input);
     SamplePoint prefix;
-    return solveLevel(0, prefix, input);
+    CdcacResult result = solveLevel(0, prefix, input);
+
+    // Soundness FLOOR (ZOLVER_NRA_UNSAT_CERT). The PRECISE per-cell sign-invariance
+    // verifier (certifyLevelSignInvariance, per level in solveLevel) sets
+    // `coveringUncertifiable_` and is PROVEN to catch the close-irrational-root
+    // class (Melquiond: allRoots 9 vs exact 17) while certifying genuine UNSAT
+    // (nra_011 etc.). BUT it is NOT yet sufficient on its own: the polypaver class
+    // is sign-invariant AND tiles yet is still false-UNSAT (a distinct
+    // section-recursion bug — a SAT section is never recursed to a full sample).
+    // So gating on `coveringUncertifiable_` alone would LEAK those 12 false-UNSATs
+    // (unsound). Until the section-recursion defect is fixed, we keep the gate
+    // CONSERVATIVE (blunt): downgrade every CDCAC covering-UNSAT to Unknown.
+    // `coveringUncertifiable_` is computed for diagnostics (ZOLVER_NRA_CERT_DIAG)
+    // and is the foundation of the future precise floor. Only CdcacCore
+    // covering-UNSAT is gated; presolve/linear UNSAT never reaches CDCAC.
+    (void)coveringUncertifiable_;
+    if (unsatCertEnabled_ && result.status == CdcacStatus::Unsat) {
+        return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
+    }
+    return result;
 }
 
 CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& input) {
@@ -562,6 +626,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
     }
     RootSet allRoots = std::move(*mergedOpt);
+    // PRECISE FLOOR: independently certify this level's boundary set is complete
+    // (sign-invariant cells) via exact ℚ-Sturm. An uncertifiable level taints the
+    // whole solve — any resulting UNSAT is downgraded to Unknown in solve().
+    if (unsatCertEnabled_ && !coveringUncertifiable_ &&
+        !certifyLevelSignInvariance(k, prefix, input, allRoots)) {
+        coveringUncertifiable_ = true;
+    }
 #ifndef NDEBUG
     std::cerr << "[CDCAC] allRoots=" << allRoots.numRoots() << std::endl;
     for (int i = 0; i < allRoots.numRoots(); ++i) {
