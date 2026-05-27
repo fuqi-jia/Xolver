@@ -426,23 +426,27 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     // Lazard projection closure instead, driving the SAME root-isolation/covering
     // path so SAT (full-model-validated) is unaffected.
     //
-    // SOUNDNESS FLOOR (T1): the Lazard projection set is smaller than McCallum/
-    // Collins and is sound+complete for UNSAT *only with Lazard lifting* (the
-    // valuation/multiplicity recovery, [H3]) + a per-cell LazardCellCertificate
-    // ([H5]). Neither is wired yet (lifting=T2, cert=T3). Trusting an UNSAT
-    // covering built from the smaller Lazard set under the existing (non-Lazard)
-    // lifting would be a latent false-UNSAT. So lazard mode emits SAT / Unknown
-    // ONLY here — unsatTrustworthy_ is forced false unconditionally until the
-    // per-cell Lazard certificate gates UNSAT (T3). CDCAC's Collins path remains
-    // the complete UNSAT backstop.
+    // SOUNDNESS (T3): the Lazard projection set is smaller than McCallum/Collins
+    // and is sound+complete for UNSAT only with (a) a COMPLETE Lazard closure AND
+    // (b) Lazard-consistent lifting at every level. Closure completeness is folded
+    // in here (incomplete ⇒ unsatTrustworthy_ = false, mirroring the Collins
+    // branch below); lift completeness is folded in per-level in solveLevel
+    // (ordinary specialize == the [H3] multiplicity-0 case; a vanished poly's
+    // boundary must be recovered by the valuation, else unsatTrustworthy_=false).
+    // The non-Lazard parts of the lift (vanish==Unknown, uncertified specialize,
+    // unsupported tower isolation) already drop the flag. So a complete Lazard
+    // closure + a fully-complete lift ⇒ a sound Lazard UNSAT; ANY incompleteness
+    // ⇒ Unknown at the line-892 gate. CDCAC's Collins path stays the backstop.
     if (projectionKind_ == ProjectionPolicyKind::LazardStyle) {
         LazardProjectionClosure::Config lcfg;
-        (void)lazardClosure_.build(rps, input.varOrder, lcfg);
-        unsatTrustworthy_ = false;   // no UNSAT may rest on Lazard until [H5] cert (T3)
+        auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg);
+        if (lreason != LazardIncompleteReason::None) {
+            unsatTrustworthy_ = false;   // incomplete Lazard projection ⇒ no UNSAT
+        }
         for (int k = 0; k < n; ++k) {
             for (int id : lazardClosure_.levelPolys(k)) {
                 PolyId pid = lazardClosure_.entries()[id].poly.toPolyId(*kernel_);
-                if (pid == NullPoly) continue;
+                if (pid == NullPoly) { unsatTrustworthy_ = false; continue; }
                 levelPolyIds_[k].push_back(pid);
             }
         }
@@ -651,26 +655,35 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // the lower levels. An UNDECIDED vanish ⇒ cannot certify ⇒ Unknown.
         auto vanish = algebra_->vanishesAtPrefix(p, prefix, var);
         if (vanish == VanishResult::Vanishes) {
-            // In LAZARD mode, a poly that nullifies over an ALGEBRAIC prefix may
-            // still expose a cell boundary via its Lazard residual (the lowest
-            // nonvanishing derivative). The Collins `continue`-skip is sound only
-            // under a COMPLETE closure; here we route the nullified poly to the
-            // valuation-recovery path (isolateRealRootsViaTower) so its residual
-            // boundary refines the cell. Sound: UNSAT is already floored in
-            // lazard mode (unsatTrustworthy_ forced false for LazardStyle), so the
-            // worst case is a missed SAT cell => Unknown, never a false verdict.
-            // If the valuation path is unsupported, fall through exactly as the
-            // Collins default (continue, no boundary contributed).
+            // Collins default: under a COMPLETE Collins closure, ALL of p's
+            // coefficients are in the closure and already delineate the lower
+            // levels, so skipping a vanished p is sound (continue).
+            //
+            // LAZARD mode: the smaller Lazard projection does NOT contain all
+            // coefficients, so that skip-soundness argument fails. A vanished
+            // poly's boundary must be POSITIVELY recovered via the [H3] valuation
+            // (its Lazard residual = the lowest nonvanishing derivative), only
+            // available over an ALGEBRAIC prefix. If we recover it -> push the
+            // residual roots. If we do NOT (rational prefix, or tower recovery
+            // unsupported / all-derivatives-zero) -> the delineation is incomplete
+            // -> unsatTrustworthy_ = false (the line-892 gate downgrades any UNSAT
+            // to Unknown). SAT is unaffected (full-model validated).
             bool lazardMode = (projectionKind_ == ProjectionPolicyKind::LazardStyle)
                               || lazardLiftEnabled_;
-            if (lazardMode && hasAlgebraicPrefix) {
-                bool supported = false;
-                RootSet roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
-                if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
-                    std::cerr << "[LAZVAL] vanish-route k=" << k << " supported="
-                              << supported << " roots=" << roots.numRoots() << std::endl;
-                if (supported && roots.numRoots() > 0)
-                    rootSets.push_back(std::move(roots));
+            if (lazardMode) {
+                bool recovered = false;
+                if (hasAlgebraicPrefix) {
+                    bool supported = false;
+                    RootSet roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
+                    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+                        std::cerr << "[LAZVAL] vanish-route k=" << k << " supported="
+                                  << supported << " roots=" << roots.numRoots() << std::endl;
+                    if (supported) {
+                        recovered = true;
+                        if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                    }
+                }
+                if (!recovered) unsatTrustworthy_ = false;  // boundary not recovered ⇒ no UNSAT
             }
             continue;
         }

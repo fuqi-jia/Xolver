@@ -1544,9 +1544,15 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         if (kDiag) std::cerr << "[LAZVAL] Norm(p1) constant => valuation recovery" << std::endl;
         LazardValuationResult val = lazardEvaluateToUnivariate(p1, mainVar, ctx);
         if (val.status == ValuationStatus::AllDerivativesZero) {
-            // Genuinely no boundary contributed by this poly: sound to skip.
-            if (kDiag) std::cerr << "[LAZVAL] AllDerivativesZero => skip (no boundary)" << std::endl;
-            supported = true;
+            // [H3] lists ValuationAllDerivativesZero as an INCOMPLETE reason. While
+            // it usually means p1 is identically zero in the tower (no boundary),
+            // distinguishing that from a valuation limitation is not certified
+            // here. For the UNSAT-critical gate (T3) we treat it conservatively as
+            // unsupported => caller drops unsatTrustworthy_ => Unknown (never a
+            // false UNSAT). (Relax to a certified no-boundary skip only with a
+            // proof that p1 in <m_0..m_{k-1}>.)
+            if (kDiag) std::cerr << "[LAZVAL] AllDerivativesZero => unsupported (conservative)" << std::endl;
+            supported = false;
             return empty;
         }
         // status == Complete: residual is in mainVar + reduced tower coeffs.
