@@ -39,62 +39,73 @@ static const char* kindToSMT2(Kind k) {
     }
 }
 
-static void dumpRec(ExprId id, const CoreIr& ir, std::ostream& os, int depth = 0) {
-    if (depth > 100000) { os << "<DEPTH-LIMIT-EXCEEDED>"; return; }
-    if (id >= ir.size()) { os << "???"; return; }
-    const auto& e = ir.get(id);
+static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth*/ = 0) {
+    // Iterative emit (was recursive on children; a deeply-nested term overflowed
+    // the stack — the former depth>100000 guard sat far above the 8MB limit).
+    // A work item is either a literal to emit (lit != nullptr) or a node to
+    // expand. Children are pushed in reverse with interleaved " " separators so
+    // output order matches the recursive "(op c0 c1 ... )".
+    struct Item { ExprId id; const char* lit; };
+    std::vector<Item> stack;
+    stack.push_back({root, nullptr});
 
-    switch (e.kind) {
-        case Kind::ConstBool:
-            os << (std::get<bool>(e.payload.value) ? "true" : "false");
-            break;
-        case Kind::ConstInt:
-            os << std::get<int64_t>(e.payload.value);
-            break;
-        case Kind::ConstReal: {
-            const auto& s = std::get<std::string>(e.payload.value);
-            os << s;
-            break;
-        }
-        case Kind::ConstBV: {
-            if (std::holds_alternative<uint64_t>(e.payload.value)) {
-                os << "#b" << std::get<uint64_t>(e.payload.value);
-            } else {
+    while (!stack.empty()) {
+        Item it = stack.back();
+        stack.pop_back();
+        if (it.lit) { os << it.lit; continue; }
+
+        ExprId id = it.id;
+        if (id >= ir.size()) { os << "???"; continue; }
+        const auto& e = ir.get(id);
+
+        auto expandChildren = [&]() {
+            stack.push_back({NullExpr, ")"});
+            for (size_t i = e.children.size(); i-- > 0;) {
+                stack.push_back({e.children[i], nullptr});
+                stack.push_back({NullExpr, " "});
+            }
+        };
+
+        switch (e.kind) {
+            case Kind::ConstBool:
+                os << (std::get<bool>(e.payload.value) ? "true" : "false");
+                break;
+            case Kind::ConstInt:
+                os << std::get<int64_t>(e.payload.value);
+                break;
+            case Kind::ConstReal:
                 os << std::get<std::string>(e.payload.value);
-            }
-            break;
-        }
-        case Kind::ConstFP:
-            os << std::get<std::string>(e.payload.value);
-            break;
-        case Kind::Variable:
-            os << std::get<std::string>(e.payload.value);
-            break;
-        case Kind::UFApply: {
-            os << "(" << std::get<std::string>(e.payload.value);
-            for (ExprId c : e.children) {
-                os << " ";
-                dumpRec(c, ir, os, depth + 1);
-            }
-            os << ")";
-            break;
-        }
-        case Kind::Unknown:
-            os << "???";
-            break;
-        default: {
-            const char* op = kindToSMT2(e.kind);
-            if (!op || !*op) {
-                os << "???";
-            } else {
-                os << "(" << op;
-                for (ExprId c : e.children) {
-                    os << " ";
-                    dumpRec(c, ir, os, depth + 1);
+                break;
+            case Kind::ConstBV:
+                if (std::holds_alternative<uint64_t>(e.payload.value)) {
+                    os << "#b" << std::get<uint64_t>(e.payload.value);
+                } else {
+                    os << std::get<std::string>(e.payload.value);
                 }
-                os << ")";
+                break;
+            case Kind::ConstFP:
+                os << std::get<std::string>(e.payload.value);
+                break;
+            case Kind::Variable:
+                os << std::get<std::string>(e.payload.value);
+                break;
+            case Kind::UFApply:
+                os << "(" << std::get<std::string>(e.payload.value);
+                expandChildren();
+                break;
+            case Kind::Unknown:
+                os << "???";
+                break;
+            default: {
+                const char* op = kindToSMT2(e.kind);
+                if (!op || !*op) {
+                    os << "???";
+                } else {
+                    os << "(" << op;
+                    expandChildren();
+                }
+                break;
             }
-            break;
         }
     }
 }

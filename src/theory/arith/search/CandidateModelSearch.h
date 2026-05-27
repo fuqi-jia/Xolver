@@ -157,6 +157,15 @@ private:
     TermResult evalTerm(
         ExprId eid,
         const std::unordered_map<std::string, mpq_class>& assignment) const;
+    // Top-level entry: pre-warms evalMemo_ bottom-up (iterative) so the recursive
+    // evalTerm resolves every subterm from the memo and never recurses deeply
+    // (deep-term stack-overflow guard). All external callers use this.
+    TermResult evalTermTop(
+        ExprId eid,
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
+    // Memo populated by evalTermTop's pre-pass; consulted at evalTerm's entry.
+    // Keyed by ExprId, valid only within one assignment (cleared per top call).
+    mutable std::unordered_map<ExprId, TermResult> evalMemo_;
 
     bool detectSymmetry() const;
     static int64_t heightOf(const mpq_class& q);

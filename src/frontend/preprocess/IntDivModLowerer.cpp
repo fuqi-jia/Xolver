@@ -174,86 +174,106 @@ ExprId IntDivModLowerer::rebuildLike(ExprId original, const std::vector<ExprId>&
     return ir_.add(std::move(ne));
 }
 
-std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId e) const {
-    const auto& node = ir_.get(e);
-    switch (node.kind) {
-    case Kind::ConstInt:
-        if (auto* v = std::get_if<int64_t>(&node.payload.value)) {
-            return mpz_class(*v);
-        }
-        return std::nullopt;
-    case Kind::ConstReal:
-        // Defensive: SOMTParser currently maps integer literals to ConstReal
-        // with Real sort in some contexts. We accept them here only when the
-        // denominator is 1 (i.e. the value is mathematically an integer).
-        // This is safe because IntDivModLowerer only operates on Int-sort
-        // subexpressions, so any ConstReal encountered here is semantically
-        // an integer constant that leaked through the parser.
-        if (auto* s = std::get_if<std::string>(&node.payload.value)) {
-            mpq_class q(*s);
-            if (q.get_den() == 1) {
-                return mpz_class(q.get_num());
+std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
+    // Iterative two-visit post-order (was recursive on Neg/Add/Sub/Mul children;
+    // a deeply-nested constant term blew the call stack). Children are evaluated
+    // into `memo` before the parent combines them — behavior-identical.
+    std::unordered_map<ExprId, std::optional<mpz_class>> memo;
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId e = fr.e;
+        if (memo.find(e) != memo.end()) { stack.pop_back(); continue; }
+        const auto& node = ir_.get(e);
+
+        if (!fr.processed) {
+            fr.processed = true;
+            switch (node.kind) {
+            case Kind::Neg: case Kind::Add: case Kind::Sub: case Kind::Mul:
+                for (ExprId c : node.children)
+                    if (memo.find(c) == memo.end()) stack.push_back({c, false});
+                break;
+            default: break;
             }
+            continue;
         }
-        return std::nullopt;
-    case Kind::Neg:
-        if (node.children.size() == 1) {
-            if (auto v = evalIntConstTerm(node.children[0])) {
-                return -(*v);
+
+        stack.pop_back();
+        std::optional<mpz_class> r = std::nullopt;
+        switch (node.kind) {
+        case Kind::ConstInt:
+            if (auto* v = std::get_if<int64_t>(&node.payload.value)) r = mpz_class(*v);
+            break;
+        case Kind::ConstReal:
+            // Defensive: SOMTParser currently maps integer literals to ConstReal
+            // with Real sort in some contexts. We accept them here only when the
+            // denominator is 1 (i.e. the value is mathematically an integer).
+            // This is safe because IntDivModLowerer only operates on Int-sort
+            // subexpressions, so any ConstReal encountered here is semantically
+            // an integer constant that leaked through the parser.
+            if (auto* s = std::get_if<std::string>(&node.payload.value)) {
+                mpq_class q(*s);
+                if (q.get_den() == 1) r = mpz_class(q.get_num());
             }
-        }
-        return std::nullopt;
-    case Kind::Add:
-        if (node.children.size() == 2) {
-            if (auto a = evalIntConstTerm(node.children[0]);
-                auto b = evalIntConstTerm(node.children[1])) {
-                return *a + *b;
+            break;
+        case Kind::Neg:
+            if (node.children.size() == 1) {
+                if (auto v = memo[node.children[0]]) r = -(*v);
             }
-        }
-        return std::nullopt;
-    case Kind::Sub:
-        if (node.children.size() == 2) {
-            if (auto a = evalIntConstTerm(node.children[0]);
-                auto b = evalIntConstTerm(node.children[1])) {
-                return *a - *b;
+            break;
+        case Kind::Add:
+            if (node.children.size() == 2) {
+                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
+                if (a && b) r = *a + *b;
             }
-        }
-        return std::nullopt;
-    case Kind::Mul:
-        if (node.children.size() == 2) {
-            if (auto a = evalIntConstTerm(node.children[0]);
-                auto b = evalIntConstTerm(node.children[1])) {
-                return *a * *b;
+            break;
+        case Kind::Sub:
+            if (node.children.size() == 2) {
+                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
+                if (a && b) r = *a - *b;
             }
+            break;
+        case Kind::Mul:
+            if (node.children.size() == 2) {
+                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
+                if (a && b) r = *a * *b;
+            }
+            break;
+        default: break;
         }
-        return std::nullopt;
-    default:
-        return std::nullopt;
+        memo[e] = r;
     }
+    return memo[root];
 }
 
-bool IntDivModLowerer::containsNonlinear(ExprId e) const {
-    const auto& node = ir_.get(e);
-    switch (node.kind) {
-    case Kind::Mul:
-        if (node.children.size() == 2) {
-            bool leftConst = evalIntConstTerm(node.children[0]).has_value();
-            bool rightConst = evalIntConstTerm(node.children[1]).has_value();
-            if (!leftConst && !rightConst) return true;
+bool IntDivModLowerer::containsNonlinear(ExprId root) const {
+    // Iterative DFS (was recursive on children; deep terms overflowed the stack).
+    std::vector<ExprId> stack{root};
+    while (!stack.empty()) {
+        ExprId e = stack.back();
+        stack.pop_back();
+        const auto& node = ir_.get(e);
+        switch (node.kind) {
+        case Kind::Mul:
+            if (node.children.size() == 2) {
+                bool leftConst = evalIntConstTerm(node.children[0]).has_value();
+                bool rightConst = evalIntConstTerm(node.children[1]).has_value();
+                if (!leftConst && !rightConst) return true;
+            }
+            break;
+        case Kind::Pow:
+            return true;
+        case Kind::Div:
+        case Kind::Mod:
+            // These should not appear (they are being lowered), but mark nonlinear if they do
+            return true;
+        default:
+            break;
         }
-        break;
-    case Kind::Pow:
-        return true;
-    case Kind::Div:
-    case Kind::Mod:
-        // These should not appear (they are being lowered), but mark nonlinear if they do
-        return true;
-    default:
-        break;
-    }
-    // Recurse into children
-    for (ExprId c : node.children) {
-        if (containsNonlinear(c)) return true;
+        for (ExprId c : node.children) stack.push_back(c);
     }
     return false;
 }

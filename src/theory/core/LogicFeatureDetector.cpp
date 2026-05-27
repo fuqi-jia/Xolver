@@ -40,9 +40,16 @@ bool LogicFeatureDetector::isNonConstantExpr(ExprId id, const std::unordered_set
     return true;
 }
 
-void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_set<ExprId>& visited) const {
-    if (id >= ir_.size()) return;
-    if (!visited.insert(id).second) return;
+void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordered_set<ExprId>& visited) const {
+    // Iterative DFS (was recursive on children; deep formulas overflowed the
+    // stack). Feature flags accumulate order-independently and `visited` dedups
+    // the DAG, so traversal order is irrelevant — behavior-identical.
+    std::vector<ExprId> stack{root};
+    while (!stack.empty()) {
+    ExprId id = stack.back();
+    stack.pop_back();
+    if (id >= ir_.size()) continue;
+    if (!visited.insert(id).second) continue;
 
     const auto& e = ir_.get(id);
 
@@ -169,8 +176,7 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
             break;
         case Kind::ToReal:
             f.hasInterpretedArithmetic = true;
-            scanExpr(e.children[0], f, visited);
-            return;
+            break;  // child pushed by the generic loop below; ToReal is not an atom
         case Kind::ToInt:
         case Kind::IsInt:
             f.hasInterpretedArithmetic = true;
@@ -196,10 +202,11 @@ void LogicFeatureDetector::scanExpr(ExprId id, LogicFeatures& f, std::unordered_
         }
     }
 
-    // Recurse into children
+    // Push children (iterative DFS).
     for (ExprId child : e.children) {
-        scanExpr(child, f, visited);
+        stack.push_back(child);
     }
+    }  // while
 }
 
 } // namespace zolver

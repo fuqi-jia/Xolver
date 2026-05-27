@@ -10,7 +10,42 @@ namespace zolver {
 Atomizer::Atomizer(SatSolver& sat) : sat_(sat) {}
 
 SatLit Atomizer::atomize(ExprId root, const CoreIr& ir) {
+    // Pre-atomize nested subformulas bottom-up so the recursive atomizeRec below
+    // resolves every deep child from the memo (no deep native recursion).
+    preAtomizeIterative(root, ir);
     return atomizeRec(root, ir);
+}
+
+void Atomizer::preAtomizeIterative(ExprId root, const CoreIr& ir) {
+    // Two-visit post-order over boolean-sorted children only: those are exactly
+    // the sub-formulas atomizeRec recurses into (And/Or/Not/Implies/Xor, bool
+    // Eq/Distinct, bool-term-in-formula-position). Arithmetic/EUF operand terms
+    // are NOT boolean-sorted, so they are left for atomizeRec's atom handling.
+    // Processing children before parents means atomizeRec(parent) finds every
+    // nested SatLit already in memo_ and never recurses deeply.
+    struct Frame { ExprId eid; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId eid = fr.eid;
+        if (eid == NullExpr || memo_.find(eid) != memo_.end()) { stack.pop_back(); continue; }
+        const CoreExpr& e = ir.get(eid);
+        if (!fr.processed) {
+            fr.processed = true;
+            for (ExprId c : e.children) {
+                if (c != NullExpr && memo_.find(c) == memo_.end() &&
+                    ir.get(c).sort == boolSortId_) {
+                    stack.push_back({c, false});
+                }
+            }
+            continue;
+        }
+        stack.pop_back();
+        // All boolean-sorted children memoized → atomizeRec emits this node's
+        // clauses reading children from memo_, recursing at most one level.
+        atomizeRec(eid, ir);
+    }
 }
 
 SatVar Atomizer::freshVar() {
@@ -169,11 +204,13 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const CoreIr& ir) {
     return SatLit::positive(fv);
 }
 
-static bool containsUfApply(ExprId eid, const CoreIr& ir) {
-    const auto& e = ir.get(eid);
-    if (e.kind == Kind::UFApply) return true;
-    for (ExprId child : e.children) {
-        if (containsUfApply(child, ir)) return true;
+static bool containsUfApply(ExprId root, const CoreIr& ir) {
+    std::vector<ExprId> stack{root};  // iterative DFS (deep-term overflow guard)
+    while (!stack.empty()) {
+        const auto& e = ir.get(stack.back());
+        stack.pop_back();
+        if (e.kind == Kind::UFApply) return true;
+        for (ExprId child : e.children) stack.push_back(child);
     }
     return false;
 }
@@ -183,14 +220,16 @@ static bool containsUfApply(ExprId eid, const CoreIr& ir) {
 // that must be routed to the EUF solver (which owns the shared egraph and the
 // array reasoner); a pure-arith atom over shared index terms instead routes to
 // the arith theory / shared-equality mechanism.
-static bool containsArrayOrUf(ExprId eid, const CoreIr& ir) {
-    const auto& e = ir.get(eid);
-    if (e.kind == Kind::UFApply || e.kind == Kind::Select ||
-        e.kind == Kind::Store || e.kind == Kind::ConstArray) {
-        return true;
-    }
-    for (ExprId child : e.children) {
-        if (containsArrayOrUf(child, ir)) return true;
+static bool containsArrayOrUf(ExprId root, const CoreIr& ir) {
+    std::vector<ExprId> stack{root};  // iterative DFS (deep-term overflow guard)
+    while (!stack.empty()) {
+        const auto& e = ir.get(stack.back());
+        stack.pop_back();
+        if (e.kind == Kind::UFApply || e.kind == Kind::Select ||
+            e.kind == Kind::Store || e.kind == Kind::ConstArray) {
+            return true;
+        }
+        for (ExprId child : e.children) stack.push_back(child);
     }
     return false;
 }

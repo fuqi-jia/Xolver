@@ -71,6 +71,11 @@ public:
 
 private:
     SatLit atomizeRec(ExprId eid, const CoreIr& ir);
+    // Bottom-up iterative pre-pass over boolean-sorted subformulas: memoizes
+    // every nested sub-formula before atomizeRec is invoked on its parent, so
+    // the (recursive) atomizeRec never recurses deeper than one memo lookup.
+    // Eliminates the deep-formula stack overflow without touching the encoding.
+    void preAtomizeIterative(ExprId root, const CoreIr& ir);
     SatVar freshVar();
 
     // Which halves of a connective's defining biconditional to emit for `eid`:

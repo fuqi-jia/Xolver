@@ -273,3 +273,40 @@ TEST_CASE("API: getUnsatCore for checkSatAssuming") {
     CHECK(!core.empty());
     CHECK(core[0] == ge);
 }
+
+// Deep-recursion regression for the global recursion->iteration sweep. These run
+// on the default (8MB) test-thread stack: a still-recursive frontend/theory
+// walker overflows here. The deep ARITH term exercises PolynomialConverter::
+// collectRec + LogicFeatureDetector::scanExpr; the deep BOOLEAN nesting
+// exercises Atomizer::atomizeRec's pre-pass. Both must answer, not crash.
+TEST_CASE("API: deep arithmetic term does not overflow (collectRec/scanExpr)") {
+    constexpr int kDeep = 60000;
+    Solver s;
+    s.setLogic("QF_LIA");
+    Sort i = s.intSort();
+    Term x = s.mkConst(i, "x");
+    Term chain = x;
+    for (int k = 0; k < kDeep; ++k) {
+        chain = s.mkOp(static_cast<uint32_t>(Kind::Add), {chain, x});  // ((x+x)+x)+...
+    }
+    Term ge = s.mkOp(static_cast<uint32_t>(Kind::Geq), {chain, s.mkInt(0)});
+    s.assertFormula(ge);
+    Result r = s.checkSat();  // N*x >= 0 is sat (x=0); must not segfault
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("API: deep boolean nesting does not overflow (atomizeRec)") {
+    constexpr int kDeep = 60000;
+    Solver s;
+    s.setLogic("QF_LIA");
+    Sort i = s.intSort();
+    Term x = s.mkConst(i, "x");
+    Term atom = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(0)});
+    Term chain = atom;
+    for (int k = 0; k < kDeep; ++k) {
+        chain = s.mkOp(static_cast<uint32_t>(Kind::Or), {chain, atom});  // (or A (or A ...))
+    }
+    s.assertFormula(chain);
+    Result r = s.checkSat();  // sat (x=0); must not segfault during atomization
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}

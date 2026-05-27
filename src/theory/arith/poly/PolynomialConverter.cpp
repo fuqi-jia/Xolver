@@ -14,6 +14,7 @@ namespace zolver {
 PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
     ExprId eid, const CoreIr& ir) {
     memo_.clear();
+    preCollectIterative(eid, ir);
     auto rpOpt = collectRec(eid, ir);
     if (!rpOpt) return {};
     rpOpt->normalize();
@@ -27,6 +28,8 @@ PolynomialConverter::ConvertedExpr PolynomialConverter::convert(
 PolynomialConverter::ConvertedConstraint PolynomialConverter::convertConstraint(
     ExprId lhs, ExprId rhs, Relation rel, const CoreIr& ir) {
     memo_.clear();
+    preCollectIterative(lhs, ir);
+    preCollectIterative(rhs, ir);
     auto rpLOpt = collectRec(lhs, ir);
     auto rpROpt = collectRec(rhs, ir);
 
@@ -240,6 +243,43 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
 
     memo_[eid] = result;
     return result;
+}
+
+void PolynomialConverter::preCollectIterative(ExprId root, const CoreIr& ir) {
+    // Bottom-up pre-pass: memoize every arithmetic subterm collectRec recurses
+    // into before collectRec(root) runs, so the (memoized) collectRec resolves
+    // each child from memo_ and never recurses deeper than one level. Pushes
+    // exactly collectRec's recursion targets (Add/Sub/Mul: all children;
+    // Neg/ToReal/Div/Pow: child[0] only — denominator/exponent are read, not
+    // collected). collectRec is idempotent (getOrCreateVar is too), so warming
+    // the memo bottom-up is behavior-identical.
+    struct Frame { ExprId eid; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId eid = fr.eid;
+        if (memo_.find(eid) != memo_.end()) { stack.pop_back(); continue; }
+        const CoreExpr& e = ir.get(eid);
+        if (!fr.processed) {
+            fr.processed = true;
+            auto push = [&](ExprId c) {
+                if (c != NullExpr && memo_.find(c) == memo_.end()) stack.push_back({c, false});
+            };
+            switch (e.kind) {
+                case Kind::Add: case Kind::Sub: case Kind::Mul:
+                    for (ExprId c : e.children) push(c);
+                    break;
+                case Kind::Neg: case Kind::ToReal: case Kind::Div: case Kind::Pow:
+                    if (!e.children.empty()) push(e.children[0]);
+                    break;
+                default: break;
+            }
+            continue;
+        }
+        stack.pop_back();
+        collectRec(eid, ir);  // children memoized -> recursion bounded to depth 1
+    }
 }
 
 } // namespace zolver

@@ -157,7 +157,7 @@ bool CandidateModelSearch::functionallyConsistent(
         std::vector<mpq_class> args;
         bool ok = true;
         for (ExprId c : node.children) {
-            TermResult cr = evalTerm(c, full);
+            TermResult cr = evalTermTop(c, full);
             if (cr.kind != TermVerdict::Number) { ok = false; break; }
             args.push_back(cr.numValue);
         }
@@ -190,7 +190,7 @@ void CandidateModelSearch::buildFunctionInterps(
         std::vector<mpq_class> args;
         bool ok = true;
         for (ExprId c : node.children) {
-            TermResult cr = evalTerm(c, full);
+            TermResult cr = evalTermTop(c, full);
             if (cr.kind != TermVerdict::Number) { ok = false; break; }
             args.push_back(cr.numValue);
         }
@@ -512,7 +512,7 @@ CandidateModelSearch::evaluateAssertions(
 {
     bool anyIndeterminate = false;
     for (ExprId aid : assertionRoots()) {
-        TermResult tr = evalTerm(aid, assignment);
+        TermResult tr = evalTermTop(aid, assignment);
         if (tr.kind == TermVerdict::Indeterminate) {
             anyIndeterminate = true;
             continue;
@@ -523,11 +523,44 @@ CandidateModelSearch::evaluateAssertions(
     return anyIndeterminate ? EvalVerdict::Indeterminate : EvalVerdict::True;
 }
 
+CandidateModelSearch::TermResult CandidateModelSearch::evalTermTop(
+    ExprId root,
+    const std::unordered_map<std::string, mpq_class>& assignment) const
+{
+    // Iterative bottom-up pre-pass: evaluate every subterm into evalMemo_ before
+    // its parent, so the recursive evalTerm below resolves each child from the
+    // memo (recursion bounded to depth 1). evalTerm is pure, so pre-evaluating
+    // children the recursion would short-circuit (And/Or/Ite) is harmless.
+    evalMemo_.clear();
+    struct Frame { ExprId eid; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId eid = fr.eid;
+        if (eid >= ir_.size() || evalMemo_.find(eid) != evalMemo_.end()) { stack.pop_back(); continue; }
+        const auto& n = ir_.get(eid);
+        if (!fr.processed) {
+            fr.processed = true;
+            for (ExprId c : n.children)
+                if (c < ir_.size() && evalMemo_.find(c) == evalMemo_.end()) stack.push_back({c, false});
+            continue;
+        }
+        stack.pop_back();
+        evalMemo_[eid] = evalTerm(eid, assignment);  // children memoized -> shallow
+    }
+    auto it = evalMemo_.find(root);
+    return it != evalMemo_.end() ? it->second : TermResult{};
+}
+
 CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
     ExprId eid,
     const std::unordered_map<std::string, mpq_class>& assignment) const
 {
     if (eid >= ir_.size()) return {};
+    // Pre-pass memo (evalTermTop): a hit returns immediately, so the recursive
+    // calls below never descend more than one level past memoized children.
+    if (auto mit = evalMemo_.find(eid); mit != evalMemo_.end()) return mit->second;
     const auto& n = ir_.get(eid);
     TermResult r;
     switch (n.kind) {

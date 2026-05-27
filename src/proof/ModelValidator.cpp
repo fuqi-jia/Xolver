@@ -1,5 +1,7 @@
 #include "proof/ModelValidator.h"
 #include <cassert>
+#include <unordered_map>
+#include <vector>
 
 namespace zolver {
 
@@ -12,46 +14,77 @@ bool ModelValidator::validate(const CoreIr& ir, const BoolAssignment& assignment
     return true;
 }
 
-bool ModelValidator::eval(ExprId eid, const CoreIr& ir, const BoolAssignment& assignment) {
-    if (eid == NullExpr) return true;
+bool ModelValidator::eval(ExprId root, const CoreIr& ir, const BoolAssignment& assignment) {
+    // Iterative two-visit post-order (was recursive on bool structure; a deeply
+    // nested formula overflowed the stack). `val` reads a child's memoized result;
+    // an absent/NullExpr child evaluates to true, matching the former eval(NullExpr).
+    std::unordered_map<ExprId, bool> memo;
+    auto val = [&](ExprId c) -> bool {
+        if (c == NullExpr) return true;
+        auto it = memo.find(c);
+        return it != memo.end() ? it->second : true;
+    };
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
 
-    const CoreExpr& e = ir.get(eid);
-    switch (e.kind) {
-        case Kind::ConstBool:
-            return std::get<bool>(e.payload.value);
-        case Kind::Variable: {
-            auto it = assignment.find(eid);
-            return it != assignment.end() ? it->second : false;
-        }
-        case Kind::Not: {
-            assert(e.children.size() == 1);
-            return !eval(e.children[0], ir, assignment);
-        }
-        case Kind::And: {
-            for (ExprId c : e.children) {
-                if (!eval(c, ir, assignment)) return false;
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId eid = fr.e;
+        if (eid == NullExpr || memo.find(eid) != memo.end()) { stack.pop_back(); continue; }
+        const CoreExpr& e = ir.get(eid);
+        const bool recurses = (e.kind == Kind::Not || e.kind == Kind::And ||
+                               e.kind == Kind::Or || e.kind == Kind::Implies ||
+                               e.kind == Kind::Eq);
+        if (!fr.processed) {
+            fr.processed = true;
+            if (recurses) {
+                for (ExprId c : e.children)
+                    if (c != NullExpr && memo.find(c) == memo.end()) stack.push_back({c, false});
             }
-            return true;
+            continue;
         }
-        case Kind::Or: {
-            for (ExprId c : e.children) {
-                if (eval(c, ir, assignment)) return true;
+
+        stack.pop_back();
+        bool r;
+        switch (e.kind) {
+            case Kind::ConstBool:
+                r = std::get<bool>(e.payload.value);
+                break;
+            case Kind::Variable: {
+                auto it = assignment.find(eid);
+                r = it != assignment.end() ? it->second : false;
+                break;
             }
-            return false;
+            case Kind::Not:
+                assert(e.children.size() == 1);
+                r = !val(e.children[0]);
+                break;
+            case Kind::And:
+                r = true;
+                for (ExprId c : e.children) { if (!val(c)) { r = false; break; } }
+                break;
+            case Kind::Or:
+                r = false;
+                for (ExprId c : e.children) { if (val(c)) { r = true; break; } }
+                break;
+            case Kind::Implies:
+                assert(e.children.size() == 2);
+                r = !val(e.children[0]) || val(e.children[1]);
+                break;
+            case Kind::Eq:
+                assert(e.children.size() == 2);
+                // Stage A: boolean equality only.
+                r = (val(e.children[0]) == val(e.children[1]));
+                break;
+            default:
+                // Stage A: non-boolean expressions treated as "cannot validate".
+                r = true;
+                break;
         }
-        case Kind::Implies: {
-            assert(e.children.size() == 2);
-            return !eval(e.children[0], ir, assignment) || eval(e.children[1], ir, assignment);
-        }
-        case Kind::Eq: {
-            assert(e.children.size() == 2);
-            // Stage A: boolean equality only.
-            return eval(e.children[0], ir, assignment) == eval(e.children[1], ir, assignment);
-        }
-        default:
-            // Stage A: non-boolean expressions treated as "cannot validate".
-            return true;
+        memo[eid] = r;
     }
+    return val(root);
 }
 
 } // namespace zolver

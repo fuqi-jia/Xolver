@@ -13,6 +13,8 @@
 #include "frontend/preprocess/UfInArithPurifier.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
+#include "theory/core/LogicFeatureDetector.h"
+#include "proof/ModelValidator.h"
 
 using namespace zolver;
 
@@ -143,4 +145,49 @@ TEST_CASE("UnconditionalConstantPropagation: wide top-level And survives ir_.add
     UnconditionalConstantPropagation cprop(ir);
     REQUIRE(cprop.run());          // former: SIGSEGV from dangling node reference
     cprop.commit();
+}
+
+TEST_CASE("LogicFeatureDetector: deep nesting does not overflow") {
+    // scanExpr was recursive on children; a deep formula overflowed the stack.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    addDeepAssertion(ir, b, i, Kind::Add);   // (<= (+ ... ) 0), 200k-deep
+    LogicFeatureDetector det(ir);
+    LogicFeatures f = det.detect();          // must not segfault
+    CHECK(f.hasInt);
+}
+
+TEST_CASE("ModelValidator: deep boolean nesting does not overflow") {
+    // ModelValidator::eval recursed on boolean structure; a deep (not (not ...))
+    // chain overflowed. Build a 200k-deep Not chain over a bool variable.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId bv = ir.add(CoreExpr{Kind::Variable, b, {}, Payload(std::string("p"))});
+    ExprId chain = bv;
+    for (int k = 0; k < kDeep; ++k) {
+        chain = ir.add(CoreExpr{Kind::Not, b, {chain}, {}});
+    }
+    ir.addAssertion(chain);
+    ModelValidator mv;
+    ModelValidator::BoolAssignment asg;
+    asg[bv] = true;
+    mv.validate(ir, asg);                    // must not segfault; verdict irrelevant
+    CHECK(true);
+}
+
+TEST_CASE("IntDivModLowerer: deep all-constant term does not overflow") {
+    // evalIntConstTerm recursed on Neg/Add/Sub/Mul children; a deep constant
+    // term (here a div numerator) overflowed. (div (+ 1 (+ 1 ...)) 2).
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId one = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+    ExprId sum = one;
+    for (int k = 0; k < kDeep; ++k) {
+        ExprId c = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+        sum = ir.add(CoreExpr{Kind::Add, i, {sum, c}, {}});
+    }
+    ExprId two = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(2))});
+    ExprId d = ir.add(CoreExpr{Kind::Div, i, {sum, two}, {}});
+    ExprId zero = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(0))});
+    ir.addAssertion(ir.add(CoreExpr{Kind::Geq, b, {d, zero}, {}}));
+    IntDivModLowerer pass(ir);
+    pass.run();                              // must not segfault (evalIntConstTerm)
+    CHECK(true);
 }

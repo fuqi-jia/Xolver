@@ -67,6 +67,9 @@ private:
     std::unordered_map<ExprId, std::optional<RationalPolynomial>> memo_;
 
     std::optional<RationalPolynomial> collectRec(ExprId eid, const CoreIr& ir);
+    // Iterative bottom-up pre-pass that memoizes nested arith subterms so
+    // collectRec never recurses deeply (deep-term stack-overflow guard).
+    void preCollectIterative(ExprId root, const CoreIr& ir);
 };
 
 } // namespace zolver
