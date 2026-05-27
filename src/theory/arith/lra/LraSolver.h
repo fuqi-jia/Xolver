@@ -157,13 +157,9 @@ private:
     };
     std::unordered_map<int, AuxFormInfo> auxFormInfo_;
 
-    std::optional<TheoryLemma> tryConvertDerivedBound(
-        const LraPropagationEngine::ExplainedBound& eb) const;
-
     // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
-    // the Farkas reasons, tagged Entailment. Unlike tryConvertDerivedBound
-    // (which drops reasons -> bare unit, only safe for the dead lemmaDb path),
-    // this is safe to give the SAT solver during search.
+    // the Farkas reasons, tagged Entailment. Safe to give the SAT solver during
+    // search (ZOLVER_LRA_PROP); the propagator verifies it is unit/falsified.
     std::optional<TheoryLemma> buildEntailmentLemma(
         const LraPropagationEngine::ExplainedBound& eb) const;
 

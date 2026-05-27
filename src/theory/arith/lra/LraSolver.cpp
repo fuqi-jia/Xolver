@@ -285,34 +285,21 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 
     // -------------------------------------------------------------------------
-    // Phase C: bound propagation
+    // Phase C: bound propagation (ZOLVER_LRA_PROP only). Lift SOUND Farkas
+    // bound-propagations to the SAT solver as reason-carrying entailment clauses
+    // (¬reasons ∨ implied), verified unit/falsified at the propagator. The old
+    // tryConvertDerivedBound path — bare unit lemmas into a dedup-only lemmaDb
+    // that was never drained to SAT, AND an over-tight b<0-lower/b>0-upper δ
+    // reconstruction — was dead code with a latent unsoundness; removed. When
+    // PROP is off we skip propagateAll entirely (it was pure waste before).
     // -------------------------------------------------------------------------
-    {
+    if (lraPropEnabled_) {
         auto derived = propagationEngine_.propagateAll(gs_);
-        int emitted = 0;
-        const int MAX_PROPAGATION_LEMMAS = 8;
+        const int kMaxProps = 64;
         for (const auto& eb : derived) {
-            if (emitted >= MAX_PROPAGATION_LEMMAS) break;
-            auto lemmaOpt = tryConvertDerivedBound(eb);
-            if (lemmaOpt) {
-                if (!lemmaDb.contains(*lemmaOpt)) {
-                    lemmaDb.insertIfNew(*lemmaOpt);
-                    ++emitted;
-                }
-            }
-        }
-
-        // ZOLVER_LRA_PROP: buffer sound entailment clauses (¬reasons ∨ implied)
-        // for the SAT propagator to install during search. Reason-carrying, so
-        // unlike the unit lemmas above they are safe to learn (the propagator
-        // also verifies each is unit/falsified under the current assignment).
-        if (lraPropEnabled_) {
-            const int kMaxProps = 64;
-            for (const auto& eb : derived) {
-                if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
-                if (auto lem = buildEntailmentLemma(eb)) {
-                    entailmentProps_.push_back(std::move(*lem));
-                }
+            if (static_cast<int>(entailmentProps_.size()) >= kMaxProps) break;
+            if (auto lem = buildEntailmentLemma(eb)) {
+                entailmentProps_.push_back(std::move(*lem));
             }
         }
     }
@@ -628,27 +615,6 @@ std::vector<SatLit> LraSolver::allActiveReasons() const {
         return a.var == b.var && a.sign == b.sign;
     }), rs.end());
     return rs;
-}
-
-std::optional<TheoryLemma> LraSolver::tryConvertDerivedBound(
-    const LraPropagationEngine::ExplainedBound& eb) const {
-    auto it = auxFormInfo_.find(eb.var);
-    if (it == auxFormInfo_.end()) return std::nullopt;
-
-    const auto& info = it->second;
-    mpq_class boundRhs = info.rhs + eb.value.a;
-
-    Relation rel;
-    if (eb.isLower) {
-        rel = (eb.value.b > 0) ? Relation::Gt : Relation::Geq;
-    } else {
-        rel = (eb.value.b < 0) ? Relation::Lt : Relation::Leq;
-    }
-
-    if (!registry_) return std::nullopt;
-    SatLit lit = registry_->getOrCreateLinearBoundAtom(
-        info.lhs, rel, boundRhs, TheoryId::LRA);
-    return TheoryLemma{{lit}};
 }
 
 std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(

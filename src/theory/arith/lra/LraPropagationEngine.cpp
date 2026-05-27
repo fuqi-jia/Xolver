@@ -64,11 +64,13 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                     if (e.coeff > 0) {
                         if (!st.lower.bound.isFinite()) { ok = false; break; }
                         numer += e.coeff * st.lower.bound.value;
-                        if (st.lower.reason) reasonAcc.push_back({e.col, *st.lower.reason});
+                        if (!st.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                        reasonAcc.push_back({e.col, *st.lower.reason});
                     } else {
                         if (!st.upper.bound.isFinite()) { ok = false; break; }
                         numer += e.coeff * st.upper.bound.value;
-                        if (st.upper.reason) reasonAcc.push_back({e.col, *st.upper.reason});
+                        if (!st.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                        reasonAcc.push_back({e.col, *st.upper.reason});
                     }
                 }
                 if (ok) {
@@ -96,7 +98,8 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                 {
                     auto basicSt = gs.varState(item.var);
                     numer = basicSt.lower.bound.value - numer;
-                    if (basicSt.lower.reason) reasonAcc.push_back({item.var, *basicSt.lower.reason});
+                    if (!basicSt.lower.reason) ok = false;  // consumed finite bound must be explained
+                    else reasonAcc.push_back({item.var, *basicSt.lower.reason});
                 }
 
                 for (const auto& e2 : tabRow.entries) {
@@ -107,22 +110,26 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                         if (e2.coeff > 0) {
                             if (!st2.upper.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.upper.bound.value;
-                            if (st2.upper.reason) reasonAcc.push_back({e2.col, *st2.upper.reason});
+                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.upper.reason});
                         } else {
                             if (!st2.lower.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.lower.bound.value;
-                            if (st2.lower.reason) reasonAcc.push_back({e2.col, *st2.lower.reason});
+                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.lower.reason});
                         }
                     } else {
                         // maximize numerator for upper(x_j) with coeff < 0
                         if (e2.coeff > 0) {
                             if (!st2.lower.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.lower.bound.value;
-                            if (st2.lower.reason) reasonAcc.push_back({e2.col, *st2.lower.reason});
+                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.lower.reason});
                         } else {
                             if (!st2.upper.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.upper.bound.value;
-                            if (st2.upper.reason) reasonAcc.push_back({e2.col, *st2.upper.reason});
+                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.upper.reason});
                         }
                     }
                 }
@@ -146,11 +153,13 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                     if (e.coeff > 0) {
                         if (!st.upper.bound.isFinite()) { ok = false; break; }
                         numer += e.coeff * st.upper.bound.value;
-                        if (st.upper.reason) reasonAcc.push_back({e.col, *st.upper.reason});
+                        if (!st.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                        reasonAcc.push_back({e.col, *st.upper.reason});
                     } else {
                         if (!st.lower.bound.isFinite()) { ok = false; break; }
                         numer += e.coeff * st.lower.bound.value;
-                        if (st.lower.reason) reasonAcc.push_back({e.col, *st.lower.reason});
+                        if (!st.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                        reasonAcc.push_back({e.col, *st.lower.reason});
                     }
                 }
                 if (ok) {
@@ -177,7 +186,8 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                 {
                     auto basicSt = gs.varState(item.var);
                     numer = basicSt.upper.bound.value - numer;
-                    if (basicSt.upper.reason) reasonAcc.push_back({item.var, *basicSt.upper.reason});
+                    if (!basicSt.upper.reason) ok = false;  // consumed finite bound must be explained
+                    else reasonAcc.push_back({item.var, *basicSt.upper.reason});
                 }
 
                 for (const auto& e2 : tabRow.entries) {
@@ -188,22 +198,26 @@ LraPropagationEngine::propagateAll(const GeneralSimplex& gs,
                         if (e2.coeff > 0) {
                             if (!st2.lower.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.lower.bound.value;
-                            if (st2.lower.reason) reasonAcc.push_back({e2.col, *st2.lower.reason});
+                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.lower.reason});
                         } else {
                             if (!st2.upper.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.upper.bound.value;
-                            if (st2.upper.reason) reasonAcc.push_back({e2.col, *st2.upper.reason});
+                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.upper.reason});
                         }
                     } else {
                         // coeff < 0, derive lower(x_j): minimize numerator
                         if (e2.coeff > 0) {
                             if (!st2.upper.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.upper.bound.value;
-                            if (st2.upper.reason) reasonAcc.push_back({e2.col, *st2.upper.reason});
+                            if (!st2.upper.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.upper.reason});
                         } else {
                             if (!st2.lower.bound.isFinite()) { ok = false; break; }
                             numer -= e2.coeff * st2.lower.bound.value;
-                            if (st2.lower.reason) reasonAcc.push_back({e2.col, *st2.lower.reason});
+                            if (!st2.lower.reason) { ok = false; break; }  // consumed finite bound must be explained
+                            reasonAcc.push_back({e2.col, *st2.lower.reason});
                         }
                     }
                 }

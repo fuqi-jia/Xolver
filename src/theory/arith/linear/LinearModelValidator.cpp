@@ -24,9 +24,17 @@ bool LinearModelValidator::validateLiaModel(
         }
     }
 
+    // Build a name->simplex-index map once, so each atom can be re-evaluated
+    // from its ORIGINAL linear form rather than trusting its aux-var row.
+    std::unordered_map<std::string, int> nameToIdx;
+    nameToIdx.reserve(static_cast<size_t>(gs.numVars()));
+    for (int v = 0; v < gs.numVars(); ++v) {
+        nameToIdx.emplace(gs.varName(v), v);
+    }
+
     // 3. Check active atoms
     for (const auto& atom : activeAtoms) {
-        if (!checkAtom(atom, gs)) {
+        if (!checkAtom(atom, gs, nameToIdx)) {
             return false;
         }
     }
@@ -35,11 +43,27 @@ bool LinearModelValidator::validateLiaModel(
 }
 
 bool LinearModelValidator::checkAtom(
-    const ActiveLinearAtom& atom, const GeneralSimplex& gs) {
-    // aux = lhs - rhs, so:
-    //   lhs rel rhs  <=>  aux rel 0
-    auto val = gs.value(atom.auxVar);
-    return satisfiesRelation(val, atom.rel, atom.value);
+    const ActiveLinearAtom& atom, const GeneralSimplex& gs,
+    const std::unordered_map<std::string, int>& nameToIdx) {
+    // Recompute the constraint value INDEPENDENTLY from the original form:
+    //   val = Σ coeff·value(var) − rhs   ( == aux by construction; lhs rel rhs <=> val rel 0 )
+    // Don't trust gs.value(atom.auxVar): if the aux row were ever stale/desynced
+    // a violated model would pass. Recomputing from atom.lhs/atom.rhs makes the
+    // validator an independent check.
+    DeltaRational val;  // 0
+    bool allResolved = true;
+    for (const auto& [name, coeff] : atom.lhs.terms) {
+        auto it = nameToIdx.find(name);
+        if (it == nameToIdx.end()) { allResolved = false; break; }
+        val += coeff * gs.value(it->second);
+    }
+    if (allResolved) {
+        val -= DeltaRational(atom.rhs);
+        return satisfiesRelation(val, atom.rel, atom.value);
+    }
+    // Fallback (a form var not registered in the simplex — should not happen for
+    // an asserted atom): preserve the prior aux-var behavior.
+    return satisfiesRelation(gs.value(atom.auxVar), atom.rel, atom.value);
 }
 
 bool LinearModelValidator::satisfiesRelation(

@@ -6,6 +6,8 @@
 #include <gmpxx.h>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
+#include <string>
 
 namespace zolver {
 
@@ -56,7 +58,8 @@ public:
         const GeneralSimplex& gs);
 
 private:
-    bool checkAtom(const ActiveLinearAtom& atom, const GeneralSimplex& gs);
+    bool checkAtom(const ActiveLinearAtom& atom, const GeneralSimplex& gs,
+                   const std::unordered_map<std::string, int>& nameToIdx);
     bool satisfiesRelation(const DeltaRational& val, Relation rel, bool value);
 };
 
