@@ -222,4 +222,20 @@ private:
     T* capacity_;
 };
 
+template <typename T, size_t N>
+bool operator==(const SmallVector<T,N>& a, const SmallVector<T,N>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) if (!(a[i] == b[i])) return false;
+    return true;
+}
+template <typename T, size_t N>
+bool operator<(const SmallVector<T,N>& a, const SmallVector<T,N>& b) {
+    size_t n = a.size() < b.size() ? a.size() : b.size();
+    for (size_t i = 0; i < n; ++i) {
+        if (a[i] < b[i]) return true;
+        if (b[i] < a[i]) return false;
+    }
+    return a.size() < b.size();
+}
+
 } // namespace zolver
