@@ -190,7 +190,7 @@ cmd_pack() {
     [[ -n "$RUN_DIR" ]] || err "results 目录下没有 run_* 文件夹"
 
     RUN_NAME=$(basename "$RUN_DIR")
-    OUT="$HOME/zolver-$(hostname)-$RUN_NAME.tar.gz"
+    OUT="$(pwd)/zolver-$(hostname)-$RUN_NAME.tar.gz"
 
     log "打包: $RUN_NAME -> $OUT"
 
@@ -259,7 +259,7 @@ Zolver 极简部署脚本
       ./zolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
 
   ./zolver-dist/tools/deploy_and_run.sh pack
-    打包最新 benchmark 结果到 ~/zolver-<hostname>-<run>.tar.gz
+    打包最新 benchmark 结果到 ./zolver-<hostname>-<run>.tar.gz（当前目录）
 
     常用选项（透传给 run_benchmark.py）:
       -j N         并行数
