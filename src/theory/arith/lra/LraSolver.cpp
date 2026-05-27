@@ -58,6 +58,7 @@ void LraSolver::onReset() {
     appliedCursor_ = 0;
     pendingConflict_.reset();
     diseqBranchAuthorized_.clear();
+    atomEvalCache_.clear();
     gs_.resetActiveBounds();
 }
 
@@ -695,6 +696,49 @@ std::optional<TheoryLemma> LraSolver::buildEntailmentLemma(
 
 std::vector<TheoryLemma> LraSolver::takeEntailmentPropagations() {
     return std::move(entailmentProps_);
+}
+
+std::optional<bool> LraSolver::evalAtomAtModel(SatVar v) {
+    // Build the STATIC form once (expensive findBySatVar + payload extraction).
+    auto cit = atomEvalCache_.find(v);
+    if (cit == atomEvalCache_.end()) {
+        AtomEvalForm form;
+        const TheoryAtomRecord* rec = registry_ ? registry_->findBySatVar(v) : nullptr;
+        if (rec && std::holds_alternative<LinearAtomPayload>(rec->payload)) {
+            const auto& p = std::get<LinearAtomPayload>(rec->payload);
+            if (p.rhs.isRational()) {
+                form.isLinear = true;
+                form.rel = p.rel;
+                form.rhs = p.rhs.asRational().get_d();
+                form.terms.reserve(p.lhs.terms.size());
+                for (const auto& t : p.lhs.terms) {
+                    form.terms.push_back({t.first, t.second.get_d()});
+                }
+            }
+        }
+        cit = atomEvalCache_.emplace(v, std::move(form)).first;
+    }
+    const AtomEvalForm& f = cit->second;
+    if (!f.isLinear) return std::nullopt;
+
+    // Resolve indices FRESH (O(1) per term). A var not yet in the simplex (or
+    // gone after backtrack) -> skip O(1). Caching the name not the index keeps
+    // this crash-safe under lazy registration. double arithmetic, zero alloc.
+    double s = 0.0;
+    for (const auto& term : f.terms) {
+        int idx = manager_.findVarIndex(term.first);
+        if (idx < 0) return std::nullopt;  // pending: var not registered yet
+        s += term.second * gs_.value(idx).a.get_d();
+    }
+    switch (f.rel) {
+        case Relation::Leq: return s <= f.rhs;
+        case Relation::Lt:  return s <  f.rhs;
+        case Relation::Geq: return s >= f.rhs;
+        case Relation::Gt:  return s >  f.rhs;
+        case Relation::Eq:  return s == f.rhs;
+        case Relation::Neq: return s != f.rhs;
+        default:            return std::nullopt;
+    }
 }
 
 void LraSolver::allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) {

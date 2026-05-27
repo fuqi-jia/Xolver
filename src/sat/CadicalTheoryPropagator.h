@@ -88,6 +88,14 @@ public:
     bool cb_check_found_model(const std::vector<int>& model) override;
     int cb_propagate() override;
 
+    // Behavior-neutral decision-steering PROBE (returns 0 = decline; CaDiCaL
+    // decides as normal, so OFF==ON). Counts decision requests and, via the
+    // first assignment after each new decision level, buckets decisions into
+    // theory bound-atoms vs boolean-structure literals. Periodic stderr dump
+    // gated by env ZOLVER_DECIDE_PROBE. Measures whether decision-steering has
+    // any leverage before building a real cb_decide steering heuristic.
+    int cb_decide() override;
+
     bool cb_has_external_clause(bool& is_forgettable) override;
     int cb_add_external_clause_lit() override;
 
@@ -120,6 +128,23 @@ private:
     std::unordered_map<SatVar, int> varToLevel_;
     std::unordered_map<SatVar, bool> currentAssignment_;
     size_t lastCheckedAssignmentSize_ = 0;
+
+    // Decision-steering probe counters (instrumentation only).
+    long long decideCalls_ = 0;        // cb_decide invocations (= decision points)
+    long long decisionLits_ = 0;       // decisions observed via notify
+    long long theoryAtomDecisions_ = 0;// of those, over a linear bound atom
+    bool expectDecisionLit_ = false;   // next notify_assignment's first lit is the decision
+
+    // ZOLVER_LRA_DECIDE (default OFF): steer decisions toward a theory-feasible
+    // region by returning an unassigned bound-atom literal at its
+    // feasibility-consistent phase. Heuristic — soundness-safe.
+    bool decideSteer_ = false;
+    bool theoryAtomVarsBuilt_ = false;
+    std::vector<SatVar> theoryAtomVars_;
+    size_t decideCursor_ = 0;
+    long long steeredDecisions_ = 0;
+    long long dbgUnassignedProbes_ = 0;
+    long long dbgEvalNull_ = 0;
 
     TheorySearchStats stats_;
 

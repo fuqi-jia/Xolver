@@ -48,6 +48,7 @@ SolverSetupResult setupSolvers(
         auto lra = std::make_unique<LraSolver>();
         lra->setRegistry(&registry);
         theoryManager.registerSolver(std::move(lra));
+        theoryManager.setRegistry(&registry);  // needed by cb_decide evalTheoryAtom
     } else if (logic == "QF_NRA" || logic == "NRA") {
         auto polyKernel = createPolynomialKernel();
         result.polyKernelRaw = polyKernel.get();

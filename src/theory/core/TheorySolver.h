@@ -43,6 +43,10 @@ public:
     // search. Must never return Guess/branch lemmas.
     virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
 
+    // Heuristic eval of a bound atom at the current theory model (see
+    // TheoryPropagationCallbacks::evalTheoryAtom). Default: no value.
+    virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
+
     // -----------------------------------------------------------------------
     // Active linear context for nonlinear solvers (optional; default = no-op)
     // -----------------------------------------------------------------------

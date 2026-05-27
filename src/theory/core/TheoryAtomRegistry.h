@@ -38,6 +38,7 @@ public:
     bool findByExprId(ExprId expr, LinearFormKey& outLhs, Relation& outRel, mpq_class& outRhs) const;
 
     const TheoryAtomRecord* findBySatVar(SatVar v) const override;
+    std::vector<SatVar> linearAtomVars() const override;
     const std::vector<TheoryAtomRecord>& records() const { return records_; }
 
     bool hasUnsupportedTheoryAtom() const { return unsupportedTheorySeen_; }

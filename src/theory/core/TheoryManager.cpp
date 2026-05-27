@@ -176,6 +176,15 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
     return out;
 }
 
+std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
+    if (!registry_) return std::nullopt;
+    const TheoryAtomRecord* rec = registry_->findBySatVar(v);
+    if (!rec) return std::nullopt;
+    auto it = solverByTheory_.find(rec->theory);
+    if (it == solverByTheory_.end()) return std::nullopt;
+    return it->second->evalAtomAtModel(v);
+}
+
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 
