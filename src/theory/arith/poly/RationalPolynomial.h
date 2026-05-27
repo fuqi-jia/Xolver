@@ -2,6 +2,7 @@
 
 #include "expr/types.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/poly/FlatMonomialMap.h"
 #include <gmpxx.h>
 #include <map>
 #include <set>
@@ -15,7 +16,7 @@ namespace zolver {
  * Monomial key: sorted list of (varId, exponent) with exponents > 0.
  * Empty key represents the constant term.
  */
-using MonomialKey = std::vector<std::pair<VarId, int>>;
+using MonomialKey = FlatMonomialMap<mpq_class>::Key;
 
 /**
  * A multivariate polynomial with rational coefficients.
@@ -47,7 +48,7 @@ public:
     bool isZero() const { return terms_.empty(); }
     bool isConstant() const;
     mpq_class constantValue() const;
-    const std::map<MonomialKey, mpq_class>& terms() const { return terms_; }
+    const FlatMonomialMap<mpq_class>& terms() const { return terms_; }
 
     // -- CDCAC V1 extensions --------------------------------------------------
 
@@ -160,7 +161,7 @@ public:
         PolyId p, const PolynomialKernel& kernel);
 
 private:
-    std::map<MonomialKey, mpq_class> terms_;
+    FlatMonomialMap<mpq_class> terms_;
 
     static MonomialKey multiplyKeys(const MonomialKey& a, const MonomialKey& b);
     static MonomialKey powKey(const MonomialKey& a, uint32_t n);

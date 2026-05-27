@@ -15,7 +15,10 @@ static MonomialKey canonicalizeMonomialKey(MonomialKey key) {
         std::sort(key.begin(), key.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
         // Merge duplicates produced by callers that listed the same VarId twice.
-        auto write = key.begin();
+        // SmallVector has no erase(first,last), so build a fresh canonical key
+        // (same semantics: sort by VarId asc, merge dup VarId by summing exp,
+        // drop exp <= 0).
+        MonomialKey merged;
         for (auto read = key.begin(); read != key.end(); ) {
             auto next = read + 1;
             int exp = read->second;
@@ -24,12 +27,11 @@ static MonomialKey canonicalizeMonomialKey(MonomialKey key) {
                 ++next;
             }
             if (exp > 0) {
-                *write = {read->first, exp};
-                ++write;
+                merged.push_back({read->first, exp});
             }
             read = next;
         }
-        key.erase(write, key.end());
+        return merged;
     } else if (key.size() == 1 && key[0].second <= 0) {
         key.clear();
     }
@@ -142,61 +144,82 @@ mpq_class RationalPolynomial::constantValue() const {
 
 RationalPolynomial RationalPolynomial::operator+(
     const RationalPolynomial& other) const {
-    RationalPolynomial result = *this;
-    for (const auto& [key, coeff] : other.terms_) {
-        result.terms_[key] += coeff;
+    // Hot build: append all terms then canonicalize once (O(m log m)) rather
+    // than repeated sorted inserts (O(n^2)). canonicalize() sorts, merges
+    // duplicate keys by += and strips zero coefficients — identical canonical
+    // result to the old terms_[key] += coeff loop.
+    RationalPolynomial result;
+    result.terms_.reserve(terms_.size() + other.terms_.size());
+    for (const auto& [key, coeff] : terms_) {
+        result.terms_.append(key, coeff);
     }
-    result.normalize();
+    for (const auto& [key, coeff] : other.terms_) {
+        result.terms_.append(key, coeff);
+    }
+    result.terms_.canonicalize();
     return result;
 }
 
 RationalPolynomial RationalPolynomial::operator-(
     const RationalPolynomial& other) const {
-    RationalPolynomial result = *this;
-    for (const auto& [key, coeff] : other.terms_) {
-        result.terms_[key] -= coeff;
+    RationalPolynomial result;
+    result.terms_.reserve(terms_.size() + other.terms_.size());
+    for (const auto& [key, coeff] : terms_) {
+        result.terms_.append(key, coeff);
     }
-    result.normalize();
+    for (const auto& [key, coeff] : other.terms_) {
+        result.terms_.append(key, -coeff);
+    }
+    result.terms_.canonicalize();
     return result;
 }
 
 RationalPolynomial RationalPolynomial::operator*(
     const RationalPolynomial& other) const {
     RationalPolynomial result;
+    result.terms_.reserve(terms_.size() * other.terms_.size());
     for (const auto& [k1, c1] : terms_) {
         for (const auto& [k2, c2] : other.terms_) {
-            auto key = multiplyKeys(k1, k2);
-            result.terms_[key] += c1 * c2;
+            result.terms_.append(multiplyKeys(k1, k2), c1 * c2);
         }
     }
-    result.normalize();
+    result.terms_.canonicalize();
     return result;
 }
 
 RationalPolynomial RationalPolynomial::operator-() const {
-    RationalPolynomial result = *this;
-    for (auto& [key, coeff] : result.terms_) {
-        (void)key;
-        coeff = -coeff;
+    // terms_ exposes only const iteration; rebuild with negated coefficients.
+    // Keys are already canonical and stay sorted/unique under negation, so
+    // append preserves order; canonicalize() re-establishes the invariant
+    // cheaply (no zeros introduced by negation of nonzero coeffs).
+    RationalPolynomial result;
+    result.terms_.reserve(terms_.size());
+    for (const auto& [key, coeff] : terms_) {
+        result.terms_.append(key, -coeff);
     }
+    result.terms_.canonicalize();
     return result;
 }
 
 RationalPolynomial& RationalPolynomial::operator+=(
     const RationalPolynomial& other) {
+    // terms_ is already canonical; append other's terms and re-canonicalize
+    // once (sort+merge+strip) — same canonical result as repeated terms_[k]+=c.
+    terms_.reserve(terms_.size() + other.terms_.size());
     for (const auto& [key, coeff] : other.terms_) {
-        terms_[key] += coeff;
+        terms_.append(key, coeff);
     }
-    normalize();
+    terms_.canonicalize();
     return *this;
 }
 
 RationalPolynomial& RationalPolynomial::operator-=(
     const RationalPolynomial& other) {
+    terms_.reserve(terms_.size() + other.terms_.size());
     for (const auto& [key, coeff] : other.terms_) {
-        terms_[key] -= coeff;
+        terms_.append(key, -coeff);
     }
-    normalize();
+    terms_.canonicalize();
     return *this;
 }
 
@@ -205,10 +228,16 @@ RationalPolynomial& RationalPolynomial::operator*=(const mpq_class& scalar) {
         terms_.clear();
         return *this;
     }
-    for (auto& [key, coeff] : terms_) {
-        (void)key;
-        coeff *= scalar;
+    // terms_ exposes only const iteration; rebuild with scaled coefficients.
+    // Scaling by a nonzero scalar preserves keys/order and introduces no zeros,
+    // so canonical form is preserved.
+    FlatMonomialMap<mpq_class> scaled;
+    scaled.reserve(terms_.size());
+    for (const auto& [key, coeff] : terms_) {
+        scaled.append(key, coeff * scalar);
     }
+    scaled.canonicalize();
+    terms_ = std::move(scaled);
     return *this;
 }
 
@@ -233,15 +262,11 @@ RationalPolynomial RationalPolynomial::pow(uint32_t n) const {
 // ============================================================================
 
 void RationalPolynomial::normalize() {
-    for (auto it = terms_.begin(); it != terms_.end(); ) {
-        if (it->second == 0) {
-            it = terms_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    // Keys are kept sorted by std::map.
-    // Variable order inside each key is maintained by multiplyKeys/powKey.
+    // FlatMonomialMap::canonicalize() sorts entries by key, merges duplicate
+    // keys by +=, and strips zero-coefficient entries — exactly the old
+    // normalize semantics (the std::map already kept keys sorted; this also
+    // tolerates any unsorted/duplicate entries from append-based builds).
+    terms_.canonicalize();
 }
 
 // ============================================================================
@@ -374,7 +399,10 @@ std::optional<RationalPolynomial> RationalPolynomial::fromPolyId(
 
     RationalPolynomial rp;
     for (const auto& term : *termsOpt) {
-        rp.addTerm(term.powers, mpq_class(term.coefficient));
+        // kernel terms expose powers as std::vector; build a MonomialKey
+        // (SmallVector) from it for addTerm.
+        MonomialKey key(term.powers.begin(), term.powers.end());
+        rp.addTerm(key, mpq_class(term.coefficient));
     }
     rp.normalize();
     return rp;
@@ -470,10 +498,20 @@ RationalPolynomial RationalPolynomial::derivative(VarId v) const {
             if (exp == 1) {
                 result.terms_[remaining] += newCoeff;
             } else {
-                MonomialKey newKey = remaining;
-                auto it = std::lower_bound(newKey.begin(), newKey.end(), v,
-                    [](const auto& p, VarId vid) { return p.first < vid; });
-                newKey.insert(it, {v, exp - 1});
+                // SmallVector has no insert(); build a fresh sorted key with
+                // {v, exp-1} placed at its VarId-ascending position so the
+                // operator[] binary search stays canonical.
+                MonomialKey newKey;
+                newKey.reserve(remaining.size() + 1);
+                bool inserted = false;
+                for (const auto& pe : remaining) {
+                    if (!inserted && v < pe.first) {
+                        newKey.push_back({v, exp - 1});
+                        inserted = true;
+                    }
+                    newKey.push_back(pe);
+                }
+                if (!inserted) newKey.push_back({v, exp - 1});
                 result.terms_[newKey] += newCoeff;
             }
         }
@@ -536,10 +574,10 @@ RationalPolynomial RationalPolynomial::pseudoRemainder(VarId v, const RationalPo
     for (size_t i = 0; i < rem.size(); ++i) {
         if (rem[i].isZero()) continue;
         for (const auto& [key, coeff] : rem[i].terms()) {
+            // SmallVector has no insert(); append {v, i} and let addTerm's
+            // canonicalizeMonomialKey re-sort/merge (i==0 -> exp 0 dropped).
             MonomialKey newKey = key;
-            auto it = std::lower_bound(newKey.begin(), newKey.end(), v,
-                [](const auto& pair, VarId vid) { return pair.first < vid; });
-            newKey.insert(it, {v, static_cast<int>(i)});
+            newKey.push_back({v, static_cast<int>(i)});
             result.addTerm(newKey, coeff);
         }
     }
@@ -645,11 +683,14 @@ mpq_class RationalPolynomial::content(VarId v) const {
 RationalPolynomial RationalPolynomial::primitivePart(VarId v) const {
     mpq_class c = content(v);
     if (c == 0 || c == 1) return *this;
-    RationalPolynomial result = *this;
-    for (auto& [key, coeff] : result.terms_) {
-        coeff /= c;
+    // terms_ exposes only const iteration; rebuild dividing each coeff by c.
+    // Dividing by a nonzero content preserves keys/order, introduces no zeros.
+    RationalPolynomial result;
+    result.terms_.reserve(terms_.size());
+    for (const auto& [key, coeff] : terms_) {
+        result.terms_.append(key, coeff / c);
     }
-    result.normalize();
+    result.terms_.canonicalize();
     return result;
 }
 
