@@ -73,6 +73,17 @@ private:
     // solve's active constraints; sets unsatTrustworthy_ false if incomplete.
     void buildClosure(const CdcacInput& input);
 
+    // Run a single CDCAC pass (buildClosure + solveLevel) with the projection
+    // configuration currently set on this core (projectionKind_/lazardLiftEnabled_).
+    // Used by the hybrid driver to run Collins then (on Unknown) Lazard. Carries
+    // the existing ZOLVER_NRA_UNSAT_CERT soundness floor.
+    CdcacResult solvePass(const CdcacInput& input);
+
+    // Reset all per-solve scratch state so a second pass over the SAME input
+    // starts clean (closures, level polys, the lazily-created policy, and the
+    // completeness/trust flags). Does NOT touch the configured projection mode.
+    void resetPerSolveState();
+
 private:
     PolynomialKernel* kernel_;
     AlgebraBackend* algebra_;
@@ -81,7 +92,21 @@ private:
     // Projection mode for the lazily-created default policy. Set from
     // ZOLVER_NRA_PROJECTION in the constructor (lazard => LazardStyle; otherwise
     // CollinsConservative). Ignored if setProjectionPolicy() installs a policy.
+    // In HYBRID mode this is flipped per-pass by solve() (Collins then Lazard).
     ProjectionPolicyKind projectionKind_ = ProjectionPolicyKind::CollinsConservative;
+
+    // FAIL-SAFE HYBRID (DEFAULT): run Collins first, and ONLY if Collins returns
+    // Unknown, re-run the SAME input under the Lazard configuration
+    // (projectionKind_ = LazardStyle + lazardLiftEnabled_ + the per-cell UNSAT
+    // cert gate). Collins's definite verdicts (Sat/Unsat) are ALWAYS authoritative
+    // — Lazard never overrides them — so the hybrid is strictly >= pure-Collins by
+    // construction (it can only recover a Collins-Unknown to a Lazard-certified
+    // Sat/Unsat). The Lazard pass's Sat is full-model-validated upstream and its
+    // Unsat is the committed cert-gated path (incomplete => Unknown). Enabled by
+    // default; A/B escape hatches read once in the constructor:
+    //   ZOLVER_NRA_PROJECTION=collins  (or ZOLVER_NRA_HYBRID=0) => pure Collins.
+    //   ZOLVER_NRA_PROJECTION=lazard                            => pure Lazard.
+    bool hybridEnabled_ = true;
 
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;

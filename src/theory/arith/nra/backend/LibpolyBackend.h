@@ -84,6 +84,18 @@ private:
     Sign signAtOneAlgebraic(PolyId p, const SamplePoint& sample);
     Sign signAtTower(PolyId p, const SamplePoint& sample);
 
+    // Crash-guarded libpoly algebraic sign evaluation (never-crash rule). Each
+    // wraps a libpoly call that can SIGSEGV on a malformed/non-squarefree defining
+    // poly in the sigsetjmp recovery harness, returning Sign::Unknown on a
+    // recovered crash. Isolated in their own frame so the callers' live locals
+    // cannot be clobbered by longjmp (-Wclobbered). Result: -1/0/+1 sign with
+    // `ok=false` => Unknown.
+    //   poly::sgn(current, algebraic-and-rational assignment over `sample`).
+    Sign signAtSampleGuarded(PolyId current, const SamplePoint& sample);
+    //   poly::sgn(g specialized, single algebraic alpha) — the univariate case.
+    Sign signUnivariateAtAlgebraicGuarded(const std::vector<mpz_class>& gCoeffs,
+                                          const AlgebraicRoot& alpha);
+
     // Helper: convert UniPolyId coefficient vector back to PolyId in given variable
     PolyId univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var);
 

@@ -505,28 +505,14 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         return Sign::Unknown;
 #else
         if (!libKernel_) return Sign::Unknown;
-        try {
-            poly::Assignment pa(libKernel_->context());
-            for (size_t i = 0; i < sample.numVars(); ++i) {
-                poly::Variable pv = libKernel_->getVariable(std::string(kernel_->varName(sample.varOrder[i])));
-                const auto& val = sample.values[i];
-                if (val.isRational()) {
-                    pa.set(pv, poly::Value(poly::Rational(val.rational)));
-                } else if (val.isAlgebraic()) {
-                    const auto& ar = val.root;
-                    const auto& coeffs = getUni(ar.definingPoly);
-                    auto algOpt = algebraicRootToPolyAlg(ar, coeffs);
-                    if (!algOpt) return Sign::Unknown;
-                    pa.set(pv, poly::Value(*algOpt));
-                }
-            }
-            int s = poly::sgn(libKernel_->getPolynomial(current), pa);
-            if (s < 0) return multiplySigns(scaleSign, Sign::Neg);
-            if (s > 0) return multiplySigns(scaleSign, Sign::Pos);
-            return multiplySigns(scaleSign, Sign::Zero);
-        } catch (...) {
-            return Sign::Unknown;
-        }
+        // ANTI-CORRUPTION / never-crash rule: building libpoly AlgebraicNumbers +
+        // poly::sgn over an algebraic assignment can SIGSEGV deep in libpoly. The
+        // sigsetjmp crash-recovery harness lives in signAtSampleGuarded (its own
+        // frame) so this caller's live locals (scaleSign/current) cannot be
+        // clobbered by longjmp. A recovered crash ⇒ Sign::Unknown.
+        Sign s = signAtSampleGuarded(current, sample);
+        if (s == Sign::Unknown) return Sign::Unknown;
+        return multiplySigns(scaleSign, s);
 #endif
     }
 
@@ -957,43 +943,124 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
     if (!libKernel_) return Sign::Unknown;
     if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
 
-    // Reconstruct the algebraic number from root definition
-    const auto& rc = getUni(alpha.definingPoly);
-    std::vector<poly::Integer> rootLpCoeffs;
-    rootLpCoeffs.reserve(rc.size());
-    for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
-        rootLpCoeffs.emplace_back(*it);
-    }
-    poly::UPolynomial rootUp(rootLpCoeffs);
-    std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
-    if (alpha.rootIndex < 0 || alpha.rootIndex >= static_cast<int>(roots.size())) {
-        return Sign::Unknown;
-    }
+    // ANTI-CORRUPTION / never-crash rule: isolate_real_roots + poly::sgn over an
+    // algebraic value go through libpoly internals that can SIGSEGV on a
+    // malformed / non-squarefree defining poly. The sigsetjmp crash-recovery
+    // harness lives in the helper (its own frame), so this caller's locals are
+    // never clobbered by longjmp; a recovered crash ⇒ Sign::Unknown.
+    return signUnivariateAtAlgebraicGuarded(gCoeffs, alpha);
+#endif
+}
 
-    // Build gPoly once
-    poly::Variable var = libKernel_->getVariable("x");
-    std::vector<poly::Integer> gLpCoeffs;
-    gLpCoeffs.reserve(gCoeffs.size());
-    for (auto it = gCoeffs.rbegin(); it != gCoeffs.rend(); ++it) {
-        gLpCoeffs.emplace_back(*it);
+#ifdef ZOLVER_HAS_LIBPOLY
+// Crash-guarded poly::sgn(current, sample) where `sample` may carry algebraic
+// coordinates. SIGSEGV/SIGFPE in libpoly is recovered to Sign::Unknown. The
+// sigsetjmp + volatile locals are isolated in this frame so callers' locals are
+// safe from longjmp clobbering (-Wclobbered).
+Sign LibpolyBackend::signAtSampleGuarded(PolyId current, const SamplePoint& sample) {
+    if (!libKernel_) return Sign::Unknown;
+    volatile int s = 0;
+    volatile bool ok = false;
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
+        try {
+            poly::Assignment pa(libKernel_->context());
+            bool buildOk = true;
+            for (size_t i = 0; i < sample.numVars(); ++i) {
+                poly::Variable pv = libKernel_->getVariable(std::string(kernel_->varName(sample.varOrder[i])));
+                const auto& val = sample.values[i];
+                if (val.isRational()) {
+                    pa.set(pv, poly::Value(poly::Rational(val.rational)));
+                } else if (val.isAlgebraic()) {
+                    const auto& ar = val.root;
+                    const auto& coeffs = getUni(ar.definingPoly);
+                    auto algOpt = algebraicRootToPolyAlg(ar, coeffs);
+                    if (!algOpt) { buildOk = false; break; }
+                    pa.set(pv, poly::Value(*algOpt));
+                }
+            }
+            if (buildOk) {
+                s = poly::sgn(libKernel_->getPolynomial(current), pa);
+                ok = true;
+            }
+        } catch (...) {
+            ok = false;
+        }
     }
-    poly::UPolynomial gUp(gLpCoeffs);
-    lp_polynomial_t* lp_poly = lp_upolynomial_to_polynomial(
-        gUp.get_internal(),
-        libKernel_->context().get_polynomial_context(),
-        var.get_internal()
-    );
-    poly::Polynomial gPoly(lp_poly);
-
-    // Exact algebraic sign evaluation via libpoly
-    poly::Assignment pa(libKernel_->context());
-    pa.set(var, poly::Value(roots[alpha.rootIndex]));
-    int s = poly::sgn(gPoly, pa);
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    if (!ok) return Sign::Unknown;
     if (s < 0) return Sign::Neg;
     if (s > 0) return Sign::Pos;
     return Sign::Zero;
-#endif
 }
+
+// Crash-guarded univariate algebraic sign: sgn(g) at the alpha'th real root of
+// alpha.definingPoly. SIGSEGV/SIGFPE recovered to Sign::Unknown.
+Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
+    const std::vector<mpz_class>& gCoeffs, const AlgebraicRoot& alpha) {
+    if (!libKernel_) return Sign::Unknown;
+    if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
+    volatile int resultSign = 0;
+    volatile bool ok = false;
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
+        try {
+            // Reconstruct the algebraic number from root definition
+            const auto& rc = getUni(alpha.definingPoly);
+            std::vector<poly::Integer> rootLpCoeffs;
+            rootLpCoeffs.reserve(rc.size());
+            for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
+                rootLpCoeffs.emplace_back(*it);
+            }
+            poly::UPolynomial rootUp(rootLpCoeffs);
+            std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
+            if (alpha.rootIndex >= 0 && alpha.rootIndex < static_cast<int>(roots.size())) {
+                // Build gPoly once
+                poly::Variable var = libKernel_->getVariable("x");
+                std::vector<poly::Integer> gLpCoeffs;
+                gLpCoeffs.reserve(gCoeffs.size());
+                for (auto it = gCoeffs.rbegin(); it != gCoeffs.rend(); ++it) {
+                    gLpCoeffs.emplace_back(*it);
+                }
+                poly::UPolynomial gUp(gLpCoeffs);
+                lp_polynomial_t* lp_poly = lp_upolynomial_to_polynomial(
+                    gUp.get_internal(),
+                    libKernel_->context().get_polynomial_context(),
+                    var.get_internal()
+                );
+                poly::Polynomial gPoly(lp_poly);
+
+                // Exact algebraic sign evaluation via libpoly
+                poly::Assignment pa(libKernel_->context());
+                pa.set(var, poly::Value(roots[alpha.rootIndex]));
+                resultSign = poly::sgn(gPoly, pa);
+                ok = true;
+            }
+        } catch (...) {
+            ok = false;
+        }
+    }
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    if (!ok) return Sign::Unknown;  // crash recovered, bad rootIndex, or eval failed
+    if (resultSign < 0) return Sign::Neg;
+    if (resultSign > 0) return Sign::Pos;
+    return Sign::Zero;
+}
+#else
+Sign LibpolyBackend::signAtSampleGuarded(PolyId, const SamplePoint&) { return Sign::Unknown; }
+Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
+    const std::vector<mpz_class>&, const AlgebraicRoot&) { return Sign::Unknown; }
+#endif
 
 CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b) {
     // rational-rational
