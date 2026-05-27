@@ -76,11 +76,13 @@ TEST_CASE("let-elim: let-bound array index (QF_ALIA target, z3=sat)") {
         == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("let-elim: flag OFF leaves the residual-let gap (unknown), unchanged") {
-    // Without the flag, the nested let in a binding value is still unmapped ->
-    // unknown. This pins the gate: the fix is opt-in, default behavior intact.
+TEST_CASE("let-elim: nested-let-in-value now closed by SOMTParser expandLet (sat regardless of flag)") {
+    // The SOMTParser expandLet fix strips nested let/let-chain wrappers at parse
+    // time (sound: let-inlining is equivalence-preserving), so this case is solved
+    // even with the adapter let-elim flag OFF: a = c+c, c = x+1 => 2(x+1)=4 => x=1.
+    // (The adapter let-elim flag remains for residual cases the parser doesn't cover.)
     CHECK(static_cast<int>(solveStr(
         "(set-logic QF_LIA)(declare-const x Int)"
         "(assert (let ((a (let ((c (+ x 1))) (+ c c)))) (= a 4)))(check-sat)\n", "off"))
-        == static_cast<int>(Result::Unknown));
+        == static_cast<int>(Result::Sat));
 }
