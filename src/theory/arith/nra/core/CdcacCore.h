@@ -47,8 +47,23 @@ private:
         const RealAlg& sample,
         CdcacResult& childRes,
         const CdcacInput& input,
-        const RootSet& roots
+        const RootSet& roots,
+        bool levelBoundaryComplete,
+        std::optional<FullLineReason> fullLineReason = std::nullopt
     );
+
+    // FAIL-SAFE per-cell gate helper. Populate a cell's LazardCellCertificate
+    // from this level's boundary completeness + the child covering's per-cell
+    // completeness. Sets every *Complete flag true ONLY when provably so.
+    LazardCellCertificate makeLazardCellCert(
+        bool levelBoundaryComplete,
+        bool levelRootIsolationComplete,
+        const CdcacResult& childRes,
+        std::optional<FullLineReason> fullLineReason) const;
+
+    // True iff EVERY cell in a covering certificate carries a complete Lazard
+    // cell certificate (recursively gated through childCoverCert).
+    static bool coveringCellsAllComplete(const CoveringCertificate& cert);
 
     bool relationHolds(Sign s, Relation rel) const;
 
@@ -85,6 +100,23 @@ private:
     // on. Default off; only adds certified isolations, never changes the Collins
     // path. Read once in the constructor.
     bool lazardLiftEnabled_ = false;
+
+    // FAIL-SAFE per-cell UNSAT gate (Lazard mode only). The per-solve
+    // `unsatTrustworthy_` flag is over-conservative: it is dropped by ANY
+    // incomplete step anywhere in the solve tree (including exploratory branches
+    // that never enter the final covering), flooring recoverable UNSATs to
+    // Unknown. The per-cell gate trusts a covering's UNSAT if EITHER
+    // `unsatTrustworthy_` is true (current behaviour) OR every cell in that
+    // covering carries a complete `LazardCellCertificate` (boundary construction
+    // for the cell complete AND its recursive child covering complete). This is
+    // strictly >= the per-solve gate: it can only turn current-Unknowns into
+    // UNSAT, never the reverse, and never weakens the Collins path. Enabled by
+    // default in Lazard mode; force-off with ZOLVER_NRA_LAZARD_CELL_CERT=0.
+    bool lazardCellCertEnabled_ = true;
+
+    // Per-solve: was the Lazard projection closure built to completion? Mirrors
+    // the closure-completeness folding in buildClosure(). Fail-safe false.
+    bool closureComplete_ = false;
 
     // Opt-in soundness FLOOR (ZOLVER_NRA_UNSAT_CERT, intended default-ON once the
     // precise verifier lands). INTERIM CONSERVATIVE form: the CDCAC covering can

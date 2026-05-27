@@ -303,11 +303,62 @@ struct CellCertificate {
 };
 
 // ------------------------------------------------------------------
+// Lazard [H5]/[H7]: per-cell completeness certificate for the FAIL-SAFE
+// per-cell UNSAT gate. A FullLine cell may back UNSAT only with a complete
+// proof of irrelevance; any other cell only when its boundary construction
+// AND its recursive child covering were both complete.
+// ------------------------------------------------------------------
+enum class FullLineReason : uint8_t {
+    CompleteLazardEvaluationNoRoots,   // every relevant poly evaluated, genuinely root-free
+    NoRelevantPolys,                   // complete proof of irrelevance (NOT levelPolys.empty())
+    IncompleteProjectionFallback       // NOT legal for UNSAT — forces fallback to Unknown
+};
+
+// Lightweight provenance handles ([H7] reserves richer replay types; the gate
+// reads only the *Complete booleans + fullLineReason, so these stay opaque ids
+// for auditability without pulling in the not-yet-built replay machinery).
+using LazardClosureId = uint32_t;   // == ProjectionClosureId fingerprint
+using LazardCellId    = uint32_t;   // prefix-cell handle (0 = root prefix)
+
+struct LazardCellCertificate {
+    LazardClosureId closureId = 0;
+    LazardCellId    prefixCellId = 0;
+
+    // Each flag is set true ONLY when the corresponding construction step for
+    // THIS cell was provably complete. When in doubt → false (fail-safe).
+    bool closureComplete      = false;  // Lazard projection closure built completely
+    bool prefixComplete       = false;  // the prefix cell chain below was complete
+    bool valuationComplete    = false;  // every relevant nullified poly recovered ([H3])
+    bool rootIsolationComplete = false; // this cell's delineating roots all isolated+certified
+    bool rootMergeComplete    = false;  // root merge across boundary sets succeeded
+
+    // Legal only for FullLine cells; NoRelevantPolys / CompleteLazardEvaluationNoRoots
+    // are the only UNSAT-legal values.
+    std::optional<FullLineReason> fullLineReason;
+
+    // The gate predicate: is this cell a complete, UNSAT-legal Lazard cell?
+    bool isComplete() const {
+        if (!(closureComplete && prefixComplete && valuationComplete &&
+              rootIsolationComplete && rootMergeComplete))
+            return false;
+        if (fullLineReason) {
+            // A full-line cell is only legal with a complete proof of irrelevance.
+            return *fullLineReason == FullLineReason::CompleteLazardEvaluationNoRoots ||
+                   *fullLineReason == FullLineReason::NoRelevantPolys;
+        }
+        return true;
+    }
+};
+
+// ------------------------------------------------------------------
 // V3: Certified cell — cell + its certificate
 // ------------------------------------------------------------------
 struct CertifiedCell {
     Cell cell;
     CellCertificate certificate;
+    // Lazard per-cell completeness cert (populated only in Lazard mode; absent
+    // ⇒ no per-cell UNSAT trust for this cell). nullopt on the Collins path.
+    std::optional<LazardCellCertificate> lazardCert;
 };
 
 // ------------------------------------------------------------------

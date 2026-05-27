@@ -189,6 +189,11 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // now (interim, while completeness recovery lands); intended default-ON.
     if (const char* e = std::getenv("ZOLVER_NRA_UNSAT_CERT"))
         unsatCertEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+    // FAIL-SAFE per-cell UNSAT gate (Lazard mode). Default ON; only relevant in
+    // Lazard mode (the Collins gate is untouched). Force off for A/B with
+    // ZOLVER_NRA_LAZARD_CELL_CERT=0.
+    if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_CELL_CERT"))
+        lazardCellCertEnabled_ = !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' || e[0] == 'N');
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -410,6 +415,12 @@ bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
 void CdcacCore::buildClosure(const CdcacInput& input) {
     unsatTrustworthy_ = true;
     coveringUncertifiable_ = false;
+    // Per-cell gate (Lazard): track whether the Lazard closure underpinning ALL
+    // levels' boundaries built to completion. Starts true, dropped to false at
+    // the SAME points that drop unsatTrustworthy_ during closure construction.
+    // (Independent of unsatTrustworthy_ so a later lift-only incompleteness in
+    // an exploratory branch does not retroactively poison the closure flag.)
+    closureComplete_ = true;
     int n = static_cast<int>(input.varOrder.size());
     levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
 
@@ -417,7 +428,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     for (const auto& c : input.constraints) {
         if (kernel_->isConstant(c.poly)) continue;   // constants pre-handled by caller
         auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
-        if (!rp) { unsatTrustworthy_ = false; continue; }
+        if (!rp) { unsatTrustworthy_ = false; closureComplete_ = false; continue; }
         rps.push_back(std::move(*rp));
     }
 
@@ -442,11 +453,12 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg);
         if (lreason != LazardIncompleteReason::None) {
             unsatTrustworthy_ = false;   // incomplete Lazard projection ⇒ no UNSAT
+            closureComplete_ = false;    // per-cell gate: closure not complete
         }
         for (int k = 0; k < n; ++k) {
             for (int id : lazardClosure_.levelPolys(k)) {
                 PolyId pid = lazardClosure_.entries()[id].poly.toPolyId(*kernel_);
-                if (pid == NullPoly) { unsatTrustworthy_ = false; continue; }
+                if (pid == NullPoly) { unsatTrustworthy_ = false; closureComplete_ = false; continue; }
                 levelPolyIds_[k].push_back(pid);
             }
         }
@@ -565,7 +577,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                         CoveringCertificate coverCert;
                         coverCert.level = k;
                         coverCert.var = var;
-                        coverCert.cells.push_back(CertifiedCell{std::move(cellCopy), std::move(cert)});
+                        // Nullification-conflict cell carries no per-cell Lazard
+                        // cert (nullopt) ⇒ not trusted by the per-cell gate; this
+                        // path stays gated by unsatTrustworthy_ (conservative).
+                        coverCert.cells.push_back(
+                            CertifiedCell{std::move(cellCopy), std::move(cert), std::nullopt});
 
                         // V3: Build CoverageCertificate
                         CoverageCertificate coverage;
@@ -604,6 +620,23 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     // axis. When the closure is incomplete OR a specialization is uncertified,
     // unsatTrustworthy_ becomes false and any UNSAT here is downgraded to
     // Unknown at the covering exit.
+    // FAIL-SAFE per-cell gate: is THIS level's boundary construction complete?
+    // Starts from the closure-completeness flag and is dropped to false at the
+    // SAME level-local points that drop unsatTrustworthy_ during boundary
+    // collection (spec-failed-and-not-norm-recovered, vanish-not-recovered,
+    // vanish-Unknown). The root-isolation/merge failures below already return
+    // Unknown directly (so they never reach the per-cell gate). The cell certs
+    // built for this level's covering inherit this flag; when in doubt → false.
+    const bool lazardModeLevel = (projectionKind_ == ProjectionPolicyKind::LazardStyle)
+                                 || lazardLiftEnabled_;
+    // When `levelBoundaryComplete` is true at the gate, every boundary poly was
+    // either (a) a rational univariate whose roots passed validateRootIsolation
+    // (else we returned Unknown directly), or (b) a norm/tower isolation that
+    // reported `supported` (the [H2] exact decision). Any unsupported/undecided
+    // boundary already drops this flag. So root isolation + merge completeness
+    // for this level are implied by levelBoundaryComplete.
+    bool levelBoundaryComplete = closureComplete_;
+
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
     bool hasAlgebraicPrefix = false;
@@ -647,6 +680,10 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 }
             }
             unsatTrustworthy_ = false;
+            // Per-cell gate: a boundary poly whose specialization could not be
+            // recovered ⇒ this level's delineation is incomplete ⇒ no per-cell
+            // UNSAT trust for ANY cell of this level.
+            levelBoundaryComplete = false;
             continue;
         }
         // A poly that vanishes (≡0 in var) at this prefix contributes no
@@ -683,11 +720,21 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                         if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
                     }
                 }
-                if (!recovered) unsatTrustworthy_ = false;  // boundary not recovered ⇒ no UNSAT
+                if (!recovered) {
+                    unsatTrustworthy_ = false;  // boundary not recovered ⇒ no UNSAT
+                    // Per-cell gate: a vanished poly's boundary that the [H3]
+                    // valuation could not positively recover ⇒ delineation
+                    // incomplete ⇒ no per-cell UNSAT trust for this level.
+                    levelBoundaryComplete = false;
+                }
             }
             continue;
         }
-        if (vanish == VanishResult::Unknown) { unsatTrustworthy_ = false; continue; }
+        if (vanish == VanishResult::Unknown) {
+            unsatTrustworthy_ = false;
+            levelBoundaryComplete = false;  // undecided vanish ⇒ incomplete
+            continue;
+        }
 
         RootSet roots = algebra_->isolateRealRoots(up);
         if (!algebra_->validateRootIsolation(up, roots)) {
@@ -777,12 +824,18 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
         }
 
-        // Has uniPolys but no roots: entire line is one cell
+        // Has uniPolys but no roots: entire line is one cell ([H5] full-line).
+        // The full-line reason is a COMPLETE proof of irrelevance only when this
+        // level's boundary construction was complete (levelBoundaryComplete) —
+        // i.e. allRoots.empty() reflects genuine root-freeness, not a dropped or
+        // unrecovered poly. If levelBoundaryComplete is false the cert is
+        // incomplete anyway, so the legal reason is gated by isComplete().
         RealAlg sample = RealAlg::fromRational(mpq_class(0));
         CdcacResult res = testAndRecurse(sample);
         if (res.status == CdcacStatus::Sat) return res;
         if (res.status == CdcacStatus::Unknown) return res;
-        auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+        auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete,
+                                     FullLineReason::CompleteLazardEvaluationNoRoots);
         if (bcr.status == BuildCellStatus::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
         }
@@ -806,7 +859,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     CdcacResult res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
@@ -824,7 +877,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
                     if (!firstConflictRecorded) {
-                        auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                        auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
                         if (bcr.status == BuildCellStatus::Unknown) {
                             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                         }
@@ -842,7 +895,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 CdcacResult res = testAndRecurse(root);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
-                auto bcr = buildConflictCell(k, root, res, input, allRoots);
+                auto bcr = buildConflictCell(k, root, res, input, allRoots, levelBoundaryComplete);
                 if (bcr.status == BuildCellStatus::Unknown) {
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
@@ -865,7 +918,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
                 if (!firstConflictRecorded) {
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots);
+                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
@@ -902,7 +955,31 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     // boundaries was complete (no degeneracy / budget / uncertified
     // specialization). Otherwise the covering may over-generalize a deeper
     // conflict — report Unknown rather than a possibly-false UNSAT.
-    if (!unsatTrustworthy_) {
+    //
+    // FAIL-SAFE per-cell gate: the per-solve `unsatTrustworthy_` is dropped by
+    // ANY incomplete step anywhere in the solve tree — including exploratory
+    // branches that never enter THIS covering — flooring recoverable UNSATs to
+    // Unknown. So additionally trust this covering's UNSAT when (Lazard mode AND
+    // the gate is enabled AND) every cell in it carries a COMPLETE
+    // LazardCellCertificate, recursively through each cell's child covering.
+    // This is strictly >= the per-solve gate (can only turn Unknown→UNSAT,
+    // never the reverse) and leaves the Collins / non-Lazard path byte-identical.
+    bool perCellTrusted = false;
+    if (!unsatTrustworthy_ && lazardModeLevel && lazardCellCertEnabled_) {
+        perCellTrusted = !certifiedCells.empty();
+        for (const auto& cc : certifiedCells) {
+            if (!cc.lazardCert || !cc.lazardCert->isComplete()) { perCellTrusted = false; break; }
+            if (cc.certificate.childCoverCert &&
+                !coveringCellsAllComplete(*cc.certificate.childCoverCert)) {
+                perCellTrusted = false;
+                break;
+            }
+        }
+        if (perCellTrusted && std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+            std::cerr << "[LAZVAL] per-cell gate RECOVERED UNSAT at level k=" << k
+                      << " cells=" << certifiedCells.size() << std::endl;
+    }
+    if (!unsatTrustworthy_ && !perCellTrusted) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
 
@@ -1014,7 +1091,27 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         coverCert.var = var;
         // Note: cover.cells[0] may have been moved, so copy from the original cell
         Cell cellCopy = cellForCover;  // copy original cell before it was moved
-        coverCert.cells.push_back(CertifiedCell{std::move(cellCopy), std::move(cert)});
+        CertifiedCell leafCC{std::move(cellCopy), std::move(cert), std::nullopt};
+        // FAIL-SAFE per-cell gate: a full-sample (all vars concrete) conflict is
+        // an EXACT point conflict — every constraint's signAt returned a definite
+        // sign (else we returned SignEvaluationInconclusive above). So the leaf
+        // cell is complete by construction. Mark it so the recursive per-cell
+        // gate can trust coverings rooted at deeper levels. (Mode-agnostic but
+        // only READ in Lazard mode.)
+        {
+            LazardCellCertificate lc;
+            lc.closureId = lazardClosure_.closureId();
+            lc.prefixCellId = 0;
+            lc.closureComplete = closureComplete_;
+            lc.prefixComplete = true;      // no deeper level — leaf
+            lc.valuationComplete = true;   // exact concrete evaluation
+            lc.rootIsolationComplete = true;
+            lc.rootMergeComplete = true;
+            // Leaf is the full-sample point conflict (not a full-line proof of
+            // irrelevance); no fullLineReason ⇒ generic complete cell.
+            leafCC.lazardCert = std::move(lc);
+        }
+        coverCert.cells.push_back(std::move(leafCC));
 
         // V3: Build CoverageCertificate
         CoverageCertificate coverage;
@@ -1046,12 +1143,62 @@ Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const Sample
     return Cell{};
 }
 
+// FAIL-SAFE per-cell gate: every cell in a covering certificate must carry a
+// COMPLETE LazardCellCertificate, and (recursively) every cell of every nested
+// child covering must too. Absent cert ⇒ incomplete (fail-safe). This is the
+// predicate that lets the line-905 gate trust a covering whose per-solve
+// unsatTrustworthy_ was poisoned by an unrelated exploratory branch.
+bool CdcacCore::coveringCellsAllComplete(const CoveringCertificate& cert) {
+    if (cert.cells.empty()) return false;  // empty covering proves nothing
+    for (const auto& cc : cert.cells) {
+        if (!cc.lazardCert || !cc.lazardCert->isComplete()) return false;
+        // Recurse into the child covering of this cell (the deeper UNSAT proof).
+        if (cc.certificate.childCoverCert) {
+            if (!coveringCellsAllComplete(*cc.certificate.childCoverCert)) return false;
+        }
+    }
+    return true;
+}
+
+LazardCellCertificate CdcacCore::makeLazardCellCert(
+    bool levelBoundaryComplete,
+    bool levelRootIsolationComplete,
+    const CdcacResult& childRes,
+    std::optional<FullLineReason> fullLineReason) const {
+    LazardCellCertificate lc;
+    lc.closureId = lazardClosure_.closureId();
+    lc.prefixCellId = 0;
+    lc.fullLineReason = fullLineReason;
+
+    // closure underpins every level's boundaries; required for the whole chain.
+    lc.closureComplete = closureComplete_;
+    // This cell's own delineating-boundary construction (specialization /
+    // vanish-recovery) was complete.
+    lc.valuationComplete = levelBoundaryComplete;
+    lc.rootIsolationComplete = levelBoundaryComplete && levelRootIsolationComplete;
+    lc.rootMergeComplete = levelBoundaryComplete;  // mergeRoots succeeded (else Unknown earlier)
+
+    // prefixComplete = the recursive child UNSAT proof below this cell was
+    // ITSELF fully per-cell complete. A cell with no child covering (shouldn't
+    // happen for a generalized conflict cell, but fail-safe) is treated as
+    // incomplete. The child covering's leaf base-case is marked complete in
+    // checkFullSample.
+    if (childRes.status == CdcacStatus::Unsat && childRes.coveringCert) {
+        lc.prefixComplete = coveringCellsAllComplete(*childRes.coveringCert);
+    } else {
+        lc.prefixComplete = false;
+    }
+    return lc;
+}
+
 BuildCellResult CdcacCore::buildConflictCell(
     int k,
     const RealAlg& sample,
     CdcacResult& childRes,
     const CdcacInput& input,
-    const RootSet& roots) {
+    const RootSet& roots,
+    bool levelBoundaryComplete,
+    std::optional<FullLineReason> fullLineReason) {
     // P2b: shallow generalization only.
     // Uses current-level constraint roots and full child reasons.
     // Does not perform projection-driven parent generalization.
@@ -1132,6 +1279,13 @@ BuildCellResult CdcacCore::buildConflictCell(
         }
     }
 
+    // FAIL-SAFE per-cell gate: build this cell's Lazard completeness certificate
+    // BEFORE childRes.coveringCert is moved away (makeLazardCellCert reads it to
+    // gate prefixComplete on the child covering's per-cell completeness).
+    LazardCellCertificate lazardCert =
+        makeLazardCellCert(levelBoundaryComplete, /*levelRootIsolationComplete=*/true,
+                           childRes, fullLineReason);
+
     // V3: Inherit child covering certificate and atomConditions
     if (childRes.coveringCert) {
         // Copy atomConditions from all child cells
@@ -1147,7 +1301,7 @@ BuildCellResult CdcacCore::buildConflictCell(
 
     BuildCellResult bcr;
     bcr.status = BuildCellStatus::Success;
-    bcr.conflictCell = CertifiedCell{std::move(cell), std::move(cert)};
+    bcr.conflictCell = CertifiedCell{std::move(cell), std::move(cert), std::move(lazardCert)};
     return bcr;
 }
 
