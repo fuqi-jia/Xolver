@@ -101,6 +101,12 @@ public:
     std::optional<std::vector<SatLit>>
     instantiateLemma(const std::vector<ArrayDiseq>& disequalities);
 
+    // Collect the SharedTermIds of all array INDEX terms (the index arg of every
+    // select/store). Used by the combination layer to scope deduced-equality
+    // propagation to array-index pairs (so an entailed index equality reaches a
+    // pending Row1/Row2 without flooding the SAT core with every deduced equality).
+    void collectIndexSharedTerms(std::unordered_set<SharedTermId>& out) const;
+
     // Accessors for model construction.
     const std::vector<EufTermId>& selectTerms() const { return selectTerms_; }
     const std::vector<EufTermId>& storeTerms() const { return storeTerms_; }

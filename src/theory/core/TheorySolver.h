@@ -91,6 +91,13 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // SharedTermIds used as ARRAY INDEX terms (only the EUF/array solver answers).
+    // The combination layer uses this to scope deduced-equality propagation to
+    // array-index pairs at Full effort: a pending array Row1/Row2 needs the
+    // entailed index equality, but propagating EVERY deduced equality at Full
+    // floods the SAT core (broad regressions). Default empty.
+    virtual std::vector<SharedTermId> arrayIndexSharedTerms() const { return {}; }
+
     // Nelson-Oppen arrangement support: the current arith-model value of a
     // shared scalar term, if this solver owns it and has a concrete value.
     // Used by model-based arrangement splitting to detect when two shared

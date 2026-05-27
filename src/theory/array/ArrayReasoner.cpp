@@ -163,6 +163,19 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
     return t;
 }
 
+void ArrayReasoner::collectIndexSharedTerms(std::unordered_set<SharedTermId>& out) const {
+    if (!sharedTermRegistry_ || !tm_) return;
+    auto addIdx = [&](EufTermId t) {
+        const auto& n = tm_->node(t);
+        if (n.args.size() < 2) return;
+        ExprId idxExpr = originExpr(n.args[1]);   // arg[1] = index for select/store
+        if (idxExpr == NullExpr) return;
+        if (auto s = sharedTermRegistry_->findByExprId(idxExpr)) out.insert(*s);
+    };
+    for (EufTermId s : selectTerms_) addIdx(s);
+    for (EufTermId s : storeTerms_)  addIdx(s);
+}
+
 void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     if (!selectCompletionEnabled_) return;
     discoverArrayTerms();

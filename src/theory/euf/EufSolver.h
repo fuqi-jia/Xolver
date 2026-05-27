@@ -63,6 +63,10 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
+    // Array-index shared terms (for scoped deduced-equality propagation). Empty
+    // unless array mode is on. Delegates to the ArrayReasoner.
+    std::vector<SharedTermId> arrayIndexSharedTerms() const override;
+
     bool satComplete(std::string* reason = nullptr) const override;
 
     // Phase 1 combination-arrangement detector. Returns true iff there exist two

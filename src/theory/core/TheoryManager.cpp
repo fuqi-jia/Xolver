@@ -439,7 +439,23 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // 3. Collect theory-propagated shared equalities
+    // 3. Collect theory-propagated shared equalities.
+    // ARRAY-INDEX scoping (read2 fix): an array-index pair's deduced equality
+    // (e.g. a computed store index = a read index) must reach the array's pending
+    // Row1/Row2. But an early-derivable deduced equality generated at STANDARD
+    // effort is dropped by cb_propagate AND cached (deducedEqCache_ + lemmaDb dedup),
+    // which permanently blocks its re-emission at FULL effort where propagation is
+    // sound. So DEFER array-index-pair deduced equalities to Full effort only — we
+    // skip them at Standard so they are neither cached nor lemmaDb-recorded, then
+    // emit cleanly at Full. Scoped to array-index pairs (which are few): propagating
+    // EVERY deduced equality at Full instead floods the SAT core (broad regressions
+    // + a new false-SAT, observed on the blanket attempt). Non-array pairs keep
+    // their exact existing behavior (no UFLIA/UFNIA change).
+    std::unordered_set<SharedTermId> arrayIdxSet;
+    for (auto& s : solvers_) {
+        auto v = s->arrayIndexSharedTerms();
+        arrayIdxSet.insert(v.begin(), v.end());
+    }
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
@@ -447,6 +463,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
         for (auto& prop : props) {
+            // Defer array-index-pair deduced equalities to Full effort (see above).
+            if (effort != TheoryEffort::Full &&
+                arrayIdxSet.count(prop.a) && arrayIdxSet.count(prop.b)) {
+                continue;
+            }
             // Care-graph prune: a deduced equality between two terms that
             // neither appears in a function/array-arg nor an Eq/Distinct cannot
             // fire any EUF inference, so skip materializing its atom/lemma. Not
