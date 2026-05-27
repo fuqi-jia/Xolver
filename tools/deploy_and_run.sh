@@ -161,6 +161,23 @@ cmd_run() {
     log "benchmark: $BENCH_DIR"
     log "输出: $RUN_DIR"
 
+    if [[ -n "${FG:-}" ]]; then
+        # 前台模式 (FG=1)：阻塞至完成，便于把 OFF 与 ON 用 && 串成一条命令顺序运行
+        log "前台运行 (FG=1, 阻塞至完成): $RUN_DIR/bench.log"
+        python3 "${DIST_DIR}/tools/run_benchmark.py" \
+            --solver "$BIN" \
+            --logic "$LOGIC" \
+            --benchmark-dir "$BENCH_DIR" \
+            --dump-stats-dir "$RUN_DIR/stats" \
+            --log-dir "$RUN_DIR/logs" \
+            -o "$RUN_DIR" \
+            "$@" \
+            > "$RUN_DIR/bench.log" 2>&1
+        rc=$?
+        log "完成: $RUN_DIR (exit $rc)"
+        return $rc
+    fi
+
     nohup python3 "${DIST_DIR}/tools/run_benchmark.py" \
         --solver "$BIN" \
         --logic "$LOGIC" \
