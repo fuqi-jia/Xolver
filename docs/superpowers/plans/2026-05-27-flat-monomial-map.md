@@ -84,7 +84,7 @@ TEST_CASE("FMM: operator== is canonical equality; SmallVector ordering ops") {
     Key a = k({{VarId{1},1},{VarId{2},1}});
     Key b = k({{VarId{1},1},{VarId{2},1}});
     Key c = k({{VarId{1},2}});
-    CHECK(a == b); CHECK(!(a == c)); CHECK((c < a));   // exercises SmallVector ==,<
+    CHECK(a == b); CHECK(!(a == c)); CHECK((a < c)); CHECK(!(c < a));   // lex on (varId,exp): a=[(1,1),(2,1)] < c=[(1,2)]
     FlatMonomialMap<mpq_class> m1, m2;
     m1[a] += 3; m2[b] += 3;
     CHECK(m1 == m2);
