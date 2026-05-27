@@ -38,6 +38,7 @@ void RdlSolver::onReset() {
     graph_.clear();
     haveModel_ = false;
     lastModel_.clear();
+    warmPot_.clear();
 }
 
 void RdlSolver::onBacktrack(int targetLevel) {
@@ -194,10 +195,25 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
 
-    auto bfResult = bf_.runFull(graph_);
-    if (bfResult.negativeCycle) {
-        return TheoryCheckResult::mkConflict(
-            buildConflict(bfResult.cycle, graph_));
+    // Warm-start fast path (see IdlSolver): if last check's potential still
+    // satisfies every current edge, skip the full Bellman-Ford. Re-verified
+    // every time; the conflict/infeasible path is unchanged (full BF).
+    BfResult<RdlWeight> bfResult;
+    bool warmOk = warmPot_.size() == static_cast<size_t>(graph_.numNodes());
+    if (warmOk) {
+        for (const auto& e : graph_.edges()) {
+            if (warmPot_[e.to] > warmPot_[e.from] + e.weight) { warmOk = false; break; }
+        }
+    }
+    if (warmOk) {
+        bfResult.dist = warmPot_;
+    } else {
+        bfResult = bf_.runFull(graph_);
+        if (bfResult.negativeCycle) {
+            return TheoryCheckResult::mkConflict(
+                buildConflict(bfResult.cycle, graph_));
+        }
+        warmPot_ = bfResult.dist;
     }
 
     // Validate lexicographic distances (sanity check)

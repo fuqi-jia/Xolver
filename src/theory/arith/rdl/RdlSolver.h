@@ -63,6 +63,11 @@ private:
     // includes __ZERO__=0), used by getModel(). Valid only while haveModel_.
     std::unordered_map<std::string, mpq_class> lastModel_;
     bool haveModel_ = false;
+
+    // Warm-start potential carried across checks (see IdlSolver). Re-verified
+    // against every current edge each check; on any miss we fall through to the
+    // full Bellman-Ford (unchanged conflict path), so soundness is unaffected.
+    std::vector<RdlWeight> warmPot_;
 };
 
 } // namespace zolver
