@@ -70,6 +70,62 @@ TEST_CASE("ViaTower: p = z^2 + a + b has NO real root at the embedding => 0 root
     CHECK(roots.numRoots() == 0);   // all conjugate-branch Norm roots dropped
 }
 
+TEST_CASE("ViaTower: nullifying p = (a^2-2)*z at a=sqrt2 recovers residual root z=0") {
+    // p = (a^2 - 2)*z. At a = sqrt2 the substitution makes p vanish IDENTICALLY
+    // (a^2 -> 2), so the Norm degenerates to a constant. The T2 valuation path
+    // recovers the Lazard residual d/da[(a^2-2)z] = 2*a*z, whose only real root
+    // in z (at a=sqrt2 != 0) is z = 0. This exercises the nullification branch
+    // wired into isolateRealRootsViaTower.
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    VarId a = kernel->getOrCreateVar("a");
+    VarId z = kernel->getOrCreateVar("z");
+
+    // (a^2 - 2) * z
+    PolyId a2m2 = kernel->add(kernel->pow(kernel->mkVar(a), 2),
+                              kernel->mkConst(mpq_class(-2)));
+    PolyId p = kernel->mul(a2m2, kernel->mkVar(z));
+
+    SamplePoint prefix;
+    prefix.push(a, sqrt2In(a, algebra));
+
+    bool supported = false;
+    RootSet roots = algebra.isolateRealRootsViaTower(p, prefix, z, supported);
+    CHECK(supported);
+    REQUIRE(roots.numRoots() == 1);
+    CHECK(roots.roots[0].isRational());
+    CHECK(roots.roots[0].rational == mpq_class(0));
+}
+
+TEST_CASE("ViaTower: nullifying p=(a^2-2)*(z-a) at a=sqrt2 recovers residual root z=sqrt2") {
+    // p = (a^2-2)*(z-a). Nullifies at a=sqrt2. Residual d/da = 2a*(z-a) + (a^2-2)*(-1);
+    // the second term reduces to 0 mod m, leaving 2a*(z-a) = 2a*z - 2a^2 -> (reduce
+    // a^2->2) 2a*z - 4. Its root in z is z = 4/(2a) = 2/a = 2/sqrt2 = sqrt2. So the
+    // single surviving real root is z = sqrt2 (~1.414); the conjugate -sqrt2 (from
+    // the Norm) must be dropped by the exact membership filter.
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    VarId a = kernel->getOrCreateVar("a");
+    VarId z = kernel->getOrCreateVar("z");
+
+    PolyId a2m2 = kernel->add(kernel->pow(kernel->mkVar(a), 2),
+                              kernel->mkConst(mpq_class(-2)));
+    PolyId zma = kernel->add(kernel->mkVar(z), kernel->neg(kernel->mkVar(a)));
+    PolyId p = kernel->mul(a2m2, zma);
+
+    SamplePoint prefix;
+    prefix.push(a, sqrt2In(a, algebra));
+
+    bool supported = false;
+    RootSet roots = algebra.isolateRealRootsViaTower(p, prefix, z, supported);
+    CHECK(supported);
+    REQUIRE(roots.numRoots() == 1);
+    // z = sqrt2 ~ 1.414 : isolating interval must straddle it (and not -sqrt2).
+    const auto& r0 = roots.roots[0];
+    if (r0.isRational()) { CHECK(r0.rational > mpq_class(1)); }
+    else { CHECK(r0.root.lower > mpq_class(0)); CHECK(r0.root.upper < mpq_class(2)); }
+}
+
 TEST_CASE("ViaTower: single algebraic coord still works (a=sqrt2, p=z-a)") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend algebra(kernel.get());

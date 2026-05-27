@@ -3,6 +3,7 @@
 #include "theory/arith/nra/projection/LocalProjection.h"   // resultant()
 #include "theory/arith/nra/valuation/TowerRootIsolation.h"     // towerNorm, TowerContext
 #include "theory/arith/nra/valuation/RootMembershipOracle.h"   // lazardRootMembership
+#include "theory/arith/nra/valuation/LazardValuationEngine.h"  // lazardEvaluateToUnivariate [H3]
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
@@ -1448,6 +1449,8 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     supported = false;
     RootSet empty;
+    static const bool kDiagEntry = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
+    if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
     //    coordinates are substituted into p). Each algebraic coordinate becomes
@@ -1493,11 +1496,86 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             if (v != mainVar && !ext.count(v)) return empty;   // residual var => Unknown
     }
 
+    // Tower-aware real-root isolation of a polynomial F (in mainVar + tower
+    // extension variables) against the tower `ctx`: Norm candidates over Q,
+    // then the exact membership filter. `ok` is set false on any incomplete /
+    // unsupported / inconclusive step (caller => Unknown, never UNSAT); when ok
+    // is true the returned set is the certified real roots (possibly empty).
+    auto isolateInTower = [this, &ctx, mainVar](const RationalPolynomial& F,
+                                                bool& ok) -> RootSet {
+        ok = false;
+        RootSet none;
+        auto nrF = towerNorm(F, mainVar, ctx);
+        if (!nrF.ok) return none;                          // degenerate Norm => Unknown
+        if (nrF.norm.isConstant()) { ok = true; return none; }  // no candidate roots
+        UniPolyId Nu = specializeToUnivariate(nrF.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
+        if (Nu == NullUniPolyId) return none;
+        RootSet cands = isolateRealRoots(Nu);
+        RootSet kept;
+        for (const auto& beta : cands.roots) {
+            mpq_class lo, hi;
+            if (beta.isRational()) { lo = hi = beta.rational; }
+            else { lo = beta.root.lower; hi = beta.root.upper; }
+            RootMembership mm = lazardRootMembership(F, mainVar, nrF.norm, lo, hi, ctx);
+            if (mm == RootMembership::Keep) kept.roots.push_back(beta);
+            else if (mm == RootMembership::Unknown) return none;   // => caller Unknown
+            // Drop => conjugate/extraneous, discard
+        }
+        ok = true;
+        return kept;
+    };
+
     // 2. Norm over Q eliminates the generators; isolate its roots via the SAFE
     //    rational univariate path (never libpoly's crash-prone algebraic path).
+    static const bool kDiag = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
     auto nr = towerNorm(p1, mainVar, ctx);
-    if (!nr.ok) return empty;
-    if (nr.norm.isConstant()) { supported = true; return empty; }   // no candidate roots
+    if (!nr.ok) {
+        if (kDiag) std::cerr << "[LAZVAL] towerNorm(p1) not ok => Unknown" << std::endl;
+        return empty;
+    }
+    if (nr.norm.isConstant()) {
+        // Nullification case: the Norm degenerated to a constant. Either p1
+        // genuinely has no boundary OR it nullified modulo the tower (vanishes
+        // identically), in which case the Collins-style Norm path MISSES the
+        // boundary the Lazard residual (lowest nonvanishing derivative) exposes.
+        // Recover it via the [H3] valuation engine, then isolate the residual's
+        // real roots with the SAME tower-aware machinery. Sound: any incomplete
+        // / unsupported / inconclusive step => supported stays false => Unknown.
+        if (kDiag) std::cerr << "[LAZVAL] Norm(p1) constant => valuation recovery" << std::endl;
+        LazardValuationResult val = lazardEvaluateToUnivariate(p1, mainVar, ctx);
+        if (val.status == ValuationStatus::AllDerivativesZero) {
+            // Genuinely no boundary contributed by this poly: sound to skip.
+            if (kDiag) std::cerr << "[LAZVAL] AllDerivativesZero => skip (no boundary)" << std::endl;
+            supported = true;
+            return empty;
+        }
+        // status == Complete: residual is in mainVar + reduced tower coeffs.
+        RationalPolynomial residual = std::move(val.univariate);
+        residual.normalize();
+        if (kDiag) std::cerr << "[LAZVAL] residual deg(mainVar)=" << residual.degree(mainVar)
+                             << " isConst=" << residual.isConstant()
+                             << " containsMain=" << residual.contains(mainVar) << std::endl;
+        if (residual.isZero() || residual.isConstant() || !residual.contains(mainVar)) {
+            // Residual has no boundary in mainVar (constant after reduction).
+            supported = true;
+            return empty;
+        }
+        {
+            std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
+            for (VarId v : residual.variables())
+                if (v != mainVar && !ext.count(v)) {
+                    if (kDiag) std::cerr << "[LAZVAL] residual has stray var => Unknown" << std::endl;
+                    return empty;   // residual var => Unknown
+                }
+        }
+        bool ok = false;
+        RootSet recovered = isolateInTower(residual, ok);
+        if (kDiag) std::cerr << "[LAZVAL] residual isolate ok=" << ok
+                             << " roots=" << recovered.numRoots() << std::endl;
+        if (!ok) return empty;                              // unsupported => Unknown
+        supported = true;
+        return recovered;
+    }
 
     UniPolyId Nuni = specializeToUnivariate(nr.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
     if (Nuni == NullUniPolyId) return empty;

@@ -603,9 +603,14 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
     bool hasAlgebraicPrefix = false;
+    int algPrefixCount = 0;
     for (const auto& v : prefix.values) {
-        if (v.isAlgebraic()) { hasAlgebraicPrefix = true; break; }
+        if (v.isAlgebraic()) { hasAlgebraicPrefix = true; ++algPrefixCount; }
     }
+    static const bool kLazDiag = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
+    if (kLazDiag && hasAlgebraicPrefix)
+        std::cerr << "[LAZVAL] solveLevel k=" << k << " algPrefixCoords=" << algPrefixCount
+                  << " levelPolys=" << levelPolyIds_[k].size() << std::endl;
 
     for (PolyId p : levelPolyIds_[k]) {
         if (kernel_->isConstant(p)) continue;
@@ -623,6 +628,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             if (hasAlgebraicPrefix) {
                 bool supported = false;
                 RootSet roots = algebra_->isolateRealRootsViaNorm(p, prefix, var, supported);
+                if (kLazDiag)
+                    std::cerr << "[LAZVAL] nullSpec k=" << k << " viaNorm supported="
+                              << supported << " roots=" << roots.numRoots() << std::endl;
                 if (!supported && lazardLiftEnabled_) {
                     // ViaNorm only certifies a single algebraic coordinate; for a
                     // genuine tower (>=2 algebraic coords) try the Lazard tower
@@ -642,7 +650,30 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // skip — the poly's coefficients (all in the closure) already delineate
         // the lower levels. An UNDECIDED vanish ⇒ cannot certify ⇒ Unknown.
         auto vanish = algebra_->vanishesAtPrefix(p, prefix, var);
-        if (vanish == VanishResult::Vanishes) continue;
+        if (vanish == VanishResult::Vanishes) {
+            // In LAZARD mode, a poly that nullifies over an ALGEBRAIC prefix may
+            // still expose a cell boundary via its Lazard residual (the lowest
+            // nonvanishing derivative). The Collins `continue`-skip is sound only
+            // under a COMPLETE closure; here we route the nullified poly to the
+            // valuation-recovery path (isolateRealRootsViaTower) so its residual
+            // boundary refines the cell. Sound: UNSAT is already floored in
+            // lazard mode (unsatTrustworthy_ forced false for LazardStyle), so the
+            // worst case is a missed SAT cell => Unknown, never a false verdict.
+            // If the valuation path is unsupported, fall through exactly as the
+            // Collins default (continue, no boundary contributed).
+            bool lazardMode = (projectionKind_ == ProjectionPolicyKind::LazardStyle)
+                              || lazardLiftEnabled_;
+            if (lazardMode && hasAlgebraicPrefix) {
+                bool supported = false;
+                RootSet roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
+                if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+                    std::cerr << "[LAZVAL] vanish-route k=" << k << " supported="
+                              << supported << " roots=" << roots.numRoots() << std::endl;
+                if (supported && roots.numRoots() > 0)
+                    rootSets.push_back(std::move(roots));
+            }
+            continue;
+        }
         if (vanish == VanishResult::Unknown) { unsatTrustworthy_ = false; continue; }
 
         RootSet roots = algebra_->isolateRealRoots(up);
