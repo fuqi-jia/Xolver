@@ -783,35 +783,34 @@ VanishResult LibpolyBackend::vanishesAtPrefix(PolyId p, const SamplePoint& prefi
         }
     }
 
-    // Rational prefix: substitute and check if zero.
-    PolyId current = p;
+    // Rational prefix: substitute in RationalPolynomial space (NO per-variable
+    // libpoly round-trip). The old loop called kernel_->substituteRational once
+    // per prefix var, each rebuilding a libpoly polynomial via toPrimitiveInteger
+    // (divide-and-conquer kernel.mul → the dominant per-cell _int_malloc churn /
+    // OOM source). vanishesAtPrefix is a per-cell solveLevel hot path and only
+    // needs a scale-invariant zero query (contains/isZero/coefficients-all-zero),
+    // so substituting in RP space (rational coeffs, normalized once) and answering
+    // directly is verdict-equivalent with a single libpoly->RP conversion.
+    auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
+    if (!rpOpt) {
+        return VanishResult::Unknown;
+    }
+    RationalPolynomial rp = std::move(*rpOpt);
     for (size_t i = 0; i < prefix.numVars(); ++i) {
         if (!prefix.values[i].isRational()) {
             return VanishResult::Unknown;
         }
-        auto nextOpt = kernel_->substituteRational(current, prefix.varOrder[i], prefix.values[i].rational);
-        if (!nextOpt) {
-            return VanishResult::Unknown;
-        }
-        current = *nextOpt;
+        rp = rp.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
     }
-
-    // After substitution, check if the remaining polynomial contains 'var'
-    // and if its coefficients are all zero.
-    auto rpOpt = RationalPolynomial::fromPolyId(current, *kernel_);
-    if (!rpOpt) {
-        return VanishResult::Unknown;
-    }
+    rp.normalize();
 
     // If the polynomial doesn't contain var, it's a constant w.r.t. var.
-    // Check if it's zero.
-    if (!rpOpt->contains(var)) {
-        return rpOpt->isZero() ? VanishResult::Vanishes : VanishResult::NonVanishes;
+    if (!rp.contains(var)) {
+        return rp.isZero() ? VanishResult::Vanishes : VanishResult::NonVanishes;
     }
 
-    // The polynomial still contains var. For nullification detection,
-    // we need to check if ALL coefficients w.r.t. var are zero.
-    auto coeffs = rpOpt->coefficients(var);
+    // Still contains var: nullification requires ALL coefficients w.r.t. var zero.
+    auto coeffs = rp.coefficients(var);
     for (const auto& c : coeffs) {
         if (!c.isZero()) {
             return VanishResult::NonVanishes;
