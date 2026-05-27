@@ -1484,7 +1484,18 @@ public:
         // the (rational) validator, so default-on there would flip ~14 genuine
         // sats to unknown (recovered separately via algebraic validation).
         bool niaSatFloor = features.hasNonlinear && !features.hasRealVar;
-        bool validateSat = niaSatFloor ||
+        // Div/mod-by-constant is LINEAR (hasNonlinear=false), so it slips past
+        // the nonlinear floor above -- yet the div/mod lowering can yield a
+        // spurious sat whose model satisfies the lowered linear-mod system but
+        // not the original mod relations (e.g. SVCOMP soft_float: many
+        // (mod m 2^k) clauses; zolver=sat, oracle=unsat). Validate the sat for
+        // such (pure-Int) div/mod-lowered formulas too. Sound: only sat->unknown.
+        // Exclude UF: div/mod-by-zero under UF is a partial function the
+        // validator cannot positively confirm (genuine UFNIA divzero sats would
+        // be over-floored to unknown); leave those to UF-aware validation.
+        bool divModSatFloor = !divModOrigins_.empty() &&
+                              !features.hasRealVar && !features.hasUF;
+        bool validateSat = niaSatFloor || divModSatFloor ||
                            (std::getenv("ZOLVER_PP_STRICT_VALIDATION") != nullptr) ||
                            (features.hasNonlinear &&
                             std::getenv("ZOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
