@@ -3,6 +3,12 @@
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/nia/search/NiaIcpAdapter.h"
 #include "theory/arith/icp/IcpTypes.h"
+#include "theory/arith/nra/core/CdcacCore.h"
+#include "theory/arith/nra/core/CdcacConstraint.h"
+#include "theory/arith/nra/engine/ReasonManager.h"
+#ifdef ZOLVER_HAS_LIBPOLY
+#include "theory/arith/nra/backend/LibpolyBackend.h"
+#endif
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
@@ -74,6 +80,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
+    // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
+    // residual. Full-effort only (heavy); runs after the SAT workhorses.
+    addFull("nia.cdcac",      &NiaSolver::stageCdcac);
     // Local search is a heuristic SAT-candidate finder; run it ONLY at Full
     // effort (like bit-blast). At Standard effort it re-ran from scratch on
     // every CDCL(T) theory-check (~225x on some QF_NIA), burning ~10s, and is
@@ -109,6 +118,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // solely from a contractor conflict or an emptied domain (invariant 7).
     if (const char* e = std::getenv("ZOLVER_NIA_ICP"); e && *e && *e != '0')
         enableIcp_ = true;
+
+    // Integer-aware CDCAC (default-OFF). Sound: a CDCAC covering-UNSAT over the
+    // real relaxation implies integer-UNSAT (ℤⁿ⊆ℝⁿ; gated by CdcacCore's own
+    // unsatTrustworthy_); a CDCAC SAT sample is accepted only when every
+    // coordinate is an exact integer AND it passes IntegerModelValidator.
+    if (const char* e = std::getenv("ZOLVER_NIA_CDCAC"); e && *e && *e != '0')
+        enableCdcac_ = true;
 }
 
 void NiaSolver::onReset() {
@@ -506,6 +522,108 @@ std::optional<TheoryCheckResult> NiaSolver::stageIcp(TheoryLemmaStorage&, Theory
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
     }
     return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageCdcac(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableCdcac_ || normalized_.empty()) return std::nullopt;
+#ifndef ZOLVER_HAS_LIBPOLY
+    return std::nullopt;  // CDCAC requires the libpoly algebra backend
+#else
+    if (!cdcacCore_) {
+        cdcacAlgebra_ = std::make_unique<LibpolyBackend>(kernel_.get());
+        cdcacCore_ = std::make_unique<CdcacCore>(kernel_.get(), cdcacAlgebra_.get());
+    }
+
+    // Pre-elimination (the lever — CAD is doubly-exponential in #vars): substitute
+    // every domain-FIXED variable (lb == ub, derived by the earlier cheap stages)
+    // into the constraint polynomials and drop it from the CDCAC variable set, so
+    // CDCAC faces fewer variables. SOUND only if the substituted vars' bound-reasons
+    // are threaded into any UNSAT conflict (detection-sound ≠ explanation-sound).
+    std::unordered_map<std::string, mpz_class> fixedVal;
+    std::unordered_map<std::string, std::vector<SatLit>> fixedReasons;
+    for (const auto& [name, dom] : domains_.getAllDomains()) {
+        if (dom.hasLower && dom.hasUpper && dom.lower.value == dom.upper.value) {
+            fixedVal[name] = dom.lower.value;
+            std::vector<SatLit>& rs = fixedReasons[name];
+            rs.insert(rs.end(), dom.lower.reasons.begin(), dom.lower.reasons.end());
+            rs.insert(rs.end(), dom.upper.reasons.begin(), dom.upper.reasons.end());
+        }
+    }
+
+    // Build CdcacInput from the (substituted) constraints; lexicographic base
+    // variable order (deterministic). varOrder excludes fixed vars because they
+    // no longer appear in the substituted polynomials.
+    CdcacInput input;
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> varNames;
+    std::unordered_set<std::string> usedFixed;  // fixed vars actually substituted
+    for (const auto& c : normalized_) {
+        PolyId p = c.poly;
+        if (!fixedVal.empty()) {
+            for (const auto& v : kernel_->variables(p)) {
+                auto it = fixedVal.find(v);
+                if (it == fixedVal.end()) continue;
+                if (auto vid = kernel_->findVar(v)) {
+                    if (auto sp = kernel_->substituteRational(p, *vid, mpq_class(it->second))) {
+                        p = *sp;
+                        usedFixed.insert(v);
+                    }
+                }
+            }
+        }
+        CdcacConstraint cc;
+        cc.poly = p;
+        cc.rel = c.rel;
+        cc.reason = c.reason;
+        input.constraints.push_back(std::move(cc));
+        for (const auto& v : kernel_->variables(p)) {
+            if (seen.insert(v).second) varNames.push_back(v);
+        }
+    }
+    std::sort(varNames.begin(), varNames.end());
+    for (const auto& name : varNames) input.varOrder.push_back(kernel_->getOrCreateVar(name));
+
+    CdcacResult result = cdcacCore_->solve(input);
+    switch (result.status) {
+        case CdcacStatus::Unsat: {
+            // Real-relaxation covering-UNSAT ⇒ integer-UNSAT (ℤⁿ⊆ℝⁿ). CdcacCore
+            // already downgrades an uncertified covering to Unknown, so a Unsat
+            // reaching here is a trustworthy real empty-covering proof. Thread in
+            // the bound-reasons of every fixed var we substituted (a superset is
+            // sound; OMITTING one would be a too-strong/false-UNSAT clause).
+            std::vector<SatLit> reasons;
+            if (result.unsat) reasons = ReasonManager::minimize(result.unsat->covering);
+            for (const auto& name : usedFixed) {
+                const auto& rs = fixedReasons[name];
+                reasons.insert(reasons.end(), rs.begin(), rs.end());
+            }
+            return TheoryCheckResult::mkConflict(ReasonManager::toConflict(reasons));
+        }
+        case CdcacStatus::Sat: {
+            // CDCAC's sample is over the reals (and over the REDUCED variable set).
+            // Accept as an integer model ONLY if every solved coordinate is an exact
+            // integer; reattach the fixed vars; then validate over the ORIGINAL
+            // normalized_ (invariant 1: never return a raw candidate).
+            if (!result.model) return std::nullopt;
+            const SamplePoint& s = *result.model;
+            IntegerModel im;
+            for (size_t i = 0; i < s.varOrder.size() && i < s.values.size(); ++i) {
+                const RealAlg& v = s.values[i];
+                if (!v.isRational() || v.rational.get_den() != 1) return std::nullopt;
+                im[std::string(kernel_->varName(s.varOrder[i]))] = v.rational.get_num();
+            }
+            for (const auto& [name, val] : fixedVal) im[name] = val;
+            if (validator_.validate(im, normalized_) == IntegerModelValidator::Result::Valid) {
+                currentModel_ = std::move(im);
+                return TheoryCheckResult::consistent();
+            }
+            return std::nullopt;
+        }
+        case CdcacStatus::Unknown:
+            return std::nullopt;
+    }
+    return std::nullopt;
+#endif
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageBvDivMod(TheoryLemmaStorage&, TheoryEffort) {

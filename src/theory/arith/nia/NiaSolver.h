@@ -31,6 +31,8 @@
 namespace zolver {
 
 class NiaLinearizationAdapter;
+class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
+class AlgebraBackend;
 
 /**
  * NIA (Nonlinear Integer Arithmetic) theory solver.
@@ -131,6 +133,13 @@ private:
     bool enableBvDivMod_ = false; // ZOLVER_NIA_BV_DIVMOD: BV mod/div-by-2^k bit-extraction (BLAN-faithful)
     bool enableGcd_ = false;      // ZOLVER_NIA_GCD: multivariate GCD-divisibility refutation
     bool enableIcp_ = false;      // ZOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
+    bool enableCdcac_ = false;    // ZOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
+
+    // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
+    // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
+    // includes out of this header. Destroyed by the out-of-line ~NiaSolver().
+    std::unique_ptr<AlgebraBackend> cdcacAlgebra_;
+    std::unique_ptr<CdcacCore> cdcacCore_;
 
     std::optional<IntegerModel> currentModel_;
 
@@ -155,6 +164,7 @@ private:
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBvDivMod(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
