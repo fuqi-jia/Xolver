@@ -261,6 +261,46 @@ std::optional<BitBlastResult> BitBlastSolver::tryBvDivMod(
     return out;                           // SAT solver Unknown
 }
 
+// One encode+solve+validate attempt at a fixed width plan. Returns the raw
+// outcome (Sat carries a validated in-box model; Unsat is box-dependent — the
+// caller decides whether it is globally complete; Overflow = encoding exceeded
+// the var budget). Factored so the start-small cascade and the
+// estimator-grow path share identical encoding/validation logic.
+BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
+    const BitWidthPlan& plan,
+    const std::vector<NormalizedNiaConstraint>& cs,
+    const DomainStore& domains,
+    const IntegerModelValidator& validator) {
+    Attempt a;
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    enc.setVarBudget(gateBudget_);   // hard cap: stop encoding before OOM
+    std::unordered_map<std::string, BitVec> varBits;
+    for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
+
+    PolyBitBlaster blaster(enc, kernel_, varBits);
+    for (const auto& c : cs) blaster.assertConstraint(c);
+    encodeDomainBounds(enc, varBits, domains);   // confine search to the box
+
+    if (enc.overflowed()) { a.kind = Attempt::Overflow; return a; }
+
+    auto res = sat->solve();
+    if (res == SatSolver::SolveResult::Sat) {
+        IntegerModel model;
+        for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
+        // Accept only a model that satisfies cs (exact) AND lies in the box.
+        if (validator.validate(model, cs) == IntegerModelValidator::Result::Valid
+            && modelInDomains(model, domains)) {
+            a.kind = Attempt::Sat;
+            a.model = std::move(model);
+        }
+        // else: SAT under narrow widths but not a real / in-box model — artifact (Unknown).
+        return a;
+    }
+    if (res == SatSolver::SolveResult::Unsat) { a.kind = Attempt::Unsat; return a; }
+    return a;   // SAT solver Unknown
+}
+
 BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>& cs,
                                      const DomainStore& domains,
                                      const IntegerModelValidator& validator) {
@@ -273,39 +313,54 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         // else fall through to the general encoder
     }
 
-    BitWidthPlan plan = estimator_.estimate(cs, domains);
-    if (plan.width.empty()) return out;              // Unknown
+    BitWidthPlan full = estimator_.estimate(cs, domains);
+    if (full.width.empty()) return out;              // Unknown
 
-    for (unsigned iter = 0; iter < maxIters_; ++iter) {
-        auto sat = createSatSolver();
-        BitBlastEncoder enc(*sat);
-        enc.setVarBudget(gateBudget_);   // hard cap: stop encoding before OOM
-        std::unordered_map<std::string, BitVec> varBits;
-        for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
-
-        PolyBitBlaster blaster(enc, kernel_, varBits);
-        for (const auto& c : cs) blaster.assertConstraint(c);
-        encodeDomainBounds(enc, varBits, domains);   // confine search to the box
-
-        // Resource guard: the encoding exceeded the variable budget (high-degree
-        // blow-up). The partial encoding is incomplete, so we must NOT solve it.
-        // Widths only grow, so larger iterations are worse — bail to Unknown
-        // (sound; other NIA stages still run).
-        if (enc.overflowed()) return out;
-
-        auto res = sat->solve();
-        if (res == SatSolver::SolveResult::Sat) {
-            IntegerModel model;
-            for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
-            // Accept only a model that satisfies cs (exact) AND lies in the box.
-            if (validator.validate(model, cs) == IntegerModelValidator::Result::Valid
-                && modelInDomains(model, domains)) {
+    // cvc5 solve-int-as-bv cascade (ZOLVER_NIA_BV_CASCADE): for problems with an
+    // unbounded variable (boxIsComplete=false ⇒ pure SAT search, UNSAT not
+    // provable here anyway), start every unbounded var at a TINY uniform width
+    // (K=2) and escalate ×2. Small widths fail fast and keep the encoding under
+    // the var budget; this catches the "solution fits in K bits" majority of
+    // QF_NIA-sat that the estimator's heuristic initial width would over-widen
+    // (and budget-overflow) on iteration 0. Bounded vars keep their exact width
+    // so nothing about completeness changes. Sound: every SAT model is validated.
+    static const bool cascade = std::getenv("ZOLVER_NIA_BV_CASCADE") != nullptr;
+    if (cascade && !full.boxIsComplete) {
+        std::unordered_set<std::string> bounded;
+        for (const auto& kv : full.width) {
+            const IntDomain* d = domains.getDomain(kv.first);
+            if (d && d->hasLower && d->hasUpper) bounded.insert(kv.first);
+        }
+        unsigned K = 2;
+        while (true) {
+            BitWidthPlan plan;
+            for (const auto& kv : full.width)
+                plan.width[kv.first] = bounded.count(kv.first) ? kv.second
+                                                               : std::min(K, maxBW_);
+            Attempt a = attemptAtWidths(plan, cs, domains, validator);
+            if (a.kind == Attempt::Sat) {
                 out.status = BitBlastResult::Status::Sat;
-                out.model = std::move(model);
+                out.model = std::move(a.model);
                 return out;
             }
-            // SAT under narrow widths but not a real / in-box model: artifact.
-        } else if (res == SatSolver::SolveResult::Unsat) {
+            if (a.kind == Attempt::Overflow) break;   // larger K only worse
+            if (K >= maxBW_) break;                   // reached the width ceiling
+            K = std::min(K * 2, maxBW_);
+        }
+        return out;   // Unknown (box incomplete ⇒ never UnsatComplete here)
+    }
+
+    // Default path: estimator-sized widths + ×grow, with complete-box UnsatComplete.
+    BitWidthPlan plan = full;
+    for (unsigned iter = 0; iter < maxIters_; ++iter) {
+        Attempt a = attemptAtWidths(plan, cs, domains, validator);
+        if (a.kind == Attempt::Overflow) return out;   // incomplete encoding; widths only grow
+        if (a.kind == Attempt::Sat) {
+            out.status = BitBlastResult::Status::Sat;
+            out.model = std::move(a.model);
+            return out;
+        }
+        if (a.kind == Attempt::Unsat) {
             if (plan.boxIsComplete) {
                 if (auto cf = buildCompleteConflict(cs, domains)) {
                     out.status = BitBlastResult::Status::UnsatComplete;

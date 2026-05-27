@@ -61,6 +61,18 @@ public:
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
 
+    // One encode+solve+validate attempt at a fixed width plan. Sat carries a
+    // validated in-box model; Unsat is box-dependent (caller decides global
+    // completeness); Overflow = encoding exceeded the var budget.
+    struct Attempt {
+        enum Kind { Sat, Unsat, Unknown, Overflow } kind = Unknown;
+        IntegerModel model;
+    };
+    Attempt attemptAtWidths(const BitWidthPlan& plan,
+                            const std::vector<NormalizedNiaConstraint>& cs,
+                            const DomainStore& domains,
+                            const IntegerModelValidator& validator);
+
     // BV-style mod/div-by-2^k bit-extraction (ZOLVER_NIA_BV_DIVMOD, default-OFF).
     // Recognizes the lowered shape `m - 2^k*q - r = 0` (with 2^k a power of two,
     // and m appearing ONLY in such groups), then binds r = m's low k bits and
