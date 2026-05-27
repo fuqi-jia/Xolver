@@ -43,6 +43,14 @@ public:
     void backtrackToLevel(int level) override;
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort = TheoryEffort::Standard) override;
 
+    // Aggregate ENTAILMENT-class propagations from single-theory solvers.
+    // Returns empty in combination mode (shared-bus interaction out of scope).
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
+
+    // Theory-agnostic dispatch of the cb_decide feasibility heuristic to the
+    // atom's owning solver (LRA-only impl today; LIA/NRA inherit later).
+    std::optional<bool> evalTheoryAtom(SatVar v) override;
+
     void setRegistry(TheoryAtomRegistry* registry) { registry_ = registry; }
     void setAssignmentView(TheoryAssignmentView* view) override { assignmentView_ = view; }
     void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }

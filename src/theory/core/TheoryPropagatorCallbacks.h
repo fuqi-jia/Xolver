@@ -13,6 +13,9 @@ class TheoryAtomLookup {
 public:
     virtual ~TheoryAtomLookup() = default;
     virtual const TheoryAtomRecord* findBySatVar(SatVar v) const = 0;
+    // SatVars of all registered linear (bound) atoms. Used by cb_decide
+    // feasibility steering. Default empty.
+    virtual std::vector<SatVar> linearAtomVars() const { return {}; }
 };
 
 // ---------------------------------------------------------------------------
@@ -45,6 +48,20 @@ public:
     // SAT propagator scope combination-only policies (e.g. the Standard-effort
     // early-conflict deferral floor) without depending on TheoryManager.
     virtual bool isCombinationMode() const { return false; }
+    // Drain ENTAILMENT-class theory propagations buffered during the most recent
+    // check() (e.g. LRA Farkas row-propagations). Default empty. Implementations
+    // must return ONLY unconditional entailments (never Guess/branch lemmas) and
+    // must return nothing in combination mode (shared-bus interaction is out of
+    // scope). The propagator additionally verifies each clause is unit/falsified
+    // under the current assignment before installing it.
+    virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
+
+    // Heuristic: is the bound atom `v` TRUE at the current (possibly stale)
+    // theory model? Used by cb_decide to steer the SAT search toward a
+    // theory-feasible region. Heuristic only — a wrong answer costs a backtrack,
+    // never soundness (the verdict is still theory-gated + model-validated).
+    // nullopt = no value / not a theory atom this theory can evaluate.
+    virtual std::optional<bool> evalTheoryAtom(SatVar v) { (void)v; return std::nullopt; }
 };
 
 } // namespace zolver

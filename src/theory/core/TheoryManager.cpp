@@ -199,6 +199,28 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
     return result;
 }
 
+std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
+    // Scope to pure single-theory solving: in combination the lifted bound
+    // propagation hits the shared bus / Nelson-Oppen arrangement, which needs
+    // separate review (A3 territory) before enabling.
+    if (combinationMode_) return {};
+    std::vector<TheoryLemma> out;
+    for (auto& s : solvers_) {
+        auto v = s->takeEntailmentPropagations();
+        for (auto& l : v) out.push_back(std::move(l));
+    }
+    return out;
+}
+
+std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
+    if (!registry_) return std::nullopt;
+    const TheoryAtomRecord* rec = registry_->findBySatVar(v);
+    if (!rec) return std::nullopt;
+    auto it = solverByTheory_.find(rec->theory);
+    if (it == solverByTheory_.end()) return std::nullopt;
+    return it->second->evalAtomAtModel(v);
+}
+
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
 

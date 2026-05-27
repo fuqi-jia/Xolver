@@ -115,6 +115,16 @@ const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
     return nullptr;
 }
 
+std::vector<SatVar> TheoryAtomRegistry::linearAtomVars() const {
+    std::vector<SatVar> out;
+    for (const auto& rec : records_) {
+        if (std::holds_alternative<LinearAtomPayload>(rec.payload)) {
+            out.push_back(rec.satVar);
+        }
+    }
+    return out;
+}
+
 SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b) {
     assert(sat_ != nullptr && registrar_ != nullptr);
 

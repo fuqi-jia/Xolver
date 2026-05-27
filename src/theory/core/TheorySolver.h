@@ -46,6 +46,8 @@ public:
 
     // Heuristic eval of a bound atom at the current theory model
     // (ZOLVER_LRA_DECIDE / cb_decide). Default: no value.
+    // Heuristic eval of a bound atom at the current theory model (see
+    // TheoryPropagationCallbacks::evalTheoryAtom). Default: no value.
     virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
 
     // -----------------------------------------------------------------------

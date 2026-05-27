@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <vector>
 #include <cstdlib>
+#include <variant>
 
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
@@ -105,6 +106,17 @@ static void writeReason(std::string* sink, const std::string& msg) {
 }
 
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
+    // Decision-steering probe: the first literal assigned right after a new
+    // decision level is CaDiCaL's decision literal. Bucket it theory vs boolean.
+    if (expectDecisionLit_ && !lits.empty()) {
+        expectDecisionLit_ = false;
+        ++decisionLits_;
+        SatVar dv = static_cast<SatVar>(std::abs(lits.front()));
+        const auto* rec = registry_.findBySatVar(dv);
+        if (rec && std::holds_alternative<LinearAtomPayload>(rec->payload)) {
+            ++theoryAtomDecisions_;
+        }
+    }
     for (int lit : lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
@@ -118,6 +130,66 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
 
 void CadicalTheoryPropagator::notify_new_decision_level() {
     ++currentLevel_;
+    expectDecisionLit_ = true;  // next assignment's first lit is the decision
+}
+
+int CadicalTheoryPropagator::cb_decide() {
+    ++decideCalls_;
+
+    if (const char* pe = std::getenv("ZOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
+        static long long every = []() {
+            const char* e = std::getenv("ZOLVER_DECIDE_PROBE");
+            long long n = e ? std::atoll(e) : 0;
+            return n > 1 ? n : 2000;
+        }();
+        if (decideCalls_ % every == 0) {
+            double pct = decisionLits_ ? 100.0 * static_cast<double>(theoryAtomDecisions_) / decisionLits_ : 0.0;
+            std::cerr << "[DECIDE-PROBE] decisions=" << decideCalls_
+                      << " steered=" << steeredDecisions_
+                      << " unassignedProbes=" << dbgUnassignedProbes_
+                      << " evalNull=" << dbgEvalNull_
+                      << " observedDecisionLits=" << decisionLits_
+                      << " theoryAtomDecisions=" << theoryAtomDecisions_
+                      << " theoryAtomPct=" << pct << "%" << std::endl;
+        }
+    }
+
+    // ZOLVER_LRA_DECIDE: steer toward a theory-feasible region. Find an
+    // unassigned bound atom (bounded cursor scan, O(K) per call, zero alloc),
+    // evaluate it at the current theory model, and decide it at the satisfying
+    // phase. Heuristic only: a decision is backtrackable and the verdict stays
+    // theory-gated + model-validated, so a wrong guess only costs a backtrack.
+    static const bool steer = []() {
+        const char* e = std::getenv("ZOLVER_LRA_DECIDE");
+        return e && *e && *e != '0';
+    }();
+    if (steer) {
+        if (!theoryAtomVarsBuilt_) {
+            theoryAtomVars_ = registry_.linearAtomVars();
+            theoryAtomVarsBuilt_ = true;
+            if (std::getenv("ZOLVER_DECIDE_PROBE"))
+                std::cerr << "[DECIDE-STEER] theoryAtomVars=" << theoryAtomVars_.size() << std::endl;
+        }
+        const size_t n = theoryAtomVars_.size();
+        if (n > 0) {
+            const size_t kMaxProbe = n < 64 ? n : 64;
+            for (size_t p = 0; p < kMaxProbe; ++p) {
+                SatVar v = theoryAtomVars_[decideCursor_];
+                decideCursor_ = (decideCursor_ + 1) % n;
+                if (currentAssignment_.find(v) != currentAssignment_.end()) continue; // assigned
+                ++dbgUnassignedProbes_;
+                auto feasible = tm_.evalTheoryAtom(v);
+                if (!feasible) { ++dbgEvalNull_; continue; }
+                ++steeredDecisions_;
+                int lit = static_cast<int>(v);
+                return *feasible ? lit : -lit;  // decide at satisfying phase
+            }
+        }
+        // fall through: no steerable unassigned atom found → let CaDiCaL decide
+    }
+
+    // Behavior-neutral: decline, let CaDiCaL decide (probe dump done at top).
+    return 0;
 }
 
 void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
