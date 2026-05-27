@@ -1146,26 +1146,45 @@ def run_single_logic(args, logic: str, output_dir: Path):
     # -------------------------------------------------------------------------
     compare_res_list: List[RunResult] = []
     if args.compare_with:
-        print(f"\n[2/2] Running {args.compare_with} on {total} files ...")
-        if args.serial or args.jobs == 1:
-            for i, f in enumerate(files, 1):
-                res = run_compare(f, args.compare_with, args.timeout)
-                compare_res_list.append(res)
-                if args.verbose or i % 100 == 0 or i == total:
-                    print(f"  {args.compare_with}: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
+        cache_path = args.oracle_cache
+        if cache_path and os.path.exists(cache_path):
+            # Reuse cached oracle verdicts so OFF/ON passes run the oracle only once.
+            print(f"\n[2/2] Loading cached {args.compare_with} oracle from {cache_path} ...")
+            with open(cache_path) as _cf:
+                _cached = json.load(_cf)
+            for f in files:
+                e = _cached.get(str(f))
+                if e is not None:
+                    compare_res_list.append(RunResult(file=str(f), result=e[0], elapsed=e[1], solver=args.compare_with))
+            print(f"  loaded {len(compare_res_list)}/{total} cached oracle verdicts (oracle not re-run)")
         else:
-            with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-                futures = {
-                    executor.submit(run_compare, f, args.compare_with, args.timeout): f
-                    for f in files
-                }
-                completed = 0
-                for future in as_completed(futures):
-                    res = future.result()
+            print(f"\n[2/2] Running {args.compare_with} on {total} files ...")
+            if args.serial or args.jobs == 1:
+                for i, f in enumerate(files, 1):
+                    res = run_compare(f, args.compare_with, args.timeout)
                     compare_res_list.append(res)
-                    completed += 1
-                    if args.verbose or completed % 100 == 0 or completed == total:
-                        print(f"  {args.compare_with}: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
+                    if args.verbose or i % 100 == 0 or i == total:
+                        print(f"  {args.compare_with}: {i}/{total}  [{res.result:10s}] {res.file[:80]}")
+            else:
+                with ProcessPoolExecutor(max_workers=args.jobs) as executor:
+                    futures = {
+                        executor.submit(run_compare, f, args.compare_with, args.timeout): f
+                        for f in files
+                    }
+                    completed = 0
+                    for future in as_completed(futures):
+                        res = future.result()
+                        compare_res_list.append(res)
+                        completed += 1
+                        if args.verbose or completed % 100 == 0 or completed == total:
+                            print(f"  {args.compare_with}: {completed}/{total}  [{res.result:10s}] {res.file[:80]}")
+            if cache_path:
+                try:
+                    with open(cache_path, "w") as _cf:
+                        json.dump({r.file: [r.result, r.elapsed] for r in compare_res_list}, _cf)
+                    print(f"  saved oracle cache -> {cache_path} ({len(compare_res_list)} verdicts)")
+                except OSError as _e:
+                    print(f"  WARN: could not write oracle cache {cache_path}: {_e}")
 
     wall_time = time.time() - start_time
     print(f"\nAll done in {wall_time:.2f}s (wall-clock)")
@@ -1376,6 +1395,7 @@ Examples:
     parser.add_argument("-t", "--timeout", type=float, default=30, help="Timeout per instance in seconds (default: 30)")
     parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to zolver binary")
     parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
+    parser.add_argument("--oracle-cache", default=None, help="Cache file for oracle (compare-with) verdicts: read if exists (skip running oracle), else run + write. Lets OFF/ON passes share one oracle run.")
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
     parser.add_argument("--random", type=int, default=None, help="Randomly sample N files per logic (shuffled, overrides --max-files)")

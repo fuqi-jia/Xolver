@@ -123,6 +123,20 @@ cmd_run() {
     LOGIC="$1"
     shift
 
+    # BOTH=1: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（两遍共享 --oracle-cache）
+    if [[ "${BOTH:-}" == "1" ]]; then
+        SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+        TAG="${LOGIC//,/_}"
+        mkdir -p "$(pwd)/results"
+        CACHE="$(pwd)/results/oracle-${TAG}.json"
+        SEQLOG="$(pwd)/both-${TAG}-seq.log"
+        log "BOTH=1: 后台顺序 OFF -> ON, z3 oracle 仅跑一遍 ($CACHE)"
+        log "  序列日志: $SEQLOG"
+        nohup bash -c "unset BOTH ALLON; rm -f '$CACHE'; FG=1 '$SELF' run '$LOGIC' $* --oracle-cache '$CACHE'; ALLON=1 FG=1 '$SELF' run '$LOGIC' $* --oracle-cache '$CACHE'" > "$SEQLOG" 2>&1 &
+        log "  PID=$!   查看: tail -f $SEQLOG"
+        return 0
+    fi
+
     # ALLON=1: bug-hunt preset — enable every optimization flag, but leave the
     # soundness FLOORS off (COMB_SAT_FLOOR / PP_STRICT_VALIDATION /
     # PP_VALIDATE_NONLINEAR_SAT / SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT).
