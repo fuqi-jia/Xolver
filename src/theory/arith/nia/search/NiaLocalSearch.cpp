@@ -2,10 +2,20 @@
 #include <random>
 #include <algorithm>
 #include <functional>
+#include <chrono>
+#include <cstdlib>
 
 namespace zolver {
 
-NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel) : kernel_(kernel) {}
+NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
+    : kernel_(kernel), budgetMs_(200), totalBudgetMs_(1000) {
+    if (const char* e = std::getenv("ZOLVER_NIA_LS_BUDGET_MS")) {
+        budgetMs_ = std::atol(e);   // 0 or negative = unlimited
+    }
+    if (const char* e = std::getenv("ZOLVER_NIA_LS_TOTAL_MS")) {
+        totalBudgetMs_ = std::atol(e);   // 0 or negative = unlimited
+    }
+}
 
 mpz_class NiaLocalSearch::violation(
     const IntegerModel& model,
@@ -35,6 +45,24 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     const DomainStore& domains) {
 
     if (constraints.empty()) return IntegerModel{};
+
+    // Per-solve cumulative budget exhausted: skip the search entirely.
+    if (totalBudgetMs_ > 0 && cumulativeMs_ >= totalBudgetMs_) return std::nullopt;
+
+    const auto t0 = std::chrono::steady_clock::now();
+    struct Accum {  // record this call's wall time into cumulativeMs_ on exit
+        std::chrono::steady_clock::time_point t0; long& acc;
+        ~Accum() {
+            acc += std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - t0).count();
+        }
+    } accum{t0, cumulativeMs_};
+    auto timedOut = [&]() -> bool {
+        if (budgetMs_ <= 0) return false;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - t0).count();
+        return ms >= budgetMs_;
+    };
 
     // Collect variables in deterministic order
     std::vector<std::string> vars;
@@ -161,6 +189,7 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     bool first = true;
 
     for (const auto& m : candidates) {
+        if (timedOut()) return std::nullopt;   // budget spent, no model this call
         mpz_class v = violation(m, constraints);
         if (v == 0) {
             return m; // Found satisfying assignment
@@ -178,6 +207,7 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
         mpz_class curViol = bestViol;
         const int MAX_STEPS = 100;
         for (int step = 0; step < MAX_STEPS; ++step) {
+            if (timedOut()) break;
             bool improved = false;
             for (const auto& v : vars) {
                 for (int delta : {-1, 1}) {

@@ -65,7 +65,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
-    add("nia.local-search",   &NiaSolver::stageLocalSearch);
+    // Local search is a heuristic SAT-candidate finder; run it ONLY at Full
+    // effort (like bit-blast). At Standard effort it re-ran from scratch on
+    // every CDCL(T) theory-check (~225x on some QF_NIA), burning ~10s, and is
+    // futile on UNSAT. Any model it would find mid-search is still found at the
+    // Full-effort check and validated -- so soundness/SAT-finding is preserved.
+    addFull("nia.local-search", &NiaSolver::stageLocalSearch);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     add("nia.branch",         &NiaSolver::stageBranch);
 
@@ -98,6 +103,7 @@ void NiaSolver::onReset() {
     pendingLinLemmas_.clear();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    localSearch_.resetBudget();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
