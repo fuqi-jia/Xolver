@@ -1095,9 +1095,10 @@ def run_single_logic(args, logic: str, output_dir: Path):
 
     if args.scramble:
         scrambler_bin = args.scrambler or _find_scrambler()
+        scr_seed = args.scramble_seed if args.scramble_seed is not None else random.randint(1, 2**31 - 1)
         if scrambler_bin and os.path.exists(scrambler_bin):
-            print(f"\n[scramble] perturbing {len(files)} inputs with {scrambler_bin} (seed {args.scramble_seed}) ...")
-            files = scramble_files(files, args.scramble_seed, scrambler_bin)
+            print(f"\n[scramble] perturbing {len(files)} inputs with {scrambler_bin} (seed {scr_seed}{' [random]' if args.scramble_seed is None else ''}) ...")
+            files = scramble_files(files, scr_seed, scrambler_bin)
         else:
             print(f"WARNING: --scramble set but scrambler not found ({scrambler_bin}); running un-scrambled")
 
@@ -1444,7 +1445,7 @@ Examples:
     parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
     parser.add_argument("--oracle-cache", default=None, help="Cache file for oracle (compare-with) verdicts: read if exists (skip running oracle), else run + write. Lets OFF/ON passes share one oracle run.")
     parser.add_argument("--scramble", action="store_true", help="Run the SMT-COMP scrambler on each input before solving (rename symbols, reorder asserts) — finds scrambling-sensitivity bugs. Both solver and oracle run on the SAME scrambled file.")
-    parser.add_argument("--scramble-seed", type=int, default=1, help="Seed for --scramble (default 1; deterministic/reproducible).")
+    parser.add_argument("--scramble-seed", type=int, default=None, help="Seed for --scramble (default: a fresh random seed each run, like SMT-COMP; pass a value to reproduce).")
     parser.add_argument("--scrambler", default=None, help="Path to scrambler binary (default: auto-detect tools/scrambler/scrambler or PATH).")
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")

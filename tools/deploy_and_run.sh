@@ -143,6 +143,14 @@ cmd_run() {
     LOGIC="$1"
     shift
 
+    # SCRAMBLE=1 且未显式给 SCRAMBLE_SEED：在此生成一个随机种子（每次运行不同，像竞赛），
+    # 生成一次并 export — 使 BOTH 的 OFF/ON 两遍共享同一份 scrambled 输入（oracle-cache 命中）。
+    # 想复现某次运行就显式传 SCRAMBLE_SEED=<n>。
+    if [[ "${SCRAMBLE:-}" == "1" && -z "${SCRAMBLE_SEED:-}" ]]; then
+        export SCRAMBLE_SEED=$(( (RANDOM * 32768) + RANDOM + 1 ))
+        log "SCRAMBLE_SEED 未指定 -> 本次随机种子 $SCRAMBLE_SEED"
+    fi
+
     # BOTH=1: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（两遍共享 --oracle-cache）
     if [[ "${BOTH:-}" == "1" ]]; then
         SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -181,8 +189,8 @@ cmd_run() {
     if [[ "${SCRAMBLE:-}" == "1" ]]; then
         SCR="${DIST_DIR}/bin/scrambler"
         [[ -f "$SCR" ]] || SCR="${DIST_DIR}/tools/scrambler/scrambler"
-        set -- "$@" --scramble --scrambler "$SCR" --scramble-seed "${SCRAMBLE_SEED:-1}"
-        log "SCRAMBLE=1: 输入经 scrambler 扰动 (seed ${SCRAMBLE_SEED:-1}, $SCR)"
+        set -- "$@" --scramble --scrambler "$SCR" --scramble-seed "$SCRAMBLE_SEED"
+        log "SCRAMBLE=1: 输入经 scrambler 扰动 (seed $SCRAMBLE_SEED, $SCR)"
     fi
 
     # 默认 benchmark 路径: ./benchmark/non-incremental
