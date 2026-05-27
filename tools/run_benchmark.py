@@ -167,8 +167,14 @@ def list_logic_dirs() -> List[str]:
     return sorted([d.name for d in get_benchmark_root().iterdir() if d.is_dir()])
 
 
-def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Optional[int] = None, random_sample: Optional[int] = None) -> List[Path]:
-    """Find all .smt2 files for a given logic."""
+def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Optional[int] = None, random_sample: Optional[int] = None, part: Optional[tuple] = None) -> List[Path]:
+    """Find all .smt2 files for a given logic.
+
+    part=(i, n): split the sorted file list into n contiguous chunks and keep
+    chunk i (1-indexed). Deterministic across machines (same sort + same i/n) so
+    nodes never overlap and never miss a file — no manual split, no touching the
+    benchmark tree. Applied AFTER sort/filter, BEFORE max_files.
+    """
     logic_dir = get_benchmark_root() / logic
     if not logic_dir.exists():
         raise FileNotFoundError(f"Benchmark directory not found: {logic_dir}")
@@ -182,14 +188,22 @@ def find_smt2_files(logic: str, filter_str: Optional[str] = None, max_files: Opt
 
     if random_sample is not None and random_sample > 0:
         if len(files) <= random_sample:
-            pass  # use all
+            files.sort()
         else:
             files = random.sample(files, random_sample)
             files.sort()
     else:
         files.sort()
-        if max_files is not None and max_files > 0:
-            files = files[:max_files]
+
+    if part is not None:
+        i, n = part
+        total = len(files)
+        lo = (total * (i - 1)) // n
+        hi = (total * i) // n
+        files = files[lo:hi]
+
+    if max_files is not None and max_files > 0:
+        files = files[:max_files]
     return files
 
 
@@ -1083,8 +1097,12 @@ def run_single_logic(args, logic: str, output_dir: Path):
         if logic and logic != "ALL":
             files = [f for f in files if logic in str(f)]
     else:
+        _part = None
+        if getattr(args, "part", None):
+            _pi, _pn = args.part.split("/")
+            _part = (int(_pi), int(_pn))
         try:
-            files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files, random_sample=args.random)
+            files = find_smt2_files(logic, filter_str=args.filter, max_files=args.max_files, random_sample=args.random, part=_part)
         except FileNotFoundError as e:
             print(f"ERROR: {e}")
             return None
@@ -1450,6 +1468,7 @@ Examples:
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
     parser.add_argument("--random", type=int, default=None, help="Randomly sample N files per logic (shuffled, overrides --max-files)")
+    parser.add_argument("--part", default=None, help="Split each logic's sorted file list into N contiguous chunks and run chunk i (format 'i/N', 1-indexed; e.g. --part 1/3). Deterministic across machines — for fanning one logic across nodes with no overlap/gap.")
     parser.add_argument("--filter", default=None, help="Filter files by substring in relative path")
     parser.add_argument("--verbose", action="store_true", help="Verbose output")
     parser.add_argument("--serial", action="store_true", help="Run serially without subprocess pool (saves memory)")

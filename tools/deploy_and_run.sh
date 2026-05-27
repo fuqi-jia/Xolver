@@ -147,12 +147,14 @@ cmd_run() {
     # 其余参数透传给 run_benchmark.py。也兼容旧环境变量 (BOTH=1 / ALLON=1 / SCRAMBLE=1 / SCRAMBLE_SEED=n)。
     DO_BOTH=0;     [[ "${BOTH:-}"     == "1" ]] && DO_BOTH=1
     DO_ALLON=0;    [[ "${ALLON:-}"    == "1" ]] && DO_ALLON=1
+    DO_SUBMIT=0;   [[ "${SUBMIT:-}"   == "1" ]] && DO_SUBMIT=1
     DO_SCRAMBLE=0; [[ "${SCRAMBLE:-}" == "1" ]] && DO_SCRAMBLE=1
     PASS_ARGS=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --both)          DO_BOTH=1; shift ;;
             --allon)         DO_ALLON=1; shift ;;
+            --submit)        DO_SUBMIT=1; shift ;;
             --scramble)      DO_SCRAMBLE=1; shift ;;
             --scramble-seed) SCRAMBLE_SEED="$2"; shift 2 ;;
             *)               PASS_ARGS+=("$1"); shift ;;
@@ -197,6 +199,28 @@ cmd_run() {
                ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
                ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
         log "--allon: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
+    fi
+
+    # --submit: SUBMISSION 预设 — 所有优化开关 + 全部 soundness FLOORS 都开 (= 实际参赛配置, 健全).
+    # 用于参赛前 soundness 校验: 配合 --compare-with z3, zolver!=z3 (双方都确定) = 必须修的错误答案;
+    # zolver=unknown 是健全的 (floor 兜底, 不算错). 与 --allon (floors off, 找 bug) 相反.
+    if [[ "$DO_SUBMIT" == "1" ]]; then
+        export ZOLVER_COMB_CAREGRAPH=1 ZOLVER_COMB_MODEL_BASED=1 \
+               ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
+               ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
+               ZOLVER_LRA_BOUND_AXIOMS=1 ZOLVER_LRA_PIVOT_HEUR=1 ZOLVER_LRA_PROP=1 \
+               ZOLVER_NIA_REFUTE=1 ZOLVER_NIA_GCD=1 ZOLVER_NIA_ICP=1 \
+               ZOLVER_NIA_CDCAC=1 ZOLVER_NIA_BV_CASCADE=1 \
+               ZOLVER_NRA_LAZARD_LIFT=1 ZOLVER_NRA_LIBPOLY_PSC=1 \
+               ZOLVER_NRA_VARORDER=1 ZOLVER_NRA_VARORDER_SIMPLEX=1 \
+               ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
+               ZOLVER_PP_PG_CNF=1 ZOLVER_PP_LET_ELIM=1 \
+               ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
+               ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1 \
+               ZOLVER_PP_STRICT_VALIDATION=1 ZOLVER_PP_VALIDATE_NONLINEAR_SAT=1 \
+               ZOLVER_SAT_DEFER_EARLY_CONFLICT=1 ZOLVER_COMB_SAT_FLOOR=1 \
+               ZOLVER_NRA_UNSAT_CERT=1
+        log "--submit: optimizations ON + soundness FLOORS ON (submission config; verify 0 wrong vs z3)"
     fi
 
     # --scramble: 用 SMT-COMP scrambler 扰动输入后再求解（solver 与 oracle 跑同一份 scrambled 文件）
