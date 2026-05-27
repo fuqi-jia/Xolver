@@ -48,8 +48,14 @@ public:
     // Assert a bound on an aux var.
     // Records bound reasons for later conflict translation.
     // -------------------------------------------------------------------------
+    // When integerForm is true, the aux var is integer-valued, so a strict
+    // bound is tightened to the equivalent non-strict integer bound
+    // (s < 0 => s <= -1, s > 0 => s >= 1). This lets the simplex prove
+    // integer-empty ranges like n < d < n+1 directly, instead of leaving a
+    // δ-strict bound that branch-and-bound chases forever.
     bool assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
-                     bool value, SatLit reasonLit, int level = 0);
+                     bool value, SatLit reasonLit, int level = 0,
+                     bool integerForm = false);
 
     // -------------------------------------------------------------------------
     // Translate a GeneralSimplex conflict to a TheoryConflict.

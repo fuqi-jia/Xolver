@@ -18,6 +18,17 @@
 
 namespace zolver {
 
+// True if the atom's linear form is integer-valued (integer coefficients and
+// integer rhs). In LiaSolver every variable is an integer, so the aux var
+// s = Σ coeff·x − rhs is then integer too, enabling exact strict→±1 tightening.
+static bool isIntegerLinearForm(const LinearAtomPayload& p) {
+    if (!p.rhs.isRational() || p.rhs.asRational().get_den() != 1) return false;
+    for (const auto& t : p.lhs.terms) {
+        if (t.second.get_den() != 1) return false;
+    }
+    return true;
+}
+
 LiaSolver::LiaSolver() {
     const char* env = std::getenv("ZOLVER_LIA_DUMP_DIR");
     if (env) {
@@ -182,7 +193,8 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (e.isDiseq) {
             disequalities_.push_back({e.auxVar, payload.lhs, payload.rhs, e.lit});
         } else {
-            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
+            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
+                                           isIntegerLinearForm(payload));
             if (!ok) {
                 pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
                 break;
@@ -199,7 +211,8 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
         if (!e.isDiseq) {
-            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level);
+            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
+                                           isIntegerLinearForm(payload));
             if (!ok) {
                 pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
                 break;
