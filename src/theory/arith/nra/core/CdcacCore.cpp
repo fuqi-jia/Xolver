@@ -199,9 +199,11 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
             hybridEnabled_ = false;
         }
     }
+    // Explicit A/B switch, read last so it always wins. Symmetric now that the
+    // default is OFF: =1/t/y enables the hybrid (the --submit/--allon ON-pass),
+    // anything else (0/f/n/unset-with-value) forces pure Collins.
     if (const char* e = std::getenv("ZOLVER_NRA_HYBRID")) {
-        if (e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' || e[0] == 'N')
-            hybridEnabled_ = false;
+        hybridEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
     }
     // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
     // now (interim, while completeness recovery lands); intended default-ON.

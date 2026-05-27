@@ -102,11 +102,17 @@ private:
     // — Lazard never overrides them — so the hybrid is strictly >= pure-Collins by
     // construction (it can only recover a Collins-Unknown to a Lazard-certified
     // Sat/Unsat). The Lazard pass's Sat is full-model-validated upstream and its
-    // Unsat is the committed cert-gated path (incomplete => Unknown). Enabled by
-    // default; A/B escape hatches read once in the constructor:
-    //   ZOLVER_NRA_PROJECTION=collins  (or ZOLVER_NRA_HYBRID=0) => pure Collins.
-    //   ZOLVER_NRA_PROJECTION=lazard                            => pure Lazard.
-    bool hybridEnabled_ = true;
+    // Unsat is the committed cert-gated path (incomplete => Unknown).
+    // DEFAULT-OFF at integration (master): the broad >=300-case QF_NRA z3
+    // differential — the hard promotion gate for a default-path NRA change — has
+    // NOT run yet, and the submission is soundness-primary (one false-UNSAT sinks
+    // the division). Default path is therefore pure Collins, byte-identical to the
+    // pre-Lazard baseline. Opt in / out, read once in the constructor:
+    //   ZOLVER_NRA_HYBRID=1            => enable hybrid (Collins-first, Lazard on Unknown).
+    //   ZOLVER_NRA_PROJECTION=lazard   => pure Lazard.
+    //   ZOLVER_NRA_PROJECTION=collins / ZOLVER_NRA_HYBRID=0 / unset => pure Collins.
+    // Promote to default-ON only after the broad differential is 0-unsound.
+    bool hybridEnabled_ = false;
 
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;
