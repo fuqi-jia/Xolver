@@ -42,12 +42,36 @@ public:
                          const DomainStore& domains,
                          const IntegerModelValidator& validator);
 
+    // Public entry for the early NIA stage: try BV mod/div-by-2^k extraction
+    // only (no general bit-blast). Returns Unknown if the shape/guards do not
+    // apply. Must run BEFORE the model-deciding stages, since after mod lowering
+    // the formula is linear and an earlier stage would otherwise decide it.
+    BitBlastResult bvDivModSolve(const std::vector<NormalizedNiaConstraint>& cs,
+                                 const DomainStore& domains,
+                                 const IntegerModelValidator& validator) {
+        if (cs.empty() || !applicable(cs)) return {};
+        if (auto r = tryBvDivMod(cs, domains, validator)) return *r;
+        return {};
+    }
+
     void setMaxBitWidth(unsigned w) { maxBW_ = w; }
     void setMaxIterations(unsigned n) { maxIters_ = n; }
     void setGateBudget(uint64_t b) { gateBudget_ = b; }
 
 private:
     bool applicable(const std::vector<NormalizedNiaConstraint>& cs) const;
+
+    // BV-style mod/div-by-2^k bit-extraction (ZOLVER_NIA_BV_DIVMOD, default-OFF).
+    // Recognizes the lowered shape `m - 2^k*q - r = 0` (with 2^k a power of two,
+    // and m appearing ONLY in such groups), then binds r = m's low k bits and
+    // q = m's high bits (slices of one bit-vector) instead of encoding the
+    // q*2^k multiplication. mod m 2^k = low k bits of m's two's-complement repr
+    // for ANY sign, so a width-(maxk+1) model covers every residue => the box is
+    // COMPLETE for mod-by-2^k and UNSAT is sound. Returns nullopt (fall back to
+    // the general encoder) when the shape/guards do not cleanly apply.
+    std::optional<BitBlastResult> tryBvDivMod(
+        const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains,
+        const IntegerModelValidator& validator);
 
     // Encode `x >= lb` and `x <= ub` (and finite-set / exclusions) for every
     // bounded variable, so the SAT search is confined to the DomainStore box.

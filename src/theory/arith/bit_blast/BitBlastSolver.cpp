@@ -5,6 +5,9 @@
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <algorithm>
+#include <iostream>
 
 namespace zolver::bitblast {
 
@@ -137,11 +140,138 @@ std::optional<TheoryConflict> BitBlastSolver::buildCompleteConflict(
     return cf;
 }
 
+// Recognize lowered `m - 2^k*q - r = 0` (m coeff +1/-1, q coeff -/+2^k, r coeff
+// -/+1 with r's sign == q's sign), bind r=m's low k bits, q=m's high bits.
+// Sound because mod m 2^k = m's low k bits (two's complement, any sign) and the
+// width-(maxk+1) model covers every residue, so the box is complete for the
+// mod-by-2^k dividends and UNSAT is sound -- BUT only if the dividend appears
+// ONLY in these groups (no raw use) and every other variable is hard-bounded.
+std::optional<BitBlastResult> BitBlastSolver::tryBvDivMod(
+    const std::vector<NormalizedNiaConstraint>& cs, const DomainStore& domains,
+    const IntegerModelValidator& validator) {
+
+    static const bool DBG = std::getenv("ZOLVER_NIA_BV_DIVMOD_DEBUG") != nullptr;
+    auto pow2k = [](const mpz_class& a) -> int {
+        mpz_class v = abs(a);
+        if (v < 2 || mpz_popcount(v.get_mpz_t()) != 1) return -1;
+        return static_cast<int>(mpz_sizeinbase(v.get_mpz_t(), 2)) - 1;
+    };
+
+    struct Group { std::string dividend, quot, rem; unsigned k; };
+    std::vector<Group> groups;
+    std::vector<bool> definitional(cs.size(), false);
+
+    for (size_t ci = 0; ci < cs.size(); ++ci) {
+        if (cs[ci].rel != Relation::Eq) continue;
+        auto termsOpt = kernel_.terms(cs[ci].poly);
+        if (!termsOpt || termsOpt->size() != 3) continue;
+        const PolynomialKernel::MonomialTerm *qT = nullptr, *u1 = nullptr, *u2 = nullptr;
+        bool ok = true;
+        for (const auto& t : *termsOpt) {
+            if (t.powers.size() != 1 || t.powers[0].second != 1) { ok = false; break; }
+            int k = pow2k(t.coefficient);
+            if (k >= 1) { if (qT) { ok = false; break; } qT = &t; }
+            else if (t.coefficient == 1 || t.coefficient == -1) {
+                if (!u1) u1 = &t; else if (!u2) u2 = &t; else { ok = false; break; }
+            } else { ok = false; break; }
+        }
+        if (!ok || !qT || !u1 || !u2) continue;
+        bool qNeg = qT->coefficient < 0;
+        const PolynomialKernel::MonomialTerm* rT = ((u1->coefficient < 0) == qNeg) ? u1 : u2;
+        const PolynomialKernel::MonomialTerm* mT = (rT == u1) ? u2 : u1;
+        if ((mT->coefficient < 0) == (rT->coefficient < 0)) continue;  // need opposite unit signs
+        groups.push_back({std::string(kernel_.varName(mT->powers[0].first)),
+                          std::string(kernel_.varName(qT->powers[0].first)),
+                          std::string(kernel_.varName(rT->powers[0].first)),
+                          static_cast<unsigned>(pow2k(qT->coefficient))});
+        definitional[ci] = true;
+    }
+    if (DBG) std::cerr << "[BVDM] groups=" << groups.size() << "\n";
+    if (groups.empty()) return std::nullopt;
+
+    std::unordered_map<std::string, unsigned> maxK;
+    std::unordered_set<std::string> dividends, qrset;
+    for (const auto& g : groups) {
+        unsigned cur = maxK.count(g.dividend) ? maxK[g.dividend] : 0u;
+        maxK[g.dividend] = std::max(cur, g.k);
+        dividends.insert(g.dividend);
+        qrset.insert(g.quot); qrset.insert(g.rem);
+    }
+    for (const auto& d : dividends) if (qrset.count(d)) { if(DBG) std::cerr<<"[BVDM] bail: var both roles\n"; return std::nullopt; }
+
+    // GUARD: dividend may appear only in the definitional groups (else a fixed
+    // width unsoundly restricts an otherwise-unbounded dividend).
+    std::unordered_set<std::string> allVars;
+    for (size_t ci = 0; ci < cs.size(); ++ci) {
+        for (const auto& v : kernel_.variables(cs[ci].poly)) {
+            allVars.insert(v);
+            if (!definitional[ci] && dividends.count(v)) { if(DBG) std::cerr<<"[BVDM] bail: dividend "<<v<<" raw use\n"; return std::nullopt; }
+        }
+    }
+    // GUARD: every non-divmod variable must be hard-bounded (for box completeness).
+    for (const auto& v : allVars) {
+        if (dividends.count(v) || qrset.count(v)) continue;
+        const IntDomain* d = domains.getDomain(v);
+        if (!d || !d->hasLower || !d->hasUpper) { if(DBG) std::cerr<<"[BVDM] bail: nondivmod var "<<v<<" unbounded\n"; return std::nullopt; }
+    }
+    if (DBG) std::cerr << "[BVDM] applying: " << groups.size() << " groups\n";
+
+    BitWidthPlan plan = estimator_.estimate(cs, domains);
+    auto sat = createSatSolver();
+    BitBlastEncoder enc(*sat);
+    enc.setVarBudget(gateBudget_);
+    std::unordered_map<std::string, BitVec> varBits;
+    for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
+    for (const auto& kv : maxK) varBits[kv.first] = enc.mkVar(kv.second + 1);  // dividend: maxk+1
+    for (const auto& g : groups) {
+        const BitVec& m = varBits[g.dividend];
+        unsigned W = maxK[g.dividend] + 1;
+        BitVec r; r.bits.assign(m.bits.begin(), m.bits.begin() + g.k);
+        r.bits.push_back(enc.constFalse());        // low k bits, 0 sign => m mod 2^k >= 0
+        varBits[g.rem] = r;
+        BitVec q; q.bits.assign(m.bits.begin() + g.k, m.bits.begin() + W);   // high bits
+        if (q.bits.empty()) q.bits.push_back(enc.constFalse());
+        varBits[g.quot] = q;
+    }
+
+    PolyBitBlaster blaster(enc, kernel_, varBits);
+    for (size_t ci = 0; ci < cs.size(); ++ci)
+        if (!definitional[ci]) blaster.assertConstraint(cs[ci]);   // mod-Eqs are definitional via slices
+    encodeDomainBounds(enc, varBits, domains);
+    if (enc.overflowed()) return std::nullopt;
+
+    BitBlastResult out;
+    auto res = sat->solve();
+    if (res == SatSolver::SolveResult::Sat) {
+        IntegerModel model;
+        for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
+        if (validator.validate(model, cs) == IntegerModelValidator::Result::Valid
+            && modelInDomains(model, domains)) {
+            out.status = BitBlastResult::Status::Sat;
+            out.model = std::move(model);
+        }
+        return out;                       // Sat, or Unknown if the model didn't validate
+    }
+    if (res == SatSolver::SolveResult::Unsat) {
+        // Box is complete by construction (mod-2^k residues fully covered, other
+        // vars hard-bounded), so this UNSAT is sound.
+        if (auto cf = buildCompleteConflict(cs, domains)) out.status = BitBlastResult::Status::UnsatComplete, out.conflict = std::move(cf);
+        return out;
+    }
+    return out;                           // SAT solver Unknown
+}
+
 BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>& cs,
                                      const DomainStore& domains,
                                      const IntegerModelValidator& validator) {
     BitBlastResult out;
     if (cs.empty() || !applicable(cs)) return out;   // Unknown
+
+    static const bool bvDivMod = std::getenv("ZOLVER_NIA_BV_DIVMOD") != nullptr;
+    if (bvDivMod) {
+        if (auto r = tryBvDivMod(cs, domains, validator)) return *r;
+        // else fall through to the general encoder
+    }
 
     BitWidthPlan plan = estimator_.estimate(cs, domains);
     if (plan.width.empty()) return out;              // Unknown

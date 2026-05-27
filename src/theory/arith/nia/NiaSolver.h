@@ -14,6 +14,7 @@
 #include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
+#include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -124,8 +125,12 @@ private:
     NiaLocalSearch localSearch_;
     bitblast::BitBlastSolver bitBlast_;
     ProductPositivityReasoner productPositivity_;
+    GcdDivisibilityReasoner gcdDivisibility_;
     bool enableBitBlast_ = true;
     bool enableRefute_ = false;   // ZOLVER_NIA_REFUTE: bound-free product-positivity refutation
+    bool enableBvDivMod_ = false; // ZOLVER_NIA_BV_DIVMOD: BV mod/div-by-2^k bit-extraction (BLAN-faithful)
+    bool enableGcd_ = false;      // ZOLVER_NIA_GCD: multivariate GCD-divisibility refutation
+    bool enableIcp_ = false;      // ZOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
 
     std::optional<IntegerModel> currentModel_;
 
@@ -148,6 +153,9 @@ private:
     std::optional<TheoryCheckResult> stageUnivariate(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageAlgebraic(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageBvDivMod(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);

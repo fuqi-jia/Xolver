@@ -1,6 +1,8 @@
 #include "theory/arith/nia/NiaSolver.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
+#include "theory/arith/nia/search/NiaIcpAdapter.h"
+#include "theory/arith/icp/IcpTypes.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
@@ -34,7 +36,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       bounded_(*kernel_),
       localSearch_(*kernel_),
       bitBlast_(*kernel_),
-      productPositivity_(*kernel_) {
+      productPositivity_(*kernel_),
+      gcdDivisibility_(*kernel_) {
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -56,11 +59,17 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.presolve",       &NiaSolver::stagePresolveFixpoint);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.domain",         &NiaSolver::stageDomainInference);
+    // BV mod/div-by-2^k bit-extraction runs EARLY (right after domain inference,
+    // before the model-deciding stages): mod-lowered formulas are linear and an
+    // earlier stage would otherwise return a (possibly spurious) verdict.
+    addFull("nia.bv-divmod",  &NiaSolver::stageBvDivMod);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
     add("nia.univariate",     &NiaSolver::stageUnivariate);
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
+    add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
+    add("nia.icp",            &NiaSolver::stageIcp);
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
@@ -86,6 +95,20 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // solely from an emptied domain (invariant 7).
     if (const char* e = std::getenv("ZOLVER_NIA_REFUTE"); e && *e && *e != '0')
         enableRefute_ = true;
+
+    if (const char* e = std::getenv("ZOLVER_NIA_BV_DIVMOD"); e && *e && *e != '0')
+        enableBvDivMod_ = true;
+
+    // Multivariate GCD-divisibility refutation (default-OFF). Sound: every
+    // monomial is an integer, so Σ aᵢmᵢ ≡ 0 (mod gcd aᵢ); g ∤ const ⇒ UNSAT.
+    if (const char* e = std::getenv("ZOLVER_NIA_GCD"); e && *e && *e != '0')
+        enableGcd_ = true;
+
+    // Interval contraction fixpoint over the existing icp/ engine (default-OFF).
+    // Sound: only narrows domains via valid bound propagation; UNSAT reported
+    // solely from a contractor conflict or an emptied domain (invariant 7).
+    if (const char* e = std::getenv("ZOLVER_NIA_ICP"); e && *e && *e != '0')
+        enableIcp_ = true;
 }
 
 void NiaSolver::onReset() {
@@ -453,6 +476,49 @@ std::optional<TheoryCheckResult> NiaSolver::stageAlgebraic(TheoryLemmaStorage& l
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableGcd_) return std::nullopt;
+    auto r = gcdDivisibility_.run(normalized_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageIcp(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableIcp_) return std::nullopt;
+    std::vector<IcpConstraint> cs;
+    cs.reserve(normalized_.size());
+    for (const auto& c : normalized_) {
+        cs.push_back(IcpConstraint{std::nullopt, c.poly, c.rel, c.reason, TheoryId::NIA});
+    }
+    NiaIcpAdapter adapter(*kernel_, domains_);
+    IcpConfig cfg;  // V1 defaults: contract to fixpoint, suggest (not apply) splits
+    auto r = adapter.run(cs, cfg);
+    if (r.status == IcpStatus::Conflict && r.conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageBvDivMod(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableBvDivMod_) return std::nullopt;
+    auto res = bitBlast_.bvDivModSolve(normalized_, domains_, validator_);
+    switch (res.status) {
+        case bitblast::BitBlastResult::Status::Sat:
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        case bitblast::BitBlastResult::Status::UnsatComplete:
+            return TheoryCheckResult::mkConflict(*res.conflict);
+        case bitblast::BitBlastResult::Status::Unknown:
+            return std::nullopt;
     }
     return std::nullopt;
 }
