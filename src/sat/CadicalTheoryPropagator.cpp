@@ -406,6 +406,30 @@ int CadicalTheoryPropagator::cb_propagate() {
                           << clause.size() << " lits)\n";
                 return 0;
             }
+            // Soundness: an external conflict clause must be FALSIFIED — every
+            // literal currently assigned to make it false. The clause stores
+            // negated reasons (makeFalsifiedConflict), so each lit must be false
+            // now: currentAssignment_[var] != lit.sign. If a lit is currently
+            // TRUE, the "conflict" is not actually falsified — it rests on a
+            // reason that no longer holds (e.g. an EUF explanation that walked a
+            // STALE merge whose interface-equality literal has since been
+            // unassigned/flipped — the xs_11_11/xs_15_15 false-UNSAT). Skipping a
+            // non-falsified clause is always sound (it was never a valid conflict).
+            bool falsified = true;
+            for (SatLit lit : clause) {
+                auto it = currentAssignment_.find(lit.var);
+                if (it != currentAssignment_.end() && it->second == lit.sign) {
+                    falsified = false;
+                    break;
+                }
+            }
+            if (!falsified) {
+                if (std::getenv("ZOLVER_WISA_DIAG"))
+                    std::fprintf(stderr, "[PROP] SKIP non-falsified conflict (%zu lits) — stale reason\n",
+                                 clause.size());
+                NO_DBG << "[PROP] skip non-falsified conflict (" << clause.size() << " lits)\n";
+                return 0;
+            }
             // Soundness floor (ZOLVER_SAT_DEFER_EARLY_CONFLICT): in combination
             // mode a Standard-effort theory conflict is UNVALIDATED (only pure
             // shared-eq conflicts are re-verified by conflictIsGenuine; a

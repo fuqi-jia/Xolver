@@ -1106,9 +1106,6 @@ TheoryCheckResult LiaSolver::assertInterfaceEquality(
     interfaceDisequalities_.erase(it, interfaceDisequalities_.end());
 
     interfaceEqualities_.push_back({a, b, reason, level});
-    std::cerr << "[LIA-IEQ] add a=" << a << " b=" << b << " reason=" << (reason.sign?"+":"-") << "v" << reason.var
-              << " level=" << level << " eqSize=" << interfaceEqualities_.size()
-              << " diseqSize=" << interfaceDisequalities_.size() << "\n";
     return TheoryCheckResult::consistent();
 }
 
