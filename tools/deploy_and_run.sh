@@ -123,6 +123,25 @@ cmd_run() {
     LOGIC="$1"
     shift
 
+    # ALLON=1: bug-hunt preset — enable every optimization flag, but leave the
+    # soundness FLOORS off (COMB_SAT_FLOOR / PP_STRICT_VALIDATION /
+    # PP_VALIDATE_NONLINEAR_SAT / SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT).
+    # Floors downgrade unconfirmed answers to 'unknown' and would HIDE bugs; off,
+    # a wrong answer shows as a zolver!=z3 MISMATCH. Use with --compare-with z3.
+    if [[ "${ALLON:-}" == "1" ]]; then
+        export ZOLVER_COMB_CAREGRAPH=1 ZOLVER_COMB_MODEL_BASED=1 \
+               ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
+               ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
+               ZOLVER_LRA_BOUND_AXIOMS=1 ZOLVER_LRA_PIVOT_HEUR=1 ZOLVER_LRA_PROP=1 \
+               ZOLVER_NIA_REFUTE=1 \
+               ZOLVER_NRA_LAZARD_LIFT=1 ZOLVER_NRA_LIBPOLY_PSC=1 \
+               ZOLVER_NRA_VARORDER=1 ZOLVER_NRA_VARORDER_SIMPLEX=1 \
+               ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
+               ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
+               ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
+        log "ALLON=1: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
+    fi
+
     # 默认 benchmark 路径: ./benchmark/non-incremental
     BENCH_DIR="$(pwd)/benchmark/non-incremental"
     if [[ ! -d "$BENCH_DIR" ]]; then
