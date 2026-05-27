@@ -68,6 +68,9 @@ public:
     // variable). See PolynomialKernel::pscChain for the index convention.
     std::vector<PolyId> pscChain(PolyId a, PolyId b, VarId v) override;
 
+    // Exact multivariate content-aware GCD via lp_polynomial_gcd.
+    PolyId gcd(PolyId a, PolyId b) override;
+
     // Public accessor for variable id resolution (used by C traverse callback)
     std::optional<VarId> resolveVariableId(lp_variable_t v) const;
 

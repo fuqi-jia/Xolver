@@ -195,6 +195,25 @@ public:
         return {};
     }
 
+    // ------------------------------------------------------------------
+    // Greatest common divisor (for CAD projection content/squarefree)
+    // ------------------------------------------------------------------
+    // Exact multivariate, content-aware GCD of a and b (libpoly's
+    // lp_polynomial_gcd: a single GCD over the recursive representation; NO
+    // explicit main variable is required, it is the full multivariate gcd).
+    //
+    // SOUNDNESS: the result is exact (libpoly integer ring). The Lazard
+    // squarefree/content path that consumes this STILL verifies the gcd by
+    // exactDivide before using it, so an off-by-a-unit / unverifiable result
+    // is downgraded to an incomplete closure (=> Unknown, never UNSAT).
+    //
+    // Base default returns NullPoly (unsupported) so non-libpoly builds fall
+    // back to the existing hand-rolled subresultant gcd path.
+    virtual PolyId gcd(PolyId a, PolyId b) {
+        (void)a; (void)b;
+        return NullPoly;
+    }
+
     // Substitute a rational value for a variable, returning a new polynomial.
     // Returns nullopt if unsupported or the decomposition fails.
     virtual std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) {

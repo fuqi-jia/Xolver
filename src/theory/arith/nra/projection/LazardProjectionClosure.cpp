@@ -76,7 +76,7 @@ void LazardProjectionClosure::projectLevel(const std::vector<int>& inputIds, Var
 
     LazardProjectionConfig opCfg;
     opCfg.maxMatrixDim = cfg_.maxMatrixDim;
-    LazardOpResult op = lazardProjectStep(E, elimVar, opCfg);
+    LazardOpResult op = lazardProjectStep(E, elimVar, opCfg, kernel_);
     if (!op.complete) { reason_ = op.reason; return; }
 
     // Items are emitted parents-before-dependents, so lookupIndex resolves each
@@ -97,12 +97,14 @@ void LazardProjectionClosure::projectLevel(const std::vector<int>& inputIds, Var
 
 LazardIncompleteReason LazardProjectionClosure::build(
     const std::vector<RationalPolynomial>& constraints,
-    const std::vector<VarId>& varOrder, const Config& cfg) {
+    const std::vector<VarId>& varOrder, const Config& cfg,
+    PolynomialKernel* kernel) {
 
     entries_.clear();
     dedup_.clear();
     varOrder_ = varOrder;
     cfg_ = cfg;
+    kernel_ = kernel;
     reason_ = LazardIncompleteReason::None;
     int n = static_cast<int>(varOrder.size());
     levelPolys_.assign(static_cast<size_t>(std::max(0, n)), {});
