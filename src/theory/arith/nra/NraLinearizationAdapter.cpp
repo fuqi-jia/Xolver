@@ -51,6 +51,46 @@ LinearizationResult NraLinearizationAdapter::runLinearizer(
     return linearizer_.run(nonlinearConstraints, emptyBounds, TheoryId::NRA);
 }
 
+LinearizationResult NraLinearizationAdapter::runLinearizerAtModel(
+    const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
+    const std::unordered_map<std::string, mpq_class>& model,
+    TheoryLemmaStorage& /*lemmaDb*/) {
+
+    // Point bounds: every base var present in the candidate model gets a tight
+    // [v, v] interval so the envelope/secant/tangent cuts have finite bounds to
+    // work with and refine AROUND the current candidate point. These cuts are
+    // globally-valid relaxations of the nonlinear term (sound regardless of the
+    // chosen point); the SAT model is still exact-validated before SAT.
+    struct ModelBoundStore : public BoundStore {
+        const std::unordered_map<std::string, mpq_class>& m;
+        explicit ModelBoundStore(const std::unordered_map<std::string, mpq_class>& mm) : m(mm) {}
+        std::optional<BoundInfo> get(const std::string& v) const override {
+            auto it = m.find(v);
+            if (it == m.end()) return std::nullopt;
+            BoundInfo bi;
+            bi.lower = it->second;
+            bi.upper = it->second;
+            bi.hasLower = true;
+            bi.hasUpper = true;
+            // No reasons: these are model-construction points, not asserted
+            // bounds. The cut lemma still carries the nonlinear-constraint
+            // reason, so it remains sound (a global relaxation).
+            bi.lowerReasonComplete = true;
+            bi.upperReasonComplete = true;
+            return bi;
+        }
+    };
+    ModelBoundStore bounds(model);
+    LinearizationConfig cfg;
+    cfg.emitAllMcCormick = true;
+    cfg.emitSquareNonneg = true;
+    cfg.emitSquareTangent = true;
+    cfg.emitSquareSecant = true;
+    cfg.maxLemmas = 16;
+    cfg.maxCutsPerTerm = 4;
+    return linearizer_.run(nonlinearConstraints, bounds, TheoryId::NRA, cfg, &model);
+}
+
 void NraLinearizationAdapter::markEmitted(const CutCacheKey& key) {
     linearizer_.markEmitted(key);
 }

@@ -52,10 +52,15 @@ SolverSetupResult setupSolvers(
     } else if (logic == "QF_NRA" || logic == "NRA") {
         auto polyKernel = createPolynomialKernel();
         result.polyKernelRaw = polyKernel.get();
-        theoryManager.registerSolver(
-            std::make_unique<NraSolver>(std::move(polyKernel)));
+        // Create the LRA sibling first so NRA can hold a raw pointer to it for
+        // the ZOLVER_NRA_LINEARIZE relaxation-model read (harmless when OFF).
         auto lra = std::make_unique<LraSolver>();
         lra->setRegistry(&registry);
+        LraSolver* lraPtr = lra.get();
+        auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+        nra->setRegistry(&registry);  // ZOLVER_NRA_LINEARIZE cut-feeder
+        nra->setLinearSibling(lraPtr);  // ZOLVER_NRA_LINEARIZE relaxation-model source
+        theoryManager.registerSolver(std::move(nra));
         theoryManager.registerSolver(std::move(lra));
     } else if (logic == "QF_NIA" || logic == "NIA") {
         auto polyKernel = createPolynomialKernel();
@@ -249,6 +254,7 @@ SolverSetupResult setupSolvers(
         auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
         nra->setCoreIr(ir);
         nra->setSharedTermRegistry(sharedTermRegistry.get());
+        nra->setRegistry(&registry);  // ZOLVER_NRA_LINEARIZE cut-feeder
         theoryManager.registerSolver(std::move(nra));
         auto lra = std::make_unique<LraSolver>();
         lra->setCoreIr(ir);
@@ -296,9 +302,16 @@ SolverSetupResult setupSolvers(
         } else if (features.hasRealVar && features.hasNonlinear) {
             auto polyKernel = createPolynomialKernel();
             result.polyKernelRaw = polyKernel.get();
-            theoryManager.registerSolver(
-                std::make_unique<NraSolver>(std::move(polyKernel)));
-            theoryManager.registerSolver(std::make_unique<LraSolver>());
+            // Create the LRA sibling first so NRA can hold a raw pointer to it
+            // for the ZOLVER_NRA_LINEARIZE relaxation-model read (OFF → unused).
+            auto lra = std::make_unique<LraSolver>();
+            lra->setRegistry(&registry);
+            LraSolver* lraPtr = lra.get();
+            auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+            nra->setRegistry(&registry);  // ZOLVER_NRA_LINEARIZE cut-feeder
+            nra->setLinearSibling(lraPtr);  // ZOLVER_NRA_LINEARIZE relaxation-model source
+            theoryManager.registerSolver(std::move(nra));
+            theoryManager.registerSolver(std::move(lra));
         } else if (features.hasRealVar) {
             theoryManager.registerSolver(std::make_unique<LraSolver>());
         }

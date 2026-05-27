@@ -10,10 +10,10 @@ std::vector<LinearCut> SquareCutGenerator::generate(
     const std::optional<mpq_class>& modelX,
     bool emitNonneg,
     bool emitSecant,
-    bool emitTangent) {
+    bool emitTangent,
+    SortKind sort) {
 
     std::vector<LinearCut> cuts;
-    SortKind sort = SortKind::Int; // V1 only handles integer squares
 
     // Cut 1: Nonnegativity (s >= 0), i.e. -s <= 0
     if (emitNonneg) {
