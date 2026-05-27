@@ -64,6 +64,13 @@ private:
     // by getModel(). haveModel_ is false until a check() returns Consistent.
     std::vector<mpz_class> lastDist_;
     bool haveModel_ = false;
+
+    // Warm-start potential carried across checks. A feasible potential stays
+    // feasible when constraints are removed (backtrack) and is often still
+    // feasible when constraints are added, so if it satisfies every current edge
+    // (an O(E) check) we SKIP the O(V·E) Bellman-Ford. The conflict/infeasible
+    // path is unchanged (full BF), so this never affects soundness.
+    std::vector<mpz_class> warmPot_;
 };
 
 } // namespace zolver

@@ -54,6 +54,7 @@ void IdlSolver::onReset() {
     graph_.clear();
     haveModel_ = false;
     lastDist_.clear();
+    warmPot_.clear();
 }
 
 IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a) {
@@ -208,11 +209,27 @@ TheoryCheckResult IdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
 
-    // Run Bellman-Ford
-    auto bfResult = bf_.runFull(graph_);
-    if (bfResult.negativeCycle) {
-        return TheoryCheckResult::mkConflict(
-            buildConflict(bfResult.cycle, graph_));
+    // Warm-start fast path: if the potential from the last consistent check
+    // still satisfies every current edge (slack >= 0), the graph is feasible
+    // and we skip the full Bellman-Ford. Sound: this only SHORT-CIRCUITS the
+    // feasible verdict; any edge it can't satisfy falls through to full BF
+    // (unchanged conflict/cycle path).
+    BfResult<mpz_class> bfResult;
+    bool warmOk = warmPot_.size() == static_cast<size_t>(graph_.numNodes());
+    if (warmOk) {
+        for (const auto& e : graph_.edges()) {
+            if (warmPot_[e.to] > warmPot_[e.from] + e.weight) { warmOk = false; break; }
+        }
+    }
+    if (warmOk) {
+        bfResult.dist = warmPot_;     // certified feasible for the current edges
+    } else {
+        bfResult = bf_.runFull(graph_);
+        if (bfResult.negativeCycle) {
+            return TheoryCheckResult::mkConflict(
+                buildConflict(bfResult.cycle, graph_));
+        }
+        warmPot_ = bfResult.dist;     // adopt the new feasible potential
     }
 
     // Disequality split
