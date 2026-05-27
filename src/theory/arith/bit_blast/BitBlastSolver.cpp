@@ -189,7 +189,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         }
 
         if (plan.boxIsComplete) break;          // exact box already decided above
-        plan = SpaceEstimator::grow(plan, maxBW_);   // doubling widen
+        plan = SpaceEstimator::grow(plan, maxBW_);   // x4 widen
     }
     return out;               // Unknown
 }

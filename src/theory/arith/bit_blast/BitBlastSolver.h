@@ -74,7 +74,7 @@ private:
                                // combined with high-degree products, blows up the
                                // SAT encoding. With the BLAN-faithful multiplier
                                // (varmin partials + constant folding) 128 is safe.
-    unsigned maxIters_ = 6;    // doubling growth from the base reaches U in ~4 iters
+    unsigned maxIters_ = 6;    // x4 width growth per iter reaches wide widths fast (capped at maxBW_)
 
     // Resource cap: refuse to bit-blast when the estimated SAT-encoding cost
     // (~gate / fresh-var count, SpaceEstimator::estimateGateCost) exceeds this.

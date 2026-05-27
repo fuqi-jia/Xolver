@@ -22,7 +22,11 @@ unsigned SpaceEstimator::bitsToHold(const mpz_class& n) {
 }
 
 BitWidthPlan SpaceEstimator::grow(BitWidthPlan plan, unsigned maxBW) {
-    for (auto& kv : plan.width) kv.second = std::min(maxBW, kv.second * 2);
+    // x4 per iteration: reaches wide widths faster so the maxIters budget is
+    // spent covering large bounded boxes (where models/decisions live) rather
+    // than many narrow-width steps. The var-budget cap still bails to Unknown
+    // before OOM, so a too-wide step is sound (never solved).
+    for (auto& kv : plan.width) kv.second = std::min(maxBW, kv.second * 4);
     return plan;
 }
 
