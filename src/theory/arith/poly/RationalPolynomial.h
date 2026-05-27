@@ -83,6 +83,16 @@ public:
     /** Substitute a rational value for a variable. */
     RationalPolynomial substituteRational(VarId v, const mpq_class& q) const;
 
+    /**
+     * Substitute a polynomial expression for a variable (exact).
+     * Every occurrence of v^k in a monomial is replaced by expr^k, multiplied
+     * by the rest of the monomial.  Result is normalized.  `expr` should not
+     * contain v (the caller is responsible for acyclicity / transitive
+     * elimination ordering).  Used by the NRA affine pre-elimination stage to
+     * substitute `v = (linear RationalPolynomial)` out of constraint polys.
+     */
+    RationalPolynomial substitute(VarId v, const RationalPolynomial& expr) const;
+
     // -- V2-1: content and primitive part ------------------------------------
 
     /**

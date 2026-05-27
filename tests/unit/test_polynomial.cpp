@@ -123,6 +123,31 @@ TEST_CASE("RationalPolynomial: power") {
     CHECK(x3.terms().begin()->first == MonomialKey{{VarId(5), 3}});
 }
 
+TEST_CASE("RationalPolynomial: substitute polynomial for variable") {
+    // (x + 1) with x -> 2y  ==>  2y + 1
+    auto x = RationalPolynomial::fromVar(VarId(1), 1, mpq_class(1));
+    auto xPlus1 = x + RationalPolynomial::fromConstant(mpq_class(1));
+    auto twoY = RationalPolynomial::fromVar(VarId(2), 1, mpq_class(2));
+    auto r1 = xPlus1.substitute(VarId(1), twoY);
+    // Expect 2*y + 1
+    CHECK(r1.terms().size() == 2);
+    auto y1 = RationalPolynomial::fromVar(VarId(2), 1, mpq_class(2));
+    auto expect1 = y1 + RationalPolynomial::fromConstant(mpq_class(1));
+    auto diff1 = r1 - expect1;
+    CHECK(diff1.isZero());
+
+    // x^2 with x -> (y + 1)  ==>  y^2 + 2y + 1
+    auto x2 = x.pow(2);
+    auto yPlus1 = RationalPolynomial::fromVar(VarId(2), 1, mpq_class(1))
+                  + RationalPolynomial::fromConstant(mpq_class(1));
+    auto r2 = x2.substitute(VarId(1), yPlus1);
+    auto expect2 = yPlus1.pow(2);  // (y+1)^2 = y^2 + 2y + 1
+    auto diff2 = r2 - expect2;
+    CHECK(diff2.isZero());
+    // Sanity: 3 terms (y^2, y, const)
+    CHECK(r2.terms().size() == 3);
+}
+
 TEST_CASE("RationalPolynomial: toPrimitiveInteger basic") {
     auto kernel = createPolynomialKernel();
     VarId xv = kernel->getOrCreateVar("x");

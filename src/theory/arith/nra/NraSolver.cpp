@@ -5,9 +5,16 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // ZOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // ZOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
+#include "theory/arith/nra/core/CdcacCore.h"               // ZOLVER_NRA_PREELIM reduced CDCAC
+#include "theory/arith/nra/core/CdcacConstraint.h"         // ZOLVER_NRA_PREELIM
+#include "theory/arith/nra/engine/ReasonManager.h"         // ZOLVER_NRA_PREELIM conflict reasons
+#ifdef ZOLVER_HAS_LIBPOLY
+#include "theory/arith/nra/backend/LibpolyBackend.h"       // ZOLVER_NRA_PREELIM algebra backend
+#endif
 #include <cstdlib>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <fstream>
 
 namespace zolver {
@@ -23,9 +30,20 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
+    // ZOLVER_NRA_PREELIM (default OFF): affine pre-elimination then reduced CDCAC.
+    // Runs BEFORE the full-variable CDCAC backstop; nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.preelim",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
+
+    // ZOLVER_NRA_PREELIM: read the gate once at construction (mirrors A7's
+    // enableCdcac_). OFF ⇒ stageNraPreElim returns nullopt immediately so the
+    // default path is byte-identical.
+    if (const char* e = std::getenv("ZOLVER_NRA_PREELIM"); e && *e && *e != '0')
+        enablePreElim_ = true;
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
@@ -67,6 +85,10 @@ void NraSolver::onReset() {
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
     linRefineRound_ = 0;  // ZOLVER_NRA_LINEARIZE: restart refinement budget
+    // ZOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
+    // per solve), but drop it so a reset releases the libpoly backend too.
+    preElimCore_.reset();
+    preElimAlgebra_.reset();
 }
 
 void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -150,6 +172,201 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkLemma(pr.lemma);
     }
     return std::nullopt;
+}
+
+// ZOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
+//
+// CAD (and CDCAC) is doubly-exponential in #variables. The hycomp BMC SAT cases
+// couple ~20+ vars, many of which are `_def_*` intermediates defined by LINEAR
+// equalities. Eliminating those before CDCAC shrinks the variable count CDCAC
+// faces — the lever this stage provides.
+//
+//   1. Run the presolve fixpoint (integerDomain=false). It records every affine
+//      substitution `v = (linear expr over remaining vars)` in substMap, already
+//      transitively composed (registerSubstitution reduces values by existing
+//      substs and back-substitutes), each tagged with a ledger fact index whose
+//      flattenReasons gives the defining-equality SAT literals.
+//   2. Substitute every eliminated var out of each ORIGINAL constraint poly.
+//   3. Build a reduced CdcacInput (varOrder = remaining vars, lexicographic) and
+//      solve with a lazily-built CdcacCore + libpoly backend.
+//   4. UNSAT: union EVERY eliminated var's defining-equality reason into the
+//      conflict (a superset is sound; omitting one would be a too-strong /
+//      false-UNSAT clause — detection-sound ≠ explanation-sound).
+//   5. SAT: reconstruct each eliminated var by evaluating its (composed, over
+//      remaining vars) defining expr on the solved model, assemble the full real
+//      model, and validate over the ORIGINAL presolveConstraints_ via the exact
+//      kernel sign (invariant 1 — never return consistent() on the reduced set).
+//   6. Unknown / anything unsound to reconstruct ⇒ nullopt (fall to stageCdcac).
+//
+// Flag OFF ⇒ returns nullopt at the gate (default path byte-identical). No-op
+// without ZOLVER_HAS_LIBPOLY (CDCAC needs the libpoly algebra backend).
+std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& /*lemmaDb*/,
+                                                            TheoryEffort /*effort*/) {
+    if (!enablePreElim_) return std::nullopt;
+#ifndef ZOLVER_HAS_LIBPOLY
+    return std::nullopt;
+#else
+    // Collect the live polynomial constraints (skip non-polynomial placeholders).
+    std::vector<PresolveCstr> liveCstrs;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        liveCstrs.push_back(c);
+    }
+    if (liveCstrs.empty()) return std::nullopt;
+
+    // --- Step 1: presolve fixpoint → affine substitutions. -------------------
+    PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
+    std::vector<std::optional<RationalPolynomial>> rps;  // cached RationalPolynomial per cstr
+    rps.reserve(liveCstrs.size());
+    for (const auto& c : liveCstrs) {
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) return std::nullopt;  // cannot reason; defer to plain CDCAC
+        presolve.addAtom(*rp, c.rel, c.reason);
+        rps.push_back(rp);
+    }
+    auto pr = presolve.run();
+    // A presolve Conflict here is handled by stagePresolve already; if it fires
+    // we still emit it (sound). A Lemma is a SAT-core split — defer to the normal
+    // pipeline by NOT consuming it here (stagePresolve ran first anyway).
+    if (pr.kind == PresolveResult::Kind::Conflict)
+        return TheoryCheckResult::mkConflict(pr.conflict);
+
+    const PresolveState& ps = presolve.state();
+    // Each entry: eliminated var → (defining expr over remaining vars, reason lits).
+    struct Elim { VarId var; RationalPolynomial expr; std::vector<SatLit> reasons; };
+    std::vector<Elim> elims;
+    for (const auto& [v, entry] : ps.substMap) {
+        std::vector<SatLit> reasons = ps.ledger.flattenReasons(entry.factIndex);
+        elims.push_back({v, entry.value, std::move(reasons)});
+    }
+    if (elims.empty()) return std::nullopt;  // nothing to eliminate → plain CDCAC wins
+
+    // --- Step 2: substitute eliminated vars out of each ORIGINAL constraint. --
+    // substMap values are already transitively composed over the non-eliminated
+    // variables, so a single pass of substitute() per eliminated var suffices.
+    CdcacInput input;
+    std::unordered_set<std::string> seen;
+    std::vector<std::string> varNames;
+    for (size_t i = 0; i < liveCstrs.size(); ++i) {
+        RationalPolynomial p = *rps[i];
+        for (const auto& e : elims) {
+            if (p.contains(e.var)) p = p.substitute(e.var, e.expr);
+        }
+        p.normalize();
+        PolyId pid = p.toPolyId(*kernel_);
+        if (pid == NullPoly) return std::nullopt;  // conversion failed → defer
+        CdcacConstraint cc;
+        cc.poly = pid;
+        cc.rel = liveCstrs[i].rel;
+        cc.reason = liveCstrs[i].reason;
+        input.constraints.push_back(std::move(cc));
+        for (const auto& vn : kernel_->variables(pid)) {
+            if (seen.insert(vn).second) varNames.push_back(vn);
+        }
+    }
+    std::sort(varNames.begin(), varNames.end());
+    for (const auto& vn : varNames) input.varOrder.push_back(kernel_->getOrCreateVar(vn));
+
+    {
+        std::ofstream pe("/tmp/nrapreelim.txt", std::ios::app);
+        pe << "[NRAPREELIM] constraints=" << liveCstrs.size()
+           << " eliminated=" << elims.size()
+           << " remainingVars=" << input.varOrder.size() << "\n";
+        pe.flush();
+    }
+
+    // --- Step 3: solve a reduced CDCAC over the remaining variables. ---------
+    if (!preElimCore_) {
+        preElimAlgebra_ = std::make_unique<LibpolyBackend>(kernel_.get());
+        preElimCore_ = std::make_unique<CdcacCore>(kernel_.get(), preElimAlgebra_.get());
+    }
+    CdcacResult result = preElimCore_->solve(input);
+
+    switch (result.status) {
+        case CdcacStatus::Unsat: {
+            // Real-relaxation covering-UNSAT over the reduced (substituted) system
+            // ⇒ UNSAT of the original (the eliminated vars are functionally pinned
+            // by their defining equalities). CdcacCore already downgrades an
+            // uncertified covering to Unknown, so a Unsat reaching here is a
+            // trustworthy empty-covering proof. Thread in EVERY eliminated var's
+            // defining-equality reason (a superset is sound; OMITTING one would be
+            // a too-strong / false-UNSAT clause).
+            std::vector<SatLit> reasons;
+            if (result.unsat) reasons = ReasonManager::minimize(result.unsat->covering);
+            for (const auto& e : elims)
+                reasons.insert(reasons.end(), e.reasons.begin(), e.reasons.end());
+            std::ofstream pe("/tmp/nrapreelim.txt", std::ios::app);
+            pe << "[NRAPREELIM] verdict=UNSAT reasons=" << reasons.size() << "\n";
+            pe.flush();
+            return TheoryCheckResult::mkConflict(ReasonManager::toConflict(reasons));
+        }
+        case CdcacStatus::Sat: {
+            if (!result.model) return std::nullopt;
+            const SamplePoint& s = *result.model;
+            // Solved model over the remaining vars. Reconstruct eliminated vars by
+            // evaluating their (composed, over-remaining-vars) defining expr.
+            // Accept ONLY a fully-rational sample (algebraic coordinates can't be
+            // reconstructed exactly through substitute/sgn here → defer to CDCAC).
+            std::unordered_map<std::string, mpq_class> model;
+            for (size_t i = 0; i < s.varOrder.size() && i < s.values.size(); ++i) {
+                const RealAlg& v = s.values[i];
+                if (!v.isRational()) return std::nullopt;
+                model[std::string(kernel_->varName(s.varOrder[i]))] = v.rational;
+            }
+            // Reconstruct eliminated vars. Their defining exprs are over the
+            // remaining (solved) vars only, so a single eval per var is exact.
+            for (const auto& e : elims) {
+                RationalPolynomial expr = e.expr;
+                // Substitute each solved value into expr; result must be constant.
+                for (const auto& [name, val] : model) {
+                    auto vid = kernel_->findVar(name);
+                    if (vid && expr.contains(*vid))
+                        expr = expr.substituteRational(*vid, val);
+                }
+                // Any eliminated var the expr still references (chained def) — fold
+                // those too, in case substMap composition left a residual.
+                for (const auto& e2 : elims) {
+                    if (e2.var == e.var) continue;
+                    // Not expected (composed away), but guard: cannot resolve → defer.
+                    if (expr.contains(e2.var)) return std::nullopt;
+                }
+                if (!expr.isConstant()) return std::nullopt;  // can't pin → defer
+                model[std::string(kernel_->varName(e.var))] = expr.constantValue();
+            }
+            // --- Step 5: validate over the ORIGINAL constraints (invariant 1). --
+            bool allHold = true;
+            for (const auto& c : liveCstrs) {
+                std::unordered_map<std::string, mpq_class> evalModel = model;
+                for (const auto& vn : kernel_->variables(c.poly))
+                    evalModel.emplace(vn, mpq_class(0));  // 0-fill any absent (none expected)
+                int sg = kernel_->sgn(c.poly, evalModel);
+                bool ok = false;
+                switch (c.rel) {
+                    case Relation::Eq:  ok = (sg == 0); break;
+                    case Relation::Geq: ok = (sg >= 0); break;
+                    case Relation::Leq: ok = (sg <= 0); break;
+                    case Relation::Gt:  ok = (sg > 0);  break;
+                    case Relation::Lt:  ok = (sg < 0);  break;
+                    case Relation::Neq: ok = (sg != 0); break;
+                }
+                if (!ok) { allHold = false; break; }
+            }
+            std::ofstream pe("/tmp/nrapreelim.txt", std::ios::app);
+            pe << "[NRAPREELIM] verdict=SAT validated=" << (allHold ? "yes" : "no") << "\n";
+            pe.flush();
+            if (allHold) return TheoryCheckResult::consistent();
+            return std::nullopt;  // validation failed → fall to plain CDCAC
+        }
+        case CdcacStatus::Unknown: {
+            std::ofstream pe("/tmp/nrapreelim.txt", std::ios::app);
+            pe << "[NRAPREELIM] verdict=UNKNOWN reason="
+               << static_cast<int>(result.unknownReason) << "\n";
+            pe.flush();
+            return std::nullopt;
+        }
+    }
+    return std::nullopt;
+#endif
 }
 
 // Stage 2: the CDCAC engine. Always yields a definite verdict.
