@@ -33,7 +33,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       algebraic_(*kernel_),
       bounded_(*kernel_),
       localSearch_(*kernel_),
-      bitBlast_(*kernel_) {
+      bitBlast_(*kernel_),
+      productPositivity_(*kernel_) {
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -59,13 +60,32 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
     add("nia.univariate",     &NiaSolver::stageUnivariate);
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
+    add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
-    add("nia.local-search",   &NiaSolver::stageLocalSearch);
+    // Local search is a heuristic SAT-candidate finder; run it ONLY at Full
+    // effort (like bit-blast). At Standard effort it re-ran from scratch on
+    // every CDCL(T) theory-check (~225x on some QF_NIA), burning ~10s, and is
+    // futile on UNSAT. Any model it would find mid-search is still found at the
+    // Full-effort check and validated -- so soundness/SAT-finding is preserved.
+    addFull("nia.local-search", &NiaSolver::stageLocalSearch);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     add("nia.branch",         &NiaSolver::stageBranch);
+
+    // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
+    // reasoning path. The backend is uncapped on this base and OOMs on dense
+    // AProVE inputs before any reasoning verdict, masking 357-refutation work.
+    // Default-on preserved; only an explicit non-empty/non-"0" value turns it off.
+    if (const char* e = std::getenv("ZOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
+        enableBitBlast_ = false;
+
+    // Bound-free product-positivity refutation (default-OFF). Sound: only
+    // derives lower bounds via valid integer implications and reports UNSAT
+    // solely from an emptied domain (invariant 7).
+    if (const char* e = std::getenv("ZOLVER_NIA_REFUTE"); e && *e && *e != '0')
+        enableRefute_ = true;
 }
 
 void NiaSolver::onReset() {
@@ -83,6 +103,7 @@ void NiaSolver::onReset() {
     pendingLinLemmas_.clear();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    localSearch_.resetBudget();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -429,6 +450,18 @@ std::optional<TheoryCheckResult> NiaSolver::stageAlgebraic(TheoryLemmaStorage& l
     }
     if (ar.kind == NiaReasoningKind::FatalUnknown) {
         return TheoryCheckResult::unknown("NIA: algebraic reasoning fatal unknown");
+    }
+    if (domains_.isEmpty()) {
+        return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageProductPositivity(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableRefute_) return std::nullopt;
+    auto r = productPositivity_.run(normalized_, domains_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
     }
     if (domains_.isEmpty()) {
         return TheoryCheckResult::mkConflict(domains_.buildEmptyDomainConflict());
