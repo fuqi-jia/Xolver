@@ -32,7 +32,7 @@ private:
     // a pure function of (poly, rel); re-analyzing an unchanged atom is both
     // wasted root isolation and (for irrational/algebraic bounds) a source of
     // spurious fixpoint progress.  Skip atoms whose content is unchanged.
-    std::map<size_t, std::pair<Relation, std::map<MonomialKey, mpq_class>>> analyzed_;
+    std::map<size_t, std::pair<Relation, FlatMonomialMap<mpq_class>>> analyzed_;
 };
 
 } // namespace zolver

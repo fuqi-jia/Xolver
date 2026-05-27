@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <cassert>
 
 namespace zolver {
 
@@ -31,6 +32,14 @@ public:
     const_reverse_iterator rend()   const { return v_.rend(); }
     const Entry& front() const { return v_.front(); }
     const Entry& back()  const { return v_.back(); }
+
+    // Checked lookup (assumes canonical). Precondition: key present; asserts
+    // otherwise. Mirrors std::map::at for the const read sites.
+    const V& at(const Key& key) const {
+        const_iterator it = find(key);
+        assert(it != v_.end() && "FlatMonomialMap::at: key not present");
+        return it->second;
+    }
 
     // Binary-search lookup (assumes canonical). Returns end() if absent.
     const_iterator find(const Key& key) const {
