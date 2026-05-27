@@ -7,6 +7,7 @@
 #include "theory/arith/nra/engine/ReasonManager.h"
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
 #include "theory/arith/nra/projection/ProjectionClosure.h"
+#include "theory/arith/nra/projection/LazardProjectionClosure.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 #include <memory>
@@ -62,8 +63,17 @@ private:
     AlgebraBackend* algebra_;
     std::unique_ptr<ProjectionPolicy> policy_;  // V4: configurable projection policy
 
+    // Projection mode for the lazily-created default policy. Set from
+    // ZOLVER_NRA_PROJECTION in the constructor (lazard => LazardStyle; otherwise
+    // CollinsConservative). Ignored if setProjectionPolicy() installs a policy.
+    ProjectionPolicyKind projectionKind_ = ProjectionPolicyKind::CollinsConservative;
+
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;
+    // Lazard projection closure — used in place of closure_ when projectionKind_
+    // == LazardStyle (ZOLVER_NRA_PROJECTION=lazard). Whole-problem, built once
+    // per solve(); drives the SAME root-isolation path. Incomplete ⇒ no UNSAT.
+    LazardProjectionClosure lazardClosure_;
     std::vector<std::vector<PolyId>> levelPolyIds_;  // closure polys per level, as PolyId
     // True iff every UNSAT-relevant projection step this solve was complete; a
     // generalized-UNSAT exit is downgraded to Unknown when false — the binding
