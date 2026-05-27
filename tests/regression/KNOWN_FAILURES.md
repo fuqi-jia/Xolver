@@ -24,8 +24,6 @@ Lines that don't match this format are ignored — feel free to add prose.
 
 ## known-fail
 
-- `nia/nia_111_unsat_divmod_falsesat_floored.smt2` — div/mod (mod-by-2^k) UNSAT that is "linear" after lowering; the validate-sat floor soundly downgrades the would-be false-SAT to `unknown` (fix 851f46e). Sound-incomplete (REFUTE-independent); a regress to `sat` = opposite of oracle = UNSOUND (caught, not lenient).
-
 - ~~`lira/lira_009_sat_nonlinear_to_int.smt2`~~ — **FIXED** in 2026-05-25 by Cap. 8c `ToIntDefinitionalLowerer` + logic upgrade `QF_LIRA → QF_NIRA`. The lowerer lifts `(to_int (* x x))` to a fresh `i_t` plus the bridge `r_t = (* x x)` and floor sandwich `(<= (to_real i_t) r_t)`, `(< r_t (+ (to_real i_t) 1))`; the upgrade routes the nonlinear bridge to NRA-CDCAC.
 - ~~`nra/nra_001_sat_cubic.smt2`~~ — **FIXED** in 2026-05-25: `PolynomialConverter::collectRec` now accepts `Kind::ConstReal` integer-valued exponents in `Kind::Pow` (SOMTParser emits `(^ x 3)`'s exponent as ConstReal with denominator 1, so the previous ConstInt-only check silently failed every nontrivial power atom).
 - ~~`lra/lra_010_unsat_eq_chain_break.smt2`~~ — **FIXED** in 2026-05-25 (verified passing; root cause: NaryDistinctLowerer + LRA disequality propagation (b8bc81f)).
