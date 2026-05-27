@@ -1093,6 +1093,14 @@ def run_single_logic(args, logic: str, output_dir: Path):
         print(f"WARNING: No .smt2 files found for logic {logic}.")
         return None
 
+    if args.scramble:
+        scrambler_bin = args.scrambler or _find_scrambler()
+        if scrambler_bin and os.path.exists(scrambler_bin):
+            print(f"\n[scramble] perturbing {len(files)} inputs with {scrambler_bin} (seed {args.scramble_seed}) ...")
+            files = scramble_files(files, args.scramble_seed, scrambler_bin)
+        else:
+            print(f"WARNING: --scramble set but scrambler not found ({scrambler_bin}); running un-scrambled")
+
     print(f"\n{'='*70}")
     print(f"Logic: {logic}")
     print(f"Files: {len(files)}")
@@ -1376,6 +1384,45 @@ def write_all_logics_summary(all_stats: List[Statistics], output_dir: Path, args
     return total_mismatches
 
 
+def _find_scrambler():
+    here = Path(__file__).resolve().parent
+    for c in [here / "scrambler" / "scrambler", here.parent / "bin" / "scrambler", here / "scrambler"]:
+        if c.exists():
+            return str(c)
+    return shutil.which("scrambler")
+
+
+def scramble_files(files, seed, scrambler_bin):
+    """SMT-COMP-style scramble each input before solving (rename symbols, reorder
+    asserts/commands — semantics-preserving). Returns scrambled paths in a stable,
+    seed-tagged dir (reused across runs so OFF/ON + the oracle-cache share them).
+    Falls back to the original file if the scrambler fails on it (parse error/timeout)."""
+    out_root = Path(f"/tmp/zolver-scrambled-s{seed}")
+    out, ok = [], 0
+    for i, f in enumerate(files, 1):
+        f = Path(f)
+        dst = out_root / str(f).lstrip("/").replace(":", "")
+        if not (dst.exists() and dst.stat().st_size > 0):
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                with open(f, "rb") as inf, open(dst, "wb") as of:
+                    subprocess.run(
+                        ["bash", "-c",
+                         'ulimit -s unlimited 2>/dev/null || ulimit -s 1048576; exec "$0" -seed "$1"',
+                         str(scrambler_bin), str(seed)],
+                        stdin=inf, stdout=of, stderr=subprocess.DEVNULL, timeout=120)
+            except Exception:
+                pass
+        if dst.exists() and dst.stat().st_size > 0:
+            out.append(dst); ok += 1
+        else:
+            out.append(f)  # fallback: scramble failed -> original (keeps the run going)
+        if i % 500 == 0:
+            print(f"  scrambling {i}/{len(files)} ...")
+    print(f"  scrambled {ok}/{len(files)} (seed {seed}) -> {out_root}; {len(files)-ok} fell back to original")
+    return out
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Zolver Benchmark Runner",
@@ -1396,6 +1443,9 @@ Examples:
     parser.add_argument("--solver", default=DEFAULT_SOLVER, help="Path to zolver binary")
     parser.add_argument("--compare-with", default=None, help="Path to comparison solver (e.g., z3, cvc5)")
     parser.add_argument("--oracle-cache", default=None, help="Cache file for oracle (compare-with) verdicts: read if exists (skip running oracle), else run + write. Lets OFF/ON passes share one oracle run.")
+    parser.add_argument("--scramble", action="store_true", help="Run the SMT-COMP scrambler on each input before solving (rename symbols, reorder asserts) — finds scrambling-sensitivity bugs. Both solver and oracle run on the SAME scrambled file.")
+    parser.add_argument("--scramble-seed", type=int, default=1, help="Seed for --scramble (default 1; deterministic/reproducible).")
+    parser.add_argument("--scrambler", default=None, help="Path to scrambler binary (default: auto-detect tools/scrambler/scrambler or PATH).")
     parser.add_argument("-o", "--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--max-files", type=int, default=None, help="Limit number of files per logic (for quick tests)")
     parser.add_argument("--random", type=int, default=None, help="Randomly sample N files per logic (shuffled, overrides --max-files)")

@@ -104,3 +104,5 @@ test_results/
 # local tooling / agent state
 .claude/
 .claire/
+# SMT-COMP scrambler (third-party, cloned + built locally)
+tools/scrambler/

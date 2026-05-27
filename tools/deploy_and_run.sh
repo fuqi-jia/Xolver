@@ -70,6 +70,18 @@ cmd_build() {
     mkdir -p "${DIST_DIR}/bin"
     cp "$BIN_BUILT" "${DIST_DIR}/bin/zolver"
     log "编译完成: ${DIST_DIR}/bin/zolver ($(du -h ${DIST_DIR}/bin/zolver | cut -f1))"
+
+    # scrambler (SMT-COMP) — 静态编译 + 复制，供 --scramble / SCRAMBLE=1 使用（竞赛会 scramble 输入）
+    if [[ -d "${DIST_DIR}/tools/scrambler" ]]; then
+        ( cd "${DIST_DIR}/tools/scrambler" && make >/dev/null 2>&1 && \
+          g++ -D_GLIBCXX_USE_CXX11_ABI=0 -std=c++11 -static -O3 scrambler.o parser.o lexer.o -o scrambler 2>/dev/null ) || warn "scrambler 编译失败"
+        if [[ -f "${DIST_DIR}/tools/scrambler/scrambler" ]]; then
+            cp "${DIST_DIR}/tools/scrambler/scrambler" "${DIST_DIR}/bin/scrambler"
+            log "scrambler: ${DIST_DIR}/bin/scrambler ($(file "${DIST_DIR}/bin/scrambler" | grep -o 'statically linked' || echo dynamic))"
+        fi
+    else
+        warn "tools/scrambler 缺失，--scramble 不可用 (git clone https://github.com/SMT-COMP/scrambler.git tools/scrambler)"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -87,6 +99,14 @@ cmd_package() {
     mkdir -p "${TMPDIR}/zolver-dist/bin"
     cp "$BIN" "${TMPDIR}/zolver-dist/bin/zolver"
     chmod +x "${TMPDIR}/zolver-dist/bin/zolver"
+
+    # scrambler (for --scramble / SCRAMBLE=1)
+    if [[ -f "${DIST_DIR}/bin/scrambler" ]]; then
+        cp "${DIST_DIR}/bin/scrambler" "${TMPDIR}/zolver-dist/bin/scrambler"
+        chmod +x "${TMPDIR}/zolver-dist/bin/scrambler"
+    else
+        warn "未找到 ${DIST_DIR}/bin/scrambler（先 build），打包不含 scrambler"
+    fi
 
     mkdir -p "${TMPDIR}/zolver-dist/tools"
     for script in \
@@ -154,6 +174,15 @@ cmd_run() {
                ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
                ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
         log "ALLON=1: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
+    fi
+
+    # SCRAMBLE=1: 用 SMT-COMP scrambler 扰动输入后再求解（竞赛会 scramble，找 scrambling 敏感 bug）。
+    # solver 与 oracle 跑同一份 scrambled 文件；可叠加 ALLON / BOTH。SCRAMBLE_SEED 默认 1。
+    if [[ "${SCRAMBLE:-}" == "1" ]]; then
+        SCR="${DIST_DIR}/bin/scrambler"
+        [[ -f "$SCR" ]] || SCR="${DIST_DIR}/tools/scrambler/scrambler"
+        set -- "$@" --scramble --scrambler "$SCR" --scramble-seed "${SCRAMBLE_SEED:-1}"
+        log "SCRAMBLE=1: 输入经 scrambler 扰动 (seed ${SCRAMBLE_SEED:-1}, $SCR)"
     fi
 
     # 默认 benchmark 路径: ./benchmark/non-incremental
