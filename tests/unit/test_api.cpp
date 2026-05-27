@@ -310,3 +310,23 @@ TEST_CASE("API: deep boolean nesting does not overflow (atomizeRec)") {
     Result r = s.checkSat();  // sat (x=0); must not segfault during atomization
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
+
+TEST_CASE("API: deep nonlinear real term does not overflow (NRA path + validator)") {
+    // Deep nested sum of x*x in QF_NRA: exercises PolynomialConverter::collectRec,
+    // extractLinearExpr's nonlinear-reject, and ArithModelValidator::eval on the
+    // deep assertion during SAT model validation. N*x^2 >= 0 is sat (x=0).
+    constexpr int kDeep = 30000;
+    Solver s;
+    s.setLogic("QF_NRA");
+    Sort rs = s.realSort();
+    Term x = s.mkConst(rs, "x");
+    Term sq = s.mkOp(static_cast<uint32_t>(Kind::Mul), {x, x});
+    Term chain = sq;
+    for (int k = 0; k < kDeep; ++k) {
+        chain = s.mkOp(static_cast<uint32_t>(Kind::Add), {chain, sq});
+    }
+    Term ge = s.mkOp(static_cast<uint32_t>(Kind::Geq), {chain, s.mkReal("0")});
+    s.assertFormula(ge);
+    Result r = s.checkSat();  // must not segfault in collectRec/NRA/ArithModelValidator
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}

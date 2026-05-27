@@ -4,18 +4,30 @@ namespace zolver {
 
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
+    // Warm a local cache bottom-up so eval() below never recurses deeply.
+    std::unordered_map<ExprId, TR> prepass;
+    prepassCache_ = &prepass;
+    for (ExprId a : assertions) warmEval(a, prepass);
+
+    Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
     for (ExprId a : assertions) {
         TR r = eval(a);
         if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }
         if (r.kind != Kind2::Bool) { anyIndeterminate = true; continue; }
-        if (!r.b) return Verdict::Violated;  // definite false
+        if (!r.b) { verdict = Verdict::Violated; break; }  // definite false
     }
+    prepassCache_ = nullptr;
+    if (verdict == Verdict::Violated) return verdict;
     return anyIndeterminate ? Verdict::Indeterminate : Verdict::Satisfied;
 }
 
 std::optional<mpq_class> ArithModelValidator::evalNumber(ExprId e) const {
+    std::unordered_map<ExprId, TR> prepass;
+    prepassCache_ = &prepass;
+    warmEval(e, prepass);
     TR r = eval(e);
+    prepassCache_ = nullptr;
     if (r.kind == Kind2::Number) return r.n.tryAsRational();  // algebraic → nullopt
     return std::nullopt;
 }
@@ -36,12 +48,41 @@ std::optional<std::string> ArithModelValidator::asToken(const TR& r) const {
 }
 
 ArithModelValidator::TR ArithModelValidator::eval(ExprId eid) const {
+    // Pre-pass cache (warmEval): a hit returns immediately, so the recursion
+    // below never descends more than one level past already-evaluated children.
+    if (prepassCache_) {
+        auto pit = prepassCache_->find(eid);
+        if (pit != prepassCache_->end()) return pit->second;
+    }
     if (!memoEnabled_) return evalImpl(eid);
     auto it = evalMemo_.find(eid);
     if (it != evalMemo_.end()) return it->second;
     TR r = evalImpl(eid);                 // recurses via eval() -> fills the cache
     evalMemo_.emplace(eid, r);
     return r;
+}
+
+void ArithModelValidator::warmEval(ExprId root, std::unordered_map<ExprId, TR>& cache) const {
+    // Bottom-up post-order: evaluate each subterm into `cache` before its parent.
+    // While prepassCache_ points at `cache`, evalImpl's eval(child) calls resolve
+    // from it, so each evalImpl runs without deep native recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+    while (!stack.empty()) {
+        Frame& fr = stack.back();
+        ExprId e = fr.e;
+        if (e >= ir_.size() || cache.find(e) != cache.end()) { stack.pop_back(); continue; }
+        const CoreExpr& n = ir_.get(e);
+        if (!fr.processed) {
+            fr.processed = true;
+            for (ExprId c : n.children)
+                if (c < ir_.size() && cache.find(c) == cache.end()) stack.push_back({c, false});
+            continue;
+        }
+        stack.pop_back();
+        cache.emplace(e, evalImpl(e));  // children resolved from cache -> shallow
+    }
 }
 
 ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {

@@ -115,6 +115,10 @@ private:
 
     TR eval(ExprId e) const;       // cached dispatcher (memo when enabled)
     TR evalImpl(ExprId e) const;   // the actual evaluator (recurses via eval)
+    // Iterative bottom-up pre-pass: fills `cache` with every subterm's TR so the
+    // recursive eval/evalImpl resolves children from it and never recurses deeply
+    // (deep-formula/term stack-overflow guard). Used by validate()/evalNumber().
+    void warmEval(ExprId root, std::unordered_map<ExprId, TR>& cache) const;
 
     // Coerce a fully-evaluated TR into an opaque equality token (Number/Bool/
     // Token). Returns nullopt if not coercible (e.g. Array or Indeterminate).
@@ -134,6 +138,10 @@ private:
     // (the model is fixed), keyed by original-formula ExprId.
     bool memoEnabled_ = false;
     mutable std::unordered_map<ExprId, TR> evalMemo_;
+    // When non-null (set for the duration of a warmed validate()/evalNumber()),
+    // eval() consults it first — lets warmEval's bottom-up fill bound recursion
+    // independently of memoEnabled_. Points at a caller-local map; never dangling.
+    mutable std::unordered_map<ExprId, TR>* prepassCache_ = nullptr;
 };
 
 } // namespace zolver
