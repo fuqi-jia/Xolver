@@ -5,6 +5,7 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
 
 using namespace zolver;
 
@@ -454,6 +455,40 @@ TEST_CASE("EUF incremental: equality then disequality conflict") {
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
 }
 
+TEST_CASE("EUF backtrack: out-of-order merge dropped past its level (no stale merge / no false conflict)") {
+    CoreIr ir;
+    ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
+    ExprId b = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("b"))});
+    ExprId c = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("c"))});
+
+    EufSolver solver;
+    solver.setCoreIr(&ir);
+    TheoryLemmaDatabase lemmaDb;
+
+    // The SAT trail is asserted in non-decreasing decision-level order (as the
+    // real propagator does). A higher-level merge (b=c @ level 2) must be rolled
+    // back when we backtrack past its level, while the lower-level a=b @ level 1
+    // is kept. (Out-of-RECORD-order merge injection — A4's interface-equality
+    // case — is internal to check()'s level-ordered saturation and covered by
+    // the combination regression suite.)
+    solver.assertLit(makeEufRecord(a, c), false, 0, SatLit{10, false});  // a != c @ 0
+    solver.assertLit(makeEufRecord(a, b), true, 1, SatLit{11, true});    // a=b @ 1
+    solver.assertLit(makeEufRecord(b, c), true, 2, SatLit{20, true});    // b=c @ 2
+
+    // a=b=c contradicts a!=c -> genuine conflict at the full assignment.
+    CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Conflict);
+
+    // Backtrack past level 2: the b=c merge (level 2) MUST be rolled back. If it
+    // were left stale, same(a,c) would still hold and the next check() would
+    // report a spurious conflict.
+    solver.backtrackToLevel(1);
+    CHECK(solver.debugCountStaleMerges() == 0);
+
+    // a=b with a!=c is consistent (c is now in its own class) -> no conflict.
+    CHECK(solver.check(lemmaDb).kind == TheoryCheckResult::Kind::Consistent);
+    CHECK(solver.debugCountStaleMerges() == 0);
+}
+
 TEST_CASE("EUF incremental: congruence closure conflict") {
     CoreIr ir;
     ExprId a = ir.add(CoreExpr{Kind::Variable, 0, {}, Payload(std::string("a"))});
@@ -847,4 +882,86 @@ TEST_CASE("EUF incremental: late term interning triggers congruence") {
     solver.assertLit(makeEufRecord(f_a, f_b), false, 0, SatLit{2, true});
     auto r = solver.check(lemmaDb);
     CHECK(r.kind == TheoryCheckResult::Kind::Conflict);
+}
+
+// ---------------------------------------------------------------------------
+// Flag-gated SOTA techniques: verify the flag-ON path preserves verdicts.
+// The env var is read in the relevant solver's constructor, so it must be set
+// before the Solver builds its theory solvers (i.e. before checkSat()).
+// ---------------------------------------------------------------------------
+
+namespace {
+struct ScopedEnv {
+    const char* key;
+    explicit ScopedEnv(const char* k) : key(k) { setenv(key, "1", 1); }
+    ~ScopedEnv() { unsetenv(key); }
+};
+} // namespace
+
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-const c U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (= b c))\n"
+        "(assert (distinct (f a) (f c)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
+    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_UF)\n"
+        "(declare-sort U 0)\n"
+        "(declare-const a U)\n"
+        "(declare-const b U)\n"
+        "(declare-fun f (U) U)\n"
+        "(assert (= a b))\n"
+        "(assert (distinct a (f a)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_UF");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
+    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_ALIA)\n"
+        "(declare-const a (Array Int Int))\n"
+        "(declare-const v Int)\n"
+        "(assert (not (= (select (store a 1 v) 2) (select a 2))))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_ALIA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index read-through SAT") {
+    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+    std::string path = writeTempSmt2(
+        "(set-logic QF_ALIA)\n"
+        "(declare-const a (Array Int Int))\n"
+        "(assert (= (select (store a 1 10) 1) 10))\n"
+        "(assert (= (select (store a 1 10) 2) (select a 2)))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_ALIA");
+    CHECK(solver.parseFile(path));
+    CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
