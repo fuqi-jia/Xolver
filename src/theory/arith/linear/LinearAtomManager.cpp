@@ -61,8 +61,17 @@ bool LinearAtomManager::auxForm(int aux, LinearFormKey& lhsOut, mpq_class& rhsOu
 }
 
 bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel,
-                                    bool value, SatLit reasonLit, int level) {
+                                    bool value, SatLit reasonLit, int level,
+                                    bool integerForm) {
     Relation effective = value ? rel : zolver::negateRelation(rel);
+
+    // Integer strict tightening: for an integer-valued aux s, s < 0 <=> s <= -1
+    // and s > 0 <=> s >= 1 (exact — no integer lies in the open gap). This
+    // replaces the δ-strict bound that branch-and-bound cannot close on an
+    // integer-empty range like n < d < n+1, where it would otherwise chase the
+    // real-feasible relaxation forever.
+    const DeltaRational strictUpper = integerForm ? DeltaRational(-1) : DeltaRational(0, -1);
+    const DeltaRational strictLower = integerForm ? DeltaRational(1)  : DeltaRational(0, 1);
 
     bool ok = true;
     switch (effective) {
@@ -75,13 +84,13 @@ bool LinearAtomManager::assertBound(GeneralSimplex& gs, int auxVar, Relation rel
             ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
             break;
         case Relation::Lt:
-            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(DeltaRational(0, -1)), reasonLit), level) && ok;
+            ok = gs.assertUpper(auxVar, BoundInfo(BoundValue(strictUpper), reasonLit), level) && ok;
             break;
         case Relation::Geq:
             ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0)), reasonLit), level) && ok;
             break;
         case Relation::Gt:
-            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(DeltaRational(0, 1)), reasonLit), level) && ok;
+            ok = gs.assertLower(auxVar, BoundInfo(BoundValue(strictLower), reasonLit), level) && ok;
             break;
         case Relation::Neq:
             // Neq cannot be expressed as a single convex bound.
