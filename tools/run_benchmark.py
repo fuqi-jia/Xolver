@@ -35,7 +35,7 @@ import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -1116,7 +1116,7 @@ def run_single_logic(args, logic: str, output_dir: Path):
         scr_seed = args.scramble_seed if args.scramble_seed is not None else random.randint(1, 2**31 - 1)
         if scrambler_bin and os.path.exists(scrambler_bin):
             print(f"\n[scramble] perturbing {len(files)} inputs with {scrambler_bin} (seed {scr_seed}{' [random]' if args.scramble_seed is None else ''}) ...")
-            files = scramble_files(files, scr_seed, scrambler_bin)
+            files = scramble_files(files, scr_seed, scrambler_bin, args.jobs)
         else:
             print(f"WARNING: --scramble set but scrambler not found ({scrambler_bin}); running un-scrambled")
 
@@ -1411,14 +1411,21 @@ def _find_scrambler():
     return shutil.which("scrambler")
 
 
-def scramble_files(files, seed, scrambler_bin):
+def scramble_files(files, seed, scrambler_bin, jobs=8):
     """SMT-COMP-style scramble each input before solving (rename symbols, reorder
     asserts/commands — semantics-preserving). Returns scrambled paths in a stable,
     seed-tagged dir (reused across runs so OFF/ON + the oracle-cache share them).
-    Falls back to the original file if the scrambler fails on it (parse error/timeout)."""
+    Falls back to the original file if the scrambler fails on it (parse error/timeout).
+
+    PARALLELIZED: this is a per-file subprocess pre-pass that previously ran
+    serially, stalling minutes before solving even started on a multi-thousand-file
+    part. Each invocation is subprocess-bound (the GIL is released while the child
+    runs), so a thread pool gives real parallelism. Output order is PRESERVED (the
+    solve loop pairs files positionally). Already-scrambled files (cached on disk)
+    are skipped, so re-runs and OFF/ON second passes are cheap."""
     out_root = Path(f"/tmp/zolver-scrambled-s{seed}")
-    out, ok = [], 0
-    for i, f in enumerate(files, 1):
+
+    def _scramble_one(f):
         f = Path(f)
         dst = out_root / str(f).lstrip("/").replace(":", "")
         if not (dst.exists() and dst.stat().st_size > 0):
@@ -1433,12 +1440,27 @@ def scramble_files(files, seed, scrambler_bin):
             except Exception:
                 pass
         if dst.exists() and dst.stat().st_size > 0:
-            out.append(dst); ok += 1
-        else:
-            out.append(f)  # fallback: scramble failed -> original (keeps the run going)
-        if i % 500 == 0:
-            print(f"  scrambling {i}/{len(files)} ...")
-    print(f"  scrambled {ok}/{len(files)} (seed {seed}) -> {out_root}; {len(files)-ok} fell back to original")
+            return dst, True
+        return f, False  # fallback: scramble failed -> original (keeps the run going)
+
+    # Each scrambler does `ulimit -s unlimited`; cap workers so a 200-job node
+    # doesn't spawn thousands of huge-stack processes at once.
+    workers = max(1, min(jobs, 128))
+    out = [None] * len(files)
+    total = len(files)
+    ok = done = 0
+    print(f"  scrambling {total} files (seed {seed}, {workers}-way parallel) ...")
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        fut2idx = {ex.submit(_scramble_one, f): i for i, f in enumerate(files)}
+        for fut in as_completed(fut2idx):
+            i = fut2idx[fut]
+            path, success = fut.result()
+            out[i] = path
+            ok += 1 if success else 0
+            done += 1
+            if done % 1000 == 0:
+                print(f"  scrambling {done}/{total} ...")
+    print(f"  scrambled {ok}/{total} (seed {seed}, {workers}-way) -> {out_root}; {total-ok} fell back to original")
     return out
 
 
