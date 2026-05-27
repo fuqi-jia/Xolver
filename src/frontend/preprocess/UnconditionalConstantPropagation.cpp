@@ -85,7 +85,10 @@ bool UnconditionalConstantPropagation::run() {
 }
 
 ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
-    const auto& node = ir_.get(assertion);
+    // Value copy, not a reference: substituteRec(child) below calls ir_.add()
+    // (and materializeConstant), which reallocates exprs_ and would dangle a
+    // `const CoreExpr&` and its children iterators mid-loop (use-after-free).
+    const auto node = ir_.get(assertion);
     if (node.kind == Kind::And) {
         // Per-conjunct: source-of-binding conjuncts are kept verbatim;
         // all other conjuncts are globally rewritten.
@@ -113,35 +116,57 @@ ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
     return constantFoldRec(substituted);
 }
 
-ExprId UnconditionalConstantPropagation::constantFoldRec(ExprId e) {
-    if (auto it = foldMemo_.find(e); it != foldMemo_.end()) return it->second;
-    const auto& node = ir_.get(e);
-    if (node.children.empty()) { foldMemo_[e] = e; return e; }
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    bool changed = false;
-    for (ExprId c : node.children) {
-        ExprId rc = constantFoldRec(c);
-        if (rc != c) changed = true;
-        newChildren.push_back(rc);
+ExprId UnconditionalConstantPropagation::constantFoldRec(ExprId root) {
+    if (auto it = foldMemo_.find(root); it != foldMemo_.end()) return it->second;
+
+    // Iterative post-order (two-visit work-stack); avoids stack overflow on deep
+    // terms. Behavior-identical to the former recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (foldMemo_.find(e) != foldMemo_.end()) { stack.pop_back(); continue; }
+
+        const auto node = ir_.get(e);  // value copy: tryFold*/ir_.add relocate
+
+        if (!frame.processed) {
+            frame.processed = true;
+            if (node.children.empty()) { foldMemo_[e] = e; stack.pop_back(); continue; }
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (c != NullExpr && foldMemo_.find(c) == foldMemo_.end()) stack.push_back({c, false});
+            }
+            continue;
+        }
+
+        stack.pop_back();
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool changed = false;
+        for (ExprId c : node.children) {
+            ExprId rc = (c == NullExpr) ? NullExpr : foldMemo_.at(c);
+            if (rc != c) changed = true;
+            newChildren.push_back(rc);
+        }
+        ExprId rebuilt = e;
+        if (changed) {
+            CoreExpr fresh;
+            fresh.kind = node.kind;
+            fresh.sort = node.sort;
+            for (ExprId c : newChildren) fresh.children.push_back(c);
+            fresh.payload = node.payload;
+            rebuilt = ir_.add(std::move(fresh));
+        }
+        // Try arithmetic, relation, and boolean folds at this node.
+        ExprId folded = tryFoldArithmetic(rebuilt);
+        if (folded == rebuilt) folded = tryFoldRelation(rebuilt);
+        if (folded == rebuilt) folded = tryFoldBoolean(rebuilt);
+        foldMemo_[e] = folded;
     }
-    ExprId rebuilt;
-    if (changed) {
-        CoreExpr fresh;
-        fresh.kind = node.kind;
-        fresh.sort = node.sort;
-        for (ExprId c : newChildren) fresh.children.push_back(c);
-        fresh.payload = node.payload;
-        rebuilt = ir_.add(std::move(fresh));
-    } else {
-        rebuilt = e;
-    }
-    // Try arithmetic, relation, and boolean folds at this node.
-    ExprId folded = tryFoldArithmetic(rebuilt);
-    if (folded == rebuilt) folded = tryFoldRelation(rebuilt);
-    if (folded == rebuilt) folded = tryFoldBoolean(rebuilt);
-    foldMemo_[e] = folded;
-    return folded;
+    return foldMemo_.at(root);
 }
 
 ExprId UnconditionalConstantPropagation::tryFoldArithmetic(ExprId e) {
@@ -422,19 +447,6 @@ void UnconditionalConstantPropagation::collectFromAssertion(ExprId assertion) {
 }
 
 void UnconditionalConstantPropagation::collectFromConjunct(ExprId conjunct) {
-    const auto& node = ir_.get(conjunct);
-    // Recurse through further unconditional Ands; SMT input rarely
-    // produces them, but the flattening is cheap and keeps the pass
-    // robust to redundant wrapping.
-    if (node.kind == Kind::And) {
-        for (ExprId child : node.children) {
-            collectFromConjunct(child);
-            if (contradiction_) return;
-        }
-        return;
-    }
-    if (node.kind != Kind::Eq || node.children.size() != 2) return;
-
     auto tryRecord = [&](ExprId varSide, ExprId constSide) -> bool {
         const auto& vn = ir_.get(varSide);
         if (vn.kind != Kind::Variable) return false;
@@ -445,8 +457,25 @@ void UnconditionalConstantPropagation::collectFromConjunct(ExprId conjunct) {
         return tryRecordBinding(*name, *valueOpt);
     };
 
-    if (tryRecord(node.children[0], node.children[1])) return;
-    tryRecord(node.children[1], node.children[0]);
+    // Iteratively flatten nested unconditional Ands (avoids deep recursion on
+    // redundantly-wrapped conjunctions). Reverse-push so children pop in source
+    // order, matching the former recursion.
+    std::vector<ExprId> work;
+    work.push_back(conjunct);
+    while (!work.empty()) {
+        if (contradiction_) return;
+        ExprId e = work.back();
+        work.pop_back();
+        const auto& node = ir_.get(e);
+        if (node.kind == Kind::And) {
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
+                work.push_back(node.children[i]);
+            continue;
+        }
+        if (node.kind != Kind::Eq || node.children.size() != 2) continue;
+        if (tryRecord(node.children[0], node.children[1])) continue;
+        tryRecord(node.children[1], node.children[0]);
+    }
 }
 
 bool UnconditionalConstantPropagation::tryRecordBinding(
@@ -488,66 +517,72 @@ UnconditionalConstantPropagation::tryAsConstNumeric(ExprId e) const {
     return std::nullopt;
 }
 
-ExprId UnconditionalConstantPropagation::substituteRec(ExprId e) {
-    if (auto it = substMemo_.find(e); it != substMemo_.end()) {
-        return it->second;
-    }
-    const auto& node = ir_.get(e);
+ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
+    if (auto it = substMemo_.find(root); it != substMemo_.end()) return it->second;
 
-    // Do not substitute under UF applications. The arithmetic-side
-    // value of `x` flowing into `(f x)` would create a new UFApply
-    // ExprId distinct from any pre-existing `(f c)` literal, hiding
-    // the congruence that EUF (or the UfInArithPurifier flow) is
-    // designed to derive from the active equality `x = c`. Leaving
-    // `(f x)` intact keeps the congruence path observable to the
-    // theory pipeline (cf. the regression on uflia_003 / uflia_017).
-    if (node.kind == Kind::UFApply) {
-        substMemo_[e] = e;
-        return e;
-    }
+    // Iterative post-order (two-visit work-stack) to avoid stack overflow on
+    // deeply nested terms (e.g. insertion_sort / large QF_LRA, where this pass
+    // runs before any theory). Behavior-identical to the former recursion.
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
 
-    // Replace a variable occurrence with the bound constant. This
-    // happens at every other depth — under or / => / not / ite / mod /
-    // div / to_real / to_int / arithmetic — because the binding is
-    // unconditional.
-    if (node.kind == Kind::Variable) {
-        if (auto* name = std::get_if<std::string>(&node.payload.value)) {
-            auto it = fixedConstMap_.find(*name);
-            if (it != fixedConstMap_.end()) {
-                ExprId materialized = materializeConstant(it->second, node.sort);
-                substMemo_[e] = materialized;
-                return materialized;
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (substMemo_.find(e) != substMemo_.end()) { stack.pop_back(); continue; }
+
+        // Value copy: materializeConstant()/ir_.add() below relocate exprs_.
+        const auto node = ir_.get(e);
+
+        if (!frame.processed) {
+            frame.processed = true;
+
+            // Do not substitute under UF applications: the arithmetic value of
+            // `x` flowing into `(f x)` would mint a new UFApply ExprId distinct
+            // from any `(f c)` literal, hiding the congruence EUF derives from
+            // the active `x = c` (cf. uflia_003 / uflia_017). Leaf here.
+            if (node.kind == Kind::UFApply) { substMemo_[e] = e; stack.pop_back(); continue; }
+
+            if (node.kind == Kind::Variable) {
+                ExprId res = e;
+                if (auto* name = std::get_if<std::string>(&node.payload.value)) {
+                    auto it = fixedConstMap_.find(*name);
+                    if (it != fixedConstMap_.end()) res = materializeConstant(it->second, node.sort);
+                }
+                substMemo_[e] = res; stack.pop_back(); continue;
             }
+
+            if (node.children.empty()) { substMemo_[e] = e; stack.pop_back(); continue; }
+
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                ExprId c = node.children[i];
+                if (c != NullExpr && substMemo_.find(c) == substMemo_.end()) stack.push_back({c, false});
+            }
+            continue;
         }
-        substMemo_[e] = e;
-        return e;
-    }
 
-    if (node.children.empty()) {
-        substMemo_[e] = e;
-        return e;
+        stack.pop_back();
+        std::vector<ExprId> newChildren;
+        newChildren.reserve(node.children.size());
+        bool changed = false;
+        for (ExprId c : node.children) {
+            ExprId rc = (c == NullExpr) ? NullExpr : substMemo_.at(c);
+            if (rc != c) changed = true;
+            newChildren.push_back(rc);
+        }
+        if (!changed) {
+            substMemo_[e] = e;
+        } else {
+            CoreExpr fresh;
+            fresh.kind = node.kind;
+            fresh.sort = node.sort;
+            for (ExprId c : newChildren) fresh.children.push_back(c);
+            fresh.payload = node.payload;
+            substMemo_[e] = ir_.add(std::move(fresh));
+        }
     }
-
-    std::vector<ExprId> newChildren;
-    newChildren.reserve(node.children.size());
-    bool changed = false;
-    for (ExprId c : node.children) {
-        ExprId rc = substituteRec(c);
-        if (rc != c) changed = true;
-        newChildren.push_back(rc);
-    }
-    if (!changed) {
-        substMemo_[e] = e;
-        return e;
-    }
-    CoreExpr fresh;
-    fresh.kind = node.kind;
-    fresh.sort = node.sort;
-    for (ExprId c : newChildren) fresh.children.push_back(c);
-    fresh.payload = node.payload;
-    ExprId newId = ir_.add(std::move(fresh));
-    substMemo_[e] = newId;
-    return newId;
+    return substMemo_.at(root);
 }
 
 ExprId UnconditionalConstantPropagation::materializeConstant(
