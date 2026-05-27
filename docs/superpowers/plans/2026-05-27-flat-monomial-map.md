@@ -256,3 +256,23 @@ private:
 - Hot `operator*`/`+` use append+canonicalize (O(m log m)) to avoid O(n²) sorted inserts — the perf intent.
 - `magCache_` (A6) is explicitly OUT of scope; `FlatMonomialMap<V>` is templated so it's a later drop-in for the integrated bit-blast, no rewrite.
 - Not flag-gated (representation refactor); safety is empirical 0-verdict-change, not a toggle.
+
+---
+
+## Results (2026-05-27) — VERDICT-PRESERVING; NRA perf NEUTRAL
+
+Commits on `agent/a2-nonlinear`: `f6475fa` (FlatMonomialMap+SmallVector ops) · `024079b` (RationalPolynomial migration) · `983c28b` (consumer adapt + `at()`) · `9d278c9` (kill 2 more `std::map`: analyzer memo→unordered_map, toPrimitiveInteger→direct-from-canonical). Default-path (not flag-gated).
+
+| Measure | Result |
+|---|---|
+| Unit suite | 731/731 (3 pre-existing skips) |
+| **Verdict gate: full regression** | **633/633, 0 UNSOUND — per-case diff vs pre-refactor baseline EMPTY (no case changed verdict)** |
+| Perf sentinels (best-of-2) | within noise: nra_124 6.6→6.26s sat, kissing_2_* sat (same), hong_5/6/7 unknown (same) |
+| hycomp OOM case | **still `std::bad_alloc`** (rc=134, ~23s) — not eliminated |
+| hong_10 | still times out (no recovery) |
+
+**Verdict: SOUND (verdict-preserving, proven) but perf-NEUTRAL on NRA.** The lighter representation did not fix the NRA timeouts/OOM, because the dominant cost on hard NRA cases is the **projection-set explosion** (number × size of polynomials built during projection), not the per-poly term-store representation. Same root cause lever-1 (libpoly-psc) hit: per-unit cost was never the bottleneck; projection-set size is.
+
+**Keep it anyway (do NOT revert):** (1) verdict-safe + a cleaner, lighter, move-cheap representation that kills 3 `std::map<heap-vector,…>` instances; (2) it's the reusable `FlatMonomialMap<V>` for the deferred `PolyBitBlaster::magCache_` drop-in — the bit-blast 1.98 GB peak is dominated by *that* map's copies (a different workload than NRA projection), so the cross-cutting payoff most likely lands there, in the integrated bit-blast; (3) it pairs with reduced projection (fewer polys × cheaper-each).
+
+**Next NRA lever (confirmed twice now): reduced/McCallum projection** — produces *fewer* subresultants → shrinks the projection set, the actual cost driver. Per discipline: profile one McCallum-reduced case FIRST to confirm the projection set shrinks before building. Do NOT claim an NRA perf win from this refactor — there isn't one on the measured cases.
