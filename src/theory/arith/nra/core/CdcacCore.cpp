@@ -174,16 +174,34 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // punts on — flag-off behaviour is byte-identical to the Collins baseline.
     if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_LIFT"))
         lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
-    // Projection mode selection. ZOLVER_NRA_PROJECTION=lazard installs the real
-    // Lazard projection operator as the (lazily-created) default policy; any
-    // other value / unset keeps the CollinsConservative default (byte-identical
-    // to today). An explicit setProjectionPolicy() call still overrides this.
-    // The projection SET affects completeness only — the UNSAT certification
-    // gate (unsatTrustworthy_, driven by the Collins closure_) is unchanged.
+    // Projection mode selection + HYBRID gate (DEFAULT). The default path is the
+    // fail-safe hybrid: Collins first, Lazard fallback ONLY on Collins-Unknown
+    // (see solve() / hybridEnabled_). The env hatches force a single fixed mode:
+    //   ZOLVER_NRA_PROJECTION=lazard  => pure Lazard  (projectionKind_=LazardStyle,
+    //                                    lift+per-cell-cert on, no Collins pass).
+    //   ZOLVER_NRA_PROJECTION=collins => pure Collins (the old default).
+    //   ZOLVER_NRA_HYBRID=0           => pure Collins (A/B baseline).
+    // Any other value / unset => hybrid. An explicit setProjectionPolicy() call
+    // still overrides the lazily-created policy regardless of mode. The projection
+    // SET affects completeness only — the UNSAT certification gate
+    // (unsatTrustworthy_ + per-cell cert) is unchanged.
     if (const char* e = std::getenv("ZOLVER_NRA_PROJECTION")) {
         std::string mode(e);
-        if (mode == "lazard" || mode == "Lazard" || mode == "LAZARD")
+        if (mode == "lazard" || mode == "Lazard" || mode == "LAZARD") {
+            // Pure Lazard: configure the full Lazard path and disable the hybrid
+            // Collins-first pass (the user explicitly asked for Lazard-only).
             projectionKind_ = ProjectionPolicyKind::LazardStyle;
+            lazardLiftEnabled_ = true;
+            hybridEnabled_ = false;
+        } else if (mode == "collins" || mode == "Collins" || mode == "COLLINS") {
+            // Pure Collins (the old default): no Lazard fallback.
+            projectionKind_ = ProjectionPolicyKind::CollinsConservative;
+            hybridEnabled_ = false;
+        }
+    }
+    if (const char* e = std::getenv("ZOLVER_NRA_HYBRID")) {
+        if (e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' || e[0] == 'N')
+            hybridEnabled_ = false;
     }
     // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
     // now (interim, while completeness recovery lands); intended default-ON.
@@ -493,10 +511,23 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     }
 }
 
-CdcacResult CdcacCore::solve(const CdcacInput& input) {
-#ifndef NDEBUG
-    std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
-#endif
+void CdcacCore::resetPerSolveState() {
+    // Drop the lazily-created policy so the next pass re-creates it for the
+    // (possibly changed) projectionKind_. The closures / levelPolyIds_ /
+    // completeness flags are all rebuilt by buildClosure(), but the policy is
+    // created in solveLevel() and would otherwise survive a mode flip.
+    policy_.reset();
+    // buildClosure() resets unsatTrustworthy_/coveringUncertifiable_/
+    // closureComplete_ and re-.assign()s levelPolyIds_; closure_/lazardClosure_
+    // are rebuilt in place by their build(). Nothing else carries cross-pass
+    // search state. (Reset the trust flags here too so they are clean even if a
+    // future buildClosure early-out skips them.)
+    unsatTrustworthy_ = true;
+    coveringUncertifiable_ = false;
+    closureComplete_ = false;
+}
+
+CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     buildClosure(input);
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
@@ -519,6 +550,63 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
     return result;
+}
+
+CdcacResult CdcacCore::solve(const CdcacInput& input) {
+#ifndef NDEBUG
+    std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
+#endif
+    // --- Pure single-mode (A/B hatches): one pass with the configured mode. ---
+    if (!hybridEnabled_) {
+        return solvePass(input);
+    }
+
+    // --- FAIL-SAFE HYBRID (DEFAULT): Collins primary, Lazard fallback. --------
+    // Pass 1 — Collins. Force the Collins configuration for this pass regardless
+    // of any ZOLVER_NRA_LAZARD_LIFT the user set, so the primary pass is exactly
+    // the old pure-Collins behaviour. Collins's Sat/Unsat are AUTHORITATIVE.
+    const bool savedLazardLift = lazardLiftEnabled_;
+    projectionKind_ = ProjectionPolicyKind::CollinsConservative;
+    lazardLiftEnabled_ = false;
+    resetPerSolveState();
+    CdcacResult collinsResult = solvePass(input);
+
+    if (collinsResult.status != CdcacStatus::Unknown) {
+        // A definite Collins verdict is returned as-is — Lazard never overrides
+        // a Collins decision. This is what makes the hybrid strictly >= Collins.
+        lazardLiftEnabled_ = savedLazardLift;  // restore configured value
+        return collinsResult;
+    }
+
+    // Pass 2 — Lazard, ONLY because Collins was Unknown (no double-work on the
+    // easy path). Stand up the full Lazard configuration on the SAME input:
+    // the Lazard projection set + [H3] valuation lift + the per-cell UNSAT cert
+    // gate (lazardCellCertEnabled_ already defaults ON). Reset all per-solve
+    // scratch first so the closures / policy / trust flags start clean.
+    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+        std::cerr << "[CDCAC-HYBRID] Collins Unknown (reason="
+                  << static_cast<int>(collinsResult.unknownReason)
+                  << ") -> Lazard fallback" << std::endl;
+    projectionKind_ = ProjectionPolicyKind::LazardStyle;
+    lazardLiftEnabled_ = true;
+    resetPerSolveState();
+    CdcacResult lazardResult = solvePass(input);
+
+    // Restore the configured mode for the next solve() (this core can be reused
+    // across theory-checks; leave it in the default Collins-first state).
+    projectionKind_ = ProjectionPolicyKind::CollinsConservative;
+    lazardLiftEnabled_ = savedLazardLift;
+
+    // Lazard recovers a Collins-Unknown only to a DEFINITE verdict; otherwise the
+    // original Collins Unknown stands. (Lazard Sat is full-model-validated
+    // upstream; Lazard Unsat is cert-gated, incomplete => Unknown.)
+    if (lazardResult.status != CdcacStatus::Unknown) {
+        if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+            std::cerr << "[CDCAC-HYBRID] Lazard RECOVERED status="
+                      << static_cast<int>(lazardResult.status) << std::endl;
+        return lazardResult;
+    }
+    return collinsResult;
 }
 
 CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& input) {
