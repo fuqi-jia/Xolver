@@ -65,10 +65,6 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.presolve",       &NiaSolver::stagePresolveFixpoint);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.domain",         &NiaSolver::stageDomainInference);
-    // BV mod/div-by-2^k bit-extraction runs EARLY (right after domain inference,
-    // before the model-deciding stages): mod-lowered formulas are linear and an
-    // earlier stage would otherwise return a (possibly spurious) verdict.
-    addFull("nia.bv-divmod",  &NiaSolver::stageBvDivMod);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
     add("nia.univariate",     &NiaSolver::stageUnivariate);
@@ -104,9 +100,6 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // solely from an emptied domain (invariant 7).
     if (const char* e = std::getenv("ZOLVER_NIA_REFUTE"); e && *e && *e != '0')
         enableRefute_ = true;
-
-    if (const char* e = std::getenv("ZOLVER_NIA_BV_DIVMOD"); e && *e && *e != '0')
-        enableBvDivMod_ = true;
 
     // Multivariate GCD-divisibility refutation (default-OFF). Sound: every
     // monomial is an integer, so Σ aᵢmᵢ ≡ 0 (mod gcd aᵢ); g ∤ const ⇒ UNSAT.
@@ -624,21 +617,6 @@ std::optional<TheoryCheckResult> NiaSolver::stageCdcac(TheoryLemmaStorage&, Theo
     }
     return std::nullopt;
 #endif
-}
-
-std::optional<TheoryCheckResult> NiaSolver::stageBvDivMod(TheoryLemmaStorage&, TheoryEffort) {
-    if (!enableBvDivMod_) return std::nullopt;
-    auto res = bitBlast_.bvDivModSolve(normalized_, domains_, validator_);
-    switch (res.status) {
-        case bitblast::BitBlastResult::Status::Sat:
-            currentModel_ = res.model;
-            return TheoryCheckResult::consistent();
-        case bitblast::BitBlastResult::Status::UnsatComplete:
-            return TheoryCheckResult::mkConflict(*res.conflict);
-        case bitblast::BitBlastResult::Status::Unknown:
-            return std::nullopt;
-    }
-    return std::nullopt;
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageProductPositivity(TheoryLemmaStorage&, TheoryEffort) {

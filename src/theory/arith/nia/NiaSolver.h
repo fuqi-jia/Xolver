@@ -130,7 +130,6 @@ private:
     GcdDivisibilityReasoner gcdDivisibility_;
     bool enableBitBlast_ = true;
     bool enableRefute_ = false;   // ZOLVER_NIA_REFUTE: bound-free product-positivity refutation
-    bool enableBvDivMod_ = false; // ZOLVER_NIA_BV_DIVMOD: BV mod/div-by-2^k bit-extraction (BLAN-faithful)
     bool enableGcd_ = false;      // ZOLVER_NIA_GCD: multivariate GCD-divisibility refutation
     bool enableIcp_ = false;      // ZOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
     bool enableCdcac_ = false;    // ZOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
@@ -165,7 +164,6 @@ private:
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
-    std::optional<TheoryCheckResult> stageBvDivMod(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
