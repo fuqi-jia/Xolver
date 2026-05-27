@@ -4,6 +4,7 @@
 #include "theory/arith/nra/engine/CoveringManager.h"
 #include "theory/arith/nra/engine/ReasonManager.h"
 #include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nra/core/CdcacCommon.h"   // VanishResult
 #include "theory/arith/poly/PolynomialKernel.h"
 
 using namespace zolver;
@@ -676,4 +677,73 @@ TEST_CASE("P2b: buildConflictCell produces FullLine for x^2+1=0") {
     solver.assertConstraint(x2p1, Relation::Eq, SatLit::positive(1), 0);
     auto res = solver.check(CdcacEffort::Full, nullptr);
     CHECK(res.kind == TheoryCheckResult::Kind::Conflict);
+}
+
+// ------------------------------------------------------------------
+// Round-trip OOM-fix lock: vanishesAtPrefix / specializeToUnivariate now
+// substitute the sample prefix in RationalPolynomial space (one libpoly<->RP
+// conversion instead of per-cell k+1 round-trips). These exercise that path
+// directly — vanishesAtPrefix had NO test before. The multi-var-prefix case
+// locks the k>1 substitution + cancellation detection the rewrite must preserve.
+// ------------------------------------------------------------------
+
+TEST_CASE("vanishesAtPrefix: x*(y-1) vanishes at y=1, not at y=2 (single-var prefix)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    VarId xv = kernel->getOrCreateVar("x");
+    VarId yv = kernel->getOrCreateVar("y");
+    PolyId x = kernel->mkVar(xv);
+    PolyId y = kernel->mkVar(yv);
+    PolyId p = kernel->sub(kernel->mul(x, y), x);   // x*y - x = x*(y-1)
+
+    SamplePoint pre1; pre1.push(yv, RealAlg::fromRational(mpq_class(1)));
+    CHECK(algebra.vanishesAtPrefix(p, pre1, xv) == VanishResult::Vanishes);     // x*(1-1) = 0
+
+    SamplePoint pre2; pre2.push(yv, RealAlg::fromRational(mpq_class(2)));
+    CHECK(algebra.vanishesAtPrefix(p, pre2, xv) == VanishResult::NonVanishes);  // x*(2-1) = x
+}
+
+TEST_CASE("vanishesAtPrefix: x*y - x*z, two-var prefix (locks multi-var RP substitution + cancellation)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    VarId xv = kernel->getOrCreateVar("x");
+    VarId yv = kernel->getOrCreateVar("y");
+    VarId zv = kernel->getOrCreateVar("z");
+    PolyId x = kernel->mkVar(xv);
+    PolyId y = kernel->mkVar(yv);
+    PolyId z = kernel->mkVar(zv);
+    PolyId p = kernel->sub(kernel->mul(x, y), kernel->mul(x, z));   // x*y - x*z = x*(y-z)
+
+    SamplePoint preEq;
+    preEq.push(yv, RealAlg::fromRational(mpq_class(2)));
+    preEq.push(zv, RealAlg::fromRational(mpq_class(2)));
+    CHECK(algebra.vanishesAtPrefix(p, preEq, xv) == VanishResult::Vanishes);    // y=z=2 -> x*0 = 0
+
+    SamplePoint preNe;
+    preNe.push(yv, RealAlg::fromRational(mpq_class(2)));
+    preNe.push(zv, RealAlg::fromRational(mpq_class(3)));
+    CHECK(algebra.vanishesAtPrefix(p, preNe, xv) == VanishResult::NonVanishes); // y=2,z=3 -> -x
+}
+
+TEST_CASE("specializeToUnivariate: x^2 - y at y=4 -> roots +-2 (rational prefix substitution)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    VarId xv = kernel->getOrCreateVar("x");
+    VarId yv = kernel->getOrCreateVar("y");
+    PolyId x = kernel->mkVar(xv);
+    PolyId y = kernel->mkVar(yv);
+    PolyId p = kernel->sub(kernel->pow(x, 2), y);   // x^2 - y
+
+    SamplePoint pre; pre.push(yv, RealAlg::fromRational(mpq_class(4)));
+    UniPolyId up = algebra.specializeToUnivariate(p, pre, xv);   // -> x^2 - 4
+    REQUIRE(up != NullUniPolyId);
+    RootSet roots = algebra.isolateRealRoots(up);
+    CHECK(roots.numRoots() == 2);                                 // x = +-2
+    bool neg = false, pos = false;
+    for (const auto& r : roots.roots) {
+        if (r.isRational()) { if (r.rational < 0) neg = true; if (r.rational > 0) pos = true; }
+        else if (r.isAlgebraic()) { if (r.root.upper < 0) neg = true; if (r.root.lower > 0) pos = true; }
+    }
+    CHECK(neg);
+    CHECK(pos);
 }
