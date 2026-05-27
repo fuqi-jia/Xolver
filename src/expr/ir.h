@@ -2,6 +2,7 @@
 
 #include "expr/payload.h"
 #include "expr/types.h"
+#include "expr/Datatype.h"
 #include "util/SmallVector.h"
 #include <vector>
 #include <algorithm>
@@ -26,6 +27,9 @@ enum class Kind : uint16_t {
     Forall, Exists,
     ToInt, ToReal, IsInt,
     Select, Store, ConstArray,
+    // Algebraic datatypes. The constructor/selector/tester NAME is carried in
+    // the CoreExpr payload string; the DatatypeRegistry resolves it.
+    Constructor, Selector, Tester,
     Unknown,
 };
 
@@ -131,6 +135,12 @@ public:
         return std::nullopt;
     }
 
+    // Algebraic-datatype signatures (populated by FrontendAdapter). Const access
+    // for the theory layer; mutable accessor for the adapter to populate.
+    const DatatypeRegistry& datatypes() const { return datatypes_; }
+    DatatypeRegistry& datatypes() { return datatypes_; }
+    bool hasDatatypes() const { return !datatypes_.empty(); }
+
     SortId boolSortId() const { return boolSortId_; }
     void setBoolSortId(SortId id) { boolSortId_ = id; }
 
@@ -180,6 +190,7 @@ private:
     ScopeLevel currentScope_ = 0;
     std::unordered_map<SortId, SortKind> sortKinds_;
     std::unordered_map<SortId, std::pair<SortId, SortId>> arraySortParams_;
+    DatatypeRegistry datatypes_;
     SortId boolSortId_ = NullSort;
     SortId intSortId_ = NullSort;
     SortId realSortId_ = NullSort;

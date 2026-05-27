@@ -1,0 +1,409 @@
+#include "theory/datatype/DtReasoner.h"
+#include "theory/euf/EufTermManager.h"
+#include "theory/euf/IncrementalEGraph.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "expr/ir.h"
+#include <vector>
+
+namespace zolver {
+
+static constexpr char kCtorPrefix[] = "#dt.ctor.";
+static constexpr char kSelPrefix[]  = "#dt.sel.";
+static constexpr char kTesterPrefix[] = "#dt.is.";
+
+void DtReasoner::reset() {
+    ctorTerms_.clear();
+    selectorTerms_.clear();
+    testerTerms_.clear();
+    ctorSet_.clear();
+    selectorSet_.clear();
+    testerSet_.clear();
+    nextTermToScan_ = 0;
+    injectivityDone_.clear();
+    projectionDone_.clear();
+}
+
+bool DtReasoner::symIsConstructor(EufTermId t) const {
+    const std::string& s = tm_->symbolName(tm_->node(t).symbol);
+    return s.rfind(kCtorPrefix, 0) == 0;
+}
+bool DtReasoner::symIsSelector(EufTermId t) const {
+    const std::string& s = tm_->symbolName(tm_->node(t).symbol);
+    return s.rfind(kSelPrefix, 0) == 0;
+}
+bool DtReasoner::symIsTester(EufTermId t) const {
+    const std::string& s = tm_->symbolName(tm_->node(t).symbol);
+    return s.rfind(kTesterPrefix, 0) == 0;
+}
+
+ExprId DtReasoner::originExpr(EufTermId t) const {
+    if (t == NullEufTerm) return NullExpr;
+    return tm_->node(t).origin;
+}
+
+std::string DtReasoner::opName(EufTermId t) const {
+    ExprId e = originExpr(t);
+    if (e == NullExpr) return std::string();
+    const auto* nm = std::get_if<std::string>(&ir_->get(e).payload.value);
+    return nm ? *nm : std::string();
+}
+
+SortId DtReasoner::ctorSort(EufTermId t) const {
+    ExprId e = originExpr(t);
+    if (e == NullExpr) return NullSort;
+    return ir_->get(e).sort;
+}
+
+bool DtReasoner::discoverDtTerms() {
+    if (!active()) return false;
+    bool found = false;
+    EufTermId total = static_cast<EufTermId>(tm_->termCount());
+    for (EufTermId t = nextTermToScan_; t < total; ++t) {
+        // NOTE: nullary constructors (enum values, nil) have NO args but ARE
+        // constructor terms, so do not skip empty-arg terms here. Selectors
+        // always have an operand.
+        if (symIsConstructor(t)) {
+            if (ctorSet_.insert(t).second) { ctorTerms_.push_back(t); found = true; }
+        } else if (symIsSelector(t) && !tm_->node(t).args.empty()) {
+            if (selectorSet_.insert(t).second) { selectorTerms_.push_back(t); found = true; }
+        } else if (symIsTester(t) && !tm_->node(t).args.empty()) {
+            if (testerSet_.insert(t).second) { testerTerms_.push_back(t); found = true; }
+        }
+    }
+    nextTermToScan_ = total;
+    return found;
+}
+
+std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
+    if (!active()) return std::nullopt;
+    discoverDtTerms();
+
+    // --- Constructor clash: two distinct-constructor terms in one class -------
+    // Different constructors have different EUF symbols (name + arg/result
+    // sorts), so a class holding two distinct symbols is C(..) = D(..), C != D.
+    std::unordered_map<EClassId, EufTermId> classCtor;  // rep -> first ctor term
+    classCtor.reserve(ctorTerms_.size() * 2 + 1);
+    for (EufTermId t : ctorTerms_) {
+        EClassId r = egraph_->rep(t);
+        auto it = classCtor.find(r);
+        if (it == classCtor.end()) {
+            classCtor.emplace(r, t);
+            continue;
+        }
+        EufTermId other = it->second;
+        if (tm_->node(t).symbol == tm_->node(other).symbol) continue;  // same ctor: injectivity
+        // Clash. Explanation = why other and t are in the same class.
+        auto er = egraph_->explainEquality(other, t);
+        if (er.ok && !er.reasons.empty()) {
+            return er.reasons;
+        }
+        // explainEquality should succeed (they ARE in the same class). If it has
+        // no literals (a tautological merge) the clash is unconditional — but DT
+        // ctor terms only merge via asserted/derived equalities, so an empty
+        // sound explanation means "always conflicting" with no antecedent, which
+        // we cannot express as a clause; skip rather than emit an empty (=> false
+        // unconditionally) clause that would be unsound to hand the SAT core.
+    }
+
+    // --- Tester consistency ---------------------------------------------------
+    // is_C(u) decided (merged with true/false) while u's class holds a known
+    // constructor C': the tester MUST equal (C == C'). A mismatch is a conflict.
+    // This makes the determinacy-based sat sound (a tester cannot disagree with
+    // the determined constructor). Guarded: only when u's constructor is known.
+    if (trueTerm_ != NullEufTerm || falseTerm_ != NullEufTerm) {
+        for (EufTermId tt : testerTerms_) {
+            const auto& tn = tm_->node(tt);
+            if (tn.args.empty()) continue;
+            bool isTrue = (trueTerm_ != NullEufTerm) && egraph_->same(tt, trueTerm_);
+            bool isFalse = (falseTerm_ != NullEufTerm) && egraph_->same(tt, falseTerm_);
+            if (!isTrue && !isFalse) continue;  // tester truth not decided
+            EufTermId u = tn.args[0];
+            // The tester's target constructor name.
+            std::string tnm = opName(tt);
+            // Find a known constructor in u's class.
+            EClassId uc = egraph_->rep(u);
+            for (EufTermId m : egraph_->classMembers(uc)) {
+                if (!symIsConstructor(m)) continue;
+                bool sameCtor = (opName(m) == tnm);
+                // is_C(u)=true but ctor is D!=C, or is_C(u)=false but ctor IS C.
+                if ((isTrue && !sameCtor) || (isFalse && sameCtor)) {
+                    std::vector<SatLit> reasons;
+                    auto erc = egraph_->explainEquality(u, m);
+                    if (erc.ok) reasons.insert(reasons.end(), erc.reasons.begin(), erc.reasons.end());
+                    auto ert = egraph_->explainEquality(tt, isTrue ? trueTerm_ : falseTerm_);
+                    if (ert.ok) reasons.insert(reasons.end(), ert.reasons.begin(), ert.reasons.end());
+                    if (!reasons.empty()) return reasons;
+                }
+                break;  // one known constructor per class suffices
+            }
+        }
+    }
+
+    // --- Acyclicity (recursive datatypes only) --------------------------------
+    bool anyRecursive = false;
+    for (EufTermId t : ctorTerms_) {
+        const DatatypeInfo* dt = ir_->datatypes().datatype(ctorSort(t));
+        if (dt && dt->recursive) { anyRecursive = true; break; }
+    }
+    if (anyRecursive) {
+        if (auto c = checkAcyclicity()) return c;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<std::vector<SatLit>> DtReasoner::checkAcyclicity() {
+    // Cycle of constructor terms t_0 -> t_1 -> ... -> t_0 where some
+    // datatype-sorted argument a of t_i is in the same class as t_{i+1}. Then
+    // t_0 is a proper subterm of itself -> UNSAT (the free-algebra acyclicity
+    // axiom). Reasons = union of explainEquality(arg, next-ctor) along the cycle.
+
+    auto datatypeArgQuick = [&](EufTermId ctor, size_t i) -> bool {
+        const auto& args = tm_->node(ctor).args;
+        if (i >= args.size()) return false;
+        return ir_->datatypes().isDatatypeSort(ir_->get(originExpr(args[i])).sort);
+    };
+
+    // Direct self-reference: a constructor term t = C(... a ...) with a
+    // datatype-sorted argument a in t's OWN class (x = C(... x ...)). t is then
+    // a proper subterm of itself -> UNSAT. Reasons = why a and t are merged.
+    for (EufTermId t : ctorTerms_) {
+        EClassId tc = egraph_->rep(t);
+        const auto& args = tm_->node(t).args;
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (!datatypeArgQuick(t, i)) continue;
+            if (egraph_->rep(args[i]) == tc) {
+                auto er = egraph_->explainEquality(args[i], t);
+                if (er.ok && !er.reasons.empty()) return er.reasons;
+            }
+        }
+    }
+
+    // rep(class) -> constructor terms living in that class.
+    std::unordered_map<EClassId, std::vector<EufTermId>> ctorsByClass;
+    for (EufTermId t : ctorTerms_) ctorsByClass[egraph_->rep(t)].push_back(t);
+
+    enum Color { White, Gray, Black };
+    std::unordered_map<EufTermId, Color> color;
+
+    // Iterative DFS over constructor-term nodes; edge t -> t' iff some
+    // datatype-sorted arg a of t has rep(a) == rep(t').
+    struct StackFrame { EufTermId node; size_t argIdx; size_t childIdx; EufTermId pendingArg; };
+    std::vector<EufTermId> path;            // current DFS path of ctor terms
+
+    auto datatypeArg = [&](EufTermId ctor, size_t i) -> bool {
+        const auto& args = tm_->node(ctor).args;
+        if (i >= args.size()) return false;
+        return ir_->datatypes().isDatatypeSort(ir_->get(originExpr(args[i])).sort);
+    };
+
+    for (EufTermId start : ctorTerms_) {
+        if (color[start] != White) continue;
+        // explicit DFS
+        std::vector<std::pair<EufTermId, size_t>> stack;  // (ctor term, next arg index)
+        stack.push_back({start, 0});
+        color[start] = Gray;
+        path.push_back(start);
+
+        while (!stack.empty()) {
+            auto& [node, argIdx] = stack.back();
+            const auto& args = tm_->node(node).args;
+            bool descended = false;
+            while (argIdx < args.size()) {
+                size_t i = argIdx++;
+                if (!datatypeArg(node, i)) continue;
+                EClassId argClass = egraph_->rep(args[i]);
+                auto cit = ctorsByClass.find(argClass);
+                if (cit == ctorsByClass.end()) continue;
+                for (EufTermId next : cit->second) {
+                    if (next == node) continue;  // self arg handled by the chain below
+                    if (color[next] == Gray) {
+                        // Found a back edge -> cycle from `next` up to `node`.
+                        std::vector<SatLit> reasons;
+                        auto addReasons = [&](EufTermId from, EufTermId to) {
+                            auto er = egraph_->explainEquality(from, to);
+                            if (er.ok) reasons.insert(reasons.end(),
+                                                      er.reasons.begin(), er.reasons.end());
+                        };
+                        // The cycle in `path` is from the position of `next` to the end,
+                        // closed by the edge node-arg -> next. Walk consecutive ctor
+                        // terms on the path and link each arg to the successor ctor.
+                        size_t startPos = 0;
+                        for (size_t p = 0; p < path.size(); ++p) {
+                            if (path[p] == next) { startPos = p; break; }
+                        }
+                        for (size_t p = startPos; p < path.size(); ++p) {
+                            EufTermId cur = path[p];
+                            EufTermId succ = (p + 1 < path.size()) ? path[p + 1] : next;
+                            // find the datatype arg of cur whose class holds succ
+                            const auto& cargs = tm_->node(cur).args;
+                            for (size_t k = 0; k < cargs.size(); ++k) {
+                                if (!datatypeArg(cur, k)) continue;
+                                if (egraph_->rep(cargs[k]) == egraph_->rep(succ)) {
+                                    addReasons(cargs[k], succ);
+                                    break;
+                                }
+                            }
+                        }
+                        if (!reasons.empty()) return reasons;
+                    } else if (color[next] == White) {
+                        color[next] = Gray;
+                        path.push_back(next);
+                        stack.push_back({next, 0});
+                        descended = true;
+                        break;
+                    }
+                }
+                if (descended) break;
+            }
+            if (descended) continue;
+            // exhausted this node
+            color[node] = Black;
+            if (!path.empty() && path.back() == node) path.pop_back();
+            stack.pop_back();
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::vector<SatLit>> DtReasoner::instantiateLemma() {
+    if (!active() || !registry_) return std::nullopt;
+    discoverDtTerms();
+    CoreIr& ir = const_cast<CoreIr&>(*ir_);
+
+    // --- Injectivity: C(a..) = C(b..)  =>  a_i = b_i --------------------------
+    // Group same-symbol constructor terms by class; for each merged same-ctor
+    // pair, propagate the first non-equal argument.
+    {
+        std::unordered_map<EClassId, std::vector<EufTermId>> byClass;
+        for (EufTermId t : ctorTerms_) byClass[egraph_->rep(t)].push_back(t);
+        for (auto& [r, terms] : byClass) {
+            (void)r;
+            for (size_t i = 0; i < terms.size(); ++i) {
+                for (size_t j = i + 1; j < terms.size(); ++j) {
+                    EufTermId t1 = terms[i], t2 = terms[j];
+                    if (tm_->node(t1).symbol != tm_->node(t2).symbol) continue;  // diff ctor = clash
+                    const auto& a1 = tm_->node(t1).args;
+                    const auto& a2 = tm_->node(t2).args;
+                    if (a1.size() != a2.size()) continue;
+                    for (size_t k = 0; k < a1.size(); ++k) {
+                        if (egraph_->same(a1[k], a2[k])) continue;
+                        uint64_t ikey = pairKey(t1, t2) ^ (static_cast<uint64_t>(k + 1) * 0x9e3779b97f4a7c15ULL);
+                        if (!injectivityDone_.insert(ikey).second) continue;
+                        ExprId aE = originExpr(a1[k]);
+                        ExprId bE = originExpr(a2[k]);
+                        if (aE == NullExpr || bE == NullExpr) continue;
+                        auto er = egraph_->explainEquality(t1, t2);
+                        if (!er.ok) continue;
+                        SatLit impl = registry_->getOrCreateEufEqualityAtom(aE, bE);
+                        std::vector<SatLit> clause;
+                        for (SatLit r2 : er.reasons) clause.push_back(r2.negated());
+                        clause.push_back(impl);
+                        return clause;
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Guarded selector projection: sel_i^C(u) = a_i when u ~ C(a..) --------
+    for (EufTermId s : selectorTerms_) {
+        const auto& sn = tm_->node(s);
+        if (sn.args.empty()) continue;
+        EufTermId u = sn.args[0];
+        ExprId uE = originExpr(u);
+        if (uE == NullExpr) continue;
+        SortId dtSort = ir.get(uE).sort;
+        uint32_t argIdx = 0;
+        const DtConstructorInfo* owner =
+            ir_->datatypes().selector(dtSort, opName(s), argIdx);
+        if (!owner) continue;  // unknown selector (shouldn't happen) -> skip
+        // Find a constructor term of the SELECTOR'S OWN constructor in u's class.
+        EClassId uClass = egraph_->rep(u);
+        for (EufTermId m : egraph_->classMembers(uClass)) {
+            if (!symIsConstructor(m)) continue;
+            if (opName(m) != owner->name) continue;          // GUARD: matching ctor only
+            if (ctorSort(m) != dtSort) continue;
+            const auto& margs = tm_->node(m).args;
+            if (argIdx >= margs.size()) continue;
+            EufTermId field = margs[argIdx];
+            if (egraph_->same(s, field)) continue;           // already projected
+            uint64_t key = pairKey(s, m);
+            if (!projectionDone_.insert(key).second) continue;
+            ExprId fieldE = originExpr(field);
+            if (fieldE == NullExpr) continue;
+            auto er = egraph_->explainEquality(u, m);
+            if (!er.ok) continue;
+            SatLit impl = registry_->getOrCreateEufEqualityAtom(originExpr(s), fieldE);
+            std::vector<SatLit> clause;
+            for (SatLit r2 : er.reasons) clause.push_back(r2.negated());
+            clause.push_back(impl);
+            return clause;
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool DtReasoner::isFiniteSort(SortId s, std::unordered_set<SortId>& visiting) const {
+    auto sk = ir_->sortKind(s);
+    if (sk == SortKind::Bool) return true;
+    if (sk == SortKind::Int || sk == SortKind::Real || sk == SortKind::Array) return false;
+    if (sk == SortKind::Datatype) {
+        const DatatypeInfo* dt = ir_->datatypes().datatype(s);
+        if (!dt || dt->recursive) return false;        // recursive DT is infinite
+        if (!visiting.insert(s).second) return false;  // cycle (defensive) -> infinite
+        bool finite = true;
+        for (const auto& c : dt->constructors) {
+            for (const auto& sel : c.selectors) {
+                if (!isFiniteSort(sel.resultSort, visiting)) { finite = false; break; }
+            }
+            if (!finite) break;
+        }
+        visiting.erase(s);
+        return finite;
+    }
+    // BV/FP/Other/uninterpreted: treat as infinite (stably infinite for N-O).
+    return false;
+}
+
+bool DtReasoner::modelFullyDetermined() const {
+    if (!active()) return true;  // nothing DT to constrain
+    // Collect, per e-class, whether it holds a constructor term; and the set of
+    // datatype-sorted classes that appear. A class is "determined" iff it has a
+    // constructor member. The model is fully determined iff every datatype-sorted
+    // class is determined. Const scan over all interned terms (egraph reflects
+    // the current satisfying assignment when called from satComplete).
+    std::unordered_set<EClassId> hasCtor;
+    std::unordered_set<EClassId> dtClasses;
+    std::unordered_set<SortId> dtSorts;
+    EufTermId total = static_cast<EufTermId>(tm_->termCount());
+    for (EufTermId t = 0; t < total; ++t) {
+        EClassId r = egraph_->rep(t);
+        if (symIsConstructor(t)) hasCtor.insert(r);
+        // A datatype-sorted term contributes a class that must be determined.
+        ExprId e = tm_->node(t).origin;
+        if (e == NullExpr) continue;
+        SortId srt = ir_->get(e).sort;
+        if (ir_->datatypes().isDatatypeSort(srt)) {
+            dtClasses.insert(r);
+            dtSorts.insert(srt);
+        }
+    }
+    // Finite-DT combination floor (plan §3): plain Nelson-Oppen is incomplete
+    // for a finite datatype combined with arithmetic (not stably infinite), so
+    // refuse to certify such a model. Pure QF_UFDT (combinationMode_ == false)
+    // is decidable on its own and is exempt.
+    if (combinationMode_) {
+        for (SortId s : dtSorts) {
+            std::unordered_set<SortId> visiting;
+            if (isFiniteSort(s, visiting)) return false;
+        }
+    }
+    for (EClassId c : dtClasses) {
+        if (hasCtor.find(c) == hasCtor.end()) return false;  // undetermined class
+    }
+    return true;
+}
+
+} // namespace zolver

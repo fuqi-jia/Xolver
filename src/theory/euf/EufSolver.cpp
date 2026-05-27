@@ -66,6 +66,18 @@ bool EufSolver::satComplete(std::string* reason) const {
     for (const auto& d : sharedDisequalities_)
         if (egraph_.same(d.lhs, d.rhs)) return fail("euf: shared disequality violated");
 
+    // Datatype completeness gate. The DtReasoner detects every DT conflict
+    // (clash / injectivity / projection / tester / acyclicity), so a Consistent
+    // check means none is present; a `sat` is then SOUND iff the DT structure is
+    // a concrete ground-term model — i.e. every datatype e-class has a
+    // determined constructor. If some datatype class is constructor-undetermined
+    // the procedure is incomplete here (no exhaustiveness split yet) so we block
+    // the sat to unknown rather than risk a false sat. Replaces the old blanket
+    // DT-sat floor with a precise, recovering gate.
+    if (dtMode_ && !dtReasoner_.modelFullyDetermined()) {
+        return fail("dt: model not fully determined (a datatype class has no constructor)");
+    }
+
     // Array obligation detector (Phase 0). EUF congruence closure does NOT
     // discharge the array axioms; an undischarged obligation leaves a model EUF
     // locally accepts but that violates extensionality (array_incompleteness1).
@@ -255,8 +267,20 @@ void EufSolver::reset() {
     falseTerm_ = NullEufTerm;
 
     arrayReasoner_.reset();
+    dtReasoner_.reset();
 
     initializeBoolConstants();
+}
+
+void EufSolver::ensureDtContext() {
+    if (!dtMode_ || !coreIr_) return;
+    if (!dtReasoner_.active()) {
+        dtReasoner_.setContext(&termManager_, &egraph_, coreIr_, dtRegistry_);
+    }
+    dtReasoner_.setBoolConstants(trueTerm_, falseTerm_);
+    // Combination logics (QF_UFDTNIA/LIA) carry a shared-term registry; pure
+    // QF_UFDT does not. Drives the finite-DT N-O completeness floor.
+    dtReasoner_.setCombinationMode(sharedTermRegistry_ != nullptr);
 }
 
 void EufSolver::ensureArrayContext() {
@@ -757,6 +781,17 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     assert(egraph_.congruenceClosed());
 #endif
 
+    // Datatype clash / acyclicity conflicts. Sound UNSAT detection against the
+    // now-congruence-closed egraph; safe at any effort (a hard contradiction).
+    if (dtMode_) {
+        ensureDtContext();
+        if (dtReasoner_.active()) {
+            if (auto conflict = dtReasoner_.checkConflict()) {
+                return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+            }
+        }
+    }
+
     // Array Row2/Extensionality lemmas — emitted only at Full effort (complete
     // SAT model), so the case split is over a stable assignment. The lemma
     // literals are observed dynamic equality atoms; returning Lemma lets the
@@ -772,6 +807,23 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 // Only emit if genuinely new; otherwise the same lemma would
                 // be regenerated forever (the dedup caches already gate this,
                 // but guard against a re-derivation across solver instances).
+                if (!lemmaDb.contains(tl)) {
+                    return TheoryCheckResult::mkLemma(std::move(tl));
+                }
+            }
+        }
+    }
+
+    // Datatype injectivity / guarded-projection lemmas (full effort). These
+    // propagate implied field equalities (a_i = b_i, sel = field) which feed
+    // back through the SAT core and can in turn surface a clash/diseq conflict.
+    if (dtMode_ && effort == TheoryEffort::Full) {
+        ensureDtContext();
+        if (dtReasoner_.active()) {
+            auto lemma = dtReasoner_.instantiateLemma();
+            if (lemma && !lemma->empty()) {
+                TheoryLemma tl;
+                tl.lits = std::move(*lemma);
                 if (!lemmaDb.contains(tl)) {
                     return TheoryCheckResult::mkLemma(std::move(tl));
                 }

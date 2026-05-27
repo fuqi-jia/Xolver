@@ -5,6 +5,7 @@
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/array/ArrayReasoner.h"
+#include "theory/datatype/DtReasoner.h"
 #include "util/SmallVector.h"
 #include <vector>
 #include <optional>
@@ -35,6 +36,14 @@ public:
     void enableArrays(TheoryAtomRegistry* registry) {
         arrayMode_ = true;
         arrayRegistry_ = registry;
+    }
+
+    // Enable algebraic-datatype reasoning (QF_DT/QF_UFDT/QF_UFDTNIA). `registry`
+    // is needed so injectivity / projection lemmas can mint dynamic equality
+    // atoms. Mirrors enableArrays. Must be called before any assertLit/check.
+    void enableDts(TheoryAtomRegistry* registry) {
+        dtMode_ = true;
+        dtRegistry_ = registry;
     }
 
     // Nelson-Oppen combination hooks
@@ -211,6 +220,12 @@ private:
     void ensureArrayContext();
     // Active array-sort disequalities (for Extensionality lemmas).
     std::vector<ArrayReasoner::ArrayDiseq> activeArrayDiseqs() const;
+
+    // Algebraic-datatype support (layered on the same shared egraph).
+    bool dtMode_ = false;
+    TheoryAtomRegistry* dtRegistry_ = nullptr;
+    DtReasoner dtReasoner_;
+    void ensureDtContext();
 };
 
 } // namespace zolver

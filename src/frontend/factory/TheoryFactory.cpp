@@ -97,6 +97,14 @@ SolverSetupResult setupSolvers(
         auto euf = std::make_unique<EufSolver>();
         euf->setCoreIr(ir);
         theoryManager.registerSolver(std::move(euf));
+    } else if (logic == "QF_DT" || logic == "QF_UFDT" || logic == "DT" || logic == "UFDT") {
+        // Algebraic datatypes (+ UF). One shared egraph hosts UF and the DT
+        // operators; the DtReasoner layers the free-algebra axioms on top.
+        // QF_DT and QF_UFDT share this branch (EUF already provides UF).
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->enableDts(&registry);
+        theoryManager.registerSolver(std::move(euf));
     } else if (logic == "QF_AX") {
         // Pure array theory (arrays + EUF, uninterpreted/Int indices+elements,
         // no arithmetic). One shared egraph; ArrayReasoner adds the axioms.
@@ -222,6 +230,64 @@ SolverSetupResult setupSolvers(
         nia->setSharedTermRegistry(sharedTermRegistry.get());
         nia->setRegistry(&registry);
         theoryManager.registerSolver(std::move(nia));
+        auto lia = std::make_unique<LiaSolver>();
+        lia->setCoreIr(ir);
+        lia->setSharedTermRegistry(sharedTermRegistry.get());
+        lia->setRegistry(&registry);
+        configureLia(*lia);
+        theoryManager.registerSolver(std::move(lia));
+        theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
+        theoryManager.setRegistry(&registry);
+        theoryManager.setCombinationMode(true);
+        theoryManager.setNonConvexMode(true);
+    } else if (logic == "QF_UFDTNIA" || logic == "UFDTNIA") {
+        // UF + algebraic datatypes + nonlinear integer arithmetic. Same shape as
+        // QF_UFNIA with the DtReasoner enabled on the shared egraph: DT owns the
+        // constructor/selector/tester structure, NIA owns the Int field values,
+        // sharing via equality propagation through the egraph (Nelson-Oppen).
+        sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
+        {
+            Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+            purifier.setArithTheory(TheoryId::NIA);
+            purifier.run();
+        }
+        auto polyKernel = createPolynomialKernel();
+        result.polyKernelRaw = polyKernel.get();
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->setSharedTermRegistry(sharedTermRegistry.get());
+        euf->enableDts(&registry);
+        theoryManager.registerSolver(std::move(euf));
+        auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+        nia->setCoreIr(ir);
+        nia->setSharedTermRegistry(sharedTermRegistry.get());
+        nia->setRegistry(&registry);
+        theoryManager.registerSolver(std::move(nia));
+        auto lia = std::make_unique<LiaSolver>();
+        lia->setCoreIr(ir);
+        lia->setSharedTermRegistry(sharedTermRegistry.get());
+        lia->setRegistry(&registry);
+        configureLia(*lia);
+        theoryManager.registerSolver(std::move(lia));
+        theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
+        theoryManager.setRegistry(&registry);
+        theoryManager.setCombinationMode(true);
+        theoryManager.setNonConvexMode(true);
+    } else if (logic == "QF_UFDTLIA" || logic == "UFDTLIA") {
+        // UF + algebraic datatypes + linear integer arithmetic.
+        sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
+        {
+            Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+            purifier.setArithTheory(TheoryId::LIA);
+            purifier.run();
+        }
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->setSharedTermRegistry(sharedTermRegistry.get());
+        euf->enableDts(&registry);
+        theoryManager.registerSolver(std::move(euf));
         auto lia = std::make_unique<LiaSolver>();
         lia->setCoreIr(ir);
         lia->setSharedTermRegistry(sharedTermRegistry.get());

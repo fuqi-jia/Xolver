@@ -226,7 +226,11 @@ static bool containsArrayOrUf(ExprId root, const CoreIr& ir) {
         const auto& e = ir.get(stack.back());
         stack.pop_back();
         if (e.kind == Kind::UFApply || e.kind == Kind::Select ||
-            e.kind == Kind::Store || e.kind == Kind::ConstArray) {
+            e.kind == Kind::Store || e.kind == Kind::ConstArray ||
+            // Datatype operators are also EUF-owned (DtReasoner on the shared
+            // egraph), so an atom mentioning one routes to EUF in combination.
+            e.kind == Kind::Constructor || e.kind == Kind::Selector ||
+            e.kind == Kind::Tester) {
             return true;
         }
         for (ExprId child : e.children) stack.push_back(child);

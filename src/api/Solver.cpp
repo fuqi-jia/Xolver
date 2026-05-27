@@ -1075,6 +1075,22 @@ public:
             return Result::Unknown;
         }
 
+        // Datatypes are only handled by the datatype logics. Any other logic
+        // that contains datatype operators is gated to Unknown (sound).
+        auto isDatatypeLogic = [](const std::string& l) {
+            return l == "QF_DT" || l == "DT" ||
+                   l == "QF_UFDT" || l == "UFDT" ||
+                   l == "QF_UFDTNIA" || l == "UFDTNIA" ||
+                   l == "QF_UFDTLIA" || l == "UFDTLIA";
+        };
+        if (features.hasDatatype && !isDatatypeLogic(logic)) {
+            lastUnknownReason_ = "LogicFeatureDetector: datatype feature outside datatype logic (declared=" + logic + ")";
+#ifdef ZOLVER_ENABLE_CASESTATS
+            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+            return Result::Unknown;
+        }
+
         // -------------------------------------------------------------------
         // Register solvers based on logic or detected features
         // -------------------------------------------------------------------
@@ -1189,6 +1205,19 @@ public:
             atomizer.setDefaultTheory(TheoryId::RDL);
         } else if (logic == "QF_UF") {
             atomizer.setDefaultTheory(TheoryId::EUF);
+        } else if (logic == "QF_DT" || logic == "DT" ||
+                   logic == "QF_UFDT" || logic == "UFDT") {
+            // Pure datatypes (+ UF): EUF owns equality + the DT operators.
+            atomizer.setDefaultTheory(TheoryId::EUF);
+        } else if (logic == "QF_UFDTNIA" || logic == "UFDTNIA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::NIA);
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+        } else if (logic == "QF_UFDTLIA" || logic == "UFDTLIA") {
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::LIA);
         } else if (logic == "QF_AX") {
             atomizer.setDefaultTheory(TheoryId::EUF);
         } else if (logic == "QF_ALRA" || logic == "ALRA" ||
@@ -1448,6 +1477,13 @@ public:
                 ret = Result::Unknown;
             }
         }
+
+        // NOTE: datatype sat soundness is enforced precisely inside the theory
+        // layer (EufSolver::satComplete blocks a sat unless every datatype
+        // e-class has a determined constructor — a concrete ground-term model).
+        // No blanket DT-sat floor here: a fully-determined consistent DT model
+        // is a sound sat; only constructor-undetermined cases fall through to
+        // Unknown via satComplete.
 
         // STRICT model-validation gate (ZOLVER_PP_STRICT_VALIDATION, default
         // OFF). The systemic soundness backstop: only emit `sat` when the

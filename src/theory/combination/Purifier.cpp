@@ -358,6 +358,43 @@ ExprId Purifier::purifyRec(ExprId root) {
             continue;
         }
 
+        // A datatype SELECTOR whose result is arithmetic (Int/Real) is, to the
+        // arith theory, an alien term — bridge it into a fresh SHARED variable
+        // exactly like an array read. `(< (head x) 0)` becomes `(< selbridge 0)`
+        // with the equality `(= selbridge (head x))` routed to EUF/DT (it
+        // mentions a selector). The DtReasoner's projection lemma then
+        // propagates head(x)=field into the shared var, coupling DT structure to
+        // arithmetic. Bridged unconditionally when arith-sorted (context-free).
+        if (e.kind == Kind::Selector &&
+            (e.sort == ir_.intSortId() || e.sort == ir_.realSortId())) {
+            std::vector<ExprId> selChildren;
+            selChildren.reserve(e.children.size());
+            bool selChanged = false;
+            for (ExprId child : e.children) {
+                ExprId p = done.at(child);
+                if (p != child) selChanged = true;
+                selChildren.push_back(p);
+            }
+            ExprId rebuilt;
+            if (!selChanged) {
+                rebuilt = f.eid;
+            } else {
+                CoreExpr ne;
+                ne.kind = e.kind;
+                ne.sort = e.sort;
+                ne.payload = e.payload;   // preserve the selector name
+                for (ExprId c : selChildren) ne.children.push_back(c);
+                rebuilt = ir_.add(ne);
+            }
+            ExprId fresh = makeFreshVar(e.sort);
+            ExprId bridge = makeEq(fresh, rebuilt);
+            bridgeAssertions_.push_back(bridge);
+            cache_[f.eid] = fresh;
+            done[f.eid] = fresh;
+            stack.pop_back();
+            continue;
+        }
+
         // Default branch
         std::vector<ExprId> newChildren;
         newChildren.reserve(e.children.size());

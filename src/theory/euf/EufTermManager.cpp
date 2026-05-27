@@ -186,8 +186,29 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                k == Kind::ConstFP || k == Kind::Variable;
     };
 
+    // Datatype operators are interned as ordinary uninterpreted applications so
+    // that constructor congruence (and dedup) is free on the shared egraph. The
+    // operator NAME is part of the symbol, and internSymbol additionally keys on
+    // arg/result sorts, so distinct constructors (or a selector vs a different
+    // datatype's selector) never collide. The DtReasoner layers the datatype
+    // axioms on top. The DT-operator symbol of a CoreExpr (name from payload).
+    auto dtSymbolName = [](const CoreExpr& e) -> std::string {
+        const std::string* nm = std::get_if<std::string>(&e.payload.value);
+        std::string base = nm ? *nm : std::string();
+        switch (e.kind) {
+            case Kind::Constructor: return "#dt.ctor." + base;
+            case Kind::Selector:    return "#dt.sel." + base;
+            case Kind::Tester:      return "#dt.is." + base;
+            default:                return std::string();
+        }
+    };
+
+    auto isDtKind = [](Kind k) -> bool {
+        return k == Kind::Constructor || k == Kind::Selector || k == Kind::Tester;
+    };
+
     auto isApplicationKind = [&](Kind k) -> bool {
-        return k == Kind::UFApply || !builtinName(k).empty();
+        return k == Kind::UFApply || isDtKind(k) || !builtinName(k).empty();
     };
 
     if (!tryResolve(root)) {
@@ -253,6 +274,8 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                     name = std::get_if<std::string>(&e.payload.value)
                            ? std::get<std::string>(e.payload.value)
                            : "";
+                } else if (isDtKind(e.kind)) {
+                    name = dtSymbolName(e);
                 } else {
                     name = builtinName(e.kind);
                 }

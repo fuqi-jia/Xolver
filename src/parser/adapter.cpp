@@ -234,6 +234,7 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
     else if (sort->isBv()) kind = SortKind::BV;
     else if (sort->isFp()) kind = SortKind::FP;
     else if (sort->isArray()) kind = SortKind::Array;
+    else if (sort->isDatatype()) kind = SortKind::Datatype;
     ir_->registerSort(id, kind);
 
     // Record (index, elem) sorts for Array sorts so the array theory and model
@@ -246,7 +247,39 @@ SortId FrontendAdapter::mapSort(std::shared_ptr<SOMTParser::Sort> sort) {
         ir_->registerArraySort(id, idxId, elemId);
     }
 
+    // Translate datatype constructor/selector signatures into the registry.
+    // `id` is already memoized above, so recursive datatypes (a selector whose
+    // result sort is the datatype itself) resolve to this same id without loop.
+    if (sort->isDatatype()) {
+        populateDatatype(id, sort);
+    }
+
     return id;
+}
+
+void FrontendAdapter::populateDatatype(SortId id,
+                                       const std::shared_ptr<SOMTParser::Sort>& sort) {
+    if (!sort || !sort->isDatatype()) return;
+    if (ir_->datatypes().isDatatypeSort(id)) return;  // idempotent
+
+    DatatypeInfo info;
+    info.sort = id;
+    info.recursive = parser_.isRecursiveDatatype(sort);
+
+    uint32_t ctorIdx = 0;
+    for (const auto& ctor : sort->getDtConstructors()) {
+        DtConstructorInfo ci;
+        ci.name = ctor.name;
+        ci.index = ctorIdx++;
+        for (const auto& sel : ctor.selectors) {
+            DtSelectorInfo si;
+            si.name = sel.name;
+            si.resultSort = mapSort(sel.sort);  // safe: `id` already memoized
+            ci.selectors.push_back(std::move(si));
+        }
+        info.constructors.push_back(std::move(ci));
+    }
+    ir_->datatypes().addDatatype(std::move(info));
 }
 
 Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
@@ -291,6 +324,9 @@ Kind FrontendAdapter::mapKind(SOMTParser::NODE_KIND nk) {
         case NODE_KIND::NT_SELECT:      return Kind::Select;
         case NODE_KIND::NT_STORE:       return Kind::Store;
         case NODE_KIND::NT_CONST_ARRAY: return Kind::ConstArray;
+        case NODE_KIND::NT_DT_CONSTRUCTOR: return Kind::Constructor;
+        case NODE_KIND::NT_DT_SELECTOR:    return Kind::Selector;
+        case NODE_KIND::NT_DT_TESTER:      return Kind::Tester;
         default:                        return Kind::Unknown;
     }
 }
@@ -346,6 +382,14 @@ Payload FrontendAdapter::extractPayload(SOMTParser::Node node) {
     }
 
     if (nk == NODE_KIND::NT_UF_APPLY) {
+        return Payload(node->getName());
+    }
+
+    // Datatype operators carry their operator name (constructor / selector /
+    // tester symbol) so the DatatypeRegistry can resolve it later.
+    if (nk == NODE_KIND::NT_DT_CONSTRUCTOR ||
+        nk == NODE_KIND::NT_DT_SELECTOR ||
+        nk == NODE_KIND::NT_DT_TESTER) {
         return Payload(node->getName());
     }
 

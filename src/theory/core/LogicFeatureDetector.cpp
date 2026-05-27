@@ -73,6 +73,7 @@ void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordere
                 case SortKind::BV:    f.hasBV = true; break;
                 case SortKind::FP:    f.hasFP = true; break;
                 case SortKind::Array: f.hasArray = true; break;
+                case SortKind::Datatype: f.hasDatatype = true; break;
                 default: break;
             }
         }
@@ -186,6 +187,11 @@ void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordere
         case Kind::Store:
         case Kind::ConstArray:
             f.hasArray = true;
+            break;
+        case Kind::Constructor:
+        case Kind::Selector:
+        case Kind::Tester:
+            f.hasDatatype = true;
             break;
         default:
             break;

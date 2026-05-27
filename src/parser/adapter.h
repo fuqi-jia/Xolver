@@ -31,6 +31,12 @@ private:
     Kind mapKind(SOMTParser::NODE_KIND nk);
     Payload extractPayload(SOMTParser::Node node);
 
+    // Translate SOMTParser declare-datatypes metadata for `sort` (already
+    // assigned `id`) into the CoreIr DatatypeRegistry. Idempotent. Recurses
+    // into selector arg sorts via mapSort; safe on recursive datatypes because
+    // `id` is memoized before this is called.
+    void populateDatatype(SortId id, const std::shared_ptr<SOMTParser::Sort>& sort);
+
     SOMTParser::Parser& parser_;
     std::unique_ptr<CoreIr> ir_;
     SortId boolSortId_ = NullSort;
