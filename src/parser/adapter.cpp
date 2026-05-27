@@ -133,13 +133,6 @@ ExprId FrontendAdapter::importNode(Node node) {
         }
         SortId s = mapSort(n);
         Payload p = extractPayload(n);
-        if (nk == SOMTParser::NODE_KIND::NT_CONST) {
-            auto sp = sort(n);
-            std::cerr << "[ADAPTER-CONST] name=" << n->getName()
-                      << " sortKind=" << (sp ? (int)sp->kind : -1)
-                      << " sortName=" << (sp ? sp->name : "null")
-                      << " mapped=" << s << "\n";
-        }
 
         // Infer sort for numeric constants when parser gives no explicit sort.
         if (s == NullSort && k == Kind::ConstReal) {
