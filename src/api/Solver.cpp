@@ -839,7 +839,13 @@ public:
                            logic == "QF_ALIA" || logic == "ALIA" ||
                            logic == "QF_ALRA" || logic == "ALRA" ||
                            logic == "QF_AUFLIA" || logic == "AUFLIA" ||
-                           logic == "QF_AUFLRA" || logic == "AUFLRA");
+                           logic == "QF_AUFLRA" || logic == "AUFLRA" ||
+                           // Datatype logics register an EufSolver (with DT
+                           // enabled), so div/mod EUF-lowering is supported.
+                           logic == "QF_DT" || logic == "DT" ||
+                           logic == "QF_UFDT" || logic == "UFDT" ||
+                           logic == "QF_UFDTNIA" || logic == "UFDTNIA" ||
+                           logic == "QF_UFDTLIA" || logic == "UFDTLIA");
             bool isLinearOnly = (logic == "QF_LIA" || logic == "LIA" ||
                                  logic == "QF_LIRA" || logic == "LIRA" ||
                                  logic == "QF_IDL" || logic == "IDL" ||
@@ -849,7 +855,9 @@ public:
                                  logic == "QF_ALIA" || logic == "ALIA" ||
                                  logic == "QF_ALRA" || logic == "ALRA" ||
                                  logic == "QF_AUFLIA" || logic == "AUFLIA" ||
-                                 logic == "QF_AUFLRA" || logic == "AUFLRA");
+                                 logic == "QF_AUFLRA" || logic == "AUFLRA" ||
+                                 // QF_UFDTLIA is linear (LIA arith), like QF_UFLIA.
+                                 logic == "QF_UFDTLIA" || logic == "UFDTLIA");
             if (req.unsupported) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported divisor";
 #ifdef ZOLVER_ENABLE_CASESTATS
