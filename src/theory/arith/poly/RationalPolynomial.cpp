@@ -292,41 +292,28 @@ RationalPolynomial::toPrimitiveInteger(PolynomialKernel& kernel) const {
         }
     }
 
-    // Step 2: Scale to integer coefficients
-    std::map<MonomialKey, mpz_class> intTerms;
+    // Step 2: Scale to integer coefficients. terms_ is canonical (unique sorted
+    // keys, no zero coeffs), so build the item list DIRECTLY — no intermediate
+    // std::map<MonomialKey,...> / dedup / zero-removal is needed (it would be a
+    // redundant std::map<heap-vector,...>, the very pattern this refactor kills).
+    // Order is preserved: terms_ iterates in the same canonical lex order.
+    struct Item { MonomialKey key; mpz_class coeff; };
+    std::vector<Item> items;
+    items.reserve(terms_.size());
     for (const auto& [key, coeff] : terms_) {
-        mpz_class num = coeff.get_num();
-        mpz_class den = coeff.get_den();
-        mpz_class a = num * (D / den);
-        if (a != 0) {
-            auto it = intTerms.find(key);
-            if (it != intTerms.end()) {
-                it->second += a;
-            } else {
-                intTerms[key] = a;
-            }
-        }
+        mpz_class a = coeff.get_num() * (D / coeff.get_den());
+        if (a != 0) items.push_back({key, std::move(a)});
     }
 
-    // Remove zeros
-    for (auto it = intTerms.begin(); it != intTerms.end(); ) {
-        if (it->second == 0) {
-            it = intTerms.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    if (intTerms.empty()) {
+    if (items.empty()) {
         PolyId zero = kernel.mkZero();
         return {zero, mpq_class(1)};
     }
 
     // Step 3: GCD of absolute coefficients
     mpz_class g = 0;
-    for (const auto& [key, coeff] : intTerms) {
-        (void)key;
-        mpz_class absCoeff = coeff >= 0 ? coeff : -coeff;
+    for (const auto& it : items) {
+        mpz_class absCoeff = it.coeff >= 0 ? it.coeff : -it.coeff;
         if (g == 0) {
             g = absCoeff;
         } else {
@@ -338,22 +325,11 @@ RationalPolynomial::toPrimitiveInteger(PolynomialKernel& kernel) const {
     }
 
     // Step 4: Divide by GCD -> primitive coefficients
-    for (auto& [key, coeff] : intTerms) {
-        (void)key;
-        coeff /= g;
-    }
+    for (auto& it : items) it.coeff /= g;
 
     // Step 5: Build PolyId via divide-and-conquer to avoid O(N^2)
     // linear accumulation.  Each term is built independently, then
     // merged pairwise so intermediate polynomials are balanced.
-    struct Item { MonomialKey key; mpz_class coeff; };
-    std::vector<Item> items;
-    items.reserve(intTerms.size());
-    for (auto& [key, coeff] : intTerms) {
-        items.push_back({std::move(const_cast<MonomialKey&>(key)), std::move(coeff)});
-    }
-    // Release the map early
-    intTerms.clear();
 
     auto build = [&](auto&& self, size_t l, size_t r) -> PolyId {
         if (l == r) {
