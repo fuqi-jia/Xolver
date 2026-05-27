@@ -143,34 +143,49 @@ cmd_run() {
     LOGIC="$1"
     shift
 
-    # SCRAMBLE=1 且未显式给 SCRAMBLE_SEED：在此生成一个随机种子（每次运行不同，像竞赛），
-    # 生成一次并 export — 使 BOTH 的 OFF/ON 两遍共享同一份 scrambled 输入（oracle-cache 命中）。
-    # 想复现某次运行就显式传 SCRAMBLE_SEED=<n>。
-    if [[ "${SCRAMBLE:-}" == "1" && -z "${SCRAMBLE_SEED:-}" ]]; then
+    # 解析 deploy_and_run 自己的开关（--both / --allon / --scramble / --scramble-seed N），
+    # 其余参数透传给 run_benchmark.py。也兼容旧环境变量 (BOTH=1 / ALLON=1 / SCRAMBLE=1 / SCRAMBLE_SEED=n)。
+    DO_BOTH=0;     [[ "${BOTH:-}"     == "1" ]] && DO_BOTH=1
+    DO_ALLON=0;    [[ "${ALLON:-}"    == "1" ]] && DO_ALLON=1
+    DO_SCRAMBLE=0; [[ "${SCRAMBLE:-}" == "1" ]] && DO_SCRAMBLE=1
+    PASS_ARGS=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --both)          DO_BOTH=1; shift ;;
+            --allon)         DO_ALLON=1; shift ;;
+            --scramble)      DO_SCRAMBLE=1; shift ;;
+            --scramble-seed) SCRAMBLE_SEED="$2"; shift 2 ;;
+            *)               PASS_ARGS+=("$1"); shift ;;
+        esac
+    done
+    set -- ${PASS_ARGS[@]+"${PASS_ARGS[@]}"}
+
+    # --scramble 且未指定 seed：生成随机种子一次并 export（竞赛风格，每次不同；--both 的 OFF/ON
+    # 两遍共享同一 scrambled 输入 -> oracle-cache 命中。想复现某次运行就传 --scramble-seed n）。
+    if [[ "$DO_SCRAMBLE" == "1" && -z "${SCRAMBLE_SEED:-}" ]]; then
         export SCRAMBLE_SEED=$(( (RANDOM * 32768) + RANDOM + 1 ))
-        log "SCRAMBLE_SEED 未指定 -> 本次随机种子 $SCRAMBLE_SEED"
+        log "scramble seed 未指定 -> 本次随机种子 $SCRAMBLE_SEED"
     fi
 
-    # BOTH=1: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（两遍共享 --oracle-cache）
-    if [[ "${BOTH:-}" == "1" ]]; then
+    # --both: 一条命令后台顺序跑 OFF 然后 ON；z3 oracle 仅跑一遍（共享 --oracle-cache）
+    if [[ "$DO_BOTH" == "1" ]]; then
         SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
         TAG="${LOGIC//,/_}"
         mkdir -p "$(pwd)/results"
         CACHE="$(pwd)/results/oracle-${TAG}.json"
         SEQLOG="$(pwd)/both-${TAG}-seq.log"
-        log "BOTH=1: 后台顺序 OFF -> ON, z3 oracle 仅跑一遍 ($CACHE)"
+        SCRF=""; [[ "$DO_SCRAMBLE" == "1" ]] && SCRF="--scramble"
+        log "--both: 后台顺序 OFF -> ON, z3 oracle 仅跑一遍 ($CACHE)"
         log "  序列日志: $SEQLOG"
-        nohup bash -c "unset BOTH ALLON; rm -f '$CACHE'; FG=1 '$SELF' run '$LOGIC' $* --oracle-cache '$CACHE'; ALLON=1 FG=1 '$SELF' run '$LOGIC' $* --oracle-cache '$CACHE'" > "$SEQLOG" 2>&1 &
+        nohup bash -c "unset BOTH ALLON SCRAMBLE; rm -f '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF --oracle-cache '$CACHE'; FG=1 '$SELF' run '$LOGIC' ${PASS_ARGS[*]} $SCRF --allon --oracle-cache '$CACHE'" > "$SEQLOG" 2>&1 &
         log "  PID=$!   查看: tail -f $SEQLOG"
         return 0
     fi
 
-    # ALLON=1: bug-hunt preset — enable every optimization flag, but leave the
-    # soundness FLOORS off (COMB_SAT_FLOOR / PP_STRICT_VALIDATION /
-    # PP_VALIDATE_NONLINEAR_SAT / SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT).
-    # Floors downgrade unconfirmed answers to 'unknown' and would HIDE bugs; off,
-    # a wrong answer shows as a zolver!=z3 MISMATCH. Use with --compare-with z3.
-    if [[ "${ALLON:-}" == "1" ]]; then
+    # --allon: bug-hunt 预设 — 开所有优化开关，但关掉 soundness FLOORS
+    # (COMB_SAT_FLOOR / PP_STRICT_VALIDATION / PP_VALIDATE_NONLINEAR_SAT /
+    #  SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT)，让假答案以 zolver!=z3 暴露。配合 --compare-with z3。
+    if [[ "$DO_ALLON" == "1" ]]; then
         export ZOLVER_COMB_CAREGRAPH=1 ZOLVER_COMB_MODEL_BASED=1 \
                ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
                ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
@@ -181,16 +196,15 @@ cmd_run() {
                ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
                ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
                ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
-        log "ALLON=1: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
+        log "--allon: optimizations ON, soundness floors OFF (bug-hunt; false answers surface vs z3)"
     fi
 
-    # SCRAMBLE=1: 用 SMT-COMP scrambler 扰动输入后再求解（竞赛会 scramble，找 scrambling 敏感 bug）。
-    # solver 与 oracle 跑同一份 scrambled 文件；可叠加 ALLON / BOTH。SCRAMBLE_SEED 默认 1。
-    if [[ "${SCRAMBLE:-}" == "1" ]]; then
+    # --scramble: 用 SMT-COMP scrambler 扰动输入后再求解（solver 与 oracle 跑同一份 scrambled 文件）
+    if [[ "$DO_SCRAMBLE" == "1" ]]; then
         SCR="${DIST_DIR}/bin/scrambler"
         [[ -f "$SCR" ]] || SCR="${DIST_DIR}/tools/scrambler/scrambler"
         set -- "$@" --scramble --scrambler "$SCR" --scramble-seed "$SCRAMBLE_SEED"
-        log "SCRAMBLE=1: 输入经 scrambler 扰动 (seed $SCRAMBLE_SEED, $SCR)"
+        log "--scramble: 输入经 scrambler 扰动 (seed $SCRAMBLE_SEED, $SCR)"
     fi
 
     # 默认 benchmark 路径: ./benchmark/non-incremental
@@ -323,13 +337,19 @@ Zolver 极简部署脚本
 
     示例:
       ./zolver-dist/tools/deploy_and_run.sh run lia,nia
-      ./zolver-dist/tools/deploy_and_run.sh run lia,nia,lra,nra -j 200 -t 100
-      ./zolver-dist/tools/deploy_and_run.sh run all -j 256 -t 100 --compare-with z3
+      ./zolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 30 --compare-with z3 --scramble --both
 
   ./zolver-dist/tools/deploy_and_run.sh pack
     打包最新 benchmark 结果到 ./zolver-<hostname>-<run>.tar.gz（当前目录）
 
-    常用选项（透传给 run_benchmark.py）:
+    deploy_and_run 自己的开关:
+      --both              一条命令后台顺序跑 OFF 再 ON；z3 oracle 仅跑一遍（共享缓存）
+      --allon             开所有优化、关 soundness floors（bug-hunt，让假答案以 zolver!=z3 暴露）
+      --scramble          先用 SMT-COMP scrambler 扰动输入再求解（solver 与 oracle 同一份）
+      --scramble-seed N   指定 scramble 种子（默认每次随机，传 N 复现某次运行）
+      （旧写法 BOTH=1 / ALLON=1 / SCRAMBLE=1 环境变量仍兼容）
+
+    透传给 run_benchmark.py 的常用选项:
       -j N         并行数
       -t SEC       超时秒数
       --max-files N   每个 logic 最多 N 个 case
