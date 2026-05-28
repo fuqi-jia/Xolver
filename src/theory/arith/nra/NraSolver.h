@@ -78,6 +78,13 @@ protected:
 private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_SIGN_REFUTE (default OFF): positive-orthant sign-definiteness
+    // refuter. From single-variable bounds, fix each var's sign; if some
+    // constraint g rel 0 is sign-definite over that orthant and contradicts rel
+    // (e.g. a sum of strictly-positive monomials = 0), emit the UNSAT conflict.
+    // O(#monomials); unconditionally sound (refutes only the provably impossible)
+    // — the cheap closer for the Sturm-MBO family that CAD/CAC time out on.
+    std::optional<TheoryCheckResult> stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts
@@ -99,6 +106,15 @@ private:
     // only on a validated model, else nullopt (fall through to CDCAC). Full
     // effort only. nullopt immediately when the flag is OFF.
     std::optional<TheoryCheckResult> stageSubtropical(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_CAC (A/B control for the Collins-vs-CAC differential): run the
+    // conflict-driven single-cell CAC engine (the "real" CDCAC) as the primary
+    // NRA decision at Full effort, BEFORE the Collins buildClosure. SAT (a
+    // rational witness the engine already validated) ⇒ consistent() + model stash;
+    // UNSAT (gap-free covering) ⇒ a theory conflict over the active reasons;
+    // Unknown / algebraic SAT model ⇒ nullopt (fall through to Collins). The flag
+    // gates promotion; whether CAC becomes the default is decided by the
+    // differential, not pinned here.
+    std::optional<TheoryCheckResult> stageCac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
     struct NraTrailEntry {
@@ -162,10 +178,17 @@ private:
     // XOLVER_NRA_SUBTROPICAL: gate read once at construction (default OFF →
     // stageSubtropical returns nullopt immediately, default path byte-identical).
     bool enableSubtropical_ = false;
-    // The validated subtropical witness for the CURRENT full assignment, if the
+    // The validated subtropical/CAC witness for the CURRENT full assignment, if a
     // SAT-fast-path fired. getModel() prefers it over the (bypassed) CDCAC engine
     // sample. Invalidated by any assignment change (assertLit/backtrack/pop/reset).
     std::optional<std::unordered_map<VarId, mpq_class>> satFastModel_;
+
+    // XOLVER_NRA_CAC: gate + lazily-built libpoly backend for the CAC engine.
+    bool enableCac_ = false;
+    std::unique_ptr<LibpolyBackend> cacBackend_;
+
+    // XOLVER_NRA_SIGN_REFUTE: gate for the sign-definiteness refuter.
+    bool enableSignRefute_ = false;
 };
 
 } // namespace xolver

@@ -7,6 +7,8 @@
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
+#include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
+#include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
 #include "theory/arith/nra/core/CdcacCore.h"               // XOLVER_NRA_PREELIM reduced CDCAC
 #include "theory/arith/nra/core/CdcacConstraint.h"         // XOLVER_NRA_PREELIM
 #include "theory/arith/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
@@ -29,6 +31,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); }));
+    // XOLVER_NRA_SIGN_REFUTE (default OFF): cheap positive-orthant sign-
+    // definiteness UNSAT refuter, right after presolve. nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.sign-refute",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
@@ -42,6 +49,12 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
+    // XOLVER_NRA_CAC (A/B for the Collins-vs-CAC differential): conflict-driven
+    // single-cell CAC as the primary engine, BEFORE the Collins buildClosure.
+    // nullopt at the gate when OFF or on CAC-Unknown ⇒ Collins fallback.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.cac",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
@@ -53,6 +66,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
         enablePreElim_ = true;
     if (const char* e = std::getenv("XOLVER_NRA_SUBTROPICAL"); e && *e && *e != '0')
         enableSubtropical_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_CAC"); e && *e && *e != '0')
+        enableCac_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_SIGN_REFUTE"); e && *e && *e != '0')
+        enableSignRefute_ = true;
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
@@ -100,6 +117,7 @@ void NraSolver::onReset() {
     // per solve), but drop it so a reset releases the libpoly backend too.
     preElimCore_.reset();
     preElimAlgebra_.reset();
+    cacBackend_.reset();   // XOLVER_NRA_CAC: release the CAC libpoly backend
 }
 
 void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -185,6 +203,37 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkLemma(pr.lemma);
     }
     return std::nullopt;
+}
+
+// XOLVER_NRA_SIGN_REFUTE: positive-orthant sign-definiteness refuter. Cheap,
+// unconditionally sound UNSAT for sign-definite constraints (e.g. a sum of
+// strictly-positive monomials = 0 with all variables positive — the Sturm-MBO
+// family that CAD/CAC time out on).
+std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& /*lemmaDb*/,
+                                                            TheoryEffort /*effort*/) {
+    if (!enableSignRefute_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
+
+    std::vector<SignRefuteConstraint> cs;
+    cs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) continue;     // skip unrepresentable; a missing constraint only loses completeness
+        cs.push_back({std::move(*rp), c.rel, c.reason});
+    }
+    auto conflict = refuteBySignDefiniteness(cs);
+    if (!conflict) return std::nullopt;
+
+    TheoryConflict tc;
+    tc.clause = std::move(*conflict);
+    if (std::getenv("XOLVER_NRA_SIGN_REFUTE_DIAG")) {
+        std::ofstream st("/tmp/sign_refute.txt", std::ios::app);
+        st << "[SIGN-REFUTE] UNSAT cons=" << cs.size() << " clause=" << tc.clause.size() << "\n";
+        st.flush();
+    }
+    return TheoryCheckResult::mkConflict(std::move(tc));
 }
 
 // XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
@@ -473,6 +522,70 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
         }
     }
     return std::nullopt;  // no base validated: fall through to CDCAC
+}
+
+// XOLVER_NRA_CAC: conflict-driven single-cell CAC engine (the "real" CDCAC) as
+// the primary NRA decision, run BEFORE the Collins buildClosure. A/B control for
+// the Collins-vs-CAC differential; promotion to default is decided by that diff.
+std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
+                                                     TheoryEffort effort) {
+    if (!enableCac_) return std::nullopt;
+    if (effort != TheoryEffort::Full) return std::nullopt;
+    // Pure NRA only: interface (dis)equalities live in the engine, not
+    // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+#ifdef XOLVER_HAS_LIBPOLY
+    // Build the constraint set + active reasons + variable order.
+    std::vector<CacConstraint> cacCons;
+    std::vector<SatLit> activeReasons;
+    std::set<VarId> varSet;
+    cacCons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;          // non-polynomial ⇒ defer to Collins
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) return std::nullopt;
+        for (VarId v : rp->variables()) varSet.insert(v);
+        cacCons.push_back({std::move(*rp), c.rel});
+        activeReasons.push_back(c.reason);
+    }
+    if (cacCons.empty() || varSet.empty()) return std::nullopt;
+    std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
+
+    if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
+    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons));
+    CacResult res = eng.solve();
+
+    const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
+    if (diag) {
+        std::ofstream st("/tmp/cac_diff.txt", std::ios::app);
+        st << "[CAC] vars=" << varOrder.size() << " cons=" << presolveConstraints_.size()
+           << " verdict=" << (res.status == CacStatus::Sat ? "sat"
+                              : res.status == CacStatus::Unsat ? "unsat" : "unknown") << "\n";
+        st.flush();
+    }
+
+    if (res.status == CacStatus::Unsat) {
+        // Sound theory conflict: the active reasons are jointly inconsistent. A
+        // superset of the true core is sound (omitting one would be unsound).
+        TheoryConflict conflict;
+        conflict.clause = std::move(activeReasons);
+        return TheoryCheckResult::mkConflict(std::move(conflict));
+    }
+    if (res.status == CacStatus::Sat) {
+        // Report only an all-rational model (the typed channel is mpq); an
+        // algebraic witness ⇒ defer to Collins (still sound). The engine already
+        // validated the model against every constraint (invariant 1).
+        std::unordered_map<VarId, mpq_class> rationalModel;
+        for (size_t i = 0; i < res.model.values.size(); ++i) {
+            if (!res.model.values[i].isRational()) return std::nullopt;
+            rationalModel.emplace(res.model.varOrder[i], res.model.values[i].rational);
+        }
+        satFastModel_ = std::move(rationalModel);
+        return TheoryCheckResult::consistent();
+    }
+#endif
+    return std::nullopt;  // Unknown / no libpoly ⇒ fall through to Collins
 }
 
 // Stage 2: the CDCAC engine. Always yields a definite verdict.
