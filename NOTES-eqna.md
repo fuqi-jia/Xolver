@@ -117,6 +117,13 @@ closeable ones; the rest of EQ+NA is NIA-engine/structural-bound.
 | QF_UFNIA | none | NIA divisors-hang (Certora) + structural blowup (Zohar) |
 My-lane atomization/routing gaps CLOSED. Remaining = NIA-engine + structural.
 
+### hoenicke QF_UFNRA spin (post-RealDivLowerer) — CLASSIFIED, NRA lane
+gdb-sampled modSimpleTest (3x): 100% inside CdcacCore::solveLevel (deep
+recursion) → checkFullSample → LibpolyBackend::signAtRational →
+LibPolyKernel::sgnVarId. The "repeated identical 3-constraint CDCAC-FULL" I
+saw earlier is the NRA engine's internal CAD cell lifting, NOT a combination
+loop. NRA-engine-bound (CdcacCore), NOT my lane. → ROUTE TO NRA AGENT.
+
 ## Fixes shipped / in progress (cont.)
 - **IntDivModLowerer hasEuf for QF_ANIA/AUFNIA (verifying)**: Solver.cpp, rides
   existing XOLVER_COMB_ARRAY_NIA gate (no new flag). Removes false needsEUF bail
