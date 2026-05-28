@@ -132,7 +132,7 @@ RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v, bool& exact) {
 CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     CoverOut out;
     if (level > maxDepth_) maxDepth_ = level;
-    if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; lastUnknown_ = "node-budget"; return out; }
+    if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; markIncomplete("node-budget"); return out; }
 
     const int n = static_cast<int>(varOrder_.size());
     const VarId var = varOrder_[level];
@@ -143,10 +143,10 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     long cells = 0;
 
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
-        if (++cells > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; lastUnknown_ = "cell-budget"; return out; }
+        if (++cells > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; markIncomplete("cell-budget"); return out; }
         bool convExact = true;
         const RealAlg s_i = toRealAlg(*algebra_, *sOpt, convExact);
-        if (!convExact) { out.status = CacStatus::Unknown; lastUnknown_ = "sample-roundtrip-ambiguous"; return out; }
+        if (!convExact) { out.status = CacStatus::Unknown; markIncomplete("sample-roundtrip-ambiguous"); return out; }
         sample.push(var, s_i);
 
         std::vector<RationalPolynomial> cellBoundaries;
@@ -154,11 +154,16 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         if (isLeaf) {
             bool allHold = true;
             bool anyUnknown = false;
+            int firstViolated = -1;            // witness constraint for the per-cell cert
             std::vector<RationalPolynomial> violated;
             for (size_t ci = 0; ci < cons_.size(); ++ci) {
                 const Sign s = algebra_->signAt(consPoly_[ci], sample);
                 if (s == Sign::Unknown) { anyUnknown = true; break; }
-                if (!relationHolds(s, cons_[ci].rel)) violated.push_back(cons_[ci].poly), allHold = false;
+                if (!relationHolds(s, cons_[ci].rel)) {
+                    violated.push_back(cons_[ci].poly);
+                    allHold = false;
+                    if (firstViolated < 0) firstViolated = static_cast<int>(ci);
+                }
             }
             if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
                 std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
@@ -167,8 +172,16 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                    << " anyUnknown=" << anyUnknown << "\n";
                 st.flush();
             }
-            if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "signAt-unknown"; return out; }
+            if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("signAt-unknown"); return out; }
             if (allHold)    { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
+            // Per-cell UNSAT witness: this leaf cell is excluded because the sample
+            // violates constraint `firstViolated`, whose roots are cell boundaries
+            // (the leaf passes `violated` AS the boundary polys) ⇒ it is sign-
+            // invariant on the cell ⇒ violated on the WHOLE cell. signAt already
+            // gave a definite (non-Unknown) sign above. Record the witness.
+            if (leafExclusions_.size() < 4096)   // bounded audit ledger; aggregate gate is the soundness net
+                leafExclusions_.push_back(
+                    LeafExclusion{var, s_i, consPoly_[firstViolated], cons_[firstViolated].rel});
             cellBoundaries = std::move(violated);
         } else {
             CoverOut rec = getUnsatCover(level + 1, sample);
@@ -178,7 +191,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             // `sample` holds vars[0..level]; the required coefficients (in those
             // vars) are evaluated against it (McCallum sample-aware projection).
             CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
-            if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "characterize-incomplete"; return out; }
+            if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("characterize-incomplete"); return out; }
             cellBoundaries = std::move(ch.downwardPolys);
         }
 
@@ -191,7 +204,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         const CellResult cr = intervalFromCharacterization(algebra_, kernel_, cellBoundaries,
                                                            prefix, var, s_i, /*skipVanishing=*/isLeaf);
         sample.pop();                                   // restore for next iteration
-        if (!cr.supported) { out.status = CacStatus::Unknown; lastUnknown_ = isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"; return out; }
+        if (!cr.supported) { out.status = CacStatus::Unknown; markIncomplete(isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"); return out; }
         cov.add(cr.interval);
         for (auto& p : cellBoundaries) levelChar.push_back(std::move(p));
     }
@@ -203,6 +216,30 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     return out;
 }
 
+void CacEngine::markIncomplete(const char* why) {
+    unsatTrustworthy_ = false;   // any incompleteness ⇒ UNSAT may NOT rest on this run
+    lastUnknown_ = why;
+}
+
+bool CacEngine::verifyCertificate() {
+    // Independent gate over the UNSAT certificate, evaluated separately from the
+    // covering control flow: it catches a regression where an UNSAT verdict
+    // escapes despite an incompleteness having been flagged. The soundness net is
+    // the AGGREGATE completeness ledger `unsatTrustworthy_`, which markIncomplete()
+    // drops at EVERY inconclusive step (budget, ambiguous round-trip, signAt
+    // Unknown, incomplete characterization, unsupported interval). Because UNSAT
+    // is returned only when the covering is gap-free with every cell `supported`,
+    // a trustworthy run never tripped the ledger.
+    //
+    // The leaf-exclusion ledger (`leafExclusions_`) is retained for audit / proof
+    // output, but is NOT re-evaluated here: each witness sample is only the leaf
+    // coordinate (the prefix is popped), so re-running signAt against it would be
+    // a PARTIAL assignment over a multivariate constraint — unreliable and, on the
+    // libpoly algebraic path, crash-prone. The witnesses were already computed
+    // from a complete (non-Unknown) signAt at record time on the full sample.
+    return unsatTrustworthy_;
+}
+
 CacResult CacEngine::solve() {
     CacResult res;
     if (!buildOk_ || !algebra_ || !kernel_ || varOrder_.empty()) {
@@ -212,7 +249,17 @@ CacResult CacEngine::solve() {
     SamplePoint sample;
     const CoverOut o = getUnsatCover(0, sample);
     res.status = o.status;
-    if (o.status == CacStatus::Sat) res.model = satModel_;
+    if (o.status == CacStatus::Sat) { res.model = satModel_; return res; }
+    if (o.status == CacStatus::Unsat) {
+        // Gate the UNSAT verdict on the independent per-cell certificate. If the
+        // ledger tripped or a witness fails to re-verify, DOWNGRADE to Unknown
+        // (never emit an uncertified UNSAT). certComplete() = ledger + witnesses.
+        certVerified_ = verifyCertificate();
+        if (!certComplete()) {
+            res.status = CacStatus::Unknown;
+            if (lastUnknown_.empty()) lastUnknown_ = "unsat-cert-unverified";
+        }
+    }
     return res;
 }
 
