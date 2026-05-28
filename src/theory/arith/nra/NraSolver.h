@@ -8,7 +8,10 @@
 #include "theory/core/ActiveLiteralSet.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include <memory>
+#include <optional>
+#include <unordered_map>
 #include <vector>
+#include <gmpxx.h>
 
 namespace xolver {
 
@@ -89,6 +92,13 @@ private:
     // and validates over the ORIGINAL constraints (invariant 1). nullopt at the gate
     // when the flag is OFF (default path byte-identical).
     std::optional<TheoryCheckResult> stageNraPreElim(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_SUBTROPICAL (default OFF): subtropical SAT-fast-path. A cheap,
+    // incomplete witness search "at infinity" (substitute x_i = s_i*B^{a_i}); on
+    // a found candidate, materialize over increasing bases and EXACT-validate
+    // every active original constraint via the kernel sign (invariant 1) — SAT
+    // only on a validated model, else nullopt (fall through to CDCAC). Full
+    // effort only. nullopt immediately when the flag is OFF.
+    std::optional<TheoryCheckResult> stageSubtropical(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
     struct NraTrailEntry {
@@ -148,6 +158,14 @@ private:
     bool enablePreElim_ = false;
     std::unique_ptr<LibpolyBackend> preElimAlgebra_;
     std::unique_ptr<CdcacCore> preElimCore_;
+
+    // XOLVER_NRA_SUBTROPICAL: gate read once at construction (default OFF →
+    // stageSubtropical returns nullopt immediately, default path byte-identical).
+    bool enableSubtropical_ = false;
+    // The validated subtropical witness for the CURRENT full assignment, if the
+    // SAT-fast-path fired. getModel() prefers it over the (bypassed) CDCAC engine
+    // sample. Invalidated by any assignment change (assertLit/backtrack/pop/reset).
+    std::optional<std::unordered_map<VarId, mpq_class>> satFastModel_;
 };
 
 } // namespace xolver
