@@ -322,11 +322,60 @@ NiaReasoningResult ModularResidueReasoner::run(
     std::unordered_set<std::string> allVars;
     for (const auto& c : constraints)
         for (const auto& v : kernel_.variables(c.poly)) allVars.insert(v);
-    std::vector<std::string> primary;
+    std::vector<std::string> primaryAll;
     for (const auto& v : allVars)
         if (!simpleVars.count(v) && !moddefVars.count(v) && !quotientVars.count(v))
-            primary.push_back(v);
+            primaryAll.push_back(v);
+
+    // Dependency closure of the USABLE constraints (group eqs + check-eqs +
+    // pinned-form neqs) through the def/group graph. Variables OUTSIDE this
+    // closure appear only in ignored constraints (inequalities, non-pinned
+    // neqs), so they cannot affect whether the usable subset has a residue
+    // model — fix them out instead of enumerating them. This is what lets the
+    // reasoner fire on cases with many irrelevant free vars (e.g. ps4: free
+    // {c,k,y} but the mod-4 refutation is purely in y -> enumerate y, not 64).
+    auto findDef0 = [&](const std::string& v) -> const SimpleDef* {
+        for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
+        return nullptr;
+    };
+    std::unordered_set<std::string> closure;
+    {
+        std::vector<std::string> work;
+        auto seed = [&](PolyId p) { for (const auto& v : kernel_.variables(p)) work.push_back(v); };
+        for (const auto& g : groups) { work.push_back(g.rVar); work.push_back(g.qVar); seed(g.aPoly); }
+        for (const auto& ce : checkEqs) seed(ce.poly);
+        for (const auto& nq : neqs) {
+            // include only pinned-form neqs (±moddef + const); skip multivar/non-pinned
+            auto t = kernel_.terms(nq.poly);
+            if (!t) continue;
+            const Term* vt = nullptr; bool ok = true;
+            for (const auto& tm : *t) {
+                if (tm.powers.empty()) continue;
+                if (vt || tm.powers.size() != 1 || tm.powers[0].second != 1) { ok = false; break; }
+                vt = &tm;
+            }
+            if (ok && vt && moddefVars.count(std::string(kernel_.varName(vt->powers[0].first))))
+                seed(nq.poly);
+        }
+        while (!work.empty()) {
+            std::string x = work.back(); work.pop_back();
+            if (!closure.insert(x).second) continue;
+            if (const SimpleDef* sd = findDef0(x)) seed(sd->defPoly);
+            for (const auto& g : groups) {
+                if (g.rVar == x) seed(g.aPoly);
+                if (g.qVar == x) { seed(g.aPoly); work.push_back(g.rVar); }
+            }
+        }
+    }
+    std::vector<std::string> primary;
+    for (const auto& v : primaryAll)
+        if (closure.count(v)) primary.push_back(v);
     std::sort(primary.begin(), primary.end());  // determinism
+    // Derived vars we must fully determine before declaring UNSAT = only those
+    // in the closure (others feed nothing usable, so leaving them unknown is fine).
+    std::unordered_set<std::string> needSimple, needModdef;
+    for (const auto& v : simpleVars)  if (closure.count(v)) needSimple.insert(v);
+    for (const auto& v : moddefVars)  if (closure.count(v)) needModdef.insert(v);
 
     static const bool DIAG = std::getenv("XOLVER_NIA_MODULAR_DIAG") != nullptr;
     if (DIAG) {
@@ -482,10 +531,11 @@ NiaReasoningResult ModularResidueReasoner::run(
                     if (val) { res[sd.vVar] = *val; prog = true; }
                 }
             }
-            // all derived determined?
+            // all CLOSURE-relevant derived vars determined? (vars outside the
+            // usable-constraint closure feed nothing checked, so don't require them)
             bool allKnown = true;
-            for (const auto& v : simpleVars) if (!res.count(v)) { allKnown = false; break; }
-            if (allKnown) for (const auto& v : moddefVars) if (!res.count(v)) { allKnown = false; break; }
+            for (const auto& v : needSimple) if (!res.count(v)) { allKnown = false; break; }
+            if (allKnown) for (const auto& v : needModdef) if (!res.count(v)) { allKnown = false; break; }
             if (!allKnown) { bailed = true; break; }
 
             // a residue model must satisfy all check-eqs and all pinned Neqs
