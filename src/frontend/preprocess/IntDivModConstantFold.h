@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * IntDivModConstantFold (Capability 8e' of the close-all-known-fails plan).
@@ -51,4 +51,4 @@ private:
     bool didFold_ = false;
 };
 
-} // namespace zolver
+} // namespace xolver

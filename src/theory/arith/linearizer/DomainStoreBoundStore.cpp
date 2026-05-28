@@ -1,6 +1,6 @@
 #include "theory/arith/linearizer/DomainStoreBoundStore.h"
 
-namespace zolver {
+namespace xolver {
 
 DomainStoreBoundStore::DomainStoreBoundStore(const DomainStore& ds)
     : ds_(ds) {}
@@ -25,4 +25,4 @@ std::optional<BoundInfo> DomainStoreBoundStore::get(const std::string& var) cons
     return info;
 }
 
-} // namespace zolver
+} // namespace xolver

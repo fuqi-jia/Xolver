@@ -15,16 +15,16 @@
 // returns Unknown we accept (incompleteness) but flag mismatched verdicts.
 
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <filesystem>
 #include <fstream>
 
-using namespace zolver;
+using namespace xolver;
 
 #define INT(r) static_cast<int>(r)
 
 static std::string writeSmt2(const std::string& name, const std::string& body) {
-    auto p = std::filesystem::temp_directory_path() / ("zolver_prop_" + name + ".smt2");
+    auto p = std::filesystem::temp_directory_path() / ("xolver_prop_" + name + ".smt2");
     std::ofstream(p) << body;
     return p.string();
 }

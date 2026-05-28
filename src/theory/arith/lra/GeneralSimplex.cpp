@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // BoundValue comparison
@@ -35,14 +35,14 @@ bool BoundValue::operator>=(const BoundValue& rhs) const {
 
 GeneralSimplex::GeneralSimplex() {
     trail_.push_back({});
-    // ZOLVER_LRA_PIVOT_HEUR (default OFF): replace the Bland-only entering-var
+    // XOLVER_LRA_PIVOT_HEUR (default OFF): replace the Bland-only entering-var
     // selection with a largest-|coefficient| heuristic for the first
     // kHeuristicPivotBudget pivots of each check(), then fall back to Bland to
     // preserve Dutertre–de Moura's termination guarantee. Pivot selection never
     // affects the SAT/UNSAT verdict (any eligible entering var yields a valid
     // pivot; the Farkas conflict on Unsat is independent of the path), so this
     // is sound regardless of the heuristic chosen.
-    const char* env = std::getenv("ZOLVER_LRA_PIVOT_HEUR");
+    const char* env = std::getenv("XOLVER_LRA_PIVOT_HEUR");
     useHeuristicPivot_ = (env && *env && *env != '0');
 }
 
@@ -280,7 +280,7 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
     for (int x : nonBasicVars_) {
@@ -300,15 +300,15 @@ void GeneralSimplex::recomputeBeta() {
 
     betaDirty_ = false;
     rebuildViolationQueue();
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
     // Diagnostic: recomputeBeta is a full O(rows*nnz) rebuild fired on every
     // backtrack (betaDirty_). Track global call count + cumulative time to see
-    // whether it (not pivoting) is the QF_LRA hot path. env ZOLVER_LRA_BETA_EVERY.
+    // whether it (not pivoting) is the QF_LRA hot path. env XOLVER_LRA_BETA_EVERY.
     {
         static int betaEvery = []() {
-            const char* e = std::getenv("ZOLVER_LRA_BETA_EVERY");
+            const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
             return (e && *e) ? std::atoi(e) : 0;
         }();
         static long long gBetaCalls = 0;
@@ -375,7 +375,7 @@ bool GeneralSimplex::atUpper(int var) const {
 }
 
 void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
     assert(vars_[nonBasicVar].basicRow == -1);
@@ -395,7 +395,7 @@ void GeneralSimplex::update(int nonBasicVar, const DeltaRational& value) {
     }
 
     vars_[nonBasicVar].beta = value;
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
 #endif
@@ -469,7 +469,7 @@ GeneralSimplex::Result GeneralSimplex::check() {
         recomputeBeta();
     }
     auto r = checkInternal();
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     if (r == Result::Sat) {
         // Sample coefficient bit sizes from tableau
         for (int row = 0; row < tab_.numRows(); ++row) {
@@ -505,7 +505,7 @@ GeneralSimplex::Result GeneralSimplex::checkInternal() {
     // iteration cap (that would be giving up on a solvable, decidable instance —
     // only the external wall-clock may stop a solve). Termination is guaranteed
     // instead by Bland's anti-cycling rule:
-    //   - iter < kHeuristicPivotBudget: heuristic entering (if ZOLVER_LRA_PIVOT_HEUR).
+    //   - iter < kHeuristicPivotBudget: heuristic entering (if XOLVER_LRA_PIVOT_HEUR).
     //   - iter >= kHeuristicPivotBudget: Bland entering (smallest index).
     //   - iter >= kStrictBlandThreshold: STRICT Bland — smallest-index leaving AND
     //     entering, which provably terminates (Dutertre–de Moura). The fast queue
@@ -622,7 +622,7 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 
     DeltaRational theta = (target - vars_[leavingBasic].beta) / aij;
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     if (theta.isZero()) ++degeneratePivots_;
 #endif
 
@@ -651,17 +651,17 @@ void GeneralSimplex::pivotAndUpdate(int leavingBasic, int enteringNonBasic,
 }
 
 void GeneralSimplex::pivot(int leaving, int entering) {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     ++pivotCount_;
     auto prof_t0 = std::chrono::steady_clock::now();
-    // Live trajectory dump (env ZOLVER_LRA_PROFILE_EVERY=N): every N pivots,
+    // Live trajectory dump (env XOLVER_LRA_PROFILE_EVERY=N): every N pivots,
     // report cumulative pivot count and the largest coefficient bit-widths in
     // the tableau. Distinguishes pivot-count explosion (pivots climb, bits
     // stay small) from rational coefficient blow-up (bits explode) on cases
     // that time out before check() returns. Diagnostic-only, profile-gated.
     {
         static int dumpEvery = []() {
-            const char* e = std::getenv("ZOLVER_LRA_PROFILE_EVERY");
+            const char* e = std::getenv("XOLVER_LRA_PROFILE_EVERY");
             return (e && *e) ? std::atoi(e) : 0;
         }();
         // Process-global pivot counter so the modulo dump works across the many
@@ -767,7 +767,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
     // Invariant: entering is now basic, so its column must be empty
     assert(tab_.col(entering).entries.empty());
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
 #endif
@@ -1106,4 +1106,4 @@ int GeneralSimplex::rowOfBasic(int var) const {
     return vars_[var].basicRow;
 }
 
-} // namespace zolver
+} // namespace xolver

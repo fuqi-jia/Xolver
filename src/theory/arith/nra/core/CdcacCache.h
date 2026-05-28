@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V5: Cache keys
@@ -126,4 +126,4 @@ private:
     static uint64_t hashKey(const std::vector<AtomId>& atoms);
 };
 
-} // namespace zolver
+} // namespace xolver

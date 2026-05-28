@@ -18,9 +18,9 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/arith/nra/projection/LazardProjectionClosure.h"
 
-using namespace zolver;
+using namespace xolver;
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 
 namespace {
 
@@ -90,4 +90,4 @@ TEST_CASE("[H4] libpoly kernel vs hand-rolled Lazard closure completion (multiva
     CHECK(kernelComplete >= handComplete);
 }
 
-#endif  // ZOLVER_HAS_LIBPOLY
+#endif  // XOLVER_HAS_LIBPOLY

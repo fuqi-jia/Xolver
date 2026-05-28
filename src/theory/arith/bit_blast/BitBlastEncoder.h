@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 // CNF encoder over an independent SAT instance. Two's-complement, width-growing
 // arithmetic: add -> max(wa,wb)+1, mul -> wa+wb, so the encoded value is exact
@@ -72,4 +72,4 @@ private:
     BitVec negFixed(const BitVec& a, unsigned w);                  // -a in width w
 };
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

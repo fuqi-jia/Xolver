@@ -16,7 +16,7 @@
 #include <sstream>
 #include <map>
 
-namespace zolver {
+namespace xolver {
 
 // True if the atom's linear form is integer-valued (integer coefficients and
 // integer rhs). In LiaSolver every variable is an integer, so the aux var
@@ -30,13 +30,13 @@ static bool isIntegerLinearForm(const LinearAtomPayload& p) {
 }
 
 LiaSolver::LiaSolver() {
-    const char* env = std::getenv("ZOLVER_LIA_DUMP_DIR");
+    const char* env = std::getenv("XOLVER_LIA_DUMP_DIR");
     if (env) {
         dumpCounter_ = 0;
     }
-    const char* repairEnv = std::getenv("ZOLVER_LIA_REPAIR");
+    const char* repairEnv = std::getenv("XOLVER_LIA_REPAIR");
     repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
-    const char* cutsEnv = std::getenv("ZOLVER_LIA_CUTS");
+    const char* cutsEnv = std::getenv("XOLVER_LIA_CUTS");
     cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
@@ -46,7 +46,7 @@ LiaSolver::LiaSolver() {
 }
 
 LiaSolver::~LiaSolver() {
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -162,7 +162,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     pendingConflict_.reset();
     repairModel_.reset();
 
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
     profile_.checkCalls++;
     int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
     profile_.totalActiveLiterals += currentActive;
@@ -172,7 +172,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
 
-#ifndef ZOLVER_LIA_INCREMENTAL
+#ifndef XOLVER_LIA_INCREMENTAL
     // -------------------------------------------------------------------------
     // Full-rebuild mode (baseline for comparison)
     // -------------------------------------------------------------------------
@@ -224,7 +224,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 #endif
 
     if (pendingConflict_) {
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
         auto prof_t1 = std::chrono::steady_clock::now();
         profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
         int sz = static_cast<int>(pendingConflict_->conflict.clause.size());
@@ -244,13 +244,13 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
 
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
     auto prof_t2 = prof_t1;
 #endif
 
-#ifdef ZOLVER_LIA_INCREMENTAL
+#ifdef XOLVER_LIA_INCREMENTAL
     // Rebuild integerVars_ from activeAtoms_ and disequalities_ (low overhead)
     integerVars_.clear();
     for (const auto& a : activeAtoms_) {
@@ -279,7 +279,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             if (!ok) {
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
                 auto prof_t3 = std::chrono::steady_clock::now();
                 profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
                 int sz = static_cast<int>(tc.clause.size());
@@ -297,7 +297,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto r = gs_.check();
 
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
     auto prof_t3 = std::chrono::steady_clock::now();
     profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
     profile_.totalPivotCount += gs_.pivotCount();
@@ -320,7 +320,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             for (const auto& cr : conflict) {
                 tc.clause.push_back(cr.reason);
             }
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -332,7 +332,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 #endif
         } else {
             tc.clause = allActiveReasons();
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -431,7 +431,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (effort == TheoryEffort::Full && !disequalities_.empty()) {
             auto dr = handleDisequalities(lemmaDb);
             if (dr.kind != TheoryCheckResult::Kind::Consistent) {
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
                 if (dr.kind == TheoryCheckResult::Kind::Lemma) {
                     profile_.disequalitySplitCount++;
                 }
@@ -443,7 +443,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb, effort);
 
-#ifdef ZOLVER_LIA_PROFILE
+#ifdef XOLVER_LIA_PROFILE
     auto prof_t5 = std::chrono::steady_clock::now();
     profile_.integralityCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t5 - prof_t4).count();
     if (ir.kind == TheoryCheckResult::Kind::Lemma) {
@@ -451,7 +451,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 #endif
     if (ir.kind == TheoryCheckResult::Kind::Consistent) {
-        // A successful rounding repair (ZOLVER_LIA_REPAIR) has already
+        // A successful rounding repair (XOLVER_LIA_REPAIR) has already
         // exact-validated its integer point against every active atom and
         // disequality, and stored it in repairModel_. The simplex β still holds
         // the fractional relaxation, so the gs_-based validator below would
@@ -573,7 +573,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     // the CAV coef-size regression). Keep the budget small ("cut a little, then
     // branch"); tunable for A/B.
     static const int kMaxCutsPerSolve = []() {
-        const char* e = std::getenv("ZOLVER_LIA_CUT_MAXPERSOLVE");
+        const char* e = std::getenv("XOLVER_LIA_CUT_MAXPERSOLVE");
         int v = e ? std::atoi(e) : -1;
         return v >= 0 ? v : 32;
     }();
@@ -615,7 +615,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     }
 
     if (bestVar != -1) {
-        // ZOLVER_LIA_REPAIR: before splitting, try to round the LRA relaxation
+        // XOLVER_LIA_REPAIR: before splitting, try to round the LRA relaxation
         // to a nearby integer point and exact-validate it. Only at Full effort
         // (a real, complete relaxation model is in hand). A success short-cuts
         // potentially deep branch-and-bound to an immediate SAT.
@@ -629,7 +629,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
             tryIntegralityRepair()) {
             return TheoryCheckResult::consistent();
         }
-        // ZOLVER_LIA_CUTS: try a Gomory fractional cut before splitting. A cut
+        // XOLVER_LIA_CUTS: try a Gomory fractional cut before splitting. A cut
         // tightens the relaxation without branching; capped per solve so
         // branch-and-bound still terminates. Only at Full effort (a real model).
         if (cutsEnabled_ && effort == TheoryEffort::Full &&
@@ -648,7 +648,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
 }
 
 // ---------------------------------------------------------------------------
-// ZOLVER_LIA_REPAIR: rounding-based integrality repair
+// XOLVER_LIA_REPAIR: rounding-based integrality repair
 // ---------------------------------------------------------------------------
 
 // floor(q + 1/2): round half-up to the nearest integer.
@@ -747,7 +747,7 @@ bool LiaSolver::tryIntegralityRepair() {
 }
 
 // ---------------------------------------------------------------------------
-// ZOLVER_LIA_CUTS: Gomory fractional cuts
+// XOLVER_LIA_CUTS: Gomory fractional cuts
 // ---------------------------------------------------------------------------
 
 bool LiaSolver::isSimplexVarInteger(int idx) const {
@@ -846,7 +846,7 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     // the solver fall back to branching, which is fast. Tunable for A/B.
     {
         static const int kMaxBits = []() {
-            const char* e = std::getenv("ZOLVER_LIA_CUT_MAXBITS");
+            const char* e = std::getenv("XOLVER_LIA_CUT_MAXBITS");
             int v = e ? std::atoi(e) : 0;
             return v > 0 ? v : 8;
         }();
@@ -1539,7 +1539,7 @@ std::string LiaSolver::linearFormToSmtLib(const LinearFormKey& form) {
 }
 
 void LiaSolver::dumpState(const std::string& tag) const {
-    const char* env = std::getenv("ZOLVER_LIA_DUMP_DIR");
+    const char* env = std::getenv("XOLVER_LIA_DUMP_DIR");
     if (!env || !*env) return;
     std::filesystem::path dir(env);
     if (!std::filesystem::exists(dir)) {
@@ -1598,11 +1598,11 @@ void LiaSolver::dumpState(const std::string& tag) const {
 }
 
 std::optional<bool> LiaSolver::z3CheckCurrentState() const {
-    const char* env = std::getenv("ZOLVER_LIA_Z3_CHECK");
+    const char* env = std::getenv("XOLVER_LIA_Z3_CHECK");
     if (!env || !*env) return std::nullopt;
 
     std::filesystem::path tmpDir = std::filesystem::temp_directory_path();
-    std::string base = "zolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
+    std::string base = "xolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
     std::filesystem::path smtPath = tmpDir / (base + ".smt2");
     std::filesystem::path outPath = tmpDir / (base + ".out");
 
@@ -1664,4 +1664,4 @@ std::optional<bool> LiaSolver::z3CheckCurrentState() const {
     return isSat;
 }
 
-} // namespace zolver
+} // namespace xolver

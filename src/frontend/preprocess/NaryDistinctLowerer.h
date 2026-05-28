@@ -3,7 +3,7 @@
 #include "expr/ir.h"
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * NaryDistinctLowerer: lowers n-ary (n>2) Kind::Distinct into pairwise binary distinct.
@@ -37,4 +37,4 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;
 };
 
-} // namespace zolver
+} // namespace xolver

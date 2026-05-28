@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 struct BitBlastResult {
     enum class Status { Sat, UnsatComplete, Unknown };
@@ -93,9 +93,9 @@ private:
     // High-degree QF_NIA (e.g. degree-5 monomials over dozens of vars) blows the
     // encoding past available memory and aborts inside CaDiCaL with bad_alloc;
     // bailing to Unknown here is sound (other NIA stages still run) and turns an
-    // OOM crash into a clean Unknown. Env-tunable via ZOLVER_NIA_BITBLAST_GATE_BUDGET.
+    // OOM crash into a clean Unknown. Env-tunable via XOLVER_NIA_BITBLAST_GATE_BUDGET.
     uint64_t gateBudget_ = defaultGateBudget();
     static uint64_t defaultGateBudget();
 };
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

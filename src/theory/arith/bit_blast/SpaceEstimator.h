@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 struct BitWidthPlan {
     std::unordered_map<std::string, unsigned> width;
@@ -63,4 +63,4 @@ private:
     static constexpr double   kVoteThreshold = 0.5; // VO threshold (BLAN Gamma)
 };
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

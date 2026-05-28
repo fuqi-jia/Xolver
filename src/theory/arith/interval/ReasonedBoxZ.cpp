@@ -1,7 +1,7 @@
 #include "theory/arith/interval/ReasonedBoxZ.h"
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 std::optional<ReasonedInterval> ReasonedBoxZ::get(const std::string& var) const {
     auto it = box_.find(var);
@@ -54,4 +54,4 @@ const std::unordered_map<std::string, ReasonedInterval>& ReasonedBoxZ::entries()
     return box_;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -1,7 +1,7 @@
 #include "theory/combination/ConflictMinimizer.h"
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 void ConflictMinimizer::dedup(std::vector<SatLit>& lits) {
     if (lits.size() < 2) return;
@@ -14,4 +14,4 @@ void ConflictMinimizer::dedup(std::vector<SatLit>& lits) {
     }), lits.end());
 }
 
-} // namespace zolver
+} // namespace xolver

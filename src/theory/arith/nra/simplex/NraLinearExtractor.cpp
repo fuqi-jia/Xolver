@@ -1,6 +1,6 @@
 #include "theory/arith/nra/simplex/NraLinearExtractor.h"
 
-namespace zolver {
+namespace xolver {
 
 ClassifiedConstraints classifyConstraints(
     const PolynomialKernel& kernel,
@@ -30,4 +30,4 @@ ClassifiedConstraints classifyConstraints(
     return out;
 }
 
-} // namespace zolver
+} // namespace xolver

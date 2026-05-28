@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // LazardLifter — real-root placement for one CDCAC lift (LAZARD.md step D).
@@ -50,4 +50,4 @@ struct LazardLiftResult {
 LazardLiftResult lazardLift(const std::vector<RationalPolynomial>& polys,
                             VarId mainVar, const TowerContext& ctx);
 
-}  // namespace zolver
+}  // namespace xolver

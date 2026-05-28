@@ -7,7 +7,7 @@
 #include "frontend/preprocess/ModelConverter.h"
 #include <functional>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 void setupSorts(CoreIr& ir, SortId& b, SortId& i, SortId& r) {

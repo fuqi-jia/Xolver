@@ -4,7 +4,7 @@
 #include "theory/core/TheorySolver.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 enum class LinearizationStatus {
     NoChange,
@@ -18,4 +18,4 @@ struct LinearizationResult {
     std::vector<PendingLinearizationLemma> lemmas;
 };
 
-} // namespace zolver
+} // namespace xolver

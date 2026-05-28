@@ -1,7 +1,7 @@
 #include "theory/arith/linearizer/NonlinearTermAbstraction.h"
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 NonlinearTermAbstraction::NonlinearTermAbstraction(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -101,4 +101,4 @@ AbstractionResult NonlinearTermAbstraction::abstract(PolyId poly) {
     return {result, std::move(auxTerms), false};
 }
 
-} // namespace zolver
+} // namespace xolver

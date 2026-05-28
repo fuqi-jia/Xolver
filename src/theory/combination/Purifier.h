@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Purifier for Nelson-Oppen theory combination.
@@ -63,4 +63,4 @@ private:
     void registerEufVars(ExprId eid);
 };
 
-} // namespace zolver
+} // namespace xolver

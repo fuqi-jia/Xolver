@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Zolver Benchmark Delta Analyzer
+Xolver Benchmark Delta Analyzer
 
 Reads two benchmark runs (current + baseline) and produces compact,
 actionable analysis artifacts for Git commit.
 
 Usage:
     python tools/analyze_benchmark.py \
-        --current /data/bench-runs/2026-05-20_1530_zolver_abc1234 \
-        --baseline /data/bench-runs/2026-05-19_2100_zolver_def4567 \
+        --current /data/bench-runs/2026-05-20_1530_xolver_abc1234 \
+        --baseline /data/bench-runs/2026-05-19_2100_xolver_def4567 \
         --z3-baseline /data/bench-baselines/z3_4.12.2_xxx_t10.json \
-        --output bench-results/runs/2026-05-20_1530_zolver_abc1234
+        --output bench-results/runs/2026-05-20_1530_xolver_abc1234
 """
 
 import argparse
@@ -374,10 +374,10 @@ def build_case_records(current_data: dict, baseline_data: Optional[dict], z3_dat
             file=fpath,
             logic=logic,
             category=category,
-            result=cur.get("zolver_result", "unknown"),
-            time=cur.get("zolver_time", 0.0),
-            old_result=base.get("zolver_result", ""),
-            old_time=base.get("zolver_time", 0.0),
+            result=cur.get("xolver_result", "unknown"),
+            time=cur.get("xolver_time", 0.0),
+            old_result=base.get("xolver_result", ""),
+            old_time=base.get("xolver_time", 0.0),
             z3_result=z3.get("result", "") if isinstance(z3, dict) else "",
             z3_time=z3.get("time", 0.0) if isinstance(z3, dict) else 0.0,
             stats=stats,
@@ -727,7 +727,7 @@ def enforce_budgets(analysis: dict, output_dir: Path) -> int:
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Zolver Benchmark Delta Analyzer")
+    parser = argparse.ArgumentParser(description="Xolver Benchmark Delta Analyzer")
     parser.add_argument("--current", required=True, help="Path to current run directory")
     parser.add_argument("--baseline", default=None, help="Path to baseline run directory")
     parser.add_argument("--z3-baseline", default=None, help="Path to Z3 frozen baseline JSON")

@@ -7,7 +7,7 @@
 #include "theory/core/TheorySolver.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // Generic active assignment for mirror step (matches NiaSolver::ActiveAssignment)
 struct LinearizerActiveAssignment {
@@ -49,4 +49,4 @@ private:
         const PolynomialAtomPayload& payload);
 };
 
-} // namespace zolver
+} // namespace xolver

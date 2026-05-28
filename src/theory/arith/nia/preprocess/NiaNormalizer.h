@@ -5,7 +5,7 @@
 #include <vector>
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 // ActiveNiaConstraint is defined in NiaSolver.h, but we define it here
 // for use by normalizer and other components.
@@ -50,4 +50,4 @@ private:
     NormalizedNiaConstraint normalizeStrict(const ActiveNiaConstraint& c, PolyId intPoly);
 };
 
-} // namespace zolver
+} // namespace xolver

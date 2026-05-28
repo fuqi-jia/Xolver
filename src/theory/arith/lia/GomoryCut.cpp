@@ -1,6 +1,6 @@
 #include "theory/arith/lia/GomoryCut.h"
 
-namespace zolver {
+namespace xolver {
 
 mpq_class gmiFractionalPart(const mpq_class& q) {
     mpz_class fl;
@@ -38,4 +38,4 @@ std::optional<GomoryCutResult> deriveGomoryCut(const mpq_class& f0,
     return res;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -14,7 +14,7 @@
 
 #include "util/RealValue.h"
 
-namespace zolver::realalg {
+namespace xolver::realalg {
 
 // Binary arithmetic. At least one operand is expected to be Algebraic (the
 // Rational⊕Rational case is handled directly in RealValue); however these are
@@ -37,4 +37,4 @@ bool isExactInteger(const RealValue& a);
 mpz_class floorOf(const RealValue& a);
 mpz_class ceilOf(const RealValue& a);
 
-} // namespace zolver::realalg
+} // namespace xolver::realalg

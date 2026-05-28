@@ -2,7 +2,7 @@
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace zolver {
+namespace xolver {
 
 EquationalConstraintManager::EquationalConstraintManager(AlgebraBackend* algebra)
     : algebra_(algebra) {}
@@ -68,4 +68,4 @@ ValidationResult EquationalConstraintManager::validateReducedProjection(
     return ValidationResult{ValidationStatus::Unknown, CdcacUnknownReason::ProjectionDegeneracyUnresolved};
 }
 
-} // namespace zolver
+} // namespace xolver

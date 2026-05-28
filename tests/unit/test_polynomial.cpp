@@ -5,7 +5,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "expr/ir.h"
 
-using namespace zolver;
+using namespace xolver;
 
 // ============================================================================
 // PolynomialKernel basics

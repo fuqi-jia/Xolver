@@ -1,6 +1,6 @@
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 
-namespace zolver {
+namespace xolver {
 
 GcdDivisibilityReasoner::GcdDivisibilityReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -39,4 +39,4 @@ NiaReasoningResult GcdDivisibilityReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace zolver
+} // namespace xolver

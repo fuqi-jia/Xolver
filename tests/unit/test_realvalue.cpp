@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <vector>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

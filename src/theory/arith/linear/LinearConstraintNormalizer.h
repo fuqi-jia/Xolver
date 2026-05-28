@@ -5,7 +5,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // LinearConstraintNormalizer: single exit for converting linear constraints
@@ -74,4 +74,4 @@ private:
     static Relation negateRelationForEffective(Relation r);
 };
 
-} // namespace zolver
+} // namespace xolver

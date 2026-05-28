@@ -9,12 +9,12 @@
 #include <cstdlib>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 ArrayReasoner::ArrayReasoner() {
-    row2ConstEnabled_ = std::getenv("ZOLVER_AX_ROW2_CONST") != nullptr;
+    row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
-    selectCompletionEnabled_ = std::getenv("ZOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
+    selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
 }
 
 std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
@@ -287,7 +287,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
         }
     }
 
-    // --- Row2 for distinct constant indices (ZOLVER_AX_ROW2_CONST) ----------
+    // --- Row2 for distinct constant indices (XOLVER_AX_ROW2_CONST) ----------
     // For select(arr,j) where arr's class holds a store(a,i,v) and i,j are
     // syntactically distinct numeric/bool constants: i != j holds
     // unconditionally, so the Row2 conclusion
@@ -470,4 +470,4 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
     return std::nullopt;
 }
 
-} // namespace zolver
+} // namespace xolver

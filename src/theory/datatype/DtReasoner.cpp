@@ -5,7 +5,7 @@
 #include "expr/ir.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 static constexpr char kCtorPrefix[] = "#dt.ctor.";
 static constexpr char kSelPrefix[]  = "#dt.sel.";
@@ -490,4 +490,4 @@ bool DtReasoner::modelFullyDetermined() const {
     return true;
 }
 
-} // namespace zolver
+} // namespace xolver

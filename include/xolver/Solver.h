@@ -1,11 +1,11 @@
 #pragma once
 
-#include "zolver/Result.h"
-#include "zolver/Term.h"
-#include "zolver/Sort.h"
-#include "zolver/Model.h"
-#include "zolver/Proof.h"
-#include "zolver/Statistics.h"
+#include "xolver/Result.h"
+#include "xolver/Term.h"
+#include "xolver/Sort.h"
+#include "xolver/Model.h"
+#include "xolver/Proof.h"
+#include "xolver/Statistics.h"
 #include <cstdint>
 #include <memory>
 #include <ostream>
@@ -13,7 +13,7 @@
 #include <string_view>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Value type for solver options.
@@ -126,4 +126,4 @@ private:
     std::unique_ptr<Impl> pImpl;
 };
 
-} // namespace zolver
+} // namespace xolver

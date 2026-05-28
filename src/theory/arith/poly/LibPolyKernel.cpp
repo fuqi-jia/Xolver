@@ -1,7 +1,7 @@
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 
 // NB: the libpoly C declarations we use below (lp_variable_order_*,
 // lp_variable_list_*, lp_polynomial_ensure_order / _new_copy) are pulled in
@@ -15,7 +15,7 @@
 #include <set>
 #include <sstream>
 
-namespace zolver {
+namespace xolver {
 
 LibPolyKernel::LibPolyKernel() = default;
 
@@ -558,7 +558,7 @@ std::vector<PolyId> LibPolyKernel::pscChain(PolyId a, PolyId b, VarId v) {
     lp_variable_order_t* order = ctx_.get_variable_order();
 
     // --- Snapshot the current variable order so we can restore it. --------
-    // Zolver leaves the libpoly order empty by default (main_variable is then
+    // Xolver leaves the libpoly order empty by default (main_variable is then
     // tie-broken by creation order), so this is normally a no-op snapshot, but
     // we restore exactly what was there to be robust against any future state.
     std::vector<lp_variable_t> saved;
@@ -689,6 +689,6 @@ std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const
     return norm.poly;
 }
 
-} // namespace zolver
+} // namespace xolver
 
-#endif // ZOLVER_HAS_LIBPOLY
+#endif // XOLVER_HAS_LIBPOLY

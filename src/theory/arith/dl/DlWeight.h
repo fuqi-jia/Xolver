@@ -3,7 +3,7 @@
 #include <gmpxx.h>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // IDL weight: plain integer (GMP mpz_class)
@@ -67,4 +67,4 @@ inline RdlWeight operator-(const RdlWeight& a) {
     return RdlWeight(-a.c, -a.deltaCoeff);
 }
 
-} // namespace zolver
+} // namespace xolver

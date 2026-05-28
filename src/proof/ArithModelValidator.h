@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * ArithModelValidator — independent end-to-end model check.
@@ -86,7 +86,7 @@ public:
     // used by the partial-function (div/mod-by-zero) model builder.
     std::optional<mpq_class> evalNumber(ExprId e) const;
 
-    // ZOLVER_PP_VALIDATOR_MEMO: memoize eval over ExprId. eval is a pure
+    // XOLVER_PP_VALIDATOR_MEMO: memoize eval over ExprId. eval is a pure
     // function of (ExprId, fixed model), so on a shared-subterm (DAG) formula
     // the un-memoized recursion re-evaluates shared nodes exponentially; the
     // cache makes validation linear in the DAG. Transparent — identical
@@ -134,7 +134,7 @@ private:
     const FuncInterpMap* funcInterps_ = nullptr;
     const RealAssignment* real_ = nullptr;
 
-    // eval memo (ZOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime
+    // eval memo (XOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime
     // (the model is fixed), keyed by original-formula ExprId.
     bool memoEnabled_ = false;
     mutable std::unordered_map<ExprId, TR> evalMemo_;
@@ -144,4 +144,4 @@ private:
     mutable std::unordered_map<ExprId, TR>* prepassCache_ = nullptr;
 };
 
-} // namespace zolver
+} // namespace xolver

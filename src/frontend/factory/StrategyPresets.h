@@ -5,10 +5,10 @@
 #include <utility>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
- * StrategyPresets (ZOLVER_STRAT_PRESETS) — per-logic strategy selection.
+ * StrategyPresets (XOLVER_STRAT_PRESETS) — per-logic strategy selection.
  *
  * The campaign backbone: a single place that maps (declared logic + cheap
  * LogicFeatureDetector features) to a set of solver knobs. Each theory agent's
@@ -17,7 +17,7 @@ namespace zolver {
  *
  * Soundness: a preset only flips knobs that are *individually* sound (each is a
  * default-OFF, separately-validated flag). It NEVER changes a verdict on its
- * own. The whole mechanism is gated behind ZOLVER_STRAT_PRESETS (default OFF),
+ * own. The whole mechanism is gated behind XOLVER_STRAT_PRESETS (default OFF),
  * and any explicit user option / env var overrides the preset (so per-flag A/B
  * testing keeps working).
  *
@@ -29,7 +29,7 @@ namespace zolver {
  */
 struct StrategyConfig {
     // In-process knobs (owned/reachable by Solver.cpp in this branch).
-    bool enableRewrite = false;        // ZOLVER_PP_REWRITE equivalent
+    bool enableRewrite = false;        // XOLVER_PP_REWRITE equivalent
 
     // LIA tuning flags (mirror the lia-* solver options). Default = current
     // engine defaults, i.e. behavior-neutral until tuned in Phase 2.
@@ -50,7 +50,7 @@ struct StrategyConfig {
 StrategyConfig selectStrategy(const std::string& logic, const LogicFeatures& features);
 
 /**
- * Portfolio (ZOLVER_STRAT_PORTFOLIO) — an ORDERED list of strategy arms tried
+ * Portfolio (XOLVER_STRAT_PORTFOLIO) — an ORDERED list of strategy arms tried
  * until one returns a definitive (Sat/Unsat) verdict.
  *
  * This is the assembly seam for the campaign: as each cross-agent technique
@@ -74,9 +74,9 @@ struct PortfolioArm {
 
 // Build the ordered portfolio for (logic, features). Always returns >= 1 arm;
 // arm[0] is the base strategy. Pure except for an explicit test hook:
-// ZOLVER_STRAT_PORTFOLIO_TEST_ARMS=N (N>=1) replicates the base arm N times so
+// XOLVER_STRAT_PORTFOLIO_TEST_ARMS=N (N>=1) replicates the base arm N times so
 // the multi-arm executor path can be exercised without a promoted flag yet.
 std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
                                           const LogicFeatures& features);
 
-} // namespace zolver
+} // namespace xolver

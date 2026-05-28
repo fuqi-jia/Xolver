@@ -10,7 +10,7 @@
 #include <optional>
 #include <utility>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Monomial key: sorted list of (varId, exponent) with exponents > 0.
@@ -177,4 +177,4 @@ private:
     static MonomialKey powKey(const MonomialKey& a, uint32_t n);
 };
 
-} // namespace zolver
+} // namespace xolver

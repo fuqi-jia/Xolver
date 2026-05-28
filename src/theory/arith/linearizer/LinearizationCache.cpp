@@ -1,6 +1,6 @@
 #include "theory/arith/linearizer/LinearizationCache.h"
 
-namespace zolver {
+namespace xolver {
 
 bool LinearizationCache::hasEmitted(const NonlinearTermKey& key,
                                      SatLit nonlinearReason,
@@ -22,4 +22,4 @@ void LinearizationCache::clear() {
     emitted_.clear();
 }
 
-} // namespace zolver
+} // namespace xolver

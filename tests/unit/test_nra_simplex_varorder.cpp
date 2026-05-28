@@ -6,7 +6,7 @@
 #include <set>
 #include <algorithm>
 
-using namespace zolver;
+using namespace xolver;
 
 static CdcacConstraint mkC(PolyId p, Relation r, int litVar) {
     CdcacConstraint c;
@@ -249,8 +249,8 @@ TEST_CASE("varorder: all-linear input is a valid deterministic permutation") {
 
 TEST_CASE("cdcac varorder flag: same verdict on/off for xy + x^2 - 2 = 0 and y>=1") {
     auto run = [](bool on) {
-        if (on) setenv("ZOLVER_NRA_VARORDER_SIMPLEX", "1", 1);
-        else    unsetenv("ZOLVER_NRA_VARORDER_SIMPLEX");
+        if (on) setenv("XOLVER_NRA_VARORDER_SIMPLEX", "1", 1);
+        else    unsetenv("XOLVER_NRA_VARORDER_SIMPLEX");
         auto kernel = createPolynomialKernel();
         CdcacSolver solver(kernel.get());
         PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
@@ -265,6 +265,6 @@ TEST_CASE("cdcac varorder flag: same verdict on/off for xy + x^2 - 2 = 0 and y>=
     };
     auto off = run(false);
     auto on  = run(true);
-    unsetenv("ZOLVER_NRA_VARORDER_SIMPLEX");
+    unsetenv("XOLVER_NRA_VARORDER_SIMPLEX");
     CHECK(off == on);   // order must not change the verdict on a decidable case
 }

@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 VarOrderHeuristic::VarOrderHeuristic(PolynomialKernel* kernel)
     : kernel_(kernel) {}
@@ -123,4 +123,4 @@ VarOrderHeuristicResult VarOrderHeuristic::brownHeuristic(
     return degreeBased(polys, vars);
 }
 
-} // namespace zolver
+} // namespace xolver

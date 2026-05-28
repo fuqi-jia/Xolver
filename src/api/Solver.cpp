@@ -1,5 +1,5 @@
-#include "zolver/Solver.h"
-#include "zolver/Result.h"
+#include "xolver/Solver.h"
+#include "xolver/Result.h"
 #include "expr/ir.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
@@ -29,8 +29,8 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
 #include "theory/core/LogicFeatureDetector.h"
-#ifdef ZOLVER_ENABLE_CASESTATS
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
 #endif
 #endif
@@ -51,7 +51,7 @@
 #include <thread>
 #include <atomic>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Solver::Impl
@@ -75,7 +75,7 @@ public:
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
     // Path of the file this problem was parsed from, retained so the portfolio
-    // executor (ZOLVER_STRAT_PORTFOLIO) can re-establish PRISTINE state per arm
+    // executor (XOLVER_STRAT_PORTFOLIO) can re-establish PRISTINE state per arm
     // via reset()+parseFile. Cleared by a programmatic assertFormula (which
     // would be lost on re-parse), which forces the executor to single-arm.
     std::string sourcePath_;
@@ -85,7 +85,7 @@ public:
     // an RAII guard in checkSatInternal clears it on every exit path.
     std::atomic<CadicalBackend*> activeBackend_{nullptr};
 
-    // Records variables eliminated by solve-eqs (ZOLVER_PP_SOLVE_EQS) so their
+    // Records variables eliminated by solve-eqs (XOLVER_PP_SOLVE_EQS) so their
     // values can be replayed onto the final model (↔SAT replay correctness).
     // Reset at the start of each checkSat's preprocessing; empty when the pass
     // did not run (flag off / incremental scope).
@@ -205,7 +205,7 @@ public:
                == ArithModelValidator::Verdict::Violated;
     }
 
-    // STRICT model validation (ZOLVER_PP_STRICT_VALIDATION). Returns true ONLY
+    // STRICT model validation (XOLVER_PP_STRICT_VALIDATION). Returns true ONLY
     // when the extracted model POSITIVELY satisfies every original assertion
     // (Verdict::Satisfied). Unlike the *Violates helpers (which act only on a
     // DEFINITE violation), this is the trust gate: an unconfirmed model
@@ -251,7 +251,7 @@ public:
                 }
             }
         }
-        const bool validatorMemo = std::getenv("ZOLVER_PP_VALIDATOR_MEMO") != nullptr;
+        const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
@@ -345,7 +345,7 @@ public:
         return false;
     }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     void parseUnknownReasonIntoStats() {
         // Derive structured unknown fields from the free-text reason.
         const std::string& r = lastUnknownReason_;
@@ -503,7 +503,7 @@ public:
         }
     }
 #endif
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     CaseStats caseStats_;
     std::string dumpStatsPath_;
 #endif
@@ -528,7 +528,7 @@ public:
         lastUnknownCode_.clear();
         lastUnknownComponent_.clear();
         lastUnknownDetail_.clear();
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
         caseStats_ = CaseStats{};
 #endif
     }
@@ -597,14 +597,14 @@ public:
         return realSortId_;
     }
 
-    // Portfolio executor (ZOLVER_STRAT_PORTFOLIO). Runs the ordered arms from
+    // Portfolio executor (XOLVER_STRAT_PORTFOLIO). Runs the ordered arms from
     // selectPortfolio until one returns a definitive (Sat/Unsat) verdict. Each
     // arm is run from PRISTINE state — the first arm uses the already-parsed
     // problem; subsequent arms reset()+re-parse the source file — so trying
     // several configurations is sound (any arm's Sat/Unsat is already
     // ModelValidator-backed; arms differ only in completeness). Multi-arm needs
     // a re-parseable file source; otherwise (programmatic input) it degrades to
-    // a single arm. Phase 1 has one arm == ZOLVER_STRAT_PRESETS, so a portfolio
+    // a single arm. Phase 1 has one arm == XOLVER_STRAT_PRESETS, so a portfolio
     // run is behavior-neutral until the master populates differentiated arms.
     Result checkSatPortfolio() {
         const std::string path = sourcePath_;  // reset() clears it; capture first
@@ -619,7 +619,7 @@ public:
         // flags), with the user's explicit env always winning (overwrite=0).
         std::set<std::string> names;
         for (size_t i = 0; i < nArms; ++i) {
-            if (arms[i].config.enableRewrite) names.insert("ZOLVER_PP_REWRITE");
+            if (arms[i].config.enableRewrite) names.insert("XOLVER_PP_REWRITE");
             for (const auto& f : arms[i].config.envFlags) names.insert(f.first);
         }
         std::map<std::string, std::optional<std::string>> baseline;
@@ -636,7 +636,7 @@ public:
         auto applyArm = [&](const PortfolioArm& a) {
             restoreEnv();  // back to the user's baseline, then layer this arm's
             // flags WITHOUT overriding an explicit user env (overwrite=0).
-            if (a.config.enableRewrite) setenv("ZOLVER_PP_REWRITE", "1", 0);
+            if (a.config.enableRewrite) setenv("XOLVER_PP_REWRITE", "1", 0);
             for (const auto& [n, val] : a.config.envFlags)
                 setenv(n.c_str(), val.c_str(), 0);
         };
@@ -701,7 +701,7 @@ public:
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
 
-        // ZOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
+        // XOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
         // formula rewriter. Runs BEFORE ITE lowering so its simplifications
         // (boolean identities/absorption, const-fold, relational const-eval)
         // shrink the formula for every downstream pass. Sound: it only APPENDS
@@ -709,17 +709,17 @@ public:
         // referencing the original formula for ModelValidator. A top-level
         // assertion that simplifies to the boolean constant false makes the
         // assertion conjunction unsatisfiable.
-        // Rewriter activation: explicit ZOLVER_PP_REWRITE, or chosen by the
-        // per-logic strategy preset (ZOLVER_STRAT_PRESETS). enableRewrite is
+        // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
+        // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
-        bool enableRewrite = (std::getenv("ZOLVER_PP_REWRITE") != nullptr);
-        if (!enableRewrite && std::getenv("ZOLVER_STRAT_PRESETS")) {
+        bool enableRewrite = (std::getenv("XOLVER_PP_REWRITE") != nullptr);
+        if (!enableRewrite && std::getenv("XOLVER_STRAT_PRESETS")) {
             enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
         }
         if (enableRewrite) {
             FormulaRewriter rewriter(*ir, boolSortId_);
             if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unsat, 0.0);
 #endif
                 return Result::Unsat;
@@ -730,7 +730,7 @@ public:
         // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
         // linear equalities (x = t), substituting globally and recording the
         // (x, t) substitution in modelConverter_ for replay onto the final
-        // model. Default-OFF (ZOLVER_PP_SOLVE_EQS). Restricted to base scope:
+        // model. Default-OFF (XOLVER_PP_SOLVE_EQS). Restricted to base scope:
         // the elimination is global and not roll-back-able, so it is gated off
         // under incremental push/pop. Also gated off for real-nonlinear logics
         // (NRA/NIRA/UFNRA): their models carry algebraic (irrational) values
@@ -739,7 +739,7 @@ public:
         modelConverter_ = ModelConverter{};
         const bool algebraicModelLogic =
             logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
-        if (std::getenv("ZOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
+        if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
             SolveEqs solveEqs(*ir, modelConverter_);
             if (solveEqs.run()) {
@@ -782,7 +782,7 @@ public:
             UnconditionalConstantPropagation cprop(*ir);
             cprop.run();
             if (cprop.hadContradiction()) {
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unsat, 0.0);
 #endif
                 return Result::Unsat;
@@ -826,7 +826,7 @@ public:
             IntDivModLowerer dmLowerer(*ir);
             if (!dmLowerer.run()) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported or internal error";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
@@ -860,21 +860,21 @@ public:
                                  logic == "QF_UFDTLIA" || logic == "UFDTLIA");
             if (req.unsupported) {
                 lastUnknownReason_ = "IntDivModLowerer: unsupported divisor";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
                 lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
             }
             if (req.needsNonlinearInt && isLinearOnly) {
                 lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
                 finalizeCaseStats(Result::Unknown, 0.0);
 #endif
                 return Result::Unknown;
@@ -978,7 +978,7 @@ public:
         auto* cadicalBackend = dynamic_cast<CadicalBackend*>(sat.get());
         if (!cadicalBackend) {
             lastUnknownReason_ = "SAT: CadicalBackend cast failed";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0);
 #endif
             return Result::Unknown;
@@ -1051,7 +1051,7 @@ public:
                       << " Mixed=" << features.hasMixedIntReal
                       << "). Returning Unknown.\n";
             lastUnknownReason_ = "LogicFeatureDetector: logic mismatch (declared=" + logic + ")";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -1059,7 +1059,7 @@ public:
 
         if (features.hasUnsupported) {
             lastUnknownReason_ = "LogicFeatureDetector: unsupported feature (quantifier/FP/BV)";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -1077,7 +1077,7 @@ public:
         };
         if (features.hasArray && !isArrayLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -1093,7 +1093,7 @@ public:
         };
         if (features.hasDatatype && !isDatatypeLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: datatype feature outside datatype logic (declared=" + logic + ")";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -1107,12 +1107,12 @@ public:
         bool liaEnableSingleVar = false;
         bool liaEnableGcdIneq = false;
         bool liaEnableEqGcdNorm = false;
-        // Strategy preset (ZOLVER_STRAT_PRESETS) provides the BASE knob values
+        // Strategy preset (XOLVER_STRAT_PRESETS) provides the BASE knob values
         // keyed on logic + detected features; explicit user options below still
         // override. Phase 1 leaves LIA flags at defaults and envFlags empty, so
         // this is behavior-neutral until the table is tuned / cross-agent flags
         // merge. envFlags use setenv(...,overwrite=0): explicit user env wins.
-        if (std::getenv("ZOLVER_STRAT_PRESETS")) {
+        if (std::getenv("XOLVER_STRAT_PRESETS")) {
             StrategyConfig sc = selectStrategy(logic, features);
             liaSafeMode = sc.liaSafeMode;
             liaUltraSafeMode = sc.liaUltraSafeMode;
@@ -1152,7 +1152,7 @@ public:
 
         if (!setupResult.success) {
             lastUnknownReason_ = "TheoryFactory: solver setup failed (unsupported logic=" + logic + ")";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
@@ -1166,7 +1166,7 @@ public:
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
         propagator.setUnknownReasonSink(&lastUnknownReason_);
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
         propagator.setCaseStats(&caseStats_);
         if (!dumpStatsPath_.empty()) {
             // Base path without extension for heartbeat
@@ -1180,7 +1180,7 @@ public:
         registry.setContext(sat.get(), &atomizer);
         atomizer.setRegistry(&registry);
         atomizer.setBoolSortId(boolSortId_);
-        atomizer.setPgCnf(std::getenv("ZOLVER_PP_PG_CNF") != nullptr);
+        atomizer.setPgCnf(std::getenv("XOLVER_PP_PG_CNF") != nullptr);
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
@@ -1281,7 +1281,7 @@ public:
             }
         }
 
-        // PG-CNF (ZOLVER_PP_PG_CNF): pre-compute the occurrence polarity of every
+        // PG-CNF (XOLVER_PP_PG_CNF): pre-compute the occurrence polarity of every
         // subformula (each assertion is a positive root) so the monotone
         // connectives below emit only the required half of their definition.
         atomizer.computePolarities(ir->assertions(), *ir);
@@ -1310,7 +1310,7 @@ public:
         if (registry.hasUnsupportedTheoryAtom()) {
             std::cerr << "[Solver] unsupported theory atom detected\n";
             lastUnknownReason_ = "Atomizer: unsupported theory atom";
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, &theoryManager,
                               cadicalBackend, &atomizer, &registry);
 #endif
@@ -1493,7 +1493,7 @@ public:
         // is a sound sat; only constructor-undetermined cases fall through to
         // Unknown via satComplete.
 
-        // STRICT model-validation gate (ZOLVER_PP_STRICT_VALIDATION, default
+        // STRICT model-validation gate (XOLVER_PP_STRICT_VALIDATION, default
         // OFF). The systemic soundness backstop: only emit `sat` when the
         // extracted model is POSITIVELY confirmed against the original
         // assertions. The default path downgrades only on a DEFINITE Violated,
@@ -1508,7 +1508,7 @@ public:
         // extraction (theory agents) lets the validator confirm them; that
         // completeness loss is the documented trade for closing the false-sat
         // class, and promotion to default-on waits on that work.
-        // Scoped variant (ZOLVER_PP_VALIDATE_NONLINEAR_SAT): enforce invariant 1
+        // Scoped variant (XOLVER_PP_VALIDATE_NONLINEAR_SAT): enforce invariant 1
         // (a Result::Sat must be ModelValidator-backed) specifically for the
         // INCOMPLETE nonlinear theories (NIA/NRA/NIRA — features.hasNonlinear).
         // Those return "no conflict found" = sat without a validated model, so
@@ -1532,7 +1532,7 @@ public:
         // the nonlinear floor above -- yet the div/mod lowering can yield a
         // spurious sat whose model satisfies the lowered linear-mod system but
         // not the original mod relations (e.g. SVCOMP soft_float: many
-        // (mod m 2^k) clauses; zolver=sat, oracle=unsat). Validate the sat for
+        // (mod m 2^k) clauses; xolver=sat, oracle=unsat). Validate the sat for
         // such (pure-Int) div/mod-lowered formulas too. Sound: only sat->unknown.
         // Exclude UF: div/mod-by-zero under UF is a partial function the
         // validator cannot positively confirm (genuine UFNIA divzero sats would
@@ -1540,9 +1540,9 @@ public:
         bool divModSatFloor = !divModOrigins_.empty() &&
                               !features.hasRealVar && !features.hasUF;
         bool validateSat = niaSatFloor || divModSatFloor ||
-                           (std::getenv("ZOLVER_PP_STRICT_VALIDATION") != nullptr) ||
+                           (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
                            (features.hasNonlinear &&
-                            std::getenv("ZOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
+                            std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
         if (ret == Result::Sat && validateSat) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
             // Theory models do not track pure-boolean VARIABLES (those values
@@ -1608,7 +1608,7 @@ public:
             }
         }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
         finalizeCaseStats(ret, solveDurMs, &propagator, &theoryManager,
                           cadicalBackend, &atomizer, &registry);
 #endif
@@ -1742,7 +1742,7 @@ void Solver::assertFormula(Term t) {
 }
 
 Result Solver::checkSat() {
-    if (std::getenv("ZOLVER_STRAT_PORTFOLIO"))
+    if (std::getenv("XOLVER_STRAT_PORTFOLIO"))
         return pImpl->checkSatPortfolio();
     return pImpl->checkSatInternal();
 }
@@ -2201,7 +2201,7 @@ std::string Solver::lastUnknownCode() const { return pImpl->lastUnknownCode_; }
 std::string Solver::lastUnknownComponent() const { return pImpl->lastUnknownComponent_; }
 std::string Solver::lastUnknownDetail() const { return pImpl->lastUnknownDetail_; }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
 void Solver::setDumpStatsPath(std::string_view path) {
     pImpl->dumpStatsPath_ = std::string(path);
 }
@@ -2221,4 +2221,4 @@ void Solver::dumpSMT2(std::ostream& os) {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

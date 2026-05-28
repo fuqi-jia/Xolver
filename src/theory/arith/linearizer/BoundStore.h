@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * BoundStore: read-only interface for looking up variable bounds.
@@ -17,4 +17,4 @@ public:
     virtual std::optional<BoundInfo> get(const std::string& var) const = 0;
 };
 
-} // namespace zolver
+} // namespace xolver

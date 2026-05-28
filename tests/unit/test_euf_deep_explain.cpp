@@ -21,7 +21,7 @@
 #include "sat/SatSolver.h"
 #include <deque>
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("EUF: deeply-nested UF congruence explanation does not overflow") {
     constexpr int kDeep = 60000;

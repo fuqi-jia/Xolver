@@ -12,7 +12,7 @@
 #include <random>
 #include <vector>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

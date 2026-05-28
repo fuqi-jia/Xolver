@@ -2,7 +2,7 @@
 
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -88,4 +88,4 @@ bool NonnegativePolynomialBoundExtractor::run(PresolveState& st) {
     return made;
 }
 
-} // namespace zolver
+} // namespace xolver

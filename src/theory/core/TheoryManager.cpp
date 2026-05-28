@@ -15,7 +15,7 @@
 #include <map>
 #include <functional>
 
-namespace zolver {
+namespace xolver {
 
 static int noDebugModelCheckId = 0;
 
@@ -47,7 +47,7 @@ void TheoryManager::clearSolvers() {
 
 void TheoryManager::ensureCareGraph() {
     if (!careGraphEnvChecked_) {
-        careGraphEnabled_ = (std::getenv("ZOLVER_COMB_CAREGRAPH") != nullptr);
+        careGraphEnabled_ = (std::getenv("XOLVER_COMB_CAREGRAPH") != nullptr);
         careGraphEnvChecked_ = true;
     }
     if (!careGraphEnabled_ || careGraph_.built()) return;
@@ -62,7 +62,7 @@ void TheoryManager::ensureCareGraph() {
 
 bool TheoryManager::useSatMin() {
     if (!satMinEnvChecked_) {
-        satMinEnabled_ = (std::getenv("ZOLVER_SAT_MIN") != nullptr);
+        satMinEnabled_ = (std::getenv("XOLVER_SAT_MIN") != nullptr);
         satMinEnvChecked_ = true;
     }
     return satMinEnabled_;
@@ -70,7 +70,7 @@ bool TheoryManager::useSatMin() {
 
 bool TheoryManager::useModelBased() {
     if (!modelBasedEnvChecked_) {
-        modelBasedEnabled_ = (std::getenv("ZOLVER_COMB_MODEL_BASED") != nullptr);
+        modelBasedEnabled_ = (std::getenv("XOLVER_COMB_MODEL_BASED") != nullptr);
         modelBasedEnvChecked_ = true;
     }
     return modelBasedEnabled_;
@@ -231,7 +231,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         for (auto lit : rawReasons) {
             fc.clause.push_back(lit.negated());
         }
-        // Theory-agnostic minimization (ZOLVER_SAT_MIN): dedup the negated
+        // Theory-agnostic minimization (XOLVER_SAT_MIN): dedup the negated
         // reasons. Sound — dedup preserves the literal set, so falsified-ness
         // is unchanged — and strictly shortens the learned clause.
         if (satMin) ConflictMinimizer::dedup(fc.clause);
@@ -318,7 +318,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
 
     // ---- Nelson-Oppen combination path ----
 
-    // Build the demand-driven care graph once (no-op unless ZOLVER_COMB_CAREGRAPH).
+    // Build the demand-driven care graph once (no-op unless XOLVER_COMB_CAREGRAPH).
     ensureCareGraph();
 
     // 1. Process pending SAT-assigned shared equalities/disequalities
@@ -405,11 +405,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
-        // Conflict-source attribution (ZOLVER_COMB_CONFLICT_TRACE): name the
+        // Conflict-source attribution (XOLVER_COMB_CONFLICT_TRACE): name the
         // solver behind a combination-path conflict so we can route the eventual
         // correctness fix (e.g. an unsound Standard-effort NIA conflict -> A2).
         if (tr.kind != TheoryCheckResult::Kind::Consistent &&
-            std::getenv("ZOLVER_COMB_CONFLICT_TRACE")) {
+            std::getenv("XOLVER_COMB_CONFLICT_TRACE")) {
             std::cerr << "[CONFLICT-SRC] solver=" << (int)solver->id()
                       << " effort=" << (effort == TheoryEffort::Full ? "Full" : "Standard")
                       << " kind=" << (int)tr.kind
@@ -514,7 +514,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             for (auto& reason : prop.reasons) {
                 lemma.lits.push_back(reason.negated());
             }
-            // Minimize (ZOLVER_SAT_MIN) the reason side before appending the
+            // Minimize (XOLVER_SAT_MIN) the reason side before appending the
             // implied-equality literal, then re-append: dedup must not drop the
             // (unique) consequent. Sound — the lemma's literal set is preserved.
             if (satMin) ConflictMinimizer::dedup(lemma.lits);
@@ -554,7 +554,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // #pairs => terminates).
     //
     // Scope: array combination logics always (arrayCombinationMode_); under
-    // ZOLVER_COMB_MODEL_BASED, additionally the LIA-based non-convex combined
+    // XOLVER_COMB_MODEL_BASED, additionally the LIA-based non-convex combined
     // logic QF_UFLIA. Excluded:
     //   - UFLRA (convex: deduced-equality sharing is already complete);
     //   - UFNIA/UFNRA: their nonlinear solver (NIA/NRA) does not expose
@@ -645,7 +645,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // Phase 1 (ZOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
+    // Phase 1 (XOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
     // congruences the scalar loop above cannot reach — the bridge-vars/const
     // args (internal or constant shared terms used as UF/select arguments) that
     // are value-equal to a sibling argument but not yet merged. EUF reports the
@@ -654,7 +654,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // vars are fixed pre-solve and arranging spawns no new pairs, so the
     // candidate set is finite and emittedArrangementSplits_ dedup bounds it.
     if (effort == TheoryEffort::Full && combinationMode_ && sharedTermRegistry_ &&
-        registry_ && std::getenv("ZOLVER_COMB_UFARG_ARRANGE")) {
+        registry_ && std::getenv("XOLVER_COMB_UFARG_ARRANGE")) {
         TheorySolver* eufS = nullptr;
         auto it = solverByTheory_.find(TheoryId::EUF);
         if (it != solverByTheory_.end()) eufS = it->second;
@@ -884,10 +884,10 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     // The validator then confirms instead of seeing Indeterminate. Numeric sorts
     // only; uninterpreted/Bool tokens keep their own model channels (A3 lane).
     //
-    // Gated by ZOLVER_COMB_SCALAR_BACKFILL (default OFF, intent default-ON at
+    // Gated by XOLVER_COMB_SCALAR_BACKFILL (default OFF, intent default-ON at
     // integration): a RECOVERY change validated against A5's strict-validation
     // build. Flag OFF => getModel byte-identical to before.
-    if (sharedTermRegistry_ && std::getenv("ZOLVER_COMB_SCALAR_BACKFILL")) {
+    if (sharedTermRegistry_ && std::getenv("XOLVER_COMB_SCALAR_BACKFILL")) {
         const CoreIr* ir = sharedTermRegistry_->coreIr();
         std::unordered_map<std::string, bool> numericScalar;
         if (ir) {
@@ -962,4 +962,4 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     return aggregated;
 }
 
-} // namespace zolver
+} // namespace xolver

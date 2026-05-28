@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 struct CastNormalizeResult {
     std::vector<std::pair<ScopeLevel, ExprId>> assertions;
@@ -31,4 +31,4 @@ private:
     ExprId rewriteRec(ExprId e);
 };
 
-} // namespace zolver
+} // namespace xolver

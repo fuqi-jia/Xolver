@@ -1,8 +1,8 @@
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include "expr/ir.h"
 #include <doctest/doctest.h>
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("CoreIteLowerer: incremental push/pop with ITE via API") {
     Solver solver;

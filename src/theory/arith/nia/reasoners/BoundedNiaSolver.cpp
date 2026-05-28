@@ -1,6 +1,6 @@
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 
-namespace zolver {
+namespace xolver {
 
 const mpz_class BoundedNiaSolver::ENUMERATION_THRESHOLD = mpz_class(10000);
 
@@ -121,4 +121,4 @@ BoundedSolveResult BoundedNiaSolver::solve(
     return enumerate(constraints, domains, validator, vars);
 }
 
-} // namespace zolver
+} // namespace xolver

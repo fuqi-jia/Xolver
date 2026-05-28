@@ -4,7 +4,7 @@
 #include <optional>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V9: OMT certificate types
@@ -67,4 +67,4 @@ struct TranscendentalConstraint {
     SatLit reason{0, true};
 };
 
-} // namespace zolver
+} // namespace xolver

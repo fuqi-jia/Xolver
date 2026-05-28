@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * SmallVector: inline storage for N elements, heap fallback.
@@ -238,4 +238,4 @@ bool operator<(const SmallVector<T,N>& a, const SmallVector<T,N>& b) {
     return a.size() < b.size();
 }
 
-} // namespace zolver
+} // namespace xolver

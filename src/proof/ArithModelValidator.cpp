@@ -1,6 +1,6 @@
 #include "proof/ArithModelValidator.h"
 
-namespace zolver {
+namespace xolver {
 
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
@@ -461,4 +461,4 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

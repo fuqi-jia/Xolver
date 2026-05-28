@@ -10,23 +10,23 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-// ZOLVER_SELFPROF: poor-man's CPU profiler. ITIMER_PROF fires SIGPROF on the
+// XOLVER_SELFPROF: poor-man's CPU profiler. ITIMER_PROF fires SIGPROF on the
 // thread consuming CPU (the large-stack solve worker), so the backtrace lands
 // in the actual hot loop. backtrace_symbols_fd writes to the real fd 2,
 // bypassing the std::cerr NullStreambuf, so samples survive non-verbose mode.
 // Async-signal-safe (backtrace/backtrace_symbols_fd/write). Resolve frames with
 // addr2line on the printed module+offset.
-static void zolverSelfprofHandler(int) {
+static void xolverSelfprofHandler(int) {
     void* bt[64];
     int n = backtrace(bt, 64);
     static const char hdr[] = "==SELFPROF-SAMPLE==\n";
     ssize_t w = write(2, hdr, sizeof(hdr) - 1); (void)w;
     backtrace_symbols_fd(bt, n, 2);
 }
-static void zolverMaybeInstallSelfprof() {
-    if (!std::getenv("ZOLVER_SELFPROF")) return;
+static void xolverMaybeInstallSelfprof() {
+    if (!std::getenv("XOLVER_SELFPROF")) return;
     struct sigaction sa{};
-    sa.sa_handler = zolverSelfprofHandler;
+    sa.sa_handler = xolverSelfprofHandler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     sigaction(SIGPROF, &sa, nullptr);
@@ -51,7 +51,7 @@ static void printUsage(const char* prog) {
               << "  --produce-proofs       Enable proof production\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
-              << "  --dump-stats <file>    Dump per-case stats JSON (requires ZOLVER_ENABLE_CASESTATS)\n"
+              << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
@@ -60,7 +60,7 @@ static void printUsage(const char* prog) {
               << "  -v, --verbose          Verbose output\n";
 }
 
-#include <zolver/Solver.h>
+#include <xolver/Solver.h>
 
 // Discards everything written to it. Installed as std::cerr's buffer in the
 // default (non-verbose) mode so the solver's internal diagnostics never reach
@@ -113,7 +113,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         return EXIT_FAILURE;
     }
 
-    zolver::Solver solver;
+    xolver::Solver solver;
 
     // Parse options after the file path
     std::optional<std::string> logicOpt;
@@ -124,7 +124,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         if (arg == "--logic" && i + 1 < argc) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
-            solver.setOption("seed", zolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+            solver.setOption("seed", xolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
         } else if (arg == "--produce-models") {
@@ -132,15 +132,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         } else if (arg == "--produce-proofs") {
             // TODO: enable proof production
         } else if (arg == "--lia-safe-mode") {
-            solver.setOption("lia-safe-mode", zolver::OptionValue(true));
+            solver.setOption("lia-safe-mode", xolver::OptionValue(true));
         } else if (arg == "--lia-ultra-safe-mode") {
-            solver.setOption("lia-ultra-safe-mode", zolver::OptionValue(true));
+            solver.setOption("lia-ultra-safe-mode", xolver::OptionValue(true));
         } else if (arg == "--lia-enable-single-var-tightening") {
-            solver.setOption("lia-enable-single-var-tightening", zolver::OptionValue(true));
+            solver.setOption("lia-enable-single-var-tightening", xolver::OptionValue(true));
         } else if (arg == "--lia-enable-gcd-ineq-tightening") {
-            solver.setOption("lia-enable-gcd-ineq-tightening", zolver::OptionValue(true));
+            solver.setOption("lia-enable-gcd-ineq-tightening", xolver::OptionValue(true));
         } else if (arg == "--lia-enable-eq-gcd-normalization") {
-            solver.setOption("lia-enable-eq-gcd-normalization", zolver::OptionValue(true));
+            solver.setOption("lia-enable-eq-gcd-normalization", xolver::OptionValue(true));
         } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;
         } else if (arg == "--check-model") {
@@ -175,19 +175,19 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
         // tokens (sat / unsat / unknown). Diagnostics go to stderr so the
         // competition harness (which greps stdout) is not confused.
-        zolver::Result r = solver.checkSat();
+        xolver::Result r = solver.checkSat();
         std::cout << toString(r) << "\n";
         // Model-Validation track: if the input requested a model and we found
         // one, emit the SMT-LIB get-model response on stdout right after `sat`.
-        if (r == zolver::Result::Sat && solver.modelRequested()) {
+        if (r == xolver::Result::Sat && solver.modelRequested()) {
             solver.dumpModel(std::cout);
         }
         std::cout.flush();
         // Diagnostic: independent model self-check against original assertions.
-        if (checkModel && r == zolver::Result::Sat && !solver.modelMatchesOriginal()) {
+        if (checkModel && r == xolver::Result::Sat && !solver.modelMatchesOriginal()) {
             std::cerr << "MODEL_MISMATCH\n";
         }
-        if (r == zolver::Result::Unknown) {
+        if (r == xolver::Result::Unknown) {
             auto reason = solver.lastUnknownReason();
             if (!reason.empty()) {
                 std::cerr << "(unknown-reason " << reason << ")\n";
@@ -220,7 +220,7 @@ static int cmdBench(int argc, char* argv[]) {
 }
 
 static int cmdTrace(int argc, char* argv[]) {
-    std::cout << "[Zolver trace] (stub)\n";
+    std::cout << "[Xolver trace] (stub)\n";
     return EXIT_SUCCESS;
 }
 
@@ -238,21 +238,21 @@ static int cmdModelCheck(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    zolver::Solver solver;
+    xolver::Solver solver;
     if (logicOpt) solver.setLogic(*logicOpt);
     if (!solver.parseFile(argv[fileIdx])) {
         std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
         return EXIT_FAILURE;
     }
 
-    zolver::Result r = solver.checkSat();
-    if (r == zolver::Result::Sat) {
+    xolver::Result r = solver.checkSat();
+    if (r == xolver::Result::Sat) {
         std::cout << "sat\n";
         auto model = solver.getModel();
         for (const auto& [varId, value] : model.values()) {
             std::cout << "  v" << varId << " = " << value << "\n";
         }
-    } else if (r == zolver::Result::Unsat) {
+    } else if (r == xolver::Result::Unsat) {
         std::cout << "unsat\n";
     } else {
         std::cout << "unknown\n";
@@ -261,13 +261,13 @@ static int cmdModelCheck(int argc, char* argv[]) {
 }
 
 static int cmdProofCheck(int argc, char* argv[]) {
-    std::cout << "[Zolver proof-check] (stub)\n";
+    std::cout << "[Xolver proof-check] (stub)\n";
     return EXIT_SUCCESS;
 }
 
 static int cmdVersion() {
-    std::cout << "Zolver " << ZOLVER_VERSION_MAJOR << "."
-              << ZOLVER_VERSION_MINOR << "." << ZOLVER_VERSION_PATCH
+    std::cout << "Xolver " << XOLVER_VERSION_MAJOR << "."
+              << XOLVER_VERSION_MINOR << "." << XOLVER_VERSION_PATCH
               << " — NonLinear Constraint Solver\n"
               << "Stage: A (bootstrap)\n";
     return EXIT_SUCCESS;
@@ -278,7 +278,7 @@ int main(int argc, char* argv[]) {
         printUsage(argv[0]);
         return EXIT_FAILURE;
     }
-    zolverMaybeInstallSelfprof();
+    xolverMaybeInstallSelfprof();
 
     const char* cmd = argv[1];
     if (std::strcmp(cmd, "solve") == 0)       return cmdSolve(argc, argv);

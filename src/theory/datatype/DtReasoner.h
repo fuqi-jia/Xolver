@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 class EufTermManager;
 class IncrementalEGraph;
@@ -147,4 +147,4 @@ private:
     }
 };
 
-} // namespace zolver
+} // namespace xolver

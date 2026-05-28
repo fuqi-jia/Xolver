@@ -3,7 +3,7 @@
 #include "expr/ir.h"
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 LiraSolver::LiraSolver() = default;
 LiraSolver::~LiraSolver() = default;
@@ -353,4 +353,4 @@ std::vector<SatLit> LiraSolver::allActiveReasons() const {
 
 
 
-} // namespace zolver
+} // namespace xolver

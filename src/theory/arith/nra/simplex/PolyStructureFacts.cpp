@@ -1,7 +1,7 @@
 #include "theory/arith/nra/simplex/PolyStructureFacts.h"
 #include <set>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 // A monomial of total degree d with v-exponent e becomes linear after fixing v
@@ -49,4 +49,4 @@ PolyStructureFacts computeStructureFacts(
     return f;
 }
 
-} // namespace zolver
+} // namespace xolver

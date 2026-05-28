@@ -8,7 +8,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 enum class PolyConstraintStatus {
     Constraint,            // normal polynomial constraint
@@ -19,7 +19,7 @@ enum class PolyConstraintStatus {
 };
 
 /**
- * Convert Zolver CoreIr arithmetic expressions into PolyId polynomials
+ * Convert Xolver CoreIr arithmetic expressions into PolyId polynomials
  * via a PolynomialKernel.
  *
  * Design: two-phase conversion.
@@ -72,4 +72,4 @@ private:
     void preCollectIterative(ExprId root, const CoreIr& ir);
 };
 
-} // namespace zolver
+} // namespace xolver

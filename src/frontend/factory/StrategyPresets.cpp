@@ -2,7 +2,7 @@
 
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
 // Helper: normalize "QF_X" / "X" comparisons.
 static bool isLogic(const std::string& l, std::initializer_list<const char*> names) {
@@ -14,7 +14,7 @@ StrategyConfig selectStrategy(const std::string& logic, const LogicFeatures& fea
     StrategyConfig c;
 
     // ---------------------------------------------------------------------
-    // Phase-1 knob: the formula rewriter (ZOLVER_PP_REWRITE). It is validated
+    // Phase-1 knob: the formula rewriter (XOLVER_PP_REWRITE). It is validated
     // behavior-neutral across the whole regression corpus, and its boolean /
     // constant simplifications pay off most on logics with rich boolean
     // structure or many constants. Enable it everywhere we support; the
@@ -39,16 +39,16 @@ StrategyConfig selectStrategy(const std::string& logic, const LogicFeatures& fea
     // below. Applied via setenv(...,overwrite=0): an explicit user env wins.
     //
     // Recommended table (from the bibles' "minimal超越集" + must-do groupings):
-    //   QF_NIA / NIA   : ZOLVER_NIA_LOCALSEARCH (WalkSAT SLS),
-    //                    ZOLVER_NIA_BITBLAST (bounded bit-blasting)
-    //   QF_NRA / NRA   : ZOLVER_NRA_LAZARD_LIFT (Lazard projection; exists here
+    //   QF_NIA / NIA   : XOLVER_NIA_LOCALSEARCH (WalkSAT SLS),
+    //                    XOLVER_NIA_BITBLAST (bounded bit-blasting)
+    //   QF_NRA / NRA   : XOLVER_NRA_LAZARD_LIFT (Lazard projection; exists here
     //                    but partial — leave to the master), NRA var-order
-    //   QF_UF / arrays : ZOLVER_UF_DISEQ_WATCH, ZOLVER_AX_ROW2_CONST,
-    //                    ZOLVER_AX_WEAKEQ
-    //   combination    : ZOLVER_COMB_CAREGRAPH, ZOLVER_SAT_MIN,
-    //                    ZOLVER_SAT_LEMMA_MGMT
+    //   QF_UF / arrays : XOLVER_UF_DISEQ_WATCH, XOLVER_AX_ROW2_CONST,
+    //                    XOLVER_AX_WEAKEQ
+    //   combination    : XOLVER_COMB_CAREGRAPH, XOLVER_SAT_MIN,
+    //                    XOLVER_SAT_LEMMA_MGMT
     // Example (kept disabled): if (isLogic(logic, {"QF_NIA","NIA"}))
-    //                              c.envFlags.push_back({"ZOLVER_NIA_LOCALSEARCH","1"});
+    //                              c.envFlags.push_back({"XOLVER_NIA_LOCALSEARCH","1"});
     // ---------------------------------------------------------------------
 
     // Per-logic shape (uniform in Phase 1; explicit arms are the Phase-2 seams).
@@ -82,7 +82,7 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
     // exercised by the unit suite without depending on a not-yet-promoted flag.
     // Replicating an IDENTICAL arm must leave the verdict unchanged (proves the
     // per-arm pristine re-entry is sound), so it is safe to gate tests on.
-    if (const char* n = std::getenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS")) {
+    if (const char* n = std::getenv("XOLVER_STRAT_PORTFOLIO_TEST_ARMS")) {
         int extra = std::atoi(n) - 1;
         for (int i = 0; i < extra && i < 7; ++i)
             arms.push_back({base, "test-replica", 0});
@@ -91,7 +91,7 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
     // Ops/test hook: stamp a per-arm wall-clock budget (ms) on every arm so the
     // anytime executor's timeout path can be driven without a promoted preset.
     // A budget only ever turns an arm's verdict into Unknown (sound).
-    if (const char* b = std::getenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS")) {
+    if (const char* b = std::getenv("XOLVER_STRAT_PORTFOLIO_BUDGET_MS")) {
         int ms = std::atoi(b);
         if (ms > 0) for (auto& a : arms) a.budgetMs = ms;
     }
@@ -99,4 +99,4 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
     return arms;
 }
 
-} // namespace zolver
+} // namespace xolver

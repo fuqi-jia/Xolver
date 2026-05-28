@@ -1,6 +1,6 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V3: CellCertificate out-of-line destructor and move operations
@@ -12,4 +12,4 @@ CellCertificate::~CellCertificate() = default;
 CellCertificate::CellCertificate(CellCertificate&&) noexcept = default;
 CellCertificate& CellCertificate::operator=(CellCertificate&&) noexcept = default;
 
-} // namespace zolver
+} // namespace xolver

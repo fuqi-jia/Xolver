@@ -5,7 +5,7 @@
 #include <set>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -129,4 +129,4 @@ bool PolynomialEqualityCombination::run(PresolveState& st) {
     return made;
 }
 
-} // namespace zolver
+} // namespace xolver

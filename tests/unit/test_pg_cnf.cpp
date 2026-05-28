@@ -1,4 +1,4 @@
-// ZOLVER_PP_PG_CNF: Plaisted-Greenbaum polarity-aware CNF.
+// XOLVER_PP_PG_CNF: Plaisted-Greenbaum polarity-aware CNF.
 //
 // A polarity bug in PG-CNF can only DROP a defining clause, which relaxes the
 // encoding and can only turn an unsat formula spuriously sat (never the
@@ -15,7 +15,7 @@
 #include <string>
 #include <functional>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

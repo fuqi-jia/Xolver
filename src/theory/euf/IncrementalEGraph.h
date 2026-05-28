@@ -11,7 +11,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 struct PendingMerge {
     EufTermId a;
@@ -87,7 +87,7 @@ private:
     EufTermManager& tm_;
     RollbackUnionFind uf_;
 
-    // ZOLVER_UF_FAST_CC: after a merge, refresh signatures for parents of the
+    // XOLVER_UF_FAST_CC: after a merge, refresh signatures for parents of the
     // LOSER class only (their members' representative changed). The winner
     // class's parents keep the same representative, so their canonical
     // signatures are unchanged — re-scanning them is wasted work. Read once.
@@ -133,4 +133,4 @@ private:
 #endif
 };
 
-} // namespace zolver
+} // namespace xolver

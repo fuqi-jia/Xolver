@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class PolyStructureFacts {
 public:
@@ -25,4 +25,4 @@ PolyStructureFacts computeStructureFacts(
     const PolynomialKernel& kernel,
     const std::vector<CdcacConstraint>& nonlinearConstraints);
 
-} // namespace zolver
+} // namespace xolver

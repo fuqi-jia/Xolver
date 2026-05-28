@@ -2,7 +2,7 @@
 #include <cassert>
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 void EufTermManager::clear() {
     nodes_.clear();
@@ -300,4 +300,4 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
     return done.at(root);
 }
 
-} // namespace zolver
+} // namespace xolver

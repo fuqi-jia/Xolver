@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <fstream>
 #include <filesystem>
 
-using namespace zolver;
+using namespace xolver;
 
 static std::string writeTempSmt2(const std::string& content) {
-    std::string path = std::filesystem::temp_directory_path() / "zolver_idl_test.smt2";
+    std::string path = std::filesystem::temp_directory_path() / "xolver_idl_test.smt2";
     std::ofstream ofs(path);
     ofs << content;
     return path;

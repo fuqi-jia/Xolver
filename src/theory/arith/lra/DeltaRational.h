@@ -3,7 +3,7 @@
 #include <gmpxx.h>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * @brief Delta-rational: Q_δ = { a + b·δ | a,b ∈ Q }
@@ -94,4 +94,4 @@ inline DeltaRational operator*(const mpq_class& c, const DeltaRational& d) {
     return DeltaRational(c * d.a, c * d.b);
 }
 
-} // namespace zolver
+} // namespace xolver

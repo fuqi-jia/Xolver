@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 class SharedTermRegistry;
@@ -58,7 +58,7 @@ public:
     void setBoolSortId(SortId id) { boolSortId_ = id; }
     void setSharedTermRegistry(SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
-    // ZOLVER_PP_PG_CNF: Plaisted-Greenbaum polarity-aware CNF. When enabled, a
+    // XOLVER_PP_PG_CNF: Plaisted-Greenbaum polarity-aware CNF. When enabled, a
     // monotone connective (And/Or/Implies) emits only the half of its defining
     // biconditional that its OCCURRENCE polarity requires, roughly halving
     // clauses for single-polarity subformulas while staying equisatisfiable.
@@ -118,7 +118,7 @@ private:
     SortId boolSortId_ = NullSort;
     SyntheticExprIdAllocator synthExprAlloc_;
 
-    // PG-CNF (ZOLVER_PP_PG_CNF). pol_ maps a subformula to its occurrence
+    // PG-CNF (XOLVER_PP_PG_CNF). pol_ maps a subformula to its occurrence
     // polarity bitset: bit0 = occurs positively, bit1 = occurs negatively.
     bool pgEnabled_ = false;
     std::unordered_map<ExprId, uint8_t> pol_;
@@ -127,4 +127,4 @@ private:
     EufAtomExtractor eufExtractor_;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 // Canonical string key for dedup (matches LocalProjection's scheme).
@@ -162,4 +162,4 @@ ProjectionIncompleteReason ProjectionClosure::build(
     return reason_;
 }
 
-} // namespace zolver
+} // namespace xolver

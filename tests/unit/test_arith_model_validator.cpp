@@ -2,7 +2,7 @@
 #include "proof/ArithModelValidator.h"
 #include "expr/ir.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 struct Fix {
@@ -148,7 +148,7 @@ TEST_CASE("ArithModelValidator: indeterminate on uninterpreted function") {
     CHECK(v.validate({eq}) == ArithModelValidator::Verdict::Indeterminate);
 }
 
-// --- ZOLVER_PP_VALIDATOR_MEMO (eval memoization) ---
+// --- XOLVER_PP_VALIDATOR_MEMO (eval memoization) ---
 
 TEST_CASE("ArithModelValidator: eval memo yields identical verdicts") {
     Fix f;

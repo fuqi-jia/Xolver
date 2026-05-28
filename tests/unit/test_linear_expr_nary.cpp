@@ -8,7 +8,7 @@
 // lock in the variadic contract (so linearization does not silently depend on
 // the frontend's binarization).
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

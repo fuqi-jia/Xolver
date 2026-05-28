@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
-# Zolver core library
+# Xolver core library
 # ---------------------------------------------------------------------------
 
-file(GLOB_RECURSE ZOLVER_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE XOLVER_SOURCES CONFIGURE_DEPENDS
     "api/*.cpp"
     "parser/*.cpp"
     "expr/*.cpp"
@@ -15,8 +15,8 @@ file(GLOB_RECURSE ZOLVER_SOURCES CONFIGURE_DEPENDS
     "util/*.cpp"
 )
 
-file(GLOB_RECURSE ZOLVER_HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/include/zolver/*.h"
+file(GLOB_RECURSE XOLVER_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/include/xolver/*.h"
     "api/*.h"
     "parser/*.h"
     "expr/*.h"
@@ -29,20 +29,20 @@ file(GLOB_RECURSE ZOLVER_HEADERS CONFIGURE_DEPENDS
     "util/*.h"
 )
 
-add_library(zolver_core STATIC
-    ${ZOLVER_SOURCES}
-    ${ZOLVER_HEADERS}
+add_library(xolver_core STATIC
+    ${XOLVER_SOURCES}
+    ${XOLVER_HEADERS}
 )
 
-set_target_properties(zolver_core PROPERTIES
+set_target_properties(xolver_core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
 )
 
-if(DEFINED ZOLVER_CXX_FLAGS)
-    target_compile_options(zolver_core PRIVATE ${ZOLVER_CXX_FLAGS})
+if(DEFINED XOLVER_CXX_FLAGS)
+    target_compile_options(xolver_core PRIVATE ${XOLVER_CXX_FLAGS})
 endif()
 
-target_include_directories(zolver_core
+target_include_directories(xolver_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
@@ -61,27 +61,27 @@ if(NOT TARGET cadical)
                         "Run: git submodule update --init --recursive && "
                         "cd third_party/cadical && ./configure && make")
 endif()
-target_link_libraries(zolver_core PUBLIC cadical)
-target_compile_definitions(zolver_core PUBLIC ZOLVER_HAS_CADICAL)
+target_link_libraries(xolver_core PUBLIC cadical)
+target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_CADICAL)
 
 # ---------------------------------------------------------------------------
 # libpoly: link the static target if available
 # ---------------------------------------------------------------------------
 if(TARGET static_polyxx)
-    target_link_libraries(zolver_core PUBLIC static_polyxx)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_HAS_LIBPOLY)
+    target_link_libraries(xolver_core PUBLIC static_polyxx)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
 elseif(TARGET polyxx)
-    target_link_libraries(zolver_core PUBLIC polyxx)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_HAS_LIBPOLY)
+    target_link_libraries(xolver_core PUBLIC polyxx)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
 elseif(TARGET poly_static)
-    target_link_libraries(zolver_core PUBLIC poly_static)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_HAS_LIBPOLY)
+    target_link_libraries(xolver_core PUBLIC poly_static)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
 elseif(TARGET poly)
-    target_link_libraries(zolver_core PUBLIC poly)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_HAS_LIBPOLY)
+    target_link_libraries(xolver_core PUBLIC poly)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_HAS_LIBPOLY)
 endif()
 
-target_link_libraries(zolver_core
+target_link_libraries(xolver_core
     PUBLIC
         somtparser
         ${GMP_LIBRARIES}
@@ -90,27 +90,27 @@ target_link_libraries(zolver_core
         nlohmann_json::nlohmann_json
 )
 
-if(ZOLVER_ENABLE_PROOFS)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_ENABLE_PROOFS)
+if(XOLVER_ENABLE_PROOFS)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_PROOFS)
 endif()
 
-if(ZOLVER_ENABLE_TRACING)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_ENABLE_TRACING)
+if(XOLVER_ENABLE_TRACING)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_TRACING)
 endif()
 
-if(ZOLVER_ENABLE_LRA_PROFILE)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_LRA_PROFILE)
+if(XOLVER_ENABLE_LRA_PROFILE)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_LRA_PROFILE)
 endif()
 
-if(ZOLVER_ENABLE_LIA_PROFILE)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_LIA_PROFILE)
+if(XOLVER_ENABLE_LIA_PROFILE)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_LIA_PROFILE)
 endif()
 
 # Incremental replay for LiaSolver (disable for baseline comparison)
-if(NOT DEFINED ZOLVER_LIA_INCREMENTAL OR ZOLVER_LIA_INCREMENTAL)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_LIA_INCREMENTAL)
+if(NOT DEFINED XOLVER_LIA_INCREMENTAL OR XOLVER_LIA_INCREMENTAL)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_LIA_INCREMENTAL)
 endif()
 
-if(ZOLVER_ENABLE_CASESTATS)
-    target_compile_definitions(zolver_core PUBLIC ZOLVER_ENABLE_CASESTATS)
+if(XOLVER_ENABLE_CASESTATS)
+    target_compile_definitions(xolver_core PUBLIC XOLVER_ENABLE_CASESTATS)
 endif()

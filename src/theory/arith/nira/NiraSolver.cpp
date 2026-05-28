@@ -8,7 +8,7 @@
 #include <functional>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 NiraSolver::NiraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)) {
@@ -976,4 +976,4 @@ std::vector<SatLit> NiraSolver::allActiveReasons() const {
     return reasons;
 }
 
-} // namespace zolver
+} // namespace xolver

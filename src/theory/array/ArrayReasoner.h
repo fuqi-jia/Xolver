@@ -10,7 +10,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 class EufTermManager;
 class IncrementalEGraph;
@@ -134,13 +134,13 @@ private:
     bool symIsStore(EufTermId t) const;
     bool symIsConstArray(EufTermId t) const;
 
-    // ZOLVER_AX_ROW2_CONST: eagerly apply Row2 (no SAT split) when the write
+    // XOLVER_AX_ROW2_CONST: eagerly apply Row2 (no SAT split) when the write
     // and read indices are syntactically-distinct numeric/bool constants. Read
     // once at construction.
     bool row2ConstEnabled_ = false;
 
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
-    // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). ZOLVER_AX_NO_SELECT_COMPLETE
+    // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE
     // disables it (A/B baseline only). Read once at construction.
     bool selectCompletionEnabled_ = true;
     // Dedup of (store-term-id, read-index-term-id) pairs already completed.
@@ -198,4 +198,4 @@ private:
     }
 };
 
-} // namespace zolver
+} // namespace xolver

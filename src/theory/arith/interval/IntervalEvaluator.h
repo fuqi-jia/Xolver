@@ -7,7 +7,7 @@
 #include "expr/types.h"
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * IntervalEvalStatus: result of evaluating one constraint against a ReasonedBox.
@@ -72,4 +72,4 @@ private:
     static bool isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel);
 };
 
-} // namespace zolver
+} // namespace xolver

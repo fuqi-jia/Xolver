@@ -6,7 +6,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/projection/Squarefree.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId VX = VarId{1}, VY = VarId{2};
 

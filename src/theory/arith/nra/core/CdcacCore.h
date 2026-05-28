@@ -12,7 +12,7 @@
 #include <vector>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * CDCAC recursive covering/search algorithm core.
@@ -76,7 +76,7 @@ private:
     // Run a single CDCAC pass (buildClosure + solveLevel) with the projection
     // configuration currently set on this core (projectionKind_/lazardLiftEnabled_).
     // Used by the hybrid driver to run Collins then (on Unknown) Lazard. Carries
-    // the existing ZOLVER_NRA_UNSAT_CERT soundness floor.
+    // the existing XOLVER_NRA_UNSAT_CERT soundness floor.
     CdcacResult solvePass(const CdcacInput& input);
 
     // Reset all per-solve scratch state so a second pass over the SAME input
@@ -90,7 +90,7 @@ private:
     std::unique_ptr<ProjectionPolicy> policy_;  // V4: configurable projection policy
 
     // Projection mode for the lazily-created default policy. Set from
-    // ZOLVER_NRA_PROJECTION in the constructor (lazard => LazardStyle; otherwise
+    // XOLVER_NRA_PROJECTION in the constructor (lazard => LazardStyle; otherwise
     // CollinsConservative). Ignored if setProjectionPolicy() installs a policy.
     // In HYBRID mode this is flipped per-pass by solve() (Collins then Lazard).
     ProjectionPolicyKind projectionKind_ = ProjectionPolicyKind::CollinsConservative;
@@ -108,16 +108,16 @@ private:
     // NOT run yet, and the submission is soundness-primary (one false-UNSAT sinks
     // the division). Default path is therefore pure Collins, byte-identical to the
     // pre-Lazard baseline. Opt in / out, read once in the constructor:
-    //   ZOLVER_NRA_HYBRID=1            => enable hybrid (Collins-first, Lazard on Unknown).
-    //   ZOLVER_NRA_PROJECTION=lazard   => pure Lazard.
-    //   ZOLVER_NRA_PROJECTION=collins / ZOLVER_NRA_HYBRID=0 / unset => pure Collins.
+    //   XOLVER_NRA_HYBRID=1            => enable hybrid (Collins-first, Lazard on Unknown).
+    //   XOLVER_NRA_PROJECTION=lazard   => pure Lazard.
+    //   XOLVER_NRA_PROJECTION=collins / XOLVER_NRA_HYBRID=0 / unset => pure Collins.
     // Promote to default-ON only after the broad differential is 0-unsound.
     bool hybridEnabled_ = false;
 
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;
     // Lazard projection closure — used in place of closure_ when projectionKind_
-    // == LazardStyle (ZOLVER_NRA_PROJECTION=lazard). Whole-problem, built once
+    // == LazardStyle (XOLVER_NRA_PROJECTION=lazard). Whole-problem, built once
     // per solve(); drives the SAME root-isolation path. Incomplete ⇒ no UNSAT.
     LazardProjectionClosure lazardClosure_;
     std::vector<std::vector<PolyId>> levelPolyIds_;  // closure polys per level, as PolyId
@@ -126,7 +126,7 @@ private:
     // "no UNSAT without a complete projection-certified covering".
     bool unsatTrustworthy_ = true;
 
-    // Opt-in (ZOLVER_NRA_LAZARD_LIFT): try Lazard tower root isolation for the
+    // Opt-in (XOLVER_NRA_LAZARD_LIFT): try Lazard tower root isolation for the
     // genuine-tower lift case (>=2 algebraic prefix coords) that ViaNorm punts
     // on. Default off; only adds certified isolations, never changes the Collins
     // path. Read once in the constructor.
@@ -142,14 +142,14 @@ private:
     // for the cell complete AND its recursive child covering complete). This is
     // strictly >= the per-solve gate: it can only turn current-Unknowns into
     // UNSAT, never the reverse, and never weakens the Collins path. Enabled by
-    // default in Lazard mode; force-off with ZOLVER_NRA_LAZARD_CELL_CERT=0.
+    // default in Lazard mode; force-off with XOLVER_NRA_LAZARD_CELL_CERT=0.
     bool lazardCellCertEnabled_ = true;
 
     // Per-solve: was the Lazard projection closure built to completion? Mirrors
     // the closure-completeness folding in buildClosure(). Fail-safe false.
     bool closureComplete_ = false;
 
-    // Opt-in soundness FLOOR (ZOLVER_NRA_UNSAT_CERT, intended default-ON once the
+    // Opt-in soundness FLOOR (XOLVER_NRA_UNSAT_CERT, intended default-ON once the
     // precise verifier lands). INTERIM CONSERVATIVE form: the CDCAC covering can
     // silently drop a satisfiable region (meti-tarski sqrt false-UNSAT) via a
     // subtle close-root / bilinear-section defect not yet pinned to a cheap
@@ -175,4 +175,4 @@ private:
                                     const CdcacInput& input, const RootSet& allRoots);
 };
 
-} // namespace zolver
+} // namespace xolver

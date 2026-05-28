@@ -1,7 +1,7 @@
 #include "theory/arith/nra/engine/SampleHeuristic.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace zolver {
+namespace xolver {
 
 SampleHeuristic::SampleHeuristic(AlgebraBackend* algebra)
     : algebra_(algebra) {}
@@ -104,4 +104,4 @@ SampleHeuristicResult SampleHeuristic::pickSection(
     return {root, true};
 }
 
-} // namespace zolver
+} // namespace xolver

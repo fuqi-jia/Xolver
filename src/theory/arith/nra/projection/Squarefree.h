@@ -3,7 +3,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "expr/types.h"
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -42,4 +42,4 @@ SquarefreeResult primitivePartWrt(const RationalPolynomial& p, VarId v,
 SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v,
                                    PolynomialKernel* kernel = nullptr);
 
-}  // namespace zolver
+}  // namespace xolver

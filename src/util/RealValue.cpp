@@ -6,7 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -322,13 +322,13 @@ bool ExtendedRealValue::isNegInf() const { return kind_ == Kind::NegInf; }
 bool ExtendedRealValue::isPosInf() const { return kind_ == Kind::PosInf; }
 const RealValue& ExtendedRealValue::asFinite() const { return finite_; }
 
-} // namespace zolver
+} // namespace xolver
 
-std::size_t std::hash<zolver::RealValue>::operator()(const zolver::RealValue& v) const {
+std::size_t std::hash<xolver::RealValue>::operator()(const xolver::RealValue& v) const {
     return std::hash<std::string>{}(v.floor().get_str());
 }
 
-namespace zolver {
+namespace xolver {
 
 int ExtendedRealValue::compare(const ExtendedRealValue& o) const {
     // -Inf < Finite < +Inf; finites compare by RealValue::compare.
@@ -339,4 +339,4 @@ int ExtendedRealValue::compare(const ExtendedRealValue& o) const {
     return finite_.compare(o.finite_);
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -1,7 +1,7 @@
 #include "theory/arith/nra/core/CdcacCache.h"
 #include <numeric>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Key comparisons
@@ -212,4 +212,4 @@ size_t CdcacCache::totalEntries() const {
            cellCertCache_.size() + coveringCertCache_.size() + unsatCoreCache_.size();
 }
 
-} // namespace zolver
+} // namespace xolver

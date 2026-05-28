@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V5: ActiveConstraintSet — incremental constraint management
@@ -62,4 +62,4 @@ private:
     std::unordered_map<uint32_t, size_t> litIndex_;  // SatLit.raw -> index
 };
 
-} // namespace zolver
+} // namespace xolver

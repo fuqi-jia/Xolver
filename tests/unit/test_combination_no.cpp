@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <filesystem>
 #include <fstream>
 
-using namespace zolver;
+using namespace xolver;
 
 #define CHECK_RESULT(actual, expected) \
     CHECK(static_cast<int>(actual) == static_cast<int>(expected))
@@ -11,7 +11,7 @@ using namespace zolver;
     CHECK(static_cast<int>(actual) != static_cast<int>(expected))
 
 static std::string writeTempSmt2(const std::string& name, const std::string& content) {
-    auto p = std::filesystem::temp_directory_path() / ("zolver_no_" + name + ".smt2");
+    auto p = std::filesystem::temp_directory_path() / ("xolver_no_" + name + ".smt2");
     std::ofstream(p) << content;
     return p.string();
 }

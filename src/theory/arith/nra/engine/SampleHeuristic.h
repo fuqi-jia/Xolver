@@ -3,7 +3,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 class AlgebraBackend;
 
@@ -50,4 +50,4 @@ private:
     AlgebraBackend* algebra_;
 };
 
-} // namespace zolver
+} // namespace xolver

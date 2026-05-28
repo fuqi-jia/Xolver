@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Sparse Indexed Explicit Tableau
@@ -93,4 +93,4 @@ private:
     void maybeBuildRowIndex(SparseRow& row);
 };
 
-} // namespace zolver
+} // namespace xolver

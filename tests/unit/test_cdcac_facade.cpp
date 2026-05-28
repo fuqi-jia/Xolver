@@ -7,7 +7,7 @@
 #include "theory/arith/nra/core/CdcacCommon.h"   // VanishResult
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("CDCAC facade: constant unsat conflict") {
     auto kernel = createPolynomialKernel();

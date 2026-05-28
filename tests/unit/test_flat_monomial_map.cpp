@@ -2,7 +2,7 @@
 #include "theory/arith/poly/FlatMonomialMap.h"
 #include "expr/types.h"
 #include <gmpxx.h>
-using namespace zolver;
+using namespace xolver;
 using Key = FlatMonomialMap<mpq_class>::Key;   // SmallVector<pair<VarId,int>,4>
 
 static Key k(std::initializer_list<std::pair<VarId,int>> xs){ Key key; for(auto&p:xs) key.push_back(p); return key; }

@@ -20,7 +20,7 @@
 
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 struct FiniteDomainResult {
     enum class Status { Sat, UnsatComplete, NotApplicable } status = Status::NotApplicable;
@@ -38,4 +38,4 @@ public:
                                   PolynomialKernel& kernel);
 };
 
-} // namespace zolver
+} // namespace xolver

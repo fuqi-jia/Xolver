@@ -2,7 +2,7 @@
 #include <fstream>
 #include <chrono>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // CaseStats JSON serialization
@@ -204,4 +204,4 @@ void HeartbeatWriter::maybeWrite(const CaseStats& stats, const std::string& base
     lastWriteMs_ = elapsedMs;
 }
 
-} // namespace zolver
+} // namespace xolver

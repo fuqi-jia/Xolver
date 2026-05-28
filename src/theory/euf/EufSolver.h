@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 class EufSolver : public TheorySolver {
 public:
@@ -150,7 +150,7 @@ private:
 
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
-    const CareGraph* careGraph_ = nullptr;  // ZOLVER_COMB_CAREGRAPH, set by TheoryManager
+    const CareGraph* careGraph_ = nullptr;  // XOLVER_COMB_CAREGRAPH, set by TheoryManager
     EufTermManager termManager_;
     IncrementalEGraph egraph_;
 
@@ -188,7 +188,7 @@ private:
     // UNSAT sound). Shared by the eager watch and the post-loop diseq scan.
     TheoryConflict buildDiseqConflict(const ActiveDisequality& d);
 
-    // ZOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
+    // XOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
     // after each merge in the saturation loop we check only the disequalities
     // that touch the just-merged (loser) class, catching the conflict the moment
     // it forms (shorter explanation, no wasted further congruence). Read once.
@@ -228,4 +228,4 @@ private:
     void ensureDtContext();
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -2,7 +2,7 @@
 #include "theory/arith/linearizer/BoundStore.h"
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 IncrementalLinearizer::IncrementalLinearizer(PolynomialKernel& kernel,
                                                TheoryAtomRegistry* registry)
@@ -232,4 +232,4 @@ LinearizationResult IncrementalLinearizer::run(
     return result;
 }
 
-} // namespace zolver
+} // namespace xolver

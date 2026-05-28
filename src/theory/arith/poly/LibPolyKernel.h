@@ -2,16 +2,16 @@
 
 #include "theory/arith/poly/PolynomialKernel.h"
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 
 #include <polyxx.h>
 #include <optional>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
- * LibPolyKernel: wraps libpoly's poly::Polynomial into the Zolver
+ * LibPolyKernel: wraps libpoly's poly::Polynomial into the Xolver
  * PolynomialKernel interface.
  *
  * Each PolyId indexes a slot in a dense vector of poly::Polynomial.
@@ -87,7 +87,7 @@ private:
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
 
-    // VarId registry: unified variable identity across Zolver
+    // VarId registry: unified variable identity across Xolver
     std::vector<std::string> varNames_;                     // index = VarId
     std::unordered_map<std::string, VarId> nameToVar_;      // name -> VarId
     std::vector<poly::Variable> varIdToPolyVar_;            // VarId -> libpoly variable
@@ -100,6 +100,6 @@ private:
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
 };
 
-} // namespace zolver
+} // namespace xolver
 
-#endif // ZOLVER_HAS_LIBPOLY
+#endif // XOLVER_HAS_LIBPOLY

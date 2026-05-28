@@ -1,6 +1,6 @@
 #include "theory/arith/presolve/AffineSubstitution.h"
 
-namespace zolver {
+namespace xolver {
 
 bool AffineSubstitution::run(PresolveState& st) {
     bool made = false;
@@ -52,4 +52,4 @@ bool AffineSubstitution::run(PresolveState& st) {
     return made;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -81,10 +81,10 @@ struct LazardOpResult {
 // (gcd / psc) instead of the hand-rolled subresultant PRS + O(n!) determinant —
 // the [H4] fix for high-degree multivariate inputs. The PSC path is FORCED
 // (forcePsc) when the kernel is supplied here, so the Lazard operator does not
-// depend on the global ZOLVER_NRA_LIBPOLY_PSC env flag. When `kernel == nullptr`
+// depend on the global XOLVER_NRA_LIBPOLY_PSC env flag. When `kernel == nullptr`
 // the historical hand-rolled path runs unchanged.
 LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId v,
                                  const LazardProjectionConfig& cfg = LazardProjectionConfig(),
                                  PolynomialKernel* kernel = nullptr);
 
-}  // namespace zolver
+}  // namespace xolver

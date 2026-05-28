@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Determinant of a matrix of RationalPolynomial (recursive cofactor expansion)
@@ -262,4 +262,4 @@ LocalProjectionResult LocalProjectionEngine::project(
     return result;
 }
 
-} // namespace zolver
+} // namespace xolver

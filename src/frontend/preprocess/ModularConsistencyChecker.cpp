@@ -1,6 +1,6 @@
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -277,4 +277,4 @@ void ModularConsistencyChecker::run() {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

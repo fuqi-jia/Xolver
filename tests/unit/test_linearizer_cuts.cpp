@@ -21,7 +21,7 @@
 #include "theory/arith/linearizer/SquareCutGenerator.h"
 #include "theory/arith/linearizer/LinearizationTypes.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static AuxTerm mkAuxProduct(const std::string& name, VarId vx, VarId vy) {
     AuxTerm t;

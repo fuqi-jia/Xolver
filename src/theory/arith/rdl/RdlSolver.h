@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -70,4 +70,4 @@ private:
     std::vector<RdlWeight> warmPot_;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -5,13 +5,13 @@
 #include <unordered_set>
 #include <deque>
 
-namespace zolver {
+namespace xolver {
 
 // Theory-lemma dedup layer. `emitted_` prevents a theory re-emitting the same
 // lemma; `installed_` tracks lemmas physically handed to CaDiCaL. Both are pure
 // SKIP caches — CaDiCaL owns the real learned-clause store.
 //
-// ZOLVER_SAT_LEMMA_MGMT (default OFF): bound each dedup cache with FIFO
+// XOLVER_SAT_LEMMA_MGMT (default OFF): bound each dedup cache with FIFO
 // eviction so memory stays bounded on huge benchmarks. Evicting an entry only
 // makes the corresponding lemma re-derivable/re-emittable on demand (the theory
 // re-proves it; re-feeding CaDiCaL a clause it may already hold is sound, just
@@ -41,4 +41,4 @@ private:
     static uint64_t computeKey(const TheoryLemma& lemma);
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -2,7 +2,7 @@
 #include "theory/arith/lra/LraPropagationEngine.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 
-using namespace zolver;
+using namespace xolver;
 
 // ---------------------------------------------------------------------------
 // Helpers

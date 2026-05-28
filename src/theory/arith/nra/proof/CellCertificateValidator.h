@@ -2,7 +2,7 @@
 
 #include "theory/arith/nra/core/CdcacTypes.h"
 
-namespace zolver {
+namespace xolver {
 
 class AlgebraBackend;
 
@@ -26,4 +26,4 @@ private:
     ValidationResult validateCoverageGeometry(const CoveringCertificate& cert);
 };
 
-} // namespace zolver
+} // namespace xolver

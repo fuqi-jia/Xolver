@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Run Zolver against tests/regression/**/*.smt2 and compare to (set-info :status …).
+"""Run Xolver against tests/regression/**/*.smt2 and compare to (set-info :status …).
 
 Designed for CTest integration. Exit code:
     0  – every file PASS or KNOWN_FAIL (no UNEXPECTED_FAIL)
     1  – at least one UNEXPECTED_FAIL
     2  – setup error (solver missing, no SMT2 found, etc.)
 
-A KNOWN_FAIL means the file is explicitly tagged `(set-info :zolver-expected
+A KNOWN_FAIL means the file is explicitly tagged `(set-info :xolver-expected
 known-fail)` — i.e. we know the solver can't handle it yet and don't want it to
-block CI. PASS means zolver matched the oracle :status. UNEXPECTED_FAIL means
+block CI. PASS means xolver matched the oracle :status. UNEXPECTED_FAIL means
 either a wrong answer, an error, or a missing :status (test file is unstamped).
 
 Usage:
     python tools/run_regression.py                          # all logics
     python tools/run_regression.py --logic euf,lia          # specific subdirs
-    python tools/run_regression.py --solver build/bin/zolver
+    python tools/run_regression.py --solver build/bin/xolver
     python tools/run_regression.py --timeout 30 -j 4
 """
 
@@ -152,8 +152,8 @@ def main() -> int:
                     help="regression root (default: tests/regression)")
     ap.add_argument("--logic", default="",
                     help="comma-separated logic subdirs to include (default: all)")
-    ap.add_argument("--solver", default="build/bin/zolver",
-                    help="path to zolver binary")
+    ap.add_argument("--solver", default="build/bin/xolver",
+                    help="path to xolver binary")
     ap.add_argument("--timeout", type=float, default=20.0)
     ap.add_argument("-j", "--jobs", type=int, default=4)
     ap.add_argument("-v", "--verbose", action="store_true",

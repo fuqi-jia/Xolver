@@ -6,7 +6,7 @@
 #include "expr/ir.h"
 #include <random>
 
-using namespace zolver;
+using namespace xolver;
 
 static TheoryAtomRecord makeLinearAtom(SatVar sv, ExprId eid, const CoreIr& ir, TheoryId theory) {
     std::unordered_map<std::string, mpq_class> coeffs;

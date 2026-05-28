@@ -8,7 +8,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Extract a linear expression from CoreExpr.
@@ -34,4 +34,4 @@ bool extractLinearConstraint(ExprId eid, const CoreIr& ir,
 // ============================================================================
 Relation negateRelation(Relation r);
 
-} // namespace zolver
+} // namespace xolver

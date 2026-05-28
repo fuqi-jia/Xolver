@@ -1,6 +1,6 @@
 #include "theory/arith/icp/IcpEngineZ.h"
 
-namespace zolver {
+namespace xolver {
 
 IcpResultZ IcpEngineZ::run(
     const std::vector<std::unique_ptr<ContractorZ>>& contractors,
@@ -45,4 +45,4 @@ IcpResultZ IcpEngineZ::run(
     return IcpResultZ{IcpStatus::NoChange, std::nullopt, {}, std::nullopt};
 }
 
-} // namespace zolver
+} // namespace xolver

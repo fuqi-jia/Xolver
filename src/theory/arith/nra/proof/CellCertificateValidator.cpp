@@ -1,7 +1,7 @@
 #include "theory/arith/nra/proof/CellCertificateValidator.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace zolver {
+namespace xolver {
 
 ValidationResult CellCertificateValidator::validateCell(
     const CellCertificate& cert, AlgebraBackend* /*algebra*/) {
@@ -159,4 +159,4 @@ ValidationResult CellCertificateValidator::validateCoverageGeometry(const Coveri
     return {ValidationStatus::Valid, CdcacUnknownReason::None};
 }
 
-} // namespace zolver
+} // namespace xolver

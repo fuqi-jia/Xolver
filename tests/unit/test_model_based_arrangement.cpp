@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
 
-using namespace zolver;
+using namespace xolver;
 
-// Model-based theory combination (ZOLVER_COMB_MODEL_BASED) closes the
+// Model-based theory combination (XOLVER_COMB_MODEL_BASED) closes the
 // Nelson-Oppen arrangement over shared scalars before reporting Sat, fixing the
 // existing QF_UFLIA combination false-SAT class (a genuinely UNSAT UF pigeonhole
 // over a bounded integer domain was reported sat because the arrangement that
@@ -18,18 +18,18 @@ using namespace zolver;
 
 namespace {
 std::string writeTmp(const std::string& name, const std::string& body) {
-    auto p = std::filesystem::temp_directory_path() / ("zolver_mba_" + name + ".smt2");
+    auto p = std::filesystem::temp_directory_path() / ("xolver_mba_" + name + ".smt2");
     std::ofstream(p) << body;
     return p.string();
 }
 
 Result solveWithFlag(const std::string& path, bool flag) {
-    if (flag) setenv("ZOLVER_COMB_MODEL_BASED", "1", 1);
-    else      unsetenv("ZOLVER_COMB_MODEL_BASED");
+    if (flag) setenv("XOLVER_COMB_MODEL_BASED", "1", 1);
+    else      unsetenv("XOLVER_COMB_MODEL_BASED");
     Solver s;
     REQUIRE(s.parseFile(path));
     Result r = s.checkSat();
-    unsetenv("ZOLVER_COMB_MODEL_BASED");
+    unsetenv("XOLVER_COMB_MODEL_BASED");
     return r;
 }
 

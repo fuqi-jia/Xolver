@@ -4,7 +4,7 @@
 #include "theory/core/TheorySolver.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Collects and minimizes conflict reasons from coverings.
@@ -25,4 +25,4 @@ public:
     static std::vector<SatLit> deduplicate(std::vector<SatLit> lits);
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -2,7 +2,7 @@
 #include "expr/ir.h"
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 LogicFeatureDetector::LogicFeatureDetector(const CoreIr& ir) : ir_(ir) {}
 
@@ -215,4 +215,4 @@ void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordere
     }  // while
 }
 
-} // namespace zolver
+} // namespace xolver

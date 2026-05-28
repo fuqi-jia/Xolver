@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Model: stores variable assignments from a satisfying query.
@@ -31,4 +31,4 @@ private:
     std::unordered_map<uint32_t, std::string> values_;
 };
 
-} // namespace zolver
+} // namespace xolver

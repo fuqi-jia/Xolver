@@ -3,7 +3,7 @@
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/core/TheoryAssignmentView.h"
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Thin lookup interface for querying theory atoms by SAT variable.
@@ -64,4 +64,4 @@ public:
     virtual std::optional<bool> evalTheoryAtom(SatVar v) { (void)v; return std::nullopt; }
 };
 
-} // namespace zolver
+} // namespace xolver

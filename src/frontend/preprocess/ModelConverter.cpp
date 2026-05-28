@@ -2,7 +2,7 @@
 #include "util/MpqUtils.h"
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 void ModelConverter::registerElimination(std::string name, SortId sort, ExprId definingExpr) {
     elims_.push_back({std::move(name), sort, definingExpr});
@@ -141,4 +141,4 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
     return allOk;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 struct LinearizationConfig {
     bool emitAllMcCormick = true;
@@ -37,7 +37,7 @@ public:
         const BoundStore& bounds,
         TheoryId owner,
         const LinearizationConfig& config = {},
-        // ZOLVER_NRA_LINEARIZE model-construction: optional base-var values used
+        // XOLVER_NRA_LINEARIZE model-construction: optional base-var values used
         // as the square-tangent point so cuts refine around the current model.
         // null -> tangent at the bound midpoint (legacy behavior).
         const std::unordered_map<std::string, mpq_class>* modelPoints = nullptr);
@@ -61,4 +61,4 @@ private:
                                SatLit cutLit);
 };
 
-} // namespace zolver
+} // namespace xolver

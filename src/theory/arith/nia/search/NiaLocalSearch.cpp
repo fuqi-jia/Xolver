@@ -5,14 +5,14 @@
 #include <chrono>
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
 NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     : kernel_(kernel), budgetMs_(200), totalBudgetMs_(1000) {
-    if (const char* e = std::getenv("ZOLVER_NIA_LS_BUDGET_MS")) {
+    if (const char* e = std::getenv("XOLVER_NIA_LS_BUDGET_MS")) {
         budgetMs_ = std::atol(e);   // 0 or negative = unlimited
     }
-    if (const char* e = std::getenv("ZOLVER_NIA_LS_TOTAL_MS")) {
+    if (const char* e = std::getenv("XOLVER_NIA_LS_TOTAL_MS")) {
         totalBudgetMs_ = std::atol(e);   // 0 or negative = unlimited
     }
 }
@@ -239,4 +239,4 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     return std::nullopt;
 }
 
-} // namespace zolver
+} // namespace xolver

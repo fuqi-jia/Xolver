@@ -7,7 +7,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/valuation/TowerRootIsolation.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId A0 = VarId{100}, X = VarId{1};
 

@@ -5,11 +5,11 @@
 #include <chrono>
 #include <deque>
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
 #endif
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Search statistics collected during SAT + theory solving.
@@ -92,7 +92,7 @@ public:
     // decides as normal, so OFF==ON). Counts decision requests and, via the
     // first assignment after each new decision level, buckets decisions into
     // theory bound-atoms vs boolean-structure literals. Periodic stderr dump
-    // gated by env ZOLVER_DECIDE_PROBE. Measures whether decision-steering has
+    // gated by env XOLVER_DECIDE_PROBE. Measures whether decision-steering has
     // any leverage before building a real cb_decide steering heuristic.
     int cb_decide() override;
 
@@ -103,7 +103,7 @@ public:
 
     const TheorySearchStats& stats() const { return stats_; }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     // --- CaseStats integration ---
     void setCaseStats(CaseStats* stats) { caseStats_ = stats; }
     void setDumpStatsBasePath(const std::string& path) { dumpStatsBasePath_ = path; }
@@ -129,7 +129,7 @@ private:
     std::unordered_map<SatVar, bool> currentAssignment_;
     size_t lastCheckedAssignmentSize_ = 0;
 
-    // Soundness floor (ZOLVER_SAT_DEFER_EARLY_CONFLICT). In combination mode a
+    // Soundness floor (XOLVER_SAT_DEFER_EARLY_CONFLICT). In combination mode a
     // Standard-effort cb_propagate theory conflict is UNVALIDATED (conflictIsGenuine
     // only re-verifies pure shared-equality conflicts; a mixed/theory conflict is
     // trusted), so an unsound theory conflict can drive a false UNSAT. When set,
@@ -143,7 +143,7 @@ private:
     long long theoryAtomDecisions_ = 0;// of those, over a linear bound atom
     bool expectDecisionLit_ = false;   // next notify_assignment's first lit is the decision
 
-    // ZOLVER_LRA_DECIDE (default OFF): steer decisions toward a theory-feasible
+    // XOLVER_LRA_DECIDE (default OFF): steer decisions toward a theory-feasible
     // region by returning an unassigned bound-atom literal at its
     // feasibility-consistent phase. Heuristic — soundness-safe.
     bool decideSteer_ = false;
@@ -156,7 +156,7 @@ private:
 
     TheorySearchStats stats_;
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     CaseStats* caseStats_ = nullptr;
     std::string dumpStatsBasePath_;
     HeartbeatWriter heartbeatWriter_;
@@ -164,7 +164,7 @@ private:
 
     CadicalAssignmentView& assignmentView() { return assignmentView_; }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     void updateCaseStatsSearch();
 #endif
 
@@ -174,4 +174,4 @@ private:
     bool isClauseFalsifiedByCurrentModel(const std::vector<SatLit>& clause) const;
 };
 
-} // namespace zolver
+} // namespace xolver

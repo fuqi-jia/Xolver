@@ -28,7 +28,7 @@
 #include <unordered_set>
 #include <deque>
 
-namespace zolver {
+namespace xolver {
 
 class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
@@ -129,10 +129,10 @@ private:
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     bool enableBitBlast_ = true;
-    bool enableRefute_ = false;   // ZOLVER_NIA_REFUTE: bound-free product-positivity refutation
-    bool enableGcd_ = false;      // ZOLVER_NIA_GCD: multivariate GCD-divisibility refutation
-    bool enableIcp_ = false;      // ZOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
-    bool enableCdcac_ = false;    // ZOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
+    bool enableRefute_ = false;   // XOLVER_NIA_REFUTE: bound-free product-positivity refutation
+    bool enableGcd_ = false;      // XOLVER_NIA_GCD: multivariate GCD-divisibility refutation
+    bool enableIcp_ = false;      // XOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
+    bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
@@ -213,4 +213,4 @@ private:
         TheoryLemmaStorage& lemmaDb);
 };
 
-} // namespace zolver
+} // namespace xolver

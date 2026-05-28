@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // LinearTerm: one variable term a_i * x_i
@@ -58,4 +58,4 @@ struct LinearCut {
     std::string debugTag;
 };
 
-} // namespace zolver
+} // namespace xolver

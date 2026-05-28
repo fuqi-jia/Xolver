@@ -1,11 +1,11 @@
-# Zolver
+# Xolver
 
 **Z**ero-human-written SMT s**olver** — a research-grade SMT/OMT solver for
 (non)linear arithmetic in which **every line of code is written by AI agents**,
 not humans. The name is the thesis: a complete, sound constraint solver grown
 end-to-end by autonomous agents working against a fixed architectural plan.
 
-Zolver targets the quantifier-free arithmetic, array, and uninterpreted-function
+Xolver targets the quantifier-free arithmetic, array, and uninterpreted-function
 fragments of SMT-LIB, with a dual-engine design: an **exact CDCL(T) kernel** for
 sound `sat`/`unsat` reasoning and a heuristic **advisor** layer (local search,
 learning) that may only *propose* — never decide — so soundness is preserved
@@ -117,8 +117,8 @@ a `Reasoner` pipeline (see `src/theory/arith/README.md`).
 
 ### Clone (with the parser submodule)
 ```bash
-git clone --recursive git@github.com:fuqi-jia/zolver.git
-cd zolver
+git clone --recursive git@github.com:fuqi-jia/xolver.git
+cd xolver
 # if you cloned without --recursive:
 git submodule update --init --recursive
 ```
@@ -130,16 +130,16 @@ cmake ..                 # Release (-O3) by default
 cmake --build . -j       # on WSL/low-RAM, prefer a bounded -j 2 to avoid OOM
 ```
 
-The CLI binary is produced at `build/bin/zolver`.
+The CLI binary is produced at `build/bin/xolver`.
 
 ### CMake options (defaults shown)
 | Option | Default | Effect |
 |---|---|---|
-| `ZOLVER_BUILD_TESTS` | ON | doctest unit suite + regression harness |
-| `ZOLVER_BUILD_TOOLS` | ON | CLI, trace-viewer, model-checker, proof-checker |
-| `ZOLVER_ENABLE_PROOFS` | ON | proof-production infrastructure + `proof-check` |
-| `ZOLVER_ENABLE_TRACING` | ON | execution tracing for the learning layer |
-| `ZOLVER_STATIC_BUILD` | OFF | fully static executable |
+| `XOLVER_BUILD_TESTS` | ON | doctest unit suite + regression harness |
+| `XOLVER_BUILD_TOOLS` | ON | CLI, trace-viewer, model-checker, proof-checker |
+| `XOLVER_ENABLE_PROOFS` | ON | proof-production infrastructure + `proof-check` |
+| `XOLVER_ENABLE_TRACING` | ON | execution tracing for the learning layer |
+| `XOLVER_STATIC_BUILD` | OFF | fully static executable |
 
 For asserts/debugging: `cmake -DCMAKE_BUILD_TYPE=Debug ..`.
 
@@ -149,22 +149,22 @@ For asserts/debugging: `cmake -DCMAKE_BUILD_TYPE=Debug ..`.
 
 ```bash
 # Solve an SMT-LIB 2 file (prints sat / unsat / unknown)
-./build/bin/zolver solve path/to/input.smt2
+./build/bin/xolver solve path/to/input.smt2
 
 # Produce a model for sat instances
-./build/bin/zolver solve --produce-models input.smt2
+./build/bin/xolver solve --produce-models input.smt2
 
 # Other commands
-./build/bin/zolver model-check <model>   # validate a model against assertions
-./build/bin/zolver proof-check <proof>   # check a proof certificate
-./build/bin/zolver version
+./build/bin/xolver model-check <model>   # validate a model against assertions
+./build/bin/xolver proof-check <proof>   # check a proof certificate
+./build/bin/xolver version
 ```
 
 Useful options: `--logic QF_NRA`, `--produce-proofs`, `--seed <n>`,
-`-v/--verbose`. Run `zolver` with no arguments for the full list.
+`-v/--verbose`. Run `xolver` with no arguments for the full list.
 
 ### Experimental flags
-- `ZOLVER_NRA_LAZARD_LIFT=1` (environment) — enables the exact-algebraic Lazard
+- `XOLVER_NRA_LAZARD_LIFT=1` (environment) — enables the exact-algebraic Lazard
   tower lift for genuine algebraic-tower CDCAC cells. **Default off**; the default
   projection path is Collins-style and the flag only *adds* certified isolations,
   never changing the baseline behavior.
@@ -178,18 +178,18 @@ Useful options: `--logic QF_NRA`, `--produce-proofs`, `--seed <n>`,
 cd build && ctest
 
 # Unit tests directly
-./build/tests/zolver_unit_tests
-./build/tests/zolver_unit_tests --test-case="<name>"
-./build/tests/zolver_unit_tests -ltc          # list cases
+./build/tests/xolver_unit_tests
+./build/tests/xolver_unit_tests --test-case="<name>"
+./build/tests/xolver_unit_tests -ltc          # list cases
 
 # Differential regression vs z3 + cvc5 oracle
 python3 tools/run_regression.py --root tests/regression \
-        --solver build/bin/zolver --timeout 20 -j 2
+        --solver build/bin/xolver --timeout 20 -j 2
 
 # Large-corpus benchmark runs (deploy + compare-with z3)
 ./tools/deploy_and_run.sh build
 ./tools/deploy_and_run.sh package
-./zolver-dist/tools/deploy_and_run.sh run nra,lra -j 200 -t 100 --compare-with z3
+./xolver-dist/tools/deploy_and_run.sh run nra,lra -j 200 -t 100 --compare-with z3
 ```
 
 The regression harness compares each verdict against z3/cvc5 and flags any
@@ -201,7 +201,7 @@ The regression harness compares each verdict against z3/cvc5 and flags any
 
 | Path | Contents |
 |---|---|
-| `include/zolver/` | public API headers (`Solver.h`, …) |
+| `include/xolver/` | public API headers (`Solver.h`, …) |
 | `src/expr/` | hash-consed Core IR, rewriter |
 | `src/parser/` | SOMTParser adapter |
 | `src/frontend/` | lowering passes, theory factory |
@@ -236,7 +236,7 @@ The regression harness compares each verdict against z3/cvc5 and flags any
 
 ## License & provenance
 
-Zolver is developed as autonomous-agent research. The `reference/` cvc5 and z3
+Xolver is developed as autonomous-agent research. The `reference/` cvc5 and z3
 copies are vendored for study only; the licensing posture relative to those
 projects is unsettled, so no code is copied from them. See `plan.md` for the full
 design rationale and `CLAUDE.md` for contributor (agent) guidance.

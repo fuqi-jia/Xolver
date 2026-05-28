@@ -14,7 +14,7 @@
 #include <fstream>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 LraSolver::LraSolver() {
     // Phase 2: single core reasoner (incremental replay + interface eqs +
@@ -23,14 +23,14 @@ LraSolver::LraSolver() {
         "lra.core",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCore(db, e); }));
 
-    // ZOLVER_LRA_PROP (default OFF): lift sound Farkas row-propagations to the
+    // XOLVER_LRA_PROP (default OFF): lift sound Farkas row-propagations to the
     // SAT solver during search. Read once.
-    const char* prop = std::getenv("ZOLVER_LRA_PROP");
+    const char* prop = std::getenv("XOLVER_LRA_PROP");
     lraPropEnabled_ = (prop && *prop && *prop != '0');
 }
 
 LraSolver::~LraSolver() {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -48,7 +48,7 @@ void LraSolver::onPop(uint32_t n) {
 }
 
 void LraSolver::onReset() {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     if (profile_.checkCalls > 0) {
         profile_.dump();
     }
@@ -151,7 +151,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     NO_DBG << "[LRA] check begin\n";
     entailmentProps_.clear();  // buffer holds only this check's propagations
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     profile_.checkCalls++;
     int currentActive = static_cast<int>(theoryTrail_.size() + interfaceEqualities_.size() + interfaceDisequalities_.size());
     profile_.totalActiveLiterals += currentActive;
@@ -181,7 +181,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (!ok) {
             auto tc = manager_.translateConflict(gs_);
             NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -192,7 +192,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t1 = std::chrono::steady_clock::now();
     profile_.assertBoundTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
     auto prof_t2 = prof_t1;
@@ -216,7 +216,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 auto tc = manager_.translateConflict(gs_);
                 tc.clause.push_back(ieq.reason);
                 NO_DBG << "[LRA] IEQ immediate conflict reasons: " << debug::fmtClause(tc.clause) << "\n";
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
                 int sz = static_cast<int>(tc.clause.size());
                 profile_.totalConflictSize += sz;
                 if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -230,7 +230,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
 
     auto r = gs_.check();
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     auto prof_t3 = std::chrono::steady_clock::now();
     profile_.simplexCheckTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t3 - prof_t2).count();
     profile_.totalPivotCount += gs_.pivotCount();
@@ -258,7 +258,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             assert(ok && "complementary literal in theory conflict clause");
             (void)ok;
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -271,7 +271,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         } else {
             tc.clause = allActiveReasons();
             NO_DBG << "[LRA] fallback conflict (allActiveReasons): " << tc.clause.size() << " lits\n";
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
             if (sz > profile_.maxConflictSize) profile_.maxConflictSize = sz;
@@ -285,7 +285,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 
     // -------------------------------------------------------------------------
-    // Phase C: bound propagation (ZOLVER_LRA_PROP only). Lift SOUND Farkas
+    // Phase C: bound propagation (XOLVER_LRA_PROP only). Lift SOUND Farkas
     // bound-propagations to the SAT solver as reason-carrying entailment clauses
     // (¬reasons ∨ implied), verified unit/falsified at the propagator. The old
     // tryConvertDerivedBound path — bare unit lemmas into a dedup-only lemmaDb
@@ -327,7 +327,7 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     std::vector<DiseqInfo> disequalities = activeDisequalities_;
 
     if (!disequalities.empty()) {
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
         profile_.disequalitySplitCount++;
 #endif
         auto dr = handleSimplexDisequalities(
@@ -760,7 +760,7 @@ std::optional<TheorySolver::TheoryModel> LraSolver::getModel() const {
     return model;
 }
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
 void LraSolver::ProfileStats::dump() const {
     int totalConflicts = fallbackConflictCount + immediateConflictCount + rowConflictCount;
     std::ofstream ofs("/tmp/lra_profile.log", std::ios::app);
@@ -788,4 +788,4 @@ void LraSolver::ProfileStats::dump() const {
 }
 #endif
 
-} // namespace zolver
+} // namespace xolver

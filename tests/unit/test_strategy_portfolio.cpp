@@ -1,11 +1,11 @@
-// ZOLVER_STRAT_PORTFOLIO: ordered strategy arms tried until one returns a
-// definitive verdict. Phase 1 is a single base arm (== ZOLVER_STRAT_PRESETS),
+// XOLVER_STRAT_PORTFOLIO: ordered strategy arms tried until one returns a
+// definitive verdict. Phase 1 is a single base arm (== XOLVER_STRAT_PRESETS),
 // so a portfolio run is behavior-neutral. The multi-arm executor is exercised
-// via the ZOLVER_STRAT_PORTFOLIO_TEST_ARMS test hook, which replicates the base
+// via the XOLVER_STRAT_PORTFOLIO_TEST_ARMS test hook, which replicates the base
 // arm N times: running an IDENTICAL arm N times must not change the verdict,
 // which proves the per-arm pristine re-entry (reset + re-parse) is sound.
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include "frontend/factory/StrategyPresets.h"
 #include "theory/core/LogicFeatureDetector.h"
 #include <cstdlib>
@@ -13,34 +13,34 @@
 #include <filesystem>
 #include <string>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 struct PortfolioEnv {
     explicit PortfolioEnv(int armsN) {
-        setenv("ZOLVER_STRAT_PORTFOLIO", "1", 1);
-        if (armsN > 1) setenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS",
+        setenv("XOLVER_STRAT_PORTFOLIO", "1", 1);
+        if (armsN > 1) setenv("XOLVER_STRAT_PORTFOLIO_TEST_ARMS",
                               std::to_string(armsN).c_str(), 1);
     }
     ~PortfolioEnv() {
-        unsetenv("ZOLVER_STRAT_PORTFOLIO");
-        unsetenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS");
+        unsetenv("XOLVER_STRAT_PORTFOLIO");
+        unsetenv("XOLVER_STRAT_PORTFOLIO_TEST_ARMS");
     }
 };
 struct BudgetEnv {
     explicit BudgetEnv(int budgetMs) {
-        setenv("ZOLVER_STRAT_PORTFOLIO", "1", 1);
-        setenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS",
+        setenv("XOLVER_STRAT_PORTFOLIO", "1", 1);
+        setenv("XOLVER_STRAT_PORTFOLIO_BUDGET_MS",
                std::to_string(budgetMs).c_str(), 1);
     }
     ~BudgetEnv() {
-        unsetenv("ZOLVER_STRAT_PORTFOLIO");
-        unsetenv("ZOLVER_STRAT_PORTFOLIO_BUDGET_MS");
+        unsetenv("XOLVER_STRAT_PORTFOLIO");
+        unsetenv("XOLVER_STRAT_PORTFOLIO_BUDGET_MS");
     }
 };
 Result solveFile(const std::string& smt, const std::string& tag) {
     std::string path = (std::filesystem::temp_directory_path() /
-                        ("zolver_pf_" + tag + ".smt2")).string();
+                        ("xolver_pf_" + tag + ".smt2")).string();
     { std::ofstream(path) << smt; }
     Solver s;
     REQUIRE(s.parseFile(path));
@@ -58,9 +58,9 @@ TEST_CASE("portfolio: selectPortfolio always returns a base arm") {
 }
 
 TEST_CASE("portfolio: test-arms hook replicates the base arm") {
-    setenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS", "3", 1);
+    setenv("XOLVER_STRAT_PORTFOLIO_TEST_ARMS", "3", 1);
     auto arms = selectPortfolio("QF_NIA", LogicFeatures{});
-    unsetenv("ZOLVER_STRAT_PORTFOLIO_TEST_ARMS");
+    unsetenv("XOLVER_STRAT_PORTFOLIO_TEST_ARMS");
     CHECK(arms.size() == 3);
     CHECK(arms[0].label == "base");
     // Replicas are identical to the base — proving idempotence is the point.
@@ -87,7 +87,7 @@ TEST_CASE("portfolio: multi-arm re-entry is idempotent (unsat stays unsat)") {
 }
 
 TEST_CASE("portfolio: single base arm is behavior-neutral") {
-    // ZOLVER_STRAT_PORTFOLIO on, no test-arms hook -> exactly one arm; the
+    // XOLVER_STRAT_PORTFOLIO on, no test-arms hook -> exactly one arm; the
     // verdict must match the plain solve.
     PortfolioEnv guard(1);
     CHECK(static_cast<int>(solveFile(

@@ -4,7 +4,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -217,4 +217,4 @@ SquarefreeResult squarefreePartWrt(const RationalPolynomial& p, VarId v, Polynom
     return {normalizeUpToUnit(r.pQuot), true};
 }
 
-}  // namespace zolver
+}  // namespace xolver

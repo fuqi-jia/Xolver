@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 void DomainStore::reset() {
     domains_.clear();
@@ -265,4 +265,4 @@ TheoryConflict DomainStore::buildEmptyDomainConflict() const {
     return TheoryConflict{clause};
 }
 
-} // namespace zolver
+} // namespace xolver

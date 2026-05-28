@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 // Flat sorted-vector map keyed by a monomial (sorted (VarId,exp) list).
 // Canonical form (after canonicalize() / operator[] inserts): entries sorted
@@ -87,4 +87,4 @@ private:
     Storage v_;
 };
 
-} // namespace zolver
+} // namespace xolver

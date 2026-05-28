@@ -1,7 +1,7 @@
 #include "frontend/preprocess/UfInArithPurifier.h"
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 UfInArithPurifier::UfInArithPurifier(CoreIr& ir) : ir_(ir) {}
 
@@ -167,4 +167,4 @@ void UfInArithPurifier::commit() {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -1,4 +1,4 @@
-// Soundness verification for the GMI cut derivation (ZOLVER_LIA_CUTS core).
+// Soundness verification for the GMI cut derivation (XOLVER_LIA_CUTS core).
 // For a row x_i = beta_i + Σ chat_j y_j (y_j >= 0 integer, x_i integer), the
 // derived cut Σ gamma_j y_j >= 1 must (a) be violated at the current point
 // y = 0, and (b) hold for EVERY integer-feasible point. (b) is checked by brute
@@ -9,7 +9,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

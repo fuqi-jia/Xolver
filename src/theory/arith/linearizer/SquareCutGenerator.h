@@ -4,7 +4,7 @@
 #include <vector>
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 class SquareCutGenerator {
 public:
@@ -22,4 +22,4 @@ public:
         SortKind sort = SortKind::Int);
 };
 
-} // namespace zolver
+} // namespace xolver

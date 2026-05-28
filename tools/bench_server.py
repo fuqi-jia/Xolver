@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Zolver Benchmark Server Orchestrator
+Xolver Benchmark Server Orchestrator
 
 Compiles solver, runs benchmark, analyzes results, and commits compact
 artifacts to a dedicated git worktree.
@@ -14,7 +14,7 @@ Usage:
 
     # Full benchmark
     python tools/bench_server.py --mode full --timeout 10 --jobs 32 \
-        --baseline-raw-run /data/bench-runs/2026-05-19_2100_zolver_def4567 \
+        --baseline-raw-run /data/bench-runs/2026-05-19_2100_xolver_def4567 \
         --compare-with-z3-baseline /data/bench-baselines/z3_4.12.2_xxx_t10.json \
         --git-worktree ../repo-bench-results --git-push
 """
@@ -36,7 +36,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 BENCHMARK_ROOT = Path("benchmark/non-incremental")
-DEFAULT_SOLVER = "./build/bin/zolver"
+DEFAULT_SOLVER = "./build/bin/xolver"
 SERVER_LOCAL_DIR = Path("/data/bench-runs")  # server-side raw storage
 
 
@@ -81,7 +81,7 @@ def ensure_git_worktree(worktree_path: Path, branch: str):
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Zolver Benchmark Server")
+    parser = argparse.ArgumentParser(description="Xolver Benchmark Server")
     parser.add_argument("--mode", choices=["smoke", "focus", "full"], required=True)
     parser.add_argument("--focus-logic", default=None, help="Logic for focus mode")
     parser.add_argument("--smoke-manifest", default="tools/smoke_manifest.txt",
@@ -123,7 +123,7 @@ def main():
     print("[INFO] Building solver...")
     build_dir = Path("build")
     if not (build_dir / "CMakeCache.txt").exists():
-        run(["cmake", "-DZOLVER_ENABLE_CASESTATS=ON", ".."], cwd=build_dir)
+        run(["cmake", "-DXOLVER_ENABLE_CASESTATS=ON", ".."], cwd=build_dir)
     run(["cmake", "--build", ".", "-j", str(args.jobs)], cwd=build_dir)
 
     # Prepare run directories

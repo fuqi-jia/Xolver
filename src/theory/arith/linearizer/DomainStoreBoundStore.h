@@ -3,7 +3,7 @@
 #include "theory/arith/linearizer/BoundStore.h"
 #include "theory/arith/nia/core/DomainStore.h"
 
-namespace zolver {
+namespace xolver {
 
 /**
  * DomainStoreBoundStore: adapts NIA DomainStore to BoundStore interface.
@@ -17,4 +17,4 @@ private:
     const DomainStore& ds_;
 };
 
-} // namespace zolver
+} // namespace xolver

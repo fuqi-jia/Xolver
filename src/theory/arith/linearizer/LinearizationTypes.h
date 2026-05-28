@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Nonlinear term classification
@@ -126,4 +126,4 @@ struct PendingLinearizationLemma {
     std::optional<CutCacheKey> cacheKey; // nullopt for abstraction lemmas
 };
 
-} // namespace zolver
+} // namespace xolver

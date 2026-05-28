@@ -2,7 +2,7 @@
 #include "theory/arith/interval/IntervalOperations.h"
 #include <cmath>
 
-namespace zolver {
+namespace xolver {
 
 SquareContractorZ::SquareContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel)
     : constraint_(constraint), kernel_(kernel) {
@@ -132,4 +132,4 @@ SatLit SquareContractorZ::reason() const {
     return constraint_.reason;
 }
 
-} // namespace zolver
+} // namespace xolver

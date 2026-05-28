@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Detected logic features from a CoreIr problem.
@@ -66,4 +66,4 @@ private:
     bool isNonConstantExpr(ExprId id, const std::unordered_set<ExprId>& visited) const;
 };
 
-} // namespace zolver
+} // namespace xolver

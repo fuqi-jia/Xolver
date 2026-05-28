@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <iostream>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 uint64_t BitBlastSolver::defaultGateBudget() {
     // Max fresh SAT variables the bit-blast encoder may allocate. Both the
@@ -18,8 +18,8 @@ uint64_t BitBlastSolver::defaultGateBudget() {
     // dense high-degree QF_NIA. 200k stays safely under that, keeps the curated
     // NIA suite (tiny encodings) unaffected, and turns the AProVE blow-ups into
     // a clean Unknown. Env-tunable: competition runs with more RAM should raise
-    // ZOLVER_NIA_BITBLAST_GATE_BUDGET to solve larger bounded instances.
-    if (const char* e = std::getenv("ZOLVER_NIA_BITBLAST_GATE_BUDGET")) {
+    // XOLVER_NIA_BITBLAST_GATE_BUDGET to solve larger bounded instances.
+    if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_GATE_BUDGET")) {
         char* end = nullptr;
         unsigned long long v = std::strtoull(e, &end, 10);
         if (end != e && v > 0) return static_cast<uint64_t>(v);
@@ -189,7 +189,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     BitWidthPlan full = estimator_.estimate(cs, domains);
     if (full.width.empty()) return out;              // Unknown
 
-    // cvc5 solve-int-as-bv cascade (ZOLVER_NIA_BV_CASCADE): for problems with an
+    // cvc5 solve-int-as-bv cascade (XOLVER_NIA_BV_CASCADE): for problems with an
     // unbounded variable (boxIsComplete=false ⇒ pure SAT search, UNSAT not
     // provable here anyway), start every unbounded var at a TINY uniform width
     // (K=2) and escalate ×2. Small widths fail fast and keep the encoding under
@@ -197,7 +197,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     // QF_NIA-sat that the estimator's heuristic initial width would over-widen
     // (and budget-overflow) on iteration 0. Bounded vars keep their exact width
     // so nothing about completeness changes. Sound: every SAT model is validated.
-    static const bool cascade = std::getenv("ZOLVER_NIA_BV_CASCADE") != nullptr;
+    static const bool cascade = std::getenv("XOLVER_NIA_BV_CASCADE") != nullptr;
     if (cascade && !full.boxIsComplete) {
         std::unordered_set<std::string> bounded;
         for (const auto& kv : full.width) {
@@ -252,4 +252,4 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     return out;               // Unknown
 }
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

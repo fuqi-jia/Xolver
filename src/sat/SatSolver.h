@@ -4,7 +4,7 @@
 #include <memory>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * SAT literal: signed variable.
@@ -56,4 +56,4 @@ public:
  */
 std::unique_ptr<SatSolver> createSatSolver();
 
-} // namespace zolver
+} // namespace xolver

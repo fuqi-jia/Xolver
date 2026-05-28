@@ -1,11 +1,11 @@
 #include "expr/rewriter.h"
 
-namespace zolver {
+namespace xolver {
 
 using namespace SOMTParser;
 
 /**
- * Stage A: minimal Zolver-specific rewrite rules.
+ * Stage A: minimal Xolver-specific rewrite rules.
  *
  * For now, we rely on SOMTParser's default rules (NOT, AND, ADD simplification).
  * Future rules:
@@ -13,9 +13,9 @@ using namespace SOMTParser;
  *   - Normalize comparisons: p > q → p - q > 0, then flip > to <
  *   - Arithmetic constant folding
  */
-void installZolverRewriteRules(Rewriter& /*r*/) {
+void installXolverRewriteRules(Rewriter& /*r*/) {
     // TODO: register custom rules via r.rules().onGT(...), onGE(...), etc.
     // For Stage A, the default rules plus adapter-side GT/GE flipping suffice.
 }
 
-} // namespace zolver
+} // namespace xolver

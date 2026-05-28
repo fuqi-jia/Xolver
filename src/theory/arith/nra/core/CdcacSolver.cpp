@@ -10,13 +10,13 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 CdcacSolver::CdcacSolver(PolynomialKernel* kernel)
     : kernel_(kernel) {
-    if (const char* e = std::getenv("ZOLVER_NRA_VARORDER_SIMPLEX"))
+    if (const char* e = std::getenv("XOLVER_NRA_VARORDER_SIMPLEX"))
         simplexVarOrder_ = (e[0]=='1'||e[0]=='t'||e[0]=='T'||e[0]=='y'||e[0]=='Y');
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
     std::cerr << "[CDCAC-SOLVER] constructing with libpoly" << std::endl;
     algebra_ = std::make_unique<LibpolyBackend>(kernel_);
     core_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
@@ -144,18 +144,18 @@ TheoryCheckResult CdcacSolver::check() {
     // Sort variables lexicographically for a deterministic base order.
     std::sort(varOrderNames.begin(), varOrderNames.end());
     if (simplexVarOrder_ && varOrderNames.size() > 1) {
-        // ZOLVER_NRA_VARORDER_SIMPLEX: degree-stratified order + frontScore
+        // XOLVER_NRA_VARORDER_SIMPLEX: degree-stratified order + frontScore
         // tie-break (supersedes the degree-only branch). Primary key stays
         // ascending total degree, so the soundness mitigation is preserved.
         varOrderNames = computeCdcacVarOrder(*kernel_, input.constraints, varOrderNames);
     } else {
-        // ZOLVER_NRA_VARORDER: degree-based ordering with the highest-degree
+        // XOLVER_NRA_VARORDER: degree-based ordering with the highest-degree
         // variable LAST (i.e. projected first). CDCAC is highly order-sensitive;
         // projecting the high-degree variable first keeps the outer lifting levels
         // on lower-degree axes with better-behaved (often rational) cell
         // boundaries, avoiding close-irrational-root cell-decomposition failures.
         // stable_sort over the lexicographic base keeps ties deterministic.
-        static const bool kDegreeVarOrder = std::getenv("ZOLVER_NRA_VARORDER") != nullptr;
+        static const bool kDegreeVarOrder = std::getenv("XOLVER_NRA_VARORDER") != nullptr;
         if (kDegreeVarOrder && varOrderNames.size() > 1) {
             std::unordered_map<std::string, int> degSum;
             for (const auto& name : varOrderNames) degSum[name] = 0;
@@ -246,4 +246,4 @@ RealValue CdcacSolver::sampleValueToRealValue(const RealAlg& v) const {
     return RealValue::fromAlgebraic(std::move(an));
 }
 
-} // namespace zolver
+} // namespace xolver

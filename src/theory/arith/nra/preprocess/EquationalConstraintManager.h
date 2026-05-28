@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class AlgebraBackend;
 class ProjectionPolicy;
@@ -69,4 +69,4 @@ private:
     AlgebraBackend* algebra_;
 };
 
-} // namespace zolver
+} // namespace xolver

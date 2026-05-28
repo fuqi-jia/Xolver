@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * ModelConverter — reconstructs variables eliminated by ↔SAT preprocessing
@@ -68,4 +68,4 @@ private:
         const std::unordered_map<std::string, mpq_class>& env);
 };
 
-} // namespace zolver
+} // namespace xolver

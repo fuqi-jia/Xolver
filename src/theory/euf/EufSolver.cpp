@@ -10,10 +10,10 @@
 #include <functional>
 #include <climits>
 
-namespace zolver {
+namespace xolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
-    diseqWatchEnabled_ = std::getenv("ZOLVER_UF_DISEQ_WATCH") != nullptr;
+    diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
     initializeBoolConstants();
 }
 
@@ -601,7 +601,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     egraph_.registerPendingSignatures(mergeQueue_);
     for (size_t i = mqTagFrom; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = currentLevel_;
 
-    // ZOLVER_UF_DISEQ_WATCH: index active disequalities by endpoint term so the
+    // XOLVER_UF_DISEQ_WATCH: index active disequalities by endpoint term so the
     // saturation loop can check, after each merge, only the disequalities that
     // touch the just-merged class (instead of re-scanning all of them).
     if (diseqWatchEnabled_) {
@@ -678,7 +678,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             return TheoryCheckResult::mkConflict(*pendingConflict_);
         }
 
-        // ZOLVER_UF_DISEQ_WATCH: only the members of the loser class (mr.killed)
+        // XOLVER_UF_DISEQ_WATCH: only the members of the loser class (mr.killed)
         // had their representative change to mr.kept, so a disequality can become
         // violated only if one of its endpoint terms lives in that loser class.
         // Check those eagerly — the conflict is reported the moment it forms.
@@ -987,7 +987,7 @@ EufSolver::getDeducedSharedEqualities() {
         for (size_t j = i + 1; j < allShared.size(); ++j) {
             EufTermId tj = internSharedConstant(allShared[j]);
             if (tj == NullEufTerm) continue;
-            // Care-graph prune (ZOLVER_COMB_CAREGRAPH): skip pairs no theory
+            // Care-graph prune (XOLVER_COMB_CAREGRAPH): skip pairs no theory
             // cares about. Done AFTER interning (so egraph state is identical
             // to the unpruned path) but before the expensive same/explain. An
             // EUF-merged pair is always care-relevant (it was connected via an
@@ -1287,4 +1287,4 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

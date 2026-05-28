@@ -5,7 +5,7 @@
 #include <iostream>
 #include <set>
 
-namespace zolver {
+namespace xolver {
 
 CandidateModelSearch::CandidateModelSearch(const CoreIr& ir, std::string_view logic)
     : CandidateModelSearch(ir, logic, Config{}) {}
@@ -902,4 +902,4 @@ bool CandidateModelSearch::detectSymmetry() const {
     return true;
 }
 
-} // namespace zolver
+} // namespace xolver

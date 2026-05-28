@@ -7,7 +7,7 @@
 #include <vector>
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 // One non-basic term of a basic variable's row, with that term variable's
 // currently stored bounds (nullopt = unbounded on that side).
@@ -49,4 +49,4 @@ SimplexTableauFacts computeSimplexTableauFacts(
     const PolynomialKernel& kernel,
     const std::vector<LinearAtom>& linear);
 
-} // namespace zolver
+} // namespace xolver

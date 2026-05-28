@@ -2,7 +2,7 @@
 #include "theory/arith/nra/preprocess/SubresultantEngine.h"
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 // Forward declaration for mutual recursion.
 static std::optional<RationalPolynomial> tryExactDivideByVar(
@@ -188,4 +188,4 @@ std::optional<RationalPolynomial> GcdEngine::exactDivide(
     return polyExactDivide(p, g);
 }
 
-} // namespace zolver
+} // namespace xolver

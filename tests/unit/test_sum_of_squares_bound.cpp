@@ -5,7 +5,7 @@
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 
-using namespace zolver;
+using namespace xolver;
 
 static SatLit mkReason(SatVar v) { return SatLit::positive(v); }
 

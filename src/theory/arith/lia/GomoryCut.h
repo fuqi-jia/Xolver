@@ -4,7 +4,7 @@
 #include <vector>
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Gomory fractional cut derivation — pure, stateless math.
@@ -56,4 +56,4 @@ mpq_class gmiFractionalPart(const mpq_class& q);
 std::optional<GomoryCutResult> deriveGomoryCut(const mpq_class& f0,
                                                const std::vector<GmiNonbasicTerm>& terms);
 
-} // namespace zolver
+} // namespace xolver

@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // ProofForest — Nieuwenhuis-Oliveras proof-producing congruence forest.
@@ -63,4 +63,4 @@ private:
     void makeRoot(EufTermId u);
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // BoundValue: -inf, finite, or +inf
@@ -197,7 +197,7 @@ public:
     /** Verify all sparse tableau invariants. Returns true, or asserts in debug. */
     bool debugCheckInvariants() const;
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     int pivotCount() const { return pivotCount_; }
     void resetPivotCount() { pivotCount_ = 0; }
     int degeneratePivotCount() const { return degeneratePivots_; }
@@ -242,13 +242,13 @@ private:
     std::vector<BoundReason> conflict_;
     bool hasImmediateConflict_ = false;
 
-    // ZOLVER_LRA_PIVOT_HEUR: when set, use a largest-|coefficient| entering-var
+    // XOLVER_LRA_PIVOT_HEUR: when set, use a largest-|coefficient| entering-var
     // heuristic (with Bland fallback) instead of Bland-only. Read once at
     // construction. Sound regardless of value (pivot choice never changes the
     // verdict); only affects the search path / pivot count.
     bool useHeuristicPivot_ = false;
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     int pivotCount_ = 0;
     int degeneratePivots_ = 0;  // theta == 0 pivots (stalling / cycling signal)
 #endif
@@ -316,7 +316,7 @@ private:
 
     // Find entering var for violated basic var. When useBland is true, the
     // smallest-index (Bland) rule is used (guarantees termination); otherwise a
-    // largest-|coefficient| heuristic is used (ZOLVER_LRA_PIVOT_HEUR).
+    // largest-|coefficient| heuristic is used (XOLVER_LRA_PIVOT_HEUR).
     int findEnteringVarToIncrease(int basicVar, bool useBland) const;
     int findEnteringVarToDecrease(int basicVar, bool useBland) const;
 
@@ -338,7 +338,7 @@ private:
     std::optional<std::pair<DeltaRational, std::vector<BoundReason>>>
     proveFixedValueImpl(int var, std::unordered_set<int>& visited) const;
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
 public:
     struct CoeffStats {
         int64_t mpqOpTimeUs = 0;
@@ -366,4 +366,4 @@ private:
 #endif
 };
 
-} // namespace zolver
+} // namespace xolver

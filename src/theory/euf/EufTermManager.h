@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 struct ENode {
     EufTermId id;
@@ -110,4 +110,4 @@ private:
                          ExprId origin);
 };
 
-} // namespace zolver
+} // namespace xolver

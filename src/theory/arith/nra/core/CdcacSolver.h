@@ -10,7 +10,7 @@
 #include <optional>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class CdcacCore;
 class LibpolyBackend;
@@ -96,10 +96,10 @@ private:
     // V5: cache
     CdcacCache* cache_ = nullptr;
 
-    bool simplexVarOrder_ = false;   // ZOLVER_NRA_VARORDER_SIMPLEX
+    bool simplexVarOrder_ = false;   // XOLVER_NRA_VARORDER_SIMPLEX
 
     // Last SAT model from CDCAC core
     std::optional<SamplePoint> lastModel_;
 };
 
-} // namespace zolver
+} // namespace xolver

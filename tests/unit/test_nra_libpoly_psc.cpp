@@ -46,12 +46,12 @@
 #include "theory/arith/nra/projection/SubresultantChain.h"
 
 // NB: this test never includes LibPolyKernel.h directly — the libpoly include
-// path is PRIVATE to zolver_core. pscChain is exposed on the PolynomialKernel
+// path is PRIVATE to xolver_core. pscChain is exposed on the PolynomialKernel
 // base interface (default {}), so we drive it through createPolynomialKernel().
 
-using namespace zolver;
+using namespace xolver;
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 
 namespace {
 
@@ -405,7 +405,7 @@ TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~30
 // ---------------------------------------------------------------------------
 // Task 3: the gated public entry point principalSubresultantCoefficients.
 //
-// The flag ZOLVER_NRA_LIBPOLY_PSC selects the libpoly path ONLY when a non-null
+// The flag XOLVER_NRA_LIBPOLY_PSC selects the libpoly path ONLY when a non-null
 // kernel is also supplied (`kernel != nullptr && flag ON`). The flag is read
 // once per process via a function-local `static const bool`, so we set the env
 // var ON for the whole process and exploit the kernel-null short-circuit to get
@@ -419,7 +419,7 @@ TEST_CASE("pscChain: randomized differential CAD-equivalence vs determinant (~30
 // ---------------------------------------------------------------------------
 TEST_CASE("principalSubresultantCoefficients: gated ON (libpoly) == OFF (determinant) up to scale") {
     // Set the flag ON before the first call so the process-static read sees it.
-    setenv("ZOLVER_NRA_LIBPOLY_PSC", "1", /*overwrite=*/1);
+    setenv("XOLVER_NRA_LIBPOLY_PSC", "1", /*overwrite=*/1);
 
     auto kernelPtr = createPolynomialKernel();
     PolynomialKernel& kernel = *kernelPtr;
@@ -457,7 +457,7 @@ TEST_CASE("principalSubresultantCoefficients: gated ON (libpoly) == OFF (determi
                       << ": libpoly path differs from determinant");
     }
 
-    unsetenv("ZOLVER_NRA_LIBPOLY_PSC");
+    unsetenv("XOLVER_NRA_LIBPOLY_PSC");
 }
 
-#endif  // ZOLVER_HAS_LIBPOLY
+#endif  // XOLVER_HAS_LIBPOLY

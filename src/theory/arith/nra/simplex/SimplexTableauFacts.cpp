@@ -5,7 +5,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 std::pair<std::optional<mpq_class>, std::optional<mpq_class>>
 deriveBasicInterval(const mpq_class& rhs, const std::vector<RowTermBound>& terms) {
@@ -134,4 +134,4 @@ SimplexTableauFacts computeSimplexTableauFacts(
     return F;
 }
 
-} // namespace zolver
+} // namespace xolver

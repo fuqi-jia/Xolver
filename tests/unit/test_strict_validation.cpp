@@ -1,25 +1,25 @@
-// ZOLVER_PP_STRICT_VALIDATION: emit `sat` only on a POSITIVELY-confirmed model.
+// XOLVER_PP_STRICT_VALIDATION: emit `sat` only on a POSITIVELY-confirmed model.
 // A model the independent validator cannot fully evaluate (Indeterminate — e.g.
 // an uninterpreted function the validator has no interpretation for) must NOT
 // escape as sat; it is downgraded to `unknown`. This only ever turns
 // sat -> unknown, so it can never introduce a wrong answer.
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
 #include <string>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 struct StrictEnv {
-    StrictEnv()  { setenv("ZOLVER_PP_STRICT_VALIDATION", "1", 1); }
-    ~StrictEnv() { unsetenv("ZOLVER_PP_STRICT_VALIDATION"); }
+    StrictEnv()  { setenv("XOLVER_PP_STRICT_VALIDATION", "1", 1); }
+    ~StrictEnv() { unsetenv("XOLVER_PP_STRICT_VALIDATION"); }
 };
 Result solveStr(const std::string& smt, const std::string& tag) {
     std::string path = (std::filesystem::temp_directory_path() /
-                        ("zolver_sv_" + tag + ".smt2")).string();
+                        ("xolver_sv_" + tag + ".smt2")).string();
     { std::ofstream(path) << smt; }
     Solver s;
     REQUIRE(s.parseFile(path));

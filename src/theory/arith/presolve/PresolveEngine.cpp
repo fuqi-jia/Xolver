@@ -10,9 +10,9 @@
 #include <iostream>
 #include <set>
 
-namespace zolver {
+namespace xolver {
 
-// ZOLVER_PRESOLVE_DIAG: print the firing capability + conflicting atoms at the
+// XOLVER_PRESOLVE_DIAG: print the firing capability + conflicting atoms at the
 // conflict-emission point. Diagnosis only (default-off).
 static void dumpPresolveConflict(const char* cap, const PresolveState& st) {
     auto polySummary = [](const RationalPolynomial& p) -> std::string {
@@ -85,7 +85,7 @@ PresolveResult PresolveEngine::run() {
         for (auto& cap : caps_) {
             if (cap->run(st_)) { progress = true; anyProgress = true; }
             if (st_.hasConflict) {
-                if (std::getenv("ZOLVER_PRESOLVE_DIAG")) dumpPresolveConflict(cap->name(), st_);
+                if (std::getenv("XOLVER_PRESOLVE_DIAG")) dumpPresolveConflict(cap->name(), st_);
                 PresolveResult r;
                 r.kind = PresolveResult::Kind::Conflict;
                 r.conflict = st_.conflict;
@@ -107,4 +107,4 @@ PresolveResult PresolveEngine::run() {
     return r;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -13,7 +13,7 @@
 #include "expr/types.h"
 #include <gmpxx.h>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // CollinsConservativePolicy
@@ -271,4 +271,4 @@ ValidationResult HybridAdaptivePolicy::validateObligations(
     return reducedPolicy_->validateObligations(result, baseCell, algebra);
 }
 
-} // namespace zolver
+} // namespace xolver

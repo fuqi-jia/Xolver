@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 bool ModelValidator::validate(const CoreIr& ir, const BoolAssignment& assignment) {
     for (ExprId assertion : ir.assertions()) {
@@ -87,4 +87,4 @@ bool ModelValidator::eval(ExprId root, const CoreIr& ir, const BoolAssignment& a
     return val(root);
 }
 
-} // namespace zolver
+} // namespace xolver

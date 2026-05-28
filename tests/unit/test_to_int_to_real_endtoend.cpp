@@ -1,11 +1,11 @@
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include "expr/Smt2Dumper.h"
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 
-using namespace zolver;
+using namespace xolver;
 
 static std::string writeTempSmt2(const std::string& content) {
     auto path = std::filesystem::temp_directory_path() / "test_to_int.smt2";

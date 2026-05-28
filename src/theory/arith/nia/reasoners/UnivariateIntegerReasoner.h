@@ -6,7 +6,7 @@
 #include "theory/core/TheorySolver.h"
 #include <set>
 
-namespace zolver {
+namespace xolver {
 
 enum class IntegerRootStatus { Complete, Incomplete };
 
@@ -48,4 +48,4 @@ private:
                                           DomainStore& domains);
 };
 
-} // namespace zolver
+} // namespace xolver

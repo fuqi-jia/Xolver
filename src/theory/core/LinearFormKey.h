@@ -5,7 +5,7 @@
 #include <vector>
 #include <functional>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // LinearFormKey: canonical representation of a linear expression's LHS.
@@ -38,4 +38,4 @@ struct LinearFormKeyHash {
     }
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Truth-set interval for an atom (L rel c).
@@ -127,7 +127,7 @@ BoundAxiomGenerator::pairShapes(Relation relA, const mpq_class& cA,
 
 bool BoundAxiomGenerator::enabled() {
     static bool e = []() {
-        const char* v = std::getenv("ZOLVER_LRA_BOUND_AXIOMS");
+        const char* v = std::getenv("XOLVER_LRA_BOUND_AXIOMS");
         return v && *v && *v != '0';
     }();
     return e;
@@ -135,7 +135,7 @@ bool BoundAxiomGenerator::enabled() {
 
 int BoundAxiomGenerator::maxGroupSize() {
     static int m = []() {
-        const char* v = std::getenv("ZOLVER_LRA_BOUND_AXIOMS_MAXGROUP");
+        const char* v = std::getenv("XOLVER_LRA_BOUND_AXIOMS_MAXGROUP");
         return (v && *v) ? std::atoi(v) : 256;
     }();
     return m;
@@ -186,7 +186,7 @@ int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver&
             }
         }
     }
-    if (const char* d = std::getenv("ZOLVER_LRA_BOUND_AXIOMS_DIAG"); d && *d) {
+    if (const char* d = std::getenv("XOLVER_LRA_BOUND_AXIOMS_DIAG"); d && *d) {
         std::fprintf(stderr,
             "[BOUND-AX] linAtoms=%d groups=%zu pairedGroups=%d maxGroup=%d clauses=%d\n",
             totalAtoms, groups.size(), pairedGroups, maxGroup, emitted);
@@ -194,4 +194,4 @@ int BoundAxiomGenerator::generate(const TheoryAtomRegistry& registry, SatSolver&
     return emitted;
 }
 
-} // namespace zolver
+} // namespace xolver

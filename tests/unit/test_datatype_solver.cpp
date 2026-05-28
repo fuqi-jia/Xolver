@@ -12,17 +12,17 @@
 //   * DT-logic sat is floored to Unknown (sound), so satisfiable cases must
 //     also be NOT Unsat.
 
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <doctest/doctest.h>
 #include <fstream>
 #include <filesystem>
 
-using namespace zolver;
+using namespace xolver;
 
 static std::string writeDtSmt2(const std::string& content) {
     static int counter = 0;
     std::string path = std::filesystem::temp_directory_path() /
-        ("zolver_dt_test_" + std::to_string(counter++) + ".smt2");
+        ("xolver_dt_test_" + std::to_string(counter++) + ".smt2");
     std::ofstream ofs(path);
     ofs << content;
     return path;

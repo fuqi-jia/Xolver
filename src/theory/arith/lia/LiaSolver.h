@@ -13,7 +13,7 @@
 #include <vector>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -145,7 +145,7 @@ private:
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
     TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
-    // ZOLVER_LIA_REPAIR: rounding-based LRA->LIA integrality repair. Read once
+    // XOLVER_LIA_REPAIR: rounding-based LRA->LIA integrality repair. Read once
     // at construction. When set, checkIntegrality tries rounding the LRA
     // relaxation to a nearby integer point and exact-validating it before
     // branching; a validated point yields SAT immediately.
@@ -164,7 +164,7 @@ private:
 
     TheoryLemma buildBranchSplitLemma(int var, const DeltaRational& val);
 
-    // ZOLVER_LIA_CUTS: Gomory fractional cuts. Read once at construction.
+    // XOLVER_LIA_CUTS: Gomory fractional cuts. Read once at construction.
     // generateGomoryCut derives a cut from the fractional basic integer var's
     // tableau row (GomoryCut.h), re-expresses it over original variables, and
     // returns an explanation-aware lemma {¬(bound reasons used), cutLit} — valid
@@ -198,4 +198,4 @@ private:
     std::vector<SatLit> allActiveReasons() const;
 };
 
-} // namespace zolver
+} // namespace xolver

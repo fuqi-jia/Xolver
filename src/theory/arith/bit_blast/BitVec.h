@@ -4,7 +4,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 // Two's-complement bit-vector. bits[0] = LSB, bits.back() = MSB (sign bit,
 // weight -2^(width-1)). Each bit is a SatLit in the owning SAT instance.
@@ -35,4 +35,4 @@ inline mpz_class readBitVec(const SatSolver& sat, const BitVec& bv) {
     return v;
 }
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

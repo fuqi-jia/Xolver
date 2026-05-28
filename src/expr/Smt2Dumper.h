@@ -3,8 +3,8 @@
 #include "expr/ir.h"
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 std::string dumpExprToSMT2(ExprId id, const CoreIr& ir);
 
-} // namespace zolver
+} // namespace xolver

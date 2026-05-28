@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Canonicalize
@@ -181,4 +181,4 @@ Relation LinearConstraintNormalizer::negateRelationForEffective(Relation r) {
     return r; // unreachable
 }
 
-} // namespace zolver
+} // namespace xolver

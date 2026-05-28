@@ -2,7 +2,7 @@
 #include "theory/arith/nra/engine/ReasonMinimizer.h"
 #include "theory/arith/nra/core/CdcacTypes.h"
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("V6: ReasonMinimizer L0 deduplicates reasons") {
     std::vector<SatLit> reasons = {

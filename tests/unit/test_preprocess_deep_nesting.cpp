@@ -16,7 +16,7 @@
 #include "theory/core/LogicFeatureDetector.h"
 #include "proof/ModelValidator.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

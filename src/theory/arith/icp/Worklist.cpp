@@ -1,6 +1,6 @@
 #include "theory/arith/icp/Worklist.h"
 
-namespace zolver {
+namespace xolver {
 
 void Worklist::push(size_t contractorId) {
     if (inQueue_.insert(contractorId).second) {
@@ -44,4 +44,4 @@ void WatcherMap::clear() {
     watchers_.clear();
 }
 
-} // namespace zolver
+} // namespace xolver

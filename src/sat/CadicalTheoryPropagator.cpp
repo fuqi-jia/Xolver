@@ -11,7 +11,7 @@
 // Inline replacement for theory/core/DebugTrace.h to avoid sat/ -> theory/ include.
 #define NO_DBG if (true) {} else std::cerr
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // TheorySearchStats implementation
@@ -94,7 +94,7 @@ CadicalTheoryPropagator::CadicalTheoryPropagator(
     TheoryLemmaStorage& lemmaDb,
     CadicalBackend& backend
 ) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {
-    deferEarlyConflict_ = (std::getenv("ZOLVER_SAT_DEFER_EARLY_CONFLICT") != nullptr);
+    deferEarlyConflict_ = (std::getenv("XOLVER_SAT_DEFER_EARLY_CONFLICT") != nullptr);
 }
 
 void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
@@ -136,9 +136,9 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
 int CadicalTheoryPropagator::cb_decide() {
     ++decideCalls_;
 
-    if (const char* pe = std::getenv("ZOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
+    if (const char* pe = std::getenv("XOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
         static long long every = []() {
-            const char* e = std::getenv("ZOLVER_DECIDE_PROBE");
+            const char* e = std::getenv("XOLVER_DECIDE_PROBE");
             long long n = e ? std::atoll(e) : 0;
             return n > 1 ? n : 2000;
         }();
@@ -154,20 +154,20 @@ int CadicalTheoryPropagator::cb_decide() {
         }
     }
 
-    // ZOLVER_LRA_DECIDE: steer toward a theory-feasible region. Find an
+    // XOLVER_LRA_DECIDE: steer toward a theory-feasible region. Find an
     // unassigned bound atom (bounded cursor scan, O(K) per call, zero alloc),
     // evaluate it at the current theory model, and decide it at the satisfying
     // phase. Heuristic only: a decision is backtrackable and the verdict stays
     // theory-gated + model-validated, so a wrong guess only costs a backtrack.
     static const bool steer = []() {
-        const char* e = std::getenv("ZOLVER_LRA_DECIDE");
+        const char* e = std::getenv("XOLVER_LRA_DECIDE");
         return e && *e && *e != '0';
     }();
     if (steer) {
         if (!theoryAtomVarsBuilt_) {
             theoryAtomVars_ = registry_.linearAtomVars();
             theoryAtomVarsBuilt_ = true;
-            if (std::getenv("ZOLVER_DECIDE_PROBE"))
+            if (std::getenv("XOLVER_DECIDE_PROBE"))
                 std::cerr << "[DECIDE-STEER] theoryAtomVars=" << theoryAtomVars_.size() << std::endl;
         }
         const size_t n = theoryAtomVars_.size();
@@ -285,7 +285,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     int conflictSize = (tr.conflictOpt && !tr.conflictOpt->clause.empty())
                            ? static_cast<int>(tr.conflictOpt->clause.size()) : 0;
     stats_.recordModelCheckResult(tr.kind, conflictSize);
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     updateCaseStatsSearch();
 #endif
 
@@ -380,7 +380,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     bool isConflict = (tr.kind == TheoryCheckResult::Kind::Conflict);
     bool isLemma = (tr.kind == TheoryCheckResult::Kind::Lemma);
     stats_.recordPropagateCheck(isConflict, isLemma, conflictSize, dur);
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
     updateCaseStatsSearch();
     if (!dumpStatsBasePath_.empty()) {
         heartbeatWriter_.maybeWrite(*caseStats_, dumpStatsBasePath_);
@@ -424,13 +424,13 @@ int CadicalTheoryPropagator::cb_propagate() {
                 }
             }
             if (!falsified) {
-                if (std::getenv("ZOLVER_WISA_DIAG"))
+                if (std::getenv("XOLVER_WISA_DIAG"))
                     std::fprintf(stderr, "[PROP] SKIP non-falsified conflict (%zu lits) — stale reason\n",
                                  clause.size());
                 NO_DBG << "[PROP] skip non-falsified conflict (" << clause.size() << " lits)\n";
                 return 0;
             }
-            // Soundness floor (ZOLVER_SAT_DEFER_EARLY_CONFLICT): in combination
+            // Soundness floor (XOLVER_SAT_DEFER_EARLY_CONFLICT): in combination
             // mode a Standard-effort theory conflict is UNVALIDATED (only pure
             // shared-eq conflicts are re-verified by conflictIsGenuine; a
             // mixed/theory conflict is trusted), so an unsound conflict can drive
@@ -531,7 +531,7 @@ void CadicalTheoryPropagator::terminateSolve() {
     backend_.requestTerminate();
 }
 
-#ifdef ZOLVER_ENABLE_CASESTATS
+#ifdef XOLVER_ENABLE_CASESTATS
 void CadicalTheoryPropagator::updateCaseStatsSearch() {
     if (!caseStats_) return;
     caseStats_->search.modelCheckCalls = stats_.modelCheckCount;
@@ -575,4 +575,4 @@ bool CadicalTheoryPropagator::isClauseFalsifiedByCurrentModel(const std::vector<
     return ok;
 }
 
-} // namespace zolver
+} // namespace xolver

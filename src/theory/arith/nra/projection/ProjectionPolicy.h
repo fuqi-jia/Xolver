@@ -3,7 +3,7 @@
 #include "theory/arith/nra/core/CdcacTypes.h"
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class AlgebraBackend;
 
@@ -140,4 +140,4 @@ private:
     std::unique_ptr<ProjectionPolicy> conservativePolicy_;
 };
 
-} // namespace zolver
+} // namespace xolver

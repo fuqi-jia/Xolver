@@ -6,14 +6,14 @@
 #include <vector>
 #include <cstddef>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * FormulaRewriter — a DAG-safe, memoized, fixpoint simplifier over CoreIr.
  *
- * This is the generic Zolver formula rewriter (plan.md §2, invariant 6). It is
+ * This is the generic Xolver formula rewriter (plan.md §2, invariant 6). It is
  * the system-level "preprocessing / canonicalization" pass that the per-theory
- * stacks rely on. It is gated behind the ZOLVER_PP_REWRITE env flag and is a
+ * stacks rely on. It is gated behind the XOLVER_PP_REWRITE env flag and is a
  * pure IR-to-IR transform: it only APPENDS CoreExpr nodes (CoreIr::add never
  * mutates), so the originalAssertions_ snapshot taken before it runs keeps
  * referencing the original formula for ModelValidator.
@@ -102,4 +102,4 @@ private:
     bool unsat_ = false;
 };
 
-} // namespace zolver
+} // namespace xolver

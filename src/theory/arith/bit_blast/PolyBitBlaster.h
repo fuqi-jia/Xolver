@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 // Lowers a normalized NIA constraint `p rel 0` to CNF: decomposes p into
 // monomials (kernel.terms), encodes each as coeff * prod(var^exp), then sums
@@ -46,4 +46,4 @@ private:
     std::map<std::vector<std::pair<VarId, int>>, BitVec> productCache_;
 };
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

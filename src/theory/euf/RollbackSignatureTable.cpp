@@ -1,6 +1,6 @@
 #include "theory/euf/RollbackSignatureTable.h"
 
-namespace zolver {
+namespace xolver {
 
 std::optional<EufTermId> RollbackSignatureTable::find(const AppSignature& sig) const {
     auto it = table_.find(sig);
@@ -57,4 +57,4 @@ void RollbackSignatureTable::clear() {
     trail_.clear();
 }
 
-} // namespace zolver
+} // namespace xolver

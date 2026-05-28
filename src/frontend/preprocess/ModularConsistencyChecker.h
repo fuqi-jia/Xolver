@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * ModularConsistencyChecker: CRT-based preprocessing for
@@ -76,4 +76,4 @@ private:
     SortId intSortId_;
 };
 
-} // namespace zolver
+} // namespace xolver

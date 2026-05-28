@@ -6,7 +6,7 @@
 #include "expr/ir.h"
 #include <chrono>
 
-using namespace zolver;
+using namespace xolver;
 using namespace std::chrono;
 
 // Helper: measure time in milliseconds

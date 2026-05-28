@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include "expr/ir.h"
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("CoreIr basic storage") {
     CoreIr ir;

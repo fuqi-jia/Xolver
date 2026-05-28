@@ -8,7 +8,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Helpers
@@ -298,4 +298,4 @@ std::optional<IdlSolver::TheoryModel> IdlSolver::getModel() const {
     return model;
 }
 
-} // namespace zolver
+} // namespace xolver

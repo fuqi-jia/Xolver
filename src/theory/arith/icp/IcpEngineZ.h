@@ -8,7 +8,7 @@
 #include <memory>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class IcpEngineZ {
 public:
@@ -19,4 +19,4 @@ public:
         const IcpConfig& config);
 };
 
-} // namespace zolver
+} // namespace xolver

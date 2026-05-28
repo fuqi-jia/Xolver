@@ -7,7 +7,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // One linear atom: (sum coeffs[i].second * coeffs[i].first) + constant  rel  0
 struct LinearAtom {
@@ -28,4 +28,4 @@ ClassifiedConstraints classifyConstraints(
     const PolynomialKernel& kernel,
     const std::vector<CdcacConstraint>& constraints);
 
-} // namespace zolver
+} // namespace xolver

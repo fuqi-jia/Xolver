@@ -1,6 +1,6 @@
 #include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
 
-namespace zolver {
+namespace xolver {
 
 SumOfSquaresBoundReasoner::SumOfSquaresBoundReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -130,4 +130,4 @@ NiaReasoningResult SumOfSquaresBoundReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace zolver
+} // namespace xolver

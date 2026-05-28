@@ -2,11 +2,11 @@
 #include "sat/SatSolver.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Theory-agnostic, always-sound clause minimization for the combination layer
-// (ZOLVER_SAT_MIN). Generalizes NRA's ReasonMinimizer::minimizeL0 (which was
+// (XOLVER_SAT_MIN). Generalizes NRA's ReasonMinimizer::minimizeL0 (which was
 // CDCAC-Covering-specific) to a theory-independent home so interface / EUF /
 // array / arith conflicts and lemmas can all be shortened.
 //
@@ -32,4 +32,4 @@ struct ConflictMinimizer {
     }
 };
 
-} // namespace zolver
+} // namespace xolver

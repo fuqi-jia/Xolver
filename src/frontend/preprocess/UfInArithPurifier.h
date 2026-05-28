@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * UfInArithPurifier: bridges uninterpreted-function applications that appear
@@ -39,4 +39,4 @@ private:
     static bool isArithKind(Kind k);
 };
 
-} // namespace zolver
+} // namespace xolver

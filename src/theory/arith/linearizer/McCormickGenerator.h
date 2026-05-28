@@ -3,7 +3,7 @@
 #include "theory/arith/linearizer/LinearizationTypes.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class McCormickGenerator {
 public:
@@ -19,4 +19,4 @@ public:
         SortKind sort = SortKind::Int);
 };
 
-} // namespace zolver
+} // namespace xolver

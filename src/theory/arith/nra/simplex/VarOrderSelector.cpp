@@ -6,7 +6,7 @@
 #include <optional>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 std::vector<std::string> computeCdcacVarOrder(
     const PolynomialKernel& kernel,
@@ -16,7 +16,7 @@ std::vector<std::string> computeCdcacVarOrder(
     SimplexTableauFacts tf = computeSimplexTableauFacts(kernel, cc.linear);
     PolyStructureFacts  sf = computeStructureFacts(kernel, cc.nonlinear);
 
-    // Primary key: total-degree sum per variable (same as ZOLVER_NRA_VARORDER).
+    // Primary key: total-degree sum per variable (same as XOLVER_NRA_VARORDER).
     std::unordered_map<std::string, int> degSum;
     for (const auto& name : varNames) degSum[name] = 0;
     for (const auto& c : constraints)
@@ -58,4 +58,4 @@ std::vector<std::string> computeCdcacVarOrder(
     return out;
 }
 
-} // namespace zolver
+} // namespace xolver

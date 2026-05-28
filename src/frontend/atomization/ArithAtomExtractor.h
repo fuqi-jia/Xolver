@@ -7,7 +7,7 @@
 #include <memory>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -34,4 +34,4 @@ private:
     std::unique_ptr<PolynomialConverter> polyConverter_;
 };
 
-} // namespace zolver
+} // namespace xolver

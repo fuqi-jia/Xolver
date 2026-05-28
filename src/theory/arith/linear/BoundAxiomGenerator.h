@@ -6,12 +6,12 @@
 #include <vector>
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
 // ---------------------------------------------------------------------------
-// BoundAxiomGenerator (ZOLVER_LRA_BOUND_AXIOMS, default OFF)
+// BoundAxiomGenerator (XOLVER_LRA_BOUND_AXIOMS, default OFF)
 //
 // For each group of linear atoms sharing the SAME linear form L (same terms
 // AND coefficients), emits the theory-tautology binary clauses relating their
@@ -58,7 +58,7 @@ public:
                                          Relation relB, const mpq_class& cB);
 
     // Enumerate registry linear atoms, group by form, emit clauses to `sat`.
-    // No-op unless ZOLVER_LRA_BOUND_AXIOMS is set. Returns #clauses emitted.
+    // No-op unless XOLVER_LRA_BOUND_AXIOMS is set. Returns #clauses emitted.
     static int generate(const TheoryAtomRegistry& registry, SatSolver& sat);
 
 private:
@@ -66,4 +66,4 @@ private:
     static int maxGroupSize();
 };
 
-} // namespace zolver
+} // namespace xolver

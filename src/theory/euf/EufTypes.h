@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace zolver {
+namespace xolver {
 
 using EufTermId = uint32_t;
 using EClassId = uint32_t;
@@ -101,4 +101,4 @@ struct ExplainResult {
     std::vector<SatLit> reasons;
 };
 
-} // namespace zolver
+} // namespace xolver

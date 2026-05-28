@@ -5,7 +5,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Abstract algebra backend for CDCAC.
@@ -143,4 +143,4 @@ public:
     }
 };
 
-} // namespace zolver
+} // namespace xolver

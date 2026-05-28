@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -48,4 +48,4 @@ private:
     VarOrderHeuristicResult brownHeuristic(const std::vector<PolyId>& polys, const std::vector<VarId>& vars);
 };
 
-} // namespace zolver
+} // namespace xolver

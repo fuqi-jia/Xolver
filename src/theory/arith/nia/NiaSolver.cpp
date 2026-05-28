@@ -6,7 +6,7 @@
 #include "theory/arith/nra/core/CdcacCore.h"
 #include "theory/arith/nra/core/CdcacConstraint.h"
 #include "theory/arith/nra/engine/ReasonManager.h"
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #endif
 #include "theory/arith/linear/LinearExpr.h"
@@ -17,7 +17,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 NiaSolver::~NiaSolver() = default;
 
@@ -67,14 +67,14 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
-    // L2 (ZOLVER_NIA_UNIVARIATE_FULL, default-OFF). The univariate rational-root
+    // L2 (XOLVER_NIA_UNIVARIATE_FULL, default-OFF). The univariate rational-root
     // search (findIntegerRoots -> divisors, O(sqrt|a0|) bignum modulos) re-runs
     // on EVERY Standard-effort cb_propagate. On EVM mod-2^256 inputs |a0| ~ 2^256
     // => an effective per-propagation hang (profiled). Gate it to Full-effort
     // only, mirroring nia.local-search / nia.bit-blast: Standard propagation stays
     // cheap; the root search runs at the Full-effort model check and is validated,
     // so completeness/soundness are preserved. Promote after the OFF+ON gate holds.
-    if (const char* e = std::getenv("ZOLVER_NIA_UNIVARIATE_FULL"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_UNIVARIATE_FULL"); e && *e && *e != '0')
         addFull("nia.univariate", &NiaSolver::stageUnivariate);
     else
         add("nia.univariate",     &NiaSolver::stageUnivariate);
@@ -102,31 +102,31 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // reasoning path. The backend is uncapped on this base and OOMs on dense
     // AProVE inputs before any reasoning verdict, masking 357-refutation work.
     // Default-on preserved; only an explicit non-empty/non-"0" value turns it off.
-    if (const char* e = std::getenv("ZOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
         enableBitBlast_ = false;
 
     // Bound-free product-positivity refutation (default-OFF). Sound: only
     // derives lower bounds via valid integer implications and reports UNSAT
     // solely from an emptied domain (invariant 7).
-    if (const char* e = std::getenv("ZOLVER_NIA_REFUTE"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_REFUTE"); e && *e && *e != '0')
         enableRefute_ = true;
 
     // Multivariate GCD-divisibility refutation (default-OFF). Sound: every
     // monomial is an integer, so Σ aᵢmᵢ ≡ 0 (mod gcd aᵢ); g ∤ const ⇒ UNSAT.
-    if (const char* e = std::getenv("ZOLVER_NIA_GCD"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_GCD"); e && *e && *e != '0')
         enableGcd_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-OFF).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
     // solely from a contractor conflict or an emptied domain (invariant 7).
-    if (const char* e = std::getenv("ZOLVER_NIA_ICP"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_ICP"); e && *e && *e != '0')
         enableIcp_ = true;
 
     // Integer-aware CDCAC (default-OFF). Sound: a CDCAC covering-UNSAT over the
     // real relaxation implies integer-UNSAT (ℤⁿ⊆ℝⁿ; gated by CdcacCore's own
     // unsatTrustworthy_); a CDCAC SAT sample is accepted only when every
     // coordinate is an exact integer AND it passes IntegerModelValidator.
-    if (const char* e = std::getenv("ZOLVER_NIA_CDCAC"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NIA_CDCAC"); e && *e && *e != '0')
         enableCdcac_ = true;
 }
 
@@ -529,7 +529,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageIcp(TheoryLemmaStorage&, Theory
 
 std::optional<TheoryCheckResult> NiaSolver::stageCdcac(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableCdcac_ || normalized_.empty()) return std::nullopt;
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return std::nullopt;  // CDCAC requires the libpoly algebra backend
 #else
     if (!cdcacCore_) {
@@ -740,7 +740,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableBitBlast_) return std::nullopt;
-    if (std::getenv("ZOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag/A-B: isolate non-bit-blast NIA reasoning
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag/A-B: isolate non-bit-blast NIA reasoning
     auto res = bitBlast_.solve(normalized_, domains_, validator_);
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
@@ -955,4 +955,4 @@ std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
     return model;
 }
 
-} // namespace zolver
+} // namespace xolver

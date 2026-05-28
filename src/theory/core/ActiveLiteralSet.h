@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * O(1) duplicate/opposite-polarity detection for active theory literals.
@@ -95,4 +95,4 @@ private:
     }
 };
 
-} // namespace zolver
+} // namespace xolver

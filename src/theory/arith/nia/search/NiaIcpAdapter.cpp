@@ -3,7 +3,7 @@
 #include "theory/arith/icp/IcpEngineZ.h"
 #include "theory/arith/interval/ReasonedBoxZ.h"
 
-namespace zolver {
+namespace xolver {
 
 NiaIcpAdapter::NiaIcpAdapter(PolynomialKernel& kernel, DomainStore& store)
     : kernel_(kernel), store_(store) {}
@@ -41,4 +41,4 @@ IcpResultZ NiaIcpAdapter::run(const std::vector<IcpConstraint>& constraints,
     return result;
 }
 
-} // namespace zolver
+} // namespace xolver

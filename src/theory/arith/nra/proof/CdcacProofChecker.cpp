@@ -1,7 +1,7 @@
 #include "theory/arith/nra/proof/CdcacProofChecker.h"
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
-namespace zolver {
+namespace xolver {
 
 CdcacProofChecker::CdcacProofChecker(AlgebraBackend* algebra)
     : algebra_(algebra) {}
@@ -127,4 +127,4 @@ ProofCheckResult CdcacProofChecker::checkObligation(
     return {ProofCheckStatus::Unknown, "Unknown obligation kind"};
 }
 
-} // namespace zolver
+} // namespace xolver

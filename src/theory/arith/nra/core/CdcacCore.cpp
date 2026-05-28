@@ -11,10 +11,10 @@
 #include <cstdlib>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
-// Helpers (free functions in zolver namespace)
+// Helpers (free functions in xolver namespace)
 // ------------------------------------------------------------------
 
 // Helper: collect all distinct polynomials from constraints
@@ -169,23 +169,23 @@ static TryLocalProjectionResult tryLocalProjection(
 CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     : kernel_(kernel), algebra_(algebra) {
     // Lazard tower lifting is OFF by default (the projection stage stays Collins).
-    // Opt in with ZOLVER_NRA_LAZARD_LIFT=1; it only ADDS certified root
+    // Opt in with XOLVER_NRA_LAZARD_LIFT=1; it only ADDS certified root
     // isolations for genuine towers (>=2 algebraic prefix coords) that ViaNorm
     // punts on — flag-off behaviour is byte-identical to the Collins baseline.
-    if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_LIFT"))
+    if (const char* e = std::getenv("XOLVER_NRA_LAZARD_LIFT"))
         lazardLiftEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
     // Projection mode selection + HYBRID gate (DEFAULT). The default path is the
     // fail-safe hybrid: Collins first, Lazard fallback ONLY on Collins-Unknown
     // (see solve() / hybridEnabled_). The env hatches force a single fixed mode:
-    //   ZOLVER_NRA_PROJECTION=lazard  => pure Lazard  (projectionKind_=LazardStyle,
+    //   XOLVER_NRA_PROJECTION=lazard  => pure Lazard  (projectionKind_=LazardStyle,
     //                                    lift+per-cell-cert on, no Collins pass).
-    //   ZOLVER_NRA_PROJECTION=collins => pure Collins (the old default).
-    //   ZOLVER_NRA_HYBRID=0           => pure Collins (A/B baseline).
+    //   XOLVER_NRA_PROJECTION=collins => pure Collins (the old default).
+    //   XOLVER_NRA_HYBRID=0           => pure Collins (A/B baseline).
     // Any other value / unset => hybrid. An explicit setProjectionPolicy() call
     // still overrides the lazily-created policy regardless of mode. The projection
     // SET affects completeness only — the UNSAT certification gate
     // (unsatTrustworthy_ + per-cell cert) is unchanged.
-    if (const char* e = std::getenv("ZOLVER_NRA_PROJECTION")) {
+    if (const char* e = std::getenv("XOLVER_NRA_PROJECTION")) {
         std::string mode(e);
         if (mode == "lazard" || mode == "Lazard" || mode == "LAZARD") {
             // Pure Lazard: configure the full Lazard path and disable the hybrid
@@ -202,17 +202,17 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // Explicit A/B switch, read last so it always wins. Symmetric now that the
     // default is OFF: =1/t/y enables the hybrid (the --submit/--allon ON-pass),
     // anything else (0/f/n/unset-with-value) forces pure Collins.
-    if (const char* e = std::getenv("ZOLVER_NRA_HYBRID")) {
+    if (const char* e = std::getenv("XOLVER_NRA_HYBRID")) {
         hybridEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
     }
     // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
     // now (interim, while completeness recovery lands); intended default-ON.
-    if (const char* e = std::getenv("ZOLVER_NRA_UNSAT_CERT"))
+    if (const char* e = std::getenv("XOLVER_NRA_UNSAT_CERT"))
         unsatCertEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
     // FAIL-SAFE per-cell UNSAT gate (Lazard mode). Default ON; only relevant in
     // Lazard mode (the Collins gate is untouched). Force off for A/B with
-    // ZOLVER_NRA_LAZARD_CELL_CERT=0.
-    if (const char* e = std::getenv("ZOLVER_NRA_LAZARD_CELL_CERT"))
+    // XOLVER_NRA_LAZARD_CELL_CERT=0.
+    if (const char* e = std::getenv("XOLVER_NRA_LAZARD_CELL_CERT"))
         lazardCellCertEnabled_ = !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' || e[0] == 'N');
 }
 
@@ -421,7 +421,7 @@ bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
     if (!roots.ok) return false;
     int exactDistinct = static_cast<int>(roots.roots.size());
     int libpolyCount = allRoots.numRoots();
-    if (std::getenv("ZOLVER_NRA_CERT_DIAG")) {
+    if (std::getenv("XOLVER_NRA_CERT_DIAG")) {
         std::cerr << "[NRA-CERT] level=" << k << " exactDistinct=" << exactDistinct
                   << " allRoots=" << libpolyCount
                   << (exactDistinct == libpolyCount ? " OK" : " MISMATCH") << std::endl;
@@ -433,7 +433,7 @@ bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
 }
 
 void CdcacCore::buildClosure(const CdcacInput& input) {
-    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
         std::cerr << "[LAZARD-CLOSURE-ENTRY] vars=" << input.varOrder.size()
                   << " constraints=" << input.constraints.size() << std::endl;
     unsatTrustworthy_ = true;
@@ -456,7 +456,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     }
 
     // Projection-set selection. Default: the Collins closure (unconditionally
-    // sound, byte-identical to today). ZOLVER_NRA_PROJECTION=lazard builds the
+    // sound, byte-identical to today). XOLVER_NRA_PROJECTION=lazard builds the
     // Lazard projection closure instead, driving the SAME root-isolation/covering
     // path so SAT (full-model-validated) is unaffected.
     //
@@ -477,7 +477,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         // GCD/content/squarefree/resultant go through libpoly's EXACT ops
         // (high-degree multivariate inputs blow up the hand-rolled PRS).
         auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg, kernel_);
-        if (std::getenv("ZOLVER_NRA_LAZARD_DIAG")) {
+        if (std::getenv("XOLVER_NRA_LAZARD_DIAG")) {
             std::cerr << "[LAZARD-CLOSURE] "
                       << (lreason == LazardIncompleteReason::None ? "COMPLETE"
                           : lreason == LazardIncompleteReason::ProjectionKernelFailure ? "KERNEL_FAILURE"
@@ -534,7 +534,7 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
 
-    // Soundness FLOOR (ZOLVER_NRA_UNSAT_CERT). The PRECISE per-cell sign-invariance
+    // Soundness FLOOR (XOLVER_NRA_UNSAT_CERT). The PRECISE per-cell sign-invariance
     // verifier (certifyLevelSignInvariance, per level in solveLevel) sets
     // `coveringUncertifiable_` and is PROVEN to catch the close-irrational-root
     // class (Melquiond: allRoots 9 vs exact 17) while certifying genuine UNSAT
@@ -544,7 +544,7 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     // So gating on `coveringUncertifiable_` alone would LEAK those 12 false-UNSATs
     // (unsound). Until the section-recursion defect is fixed, we keep the gate
     // CONSERVATIVE (blunt): downgrade every CDCAC covering-UNSAT to Unknown.
-    // `coveringUncertifiable_` is computed for diagnostics (ZOLVER_NRA_CERT_DIAG)
+    // `coveringUncertifiable_` is computed for diagnostics (XOLVER_NRA_CERT_DIAG)
     // and is the foundation of the future precise floor. Only CdcacCore
     // covering-UNSAT is gated; presolve/linear UNSAT never reaches CDCAC.
     (void)coveringUncertifiable_;
@@ -565,7 +565,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 
     // --- FAIL-SAFE HYBRID (DEFAULT): Collins primary, Lazard fallback. --------
     // Pass 1 — Collins. Force the Collins configuration for this pass regardless
-    // of any ZOLVER_NRA_LAZARD_LIFT the user set, so the primary pass is exactly
+    // of any XOLVER_NRA_LAZARD_LIFT the user set, so the primary pass is exactly
     // the old pure-Collins behaviour. Collins's Sat/Unsat are AUTHORITATIVE.
     const bool savedLazardLift = lazardLiftEnabled_;
     projectionKind_ = ProjectionPolicyKind::CollinsConservative;
@@ -585,7 +585,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // the Lazard projection set + [H3] valuation lift + the per-cell UNSAT cert
     // gate (lazardCellCertEnabled_ already defaults ON). Reset all per-solve
     // scratch first so the closures / policy / trust flags start clean.
-    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
         std::cerr << "[CDCAC-HYBRID] Collins Unknown (reason="
                   << static_cast<int>(collinsResult.unknownReason)
                   << ") -> Lazard fallback" << std::endl;
@@ -603,7 +603,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // original Collins Unknown stands. (Lazard Sat is full-model-validated
     // upstream; Lazard Unsat is cert-gated, incomplete => Unknown.)
     if (lazardResult.status != CdcacStatus::Unknown) {
-        if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+        if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
             std::cerr << "[CDCAC-HYBRID] Lazard RECOVERED status="
                       << static_cast<int>(lazardResult.status) << std::endl;
         return lazardResult;
@@ -618,7 +618,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
 
     // V4: ensure a projection policy is available. Default is CollinsConservative;
-    // ZOLVER_NRA_PROJECTION=lazard selects the Lazard operator (projectionKind_).
+    // XOLVER_NRA_PROJECTION=lazard selects the Lazard operator (projectionKind_).
     if (!policy_) {
         if (projectionKind_ == ProjectionPolicyKind::LazardStyle) {
             policy_ = std::make_unique<LazardStylePolicy>();
@@ -748,7 +748,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     for (const auto& v : prefix.values) {
         if (v.isAlgebraic()) { hasAlgebraicPrefix = true; ++algPrefixCount; }
     }
-    static const bool kLazDiag = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
+    static const bool kLazDiag = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     if (kLazDiag && hasAlgebraicPrefix)
         std::cerr << "[LAZVAL] solveLevel k=" << k << " algPrefixCoords=" << algPrefixCount
                   << " levelPolys=" << levelPolyIds_[k].size() << std::endl;
@@ -816,7 +816,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (hasAlgebraicPrefix) {
                     bool supported = false;
                     RootSet roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
-                    if (std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+                    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
                         std::cerr << "[LAZVAL] vanish-route k=" << k << " supported="
                                   << supported << " roots=" << roots.numRoots() << std::endl;
                     if (supported) {
@@ -1079,7 +1079,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 break;
             }
         }
-        if (perCellTrusted && std::getenv("ZOLVER_NRA_LAZARD_DIAG"))
+        if (perCellTrusted && std::getenv("XOLVER_NRA_LAZARD_DIAG"))
             std::cerr << "[LAZVAL] per-cell gate RECOVERED UNSAT at level k=" << k
                       << " cells=" << certifiedCells.size() << std::endl;
     }
@@ -1427,4 +1427,4 @@ bool CdcacCore::relationHolds(Sign s, Relation rel) const {
     return false;
 }
 
-} // namespace zolver
+} // namespace xolver

@@ -1,7 +1,7 @@
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 NaryDistinctLowerer::NaryDistinctLowerer(CoreIr& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()) {
@@ -122,4 +122,4 @@ ExprId NaryDistinctLowerer::mkTrue() {
     return ir_.add(std::move(e));
 }
 
-} // namespace zolver
+} // namespace xolver

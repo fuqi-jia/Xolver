@@ -4,7 +4,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Simple key-value statistics tracker.
@@ -21,4 +21,4 @@ private:
     std::unordered_map<std::string, uint64_t> data_;
 };
 
-} // namespace zolver
+} // namespace xolver

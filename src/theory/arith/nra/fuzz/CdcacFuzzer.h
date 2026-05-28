@@ -5,7 +5,7 @@
 #include <vector>
 #include <random>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V7: Random case generators for CDCAC fuzzing
@@ -36,4 +36,4 @@ private:
     std::mt19937_64 rng_;
 };
 
-} // namespace zolver
+} // namespace xolver

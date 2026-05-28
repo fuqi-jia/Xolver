@@ -6,7 +6,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/valuation/TowerAlgebraicKernel.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId A0 = VarId{100}, A1 = VarId{101};
 

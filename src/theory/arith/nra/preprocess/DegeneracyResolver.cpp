@@ -1,7 +1,7 @@
 #include "theory/arith/nra/preprocess/DegeneracyResolver.h"
 #include "theory/arith/nra/preprocess/GcdEngine.h"
 
-namespace zolver {
+namespace xolver {
 
 DegeneracyResolver::DegeneracyResolver(DegeneracyResolverConfig cfg)
     : cfg_(cfg) {}
@@ -98,4 +98,4 @@ DegeneracyResolver::Resolution DegeneracyResolver::resolvePairDegeneracy(
     return res;
 }
 
-} // namespace zolver
+} // namespace xolver

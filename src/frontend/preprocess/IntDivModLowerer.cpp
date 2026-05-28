@@ -2,7 +2,7 @@
 #include <cassert>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 IntDivModLowerer::IntDivModLowerer(CoreIr& ir)
     : ir_(ir), boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()) {
@@ -451,7 +451,7 @@ ExprId IntDivModLowerer::mkNot(ExprId a) {
 ExprId IntDivModLowerer::getOrCreateUndefDivSymbol() {
     if (undefDivSym_ != NullExpr) return undefDivSym_;
     // Create a placeholder Variable node to serve as the UF symbol name carrier.
-    // In Zolver's IR, UF symbols are represented by Variable nodes with special names.
+    // In Xolver's IR, UF symbols are represented by Variable nodes with special names.
     CoreExpr e;
     e.kind = Kind::Variable;
     e.sort = intSortId_;
@@ -494,4 +494,4 @@ ExprId IntDivModLowerer::mkUndefModApp(ExprId a, ExprId b) {
     return ir_.add(std::move(e));
 }
 
-} // namespace zolver
+} // namespace xolver

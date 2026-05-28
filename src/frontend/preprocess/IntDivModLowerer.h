@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 struct ArithmeticRequirement {
     bool needsNonlinearInt = false;
@@ -143,4 +143,4 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;
 };
 
-} // namespace zolver
+} // namespace xolver

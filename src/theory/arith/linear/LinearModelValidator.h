@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * ActiveLinearAtom: record of an asserted theory literal for validation.
@@ -63,4 +63,4 @@ private:
     bool satisfiesRelation(const DeltaRational& val, Relation rel, bool value);
 };
 
-} // namespace zolver
+} // namespace xolver

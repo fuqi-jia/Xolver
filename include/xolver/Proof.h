@@ -1,6 +1,6 @@
 #pragma once
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Proof (stub for Stage A).
@@ -10,4 +10,4 @@ public:
     bool isEmpty() const { return true; }
 };
 
-} // namespace zolver
+} // namespace xolver

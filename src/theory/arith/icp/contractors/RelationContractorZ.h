@@ -5,7 +5,7 @@
 #include "theory/arith/interval/IntervalOperations.h"
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class RelationContractorZ : public ContractorZ {
 public:
@@ -23,4 +23,4 @@ private:
     bool isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel) const;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -13,7 +13,7 @@
 #include <gmpxx.h>
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static std::unordered_map<std::string, mpq_class> point(const std::string& v, const mpq_class& val) {
     return {{v, val}};

@@ -13,7 +13,7 @@
 #include <vector>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 class LraSolver : public ArithSolverBase {
 public:
@@ -49,7 +49,7 @@ public:
 
     std::optional<TheoryModel> getModel() const override;
 
-    // ZOLVER_LRA_PROP (default OFF): drain sound Farkas row-propagations
+    // XOLVER_LRA_PROP (default OFF): drain sound Farkas row-propagations
     // (reasons ⟹ impliedBound) buffered during the last check() so the SAT
     // propagator can install them during search. Entailment-tagged only.
     std::vector<TheoryLemma> takeEntailmentPropagations() override;
@@ -159,11 +159,11 @@ private:
 
     // Build a SOUND propagation clause (¬reason₁ ∨ ... ∨ impliedBound) carrying
     // the Farkas reasons, tagged Entailment. Safe to give the SAT solver during
-    // search (ZOLVER_LRA_PROP); the propagator verifies it is unit/falsified.
+    // search (XOLVER_LRA_PROP); the propagator verifies it is unit/falsified.
     std::optional<TheoryLemma> buildEntailmentLemma(
         const LraPropagationEngine::ExplainedBound& eb) const;
 
-    // ZOLVER_LRA_PROP gate (read once) + this-check buffer of entailment props.
+    // XOLVER_LRA_PROP gate (read once) + this-check buffer of entailment props.
     bool lraPropEnabled_ = false;
     std::vector<TheoryLemma> entailmentProps_;
 
@@ -182,7 +182,7 @@ private:
     };
     std::unordered_map<SatVar, AtomEvalForm> atomEvalCache_;
 
-#ifdef ZOLVER_LRA_PROFILE
+#ifdef XOLVER_LRA_PROFILE
     struct ProfileStats {
         int solveCount = 0;
         int checkCalls = 0;
@@ -231,4 +231,4 @@ private:
 #endif
 };
 
-} // namespace zolver
+} // namespace xolver

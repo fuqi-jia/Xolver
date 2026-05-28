@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 // V2-8: validation rule for safe redundancy deletion.
 // A reason set is valid if every cell's reasons are contained in the kept set.
@@ -82,4 +82,4 @@ std::vector<SatLit> ReasonManager::deduplicate(std::vector<SatLit> lits) {
     return lits;
 }
 
-} // namespace zolver
+} // namespace xolver

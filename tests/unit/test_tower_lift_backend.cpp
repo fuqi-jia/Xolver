@@ -7,7 +7,7 @@
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 // Prefix coordinate a = +sqrt2 (defPoly x^2-2, interval [1,2]) in variable `a`.

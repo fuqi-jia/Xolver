@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 IntervalEvaluator::IntervalEvaluator(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -93,4 +93,4 @@ IntervalEvalResult IntervalEvaluator::run(
     return {IntervalEvalStatus::NoChange, {}};
 }
 
-} // namespace zolver
+} // namespace xolver

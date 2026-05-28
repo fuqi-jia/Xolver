@@ -8,7 +8,7 @@
 #include <map>
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 class CoreIr;
 
@@ -65,4 +65,4 @@ private:
     std::map<mpq_class, SharedTermId> constValueToId_;  // numeric-constant dedup by value
 };
 
-} // namespace zolver
+} // namespace xolver

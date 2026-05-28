@@ -4,7 +4,7 @@
 #include "theory/core/TheorySolver.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // V6: SCPR (Set Cover-based Proof Reduction) reason minimization
@@ -43,4 +43,4 @@ public:
     static bool isValid(const Covering& cover, const std::vector<SatLit>& kept);
 };
 
-} // namespace zolver
+} // namespace xolver

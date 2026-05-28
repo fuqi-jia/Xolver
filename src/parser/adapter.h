@@ -6,11 +6,11 @@
 #include <somtparser/ir/node.h>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * FrontendAdapter: converts SOMTParser AST (Node = shared_ptr<DAGNode>)
- * into Zolver internal CoreIr (ExprId-based dense array).
+ * into Xolver internal CoreIr (ExprId-based dense array).
  *
  * Uses unordered_map<Node, ExprId, NodeHash, NodeEqual> for memoization,
  * leveraging SOMTParser's existing hash-consing.
@@ -41,7 +41,7 @@ private:
     std::unique_ptr<CoreIr> ir_;
     SortId boolSortId_ = NullSort;
 
-    // ZOLVER_PP_LET_ELIM: eliminate residual let nodes at import time. SOMTParser
+    // XOLVER_PP_LET_ELIM: eliminate residual let nodes at import time. SOMTParser
     // preserves lets and its expandLet only expands the outermost one, so a let
     // nested in a binding VALUE or an operand position survives as a let_chain
     // that mapKind cannot map (-> Unknown -> unknown verdict). When set, a
@@ -78,4 +78,4 @@ private:
     > sortMemo_;
 };
 
-} // namespace zolver
+} // namespace xolver

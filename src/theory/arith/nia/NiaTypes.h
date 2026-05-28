@@ -3,7 +3,7 @@
 #include "theory/core/TheorySolver.h"
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 // Forward declaration from NiaSolver
 struct ActiveNiaConstraint;
@@ -23,4 +23,4 @@ struct NiaReasoningResult {
     std::optional<TheoryLemma> lemma;
 };
 
-} // namespace zolver
+} // namespace xolver

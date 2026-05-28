@@ -15,7 +15,7 @@
 
 #include "theory/arith/presolve/Presolve.h"
 
-namespace zolver {
+namespace xolver {
 
 class NonnegativePolynomialBoundExtractor : public PresolveCapability {
 public:
@@ -23,4 +23,4 @@ public:
     bool run(PresolveState& st) override;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -6,7 +6,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * ProductPositivityReasoner: bound-free integer product-positivity.
@@ -31,4 +31,4 @@ private:
     PolynomialKernel& kernel_;
 };
 
-} // namespace zolver
+} // namespace xolver

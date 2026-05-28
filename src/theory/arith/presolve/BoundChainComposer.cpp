@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -123,4 +123,4 @@ bool BoundChainComposer::run(PresolveState& st) {
     return made;
 }
 
-} // namespace zolver
+} // namespace xolver

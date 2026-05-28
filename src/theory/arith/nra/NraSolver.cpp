@@ -3,13 +3,13 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/poly/RationalPolynomial.h"
-#include "theory/arith/nra/NraLinearizationAdapter.h"     // ZOLVER_NRA_LINEARIZE cut-feeder
-#include "theory/arith/nia/preprocess/NiaNormalizer.h"    // ZOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
-#include "theory/arith/nra/core/CdcacCore.h"               // ZOLVER_NRA_PREELIM reduced CDCAC
-#include "theory/arith/nra/core/CdcacConstraint.h"         // ZOLVER_NRA_PREELIM
-#include "theory/arith/nra/engine/ReasonManager.h"         // ZOLVER_NRA_PREELIM conflict reasons
-#ifdef ZOLVER_HAS_LIBPOLY
-#include "theory/arith/nra/backend/LibpolyBackend.h"       // ZOLVER_NRA_PREELIM algebra backend
+#include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
+#include "theory/arith/nra/core/CdcacCore.h"               // XOLVER_NRA_PREELIM reduced CDCAC
+#include "theory/arith/nra/core/CdcacConstraint.h"         // XOLVER_NRA_PREELIM
+#include "theory/arith/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
+#ifdef XOLVER_HAS_LIBPOLY
+#include "theory/arith/nra/backend/LibpolyBackend.h"       // XOLVER_NRA_PREELIM algebra backend
 #endif
 #include <cstdlib>
 #include <set>
@@ -17,7 +17,7 @@
 #include <unordered_set>
 #include <fstream>
 
-namespace zolver {
+namespace xolver {
 
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
@@ -30,7 +30,7 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
-    // ZOLVER_NRA_PREELIM (default OFF): affine pre-elimination then reduced CDCAC.
+    // XOLVER_NRA_PREELIM (default OFF): affine pre-elimination then reduced CDCAC.
     // Runs BEFORE the full-variable CDCAC backstop; nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.preelim",
@@ -39,10 +39,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
         "nra.cdcac",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
 
-    // ZOLVER_NRA_PREELIM: read the gate once at construction (mirrors A7's
+    // XOLVER_NRA_PREELIM: read the gate once at construction (mirrors A7's
     // enableCdcac_). OFF ⇒ stageNraPreElim returns nullopt immediately so the
     // default path is byte-identical.
-    if (const char* e = std::getenv("ZOLVER_NRA_PREELIM"); e && *e && *e != '0')
+    if (const char* e = std::getenv("XOLVER_NRA_PREELIM"); e && *e && *e != '0')
         enablePreElim_ = true;
 }
 
@@ -84,8 +84,8 @@ void NraSolver::onReset() {
     activeSet_.reset();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
-    linRefineRound_ = 0;  // ZOLVER_NRA_LINEARIZE: restart refinement budget
-    // ZOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
+    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
     preElimCore_.reset();
     preElimAlgebra_.reset();
@@ -103,7 +103,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     size_t oldSize = activeLits_.size();
     activeLits_.push_back(reason);
     trail_.push_back({level, oldSize});
-    // ZOLVER_NRA_LINEARIZE: capture full record (one per assertLit, kept aligned
+    // XOLVER_NRA_LINEARIZE: capture full record (one per assertLit, kept aligned
     // with activeLits_/presolveConstraints_ via the same resize() in backtrack/pop).
     activeRecords_.push_back({reason, atom, value});
 
@@ -142,7 +142,7 @@ void NraSolver::onBacktrack(int level) {
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
     engine_.backtrack(level);
-    linRefineRound_ = 0;  // ZOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
+    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
@@ -174,7 +174,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
     return std::nullopt;
 }
 
-// ZOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
+// XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
 //
 // CAD (and CDCAC) is doubly-exponential in #variables. The hycomp BMC SAT cases
 // couple ~20+ vars, many of which are `_def_*` intermediates defined by LINEAR
@@ -199,11 +199,11 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
 //   6. Unknown / anything unsound to reconstruct ⇒ nullopt (fall to stageCdcac).
 //
 // Flag OFF ⇒ returns nullopt at the gate (default path byte-identical). No-op
-// without ZOLVER_HAS_LIBPOLY (CDCAC needs the libpoly algebra backend).
+// without XOLVER_HAS_LIBPOLY (CDCAC needs the libpoly algebra backend).
 std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& /*lemmaDb*/,
                                                             TheoryEffort /*effort*/) {
     if (!enablePreElim_) return std::nullopt;
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return std::nullopt;
 #else
     // Collect the live polynomial constraints (skip non-polynomial placeholders).
@@ -375,7 +375,7 @@ std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lem
     return engine_.check();
 }
 
-// ZOLVER_NRA_LINEARIZE incremental-linearization SAT LOOP (default OFF).
+// XOLVER_NRA_LINEARIZE incremental-linearization SAT LOOP (default OFF).
 //
 // Closes the linearization SAT loop for NRA (mirrors NiaSolver but for reals):
 //
@@ -402,14 +402,14 @@ std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lem
 std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStorage& lemmaDb,
                                                                 TheoryEffort /*effort*/) {
     static const bool enabled = [] {
-        const char* e = std::getenv("ZOLVER_NRA_LINEARIZE");
+        const char* e = std::getenv("XOLVER_NRA_LINEARIZE");
         return e && (e[0]=='1'||e[0]=='t'||e[0]=='T'||e[0]=='y'||e[0]=='Y');
     }();
     if (!enabled) return std::nullopt;
     if (!registry_ || !linAdapter_) return std::nullopt;
 
     static const int kRefineCap = [] {
-        if (const char* c = std::getenv("ZOLVER_NRA_LINEARIZE_CAP")) {
+        if (const char* c = std::getenv("XOLVER_NRA_LINEARIZE_CAP")) {
             int v = std::atoi(c);
             if (v > 0) return v;
         }
@@ -455,7 +455,7 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
         if (val != 0) ++nNonzeroBase;
         fp += val * val + val;  // order-independent-ish mix
     }
-    if (std::getenv("ZOLVER_NRA_LINEARIZE_DUMP") && modelFilled) {
+    if (std::getenv("XOLVER_NRA_LINEARIZE_DUMP") && modelFilled) {
         std::ofstream md("/tmp/linmodel.txt", std::ios::app);
         md << "--- model (nBase=" << nBase << " nNonzeroBase=" << nNonzeroBase
            << " total=" << model.size() << ") ---\n";
@@ -662,4 +662,4 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
     return model;
 }
 
-} // namespace zolver
+} // namespace xolver

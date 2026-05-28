@@ -5,7 +5,7 @@
 #include "expr/types.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // LazardValuationEngine (step C, LAZARD.md [H3]) — evaluate a polynomial at a
@@ -43,4 +43,4 @@ LazardValuationResult lazardEvaluateToUnivariate(const RationalPolynomial& p,
                                                  VarId targetVar,
                                                  const TowerContext& ctx);
 
-}  // namespace zolver
+}  // namespace xolver

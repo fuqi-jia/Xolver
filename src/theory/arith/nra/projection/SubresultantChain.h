@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -47,7 +47,7 @@ struct PscChainResult {
 // side with degree < 1 in v) yield an empty chain.
 //
 // `kernel` is OPTIONAL. When it is non-null AND (the env flag
-// ZOLVER_NRA_LIBPOLY_PSC is ON OR `forcePsc` is set), the chain is computed via
+// XOLVER_NRA_LIBPOLY_PSC is ON OR `forcePsc` is set), the chain is computed via
 // the libpoly `pscChain` (no matrix-dimension bound, so budgetExceeded is never
 // set). When `kernel` is null OR neither the flag nor forcePsc is set, the
 // definitional Sylvester-submatrix determinant below is used — byte-identical
@@ -66,4 +66,4 @@ PscChainResult principalSubresultantCoefficients(
     PolynomialKernel* kernel = nullptr,
     bool forcePsc = false);
 
-} // namespace zolver
+} // namespace xolver

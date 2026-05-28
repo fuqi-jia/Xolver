@@ -1,6 +1,6 @@
 #include "theory/arith/linear/LinearModelValidator.h"
 
-namespace zolver {
+namespace xolver {
 
 bool LinearModelValidator::validateLiaModel(
     const std::vector<ActiveLinearAtom>& activeAtoms,
@@ -101,4 +101,4 @@ bool LinearModelValidator::satisfiesRelation(
     return false;
 }
 
-} // namespace zolver
+} // namespace xolver

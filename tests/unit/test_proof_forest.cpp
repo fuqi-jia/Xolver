@@ -5,7 +5,7 @@
 #include <tuple>
 #include <vector>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 MergeReason asserted(uint32_t var) {

@@ -4,7 +4,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

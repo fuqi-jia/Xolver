@@ -12,7 +12,7 @@
 #include <optional>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -84,4 +84,4 @@ private:
         PolynomialKernel* kernel);
 };
 
-} // namespace zolver
+} // namespace xolver

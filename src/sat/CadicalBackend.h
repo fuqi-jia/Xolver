@@ -4,7 +4,7 @@
 #include <cadical.hpp>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class CadicalTheoryPropagator;
 
@@ -47,4 +47,4 @@ private:
     std::vector<bool> observedVars_;
 };
 
-} // namespace zolver
+} // namespace xolver

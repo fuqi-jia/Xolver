@@ -1,7 +1,7 @@
 #include "theory/arith/nra/preprocess/SquarefreeEngine.h"
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 
-namespace zolver {
+namespace xolver {
 
 SquarefreeEngine::SquarefreeEngine(LibpolyBackend& backend)
     : backend_(backend) {}
@@ -67,4 +67,4 @@ SquarefreeEngine::Result SquarefreeEngine::compute(UniPolyId f) {
     return {squarefree};
 }
 
-} // namespace zolver
+} // namespace xolver

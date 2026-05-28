@@ -3,7 +3,7 @@
 #include "theory/combination/SharedTermRegistry.h"
 #include "expr/ir.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

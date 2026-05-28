@@ -4,7 +4,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 struct AbstractionResult {
     PolyId linearizedPoly;      // polynomial with aux vars replacing nonlinear monomials
@@ -31,4 +31,4 @@ private:
         const PolynomialKernel::MonomialTerm& term);
 };
 
-} // namespace zolver
+} // namespace xolver

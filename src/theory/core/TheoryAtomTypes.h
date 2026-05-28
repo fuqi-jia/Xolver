@@ -10,7 +10,7 @@
 #include <variant>
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 // Forward declaration
 class TheoryLemmaDatabase;
@@ -85,7 +85,7 @@ struct TheoryConflict {
 };
 
 // Distinguishes sound entailment propagations (safe to lift to SAT) from
-// heuristic guesses (ZOLVER_LRA_PROP). Conservative default = Guess.
+// heuristic guesses (XOLVER_LRA_PROP). Conservative default = Guess.
 enum class LemmaKind : uint8_t { Guess, Entailment };
 
 // TheoryLemma stores a propagation lemma in the form:
@@ -166,4 +166,4 @@ struct TheoryCheckResult {
     }
 };
 
-} // namespace zolver
+} // namespace xolver

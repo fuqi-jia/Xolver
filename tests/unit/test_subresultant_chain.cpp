@@ -10,7 +10,7 @@
 #include "theory/arith/nra/projection/SubresultantChain.h"
 #include "theory/arith/nra/projection/LocalProjection.h"   // resultant()
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId VX = VarId{1}, VY = VarId{2};
 

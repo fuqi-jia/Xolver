@@ -4,8 +4,8 @@
 //      Int/Mixed -> false logic mismatch -> Unknown (the gasburner merge-casualty).
 //      A GENUINE Int var in QF_LRA must still be flagged.
 //   2. LraSolver::evalAtomAtModel evaluates a bound atom at the current simplex
-//      point (the cb_decide / ZOLVER_LRA_DECIDE feasibility heuristic core).
-//   3. ZOLVER_LRA_DECIDE must not change a verdict (sound regardless of value).
+//      point (the cb_decide / XOLVER_LRA_DECIDE feasibility heuristic core).
+//   3. XOLVER_LRA_DECIDE must not change a verdict (sound regardless of value).
 
 #include <doctest/doctest.h>
 #include "expr/ir.h"
@@ -17,12 +17,12 @@
 #include "theory/arith/lra/LraSolver.h"
 #include "util/RealValue.h"
 #include "sat/SatSolver.h"
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 // Minimal SatSolver so TheoryAtomRegistry::setContext is non-null (its
@@ -123,21 +123,21 @@ TEST_CASE("LraSolver::evalAtomAtModel evaluates atoms at the simplex point") {
 
 namespace {
 std::string writeTmp(const std::string& content, const std::string& tag) {
-    std::string path = std::filesystem::temp_directory_path() / ("zolver_a1lock_" + tag + ".smt2");
+    std::string path = std::filesystem::temp_directory_path() / ("xolver_a1lock_" + tag + ".smt2");
     std::ofstream ofs(path); ofs << content; return path;
 }
 Result solveWith(const std::string& smt2, const std::string& logic, bool decideOn) {
-    if (decideOn) setenv("ZOLVER_LRA_DECIDE", "1", 1); else unsetenv("ZOLVER_LRA_DECIDE");
+    if (decideOn) setenv("XOLVER_LRA_DECIDE", "1", 1); else unsetenv("XOLVER_LRA_DECIDE");
     std::string path = writeTmp(smt2, decideOn ? "on" : "off");
     Solver solver; solver.setLogic(logic);
     solver.parseFile(path);
     Result r = solver.checkSat();
-    unsetenv("ZOLVER_LRA_DECIDE");
+    unsetenv("XOLVER_LRA_DECIDE");
     return r;
 }
 } // namespace
 
-TEST_CASE("ZOLVER_LRA_DECIDE: verdict unchanged (sound regardless of value)") {
+TEST_CASE("XOLVER_LRA_DECIDE: verdict unchanged (sound regardless of value)") {
     const std::string sat =
         "(set-logic QF_LRA)\n(declare-fun x () Real)\n(declare-fun y () Real)\n"
         "(assert (< x y))\n(assert (< y (+ x 5)))\n(check-sat)\n";

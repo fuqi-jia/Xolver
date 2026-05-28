@@ -2,7 +2,7 @@
 
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * IntervalQ: rational interval [lo, hi] (inclusive, finite only in V1).
@@ -17,4 +17,4 @@ struct IntervalQ {
     mpq_class width() const { return hi - lo; }
 };
 
-} // namespace zolver
+} // namespace xolver

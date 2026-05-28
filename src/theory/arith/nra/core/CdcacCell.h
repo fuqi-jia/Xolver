@@ -1,7 +1,7 @@
 #pragma once
 #include "theory/arith/nra/core/CdcacValue.h"
 
-namespace zolver {
+namespace xolver {
 
 // ------------------------------------------------------------------
 // Cell kinds
@@ -111,4 +111,4 @@ enum class BuildCellStatus : uint8_t {
     Unknown
 };
 
-} // namespace zolver
+} // namespace xolver

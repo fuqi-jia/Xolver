@@ -16,7 +16,7 @@
 #include <csignal>
 #include <csetjmp>
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 #include <polyxx.h>
 #endif
 
@@ -44,11 +44,11 @@ static void libpolyCrashHandler(int sig) {
 
 } // anonymous namespace
 
-namespace zolver {
+namespace xolver {
 
 LibpolyBackend::LibpolyBackend(PolynomialKernel* kernel)
     : kernel_(kernel) {
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
     libKernel_ = dynamic_cast<LibPolyKernel*>(kernel);
 #endif
 }
@@ -64,7 +64,7 @@ const std::vector<mpz_class>& LibpolyBackend::getUni(UniPolyId id) const {
 }
 
 RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     (void)p;
     return RootSet{};
 #else
@@ -148,7 +148,7 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
 #endif
 }
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 static std::optional<poly::DyadicRational> mpqToDyadicRational(const mpq_class& q) {
     mpz_class num = q.get_num();
     mpz_class den = q.get_den();
@@ -196,7 +196,7 @@ static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
 
 RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     PolyId p, const SamplePoint& prefix, VarId mainVar) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     (void)p; (void)prefix; (void)mainVar;
     return RootSet{};
 #else
@@ -501,7 +501,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
     if (hasRemainingAlg) {
         // Tower reduction did not eliminate all algebraic variables.
         // Use libpoly direct evaluation with algebraic assignment.
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
         return Sign::Unknown;
 #else
         if (!libKernel_) return Sign::Unknown;
@@ -620,7 +620,7 @@ ProjectionResult LibpolyBackend::projectionPolys(
     const std::vector<PolyId>& polys,
     VarId eliminateVar,
     ProjectionMode mode) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     (void)polys; (void)eliminateVar; (void)mode;
     return {ProjectionStatus::BackendFailure, {}};
 #else
@@ -832,7 +832,7 @@ mpq_class LibpolyBackend::evalUniAtRational(const std::vector<mpz_class>& coeffs
 // ------------------------------------------------------------------
 
 UniPolyId LibpolyBackend::gcdUni(UniPolyId a, UniPolyId b) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     (void)a; (void)b;
     return NullUniPolyId;
 #else
@@ -937,7 +937,7 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
         return Sign::Zero;
     }
 
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return Sign::Unknown;
 #else
     if (!libKernel_) return Sign::Unknown;
@@ -952,7 +952,7 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
 #endif
 }
 
-#ifdef ZOLVER_HAS_LIBPOLY
+#ifdef XOLVER_HAS_LIBPOLY
 // Crash-guarded poly::sgn(current, sample) where `sample` may carry algebraic
 // coordinates. SIGSEGV/SIGFPE in libpoly is recovered to Sign::Unknown. The
 // sigsetjmp + volatile locals are isolated in this frame so callers' locals are
@@ -1119,7 +1119,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
     }
 
     // From here: need refinement (rational inside interval, or overlapping alg-alg)
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return CompareResult::Unknown;
 #else
     if (!libKernel_) return CompareResult::Unknown;
@@ -1226,7 +1226,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
 // ------------------------------------------------------------------
 
 bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return false;
 #else
     if (!libKernel_) return false;
@@ -1297,7 +1297,7 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
 }
 
 int LibpolyBackend::countRealRootsInInterval(UniPolyId h, const mpq_class& lo, const mpq_class& hi) {
-#ifndef ZOLVER_HAS_LIBPOLY
+#ifndef XOLVER_HAS_LIBPOLY
     return -1;
 #else
     if (!libKernel_) return -1;
@@ -1516,7 +1516,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     supported = false;
     RootSet empty;
-    static const bool kDiagEntry = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
+    static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
@@ -1594,7 +1594,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     // 2. Norm over Q eliminates the generators; isolate its roots via the SAFE
     //    rational univariate path (never libpoly's crash-prone algebraic path).
-    static const bool kDiag = std::getenv("ZOLVER_NRA_LAZARD_DIAG") != nullptr;
+    static const bool kDiag = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     auto nr = towerNorm(p1, mainVar, ctx);
     if (!nr.ok) {
         if (kDiag) std::cerr << "[LAZVAL] towerNorm(p1) not ok => Unknown" << std::endl;
@@ -1670,4 +1670,4 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     return out;
 }
 
-} // namespace zolver
+} // namespace xolver

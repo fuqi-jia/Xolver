@@ -3,13 +3,13 @@
 #include <unordered_set>
 #include <cstddef>
 
-namespace zolver {
+namespace xolver {
 
 class CoreIr;
 class SharedTermRegistry;
 
 // ---------------------------------------------------------------------------
-// Demand-driven care set for Nelson-Oppen combination (ZOLVER_COMB_CAREGRAPH).
+// Demand-driven care set for Nelson-Oppen combination (XOLVER_COMB_CAREGRAPH).
 //
 // A shared term is "care-relevant" iff merging it (or splitting an arrangement
 // on it) can trigger a theory inference: it appears as an argument of a
@@ -59,4 +59,4 @@ private:
     bool built_ = false;
 };
 
-} // namespace zolver
+} // namespace xolver

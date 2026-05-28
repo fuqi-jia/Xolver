@@ -5,7 +5,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include "theory/core/TheorySolver.h"
 
-namespace zolver {
+namespace xolver {
 
 /**
  * SumOfSquaresBoundReasoner: derives finite bounds from sum-of-squares constraints.
@@ -44,4 +44,4 @@ private:
     NiaReasoningResult handleConstraint(const NormalizedNiaConstraint& c, DomainStore& domains);
 };
 
-} // namespace zolver
+} // namespace xolver

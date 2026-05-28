@@ -5,7 +5,7 @@
 #include <vector>
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // IncrementalDiffGraph: stateful difference-constraint graph that maintains a
@@ -124,4 +124,4 @@ private:
     std::vector<EdgeId> lastCycle_;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 
-namespace zolver {
+namespace xolver {
 
 using namespace SOMTParser;
 
@@ -15,12 +15,12 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     ir_ = std::make_unique<CoreIr>();
     memo_.clear();
     sortMemo_.clear();
-    letElim_ = (std::getenv("ZOLVER_PP_LET_ELIM") != nullptr);
+    letElim_ = (std::getenv("XOLVER_PP_LET_ELIM") != nullptr);
 
     // Stage A: run SOMTParser rewriter before conversion.
     SOMTParser::Rewriter rewriter(parser_.getNodeManager());
     SOMTParser::installDefaultRewriteRules(rewriter);
-    installZolverRewriteRules(rewriter);
+    installXolverRewriteRules(rewriter);
 
     for (Node assertion : parser_.getAssertions()) {
         Node rewritten = rewriter.rewrite(assertion);
@@ -87,7 +87,7 @@ ExprId FrontendAdapter::importNode(Node node) {
             }
         }
 
-        // Import-time let elimination (ZOLVER_PP_LET_ELIM). Substitution by node
+        // Import-time let elimination (XOLVER_PP_LET_ELIM). Substitution by node
         // identity: a let_bind_var IS its bound value (child 0); a let/let_chain
         // IS its body (child 0 / last child). The body references each bound var
         // as the SAME shared node, so this single post-order pass collapses
@@ -389,4 +389,4 @@ Payload FrontendAdapter::extractPayload(SOMTParser::Node node) {
     return {};
 }
 
-} // namespace zolver
+} // namespace xolver

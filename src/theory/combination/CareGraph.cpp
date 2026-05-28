@@ -3,7 +3,7 @@
 #include "expr/ir.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 void CareGraph::build(const CoreIr& ir, const SharedTermRegistry& reg) {
     care_.clear();
@@ -48,4 +48,4 @@ void CareGraph::build(const CoreIr& ir, const SharedTermRegistry& reg) {
     built_ = true;
 }
 
-} // namespace zolver
+} // namespace xolver

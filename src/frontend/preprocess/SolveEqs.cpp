@@ -1,6 +1,6 @@
 #include "frontend/preprocess/SolveEqs.h"
 
-namespace zolver {
+namespace xolver {
 
 SolveEqs::SolveEqs(CoreIr& ir, ModelConverter& mc)
     : ir_(ir), mc_(mc),
@@ -200,4 +200,4 @@ void SolveEqs::commit() {
     for (const auto& [level, e] : conjuncts_) ir_.addAssertion(e, level);
 }
 
-} // namespace zolver
+} // namespace xolver

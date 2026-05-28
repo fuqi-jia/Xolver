@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <functional>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 class CoreIr;
@@ -73,4 +73,4 @@ private:
     std::unordered_map<EufAtomKey, SatLit, EufAtomKeyHash> dedup_;
 };
 
-} // namespace zolver
+} // namespace xolver

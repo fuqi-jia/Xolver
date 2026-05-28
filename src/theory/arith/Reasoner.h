@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryLemmaStorage;
 
@@ -99,4 +99,4 @@ private:
     bool fullEffortOnly_;
 };
 
-} // namespace zolver
+} // namespace xolver

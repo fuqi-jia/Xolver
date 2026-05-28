@@ -1,4 +1,4 @@
-// Soundness gate for the generic FormulaRewriter (ZOLVER_PP_REWRITE).
+// Soundness gate for the generic FormulaRewriter (XOLVER_PP_REWRITE).
 //
 // A wrong rewrite rule is instant unsoundness that ModelValidator cannot catch
 // when it yields a wrong UNSAT. So every rule is verified against a brute-force
@@ -19,9 +19,9 @@
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 
@@ -303,7 +303,7 @@ TEST_CASE("rewriter: random equivalence oracle") {
 // uninterpreted-function applications (which the rewriter rebuilds and whose
 // numeric args it folds), or array select/store/const-array (rebuilt, with
 // numeric index/value args folded) plus eq/distinct reflexivity over those
-// sorts. This widened oracle covers them so ZOLVER_PP_REWRITE is trustworthy
+// sorts. This widened oracle covers them so XOLVER_PP_REWRITE is trustworthy
 // on QF_*RA / UF / array logics (prerequisite for default-on promotion).
 //
 // A self-contained typed value + evaluator (kept separate from the bool/int
@@ -544,10 +544,10 @@ TEST_CASE("rewriter: random equivalence oracle over REALS + UF + ARRAYS") {
 // across a child-rewrite that called ir_.add(), reallocating the vector; the
 // dangling read produced a garbage node and a wrong SAT at exactly the chain
 // depth where the realloc boundary fell — euf_055.)
-TEST_CASE("rewriter: deep EUF chains stay unsat under ZOLVER_PP_REWRITE") {
+TEST_CASE("rewriter: deep EUF chains stay unsat under XOLVER_PP_REWRITE") {
     struct EnvGuard {
-        EnvGuard()  { setenv("ZOLVER_PP_REWRITE", "1", 1); }
-        ~EnvGuard() { unsetenv("ZOLVER_PP_REWRITE"); }
+        EnvGuard()  { setenv("XOLVER_PP_REWRITE", "1", 1); }
+        ~EnvGuard() { unsetenv("XOLVER_PP_REWRITE"); }
     } guard;
 
     for (int depth = 1; depth <= 9; ++depth) {
@@ -558,10 +558,10 @@ TEST_CASE("rewriter: deep EUF chains stay unsat under ZOLVER_PP_REWRITE") {
             "(declare-const x U)(declare-const y U)\n(assert (= x y))\n"
             "(assert (distinct " + fx + " " + fy + "))\n(check-sat)\n";
         std::string path = (std::filesystem::temp_directory_path() /
-                            ("zolver_rw_euf_" + std::to_string(depth) + ".smt2")).string();
+                            ("xolver_rw_euf_" + std::to_string(depth) + ".smt2")).string();
         { std::ofstream(path) << smt; }
 
-        zolver::Solver solver;
+        xolver::Solver solver;
         REQUIRE(solver.parseFile(path));
         Result r = solver.checkSat();
         CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));

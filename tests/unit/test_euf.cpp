@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include "expr/ir.h"
 #include "theory/euf/EufSolver.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -7,10 +7,10 @@
 #include <filesystem>
 #include <cstdlib>
 
-using namespace zolver;
+using namespace xolver;
 
 static std::string writeTempSmt2(const std::string& content) {
-    std::string path = std::filesystem::temp_directory_path() / "zolver_euf.smt2";
+    std::string path = std::filesystem::temp_directory_path() / "xolver_euf.smt2";
     std::ofstream ofs(path);
     ofs << content;
     return path;
@@ -898,8 +898,8 @@ struct ScopedEnv {
 };
 } // namespace
 
-TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
-    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
+    ScopedEnv env("XOLVER_UF_DISEQ_WATCH");
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-sort U 0)\n"
@@ -918,8 +918,8 @@ TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: chained-congruence diseq still UNSAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
-    ScopedEnv env("ZOLVER_UF_DISEQ_WATCH");
+TEST_CASE("EUF XOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
+    ScopedEnv env("XOLVER_UF_DISEQ_WATCH");
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-sort U 0)\n"
@@ -936,8 +936,8 @@ TEST_CASE("EUF ZOLVER_UF_DISEQ_WATCH: independent classes stay SAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
-    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+TEST_CASE("AX XOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
+    ScopedEnv env("XOLVER_AX_ROW2_CONST");
     std::string path = writeTempSmt2(
         "(set-logic QF_ALIA)\n"
         "(declare-const a (Array Int Int))\n"
@@ -951,8 +951,8 @@ TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index Row2 UNSAT") {
     CHECK(static_cast<int>(solver.checkSat()) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("AX ZOLVER_AX_ROW2_CONST: distinct constant index read-through SAT") {
-    ScopedEnv env("ZOLVER_AX_ROW2_CONST");
+TEST_CASE("AX XOLVER_AX_ROW2_CONST: distinct constant index read-through SAT") {
+    ScopedEnv env("XOLVER_AX_ROW2_CONST");
     std::string path = writeTempSmt2(
         "(set-logic QF_ALIA)\n"
         "(declare-const a (Array Int Int))\n"

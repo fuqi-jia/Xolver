@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
 UnivariateIntegerReasoner::UnivariateIntegerReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
@@ -30,11 +30,11 @@ std::set<mpz_class> UnivariateIntegerReasoner::divisors(const mpz_class& n) {
 
 // Rational-root divisor enumeration trial-divides up to sqrt(|a0|). For huge
 // constant terms (EVM mod-2^256 => |a0| ~ 2^256 => ~2^128 iterations) this is an
-// effective hang. ZOLVER_NIA_DIVISOR_CAP (default-OFF; promote after A/B) bails
+// effective hang. XOLVER_NIA_DIVISOR_CAP (default-OFF; promote after A/B) bails
 // the root search to Incomplete when sqrt(|a0|) exceeds ~10^6 (|a0| > 10^12),
 // turning a hang into a sound `unknown` (Incomplete is never read as UNSAT).
 static bool divisorEnumerationInfeasible(const mpz_class& a0) {
-    static const bool capEnabled = std::getenv("ZOLVER_NIA_DIVISOR_CAP") != nullptr;
+    static const bool capEnabled = std::getenv("XOLVER_NIA_DIVISOR_CAP") != nullptr;
     if (!capEnabled) return false;
     static const mpz_class kThreshold("1000000000000");  // 10^12 = (10^6)^2
     return abs(a0) > kThreshold;
@@ -223,4 +223,4 @@ NiaReasoningResult UnivariateIntegerReasoner::run(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
-} // namespace zolver
+} // namespace xolver

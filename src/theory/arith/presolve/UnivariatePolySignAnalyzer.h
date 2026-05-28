@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <memory>
 
-namespace zolver {
+namespace xolver {
 
 class LibpolyBackend;
 
@@ -36,4 +36,4 @@ private:
     std::unordered_map<size_t, std::pair<Relation, FlatMonomialMap<mpq_class>>> analyzed_;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -4,7 +4,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -31,4 +31,4 @@ private:
     PolynomialKernel& kernel_;
 };
 
-} // namespace zolver
+} // namespace xolver

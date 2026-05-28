@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 unsigned SpaceEstimator::bitsToCover(const mpz_class& lo, const mpz_class& hi) {
     unsigned w = 1;
@@ -145,4 +145,4 @@ BitWidthPlan SpaceEstimator::estimate(const std::vector<NormalizedNiaConstraint>
     return plan;
 }
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

@@ -4,7 +4,7 @@
 #include "theory/arith/nra/projection/LocalProjection.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * DegeneracyResolver: resolve zero resultant degeneracy in local projection.
@@ -54,4 +54,4 @@ private:
     DegeneracyResolverConfig cfg_;
 };
 
-} // namespace zolver
+} // namespace xolver

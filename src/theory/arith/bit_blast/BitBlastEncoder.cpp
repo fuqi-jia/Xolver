@@ -1,7 +1,7 @@
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include <algorithm>
 
-namespace zolver::bitblast {
+namespace xolver::bitblast {
 
 BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
     SatVar t = sat_.newVar();
@@ -253,4 +253,4 @@ SatLit BitBlastEncoder::relZero(const BitVec& a, Relation rel) {
     return z;
 }
 
-} // namespace zolver::bitblast
+} // namespace xolver::bitblast

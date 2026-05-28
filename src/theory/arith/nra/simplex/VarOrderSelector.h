@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // Degree-stratified CDCAC variable order. Primary key: ascending total-degree
 // sum (highest-degree var LAST). Tie-break within a stratum: descending
@@ -16,4 +16,4 @@ std::vector<std::string> computeCdcacVarOrder(
     const std::vector<CdcacConstraint>& constraints,
     const std::vector<std::string>& varNames);
 
-} // namespace zolver
+} // namespace xolver

@@ -9,7 +9,7 @@ import glob
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-ZOLVER_BIN = "./build/bin/zolver"
+XOLVER_BIN = "./build/bin/xolver"
 BENCHMARK_DIR = "benchmark/non-incremental"
 TIMEOUT = 10
 SAMPLE_SIZE = 50
@@ -27,10 +27,10 @@ def find_files(logic: str):
 
 
 def run_file(filepath: str):
-    """Run zolver on a single file with timeout."""
+    """Run xolver on a single file with timeout."""
     try:
         result = subprocess.run(
-            [ZOLVER_BIN, "solve", filepath],
+            [XOLVER_BIN, "solve", filepath],
             capture_output=True,
             timeout=TIMEOUT,
             text=True,

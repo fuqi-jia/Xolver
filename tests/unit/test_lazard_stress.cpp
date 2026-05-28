@@ -13,7 +13,7 @@
 #include "theory/arith/nra/projection/LazardProjectionClosure.h"
 #include "theory/arith/nra/projection/Squarefree.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId A0 = VarId{100}, A1 = VarId{101}, X = VarId{1}, Y = VarId{2};
 

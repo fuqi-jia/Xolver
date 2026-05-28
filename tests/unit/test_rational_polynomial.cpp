@@ -8,7 +8,7 @@
 #include <gmpxx.h>
 #include "theory/arith/poly/RationalPolynomial.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId VX = VarId{1}, VY = VarId{2};
 

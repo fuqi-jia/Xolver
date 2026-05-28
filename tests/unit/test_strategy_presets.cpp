@@ -1,11 +1,11 @@
 #include <doctest/doctest.h>
 #include "frontend/factory/StrategyPresets.h"
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
 
-using namespace zolver;
+using namespace xolver;
 
 TEST_CASE("strategy presets: Phase-1 invariants") {
     LogicFeatures f;
@@ -26,10 +26,10 @@ TEST_CASE("strategy presets: Phase-1 invariants") {
     }
 }
 
-TEST_CASE("strategy presets: ZOLVER_STRAT_PRESETS drives rewriter end-to-end") {
+TEST_CASE("strategy presets: XOLVER_STRAT_PRESETS drives rewriter end-to-end") {
     struct EnvGuard {
-        EnvGuard()  { setenv("ZOLVER_STRAT_PRESETS", "1", 1); }
-        ~EnvGuard() { unsetenv("ZOLVER_STRAT_PRESETS"); }
+        EnvGuard()  { setenv("XOLVER_STRAT_PRESETS", "1", 1); }
+        ~EnvGuard() { unsetenv("XOLVER_STRAT_PRESETS"); }
     } guard;
 
     // The preset enables the rewriter; the deep EUF chain that exposed the
@@ -39,7 +39,7 @@ TEST_CASE("strategy presets: ZOLVER_STRAT_PRESETS drives rewriter end-to-end") {
         "(declare-const x U)(declare-const y U)\n(assert (= x y))\n"
         "(assert (distinct (f (f (f (f (f x))))) (f (f (f (f (f y)))))))\n(check-sat)\n";
     std::string path = (std::filesystem::temp_directory_path() /
-                        "zolver_strat_euf.smt2").string();
+                        "xolver_strat_euf.smt2").string();
     { std::ofstream(path) << smt; }
 
     Solver solver;

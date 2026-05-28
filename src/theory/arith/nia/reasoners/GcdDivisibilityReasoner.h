@@ -5,7 +5,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * GcdDivisibilityReasoner: sound UNSAT refutation for NIA equalities by the
@@ -35,4 +35,4 @@ private:
     PolynomialKernel& kernel_;
 };
 
-} // namespace zolver
+} // namespace xolver

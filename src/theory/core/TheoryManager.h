@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <deque>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 class SatSolver;
@@ -106,7 +106,7 @@ private:
 
     SharedEqualityManager sharedEqMgr_;
 
-    // Demand-driven care graph (ZOLVER_COMB_CAREGRAPH, default OFF). Built once
+    // Demand-driven care graph (XOLVER_COMB_CAREGRAPH, default OFF). Built once
     // per solve from the purified IR; prunes the O(n^2) shared-pair loops
     // (deduced-equality propagation + model-based arrangement splitting) to
     // pairs that can actually fire a theory inference. Under-approximation =>
@@ -116,7 +116,7 @@ private:
     bool careGraphEnvChecked_ = false;
     void ensureCareGraph();
 
-    // Theory-agnostic combination conflict/lemma minimization (ZOLVER_SAT_MIN,
+    // Theory-agnostic combination conflict/lemma minimization (XOLVER_SAT_MIN,
     // default OFF). Dedups literals in interface/theory conflicts and lemmas.
     // Always sound (dedup preserves the clause's literal set).
     bool satMinEnabled_ = false;
@@ -124,7 +124,7 @@ private:
     bool useSatMin();
 
     // Model-based theory combination for the non-convex combined logics
-    // (ZOLVER_COMB_MODEL_BASED, default OFF). Extends the array-only arrangement
+    // (XOLVER_COMB_MODEL_BASED, default OFF). Extends the array-only arrangement
     // splitting to QF_UFLIA/UFNIA/UFNRA: at Full effort, force the Nelson-Oppen
     // arrangement over shared scalars to be CLOSED before reporting Sat, so the
     // combination cannot return a per-theory-consistent-but-globally-inconsistent
@@ -185,4 +185,4 @@ private:
     void discardSnapshotsAbove(int level);
 };
 
-} // namespace zolver
+} // namespace xolver

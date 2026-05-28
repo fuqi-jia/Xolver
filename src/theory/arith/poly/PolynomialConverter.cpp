@@ -5,7 +5,7 @@
 #include <cassert>
 #include <gmpxx.h>
 
-namespace zolver {
+namespace xolver {
 
 // ============================================================================
 // Public API
@@ -292,4 +292,4 @@ void PolynomialConverter::preCollectIterative(ExprId root, const CoreIr& ir) {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

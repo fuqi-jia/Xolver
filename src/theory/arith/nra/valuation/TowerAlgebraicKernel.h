@@ -6,7 +6,7 @@
 #include <optional>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // TowerAlgebraicKernel — exact arithmetic in the field tower
@@ -86,4 +86,4 @@ private:
                                      VarId v, int coeffLevel) const;
 };
 
-}  // namespace zolver
+}  // namespace xolver

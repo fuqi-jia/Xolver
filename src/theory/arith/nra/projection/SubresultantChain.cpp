@@ -5,15 +5,15 @@
 #include <cstdlib>
 #include <utility>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
-// ZOLVER_NRA_LIBPOLY_PSC: route principalSubresultantCoefficients through the
+// XOLVER_NRA_LIBPOLY_PSC: route principalSubresultantCoefficients through the
 // libpoly psc chain instead of the O(n!) determinant. Default OFF; read once.
-// Same idiom as ZOLVER_NRA_VARORDER_SIMPLEX in CdcacSolver.cpp.
+// Same idiom as XOLVER_NRA_VARORDER_SIMPLEX in CdcacSolver.cpp.
 bool libpolyPscEnabled() {
     static const bool kEnabled = [] {
-        const char* e = std::getenv("ZOLVER_NRA_LIBPOLY_PSC");
+        const char* e = std::getenv("XOLVER_NRA_LIBPOLY_PSC");
         return e && (e[0]=='1'||e[0]=='t'||e[0]=='T'||e[0]=='y'||e[0]=='Y');
     }();
     return kEnabled;
@@ -77,7 +77,7 @@ PscChainResult principalSubresultantCoefficients(
     // extraction step of the projection handles its coefficients separately).
     if (dp < 1 || dq < 1) return out;
 
-    // ----- libpoly psc path (ZOLVER_NRA_LIBPOLY_PSC, default OFF) -----------
+    // ----- libpoly psc path (XOLVER_NRA_LIBPOLY_PSC, default OFF) -----------
     // Verdict-preserving perf path: route through libpoly's lp_polynomial_psc
     // (no matrix-dim bound, so budgetExceeded is never set — the recovery
     // source). CAD-equivalent to the determinant up to a nonzero rational scale
@@ -150,4 +150,4 @@ PscChainResult principalSubresultantCoefficients(
     return out;
 }
 
-} // namespace zolver
+} // namespace xolver

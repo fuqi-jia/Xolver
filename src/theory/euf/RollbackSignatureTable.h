@@ -6,7 +6,7 @@
 #include <optional>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 struct AppSignature {
     FuncSymbolId symbol;
@@ -52,4 +52,4 @@ private:
     std::vector<Change> trail_;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -2,7 +2,7 @@
 
 #include "expr/types.h"
 
-namespace zolver {
+namespace xolver {
 
 enum class LitValue {
     True,
@@ -27,4 +27,4 @@ public:
     virtual LitValue value(SatLit lit) const = 0;
 };
 
-} // namespace zolver
+} // namespace xolver

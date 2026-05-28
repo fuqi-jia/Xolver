@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace zolver {
+namespace xolver {
 
 class RollbackUnionFind {
 public:
@@ -34,4 +34,4 @@ private:
     std::vector<Change> trail_;
 };
 
-} // namespace zolver
+} // namespace xolver

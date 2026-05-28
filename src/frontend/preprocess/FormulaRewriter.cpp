@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -462,4 +462,4 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
     return mk(kind, sort, std::move(children), payload);
 }
 
-} // namespace zolver
+} // namespace xolver

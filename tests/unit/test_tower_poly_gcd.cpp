@@ -5,7 +5,7 @@
 #include <gmpxx.h>
 #include "theory/arith/nra/valuation/TowerPolyGcd.h"
 
-using namespace zolver;
+using namespace xolver;
 
 static VarId A0 = VarId{100}, T = VarId{1};
 

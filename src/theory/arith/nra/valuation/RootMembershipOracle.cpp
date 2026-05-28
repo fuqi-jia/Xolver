@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <map>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -171,4 +171,4 @@ RootMembership lazardRootMembership(const RationalPolynomial& F, VarId targetVar
     return RootMembership::Unknown;   // higher-degree proper factor: needs Trager
 }
 
-}  // namespace zolver
+}  // namespace xolver

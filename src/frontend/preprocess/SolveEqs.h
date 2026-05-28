@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * SolveEqs — solve-equalities / linear variable elimination (↔SAT, P1).
@@ -73,4 +73,4 @@ private:
     bool didRun_ = false;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -6,7 +6,7 @@
 #include "theory/core/TheorySolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 
-namespace zolver {
+namespace xolver {
 
 /**
  * AlgebraicIntegerReasoner: square rules, GCD conflicts, factor lemmas,
@@ -52,4 +52,4 @@ private:
                      int& result) const;
 };
 
-} // namespace zolver
+} // namespace xolver

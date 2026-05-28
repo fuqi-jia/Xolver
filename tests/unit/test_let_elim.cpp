@@ -1,4 +1,4 @@
-// ZOLVER_PP_LET_ELIM: import-time elimination of residual let nodes.
+// XOLVER_PP_LET_ELIM: import-time elimination of residual let nodes.
 //
 // SOMTParser preserves lets and its expandLet only expands the outermost one,
 // so a let nested in a binding VALUE or an operand position survives as a
@@ -8,22 +8,22 @@
 // value, a let/let_chain IS its body), collapsing arbitrary nesting in one
 // pass. Verdicts here are cross-checked against z3 (capture-safety included).
 #include <doctest/doctest.h>
-#include "zolver/Solver.h"
+#include "xolver/Solver.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>
 #include <string>
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 struct LetElimEnv {
-    LetElimEnv()  { setenv("ZOLVER_PP_LET_ELIM", "1", 1); }
-    ~LetElimEnv() { unsetenv("ZOLVER_PP_LET_ELIM"); }
+    LetElimEnv()  { setenv("XOLVER_PP_LET_ELIM", "1", 1); }
+    ~LetElimEnv() { unsetenv("XOLVER_PP_LET_ELIM"); }
 };
 Result solveStr(const std::string& smt, const std::string& tag) {
     std::string path = (std::filesystem::temp_directory_path() /
-                        ("zolver_let_" + tag + ".smt2")).string();
+                        ("xolver_let_" + tag + ".smt2")).string();
     { std::ofstream(path) << smt; }
     Solver s;
     REQUIRE(s.parseFile(path));

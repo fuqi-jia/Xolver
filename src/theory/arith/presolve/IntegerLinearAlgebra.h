@@ -6,7 +6,7 @@
 #include <gmpxx.h>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 using IntMatrix = std::vector<std::vector<mpz_class>>;
 using RatMatrix = std::vector<std::vector<mpq_class>>;
@@ -28,4 +28,4 @@ SmithNormalForm smithNormalForm(const IntMatrix& A);
 // Matrix · vector over Z.
 std::vector<mpz_class> matVec(const IntMatrix& M, const std::vector<mpz_class>& v);
 
-} // namespace zolver
+} // namespace xolver

@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class ContractorZ {
 public:
@@ -24,4 +24,4 @@ public:
     virtual SatLit reason() const = 0;
 };
 
-} // namespace zolver
+} // namespace xolver

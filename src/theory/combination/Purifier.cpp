@@ -6,16 +6,16 @@
 #include <iostream>
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
-// Phase 1 (ZOLVER_COMB_UFARG_ARRANGE / ZOLVER_COMB_SAT_FLOOR): whether to bridge
+// Phase 1 (XOLVER_COMB_UFARG_ARRANGE / XOLVER_COMB_SAT_FLOOR): whether to bridge
 // a COMPOUND arith argument of a UF application into a fresh shared leaf. Gated
 // so the default purified form is unchanged; active when either the certificate
 // floor (needs the bridge var to SEE the obligation) or the arrangement (needs
 // it to SPLIT and recover) is enabled.
 static bool ufArgBridgeEnabled() {
-    return std::getenv("ZOLVER_COMB_SAT_FLOOR") != nullptr ||
-           std::getenv("ZOLVER_COMB_UFARG_ARRANGE") != nullptr;
+    return std::getenv("XOLVER_COMB_SAT_FLOOR") != nullptr ||
+           std::getenv("XOLVER_COMB_UFARG_ARRANGE") != nullptr;
 }
 
 Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
@@ -490,4 +490,4 @@ void Purifier::run() {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

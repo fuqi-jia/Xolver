@@ -5,7 +5,7 @@
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * NiaLocalSearch: heuristic SAT finder for NIA.
@@ -22,7 +22,7 @@ public:
 
     // Per-call wall-clock budget in ms; <= 0 means unlimited. The search is a
     // heuristic candidate finder, so giving up early just returns nullopt
-    // (no model this call) -- always sound. Default from ZOLVER_NIA_LS_BUDGET_MS.
+    // (no model this call) -- always sound. Default from XOLVER_NIA_LS_BUDGET_MS.
     void setBudgetMs(long ms) { budgetMs_ = ms; }
 
     // Cumulative per-solve budget: the SAT core triggers a full-effort theory
@@ -30,7 +30,7 @@ public:
     // re-running this search from scratch -- futile on UNSAT and ~10s in total.
     // Once cumulative search time exceeds this, the search is skipped entirely
     // (returns nullopt) so the cheap reasoning stages get the time. Sound
-    // (candidate-only). Reset per solve. Default from ZOLVER_NIA_LS_TOTAL_MS.
+    // (candidate-only). Reset per solve. Default from XOLVER_NIA_LS_TOTAL_MS.
     void resetBudget() { cumulativeMs_ = 0; }
 
 private:
@@ -43,4 +43,4 @@ private:
                         const std::vector<NormalizedNiaConstraint>& constraints) const;
 };
 
-} // namespace zolver
+} // namespace xolver

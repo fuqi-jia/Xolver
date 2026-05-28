@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -80,7 +80,7 @@ public:
     // incompleteness reason (None == complete).
     //
     // `kernel` is OPTIONAL and only consulted on the PSC path: when non-null
-    // AND the env flag ZOLVER_NRA_LIBPOLY_PSC is ON, the per-level PSC chains
+    // AND the env flag XOLVER_NRA_LIBPOLY_PSC is ON, the per-level PSC chains
     // route through libpoly instead of the determinant. Null kernel or flag
     // OFF => the determinant path, byte-identical to historical behaviour.
     ProjectionIncompleteReason build(
@@ -116,4 +116,4 @@ private:
     void projectLevel(const std::vector<int>& inputIds, VarId elimVar, int elimLevel);
 };
 
-} // namespace zolver
+} // namespace xolver

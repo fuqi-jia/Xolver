@@ -9,7 +9,7 @@
 #include <optional>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 // Note: using std::string directly for NIA variable names
 // (expr/types.h defines VarId as uint32_t, which is different)
@@ -70,4 +70,4 @@ private:
     std::vector<SatLit> collectEmptyReasons(const IntDomain& d) const;
 };
 
-} // namespace zolver
+} // namespace xolver

@@ -5,7 +5,7 @@
 #include <unordered_set>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -398,4 +398,4 @@ NiaReasoningResult ProductPositivityReasoner::run(
             std::nullopt, std::nullopt};
 }
 
-} // namespace zolver
+} // namespace xolver

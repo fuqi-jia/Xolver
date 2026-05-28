@@ -10,12 +10,12 @@
 #include <memory>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class NraLinearizationAdapter;
 class TheoryAtomRegistry;
-class CdcacCore;       // ZOLVER_NRA_PREELIM: lazily-built reduced-CDCAC core
-class LibpolyBackend;  // ZOLVER_NRA_PREELIM: algebra backend for the pre-elim core
+class CdcacCore;       // XOLVER_NRA_PREELIM: lazily-built reduced-CDCAC core
+class LibpolyBackend;  // XOLVER_NRA_PREELIM: algebra backend for the pre-elim core
 
 /**
  * NRA (Nonlinear Real Arithmetic) theory solver.
@@ -44,11 +44,11 @@ public:
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
-    // ZOLVER_NRA_LINEARIZE: registry needed to mint mirror/cut literals for the
+    // XOLVER_NRA_LINEARIZE: registry needed to mint mirror/cut literals for the
     // LRA sibling. Mirrors NiaSolver::setRegistry; builds the linearization
     // adapter lazily.
     void setRegistry(TheoryAtomRegistry* reg);
-    // ZOLVER_NRA_LINEARIZE: pointer to the LRA sibling registered alongside NRA
+    // XOLVER_NRA_LINEARIZE: pointer to the LRA sibling registered alongside NRA
     // in the same (single-theory) TheoryManager. The linearize-probe stage reads
     // its candidate relaxation model (getModel()) to attempt a validated SAT.
     // Harmless when the flag is OFF (only the gated stage reads it).
@@ -75,13 +75,13 @@ protected:
 private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
-    // ZOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
+    // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts
     // and return one as a Lemma to defer CDCAC + re-solve. nullopt when the flag
     // is OFF or the refinement budget is exhausted (fall through to CDCAC).
     std::optional<TheoryCheckResult> stageLinearizeProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
-    // ZOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination. Collect
+    // XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination. Collect
     // `v = (linear expr)` substitutions from the presolve fixpoint, substitute the
     // eliminated vars out of every constraint poly, and run a reduced CDCAC over the
     // remaining variables (CAD is doubly-exponential in #vars). UNSAT unions every
@@ -110,7 +110,7 @@ private:
     struct PresolveCstr { PolyId poly; Relation rel; SatLit reason; };
     std::vector<PresolveCstr> presolveConstraints_;
 
-    // ZOLVER_NRA_LINEARIZE: full active-assignment records captured at
+    // XOLVER_NRA_LINEARIZE: full active-assignment records captured at
     // assertLit, aligned 1:1 with activeLits_/presolveConstraints_, so the
     // cut-feeder can mirror linear bounds to the LRA sibling. Held only to feed
     // NraLinearizationAdapter::mirrorActiveLinearBounds (needs lit+atom+value).
@@ -120,11 +120,11 @@ private:
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
 
-    // ZOLVER_NRA_LINEARIZE: registry + linearization adapter (mirror lemmas +
+    // XOLVER_NRA_LINEARIZE: registry + linearization adapter (mirror lemmas +
     // McCormick/square cut lemmas). Built lazily by setRegistry.
     TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<NraLinearizationAdapter> linAdapter_;
-    // ZOLVER_NRA_LINEARIZE: LRA sibling (raw, non-owning) whose relaxation model
+    // XOLVER_NRA_LINEARIZE: LRA sibling (raw, non-owning) whose relaxation model
     // we exact-validate; refinement-round counter for the incremental loop
     // (reset on backtrack/reset so each search restarts the budget).
     TheorySolver* linearSibling_ = nullptr;
@@ -142,7 +142,7 @@ private:
     // V5: scope stack for push/pop
     std::vector<size_t> scopeStack_;
 
-    // ZOLVER_NRA_PREELIM: gate + lazily-built reduced-CDCAC core/backend. The
+    // XOLVER_NRA_PREELIM: gate + lazily-built reduced-CDCAC core/backend. The
     // core is rebuilt per solve (stateless across calls except the libpoly var
     // table), so it can persist across theory-checks; reset in onReset.
     bool enablePreElim_ = false;
@@ -150,4 +150,4 @@ private:
     std::unique_ptr<CdcacCore> preElimCore_;
 };
 
-} // namespace zolver
+} // namespace xolver

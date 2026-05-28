@@ -8,7 +8,7 @@
 #include <functional>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryLemmaStorage;
 class CareGraph;
@@ -41,11 +41,11 @@ public:
     virtual void reset() = 0;
 
     // Sound Farkas bound-propagations to lift to the SAT solver as entailment
-    // lemmas (ZOLVER_LRA_PROP). Default: none. Must never return Guess/branch lemmas.
+    // lemmas (XOLVER_LRA_PROP). Default: none. Must never return Guess/branch lemmas.
     virtual std::vector<TheoryLemma> takeEntailmentPropagations() { return {}; }
 
     // Heuristic eval of a bound atom at the current theory model
-    // (ZOLVER_LRA_DECIDE / cb_decide). Default: no value.
+    // (XOLVER_LRA_DECIDE / cb_decide). Default: no value.
     // Heuristic eval of a bound atom at the current theory model (see
     // TheoryPropagationCallbacks::evalTheoryAtom). Default: no value.
     virtual std::optional<bool> evalAtomAtModel(SatVar v) { (void)v; return std::nullopt; }
@@ -62,7 +62,7 @@ public:
     // -----------------------------------------------------------------------
     virtual bool supportsCombination() const { return false; }
 
-    // Care graph (ZOLVER_COMB_CAREGRAPH). TheoryManager hands the built care
+    // Care graph (XOLVER_COMB_CAREGRAPH). TheoryManager hands the built care
     // graph to each solver so the O(n^2) getDeducedSharedEqualities loops can
     // skip shared-term pairs no theory cares about. Non-null only when the flag
     // is on AND the graph is built; default no-op keeps the pointer null and the
@@ -244,4 +244,4 @@ struct TheoryAtom {
     ExprId exprId;
 };
 
-} // namespace zolver
+} // namespace xolver

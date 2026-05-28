@@ -1,7 +1,7 @@
 #include "theory/euf/ProofForest.h"
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 void ProofForest::clear() {
     parent_.clear();
@@ -99,4 +99,4 @@ std::vector<size_t> ProofForest::path(EufTermId u, EufTermId v) const {
     return out;
 }
 
-} // namespace zolver
+} // namespace xolver

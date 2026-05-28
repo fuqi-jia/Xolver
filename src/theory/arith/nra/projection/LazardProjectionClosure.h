@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class PolynomialKernel;
 
@@ -85,4 +85,4 @@ private:
     void projectLevel(const std::vector<int>& inputIds, VarId elimVar);
 };
 
-}  // namespace zolver
+}  // namespace xolver

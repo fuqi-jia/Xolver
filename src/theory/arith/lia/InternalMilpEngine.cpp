@@ -1,7 +1,7 @@
 #include "theory/arith/lia/InternalMilpEngine.h"
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 void InternalMilpEngine::clear() {
     simplex_.reset();
@@ -366,4 +366,4 @@ std::vector<SatLit> InternalMilpEngine::getConflictReasons() const {
     return reasons;
 }
 
-} // namespace zolver
+} // namespace xolver

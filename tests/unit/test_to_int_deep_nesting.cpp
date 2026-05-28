@@ -11,7 +11,7 @@
 #include "expr/ir.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 
-using namespace zolver;
+using namespace xolver;
 
 namespace {
 

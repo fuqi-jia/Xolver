@@ -1,6 +1,6 @@
 #include "theory/arith/nra/valuation/TowerAlgebraicKernel.h"
 
-namespace zolver {
+namespace xolver {
 
 // Exact monic reduction: while deg_{Ai}(p) >= deg_{Ai}(mi), cancel the leading
 // A_i power by subtracting lead * A_i^(e-di) * mi. Because mi is monic in A_i
@@ -157,4 +157,4 @@ std::optional<TowerElement> TowerKernel::div(const TowerElement& a, const TowerE
     return mul(a, *bi);
 }
 
-}  // namespace zolver
+}  // namespace xolver

@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <set>
 
-namespace zolver {
+namespace xolver {
 
 namespace {
 
@@ -154,4 +154,4 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
     return res;
 }
 
-} // namespace zolver
+} // namespace xolver

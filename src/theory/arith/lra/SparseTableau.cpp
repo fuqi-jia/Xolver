@@ -1,7 +1,7 @@
 #include "theory/arith/lra/SparseTableau.h"
 #include <cassert>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
 // Row lookup helpers
@@ -220,4 +220,4 @@ void SparseTableau::checkInvariants(const std::vector<int>& basicRowOfVar) const
 #endif
 }
 
-} // namespace zolver
+} // namespace xolver

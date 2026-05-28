@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace zolver {
+namespace xolver {
 
 class Worklist {
 public:
@@ -31,4 +31,4 @@ private:
     std::unordered_map<std::string, std::vector<size_t>> watchers_;
 };
 
-} // namespace zolver
+} // namespace xolver

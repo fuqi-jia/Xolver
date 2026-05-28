@@ -8,7 +8,7 @@
 #include <optional>
 #include <string>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -73,4 +73,4 @@ private:
     std::vector<mpz_class> warmPot_;
 };
 
-} // namespace zolver
+} // namespace xolver

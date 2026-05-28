@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================================
-# Zolver 极简部署脚本
+# Xolver 极简部署脚本
 #
 # 默认目录结构（上传后保持这样）：
 #   部署目录/
-#   ├── zolver-dist/          <- 本脚本 + binary + Python 工具
-#   │   ├── bin/zolver
+#   ├── xolver-dist/          <- 本脚本 + binary + Python 工具
+#   │   ├── bin/xolver
 #   │   └── tools/
 #   │       ├── deploy_and_run.sh
 #   │       ├── run_benchmark.py
@@ -18,15 +18,15 @@
 #           └── ...
 #
 # 用法（在"部署目录"下执行）：
-#   ./zolver-dist/tools/deploy_and_run.sh build
-#   ./zolver-dist/tools/deploy_and_run.sh run "lia,nia" -j 200 -t 100
+#   ./xolver-dist/tools/deploy_and_run.sh build
+#   ./xolver-dist/tools/deploy_and_run.sh run "lia,nia" -j 200 -t 100
 # ============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DIST_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BIN="${DIST_DIR}/bin/zolver"
+BIN="${DIST_DIR}/bin/xolver"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -56,20 +56,20 @@ cmd_build() {
 
     cmake .. \
         -DCMAKE_BUILD_TYPE=Release \
-        -DZOLVER_STATIC_BUILD=ON \
-        -DZOLVER_ENABLE_CASESTATS=ON \
-        -DZOLVER_BUILD_TESTS=OFF
+        -DXOLVER_STATIC_BUILD=ON \
+        -DXOLVER_ENABLE_CASESTATS=ON \
+        -DXOLVER_BUILD_TESTS=OFF
 
     cmake --build . -j$(nproc)
     cd ..
 
-    BIN_BUILT="$(pwd)/build_static/bin/zolver"
+    BIN_BUILT="$(pwd)/build_static/bin/xolver"
     [[ -f "$BIN_BUILT" ]] || err "Binary 未生成"
     file "$BIN_BUILT" | grep -q "statically linked" || err "不是静态链接"
 
     mkdir -p "${DIST_DIR}/bin"
-    cp "$BIN_BUILT" "${DIST_DIR}/bin/zolver"
-    log "编译完成: ${DIST_DIR}/bin/zolver ($(du -h ${DIST_DIR}/bin/zolver | cut -f1))"
+    cp "$BIN_BUILT" "${DIST_DIR}/bin/xolver"
+    log "编译完成: ${DIST_DIR}/bin/xolver ($(du -h ${DIST_DIR}/bin/xolver | cut -f1))"
 
     # scrambler (SMT-COMP) — 静态编译 + 复制，供 --scramble / SCRAMBLE=1 使用（竞赛会 scramble 输入）
     if [[ -d "${DIST_DIR}/tools/scrambler" ]]; then
@@ -85,30 +85,30 @@ cmd_build() {
 }
 
 # ---------------------------------------------------------------------------
-# package: 把 zolver-dist/ 打包成 tar.gz，方便上传
+# package: 把 xolver-dist/ 打包成 tar.gz，方便上传
 # ---------------------------------------------------------------------------
 cmd_package() {
     [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build。"
 
-    PKG="$(pwd)/zolver-dist.tar.gz"
+    PKG="$(pwd)/xolver-dist.tar.gz"
     log "打包: ${BIN} + tools/ -> ${PKG}"
 
     TMPDIR=$(mktemp -d)
     trap "rm -rf ${TMPDIR}" EXIT
 
-    mkdir -p "${TMPDIR}/zolver-dist/bin"
-    cp "$BIN" "${TMPDIR}/zolver-dist/bin/zolver"
-    chmod +x "${TMPDIR}/zolver-dist/bin/zolver"
+    mkdir -p "${TMPDIR}/xolver-dist/bin"
+    cp "$BIN" "${TMPDIR}/xolver-dist/bin/xolver"
+    chmod +x "${TMPDIR}/xolver-dist/bin/xolver"
 
     # scrambler (for --scramble / SCRAMBLE=1)
     if [[ -f "${DIST_DIR}/bin/scrambler" ]]; then
-        cp "${DIST_DIR}/bin/scrambler" "${TMPDIR}/zolver-dist/bin/scrambler"
-        chmod +x "${TMPDIR}/zolver-dist/bin/scrambler"
+        cp "${DIST_DIR}/bin/scrambler" "${TMPDIR}/xolver-dist/bin/scrambler"
+        chmod +x "${TMPDIR}/xolver-dist/bin/scrambler"
     else
         warn "未找到 ${DIST_DIR}/bin/scrambler（先 build），打包不含 scrambler"
     fi
 
-    mkdir -p "${TMPDIR}/zolver-dist/tools"
+    mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
         run_benchmark.py \
@@ -120,11 +120,11 @@ cmd_package() {
         run_lia_ablation.sh; do
         src="${SCRIPT_DIR}/${script}"
         if [[ -f "$src" ]]; then
-            cp "$src" "${TMPDIR}/zolver-dist/tools/"
+            cp "$src" "${TMPDIR}/xolver-dist/tools/"
         fi
     done
 
-    tar czf "$PKG" -C "$TMPDIR" zolver-dist
+    tar czf "$PKG" -C "$TMPDIR" xolver-dist
 
     log "打包完成: ${PKG} ($(du -h ${PKG} | cut -f1))"
     log "上传命令示例: scp ${PKG} user@server:/data/"
@@ -137,8 +137,8 @@ cmd_package() {
 cmd_run() {
     shift  # 去掉 "run"
 
-    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build，或把 zolver-dist 目录放完整。"
-    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./zolver-dist/tools/deploy_and_run.sh run lia,nia"
+    [[ -f "$BIN" ]] || err "找不到 binary: $BIN。请先 build，或把 xolver-dist 目录放完整。"
+    [[ $# -gt 0 ]] || err "请指定逻辑，例如: ./xolver-dist/tools/deploy_and_run.sh run lia,nia"
 
     LOGIC="$1"
     shift
@@ -189,46 +189,46 @@ cmd_run() {
 
     # --allon: bug-hunt 预设 — 开所有优化开关，但关掉 soundness FLOORS
     # (COMB_SAT_FLOOR / PP_STRICT_VALIDATION / PP_VALIDATE_NONLINEAR_SAT /
-    #  SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT)，让假答案以 zolver!=z3 暴露。配合 --compare-with z3。
+    #  SAT_DEFER_EARLY_CONFLICT / NRA_UNSAT_CERT)，让假答案以 xolver!=z3 暴露。配合 --compare-with z3。
     if [[ "$DO_ALLON" == "1" ]]; then
-        export ZOLVER_COMB_CAREGRAPH=1 ZOLVER_COMB_MODEL_BASED=1 \
-               ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
-               ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
-               ZOLVER_LRA_BOUND_AXIOMS=1 ZOLVER_LRA_PIVOT_HEUR=1 ZOLVER_LRA_PROP=1 \
-               ZOLVER_NIA_REFUTE=1 ZOLVER_NIA_GCD=1 ZOLVER_NIA_ICP=1 \
-               ZOLVER_NIA_CDCAC=1 ZOLVER_NIA_BV_CASCADE=1 \
-               ZOLVER_NRA_LAZARD_LIFT=1 ZOLVER_NRA_LIBPOLY_PSC=1 \
-               ZOLVER_NRA_VARORDER=1 ZOLVER_NRA_VARORDER_SIMPLEX=1 \
-               ZOLVER_NRA_HYBRID=1 ZOLVER_NRA_PREELIM=1 ZOLVER_NRA_LINEARIZE=1 \
-               ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
-               ZOLVER_PP_PG_CNF=1 ZOLVER_PP_LET_ELIM=1 \
-               ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
-               ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1
+        export XOLVER_COMB_CAREGRAPH=1 XOLVER_COMB_MODEL_BASED=1 \
+               XOLVER_COMB_SCALAR_BACKFILL=1 XOLVER_COMB_UFARG_ARRANGE=1 \
+               XOLVER_LIA_CUTS=1 XOLVER_LIA_REPAIR=1 \
+               XOLVER_LRA_BOUND_AXIOMS=1 XOLVER_LRA_PIVOT_HEUR=1 XOLVER_LRA_PROP=1 \
+               XOLVER_NIA_REFUTE=1 XOLVER_NIA_GCD=1 XOLVER_NIA_ICP=1 \
+               XOLVER_NIA_CDCAC=1 XOLVER_NIA_BV_CASCADE=1 \
+               XOLVER_NRA_LAZARD_LIFT=1 XOLVER_NRA_LIBPOLY_PSC=1 \
+               XOLVER_NRA_VARORDER=1 XOLVER_NRA_VARORDER_SIMPLEX=1 \
+               XOLVER_NRA_HYBRID=1 XOLVER_NRA_PREELIM=1 XOLVER_NRA_LINEARIZE=1 \
+               XOLVER_PP_REWRITE=1 XOLVER_PP_SOLVE_EQS=1 \
+               XOLVER_PP_PG_CNF=1 XOLVER_PP_LET_ELIM=1 \
+               XOLVER_SAT_LEMMA_MGMT=1 XOLVER_SAT_MIN=1 XOLVER_STRAT_PRESETS=1 \
+               XOLVER_UF_DISEQ_WATCH=1 XOLVER_UF_FAST_CC=1
         log "--allon: optimizations ON (incl. NIA gcd/icp/cdcac/cascade + Lazard hybrid + PG-CNF/let-elim), soundness floors OFF (bug-hunt; false answers surface vs z3)"
     fi
 
     # --submit: SUBMISSION 预设 — 所有优化开关 + 全部 soundness FLOORS 都开 (= 实际参赛配置, 健全).
-    # 用于参赛前 soundness 校验: 配合 --compare-with z3, zolver!=z3 (双方都确定) = 必须修的错误答案;
-    # zolver=unknown 是健全的 (floor 兜底, 不算错). 与 --allon (floors off, 找 bug) 相反.
-    # 注意: Lazard 混合 (ZOLVER_NRA_HYBRID/PREELIM/LINEARIZE) 故意不在此预设里 — 它们尚未通过
+    # 用于参赛前 soundness 校验: 配合 --compare-with z3, xolver!=z3 (双方都确定) = 必须修的错误答案;
+    # xolver=unknown 是健全的 (floor 兜底, 不算错). 与 --allon (floors off, 找 bug) 相反.
+    # 注意: Lazard 混合 (XOLVER_NRA_HYBRID/PREELIM/LINEARIZE) 故意不在此预设里 — 它们尚未通过
     # 广 QF_NRA z3 差分 (default-path NRA 改动的硬晋级门)。先在 --allon 里跑差分确认 0-unsound,
     # 再提升进 --submit / 默认。在此之前 NRA 走纯 Collins (= 已验证基线)。
     if [[ "$DO_SUBMIT" == "1" ]]; then
-        export ZOLVER_COMB_CAREGRAPH=1 ZOLVER_COMB_MODEL_BASED=1 \
-               ZOLVER_COMB_SCALAR_BACKFILL=1 ZOLVER_COMB_UFARG_ARRANGE=1 \
-               ZOLVER_LIA_CUTS=1 ZOLVER_LIA_REPAIR=1 \
-               ZOLVER_LRA_BOUND_AXIOMS=1 ZOLVER_LRA_PIVOT_HEUR=1 ZOLVER_LRA_PROP=1 \
-               ZOLVER_NIA_REFUTE=1 ZOLVER_NIA_GCD=1 ZOLVER_NIA_ICP=1 \
-               ZOLVER_NIA_CDCAC=1 ZOLVER_NIA_BV_CASCADE=1 \
-               ZOLVER_NRA_LAZARD_LIFT=1 ZOLVER_NRA_LIBPOLY_PSC=1 \
-               ZOLVER_NRA_VARORDER=1 ZOLVER_NRA_VARORDER_SIMPLEX=1 \
-               ZOLVER_PP_REWRITE=1 ZOLVER_PP_SOLVE_EQS=1 \
-               ZOLVER_PP_PG_CNF=1 ZOLVER_PP_LET_ELIM=1 \
-               ZOLVER_SAT_LEMMA_MGMT=1 ZOLVER_SAT_MIN=1 ZOLVER_STRAT_PRESETS=1 \
-               ZOLVER_UF_DISEQ_WATCH=1 ZOLVER_UF_FAST_CC=1 \
-               ZOLVER_PP_STRICT_VALIDATION=1 ZOLVER_PP_VALIDATE_NONLINEAR_SAT=1 \
-               ZOLVER_SAT_DEFER_EARLY_CONFLICT=1 ZOLVER_COMB_SAT_FLOOR=1 \
-               ZOLVER_NRA_UNSAT_CERT=1
+        export XOLVER_COMB_CAREGRAPH=1 XOLVER_COMB_MODEL_BASED=1 \
+               XOLVER_COMB_SCALAR_BACKFILL=1 XOLVER_COMB_UFARG_ARRANGE=1 \
+               XOLVER_LIA_CUTS=1 XOLVER_LIA_REPAIR=1 \
+               XOLVER_LRA_BOUND_AXIOMS=1 XOLVER_LRA_PIVOT_HEUR=1 XOLVER_LRA_PROP=1 \
+               XOLVER_NIA_REFUTE=1 XOLVER_NIA_GCD=1 XOLVER_NIA_ICP=1 \
+               XOLVER_NIA_CDCAC=1 XOLVER_NIA_BV_CASCADE=1 \
+               XOLVER_NRA_LAZARD_LIFT=1 XOLVER_NRA_LIBPOLY_PSC=1 \
+               XOLVER_NRA_VARORDER=1 XOLVER_NRA_VARORDER_SIMPLEX=1 \
+               XOLVER_PP_REWRITE=1 XOLVER_PP_SOLVE_EQS=1 \
+               XOLVER_PP_PG_CNF=1 XOLVER_PP_LET_ELIM=1 \
+               XOLVER_SAT_LEMMA_MGMT=1 XOLVER_SAT_MIN=1 XOLVER_STRAT_PRESETS=1 \
+               XOLVER_UF_DISEQ_WATCH=1 XOLVER_UF_FAST_CC=1 \
+               XOLVER_PP_STRICT_VALIDATION=1 XOLVER_PP_VALIDATE_NONLINEAR_SAT=1 \
+               XOLVER_SAT_DEFER_EARLY_CONFLICT=1 XOLVER_COMB_SAT_FLOOR=1 \
+               XOLVER_NRA_UNSAT_CERT=1
         log "--submit: optimizations ON + soundness FLOORS ON (submission config; verify 0 wrong vs z3)"
     fi
 
@@ -246,7 +246,7 @@ cmd_run() {
         warn "默认 benchmark 路径不存在: $BENCH_DIR"
         warn "请确保目录结构如下:"
         warn "  当前目录/"
-        warn "  ├── zolver-dist/"
+        warn "  ├── xolver-dist/"
         warn "  └── benchmark/non-incremental/QF_*/"
     fi
 
@@ -305,7 +305,7 @@ cmd_pack() {
     [[ -n "$RUN_DIR" ]] || err "results 目录下没有 run_* 文件夹"
 
     RUN_NAME=$(basename "$RUN_DIR")
-    OUT="$(pwd)/zolver-$(hostname)-$RUN_NAME.tar.gz"
+    OUT="$(pwd)/xolver-$(hostname)-$RUN_NAME.tar.gz"
 
     log "打包: $RUN_NAME -> $OUT"
 
@@ -345,12 +345,12 @@ case "${1:-}" in
         ;;
     *)
         cat << 'EOF'
-Zolver 极简部署脚本
+Xolver 极简部署脚本
 
 默认目录结构:
   部署目录/
-  ├── zolver-dist/          <- 本脚本 + binary + 工具
-  │   ├── bin/zolver
+  ├── xolver-dist/          <- 本脚本 + binary + 工具
+  │   ├── bin/xolver
   │   └── tools/
   │       ├── deploy_and_run.sh
   │       ├── run_benchmark.py
@@ -362,22 +362,22 @@ Zolver 极简部署脚本
           └── ...
 
 用法:
-  ./zolver-dist/tools/deploy_and_run.sh build
-    编译静态 binary（在源码仓库里执行，产出到 zolver-dist/bin/）
+  ./xolver-dist/tools/deploy_and_run.sh build
+    编译静态 binary（在源码仓库里执行，产出到 xolver-dist/bin/）
 
-  ./zolver-dist/tools/deploy_and_run.sh run <logic> [选项...]
+  ./xolver-dist/tools/deploy_and_run.sh run <logic> [选项...]
     后台运行 benchmark（nohup，终端断开不停止）
 
     示例:
-      ./zolver-dist/tools/deploy_and_run.sh run lia,nia
-      ./zolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 30 --compare-with z3 --scramble --both
+      ./xolver-dist/tools/deploy_and_run.sh run lia,nia
+      ./xolver-dist/tools/deploy_and_run.sh run nia -j 200 -t 30 --compare-with z3 --scramble --both
 
-  ./zolver-dist/tools/deploy_and_run.sh pack
-    打包最新 benchmark 结果到 ./zolver-<hostname>-<run>.tar.gz（当前目录）
+  ./xolver-dist/tools/deploy_and_run.sh pack
+    打包最新 benchmark 结果到 ./xolver-<hostname>-<run>.tar.gz（当前目录）
 
     deploy_and_run 自己的开关:
       --both              一条命令后台顺序跑 OFF 再 ON；z3 oracle 仅跑一遍（共享缓存）
-      --allon             开所有优化、关 soundness floors（bug-hunt，让假答案以 zolver!=z3 暴露）
+      --allon             开所有优化、关 soundness floors（bug-hunt，让假答案以 xolver!=z3 暴露）
       --scramble          先用 SMT-COMP scrambler 扰动输入再求解（solver 与 oracle 同一份）
       --scramble-seed N   指定 scramble 种子（默认每次随机，传 N 复现某次运行）
       （旧写法 BOTH=1 / ALLON=1 / SCRAMBLE=1 环境变量仍兼容）

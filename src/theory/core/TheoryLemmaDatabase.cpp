@@ -2,12 +2,12 @@
 #include <algorithm>
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
 void TheoryLemmaDatabase::ensureMgmt() {
     if (mgmtChecked_) return;
     mgmtChecked_ = true;
-    const char* env = std::getenv("ZOLVER_SAT_LEMMA_MGMT");
+    const char* env = std::getenv("XOLVER_SAT_LEMMA_MGMT");
     if (!env) { cap_ = 0; return; }  // unbounded (flag OFF)
     long v = std::atol(env);
     cap_ = (v > 0) ? static_cast<size_t>(v) : 100000;  // bare flag => default cap
@@ -64,4 +64,4 @@ void TheoryLemmaDatabase::markInstalled(const TheoryLemma& lemma) {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

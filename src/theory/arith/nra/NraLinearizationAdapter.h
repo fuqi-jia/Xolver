@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 // Generic active assignment for mirror step
 struct GenericActiveAssignment {
@@ -31,7 +31,7 @@ public:
         const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
         TheoryLemmaStorage& lemmaDb);
 
-    // ZOLVER_NRA_LINEARIZE model-driven overload: the sibling's candidate
+    // XOLVER_NRA_LINEARIZE model-driven overload: the sibling's candidate
     // relaxation model (base var name -> rational value) seeds tight point
     // bounds [v, v] for every base var, so McCormick envelopes and the square
     // tangent refine AROUND the current point (model-construction refinement)
@@ -50,4 +50,4 @@ private:
     TheoryAtomRegistry* registry_;
 };
 
-} // namespace zolver
+} // namespace xolver

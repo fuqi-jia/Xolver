@@ -1,6 +1,6 @@
 #include "experimental/learning/TraceRecorder.h"
 
-namespace zolver {
+namespace xolver {
 
 TraceRecorder::TraceRecorder(std::string benchmarkId) {
     trace_["benchmark_id"] = benchmarkId;
@@ -22,4 +22,4 @@ void TraceRecorder::flush(const std::string& path) {
     ofs << trace_.dump(2);
 }
 
-} // namespace zolver
+} // namespace xolver

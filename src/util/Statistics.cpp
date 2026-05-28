@@ -1,6 +1,6 @@
 #include "util/Statistics.h"
 
-namespace zolver {
+namespace xolver {
 
 void Statistics::increment(const std::string& key, uint64_t delta) {
     data_[key] += delta;
@@ -15,4 +15,4 @@ uint64_t Statistics::get(const std::string& key) const {
     return it != data_.end() ? it->second : 0;
 }
 
-} // namespace zolver
+} // namespace xolver

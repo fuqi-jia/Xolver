@@ -5,7 +5,7 @@
 #include <cassert>
 #include <algorithm>
 
-namespace zolver {
+namespace xolver {
 
 bool extractLinearExpr(ExprId root, const CoreIr& ir,
                        std::unordered_map<std::string, mpq_class>& coeffs,
@@ -228,4 +228,4 @@ Relation negateRelation(Relation r) {
     return r;
 }
 
-} // namespace zolver
+} // namespace xolver

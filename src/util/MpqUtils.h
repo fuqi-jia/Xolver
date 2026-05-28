@@ -4,7 +4,7 @@
 #include <string>
 #include <stdexcept>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * Safely construct mpq_class from a string, handling scientific notation
@@ -65,4 +65,4 @@ inline mpq_class mpqFromString(const std::string& str) {
     }
 }
 
-} // namespace zolver
+} // namespace xolver

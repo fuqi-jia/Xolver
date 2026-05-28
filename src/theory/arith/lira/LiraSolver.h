@@ -10,7 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 class TheoryAtomRegistry;
 
@@ -94,4 +94,4 @@ private:
     void ensureIntVarCache() const;
 };
 
-} // namespace zolver
+} // namespace xolver

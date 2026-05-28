@@ -5,13 +5,13 @@
 #include <vector>
 #include <unordered_map>
 
-namespace zolver {
+namespace xolver {
 
 // ---------------------------------------------------------------------------
-// DatatypeRegistry — Zolver-native algebraic-datatype signature.
+// DatatypeRegistry — Xolver-native algebraic-datatype signature.
 //
 // Populated by the FrontendAdapter from SOMTParser's declare-datatypes
-// metadata, translated entirely into Zolver SortIds so that CoreIr (the DAG
+// metadata, translated entirely into Xolver SortIds so that CoreIr (the DAG
 // view) and the theory layer never include heavy parser headers. One entry
 // per datatype sort: an ordered list of constructors, each with an ordered
 // list of selectors (name + result sort). Testers are derived from the
@@ -104,4 +104,4 @@ private:
     std::unordered_map<SortId, DatatypeInfo> bySort_;
 };
 
-} // namespace zolver
+} // namespace xolver

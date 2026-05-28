@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace zolver {
+namespace xolver {
 
 /**
  * UnconditionalConstantPropagation (Capability 8a of the
@@ -115,4 +115,4 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> rewrittenAssertions_;
 };
 
-} // namespace zolver
+} // namespace xolver

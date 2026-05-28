@@ -5,10 +5,10 @@
 #include <iostream>
 #include <cstdlib>
 
-namespace zolver {
+namespace xolver {
 
 IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {
-    fastMerge_ = std::getenv("ZOLVER_UF_FAST_CC") != nullptr;
+    fastMerge_ = std::getenv("XOLVER_UF_FAST_CC") != nullptr;
 }
 
 void IncrementalEGraph::clear() {
@@ -589,4 +589,4 @@ bool IncrementalEGraph::congruenceClosed() const {
 }
 #endif
 
-} // namespace zolver
+} // namespace xolver
