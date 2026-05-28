@@ -1,6 +1,8 @@
 #pragma once
 
 #include "theory/arith/poly/RationalPolynomial.h"
+#include "theory/arith/nra/cac/Covering.h"
+#include "theory/arith/nra/core/CdcacValue.h"   // SamplePoint, RealAlg
 #include "expr/types.h"
 
 #include <vector>
@@ -8,6 +10,7 @@
 namespace xolver {
 
 class PolynomialKernel;
+class LibpolyBackend;
 
 // ============================================================================
 // CAC single-cell projection (lever 3, module B — see ../CAC.md).
@@ -43,5 +46,33 @@ struct CharacterizationResult {
 CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellPolys,
                                     VarId elimVar,
                                     PolynomialKernel* kernel = nullptr);
+
+// ----------------------------------------------------------------------------
+// interval_from_characterization (module B.2): given THIS level's boundary
+// polynomials (each with main variable `var`, from characterize), isolate their
+// real roots at the sample `prefix` and return the maximal sign-invariant cell
+// on var's axis that contains `sampleValue` — the interval to exclude from the
+// covering. The roots' bracketing the sample become the cell's open endpoints
+// (±∞ when the sample is below/above all roots); a sample equal to a root yields
+// a point cell.
+//
+// SOUNDNESS: `supported == false` on ANY incomplete/inconclusive backend step
+// (poly not representable, a curtain/vanishing boundary, a failed
+// specialization with no Norm/Tower recovery, an invalid root isolation, or an
+// inconclusive algebraic comparison). The caller MUST then conclude Unknown —
+// never UNSAT. A `supported == true` cell is exactly delineated (every boundary
+// poly's roots isolated + ordered), so it is genuinely sign-invariant.
+//
+// Requires libpoly (#ifdef XOLVER_HAS_LIBPOLY); the stub returns unsupported.
+// ----------------------------------------------------------------------------
+struct CellResult {
+    bool supported = false;   // false ⇒ caller concludes Unknown
+    CacInterval interval;
+};
+
+CellResult intervalFromCharacterization(
+    LibpolyBackend* algebra, PolynomialKernel* kernel,
+    const std::vector<RationalPolynomial>& boundaryPolys,
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue);
 
 } // namespace xolver

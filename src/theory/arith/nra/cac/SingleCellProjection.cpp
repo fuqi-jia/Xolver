@@ -2,8 +2,15 @@
 
 #include "theory/arith/nra/projection/LazardProjectionOperator.h"
 
+#include <algorithm>
 #include <string>
 #include <unordered_set>
+
+#ifdef XOLVER_HAS_LIBPOLY
+#include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nra/core/CdcacCommon.h"   // CompareResult, VanishResult
+#include "theory/arith/poly/PolynomialKernel.h"
+#endif
 
 namespace xolver {
 
@@ -51,5 +58,115 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
     }
     return out;
 }
+
+#ifdef XOLVER_HAS_LIBPOLY
+
+namespace {
+// Engine RealAlg → util RealValue (for CacInterval endpoints). Algebraic roots
+// carry their defining univariate by handle; getUni returns it high→low degree,
+// while RealValue::AlgebraicNumber wants low→high (coefficients[i] = coeff x^i).
+RealValue toRealValue(LibpolyBackend& algebra, const RealAlg& r) {
+    if (r.isRational()) return RealValue::fromMpq(r.rational);
+    const std::vector<mpz_class>& hiLo = algebra.getUni(r.root.definingPoly);
+    AlgebraicNumber a;
+    a.coefficients.assign(hiLo.rbegin(), hiLo.rend());
+    a.lower = r.root.lower;
+    a.upper = r.root.upper;
+    a.lowerOpen = true;
+    a.upperOpen = true;
+    return RealValue::fromAlgebraic(std::move(a));
+}
+} // namespace
+
+CellResult intervalFromCharacterization(
+    LibpolyBackend* algebra, PolynomialKernel* kernel,
+    const std::vector<RationalPolynomial>& boundaryPolys,
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue) {
+
+    CellResult out;   // supported == false by default
+    if (!algebra || !kernel) return out;
+
+    bool prefixHasAlgebraic = false;
+    for (const auto& v : prefix.values) if (v.isAlgebraic()) { prefixHasAlgebraic = true; break; }
+
+    // 1. Collect this level's delineating roots at the prefix.
+    std::vector<RealAlg> roots;
+    for (const auto& rp : boundaryPolys) {
+        auto norm = rp.toPrimitiveInteger(*kernel);
+        if (!norm.ok()) return out;                       // not representable ⇒ Unknown
+        const PolyId pid = norm.poly;
+        if (kernel->isConstant(pid)) continue;            // no boundary
+        // A vanishing (curtain) boundary cannot be soundly delineated here.
+        if (algebra->vanishesAtPrefix(pid, prefix, var) != VanishResult::NonVanishes) return out;
+
+        const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);
+        RootSet rs;
+        if (up == NullUniPolyId) {
+            if (!prefixHasAlgebraic) return out;          // specialization failed, no recovery
+            bool supported = false;
+            rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
+            if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);
+            if (!supported) return out;
+        } else {
+            rs = algebra->isolateRealRoots(up);
+            if (rs.crashOccurred) return out;
+            if (!algebra->validateRootIsolation(up, rs)) return out;
+        }
+        for (auto& r : rs.roots) roots.push_back(std::move(r));
+    }
+
+    // 2. Sort + dedup (exact algebraic comparison; any inconclusive ⇒ Unknown).
+    bool cmpFail = false;
+    std::sort(roots.begin(), roots.end(), [&](const RealAlg& a, const RealAlg& b) {
+        const CompareResult c = algebra->compareRealAlg(a, b);
+        if (c == CompareResult::Unknown) cmpFail = true;
+        return c == CompareResult::Less;
+    });
+    if (cmpFail) return out;
+    std::vector<RealAlg> distinct;
+    for (auto& r : roots) {
+        if (!distinct.empty()) {
+            const CompareResult c = algebra->compareRealAlg(distinct.back(), r);
+            if (c == CompareResult::Unknown) return out;
+            if (c == CompareResult::Equal) continue;
+        }
+        distinct.push_back(std::move(r));
+    }
+
+    // 3. Locate the sample among the sorted distinct roots.
+    int loIdx = -1, hiIdx = -1, ptIdx = -1;
+    for (int i = 0; i < static_cast<int>(distinct.size()); ++i) {
+        const CompareResult c = algebra->compareRealAlg(distinct[i], sampleValue);
+        if (c == CompareResult::Unknown) return out;
+        if (c == CompareResult::Less) { loIdx = i; }
+        else if (c == CompareResult::Equal) { ptIdx = i; break; }
+        else { hiIdx = i; break; }   // first root > sample
+    }
+
+    // 4. Build the cell (RealValue endpoints).
+    if (ptIdx >= 0) {
+        out.interval = CacInterval::point(toRealValue(*algebra, distinct[ptIdx]));
+    } else {
+        ExtendedRealValue lo = (loIdx < 0)
+            ? ExtendedRealValue::negInf()
+            : ExtendedRealValue::finite(toRealValue(*algebra, distinct[loIdx]));
+        ExtendedRealValue hi = (hiIdx < 0)
+            ? ExtendedRealValue::posInf()
+            : ExtendedRealValue::finite(toRealValue(*algebra, distinct[hiIdx]));
+        out.interval = CacInterval::make(std::move(lo), std::move(hi), true, true);
+    }
+    out.supported = true;
+    return out;
+}
+
+#else  // !XOLVER_HAS_LIBPOLY
+
+CellResult intervalFromCharacterization(
+    LibpolyBackend*, PolynomialKernel*,
+    const std::vector<RationalPolynomial>&, const SamplePoint&, VarId, const RealAlg&) {
+    return {};   // unsupported without the algebra backend
+}
+
+#endif
 
 } // namespace xolver

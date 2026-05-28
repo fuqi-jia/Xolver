@@ -48,18 +48,18 @@ mpq_class rationalStrictlyBetween(const RealValue& a, const RealValue& b) {
     return (lo + hi) / 2;  // unreachable for well-separated reals
 }
 
-// --- Covering ---------------------------------------------------------------
+// --- CacCovering ---------------------------------------------------------------
 
-void Covering::add(const CacInterval& iv) {
+void CacCovering::add(const CacInterval& iv) {
     if (iv.valid()) intervals_.push_back(iv);
 }
 
-bool Covering::covers(const RealValue& x) const {
+bool CacCovering::covers(const RealValue& x) const {
     for (const auto& iv : intervals_) if (iv.contains(x)) return true;
     return false;
 }
 
-std::vector<CacInterval> Covering::merged() const {
+std::vector<CacInterval> CacCovering::merged() const {
     std::vector<CacInterval> v;
     v.reserve(intervals_.size());
     for (const auto& iv : intervals_) if (iv.valid()) v.push_back(iv);
@@ -94,12 +94,12 @@ std::vector<CacInterval> Covering::merged() const {
     return out;
 }
 
-bool Covering::isComplete() const {
+bool CacCovering::isComplete() const {
     const auto m = merged();
     return m.size() == 1 && m[0].lo.isNegInf() && m[0].hi.isPosInf();
 }
 
-std::optional<RealValue> Covering::sampleUncovered() const {
+std::optional<RealValue> CacCovering::sampleUncovered() const {
     const auto m = merged();
     if (m.empty()) return RealValue::fromInt(0);   // nothing excluded
 

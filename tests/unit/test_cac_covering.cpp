@@ -1,4 +1,4 @@
-// CAC covering data structures (module A — src/theory/arith/nra/cac/Covering).
+// CAC covering data structures (module A — src/theory/arith/nra/cac/CacCovering).
 // Exact open/closed/±∞ interval union: membership, gap-sampling, completeness,
 // and a rational strictly between two reals (incl. algebraic endpoints).
 
@@ -43,31 +43,31 @@ TEST_CASE("CacInterval: contains open/closed/inf") {
     CHECK_FALSE(pt.contains(Q(4)));
 }
 
-TEST_CASE("Covering: empty samples 0, not complete") {
-    Covering c;
+TEST_CASE("CacCovering: empty samples 0, not complete") {
+    CacCovering c;
     auto s = c.sampleUncovered();
     REQUIRE(s.has_value());
     CHECK(s->compare(Q(0)) == 0);
     CHECK_FALSE(c.isComplete());
 }
 
-TEST_CASE("Covering: full line is complete, no sample") {
-    Covering c;
+TEST_CASE("CacCovering: full line is complete, no sample") {
+    CacCovering c;
     c.add(CacInterval::all());
     CHECK(c.isComplete());
     CHECK_FALSE(c.sampleUncovered().has_value());
 }
 
-TEST_CASE("Covering: two halves closed at the join cover ℝ") {
-    Covering c;
+TEST_CASE("CacCovering: two halves closed at the join cover ℝ") {
+    CacCovering c;
     c.add(CacInterval::make(ExtendedRealValue::negInf(), F(1), true, false)); // (-inf,1]
     c.add(CacInterval::make(F(1), ExtendedRealValue::posInf(), false, true)); // [1,+inf)
     CHECK(c.isComplete());
     CHECK_FALSE(c.sampleUncovered().has_value());
 }
 
-TEST_CASE("Covering: two halves both open at the join leave a point gap") {
-    Covering c;
+TEST_CASE("CacCovering: two halves both open at the join leave a point gap") {
+    CacCovering c;
     c.add(CacInterval::make(ExtendedRealValue::negInf(), F(1), true, true));  // (-inf,1)
     c.add(CacInterval::make(F(1), ExtendedRealValue::posInf(), true, true));  // (1,+inf)
     CHECK_FALSE(c.isComplete());
@@ -77,8 +77,8 @@ TEST_CASE("Covering: two halves both open at the join leave a point gap") {
     CHECK_FALSE(c.covers(Q(1)));
 }
 
-TEST_CASE("Covering: interior open gap yields a rational inside it") {
-    Covering c;
+TEST_CASE("CacCovering: interior open gap yields a rational inside it") {
+    CacCovering c;
     c.add(CacInterval::make(ExtendedRealValue::negInf(), F(0), true, true));  // (-inf,0)
     c.add(CacInterval::make(F(3), ExtendedRealValue::posInf(), true, true));  // (3,+inf)
     auto s = c.sampleUncovered();
@@ -88,8 +88,8 @@ TEST_CASE("Covering: interior open gap yields a rational inside it") {
     CHECK_FALSE(c.covers(*s));
 }
 
-TEST_CASE("Covering: left and right gaps") {
-    Covering c;
+TEST_CASE("CacCovering: left and right gaps") {
+    CacCovering c;
     c.add(openIv(0, 5));                      // only (0,5) excluded
     auto s = c.sampleUncovered();
     REQUIRE(s.has_value());
@@ -101,8 +101,8 @@ TEST_CASE("Covering: left and right gaps") {
     CHECK_FALSE(c.covers(*s2));
 }
 
-TEST_CASE("Covering: overlapping intervals merge to cover ℝ") {
-    Covering c;
+TEST_CASE("CacCovering: overlapping intervals merge to cover ℝ") {
+    CacCovering c;
     c.add(CacInterval::make(ExtendedRealValue::negInf(), F(2), true, true));  // (-inf,2)
     c.add(CacInterval::make(F(1), ExtendedRealValue::posInf(), true, true));  // (1,+inf) overlap (1,2)
     CHECK(c.isComplete());
@@ -130,11 +130,11 @@ TEST_CASE("rationalStrictlyBetween: rational below an algebraic (1, √2)") {
     CHECK(qv.compare(s2) < 0);     // q < √2
 }
 
-TEST_CASE("Covering: algebraic endpoints — gap sampled between two roots") {
+TEST_CASE("CacCovering: algebraic endpoints — gap sampled between two roots") {
     // Exclude (-inf, √2) and (2, +inf); the gap [√2, 2] (minus the open √2) must
     // yield a covered-checked sample strictly between √2 and 2.
     RealValue s2 = sqrt2();
-    Covering c;
+    CacCovering c;
     c.add(CacInterval::make(ExtendedRealValue::negInf(),
                             ExtendedRealValue::finite(s2), true, true));     // (-inf,√2)
     c.add(CacInterval::make(F(2), ExtendedRealValue::posInf(), true, true)); // (2,+inf)

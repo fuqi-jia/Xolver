@@ -11,7 +11,7 @@ namespace xolver {
 // ============================================================================
 // CAC covering data structures (lever 3, module A — see ../CAC.md).
 //
-// A `Covering` is the union of EXCLUDED intervals on a single CAC axis: the
+// A `CacCovering` is the union of EXCLUDED intervals on a single CAC axis: the
 // cells that conflict-driven coverings has already ruled out for the current
 // variable. The two operations the get_unsat_cover recursion needs are:
 //   * sampleUncovered() — a real point in a remaining gap (the next x_i to try),
@@ -53,7 +53,7 @@ struct CacInterval {
     bool contains(const RealValue& x) const;
 };
 
-class Covering {
+class CacCovering {
 public:
     void add(const CacInterval& iv);            // ignores invalid/empty intervals
     void clear() { intervals_.clear(); }
