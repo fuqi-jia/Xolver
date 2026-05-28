@@ -3,7 +3,14 @@
 Running notes. Branch `agent/nia-2` (integrated main + my work). Commit+push per lever.
 Gates every lever: default-OFF flag, 0-unsound, nia reg 113/113 OFF+ON, self-measure via eval/.
 
-## Shipped (verified + pushed)
+## Shipped (verified + pushed) — on agent/nia-2
+- **--parse-only** CLI mode (aa24e72): parse + print `parse-ok` + exit; lets E tag
+  parse-vs-solve failures corpus-wide. (Certora confirmed solve-bound, not parse.)
+- **Modular reasoner broadened to non-pow2** (a6945ec, XOLVER_NIA_MODULAR): relaxed
+  div-group recognition isPow2(n)->n>=2; enumerate at m=lcm(group n's); extended
+  no-group brute set incl. composites. Catches `mod 3/5/10/...` residue
+  contradictions. Hensel stays pow2-only. unit 884/884, nia reg 113/113 OFF+ON.
+
 - **L3 modular residue reasoner** `XOLVER_NIA_MODULAR` (enum path): sound constant-pow2-modulus
   UNSAT via div/mod quotient elimination + residue enumeration. (2d78819, b8968ed)
 - **Hensel/Newton-doubling** (same flag): lifts past enum cap. ENTIRE modInv family
