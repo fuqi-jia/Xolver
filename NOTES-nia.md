@@ -97,6 +97,24 @@ the soundness exposure — nothing external can catch a false-UNSAT there. Harde
 Net: oracle-blind modular UNSATs are cert-backed + ladder-validated => safe toward
 all-on final. unit 884/884, nia reg 113/113 OFF + all-3-flags, 0-unsound throughout.
 
+## Bit-blast perf lever (2026-05-29, master unheld it; SLS stays held for E)
+Profiled (NIA_BITBLAST_PROF, encode-vs-SAT split) the ~7s on AProVE/calypto:
+- (a) encode-bound + ALWAYS-OVERFLOW (aprove2313): 5s encode, sat_ms=0, 200k-var
+  budget hit every attempt, re-solved ~10x across Full checks => futile Unknown.
+- (b) SAT-SOLVING-dominated (aprove2593/3390): encode ~2s, SAT 6-8s growing,
+  62k/43k satvars, ONE long solve. Encoding already BLAN-optimized.
+SHIPPED: bit-blast result cache XOLVER_NIA_BITBLAST_FAST (026417c, default-OFF),
+memoize solve() by (cs polys+rels, domain bounds). VERDICT-PRESERVING (nia bucket
+113 cases, 0 verdict-diffs OFF vs ON; unit 9/9). HONEST: 0 newly-solved on the
+13-case AProVE/calypto subset — the dominant cost is ONE long SAT solve of the
+wide CNF, NOT redundant repetition, so the cache (and collapsing futile
+re-encoding) doesn't cross the 18s timeout. Cache kept as safe gated building block.
+=> REAL recovery lever = faster SAT: incremental solver reuse across width attempts
+(warm-start, no re-encode) and/or smaller CNF. Bigger + verdict-preservation-
+sensitive (width changes are NOT verdict-preserving; incremental SAT IS if same
+widths). Flagged for master: invest in incremental-SAT, or hand bit-blast-recovery
+magnitude to E's panda. Tighter-width growth ruled out (changes verdicts -> fails gate).
+
 ## Profiler / diag (all env-gated, default unchanged; gate held unit 883/883, nia reg 113/113 OFF)
 - `ARITH_STAGE_PROF=1` → per-NIA-stage cumulative ms + calls, dumped every 2s to stderr (survives
   timeout-kill). In ArithSolverBase::runReasonerPipeline.
