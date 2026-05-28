@@ -1,5 +1,49 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
+The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
+combination logics** — ALL pre-existing (NOT caused by the Ext-witness array fix:
+verified default==fix-on==sat), ALL in my lane (EUF/array/combination), ALL
+DIVISION-SINKERS, NONE in the regression suite (escaped the 661/661 gate). This is
+the top soundness priority (user: "0-unsound paramount", "就算pre-existing也要解决").
+
+| logic | false-SATs | cases | floorable by XOLVER_ARRAY_COMB_VALIDATE_SAT? |
+|-------|-----------|-------|---------------------------------------------|
+| QF_ALIA | 1 | cvc/read2 | YES → unknown (verified) |
+| QF_AUFLIA | 9 | check/array_incompleteness1, cvc/{add5,add6,read6,read7,fb_var_12_11,fb_var_33_6,fb_var_5_12,fb_var_6_12} | YES → all 9 unknown (verified) |
+| QF_UFLIA | 4 | mathsat/Wisa/{xs-05,xs-06,xs-09}, wisas/xs_9_19 | NO (no arrays; strict-validation → TIMEOUT, not a clean floor) |
+
+**ROOT CAUSE (shared): combination SAT is not ModelValidator-backed (invariant 1
+violation).** The Nelson-Oppen arrangement declares a model "consistent" at the
+Full-effort check while a conflict found mid-search escaped (the read2/Wisa
+conflict-stickiness class). The array floor (XOLVER_ARRAY_COMB_VALIDATE_SAT,
+shipped b27d7b6) requires POSITIVE validation for QF_ALIA/ALRA/AUFLIA/AUFLRA →
+floors the 10 array-combination false-SATs. The 4 QF_UFLIA Wisa cases are EUF
+cross-equality soundness (the false-UNSAT direction was fixed earlier per
+[[project_wisa_varconst]]; this is the false-SAT residual) — NOT cleanly floorable
+(UF apps → validator Indeterminate; strict-validation recovery times out). They
+need EUF/combination conflict-soundness work = #12.
+
+**MEASURED COST (QF_AUFLIA sample, floor ON vs OFF):** UNSOUND 9→0 (all false-SATs
+floored) BUT correct 53→36 — the floor over-floors **17 of ~24 genuine sats** to
+unknown (UF apps + incomplete array models → validator Indeterminate → not
+positively confirmed). So the floor is a NECESSARY-FOR-ENTRY soundness gate (can't
+enter a division with 9 false-SATs) but BLUNT: it trades ~71% of genuine sats for
+soundness. The REAL fix is #12 (N-O valid model construction): complete the
+combined model so genuine sats validate positively → the floor then catches ONLY
+the false-SATs (recover the 17+2 lost sats). Floor = sound floor; #12 = recover.
+
+**PROMOTION RECOMMENDATION (for master):** XOLVER_ARRAY_COMB_VALIDATE_SAT is
+MANDATORY to enter QF_ALIA/QF_AUFLIA soundly (without it: 10 division-sinking
+false-SATs). But default-ON today costs heavy completeness (QF_AUFLIA 53→36 solved,
+2 suite sats alia_005/alra_010 → unknown). RECOMMENDATION: (a) the floor is the
+soundness prerequisite for entering these divisions — enable it whenever entering
+QF_ALIA/AUFLIA; (b) PRIORITIZE #12 combination model construction to recover the
+over-floored genuine sats (turns sound-but-low-solve into sound-AND-complete);
+(c) keep default-OFF until #12 lands (else suite 661→659 + ~18% AUFLIA solve loss).
+The 4 QF_UFLIA Wisa false-SATs are a SEPARATE EUF-soundness blocker (#17) with NO
+clean floor — QF_UFLIA CANNOT be entered until fixed at the EUF level.
+
 ## ★★★ ENTRY-READINESS EVIDENCE (task #14 — for the master's division-entry call)
 Gate to enter a division: 0-unsound AND P(bug)<33%. My job = the evidence below.
 All numbers are family-split samples vs z3 (NOT full corpus — directional).
@@ -8,15 +52,19 @@ All numbers are family-split samples vs z3 (NOT full corpus — directional).
 |----------|---------------|-----------|-----------|---------------|
 | QF_AX | 67/76 (88%) w/ array-fix ON | YES (MISMATCH 0) | array completeness mostly closed; residual = storecomm/swap (9) | STRONG: pure-array, fix shipped, 0-unsound across sample + 33 reg + 661 full reg. Promote XOLVER_AX_EXT_WITNESS_COMPLETE → enter. |
 | QF_UF | 55/99 (56%) | YES (MISMATCH 0) | EUF perf — 44 transitivity-diamond TIMEOUTS (not unknowns) | SOUND but perf-limited. Entry safe (0-unsound); solve-count gated on e-propagation (diagnosed, deferred). Half-won. |
-| QF_ALIA | (audit running) | TBD | array+LIA — shares ArrayReasoner (array-fix should help) | pending audit |
-| QF_AUFLIA | (audit running) | TBD | array+UF+LIA | pending audit |
-| QF_UFLIA | (audit running) | TBD | UF+LIA combination | pending audit |
-| QF_UFLRA | (audit running) | TBD | UF+LRA combination | pending audit |
+| QF_ALIA | 17/100 (17%) | NO — 1 false-SAT (read2) | array+LIA combination perf/completeness | BLOCKED on soundness: floor (XOLVER_ARRAY_COMB_VALIDATE_SAT) fixes read2 → then 0-unsound but low solve-rate (combination perf). Enter only floor-ON. |
+| QF_AUFLIA | 53/92 (58%) | NO — 9 false-SATs (all floorable) | array+UF+LIA | BLOCKED on soundness: 9 false-SATs → floor-ON makes 0-unsound (cost: measuring genuine-sat loss). Highest combination solve-rate; promising once floored. |
+| QF_UFLIA | 31/80 (39%) | NO — 4 Wisa false-SATs (NOT floorable) | UF+LIA combination | BLOCKED: 4 EUF Wisa false-SATs need EUF-soundness fix (#17), no clean floor. DO NOT ENTER until fixed. |
+| QF_UFLRA | 34/61 (56%) | YES (MISMATCH 0) | UF+LRA combination, perf-limited | SOUND. Entry-safe (0-unsound); perf-limited solve-rate. The only CLEAN combination division. |
 | QF_DT / QF_UFDT | NO CORPUS in-tree (12 reg cases only) | reg 0-unsound | — | CANNOT audit locally — needs corpus on E/panda before any entry call |
 
-KEY: both audited divisions are 0-unsound (the paramount gate holds). QF_AX is the
-strongest entry candidate (fix shipped, big solve gain, fully gated). QF_UF is
-entry-safe but solve-count needs the deferred e-propagation lever.
+KEY: **the cross-division audit's headline = a SOUNDNESS problem, not a perf one.**
+4 of 6 audited combination/array divisions have pre-existing false-SATs (QF_ALIA 1,
+QF_AUFLIA 9, QF_UFLIA 4); only QF_UF, QF_AX, QF_UFLRA are 0-unsound as-is. The
+array floor makes QF_ALIA+QF_AUFLIA sound (10 false-SATs → unknown). QF_UFLIA's 4
+Wisa false-SATs are an EUF-soundness blocker (#17). STRONGEST entry candidates:
+QF_AX (fix shipped, 88%, 0-unsound), QF_UFLRA (56%, 0-unsound clean), QF_UF (56%,
+0-unsound). NONE of the false-SAT divisions may be entered until floored/fixed.
 
 ## ★★ NEW LANE (2026-05-29): cross-division capability audit (EUF/array/combination/DT)
 Mission: raise my solvers across the ~12 divisions they serve. The PURE divisions
@@ -32,7 +80,10 @@ family-balanced sample) → `tools/run_benchmark.py --file-list --compare-with z
 |-------|--------|--------------|----|---------| ---------------|-----------|
 | QF_AX | 76 | 41 (54%) | 76 | **0** | storeinv (~all unk), storecomm, swap | array completeness (missed-axiom floor) |
 | QF_UF | 99 | 55 (56%) | 98 | **0** | eq_diamond 12, NEQ 11, PEQ 11, SEQ 5 (all TIMEOUT) | EUF perf (cc + SAT-search on transitivity diamonds) |
-| QF_ALIA | 100 | 17 (17%) array-fix ON | 100 | **1→0** | recoverable-slow 45 (combination timeout), recoverable 20 | array+LIA combination perf/completeness + **read2 false-SAT (FIXED)** |
+| QF_ALIA | 100 | 17 (17%) array-fix ON | 100 | **1** (read2, floorable) | recoverable-slow 45 (combination timeout), recoverable 20 | array+LIA combination perf/completeness + read2 false-SAT |
+| QF_AUFLIA | 92 | 53 (58%) array-fix ON | 92 | **9** (all floorable) | recoverable 16, recoverable-slow 14 | array+UF+LIA: 9 pre-existing false-SATs (floored by XOLVER_ARRAY_COMB_VALIDATE_SAT) |
+| QF_UFLIA | 80 | 31 (39%) | 80 | **4** (Wisa, NOT floorable) | recoverable-slow 33 (combination timeout), other 12 | UF+LIA: 4 Wisa false-SATs (EUF soundness #17), 33 combination-perf timeouts |
+| QF_UFLRA | 61 | 34 (56%) | 61 | **0** | recoverable-slow 16, recoverable 2, other 9 | UF+LRA combination — CLEAN (0-unsound), perf-limited |
 
 **QF_ALIA — SOUNDNESS BUG FOUND + FIXED (task #16):** audit surfaced
 `QF_ALIA/cvc/read2.smt2` = **DEFAULT-PATH false-SAT** (xolver=sat, z3=unsat),
