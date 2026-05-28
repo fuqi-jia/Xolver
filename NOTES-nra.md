@@ -53,6 +53,52 @@ sign-definite / frontier). 175 previously-timing-out cases recovered by one chea
 sound check (≈ the ~210 winnable estimate, minus those needing >4s or not
 all-same-sign).
 
+## Family classification (oracle z3+cvc5 vs our levers, 0-unsound everywhere)
+
+| family | sample | solved | winnable (oracle-fast, we TO) | frontier (all TO) | note |
+|---|---|---|---|---|---|
+| Sturm-MBO (405) | 51 | 3→**175 w/ sign-refute** | ~210 (all UNSAT) | 21 | sign-refute closes it |
+| meti-tarski (7006) | 24 | 15 | **9** | 0 | **highest-ROI gap — all oracle-solvable, NO frontier**; profile needed |
+| hycomp (2752) | 19 | 6 | 9 | **4** | 4 frontier = nlsat wall (LONG#5) |
+| kissing (45) | 15 | 2 | 2 | **11** | mostly frontier (sphere-packing); low ROI |
+
+→ Next lever: meti-tarski winnable gap (no frontier, so fully achievable). Profile
+a winnable case to name the bottleneck (CDCAC lifting? buildClosure? cut-loop?).
+hycomp/kissing frontier = the nlsat residual (LONG#5).
+
+## Family: meti-tarski (7006) — winnable gap profiled
+
+Winnable ≈ 37% (9/24 sample), **frontier 0** (z3/cvc5 always solve). The gap is
+DOMINATED by `z3=sat, xolver=unknown` (we give up on SATISFIABLE transcendental-
+bound cases: asin/atan/sin/cos/exp/sqrt) + some `z3=unsat, xolver=unknown`.
+Profiled the spinning SAT case `asin-8-vars4` (4 vars, SAT): SAME wall as
+Sturm-MBO — `CdcacCore::buildClosure → projectLevel → determinant` (O(n!)).
+`XOLVER_NRA_LIBPOLY_PSC=1` removes the determinant but `asin-8` STILL TO →
+**the full Collins closure is doubly-exp in DEGREE** (transcendental approxes are
+high-degree), not just the determinant constant-factor.
+
+**Lever for meti-tarski:** NOT a flag flip. The SAT cases need model-construction
+(nlsat/MCSAT — assign→check→backjump, no full closure) OR an efficient
+single-cell CAC (LONG#3 with the sample-aware "required coefficients"
+characterization — my CAC v1's conservative characterization is as expensive as
+the full closure, so it doesn't help yet). The UNSAT cases need the same
+single-cell projection. Both are LARGE. Note these are NOT "frontier" (z3/cvc5
+solve them) — they are a CAPABILITY gap (we lack nlsat + efficient CAC).
+
+## Frontier (LONG#5): genuine nlsat/MCSAT residual
+
+| family | frontier (all-TO incl z3+cvc5) | note |
+|---|---|---|
+| Sturm-MBO | 21/51 | hard even for cvc5 |
+| meti-tarski | 0/24 | NOT frontier — capability gap (need nlsat/efficient-CAC) |
+| hycomp | 4/19 | BMC — the recurring nlsat wall (project_nonlinear_sat_strategy) |
+| kissing | 11/15 | sphere-packing, intrinsically hard |
+
+→ The TRUE frontier (unreachable without nlsat/MCSAT) is concentrated in hycomp
+BMC + kissing. meti-tarski is reachable-but-needs-capability. The single biggest
+NRA capability lever remains: **don't build the full Collins closure** (efficient
+single-cell CAC) and/or **nlsat model-construction** for bounded SAT.
+
 ## Dead-ends / negative results
 
 - CAC (conflict-driven single-cell coverings, modules A-C, sound + tested) is NOT
