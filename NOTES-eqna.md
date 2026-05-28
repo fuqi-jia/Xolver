@@ -32,6 +32,33 @@ family-balanced sample) → `tools/run_benchmark.py --file-list --compare-with z
 |-------|--------|--------------|----|---------| ---------------|-----------|
 | QF_AX | 76 | 41 (54%) | 76 | **0** | storeinv (~all unk), storecomm, swap | array completeness (missed-axiom floor) |
 | QF_UF | 99 | 55 (56%) | 98 | **0** | eq_diamond 12, NEQ 11, PEQ 11, SEQ 5 (all TIMEOUT) | EUF perf (cc + SAT-search on transitivity diamonds) |
+| QF_ALIA | 100 | 17 (17%) array-fix ON | 100 | **1→0** | recoverable-slow 45 (combination timeout), recoverable 20 | array+LIA combination perf/completeness + **read2 false-SAT (FIXED)** |
+
+**QF_ALIA — SOUNDNESS BUG FOUND + FIXED (task #16):** audit surfaced
+`QF_ALIA/cvc/read2.smt2` = **DEFAULT-PATH false-SAT** (xolver=sat, z3=unsat),
+PRE-EXISTING (sat OFF and ON — my Ext-witness flag did NOT cause it), NOT in the
+regression suite (escaped the 661/661 gate). It is the documented read2
+conflict-stickiness residual (N-O arrangement declares consistent while a found
+conflict escaped). Per user directive "就算pre-existing也要解决" + 0-unsound
+paramount, FIXED via `arrayCombSatFloor` (Solver.cpp, flag
+XOLVER_ARRAY_COMB_VALIDATE_SAT): QF_ALIA/ALRA/AUFLIA/AUFLRA SAT requires POSITIVE
+ModelValidator confirmation (invariant 1) → read2's unconfirmable model
+downgrades to unknown (VERIFIED: read2 sat→unknown under flag, sat with opt-out).
+**DEFAULT-OFF + promotion gate (campaign policy: no default-ON until genuine-sat
+losses recover).** Default-ON today regresses 2 GENUINE sats to unknown:
+alia_005_sat_read_fallthrough + alra_010_sat_selfstore_nested_row2 (suite
+661→659). Root cause of the over-floor: the combined model is INDETERMINATE to
+the validator — declared array vars lack an interp AND/OR asserted-distinct
+scalars (alia_005: i≠j) default to 0=0 → spurious violation; CandidateModelSearch
+has NO array support so recovery fails. PROMOTION (default-ON + final-all-on)
+GATED on #12 N-O valid model construction: assign asserted-distinct scalars
+distinct values + emit interps for declared arrays so genuine sats validate
+positively while read2 stays Violated→unknown. read2's correct-unsat recovery =
+deeper N-O conflict-stickiness (structural, open). NET NOW: read2 false-SAT
+eliminated under the flag (and in the final all-flags-ON build); default path
+keeps the green suite; promotion path tracked. Engaged, not walked away. Beyond read2, QF_ALIA
+is far from won (17/100): 45 recoverable-slow = combination-perf timeouts, 20
+instant recoverable = combination completeness gaps (next slices).
 
 **QF_UF deep-dive (task #10, EUF perf):** 0-unsound, 55/99. ALL 44 losses are
 TIMEOUTS (zero unknown) → PERFORMANCE, not incompleteness. Concentrated in the

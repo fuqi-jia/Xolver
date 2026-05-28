@@ -1598,7 +1598,37 @@ public:
         // to unknown via CMS re-validation). Invariant 1 + corner soundness.
         bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar &&
                                      std::getenv("XOLVER_REAL_DIV_PURIFY") != nullptr;
+        // Array-combination SAT floor (QF_ALIA/ALRA/AUFLIA/AUFLRA). In these
+        // Nelson-Oppen logics the arrangement between the array/EUF e-graph and
+        // the arith solver can declare a model "consistent" at the Full-effort
+        // check while a conflict found mid-search has ESCAPED (the read2
+        // conflict-stickiness class) — yielding a false-SAT (xolver=sat,
+        // z3=unsat). The definite-Violated array floor (arrayModelDefinitelyViolates)
+        // misses it because the combined model is only INDETERMINATE to the
+        // validator (incomplete cross-theory extraction), not a definite
+        // violation. Enforce invariant 1: a Result::Sat must be
+        // ModelValidator-backed -> require POSITIVE validation of the combined
+        // (array+arith) model; an unconfirmable array-combination sat downgrades
+        // to unknown (with CMS recovery first). Sound: only ever sat->unknown,
+        // never a wrong verdict. Eliminates the read2 false-SAT (verified).
+        // DEFAULT-OFF (XOLVER_ARRAY_COMB_VALIDATE_SAT): promotion to default-ON is
+        // GATED on combination model-recovery — CandidateModelSearch has no array
+        // support, so it cannot rebuild a positively-validatable model for genuine
+        // array-combination sats whose scalars/array-interps the theory left
+        // incomplete (e.g. alia_005 asserts i!=j but the model defaults i=j=0 ->
+        // spurious violation; alra_010 nested-row2). Default-ON today regresses
+        // those 2 genuine sats to unknown (suite 661->659). Promote once #12
+        // (N-O valid model construction: distinct asserted-diseq scalars + array
+        // interps for declared arrays) lets them validate positively. Pure QF_AX
+        // is excluded (opaque sorts -> definite-Violated floor already guards it).
+        auto isCombArrayLogic = [](const std::string& L) {
+            return L == "QF_ALIA" || L == "ALIA" || L == "QF_ALRA" || L == "ALRA" ||
+                   L == "QF_AUFLIA" || L == "AUFLIA" || L == "QF_AUFLRA" || L == "AUFLRA";
+        };
+        bool arrayCombSatFloor = features.hasArray && isCombArrayLogic(logic) &&
+                                 std::getenv("XOLVER_ARRAY_COMB_VALIDATE_SAT") != nullptr;
         bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
+                           arrayCombSatFloor ||
                            (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
                            (features.hasNonlinear &&
                             std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
