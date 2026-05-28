@@ -1,0 +1,5 @@
+(set-logic QF_NIA)
+(set-info :status unsat)
+(declare-fun x () Int)
+(assert (= (mod (+ (* x x) x) 2) 1))
+(check-sat)

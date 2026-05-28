@@ -57,6 +57,7 @@ static void printUsage(const char* prog) {
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
               << "  --lia-enable-gcd-ineq-tightening     Re-enable GCD inequality tightening\n"
               << "  --lia-enable-eq-gcd-normalization    Re-enable equality GCD normalization\n"
+              << "  --parse-only           Parse the file and exit (print parse-ok); no solve\n"
               << "  -v, --verbose          Verbose output\n";
 }
 
@@ -119,9 +120,12 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     std::optional<std::string> logicOpt;
     bool checkModel = false;
     bool verbose = false;
+    bool parseOnly = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--logic" && i + 1 < argc) {
+        if (arg == "--parse-only") {
+            parseOnly = true;
+        } else if (arg == "--logic" && i + 1 < argc) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
             solver.setOption("seed", xolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
@@ -165,6 +169,16 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         if (!solver.parseFile(argv[fileIdx])) {
             std::cerr << "Error: failed to parse " << argv[fileIdx] << "\n";
             return EXIT_FAILURE;
+        }
+
+        // --parse-only: report parse success and exit BEFORE solving. Lets the
+        // harness separate parse-phase failures (the case times out / OOMs under
+        // --parse-only) from solve-phase failures (parses fast here, fails only
+        // under a normal solve). Emits `parse-ok` on stdout; no solver run.
+        if (parseOnly) {
+            std::cout << "parse-ok\n";
+            std::cout.flush();
+            return EXIT_SUCCESS;
         }
 
         // Command-line --logic overrides file-declared logic

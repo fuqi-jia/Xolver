@@ -3,6 +3,7 @@
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "sat/SatSolver.h"
 #include <cstdlib>
+#include <chrono>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -150,20 +151,50 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     const std::vector<NormalizedNiaConstraint>& cs,
     const DomainStore& domains,
     const IntegerModelValidator& validator) {
+    // Finer profiler (NIA_BITBLAST_PROF): split encode-vs-SAT time + attempts,
+    // dumped to stderr every 2s so a timeout-killed run still reveals the
+    // dominant bit-blast cost (no clean exit). Zero cost when env unset.
+    static const bool bbProf = std::getenv("NIA_BITBLAST_PROF") != nullptr;
+    struct BBProf {
+        double encodeMs = 0, satMs = 0; long attempts = 0; long lastVars = 0;
+        std::chrono::steady_clock::time_point lastDump = std::chrono::steady_clock::now();
+        void maybeDump() {
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDump).count() >= 2000) {
+                std::cerr << "[BB-PROF] attempts=" << attempts << " encode_ms=" << (long)encodeMs
+                          << " sat_ms=" << (long)satMs << " last_satvars=" << lastVars << "\n";
+                lastDump = now;
+            }
+        }
+    };
+    static BBProf prof;
+
     Attempt a;
     auto sat = createSatSolver();
     BitBlastEncoder enc(*sat);
     enc.setVarBudget(gateBudget_);   // hard cap: stop encoding before OOM
     std::unordered_map<std::string, BitVec> varBits;
+    auto encT0 = std::chrono::steady_clock::now();
     for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
 
     PolyBitBlaster blaster(enc, kernel_, varBits);
     for (const auto& c : cs) blaster.assertConstraint(c);
     encodeDomainBounds(enc, varBits, domains);   // confine search to the box
+    if (bbProf) {
+        prof.encodeMs += std::chrono::duration<double, std::milli>(
+                             std::chrono::steady_clock::now() - encT0).count();
+        ++prof.attempts; prof.lastVars = (long)enc.varCount(); prof.maybeDump();
+    }
 
     if (enc.overflowed()) { a.kind = Attempt::Overflow; return a; }
 
+    auto satT0 = std::chrono::steady_clock::now();
     auto res = sat->solve();
+    if (bbProf) {
+        prof.satMs += std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - satT0).count();
+        prof.maybeDump();
+    }
     if (res == SatSolver::SolveResult::Sat) {
         IntegerModel model;
         for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
@@ -180,12 +211,53 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
     return a;   // SAT solver Unknown
 }
 
+std::string BitBlastSolver::fingerprint(const std::vector<NormalizedNiaConstraint>& cs,
+                                        const DomainStore& domains) const {
+    // Key = each constraint (poly id, relation) + each involved var's domain
+    // bounds. PolyIds are hash-consed (stable per kernel), so structurally-equal
+    // constraint sets share a key. Deterministic (sorted).
+    std::vector<std::string> parts;
+    std::unordered_map<std::string, char> seenVar;
+    for (const auto& c : cs) {
+        parts.push_back("c" + std::to_string(static_cast<unsigned>(c.poly)) + "/" +
+                        std::to_string(static_cast<int>(c.rel)));
+        for (const auto& v : kernel_.variables(c.poly)) seenVar[v] = 1;
+    }
+    std::sort(parts.begin(), parts.end());
+    std::vector<std::string> vparts;
+    for (const auto& kv : seenVar) {
+        const IntDomain* d = domains.getDomain(kv.first);
+        std::string s = "v" + kv.first + ":";
+        if (d && d->hasLower) s += d->lower.value.get_str();
+        s += "..";
+        if (d && d->hasUpper) s += d->upper.value.get_str();
+        vparts.push_back(s);
+    }
+    std::sort(vparts.begin(), vparts.end());
+    std::string key;
+    for (const auto& p : parts) { key += p; key += ';'; }
+    key += '|';
+    for (const auto& p : vparts) { key += p; key += ';'; }
+    return key;
+}
+
 BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>& cs,
                                      const DomainStore& domains,
                                      const IntegerModelValidator& validator) {
     BitBlastResult out;
     if (cs.empty() || !applicable(cs)) return out;   // Unknown
 
+    // XOLVER_NIA_BITBLAST_FAST: return the memoized result for an identical
+    // (cs, domains) input instead of re-encoding+re-solving. Verdict-preserving.
+    std::string key;
+    if (fastMode_) {
+        key = fingerprint(cs, domains);
+        auto it = resultCache_.find(key);
+        if (it != resultCache_.end()) return it->second;
+    }
+
+    auto compute = [&]() -> BitBlastResult {
+    BitBlastResult out;
     BitWidthPlan full = estimator_.estimate(cs, domains);
     if (full.width.empty()) return out;              // Unknown
 
@@ -250,6 +322,11 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         plan = SpaceEstimator::grow(plan, maxBW_);   // x4 widen
     }
     return out;               // Unknown
+    };  // compute
+
+    BitBlastResult r = compute();
+    if (fastMode_) resultCache_[key] = r;
+    return r;
 }
 
 } // namespace xolver::bitblast

@@ -1,0 +1,27 @@
+======================================================================
+Xolver Benchmark Report
+======================================================================
+
+Date:           2026-05-29T02:08:08.971509
+Logic:          QF_NIA
+Benchmark root: /mnt/d/D_Study/BUAA/projects/NLColver/benchmark/non-incremental
+Xolver:       build/bin/xolver
+Jobs:           2
+Timeout:        15.0s
+Total files:    110
+Wall-clock:     599.75s
+
+----------------------------------------------------------------------
+Xolver Results
+----------------------------------------------------------------------
+  sat         :     10 (  9.1%)
+  unsat       :      5 (  4.5%)
+  unknown     :     16 ( 14.5%)
+  timeout     :     79 ( 71.8%)
+  error       :      0 (  0.0%)
+  killed      :      0 (  0.0%)
+  Total time  :    1203.40s
+  Avg time    :      10.94s
+  Max time    :      15.31s
+
+======================================================================

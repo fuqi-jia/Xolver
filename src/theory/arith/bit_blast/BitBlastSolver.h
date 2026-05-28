@@ -8,6 +8,7 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/core/TheoryAtomTypes.h"   // TheoryConflict
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -36,7 +37,10 @@ struct BitBlastResult {
 class BitBlastSolver {
 public:
     explicit BitBlastSolver(PolynomialKernel& kernel)
-        : kernel_(kernel), estimator_(kernel) {}
+        : kernel_(kernel), estimator_(kernel) {
+        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_FAST"); e && *e && *e != '0')
+            fastMode_ = true;
+    }
 
     BitBlastResult solve(const std::vector<NormalizedNiaConstraint>& cs,
                          const DomainStore& domains,
@@ -96,6 +100,18 @@ private:
     // OOM crash into a clean Unknown. Env-tunable via XOLVER_NIA_BITBLAST_GATE_BUDGET.
     uint64_t gateBudget_ = defaultGateBudget();
     static uint64_t defaultGateBudget();
+
+    // XOLVER_NIA_BITBLAST_FAST (default-OFF): memoize solve() by a fingerprint of
+    // (cs polys+rels, per-var domain bounds). The Full-effort bit-blast stage is
+    // re-invoked across CDCL(T) theory checks with an unchanged constraint set;
+    // profiling shows the SAME problem re-encoded+re-solved many times (e.g. an
+    // always-overflow AProVE case attempted ~10x). The cache collapses those
+    // redundant solves, freeing the time budget for the deciding width / other
+    // stages. Verdict-preserving: identical input -> identical cached output.
+    bool fastMode_ = false;
+    std::unordered_map<std::string, BitBlastResult> resultCache_;
+    std::string fingerprint(const std::vector<NormalizedNiaConstraint>& cs,
+                            const DomainStore& domains) const;
 };
 
 } // namespace xolver::bitblast

@@ -1,8 +1,11 @@
 #include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/Reasoner.h"
 #include <cassert>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <string>
 
 namespace xolver {
 
@@ -24,12 +27,44 @@ std::vector<std::string> ArithSolverBase::reasonerNames() const {
 TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemmaDb,
                                                        TheoryEffort effort) {
     if (hasPending()) return drainPending();
+    // Per-stage cumulative profiler (ARITH_STAGE_PROF). Dumps periodically to
+    // stderr so a timeout-killed run still reveals the per-propagation hot
+    // stage (no clean exit / atexit). Zero cost when the env var is unset.
+    static const bool stageProf = std::getenv("ARITH_STAGE_PROF") != nullptr;
+    struct ProfState {
+        std::map<std::string, std::pair<double, long>> acc;  // name -> (ms, calls)
+        long pipelineCalls = 0;
+        std::chrono::steady_clock::time_point lastDump = std::chrono::steady_clock::now();
+        void dump() {
+            std::cerr << "[STAGE-PROF] pipeline-calls=" << pipelineCalls << "\n";
+            for (const auto& [nm, mc] : acc)
+                std::cerr << "  " << nm << "  ms=" << (long)mc.first
+                          << " calls=" << mc.second << "\n";
+        }
+    };
+    static ProfState prof;
+    if (stageProf) {
+        ++prof.pipelineCalls;
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - prof.lastDump).count() >= 2000) {
+            prof.dump();
+            prof.lastDump = now;
+        }
+    }
     for (auto& r : reasoners_) {
         if (!r->runsAt(effort)) continue;
 #ifndef NDEBUG
         size_t trailBefore = state_.trail.size();
 #endif
+        auto profT0 = stageProf ? std::chrono::steady_clock::now()
+                                : std::chrono::steady_clock::time_point{};
         auto res = r->run(lemmaDb, effort);
+        if (stageProf) {
+            auto& mc = prof.acc[r->name()];
+            mc.first += std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - profT0).count();
+            ++mc.second;
+        }
         // Reasoners must not mutate the shared trail; only assertLit does.
         assert(state_.trail.size() == trailBefore && "Reasoner mutated trail");
         // nullopt = continue to next stage; a value = stop with that verdict
