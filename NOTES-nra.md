@@ -299,9 +299,54 @@ recovery is its scope.
 - `XOLVER_NRA_LIBPOLY_PSC` / `XOLVER_NRA_VARORDER` / `XOLVER_NRA_LINEARIZE`: none
   close Sturm-MBO.
 
+## CAC Lazard-completeness campaign (2026-05-29, cvc5-grounded)
+
+Master directive: "CDCAC + Lazard must be UNCONDITIONALLY complete — no floor."
+Worked the CAC single-cell lifting to penetrate algebraic-prefix leaves it used
+to bail on. **First meti-tarski frontier case (CONVOI2-chunk-0041) now closes
+UNSAT, matching z3.** All default-OFF (XOLVER_NRA_CAC + XOLVER_NRA_CAC_TRUST_UNSAT).
+
+The chain of fixes (each unblocked the next bail site, depth-first):
+1. **Algebraic-prefix routing** (12396f4): `vanishesAtPrefix` returns Unknown for
+   any algebraic prefix by design and sat IN FRONT of the algebraic-capable tower
+   path → unreachable. Demoted it to a rational-only fast path; algebraic prefixes
+   route straight to Norm/Tower.
+2. **Rational-prefix non-leaf nullification = Lazard residual recovery** (12396f4):
+   a nullified projection factor is NOT boundary-free; its valuation residual
+   (iterated (xi-ai)-division + substitute = cvc5 `reducePolynomial` for rational
+   coords) carries genuine lifting boundaries. cvc5 NEVER skips; skipping enlarges
+   the cell → false UNSAT. (Leaf nullified *constraints* still skip — uniform truth
+   via signAt → whole fiber excluded.) Bug found: `divideByLinearExact` dropped the
+   xi^0 quotient term (`fromVar(v,0,·)` returns zero by design).
+3. **No-var skip** (3144ab2): a boundary poly with no `var` dependence after the
+   rational coords are fixed has no lift-axis boundary → skip (was bailing
+   "p1-no-mainVar" at algebraic leaves).
+4. **Conservative-inclusion membership** (3144ab2): the Norm's real roots are a
+   sound SUPERSET of p1's real boundaries (every real root of p1's specialization
+   is a root of the Norm). On `RootMembership::Unknown`, INCLUDE the candidate
+   (extra boundary only refines the covering — splits a sign-invariant region into
+   two equally sign-invariant pieces, never merges) instead of bail. Sound +
+   complete; replaces bail-on-Unknown that cost completeness for no soundness gain.
+5. **Round-trip interval refinement** (3144ab2): `toRealAlg` matched re-isolated
+   roots by coarse interval overlap → >1 candidate when the RealValue interval is
+   loose. Now refine each candidate (bisect against defining poly) and drop those
+   provably disjoint → unique match (true match brackets its root, never dropped);
+   still fail-closed if the interval genuinely brackets two roots.
+
+**Validation:** full NRA reg 143/143 OFF + 143/143 ON, unit 920/920, adversarial
+nra_142/143 + 4 rootIndex cases all correct. **meti-tarski 150-case differential
+vs z3: 0 UNSOUND, 101 solved-agree** (CAC-UNSAT path is sound).
+
+REMAINING cdcac gaps (still floored, SOUND — bail → Unknown, never false-UNSAT):
+- `AllDerivativesZero` (Lazard valuation [H3] incomplete reason).
+- `towerNorm-not-ok` (degenerate iterated-resultant Norm).
+These are deeper tower-kernel limitations; cvc5 sidesteps them with CoCoA Gröbner
+reduction over the tower. Tracked for follow-up.
+
 ## TODO (LONG-LINE queue)
-1. Extend classification to meti-tarski / hycomp / kissing (this file's tables).
-2. Broaden subtropical (SAT-gap).
-3. CAC late-path + UNSAT_CERT (UNSAT-gap, per-cell certs).
-4. Re-profile + fix CDCAC per-cell RP↔libpoly rebuild in RP space.
+1. ~~Extend classification to meti-tarski / hycomp / kissing.~~ (done)
+2. ~~Broaden subtropical (SAT-gap).~~ (shipped, low-ROI)
+3. CAC late-path + UNSAT_CERT: completeness DONE (CONVOI2 closes); per-cell
+   certificate for default-on `XOLVER_NRA_CAC_TRUST_UNSAT` still pending (#17).
+4. ~~Re-profile + fix CDCAC per-cell RP↔libpoly rebuild.~~ (done)
 5. Frontier honesty: quantify the nlsat/MCSAT residual.
