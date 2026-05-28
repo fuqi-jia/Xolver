@@ -40,6 +40,7 @@ OPTIMIZATION_FLAGS: List[str] = [
     "XOLVER_NIA_REFUTE", "XOLVER_NIA_GCD", "XOLVER_NIA_ICP",
     "XOLVER_NIA_CDCAC", "XOLVER_NIA_BV_CASCADE",
     "XOLVER_NIA_DIVISOR_CAP", "XOLVER_NIA_UNIVARIATE_FULL", "XOLVER_NIA_MODULAR",
+    "XOLVER_NIA_LOCALSEARCH",  # WalkSAT SLS (SAT-side), origin/agent/nia — real-recovery lever
     # NRA (hybrid/preelim/linearize gated by the wrong-count differential;
     #      SUBTROPICAL = SAT-fast front door, origin/agent/nra — a real-recovery lever)
     "XOLVER_NRA_LAZARD_LIFT", "XOLVER_NRA_LIBPOLY_PSC",
