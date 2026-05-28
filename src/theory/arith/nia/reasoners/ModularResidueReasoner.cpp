@@ -493,6 +493,60 @@ NiaReasoningResult ModularResidueReasoner::run(
         return std::make_tuple(rv, vt->coefficient > 0 ? 1 : -1, c);
     };
 
+    // --- Brute-force CERTIFICATE (soundness floor) ---
+    // Independently re-verify a modular UNSAT by enumerating ALL variables over
+    // Z/m (NO substitution / closure / Hensel reuse — fresh brute force over the
+    // raw normalized constraints) and checking the SAME relaxation the reasoner
+    // refuted: every Eq ≡ 0 (mod m), every div-group remainder in [0,n), every
+    // pinned-form neq. This catches a bug in the plan-building (substitution,
+    // group recognition, closure) that would otherwise emit a false UNSAT —
+    // critical for the oracle-blind cases (z3/cvc5/BLAN all time out, so nothing
+    // external can catch it). Returns:
+    //   2 = ConfirmedUnsat (fully enumerated, no model) -> cert-backed, emit
+    //   0 = FoundModel (a residue model exists) -> reasoner is WRONG -> FLOOR
+    //   1 = OverBudget (m^|allVars| too large, e.g. modInv 256^12) -> can't
+    //       brute-cert here; emit (those are the large-m structured cases that
+    //       carry their own evidence — Hensel identity / oracle :status unsat).
+    std::vector<std::string> allVarsVec(allVars.begin(), allVars.end());
+    std::sort(allVarsVec.begin(), allVarsVec.end());
+    const mpz_class certBudget(static_cast<unsigned long>(1u << 22));
+    auto bruteCertify = [&](const mpz_class& m) -> int {
+        mpz_class sz = 1;
+        for (size_t i = 0; i < allVarsVec.size(); ++i) {
+            sz *= m;
+            if (sz > certBudget) return 1;  // OverBudget
+        }
+        unsigned long total = allVarsVec.empty() ? 1 : static_cast<unsigned long>(sz.get_ui());
+        std::vector<mpz_class> odo(allVarsVec.size(), 0);
+        for (unsigned long it = 0; it < total; ++it) {
+            std::unordered_map<std::string, mpz_class> res;
+            for (size_t i = 0; i < allVarsVec.size(); ++i) res[allVarsVec[i]] = odo[i];
+            bool model = true;
+            // div-group remainder bounds: r in [0,n)
+            for (const auto& g : groups) {
+                auto rit = res.find(g.rVar);
+                if (rit != res.end() && rit->second >= g.n) { model = false; break; }
+            }
+            // every equality ≡ 0 mod m (raw evalInteger, no reuse of evalOpt)
+            if (model) for (const auto& c : constraints) {
+                if (c.rel != Relation::Eq) continue;
+                auto v = kernel_.evalInteger(c.poly, res);
+                if (!v) return 1;  // can't evaluate -> can't certify -> treat as OverBudget
+                if (modPos(*v, m) != 0) { model = false; break; }
+            }
+            // pinned-form neqs
+            if (model) for (const auto& nq : neqs) {
+                auto pin = pinnedNeq(nq.poly, m);
+                if (!pin) continue;
+                auto [rv, sign, c] = *pin;
+                if (sign * res[rv] + c == 0) { model = false; break; }
+            }
+            if (model) return 0;  // FoundModel -> reasoner WRONG
+            for (size_t i = 0; i < allVarsVec.size(); ++i) { if (++odo[i] < m) break; odo[i] = 0; }
+        }
+        return 2;  // ConfirmedUnsat
+    };
+
     // --- 7. Try each modulus ---
     for (const mpz_class& m : moduli) {
         // enumeration size = m^|primary|
@@ -571,6 +625,12 @@ NiaReasoningResult ModularResidueReasoner::run(
         if (bailed || feasible) continue;
 
         // No residue model exists for m => the constraint subset is UNSAT.
+        // SOUNDNESS FLOOR: independently brute-force-certify before emitting.
+        int cert = bruteCertify(m);
+        if (DIAG) std::cerr << "[MODRES] cert(m=" << m.get_str() << ")="
+                            << (cert == 2 ? "ConfirmedUnsat" : cert == 0 ? "FoundModel(FLOOR)" : "OverBudget")
+                            << "\n";
+        if (cert == 0) continue;  // reasoner disagrees with brute force -> do NOT emit (floor)
         std::unordered_set<uint32_t> seen;
         std::vector<SatLit> clause;
         auto add = [&](SatLit l) { if (seen.insert(l.var).second) clause.push_back(l); };
