@@ -51,6 +51,20 @@ goal. The modular lever reaches FAR beyond modInv. SLS gave 0 SAT recovery in th
 moduli / structural patterns), it's the dominant UNSAT lever. Sample is UNSAT-biased;
 SLS value needs a SAT-rich sample to show (full corpus is ~2:1 SAT:UNSAT for leaders).
 
+## Task 13: per-propagation perf (profiled engine-reaching QF_NIA timeouts)
+ARITH_STAGE_PROF on the 65 sample timeouts: nia.presolve is the hot stage
+(~1.1s/call dense Dartagnan B_2; normalize+presolve re-run ~8000x/Standard-effort
+on mcm 08). SHIPPED L4 XOLVER_NIA_PRESOLVE_FULL (1ba8606, default-OFF): gate
+nia.presolve to Full-effort (like univariate/bit-blast). Differential: +6 UNSAT
+over MODULAR+LOCALSEARCH (the presolve-bound timeouts reach a verdict at Full).
+TOTAL all-3-flags on 110-sample: baseline 15 -> 35 solved (+20, all <=24s, 0
+unsound, promote=YES). unit 884/884, nia reg 113/113 OFF + all-3-ON.
+SOUNDNESS of +20: 8 ground-truth :status unsat (STC+modInv); 12 :status unknown
+(ps/egcd/hard UltimateAutomizer-style) where z3+cvc5+BLAN all timeout — sound by
+construction (modular invariant-7 + established presolve HNF/FM), ps4 hand-verified.
+NOTE: 2019-ezsmt timeouts are NOT engine-bound (no STAGE-PROF dump) — likely
+SAT-search; SLS/value-selection territory, needs a SAT-rich sample to measure.
+
 ## Profiler / diag (all env-gated, default unchanged; gate held unit 883/883, nia reg 113/113 OFF)
 - `ARITH_STAGE_PROF=1` → per-NIA-stage cumulative ms + calls, dumped every 2s to stderr (survives
   timeout-kill). In ArithSolverBase::runReasonerPipeline.
