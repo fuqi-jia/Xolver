@@ -76,7 +76,46 @@ FIX (below): add QF_ANIA/AUFNIA to hasEuf, gated on XOLVER_COMB_ARRAY_NIA. After
 fix the 20 cases reach the NIA engine: floppy2→timeout, sum10/avg20→`NIA: pending
 unknown (opposite polarity)` = NiaSolver.cpp:237 floor (NIA lane, established).
 So fix removes the my-lane bail; verdict closure is now NIA-engine-bound.
-- TODO: QF_UFNIA full (806 — Certora subset = NIA divisors hang, profiled).
+### QF_UFNIA (200-case random sample, t=6) — DONE 2026-05-29
+correct=40 recoverable=79 recoverable-slow=18 UNSOUND=0 other=63. z3 solves
+≳119/200 (~60%) → WINNABLE family, the medal flagship. 73 of 79 recoverable are
+"instant" (<1s) — but NOT a my-lane atomization bail: traced 3 (Zohar-alive/
+Zohar-ic) all hit `NIA: pending unknown (opposite polarity asserted)` fast.
+
+### VERIFIED DEEP-DIVE: QF_UFNIA Zohar "opposite polarity" floor (instrumented)
+Diagnostic in NiaSolver::assertLit (reverted after). Smallest case
+int_check_bvsge_bvand_rtl.smt2 (invertibility-condition, pow2/intand/intor as
+UNINTERPRETED fns; div/mod by pow2(l)). Trace:
+  [A] var=24 sign=1 level=9825   (pos asserted, decision level ~9825!)
+  [B] to level=9825 / [B] to 9824 (one-level chronological backtracks)
+  [A] var=24 sign=0 level=9824   → OppositePolarity → pendingUnknown (poly atom)
+ROOT CAUSE = STRUCTURAL SAT BLOWUP, not a routing bug:
+- Decision level reaches ~9825 with one-level-at-a-time backtracks (…9708→9707…):
+  the formula expands (every define-fun inlined: pow2/bitof/intmod/intudiv… +
+  div/mod-by-pow2(UF) lowering + nonlinear atomization) into THOUSANDS of SAT
+  vars → degenerate deep chronological search.
+- The opposite-polarity floor (ActiveLiteralSet, NiaSolver.cpp:171) is a SOUND
+  symptom of this deep search (var flips after a backtrack the theory state
+  hasn't fully cleared at that depth), not the disease. Latches → fast unknown.
+- It is BENIGN/helpful: without it the search times out anyway (12s unknown).
+  Fixing the bail = 0.1s-unknown → 12s-unknown, no score gain, worse wall-clock.
+CLASSIFICATION: structural (formula blowup + degenerate SAT search). Winnable
+only via z3/cvc5-style bit-width-independent reasoning (the Niemetz/Preiner/
+Reynolds/Zohar/Barrett/Tinelli CADE-27 invertibility method) — a major NIA/
+preprocessing redesign, NOT a quick my-lane fix. FRONTIER, route/document.
+REALITY CHECK: z3 wins ~60% of QF_UFNIA but via specialized reasoning; our NIA
+engine structurally can't. The 2 my-lane gaps (real-div, hasEuf) are the
+closeable ones; the rest of EQ+NA is NIA-engine/structural-bound.
+
+## OVERALL EQ+NA PICTURE (inventory complete, 2026-05-29)
+| logic | my-lane gap | status |
+|-------|-------------|--------|
+| QF_UFNRA | real div-by-var | FIXED (RealDivLowerer) → NRA-engine-bound |
+| QF_ANIA | IntDivMod hasEuf | FIXED → NIA-floor-bound |
+| QF_AUFNIA | none | NIA-engine-bound (route NIA) |
+| QF_UFDTNIA | none | NIA divisors-hang (cap → NIA) |
+| QF_UFNIA | none | NIA divisors-hang (Certora) + structural blowup (Zohar) |
+My-lane atomization/routing gaps CLOSED. Remaining = NIA-engine + structural.
 
 ## Fixes shipped / in progress (cont.)
 - **IntDivModLowerer hasEuf for QF_ANIA/AUFNIA (verifying)**: Solver.cpp, rides
