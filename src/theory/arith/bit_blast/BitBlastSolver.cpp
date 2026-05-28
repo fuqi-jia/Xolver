@@ -195,19 +195,31 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
                           std::chrono::steady_clock::now() - satT0).count();
         prof.maybeDump();
     }
+    static const bool bbDiag = std::getenv("NIA_BITBLAST_DIAG") != nullptr;
     if (res == SatSolver::SolveResult::Sat) {
         IntegerModel model;
         for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);
         // Accept only a model that satisfies cs (exact) AND lies in the box.
-        if (validator.validate(model, cs) == IntegerModelValidator::Result::Valid
-            && modelInDomains(model, domains)) {
+        bool valid = validator.validate(model, cs) == IntegerModelValidator::Result::Valid;
+        bool inBox = modelInDomains(model, domains);
+        if (bbDiag) {
+            std::cerr << "[BB-DIAG] SAT@vars=" << enc.varCount() << " valid=" << valid
+                      << " inBox=" << inBox;
+            if (!valid || !inBox) { for (const auto& kv : model) std::cerr << " " << kv.first << "=" << kv.second.get_str(); }
+            std::cerr << "\n";
+        }
+        if (valid && inBox) {
             a.kind = Attempt::Sat;
             a.model = std::move(model);
         }
         // else: SAT under narrow widths but not a real / in-box model — artifact (Unknown).
         return a;
     }
-    if (res == SatSolver::SolveResult::Unsat) { a.kind = Attempt::Unsat; return a; }
+    if (res == SatSolver::SolveResult::Unsat) {
+        if (bbDiag) std::cerr << "[BB-DIAG] UNSAT@vars=" << enc.varCount() << "\n";
+        a.kind = Attempt::Unsat; return a;
+    }
+    if (bbDiag) std::cerr << "[BB-DIAG] SAT-solver-UNKNOWN@vars=" << enc.varCount() << "\n";
     return a;   // SAT solver Unknown
 }
 
