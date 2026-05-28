@@ -5,6 +5,36 @@
 #include <optional>
 #include <functional>
 #include <pthread.h>
+#include <execinfo.h>
+#include <csignal>
+#include <sys/time.h>
+#include <unistd.h>
+
+// ZOLVER_SELFPROF: poor-man's CPU profiler. ITIMER_PROF fires SIGPROF on the
+// thread consuming CPU (the large-stack solve worker), so the backtrace lands
+// in the actual hot loop. backtrace_symbols_fd writes to the real fd 2,
+// bypassing the std::cerr NullStreambuf, so samples survive non-verbose mode.
+// Async-signal-safe (backtrace/backtrace_symbols_fd/write). Resolve frames with
+// addr2line on the printed module+offset.
+static void zolverSelfprofHandler(int) {
+    void* bt[64];
+    int n = backtrace(bt, 64);
+    static const char hdr[] = "==SELFPROF-SAMPLE==\n";
+    ssize_t w = write(2, hdr, sizeof(hdr) - 1); (void)w;
+    backtrace_symbols_fd(bt, n, 2);
+}
+static void zolverMaybeInstallSelfprof() {
+    if (!std::getenv("ZOLVER_SELFPROF")) return;
+    struct sigaction sa{};
+    sa.sa_handler = zolverSelfprofHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGPROF, &sa, nullptr);
+    struct itimerval tv{};
+    tv.it_interval.tv_usec = 400000;  // 400ms repeating
+    tv.it_value.tv_usec = 400000;
+    setitimer(ITIMER_PROF, &tv, nullptr);
+}
 
 static void printUsage(const char* prog) {
     std::cout << "Usage: " << prog << " <command> [options]\n"
@@ -248,6 +278,7 @@ int main(int argc, char* argv[]) {
         printUsage(argv[0]);
         return EXIT_FAILURE;
     }
+    zolverMaybeInstallSelfprof();
 
     const char* cmd = argv[1];
     if (std::strcmp(cmd, "solve") == 0)       return cmdSolve(argc, argv);
