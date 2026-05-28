@@ -3,6 +3,7 @@
 
 #include <map>
 #include <set>
+#include <cstdlib>
 
 namespace xolver {
 
@@ -38,6 +39,20 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
     struct Eq { std::map<VarId, mpq_class> coeffs; mpq_class cst; size_t atomIdx; };
     std::vector<Eq> eqs;
     std::set<VarId> varset;
+    // XOLVER_PRESOLVE_DEDUP_ROWS (default-OFF): skip an equality whose
+    // (coeffs, cst) is byte-identical to one already collected. Such a row is
+    // the SAME linear constraint (E ∧ E ≡ E), so its presence does not change
+    // the solution set, the existence/feasibility test, or any SNF-derived
+    // substitution/congruence — only the matrix row count. On EVM/SVCOMP-style
+    // QF_ANIA inputs the live equality set is up to ~98% exact duplicates
+    // (floppy2: 19847 rows → 415 unique), so SNF (super-linear in rows) is
+    // computed on a massively redundant matrix. Deduping is solution-set exact;
+    // we keep the FIRST occurrence's atomIdx as the reason representative (a
+    // valid, possibly tighter, conflict justification). Same-coeffs/different-
+    // cst rows have distinct keys → both kept → the SNF existence check still
+    // detects the contradiction. Gate proves no-verdict-change OFF vs ON.
+    const bool dedupRows = std::getenv("XOLVER_PRESOLVE_DEDUP_ROWS") != nullptr;
+    std::set<std::pair<std::map<VarId, mpq_class>, mpq_class>> seenEq;
     for (size_t i = 0; i < st.atoms.size(); ++i) {
         const auto& A = st.atoms[i];
         if (!A.live || A.rel != Relation::Eq) continue;
@@ -45,6 +60,7 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
         mpq_class cst;
         if (!extractLinear(A.poly, coeffs, cst)) continue;
         if (coeffs.empty()) continue;  // pure constant — handled elsewhere
+        if (dedupRows && !seenEq.insert({coeffs, cst}).second) continue;  // exact duplicate
         for (const auto& [v, c] : coeffs) { (void)c; varset.insert(v); }
         eqs.push_back({std::move(coeffs), cst, i});
     }
