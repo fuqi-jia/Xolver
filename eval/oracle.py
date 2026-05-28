@@ -112,6 +112,35 @@ def decided_disagreements(cases: List[CaseResult],
     return out
 
 
+def overlap_stats(cases: List[CaseResult], blan_map: Dict[str, BlanRow],
+                  logic: str = "QF_NIA") -> Dict[str, float]:
+    """How well the Xolver run and the BLAN CSV cover the SAME files.
+
+    A near-empty overlap makes "0 disagreements" meaningless (the sets don't
+    align), so callers must surface this rather than report a silent pass.
+    `xolver` counts only the cases under `logic` (BLAN is QF_NIA-only).
+    """
+    xkeys = {c.key for c in cases if c.key.startswith(logic + "/")}
+    bkeys = set(blan_map)
+    joined = len(xkeys & bkeys)
+    return {"joined": joined, "xolver": len(xkeys), "blan": len(bkeys),
+            "ratio": (joined / len(xkeys)) if xkeys else 0.0}
+
+
+def overlap_warning(stats: Dict[str, float], threshold: float = 0.10) -> Optional[str]:
+    """A loud message when the join is too thin to trust (or empty), else None."""
+    if stats["xolver"] == 0:
+        return ("file sets don't align: 0 Xolver cases to join against BLAN "
+                "(BLAN has %d keys) — run Xolver on the same files first"
+                % stats["blan"])
+    if stats["ratio"] < threshold:
+        return ("file sets don't align: joined only %d of %d Xolver cases "
+                "(%.1f%%); BLAN has %d keys. A '0 disagreements' result here is "
+                "NOT meaningful — feed both from one --file-list."
+                % (stats["joined"], stats["xolver"], 100.0 * stats["ratio"], stats["blan"]))
+    return None
+
+
 def blan_debug_targets(cases: List[CaseResult],
                        blan_map: Dict[str, BlanRow]) -> List[Disagreement]:
     """Cases BLAN decided but Xolver did not (recovery / debug-locally targets)."""

@@ -38,8 +38,11 @@ class FlagEffect:
     baseline_solved: int
     flag_solved: int
     delta_solved: int
+    delta_solved_24: int
     added_wrong: int
+    added_par2: float
     selected: bool
+    is_regression: bool
     reason: str
 
 
@@ -50,21 +53,39 @@ class CombineResult:
 
 
 def combine(baseline: Score, per_flag: Dict[str, Score]) -> CombineResult:
-    """Select flags that improve solved with zero added wrong (soundness gate)."""
+    """Select flags that improve solved-count with zero added wrong.
+
+    Promotion rule (per EQNA): 0-unsound is the FLOOR, not the bar. A flag is
+    promoted only on a POSITIVE solved-count delta (solved@1200 OR solved@24);
+    a sound flag with no solve gain that costs PAR-2/time (e.g. an instant
+    unknown turned into a full-budget timeout) is explicitly flagged as a
+    REGRESSION and never auto-promoted.
+    """
     effects: List[FlagEffect] = []
     selected: List[str] = []
     for flag in sorted(per_flag):
         s = per_flag[flag]
         added_wrong = s.wrong - baseline.wrong
-        delta = s.solved_1200 - baseline.solved_1200
+        d1200 = s.solved_1200 - baseline.solved_1200
+        d24 = s.solved_24 - baseline.solved_24
+        dpar2 = s.par2 - baseline.par2  # positive = slower / worse
+        ok = False
+        is_regression = False
         if added_wrong > 0:
-            ok, reason = False, "rejected: +%d wrong (soundness)" % added_wrong
-        elif delta > 0:
-            ok, reason = True, "selected: +%d solved" % delta
+            is_regression = True
+            reason = "rejected: +%d wrong (soundness floor breached)" % added_wrong
+        elif d1200 > 0 or d24 > 0:
+            ok = True
+            reason = "selected: %+d solved@1200, %+d solved@24" % (d1200, d24)
+        elif d1200 < 0 or dpar2 > 0:
+            # No solve gain AND fewer solves or worse time -> net regression.
+            is_regression = True
+            reason = ("REGRESSION (never promote): %+d solved@1200, %+d solved@24, "
+                      "%+.1fs PAR-2" % (d1200, d24, dpar2))
         else:
-            ok, reason = False, "no gain (delta=%d)" % delta
-        effects.append(FlagEffect(flag, baseline.solved_1200, s.solved_1200,
-                                  delta, added_wrong, ok, reason))
+            reason = "no gain (neutral): %+d solved@1200, %+.1fs PAR-2" % (d1200, dpar2)
+        effects.append(FlagEffect(flag, baseline.solved_1200, s.solved_1200, d1200,
+                                  d24, added_wrong, dpar2, ok, is_regression, reason))
         if ok:
             selected.append(flag)
     return CombineResult(selected, effects)
@@ -156,7 +177,7 @@ def _cmd_combine(args) -> int:
     res = combine(baseline, per_flag)
     print("baseline solved@1200=%d  wrong=%d" % (baseline.solved_1200, baseline.wrong))
     for e in res.effects:
-        mark = "+" if e.selected else " "
+        mark = "+" if e.selected else ("!" if e.is_regression else " ")
         print("  [%s] %-32s %s" % (mark, e.flag, e.reason))
     print("\nSELECTED (%d): %s" % (len(res.selected_flags), ",".join(res.selected_flags)))
     env = candidate_env(res.selected_flags)
