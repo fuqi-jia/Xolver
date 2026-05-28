@@ -415,6 +415,17 @@ NiaReasoningResult ModularResidueReasoner::run(
             moduli.push_back(m);
             if (moduli.size() >= 3) break;
         }
+        // CRT-style coverage: also try a few small moduli COPRIME to the group
+        // base. A formula whose div/mod groups are mod 2^k can still carry a
+        // residue contradiction at mod 3/5/7 in its equality structure (the
+        // groups simply don't constrain those residues). The brute-force cert
+        // floor keeps any such UNSAT sound. (Groups with n ∤ m bail at that m,
+        // so this only fires on a contradiction among the non-group constraints.)
+        for (long p : {3, 5, 7}) {
+            mpz_class pm(p);
+            mpz_class g; mpz_gcd(g.get_mpz_t(), base.get_mpz_t(), pm.get_mpz_t());
+            if (g == 1 && pm <= cap) moduli.push_back(pm);
+        }
     }
     // base > cap (e.g. 2^256) leaves moduli empty: the enumeration loop is
     // skipped and the Hensel-lifting section (step 8) handles the goal modulus.
