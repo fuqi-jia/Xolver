@@ -122,6 +122,35 @@ single-cell CAC) and/or **nlsat model-construction** for bounded SAT.
 - **nlsat/MCSAT (frontier):** the true unreachable residual (hycomp BMC + kissing)
   + the meti-tarski bounded-SAT capability gap. Largest effort; fresh-session.
 
+## #11 CAC efficiency — incremental diagnosis (in progress)
+
+Instrumented CAC bail reasons (`XOLVER_NRA_CAC_DIAG` → /tmp/cac_diff.txt +
+/tmp/cac_cell.txt). On winnable buildClosure-bound cases (CONVOI2 meti-tarski
+z3=unsat; frontier Sturm mbo_E10E17/E12E14), CAC reaches **depth 3 (4-var)** then
+bails — exact sub-cause = **`vanish-nonleaf`**: a characterization (discriminant/
+resultant/coeff) poly VANISHES at the rational prefix.
+
+**This is McCallum nullification.** Skipping a nullified projection poly at a
+non-leaf level is UNSOUND (the lower-dim cell may not stay sign-invariant — the
+curtain problem), so CAC correctly **FLOORS to Unknown** (never false-UNSAT;
+falls through to Collins). SOUND, just incomplete.
+
+**Sound recovery (the next deep increment):** wire the Lazard **[H3] valuation**
+(`lazardEvaluateToUnivariate` — recover the residual via the lowest nonzero
+derivative w.r.t. the nullified prefix var) into the CAC rational-prefix path.
+It's implemented + wired for ALGEBRAIC-prefix towers (`isolateRealRootsViaTower`)
+but not for this rational-prefix nullification. Alternative cheaper mitigation:
+generic sample selection at the parent level to avoid landing on a nullification
+point (needs recursion-level resampling). Both are non-trivial. This is the SAME
+completeness ceiling the Lazard work documented ([[project-lazard]]: nullification
+recovery + [H4]). asin-8 (SAT) SPINS separately (not a bail) — likely the
+characterization recursion exploring many cells; secondary.
+
+→ CAC's UNSAT completeness on buildClosure-bound families is gated on this
+nullification recovery. Floored sound for now; the recovery is a focused
+fresh-session effort. Win condition (CAC dominates Collins → unblock task #8) is
+NOT yet met.
+
 ## Dead-ends / negative results
 
 - CAC (conflict-driven single-cell coverings, modules A-C, sound + tested) is NOT

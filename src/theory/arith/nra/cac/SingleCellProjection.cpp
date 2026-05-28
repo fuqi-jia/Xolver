@@ -3,6 +3,8 @@
 #include "theory/arith/nra/projection/LazardProjectionOperator.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
 #include <string>
 #include <unordered_set>
 
@@ -104,6 +106,17 @@ CellResult intervalFromCharacterization(
     CellResult out;   // supported == false by default
     if (!algebra || !kernel) return out;
 
+    static const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
+    auto bail = [&](const char* why) -> CellResult {
+        if (diag) {
+            std::ofstream st("/tmp/cac_cell.txt", std::ios::app);
+            st << "[CELL] unsupported why=" << why << " leaf=" << skipVanishing
+               << " nbound=" << boundaryPolys.size() << "\n";
+            st.flush();
+        }
+        return out;
+    };
+
     bool prefixHasAlgebraic = false;
     for (const auto& v : prefix.values) if (v.isAlgebraic()) { prefixHasAlgebraic = true; break; }
 
@@ -111,28 +124,28 @@ CellResult intervalFromCharacterization(
     std::vector<RealAlg> roots;
     for (const auto& rp : boundaryPolys) {
         auto norm = rp.toPrimitiveInteger(*kernel);
-        if (!norm.ok()) return out;                       // not representable ⇒ Unknown
+        if (!norm.ok()) return bail("toPrim");
         const PolyId pid = norm.poly;
         if (kernel->isConstant(pid)) continue;            // no boundary
         const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
-        if (vr == VanishResult::Unknown) return out;      // can't decide ⇒ Unknown
+        if (vr == VanishResult::Unknown) return bail("vanish-unknown");
         if (vr == VanishResult::Vanishes) {
             if (skipVanishing) continue;                  // leaf constraint: no var-boundary
-            return out;                                   // non-leaf nullification ⇒ Unknown
+            return bail("vanish-nonleaf");                // non-leaf nullification ⇒ Unknown
         }
 
         const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);
         RootSet rs;
         if (up == NullUniPolyId) {
-            if (!prefixHasAlgebraic) return out;          // specialization failed, no recovery
+            if (!prefixHasAlgebraic) return bail("specialize-fail-rational");
             bool supported = false;
             rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
             if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);
-            if (!supported) return out;
+            if (!supported) return bail("algebraic-isolation-unsupported");
         } else {
             rs = algebra->isolateRealRoots(up);
-            if (rs.crashOccurred) return out;
-            if (!algebra->validateRootIsolation(up, rs)) return out;
+            if (rs.crashOccurred) return bail("isolate-crash");
+            if (!algebra->validateRootIsolation(up, rs)) return bail("isolate-invalid");
         }
         for (auto& r : rs.roots) roots.push_back(std::move(r));
     }
@@ -144,12 +157,12 @@ CellResult intervalFromCharacterization(
         if (c == CompareResult::Unknown) cmpFail = true;
         return c == CompareResult::Less;
     });
-    if (cmpFail) return out;
+    if (cmpFail) return bail("sort-compare-unknown");
     std::vector<RealAlg> distinct;
     for (auto& r : roots) {
         if (!distinct.empty()) {
             const CompareResult c = algebra->compareRealAlg(distinct.back(), r);
-            if (c == CompareResult::Unknown) return out;
+            if (c == CompareResult::Unknown) return bail("dedup-compare-unknown");
             if (c == CompareResult::Equal) continue;
         }
         distinct.push_back(std::move(r));
@@ -159,7 +172,7 @@ CellResult intervalFromCharacterization(
     int loIdx = -1, hiIdx = -1, ptIdx = -1;
     for (int i = 0; i < static_cast<int>(distinct.size()); ++i) {
         const CompareResult c = algebra->compareRealAlg(distinct[i], sampleValue);
-        if (c == CompareResult::Unknown) return out;
+        if (c == CompareResult::Unknown) return bail("locate-compare-unknown");
         if (c == CompareResult::Less) { loIdx = i; }
         else if (c == CompareResult::Equal) { ptIdx = i; break; }
         else { hiIdx = i; break; }   // first root > sample
