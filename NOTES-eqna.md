@@ -54,7 +54,12 @@ correct=9 recoverable=14 recoverable-slow=27 UNSOUND=0 other=8 (8=z3 also t/o).
   → MY LANE: capability gap (frontend/atomization). FIX = RealDivLowerer (below).
 - 27 recoverable-slow = `cas/` family + a few: xolver timeout @12s, z3 definite.
   → NRA-engine-bound (reach engine, run out of budget). Route to NRA agent.
-- TODO: QF_AUFNIA (17), QF_UFDTNIA (80), QF_ANIA (157), QF_UFNIA (806, sample).
+### QF_AUFNIA (17 cases) — DONE 2026-05-29
+correct=0 recoverable=0 recoverable-slow=16 UNSOUND=0 other=1 (z3 also t/o).
+All 16 = UltimateAutomizer/* timeout @12s (NOT instant-unknown → they reach the
+engine). Confirms established fact: NIA-engine-bound (NiaSolver.cpp:237 floor),
+NOT my routing. → ROUTE TO NIA AGENT. No my-lane atomization gap in QF_AUFNIA.
+- TODO: QF_UFDTNIA (80), QF_ANIA (157), QF_UFNIA (806, sample).
 
 ## Trace + classify table
 | case | logic | xolver | oracle | root cause | bucket | action |
@@ -63,7 +68,13 @@ correct=9 recoverable=14 recoverable-slow=27 UNSOUND=0 other=8 (8=z3 also t/o).
 | cas/* (~25) | QF_UFNRA | timeout | sat/unsat | NRA engine budget | NRA-engine | route to NRA agent |
 
 ## Fixes shipped / in progress
-- **RealDivLowerer (IN PROGRESS)**: new preprocess pass purifies real `/` by a
+- **RealDivLowerer (SHIPPED 9e41e83, pushed agent/eqna-2)**: gates unit 895/895,
+  reg 661/661 OFF + 187/187 ON, 0 unsound. div-by-0 corner ON→unknown (z3=unsat).
+  hoenicke family now reaches CDCAC (no longer instant-unknown) but engine/combo
+  loop times out (z3 0.02s) → NRA-engine-bound, ROUTE TO NRA AGENT. The combo
+  layer re-checks an identical 3-constraint set (CDCAC-FULL spin); could be NRA
+  perf OR a combination arrangement non-convergence — flagged for NRA agent.
+- **RealDivLowerer (orig design note)**: new preprocess pass purifies real `/` by a
   non-constant denominator into fresh `q` + guarded def
   `(=> (not (= b 0)) (= (* q b) a))`. Flag `XOLVER_REAL_DIV_PURIFY` default-OFF,
   gated to logics containing NRA/NIRA. Files:
