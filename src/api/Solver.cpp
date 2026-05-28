@@ -1266,6 +1266,18 @@ public:
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
             atomizer.setCombinationArithTheory(TheoryId::NRA);
             if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+        } else if (logic == "QF_ANIA" || logic == "ANIA" ||
+                   logic == "QF_AUFNIA" || logic == "AUFNIA") {
+            // Arrays + NIA (+ UF): combination atomizer routes array/UF atoms to
+            // EUF (which hosts the ArrayReasoner) and pure-arith atoms to NIA.
+            // Without this branch the dispatch falls to feature-routing and sets
+            // the default theory to LIA, bypassing combination routing — the
+            // (= bridge (select ...)) array-read bridges then go to the linear
+            // extractor, which cannot parse a Select. Mirrors QF_UFNIA.
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::NIA);
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
         } else {
             // No declared logic: route by detected features.
             // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
