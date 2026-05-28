@@ -21,9 +21,9 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from eval._compat import dataclass
 from eval.flags import candidate_env, flags_for_logic
 from eval.loader import load_run_dir
 from eval.score import Score, score
@@ -174,7 +174,8 @@ def _cmd_combine(args) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Staged offline autotuner over XOLVER_* flags.")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
+    sub.required = True  # set after creation: the required= kwarg is 3.7+ only
 
     pl = sub.add_parser("plan", help="emit stage-1 per-flag run commands")
     pl.add_argument("--logic", required=True)

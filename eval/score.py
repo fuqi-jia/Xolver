@@ -14,9 +14,9 @@ Plus:
 
 Python 3.7+ / stdlib only.
 """
-from dataclasses import dataclass
 from typing import Callable, Dict, List
 
+from eval._compat import dataclass
 from eval.model import CaseResult
 
 DECIDED = ("sat", "unsat")

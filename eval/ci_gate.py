@@ -20,9 +20,9 @@ Python 3.7+ / stdlib only.
 """
 import argparse
 import sys
-from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from eval._compat import dataclass, field
 from eval.loader import load_run_dir
 from eval.model import CaseResult
 from eval.oracle import BlanRow, decided_disagreements, load_blan_csv
@@ -139,7 +139,8 @@ def _cmd_scramble(args) -> int:
 
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(description="CI promotion gate + scramble-stability.")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd")
+    sub.required = True  # set after creation: the required= kwarg is 3.7+ only
 
     g = sub.add_parser("gate", help="require-zero-wrong + no-24s-regression")
     g.add_argument("--candidate", required=True, help="candidate run dir")
