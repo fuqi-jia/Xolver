@@ -65,6 +65,19 @@ construction (modular invariant-7 + established presolve HNF/FM), ps4 hand-verif
 NOTE: 2019-ezsmt timeouts are NOT engine-bound (no STAGE-PROF dump) — likely
 SAT-search; SLS/value-selection territory, needs a SAT-rich sample to measure.
 
+## Task 14 (NIA->BV) = MOOT (data-directed dead-end, documented per master's rule)
+Profiled the remaining 57 timeouts: bit-blast ALREADY fires on the bounded ones
+(AProVE aproveSMT*: nia.bit-blast ms=7229; calypto problem-*: ms=5918) — it's SLOW,
+not absent. So "add NIA->BV for bounded NIA" is moot; the blaster exists + runs
+Full-effort by default. The remaining gap splits: (a) bit-blast-SLOW (AProVE/calypto
+— optimize the existing blaster, big); (b) SAT-search-bound (2019-ezsmt, UltimateAutomizer
+hard — NO dominant engine stage). Confirmed ezsmt are SAT (z3@60s=sat; we timeout@15s,
+WalkSAT too weak) => SAT gap is REAL. (c) residual presolve (mcm/Dartagnan per-call).
+=> NEXT LEVER (data-directed) = DEEPEN WalkSAT SLS for the SAT gap (bigger Full-effort
+budget + restarts + feasible-jump moves) — task-12 SAT branch, now justified. But it's
+substantial; per master "reprioritize on E's panda authoritatively" — E's full differential
+confirms SAT-gap corpus-wide magnitude before heavy SLS investment. Task 14 skipped, not built.
+
 ## Profiler / diag (all env-gated, default unchanged; gate held unit 883/883, nia reg 113/113 OFF)
 - `ARITH_STAGE_PROF=1` → per-NIA-stage cumulative ms + calls, dumped every 2s to stderr (survives
   timeout-kill). In ArithSolverBase::runReasonerPipeline.
