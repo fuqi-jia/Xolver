@@ -78,6 +78,25 @@ budget + restarts + feasible-jump moves) — task-12 SAT branch, now justified. 
 substantial; per master "reprioritize on E's panda authoritatively" — E's full differential
 confirms SAT-gap corpus-wide magnitude before heavy SLS investment. Task 14 skipped, not built.
 
+## Soundness hardening of oracle-blind modular UNSATs (priority-1, DONE 2026-05-29)
+The 12 oracle-blind modular UNSATs (z3/cvc5/BLAN all timeout) are the medal win AND
+the soundness exposure — nothing external can catch a false-UNSAT there. Hardened:
+- **Brute-force certificate FLOOR** (f7689f4): before emitting any enumeration-path
+  modular UNSAT, independently brute-force ALL vars over Z/m (fresh, no
+  substitution/closure/Hensel reuse) over the raw constraints. ConfirmedUnsat->emit;
+  FoundModel->FLOOR (plan bug caught, never emit false UNSAT); OverBudget->emit
+  (large-m structured: modInv via Hensel / :status-unsat-confirmed). Default-ON
+  within XOLVER_NIA_MODULAR. So every small-m oracle-blind UNSAT is cert-backed.
+- **Graded-ladder** (6af3fc3, tests/modular_ladder/): 5 isolated small-k
+  always-true-mod-k instances. z3 DECIDES L1/L3/L5 and AGREES unsat with our engine
+  (mod-k reasoning validated on z3-checkable); z3 can't decide L2/L4 (oracle-blind
+  regime) where engine + brute-cert=ConfirmedUnsat, python-confirmed. Same code path
+  => real oracle-blind ps/STC inherit confidence.
+- **CRT coprime pass** (908fe6e, priority-2): also try mod 3/5/7 coprime to the group
+  base; cert-floored. No local gain on the sample, broader corpus coverage.
+Net: oracle-blind modular UNSATs are cert-backed + ladder-validated => safe toward
+all-on final. unit 884/884, nia reg 113/113 OFF + all-3-flags, 0-unsound throughout.
+
 ## Profiler / diag (all env-gated, default unchanged; gate held unit 883/883, nia reg 113/113 OFF)
 - `ARITH_STAGE_PROF=1` → per-NIA-stage cumulative ms + calls, dumped every 2s to stderr (survives
   timeout-kill). In ArithSolverBase::runReasonerPipeline.
