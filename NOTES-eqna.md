@@ -1,5 +1,45 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★ MASTER HANDOFF SUMMARY (2026-05-29, branch agent/eqna-2)
+Full EQ+NA inventory done (UFNRA/AUFNIA/UFDTNIA/ANIA + UFNIA sample). **0 unsound
+everywhere.** Finding: after my 2 routing fixes, the EQ+NA medal is
+**NIA/NRA-engine-bound** — the closeable MY-LANE (atomization/routing) gaps are
+closed; remaining unknowns need engine work (not my lane).
+
+SHIPPED (sound, gated, pushed):
+1. `9e41e83` RealDivLowerer — real division-by-variable purification (flag
+   XOLVER_REAL_DIV_PURIFY, default-OFF, NRA/NIRA logics). Fixes QF_UFNRA hoenicke
+   instant-unknown (atomizer kind=24 reject). div-by-0 corner → unknown (sound).
+   Gates: unit 895, reg 661 OFF + 187 ON, 0 unsound.
+2. `a8b7cc3` IntDivModLowerer hasEuf for QF_ANIA/QF_AUFNIA — the array+NIA stack
+   has EUF, so int div/mod-by-var (div-by-0 UF) should not be rejected. Rides
+   existing XOLVER_COMB_ARRAY_NIA gate (no new flag). Fixes 20 QF_ANIA SVCOMP
+   instant-unknowns. Gates: reg 661 OFF+ON, QF_ANIA 0 unsound.
+
+Both fixes route cases PAST my-lane bails INTO the engine; 0 net solves on the
+current corpus today (engine floors) but PREREQUISITE — cases could never solve
+while bailing. SAT covered by default-on niaSatFloor / SAT-validation floor.
+
+HANDOFFS (verified diagnoses, not my lane):
+- **NIA**: Certora QF_UFNIA/UFDTNIA hang = `UnivariateIntegerReasoner::divisors()`
+  trial-dividing sqrt(2^256) (gdb-verified, CONTRADICTS the earlier "not NIA
+  pipeline" handoff). Fix EXISTS: promote XOLVER_NIA_DIVISOR_CAP default-ON
+  (hang→251ms unknown). Model-finding for EVM mod-2^256 SAT = open frontier.
+- **NRA**: QF_UFNRA hoenicke/cas timeouts = CdcacCore::solveLevel CAD recursion
+  (gdb-verified), not combination.
+- **Structural/frontier**: QF_UFNIA Zohar invertibility = SAT blowup (define-fun
+  expansion → ~9800 decision levels) → opposite-polarity floor (benign symptom);
+  winnable only via z3-style bit-width-independent reasoning.
+
+PROMOTION ASK: server z3-diff the 2 flags on full QF_UFNRA/ANIA/AUFNIA, then
+promote (both default-OFF now; final needs all-on). Local per-logic = 0 unsound.
+Full-logic flag-ON evidence: QF_UFNRA + XOLVER_REAL_DIV_PURIFY=1 = correct 9 (no
+regression vs OFF), 14 instant-unknowns→engine (recoverable→recoverable-slow),
+**0 UNSOUND** (benchmark_results/inv_QF_UFNRA_flagon). QF_ANIA + hasEuf =
+0 UNSOUND, correct 0→0 (benchmark_results/inv_QF_ANIA_fixed).
+
+---
+
 Worktree `../zolver-eqna`, branch `agent/eqna-2` (off `origin/integration`,
 tip 735d6df which includes my routing 35137f9+3976de8). Submodules are SYMLINKS
 to the main checkout (re-symlink after any `git reset --hard`). Binary:
