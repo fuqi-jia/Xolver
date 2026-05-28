@@ -11,9 +11,9 @@ Python 3.7+ / stdlib only.
 import argparse
 import json
 import sys
-from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from eval._compat import dataclass
 from eval.loader import load_run_dir, load_statistics_json
 from eval.model import CaseResult
 from eval.score import Score, score, score_by

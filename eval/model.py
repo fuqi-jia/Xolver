@@ -3,8 +3,9 @@
 Python 3.7+ / stdlib only (the test server may lack 3.12; see memory
 feedback_python_version_conservative).
 """
-from dataclasses import dataclass
 from typing import Optional
+
+from eval._compat import dataclass
 
 
 @dataclass

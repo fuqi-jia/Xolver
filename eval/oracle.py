@@ -20,9 +20,9 @@ Python 3.7+ / stdlib only.
 import csv
 import glob
 import os
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Union
 
+from eval._compat import dataclass
 from eval.model import CaseResult
 
 DECIDED = ("sat", "unsat")
