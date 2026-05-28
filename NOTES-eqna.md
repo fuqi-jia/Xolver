@@ -44,15 +44,23 @@ sat→unknown), but completeness-sensitive → dedicated #12 pass, full-reg-gate
 Recovers alia_005/alra_010 (enables QF_ALIA default-ON) + the pure-array+arith
 subset of the 17 over-floored AUFLIA sats (UF-heavy ones stay Indeterminate →
 need UF model construction too).
-CAVEAT (don't take the scalar-default theory as settled): the floor returned
-INDETERMINATE, not VIOLATED — which argues i,j were NOT both defaulted to 0 (else
-the i≠j assertion would be a definite violation). And the empty-array-interp
-completion attempt FAILED to recover alia_005. So the real gap may be an
-array-interp TOKEN-NAMESPACE mismatch (scalar value token ≠ interp entry key) OR
-theoryManager.getModel() differing from the get-model CLI construction. The #12
-pass must INSTRUMENT (dump lastModel_ + per-assertion validator verdict) to pin
-the exact gap before coding. Safe direction regardless: validate the
-get-model-constructed model (proven valid) rather than the raw theory model.
+INSTRUMENTED (2026-05-29, diag reverted): alia_005's floor model has
+`numericAssignments: i=0 j=0` (COLLAPSED) but `assignments: i=@e6 j=@e3` (DISTINCT
+opaque EUF tokens) + `arrayInterps: a(deflt=@def2,n=1)` (interp PRESENT). So the
+numeric channel collapsed the EUF-distinct scalars to 0==0. ATTEMPT 2 (reverted):
+mapped distinct "@" tokens → distinct numbers, overriding numAsg — STILL did not
+recover alia_005 (read2 + the 9 AUFLIA false-SATs stayed floored throughout). So
+the validator evaluates EUF scalars via the OPAQUE-TOKEN channel (tokAsg), not
+numAsg, and the residual failure is in ArithModelValidator's select/equality
+evaluation over an opaque-token + array-interp model (deflt=@def2 comparison),
+NOT in the model extraction alone. TWO attempts failed (empty-interp, token→num).
+#12 NEXT STEP: instrument ArithModelValidator itself (per-assertion sub-verdict +
+how select(a,@e3) and (= @e6 @e3) evaluate) — likely the opaque-token equality /
+array-deflt-token handling returns Indeterminate where it should be definite.
+This is validator-internal, soundness-sensitive (it gates the floor's recovery) →
+dedicated instrumented pass on ArithModelValidator. Floor stays default-OFF until
+then (genuine sats over-floored). Floor itself is robust (all false-SATs floored
+across every attempt).
 
 **MEASURED COST (QF_AUFLIA sample, floor ON vs OFF):** UNSOUND 9→0 (all false-SATs
 floored) BUT correct 53→36 — the floor over-floors **17 of ~24 genuine sats** to
