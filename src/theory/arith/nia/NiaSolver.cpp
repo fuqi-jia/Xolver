@@ -43,7 +43,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       localSearch_(*kernel_),
       bitBlast_(*kernel_),
       productPositivity_(*kernel_),
-      gcdDivisibility_(*kernel_) {
+      gcdDivisibility_(*kernel_),
+      modularResidue_(*kernel_) {
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -85,6 +86,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
+    // L3 modular residue refutation (XOLVER_NIA_MODULAR, default-OFF). Sound
+    // UNSAT-only (invariant 7). Full-effort only — the bounded residue
+    // enumeration must not re-run on every Standard-effort cb_propagate (the
+    // per-propagation pathology that motivated the L1/L2 gates). Registered
+    // BEFORE nia.bit-blast so it refutes the modular `mod 2^k` structure before
+    // the blaster (which times out / OOMs on those inputs) is even attempted.
+    addFull("nia.modular",    &NiaSolver::stageModular);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
     // residual. Full-effort only (heavy); runs after the SAT workhorses.
@@ -115,6 +123,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // monomial is an integer, so Σ aᵢmᵢ ≡ 0 (mod gcd aᵢ); g ∤ const ⇒ UNSAT.
     if (const char* e = std::getenv("XOLVER_NIA_GCD"); e && *e && *e != '0')
         enableGcd_ = true;
+
+    // L3 modular residue refutation (default-OFF). Sound: only emits UNSAT,
+    // and only when the system has no solution modulo a constant power-of-two
+    // modulus (an integer solution would project to one) — invariant 7.
+    if (const char* e = std::getenv("XOLVER_NIA_MODULAR"); e && *e && *e != '0')
+        enableModular_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-OFF).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
@@ -502,6 +516,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageAlgebraic(TheoryLemmaStorage& l
 std::optional<TheoryCheckResult> NiaSolver::stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableGcd_) return std::nullopt;
     auto r = gcdDivisibility_.run(normalized_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableModular_) return std::nullopt;
+    auto r = modularResidue_.run(normalized_);
     if (r.kind == NiaReasoningKind::Conflict) {
         return TheoryCheckResult::mkConflict(*r.conflict);
     }
