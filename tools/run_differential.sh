@@ -24,7 +24,14 @@ NODES="${2:?共几台}"; JOBS="${3:?并行数}"; LOGIC="${4:?logic, 如 QF_NIA}"
 TIMEOUT="${TIMEOUT:-24}"                 # 每个文件的墙钟超时(秒)
 MEMCAP_KB="${MEMCAP_KB:-16000000}"       # 每个进程地址空间上限(~16GB,防跑飞)
 HERE="$(cd "$(dirname "$0")" && pwd)"
-XOLVER="${XOLVER:-$HERE/../build_static/bin/xolver}"   # 默认用 deploy_and_run.sh build 产物
+# 自动找 xolver 二进制(本地打包→上传解压的常见位置;也可 XOLVER=/路径 覆盖)
+if [ -z "${XOLVER:-}" ]; then
+  for c in "$HERE/bin/xolver" "$HERE/xolver" "$HERE/../bin/xolver" \
+           "./bin/xolver" "./xolver" "$HERE/../build_static/bin/xolver"; do
+    [ -x "$c" ] && { XOLVER="$c"; break; }
+  done
+fi
+XOLVER="${XOLVER:-./bin/xolver}"
 Z3="${Z3:-z3}"
 
 # candidate = 开全部新优化(= deploy_and_run.sh 的 --allon 优化集; 跨 logic 的开关是无害空操作)
