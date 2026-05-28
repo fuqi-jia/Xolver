@@ -56,7 +56,14 @@ distinct values + emit interps for declared arrays so genuine sats validate
 positively while read2 stays Violated→unknown. read2's correct-unsat recovery =
 deeper N-O conflict-stickiness (structural, open). NET NOW: read2 false-SAT
 eliminated under the flag (and in the final all-flags-ON build); default path
-keeps the green suite; promotion path tracked. Engaged, not walked away. Beyond read2, QF_ALIA
+keeps the green suite; promotion path tracked. Engaged, not walked away.
+**FAILED promotion attempt (don't retry):** hypothesized the over-floor was just
+missing array interps → added empty default interps for declared arrays in
+modelPositivelyValidates. alia_005/alra_010 STILL unknown flag-ON (read2 stayed
+floored, good). So the gap is NOT merely the array interp — it is the deeper
+combined-model construction (distinct asserted-diseq scalars in the typed
+channel + array model with matching var-namespacing across getModel/IR/validator).
+Reverted (ineffective). Default-ON promotion = genuine #12 work. Beyond read2, QF_ALIA
 is far from won (17/100): 45 recoverable-slow = combination-perf timeouts, 20
 instant recoverable = combination completeness gaps (next slices).
 
