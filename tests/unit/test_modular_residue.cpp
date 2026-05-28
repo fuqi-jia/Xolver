@@ -154,3 +154,69 @@ TEST_CASE("ModularResidue: modulus over cap -> NoChange (no crash, no false UNSA
     auto res = r.run(cs);
     CHECK(res.kind == NiaReasoningKind::NoChange);
 }
+
+namespace {
+// Faithful mini-modInv: the real seed (inv0 = 3d; inv1 = 4*(inv0 div 4) +
+// ((inv0+2) mod 4) via div/mod groups, giving d*inv1 ≡ 1 mod 16), then `steps`
+// Newton iterations inv_{i+1} = inv_i*(2 - d*inv_i), d odd, goal d*inv_last mod
+// 2^K != forbid. This mirrors the lowered form exactly (unambiguous base).
+void buildNewtonChain(std::vector<NormalizedNiaConstraint>& cs, PolynomialKernel& k,
+                      int steps, long K, long forbid, SatVar& rsn) {
+    auto d = [&]{ return var(k, "d"); };
+    // d odd: d - 2*q0 - r1 = 0, 0<=r1<2, r1 = 1
+    cs.push_back({k.sub(k.sub(d(), mul(k, 2, var(k, "q0"))), var(k, "r1")), Relation::Eq, rl(rsn++)});
+    addBounds(cs, k, "r1", 0, 1, rsn, rsn + 1); rsn += 2;
+    cs.push_back({k.sub(var(k, "r1"), cst(k, 1)), Relation::Eq, rl(rsn++)});
+    // inv0 = 3d
+    cs.push_back({k.sub(var(k, "inv0"), mul(k, 3, d())), Relation::Eq, rl(rsn++)});
+    // r3 = inv0 mod 4
+    cs.push_back({k.sub(k.sub(var(k, "inv0"), mul(k, 4, var(k, "q2"))), var(k, "r3")), Relation::Eq, rl(rsn++)});
+    addBounds(cs, k, "r3", 0, 3, rsn, rsn + 1); rsn += 2;
+    // r5 = (inv0+2) mod 4
+    cs.push_back({k.sub(k.sub(k.add(var(k, "inv0"), cst(k, 2)), mul(k, 4, var(k, "q4"))), var(k, "r5")),
+                  Relation::Eq, rl(rsn++)});
+    addBounds(cs, k, "r5", 0, 3, rsn, rsn + 1); rsn += 2;
+    // inv1 = 4*q2 + r5  (the seed)
+    cs.push_back({k.sub(k.sub(var(k, "inv1"), mul(k, 4, var(k, "q2"))), var(k, "r5")), Relation::Eq, rl(rsn++)});
+    // Newton steps inv2 .. inv_{1+steps}
+    std::string prev = "inv1";
+    for (int i = 2; i <= 1 + steps; ++i) {
+        std::string next = "inv" + std::to_string(i);
+        PolyId dPrevSq = k.mul(d(), k.pow(var(k, prev.c_str()), 2));
+        cs.push_back({k.add(k.sub(var(k, next.c_str()), mul(k, 2, var(k, prev.c_str()))), dPrevSq),
+                      Relation::Eq, rl(rsn++)});
+        prev = next;
+    }
+    // goal: d*inv_last - 2^K*qg - rg = 0, 0<=rg<2^K, rg != forbid
+    const long M = 1L << K;
+    cs.push_back({k.sub(k.sub(k.mul(d(), var(k, prev.c_str())), mul(k, M, var(k, "qg"))), var(k, "rg")),
+                  Relation::Eq, rl(rsn++)});
+    addBounds(cs, k, "rg", 0, M - 1, rsn, rsn + 1); rsn += 2;
+    cs.push_back({k.sub(var(k, "rg"), cst(k, forbid)), Relation::Neq, rl(rsn++)});
+}
+} // namespace
+
+// 3 Newton steps: base d*x1 = d^2 ≡ 1 (mod 8) for odd d, doubled 3x => mod 2^24.
+// Goal modulus 2^24 is past the enum cap, so ONLY Hensel lifting can refute it.
+TEST_CASE("ModularResidue: Hensel 3-step Newton chain, d*x4 != 1 mod 2^24 -> Conflict") {
+    auto k = createPolynomialKernel();
+    ModularResidueReasoner r(*k);
+    std::vector<NormalizedNiaConstraint> cs;
+    SatVar rsn = 1;
+    buildNewtonChain(cs, *k, /*steps=*/3, /*K=*/24, /*forbid=*/1, rsn);
+    auto res = r.run(cs);
+    CHECK(res.kind == NiaReasoningKind::Conflict);
+    REQUIRE(res.conflict.has_value());
+}
+
+// rg is forced to 1, so the goal `rg != 2` is satisfiable -> must NOT refute.
+// (Hensel's error identity only holds for the forbidden value 1.)
+TEST_CASE("ModularResidue: Hensel chain with goal rg != 2 -> NoChange (satisfiable)") {
+    auto k = createPolynomialKernel();
+    ModularResidueReasoner r(*k);
+    std::vector<NormalizedNiaConstraint> cs;
+    SatVar rsn = 1;
+    buildNewtonChain(cs, *k, /*steps=*/3, /*K=*/24, /*forbid=*/2, rsn);
+    auto res = r.run(cs);
+    CHECK(res.kind == NiaReasoningKind::NoChange);
+}

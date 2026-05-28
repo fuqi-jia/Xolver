@@ -348,14 +348,14 @@ NiaReasoningResult ModularResidueReasoner::run(
     if (base == 1) {
         for (long m : {2, 3, 4, 5, 7, 8, 9})
             if (mpz_class(m) <= cap) moduli.push_back(mpz_class(m));
-    } else {
-        if (base > cap) return NO_CHANGE;     // e.g. 2^256 — needs Hensel lifting
+    } else if (base <= cap) {
         for (mpz_class m = base; m <= cap; m *= 2) {
             moduli.push_back(m);
             if (moduli.size() >= 3) break;
         }
     }
-    if (moduli.empty()) return NO_CHANGE;
+    // base > cap (e.g. 2^256) leaves moduli empty: the enumeration loop is
+    // skipped and the Hensel-lifting section (step 8) handles the goal modulus.
 
     // --- evalOpt: value of a poly under residue map (reduced mod m), with
     //     quotient elimination. nullopt = some needed variable not yet known. ---
@@ -515,6 +515,162 @@ NiaReasoningResult ModularResidueReasoner::run(
         for (const auto& sd : simpleDefs) add(sd.reason);
         for (const auto& ce : checkEqs) add(ce.reason);
         for (const auto& nq : neqs) if (pinnedNeq(nq.poly, m)) add(nq.reason);
+        return {NiaReasoningKind::Conflict, TheoryConflict{std::move(clause)}, std::nullopt};
+    }
+
+    // --- 8. Hensel / Newton-doubling lifting (goal modulus past the enum cap) ---
+    // For a goal `r = a mod 2^K, r != 1` where a = mult*v_last and v_last is the
+    // tail of a Newton chain v_{i+1} = v_i*(2 - mult*v_i): the error
+    // E_i = mult*v_i - 1 satisfies E_{i+1} = -E_i^2 (a kernel-verified polynomial
+    // identity), so v_2(E_n) = 2^{steps} * v_2(E_1). Prove the small base
+    // v_2(E_1) >= k0 = ceil(K / 2^steps) by enumeration at 2^k0; then
+    // 2^K | (mult*v_last - 1) => r = 1, contradicting r != 1. Every step is exact
+    // => sound UNSAT-only (invariant 7). This lifts modInv32/64/128/Full and the
+    // 2^256 EVM cases without enumerating Z/2^K.
+    auto log2pow2 = [](const mpz_class& v) -> long {
+        if (v <= 0 || mpz_popcount(v.get_mpz_t()) != 1) return -1;
+        return static_cast<long>(mpz_sizeinbase(v.get_mpz_t(), 2)) - 1;
+    };
+    auto findDef = [&](const std::string& v) -> const SimpleDef* {
+        for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
+        return nullptr;
+    };
+    const mpz_class enumCap(static_cast<unsigned long>(enumBudget_));
+
+    for (const auto& G : groups) {
+        long K = log2pow2(G.n);
+        if (K < 1) continue;
+        // goal Neq forbidding value 1 on G.rVar
+        mpz_class targetC = 0; bool haveGoal = false; SatLit neqReason{SatLit::positive(0)};
+        for (const auto& nq : neqs) {
+            auto pin = pinnedNeq(nq.poly, G.n);
+            if (!pin) continue;
+            auto [rv, sign, cc] = *pin;
+            if (rv != G.rVar) continue;
+            targetC = -cc / sign;  // forbidden value of r
+            haveGoal = true; neqReason = nq.reason; break;
+        }
+        if (!haveGoal || targetC != 1) continue;  // only the modular-inverse form
+
+        // goal dividend = mult * vLast (single monomial, vLast a chain simpleVar)
+        auto gtOpt = kernel_.terms(G.aPoly);
+        if (!gtOpt || gtOpt->size() != 1) continue;
+        const Term& gt = (*gtOpt)[0];
+        std::string vLast; int vLastCnt = 0; bool shapeOk = true;
+        for (const auto& [vid, exp] : gt.powers) {
+            std::string nm = std::string(kernel_.varName(vid));
+            if (simpleVars.count(nm) && exp == 1) { vLast = nm; ++vLastCnt; }
+        }
+        if (vLastCnt != 1) continue;
+        PolyId mult = kernel_.mkConst(mpq_class(gt.coefficient));
+        for (const auto& [vid, exp] : gt.powers) {
+            if (std::string(kernel_.varName(vid)) == vLast) { if (exp != 1) shapeOk = false; continue; }
+            mult = kernel_.mul(mult, kernel_.pow(kernel_.mkVar(vid), static_cast<uint32_t>(exp)));
+        }
+        if (!shapeOk) continue;
+        std::unordered_set<std::string> multVars;
+        for (const auto& y : kernel_.variables(mult)) multVars.insert(y);
+
+        // walk the Newton chain, verifying E_{i+1} = -E_i^2 at each step
+        int steps = 0; std::string v = vLast; std::vector<SatLit> chainReasons;
+        while (steps <= 64) {
+            const SimpleDef* sd = findDef(v);
+            if (!sd) break;  // v is the base (seed), not a Newton step
+            std::string vprev; int cnt = 0;
+            for (const auto& y : kernel_.variables(sd->defPoly))
+                if (!multVars.count(y)) { vprev = y; ++cnt; }
+            if (cnt != 1 || vprev == v) break;
+            PolyId vprevPoly = kernel_.mkVar(kernel_.getOrCreateVar(vprev));
+            PolyId eNext = kernel_.sub(kernel_.mul(mult, sd->defPoly), kernel_.mkOne());
+            PolyId ePrev = kernel_.sub(kernel_.mul(mult, vprevPoly), kernel_.mkOne());
+            PolyId chk = kernel_.add(eNext, kernel_.pow(ePrev, 2));
+            if (!kernel_.isZero(chk)) break;  // not the doubling identity
+            ++steps; chainReasons.push_back(sd->reason); v = vprev;
+        }
+        if (steps < 1 || steps > 62) continue;
+        const std::string baseVar = v;
+
+        long k0 = (K + (1L << steps) - 1) / (1L << steps);  // ceil(K / 2^steps)
+        if (k0 < 1) k0 = 1;
+        if (2L * k0 < 0 || k0 > 40) continue;
+        mpz_class mBase = mpz_class(1) << k0;
+        if (mBase > mpz_class(static_cast<unsigned long>(modulusCap_))) continue;
+
+        // dependency closure of (mult*baseVar - 1) -> restrict base primaries
+        PolyId baseVarPoly = kernel_.mkVar(kernel_.getOrCreateVar(baseVar));
+        PolyId baseTarget = kernel_.sub(kernel_.mul(mult, baseVarPoly), kernel_.mkOne());
+        std::unordered_set<std::string> closure;
+        std::vector<std::string> work = kernel_.variables(baseTarget);
+        while (!work.empty()) {
+            std::string x = work.back(); work.pop_back();
+            if (!closure.insert(x).second) continue;
+            if (const SimpleDef* sd = findDef(x))
+                for (const auto& y : kernel_.variables(sd->defPoly)) work.push_back(y);
+            for (const auto& g : groups) {
+                if (g.rVar == x) for (const auto& y : kernel_.variables(g.aPoly)) work.push_back(y);
+                if (g.qVar == x) { for (const auto& y : kernel_.variables(g.aPoly)) work.push_back(y); work.push_back(g.rVar); }
+            }
+        }
+        std::vector<std::string> basePrimary;
+        for (const auto& p : primary) if (closure.count(p)) basePrimary.push_back(p);
+
+        mpz_class bsize = 1; bool bover = false;
+        for (size_t i = 0; i < basePrimary.size(); ++i) {
+            bsize *= mBase;
+            if (bsize > enumCap) { bover = true; break; }
+        }
+        if (bover) continue;
+
+        // prove: every valid assignment (mod 2^k0) has mult*baseVar ≡ 1 (mod 2^k0)
+        bool baseHolds = true, baseBail = false;
+        std::vector<mpz_class> odo(basePrimary.size(), 0);
+        unsigned long btotal = basePrimary.empty() ? 1 : static_cast<unsigned long>(bsize.get_ui());
+        for (unsigned long it = 0; it < btotal && baseHolds && !baseBail; ++it) {
+            std::unordered_map<std::string, mpz_class> res;
+            for (size_t i = 0; i < basePrimary.size(); ++i) res[basePrimary[i]] = odo[i];
+            bool prog = true;
+            while (prog) {
+                prog = false;
+                for (const auto& g : groups) {
+                    if (res.count(g.rVar) || (mBase % g.n) != 0) continue;  // usable groups only
+                    auto aval = evalOpt(g.aPoly, res, mBase, 0);
+                    if (aval) { res[g.rVar] = modPos(*aval, g.n); prog = true; }
+                }
+                for (const auto& sd : simpleDefs) {
+                    if (res.count(sd.vVar)) continue;
+                    auto val = evalOpt(sd.defPoly, res, mBase, 0);
+                    if (val) { res[sd.vVar] = *val; prog = true; }
+                }
+            }
+            // validity filter: every EVALUABLE check-eq must hold (a stronger
+            // ∀ over a superset of valid assignments is sound)
+            bool valid = true;
+            for (const auto& ce : checkEqs) {
+                auto cv = evalOpt(ce.poly, res, mBase, 0);
+                if (cv && *cv != 0) { valid = false; break; }
+            }
+            if (!valid) { for (size_t i = 0; i < basePrimary.size(); ++i) { if (++odo[i] < mBase) break; odo[i] = 0; } continue; }
+            auto bt = evalOpt(baseTarget, res, mBase, 0);
+            if (!bt) { baseBail = true; break; }
+            if (*bt != 0) { baseHolds = false; break; }
+            for (size_t i = 0; i < basePrimary.size(); ++i) { if (++odo[i] < mBase) break; odo[i] = 0; }
+        }
+        if (baseBail || !baseHolds) continue;
+        if (static_cast<long long>(k0) * (1LL << steps) < K) continue;  // 2^steps*k0 >= K
+
+        if (DIAG) {
+            std::cerr << "[MODRES-HENSEL] goal r=" << G.rVar << " K=" << K
+                      << " vLast=" << vLast << " steps=" << steps
+                      << " base=" << baseVar << " k0=" << k0 << " -> UNSAT\n";
+        }
+        // UNSAT: 2^K | (mult*vLast - 1) => r = 1, contradicting r != 1.
+        std::unordered_set<uint32_t> seen;
+        std::vector<SatLit> clause;
+        auto add = [&](SatLit l) { if (seen.insert(l.var).second) clause.push_back(l); };
+        for (const auto& g : groups) { add(g.eqReason); add(g.loReason); add(g.hiReason); }
+        for (const auto& sd : simpleDefs) add(sd.reason);
+        for (const auto& ce : checkEqs) add(ce.reason);
+        add(neqReason);
         return {NiaReasoningKind::Conflict, TheoryConflict{std::move(clause)}, std::nullopt};
     }
 
