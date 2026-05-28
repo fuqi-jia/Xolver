@@ -11,7 +11,6 @@
 #include <functional>
 
 #include <iostream>
-#include <fstream>
 #include <map>
 #include <unordered_set>
 #include <csignal>
@@ -1421,9 +1420,9 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
     for (size_t i = 0; i < prefix.values.size(); ++i) {
         if (prefix.values[i].isAlgebraic()) { ++algCount; algIdx = static_cast<int>(i); }
     }
-    if (algCount != 1) {                 // tower / none → caller Unknown (follow-up)
+    if (algCount != 1) {                 // multi-extension / none → tower path takes over
         static const bool kTd = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
-        if (kTd) { std::ofstream f("/tmp/cac_tower.txt", std::ios::app); f << "[NORM] bail=algCount=" << algCount << "\n"; }
+        if (kTd) std::cerr << "[LAZVAL] norm bail=algCount=" << algCount << std::endl;
         return empty;
     }
     VarId algVar = prefix.varOrder[algIdx];
@@ -1524,7 +1523,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
     auto TD = [&](const char* why) -> RootSet {
-        if (kDiagEntry) { std::ofstream f("/tmp/cac_tower.txt", std::ios::app); f << "[TOWER] bail=" << why << "\n"; }
+        if (kDiagEntry) std::cerr << "[LAZVAL] tower bail=" << why << std::endl;
         return empty;
     };
 
