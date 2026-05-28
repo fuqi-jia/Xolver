@@ -77,6 +77,11 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
         case Kind::ConstInt: {
             if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
                 result = RationalPolynomial::fromConstant(mpq_class(*i));
+            } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                // Large integer literals (e.g. EVM 2^256 constants) do not fit
+                // int64 and are stored as decimal strings — parse at full
+                // precision (mirrors the ConstReal path) rather than dropping them.
+                result = RationalPolynomial::fromConstant(mpqFromString(*s));
             }
             break;
         }

@@ -80,6 +80,11 @@ private:
 
     // IR builders
     ExprId mkIntConst(int64_t v);
+    // Arbitrary-precision integer constant. Large values (e.g. an EVM 2^256
+    // modulus) do NOT fit int64; emit them as a string-payload ConstInt instead
+    // of truncating via get_si() — truncation fabricated bogus bounds (e.g.
+    // r <= 2^63-1) that caused false-UNSAT in the NIA presolve.
+    ExprId mkIntConst(const mpz_class& v);
     ExprId mkEq(ExprId a, ExprId b);
     ExprId mkLe(ExprId a, ExprId b);
     ExprId mkLt(ExprId a, ExprId b);

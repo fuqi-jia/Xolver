@@ -279,10 +279,10 @@ bool IntDivModLowerer::containsNonlinear(ExprId root) const {
 }
 
 void IntDivModLowerer::emitConstDivisorConstraints(const DivModDef& def, const mpz_class& k, ScopeLevel level) {
-    ExprId kExpr = mkIntConst(k.get_si());
+    ExprId kExpr = mkIntConst(k);                 // full precision (no get_si truncation)
     mpz_class absKMinusOneVal = abs(k);
     absKMinusOneVal -= 1;
-    ExprId absKMinusOne = mkIntConst(absKMinusOneVal.get_si());
+    ExprId absKMinusOne = mkIntConst(absKMinusOneVal);
 
     // a = k*q + r
     generatedAssertions_.push_back({level, mkEq(def.a, mkAdd(mkMul(kExpr, def.q), def.r))});
@@ -347,6 +347,21 @@ ExprId IntDivModLowerer::mkIntConst(int64_t v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
+    return ir_.add(std::move(e));
+}
+
+ExprId IntDivModLowerer::mkIntConst(const mpz_class& v) {
+    // Small enough for int64 -> use the int64 path (cheaper downstream).
+    if (mpz_fits_slong_p(v.get_mpz_t())) {
+        return mkIntConst(static_cast<int64_t>(v.get_si()));
+    }
+    // Large (e.g. 2^256 modulus): store the FULL decimal as a string-payload
+    // ConstInt — exactly how the frontend adapter represents big literals — so
+    // no precision is lost. (PolynomialConverter handles string-payload ConstInt.)
+    CoreExpr e;
+    e.kind = Kind::ConstInt;
+    e.sort = intSortId_;
+    e.payload = Payload(v.get_str());
     return ir_.add(std::move(e));
 }
 
