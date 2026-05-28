@@ -172,7 +172,13 @@ CellResult intervalFromCharacterization(
         if (vr == VanishResult::Unknown) return bail("vanish-unknown");
         if (vr == VanishResult::Vanishes) {
             if (skipVanishing) continue;                  // leaf constraint: no var-boundary
-            return bail("vanish-nonleaf");                // non-leaf nullification ⇒ Unknown
+            // Non-leaf nullification: skipping it would be sound ONLY if the
+            // nullified poly's required-coefficients provably delineate the locus
+            // at lower levels — UNVERIFIED for frontier (no-oracle) cells, and the
+            // skip gave no measured benefit (CONVOI2 stayed unknown). Per the
+            // no-unverified-UNSAT mandate, FLOOR to Unknown. The sound recovery is
+            // the per-cell certificate (the documented next deep increment).
+            return bail("vanish-nonleaf");
         }
 
         const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);

@@ -270,6 +270,18 @@ promote. CAC `XOLVER_NRA_CAC` stays default-OFF until then.
   lifting); `specializeToUnivariate` already substitutes in RP space. Only families
   that REACH lifting would benefit — not the gap families.
 
+## vanish-nonleaf skip experiment (reverted — kept the sound bail)
+
+Tried skipping the nullified non-leaf poly's boundary (Collins skip-soundness via
+the now-propagated required-coefficients). Result: reg ON (CAC=1+trust-unsat)
+179/179 + adversarial sound, BUT (a) NO measured benefit — CONVOI2 stayed
+`unknown` (it bails elsewhere after the skip, so the skip alone doesn't close the
+winnable), and (b) frontier-soundness UNVERIFIED (no oracle, no per-cell cert).
+Per the no-unverified-UNSAT mandate, REVERTED to the bail (verified sound floor).
+The real CAC-completeness path is the per-cell certificate + the deeper recursion
+work (why CONVOI2 bails after the skip) — a focused fresh-session effort, not a
+speculative skip.
+
 ## Cross-family sign-refute reach (it does NOT generalize)
 
 sign-refute gain over default (sample): Sturm-MGC 0, Economics-Mulligan 0,
