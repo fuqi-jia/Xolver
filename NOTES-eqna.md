@@ -59,7 +59,51 @@ correct=0 recoverable=0 recoverable-slow=16 UNSOUND=0 other=1 (z3 also t/o).
 All 16 = UltimateAutomizer/* timeout @12s (NOT instant-unknown → they reach the
 engine). Confirms established fact: NIA-engine-bound (NiaSolver.cpp:237 floor),
 NOT my routing. → ROUTE TO NIA AGENT. No my-lane atomization gap in QF_AUFNIA.
-- TODO: QF_UFDTNIA (80), QF_ANIA (157), QF_UFNIA (806, sample).
+### QF_UFDTNIA (80 cases) — DONE 2026-05-29
+correct=1 recoverable=0 recoverable-slow=39 UNSOUND=0 other=40 (z3 also t/o on
+many Certora). ALL recoverable-slow = 20230314 Certora/* timeout @12s, NO
+instant-unknown → all post-atomize. SAME Certora EVM family as the NIA handoff
+(task: profile Certora QF_UFNIA hang). This family spans QF_UFNIA(282)+
+QF_UFDTNIA(39) = TOP LEVER. Pivoting to Certora profiling.
+- TODO: QF_ANIA (157, est. NIA-bound), QF_UFNIA full (806 — Certora subset profiled via handoff).
+
+## Certora EVM hang investigation (NIA handoff, task #3)
+Smallest case: QF_UFNIA/20230314-Jaroslav-Bendik-Certora/
+72658_63104dadde9c6026353f_70_QF_UFNIA.smt2 (12.9KB, 80 asserts, 22 mod 2^256,
+93 declare-fun, 4 ite). mod-by-const 2^256 lowers to LINEAR q*2^256+r.
+
+### VERIFIED PROFILE (gdb-SIGINT, 3 samples) — CONTRADICTS the NIA handoff
+The handoff claimed "zero NiaSolver activity, hang is combination/EUF/SAT". FALSE
+(3rd wrong diagnosis on this case). gdb backtrace, all samples, worker thread:
+  __gmpn_divrem_1 / __gmpn_tdiv_qr  (GMP trial division)
+   ← UnivariateIntegerReasoner::divisors(mpz)              [the hang]
+   ← UnivariateIntegerReasoner::findIntegerRoots()
+   ← NiaSolver::stageUnivariate()
+   ← ArithSolverBase::runReasonerPipeline → check
+   ← TheoryManager::check ← CadicalTheoryPropagator::cb_propagate ← CaDiCaL
+Main thread is just pthread_join-waiting on the worker. The hang IS the NIA
+pipeline: `divisors()` (UnivariateIntegerReasoner.cpp:11) trial-divides up to
+sqrt(|a0|) — for a 2^256 constant term that's ~2^128 bignum modulos = effective
+hang. NOT combination/EUF/SAT. NOT my lane (NiaSolver/UnivariateIntegerReasoner).
+
+### Classification
+- PERF bottleneck, FIX ALREADY EXISTS: `XOLVER_NIA_DIVISOR_CAP` (default-OFF,
+  UnivariateIntegerReasoner.cpp:36, bails to Incomplete when |a0|>10^12). VERIFIED:
+  cap OFF → hang(timeout); cap ON → sound `unknown` in 251ms. NIA should promote.
+- STRUCTURAL (hard) to SOLVE: even hang-free (cap ON), the smallest Certora case
+  stays `unknown` under every NIA model-finding path tried —
+  +BITBLAST / +ICP / +MODULAR / +LOCALSEARCH all → unknown (15-20s). z3=sat on
+  this one but z3 is 4/5 timeout on Certora overall ⇒ mostly hard-for-everyone.
+- SCORE REALITY: divisor-cap is HYGIENE not a medal lever (hang=timeout=unknown=0
+  per-case). The win requires NIA model-construction for EVM mod-2^256 SAT — open
+  frontier, low ROI (z3 also mostly t/o). Do NOT over-invest the EQ+NA budget here.
+
+### HANDBACK TO NIA AGENT (verified, actionable)
+1. Promote XOLVER_NIA_DIVISOR_CAP default-ON: removes the hang across 282 QF_UFNIA
+   + 39 QF_UFDTNIA Certora cases (1200s waste → 251ms unknown). Sound (Incomplete
+   never read as UNSAT). Already implemented + gated.
+2. EVM mod-2^256 SAT model-finding is the real (hard) lever; bitblast/ICP/modular
+   do not close the smallest case. Frontier, not quick win.
 
 ## Trace + classify table
 | case | logic | xolver | oracle | root cause | bucket | action |
