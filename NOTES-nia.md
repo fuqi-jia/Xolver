@@ -224,3 +224,39 @@ sat/unsat on micro-tests. Pushed origin/agent/nia-2.
 This EXHAUSTS the data-independent NIA levers -> await-E state (BLAN false-UNSAT
 join #16 = immediate #1 if any modular Xolver=unsat & BLAN=sat; E differential picks
 SLS vs incremental-SAT, both held).
+
+## SOUNDNESS FIX — false-UNSAT from dropped exclusion reasons (2026-05-29) [f58ed43]
+Found by self-served BLAN+z3 differential (master dispatched "study cases BLAN
+solves but we time out"). Sampled 150 BLAN-sat QF_NIA, ran full binary (all NIA
+levers on): 109 timeout, 19 sat, **18 unsat**. z3 cross-check: 17/18 z3=sat (18th
+z3-timeout) => GENUINE false-UNSAT (invariant-7 violation, two oracles agree sat).
+
+Bisect (drop one flag at a time): XOLVER_NIA_PRESOLVE_FULL is the trigger. But it
+does NOT change presolve logic — only schedules nia.presolve Full-effort-only. The
+DEFAULT path TIMES OUT (per-propagation presolve pathology) and never reaches the
+buggy conclusion => "perf unmasks soundness" ([[feedback_perf_unmasks_soundness]]).
+ARITH_STAGE_DIAG named the stage: `nia.domain` (stageDomainInference), conflict via
+`isEmpty after linearDomain_.run`. NIA_DOM_DIAG: emptied var=global_invc1_0, domain
+{0} (finite set, lower=upper=0, all reason satVar 4), value 0 EXCLUDED (nExcluded=1).
+
+ROOT CAUSE: DomainStore::collectEmptyReasons, the "finite set has no valid value"
+branch, added lower.reasons+upper.reasons+finiteSetReasons but DROPPED the per-value
+EXCLUSION reasons when a member was killed by excludeValue (x!=v) not a bound. So
+the conflict clause was {atom4} ("x in {0}") instead of {atom4, exclusion}
+("x in {0}" AND "x!=0") — an over-strong learned clause (atom4 globally false) that
+pruned a satisfying assignment => false UNSAT. (Matched the observed lits=`4 4 4`.)
+
+FIX (DomainStore.cpp, default-path, NOT flag-gated): attribute the SPECIFIC killer
+per finite-set member — exclusion reasons if excluded, bound reasons only if
+actually out of range. A weaker+correct conflict clause is strictly more sound
+(never over-prunes). Verified: 18 former false-UNSAT -> unsat=0 (16 honest timeout,
+2 recovered to z3-agreeing sat). Re-ran the 150 sample post-fix: 0 unsat, sat 19->22
+(+3 recovered), 127 timeout, 1 unknown. Plus a FRESH non-overlapping 272-case
+BLAN-sat sample post-fix: 0 unsat, 39 sat, 232 timeout, 1 unknown. => across 422
+sampled BLAN-sat cases, ZERO false-UNSAT remain (no other unsound conflict path
+surfaced). unit 890/890, nia reg 113/113 OFF+ON, 0-unsound. DEFAULT-PATH soundness
+fix => master should run full panda differential.
+NOTE: remaining ~85% of BLAN-sat are honest timeouts (hard VeryMax/termination
+bilinear-Farkas SAT that BLAN's full ICP+eq+blaster+cdcl_t engine solves; our
+bit-blast is gated Full-effort + the big boolean structure thrashes before reaching
+it) — that's the recovery lever (#24-26), distinct from this soundness fix.
