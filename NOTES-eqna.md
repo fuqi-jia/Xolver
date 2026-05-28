@@ -24,6 +24,36 @@ cross-equality soundness (the false-UNSAT direction was fixed earlier per
 (UF apps → validator Indeterminate; strict-validation recovery times out). They
 need EUF/combination conflict-soundness work = #12.
 
+**★ #12 ACTIONABLE DESIGN (diagnosed precisely 2026-05-29):** the over-floor root
+is NOT missing array interps — it is UNCONSTRAINED-SCALAR DEFAULTING. Dumped
+alia_005's model via (get-model): it is VALID + complete — `a=(store (const 0) 1 2)`,
+v=3, j=1, i=4 (i≠j satisfied, read-fallthrough holds). The get-model CLI path
+(Solver.cpp ~2042 `emit.resolve`) assigns unconstrained scalars DISTINCT FRESH
+values (freshNum/numericOpaque). But the floor's `modelPositivelyValidates`
+(Solver.cpp:245-253) validates the RAW theoryManager.getModel() and defaults
+unconstrained declared scalars to **0** → i=j=0 → spuriously violates `(not (= i j))`
+→ Violated → over-floored. FIX: route the floor's validation through the SAME
+distinct-scalar model construction the get-model path uses (assign unconstrained
+declared scalars distinct fresh values respecting asserted diseqs), OR add
+array+scalar-distinct support to CandidateModelSearch. read2 stays floored (unsat
+→ Violated under any completion). CAUTION: `modelPositivelyValidates` is SHARED
+with the default-ON niaSatFloor — changing scalar defaulting from 0→distinct-fresh
+could over-floor genuine NIA sats that validate at 0. Must SCOPE the change to the
+array-combination floor context + gate on full reg 661/661. Sound (only
+sat→unknown), but completeness-sensitive → dedicated #12 pass, full-reg-gated.
+Recovers alia_005/alra_010 (enables QF_ALIA default-ON) + the pure-array+arith
+subset of the 17 over-floored AUFLIA sats (UF-heavy ones stay Indeterminate →
+need UF model construction too).
+CAVEAT (don't take the scalar-default theory as settled): the floor returned
+INDETERMINATE, not VIOLATED — which argues i,j were NOT both defaulted to 0 (else
+the i≠j assertion would be a definite violation). And the empty-array-interp
+completion attempt FAILED to recover alia_005. So the real gap may be an
+array-interp TOKEN-NAMESPACE mismatch (scalar value token ≠ interp entry key) OR
+theoryManager.getModel() differing from the get-model CLI construction. The #12
+pass must INSTRUMENT (dump lastModel_ + per-assertion validator verdict) to pin
+the exact gap before coding. Safe direction regardless: validate the
+get-model-constructed model (proven valid) rather than the raw theory model.
+
 **MEASURED COST (QF_AUFLIA sample, floor ON vs OFF):** UNSOUND 9→0 (all false-SATs
 floored) BUT correct 53→36 — the floor over-floors **17 of ~24 genuine sats** to
 unknown (UF apps + incomplete array models → validator Indeterminate → not
