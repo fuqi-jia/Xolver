@@ -65,7 +65,25 @@ many Certora). ALL recoverable-slow = 20230314 Certora/* timeout @12s, NO
 instant-unknown → all post-atomize. SAME Certora EVM family as the NIA handoff
 (task: profile Certora QF_UFNIA hang). This family spans QF_UFNIA(282)+
 QF_UFDTNIA(39) = TOP LEVER. Pivoting to Certora profiling.
-- TODO: QF_ANIA (157, est. NIA-bound), QF_UFNIA full (806 — Certora subset profiled via handoff).
+### QF_ANIA (157 cases) — DONE 2026-05-29
+correct=0 recoverable=25 (20 INSTANT <1s + 5 slow) recoverable-slow=35 UNSOUND=0
+other=97. NEW MY-LANE GAP FOUND: 20 instant-unknown (SVCOMP UltimateAutomizer
+avg20/floppy2/sum10/lcm2) bailed with `IntDivModLowerer: needsEUF but logic=
+QF_ANIA`. Root cause: hasEuf list (Solver.cpp:836) omitted QF_ANIA/QF_AUFNIA,
+which DO register an EufSolver under XOLVER_COMB_ARRAY_NIA routing → int
+div/mod-by-variable (needs div-by-0 UF) wrongly rejected.
+FIX (below): add QF_ANIA/AUFNIA to hasEuf, gated on XOLVER_COMB_ARRAY_NIA. After
+fix the 20 cases reach the NIA engine: floppy2→timeout, sum10/avg20→`NIA: pending
+unknown (opposite polarity)` = NiaSolver.cpp:237 floor (NIA lane, established).
+So fix removes the my-lane bail; verdict closure is now NIA-engine-bound.
+- TODO: QF_UFNIA full (806 — Certora subset = NIA divisors hang, profiled).
+
+## Fixes shipped / in progress (cont.)
+- **IntDivModLowerer hasEuf for QF_ANIA/AUFNIA (verifying)**: Solver.cpp, rides
+  existing XOLVER_COMB_ARRAY_NIA gate (no new flag). Removes false needsEUF bail
+  for the array+NIA stack (which has EUF). 20 QF_ANIA instant-unknowns now reach
+  NIA engine. SAT covered by default-on niaSatFloor (nonlinear&&!realVar). Gates:
+  reg 661/661 OFF; QF_ANIA re-run mismatch-check in progress.
 
 ## Certora EVM hang investigation (NIA handoff, task #3)
 Smallest case: QF_UFNIA/20230314-Jaroslav-Bendik-Certora/

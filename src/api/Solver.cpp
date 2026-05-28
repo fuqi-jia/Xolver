@@ -833,7 +833,19 @@ public:
                 return Result::Unknown;
             }
             const auto& req = dmLowerer.requirement();
-            bool hasEuf = (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
+            // QF_ANIA / QF_AUFNIA register an EufSolver (the array+NIA stack runs
+            // arrays on a shared EUF e-graph) — but ONLY when XOLVER_COMB_ARRAY_NIA
+            // routes them (without the flag they are not admitted at the array
+            // gate, so this code is never reached for them). So they have EUF
+            // available for the div/mod div-by-zero UF exactly when that flag is
+            // set. Missing here meant int div/mod-by-variable in QF_ANIA bailed to
+            // unknown (SVCOMP UltimateAutomizer family) despite EUF being present.
+            bool arrayNiaRoutedEuf =
+                std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr &&
+                (logic == "QF_ANIA" || logic == "ANIA" ||
+                 logic == "QF_AUFNIA" || logic == "AUFNIA");
+            bool hasEuf = arrayNiaRoutedEuf ||
+                          (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
                            logic == "QF_UFNIA" || logic == "UFNIA" ||
                            logic == "QF_UFNRA" || logic == "UFNRA" ||
                            logic == "QF_AX" ||
