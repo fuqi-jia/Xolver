@@ -47,6 +47,22 @@ TEST_CASE("ModularResidue: R = x^2 mod 4, R = 2 -> Conflict") {
     CHECK_FALSE(res.conflict->clause.empty());
 }
 
+// Non-power-of-two modulus: R = x^2 mod 3 is always 0 or 1, never 2. With the
+// asserted R = 2 the system is UNSAT, free variable x enumerated over Z/3.
+// Exercises the relaxed (any n>=2) div-group recognition.
+TEST_CASE("ModularResidue: R = x^2 mod 3, R = 2 -> Conflict (non-pow2)") {
+    auto k = createPolynomialKernel();
+    ModularResidueReasoner r(*k);
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.push_back({k->sub(k->sub(var(*k, "s"), mul(*k, 3, var(*k, "Q"))), var(*k, "R")),
+                  Relation::Eq, rl(1)});
+    addBounds(cs, *k, "R", 0, 2, 2, 3);
+    cs.push_back({k->sub(var(*k, "s"), k->pow(var(*k, "x"), 2)), Relation::Eq, rl(4)});
+    cs.push_back({k->sub(var(*k, "R"), cst(*k, 2)), Relation::Eq, rl(5)});
+    auto res = r.run(cs);
+    CHECK(res.kind == NiaReasoningKind::Conflict);
+}
+
 // Same structure but R = 1, which IS reachable (x=1 -> x^2=1 -> R=1).
 // Must NOT refute (guards against false UNSAT).
 TEST_CASE("ModularResidue: R = x^2 mod 4, R = 1 -> NoChange (satisfiable)") {

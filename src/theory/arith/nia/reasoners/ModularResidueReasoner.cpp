@@ -161,7 +161,11 @@ NiaReasoningResult ModularResidueReasoner::run(
             const Term& qt = terms[qi];
             if (qt.powers.size() != 1 || qt.powers[0].second != 1) continue;
             mpz_class n = abs(qt.coefficient);
-            if (!isPow2(n) || n < 2) continue;
+            // Any modulus n >= 2 (not just powers of two): the quotient
+            // elimination n*q = a - r and the remainder r = a mod n are exact
+            // for any n, so the enumeration path generalizes to `mod 3/5/10/...`.
+            // (The Hensel-lifting section stays pow2-only via log2pow2.)
+            if (n < 2) continue;
             int eqSign = qt.coefficient > 0 ? 1 : -1;
             std::string qName = std::string(kernel_.varName(qt.powers[0].first));
             for (size_t ri = 0; ri < terms.size(); ++ri) {
@@ -341,12 +345,21 @@ NiaReasoningResult ModularResidueReasoner::run(
     }
 
     // --- 6. Candidate moduli ---
+    // base = lcm of all group moduli (so every group's n divides the modulus we
+    // enumerate; for all-pow2 groups lcm == max, but mixed n's (e.g. 2,3,256)
+    // need the true lcm).
     mpz_class base = 1;
-    for (const auto& g : groups) if (g.n > base) base = g.n;  // lcm of pow2 = max
+    for (const auto& g : groups) {
+        mpz_class gg;
+        mpz_gcd(gg.get_mpz_t(), base.get_mpz_t(), g.n.get_mpz_t());
+        base = base / gg * g.n;
+    }
     mpz_class cap = mpz_class(static_cast<unsigned long>(modulusCap_));
     std::vector<mpz_class> moduli;
     if (base == 1) {
-        for (long m : {2, 3, 4, 5, 7, 8, 9})
+        // No div/mod groups: brute small moduli for a direct residue
+        // contradiction (CRT-style coverage incl. composites).
+        for (long m : {2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 16})
             if (mpz_class(m) <= cap) moduli.push_back(mpz_class(m));
     } else if (base <= cap) {
         for (mpz_class m = base; m <= cap; m *= 2) {
