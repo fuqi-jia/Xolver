@@ -39,6 +39,36 @@ class TestCombine(unittest.TestCase):
         self.assertEqual(res.selected_flags, [])
 
 
+class TestCombinePromotionRule(unittest.TestCase):
+    def test_promotes_on_solved24_gain_even_if_1200_flat(self):
+        base = Score(total=20, solved_1200=10, solved_24=5, par2=100.0, wrong=0)
+        per = {"XOLVER_NRA_SUBTROPICAL": Score(total=20, solved_1200=10, solved_24=7,
+                                               par2=90.0, wrong=0)}
+        res = combine(base, per)
+        self.assertEqual(res.selected_flags, ["XOLVER_NRA_SUBTROPICAL"])
+
+    def test_zero_solve_gain_with_worse_par2_is_flagged_regression_not_promoted(self):
+        # The XOLVER_COMB_ARRAY_NIA case: sound, but turns instant-unknown into a
+        # full-budget timeout — zero solve gain, pure PAR-2 loss.
+        base = Score(total=20, solved_1200=10, solved_24=5, par2=100.0, wrong=0)
+        per = {"XOLVER_COMB_ARRAY_NIA": Score(total=20, solved_1200=10, solved_24=5,
+                                              par2=300.0, wrong=0)}
+        res = combine(base, per)
+        self.assertEqual(res.selected_flags, [])  # never auto-promoted
+        eff = res.effects[0]
+        self.assertTrue(eff.is_regression)
+        self.assertGreater(eff.added_par2, 0)
+        self.assertIn("regression", eff.reason.lower())
+
+    def test_pure_par2_improvement_without_solve_gain_is_not_promoted_nor_regression(self):
+        base = Score(total=20, solved_1200=10, solved_24=5, par2=100.0, wrong=0)
+        per = {"XOLVER_PP_VALIDATOR_MEMO": Score(total=20, solved_1200=10, solved_24=5,
+                                                 par2=80.0, wrong=0)}
+        res = combine(base, per)
+        self.assertEqual(res.selected_flags, [])     # require a positive solve delta
+        self.assertFalse(res.effects[0].is_regression)  # faster, not a regression
+
+
 class TestMakeRunCommand(unittest.TestCase):
     def test_command_has_env_prefix_and_run_benchmark_invocation(self):
         env = {"XOLVER_NIA_GCD": "1", "XOLVER_PP_STRICT_VALIDATION": "1"}

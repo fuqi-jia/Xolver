@@ -34,6 +34,23 @@ times out on 4/5 (1 SAT). AND the Full-effort stage is never reached (per-propag
    (/mnt/d/D_Study/BUAA/projects/BLAN, our bit_blast was ported from it). Candidate → exact-validate
    (invariant 1). BLAN-static = 3rd oracle.
 
+## Preliminary local differential (2026-05-29, 110-case family-split QF_NIA sample)
+baseline(no flags) vs candidate(XOLVER_NIA_MODULAR=1 XOLVER_NIA_LOCALSEARCH=1), -t15 -j2.
+solved 15->29 (+14), unsat 5->19 (+14), sat 10->10 (+0). eval.compare: +14 @1200 AND
+@24, 0 wrong, 0 decided-disagreements, promote=YES.
+SOUNDNESS of the 14 new-unsats: 8 have ground-truth :status unsat (4 MathProblems
+STC_*, 4 sqrtmodinv modInv8/16/64/128); 6 UltimateAutomizer ps* are :status=unknown
+with z3+cvc5+BLAN ALL timing out (no oracle) — recovered ONLY by our modular reasoner.
+ps4 hand-verified sound in python: goal (3y^2+2y^3+3y^4) mod 4 != 0 is UNSAT because
+the poly ≡0 mod4 ∀y; reasoner enumerates y mod4, r=0 always, neq r!=0 always violated.
+Same mechanism for the other ps. 0 unsound detected.
+=> KEY: the modular reasoner BEATS z3+cvc5+BLAN on STC (MathProblems) + ps
+(UltimateAutomizer) — general nonlinear families with an always-true `(poly) mod k`
+goal. The modular lever reaches FAR beyond modInv. SLS gave 0 SAT recovery in this
+(UNSAT-heavy) sample. NEXT LEVER (data-directed): broaden modular further (more
+moduli / structural patterns), it's the dominant UNSAT lever. Sample is UNSAT-biased;
+SLS value needs a SAT-rich sample to show (full corpus is ~2:1 SAT:UNSAT for leaders).
+
 ## Profiler / diag (all env-gated, default unchanged; gate held unit 883/883, nia reg 113/113 OFF)
 - `ARITH_STAGE_PROF=1` → per-NIA-stage cumulative ms + calls, dumped every 2s to stderr (survives
   timeout-kill). In ArithSolverBase::runReasonerPipeline.

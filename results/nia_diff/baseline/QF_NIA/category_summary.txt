@@ -1,0 +1,37 @@
+======================================================================
+Per-Category Summary
+======================================================================
+
+[2019-ezsmt]  count=8
+  xolver: {'timeout': 8}
+
+[20210219-Dartagnan]  count=12
+  xolver: {'timeout': 12}
+
+[20220315-MathProblems]  count=12
+  xolver: {'timeout': 8, 'sat': 4}
+
+[20230321-UltimateAutomizerSvcomp2023]  count=12
+  xolver: {'timeout': 9, 'unknown': 3}
+
+[20230328-sqrtmodinv-hoenicke]  count=12
+  xolver: {'timeout': 4, 'unknown': 8}
+
+[20250331-elster]  count=9
+  xolver: {'timeout': 6, 'unknown': 3}
+
+[AProVE]  count=12
+  xolver: {'sat': 4, 'timeout': 8}
+
+[LCTES]  count=2
+  xolver: {'unknown': 2}
+
+[UltimateAutomizer]  count=7
+  xolver: {'unsat': 1, 'timeout': 6}
+
+[calypto]  count=12
+  xolver: {'timeout': 6, 'unsat': 4, 'sat': 2}
+
+[mcm]  count=12
+  xolver: {'timeout': 12}
+
