@@ -1,5 +1,69 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★ NEW LANE (2026-05-29): cross-division capability audit (EUF/array/combination/DT)
+Mission: raise my solvers across the ~12 divisions they serve. The PURE divisions
+(QF_UF/AX/ALIA/AUFLIA/UFLIA/UFLRA/DT/UFDT) are NOT NIA/NRA-bound — the bottleneck
+there is MY solvers. Data-first audit (family-split sample @24s, ulimit -v 3000000,
+-j2, foreground) → fix highest-leverage my-lane gaps → entry-readiness evidence.
+Tooling: `eval.select --per-family-cap K --val-fraction 0.5` (cat train+val =
+family-balanced sample) → `tools/run_benchmark.py --file-list --compare-with z3
+--oracle-cache` → `NOTES/inv_parse.py`. Oracle binaries: z3 + cvc5 both present.
+
+### AUDIT RESULTS (family-split samples vs z3)
+| logic | sample | xolver solved | z3 | unsound | top loss family | gap class |
+|-------|--------|--------------|----|---------| ---------------|-----------|
+| QF_AX | 76 | 41 (54%) | 76 | **0** | storeinv (~all unk), storecomm, swap | array completeness (missed-axiom floor) |
+| QF_UF | 99 | 55 (56%) | 98 | **0** | eq_diamond 12, NEQ 11, PEQ 11, SEQ 5 (all TIMEOUT) | EUF perf (cc + SAT-search on transitivity diamonds) |
+
+**QF_UF deep-dive (task #10, EUF perf):** 0-unsound, 55/99. ALL 44 losses are
+TIMEOUTS (zero unknown) → PERFORMANCE, not incompleteness. Concentrated in the
+synthetic equality-stress families eq_diamond/NEQ/PEQ/SEQ (Strichman-Rozanov
+"minimum transitivity constraints for equality logic"). eq_diamond1 (trivial
+`(not (= x0 x0))`) solves instantly; the sampled eq_diamond27..96 (95-302 lines)
+are real transitivity chains → exponential without good conflict-learning /
+transitivity-constraint generation. DEEPER + single-division + riskier than the
+array lever. Documented; deferred behind the array fix.
+
+**QF_AX deep-dive (TOP LEVER so far):** 0-unsound, 41/76 solved. The 35 losses
+(32 unknown + 3 timeout) ALL hit `array: SAT model violates an original assertion
+(missed array axiom instance) — gated to Unknown (sound)` (Solver.cpp:1526). The
+EUF/ArrayReasoner theory layer returns SAT before instantiating all needed
+read-over-write/extensionality instances; the post-solve ModelValidator catches
+the spurious model and the sound floor downgrades to unknown. BOTH directions hit
+it: sat cases (model spurious→would be valid with the missing instance) AND unsat
+cases (e.g. storeinv_t1: `(= nested-store nested-store) ∧ a1≠a2` → should be UNSAT
+but reasoner declares SAT, model violates → unknown).
+ROOT CAUSE HYPOTHESIS (ArrayReasoner.cpp:199): the fresh Extensionality witness k
+(minted for a1≠a2) is EXCLUDED from `completeStoreSelects` read-indices — so
+select(store-tower, k) is never interned, the witness never propagates THROUGH a
+positive store-equality hypothesis, and the contradiction/refinement is missed.
+Exclusion was a stability choice (witnesses fanning across every array
+destabilized storecomm genuine-sats). FIX = include witness k in completion but
+BOUND the target arrays to k's own disequality arrays (a1,a2 + towers equated to
+them), behind a default-OFF flag. Targets: storeinv + read2/read5 regression;
+guard: storecomm must not regress. → task #11.
+
+**FIX IMPLEMENTED (pending build+test): `XOLVER_AX_EXT_WITNESS_COMPLETE`
+(default-OFF), ArrayReasoner.{h,cpp}.** The witness k was blocked from completion
+by TWO gates: completeStoreSelects skips internalSelect_ (line 194 — Ext's own
+select(a,k)/select(b,k) are internal) AND skips extWitnessIdx_ (line 199). So I
+capture the interned witness INDEX term id at Ext mint time
+(extWitnessIdxTerms_), and under the flag append those to readIdx directly —
+completion then reads k across all array terms (store towers included), so Row2
+peels select(tower,k) → select(a,k)/select(b,k), congruence on the equal towers
+contradicts the Ext disequality → storeinv closes. Bounded (1 witness/diseq pair
+× finite arrays, deduped), sound (only tautological selects, never assertions;
+model-validation floor stays as backstop).
+
+**★ VERIFIED WIN (2026-05-29):** flag ON converts all sampled storeinv cases
+unknown→correct verdict (unsat→unsat, sat→sat, vs z3). **QF_AX slice: 41/76 →
+67/76 (+26 solved), MISMATCHES 0, DIFFS 35→9.** Array regression (ax/alia/alra/
+auflia/auflra, 33 cases) 33/33 PASS OFF + 33/33 PASS ON. storecomm no-regress
+(covered by the slice re-measure). Full reg flag-ON 0-unsound gate: running.
+Residual 9 (7 unknown + 2 timeout) = swap-family timeouts + a few harder unknowns
+(next slice). Promotion: default-OFF now; server z3-diff QF_AX/ALIA/AUFLIA full
+corpus, then default-ON (final = all-on).
+
 ## ★ MASTER HANDOFF SUMMARY (2026-05-29, branch agent/eqna-2)
 Full EQ+NA inventory done (UFNRA/AUFNIA/UFDTNIA/ANIA + UFNIA sample). **0 unsound
 everywhere.** Finding: after my 2 routing fixes, the EQ+NA medal is

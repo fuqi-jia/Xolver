@@ -15,6 +15,7 @@ ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
+    extWitnessComplete_ = std::getenv("XOLVER_AX_EXT_WITNESS_COMPLETE") != nullptr;
 }
 
 std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
@@ -73,6 +74,7 @@ void ArrayReasoner::reset() {
     extDone_.clear();
     selectCompleteDone_.clear();
     extWitnessIdx_.clear();
+    extWitnessIdxTerms_.clear();
     internalSelect_.clear();
 }
 
@@ -198,6 +200,17 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
         ExprId idxExpr = originExpr(idx);
         if (idxExpr != NullExpr && extWitnessIdx_.count(idxExpr)) continue;  // skip Ext witness
         if (seenIdx.insert(idx).second) readIdx.push_back(idx);
+    }
+    // extWitnessComplete_ (default-OFF): re-admit the Ext witness indices so the
+    // witness k from an array disequality a!=b is read THROUGH the store towers.
+    // Bounded: one witness per disequality pair, deduped via seenIdx, each read
+    // across the finite array set; internSelect adds only element-sorted reads
+    // (no new arrays/witnesses) so saturation stays finite. Sound: completion
+    // only interns tautological selects, never assertions.
+    if (extWitnessComplete_) {
+        for (EufTermId widx : extWitnessIdxTerms_) {
+            if (seenIdx.insert(widx).second) readIdx.push_back(widx);
+        }
     }
     if (readIdx.empty()) return;
 
@@ -457,6 +470,14 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
         EufTermId selAK = internSelect(aExpr, kExpr, dummy);
         EufTermId selBK = internSelect(bExpr, kExpr, dummy);
         if (selAK == NullEufTerm || selBK == NullEufTerm) continue;
+        // Remember the interned witness INDEX term (arg[1] of select(a,k)) so
+        // completeStoreSelects can fan it through the store towers when
+        // extWitnessComplete_ is on (the storeinv class). The select args[1]
+        // is the EufTermId of k regardless of how internSelect deduped it.
+        {
+            const auto& sAKnode = tm_->node(selAK);
+            if (sAKnode.args.size() == 2) extWitnessIdxTerms_.push_back(sAKnode.args[1]);
+        }
         ExprId selAKExpr = originExpr(selAK);
         ExprId selBKExpr = originExpr(selBK);
         if (selAKExpr == NullExpr || selBKExpr == NullExpr) continue;

@@ -152,6 +152,23 @@ private:
     // reason (Ext already builds the two witness selects it needs). Completion
     // is for POSITIVE array equalities; Ext owns the disequality side.
     std::unordered_set<ExprId> extWitnessIdx_;
+    // XOLVER_AX_EXT_WITNESS_COMPLETE (default-OFF): also fan the fresh
+    // extensionality witness index k through the store towers in
+    // completeStoreSelects. Needed for the storeinv class — a positive
+    // store-equality hypothesis (store-tower = store-tower) combined with an
+    // array disequality a!=b is only refuted when the witness k from Ext is read
+    // THROUGH the towers (Row2 peels to select(a,k)/select(b,k), congruence on
+    // the equal towers contradicts the Ext disequality). The default excludes
+    // witnesses (extWitnessIdx_) to keep storecomm genuine-sats stable; this flag
+    // re-admits them via the dedicated witness-term list below (bounded: one
+    // witness per array-disequality pair, each read across the finite array set).
+    bool extWitnessComplete_ = false;
+    // EufTermIds of the fresh Ext witness index terms (the k in select(a,k)).
+    // Populated by instantiateLemma when minting a witness; consumed by
+    // completeStoreSelects under extWitnessComplete_ to seed the read-index set
+    // (extWitnessIdx_ holds the ExprId origins for the skip path; this holds the
+    // interned index term ids needed by completion's EufTermId-keyed readIdx).
+    std::vector<EufTermId> extWitnessIdxTerms_;
     // Select terms created INTERNALLY by internSelect (Row1/Row2/Ext/completion),
     // as opposed to the ORIGINAL formula selects interned by the EUF term path.
     // The completion read-index set must be seeded only from ORIGINAL selects:
