@@ -169,6 +169,23 @@ all arith theories. Findings via instrumentation:
   corpus benefit on QF_NIA sample (OFF=9/120 solved; ON pending).
 - Re-profile lesson: dedup removed floppy2 SNF wall but bottleneck moved to the
   structural NIA opposite-polarity floor + NiaNormalizer::clearDenominators.
+- **Post-dedup grandprod profile (5 samples): DIFFUSE** — no single dominant hot
+  spot. Spread across LibPolyKernel::variables/getOrCreateVar, FlatMonomialMap::
+  canonicalize, GeneralSimplex::resetActiveBounds, SharedEqualityManager::
+  checkDisequalityConflict. = "per-check overhead × MANY checks (172+)". The
+  many-checks is driven by weak NONLINEAR conflicts (the model rejections are
+  nonlinear NIA, not HNF) → fewer checks needs nonlinear-conflict generalization
+  = NIA lane. Per-check micro-opts (variables() cache etc.) = diffuse, modest,
+  non-converting, grey-lane (NIA/NRA backend) + PolyId-stability soundness risk
+  → NOT pursued (poor ROI/risk).
+- **PRESOLVE-LANE VERDICT**: dedup is the clean sound win (shipped, eliminates
+  pathological ~48x SNF cost). IIS sound+gated (0 sample conversion). Neither
+  CONVERTS sampled cases — the EQ+NA wall is the NIA nonlinear engine +
+  structural SAT blowup, consistent across ALL my owned layers (SAT/combination/
+  presolve). My layers are now sound + efficient; the real bottleneck is mapped
+  and handed to NIA. Tasks #12 (presolve fixpoint: dominant stage was HNF SNF,
+  fixed by dedup; rest diffuse) / #13 (shared linear infra: diffuse, grey-lane)
+  = diminishing returns, documented.
 
 ## ★ SAT/COMBINATION-EFFICIENCY LANE (2026-05-29) — bottleneck map (profiling)
 New lane: SAT/CDCL(T)/combination efficiency. Profiled the EQ+NA timeout
