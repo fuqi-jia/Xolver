@@ -174,6 +174,62 @@ before trusting UNSAT):
 Most promising = (b): contained, no new valuation, keeps single-cell. SOUNDNESS-
 CRITICAL — gate on per-cell cert + Collins-vs-CAC differential (no false-UNSAT).
 
+**⚠️ SOUNDNESS TRAP (do NOT do this) — two separate semantics, never mixed:**
+The Lazard valuation recovers the **lifting boundary / neighbourhood structure**,
+NOT the original atom's truth on the exact section. Using the recovered residual
+as the atom's residual is UNSOUND. Counterexample (`p=(x-1)·y`, section `x=1`):
+`p≡0` on the section, valuation recovers `y`; but `p>0` is ALWAYS FALSE at `x=1`,
+so treating `p>0` as `y>0` → false-sat. Therefore:
+  - **Atom truth / section satisfiability:** a zero specialization means `p≡0` on
+    the section → judge the atom by `p=0` directly (our leaf `signAt` already does
+    this: `Sign::Zero` → `relationHolds(Zero,>)`=false). NEVER the valuation.
+  - **Lifting boundary / root isolation only:** a zero specialization MAY use the
+    valuation to recover boundary polys — but those feed the COVERING/REFINEMENT,
+    not the atom. And for the sample-null-but-sector-not-null case, the correct
+    action is to introduce the nullification locus (`x=1`) as a refinement
+    boundary, NOT to use the derivative as a delineator.
+So candidate (a) as "valuation→atom residual" is the trap; the correct (a) keeps
+the valuation strictly in the lifting/refinement channel. The current **bail is
+sound** and must not be replaced by a naive valuation-as-residual.
+
+**VERIFIED sound on the adversarial nullification cases** (now locked as
+nra_142_unsat / nra_143_sat): `(x-1)*y>0 ∧ x=1` → unsat (default/CAC/all-flags,
+= z3); `(x-1)*(y-2)=0 ∧ x=1 ∧ y<0` → sat. No false-sat / false-unsat. The leaf
+`signAt` handles the section nullification correctly (atom-truth = p≡0).
+
+## ⚠️ CAC false-UNSAT FOUND + floored (2026-05-29)
+
+Running the regression suite with `XOLVER_NRA_CAC=1` exposed **false-UNSAT**:
+nra_014/022/047/138 (all `:status sat`) returned UNSAT. Root cause: my
+`characterize` uses Lazard's LC/TC set (`lazardProjectStep`), which is INSUFFICIENT
+for nullification without the [H3] valuation → the covering is wrongly declared
+gap-free → false-UNSAT. (The 12 Sturm-MBO cases I'd sampled were all UNSAT, so they
+didn't expose it; the suite's SAT cases did.)
+
+**FLOORED (NraSolver stageCac):** CAC-UNSAT is no longer trusted — on
+`CacStatus::Unsat` the stage returns nullopt (defer to Collins, the validated
+baseline). CAC keeps only its validated-SAT (sound). This is the user's
+"no UNSAT from an unverified characterization" mandate. Re-enable CAC-UNSAT only
+with a per-cell certificate. reg ON (CAC=1) now 179/179 (no false-UNSAT).
+
+**THE FIX (cvc5-referenced, `reference/cvc5/.../coverings/cdcac.cpp`):** make
+`characterize` SAMPLE-AWARE with McCallum **required coefficients**
+(`requiredCoefficientsOriginal`): for poly f, the projection coefficients are
+f's var-coefficients TOP-DOWN, adding each, stopping at the first one that is
+constant OR **nonzero at the sample** (`SignCondition::NE`). This correctly
+delineates the degree-drop / nullification loci at lower levels (sound, no
+valuation needed), and is sample-pruned (smaller than full). Plus disc_v(f) and
+pairwise res_v(f,g). Replaces the LC/TC-only set that caused the false-UNSAT.
+Then re-enable CAC-UNSAT, gated by the adversarial tests (nra_142/143) + a
+Collins-vs-CAC differential (0 false-UNSAT on z3-decidable) + per-cell cert.
+
+## Cross-family sign-refute reach (it does NOT generalize)
+
+sign-refute gain over default (sample): Sturm-MGC 0, Economics-Mulligan 0,
+Uncu 0, Pine 0. → sign-refute is SPECIFIC to Sturm-MBO's all-positive-monomial +
+positive-orthant shape. Broadening it cross-family is low-value; the 175 Sturm-MBO
+recovery is its scope.
+
 ## Dead-ends / negative results
 
 - CAC (conflict-driven single-cell coverings, modules A-C, sound + tested) is NOT

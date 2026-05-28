@@ -569,11 +569,16 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     }
 
     if (res.status == CacStatus::Unsat) {
-        // Sound theory conflict: the active reasons are jointly inconsistent. A
-        // superset of the true core is sound (omitting one would be unsound).
-        TheoryConflict conflict;
-        conflict.clause = std::move(activeReasons);
-        return TheoryCheckResult::mkConflict(std::move(conflict));
+        // SOUNDNESS FLOOR: CAC's covering is NOT yet per-cell-certified, and the
+        // regression suite caught false-UNSAT from it (sat cases nra_014/022/047/
+        // 138 — an unverified characterization wrongly declared the covering
+        // gap-free; the rational-prefix nullification handling is incomplete).
+        // Per the no-UNSAT-from-unverified-characterization rule, do NOT trust
+        // CAC-UNSAT: defer to Collins (the validated baseline). UNSAT is re-enabled
+        // only once each conflict cell carries an exact, checkable certificate.
+        // (CAC's validated-SAT below is still sound and IS returned.)
+        (void)activeReasons;   // retained for the certified-UNSAT re-enable
+        return std::nullopt;
     }
     if (res.status == CacStatus::Sat) {
         // Report only an all-rational model (the typed channel is mpq); an
