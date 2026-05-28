@@ -15,7 +15,15 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     ir_ = std::make_unique<CoreIr>();
     memo_.clear();
     sortMemo_.clear();
-    letElim_ = (std::getenv("XOLVER_PP_LET_ELIM") != nullptr);
+    // Import-time let-elimination collapses the residual nested let_chain nodes
+    // that SOMTParser::expandLet leaves behind (it expands only the outermost
+    // let). XOLVER_COMB_ARRAY_NIA implies it: the array+NIA benchmarks
+    // (Ultimate-Automizer SV-COMP) are let-heavy, and without elimination the
+    // let nodes map to Kind::Unknown and corrupt the formula. The pass is
+    // capture-free and idempotent on non-let nodes (z3-validated), so coupling
+    // it on is behavior-neutral for let-free input.
+    letElim_ = (std::getenv("XOLVER_PP_LET_ELIM") != nullptr) ||
+               (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
 
     // Stage A: run SOMTParser rewriter before conversion.
     SOMTParser::Rewriter rewriter(parser_.getNodeManager());

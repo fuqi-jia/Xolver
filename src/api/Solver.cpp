@@ -1068,12 +1068,23 @@ public:
         // Arrays are only handled by the array logics: pure QF_AX and the
         // combination logics QF_ALIA/QF_ALRA/QF_AUFLIA/QF_AUFLRA. Any other
         // logic that contains arrays is gated to Unknown (sound).
-        auto isArrayLogic = [](const std::string& l) {
-            return l == "QF_AX" ||
+        //
+        // XOLVER_COMB_ARRAY_NIA (default-OFF) additionally admits the
+        // array+nonlinear-integer logics QF_ANIA/QF_AUFNIA: arrays layered on
+        // the EUF e-graph with a purified NIA core underneath (see
+        // TheoryFactory). Gated until cross-validated; SAT results still pass
+        // the nonlinear validate-sat floor (unconfirmed → unknown).
+        bool arrayNiaEnabled = (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
+        auto isArrayLogic = [&](const std::string& l) {
+            bool base = l == "QF_AX" ||
                    l == "QF_ALIA" || l == "ALIA" ||
                    l == "QF_ALRA" || l == "ALRA" ||
                    l == "QF_AUFLIA" || l == "AUFLIA" ||
                    l == "QF_AUFLRA" || l == "AUFLRA";
+            bool arrayNia = arrayNiaEnabled &&
+                  (l == "QF_ANIA" || l == "ANIA" ||
+                   l == "QF_AUFNIA" || l == "AUFNIA");
+            return base || arrayNia;
         };
         if (features.hasArray && !isArrayLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
