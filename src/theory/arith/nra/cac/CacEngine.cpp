@@ -58,7 +58,8 @@ bool relationHolds(Sign s, Relation rel) {
 // Covering sample (RealValue) → engine sample (RealAlg). Rational is exact; an
 // algebraic value is rebuilt from its defining poly (low→high) + isolating
 // interval into the engine's UniPolyId-handle form (high→low).
-RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v) {
+RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v, bool& exact) {
+    exact = true;
     if (v.isRational()) return RealAlg::fromRational(v.asRational());
     const AlgebraicNumber& a = v.asAlgebraic();
     std::vector<mpz_class> hiLo(a.coefficients.rbegin(), a.coefficients.rend());
@@ -70,16 +71,26 @@ RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v) {
     // the WRONG root (e.g. -√2 for √2) → false verdicts. Recover it: isolate the
     // defining poly's roots and return the one whose isolating interval matches
     // the RealValue's [a.lower, a.upper] (its correct rootIndex + native form).
+    //
+    // Defensive (do NOT assume the round-trip is lossless): a well-formed RealValue
+    // carries an ISOLATING interval bracketing exactly one root, so exactly one
+    // re-isolated root must overlap. If 0 or >1 overlap, the interval is loose /
+    // malformed and the match is ambiguous — we CANNOT pick the right rootIndex →
+    // set exact=false so the caller fails CLOSED (→ Unknown, never a guessed root
+    // that could drive a false verdict).
     RootSet rs = algebra.isolateRealRoots(up);
+    const RealAlg* hit = nullptr;
+    int overlaps = 0;
     for (const auto& r : rs.roots) {
-        if (r.isRational()) {
-            if (a.lower <= r.rational && r.rational <= a.upper) return r;
-        } else {
-            // overlapping isolating intervals ⇒ same root.
-            if (r.root.lower <= a.upper && a.lower <= r.root.upper) return r;
-        }
+        const bool ov = r.isRational()
+            ? (a.lower <= r.rational && r.rational <= a.upper)
+            : (r.root.lower <= a.upper && a.lower <= r.root.upper);  // overlapping intervals ⇒ same root
+        if (ov) { ++overlaps; hit = &r; }
     }
-    // Fallback (no match — should not happen): hand-built, rootIndex 0.
+    if (overlaps == 1) return *hit;
+
+    // Ambiguous / no match: fail closed.
+    exact = false;
     AlgebraicRoot ar;
     ar.definingPoly = up;
     ar.rootIndex = 0;
@@ -104,7 +115,9 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
 
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
         if (++cells > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; lastUnknown_ = "cell-budget"; return out; }
-        const RealAlg s_i = toRealAlg(*algebra_, *sOpt);
+        bool convExact = true;
+        const RealAlg s_i = toRealAlg(*algebra_, *sOpt, convExact);
+        if (!convExact) { out.status = CacStatus::Unknown; lastUnknown_ = "sample-roundtrip-ambiguous"; return out; }
         sample.push(var, s_i);
 
         std::vector<RationalPolynomial> cellBoundaries;
