@@ -147,6 +147,36 @@ REALITY CHECK: z3 wins ~60% of QF_UFNIA but via specialized reasoning; our NIA
 engine structurally can't. The 2 my-lane gaps (real-div, hasEuf) are the
 closeable ones; the rest of EQ+NA is NIA-engine/structural-bound.
 
+## ★ SAT/COMBINATION-EFFICIENCY LANE (2026-05-29) — bottleneck map (profiling)
+New lane: SAT/CDCL(T)/combination efficiency. Profiled the EQ+NA timeout
+families (gdb-SIGINT + breakpoint counts). VERDICT: the EQ+NA timeouts are
+**NIA-arith-engine-bound, NOT SAT/combination-bound** — the SAT-side flags I own
+(ZOLVER_SAT_MIN / SAT_LEMMA_MGMT / COMB_CAREGRAPH) do NOT help (all timeout 30s
+on grandproduct). My value here = the precise profiling handoffs below.
+
+### COMPLETE EQ+NA bottleneck map (verified hot functions):
+| family | hot function | lane | call pattern |
+|--------|-------------|------|-------------|
+| QF_ANIA/AUFNIA (SVCOMP floppy2/s3srvr, GrandProduct) | `smithNormalForm` ← `IntLinearEqualityCoreHNF::run` ← `NiaSolver::stagePresolveFixpoint` | **NIA presolve** | grandproduct: 172 Full model-checks, 39 presolve(SNF) in 7s, ~170ms/SNF, NEVER converges (30s t/o) |
+| QF_UFNRA (hoenicke) | `CdcacCore::solveLevel` recursion → `signAtRational` | **NRA CDCAC** | deep CAD lifting |
+| QF_UFNIA/UFDTNIA (Certora) | `UnivariateIntegerReasoner::divisors` (trial-div √2^256) | **NIA** | per cb_propagate; fix=XOLVER_NIA_DIVISOR_CAP |
+| QF_UFNIA (Zohar) | CaDiCaL deep search ~9800 levels → opposite-polarity floor | **structural** | SAT blowup from define-fun expansion |
+
+### HANDOFF TO NIA — smithNormalForm (the QF_ANIA/AUFNIA medal bottleneck):
+`IntLinearEqualityCoreHNF::run` (src/theory/arith/presolve/IntLinearEqualityCoreHNF.cpp:74)
+recomputes `smithNormalForm(Amat)` FRESH every call — NO cache/memo. On
+GrandProduct/SVCOMP it runs ~39× in 7s (~170ms each) and the search never
+converges. TWO levers (NIA's lane, I locate / they fix):
+1. **Cache/incrementalize SNF** keyed by the linear-equality-core fingerprint
+   (if Amat is stable across checks, ~39× win → likely in-budget). Or a cheap
+   feasibility pre-check (rank/gcd) before the full SNF.
+2. **Minimal infeasible subset (IIS) conflict**: the presolve UNSAT conflict
+   does not generalize → SAT re-proposes 172 models. Returning a minimal
+   infeasible core would block 2^(n-k) models per conflict (convergence).
+CONCLUSION: EQ+NA medal throughput is gated by NIA presolve SNF cost +
+conflict-core minimality, not the SAT/combination layer. SAT-side lane has
+limited EQ+NA leverage (verified).
+
 ## OVERALL EQ+NA PICTURE (inventory complete, 2026-05-29)
 | logic | my-lane gap | status |
 |-------|-------------|--------|
