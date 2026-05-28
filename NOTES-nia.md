@@ -189,3 +189,38 @@ A3's lane — consistent with the ORIGINAL [[project_nia_perpropagation_perf]]
 --parse-only tool is still useful: lets E confirm parse-phase is fine corpus-wide.
 NEXT: localize the solve hang (SAT vs EUF vs combination N-O) — coordinate w/ A3.
 LESSON: always pass `-v` when reading cerr diagnostics from the CLI.
+
+## LEVER — RRT divisor enumeration via prime factorization (2026-05-29)
+Flag XOLVER_NIA_DIVISOR_FACTOR (default-OFF). Replaces the O(sqrt|a0|) trial
+division in UnivariateIntegerReasoner's RRT divisor enumeration with
+prime-factorization enumeration. RRT: every integer root divides the constant
+term a0, so the root search must enumerate ALL divisors of a0 — trial division to
+sqrt(|a0|) is ~2^128 iterations for an EVM mod-2^256 constant (effective hang;
+previously only the XOLVER_NIA_DIVISOR_CAP bailed it to unknown). Factorization of
+2^256 = {2:256} extracts in 256 `%2` steps -> 257 divisors enumerated instantly,
+so RRT now RUNS TO COMPLETION (solves) where the cap could only give unknown.
+
+Files: UnivariateIntegerReasoner.{h,cpp} — new static `completeDivisors(n,&complete)`
+(public for testing) unifies both divisor sites in findIntegerRoots:
+  - factor mode: primeFactorizeBounded (trial-divide primes up to B=10^6) +
+    divisorsFromFactors (cartesian product of prime-power ranges, capped at 1000
+    divisors). complete=false => caller -> IntegerRootStatus::Incomplete -> unknown.
+  - default mode: original O(sqrt n) trial division behind divisorEnumerationInfeasible.
+SOUNDNESS (invariant 7 — never UNSAT from incomplete reasoning): complete=true IFF
+the FULL divisor set was enumerated. Two bail conditions keep this exact:
+  1. Residual cofactor with no factor <= B: accepted as prime ONLY when m <= B^2
+     (a composite < B^2 MUST have a factor < B, which the loop found => deterministic
+     primality, NOT probabilistic). m > B^2 => complete=false (DELIBERATELY no
+     Miller-Rabin: a false "probable prime" would under-enumerate divisors and could
+     fabricate a false UNSAT; the target corpus is pure powers of 2 so this costs
+     nothing). 2. Divisor count > 1000 => complete=false. Incomplete is never read
+     as UNSAT (run() derives Conflict only on Complete && empty roots).
+Gate: unit 890/890 (+6 new test_univariate_divisors.cpp: full-enum, factor==default
+on small composites, 2^256 completes + contains 2^128, large-semiprime incomplete,
+over-cap incomplete, single-large-prime accepted). nia reg 113/113 OFF + ON,
+0-unsound. Synthetic x^2=2^256/2^255 cases are caught earlier (square-rule), so the
+corpus win is unknown->solved on cases the cap previously floored, not new
+sat/unsat on micro-tests. Pushed origin/agent/nia-2.
+This EXHAUSTS the data-independent NIA levers -> await-E state (BLAN false-UNSAT
+join #16 = immediate #1 if any modular Xolver=unsat & BLAN=sat; E differential picks
+SLS vs incremental-SAT, both held).

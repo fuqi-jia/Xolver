@@ -31,6 +31,15 @@ public:
                            DomainStore& domains,
                            TheoryLemmaStorage& lemmaDb);
 
+    // Complete divisor set of |n| (±), or complete=false if it cannot be
+    // enumerated completely AND cheaply. Default: O(sqrt n) trial division +
+    // infeasibility cap. XOLVER_NIA_DIVISOR_FACTOR: prime-factorization-based
+    // enumeration (e.g. 2^256 -> {2:256} -> 257 divisors, fast) — closes the
+    // O(sqrt n) RRT hang on large-but-factorable constants. Sound: complete=true
+    // only when ALL divisors are enumerated (full factorization within the cap).
+    // Public for direct unit testing of the soundness contract.
+    static std::set<mpz_class> completeDivisors(const mpz_class& n, bool& complete);
+
 private:
     PolynomialKernel& kernel_;
 
