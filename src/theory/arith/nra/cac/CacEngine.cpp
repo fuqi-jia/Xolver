@@ -3,6 +3,8 @@
 #include "theory/arith/nra/cac/SingleCellProjection.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
 #include <utility>
 
 #ifdef XOLVER_HAS_LIBPOLY
@@ -60,8 +62,26 @@ RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v) {
     if (v.isRational()) return RealAlg::fromRational(v.asRational());
     const AlgebraicNumber& a = v.asAlgebraic();
     std::vector<mpz_class> hiLo(a.coefficients.rbegin(), a.coefficients.rend());
+    const UniPolyId up = algebra.allocUni(hiLo);
+
+    // CRITICAL: algebraic signAt picks roots[rootIndex] (LibpolyBackend ~:1043),
+    // so the rootIndex MUST identify the right root. The RealValue→RealAlg
+    // round-trip dropped it (RealValue has no rootIndex), so a hardcoded 0 picks
+    // the WRONG root (e.g. -√2 for √2) → false verdicts. Recover it: isolate the
+    // defining poly's roots and return the one whose isolating interval matches
+    // the RealValue's [a.lower, a.upper] (its correct rootIndex + native form).
+    RootSet rs = algebra.isolateRealRoots(up);
+    for (const auto& r : rs.roots) {
+        if (r.isRational()) {
+            if (a.lower <= r.rational && r.rational <= a.upper) return r;
+        } else {
+            // overlapping isolating intervals ⇒ same root.
+            if (r.root.lower <= a.upper && a.lower <= r.root.upper) return r;
+        }
+    }
+    // Fallback (no match — should not happen): hand-built, rootIndex 0.
     AlgebraicRoot ar;
-    ar.definingPoly = algebra.allocUni(std::move(hiLo));
+    ar.definingPoly = up;
     ar.rootIndex = 0;
     ar.lower = a.lower;
     ar.upper = a.upper;
@@ -98,6 +118,13 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 if (s == Sign::Unknown) { anyUnknown = true; break; }
                 if (!relationHolds(s, cons_[ci].rel)) violated.push_back(cons_[ci].poly), allHold = false;
             }
+            if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
+                std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
+                st << "[LEAF] var=" << var << " sample=" << (s_i.isRational() ? s_i.rational.get_str() : "alg")
+                   << " allHold=" << allHold << " violated=" << violated.size()
+                   << " anyUnknown=" << anyUnknown << "\n";
+                st.flush();
+            }
             if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "signAt-unknown"; return out; }
             if (allHold)    { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
             cellBoundaries = std::move(violated);
@@ -106,7 +133,9 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             if (rec.status == CacStatus::Sat)     { sample.pop(); out.status = CacStatus::Sat; return out; }
             if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
             // rec UNSAT: project its characterization down, eliminating var_{level+1}.
-            CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_);
+            // `sample` holds vars[0..level]; the required coefficients (in those
+            // vars) are evaluated against it (McCallum sample-aware projection).
+            CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
             if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "characterize-incomplete"; return out; }
             cellBoundaries = std::move(ch.downwardPolys);
         }

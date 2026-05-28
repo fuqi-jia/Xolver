@@ -223,6 +223,32 @@ pairwise res_v(f,g). Replaces the LC/TC-only set that caused the false-UNSAT.
 Then re-enable CAC-UNSAT, gated by the adversarial tests (nra_142/143) + a
 Collins-vs-CAC differential (0 false-UNSAT on z3-decidable) + per-cell cert.
 
+## ✅ CAC false-UNSAT ROOT-CAUSED + FIXED (2026-05-29)
+
+The false-UNSAT was NOT the covering (CacCovering point-gap at √2 verified correct)
+nor (only) the characterization. ROOT CAUSE: the **RealAlg→RealValue→RealAlg
+round-trip lost the rootIndex**. `CacEngine::toRealAlg` rebuilt the sample with
+`rootIndex=0`, but algebraic `signAt` picks `roots[rootIndex]` (LibpolyBackend
+~:1043) — so for √2 (root index 1 of x²-2) it evaluated at **−√2**, making `x>0`
+wrongly violated → the SAT point √2 never accepted → covering wrongly gap-free →
+false-UNSAT. (Confirmed via a leaf-trace: the √2 point-gap WAS sampled but
+mis-evaluated.)
+
+**FIX:** `toRealAlg` now isolates the defining poly's roots and returns the one
+whose isolating interval matches the RealValue's — the correct rootIndex + the
+backend's native RealAlg. Plus the McCallum required-coefficients in characterize
+(completeness). RESULT: nra_014/022/047/138 → sat (was false-unsat); reg ON
+(CAC=1 + TRUST_UNSAT=1 + sign-refute) **179/179, 0 false**; adversarial nra_142/143
+sound; unit 918/918.
+
+**Promotion gate (still):** CAC-UNSAT remains floored by default
+(`XOLVER_NRA_CAC_TRUST_UNSAT` OFF) — the 179 suite is necessary but the user
+mandated a **broad z3 differential + per-cell certificate** before trusting UNSAT
+(esp. for z3-timeout/frontier cells with no oracle backstop). The fix makes
+trust-unsat-mode pass the local suite; run the broad differential
+(`XOLVER_NRA_CAC=1 XOLVER_NRA_CAC_TRUST_UNSAT=1`, server) + add per-cell certs to
+promote. CAC `XOLVER_NRA_CAC` stays default-OFF until then.
+
 ## Cross-family sign-refute reach (it does NOT generalize)
 
 sign-refute gain over default (sample): Sturm-MGC 0, Economics-Mulligan 0,

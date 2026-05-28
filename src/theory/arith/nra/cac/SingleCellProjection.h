@@ -43,9 +43,18 @@ struct CharacterizationResult {
     std::vector<RationalPolynomial> downwardPolys;    // free of elimVar (next level)
 };
 
+// `sample` (optional): the prefix assignment. When given, the McCallum REQUIRED
+// COEFFICIENTS are added to the downward characterization — f's var-coefficients
+// top-down, stopping at the first that is constant or provably nonzero at the
+// sample (cvc5 requiredCoefficientsOriginal). This completes the projection for
+// nullification (the degree-drop loci are delineated at lower levels) — the fix
+// for the LC/TC-only set that produced false-UNSAT. Adding them is sound (a
+// superset only refines cells). nullptr ⇒ all non-constant coefficients are
+// added (conservative, sound).
 CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellPolys,
                                     VarId elimVar,
-                                    PolynomialKernel* kernel = nullptr);
+                                    PolynomialKernel* kernel = nullptr,
+                                    const SamplePoint* sample = nullptr);
 
 // ----------------------------------------------------------------------------
 // interval_from_characterization (module B.2): given THIS level's boundary

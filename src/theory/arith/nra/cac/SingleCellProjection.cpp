@@ -33,11 +33,43 @@ std::string unitKey(RationalPolynomial p) {
     }
     return key;
 }
+// McCallum required coefficients of f w.r.t. elimVar (cvc5 requiredCoefficients-
+// Original): the var-coefficients top-down; add each non-constant one; stop at
+// the first that is constant or provably nonzero at the sample. nullptr sample ⇒
+// add all non-constant coefficients (conservative). All in lower variables.
+std::vector<RationalPolynomial> requiredCoefficients(const RationalPolynomial& f,
+                                                     VarId elimVar,
+                                                     const SamplePoint* sample) {
+    std::vector<RationalPolynomial> out;
+    std::vector<RationalPolynomial> coeffs = f.coefficients(elimVar);  // index i = coeff of elimVar^i
+    for (int deg = static_cast<int>(coeffs.size()) - 1; deg >= 0; --deg) {
+        RationalPolynomial c = coeffs[deg];
+        c.normalize();
+        if (c.isZero()) continue;          // gap coefficient — not a boundary
+        if (c.isConstant()) break;         // nonzero constant ⇒ degree fixed ⇒ done
+        out.push_back(c);                  // required (a lower-level boundary)
+        if (sample) {
+            // Provably nonzero at the sample? Substitute the rational coords; if
+            // it collapses to a nonzero constant, the degree does not drop here.
+            RationalPolynomial e = c;
+            for (size_t i = 0; i < sample->varOrder.size(); ++i) {
+                if (sample->values[i].isRational())
+                    e = e.substituteRational(sample->varOrder[i], sample->values[i].rational);
+            }
+            e.normalize();
+            if (e.isConstant() && !e.isZero()) break;   // nonzero-at-sample ⇒ stop
+            // else (vanishes or algebraic/undecided): keep going (sound: more coeffs)
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellPolys,
                                     VarId elimVar,
-                                    PolynomialKernel* kernel) {
+                                    PolynomialKernel* kernel,
+                                    const SamplePoint* sample) {
     CharacterizationResult out;
     std::unordered_set<std::string> seenBoundary, seenDownward;
 
@@ -72,6 +104,15 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
                 if (seenBoundary.insert(unitKey(p)).second) out.boundaryPolys.push_back(std::move(p));
             } else if (seenDownward.insert(unitKey(p)).second) {
                 out.downwardPolys.push_back(std::move(p));
+            }
+        }
+        // McCallum required coefficients (sample-aware): completes the projection
+        // for nullification — the LC/TC the Lazard step emits is insufficient
+        // (caused false-UNSAT). A superset of LC/TC, so adding it is sound.
+        for (const auto& f : withElim) {
+            for (auto& c : requiredCoefficients(f, elimVar, sample)) {
+                if (c.degree(elimVar) >= 1) continue;   // (defensive: coeffs are in lower vars)
+                if (seenDownward.insert(unitKey(c)).second) out.downwardPolys.push_back(std::move(c));
             }
         }
     }

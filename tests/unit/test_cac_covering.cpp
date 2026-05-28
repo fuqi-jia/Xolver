@@ -130,6 +130,24 @@ TEST_CASE("rationalStrictlyBetween: rational below an algebraic (1, √2)") {
     CHECK(qv.compare(s2) < 0);     // q < √2
 }
 
+TEST_CASE("CacCovering: point-gap at a shared ALGEBRAIC open endpoint (√2)") {
+    // (-inf, √2) and (√2, +inf), both OPEN at √2 → the point √2 is uncovered.
+    // This is the false-UNSAT shape (x^2=2 ∧ x>0: the SAT point √2 is a shared
+    // open boundary). sampleUncovered MUST return √2, and √2 MUST be uncovered.
+    RealValue s2a = sqrt2();   // two independent √2 constructions (as in two
+    RealValue s2b = sqrt2();   // separate intervalFromCharacterization calls)
+    CacCovering c;
+    c.add(CacInterval::make(ExtendedRealValue::negInf(),
+                            ExtendedRealValue::finite(s2a), true, true));
+    c.add(CacInterval::make(ExtendedRealValue::finite(s2b),
+                            ExtendedRealValue::posInf(), true, true));
+    CHECK_FALSE(c.isComplete());
+    CHECK_FALSE(c.covers(sqrt2()));
+    auto s = c.sampleUncovered();
+    REQUIRE(s.has_value());
+    CHECK(s->compare(sqrt2()) == 0);   // the uncovered point is exactly √2
+}
+
 TEST_CASE("CacCovering: algebraic endpoints — gap sampled between two roots") {
     // Exclude (-inf, √2) and (2, +inf); the gap [√2, 2] (minus the open √2) must
     // yield a covered-checked sample strictly between √2 and 2.

@@ -577,8 +577,17 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         // CAC-UNSAT: defer to Collins (the validated baseline). UNSAT is re-enabled
         // only once each conflict cell carries an exact, checkable certificate.
         // (CAC's validated-SAT below is still sound and IS returned.)
-        (void)activeReasons;   // retained for the certified-UNSAT re-enable
-        return std::nullopt;
+        // XOLVER_NRA_CAC_TRUST_UNSAT re-enables CAC-UNSAT (for validating the
+        // required-coefficients characterization fix before promotion); default
+        // OFF = the sound floor.
+        static const bool trustUnsat = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_TRUST_UNSAT");
+            return e && *e && *e != '0';
+        }();
+        if (!trustUnsat) return std::nullopt;   // floor: defer to Collins
+        TheoryConflict conflict;
+        conflict.clause = std::move(activeReasons);
+        return TheoryCheckResult::mkConflict(std::move(conflict));
     }
     if (res.status == CacStatus::Sat) {
         // Report only an all-rational model (the typed channel is mpq); an
