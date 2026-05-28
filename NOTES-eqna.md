@@ -1,5 +1,23 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★★ ENTRY-READINESS EVIDENCE (task #14 — for the master's division-entry call)
+Gate to enter a division: 0-unsound AND P(bug)<33%. My job = the evidence below.
+All numbers are family-split samples vs z3 (NOT full corpus — directional).
+
+| division | sample solved | 0-unsound? | gap class | entry posture |
+|----------|---------------|-----------|-----------|---------------|
+| QF_AX | 67/76 (88%) w/ array-fix ON | YES (MISMATCH 0) | array completeness mostly closed; residual = storecomm/swap (9) | STRONG: pure-array, fix shipped, 0-unsound across sample + 33 reg + 661 full reg. Promote XOLVER_AX_EXT_WITNESS_COMPLETE → enter. |
+| QF_UF | 55/99 (56%) | YES (MISMATCH 0) | EUF perf — 44 transitivity-diamond TIMEOUTS (not unknowns) | SOUND but perf-limited. Entry safe (0-unsound); solve-count gated on e-propagation (diagnosed, deferred). Half-won. |
+| QF_ALIA | (audit running) | TBD | array+LIA — shares ArrayReasoner (array-fix should help) | pending audit |
+| QF_AUFLIA | (audit running) | TBD | array+UF+LIA | pending audit |
+| QF_UFLIA | (audit running) | TBD | UF+LIA combination | pending audit |
+| QF_UFLRA | (audit running) | TBD | UF+LRA combination | pending audit |
+| QF_DT / QF_UFDT | NO CORPUS in-tree (12 reg cases only) | reg 0-unsound | — | CANNOT audit locally — needs corpus on E/panda before any entry call |
+
+KEY: both audited divisions are 0-unsound (the paramount gate holds). QF_AX is the
+strongest entry candidate (fix shipped, big solve gain, fully gated). QF_UF is
+entry-safe but solve-count needs the deferred e-propagation lever.
+
 ## ★★ NEW LANE (2026-05-29): cross-division capability audit (EUF/array/combination/DT)
 Mission: raise my solvers across the ~12 divisions they serve. The PURE divisions
 (QF_UF/AX/ALIA/AUFLIA/UFLIA/UFLRA/DT/UFDT) are NOT NIA/NRA-bound — the bottleneck
@@ -23,6 +41,47 @@ synthetic equality-stress families eq_diamond/NEQ/PEQ/SEQ (Strichman-Rozanov
 are real transitivity chains → exponential without good conflict-learning /
 transitivity-constraint generation. DEEPER + single-division + riskier than the
 array lever. Documented; deferred behind the array fix.
+
+**★ PROFILE (gdb SIGINT, 6 samples, eq_diamond27) — REFUTES cc/union-find
+hypothesis.** Solve runs on a worker thread; ALL hot frames are in CaDiCaL, NONE
+in congruence-closure/union-find:
+- ~3/6 CaDiCaL inprocessing: `Closure::find_subsuming_clause` ←
+  `forward_subsume_matching_clauses` ← `extract_gates` ← `inprobe` ←
+  `cdcl_loop_with_inprocessing` (structural gate extraction / forward subsumption).
+- ~2/6 conflict-analysis→backtrack: `analyze` → `backtrack` → `notify_backtrack`
+  → `EufSolver::backtrackToLevel` (EUF only shows up as cheap backtrack bookkeeping).
+- ~1/6 `external_propagate` → `add_external_clause` → `add_new_original_clause`.
+ROOT CAUSE = lazy-SMT search explosion from MISSING EUF THEORY PROPAGATION: EUF
+emits only conflict/blocking clauses (no entailed-(dis)equality propagation), so
+CaDiCaL enumerates a huge tree → many conflicts → growing clause DB → expensive
+inprocessing. RollbackUnionFind is union-by-size O(log n) — NOT the bottleneck.
+Framework HAS the hook (`TheorySolver::takeEntailmentPropagations`, used by LRA
+via XOLVER_LRA_PROP, kind=Entailment); EufSolver does NOT override it.
+TWO LEVERS:
+- QUICK (TESTED → FAILED, reverted): `configure("probe",0)`. Measured on
+  eq_diamond27/35/41 + NEQ/PEQ: ALL still timeout OFF==ON. The search thrash
+  (analyze/backtrack, ~1/3 of samples) dominates independent of inprocessing, so
+  killing probing doesn't convert any diamond. Reverted (no value, keep tree clean).
+- DEEP (right fix): EUF e-propagation — propagate entailed equality atoms
+  (find(a)==find(b)) so the SAT solver never branches on chain equalities.
+  SOUND-BY-CONSTRUCTION recipe: propagation is OPTIONAL, so verify-then-emit —
+  before propagating, re-check via union-find over the explainEquality reason set
+  that the reasons actually entail the merge (mirrors TheoryManager::
+  conflictIsGenuine, TheoryManager.cpp:253); skip if unverified. A bad/incomplete
+  proof-forest explanation → missed propagation, NEVER false-UNSAT. Atom pool is
+  reachable via `registry_->records()`; combination mode already excluded
+  (TheoryManager.cpp:206) → scopes cleanly to pure QF_UF.
+  **WIRING BLOCKER (why deferred to a dedicated pass):** `takeEntailmentPropagations`
+  is DEFINED (LraSolver+TheoryManager) but NEVER DRAINED — the propagator does not
+  call it. And `cb_propagate` DROPS lemmas at Standard effort
+  (CadicalTheoryPropagator.cpp:464 `(void)isLemma` — only CONFLICT clauses
+  propagate during search; lemmas only flow from cb_check_found_model = full
+  model, too late to prune). True implied-LITERAL propagation (return the entailed
+  literal + lazy reason via CaDiCaL's cb_propagate-returns-lit + cb_add_reason_
+  clause_lit protocol) is UNIMPLEMENTED. So this lever = a core CaDiCaL-external-
+  propagator change, soundness-sensitive (division-sinking false-UNSAT risk if the
+  reason clause is wrong) → dedicated focused pass, NOT a rushed tail-end edit
+  (0-unsound is paramount). DIAGNOSIS COMPLETE; design + blocker handed off.
 
 **QF_AX deep-dive (TOP LEVER so far):** 0-unsound, 41/76 solved. The 35 losses
 (32 unknown + 3 timeout) ALL hit `array: SAT model violates an original assertion
