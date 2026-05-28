@@ -70,9 +70,15 @@ struct CellResult {
     CacInterval interval;
 };
 
+// `skipVanishing`: when a boundary poly is ≡0 in `var` at the prefix, treat it
+// as contributing no boundary (skip) instead of unsupported. SOUND ONLY for LEAF
+// constraint polys (a constraint constant on the fiber has no var-boundary; the
+// cell from the other violated polys stays all-bad). For non-leaf characterization
+// polys a vanishing poly is genuine nullification ⇒ leave it unsupported (false).
 CellResult intervalFromCharacterization(
     LibpolyBackend* algebra, PolynomialKernel* kernel,
     const std::vector<RationalPolynomial>& boundaryPolys,
-    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue);
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue,
+    bool skipVanishing = false);
 
 } // namespace xolver

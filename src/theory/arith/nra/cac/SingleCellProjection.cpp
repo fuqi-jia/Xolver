@@ -37,23 +37,40 @@ CharacterizationResult characterize(const std::vector<RationalPolynomial>& cellP
                                     VarId elimVar,
                                     PolynomialKernel* kernel) {
     CharacterizationResult out;
+    std::unordered_set<std::string> seenBoundary, seenDownward;
 
-    LazardOpResult r = lazardProjectStep(cellPolys, elimVar,
-                                         LazardProjectionConfig(), kernel);
-    if (!r.complete) {
-        out.complete = false;
-        return out;   // caller ⇒ Unknown; never UNSAT on an incomplete characterization
+    // Inputs already FREE of elimVar are at a lower level — pass them straight
+    // through to downwardPolys (eliminating elimVar from them is a no-op; the
+    // Lazard operator emits nothing for them, so they must be retained here, NOT
+    // dropped). Only inputs containing elimVar are projected.
+    std::vector<RationalPolynomial> withElim;
+    for (const auto& cp : cellPolys) {
+        RationalPolynomial p = cp;
+        p.normalize();
+        if (p.isZero() || p.isConstant()) continue;
+        if (p.degree(elimVar) >= 1) {
+            withElim.push_back(std::move(p));
+        } else if (seenDownward.insert(unitKey(p)).second) {
+            out.downwardPolys.push_back(std::move(p));
+        }
     }
 
-    std::unordered_set<std::string> seenBoundary, seenDownward;
-    for (const auto& item : r.items) {
-        RationalPolynomial p = item.poly;
-        p.normalize();
-        if (p.isZero() || p.isConstant()) continue;   // constants delineate nothing
-        if (p.degree(elimVar) >= 1) {
-            if (seenBoundary.insert(unitKey(p)).second) out.boundaryPolys.push_back(std::move(p));
-        } else {
-            if (seenDownward.insert(unitKey(p)).second) out.downwardPolys.push_back(std::move(p));
+    if (!withElim.empty()) {
+        LazardOpResult r = lazardProjectStep(withElim, elimVar,
+                                             LazardProjectionConfig(), kernel);
+        if (!r.complete) {
+            out.complete = false;
+            return out;   // caller ⇒ Unknown; never UNSAT on an incomplete characterization
+        }
+        for (const auto& item : r.items) {
+            RationalPolynomial p = item.poly;
+            p.normalize();
+            if (p.isZero() || p.isConstant()) continue;
+            if (p.degree(elimVar) >= 1) {
+                if (seenBoundary.insert(unitKey(p)).second) out.boundaryPolys.push_back(std::move(p));
+            } else if (seenDownward.insert(unitKey(p)).second) {
+                out.downwardPolys.push_back(std::move(p));
+            }
         }
     }
     return out;
@@ -81,7 +98,8 @@ RealValue toRealValue(LibpolyBackend& algebra, const RealAlg& r) {
 CellResult intervalFromCharacterization(
     LibpolyBackend* algebra, PolynomialKernel* kernel,
     const std::vector<RationalPolynomial>& boundaryPolys,
-    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue) {
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue,
+    bool skipVanishing) {
 
     CellResult out;   // supported == false by default
     if (!algebra || !kernel) return out;
@@ -96,8 +114,12 @@ CellResult intervalFromCharacterization(
         if (!norm.ok()) return out;                       // not representable ⇒ Unknown
         const PolyId pid = norm.poly;
         if (kernel->isConstant(pid)) continue;            // no boundary
-        // A vanishing (curtain) boundary cannot be soundly delineated here.
-        if (algebra->vanishesAtPrefix(pid, prefix, var) != VanishResult::NonVanishes) return out;
+        const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
+        if (vr == VanishResult::Unknown) return out;      // can't decide ⇒ Unknown
+        if (vr == VanishResult::Vanishes) {
+            if (skipVanishing) continue;                  // leaf constraint: no var-boundary
+            return out;                                   // non-leaf nullification ⇒ Unknown
+        }
 
         const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);
         RootSet rs;
@@ -163,7 +185,7 @@ CellResult intervalFromCharacterization(
 
 CellResult intervalFromCharacterization(
     LibpolyBackend*, PolynomialKernel*,
-    const std::vector<RationalPolynomial>&, const SamplePoint&, VarId, const RealAlg&) {
+    const std::vector<RationalPolynomial>&, const SamplePoint&, VarId, const RealAlg&, bool) {
     return {};   // unsupported without the algebra backend
 }
 
