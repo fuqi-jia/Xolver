@@ -106,3 +106,20 @@ test_results/
 .claire/
 # SMT-COMP scrambler (third-party, cloned + built locally)
 tools/scrambler/
+bin/xolver
+
+# Internal campaign / agent artifacts — kept LOCALLY, untracked on the public repo
+.nra_wip_backup/
+docs/
+.github/prompts/
+adam-warlock-terra-us-agent.md
+jean-grey-orion-donna-troy.md
+kid-flash-hulkling-bishop.md
+milestone-2026-05-13.md
+COMMAND.md
+run_euf_validation.sh
+CLAUDE.md
+AGENTS.md
+
+# SMT-COMP submission staging (local only; archive lives on Zenodo)
+submission-smtcomp2026/
