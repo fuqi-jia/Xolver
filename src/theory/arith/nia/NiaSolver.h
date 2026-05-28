@@ -15,6 +15,7 @@
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -128,7 +129,9 @@ private:
     bitblast::BitBlastSolver bitBlast_;
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
+    ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
+    bool enableModular_ = false;  // XOLVER_NIA_MODULAR: constant-pow2-modulus residue refutation (L3)
     bool enableRefute_ = false;   // XOLVER_NIA_REFUTE: bound-free product-positivity refutation
     bool enableGcd_ = false;      // XOLVER_NIA_GCD: multivariate GCD-divisibility refutation
     bool enableIcp_ = false;      // XOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
@@ -162,6 +165,7 @@ private:
     std::optional<TheoryCheckResult> stageAlgebraic(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);

@@ -138,65 +138,78 @@ NiaReasoningResult ModularResidueReasoner::run(
     std::unordered_set<std::string> moddefVars; // r's
     std::unordered_set<std::string> quotientVars; // q's
 
+    // 2a. Collect ALL candidate matches (eq, q, r, n, a) without claiming.
+    //     An equation like `inv1 = 4*q2 + r5` (a *definition* of the real var
+    //     inv1) is structurally indistinguishable from a div group
+    //     `r5 = inv1 mod 4`; greedy first-match would mis-claim it and steal
+    //     q2/r5 from their true defining equations. So we resolve globally:
+    //     a remainder that is a candidate in exactly one equation is
+    //     unambiguous; accepting those first claims their quotients, which then
+    //     disambiguates the rest.
+    struct Cand {
+        size_t ei; std::string q, r; mpz_class n; PolyId aPoly;
+        SatLit eqReason, loR, hiR;
+    };
+    std::vector<Cand> cands;
     for (size_t ei : eqIdx) {
         const auto& c = constraints[ei];
         auto termsOpt = kernel_.terms(c.poly);
         if (!termsOpt) continue;
         const auto& terms = *termsOpt;
         if (terms.size() < 2) continue;
-
-        bool matched = false;
-        for (size_t qi = 0; qi < terms.size() && !matched; ++qi) {
+        for (size_t qi = 0; qi < terms.size(); ++qi) {
             const Term& qt = terms[qi];
             if (qt.powers.size() != 1 || qt.powers[0].second != 1) continue;
             mpz_class n = abs(qt.coefficient);
             if (!isPow2(n) || n < 2) continue;
             int eqSign = qt.coefficient > 0 ? 1 : -1;
             std::string qName = std::string(kernel_.varName(qt.powers[0].first));
-            // Each quotient is fresh-per-div: if it already belongs to a group,
-            // this equation merely *uses* it (e.g. inv1 = 4*q + r5), so it is a
-            // definition of inv1, not a new div group. Skip.
-            if (quotientVars.count(qName) || moddefVars.count(qName)) continue;
-
-            for (size_t ri = 0; ri < terms.size() && !matched; ++ri) {
+            for (size_t ri = 0; ri < terms.size(); ++ri) {
                 if (ri == qi) continue;
                 const Term& rt = terms[ri];
                 if (rt.powers.size() != 1 || rt.powers[0].second != 1) continue;
                 if (rt.coefficient != 1 && rt.coefficient != -1) continue;
-                int erSign = rt.coefficient > 0 ? 1 : -1;
-                if (erSign != eqSign) continue;  // need clean a = n*q + r
+                if ((rt.coefficient > 0 ? 1 : -1) != eqSign) continue; // clean a = n*q + r
                 std::string rName = std::string(kernel_.varName(rt.powers[0].first));
                 if (rName == qName) continue;
-                // A remainder belongs to at most one group.
-                if (moddefVars.count(rName) || quotientVars.count(rName)) continue;
-
                 auto bit = bounds.find(rName);
                 if (bit == bounds.end()) continue;
                 if (!bit->second.lo.has || bit->second.lo.val != 0) continue;
                 if (!bit->second.hi.has || bit->second.hi.val != n - 1) continue;
-
-                // leftover = all other terms
                 std::vector<const Term*> rest;
                 for (size_t k = 0; k < terms.size(); ++k)
                     if (k != qi && k != ri) rest.push_back(&terms[k]);
                 PolyId leftover = buildFromTerms(kernel_, rest);
-                // a = -eqSign * leftover
                 PolyId aPoly = (eqSign == 1) ? kernel_.neg(leftover) : leftover;
-
-                // a must not mention r or q
                 bool clean = true;
                 for (const auto& v : kernel_.variables(aPoly))
                     if (v == rName || v == qName) { clean = false; break; }
                 if (!clean) continue;
-
-                groups.push_back(ModGroup{rName, qName, n, aPoly, c.reason,
-                                          bit->second.lo.reason, bit->second.hi.reason});
-                moddefVars.insert(rName);
-                quotientVars.insert(qName);
-                consumed.insert(ei);
-                matched = true;
+                cands.push_back(Cand{ei, qName, rName, n, aPoly, c.reason,
+                                      bit->second.lo.reason, bit->second.hi.reason});
             }
         }
+    }
+    // 2b. Unambiguous remainders (candidate in exactly one equation) first.
+    std::unordered_map<std::string, int> rEqCount;
+    {
+        std::unordered_map<std::string, std::unordered_set<size_t>> rEqs;
+        for (const auto& c : cands) rEqs[c.r].insert(c.ei);
+        for (const auto& [r, eqs] : rEqs) rEqCount[r] = static_cast<int>(eqs.size());
+    }
+    std::stable_sort(cands.begin(), cands.end(), [&](const Cand& a, const Cand& b) {
+        return (rEqCount[a.r] == 1 ? 0 : 1) < (rEqCount[b.r] == 1 ? 0 : 1);
+    });
+    // 2c. Greedy accept: a quotient/remainder belongs to one group; an
+    //     equation defines one group.
+    for (const auto& cd : cands) {
+        if (consumed.count(cd.ei)) continue;
+        if (moddefVars.count(cd.r) || quotientVars.count(cd.r)) continue;
+        if (moddefVars.count(cd.q) || quotientVars.count(cd.q)) continue;
+        groups.push_back(ModGroup{cd.r, cd.q, cd.n, cd.aPoly, cd.eqReason, cd.loR, cd.hiR});
+        moddefVars.insert(cd.r);
+        quotientVars.insert(cd.q);
+        consumed.insert(cd.ei);
     }
 
     // --- 2b. Eliminability: every occurrence of each quotient must be a
