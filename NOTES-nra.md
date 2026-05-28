@@ -151,6 +151,29 @@ nullification recovery. Floored sound for now; the recovery is a focused
 fresh-session effort. Win condition (CAC dominates Collins → unblock task #8) is
 NOT yet met.
 
+**WHY Lazard doesn't already cover it (user asked):** Lazard's nullification
+recovery IS correct + implemented — but only for the **algebraic-prefix tower**
+case: `isolateRealRootsViaTower` runs the [H3] valuation (`lazardEvaluateToUnivariate`,
+LibpolyBackend.cpp:1612) ONLY after `if (algCount < 1) return empty;` (line 1556).
+My CAC hits nullification at a **pure-rational prefix** (algCount==0), which that
+path returns empty for. So it's not a Lazard bug or a wrong Lazard impl — it's a
+DISTINCT, unimplemented case (rational-prefix nullification), and CAC correctly
+floors (sound). Candidate sound fixes (each needs the per-cell cert + differential
+before trusting UNSAT):
+  (a) **rational-prefix valuation recovery** — the lowest-order nonzero derivative
+      of p w.r.t. the nullified prefix vars along a generic direction (new; the
+      0-dim analogue of the tower [H3] valuation).
+  (b) **all-coefficients (Collins) single-cell characterization** — emit ALL
+      coefficients (not just Lazard's LC/TC) in characterize, so a vanished poly's
+      coeffs are in the characterization → skip-on-vanish becomes sound (the
+      CdcacCore.cpp:798 Collins argument), still single-cell (not the full
+      iterated closure). Cheaper to implement; verify the propagation makes the
+      lower covering delineate the sample-on-variety.
+  (c) **generic sample selection** — choose the parent samples to avoid landing on
+      coefficient varieties (recursion-level resampling); avoids nullification.
+Most promising = (b): contained, no new valuation, keeps single-cell. SOUNDNESS-
+CRITICAL — gate on per-cell cert + Collins-vs-CAC differential (no false-UNSAT).
+
 ## Dead-ends / negative results
 
 - CAC (conflict-driven single-cell coverings, modules A-C, sound + tested) is NOT
