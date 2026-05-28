@@ -67,7 +67,17 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
-    add("nia.univariate",     &NiaSolver::stageUnivariate);
+    // L2 (ZOLVER_NIA_UNIVARIATE_FULL, default-OFF). The univariate rational-root
+    // search (findIntegerRoots -> divisors, O(sqrt|a0|) bignum modulos) re-runs
+    // on EVERY Standard-effort cb_propagate. On EVM mod-2^256 inputs |a0| ~ 2^256
+    // => an effective per-propagation hang (profiled). Gate it to Full-effort
+    // only, mirroring nia.local-search / nia.bit-blast: Standard propagation stays
+    // cheap; the root search runs at the Full-effort model check and is validated,
+    // so completeness/soundness are preserved. Promote after the OFF+ON gate holds.
+    if (const char* e = std::getenv("ZOLVER_NIA_UNIVARIATE_FULL"); e && *e && *e != '0')
+        addFull("nia.univariate", &NiaSolver::stageUnivariate);
+    else
+        add("nia.univariate",     &NiaSolver::stageUnivariate);
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);

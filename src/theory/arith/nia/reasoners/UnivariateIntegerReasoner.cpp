@@ -1,6 +1,7 @@
 #include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <cmath>
+#include <cstdlib>
 
 namespace zolver {
 
@@ -25,6 +26,18 @@ std::set<mpz_class> UnivariateIntegerReasoner::divisors(const mpz_class& n) {
         }
     }
     return result;
+}
+
+// Rational-root divisor enumeration trial-divides up to sqrt(|a0|). For huge
+// constant terms (EVM mod-2^256 => |a0| ~ 2^256 => ~2^128 iterations) this is an
+// effective hang. ZOLVER_NIA_DIVISOR_CAP (default-OFF; promote after A/B) bails
+// the root search to Incomplete when sqrt(|a0|) exceeds ~10^6 (|a0| > 10^12),
+// turning a hang into a sound `unknown` (Incomplete is never read as UNSAT).
+static bool divisorEnumerationInfeasible(const mpz_class& a0) {
+    static const bool capEnabled = std::getenv("ZOLVER_NIA_DIVISOR_CAP") != nullptr;
+    if (!capEnabled) return false;
+    static const mpz_class kThreshold("1000000000000");  // 10^12 = (10^6)^2
+    return abs(a0) > kThreshold;
 }
 
 bool UnivariateIntegerReasoner::isRoot(PolyId poly,
@@ -76,6 +89,10 @@ IntegerRootResult UnivariateIntegerReasoner::findIntegerRoots(
         }
 
         mpz_class a0_reduced = coeffs[effectiveSize - 1];
+        if (divisorEnumerationInfeasible(a0_reduced)) {
+            result.status = IntegerRootStatus::Incomplete;
+            return result;
+        }
         auto divs = divisors(a0_reduced);
 
         constexpr size_t MAX_DIVISORS = 1000;
@@ -92,7 +109,16 @@ IntegerRootResult UnivariateIntegerReasoner::findIntegerRoots(
         return result;
     }
 
-    // RRT: all integer roots divide |a0|
+    // RRT: all integer roots divide |a0|. But enumerating divisors trial-divides
+    // up to sqrt(|a0|); for an EVM mod-2^256 constant term |a0| ~ 2^256 that is
+    // ~2^128 bignum modulos — an effective hang. Bail to Incomplete BEFORE the
+    // loop when sqrt(|a0|) exceeds a feasible trial bound (the existing
+    // post-enumeration MAX_DIVISORS cap was too late — it computed the full set
+    // first). Sound: Incomplete -> run() never derives UNSAT from empty roots.
+    if (divisorEnumerationInfeasible(a0)) {
+        result.status = IntegerRootStatus::Incomplete;
+        return result;
+    }
     auto divs = divisors(a0);
 
     constexpr size_t MAX_DIVISORS = 1000;
