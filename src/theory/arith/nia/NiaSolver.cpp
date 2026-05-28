@@ -63,7 +63,19 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     };
     add("nia.pending",        &NiaSolver::stagePending);
     add("nia.normalize",      &NiaSolver::stageNormalize);
-    add("nia.presolve",       &NiaSolver::stagePresolveFixpoint);
+    // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
+    // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
+    // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
+    // ~1.1s/call on dense Dartagnan, and re-run ~8000x at Standard effort on mcm).
+    // Gate it to Full-effort only, mirroring nia.univariate/bit-blast/cdcac:
+    // Standard propagation stays cheap; the fixpoint (and its UNSAT conflicts /
+    // complete enumeration) runs at the Full-effort model check. Sound +
+    // complete-preserving (the Full check still drains it). Promote after the
+    // OFF+ON gate + differential hold.
+    if (const char* e = std::getenv("XOLVER_NIA_PRESOLVE_FULL"); e && *e && *e != '0')
+        addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
+    else
+        add("nia.presolve",     &NiaSolver::stagePresolveFixpoint);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
