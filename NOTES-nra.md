@@ -99,6 +99,29 @@ BMC + kissing. meti-tarski is reachable-but-needs-capability. The single biggest
 NRA capability lever remains: **don't build the full Collins closure** (efficient
 single-cell CAC) and/or **nlsat model-construction** for bounded SAT.
 
+## Lever ROI re-assessment (after classification — what to do next)
+
+- **Sign-refute (DONE):** the session win — 175/405 Sturm-MBO recovered, 0-unsound,
+  default-OFF + in `--allon`. Promote to default after the broad server differential.
+- **#8 Collins deletion:** evidence says **DO NOT delete Collins yet** — CAC v1
+  bails to Unknown on the hard families (Sturm-MBO, meti-tarski, hycomp) and falls
+  through to Collins, so Collins is still the workhorse. Deletion is gated on CAC
+  first DOMINATING Collins, which needs the efficient single-cell characterization
+  (#11). Differential would just confirm this. LOW priority until #11 lands.
+- **#11 efficient single-cell CAC (BIG lever):** the one structural fix that
+  addresses the buildClosure doubly-exp wall hit by BOTH Sturm-MBO and meti-tarski.
+  Needs the sample-aware "required coefficients" characterization (my CAC v1's
+  conservative characterization is as costly as the full closure → no win yet).
+  Large + soundness-critical. The highest-value remaining NRA capability.
+- **#10 subtropical broadening:** LOW ROI for the measured gaps — meti-tarski SAT
+  is BOUNDED (transcendental), subtropical finds only "at-infinity" witnesses.
+  Helps only unbounded SAT (rare here). Defer.
+- **#12 RP↔libpoly rebuild fix:** LOW ROI now — the wall is `buildClosure` (BEFORE
+  the lifting phase); `specializeToUnivariate` already substitutes in RP space.
+  Only matters for families that REACH lifting (not the gap families). Defer.
+- **nlsat/MCSAT (frontier):** the true unreachable residual (hycomp BMC + kissing)
+  + the meti-tarski bounded-SAT capability gap. Largest effort; fresh-session.
+
 ## Dead-ends / negative results
 
 - CAC (conflict-driven single-cell coverings, modules A-C, sound + tested) is NOT
