@@ -48,3 +48,21 @@ never does.) FIX = frontend/SOMTParser (A5 lane / submodule): either (a) cross-c
 hash-consed expansion in SOMTParser, or (b) parse with expand OFF + expand define-fun apply nodes in
 our hash-consed CoreIr. High blast radius (all logics) → dispatch decision needed. NIA→BV (lever #5)
 also needs this first (everything needs parsing).
+
+### Fix attempt 1 (FAILED) — applyFun memoization
+Added a global memo on `Parser::applyFun` keyed by (funcDef ptr, param ptrs) +
+keep-alive (base_parser.cpp; parser.h). Semantics-preserving. Built OK. RESULT:
+Certora still TIMEOUT(ph=0) on all 8 sampled => INSUFFICIENT. Why: the blowup is
+compositional inlining with DISTINCT args (wrap-fns applied to many different
+subexprs), so same-(def,args) memoization rarely hits. NOT pushed to SOMTParser
+main (it's not the fix; left in the worktree copy only).
+### Real cause + real fix
+SOMTParser eagerly FULLY-EXPANDS define-fun bodies (no global hash-consing), so
+stored/expanded bodies grow exponentially down the define-fun dependency chain.
+z3 parses fine because it keeps macros / hash-conses. REAL FIX (architectural,
+pick one): (a) global hash-consing in the node factory (getNodeManager/createNode
+/mkOper) so identical subterms share — benefits ALL parsing; (b) lazy define-fun
+expansion (don't inline at definition; expand at use with sharing); (c) STOPGAP:
+expansion node-count cap → abort to fast `unknown` (sound, frees the time budget
+vs a 1200s hang) — small, unblocks but doesn't solve. All are frontend/parser,
+shared infra. Awaiting master's depth call.
