@@ -147,6 +147,29 @@ REALITY CHECK: z3 wins ~60% of QF_UFNIA but via specialized reasoning; our NIA
 engine structurally can't. The 2 my-lane gaps (real-div, hasEuf) are the
 closeable ones; the rest of EQ+NA is NIA-engine/structural-bound.
 
+## ★ PRESOLVE-INFRA LANE (2026-05-29) — shared arith presolve (mine to fix)
+Master redirect: own src/theory/arith/presolve/ (PresolveEngine,
+IntLinearEqualityCoreHNF, IntegerLinearAlgebra) — the real EQ+NA wall, shared by
+all arith theories. Findings via instrumentation:
+- **SNF input matrix is ~87-98% EXACT-duplicate equality rows** (floppy2:
+  19847 rows→415 unique; GrandProduct 593→77). SNF is super-linear in rows.
+  SHIPPED row-dedup (a96d149, XOLVER_PRESOLVE_DEDUP_ROWS, default-OFF): skip
+  byte-identical (coeffs,cst) rows (E∧E≡E, solution-set exact). reg 661/661
+  OFF+ON, 0 unsound. floppy2 timeout(20s)→unknown(10.5s) (SNF wall gone;
+  bottleneck moves to NIA opposite-polarity floor = structural).
+- Exact-Amat CACHING (orig task) = only 18-58% recurrence (matrices grow per
+  decision) → SUPERSEDED by dedup (~48x). Not pursued.
+- **Presolve conflict was MAXIMALLY WEAK**: IntLinearEqualityCoreHNF existence
+  conflict returned ALL equalities' literals (line 112) → blocks one assignment
+  → no convergence. IMPLEMENTED IIS (XOLVER_PRESOLVE_IIS, default-OFF): SNF row
+  i = combination U[i] of original eqs; conflict = only eqs with U[i][j]≠0
+  (sound minimal infeasible subset). reg 661/661 OFF+ON. BUT: GrandProduct
+  UNSAT is NONLINEAR (products) — HNF existence never fires there, so IIS
+  doesn't help it. IIS targets the LINEAR-integer-infeasible class; measuring
+  corpus benefit on QF_NIA sample (OFF=9/120 solved; ON pending).
+- Re-profile lesson: dedup removed floppy2 SNF wall but bottleneck moved to the
+  structural NIA opposite-polarity floor + NiaNormalizer::clearDenominators.
+
 ## ★ SAT/COMBINATION-EFFICIENCY LANE (2026-05-29) — bottleneck map (profiling)
 New lane: SAT/CDCL(T)/combination efficiency. Profiled the EQ+NA timeout
 families (gdb-SIGINT + breakpoint counts). VERDICT: the EQ+NA timeouts are

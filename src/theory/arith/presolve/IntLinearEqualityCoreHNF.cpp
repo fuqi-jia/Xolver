@@ -103,13 +103,42 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
 
     const int diagN = std::min(snf.m, snf.n);
 
+    // XOLVER_PRESOLVE_IIS (default-OFF): on an existence conflict, return a
+    // MINIMAL infeasible subset instead of every equality's literals. The SNF
+    // row i is the integer combination U[i] of the original equalities (U·A·V=D,
+    // so row i of U·A is Σ_j U[i][j]·A[j]); the infeasibility of row i is
+    // therefore certified by exactly the equalities with U[i][j] ≠ 0. Their base
+    // literals form a SOUND, far tighter conflict than the full set. Without
+    // this, the presolve conflict is the negation of the ENTIRE active equality
+    // set, which blocks only the current assignment → the SAT solver re-proposes
+    // near-identical models (GrandProduct: 172 full model-checks, no
+    // convergence). A tight conflict generalizes and prunes the search.
+    const bool iisEnabled = std::getenv("XOLVER_PRESOLVE_IIS") != nullptr;
+    const int meq = static_cast<int>(eqs.size());
+
     // Existence: d_i | b'_i for nonzero diagonals; b'_i = 0 for zero rows.
     for (int i = 0; i < snf.m; ++i) {
         mpz_class d = (i < diagN) ? snf.D[i][i] : mpz_class(0);
         bool bad = (d != 0) ? (bp[i] % d != 0) : (bp[i] != 0);
         if (bad) {
             st.hasConflict = true;
-            st.conflict.clause = reasons.baseLiterals;
+            if (iisEnabled && i < static_cast<int>(snf.U.size())) {
+                // Collect only equalities combined into infeasible row i.
+                decltype(reasons.baseLiterals) iisLits;
+                std::set<std::pair<uint32_t, bool>> seen;
+                for (int j = 0; j < meq && j < static_cast<int>(snf.U[i].size()); ++j) {
+                    if (snf.U[i][j] == 0) continue;
+                    auto lits = st.ledger.flattenReasons(st.atoms[eqs[j].atomIdx].reasons);
+                    for (const auto& l : lits)
+                        if (seen.insert({l.var, l.sign}).second) iisLits.push_back(l);
+                }
+                // Guard: never emit an empty conflict (would be unsound). Fall
+                // back to the full reason set if the support was somehow empty.
+                st.conflict.clause = iisLits.empty() ? reasons.baseLiterals
+                                                     : std::move(iisLits);
+            } else {
+                st.conflict.clause = reasons.baseLiterals;
+            }
             return true;
         }
     }
