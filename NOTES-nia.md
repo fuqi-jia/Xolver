@@ -66,3 +66,20 @@ expansion (don't inline at definition; expand at use with sharing); (c) STOPGAP:
 expansion node-count cap → abort to fast `unknown` (sound, frees the time budget
 vs a 1200s hang) — small, unblocks but doesn't solve. All are frontend/parser,
 shared infra. Awaiting master's depth call.
+
+### CORRECTION (2026-05-29) — hash-consing IS present; "global hash-consing" is MOOT.
+NodeManager::createNode → insertNodeToBucket dedups (hashCode + isEquivalentTo).
+So SOMTParser is already globally hash-consed. The blowup is NOT missing sharing
+— it's EAGER FULL define-fun expansion of COMPOSITIONAL define-funs with DISTINCT
+args. Confirmed: 72658 (smallest, 247 lines) has 25 define-funs that compose
+(x2 → x72/x45/x111 → x40, each calling x40 with DIFFERENT args x4*x4 / x4*0 /
+0*x4 / x4*(2^256-1)); distinct args ⇒ distinct expanded nodes ⇒ dedup can't help
+⇒ multiplicative growth down the chain ⇒ exponential. Parse never finishes in
+146s; z3 parses instantly because it keeps define-funs as MACROS (lazy, never
+fully expands). My applyFun memo (keyed by def+args) can't help (args distinct);
+REVERTED to keep SOMTParser pristine.
+REAL FIX = LAZY define-fun handling (keep macros; do NOT eagerly inline at parse;
+expand on-demand / never fully) — a substantial frontend+SOMTParser+CoreIr
+architecture change. AND the Certora lane is hard for z3 (4/5 timeout). => LOW ROI.
+RECOMMEND: deprioritize the Certora parser rewrite; quantify the shipped broad
+QF_NIA levers (modular L3+Hensel, WalkSAT SLS) via E's differential instead.
