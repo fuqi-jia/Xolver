@@ -29,6 +29,10 @@ bool extractLinearExpr(ExprId root, const CoreIr& ir,
             case Kind::ConstInt: {
                 if (auto* v = std::get_if<int64_t>(&e.payload.value)) {
                     constant += mul * mpq_class(*v);
+                } else if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                    // Large integer literals (e.g. EVM 2^256) are string payloads;
+                    // dropping them would zero the constant -> wrong linear form.
+                    constant += mul * mpqFromString(*s);
                 }
                 break;
             }
@@ -127,6 +131,8 @@ bool extractLinearExpr(ExprId root, const CoreIr& ir,
                 if (arg.kind == Kind::ConstInt) {
                     if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
                         constant += mul * mpq_class(*v);
+                    } else if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                        constant += mul * mpqFromString(*s);  // to_int(int) = int (full precision)
                     }
                     break;
                 }

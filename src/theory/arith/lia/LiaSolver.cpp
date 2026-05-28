@@ -1433,6 +1433,8 @@ std::optional<RealValue> LiaSolver::sharedTermArithValue(SharedTermId s) const {
     if (expr.kind == Kind::ConstInt) {
         if (auto* iv = std::get_if<int64_t>(&expr.payload.value))
             return RealValue::fromMpq(mpq_class(*iv));
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value))
+            return RealValue::fromMpq(mpqFromString(*sv));  // large literal (string payload)
     }
     if (expr.kind == Kind::ConstReal) {
         if (auto* sv = std::get_if<std::string>(&expr.payload.value))

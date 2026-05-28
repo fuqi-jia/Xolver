@@ -9,6 +9,7 @@ static std::optional<mpq_class> constValueOf(const CoreIr& ir, ExprId expr) {
     const auto& e = ir.get(expr);
     if (e.kind == Kind::ConstInt) {
         if (auto* i = std::get_if<int64_t>(&e.payload.value)) return mpq_class(*i);
+        if (auto* s = std::get_if<std::string>(&e.payload.value)) return mpqFromString(*s);
     } else if (e.kind == Kind::ConstReal) {
         if (auto* s = std::get_if<std::string>(&e.payload.value)) return mpqFromString(*s);
     }

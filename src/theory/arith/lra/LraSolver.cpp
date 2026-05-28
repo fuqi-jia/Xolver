@@ -402,6 +402,9 @@ static std::optional<mpq_class> getConstantRationalValue(const CoreIr& ir, const
         if (auto* i = std::get_if<int64_t>(&expr.payload.value)) {
             return mpq_class(*i);
         }
+        if (auto* str = std::get_if<std::string>(&expr.payload.value)) {
+            return mpqFromString(*str);  // large integer literal (string payload)
+        }
     }
     if (expr.kind == Kind::ConstReal) {
         if (auto* str = std::get_if<std::string>(&expr.payload.value)) {

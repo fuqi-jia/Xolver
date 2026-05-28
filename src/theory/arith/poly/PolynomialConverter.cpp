@@ -158,6 +158,9 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                             denomValue = mpq_class(1, *i);
                             isConstantDenominator = true;
                         }
+                    } else if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
+                        mpq_class q = mpqFromString(*s);  // large divisor (string payload)
+                        if (q != 0) { denomValue = mpq_class(1) / q; isConstantDenominator = true; }
                     }
                 } else if (denNode.kind == Kind::ConstReal) {
                     if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
@@ -226,6 +229,8 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 if (arg.kind == Kind::ConstInt) {
                     if (auto* v = std::get_if<int64_t>(&arg.payload.value)) {
                         result = RationalPolynomial::fromConstant(mpq_class(*v));
+                    } else if (auto* s = std::get_if<std::string>(&arg.payload.value)) {
+                        result = RationalPolynomial::fromConstant(mpqFromString(*s));  // to_int(int)=int
                     }
                 } else if (arg.kind == Kind::ConstReal) {
                     if (auto* s = std::get_if<std::string>(&arg.payload.value)) {

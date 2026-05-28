@@ -184,7 +184,16 @@ ExprId ModularConsistencyChecker::mkIntConst(const mpz_class& v) {
     CoreExpr e;
     e.kind    = Kind::ConstInt;
     e.sort    = intSortId_;
-    e.payload = Payload(static_cast<int64_t>(v.get_si()));
+    // SOUNDNESS: the pinned candidate `start = lo + k` can be a 2^256-scale EVM
+    // value that does not fit int64. get_si() would truncate it to a WRONG value
+    // -> a bogus `x = <wrong>` pin -> false verdict. Emit the FULL value: int64
+    // when it fits, otherwise a string-payload ConstInt (the adapter's lossless
+    // big-literal representation; PolynomialConverter parses it at full precision).
+    if (mpz_fits_slong_p(v.get_mpz_t())) {
+        e.payload = Payload(static_cast<int64_t>(v.get_si()));
+    } else {
+        e.payload = Payload(v.get_str());
+    }
     return ir_.add(std::move(e));
 }
 
