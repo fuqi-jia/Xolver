@@ -249,6 +249,27 @@ trust-unsat-mode pass the local suite; run the broad differential
 (`XOLVER_NRA_CAC=1 XOLVER_NRA_CAC_TRUST_UNSAT=1`, server) + add per-cell certs to
 promote. CAC `XOLVER_NRA_CAC` stays default-OFF until then.
 
+## Queue resolutions (evidence-based)
+
+- **#8 Collins deletion → DECISION: KEEP Collins.** Differential (CAC=1+trust-unsat
+  vs default, post-fix): on the buildClosure-bound/frontier families CAC=Collins=TO
+  (0-unsound) — CAC still bails at `vanish-nonleaf` on the winnable UNSAT, so it does
+  NOT dominate Collins. Re-open only if the vanish-nonleaf recovery + per-cell cert
+  land and a broad differential shows CAC ≥ Collins.
+- **#11 CAC: false-UNSAT FIXED (soundness done).** Completeness remains: CAC bails at
+  `vanish-nonleaf` (rational-prefix nullification) on the hard families. The SOUND
+  recovery (skip the nullified poly's var-boundary, relying on the now-propagated
+  required-coefficients to delineate the locus at lower levels) is PLAUSIBLE but
+  must be gated by a per-cell certificate + broad differential — NOT assumed (the
+  user's no-unverified-UNSAT mandate; frontier cells have no oracle backstop).
+  Floored sound (trust-unsat default-OFF). The remaining deep increment.
+- **#10 subtropical broaden → LOW ROI (deferred):** the measured SAT-gap (meti-tarski)
+  is BOUNDED transcendental SAT; subtropical finds only "at-infinity" witnesses. No
+  measured family benefits. Sign-refute is Sturm-MBO-specific (cross-family gain 0).
+- **#12 RP↔libpoly rebuild → LOW ROI (deferred):** the wall is `buildClosure` (BEFORE
+  lifting); `specializeToUnivariate` already substitutes in RP space. Only families
+  that REACH lifting would benefit — not the gap families.
+
 ## Cross-family sign-refute reach (it does NOT generalize)
 
 sign-refute gain over default (sample): Sturm-MGC 0, Economics-Mulligan 0,
