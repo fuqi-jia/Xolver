@@ -354,8 +354,12 @@ void CandidateModelSearch::detectActiveBounds() {
 int64_t CandidateModelSearch::heightOf(const mpq_class& q) {
     mpz_class n = abs(q.get_num());
     mpz_class d = q.get_den();
-    if (!n.fits_slong_p() || !d.fits_slong_p()) return INT64_MAX;
-    return n.get_si() + d.get_si();
+    // Compute the height sum in mpz (n.get_si()+d.get_si() can overflow int64
+    // even when each fits); saturate to INT64_MAX. Height is only a candidate-
+    // ordering heuristic, so saturation is harmless — but no silent overflow.
+    mpz_class h = n + d;
+    if (!h.fits_slong_p()) return INT64_MAX;
+    return h.get_si();
 }
 
 bool CandidateModelSearch::tryAcceptCandidate(
