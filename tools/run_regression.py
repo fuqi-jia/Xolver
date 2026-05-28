@@ -91,8 +91,10 @@ def run_case(path_str: str, solver: str, timeout: float, expected: str) -> CaseR
     try:
         proc = subprocess.run(
             [solver, "solve", str(path)],
-            capture_output=True,
-            text=True,
+            # 3.6-safe (capture_output= / text= are 3.7+).
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:

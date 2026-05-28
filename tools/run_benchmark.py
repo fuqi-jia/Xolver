@@ -256,8 +256,11 @@ def run_solver(cmd: List[str], file_path: Path, timeout: float, solver_name: str
     try:
         proc = subprocess.run(
             full_cmd,
-            capture_output=True,
-            text=True,
+            # 3.6-safe: capture_output= and text= are Python 3.7+ (panda14 runs 3.6
+            # -> every case errored 0.000s "unexpected keyword argument 'capture_output'").
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=timeout,
         )
         elapsed = time.perf_counter() - start

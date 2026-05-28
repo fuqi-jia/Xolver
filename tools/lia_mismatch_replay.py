@@ -83,8 +83,10 @@ def run_solver(cmd: List[str], timeout: float = 30.0) -> tuple:
         t0 = os.times()
         proc = subprocess.run(
             cmd,
-            capture_output=True,
-            text=True,
+            # 3.6-safe (capture_output= / text= are 3.7+).
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
             timeout=timeout,
         )
         t1 = os.times()

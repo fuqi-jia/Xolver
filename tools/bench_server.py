@@ -49,8 +49,10 @@ def run(cmd, cwd=None, check=True, capture=True):
     print(f"[RUN] {' '.join(cmd) if isinstance(cmd, list) else cmd}")
     kwargs = {"cwd": cwd, "check": check}
     if capture:
-        kwargs["capture_output"] = True
-        kwargs["text"] = True
+        # 3.6-safe (capture_output= / text= are 3.7+).
+        kwargs["stdout"] = subprocess.PIPE
+        kwargs["stderr"] = subprocess.PIPE
+        kwargs["universal_newlines"] = True
     return subprocess.run(cmd, **kwargs)
 
 
