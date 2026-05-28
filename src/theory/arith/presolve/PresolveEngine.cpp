@@ -6,8 +6,49 @@
 #include "theory/arith/presolve/NonnegativePolynomialBoundExtractor.h"
 #include "theory/arith/presolve/BoundChainComposer.h"
 #include "theory/arith/presolve/UnivariatePolySignAnalyzer.h"
+#include <cstdlib>
+#include <iostream>
+#include <set>
 
 namespace zolver {
+
+// ZOLVER_PRESOLVE_DIAG: print the firing capability + conflicting atoms at the
+// conflict-emission point. Diagnosis only (default-off).
+static void dumpPresolveConflict(const char* cap, const PresolveState& st) {
+    auto polySummary = [](const RationalPolynomial& p) -> std::string {
+        if (p.isConstant()) return "const=" + p.constantValue().get_str();
+        std::string s;
+        bool first = true;
+        for (const auto& e : p.terms()) {
+            if (!first) s += " + ";
+            first = false;
+            s += e.second.get_str();
+            for (const auto& vp : e.first) s += "*x" + std::to_string(vp.first) +
+                                               (vp.second != 1 ? "^" + std::to_string(vp.second) : "");
+        }
+        return s.empty() ? "0" : s;
+    };
+    auto relStr = [](Relation r) {
+        switch (r) { case Relation::Eq: return "=0"; case Relation::Neq: return "!=0";
+            case Relation::Lt: return "<0"; case Relation::Leq: return "<=0";
+            case Relation::Gt: return ">0"; case Relation::Geq: return ">=0"; }
+        return "?";
+    };
+    std::cerr << "[PRESOLVE-DIAG] firing-cap=" << cap
+              << " conflict-clause(" << st.conflict.clause.size() << ")=";
+    std::set<int> conflictVars;
+    for (auto l : st.conflict.clause) { std::cerr << (l.sign ? "" : "-") << l.var << " "; conflictVars.insert(l.var); }
+    std::cerr << "\n";
+    for (const auto& a : st.atoms) {
+        if (!a.live) continue;
+        bool inConflict = false;
+        for (auto l : a.reasons.baseLiterals) if (conflictVars.count(l.var)) inConflict = true;
+        std::cerr << "  " << (inConflict ? "* " : "  ") << polySummary(a.poly) << " " << relStr(a.rel)
+                  << "  lits=";
+        for (auto l : a.reasons.baseLiterals) std::cerr << (l.sign ? "" : "-") << l.var << " ";
+        std::cerr << "\n";
+    }
+}
 
 PresolveEngine::PresolveEngine(PolynomialKernel* kernel, bool integerDomain) {
     st_.kernel = kernel;
@@ -44,6 +85,7 @@ PresolveResult PresolveEngine::run() {
         for (auto& cap : caps_) {
             if (cap->run(st_)) { progress = true; anyProgress = true; }
             if (st_.hasConflict) {
+                if (std::getenv("ZOLVER_PRESOLVE_DIAG")) dumpPresolveConflict(cap->name(), st_);
                 PresolveResult r;
                 r.kind = PresolveResult::Kind::Conflict;
                 r.conflict = st_.conflict;
