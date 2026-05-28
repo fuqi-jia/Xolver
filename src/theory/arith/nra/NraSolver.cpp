@@ -3,8 +3,10 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/poly/RationalPolynomial.h"
+#include "util/RealValue.h"                                // XOLVER_NRA_SUBTROPICAL witness model
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
+#include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/core/CdcacCore.h"               // XOLVER_NRA_PREELIM reduced CDCAC
 #include "theory/arith/nra/core/CdcacConstraint.h"         // XOLVER_NRA_PREELIM
 #include "theory/arith/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
@@ -35,6 +37,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.preelim",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); }));
+    // XOLVER_NRA_SUBTROPICAL (default OFF): cheap SAT-fast-path before the full
+    // CAD. nullopt at the gate when OFF; runs only at Full effort.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.subtropical",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
@@ -44,6 +51,8 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // default path is byte-identical.
     if (const char* e = std::getenv("XOLVER_NRA_PREELIM"); e && *e && *e != '0')
         enablePreElim_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_SUBTROPICAL"); e && *e && *e != '0')
+        enableSubtropical_ = true;
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
@@ -71,6 +80,7 @@ void NraSolver::onPop(uint32_t n) {
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     engine_.pop(n);
 }
 
@@ -84,6 +94,7 @@ void NraSolver::onReset() {
     activeSet_.reset();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
     // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
@@ -99,6 +110,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
     activeSet_.insert(reason);
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
 
     size_t oldSize = activeLits_.size();
     activeLits_.push_back(reason);
@@ -141,6 +153,7 @@ void NraSolver::onBacktrack(int level) {
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     engine_.backtrack(level);
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -367,6 +380,99 @@ std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& 
     }
     return std::nullopt;
 #endif
+}
+
+// XOLVER_NRA_SUBTROPICAL SAT-fast-path (default OFF). A cheap, incomplete
+// witness search "at infinity" run before the full CAD. It produces a CANDIDATE
+// assignment; every active original constraint is then exact-validated via the
+// kernel sign (invariant 1). SAT only on a validated model (stored in
+// satFastModel_ so getModel() reports it); otherwise nullopt → fall to CDCAC.
+std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage& /*lemmaDb*/,
+                                                             TheoryEffort effort) {
+    if (!enableSubtropical_) return std::nullopt;
+    if (effort != TheoryEffort::Full) return std::nullopt;  // fast path at full effort only
+    // Combination (Nelson-Oppen) mode: interface (dis)equalities live in the
+    // engine, not presolveConstraints_, so a witness validated only against the
+    // local atoms could violate them. Restrict the fast path to pure NRA.
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+
+    // --- Build the subtropical constraint set from the active polynomials. ---
+    // Bail (fall through) if ANY active constraint is non-polynomial or cannot be
+    // decomposed into integer-coefficient terms: a witness validated only against
+    // a SUBSET would be unsound to report as SAT.
+    std::vector<SubtropicalConstraint> subCons;
+    std::unordered_set<VarId> varSet;
+    subCons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        auto termsOpt = kernel_->terms(c.poly);
+        if (!termsOpt) return std::nullopt;
+        SubtropicalConstraint sc;
+        sc.rel = c.rel;
+        sc.monomials.reserve(termsOpt->size());
+        for (const auto& t : *termsOpt) {
+            if (t.coefficient == 0) continue;
+            SubtropicalMonomial m;
+            m.coeff = t.coefficient;
+            m.powers = t.powers;
+            for (const auto& pr : t.powers) varSet.insert(pr.first);
+            sc.monomials.push_back(std::move(m));
+        }
+        subCons.push_back(std::move(sc));
+    }
+    if (subCons.empty() || varSet.empty()) return std::nullopt;  // ground / nothing to do
+
+    std::vector<VarId> vars(varSet.begin(), varSet.end());
+
+    SubtropicalSatFinder finder;
+    SubtropicalResult r = finder.find(subCons, vars);
+    if (!r.found) return std::nullopt;
+
+    // Guard against pathological magnitudes (base^exp blow-up). Sound to skip.
+    for (const auto& [v, e] : r.dir.exponents) {
+        if (abs(e) > 64) return std::nullopt;
+    }
+
+    // --- Materialize over increasing bases and exact-validate (invariant 1). -
+    static const long kBases[] = {2, 4, 16, 256, 4096, 65536};
+    for (long b : kBases) {
+        auto vidModel = SubtropicalSatFinder::materialize(r.dir, vars, mpq_class(b));
+        std::unordered_map<std::string, mpq_class> model;
+        model.reserve(vidModel.size());
+        for (const auto& [v, val] : vidModel) model.emplace(std::string(kernel_->varName(v)), val);
+
+        bool allHold = true;
+        for (const auto& c : presolveConstraints_) {
+            std::unordered_map<std::string, mpq_class> evalModel = model;
+            for (const auto& vn : kernel_->variables(c.poly))
+                evalModel.emplace(vn, mpq_class(0));  // 0-fill (defensive)
+            const int s = kernel_->sgn(c.poly, evalModel);
+            bool ok = false;
+            switch (c.rel) {
+                case Relation::Eq:  ok = (s == 0); break;
+                case Relation::Geq: ok = (s >= 0); break;
+                case Relation::Leq: ok = (s <= 0); break;
+                case Relation::Gt:  ok = (s > 0);  break;
+                case Relation::Lt:  ok = (s < 0);  break;
+                case Relation::Neq: ok = (s != 0); break;
+            }
+            if (!ok) { allHold = false; break; }
+        }
+        if (allHold) {
+            // Sound: a concrete rational point validates ALL active constraints
+            // under the exact kernel sign. Stash it so getModel() reports it.
+            satFastModel_ = std::move(vidModel);
+            if (std::getenv("XOLVER_NRA_SUBTROP_DIAG")) {
+                std::ofstream st("/tmp/subtropical.txt", std::ios::app);
+                st << "[SUBTROP] SAT vars=" << vars.size()
+                   << " cons=" << subCons.size() << " base=" << b << "\n";
+                st.flush();
+            }
+            return TheoryCheckResult::consistent();
+        }
+    }
+    return std::nullopt;  // no base validated: fall through to CDCAC
 }
 
 // Stage 2: the CDCAC engine. Always yields a definite verdict.
@@ -638,6 +744,19 @@ NraSolver::getDeducedSharedEqualities() {
 }
 
 std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
+    // XOLVER_NRA_SUBTROPICAL: if the SAT-fast-path produced a validated witness
+    // for the current assignment, report it (the CDCAC engine was bypassed, so
+    // its sample is stale/empty). Exact rational values.
+    if (satFastModel_) {
+        TheoryModel model;
+        for (const auto& [v, val] : *satFastModel_) {
+            std::string name(kernel_->varName(v));
+            model.numericAssignments.insert({name, RealValue::fromMpq(val)});
+            model.assignments[std::move(name)] = val.get_str();
+        }
+        return model;
+    }
+
     auto sampleOpt = engine_.getModel();
     if (!sampleOpt) return std::nullopt;
     const auto& sample = *sampleOpt;
