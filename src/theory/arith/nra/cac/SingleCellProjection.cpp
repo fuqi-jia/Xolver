@@ -239,6 +239,21 @@ CellResult intervalFromCharacterization(
             // found in the audit). The tower path is MORE capable, not total — it
             // still has its own unsupported branches (→ bail), so this is a
             // reachability fix, not a completeness claim.
+            // A boundary poly with NO dependence on `var` once the rational prefix
+            // coords are fixed contributes no boundary on the lift axis (it is
+            // constant along `var` at this prefix). Skip it — sound for leaf
+            // (uniform truth via signAt → whole fiber handled) and non-leaf (no
+            // delineation). This mirrors the rational fiber-constant skip; without
+            // it the tower path bails "p1-no-mainVar" for an outer-variable-only
+            // constraint at an algebraic leaf (the CONVOI2 gap), losing the case.
+            {
+                RationalPolynomial pr = rp;
+                for (size_t i = 0; i < prefix.numVars(); ++i)
+                    if (prefix.values[i].isRational())
+                        pr = pr.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
+                pr.normalize();
+                if (!pr.contains(var)) continue;   // no var-boundary at this prefix
+            }
             bool supported = false;
             rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
             if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);

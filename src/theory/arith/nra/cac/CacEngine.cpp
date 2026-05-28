@@ -79,15 +79,44 @@ RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v, bool& exact) {
     // set exact=false so the caller fails CLOSED (→ Unknown, never a guessed root
     // that could drive a false verdict).
     RootSet rs = algebra.isolateRealRoots(up);
-    const RealAlg* hit = nullptr;
-    int overlaps = 0;
-    for (const auto& r : rs.roots) {
-        const bool ov = r.isRational()
+
+    auto overlaps = [&](const RealAlg& r) -> bool {
+        return r.isRational()
             ? (a.lower <= r.rational && r.rational <= a.upper)
-            : (r.root.lower <= a.upper && a.lower <= r.root.upper);  // overlapping intervals ⇒ same root
-        if (ov) { ++overlaps; hit = &r; }
+            : (r.root.lower <= a.upper && a.lower <= r.root.upper);
+    };
+
+    // Candidates whose isolating interval overlaps the target [a.lower, a.upper].
+    std::vector<RealAlg> cands;
+    for (const auto& r : rs.roots) if (overlaps(r)) cands.push_back(r);
+    if (cands.size() == 1) return cands.front();
+
+    // >1 (or 0) candidates: the target interval is looser than the gap between
+    // distinct roots, so the coarse overlap test cannot disambiguate. REFINE each
+    // candidate's isolating interval (bisection against `up`) and DROP those that
+    // become provably disjoint from [a.lower, a.upper]. The true match's interval
+    // always brackets its root (which lies in [a.lower,a.upper]), so it can NEVER
+    // be dropped; the others converge disjoint. This is sound + complete for a
+    // well-formed RealValue (interval brackets exactly one root). If the target
+    // genuinely brackets two roots (malformed/loose value), the count stays >1 and
+    // we fail CLOSED (exact=false → caller Unknown, never a guessed root).
+    for (int round = 0; round < 80 && cands.size() != 1; ++round) {
+        std::vector<RealAlg> next;
+        bool progressed = false;
+        for (auto& r : cands) {
+            if (r.isRational()) {                 // exact point: keep iff still inside
+                if (a.lower <= r.rational && r.rational <= a.upper) next.push_back(r);
+                else progressed = true;
+                continue;
+            }
+            if (algebra.refineRootInterval(r.root)) progressed = true;
+            if (r.root.upper < a.lower || r.root.lower > a.upper) { progressed = true; continue; } // disjoint → drop
+            next.push_back(r);
+        }
+        cands.swap(next);
+        if (cands.empty() || !progressed) break;   // no match / cannot refine further
     }
-    if (overlaps == 1) return *hit;
+    if (cands.size() == 1) return cands.front();
 
     // Ambiguous / no match: fail closed.
     exact = false;
