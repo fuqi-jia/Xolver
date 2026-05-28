@@ -5,6 +5,7 @@
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include "frontend/preprocess/UfInArithPurifier.h"
+#include "frontend/preprocess/RealDivLowerer.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
@@ -849,7 +850,19 @@ public:
                 return Result::Unknown;
             }
             const auto& req = dmLowerer.requirement();
-            bool hasEuf = (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
+            // QF_ANIA / QF_AUFNIA register an EufSolver (the array+NIA stack runs
+            // arrays on a shared EUF e-graph) — but ONLY when XOLVER_COMB_ARRAY_NIA
+            // routes them (without the flag they are not admitted at the array
+            // gate, so this code is never reached for them). So they have EUF
+            // available for the div/mod div-by-zero UF exactly when that flag is
+            // set. Missing here meant int div/mod-by-variable in QF_ANIA bailed to
+            // unknown (SVCOMP UltimateAutomizer family) despite EUF being present.
+            bool arrayNiaRoutedEuf =
+                std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr &&
+                (logic == "QF_ANIA" || logic == "ANIA" ||
+                 logic == "QF_AUFNIA" || logic == "AUFNIA");
+            bool hasEuf = arrayNiaRoutedEuf ||
+                          (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
                            logic == "QF_UFNIA" || logic == "UFNIA" ||
                            logic == "QF_UFNRA" || logic == "UFNRA" ||
                            logic == "QF_AX" ||
@@ -921,6 +934,18 @@ public:
             UfInArithPurifier ufPurifier(*ir);
             ufPurifier.run();
             ufPurifier.commit();
+        }
+
+        // Purify real division by a non-constant denominator into a fresh var
+        // plus a guarded polynomial defining constraint, so CDCAC can reason
+        // about it (default-OFF; gated to nonlinear-real logics where variable
+        // real division is in-fragment). Capability addition: when OFF the
+        // enclosing atom is rejected by the atomizer -> unknown (status quo).
+        if (std::getenv("XOLVER_REAL_DIV_PURIFY") != nullptr &&
+            (logic.find("NRA") != std::string::npos ||
+             logic.find("NIRA") != std::string::npos)) {
+            RealDivLowerer rdLowerer(*ir);
+            if (rdLowerer.run()) rdLowerer.commit();
         }
 
         // Normalize arithmetic casts (fold constant to_int/to_real)
@@ -1583,7 +1608,18 @@ public:
         // be over-floored to unknown); leave those to UF-aware validation.
         bool divModSatFloor = !divModOrigins_.empty() &&
                               !features.hasRealVar && !features.hasUF;
-        bool validateSat = niaSatFloor || divModSatFloor ||
+        // XOLVER_REAL_DIV_PURIFY introduces fresh `q` for real `(/ a b)` with the
+        // guarded def `b!=0 => q*b=a`. For b!=0 this pins q=a/b exactly; for b==0
+        // q is left free (SMT-LIB div-by-0 is unconstrained). The only residual
+        // soundness gap is the div-by-0 functional-consistency corner (distinct
+        // (/ a 0),(/ a' 0) with a=a' could diverge here). Co-activate the
+        // nonlinear-real SAT floor so every such sat is re-validated against the
+        // ORIGINAL `(/ a b)`: the validator computes a/b for b!=0 (confirms
+        // genuine sats) and returns Indeterminate for b==0 (downgrades the corner
+        // to unknown via CMS re-validation). Invariant 1 + corner soundness.
+        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar &&
+                                     std::getenv("XOLVER_REAL_DIV_PURIFY") != nullptr;
+        bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
                            (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
                            (features.hasNonlinear &&
                             std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);

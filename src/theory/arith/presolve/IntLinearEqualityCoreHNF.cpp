@@ -3,6 +3,7 @@
 
 #include <map>
 #include <set>
+#include <cstdlib>
 
 namespace xolver {
 
@@ -38,6 +39,20 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
     struct Eq { std::map<VarId, mpq_class> coeffs; mpq_class cst; size_t atomIdx; };
     std::vector<Eq> eqs;
     std::set<VarId> varset;
+    // XOLVER_PRESOLVE_DEDUP_ROWS (default-OFF): skip an equality whose
+    // (coeffs, cst) is byte-identical to one already collected. Such a row is
+    // the SAME linear constraint (E ∧ E ≡ E), so its presence does not change
+    // the solution set, the existence/feasibility test, or any SNF-derived
+    // substitution/congruence — only the matrix row count. On EVM/SVCOMP-style
+    // QF_ANIA inputs the live equality set is up to ~98% exact duplicates
+    // (floppy2: 19847 rows → 415 unique), so SNF (super-linear in rows) is
+    // computed on a massively redundant matrix. Deduping is solution-set exact;
+    // we keep the FIRST occurrence's atomIdx as the reason representative (a
+    // valid, possibly tighter, conflict justification). Same-coeffs/different-
+    // cst rows have distinct keys → both kept → the SNF existence check still
+    // detects the contradiction. Gate proves no-verdict-change OFF vs ON.
+    const bool dedupRows = std::getenv("XOLVER_PRESOLVE_DEDUP_ROWS") != nullptr;
+    std::set<std::pair<std::map<VarId, mpq_class>, mpq_class>> seenEq;
     for (size_t i = 0; i < st.atoms.size(); ++i) {
         const auto& A = st.atoms[i];
         if (!A.live || A.rel != Relation::Eq) continue;
@@ -45,6 +60,7 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
         mpq_class cst;
         if (!extractLinear(A.poly, coeffs, cst)) continue;
         if (coeffs.empty()) continue;  // pure constant — handled elsewhere
+        if (dedupRows && !seenEq.insert({coeffs, cst}).second) continue;  // exact duplicate
         for (const auto& [v, c] : coeffs) { (void)c; varset.insert(v); }
         eqs.push_back({std::move(coeffs), cst, i});
     }
@@ -87,13 +103,42 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
 
     const int diagN = std::min(snf.m, snf.n);
 
+    // XOLVER_PRESOLVE_IIS (default-OFF): on an existence conflict, return a
+    // MINIMAL infeasible subset instead of every equality's literals. The SNF
+    // row i is the integer combination U[i] of the original equalities (U·A·V=D,
+    // so row i of U·A is Σ_j U[i][j]·A[j]); the infeasibility of row i is
+    // therefore certified by exactly the equalities with U[i][j] ≠ 0. Their base
+    // literals form a SOUND, far tighter conflict than the full set. Without
+    // this, the presolve conflict is the negation of the ENTIRE active equality
+    // set, which blocks only the current assignment → the SAT solver re-proposes
+    // near-identical models (GrandProduct: 172 full model-checks, no
+    // convergence). A tight conflict generalizes and prunes the search.
+    const bool iisEnabled = std::getenv("XOLVER_PRESOLVE_IIS") != nullptr;
+    const int meq = static_cast<int>(eqs.size());
+
     // Existence: d_i | b'_i for nonzero diagonals; b'_i = 0 for zero rows.
     for (int i = 0; i < snf.m; ++i) {
         mpz_class d = (i < diagN) ? snf.D[i][i] : mpz_class(0);
         bool bad = (d != 0) ? (bp[i] % d != 0) : (bp[i] != 0);
         if (bad) {
             st.hasConflict = true;
-            st.conflict.clause = reasons.baseLiterals;
+            if (iisEnabled && i < static_cast<int>(snf.U.size())) {
+                // Collect only equalities combined into infeasible row i.
+                decltype(reasons.baseLiterals) iisLits;
+                std::set<std::pair<uint32_t, bool>> seen;
+                for (int j = 0; j < meq && j < static_cast<int>(snf.U[i].size()); ++j) {
+                    if (snf.U[i][j] == 0) continue;
+                    auto lits = st.ledger.flattenReasons(st.atoms[eqs[j].atomIdx].reasons);
+                    for (const auto& l : lits)
+                        if (seen.insert({l.var, l.sign}).second) iisLits.push_back(l);
+                }
+                // Guard: never emit an empty conflict (would be unsound). Fall
+                // back to the full reason set if the support was somehow empty.
+                st.conflict.clause = iisLits.empty() ? reasons.baseLiterals
+                                                     : std::move(iisLits);
+            } else {
+                st.conflict.clause = reasons.baseLiterals;
+            }
             return true;
         }
     }
