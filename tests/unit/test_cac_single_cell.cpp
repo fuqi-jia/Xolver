@@ -1,0 +1,130 @@
+// CAC single-cell projection (module B — characterize). Verifies the Lazard
+// projection is split correctly into this-level boundary polys (contain elimVar)
+// vs the downward characterization (free of elimVar), matching known cells.
+
+#include <doctest/doctest.h>
+#include <gmpxx.h>
+#include "theory/arith/nra/cac/SingleCellProjection.h"
+#ifdef XOLVER_HAS_LIBPOLY
+#include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/poly/PolynomialKernel.h"
+#endif
+
+using namespace xolver;
+
+static RealValue Q(long n, long d = 1) { return RealValue::fromMpq(mpq_class(n, d)); }
+
+static const VarId VX = VarId{1}, VY = VarId{2};
+
+static RationalPolynomial konst(long c) { return RationalPolynomial::fromConstant(mpq_class(c)); }
+
+// y^2 - x
+static RationalPolynomial yy_minus_x() {
+    RationalPolynomial p; p.addVar(VY, 2, 1); p.addVar(VX, 1, -1); p.normalize(); return p;
+}
+// x^2 + y^2 - 1
+static RationalPolynomial circle() {
+    RationalPolynomial p; p.addVar(VX, 2, 1); p.addVar(VY, 2, 1);
+    p = p + konst(-1); p.normalize(); return p;
+}
+
+static bool hasPolyInXOnly(const std::vector<RationalPolynomial>& v) {
+    for (const auto& p : v) if (p.degree(VY) == 0 && p.degree(VX) >= 1) return true;
+    return false;
+}
+
+TEST_CASE("characterize: y^2 - x eliminate y") {
+    auto r = characterize({yy_minus_x()}, VY);
+    CHECK(r.complete);
+    // The squarefree factor y^2 - x stays in y as this level's boundary.
+    REQUIRE(r.boundaryPolys.size() >= 1);
+    for (const auto& p : r.boundaryPolys) CHECK(p.degree(VY) >= 1);
+    // The discriminant / trailing coeff (~ x) is the downward boundary.
+    CHECK(hasPolyInXOnly(r.downwardPolys));
+    for (const auto& p : r.downwardPolys) CHECK(p.degree(VY) == 0);
+}
+
+TEST_CASE("characterize: circle x^2 + y^2 - 1 eliminate y") {
+    auto r = characterize({circle()}, VY);
+    CHECK(r.complete);
+    REQUIRE(r.boundaryPolys.size() >= 1);
+    // Discriminant in y is ~ (1 - x^2): a downward poly in x only.
+    CHECK(hasPolyInXOnly(r.downwardPolys));
+}
+
+TEST_CASE("characterize: resultant of two lines in y") {
+    // y - x and y - 2 : res_y = (x - 2), a downward poly in x only.
+    RationalPolynomial a; a.addVar(VY, 1, 1); a.addVar(VX, 1, -1); a.normalize();   // y - x
+    RationalPolynomial b; b.addVar(VY, 1, 1); b = b + konst(-2); b.normalize();     // y - 2
+    auto r = characterize({a, b}, VY);
+    CHECK(r.complete);
+    CHECK(hasPolyInXOnly(r.downwardPolys));
+}
+
+TEST_CASE("characterize: empty input is complete and empty") {
+    auto r = characterize({}, VY);
+    CHECK(r.complete);
+    CHECK(r.boundaryPolys.empty());
+    CHECK(r.downwardPolys.empty());
+}
+
+TEST_CASE("characterize: no constants leak into either bucket") {
+    auto r = characterize({circle()}, VY);
+    for (const auto& p : r.boundaryPolys) CHECK_FALSE(p.isConstant());
+    for (const auto& p : r.downwardPolys) CHECK_FALSE(p.isConstant());
+}
+
+#ifdef XOLVER_HAS_LIBPOLY
+// x^2 - 2 in variable `x` (registered with the kernel).
+static RationalPolynomial xsq_minus_2(VarId x) {
+    RationalPolynomial p; p.addVar(x, 2, 1); p = p + konst(-2); p.normalize(); return p;
+}
+
+TEST_CASE("intervalFromCharacterization: x^2-2, sample 0 -> (-√2, √2)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    SamplePoint prefix;   // x is level 0: empty prefix
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {xsq_minus_2(x)},
+                                          prefix, x, RealAlg::fromRational(mpq_class(0)));
+    REQUIRE(r.supported);
+    CHECK(r.interval.contains(Q(0)));
+    CHECK(r.interval.contains(Q(1)));
+    CHECK_FALSE(r.interval.contains(Q(2)));
+    CHECK_FALSE(r.interval.contains(Q(-2)));
+    // endpoints ≈ ±√2 (1.41 < √2 < 1.42): validates the algebraic conversion.
+    CHECK(r.interval.contains(Q(141, 100)));
+    CHECK_FALSE(r.interval.contains(Q(142, 100)));
+    CHECK(r.interval.contains(Q(-141, 100)));
+    CHECK_FALSE(r.interval.contains(Q(-142, 100)));
+}
+
+TEST_CASE("intervalFromCharacterization: x^2-2, sample 2 -> (√2, +inf)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    SamplePoint prefix;
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {xsq_minus_2(x)},
+                                          prefix, x, RealAlg::fromRational(mpq_class(2)));
+    REQUIRE(r.supported);
+    CHECK(r.interval.contains(Q(2)));
+    CHECK(r.interval.contains(Q(100)));
+    CHECK(r.interval.contains(Q(142, 100)));    // just above √2
+    CHECK_FALSE(r.interval.contains(Q(141, 100)));  // just below √2
+    CHECK_FALSE(r.interval.contains(Q(0)));
+}
+
+TEST_CASE("intervalFromCharacterization: positive-definite x^2+1 -> whole axis") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial p; p.addVar(x, 2, 1); p = p + konst(1); p.normalize();  // x^2 + 1
+    SamplePoint prefix;
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {p},
+                                          prefix, x, RealAlg::fromRational(mpq_class(0)));
+    REQUIRE(r.supported);          // no real roots ⇒ sign-invariant on all of ℝ
+    CHECK(r.interval.contains(Q(0)));
+    CHECK(r.interval.contains(Q(1000)));
+    CHECK(r.interval.contains(Q(-1000)));
+}
+#endif  // XOLVER_HAS_LIBPOLY
