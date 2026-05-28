@@ -535,7 +535,10 @@ public:
 
     bool parseFile(std::string_view filename) {
         parser = std::make_unique<SOMTParser::Parser>();
-        parser->setOption("expand_functions", true);
+        // DIAG (XOLVER_NO_EXPAND_FUNCTIONS): toggle define-fun inlining to confirm
+        // whether parse-time expansion is the Certora blowup. Not for production.
+        parser->setOption("expand_functions",
+                          std::getenv("XOLVER_NO_EXPAND_FUNCTIONS") == nullptr);
         if (!parser->parse(std::string(filename))) {
             return false;
         }
@@ -700,6 +703,20 @@ public:
         // these ExprIds keep referencing the original formula even after
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
+
+        // Coarse phase timing (SOLVE_PHASE_PROF) to localize a pre-solve hang.
+        // Flushed to stderr so a timeout-killed run shows the last phase entered.
+        static const bool phaseProf = std::getenv("SOLVE_PHASE_PROF") != nullptr;
+        auto phaseClock = std::chrono::steady_clock::now();
+        auto phase = [&](const char* nm) {
+            if (!phaseProf) return;
+            auto now = std::chrono::steady_clock::now();
+            std::cerr << "[PHASE] " << nm << "  +"
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(now - phaseClock).count()
+                      << "ms (asserts=" << ir->assertions().size() << ")" << std::endl;
+            phaseClock = now;
+        };
+        phase("enter");
 
         // XOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
         // formula rewriter. Runs BEFORE ITE lowering so its simplifications
@@ -929,6 +946,7 @@ public:
             ToIntDefinitionalLowerer t2i(*ir);
             t2i.run();
             t2i.commit();
+            phase("preprocess-done");
 
             if (t2i.hadNonlinearBridge()) {
                 // Upgrade declared logic to the nonlinear counterpart.
@@ -1001,6 +1019,7 @@ public:
         // Detect features from CoreIr for safe routing
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
+        phase("detect-done");
 
         // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
@@ -1284,11 +1303,13 @@ public:
         // PG-CNF (XOLVER_PP_PG_CNF): pre-compute the occurrence polarity of every
         // subformula (each assertion is a positive root) so the monotone
         // connectives below emit only the required half of their definition.
+        phase("setup-done");
         atomizer.computePolarities(ir->assertions(), *ir);
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
+        phase("atomize-done");
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,
