@@ -147,6 +147,28 @@ REALITY CHECK: z3 wins ~60% of QF_UFNIA but via specialized reasoning; our NIA
 engine structurally can't. The 2 my-lane gaps (real-div, hasEuf) are the
 closeable ones; the rest of EQ+NA is NIA-engine/structural-bound.
 
+### HARDENED 2026-05-29: all 73 QF_UFNIA instant-unknowns are NIA/structural
+Earlier verdict rested on 3 Zohar traces; the 73 instant-unknowns actually span
+5 families (44 Zohar-ic, 25 Zohar-alive, 2 TwoSquares, 1+1 CLEARSY). Traced the
+4 NON-Zohar ones (the only place a hidden my-lane bail could lurk) — all 4 reach
+the engine, none is an atomization/routing bail:
+- 20190906-CLEARSY/0001/00304 (sat): Full-effort modelCheck → unknowns=1,
+  "Theory: unknown (no reason)" = NIA engine can't decide consistency (engine
+  incompleteness).
+- 20190909-CLEARSY/0021/00001 (sat): "NIA: pending unknown (opposite polarity)"
+  = NiaSolver.cpp:237 floor (same structural floor as Zohar).
+- TwoSquares/z3.704037 + z3.704066 (BOTH oracle=unsat): Full-effort modelCheck
+  returns consistent=1 on an UNSAT formula (NIA can't refute → spurious
+  "consistent" model), then strict-validation floor → unknown ("model not
+  positively confirmed (Indeterminate)"). The floor is CORRECT — promoting that
+  model to SAT would be a FALSE-SAT (unsound). Real fix = NIA unsat-completeness,
+  NOT my-lane model extraction. (Do NOT "recover" these — sound unknown is the
+  right answer until NIA can prove unsat.)
+VERDICT: zero hidden my-lane atomization/routing gaps in the QF_UFNIA flagship
+instant-unknown set. The flagship conclusion (NIA-engine + structural) now holds
+across all 5 families present, not just Zohar. EQ+NA my-lane is fully mapped +
+closed; remaining throughput is NIA-engine/structural, handed off.
+
 ## ★ PRESOLVE-INFRA LANE (2026-05-29) — shared arith presolve (mine to fix)
 Master redirect: own src/theory/arith/presolve/ (PresolveEngine,
 IntLinearEqualityCoreHNF, IntegerLinearAlgebra) — the real EQ+NA wall, shared by
