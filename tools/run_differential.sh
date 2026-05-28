@@ -27,7 +27,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # 自动找 xolver 二进制(本地打包→上传解压的常见位置;也可 XOLVER=/路径 覆盖)
 if [ -z "${XOLVER:-}" ]; then
   for c in "$HERE/bin/xolver" "$HERE/xolver" "$HERE/../bin/xolver" \
-           "./bin/xolver" "./xolver" "$HERE/../build_static/bin/xolver"; do
+           ./bin/xolver ./xolver ./xolver-dist/bin/xolver "$HERE"/xolver-dist/bin/xolver \
+           "$HERE"/*-dist/bin/xolver ./*-dist/bin/xolver "$HERE/../build_static/bin/xolver"; do
     [ -x "$c" ] && { XOLVER="$c"; break; }
   done
 fi
