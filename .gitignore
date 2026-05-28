@@ -120,6 +120,9 @@ COMMAND.md
 run_euf_validation.sh
 CLAUDE.md
 AGENTS.md
+preparation/
+smt-comp-2026-racing.md
+bin/
 
 # SMT-COMP submission staging (local only; archive lives on Zenodo)
 submission-smtcomp2026/
