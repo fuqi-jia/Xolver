@@ -36,14 +36,16 @@ OPTIMIZATION_FLAGS: List[str] = [
     # LIA / LRA
     "XOLVER_LIA_CUTS", "XOLVER_LIA_REPAIR",
     "XOLVER_LRA_BOUND_AXIOMS", "XOLVER_LRA_PIVOT_HEUR", "XOLVER_LRA_PROP",
-    # NIA
+    # NIA  (MODULAR = L3 modular reasoner, origin/agent/nia — a real-recovery lever)
     "XOLVER_NIA_REFUTE", "XOLVER_NIA_GCD", "XOLVER_NIA_ICP",
     "XOLVER_NIA_CDCAC", "XOLVER_NIA_BV_CASCADE",
-    "XOLVER_NIA_DIVISOR_CAP", "XOLVER_NIA_UNIVARIATE_FULL",
-    # NRA (hybrid/preelim/linearize gated by the wrong-count differential)
+    "XOLVER_NIA_DIVISOR_CAP", "XOLVER_NIA_UNIVARIATE_FULL", "XOLVER_NIA_MODULAR",
+    # NRA (hybrid/preelim/linearize gated by the wrong-count differential;
+    #      SUBTROPICAL = SAT-fast front door, origin/agent/nra — a real-recovery lever)
     "XOLVER_NRA_LAZARD_LIFT", "XOLVER_NRA_LIBPOLY_PSC",
     "XOLVER_NRA_VARORDER", "XOLVER_NRA_VARORDER_SIMPLEX",
     "XOLVER_NRA_HYBRID", "XOLVER_NRA_PREELIM", "XOLVER_NRA_LINEARIZE",
+    "XOLVER_NRA_SUBTROPICAL",
     # preprocessing / SAT / strategy (universal)
     "XOLVER_PP_REWRITE", "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_PG_CNF",
     "XOLVER_PP_LET_ELIM", "XOLVER_PP_VALIDATOR_MEMO",
