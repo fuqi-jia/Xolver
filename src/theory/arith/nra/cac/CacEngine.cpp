@@ -71,7 +71,8 @@ RealAlg toRealAlg(LibpolyBackend& algebra, const RealValue& v) {
 
 CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     CoverOut out;
-    if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; return out; }
+    if (level > maxDepth_) maxDepth_ = level;
+    if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; lastUnknown_ = "node-budget"; return out; }
 
     const int n = static_cast<int>(varOrder_.size());
     const VarId var = varOrder_[level];
@@ -82,7 +83,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     long cells = 0;
 
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
-        if (++cells > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; return out; }
+        if (++cells > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; lastUnknown_ = "cell-budget"; return out; }
         const RealAlg s_i = toRealAlg(*algebra_, *sOpt);
         sample.push(var, s_i);
 
@@ -97,7 +98,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 if (s == Sign::Unknown) { anyUnknown = true; break; }
                 if (!relationHolds(s, cons_[ci].rel)) violated.push_back(cons_[ci].poly), allHold = false;
             }
-            if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
+            if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "signAt-unknown"; return out; }
             if (allHold)    { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
             cellBoundaries = std::move(violated);
         } else {
@@ -106,7 +107,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
             // rec UNSAT: project its characterization down, eliminating var_{level+1}.
             CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_);
-            if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; return out; }
+            if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; lastUnknown_ = "characterize-incomplete"; return out; }
             cellBoundaries = std::move(ch.downwardPolys);
         }
 
@@ -119,7 +120,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         const CellResult cr = intervalFromCharacterization(algebra_, kernel_, cellBoundaries,
                                                            prefix, var, s_i, /*skipVanishing=*/isLeaf);
         sample.pop();                                   // restore for next iteration
-        if (!cr.supported) { out.status = CacStatus::Unknown; return out; }
+        if (!cr.supported) { out.status = CacStatus::Unknown; lastUnknown_ = isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"; return out; }
         cov.add(cr.interval);
         for (auto& p : cellBoundaries) levelChar.push_back(std::move(p));
     }

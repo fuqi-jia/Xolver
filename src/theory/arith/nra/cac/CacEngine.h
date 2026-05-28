@@ -5,6 +5,7 @@
 #include "theory/arith/nra/core/CdcacValue.h"   // SamplePoint, RealAlg
 #include "expr/types.h"
 
+#include <string>
 #include <vector>
 
 namespace xolver {
@@ -69,6 +70,11 @@ public:
 
     CacResult solve();
 
+    // Why solve() returned Unknown (for diagnostics / lever triage). Empty if
+    // it did not return Unknown.
+    const std::string& lastUnknown() const { return lastUnknown_; }
+    long maxDepthReached() const { return maxDepth_; }
+
 private:
     struct CoverOut {
         CacStatus status = CacStatus::Unknown;
@@ -85,6 +91,8 @@ private:
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;
+    std::string lastUnknown_;        // bail reason (diagnostics)
+    long maxDepth_ = 0;              // deepest level reached
 };
 
 } // namespace xolver

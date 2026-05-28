@@ -561,7 +561,10 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         std::ofstream st("/tmp/cac_diff.txt", std::ios::app);
         st << "[CAC] vars=" << varOrder.size() << " cons=" << presolveConstraints_.size()
            << " verdict=" << (res.status == CacStatus::Sat ? "sat"
-                              : res.status == CacStatus::Unsat ? "unsat" : "unknown") << "\n";
+                              : res.status == CacStatus::Unsat ? "unsat" : "unknown")
+           << " depth=" << eng.maxDepthReached()
+           << (res.status == CacStatus::Unknown ? (" reason=" + eng.lastUnknown()) : std::string())
+           << "\n";
         st.flush();
     }
 
