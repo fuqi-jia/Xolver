@@ -83,3 +83,21 @@ expand on-demand / never fully) — a substantial frontend+SOMTParser+CoreIr
 architecture change. AND the Certora lane is hard for z3 (4/5 timeout). => LOW ROI.
 RECOMMEND: deprioritize the Certora parser rewrite; quantify the shipped broad
 QF_NIA levers (modular L3+Hensel, WalkSAT SLS) via E's differential instead.
+
+### CORRECTION 2 (2026-05-29) — "parser-bound" was a -v / cerr-silencing ARTIFACT.
+The CLI silences stderr unless `-v` (Solver.cpp:157 → NullStreambuf). My Certora
+phase/stage profiling runs OMITTED `-v`, so [PHASE]/STAGE-PROF (cerr) were
+SUPPRESSED — I misread "0 lines" as "hang before checkSatInternal = parser."
+WRONG. Re-run WITH `-v`: ALL phases print in ~20ms: enter(asserts=80) →
+preprocess-done(307) → detect-done(307) → setup-done(357) → atomize-done(357).
+So PARSE + lowering + atomization are FAST (~20ms). `--parse-only` (stdout, not
+silenced) confirms parse-ok fast too. The hang is in SOLVING (after atomize), and
+ARITH_STAGE_PROF shows NO NiaSolver-pipeline dumps in 15s ⇒ the NIA arith pipeline
+is NOT the hot path here ⇒ the hang is in the COMBINATION/EUF/SAT layer
+(TheoryManager / SharedEqualityManager N-O diseq / CaDiCaL search / propagator) —
+A3's lane — consistent with the ORIGINAL [[project_nia_perpropagation_perf]]
+(NIA/combination-engine-bound, NOT parser). The whole "eager define-fun expansion
+/ lazy-macro" thread is MOOT (parse is fast). SOMTParser untouched/pristine.
+--parse-only tool is still useful: lets E confirm parse-phase is fine corpus-wide.
+NEXT: localize the solve hang (SAT vs EUF vs combination N-O) — coordinate w/ A3.
+LESSON: always pass `-v` when reading cerr diagnostics from the CLI.
