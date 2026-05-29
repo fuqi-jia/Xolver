@@ -631,8 +631,13 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
                         // yields fast to Collins instead of grinding); rest of 1200s is Collins
     }();
+    static const bool earlyInfeas = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_EARLY_INFEAS");
+        return e && *e && *e != '0';
+    }();
     CacEngine::Config cfg;
     cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    cfg.earlyInfeas = earlyInfeas;
     CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 

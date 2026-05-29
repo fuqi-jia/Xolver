@@ -85,6 +85,13 @@ public:
         // to the global timeout and starving it. When CAC is the SOLE engine
         // (no Collins), leave it 0 (unbounded) and rely on the external timeout.
         long deadlineMillis = 0;
+        // Track 1 #39: early-infeasibility probe at every non-leaf sample.
+        // signAt every constraint whose mainLevel ≤ current level; a definite-
+        // nonzero violating sign ⇒ exclude the cell on var WITHOUT recursing.
+        // signAt = Zero (nullification) routes via the existing characterize
+        // path (NOT a direct conflict). Default OFF; NraSolver stageCac flips
+        // it from XOLVER_NRA_CAC_EARLY_INFEAS.
+        bool earlyInfeas = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -123,7 +130,17 @@ private:
     PolynomialKernel* kernel_;
     std::vector<VarId> varOrder_;
     std::vector<CacConstraint> cons_;
+    // Per-constraint cache, parallel to cons_ (populated in the constructor):
+    //   consMainLevel_[ci] = highest level in varOrder_ that appears in cons_[ci].poly,
+    //                        or -1 if the poly is constant.  Used by the early-
+    //                        infeasibility probe to filter constraints whose sign
+    //                        is fully decidable at the current prefix (mvLevel<=level).
+    //   consPid_[ci]       = libpoly PolyId for signAt (one-time toPrimitiveInteger),
+    //                        avoiding per-probe re-normalization.
+    std::vector<int> consMainLevel_;
+    std::vector<PolyId> consPid_;
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
+    bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;

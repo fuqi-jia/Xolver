@@ -126,4 +126,63 @@ TEST_CASE("CAC engine: unsatCore non-empty + in-range on a 2-var UNSAT") {
     CHECK(std::find(r.unsatCore.begin(), r.unsatCore.end(), size_t{1}) != r.unsatCore.end());
 }
 
+// ---- Early infeasibility probe (Track 1 #39) -------------------------------
+// XOLVER_NRA_CAC_EARLY_INFEAS / Config::earlyInfeas: at non-leaf levels, signAt
+// every constraint whose mainLevel ≤ current level; a definite-nonzero violation
+// excludes the cell on var without recursing. Soundness: SAT unchanged (the
+// probe only PRUNES); UNSAT verdict matches the baseline; signAt = Zero
+// (nullification) is NOT treated as a violation, it falls through to the
+// existing characterize / Lazard-residual path.
+
+TEST_CASE("CAC engine: early-infeas preserves UNSAT verdict + core (2-var)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-1); circ.normalize();                                   // x^2+y^2-1
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize(); // x-2
+    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK_FALSE(r.unsatCore.empty());
+    // x-2>0 (idx 1) MUST appear (the early-infeas probe at level 0 excludes the
+    // x<2 cell directly from this constraint).
+    CHECK(std::find(r.unsatCore.begin(), r.unsatCore.end(), size_t{1}) != r.unsatCore.end());
+}
+
+TEST_CASE("CAC engine: early-infeas preserves SAT verdict (2-var)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-4); circ.normalize();                                   // x^2+y^2-4
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();               // x
+    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CHECK(eng.solve().status == CacStatus::Sat);   // SAT pruning-invariant
+}
+
+TEST_CASE("CAC engine: early-infeas + var-independent unsat constraint (whole-axis)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    // x-5>0 ∧ x+1<0 — both depend only on x (level 0); jointly UNSAT.
+    // At level 0 (x), sampling any x value lets early-infeas decide one of the
+    // bounds (or both, depending on sample), without ever recursing into y.
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-5); xg.normalize(); // x-5
+    RationalPolynomial xl; xl.addVar(x, 1, 1); xl = xl + K(1);  xl.normalize(); // x+1
+    CacEngine::Config cfg; cfg.earlyInfeas = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{xg, Relation::Gt}, {xl, Relation::Lt}}, cfg);
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK(r.unsatCore == std::vector<size_t>{0, 1});                       // both x-bounds needed
+}
+
 #endif  // XOLVER_HAS_LIBPOLY

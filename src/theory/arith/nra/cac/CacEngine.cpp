@@ -22,13 +22,30 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
       cons_(std::move(constraints)), cfg_(cfg) {
 #ifdef XOLVER_HAS_LIBPOLY
     if (kernel_) {
-        // Upfront representability probe: if any constraint poly cannot be
-        // normalized to a primitive integer poly the engine cannot reason on it
-        // ⇒ buildOk_ = false ⇒ solve() returns Unknown. (The per-atom paths
-        // re-normalize on demand via characterizeLeafAtom / characterize.)
-        for (const auto& c : cons_) {
-            if (!c.poly.toPrimitiveInteger(*kernel_).ok()) { buildOk_ = false; break; }
+        // Per-constraint cache + representability probe in one pass:
+        //   - toPrimitiveInteger normalizes & PolyIds the constraint poly for
+        //     signAt; cache the PolyId for the early-infeasibility probe (T1).
+        //   - Compute mainLevel = highest level in varOrder_ that appears in
+        //     the poly (or -1 for a constant). Used to filter constraints
+        //     whose sign is decidable at the current prefix.
+        consMainLevel_.resize(cons_.size(), -1);
+        consPid_.resize(cons_.size(), NullPoly);
+        for (size_t ci = 0; ci < cons_.size(); ++ci) {
+            auto np = cons_[ci].poly.toPrimitiveInteger(*kernel_);
+            if (!np.ok()) { buildOk_ = false; break; }
+            consPid_[ci] = np.poly;
+            int top = -1;
+            for (VarId v : cons_[ci].poly.variables()) {
+                for (size_t li = 0; li < varOrder_.size(); ++li) {
+                    if (varOrder_[li] == v) {
+                        if (static_cast<int>(li) > top) top = static_cast<int>(li);
+                        break;
+                    }
+                }
+            }
+            consMainLevel_[ci] = top;
         }
+        earlyInfeas_ = cfg_.earlyInfeas;
     } else {
         buildOk_ = false;
     }
@@ -196,16 +213,46 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             cellBoundaries = std::move(violated);
             cellOrigins = std::move(violatedIdx);
         } else {
-            CoverOut rec = getUnsatCover(level + 1, sample);
-            if (rec.status == CacStatus::Sat)     { sample.pop(); out.status = CacStatus::Sat; return out; }
-            if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
-            cellOrigins.assign(rec.origins.begin(), rec.origins.end());
-            // rec UNSAT: project its characterization down, eliminating var_{level+1}.
-            // `sample` holds vars[0..level]; the required coefficients (in those
-            // vars) are evaluated against it (McCallum sample-aware projection).
-            CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
-            if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("characterize-incomplete"); return out; }
-            cellBoundaries = std::move(ch.downwardPolys);
+            // EARLY INFEASIBILITY PROBE (XOLVER_NRA_CAC_EARLY_INFEAS, default
+            // OFF — Track 1 #39). signAt every constraint whose mainLevel ≤ level
+            // (fully decidable at the current prefix `sample`). A definite NON-
+            // ZERO sign that violates `rel` ⇒ this prefix cannot extend to SAT
+            // regardless of deeper var choices ⇒ exclude the cell on `var`
+            // around the sample WITHOUT recursing. The cell is built by the
+            // shared tail via intervalFromCharacterization: whole-axis when the
+            // poly is var-independent at the prefix (mainLevel < level, no
+            // roots in var ⇒ cell = ℝ), single-cell otherwise (mainLevel ==
+            // level, roots delineate). signAt = Zero is the nullification path
+            // (constraint vanishes on the sub-fiber) — NEVER a direct conflict;
+            // route via the existing characterize / Lazard-residual machinery
+            // by FALLING THROUGH to the recurse (the deeper level handles it).
+            // signAt = Unknown is fail-safe skip. SAT path (no violation found)
+            // recurses as before, so SAT correctness is unchanged.
+            bool earlyHit = false;
+            if (earlyInfeas_) {
+                for (size_t ci = 0; ci < cons_.size(); ++ci) {
+                    if (consMainLevel_[ci] < 0 || consMainLevel_[ci] > level) continue;
+                    if (consPid_[ci] == NullPoly) continue;
+                    const Sign sig = algebra_->signAt(consPid_[ci], sample);
+                    if (sig == Sign::Unknown || sig == Sign::Zero) continue;   // trap-safe (Zero ⇒ nullification → recurse)
+                    if (relationHolds(sig, cons_[ci].rel)) continue;            // satisfied
+                    cellBoundaries.push_back(cons_[ci].poly);
+                    cellOrigins.push_back(ci);
+                    earlyHit = true;
+                }
+            }
+            if (!earlyHit) {
+                CoverOut rec = getUnsatCover(level + 1, sample);
+                if (rec.status == CacStatus::Sat)     { sample.pop(); out.status = CacStatus::Sat; return out; }
+                if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
+                cellOrigins.assign(rec.origins.begin(), rec.origins.end());
+                // rec UNSAT: project its characterization down, eliminating var_{level+1}.
+                // `sample` holds vars[0..level]; the required coefficients (in those
+                // vars) are evaluated against it (McCallum sample-aware projection).
+                CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
+                if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("characterize-incomplete"); return out; }
+                cellBoundaries = std::move(ch.downwardPolys);
+            }
         }
 
         // Cell on var's axis around s_i, from boundary polys isolated at the prefix.
