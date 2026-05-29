@@ -560,3 +560,50 @@ shippable; the un-cross-checkable are floored. unit 890/890, nia reg 113/113 OFF
 DECISION per master: score the confirmed, never gamble the division on an unaudited
 cert. (A formal Xolver-proof-checker-consumable modular cert is a further
 formalization; the empirical 3-path agreement provides the independent validation.)
+
+## MEDAL LANE — per-cb_propagate NIA perf in combination (QF_UFNIA/ANIA/UFDTNIA) (2026-05-29)
+Master charter: make the NIA-engine per-propagation path cheap so the combination
+divisions stop hanging->unknown. Profiled (gdb worker-stack SIGINT sampling under
+ptrace_scope=1 via gdb-launch-as-child + ARITH_STAGE_PROF cumulative) the actual
+hot paths. KEY FINDINGS:
+
+1. QF_ANIA ~0/157 is NOT a NIA-engine problem — it is EQNA's lane (TWO gates):
+   (a) ROUTING is default-OFF behind `XOLVER_COMB_ARRAY_NIA`. Without it every
+       QF_ANIA case floors at Solver.cpp isArrayLogic -> "array feature outside
+       array logic" BEFORE any solver runs (that is the ~0/157 in the submitted
+       config). EQNA must promote this gate.
+   (b) With routing ON, QF_ANIA reaches the array+NIA stack and HANGS (33/40
+       sampled timeout). gdb worker stack is ENTIRELY in the EUF/array layer:
+         ArrayReasoner::completeStoreSelects -> enqueueEagerMerges ->
+         internSelect -> IncrementalEGraph::ensureTermRegistered/refreshSignature
+         -> RollbackSignatureTable::find (signature hash lookups), per cb_propagate.
+       The NIA engine is NOT on the stack. => eager-array-merge perf, EQNA's lane.
+   Plus a 3rd, smaller NIA-side floor: 7/40 fast-unknown "NIA: pending unknown
+   (opposite polarity asserted)" — activeSet_ sees both polarities of an atom
+   asserted (combination feeds it contradictory interface lits); floors instead
+   of emitting the {b,-b} conflict. At the combination->NIA seam (coordinate w/
+   EQNA before touching). avg20 (z3=sat) is lost to this floor.
+
+2. QF_UFNIA timeouts (~33% of a 45-sample) split, by z3@15s ground truth:
+   - ~80% also time out z3 (genuinely hard; full 1200s may get some, not low fruit)
+   - a couple are z3-quick-UNSAT but EUF-bound: Zohar qf_AndOrXor / int_check_bvugt
+     encode BV via UNINTERPRETED intand/intor/pow2 + axioms => unsat is an EUF+NIA
+     combination result, not pure NIA (EQNA/combination).
+   - a NIA-engine-bound fraction (e.g. Certora 3106, z3=sat): hot stage is
+     nia.normalize.
+
+3. SHIPPED [273e0a3] incremental normalize cache (XOLVER_NIA_NORM_CACHE, default-OFF):
+   nia.normalize re-normalized the FULL active_ set every cb_propagate at Standard
+   effort. normalizeOne is pure per immutable constraint; active_ is a strict stack
+   => normalized_ kept in lockstep (onBacktrack eager-truncate kills the
+   pop-then-push same-size-different-tail hazard; onReset clears; stageNormalize
+   appends only the fresh tail). Byte-identical output. Measured on 3106:
+   nia.normalize 3483ms/146 -> 55ms/126 calls (63x). Gate: unit 890/890, nia reg
+   113/113 OFF+ON, ufnia 10/10 OFF+ON, 0-unsound, OFF==ON verdicts. Promote candidate.
+
+4. NEXT NIA hot stage after normalize = nia.domain (stageDomainInference, 2.2s/126
+   on 3106): domains_.reset() + linearDomain_.run + product-bound + equality-prop,
+   a CROSS-constraint fixpoint re-run from scratch each call. NOT a clean
+   per-constraint cache (state interacts; conflict-explanation soundness risk).
+   Incrementalizing it is a real project — deferred pending A/B evidence that
+   per-propagation perf flips solved-count (vs the cases being SAT-hard / EUF-bound).
