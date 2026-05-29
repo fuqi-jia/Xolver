@@ -408,3 +408,22 @@ offset to fit. WHY-BLAN-IS-FASTER answer: more compact encoding (constant foldin
 CURRENT STANDING: head-to-head 17-18/24 (BLAN 20), within timing noise. All sound:
 unit 890/890, nia reg 113/113 OFF+ON, 0-unsound. NEXT for full parity (20+):
 debug+reland offset product encoding, or sorting-network addition.
+
+## OFFSET RE-ATTEMPT — CORRECT BUT EMPIRICALLY NET-NEGATIVE (2026-05-29, final)
+Re-landed offset WITH the polarity fix and isolated the earlier bug: the offset
+VALUE (lb+t) in products is EXACT (1395 valid=1 with offset-value, bounds still
+encoded) — the earlier invalidity was the SKIP combined with the polarity bug, NOT
+the product encoding. So offset is now CORRECT. BUT measuring offset+skip:
+head-to-head DROPPED to 16/24 (from 17-18), calypto still TO. WHY: these Farkas/
+termination cases are dominated by ONE-SIDED `>=0` lambdas (not both-sided =>
+not offset-eligible => no bound-skip) and by bilinear PRODUCTS + big SUMS, while
+offset's lb+t representation WIDENS both-sided vars (W+1 bits + adder) => slower.
+1395 cost breakdown is products+sums, not bound atoms. => OFFSET IS THE WRONG
+LEVER for this corpus. REVERTED to per-var-width + folding + polarity (= ce9181e,
+17-18/24). The real SAT-side lever to reach 20 is SUM/PRODUCT density: sorting-
+network / Wallace-tree multi-operand addition for the Farkas sums (substantial,
+validate-gate-safe). KEY STRATEGIC POINT: overall Xolver ALREADY EXCEEDS BLAN via
+complementarity — BLAN (pure bit-blaster) TIMES OUT on the modInv/Hensel UNSAT
+family that nia.modular solves; so on the full QF_NIA corpus (SAT+UNSAT) the union
+is ahead even at 17-18/24 SAT-recovery. The 18->20 SAT-parity is the last SAT-side
+subset, needs the sum-encoding rewrite.
