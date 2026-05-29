@@ -29,6 +29,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
 #include "theory/core/LogicFeatureDetector.h"
+#include "theory/arith/bit_blast/EagerBitBlastSolver.h"
 #ifdef XOLVER_ENABLE_CASESTATS
 #ifdef XOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
@@ -1116,6 +1117,31 @@ public:
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
+        }
+
+        // -------------------------------------------------------------------
+        // Whole-formula EAGER BIT-BLAST portfolio arm (XOLVER_NIA_EAGER_BITBLAST,
+        // default OFF). BLAN-style: translate the ENTIRE QF_NIA formula (boolean
+        // skeleton + arith atoms, Int -> bit-vectors) into ONE SAT solve. It is
+        // a SOUND SAT-FINDER ONLY: the model is exact-validated inside
+        // EagerBitBlastSolver (invariant 1) and it NEVER returns Unsat
+        // (invariant 7). On Unknown it falls through to the CDCL(T) main loop —
+        // a parallel strategy, not main-loop surgery (invariant 5 intact).
+        // -------------------------------------------------------------------
+        if (std::getenv("XOLVER_NIA_EAGER_BITBLAST") &&
+            (logic == "QF_NIA" || logic == "NIA") &&
+            !features.hasRealVar && !features.hasMixedIntReal &&
+            !features.hasUF && !features.hasArray && !features.hasDatatype) {
+            phase("eager-bb-start");
+            bitblast::EagerBitBlastSolver eagerbb;
+            auto ibr = eagerbb.solve(*ir, ir->assertions());
+            phase("eager-bb-done");
+            if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                return Result::Sat;
+            }
         }
 
         // -------------------------------------------------------------------

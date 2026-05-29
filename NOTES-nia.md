@@ -302,3 +302,53 @@ held incremental-SAT/whole-blast lane). Per-assignment bit-blast stays as-is.
 Cheaper partial win available meanwhile: time-box nia.cdcac so it stops wasting
 multi-second budget on SAT cases (doesn't recover these — bit-blast already failed —
 but frees budget broadly). Kept NIA_BITBLAST_DIAG (env-gated) for the blast work.
+
+## LEVER — EagerBitBlastSolver: whole-formula eager bit-blast arm (2026-05-29) [GREENLIT]
+Master greenlit the whole-formula recovery lever as a SOUND PORTFOLIO ARM. Flag
+XOLVER_NIA_EAGER_BITBLAST (default-OFF). NEW files src/theory/arith/bit_blast/
+EagerBitBlastSolver.{h,cpp}; wired in Solver.cpp checkSatInternal AFTER lowering/
+detect, gated to QF_NIA + integer-only, BEFORE TheoryManager setup. On Unknown it
+falls through to the CDCL(T) main loop (invariant 5 intact — parallel strategy, not
+surgery). NAMING: it's EAGER BIT-BLAST (whole formula -> SAT), NOT "int-blast"
+(that term = integer->BV BV-solving; user corrected me).
+
+DESIGN (adapt-to-our-code, not a BLAN 1:1 clone): walk the lowered formula DAG;
+boolean skeleton via Tseitin gates (my BitBlastEncoder andGate/orGate/xorGate/
+iteGate — already a faithful port of BLAN's logic); each arith atom reified via
+enc.relZero(PolyBitBlaster::encodePoly(diff), rel) using PolynomialConverter::
+convertConstraint; Int vars -> two's-complement BitVec (width cascade {4,8,16,24,
+32}). REUSE: BitBlastEncoder (BLAN-faithful width-growing exact arith add->max+1,
+mul->wa+wb) + PolyBitBlaster (Greedy-Addition + CSE = BLAN mkInnerVar).
+
+SOUNDNESS (invariants 1+7): SAT-FINDER ONLY. A SAT model is a CANDIDATE, accepted
+only after EXACT integer re-evaluation of EVERY assertion (kernel.evalInteger on
+each atom's diff + boolean structure walk). NEVER returns Unsat (bit-blast UNSAT at
+a heuristic width proves nothing about the unbounded integer problem -> Unknown).
+Any encoding mistake can only downgrade a candidate to Unknown. So sound BY
+CONSTRUCTION regardless of encoding subtleties.
+
+TIME-BOX (critical): the arm can't prove UNSAT, so on UNSAT cases it would churn
+widths and eat the CDCL(T) budget. Added SatSolver::limit() (CaDiCaL
+solver_->limit) -> per-solve conflict cap (XOLVER_NIA_EAGER_BITBLAST_CONFLICTS,
+default 50000) + wall-clock budget between widths (XOLVER_NIA_EAGER_BITBLAST_
+BUDGET_MS, default 3000) + var budget (_BUDGET, default 20M). Fixed nia_097
+timeout->unsat (arm yields, CDCL(T) finishes).
+
+RESULTS (150 BLAN-sat sample, all-on + EAGER_BITBLAST vs all-on baseline):
+sat 22 -> 62 (+40 recovered, 27% of sample), timeout 127 -> 62, **0 unsat on
+BLAN-sat (sound)**. Per-case: AProVE/leipzig/ezsmt recover at 0.14-0.22s
+(BLAN ~0.05s); the rare slow-SAT (>budget) and calypto (needs width>32) miss at
+default budget (env-tunable up). Gate: unit 890/890, nia reg 113/113 OFF+ON,
+0-unsound. Pushed origin/agent/nia-2.
+
+FLAG HYGIENE this commit (master directive): DELETED superseded XOLVER_NIA_DIVISOR_
+CAP (+ divisorEnumerationInfeasible) — DIVISOR_FACTOR supersedes it; CAP was
+default-OFF so default behavior unchanged. Live optimization flags stay GATED this
+round (differential baseline needs them OFF); master collapses to default after the
+differential passes (0-unsound + more solved). One-capability-one-flag going fwd.
+
+KNOWN follow-ups for the eager arm (optimization, not soundness): (1) budget/width
+tuning via the differential (3s default misses slow-SAT; calypto needs width>32);
+(2) BLAN encoding optimizations not yet ported — offset encoding for bounded vars
+(var=lb+t, narrower width), range-splitting, sorting-network addition; CSE is
+already ported. Validate-gate keeps all of these sound to add later.

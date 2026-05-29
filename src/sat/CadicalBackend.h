@@ -19,6 +19,7 @@ public:
     SolveResult solve(const std::vector<SatLit>& assumptions) override;
     bool value(SatVar v) const override;
     bool configure(const char* name, int64_t value) override;
+    bool limit(const char* name, int value) override;
     std::vector<SatLit> getFailedAssumptions() const override;
     void addObservedVar(SatVar v) override;
 
