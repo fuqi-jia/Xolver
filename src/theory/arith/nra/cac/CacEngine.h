@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <set>
 
 namespace xolver {
 
@@ -54,6 +55,16 @@ enum class CacStatus { Sat, Unsat, Unknown };
 struct CacResult {
     CacStatus status = CacStatus::Unknown;
     SamplePoint model;   // a full assignment, valid iff status == Sat
+    // UNSAT core: indices (into the constructor's constraint vector) of the
+    // constraints that actually DELINEATED the gap-free covering — i.e. the
+    // ones whose violation/boundary produced an excluded cell. A conservative
+    // SUPERSET of a truly-minimal core (the union projection can't attribute
+    // per-cell), but strictly smaller than "all constraints" in general, so the
+    // combination/conflict layer can (a) minimize the learned lemma and (b)
+    // include exactly the interface-(dis)eq lits that participated. Valid iff
+    // status == Unsat; EMPTY means "could not attribute" ⇒ caller falls back to
+    // the full constraint set (sound).
+    std::vector<size_t> unsatCore;
 };
 
 class CacEngine {
@@ -101,6 +112,10 @@ private:
     struct CoverOut {
         CacStatus status = CacStatus::Unknown;
         std::vector<RationalPolynomial> charPolys;   // delineate this level's covering
+        // Constraint indices (into cons_) that contributed to THIS level's UNSAT
+        // covering: at the leaf, every violated atom; at a non-leaf, the union of
+        // the child recursions' origins. Propagated up to form CacResult::unsatCore.
+        std::set<size_t> origins;
     };
     CoverOut getUnsatCover(int level, SamplePoint& sample);
 

@@ -131,7 +131,32 @@ stable-key comparator is allowed for map/set keys ONLY, never for cell order /
 sign reasoning / covering merge / SAT-UNSAT decisions. To reduce Unknown,
 strengthen steps 1/2 (exact equality), do NOT raise the step-3 refine cap.
 
-## Combination-aware CAC (UFNRA medal lane) — DESIGN SCOPE (not built; pair with EQNA)
+## Combination-aware CAC — v1 BUILT (default-OFF `XOLVER_NRA_CAC_COMBINATION`)
+
+STATUS (v1, EQNA-paired seam): the NRA side is built behind
+`XOLVER_NRA_CAC_COMBINATION` (default OFF, inert until flipped). What it does
+when ON, in `NraSolver::stageCac`:
+- **Lift** each `interfaceEqualities_`/`interfaceDisequalities_` entry into a
+  `CacConstraint` via the SAME `PolynomialConverter::convertConstraint` path
+  `assertInterfaceEquality` already feeds `engine_` (`cc.diff rel 0`), with its
+  reason lit appended to `activeReasons` (index ⇒ reason). A shared term that is
+  not NRA-poly-expressible ⇒ DEFER the whole CAC run to Collins (sound floor).
+- **UNSAT** ⇒ a gap-free covering of (NRA ∧ interface (dis)eqs) is a combination
+  conflict. The conflict clause is drawn from `CacResult::unsatCore` (per-cell
+  origins, `XOLVER_NRA_CAC_MIN_CONFLICT`) or the full `activeReasons` — EITHER
+  way it includes the interface lits that participated, so the SAT core cannot
+  relearn the arrangement. Still gated behind `XOLVER_NRA_CAC_TRUST_UNSAT`.
+- **SAT** ⇒ v1 DEFERS to Collins (engine_ has the interface constraints): the
+  N-O arrangement read-back (shared-term values) is NOT yet exposed — that is
+  the remaining EQNA-paired step (#43 below). Sound: Collins is the validated
+  SAT+arrangement baseline.
+
+REMAINING (EQNA-paired): (a) expose shared-term values in the CAC SAT model so
+the arrangement can be read back (then stop deferring SAT); (b) coordinate the
+effort-schedule + deadline; (c) flip the gate after the UFNRA differential.
+The seam EQNA owns is the stageCac gate + conflict consumption — do NOT dual-edit.
+
+## Combination-aware CAC (UFNRA medal lane) — ORIGINAL DESIGN SCOPE (pair with EQNA)
 
 PROBLEM. Today the fast NRA stages (sign-refute, subtropical, CAC) DEFER (return
 nullopt) whenever interfaceEqualities_/interfaceDisequalities_ is non-empty, so in

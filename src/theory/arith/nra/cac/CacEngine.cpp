@@ -135,6 +135,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
 
     CacCovering cov;
     std::vector<RationalPolynomial> levelChar;   // delineators of this level's covering
+    std::set<size_t> levelOrigins;               // constraint indices that delineated this covering
     long cells = 0;
 
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
@@ -145,6 +146,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         sample.push(var, s_i);
 
         std::vector<RationalPolynomial> cellBoundaries;
+        std::vector<size_t> cellOrigins;   // constraint indices delineating THIS cell
 
         if (isLeaf) {
             // SPLIT the truth path from the boundary path per leaf atom
@@ -155,16 +157,17 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             bool allHold = true;
             bool fiberInfeasible = false;           // some atom UniformFalse on the fiber
             std::vector<RationalPolynomial> violated;
+            std::vector<size_t> violatedIdx;        // parallel to `violated` (origin tracking)
             for (size_t ci = 0; ci < cons_.size(); ++ci) {
                 const LeafCellResult lr = characterizeLeafAtom(
                     algebra_, kernel_, cons_[ci].poly, cons_[ci].rel, prefixLeaf, var, s_i);
                 if (!lr.supported) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("leaf-atom-unsupported"); return out; }
                 if (lr.truth == LeafTruth::UniformFalse) {
                     // ≡0 (or constant) and violated for ALL var ⇒ whole fiber infeasible.
-                    fiberInfeasible = true; allHold = false; violated.push_back(cons_[ci].poly);
+                    fiberInfeasible = true; allHold = false; violated.push_back(cons_[ci].poly); violatedIdx.push_back(ci);
                 } else if (!lr.holdsAtSample) {
                     // NonUniform and violated at the sample ⇒ its roots delineate.
-                    allHold = false; violated.push_back(cons_[ci].poly);
+                    allHold = false; violated.push_back(cons_[ci].poly); violatedIdx.push_back(ci);
                 }
                 // UniformTrue, or NonUniform-and-holds ⇒ satisfied at the sample ⇒
                 // contributes nothing (no boundary, not a violation).
@@ -186,14 +189,17 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 // cannot cross it as if nullification held on a whole sector.
                 cov.add(CacInterval::all());
                 for (auto& p : violated) levelChar.push_back(std::move(p));
+                levelOrigins.insert(violatedIdx.begin(), violatedIdx.end());
                 sample.pop();
                 continue;
             }
             cellBoundaries = std::move(violated);
+            cellOrigins = std::move(violatedIdx);
         } else {
             CoverOut rec = getUnsatCover(level + 1, sample);
             if (rec.status == CacStatus::Sat)     { sample.pop(); out.status = CacStatus::Sat; return out; }
             if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
+            cellOrigins.assign(rec.origins.begin(), rec.origins.end());
             // rec UNSAT: project its characterization down, eliminating var_{level+1}.
             // `sample` holds vars[0..level]; the required coefficients (in those
             // vars) are evaluated against it (McCallum sample-aware projection).
@@ -215,12 +221,14 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         if (!cr.supported) { out.status = CacStatus::Unknown; markIncomplete(isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"); return out; }
         cov.add(cr.interval);
         for (auto& p : cellBoundaries) levelChar.push_back(std::move(p));
+        levelOrigins.insert(cellOrigins.begin(), cellOrigins.end());
     }
 
     // The covering is gap-free over ℝ (loop exited) and every cell was a
     // `supported` interval from a complete characterization ⇒ sound UNSAT.
     out.status = CacStatus::Unsat;
     out.charPolys = std::move(levelChar);
+    out.origins = std::move(levelOrigins);
     return out;
 }
 
@@ -249,6 +257,7 @@ CacResult CacEngine::solve() {
     const CoverOut o = getUnsatCover(0, sample);
     res.status = o.status;
     if (o.status == CacStatus::Sat) { res.model = satModel_; return res; }
+    if (o.status == CacStatus::Unsat) res.unsatCore.assign(o.origins.begin(), o.origins.end());
     if (o.status == CacStatus::Unsat && !unsatTrustworthy_) {
         // Gate UNSAT on the completeness ledger: markIncomplete() drops it at every
         // inconclusive step, so an uncertified UNSAT is DOWNGRADED to Unknown

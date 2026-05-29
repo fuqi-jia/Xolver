@@ -5,6 +5,8 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
+#include <algorithm>
+#include <vector>
 #include "theory/arith/nra/cac/CacEngine.h"
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"
@@ -72,6 +74,56 @@ TEST_CASE("CAC engine: 2-var SAT  x^2+y^2 < 4 and x > 0") {
     CacEngine eng(&backend, kernel.get(), {x, y},
                   {{circ, Relation::Lt}, {xg, Relation::Gt}});
     CHECK(eng.solve().status == CacStatus::Sat);
+}
+
+// ---- UNSAT core / origins tracking (task P5 foundation) --------------------
+// CacResult::unsatCore lists the constraint indices that DELINEATED the gap-free
+// covering. Used to minimize the learned conflict (XOLVER_NRA_CAC_MIN_CONFLICT)
+// and, under combination, to carry the interface-(dis)eq lits that participated.
+// Contract: on UNSAT it is non-empty, a subset of valid indices, and the
+// sub-conjunction over those indices is itself UNSAT (so the lemma stays sound).
+
+TEST_CASE("CAC engine: unsatCore is the single relevant constraint (x^2<0)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial xx; xx.addVar(x, 2, 1); xx.normalize();          // x^2
+    CacEngine eng(&backend, kernel.get(), {x}, {{xx, Relation::Lt}});   // x^2 < 0
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK(r.unsatCore == std::vector<size_t>{0});                       // exactly the one constraint
+}
+
+TEST_CASE("CAC engine: unsatCore covers both bounds (x>2 and x<1)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial a; a.addVar(x, 1, 1); a = a + K(-2); a.normalize();   // x - 2
+    RationalPolynomial b; b.addVar(x, 1, 1); b = b + K(-1); b.normalize();   // x - 1
+    CacEngine eng(&backend, kernel.get(), {x},
+                  {{a, Relation::Gt}, {b, Relation::Lt}});                  // x>2 ∧ x<1
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK(r.unsatCore == std::vector<size_t>{0, 1});                        // both bounds needed
+}
+
+TEST_CASE("CAC engine: unsatCore non-empty + in-range on a 2-var UNSAT") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-1); circ.normalize();                                   // x^2+y^2-1
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize(); // x-2
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}});               // x^2+y^2<1 ∧ x>2
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK_FALSE(r.unsatCore.empty());
+    for (size_t idx : r.unsatCore) CHECK(idx < 2);                           // valid indices only
+    // x>2 (idx 1) is the binding constraint — it MUST appear (the covering of
+    // x rules out x>2 entirely; without it the system is sat).
+    CHECK(std::find(r.unsatCore.begin(), r.unsatCore.end(), size_t{1}) != r.unsatCore.end());
 }
 
 #endif  // XOLVER_HAS_LIBPOLY
