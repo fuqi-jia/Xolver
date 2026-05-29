@@ -14,12 +14,13 @@ Plus:
 
 Python 3.7+ / stdlib only.
 """
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from eval._compat import dataclass
 from eval.model import CaseResult
 
 DECIDED = ("sat", "unsat")
+_UNSOLVED_AT_BUDGET = ("timeout", "killed")
 
 
 @dataclass
@@ -77,3 +78,24 @@ def score_by(cases: List[CaseResult], key_fn: Callable[[CaseResult], str],
     for c in cases:
         groups.setdefault(key_fn(c), []).append(c)
     return {k: score(v, main_t, fast_t) for k, v in groups.items()}
+
+
+def inferred_wall(cases: List[CaseResult]) -> float:
+    """Estimate the run's wall budget from the slowest unsolved (timeout/killed)
+    case — those ran to the cap. 0.0 if nothing hit the budget."""
+    times = [c.time for c in cases if c.result in _UNSOLVED_AT_BUDGET]
+    return max(times) if times else 0.0
+
+
+def budget_mismatch_warning(cases: List[CaseResult], main_t: float,
+                            ratio: float = 0.5) -> Optional[str]:
+    """Warn when scoring at main_t but the run's actual wall was far smaller — a
+    24s screening run scored at 1200s undercounts solved@1200 (the retuned
+    config's large budgets never fired). Authoritative numbers need a main_t
+    run. None when the run budget matches or nothing timed out."""
+    w = inferred_wall(cases)
+    if 0.0 < w < ratio * main_t:
+        return ("run wall budget ~%.0fs but scoring at main_t=%.0fs — solved@%.0f "
+                "is from a %.0fs run and UNDERCOUNTS; re-run at -t %.0f for "
+                "authoritative numbers." % (w, main_t, main_t, w, main_t))
+    return None

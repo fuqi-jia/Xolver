@@ -22,7 +22,7 @@ from eval.analyze import GROUPERS
 from eval.loader import load_run_dir
 from eval.model import CaseResult
 from eval.oracle import BlanRow, decided_disagreements, load_blan_csv
-from eval.score import score
+from eval.score import budget_mismatch_warning, score
 
 
 @dataclass
@@ -46,6 +46,7 @@ class CompareResult:
     decided_disagreements: int
     promote: bool
     reason: str
+    budget_warning: Optional[str] = None
 
 
 def _diff(group, base_cases, cand_cases, main_t, fast_t) -> GroupDiff:
@@ -84,7 +85,8 @@ def compare_runs(base: List[CaseResult], cand: List[CaseResult], group_by: str =
     else:
         reason = ("PROMOTE: d@1200=%+d, d@24=%+d, 0 added wrong, 0 disagreements"
                   % (overall.d_solved_1200, overall.d_solved_24))
-    return CompareResult(groups, overall, dd, promote, reason)
+    budget_warn = budget_mismatch_warning(cand, main_t)
+    return CompareResult(groups, overall, dd, promote, reason, budget_warn)
 
 
 _HEADER = "{:<30} {:>11} {:>9} {:>7}".format("group", "d_solved@1200", "d_solved@24", "d_wrong")
@@ -104,6 +106,8 @@ def format_compare(res: CompareResult) -> str:
     lines.append("-" * len(_HEADER))
     lines.append(_row(res.overall))
     lines.append("decided-disagreements (0-unsound check): %d" % res.decided_disagreements)
+    if res.budget_warning:
+        lines.append("WARNING: " + res.budget_warning)
     lines.append("Promote? %s  — %s" % ("YES" if res.promote else "NO", res.reason))
     return "\n".join(lines)
 

@@ -16,7 +16,7 @@ from typing import Dict, List, Optional
 from eval._compat import dataclass
 from eval.loader import load_run_dir, load_statistics_json
 from eval.model import CaseResult
-from eval.score import Score, score, score_by
+from eval.score import Score, budget_mismatch_warning, score, score_by
 
 
 def timeout_bucket(t: float) -> str:
@@ -116,6 +116,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(json.dumps(report_to_dict(rep), indent=2))
     else:
         print(format_report(rep))
+        warn = budget_mismatch_warning(cases, args.main_timeout)
+        if warn:
+            print("WARNING: " + warn)
     return 0
 
 

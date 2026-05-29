@@ -26,7 +26,7 @@ from eval._compat import dataclass, field
 from eval.loader import load_run_dir
 from eval.model import CaseResult
 from eval.oracle import BlanRow, decided_disagreements, load_blan_csv
-from eval.score import score
+from eval.score import budget_mismatch_warning, score
 
 DECIDED = ("sat", "unsat")
 
@@ -68,6 +68,9 @@ def gate(candidate: List[CaseResult], baseline: Optional[List[CaseResult]] = Non
             reasons.append("no-24s-regression FAILED: solved@24 %d -> %d (delta %d)"
                            % (bs.solved_24, cs.solved_24, delta))
 
+    bw = budget_mismatch_warning(candidate, main_t)
+    if bw:
+        reasons.append("WARNING: " + bw + " (solved-count not authoritative)")
     if passed:
         reasons.append("PASS: 0 wrong; solved@24 not regressed (delta %s)"
                        % ("n/a" if delta is None else delta))

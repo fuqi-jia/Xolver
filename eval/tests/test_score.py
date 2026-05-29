@@ -9,7 +9,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from eval.model import CaseResult  # noqa: E402
-from eval.score import score, score_by  # noqa: E402
+from eval.score import (  # noqa: E402
+    score, score_by, inferred_wall, budget_mismatch_warning,
+)
 
 
 def mk(result, time, match="MATCH", family="fam", logic="QF_NIA"):
@@ -69,6 +71,30 @@ class TestScoreBy(unittest.TestCase):
         self.assertEqual(set(by.keys()), {"AProVE", "calypto"})
         self.assertEqual(by["AProVE"].solved_1200, 2)
         self.assertEqual(by["calypto"].solved_1200, 1)
+
+
+class TestBudgetGuard(unittest.TestCase):
+    def test_inferred_wall_is_max_timeout_case_time(self):
+        cases = [mk("sat", 5.0), mk("timeout", 24.0, "SKIP"), mk("timeout", 23.6, "SKIP")]
+        self.assertAlmostEqual(inferred_wall(cases), 24.0)
+
+    def test_inferred_wall_zero_when_no_timeouts(self):
+        self.assertEqual(inferred_wall([mk("sat", 5.0), mk("unsat", 9.0)]), 0.0)
+
+    def test_warns_when_scoring_1200_on_a_24s_run(self):
+        cases = [mk("sat", 5.0), mk("timeout", 24.0, "SKIP")]
+        w = budget_mismatch_warning(cases, main_t=1200.0)
+        self.assertIsNotNone(w)
+        self.assertIn("1200", w)
+        self.assertIn("24", w)
+
+    def test_no_warning_when_run_budget_matches_main_t(self):
+        cases = [mk("sat", 5.0), mk("timeout", 1180.0, "SKIP")]
+        self.assertIsNone(budget_mismatch_warning(cases, main_t=1200.0))
+
+    def test_no_warning_when_everything_solved(self):
+        cases = [mk("sat", 5.0), mk("unsat", 800.0)]
+        self.assertIsNone(budget_mismatch_warning(cases, main_t=1200.0))
 
 
 if __name__ == "__main__":
