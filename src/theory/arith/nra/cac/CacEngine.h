@@ -92,6 +92,14 @@ public:
         // path (NOT a direct conflict). Default OFF; NraSolver stageCac flips
         // it from XOLVER_NRA_CAC_EARLY_INFEAS.
         bool earlyInfeas = false;
+        // Track 2 #40: prune subsumed cells before flattening to charPolys/
+        // origins (cvc5 cleanIntervals analog). Sound: the surviving cells
+        // still cover ℝ (a subsumed cell's interval is contained in the
+        // subsuming one, so removing it leaves the union unchanged); only
+        // PROPAGATION is trimmed — smaller projection input at the parent,
+        // tighter (still sound) unsatCore. Default OFF; NraSolver stageCac
+        // flips it from XOLVER_NRA_CAC_PRUNE_INTERVALS.
+        bool pruneIntervals = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -141,6 +149,7 @@ private:
     std::vector<PolyId> consPid_;
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
     bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
+    bool pruneIntervals_ = false;    // XOLVER_NRA_CAC_PRUNE_INTERVALS gate
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;

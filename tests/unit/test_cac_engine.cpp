@@ -185,4 +185,80 @@ TEST_CASE("CAC engine: early-infeas + var-independent unsat constraint (whole-ax
     CHECK(r.unsatCore == std::vector<size_t>{0, 1});                       // both x-bounds needed
 }
 
+// ---- Interval pruning (Track 2 #40) ---------------------------------------
+// XOLVER_NRA_CAC_PRUNE_INTERVALS / Config::pruneIntervals: after the level
+// loop completes a gap-free covering, drop cells whose intervals are subsumed
+// by another surviving cell BEFORE flattening into charPolys/origins. Sound:
+// the surviving cells still cover ℝ (the loop already proved gap-freeness;
+// removing a subset can't lose any point), and the parent's level-(i-1) cell
+// is sign-invariant for the surviving polys — by continuous deformation, the
+// surviving covering lifts at every prefix in that cell. Verdict unchanged.
+
+TEST_CASE("CAC engine: prune-intervals preserves UNSAT verdict + core") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial a; a.addVar(x, 1, 1); a.normalize();                  // x
+    RationalPolynomial b; b.addVar(x, 1, 1); b = b + K(-1); b.normalize();   // x - 1
+    CacEngine::Config cfg; cfg.pruneIntervals = true;
+    CacEngine eng(&backend, kernel.get(), {x},
+                  {{a, Relation::Lt}, {b, Relation::Gt}}, cfg);              // x<0 ∧ x>1
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK(r.unsatCore == std::vector<size_t>{0, 1});
+}
+
+TEST_CASE("CAC engine: prune-intervals preserves SAT verdict") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-4); circ.normalize();                                   // x^2+y^2-4
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();               // x
+    CacEngine::Config cfg; cfg.pruneIntervals = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CHECK(eng.solve().status == CacStatus::Sat);
+}
+
+TEST_CASE("CAC engine: prune-intervals + early-infeas compose (2-var UNSAT)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-1); circ.normalize();                                   // x^2+y^2-1
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize(); // x-2
+    CacEngine::Config cfg; cfg.pruneIntervals = true; cfg.earlyInfeas = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK_FALSE(r.unsatCore.empty());
+    CHECK(std::find(r.unsatCore.begin(), r.unsatCore.end(), size_t{1}) != r.unsatCore.end());
+}
+
+// ---- intervalSubsumes helper (Covering.h) ---------------------------------
+TEST_CASE("Covering: intervalSubsumes endpoint semantics") {
+    using EV = ExtendedRealValue;
+    auto rv = [](long n) { return EV::finite(RealValue::fromInt(n)); };
+    // (-∞, 5)  ⊇  [0, 0]      ← finite point inside open interval
+    CacInterval outer{EV::negInf(), rv(5), true, true};
+    CacInterval inner{rv(0),         rv(0), false, false};
+    CHECK(intervalSubsumes(outer, inner));
+    // (-∞, 5)  ⊉  (5, 10)     ← upper-side disjoint
+    CacInterval right{rv(5), rv(10), true, true};
+    CHECK_FALSE(intervalSubsumes(outer, right));
+    // [0, 5]  ⊇  (0, 5)       ← closed outer subsumes open inner (same endpoints)
+    CacInterval cl{rv(0), rv(5), false, false};
+    CacInterval op{rv(0), rv(5), true,  true };
+    CHECK(intervalSubsumes(cl, op));
+    // (0, 5)  ⊉  [0, 5]       ← open outer cannot subsume closed inner at same endpoints
+    CHECK_FALSE(intervalSubsumes(op, cl));
+    // Equal intervals subsume each other.
+    CHECK(intervalSubsumes(op, op));
+    CHECK(intervalSubsumes(cl, cl));
+}
+
 #endif  // XOLVER_HAS_LIBPOLY
