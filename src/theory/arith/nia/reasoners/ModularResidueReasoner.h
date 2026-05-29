@@ -59,8 +59,11 @@ public:
 
 private:
     PolynomialKernel& kernel_;
-    uint64_t modulusCap_ = (1u << 16);
-    uint64_t enumBudget_ = (1u << 20);
+    // Competition retune (1200s): larger residue enumeration. Sound — UNSAT-only,
+    // and over-budget moduli are skipped (never wrong). Hensel doubling still
+    // handles 2^k beyond the cap, so these only widen the small-modulus enum.
+    uint64_t modulusCap_ = (1u << 18);
+    uint64_t enumBudget_ = (1u << 24);
 };
 
 } // namespace xolver

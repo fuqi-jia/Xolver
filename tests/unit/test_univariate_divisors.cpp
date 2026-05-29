@@ -57,10 +57,10 @@ TEST_CASE("completeDivisors: factor mode finishes on 2^256 (default would hang)"
 }
 
 TEST_CASE("completeDivisors: factor mode signals incomplete on large semiprime") {
-    // p, q both prime and above the 10^6 trial bound => the bounded trial loop
+    // p, q both prime and above the 10^7 trial bound => the bounded trial loop
     // cannot split the product, and it is composite (not accepted as prime) =>
     // complete=false. A partial divisor set must NEVER be reported as complete.
-    mpz_class p("1000003"), q("1000033");  // both prime, both > 10^6
+    mpz_class p("1000000007"), q("1000000009");  // both prime, both > 10^7
     setenv("XOLVER_NIA_DIVISOR_FACTOR", "1", 1);
     bool complete = true;
     auto d = UnivariateIntegerReasoner::completeDivisors(p * q, complete);
@@ -70,10 +70,11 @@ TEST_CASE("completeDivisors: factor mode signals incomplete on large semiprime")
 }
 
 TEST_CASE("completeDivisors: factor mode signals incomplete when over divisor cap") {
-    // 2^1000 has 1001 positive divisors, above the 1000 cap => incomplete.
+    // 2^20000 has 20001 positive divisors, above the 10000 cap => incomplete.
+    // (The divisor-count is checked BEFORE enumeration, so this bails fast.)
     setenv("XOLVER_NIA_DIVISOR_FACTOR", "1", 1);
     bool complete = true;
-    auto d = UnivariateIntegerReasoner::completeDivisors(pow2(1000), complete);
+    auto d = UnivariateIntegerReasoner::completeDivisors(pow2(20000), complete);
     unsetenv("XOLVER_NIA_DIVISOR_FACTOR");
     CHECK_FALSE(complete);
     CHECK(d.empty());

@@ -447,3 +447,36 @@ a substantial coupled rewrite. Individual cheap levers (offset, no-grow alone) a
 net-negative. The ONE big win that landed is constant folding [dec1495] (11->18).
 Grow + per-var-width + folding + polarity = the working scheme (17-18/24, sound).
 Overall Xolver already EXCEEDS BLAN via complementarity (modular UNSATs BLAN can't).
+
+## COMPETITION-BUDGET RETUNE of hardcoded limits (2026-05-29) — 1200s / 30GB / 4-core
+Audited every NIA hardcoded limit: (a) genuine hang/OOM guard at 1200s/30GB, or
+dev-conservative (WSL/24s-screening)? (b) algorithm to eliminate? Retuned the
+dev-conservative ones; raising is SOUND (worst case = hang/OOM = unsolved, never
+wrong). Changes:
+- eager-bitblast budgetMs 3000 -> 120000 (THE biggest QF_NIA recovery throttle; 3s
+  cut off slow-SAT before the deciding width; 120s of 1200s leaves ~1080s for the
+  CDCL(T)/reasoning UNSAT path), confLimit 50000 -> 1000000 (hard deciding width
+  gets a real chance), var-budget 2M -> 20M (30GB allows it; per-attempt SIZE cap),
+  widths {4,8,16,24,32} -> +48,64 (competition can afford wider for big bounded vars).
+- SLS LS_BUDGET_MS/LS_TOTAL_MS 200/1000 -> 5000/60000 (candidate-only+validated).
+- per-assignment bit-blast defaultGateBudget 200000 -> 2000000 (dev 2GB->30GB).
+- univariate factorization bound B 1e6 -> 1e7 (factor more constants; ~10ms),
+  MAX_DIVISORS 1000 -> 10000 (RRT enumerates more; over cap => Incomplete=unknown).
+- modular modulusCap 1<<16 -> 1<<18, enumBudget 1<<20 -> 1<<24 (larger residue enum).
+- per-assignment bit-blast maxBW_=128 / maxIters_=6 LEFT AS-IS (already
+  competition-tuned: 128-bit ceiling, x4 growth reaches it in <=6 iters).
+ALGORITHM-ELIMINATED earlier (the model): XOLVER_NIA_DIVISOR_CAP -> deleted, the
+factorization (DIVISOR_FACTOR) makes RRT complete instead of capping to unknown.
+
+GATE: unit 890/890 (updated the 2 divisor unit tests for the new B/MAX_DIVISORS:
+semiprime now uses 1e9+7 * 1e9+9 > B; over-cap uses 2^20000 > 10000), nia reg OFF
+113/113 (the default-on raises — gateBudget/MAX_DIVISORS/B — don't slow the suite).
+nia reg ON 113/113 with the eager budget scaled to the dev 12s timeout
+(XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS=6000). DEV-vs-COMPETITION NOTE: at the 120s
+DEFAULT, nia_097 (an UNSAT case) TIMES OUT at the 12s dev timeout — the eager arm
+spends its full budget (can't prove UNSAT) before yielding to CDCL(T). This is a
+DEV-TIMEOUT ARTIFACT, NOT unsoundness: at the 1200s competition budget nia_097
+solves (120s eager -> yield -> CDCL(T) unsat in 0.07s). The solver has NO timeout
+awareness (SMT-COMP uses external wall-clock kill), so the eager budget cannot
+auto-scale; the dev-reg-ON soundness check therefore runs with a dev budget
+override. Competition binary uses the high default (or the deploy --submit env).

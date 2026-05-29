@@ -23,7 +23,10 @@ std::map<mpz_class, int> primeFactorizeBounded(mpz_class m, bool& complete) {
     if (m < 0) m = -m;
     if (m <= 1) return f;
     while (m % 2 == 0) { f[2]++; m /= 2; }
-    static const mpz_class B("1000000");
+    // Trial-division bound: a residual with no factor <= B and <= B^2 is provably
+    // prime. 1e7 (~10ms worst case) at the competition budget factors more
+    // constants fully (vs the dev 1e6); 2^k constants never reach it anyway.
+    static const mpz_class B("10000000");
     for (mpz_class d = 3; d <= B && d * d <= m; d += 2) {
         if (m % d == 0) { while (m % d == 0) { f[d]++; m /= d; } }
     }
@@ -90,7 +93,10 @@ std::set<mpz_class> UnivariateIntegerReasoner::completeDivisors(const mpz_class&
     // modes in one process; this path runs once per univariate equation, not
     // in any inner loop, so the getenv cost is irrelevant.
     const bool factorMode = std::getenv("XOLVER_NIA_DIVISOR_FACTOR") != nullptr;
-    constexpr size_t MAX_DIVISORS = 1000;
+    // Max divisors RRT will enumerate+root-test. Raised 1000->10000 for the
+    // competition budget (each is one exact kernel eval); over the cap =>
+    // Incomplete => unknown (sound, never UNSAT from a partial set).
+    constexpr size_t MAX_DIVISORS = 10000;
     complete = true;
 
     if (factorMode) {

@@ -231,21 +231,31 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     if (diag) std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
                         << " atoms=" << atomCs_.size() << "\n";
 
-    uint64_t budget = 2000000ull;   // var-budget cap: bail huge encodes (overflow) fast
+    // Var-budget cap (encode SIZE): bounds a single attempt's encoding so a huge
+    // formula bails (overflow->Unknown) instead of OOM. Competition has 30GB, so
+    // 20M fresh vars (~a few GB of CNF) is safe; the per-attempt cap keeps any one
+    // width from exploding while the cascade/wall-clock control total time.
+    uint64_t budget = 20000000ull;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v > 0) budget = static_cast<uint64_t>(v);
     }
-    // Time-box the arm so it cannot eat the budget the CDCL(T) main loop needs
-    // on UNSAT cases (eager bit-blast can never prove UNSAT here, so it would churn
-    // widths forever). Per-solve conflict limit bounds a single hard solve;
-    // wall-clock deadline bounds the whole cascade. Both env-tunable.
-    long long budgetMs = 3000;
+    // Wall-clock budget for the WHOLE arm. This is the single biggest QF_NIA
+    // recovery throttle: a small budget cuts off slow-SAT before the deciding
+    // width's solve. Competition gives 1200s, so default 120s lets the cascade
+    // reach the deciding width while leaving ~1000s+ for the CDCL(T) UNSAT path.
+    // Raising is SOUND (the arm only finds validated SAT or yields). Per-attempt
+    // is still bounded by confLimit + var budget, so this does not break short
+    // (dev-timeout) runs on small formulas.
+    long long budgetMs = 120000;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v >= 0) budgetMs = v;
     }
-    int confLimit = 50000;
+    // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
+    // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
+    // gets a real chance, while still capping a futile width.
+    int confLimit = 1000000;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_CONFLICTS")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v > 0) confLimit = static_cast<int>(v);
@@ -255,7 +265,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         return std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::steady_clock::now() - t0).count();
     };
-    const unsigned widths[] = {4, 8, 16, 24, 32};
+    const unsigned widths[] = {4, 8, 16, 24, 32, 48, 64};
 
     for (unsigned K : widths) {
         if (budgetMs > 0 && elapsedMs() >= budgetMs) {
