@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace xolver {
 
@@ -65,7 +66,14 @@ public:
         // 30GB. (The old 4000/400000 could bail a hard covering in ~minutes,
         // throttling CAC before its real time budget.)
         long maxCellsPerLevel = 200000;     // per-level covering blow-up guard
-        long maxNodes = 20000000;           // total recursion-node budget
+        long maxNodes = 20000000;           // total recursion-node budget (memory guard)
+        // Wall-clock deadline for the covering search (ms; 0 = unbounded). This is
+        // the PRIMARY time bound — the node/cell caps are just memory guards. In
+        // the HYBRID (Collins fallback present) CAC gets a bounded time-share so a
+        // hard covering yields to Collins (Unknown→fallback) instead of grinding
+        // to the global timeout and starving it. When CAC is the SOLE engine
+        // (no Collins), leave it 0 (unbounded) and rely on the external timeout.
+        long deadlineMillis = 0;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -111,6 +119,12 @@ private:
     // UNSAT completeness certificate (see accessor above).
     bool unsatTrustworthy_ = true;          // ANDed false at every incompleteness point
     void markIncomplete(const char* why);   // unsatTrustworthy_=false + lastUnknown_
+
+    // Wall-clock deadline (cfg_.deadlineMillis). Set at solve() start; checked
+    // periodically in getUnsatCover. Returns true once the budget is exhausted.
+    std::chrono::steady_clock::time_point startTime_;
+    bool deadlineHit_ = false;
+    bool overDeadline();
 };
 
 } // namespace xolver

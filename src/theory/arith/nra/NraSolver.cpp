@@ -574,7 +574,23 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
 
     if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
-    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons));
+    // Wall-clock deadline: in the HYBRID (Collins fallback present) bound CAC@Full
+    // to a time-share so a hard covering YIELDS to Collins (Unknown→fallback)
+    // rather than grinding to the global timeout and starving it. When CAC is the
+    // SOLE engine (XOLVER_NRA_CAC_NO_COLLINS / _ONLY) leave it unbounded (0) and
+    // rely on the external timeout. Override via XOLVER_NRA_CAC_DEADLINE_MS.
+    static const bool soleEngine = [] {
+        const char* n = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");
+        return (n && *n && *n != '0') || (o && *o && *o != '0');
+    }();
+    static const long cacDeadlineMs = [] () -> long {
+        if (const char* e = std::getenv("XOLVER_NRA_CAC_DEADLINE_MS")) return std::atol(e);
+        return 60000;   // hybrid default: 60s CAC@Full share, leaving Collins the rest of 1200s
+    }();
+    CacEngine::Config cfg;
+    cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 
     const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;

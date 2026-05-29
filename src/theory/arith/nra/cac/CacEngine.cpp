@@ -133,6 +133,10 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     CoverOut out;
     if (level > maxDepth_) maxDepth_ = level;
     if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; markIncomplete("node-budget"); return out; }
+    // Wall-clock deadline (primary time bound): check every 256 nodes (cheap) so
+    // a hard covering yields to the Collins fallback instead of grinding to the
+    // global timeout. Unknown is sound (never a wrong verdict).
+    if ((nodes_ & 255) == 0 && overDeadline()) { out.status = CacStatus::Unknown; markIncomplete("deadline"); return out; }
 
     const int n = static_cast<int>(varOrder_.size());
     const VarId var = varOrder_[level];
@@ -208,12 +212,22 @@ void CacEngine::markIncomplete(const char* why) {
     lastUnknown_ = why;
 }
 
+bool CacEngine::overDeadline() {
+    if (deadlineHit_) return true;
+    if (cfg_.deadlineMillis <= 0) return false;     // unbounded (CAC-only / sole engine)
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startTime_).count();
+    if (elapsed >= cfg_.deadlineMillis) { deadlineHit_ = true; return true; }
+    return false;
+}
+
 CacResult CacEngine::solve() {
     CacResult res;
     if (!buildOk_ || !algebra_ || !kernel_ || varOrder_.empty()) {
         res.status = CacStatus::Unknown;
         return res;
     }
+    startTime_ = std::chrono::steady_clock::now();
     SamplePoint sample;
     const CoverOut o = getUnsatCover(0, sample);
     res.status = o.status;
