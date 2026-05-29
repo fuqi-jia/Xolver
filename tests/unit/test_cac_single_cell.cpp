@@ -237,6 +237,87 @@ TEST_CASE("characterizeLeafAtom: non-vanishing y-3 -> NonUniform with boundary a
     CHECK_FALSE(r.interval.contains(Q(4)));
 }
 
+// ---- A'/A''. vanishing, the OTHER relations that make (0 rel 0) TRUE -> UniformTrue
+TEST_CASE("characterizeLeafAtom: p<=0 / p>=0 with p vanishing -> UniformTrue (0 rel 0 true)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial q = xm1_times_y(x, y);
+    SamplePoint prefix; prefix.push(x, RealAlg::fromRational(mpq_class(1)));
+    for (Relation rel : {Relation::Leq, Relation::Geq}) {     // 0<=0, 0>=0 both true
+        auto r = characterizeLeafAtom(&backend, kernel.get(), q, rel,
+                                      prefix, y, RealAlg::fromRational(mpq_class(1)));
+        REQUIRE(r.supported);
+        CHECK(r.truth == LeafTruth::UniformTrue);
+        CHECK(r.holdsAtSample);
+        CHECK(r.interval.contains(Q(0)));        // whole axis (empty boundary)
+        CHECK(r.interval.contains(Q(-1000)));
+        CHECK(r.interval.contains(Q(1000)));
+    }
+}
+
+// ---- B'. vanishing, p<0 -> the last relation that makes (0 rel 0) FALSE -> UniformFalse
+TEST_CASE("characterizeLeafAtom: p<0 with p vanishing -> UniformFalse infeasible") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial q = xm1_times_y(x, y);
+    SamplePoint prefix; prefix.push(x, RealAlg::fromRational(mpq_class(1)));
+    auto r = characterizeLeafAtom(&backend, kernel.get(), q, Relation::Lt,
+                                  prefix, y, RealAlg::fromRational(mpq_class(1)));
+    REQUIRE(r.supported);
+    CHECK(r.truth == LeafTruth::UniformFalse);   // 0 < 0 is false for ALL y
+    CHECK_FALSE(r.holdsAtSample);
+}
+
+// ---- C''. NonUniform but VIOLATED at the sample -> roots delineate the bad cell --
+TEST_CASE("characterizeLeafAtom: non-vanishing y-3>0 violated at y=0 -> NonUniform cell (-inf,3)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial ym3; ym3.addVar(y, 1, 1); ym3 = ym3 + konst(-3); ym3.normalize();   // y-3
+    SamplePoint prefix;   // y is level 0
+    auto r = characterizeLeafAtom(&backend, kernel.get(), ym3, Relation::Gt,
+                                  prefix, y, RealAlg::fromRational(mpq_class(0)));
+    REQUIRE(r.supported);
+    CHECK(r.truth == LeafTruth::NonUniform);
+    CHECK_FALSE(r.holdsAtSample);               // 0-3 = -3, not > 0 ⇒ violated at the sample
+    CHECK(r.interval.contains(Q(0)));           // cell where y-3 stays Neg ⇒ stays violated: (-inf,3)
+    CHECK_FALSE(r.interval.contains(Q(3)));
+    CHECK_FALSE(r.interval.contains(Q(4)));
+}
+
+// ---- F. atom CONSTANT in the leaf var on the fiber (no var-dependence) -> uniform -
+// (x-2) at x=5 is the nonzero constant 3 in y: NotVanishes + no var-root ⇒ uniform
+// truth from the constant's sign, whole axis, NO boundary. Both polarities.
+TEST_CASE("characterizeLeafAtom: constant-in-var atom -> UniformTrue / UniformFalse, whole axis") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial xm2; xm2.addVar(x, 1, 1); xm2 = xm2 + konst(-2); xm2.normalize();   // x-2
+    SamplePoint prefix; prefix.push(x, RealAlg::fromRational(mpq_class(5)));                 // x=5 ⇒ value 3
+    {   // 3 > 0 ⇒ holds for ALL y
+        auto r = characterizeLeafAtom(&backend, kernel.get(), xm2, Relation::Gt,
+                                      prefix, y, RealAlg::fromRational(mpq_class(0)));
+        REQUIRE(r.supported);
+        CHECK(r.truth == LeafTruth::UniformTrue);
+        CHECK(r.holdsAtSample);
+        CHECK(r.interval.contains(Q(0)));        // whole axis, no boundary
+        CHECK(r.interval.contains(Q(1000)));
+        CHECK(r.interval.contains(Q(-1000)));
+    }
+    {   // 3 < 0 ⇒ false for ALL y ⇒ fiber infeasible
+        auto r = characterizeLeafAtom(&backend, kernel.get(), xm2, Relation::Lt,
+                                      prefix, y, RealAlg::fromRational(mpq_class(0)));
+        REQUIRE(r.supported);
+        CHECK(r.truth == LeafTruth::UniformFalse);
+        CHECK_FALSE(r.holdsAtSample);
+    }
+}
+
 TEST_CASE("intervalFromCharacterization: square-free reduction preserves ALL roots (no too-big cell)") {
     // ★ Soundness, the UNSOUND direction: the witness square-free reduction must
     // never DROP a genuine root boundary (that would enlarge the cell ⇒ claim
