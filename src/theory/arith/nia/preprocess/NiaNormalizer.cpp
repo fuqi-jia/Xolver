@@ -71,20 +71,19 @@ NormalizedNiaConstraint NiaNormalizer::normalizeStrict(
     return {intPoly, c.rel, c.reason};
 }
 
+NormalizedNiaConstraint NiaNormalizer::normalizeOne(const ActiveNiaConstraint& c) {
+    // Step 1: Clear denominators (if possible)
+    PolyId intPoly = clearDenominators(c.poly);
+    // Step 2: Normalize strict inequalities
+    return normalizeStrict(c, intPoly);
+}
+
 std::optional<std::vector<NormalizedNiaConstraint>>
 NiaNormalizer::normalize(const std::vector<ActiveNiaConstraint>& active) {
     std::vector<NormalizedNiaConstraint> result;
     result.reserve(active.size());
-
-    for (const auto& c : active) {
-        // Step 1: Clear denominators (if possible)
-        PolyId intPoly = clearDenominators(c.poly);
-
-        // Step 2: Normalize strict inequalities
-        NormalizedNiaConstraint nc = normalizeStrict(c, intPoly);
-        result.push_back(nc);
-    }
-
+    for (const auto& c : active)
+        result.push_back(normalizeOne(c));
     return result;
 }
 

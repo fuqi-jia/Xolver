@@ -39,6 +39,12 @@ public:
     std::optional<std::vector<NormalizedNiaConstraint>>
     normalize(const std::vector<ActiveNiaConstraint>& active);
 
+    // Normalize a single active constraint. The result is a pure function of
+    // `c` (clear-denominators + strict-inequality rewrite, no cross-constraint
+    // state), so callers may cache it per constraint — see NiaSolver's
+    // incremental normalize cache (XOLVER_NIA_NORM_CACHE).
+    NormalizedNiaConstraint normalizeOne(const ActiveNiaConstraint& c);
+
 private:
     PolynomialKernel& kernel_;
 

@@ -154,6 +154,21 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // coordinate is an exact integer AND it passes IntegerModelValidator.
     if (const char* e = std::getenv("XOLVER_NIA_CDCAC"); e && *e && *e != '0')
         enableCdcac_ = true;
+
+    // Incremental normalize cache (XOLVER_NIA_NORM_CACHE, default-OFF).
+    // nia.normalize re-normalized the FULL active_ set on every cb_propagate
+    // (Standard effort) — profiled as the per-propagation hot stage on dense
+    // QF_UFNIA (NiaNormalizer::normalize -> clearDenominators ->
+    // getIntegerCoefficients builds an lp_assignment per constraint per call).
+    // normalizeOne is a pure function of its (immutable) ActiveNiaConstraint,
+    // and active_ is a strict stack (push_back on assert, resize-from-end on
+    // backtrack, clear on reset). So normalized_ is kept in lockstep with
+    // active_: onBacktrack truncates it (killing the pop-then-push staleness
+    // hazard), onReset clears it, and stageNormalize only normalizes the new
+    // tail. Output is byte-identical to the full re-normalize. Promote after
+    // the OFF+ON gate + differential hold.
+    if (const char* e = std::getenv("XOLVER_NIA_NORM_CACHE"); e && *e && *e != '0')
+        normCache_ = true;
 }
 
 void NiaSolver::onReset() {
@@ -162,6 +177,7 @@ void NiaSolver::onReset() {
     // combination state.
     active_.clear();
     trail_.clear();
+    normalized_.clear();  // incremental normalize cache is keyed to active_
     activeSet_.reset();
     pendingConflict_.reset();
     pendingUnknown_.reset();
@@ -225,6 +241,12 @@ void NiaSolver::onBacktrack(int level) {
         active_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
     }
+    // Keep the incremental normalize cache in lockstep: drop the popped tail so
+    // a subsequent pop-then-push (same net size, different tail) can't read a
+    // stale normalized_ entry. The next stageNormalize re-normalizes only the
+    // fresh tail. No-op when normCache_ is off (normalized_ is rebuilt anyway).
+    if (normalized_.size() > active_.size())
+        normalized_.resize(active_.size());
     activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
@@ -267,6 +289,18 @@ std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, Th
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
+    if (normCache_) {
+        // Incremental: normalized_ is kept in lockstep with active_ (a strict
+        // stack). Safety-truncate in case a backtrack left it longer (onBacktrack
+        // already truncates eagerly; this guards the boundary), then normalize
+        // only the new tail. normalizeOne is pure per-constraint, so the result
+        // is identical to a full re-normalize.
+        if (normalized_.size() > active_.size())
+            normalized_.resize(active_.size());
+        for (size_t i = normalized_.size(); i < active_.size(); ++i)
+            normalized_.push_back(normalizer_.normalizeOne(active_[i]));
+        return std::nullopt;
+    }
     auto normalizedOpt = normalizer_.normalize(active_);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     normalized_ = std::move(*normalizedOpt);
