@@ -67,56 +67,27 @@ std::set<mpz_class> divisorsFromFactors(const std::map<mpz_class, int>& f,
 UnivariateIntegerReasoner::UnivariateIntegerReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
 
-std::set<mpz_class> UnivariateIntegerReasoner::divisors(const mpz_class& n) {
-    std::set<mpz_class> result;
-    mpz_class abs_n = abs(n);
-    if (abs_n == 0) return result;
-
-    mpz_class limit = sqrt(abs_n);
-    for (mpz_class d = 1; d <= limit; ++d) {
-        if (abs_n % d == 0) {
-            result.insert(d);
-            result.insert(-d);
-            mpz_class q = abs_n / d;
-            if (q != d) {
-                result.insert(q);
-                result.insert(-q);
-            }
-        }
-    }
-    return result;
-}
-
 std::set<mpz_class> UnivariateIntegerReasoner::completeDivisors(const mpz_class& n,
                                                                bool& complete) {
-    // Read per call (not a one-time static) so unit tests can exercise both
-    // modes in one process; this path runs once per univariate equation, not
-    // in any inner loop, so the getenv cost is irrelevant.
-    const bool factorMode = std::getenv("XOLVER_NIA_DIVISOR_FACTOR") != nullptr;
-    // Max divisors RRT will enumerate+root-test. Raised 1000->10000 for the
-    // competition budget (each is one exact kernel eval); over the cap =>
-    // Incomplete => unknown (sound, never UNSAT from a partial set).
+    // PRIME-FACTORIZATION is the SOLE path — it DISSOLVES the old O(sqrt n)
+    // divisor cap (2^256 -> {2:256} -> 257 divisors in O(log n), where trial
+    // division would do ~2^128 iterations). No env flag: factorization is always
+    // strictly better (sound + fast), so it is the default, not a toggle.
+    // complete=false (=> caller Incomplete => unknown, never the O(sqrt n) hang
+    // and never UNSAT from a partial set) only when:
+    //   (a) the constant has a large composite cofactor with no factor <= B and
+    //       > B^2 (un-factorable cheaply — then |n| > B^2, so trial division
+    //       would also be infeasible), or
+    //   (b) the full divisor set would exceed MAX_DIVISORS (each divisor is one
+    //       exact kernel root-test; 10000 is the competition-budget fallback cap).
     constexpr size_t MAX_DIVISORS = 10000;
     complete = true;
-
-    if (factorMode) {
-        // Prime-factorization path: 2^256 -> {2:256} -> 257 divisors in O(log n),
-        // vs O(sqrt n) = ~2^128 trial-division iterations. complete=false (=>
-        // caller -> Incomplete -> unknown) when the constant cannot be fully
-        // factored (large composite cofactor) or the divisor set exceeds the cap.
-        bool fullyFactored = false;
-        auto factors = primeFactorizeBounded(abs(n), fullyFactored);
-        if (!fullyFactored) { complete = false; return {}; }
-        bool ok = false;
-        auto divs = divisorsFromFactors(factors, MAX_DIVISORS, ok);
-        if (!ok) { complete = false; return {}; }
-        return divs;
-    }
-
-    // Default path: O(sqrt n) trial division, with the divisor-count cap as the
-    // only bail (an over-large set => Incomplete => unknown, never UNSAT).
-    auto divs = divisors(n);
-    if (divs.size() > MAX_DIVISORS) { complete = false; return {}; }
+    bool fullyFactored = false;
+    auto factors = primeFactorizeBounded(abs(n), fullyFactored);
+    if (!fullyFactored) { complete = false; return {}; }
+    bool ok = false;
+    auto divs = divisorsFromFactors(factors, MAX_DIVISORS, ok);
+    if (!ok) { complete = false; return {}; }
     return divs;
 }
 
