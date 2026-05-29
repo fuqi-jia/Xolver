@@ -224,3 +224,81 @@ sat/unsat on micro-tests. Pushed origin/agent/nia-2.
 This EXHAUSTS the data-independent NIA levers -> await-E state (BLAN false-UNSAT
 join #16 = immediate #1 if any modular Xolver=unsat & BLAN=sat; E differential picks
 SLS vs incremental-SAT, both held).
+
+## SOUNDNESS FIX — false-UNSAT from dropped exclusion reasons (2026-05-29) [f58ed43]
+Found by self-served BLAN+z3 differential (master dispatched "study cases BLAN
+solves but we time out"). Sampled 150 BLAN-sat QF_NIA, ran full binary (all NIA
+levers on): 109 timeout, 19 sat, **18 unsat**. z3 cross-check: 17/18 z3=sat (18th
+z3-timeout) => GENUINE false-UNSAT (invariant-7 violation, two oracles agree sat).
+
+Bisect (drop one flag at a time): XOLVER_NIA_PRESOLVE_FULL is the trigger. But it
+does NOT change presolve logic — only schedules nia.presolve Full-effort-only. The
+DEFAULT path TIMES OUT (per-propagation presolve pathology) and never reaches the
+buggy conclusion => "perf unmasks soundness" ([[feedback_perf_unmasks_soundness]]).
+ARITH_STAGE_DIAG named the stage: `nia.domain` (stageDomainInference), conflict via
+`isEmpty after linearDomain_.run`. NIA_DOM_DIAG: emptied var=global_invc1_0, domain
+{0} (finite set, lower=upper=0, all reason satVar 4), value 0 EXCLUDED (nExcluded=1).
+
+ROOT CAUSE: DomainStore::collectEmptyReasons, the "finite set has no valid value"
+branch, added lower.reasons+upper.reasons+finiteSetReasons but DROPPED the per-value
+EXCLUSION reasons when a member was killed by excludeValue (x!=v) not a bound. So
+the conflict clause was {atom4} ("x in {0}") instead of {atom4, exclusion}
+("x in {0}" AND "x!=0") — an over-strong learned clause (atom4 globally false) that
+pruned a satisfying assignment => false UNSAT. (Matched the observed lits=`4 4 4`.)
+
+FIX (DomainStore.cpp, default-path, NOT flag-gated): attribute the SPECIFIC killer
+per finite-set member — exclusion reasons if excluded, bound reasons only if
+actually out of range. A weaker+correct conflict clause is strictly more sound
+(never over-prunes). Verified: 18 former false-UNSAT -> unsat=0 (16 honest timeout,
+2 recovered to z3-agreeing sat). Re-ran the 150 sample post-fix: 0 unsat, sat 19->22
+(+3 recovered), 127 timeout, 1 unknown. Plus a FRESH non-overlapping 272-case
+BLAN-sat sample post-fix: 0 unsat, 39 sat, 232 timeout, 1 unknown. => across 422
+sampled BLAN-sat cases, ZERO false-UNSAT remain (no other unsound conflict path
+surfaced). unit 890/890, nia reg 113/113 OFF+ON, 0-unsound. DEFAULT-PATH soundness
+fix => master should run full panda differential.
+NOTE: remaining ~85% of BLAN-sat are honest timeouts (hard VeryMax/termination
+bilinear-Farkas SAT that BLAN's full ICP+eq+blaster+cdcl_t engine solves; our
+bit-blast is gated Full-effort + the big boolean structure thrashes before reaching
+it) — that's the recovery lever (#24-26), distinct from this soundness fix.
+
+## RECOVERY DIAGNOSIS — why we time out on BLAN-fast-sat cases (2026-05-29) [#24-26]
+359/422 sampled BLAN-sat cases time out in Xolver; some BLAN solves in 0.05-0.6s.
+Traced 5 (AProVE/calypto/leipzig/ezsmt/VeryMax-ITS) with ARITH_STAGE_PROF + a new
+NIA_BITBLAST_DIAG (per-width attempt kind, added to BitBlastSolver.cpp).
+
+WHERE THE TIME GOES (case 1 AProVE, BLAN 0.05s): nia.cdcac ms=8194 calls=1 (CDCAC
+churns 8.2s on a SAT case — it's the UNSAT lever, futile here), nia.bit-blast
+ms=624 calls=1 -> Unknown. case 2 calypto: presolve 5s + cdcac 2.9s + bit-blast 1.8s
++ local-search 1.1s, all spread across 6 Full-effort checks.
+
+WHY BIT-BLAST FAILS (the core divergence, NOT an encoding bug):
+- NIA_BITBLAST_DIAG on AProVE: UNSAT at EVERY width K=2..32 (vars 4105..280270), even
+  though a {0,1} model exists (b__15=0 collapses all degree-3 terms; verified by hand
+  + z3). Box is incomplete (unbounded vars) so this UNSAT is correctly downgraded to
+  Unknown (SOUND) — but it can't find the model.
+- Minimal-construct tests (products, deg-3, neg-coeff nested products, not(and(=)))
+  ALL solve correctly. The blaster is NOT broken.
+- DECISIVE: pin the disequality branch (replace `not(and E1 E2 E3)` with `not E1`)
+  and feed the full conjunction -> bit-blast finds SAT INSTANTLY at K=2 (valid+inBox).
+  => the blaster encoding is CORRECT; the problem is INTEGRATION: our nia.bit-blast
+  only blasts the CURRENT CDCL(T) assignment's theory atoms (normalized_), NOT the
+  whole formula's boolean structure. For boolean-rich formulas the outer SAT solver
+  commits a non-satisfying disequality resolution, bit-blast returns Unknown (no
+  conflict -> no backtrack signal for an incomplete box), the loop stalls -> unknown.
+- BLAN bit-blasts the WHOLE formula (boolean + arithmetic) into ONE SAT instance, so
+  the disjunctions and the arithmetic are searched together -> 0.05s.
+
+SLS CHECK (built WalkSAT, XOLVER_NIA_LOCALSEARCH, big budget 8s/20s, bit-blast off):
+recovers only 1/5 (AProVE). Not robust for these.
+
+DECISION (master reserved SLS-vs-bit-blast; data resolves it): bit-blast is the RIGHT
+tool but needs WHOLE-FORMULA eager blasting (translate the entire QF_NIA formula —
+Int vars -> bit vectors, every arith atom -> bit-level clauses, boolean skeleton ->
+CNF — into one SAT solve, like BLAN), NOT the current per-assignment Full-effort
+stage. SLS is too weak (1/5). This is a sizeable NEW capability (a portfolio
+int-blast mode wired to the SAT core / a frontend int-blast pass), not a tweak and
+not "wire up built machinery" — recommend to master before building (overlaps the
+held incremental-SAT/whole-blast lane). Per-assignment bit-blast stays as-is.
+Cheaper partial win available meanwhile: time-box nia.cdcac so it stops wasting
+multi-second budget on SAT cases (doesn't recover these — bit-blast already failed —
+but frees budget broadly). Kept NIA_BITBLAST_DIAG (env-gated) for the blast work.
