@@ -312,7 +312,27 @@ CellResult intervalFromCharacterization(
         if (c == CompareResult::Unknown) cmpFail = true;
         return c == CompareResult::Less;
     });
-    if (cmpFail) return bail("sort-compare-unknown");
+    if (cmpFail) {
+        // [P0 step1] Dump the exact RealAlg pairs compareRealAlg cannot order, as
+        // standalone algebraic-kernel reproducers (gated XOLVER_NRA_CAC_DUMP).
+        if (std::getenv("XOLVER_NRA_CAC_DUMP")) {
+            std::ofstream st("/tmp/cac_repro_compare.txt", std::ios::app);
+            auto ser = [&](const RealAlg& r) {
+                if (r.isRational()) { st << "R " << r.rational.get_str(); return; }
+                st << "A idx=" << r.root.rootIndex
+                   << " lo=" << r.root.lower.get_str() << " hi=" << r.root.upper.get_str()
+                   << " poly=";
+                for (const auto& c : algebra->getUni(r.root.definingPoly)) st << c.get_str() << " ";
+            };
+            for (size_t i = 0; i < roots.size(); ++i)
+                for (size_t j = i + 1; j < roots.size(); ++j)
+                    if (algebra->compareRealAlg(roots[i], roots[j]) == CompareResult::Unknown) {
+                        st << "PAIR\n  a: "; ser(roots[i]); st << "\n  b: "; ser(roots[j]); st << "\n";
+                    }
+            st.flush();
+        }
+        return bail("sort-compare-unknown");
+    }
     std::vector<RealAlg> distinct;
     for (auto& r : roots) {
         if (!distinct.empty()) {

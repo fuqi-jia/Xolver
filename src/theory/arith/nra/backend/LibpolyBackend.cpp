@@ -1241,67 +1241,37 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
     if (!libKernel_) return false;
     if (alpha.definingPoly == NullUniPolyId) return false;
 
-    const auto& rc = getUni(alpha.definingPoly);
-    std::vector<poly::Integer> rootLpCoeffs;
-    for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
-        rootLpCoeffs.emplace_back(*it);
-    }
-    poly::UPolynomial rootUp(rootLpCoeffs);
-    std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
-    if (alpha.rootIndex < 0 || alpha.rootIndex >= static_cast<int>(roots.size())) {
-        return false;
-    }
-
-    // libpoly's `refine` halves the bracketing interval per call, but we are
-    // re-isolating from scratch on every entry to this function — so the
-    // refinement state of `roots[alpha.rootIndex]` always starts at libpoly's
-    // initial bracket, not the caller's current `alpha.lower/upper`. Without
-    // compensation, caller-driven loops never make progress past the first
-    // refinement step.
+    // LOCAL root-preserving bisection of the CURRENT certified isolating interval
+    // [lo,hi]. The previous implementation RE-ISOLATED all roots from scratch on
+    // every call and refined libpoly's fresh bracket back down to the caller's
+    // width — that lost the caller's accumulated progress, paid full isolation
+    // cost per step, and (worse) risked root-matching errors on high-degree
+    // polynomials, so caller loops stalled and compareRealAlg returned a spurious
+    // Unknown on genuinely distinct roots ~1e-8 apart (meti-tarski trig/exp).
     //
-    // Strategy: refine repeatedly within this call until the resulting
-    // interval is strictly tighter than the caller's current bracket, or we
-    // hit a safety cap. The width-based progress check is the key — it
-    // succeeds even if the absolute endpoint values match libpoly's internal
-    // representation, as long as the bracket has shrunk.
-    auto extractInterval = [](const poly::AlgebraicNumber& a) {
-        const auto& lo = poly::get_lower_bound(a);
-        const auto& hi = poly::get_upper_bound(a);
-        poly::Integer loN = poly::numerator(lo);
-        poly::Integer loD = poly::denominator(lo);
-        poly::Integer hiN = poly::numerator(hi);
-        poly::Integer hiD = poly::denominator(hi);
-        mpz_class loNum = *poly::detail::cast_to_gmp(&loN);
-        mpz_class loDen = *poly::detail::cast_to_gmp(&loD);
-        mpz_class hiNum = *poly::detail::cast_to_gmp(&hiN);
-        mpz_class hiDen = *poly::detail::cast_to_gmp(&hiD);
-        return std::pair<mpq_class, mpq_class>{mpq_class(loNum, loDen),
-                                               mpq_class(hiNum, hiDen)};
-    };
+    // Instead: split [lo,hi] at its midpoint and keep the half that still
+    // contains exactly one real root of the SAME defining polynomial (root count
+    // via Sturm/sign-changes). Guarantees the refinement contract: the new
+    // interval is a strict sub-interval of the old, still isolating, contains the
+    // SAME root, and rootIndex/definingPoly are unchanged. If the count cannot
+    // certify a unique half (interval not cleanly isolating, or count
+    // unsupported) ⇒ return false: the caller treats "no progress" as Unknown and
+    // never guesses an order or swaps in an extraneous root (fail-closed).
+    const mpq_class lo = alpha.lower;
+    const mpq_class hi = alpha.upper;
+    if (hi <= lo) return false;                  // already a point ⇒ cannot shrink
 
-    auto [initLo, initHi] = extractInterval(roots[alpha.rootIndex]);
-    mpq_class initWidth = initHi - initLo;
-    mpq_class targetWidth = (alpha.upper - alpha.lower) / 2;
-    if (targetWidth < 0) targetWidth = 0;
-
-    constexpr int kMaxInnerRefines = 40;
-    for (int i = 0; i < kMaxInnerRefines; ++i) {
-        poly::refine(roots[alpha.rootIndex]);
-        auto [curLo, curHi] = extractInterval(roots[alpha.rootIndex]);
-        mpq_class curWidth = curHi - curLo;
-        if (curWidth < targetWidth || curWidth == 0) {
-            alpha.lower = curLo;
-            alpha.upper = curHi;
-            return true;
-        }
+    const mpq_class m = (lo + hi) / 2;
+    const auto& coeffs = getUni(alpha.definingPoly);
+    if (evalUniAtRational(coeffs, m) == 0) {     // exact rational root at midpoint
+        alpha.lower = m; alpha.upper = m; return true;
     }
-
-    auto [finalLo, finalHi] = extractInterval(roots[alpha.rootIndex]);
-    alpha.lower = finalLo;
-    alpha.upper = finalHi;
-    // Return true only if width actually shrank vs caller's previous state.
-    return (finalHi - finalLo) < (alpha.upper - alpha.lower)
-        || (finalHi - finalLo) < initWidth;
+    const int leftCount  = countRealRootsInInterval(alpha.definingPoly, lo, m);
+    const int rightCount = countRealRootsInInterval(alpha.definingPoly, m, hi);
+    if (leftCount < 0 || rightCount < 0) return false;                  // count unsupported
+    if (leftCount == 1 && rightCount == 0) { alpha.upper = m; return true; }
+    if (leftCount == 0 && rightCount == 1) { alpha.lower = m; return true; }
+    return false;   // 0 or >1 roots in a half ⇒ not cleanly isolating ⇒ no certified shrink
 #endif
 }
 

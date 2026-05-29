@@ -66,6 +66,37 @@ TEST_CASE("compareRealAlg T4: coprime distinct roots -> ordered, never Equal") {
     CHECK(c == CompareResult::Less);               // sqrt2 < sqrt3 (completeness target)
 }
 
+// R1: standalone reproducer of a real meti-tarski sort-compare-unknown failure
+// (Pair B from /tmp/cac_repro_compare.txt, sin-problem-7-weak family). Two roots
+// in [0,1/4] from different high-degree polys; the comparator currently returns
+// Unknown. This test pins the reproducer + reveals equal-vs-distinct via gcd, to
+// drive the [P0] algebraic-kernel completion.
+TEST_CASE("compareRealAlg R1: high-degree meti-tarski pair (sort-compare-unknown repro)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    // a: 1000x^7 - 42000x^5 + 840000x^3 - 798000x + 2121, root idx1 in [0,1/4]
+    UniPolyId pa = algebra.allocUni({1000, 0, -42000, 0, 840000, 0, -798000, 2121});
+    // b: 40000x^3 - 38000x + 101, root idx1 in [0,1/4]
+    UniPolyId pb = algebra.allocUni({40000, 0, -38000, 101});
+    RealAlg a = algRoot(pa, 1, mpq_class(0), mpq_class(1, 4));
+    RealAlg b = algRoot(pb, 1, mpq_class(0), mpq_class(1, 4));
+
+    // Diagnose equal-vs-distinct via gcd (drives the fix; not an assertion yet).
+    UniPolyId g = algebra.gcdUni(pa, pb);
+    const bool coprime = (g == NullUniPolyId) || algebra.isConstantUni(g);
+    MESSAGE("R1 gcd coprime=" << coprime);
+
+    CompareResult c = algebra.compareRealAlg(a, b);
+    MESSAGE("R1 compareRealAlg = " << static_cast<int>(c));
+    // SOUNDNESS: distinct (coprime) ⇒ never Equal.
+    if (coprime) CHECK(c != CompareResult::Equal);
+    // COMPLETENESS ([P0], after the refineRootInterval local-bisection fix): the
+    // two roots are ~1e-8 apart, so certified separation MUST decide the order
+    // (Less or Greater — direction by disjoint intervals, not asserted here).
+    CHECK(c != CompareResult::Unknown);
+    CHECK((c == CompareResult::Less || c == CompareResult::Greater));
+}
+
 // T5: wide overlapping intervals must NOT be conflated (first-overlap bug guard).
 // sqrt(2) and sqrt(3), BOTH given the loose interval [1,2] (overlaps each other).
 TEST_CASE("compareRealAlg T5: wide overlapping intervals not conflated") {
