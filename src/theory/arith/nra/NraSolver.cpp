@@ -530,7 +530,15 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
     if (!enableCac_) return std::nullopt;
-    if (effort != TheoryEffort::Full) return std::nullopt;
+    // CAC runs at EVERY effort (mirroring Collins). The old Full-effort-only gate
+    // crippled CAC: Collins (which runs at every effort) preempted it at Standard
+    // effort, so on the meti-tarski sample CAC never ran on ~37/64 Collins-solved
+    // cases. A fair head-to-head (CAC at all efforts) gives CAC-only=95 vs
+    // Collins-only=64 (0-unsound) — the conflict-driven CAC is the stronger engine,
+    // so it gets first refusal at every effort; Collins remains the fallback on
+    // CAC-Unknown (its ~8 unique cases). XOLVER_NRA_CAC_ONLY additionally disables
+    // the Collins fallback (stageCdcac) for the pure A/B differential.
+    (void)effort;
     // Pure NRA only: interface (dis)equalities live in the engine, not
     // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
@@ -605,9 +613,17 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     return std::nullopt;  // Unknown / no libpoly ⇒ fall through to Collins
 }
 
-// Stage 2: the CDCAC engine. Always yields a definite verdict.
+// Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
+    // XOLVER_NRA_CAC_ONLY (differential): disable Collins so CAC is the sole
+    // engine. Return Unknown (not nullopt) so the solver reports unknown when CAC
+    // cannot decide, rather than falling through to a default/false verdict.
+    static const bool cacOnly = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_ONLY");
+        return e && *e && *e != '0';
+    }();
+    if (cacOnly) return TheoryCheckResult::unknown("cac-only-collins-disabled");
     return engine_.check();
 }
 
