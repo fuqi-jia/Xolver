@@ -13,9 +13,16 @@ never emits a dead/superseded/no-op flag. Three disjoint buckets:
                       Kept all-on-testable this round; master collapses the
                       differential-proven ones into default in one pass later.
 
-Excluded entirely (not 0/1 levers): *_DIAG / *_DUMP* / *_MS / *_BUDGET* /
-*_MAX* / *_EVERY numeric+diagnostic envs, *_NO_* disable switches,
-XOLVER_NRA_PROJECTION (value not bool), and the STRAT_PORTFOLIO meta-knobs.
+Excluded entirely (not 0/1 autotuner levers): *_DIAG / *_DUMP* / *_MS /
+*_BUDGET* / *_MAX* / *_CAP / *_EVERY numeric+diagnostic envs, *_NO_* disable
+switches, XOLVER_NRA_PROJECTION (value not bool), XOLVER_LIA_Z3_CHECK (z3
+cross-check dev harness, needs z3 present), XOLVER_NRA_LAZARD_CELL_CERT
+(default-ON soundness cert — force-off only; not a toggle we manage), and
+XOLVER_STRAT_PORTFOLIO* (strategy framework + its budget/arm knobs — its arms
+e.g. eager-bitblast are promoted individually, not the framework wholesale).
+Note: XOLVER_NIA_DIVISOR_FACTOR was promoted to DEFAULT (15abfdf, "make prime
+factorization the default divisor path") and its flag dropped — always-on now,
+no longer a lever. This is the model end-state for every validated flag.
 
 Policy: one capability = one flag (no flag per micro-change).
 Python 3.6+ / stdlib only.
@@ -48,12 +55,14 @@ OPTIMIZATION_FLAGS: List[str] = [
     # LIA / LRA
     "XOLVER_LIA_CUTS", "XOLVER_LIA_REPAIR",
     "XOLVER_LRA_BOUND_AXIOMS", "XOLVER_LRA_PIVOT_HEUR", "XOLVER_LRA_PROP",
-    # NIA  (MODULAR L3 + LOCALSEARCH WalkSAT = the recovery levers; DIVISOR_FACTOR
-    #       supersedes the old DIVISOR_CAP)
+    # NIA  (MODULAR L3 + LOCALSEARCH WalkSAT + EAGER_BITBLAST = recovery levers;
+    #       prime-factor divisor enumeration is now DEFAULT, no longer a flag.
+    #       EAGER_BITBLAST runs as a portfolio arm but is independently env-gated;
+    #       it needs the 1200s budget to fire — see the budget-mismatch guard.)
     "XOLVER_NIA_REFUTE", "XOLVER_NIA_GCD", "XOLVER_NIA_ICP", "XOLVER_NIA_CDCAC",
-    "XOLVER_NIA_BV_CASCADE", "XOLVER_NIA_BITBLAST_FAST", "XOLVER_NIA_DIVISOR_FACTOR",
+    "XOLVER_NIA_BV_CASCADE", "XOLVER_NIA_BITBLAST_FAST", "XOLVER_NIA_EAGER_BITBLAST",
     "XOLVER_NIA_UNIVARIATE_FULL", "XOLVER_NIA_PRESOLVE_FULL", "XOLVER_NIA_MODULAR",
-    "XOLVER_NIA_LOCALSEARCH",
+    "XOLVER_NIA_LOCALSEARCH", "XOLVER_NIA_NORM_CACHE", "XOLVER_NIA_IFACE_LIFECYCLE",
     # NRA  (CAC engine; SUBTROPICAL = SAT-fast front door; SIGN_REFUTE)
     "XOLVER_NRA_CAC", "XOLVER_NRA_LAZARD_LIFT", "XOLVER_NRA_LIBPOLY_PSC",
     "XOLVER_NRA_VARORDER", "XOLVER_NRA_VARORDER_SIMPLEX", "XOLVER_NRA_HYBRID",
@@ -63,12 +72,12 @@ OPTIMIZATION_FLAGS: List[str] = [
     "XOLVER_PP_REWRITE", "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_PG_CNF",
     "XOLVER_PP_LET_ELIM", "XOLVER_PP_VALIDATOR_MEMO",
     "XOLVER_PRESOLVE_DEDUP_ROWS", "XOLVER_PRESOLVE_IIS", "XOLVER_REAL_DIV_PURIFY",
-    # arrays
-    "XOLVER_AX_EXT_WITNESS_COMPLETE", "XOLVER_AX_ROW2_CONST",
+    # arrays / EUF-array extensionality
+    "XOLVER_AX_EXT_WITNESS_COMPLETE", "XOLVER_AX_ROW2_CONST", "XOLVER_ARRAY_CONGR_EXT",
     # SAT / strategy
     "XOLVER_SAT_LEMMA_MGMT", "XOLVER_SAT_MIN", "XOLVER_STRAT_PRESETS",
-    # UF
-    "XOLVER_UF_DISEQ_WATCH", "XOLVER_UF_FAST_CC",
+    # UF / EUF e-propagation
+    "XOLVER_UF_DISEQ_WATCH", "XOLVER_UF_FAST_CC", "XOLVER_EUF_PROP",
 ]
 
 # Applied to every logic in flags_for_logic (preprocessing / SAT / strategy /
@@ -112,9 +121,11 @@ def flags_for_logic(logic: str) -> List[str]:
         add_prefix("XOLVER_LRA_")
     if has_array:
         add_prefix("XOLVER_AX_")
+        add_prefix("XOLVER_ARRAY_")
     if is_comb:
         add_prefix("XOLVER_COMB_")
         add_prefix("XOLVER_UF_")
+        add_prefix("XOLVER_EUF_")
     return sorted(sel & set(OPTIMIZATION_FLAGS))
 
 

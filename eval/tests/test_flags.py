@@ -54,9 +54,29 @@ class TestLogicFlags(unittest.TestCase):
 
 
 class TestFlagHygiene(unittest.TestCase):
-    def test_superseded_divisor_cap_removed_factor_present(self):
+    def test_superseded_divisor_flags_fully_removed(self):
+        # DIVISOR_CAP was superseded by DIVISOR_FACTOR, which was then PROMOTED to
+        # default (15abfdf) and its flag dropped — neither is a lever anymore.
         self.assertNotIn("XOLVER_NIA_DIVISOR_CAP", flags.OPTIMIZATION_FLAGS)
-        self.assertIn("XOLVER_NIA_DIVISOR_FACTOR", flags.OPTIMIZATION_FLAGS)
+        self.assertNotIn("XOLVER_NIA_DIVISOR_FACTOR", flags.OPTIMIZATION_FLAGS)
+
+    def test_new_merged_levers_registered(self):
+        # Capability levers added by the integration merge (98-flag live set).
+        for f in ("XOLVER_NIA_EAGER_BITBLAST", "XOLVER_NIA_NORM_CACHE",
+                  "XOLVER_NIA_IFACE_LIFECYCLE", "XOLVER_ARRAY_CONGR_EXT",
+                  "XOLVER_EUF_PROP"):
+            self.assertIn(f, flags.OPTIMIZATION_FLAGS, f)
+
+    def test_new_levers_routed_to_their_logics(self):
+        self.assertIn("XOLVER_NIA_EAGER_BITBLAST", flags.LOGIC_FLAGS["QF_NIA"])
+        self.assertIn("XOLVER_EUF_PROP", flags.LOGIC_FLAGS["QF_UF"])
+        self.assertIn("XOLVER_ARRAY_CONGR_EXT", flags.LOGIC_FLAGS["QF_AX"])
+
+    def test_non_lever_flags_excluded_from_opt(self):
+        # default-ON cert / dev z3-check / strategy framework / numeric cap.
+        for f in ("XOLVER_NRA_LAZARD_CELL_CERT", "XOLVER_LIA_Z3_CHECK",
+                  "XOLVER_STRAT_PORTFOLIO", "XOLVER_NRA_LINEARIZE_CAP"):
+            self.assertNotIn(f, flags.OPTIMIZATION_FLAGS, f)
 
     def test_soundness_gated_disjoint_and_excluded_from_opt(self):
         self.assertTrue(flags.SOUNDNESS_GATED)
