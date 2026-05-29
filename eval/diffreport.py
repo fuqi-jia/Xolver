@@ -11,6 +11,8 @@ import argparse
 import sys
 from typing import List, Optional
 
+from eval.cluster_patterns import annotate as annotate_pattern
+from eval.cluster_patterns import verification_report
 from eval.diffmodel import load_diff
 from eval.diffscore import (division_rollup, family_split, format_divisions,
                             format_stale, jiecuo_clusters, stale_suspects)
@@ -64,10 +66,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("\n== 解错 triage ==")
         print("total 解错 = %d  |  in likely-stale/single-root clusters = %d  |  residual (scattered) = %d"
               % (total_jiecuo, stale_jiecuo, total_jiecuo - stale_jiecuo))
-        print(format_stale(clusters, suspects))
+        stale_lines = format_stale(clusters, suspects).split("\n")
+        # format_stale yields: title, column-header, then ONE line per cluster
+        # in `clusters` order. Annotate each cluster line with its pattern tag.
+        header, col, body = stale_lines[0], stale_lines[1], stale_lines[2:]
+        annotated = [header, col]
+        for line, c in zip(body, clusters):
+            tag = annotate_pattern(c)
+            annotated.append(line.rstrip() + ("  " + tag if tag else ""))
+        print("\n".join(annotated))
         print("\nNOTE: ★ clusters are one family flipping one direction at scale = likely a "
               "stale-binary / single-root artifact (re-run with the fresh binary, harness #4), "
               "NOT N independent bugs. Residual scattered 解错 are the real soundness targets.")
+
+    # Verification: expected-absent patterns. After a known fix lands (e.g. the
+    # 2965e21 SquareContractor fix), this report names what stayed absent (verified)
+    # vs what re-appeared (regression). Runs whether or not we have 解错 to print:
+    # 'all expected-absent absent' is the meaningful post-fix signal.
+    print("\n== pattern verification ==")
+    print(verification_report(clusters))
 
     if args.by == "family":
         print("\n== per-family (families with movement) ==")
