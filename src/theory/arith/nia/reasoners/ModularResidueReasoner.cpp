@@ -515,12 +515,17 @@ NiaReasoningResult ModularResidueReasoner::run(
     // external can catch it). Returns:
     //   2 = ConfirmedUnsat (fully enumerated, no model) -> cert-backed, emit
     //   0 = FoundModel (a residue model exists) -> reasoner is WRONG -> FLOOR
-    //   1 = OverBudget (m^|allVars| too large, e.g. modInv 256^12) -> can't
-    //       brute-cert here; emit (those are the large-m structured cases that
-    //       carry their own evidence — Hensel identity / oracle :status unsat).
+    //   1 = OverBudget (residue space too large to brute-force) -> the enum path
+    //       FLOORS this now (un-cross-checkable; never ship an un-brute-verified
+    //       enum UNSAT). The only large-residue UNSATs we still emit come from the
+    //       Hensel path, which carries its OWN machine-checkable polynomial-identity
+    //       certificate (verified below), not this enumeration.
+    // certBudget MATCHES enumBudget_: the enum path only enumerates moduli with
+    // residue space <= enumBudget_, so the independent cert can always re-verify
+    // exactly what the enum proved (no enum-proven-but-cert-OverBudget gap).
     std::vector<std::string> allVarsVec(allVars.begin(), allVars.end());
     std::sort(allVarsVec.begin(), allVarsVec.end());
-    const mpz_class certBudget(static_cast<unsigned long>(1u << 22));
+    const mpz_class certBudget(static_cast<unsigned long>(enumBudget_));
     auto bruteCertify = [&](const mpz_class& m) -> int {
         mpz_class sz = 1;
         for (size_t i = 0; i < allVarsVec.size(); ++i) {
@@ -641,7 +646,11 @@ NiaReasoningResult ModularResidueReasoner::run(
         if (DIAG) std::cerr << "[MODRES] cert(m=" << m.get_str() << ")="
                             << (cert == 2 ? "ConfirmedUnsat" : cert == 0 ? "FoundModel(FLOOR)" : "OverBudget")
                             << "\n";
-        if (cert == 0) continue;  // reasoner disagrees with brute force -> do NOT emit (floor)
+        // STRICT independent-proof gate: emit an enum-path UNSAT ONLY when the
+        // independent brute-force re-verification CONFIRMS it (cert==2). FoundModel
+        // (0, reasoner WRONG) and OverBudget (1, un-cross-checkable) both FLOOR ->
+        // we never ship an enum UNSAT that a second independent path didn't confirm.
+        if (cert != 2) continue;
         std::unordered_set<uint32_t> seen;
         std::vector<SatLit> clause;
         auto add = [&](SatLit l) { if (seen.insert(l.var).second) clause.push_back(l); };

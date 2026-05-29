@@ -25,7 +25,11 @@ uint64_t BitBlastSolver::defaultGateBudget() {
         unsigned long long v = std::strtoull(e, &end, 10);
         if (end != e && v > 0) return static_cast<uint64_t>(v);
     }
-    return 200000ull;
+    // Competition retune: 30GB (not the dev 2GB) allows far more vars before OOM
+    // (~0.2-0.5M vars per 2GB => ~3-7M for 30GB). 2M is safely under that and lets
+    // the bit-blast decide larger bounded instances; tiny suite encodings are
+    // unaffected. Overflow past the cap still bails to a clean Unknown (sound).
+    return 2000000ull;
 }
 
 bool BitBlastSolver::applicable(const std::vector<NormalizedNiaConstraint>& cs) const {

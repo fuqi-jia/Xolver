@@ -8,7 +8,10 @@
 namespace xolver {
 
 NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
-    : kernel_(kernel), budgetMs_(200), totalBudgetMs_(1000) {
+    // Dev defaults were 200ms/1000ms (24s-screening). Competition has 1200s, so
+    // give SLS a real budget: 5s per call, 60s cumulative. Candidate-only +
+    // validator-gated, so raising is SOUND (no model found = just unknown).
+    : kernel_(kernel), budgetMs_(5000), totalBudgetMs_(60000) {
     if (const char* e = std::getenv("XOLVER_NIA_LS_BUDGET_MS")) {
         budgetMs_ = std::atol(e);   // 0 or negative = unlimited
     }

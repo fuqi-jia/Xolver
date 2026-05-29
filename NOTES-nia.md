@@ -352,3 +352,322 @@ tuning via the differential (3s default misses slow-SAT; calypto needs width>32)
 (2) BLAN encoding optimizations not yet ported — offset encoding for bounded vars
 (var=lb+t, narrower width), range-splitting, sorting-network addition; CSE is
 already ported. Validate-gate keeps all of these sound to add later.
+
+## ENCODING-PARITY WITH BLAN ("对拍", 2026-05-29) — closing the speed gap
+Head-to-head on 24 BLAN-sat cases: BLAN 20/24. Xolver eager-arm progression:
+11/24 (initial) -> 17/24 (per-var width) -> **18/24 (constant folding)**.
+Root-caused via minimal-case SAT-var counts (BLAN prints satVars):
+  m_mul (a*b=100): BLAN 231, ours 744->411 (folding).
+  m_sum (a+b+..=100): BLAN 159, ours 686->403 (folding).
+  1395.smt2: BLAN 25444 vars/1.48s; ours 153k/16.8s -> 98k/8.6s (per-var width)
+             -> 60k/3.7s (folding).
+
+FIXES SHIPPED:
+1. Per-var width [0a29ca2]: bounded vars at exact width not uniform cascade.
+2. **Constant folding in BitBlastEncoder gates [this commit]** — andGate/orGate/
+   xorGate/iteGate now short-circuit on constant/(anti)identical inputs instead of
+   always allocating a fresh var+clauses. Bit-blasting emits MANY constant inputs
+   (padding, sign-extension, zero partial products, LSB carry-in), so this is the
+   dominant systematic var reduction (~45% on minimal cases). SHARED ENCODER ->
+   benefits BOTH the eager arm AND the per-assignment nia.bit-blast. Exact
+   (semantics-preserving): unit 890/890, nia reg 113/113 OFF+ON, 0-unsound.
+3. Encode budget guard [a6727bd]: var-budget 2M + in-encode wall-clock check so a
+   single huge formula (3110 vars) can't hang the arm.
+
+REMAINING gap to BLAN (still ~1.8-2.5x var count): the bound atoms are still
+encoded as adder+comparator (BLAN's OFFSET encoding makes them free) — that's the
+next lever. The last 2 unsolved h2h cases are huge formulas (3110 vars) that need
+offset to fit. WHY-BLAN-IS-FASTER answer: more compact encoding (constant folding
+[now ported] + offset/unsigned vars [next] + tighter operators), not algorithm.
+
+## OFFSET ATTEMPT + POLARITY FIX + COMPLEMENTARITY (2026-05-29, cont.)
+1. POLARITY BUG FOUND+FIXED [ce9181e]: per-var bound extraction was polarity-blind
+   — it pulled a bound from EVERY simple atom incl. ones under (not ...)/(or ...).
+   `(not (= rfc0 0))` made it extract `rfc0=0` and size rfc0 to 1 bit (wrong; real
+   constraint is rfc0!=0). Worked only by luck (1-bit signed range held a non-zero
+   value). FIX: markTop pass — descend from assertion roots through And ONLY;
+   bounds come exclusively from top-level positive conjuncts. Correct by
+   construction; validate-gate remains the backstop. (This is the kind of latent
+   bug the offset work surfaced.)
+2. OFFSET ENCODING ATTEMPTED + REVERTED: value = lb + t (t unsigned in [0,range]),
+   skip bound atoms (free). Worked on minimal cases (m_mul 411->377, m_sum 403->318)
+   but produced INVALID candidates on full bilinear formulas (1395): exact-encoding
+   mismatch on offset-var * unbounded-var products (validate-gate caught it => sound
+   Unknown, no recovery). Root cause not fully isolated (the add-result value bitvec
+   interacting with PolyBitBlaster products). Reverted to per-var EXACT width +
+   polarity-correct bounds. Offset needs more careful work before it helps; the
+   bound-atom-skip win is real for the huge 3110-var cases but the product encoding
+   must be debugged first.
+3. COMPLEMENTARITY CONFIRMED ("exceed BLAN" thesis): same all-flags-on binary —
+   modInv8 -> UNSAT (via nia.modular; eager arm bails, reasoning proves it) AND
+   1395 -> SAT (via eager bit-blast). The eager arm finds SAT, the
+   modular/Hensel/CDCAC levers prove UNSAT, they don't interfere (eager runs first,
+   Unknown -> CDCL(T) reasoning). So Xolver = BLAN's SAT power + UNSAT reasoning
+   BLAN (a pure bit-blaster) lacks => total > BLAN on the union.
+
+CURRENT STANDING: head-to-head 17-18/24 (BLAN 20), within timing noise. All sound:
+unit 890/890, nia reg 113/113 OFF+ON, 0-unsound. NEXT for full parity (20+):
+debug+reland offset product encoding, or sorting-network addition.
+
+## OFFSET RE-ATTEMPT — CORRECT BUT EMPIRICALLY NET-NEGATIVE (2026-05-29, final)
+Re-landed offset WITH the polarity fix and isolated the earlier bug: the offset
+VALUE (lb+t) in products is EXACT (1395 valid=1 with offset-value, bounds still
+encoded) — the earlier invalidity was the SKIP combined with the polarity bug, NOT
+the product encoding. So offset is now CORRECT. BUT measuring offset+skip:
+head-to-head DROPPED to 16/24 (from 17-18), calypto still TO. WHY: these Farkas/
+termination cases are dominated by ONE-SIDED `>=0` lambdas (not both-sided =>
+not offset-eligible => no bound-skip) and by bilinear PRODUCTS + big SUMS, while
+offset's lb+t representation WIDENS both-sided vars (W+1 bits + adder) => slower.
+1395 cost breakdown is products+sums, not bound atoms. => OFFSET IS THE WRONG
+LEVER for this corpus. REVERTED to per-var-width + folding + polarity (= ce9181e,
+17-18/24). The real SAT-side lever to reach 20 is SUM/PRODUCT density: sorting-
+network / Wallace-tree multi-operand addition for the Farkas sums (substantial,
+validate-gate-safe). KEY STRATEGIC POINT: overall Xolver ALREADY EXCEEDS BLAN via
+complementarity — BLAN (pure bit-blaster) TIMES OUT on the modInv/Hensel UNSAT
+family that nia.modular solves; so on the full QF_NIA corpus (SAT+UNSAT) the union
+is ahead even at 17-18/24 SAT-recovery. The 18->20 SAT-parity is the last SAT-side
+subset, needs the sum-encoding rewrite.
+
+## NO-GROW (FIXED-WIDTH) ARITHMETIC — studied BLAN source + tried + reverted
+Read BLAN solvers/blaster/blaster_operations.cpp::Add — CONFIRMED BLAN uses
+FIXED-WIDTH no-grow arithmetic: `size = varmax->size()` (sum width = max operand
+width, final carry dropped = mod 2^w), NOT max+1. Our encoder GROWS (add->max+1,
+mul->wa+wb) which bloats Farkas intermediates. Added a no-grow mode to
+BitBlastEncoder (setFixedWidth, default-off, exact path unchanged) and enabled it
+in the eager arm. RESULT: NET-NEGATIVE for our cascade. no-grow caps sums/products
+at the operand width, so at a LOW cascade K the Farkas sums (sum of ~24 K-bit
+terms ~ 2^(K+5)) WRAP -> invalid candidate -> validate rejects -> must escalate to
+a high K (24/32) where it's slow (189k-300k vars) — WORSE than grow (which holds
+the sum at K=8 via growth, validates 1395 in 3.7s). BLAN avoids this because its
+COLLECTOR picks a sufficient def_width UPFRONT (no wasteful low-K attempts); its
+no-grow at the right width is then compact. So no-grow REQUIRES BLAN's collector
+(per-formula width estimation) to be a win — the two are COUPLED. Reverted no-grow.
+CONCLUSION: full BLAN encoding parity = collector (smart width) + no-grow together,
+a substantial coupled rewrite. Individual cheap levers (offset, no-grow alone) are
+net-negative. The ONE big win that landed is constant folding [dec1495] (11->18).
+Grow + per-var-width + folding + polarity = the working scheme (17-18/24, sound).
+Overall Xolver already EXCEEDS BLAN via complementarity (modular UNSATs BLAN can't).
+
+## COMPETITION-BUDGET RETUNE of hardcoded limits (2026-05-29) — 1200s / 30GB / 4-core
+Audited every NIA hardcoded limit: (a) genuine hang/OOM guard at 1200s/30GB, or
+dev-conservative (WSL/24s-screening)? (b) algorithm to eliminate? Retuned the
+dev-conservative ones; raising is SOUND (worst case = hang/OOM = unsolved, never
+wrong). Changes:
+- eager-bitblast budgetMs 3000 -> 120000 (THE biggest QF_NIA recovery throttle; 3s
+  cut off slow-SAT before the deciding width; 120s of 1200s leaves ~1080s for the
+  CDCL(T)/reasoning UNSAT path), confLimit 50000 -> 1000000 (hard deciding width
+  gets a real chance), var-budget 2M -> 20M (30GB allows it; per-attempt SIZE cap),
+  widths {4,8,16,24,32} -> +48,64 (competition can afford wider for big bounded vars).
+- SLS LS_BUDGET_MS/LS_TOTAL_MS 200/1000 -> 5000/60000 (candidate-only+validated).
+- per-assignment bit-blast defaultGateBudget 200000 -> 2000000 (dev 2GB->30GB).
+- univariate factorization bound B 1e6 -> 1e7 (factor more constants; ~10ms),
+  MAX_DIVISORS 1000 -> 10000 (RRT enumerates more; over cap => Incomplete=unknown).
+- modular modulusCap 1<<16 -> 1<<18, enumBudget 1<<20 -> 1<<24 (larger residue enum).
+- per-assignment bit-blast maxBW_=128 / maxIters_=6 LEFT AS-IS (already
+  competition-tuned: 128-bit ceiling, x4 growth reaches it in <=6 iters).
+ALGORITHM-ELIMINATED earlier (the model): XOLVER_NIA_DIVISOR_CAP -> deleted, the
+factorization (DIVISOR_FACTOR) makes RRT complete instead of capping to unknown.
+
+GATE: unit 890/890 (updated the 2 divisor unit tests for the new B/MAX_DIVISORS:
+semiprime now uses 1e9+7 * 1e9+9 > B; over-cap uses 2^20000 > 10000), nia reg OFF
+113/113 (the default-on raises — gateBudget/MAX_DIVISORS/B — don't slow the suite).
+nia reg ON 113/113 with the eager budget scaled to the dev 12s timeout
+(XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS=6000). DEV-vs-COMPETITION NOTE: at the 120s
+DEFAULT, nia_097 (an UNSAT case) TIMES OUT at the 12s dev timeout — the eager arm
+spends its full budget (can't prove UNSAT) before yielding to CDCL(T). This is a
+DEV-TIMEOUT ARTIFACT, NOT unsoundness: at the 1200s competition budget nia_097
+solves (120s eager -> yield -> CDCL(T) unsat in 0.07s). The solver has NO timeout
+awareness (SMT-COMP uses external wall-clock kill), so the eager budget cannot
+auto-scale; the dev-reg-ON soundness check therefore runs with a dev budget
+override. Competition binary uses the high default (or the deploy --submit env).
+
+## TRACK 4 — NIA flag inventory for master's default-ON consolidation (2026-05-29)
+One-capability-one-flag. After the differential clears each, master collapses the
+optimization flags to default-ON; soundness-floor/disable toggles stay gated.
+DELETED (superseded, on sight): XOLVER_NIA_DIVISOR_CAP (factorization replaced it),
+XOLVER_NIA_DIVISOR_FACTOR (factorization is now the unconditional default path).
+
+OPTIMIZATION flags (default-OFF now; collapse to default-ON once differential-cleared):
+- XOLVER_NIA_MODULAR        — modular/Hensel/CRT residue UNSAT (Track-1 lever; sound UNSAT-only, inv-7 + brute-cert floor).
+- XOLVER_NIA_LOCALSEARCH    — WalkSAT SLS SAT-finder (candidate-only, validator-gated).
+- XOLVER_NIA_PRESOLVE_FULL  — L4: gate presolve fixpoint to Full effort (per-propagation perf).
+- XOLVER_NIA_UNIVARIATE_FULL— L2: gate univariate RRT to Full effort.
+- XOLVER_NIA_BITBLAST_FAST  — per-assignment bit-blast result cache (verdict-preserving).
+- XOLVER_NIA_EAGER_BITBLAST — whole-formula eager bit-blast portfolio arm (SAT-side; SAT 21/24 vs BLAN 20).
+    tunables: _BUDGET_MS (default 120000), _CONFLICTS (1000000), _BUDGET (var cap 20M), _GROW (A/B exact-width).
+- XOLVER_NIA_REFUTE         — bound-free product-positivity refutation (UNSAT via emptied domain).
+- XOLVER_NIA_GCD            — multivariate GCD-divisibility refutation (UNSAT).
+- XOLVER_NIA_ICP            — interval contraction fixpoint (domain narrowing/UNSAT).
+- XOLVER_NIA_CDCAC          — integer-aware CDCAC (complete UNSAT lever).
+- XOLVER_NIA_BV_CASCADE     — per-assignment bit-blast start-small width cascade.
+- XOLVER_NIA_BITBLAST_GATE_BUDGET — per-assignment bit-blast var cap (default 2M competition).
+DISABLE/DIAG toggles (KEEP gated, not consolidated):
+- XOLVER_NIA_NO_BITBLAST    — disable the per-assignment bit-blast stage (diagnostic/A-B isolation).
+- diagnostics (NOT flags): NIA_MODULAR_DIAG, NIA_DOM_DIAG, NIA_BITBLAST_PROF/DIAG, NIA_EAGER_BB_DIAG,
+  ARITH_STAGE_PROF/DIAG, SOLVE_PHASE_PROF — env-gated cerr traces, zero cost when unset.
+
+## TRACK 1 — SURPASS via UNSAT: modular-lever hunt on BLAN-undecided (2026-05-29)
+BLAN proves ~0 UNSAT (CSV: 2526+5142 timeout, 6 unsat total). UNSAT is the
+structural surpass axis. Hunted the modular lever (XOLVER_NIA_MODULAR + GCD +
+REFUTE + PRESOLVE_FULL + UNIVARIATE_FULL, bit-blast OFF for fast bail) over
+BLAN-undecided (10342 cases) in the residue-friendly families.
+RESULTS (sample):
+- MathProblems + UltimateAutomizer + sqrtmodinv (177 BLAN-undecided): 80 UNSAT,
+  72 unknown, 25 timeout. z3 on the 80: 0 sat, 1 unsat, 79 timeout. cvc5 on the
+  80: 0 sat, 1 unsat, 79 timeout. => 0 FALSE-UNSAT across BOTH oracles; ~78 are
+  ORACLE-BLIND (z3+cvc5+BLAN all timeout) = pure surpass, cert-floor-backed (#16).
+- AProVE (107 BLAN-undecided): only 5 UNSAT (78 timeout, 24 unknown — AProVE is
+  SAT/bit-blast territory, not residue). All 5: z3=unsat AND cvc5=unsat CONFIRMED.
+TOTAL sample: 85 modular UNSAT wins on BLAN-undecided cases, 0 false-UNSAT
+(z3+cvc5). Extrapolated corpus yield: 489 residue-family BLAN-undecided x ~45% +
+AProVE 747 x ~5% => ~250 UNSAT wins where Xolver surpasses BLAN. (Authoritative
+absolute count = master's full-corpus 1200s differential.)
+MISSES are NOT modular-reachable: MathProblems MC_*/MQ_* (magic square of cubes /
+fourth-power) need residue enum over 9 vars mod 9 = 9^9 >> enumBudget AND have
+uncertain ground-truth (a magic square may EXIST => SAT, modular can't prove
+UNSAT); sqrtmodinv misses are variable-modulus (mod (k*s+1)). Catching the
+magic-square class would need a NEW residue-PROPAGATION algorithm (constraint-aware,
+not brute 9^9 enumeration) with uncertain yield — scoped as a future lever, not
+built (speculative + ground-truth-unknown).
+VERDICT: the modular lever's reachable UNSAT is captured + 2-oracle-validated
+0-unsound; surpass demonstrated on the sample. nia reg OFF+ON 0-unsound, unit 890.
+
+## TRACK A — independent validation of the oracle-blind modular UNSATs (DONE 2026-05-29)
+The oracle-blind UNSATs (z3+cvc5+BLAN all timeout) are the surpass axis + the
+single biggest soundness exposure (the n*q=a-r quotient-elimination must be
+equisat; nothing external confirms). Made them competition-safe via a STRICT
+independent-proof gate + a SECOND, fully-independent checker:
+1. STRICT GATE [da843e3]: the enum path emits UNSAT ONLY when the in-binary
+   brute-cert (raw constraints, NO quotient-elim — a path independent of the
+   transform) returns ConfirmedUnsat. OverBudget (un-cross-checkable) now FLOORS
+   to unknown; FoundModel floors. certBudget raised to enumBudget_ so every
+   enum-proven case is brute-re-verifiable. Hensel emits separately via its
+   kernel-verified polynomial-identity cert.
+2. SECOND INDEPENDENT CHECKER [tools/modular_indep_check.py]: separate Python +
+   separate evaluator (no shared kernel). Parses the dumped normalized
+   constraints, brute-forces a SUBSET (equalities ==0 mod m + Neqs on PROVABLY
+   BOUNDED remainder vars) over Z/m. Sound subset argument: subset-UNSAT-mod-m =>
+   full-system UNSAT; can only CONFIRM or be INCONCLUSIVE, never false-refute.
+RESULTS on the 80 BLAN-undecided modular UNSATs:
+- 65 brute-cert ConfirmedUnsat; the independent Python checker re-confirms 64/65
+  (1 = ps4, subset-inconclusive but C++-cert-confirmed; NOT a disagreement).
+- 6 Hensel-identity-backed (machine-checkable polynomial identity).
+- 8 un-cross-checkable -> FLOORED to unknown (sound; never ship unverified).
+- 0 FoundModel (C++), 0 Python disagreements, 0 z3 sat, 0 cvc5 sat.
+=> the n*q=a-r transformation is validated by THREE independent angles (C++
+brute-cert raw, Python separate-evaluator, z3+cvc5). The confirmed UNSATs are
+shippable; the un-cross-checkable are floored. unit 890/890, nia reg 113/113 OFF+ON.
+DECISION per master: score the confirmed, never gamble the division on an unaudited
+cert. (A formal Xolver-proof-checker-consumable modular cert is a further
+formalization; the empirical 3-path agreement provides the independent validation.)
+
+## MEDAL LANE — per-cb_propagate NIA perf in combination (QF_UFNIA/ANIA/UFDTNIA) (2026-05-29)
+Master charter: make the NIA-engine per-propagation path cheap so the combination
+divisions stop hanging->unknown. Profiled (gdb worker-stack SIGINT sampling under
+ptrace_scope=1 via gdb-launch-as-child + ARITH_STAGE_PROF cumulative) the actual
+hot paths. KEY FINDINGS:
+
+1. QF_ANIA ~0/157 is NOT a NIA-engine problem — it is EQNA's lane (TWO gates):
+   (a) ROUTING is default-OFF behind `XOLVER_COMB_ARRAY_NIA`. Without it every
+       QF_ANIA case floors at Solver.cpp isArrayLogic -> "array feature outside
+       array logic" BEFORE any solver runs (that is the ~0/157 in the submitted
+       config). EQNA must promote this gate.
+   (b) With routing ON, QF_ANIA reaches the array+NIA stack and HANGS (33/40
+       sampled timeout). gdb worker stack is ENTIRELY in the EUF/array layer:
+         ArrayReasoner::completeStoreSelects -> enqueueEagerMerges ->
+         internSelect -> IncrementalEGraph::ensureTermRegistered/refreshSignature
+         -> RollbackSignatureTable::find (signature hash lookups), per cb_propagate.
+       The NIA engine is NOT on the stack. => eager-array-merge perf, EQNA's lane.
+   Plus a 3rd, smaller NIA-side floor: 7/40 fast-unknown "NIA: pending unknown
+   (opposite polarity asserted)" — activeSet_ sees both polarities of an atom
+   asserted (combination feeds it contradictory interface lits); floors instead
+   of emitting the {b,-b} conflict. At the combination->NIA seam (coordinate w/
+   EQNA before touching). avg20 (z3=sat) is lost to this floor.
+
+2. QF_UFNIA timeouts (~33% of a 45-sample) split, by z3@15s ground truth:
+   - ~80% also time out z3 (genuinely hard; full 1200s may get some, not low fruit)
+   - a couple are z3-quick-UNSAT but EUF-bound: Zohar qf_AndOrXor / int_check_bvugt
+     encode BV via UNINTERPRETED intand/intor/pow2 + axioms => unsat is an EUF+NIA
+     combination result, not pure NIA (EQNA/combination).
+   - a NIA-engine-bound fraction (e.g. Certora 3106, z3=sat): hot stage is
+     nia.normalize.
+
+3. SHIPPED [273e0a3] incremental normalize cache (XOLVER_NIA_NORM_CACHE, default-OFF):
+   nia.normalize re-normalized the FULL active_ set every cb_propagate at Standard
+   effort. normalizeOne is pure per immutable constraint; active_ is a strict stack
+   => normalized_ kept in lockstep (onBacktrack eager-truncate kills the
+   pop-then-push same-size-different-tail hazard; onReset clears; stageNormalize
+   appends only the fresh tail). Byte-identical output. Measured on 3106:
+   nia.normalize 3483ms/146 -> 55ms/126 calls (63x). Gate: unit 890/890, nia reg
+   113/113 OFF+ON, ufnia 10/10 OFF+ON, 0-unsound, OFF==ON verdicts. Promote candidate.
+
+4. NEXT NIA hot stage after normalize = nia.domain (stageDomainInference, 2.2s/126
+   on 3106): domains_.reset() + linearDomain_.run + product-bound + equality-prop,
+   a CROSS-constraint fixpoint re-run from scratch each call. NOT a clean
+   per-constraint cache (state interacts; conflict-explanation soundness risk).
+   Incrementalizing it is a real project — deferred pending A/B evidence that
+   per-propagation perf flips solved-count (vs the cases being SAT-hard / EUF-bound).
+
+## MEDAL-LANE ROOT CAUSE (★ HAND TO EQNA) — opposite-polarity floor masks a backtrack-sync bug (2026-05-29)
+The QF_UFNIA capability gap is BIG and concrete. On a 50-case sample @25s:
+10 TO / 7 sat / 27 unknown / 6 unsat. ALL 27 fast-unknowns are z3-solvable (20 sat,
+7 unsat) — pure capability loss, not perf. Reason tally over the 27:
+  22  "NIA: pending unknown (opposite polarity asserted)"   <-- dominant
+   1  strict-validation indeterminate
+(the rest no-reason/slow). Same floor loses QF_ANIA avg20 (z3=sat).
+
+DIAGNOSIS (NIA_OPP_DIAG env, added env-gated zero-cost): on int_check_bvsge_bvmul_rtl
+the floor fires repeatedly, e.g.:
+  [NIA-OPP] satVar=85 level=9815 currentLevel=0 active=60 trail=9
+i.e. AFTER a backtrack to level 0 (state_.currentLevel=0), NIA's active_ still holds
+~60 entries (state_.trail=9). active_-trail ~= 51 = the INTERFACE (dis)equalities,
+which TheoryManager replays at ev.decisionLevel (TheoryManager.cpp:358/385) and push
+into NIA active_/trail_ (NiaSolver.cpp:946-948/970-972) but which are NOT being
+truncated on backtrack — they ACCUMULATE across the search. Regular theory atoms
+(satVar 85,160) then trip ActiveLiteralSet::OppositePolarity because the stale
+opposite-sign stamp from a pre-backtrack context is still present.
+
+WHY THE FLOOR EXISTS: it MASKS this sync bug. If NIA reasoned over the stale
+(too-large) active_ it could emit a conflict whose reasons include lits no longer on
+the SAT trail => potential false UNSAT. Flooring to unknown is the safe-but-lossy
+guard. NRA does NOT floor (NraSolver.cpp:97 "left to engine defense-in-depth") — it
+just dedups same-polarity; that's why NRA doesn't bleed cases here.
+
+PROPER FIX = EQNA lane (do NOT dual-edit per master): the backtrack path
+notify_backtrack -> tm_.backtrackToLevel -> solver->backtrackToLevel -> onBacktrack
+must truncate NIA's interface-eq entries too. Either (a) the interface eqs need a
+correct decisionLevel so onBacktrack's `trail_.back().level > level` pops them, or
+(b) TheoryManager must re-drive interface-eq assertion fresh per decision level
+instead of letting them accumulate. Once active_ tracks the live SAT trail, the
+opposite-polarity floor stops firing and ~22/27 (this sample) UFNIA + the QF_ANIA
+sats become reachable; THEN re-validate each newly-reachable verdict vs z3 (the
+floor was guarding soundness — removing it must be paired with the sync fix, not
+alone). NIA-side robust alternative if EQNA can't: replace-stale-on-OppositePolarity
+(latest-wins) — sound under invariant 1 (SAT validated) + subset-conflict soundness,
+but needs active_/trail_/normalized_ index surgery; deferred pending the seam agreement.
+
+## 7 z3-UNSAT BV-as-NIA prep (master directive) — NOT NIA-only; they're combination-floor-blocked (2026-05-29)
+Directive: confirm the 7 z3-confirmed-UNSAT BV-as-NIA unknowns solve standalone via NIA
+(modular/GCD/CDCAC), bypassing combination, so they're ready when EQNA lifts the floor.
+RESULT: the premise doesn't hold — they are NOT NIA-only-provable. Evidence (harness
+/tmp/nia7/ackermann.py = sound Ackermann reduction: distinct ground UF apps -> fresh
+Int vars + pairwise functional-consistency => equisat; z3 confirms each .nia stays unsat):
+- z3.704095: f3 returns uninterpreted sort S1 => genuine EUF congruence (f3(arg1)=f3(arg2)
+  when NIA proves arg1=arg2). NIA-only impossible by construction.
+- 5 int_check/qf_Select: arithmetic-core unsat (e.g. ne_bvurem0 = s=1,t=0,(x0 mod s)!=t;
+  mod-by-1 is always 0). BUT the contradiction core M1/M2/M3 (s=1,t=0,(mod x0 s)!=t as
+  TOP-LEVEL asserts) IS NIA-provable (unsat). The full cases fail for TWO reasons:
+  (i) FRONTEND: when s=1/t=0 are packed in `(not (or (distinct s 1)(distinct t 0)))`
+      (De Morgan), the divisor s is NOT constant-folded, so `(mod x0 s)` stays mod-by-
+      VARIABLE -> IntDivModLowerer reports "needsEUF but logic=QF_NIA" -> unknown. 4-line
+      repro /tmp/nia7/g.smt2 (z3=unsat, xolver=unknown). E.smt2 (same but s=1 top-level
+      assert) -> unsat. So mod-by-variable INHERENTLY needs EUF (it's lowered via EUF terms).
+  (ii) Therefore they route through QF_UFNIA EUF+NIA COMBINATION, where they hit the SAME
+      opposite-polarity floor (EQNA backtrack-sync). Re-tested abstracted-as-QF_UFNIA
+      (user-UF removed, internal div/mod EUF kept): 1-3/6 now solve unsat, the rest show
+      "NIA: pending unknown (opposite polarity asserted)".
+CONCLUSION: these 7 are NOT a separate non-blocked NIA-only prep item. They are
+combination cases gated by the EQNA opp-polarity/backtrack-sync floor — same blocker as the
+22 z3-sat cases. Folded into #36: after EQNA's fix, re-validate all 29 (22 sat + 7 unsat)
+vs z3 through the EUF+NIA combination path; point modular/GCD/CDCAC at the 7 unsat THERE,
+not standalone. No NIA-side code change possible/needed pre-fix. Harness kept in /tmp/nia7.

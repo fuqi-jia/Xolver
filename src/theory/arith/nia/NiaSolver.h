@@ -136,6 +136,7 @@ private:
     bool enableGcd_ = false;      // XOLVER_NIA_GCD: multivariate GCD-divisibility refutation
     bool enableIcp_ = false;      // XOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
+    bool normCache_ = false;      // XOLVER_NIA_NORM_CACHE: incremental per-constraint normalize cache (kept in lockstep with active_)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly

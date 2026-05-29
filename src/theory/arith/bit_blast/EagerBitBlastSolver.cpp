@@ -2,6 +2,7 @@
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "theory/arith/bit_blast/BitVec.h"
+#include "theory/arith/bit_blast/SpaceEstimator.h"
 #include "sat/SatSolver.h"
 #include <functional>
 #include <unordered_set>
@@ -57,6 +58,48 @@ bool EagerBitBlastSolver::isArithAtom(ExprId eid, const CoreIr& ir) const {
     }
 }
 
+void EagerBitBlastSolver::tryExtractBound(PolyId diff, Relation rel) {
+    // Extract a bound on x from a single-variable linear atom `a*x + c rel 0`
+    // with |a| == 1. Conservative: records nothing unless certain (a loose/absent
+    // bound just falls back to the cascade width — never unsound).
+    auto vars = kernel_->variables(diff);
+    if (vars.size() != 1) return;
+    const std::string& x = vars[0];
+    auto degOpt = kernel_->degree(diff, x);
+    if (!degOpt || *degOpt != 1) return;
+    auto coeffsOpt = kernel_->getIntegerCoefficients(diff, x);
+    if (!coeffsOpt || coeffsOpt->size() != 2) return;
+    mpz_class a = (*coeffsOpt)[0];   // coeff of x
+    mpz_class c = (*coeffsOpt)[1];   // constant
+    if (a != 1 && a != -1) return;
+
+    bool hasLo = false, hasHi = false;
+    mpz_class lo, hi;
+    if (a == 1) {
+        mpz_class B = -c;            // x + c rel 0  =>  x rel (-c)
+        switch (rel) {
+            case Relation::Leq: hi = B;     hasHi = true; break;
+            case Relation::Geq: lo = B;     hasLo = true; break;
+            case Relation::Lt:  hi = B - 1; hasHi = true; break;
+            case Relation::Gt:  lo = B + 1; hasLo = true; break;
+            case Relation::Eq:  lo = hi = B; hasLo = hasHi = true; break;
+            case Relation::Neq: break;
+        }
+    } else {                         // a == -1: -x + c rel 0
+        mpz_class B = c;
+        switch (rel) {
+            case Relation::Leq: lo = B;     hasLo = true; break;   // x >= c
+            case Relation::Geq: hi = B;     hasHi = true; break;   // x <= c
+            case Relation::Lt:  lo = B + 1; hasLo = true; break;   // x > c
+            case Relation::Gt:  hi = B - 1; hasHi = true; break;   // x < c
+            case Relation::Eq:  lo = hi = B; hasLo = hasHi = true; break;
+            case Relation::Neq: break;
+        }
+    }
+    if (hasLo) { auto it = lb_.find(x); if (it == lb_.end() || lo > it->second) lb_[x] = lo; }
+    if (hasHi) { auto it = ub_.find(x); if (it == ub_.end() || hi < it->second) ub_[x] = hi; }
+}
+
 bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& assertions) {
     std::unordered_set<std::string> intVarSet;
     std::unordered_set<ExprId> visited;
@@ -95,7 +138,12 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case Kind::Variable:
                 // A walked Variable is a boolean (arith vars live inside atoms,
                 // collected via convertConstraint). Non-bool bare var => reject.
-                if (e.sort != ir.boolSortId()) ok = false;
+                if (e.sort != ir.boolSortId()) {
+                    if (std::getenv("NIA_EAGER_BB_DIAG"))
+                        std::cerr << "[EAGER-BB] collect reject non-bool Variable eid=" << eid
+                                  << " sort=" << e.sort << "\n";
+                    ok = false;
+                }
                 return;
             case Kind::Not: case Kind::And: case Kind::Or:
             case Kind::Implies: case Kind::Xor: case Kind::Ite:
@@ -121,7 +169,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
                 AtomCs cs;
                 if (e.children.size() == 2) addPair(e.children[0], e.children[1], relOf(e.kind), cs);
-                else ok = false;
+                else { if (std::getenv("NIA_EAGER_BB_DIAG")) std::cerr << "[EAGER-BB] collect reject rel-arity=" << e.children.size() << " kind=" << (int)e.kind << "\n"; ok = false; }
                 atomCs_[eid] = std::move(cs);
                 return;
             }
@@ -136,6 +184,26 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
     for (ExprId a : assertions) walk(a);
     if (!ok) return false;
     intVars_.assign(intVarSet.begin(), intVarSet.end());
+
+    // Bound extraction is POLARITY-AWARE: only atoms that are TOP-LEVEL POSITIVE
+    // CONJUNCTS (reachable from an assertion root through And nodes only) are
+    // genuinely asserted, so only those may set variable bounds (-> offset width)
+    // and be skipped in the encoding. An atom under not/or/ite/implies is NOT
+    // guaranteed true — extracting a bound from it (e.g. `(= rfc0 0)` under
+    // `(not ...)`) would wrongly pin rfc0=0 and produce an invalid model.
+    std::unordered_set<ExprId> topSeen;
+    std::function<void(ExprId)> markTop = [&](ExprId eid) {
+        if (!topSeen.insert(eid).second) return;
+        const CoreExpr& e = ir.get(eid);
+        if (e.kind == Kind::And) { for (ExprId c : e.children) markTop(c); return; }
+        auto it = atomCs_.find(eid);
+        if (it == atomCs_.end()) return;                 // not an asserted arith atom
+        if (it->second.parts.size() != 1) return;
+        PolyId diff = it->second.parts[0].first;
+        if (diff == NullPoly) return;
+        tryExtractBound(diff, it->second.parts[0].second);
+    };
+    for (ExprId a : assertions) markTop(a);
     return true;
 }
 
@@ -156,24 +224,38 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     if (assertions.empty()) return out;
     atomCs_.clear();
     intVars_.clear();
-    if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
-
+    lb_.clear();
+    ub_.clear();
     static const bool diag = std::getenv("NIA_EAGER_BB_DIAG") != nullptr;
+    if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
+    if (diag) std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
+                        << " atoms=" << atomCs_.size() << "\n";
+
+    // Var-budget cap (encode SIZE): bounds a single attempt's encoding so a huge
+    // formula bails (overflow->Unknown) instead of OOM. Competition has 30GB, so
+    // 20M fresh vars (~a few GB of CNF) is safe; the per-attempt cap keeps any one
+    // width from exploding while the cascade/wall-clock control total time.
     uint64_t budget = 20000000ull;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v > 0) budget = static_cast<uint64_t>(v);
     }
-    // Time-box the arm so it cannot eat the budget the CDCL(T) main loop needs
-    // on UNSAT cases (eager bit-blast can never prove UNSAT here, so it would churn
-    // widths forever). Per-solve conflict limit bounds a single hard solve;
-    // wall-clock deadline bounds the whole cascade. Both env-tunable.
-    long long budgetMs = 3000;
+    // Wall-clock budget for the WHOLE arm. This is the single biggest QF_NIA
+    // recovery throttle: a small budget cuts off slow-SAT before the deciding
+    // width's solve. Competition gives 1200s, so default 120s lets the cascade
+    // reach the deciding width while leaving ~1000s+ for the CDCL(T) UNSAT path.
+    // Raising is SOUND (the arm only finds validated SAT or yields). Per-attempt
+    // is still bounded by confLimit + var budget, so this does not break short
+    // (dev-timeout) runs on small formulas.
+    long long budgetMs = 120000;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v >= 0) budgetMs = v;
     }
-    int confLimit = 50000;
+    // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
+    // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
+    // gets a real chance, while still capping a futile width.
+    int confLimit = 1000000;
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_CONFLICTS")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v > 0) confLimit = static_cast<int>(v);
@@ -183,7 +265,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         return std::chrono::duration_cast<std::chrono::milliseconds>(
                    std::chrono::steady_clock::now() - t0).count();
     };
-    const unsigned widths[] = {4, 8, 16, 24, 32};
+    const unsigned widths[] = {4, 8, 16, 24, 32, 48, 64};
 
     for (unsigned K : widths) {
         if (budgetMs > 0 && elapsedMs() >= budgetMs) {
@@ -194,15 +276,34 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         BitBlastEncoder enc(*sat);
         enc.setVarBudget(budget);
 
+        // Per-var width (BLAN collector discipline): both-sided-bounded vars get
+        // their EXACT width (value provably fits — bound atom still encoded);
+        // unbounded vars get the cascade width K. Bounds are POLARITY-AWARE (only
+        // top-level positive conjuncts set them — see markTop in collect), so a
+        // negated atom like `(not (= rfc0 0))` never wrongly pins rfc0.
         std::unordered_map<std::string, BitVec> varBits;
-        for (const auto& v : intVars_) varBits[v] = enc.mkVar(K);
+        for (const auto& v : intVars_) {
+            unsigned w = K;
+            auto il = lb_.find(v), iu = ub_.find(v);
+            if (il != lb_.end() && iu != ub_.end() && il->second <= iu->second)
+                w = SpaceEstimator::bitsToCover(il->second, iu->second);
+            varBits[v] = enc.mkVar(w);
+        }
         PolyBitBlaster blaster(enc, *kernel_, varBits);
 
         std::unordered_map<ExprId, SatLit> memo;
         std::unordered_map<ExprId, SatLit> boolVars;
         bool encodeOk = true;
+        long long encodeOps = 0;
 
         std::function<SatLit(ExprId)> encode = [&](ExprId eid) -> SatLit {
+            if (!encodeOk) return enc.constFalse();
+            // In-encode time guard: a single huge formula's encode must not blow
+            // the wall-clock budget (it's only checked between widths otherwise).
+            if (budgetMs > 0 && ((++encodeOps & 0x3FFF) == 0) && elapsedMs() >= budgetMs) {
+                encodeOk = false;
+                return enc.constFalse();
+            }
             auto m = memo.find(eid);
             if (m != memo.end()) return m->second;
             const CoreExpr& e = ir.get(eid);
@@ -298,10 +399,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         }
 
         if (confLimit > 0) sat->limit("conflicts", confLimit);
+        long long encMs = elapsedMs();
         auto res = sat->solve();
         if (diag) std::cerr << "[EAGER-BB] width=" << K << " vars=" << enc.varCount()
                             << " sat=" << (res == SatSolver::SolveResult::Sat ? "Y" :
-                                          res == SatSolver::SolveResult::Unsat ? "N" : "?") << "\n";
+                                          res == SatSolver::SolveResult::Unsat ? "N" : "?")
+                            << " encMs=" << encMs << " solveMs=" << (elapsedMs() - encMs) << "\n";
         if (res != SatSolver::SolveResult::Sat) continue;   // wider K (never claim UNSAT)
 
         // Candidate model -> EXACT integer re-validation over all assertions.
