@@ -14,7 +14,88 @@ namespace xolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
+    eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
     initializeBoolConstants();
+}
+
+std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
+    std::vector<TheoryLemma> out;
+    if (!eufPropEnabled_ || !eqAtomRegistry_ || !coreIr_) return out;
+    // Propagate only from a clean, congruence-closed, conflict-free state: after
+    // a Consistent check the merge queue is drained and the explanation paths
+    // reflect the current assignment.
+    if (pendingConflict_ || pendingUnknown_ || !mergeQueue_.empty()) return out;
+
+    // Assigned EUF atom vars — only UNDECIDED atoms are propagation targets.
+    std::unordered_set<SatVar> assigned;
+    assigned.reserve(trail_.size() * 2 + 1);
+    for (const auto& e : trail_) assigned.insert(e.lit.var);
+
+    // Canonical (rep,rep) -> active-disequality index, for entailed-FALSE props.
+    // Single-theory only: the combination shared bus is gated off upstream
+    // (TheoryManager::takeEntailmentPropagations returns {} in combination).
+    auto repPairKey = [](EClassId r1, EClassId r2) -> uint64_t {
+        uint64_t lo = r1 < r2 ? r1 : r2, hi = r1 < r2 ? r2 : r1;
+        return (lo << 32) | hi;
+    };
+    std::unordered_map<uint64_t, size_t> diseqByRepPair;
+    diseqByRepPair.reserve(disequalities_.size() * 2 + 1);
+    for (size_t i = 0; i < disequalities_.size(); ++i) {
+        const auto& d = disequalities_[i];
+        if (d.lhs == NullEufTerm || d.rhs == NullEufTerm) continue;
+        EClassId ra = egraph_.rep(d.lhs), rb = egraph_.rep(d.rhs);
+        if (ra == rb) continue;  // violated diseq -> conflict path handles it
+        diseqByRepPair.emplace(repPairKey(ra, rb), i);
+    }
+
+    const auto& recs = eqAtomRegistry_->records();
+    const size_t kMaxProps = 256;
+    for (const auto& rec : recs) {
+        if (out.size() >= kMaxProps) break;
+        if (rec.theory != TheoryId::EUF) continue;
+        if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
+        const auto& p = std::get<EufAtomPayload>(rec.payload);
+        if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) continue;
+        SatVar v = rec.satVar;
+        if (assigned.count(v)) continue;
+        EufTermId s = termManager_.findTerm(p.lhs);
+        EufTermId t = termManager_.findTerm(p.rhs);
+        if (s == NullEufTerm || t == NullEufTerm) continue;
+        EClassId rs = egraph_.rep(s), rt = egraph_.rep(t);
+        if (rs == rt) {
+            // Entailed TRUE: (¬reasons ∨ (s=t)). Skip empty-reason (bare unit).
+            auto er = egraph_.explainEquality(s, t);
+            if (!er.ok || er.reasons.empty()) continue;
+            TheoryLemma lem;
+            lem.kind = LemmaKind::Entailment;
+            lem.lits.reserve(er.reasons.size() + 1);
+            for (SatLit r : er.reasons) lem.lits.push_back(r.negated());
+            lem.lits.push_back(SatLit{v, true});
+            out.push_back(std::move(lem));
+        } else {
+            // Entailed FALSE: s,t straddle an asserted diseq (s≅a, t≅b, a≠b).
+            auto it = diseqByRepPair.find(repPairKey(rs, rt));
+            if (it == diseqByRepPair.end()) continue;
+            const ActiveDisequality& d = disequalities_[it->second];
+            EClassId ra = egraph_.rep(d.lhs), rb = egraph_.rep(d.rhs);
+            EufTermId dS, dT;  // diseq endpoint in s's class / in t's class
+            if (rs == ra && rt == rb) { dS = d.lhs; dT = d.rhs; }
+            else if (rs == rb && rt == ra) { dS = d.rhs; dT = d.lhs; }
+            else continue;
+            auto e1 = egraph_.explainEquality(s, dS);
+            auto e2 = egraph_.explainEquality(t, dT);
+            if (!e1.ok || !e2.ok) continue;
+            TheoryLemma lem;
+            lem.kind = LemmaKind::Entailment;
+            lem.lits.reserve(e1.reasons.size() + e2.reasons.size() + 2);
+            for (SatLit r : e1.reasons) lem.lits.push_back(r.negated());
+            for (SatLit r : e2.reasons) lem.lits.push_back(r.negated());
+            lem.lits.push_back(d.reason.negated());
+            lem.lits.push_back(SatLit{v, false});
+            out.push_back(std::move(lem));
+        }
+    }
+    return out;
 }
 
 void EufSolver::rebuildDiseqIndex() {

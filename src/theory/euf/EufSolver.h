@@ -30,6 +30,21 @@ public:
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
+    // Registry of all parsed equality atoms — enables EUF theory propagation
+    // (XOLVER_EUF_PROP): the e-graph pushes entailed equality/disequality
+    // literals back to the SAT core so it need not guess each equality atom
+    // (the eq_diamond exponential blowup). Distinct from arrayRegistry_/
+    // dtRegistry_ (which are about minting dynamic atoms), though in array/DT
+    // mode they alias the same object.
+    void setEqualityAtomRegistry(TheoryAtomRegistry* r) { eqAtomRegistry_ = r; }
+
+    // EUF theory propagation (XOLVER_EUF_PROP): after a consistent check, return
+    // EUF-valid entailment clauses (¬reasons ∨ implied) for undecided equality
+    // atoms that the current e-graph forces true (merged class) or false (the
+    // two sides straddle an asserted disequality). Each clause is an EUF
+    // tautology, so enqueuing it is sound regardless of the current assignment.
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
+
     // Enable QF_AX array reasoning. `registry` is needed so Row2/Ext lemmas
     // can create observed dynamic equality atoms before placing them in a
     // clause. Must be called before any assertLit/check.
@@ -195,6 +210,13 @@ private:
     // Re-enabled after the N-O proof forest + level-aware backtrack made
     // mid-saturation explainEquality sound (the bug that forced the revert).
     bool diseqWatchEnabled_ = false;
+    // XOLVER_EUF_PROP: enable EUF theory propagation (entailed equality/diseq
+    // literals lifted to SAT). Read once in the constructor.
+    bool eufPropEnabled_ = false;
+    // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
+    // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
+    // sees assigned ones.
+    TheoryAtomRegistry* eqAtomRegistry_ = nullptr;
     // Scratch index rebuilt per check() when the watch is on: diseq endpoint
     // term -> list of (index into the vector, 0=local diseq / 1=shared diseq).
     std::unordered_map<EufTermId, std::vector<std::pair<uint32_t, uint8_t>>> diseqByTerm_;
