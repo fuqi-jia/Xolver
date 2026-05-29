@@ -379,3 +379,32 @@ encoded as adder+comparator (BLAN's OFFSET encoding makes them free) — that's 
 next lever. The last 2 unsolved h2h cases are huge formulas (3110 vars) that need
 offset to fit. WHY-BLAN-IS-FASTER answer: more compact encoding (constant folding
 [now ported] + offset/unsigned vars [next] + tighter operators), not algorithm.
+
+## OFFSET ATTEMPT + POLARITY FIX + COMPLEMENTARITY (2026-05-29, cont.)
+1. POLARITY BUG FOUND+FIXED [ce9181e]: per-var bound extraction was polarity-blind
+   — it pulled a bound from EVERY simple atom incl. ones under (not ...)/(or ...).
+   `(not (= rfc0 0))` made it extract `rfc0=0` and size rfc0 to 1 bit (wrong; real
+   constraint is rfc0!=0). Worked only by luck (1-bit signed range held a non-zero
+   value). FIX: markTop pass — descend from assertion roots through And ONLY;
+   bounds come exclusively from top-level positive conjuncts. Correct by
+   construction; validate-gate remains the backstop. (This is the kind of latent
+   bug the offset work surfaced.)
+2. OFFSET ENCODING ATTEMPTED + REVERTED: value = lb + t (t unsigned in [0,range]),
+   skip bound atoms (free). Worked on minimal cases (m_mul 411->377, m_sum 403->318)
+   but produced INVALID candidates on full bilinear formulas (1395): exact-encoding
+   mismatch on offset-var * unbounded-var products (validate-gate caught it => sound
+   Unknown, no recovery). Root cause not fully isolated (the add-result value bitvec
+   interacting with PolyBitBlaster products). Reverted to per-var EXACT width +
+   polarity-correct bounds. Offset needs more careful work before it helps; the
+   bound-atom-skip win is real for the huge 3110-var cases but the product encoding
+   must be debugged first.
+3. COMPLEMENTARITY CONFIRMED ("exceed BLAN" thesis): same all-flags-on binary —
+   modInv8 -> UNSAT (via nia.modular; eager arm bails, reasoning proves it) AND
+   1395 -> SAT (via eager bit-blast). The eager arm finds SAT, the
+   modular/Hensel/CDCAC levers prove UNSAT, they don't interfere (eager runs first,
+   Unknown -> CDCL(T) reasoning). So Xolver = BLAN's SAT power + UNSAT reasoning
+   BLAN (a pure bit-blaster) lacks => total > BLAN on the union.
+
+CURRENT STANDING: head-to-head 17-18/24 (BLAN 20), within timing noise. All sound:
+unit 890/890, nia reg 113/113 OFF+ON, 0-unsound. NEXT for full parity (20+):
+debug+reland offset product encoding, or sorting-network addition.
