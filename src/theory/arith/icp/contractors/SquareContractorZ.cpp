@@ -52,8 +52,11 @@ ContractorResultZ SquareContractorZ::contract(ReasonedBoxZ& box) {
 
     Relation rel = constraint_.rel;
 
-    // Normalize: we handle p = x^2 - c (sign=1) or p = -x^2 + c (sign=-1)
-    // For sign=-1, invert relation to match x^2 - c form
+    // recognizePattern set `c` to the RHS so the switch reads the constraint as
+    // "x^2 REL c".  For sign=-1 the poly is (-x^2 + c) REL 0, i.e. -x^2 REL -c,
+    // i.e. x^2 flip(REL) c — only the RELATION flips; the constant `c` is
+    // UNCHANGED.  (A prior `c = -c` here turned x^2 = c into c<0 => a false
+    // Conflict, e.g. on v^2 = 16 with the -v^2+16 normal form.)
     if (sign == -1) {
         switch (rel) {
             case Relation::Leq: rel = Relation::Geq; break;
@@ -62,10 +65,9 @@ ContractorResultZ SquareContractorZ::contract(ReasonedBoxZ& box) {
             case Relation::Gt:  rel = Relation::Lt;  break;
             default: break; // Eq, Neq unchanged
         }
-        c = -c; // now treating as x^2 - (-c)
     }
 
-    // Now rel applies to x^2 - c
+    // Now rel applies to x^2 vs c
     switch (rel) {
         case Relation::Leq: // x^2 <= c
             if (c < 0) {
