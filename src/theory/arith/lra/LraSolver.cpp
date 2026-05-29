@@ -672,14 +672,15 @@ LraSolver::getDeducedSharedEqualities() {
         }
     }
 
-    // Step 2: polyhedral implied-eq via the bound-propagation engine. PROACTIVE:
-    // we ensure an interface aux var exists for every shared-var pair before
-    // querying the engine, so the polyhedron can pin (a - b) to 0 without EUF
-    // having asked about (a, b) first (the chicken-and-egg with direct EUF
-    // queries). Aux creation is idempotent via interfaceEqAuxVars_ — first call
-    // grows the tableau by O(N choose 2) auxes; subsequent calls only query.
-    // Bounded: shared-var count is small for combination workloads (Wisa-class
-    // ~10), so the aux pool is ~50 in practice.
+    // Step 2: polyhedral implied-eq via gs_.proveFixedValue — multi-row Farkas
+    // through the tableau (LIA's existing detection uses the same primitive).
+    // PROACTIVELY ensure an interface aux var exists for every shared-var pair
+    // (idempotent via interfaceEqAuxVars_, bounded by shared-var count which is
+    // small for combination workloads). Each aux represents a (va - vb) linear
+    // combination; proveFixedValue chases tableau rows recursively to discover
+    // whether the constraint system pins it. If it proves the aux is fixed
+    // at 0 (rational a == 0 AND delta b == 0), the polyhedron entails va = vb
+    // in every feasible model — emit a = b with the collected bound reasons.
     if (impliedEqEnabled_ && n >= 2) {
         for (int i = 0; i < n; ++i)
             for (int j = i + 1; j < n; ++j)
@@ -689,25 +690,8 @@ LraSolver::getDeducedSharedEqualities() {
         sharedTermToIdx.reserve(sharedVars.size());
         for (int k = 0; k < n; ++k) sharedTermToIdx[sharedVars[k]] = k;
 
-        auto derived = propagationEngine_.propagateAll(gs_);
-        // For each aux var, remember whether the engine derived a tight 0
-        // bound on each side and the reasons. The engine reports a derived
-        // bound whose DeltaRational has rational part .a and delta part .b;
-        // a bound that pins to exactly zero (a == 0 AND b == 0) is what we
-        // need — a strict (delta-bearing) bound is NOT an equality witness.
-        struct ZeroBound { bool have = false; std::vector<SatLit> reasons; };
-        std::unordered_map<int, std::pair<ZeroBound, ZeroBound>> auxZero;  // var -> (lower, upper)
-        for (const auto& eb : derived) {
-            if (!(eb.value.a == 0 && eb.value.b == 0)) continue;
-            auto& slot = auxZero[eb.var];
-            (eb.isLower ? slot.first : slot.second) = {true, eb.reasons};
-        }
-
         for (const auto& [pk, aux] : interfaceEqAuxVars_) {
-            if (aux < 0) continue;  // const-conflict / unmapped aux
-            auto zit = auxZero.find(aux);
-            if (zit == auxZero.end()) continue;
-            if (!zit->second.first.have || !zit->second.second.have) continue;
+            if (aux < 0) continue;
             SharedTermId lo = static_cast<SharedTermId>(pk >> 32);
             SharedTermId hi = static_cast<SharedTermId>(pk & 0xFFFFFFFFu);
             auto liIt = sharedTermToIdx.find(lo);
@@ -716,10 +700,14 @@ LraSolver::getDeducedSharedEqualities() {
             int i = liIt->second, j = hiIt->second;
             uint64_t k = pairKey(i, j);
             if (emittedPair.count(k)) continue;
-            std::vector<SatLit> rs = zit->second.first.reasons;
-            rs.insert(rs.end(),
-                      zit->second.second.reasons.begin(),
-                      zit->second.second.reasons.end());
+            auto fixed = gs_.proveFixedValue(aux);
+            if (!fixed) continue;
+            // The aux's value at 0 means (va - vb) == 0 (since the constraint is
+            // aux = va - vb; the aux's bound being 0 is the equality witness).
+            if (!(fixed->first.a == 0 && fixed->first.b == 0)) continue;
+            std::vector<SatLit> rs;
+            rs.reserve(fixed->second.size());
+            for (const auto& br : fixed->second) rs.push_back(br.reason);
             std::sort(rs.begin(), rs.end(),
                 [](SatLit a, SatLit b) {
                     if (a.var != b.var) return a.var < b.var;
