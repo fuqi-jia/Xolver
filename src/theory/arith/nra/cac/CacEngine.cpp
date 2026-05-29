@@ -22,11 +22,12 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
       cons_(std::move(constraints)), cfg_(cfg) {
 #ifdef XOLVER_HAS_LIBPOLY
     if (kernel_) {
-        consPoly_.reserve(cons_.size());
+        // Upfront representability probe: if any constraint poly cannot be
+        // normalized to a primitive integer poly the engine cannot reason on it
+        // ⇒ buildOk_ = false ⇒ solve() returns Unknown. (The per-atom paths
+        // re-normalize on demand via characterizeLeafAtom / characterize.)
         for (const auto& c : cons_) {
-            auto norm = c.poly.toPrimitiveInteger(*kernel_);   // scale > 0, relation-preserving
-            if (!norm.ok()) { buildOk_ = false; consPoly_.push_back(NullPoly); }
-            else consPoly_.push_back(norm.poly);
+            if (!c.poly.toPrimitiveInteger(*kernel_).ok()) { buildOk_ = false; break; }
         }
     } else {
         buildOk_ = false;
@@ -43,17 +44,7 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
 #ifdef XOLVER_HAS_LIBPOLY
 
 namespace {
-bool relationHolds(Sign s, Relation rel) {
-    switch (rel) {
-        case Relation::Eq:  return s == Sign::Zero;
-        case Relation::Neq: return s != Sign::Zero;   // caller has excluded Sign::Unknown
-        case Relation::Lt:  return s == Sign::Neg;
-        case Relation::Leq: return s == Sign::Neg || s == Sign::Zero;
-        case Relation::Gt:  return s == Sign::Pos;
-        case Relation::Geq: return s == Sign::Pos || s == Sign::Zero;
-    }
-    return false;
-}
+// relationHolds(Sign, Relation) is shared in CdcacCommon.h.
 
 // Covering sample (RealValue) → engine sample (RealAlg). Rational is exact; an
 // algebraic value is rebuilt from its defining poly (low→high) + isolating
@@ -156,23 +147,48 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         std::vector<RationalPolynomial> cellBoundaries;
 
         if (isLeaf) {
+            // SPLIT the truth path from the boundary path per leaf atom
+            // (characterizeLeafAtom): truth = UniformTrue / UniformFalse /
+            // NonUniform, plus the exact truth at the sample and the var-boundary.
+            SamplePoint prefixLeaf = sample;
+            prefixLeaf.pop();                       // vars[0..level-1]
             bool allHold = true;
-            bool anyUnknown = false;
+            bool fiberInfeasible = false;           // some atom UniformFalse on the fiber
             std::vector<RationalPolynomial> violated;
             for (size_t ci = 0; ci < cons_.size(); ++ci) {
-                const Sign s = algebra_->signAt(consPoly_[ci], sample);
-                if (s == Sign::Unknown) { anyUnknown = true; break; }
-                if (!relationHolds(s, cons_[ci].rel)) { violated.push_back(cons_[ci].poly); allHold = false; }
+                const LeafCellResult lr = characterizeLeafAtom(
+                    algebra_, kernel_, cons_[ci].poly, cons_[ci].rel, prefixLeaf, var, s_i);
+                if (!lr.supported) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("leaf-atom-unsupported"); return out; }
+                if (lr.truth == LeafTruth::UniformFalse) {
+                    // ≡0 (or constant) and violated for ALL var ⇒ whole fiber infeasible.
+                    fiberInfeasible = true; allHold = false; violated.push_back(cons_[ci].poly);
+                } else if (!lr.holdsAtSample) {
+                    // NonUniform and violated at the sample ⇒ its roots delineate.
+                    allHold = false; violated.push_back(cons_[ci].poly);
+                }
+                // UniformTrue, or NonUniform-and-holds ⇒ satisfied at the sample ⇒
+                // contributes nothing (no boundary, not a violation).
             }
             if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
                 std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
                 st << "[LEAF] var=" << var << " sample=" << (s_i.isRational() ? s_i.rational.get_str() : "alg")
                    << " allHold=" << allHold << " violated=" << violated.size()
-                   << " anyUnknown=" << anyUnknown << "\n";
+                   << " fiberInfeasible=" << fiberInfeasible << "\n";
                 st.flush();
             }
-            if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("signAt-unknown"); return out; }
-            if (allHold)    { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
+            if (allHold) { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
+            if (fiberInfeasible) {
+                // A leaf atom is UniformFalse on this fiber ⇒ NO value of `var`
+                // satisfies it ⇒ exclude ALL of ℝ (a sound, maximal cell — never a
+                // satisfied whole axis). The nullification-causing polys propagate
+                // up via levelChar; characterize() projects them so the parent gets
+                // the section boundary (e.g. x=1 from (x-1)y) and the covering
+                // cannot cross it as if nullification held on a whole sector.
+                cov.add(CacInterval::all());
+                for (auto& p : violated) levelChar.push_back(std::move(p));
+                sample.pop();
+                continue;
+            }
             cellBoundaries = std::move(violated);
         } else {
             CoverOut rec = getUnsatCover(level + 1, sample);
@@ -187,13 +203,14 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         }
 
         // Cell on var's axis around s_i, from boundary polys isolated at the prefix.
+        // Leaf-NonUniform boundaries are violated original constraints (none vanish
+        // — vanishing leaf atoms were handled above as UniformFalse / UniformTrue);
+        // non-leaf boundaries are characterization polys (vanishing ⇒ Lazard
+        // residual recovery inside). Neither path silently skips a vanishing poly.
         SamplePoint prefix = sample;
         prefix.pop();                                   // vars[0..level-1]
-        // Leaf boundary polys are original constraints: a constraint constant on
-        // the fiber (vanishes in var) has no boundary ⇒ skip is sound. Non-leaf
-        // characterization polys must not skip vanishing (nullification ⇒ Unknown).
         const CellResult cr = intervalFromCharacterization(algebra_, kernel_, cellBoundaries,
-                                                           prefix, var, s_i, /*skipVanishing=*/isLeaf);
+                                                           prefix, var, s_i);
         sample.pop();                                   // restore for next iteration
         if (!cr.supported) { out.status = CacStatus::Unknown; markIncomplete(isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"); return out; }
         cov.add(cr.interval);
