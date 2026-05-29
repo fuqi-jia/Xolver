@@ -1144,8 +1144,11 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             }
         }
 
+        // q is NOT a root of b's poly (val != 0 above) ⇒ q != α ⇒ DISTINCT, so
+        // refine-until-disjoint terminates; a generous bound (not 20) separates
+        // even ~2^-65-close pairs. Hit bound ⇒ sound Unknown.
         AlgebraicRoot mutableB = b.root;
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < 4096; ++iter) {
             if (!refineRootInterval(mutableB)) break;
             if (a.rational < mutableB.lower) return CompareResult::Less;
             if (a.rational > mutableB.upper) return CompareResult::Greater;

@@ -58,8 +58,14 @@ struct CacResult {
 class CacEngine {
 public:
     struct Config {
-        long maxCellsPerLevel = 4000;   // covering blow-up guard (⇒ Unknown)
-        long maxNodes = 400000;         // total recursion-node budget (⇒ Unknown)
+        // Runaway/OOM guards (⇒ Unknown when hit — sound: a hit cap is never a
+        // wrong answer). Sized to the COMPETITION budget (1200s/30GB), NOT a
+        // dev-conservative throttle: at ~tens of ms/cell the 1200s wall-clock
+        // binds long before these, and the cell/node structures stay well under
+        // 30GB. (The old 4000/400000 could bail a hard covering in ~minutes,
+        // throttling CAC before its real time budget.)
+        long maxCellsPerLevel = 200000;     // per-level covering blow-up guard
+        long maxNodes = 20000000;           // total recursion-node budget
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,

@@ -71,6 +71,9 @@ public:
     // Exact multivariate content-aware GCD via lp_polynomial_gcd.
     PolyId gcd(PolyId a, PolyId b) override;
 
+    // Square-free factors via poly::square_free_factors (root-preserving).
+    std::vector<PolyId> squareFreeFactors(PolyId a) override;
+
     // Public accessor for variable id resolution (used by C traverse callback)
     std::optional<VarId> resolveVariableId(lp_variable_t v) const;
 
