@@ -156,6 +156,62 @@ the arrangement can be read back (then stop deferring SAT); (b) coordinate the
 effort-schedule + deadline; (c) flip the gate after the UFNRA differential.
 The seam EQNA owns is the stageCac gate + conflict consumption — do NOT dual-edit.
 
+## Task #43 — SAT arrangement read-back (design contract, queued for EQNA-pairing)
+
+STATUS: design pinned, NOT built. WAIT for EQNA's Track 3 mechanism (UF model
+extraction / functionInterps surfaced via `TheoryManager::getModel`) to land —
+do NOT pre-empt their getModel shape. When their channel is exposed, plug in.
+
+WHAT THIS CLOSES. The combination-aware CAC (`XOLVER_NRA_CAC_COMBINATION`)
+currently DEFERS SAT to Collins because the N-O arrangement needs every shared
+term's value (rational or algebraic) — the SAT model already assigns the NRA
+vars, but the combination loop reads back shared-term values from the theory
+model to build the arrangement. Once EQNA's read-back channel is live, CAC SAT
+under combination can return its own model directly (rather than deferring),
+unlocking the standalone NRA SAT wins (+5 in the headline diff) for QF_UFNRA.
+
+WHAT I NEED FROM EQNA (read-only contract; do NOT pre-empt the shape):
+1. The CHANNEL EQNA's combination loop uses to read a shared term's value out
+   of an arith theory's getModel — most likely a typed-channel entry keyed by
+   the shared term's name (the same name the converter resolved when the
+   interface (dis)eq was asserted). Document the channel name + value type
+   (mpq_class for rationals, plus whatever the algebraic encoding is).
+2. Whether algebraic values are accepted on that channel today, or whether
+   only rationals round-trip. If algebraic isn't accepted yet, my SAT path
+   stays DEFER for the algebraic case (still sound).
+3. The cb_propagate sequencing — when the combination loop actually CONSULTS
+   the read-back (so I know when the model must be populated).
+
+MY SIDE (build when EQNA's channel is up — single seam touch):
+1. `NraSolver::getModel()` already returns the SAT sample as `satFastModel_`
+   (rational vars). Under combination, ADD a pass that resolves every shared
+   term in `sharedTermRegistry_` to a polynomial via `converter_`, evaluates
+   that polynomial at the SAT sample (the CAC `satModel_`), and emits the
+   result on EQNA's channel.
+   * Evaluation at a RATIONAL sample is exact polynomial arithmetic →
+     definite rational value, channel-ready.
+   * Evaluation at an ALGEBRAIC sample yields an algebraic value (built via
+     the existing `RealAlg` machinery). Emit IFF EQNA's channel accepts
+     algebraic; else keep deferring (the existing v1 SAT-defer).
+2. `stageCac` SAT branch: when `cacCombination` + interface set non-empty +
+   shared-term emission succeeded for every entry → return `consistent()` +
+   stash `satFastModel_`. Else keep the current `return std::nullopt` → Collins.
+3. Validate: the same SAT model that `allHold` certified against
+   `presolveConstraints_` (incl. lifted interface constraints) must ALSO
+   satisfy every shared-term equality the combination loop sees — the lifted
+   `poly(a)-poly(b) = 0` constraint is exactly what makes the shared values
+   equal under the model, so this is automatic. Belt-and-suspenders: assert
+   `value(a) == value(b)` on the emission channel for each interface eq.
+
+GATE (when built): QF_UFNRA differential vs z3 — the standalone +5 SAT wins
+from the headline diff must now fire under combination. QF_NRA reg stays
+inert (the new SAT-emission path runs only when `cacCombination` + interface
+set non-empty). 0 unsound in reg+differential.
+
+SEAM DISCIPLINE: edits ONLY in `NraSolver::getModel` + the SAT branch of
+`stageCac`. No edits to `cb_propagate` / `SharedEqualityManager` / EQNA's
+getModel mechanism. Coordinate the channel-name pin with master before building.
+
 ## Combination-aware CAC (UFNRA medal lane) — ORIGINAL DESIGN SCOPE (pair with EQNA)
 
 PROBLEM. Today the fast NRA stages (sign-refute, subtropical, CAC) DEFER (return
