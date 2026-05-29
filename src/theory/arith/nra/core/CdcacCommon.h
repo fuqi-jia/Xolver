@@ -113,6 +113,21 @@ inline Sign multiplySigns(Sign a, Sign b) {
     return (prod > 0) ? Sign::Pos : Sign::Neg;
 }
 
+// Does a polynomial of exact sign `s` satisfy the atom `poly rel 0`?
+// PRECONDITION: the caller has excluded Sign::Unknown (an Unknown sign must map
+// to engine-Unknown, never to a truth value — Neq below would wrongly accept it).
+inline bool relationHolds(Sign s, Relation rel) {
+    switch (rel) {
+        case Relation::Eq:  return s == Sign::Zero;
+        case Relation::Neq: return s != Sign::Zero;
+        case Relation::Lt:  return s == Sign::Neg;
+        case Relation::Leq: return s == Sign::Neg || s == Sign::Zero;
+        case Relation::Gt:  return s == Sign::Pos;
+        case Relation::Geq: return s == Sign::Pos || s == Sign::Zero;
+    }
+    return false;
+}
+
 // ------------------------------------------------------------------
 // Real algebraic number comparison result
 // ------------------------------------------------------------------

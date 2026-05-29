@@ -199,8 +199,7 @@ RationalPolynomial lazardResidualRational(RationalPolynomial p, const SamplePoin
 CellResult intervalFromCharacterization(
     LibpolyBackend* algebra, PolynomialKernel* kernel,
     const std::vector<RationalPolynomial>& boundaryPolys,
-    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue,
-    bool skipVanishing) {
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue) {
 
     CellResult out;   // supported == false by default
     if (!algebra || !kernel) return out;
@@ -209,7 +208,7 @@ CellResult intervalFromCharacterization(
     auto bail = [&](const char* why) -> CellResult {
         if (diag) {
             std::ofstream st("/tmp/cac_cell.txt", std::ios::app);
-            st << "[CELL] unsupported why=" << why << " leaf=" << skipVanishing
+            st << "[CELL] unsupported why=" << why
                << " nbound=" << boundaryPolys.size() << "\n";
             st.flush();
         }
@@ -235,6 +234,27 @@ CellResult intervalFromCharacterization(
             auto norm = rp.toPrimitiveInteger(*kernel);
             if (!norm.ok()) return bail("toPrim");
             if (kernel->isConstant(norm.poly)) continue;
+            // A constraint's NULLIFICATION is a whole-poly property, so the vanish
+            // decision (step 1) must see the ORIGINAL poly — not its factors.
+            // Square-free factoring splits a poly that vanishes on the fiber into a
+            // vanishing factor and (possibly) NON-vanishing ones: e.g. (x-1)*y at
+            // x=1 → {(x-1) [vanishes], y [does NOT]}. The leaf skip ("≡0 on the
+            // fiber ⇒ uniform truth ⇒ no boundary") would then fire only for the
+            // vanishing factor while `y` wrongly adds a boundary y=0 (cell too
+            // small). So only factor polys that do NOT vanish: over an integral
+            // domain ∏fᵢ≡0 ⇔ some fᵢ≡0, hence a non-vanishing poly has no vanishing
+            // factor → factoring is sound and the dedup perf win still applies to
+            // the dominant non-vanishing projection polys. Vanishing polys pass
+            // through WHOLE; step 1 decides skip (leaf) vs Lazard-residual
+            // (non-leaf) on the original constraint. (Rational prefix only:
+            // vanishesAtPrefix is Unknown for algebraic prefixes, where factoring
+            // stays at-worst conservative — cell too small, never too big — so the
+            // covering remains sound, just possibly finer.)
+            if (!prefixHasAlgebraic &&
+                algebra->vanishesAtPrefix(norm.poly, prefix, var) == VanishResult::Vanishes) {
+                reduced.push_back(rp);
+                continue;
+            }
             for (PolyId f : kernel->squareFreeFactors(norm.poly)) {
                 if (kernel->isConstant(f)) continue;
                 auto frp = RationalPolynomial::fromPolyId(f, *kernel);
@@ -293,20 +313,15 @@ CellResult intervalFromCharacterization(
             const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
             if (vr == VanishResult::Unknown) return bail("vanish-unknown");
             if (vr == VanishResult::Vanishes) {
-                if (skipVanishing) {
-                    // LEAF: pid is an original CONSTRAINT. ≡0 on the fiber ⇒ its
-                    // truth is UNIFORM there and was already decided by signAt
-                    // (pid≡0 ⇒ Sign::Zero ⇒ e.g. p>0 false on the whole fiber ⇒
-                    // the entire var-axis is excluded). No var-boundary to add.
-                    continue;
-                }
-                // NON-LEAF: pid is a PROJECTION FACTOR. ≡0 does NOT mean "no
-                // boundary" — its Lazard valuation residual still carries genuine
-                // lifting boundaries (cvc5 routes every char poly through
-                // LazardEvaluation::isolateRealRoots and NEVER skips; skipping
-                // enlarges the cell ⇒ false UNSAT). Recover the residual via the
-                // rational-coordinate Lazard valuation, then isolate ITS roots.
-                // This is lifting-boundary recovery ONLY, never atom truth.
+                // pid is a PROJECTION FACTOR (this is the non-leaf lifting path;
+                // leaf atoms never reach here — they go through characterizeLeafAtom).
+                // ≡0 does NOT mean "no boundary" — its Lazard valuation residual
+                // still carries genuine lifting boundaries (cvc5 routes every char
+                // poly through LazardEvaluation::isolateRealRoots and NEVER skips;
+                // skipping enlarges the cell ⇒ false UNSAT). Recover the residual
+                // via the rational-coordinate Lazard valuation, then isolate ITS
+                // roots. This is lifting-boundary recovery ONLY, never atom truth —
+                // and it is the SOLE place residual→boundary is allowed.
                 RationalPolynomial residual = lazardResidualRational(rp, prefix);
                 residual.normalize();
                 if (residual.isZero() || !residual.contains(var)) continue;   // no var-boundary
@@ -395,11 +410,76 @@ CellResult intervalFromCharacterization(
     return out;
 }
 
+LeafCellResult characterizeLeafAtom(
+    LibpolyBackend* algebra, PolynomialKernel* kernel,
+    const RationalPolynomial& poly, Relation rel,
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue) {
+
+    LeafCellResult out;   // supported == false by default
+    if (!algebra || !kernel) return out;
+
+    auto norm = poly.toPrimitiveInteger(*kernel);
+    if (!norm.ok()) return out;
+    const PolyId pid = norm.poly;
+
+    // (a) TRUTH PATH — the atom's exact truth AT the sample (full assignment).
+    //     An Unknown sign is fail-closed (⇒ supported=false ⇒ caller Unknown).
+    SamplePoint full = prefix;
+    full.push(var, sampleValue);
+    const Sign sSample = algebra->signAt(pid, full);
+    if (sSample == Sign::Unknown) return out;
+    out.holdsAtSample = relationHolds(sSample, rel);
+
+    // A constant atom (no var, no remaining lower vars) is globally uniform.
+    if (kernel->isConstant(pid)) {
+        out.truth = out.holdsAtSample ? LeafTruth::UniformTrue : LeafTruth::UniformFalse;
+        out.interval = CacInterval::all();
+        out.supported = true;
+        return out;
+    }
+
+    // (b) BOUNDARY PATH — does the atom NULLIFY in `var` on this fiber?
+    const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
+    if (vr == VanishResult::Unknown) return out;     // fail-closed ⇒ caller Unknown
+    if (vr == VanishResult::Vanishes) {
+        // poly ≡ 0 in `var` on the fiber ⇒ UNIFORM truth, decided by (0 rel 0).
+        // NO var-boundary (the valuation residual is a LIFTING boundary, never a
+        // leaf atom's truth, so it is NOT injected here). UniformFalse ⇒ the whole
+        // fiber is infeasible; the caller excludes the entire axis. (signAt at the
+        // sample agrees: sSample == Zero ⇒ holdsAtSample == relationHolds(Zero,rel).)
+        out.truth = relationHolds(Sign::Zero, rel) ? LeafTruth::UniformTrue
+                                                   : LeafTruth::UniformFalse;
+        out.interval = CacInterval::all();
+        out.supported = true;
+        return out;
+    }
+
+    // NotVanishes: poly|prefix is a nonzero univariate. Its real roots delineate
+    // the maximal sign-invariant cell around the sample (exact isolation). If it
+    // has NO var-boundary (constant-nonzero in var on the fiber ⇒ cell == ℝ), the
+    // atom is still uniform; otherwise its sign changes across roots ⇒ NonUniform.
+    const CellResult cell = intervalFromCharacterization(algebra, kernel, {poly},
+                                                         prefix, var, sampleValue);
+    if (!cell.supported) return out;
+    out.interval = cell.interval;
+    const bool wholeAxis = cell.interval.lo.isNegInf() && cell.interval.hi.isPosInf();
+    out.truth = wholeAxis ? (out.holdsAtSample ? LeafTruth::UniformTrue : LeafTruth::UniformFalse)
+                          : LeafTruth::NonUniform;
+    out.supported = true;
+    return out;
+}
+
 #else  // !XOLVER_HAS_LIBPOLY
 
 CellResult intervalFromCharacterization(
     LibpolyBackend*, PolynomialKernel*,
-    const std::vector<RationalPolynomial>&, const SamplePoint&, VarId, const RealAlg&, bool) {
+    const std::vector<RationalPolynomial>&, const SamplePoint&, VarId, const RealAlg&) {
+    return {};   // unsupported without the algebra backend
+}
+
+LeafCellResult characterizeLeafAtom(
+    LibpolyBackend*, PolynomialKernel*,
+    const RationalPolynomial&, Relation, const SamplePoint&, VarId, const RealAlg&) {
     return {};   // unsupported without the algebra backend
 }
 

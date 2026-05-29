@@ -79,15 +79,49 @@ struct CellResult {
     CacInterval interval;
 };
 
-// `skipVanishing`: when a boundary poly is ≡0 in `var` at the prefix, treat it
-// as contributing no boundary (skip) instead of unsupported. SOUND ONLY for LEAF
-// constraint polys (a constraint constant on the fiber has no var-boundary; the
-// cell from the other violated polys stays all-bad). For non-leaf characterization
-// polys a vanishing poly is genuine nullification ⇒ leave it unsupported (false).
+// This is the NON-LEAF lifting/boundary path. On nullification (a boundary poly
+// ≡0 in `var` at the prefix) it recovers the Lazard valuation residual and
+// isolates ITS roots as the genuine lifting boundary — residual→boundary is
+// allowed HERE and nowhere else (the residual is a LIFTING boundary, never an
+// atom's truth). It NEVER silently skips a vanishing poly. Leaf ATOMS go through
+// `characterizeLeafAtom` instead, which splits truth from boundary.
 CellResult intervalFromCharacterization(
     LibpolyBackend* algebra, PolynomialKernel* kernel,
     const std::vector<RationalPolynomial>& boundaryPolys,
-    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue,
-    bool skipVanishing = false);
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue);
+
+// ----------------------------------------------------------------------------
+// Leaf-atom characterization (module B.3): SPLITS the truth path from the
+// boundary path for a leaf constraint `poly rel 0` on the `var` axis at `prefix`
+// (the vague `skipVanishing` flag conflated these two concerns):
+//
+//   * poly ≡ 0 in `var` on the fiber (nullifies) ⇒ its truth is UNIFORM, decided
+//     by (0 rel 0): UniformTrue or UniformFalse. NO var-boundary is produced (the
+//     valuation residual is a LIFTING boundary, never a leaf atom's truth, so it
+//     is NOT injected here). UniformFalse means the WHOLE fiber is infeasible —
+//     the caller excludes the entire axis / raises a conflict; it is NEVER a
+//     satisfied whole axis.
+//   * else poly|prefix is a nonzero univariate ⇒ NonUniform: its real roots
+//     delineate the maximal sign-invariant cell around `sampleValue` (the
+//     boundary path; same exact-isolation contract as intervalFromCharacterization).
+//
+// `holdsAtSample` is the exact truth of the atom AT the sample (so the caller can
+// detect SAT / which constraints are violated without a second signAt).
+// `supported == false` on ANY inconclusive backend step ⇒ caller Unknown (never
+// UNSAT) — same fail-closed contract as above.
+// ----------------------------------------------------------------------------
+enum class LeafTruth : uint8_t { UniformTrue, UniformFalse, NonUniform };
+
+struct LeafCellResult {
+    bool supported = false;
+    LeafTruth truth = LeafTruth::NonUniform;
+    bool holdsAtSample = false;       // exact truth of `poly rel 0` at the sample
+    CacInterval interval;             // sign-invariant cell (NonUniform); all() for Uniform*
+};
+
+LeafCellResult characterizeLeafAtom(
+    LibpolyBackend* algebra, PolynomialKernel* kernel,
+    const RationalPolynomial& poly, Relation rel,
+    const SamplePoint& prefix, VarId var, const RealAlg& sampleValue);
 
 } // namespace xolver

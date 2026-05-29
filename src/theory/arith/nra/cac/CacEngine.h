@@ -108,7 +108,6 @@ private:
     PolynomialKernel* kernel_;
     std::vector<VarId> varOrder_;
     std::vector<CacConstraint> cons_;
-    std::vector<PolyId> consPoly_;   // toPrimitiveInteger(poly) per constraint
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
