@@ -530,15 +530,28 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
     if (!enableCac_) return std::nullopt;
-    // CAC runs at EVERY effort (mirroring Collins). The old Full-effort-only gate
-    // crippled CAC: Collins (which runs at every effort) preempted it at Standard
-    // effort, so on the meti-tarski sample CAC never ran on ~37/64 Collins-solved
-    // cases. A fair head-to-head (CAC at all efforts) gives CAC-only=95 vs
-    // Collins-only=64 (0-unsound) — the conflict-driven CAC is the stronger engine,
-    // so it gets first refusal at every effort; Collins remains the fallback on
-    // CAC-Unknown (its ~8 unique cases). XOLVER_NRA_CAC_ONLY additionally disables
-    // the Collins fallback (stageCdcac) for the pure A/B differential.
-    (void)effort;
+    // EFFORT SCHEDULE (validated by the Collins-vs-CAC A/B + endorsed design):
+    //   Standard effort → cheap engines (Collins as cheap CAD, linearized checks);
+    //   Full effort     → the heavy CAC/Lazard hard path (this stage), then Collins
+    //                     as fallback on CAC-Unknown (stageCdcac runs at all efforts).
+    // So in the hybrid CAC runs ONLY at Full: it gets first refusal on the hard
+    // cases Collins times out on, while Collins disposes of the easy cases cheaply
+    // at Standard — running the heavy CAC at every Standard propagation instead
+    // STARVES the time budget (50/150 meti-tarski timeouts in the all-efforts A/B).
+    // A fair head-to-head still needs CAC at all efforts (else Collins preempts it
+    // at Standard and CAC never runs) — that is what XOLVER_NRA_CAC_ONLY enables
+    // (CAC at every effort + Collins disabled): CAC-only=95 vs Collins-only=64,
+    // 0-unsound, confirming CAC is the stronger engine on the hard path.
+    // Two orthogonal differential flags (decoupled so the full schedule matrix
+    // A-E is expressible): CAC_ALL_EFFORTS runs CAC at Standard+Full (else Full
+    // only); CAC_NO_COLLINS (read in stageCdcac) disables the Collins fallback.
+    static const bool cacAllEfforts = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_ALL_EFFORTS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
+    }();
+    if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
     // Pure NRA only: interface (dis)equalities live in the engine, not
     // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
@@ -616,14 +629,16 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
 // Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
-    // XOLVER_NRA_CAC_ONLY (differential): disable Collins so CAC is the sole
-    // engine. Return Unknown (not nullopt) so the solver reports unknown when CAC
-    // cannot decide, rather than falling through to a default/false verdict.
-    static const bool cacOnly = [] {
-        const char* e = std::getenv("XOLVER_NRA_CAC_ONLY");
-        return e && *e && *e != '0';
+    // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
+    // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
+    // unknown when CAC cannot decide, rather than a default/false verdict.
+    static const bool noCollins = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
     }();
-    if (cacOnly) return TheoryCheckResult::unknown("cac-only-collins-disabled");
+    if (noCollins) return TheoryCheckResult::unknown("cac-only-collins-disabled");
     return engine_.check();
 }
 
