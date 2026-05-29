@@ -33,14 +33,30 @@ public:
     // (candidate-only). Reset per solve. Default from XOLVER_NIA_LS_TOTAL_MS.
     void resetBudget() { cumulativeMs_ = 0; }
 
+    // Enable the WalkSAT / accelerated-hill-climb search (XOLVER_NIA_LOCALSEARCH,
+    // default-OFF). Settable for tests.
+    void setEnhanced(bool e) { enhanced_ = e; }
+
 private:
     PolynomialKernel& kernel_;
     long budgetMs_;
     long totalBudgetMs_;
     long cumulativeMs_ = 0;
+    bool enhanced_ = false;
 
     mpz_class violation(const IntegerModel& model,
                         const std::vector<NormalizedNiaConstraint>& constraints) const;
+
+    // WalkSAT with discrete-Newton critical moves: pick a violated constraint,
+    // jump a variable toward the value that satisfies it (Yices2-style
+    // accelerated hill-climbing + feasible-set jumping), with random noise and
+    // restarts to escape local minima. Returns a satisfying assignment or
+    // nullopt; the result is a candidate only (the caller validates it), so the
+    // search is always sound regardless of heuristic choices.
+    std::optional<IntegerModel> walkSat(
+        const std::vector<NormalizedNiaConstraint>& constraints,
+        const std::vector<std::string>& vars,
+        const DomainStore& domains);
 };
 
 } // namespace xolver

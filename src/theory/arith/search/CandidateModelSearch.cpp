@@ -471,9 +471,21 @@ bool CandidateModelSearch::runStrategy10a() {
     size_t budget = cfg_.maxCandidatesPerStrategy;
     size_t produced = 0;
 
+    // Wall-clock guard for the ENUMERATION TREE itself. tryAcceptCandidate only
+    // checks the deadline when a leaf (full assignment) is reached, but with many
+    // variables/app slots the traversal explores an astronomical number of
+    // INTERIOR nodes that never reach a leaf — so without an in-recursion check
+    // the search runs far past wallClockBudget (the UF-recovery hang on large
+    // Wisa-class QF_UFLIA formulas, which burned the whole solve budget). Check
+    // the deadline every 1024 recursion nodes and unwind on expiry. Sound: a
+    // timed-out search just yields no witness (Result.found stays false) → the
+    // caller returns Unknown, identical to a genuine no-witness outcome.
+    size_t nodes = 0;
+    bool timedOut = false;
+
     // For up to maxHeight 30 (loose envelope), enumerate combinations
     // whose total height equals the current envelope.
-    for (int64_t envelope = 0; envelope <= 30 && produced < budget; ++envelope) {
+    for (int64_t envelope = 0; envelope <= 30 && produced < budget && !timedOut; ++envelope) {
         // Iterate per-variable index combinations using a stack.
         std::vector<size_t> cursor(n, 0);
         // For low-height-first, iterate every per-variable index that has
@@ -481,6 +493,11 @@ bool CandidateModelSearch::runStrategy10a() {
         // equals the envelope.
         std::function<bool(size_t, int64_t)> recurse =
             [&](size_t pos, int64_t remainingHeight) -> bool {
+                if ((++nodes & 0x3FFu) == 0u &&
+                    std::chrono::steady_clock::now() > deadline_) {
+                    timedOut = true;
+                    return true;  // unwind immediately; no witness recorded
+                }
                 if (produced >= budget) return false;
                 if (pos == n) {
                     if (remainingHeight != 0) return false;

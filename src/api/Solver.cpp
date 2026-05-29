@@ -5,6 +5,7 @@
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
 #include "frontend/preprocess/UfInArithPurifier.h"
+#include "frontend/preprocess/RealDivLowerer.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
@@ -29,6 +30,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/factory/TheoryFactory.h"
 #include "theory/core/LogicFeatureDetector.h"
+#include "theory/arith/bit_blast/EagerBitBlastSolver.h"
 #ifdef XOLVER_ENABLE_CASESTATS
 #ifdef XOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
@@ -228,26 +230,43 @@ public:
                 try { numAsg[name] = mpq_class(val); } catch (...) {}
             }
         }
-        // Prefer the typed numeric channel (RealValue) over the lossy string
-        // channel: it carries exact rationals AND is the place combination
-        // logics put a shared scalar's true arithmetic value (the string
-        // `assignments` may instead hold an opaque EUF equality token like
-        // "@e6", which would otherwise default to 0 and spuriously collapse
-        // i==j). Algebraic values (e.g. √2) have no rational form -> left for
-        // the validator to report Indeterminate (it cannot evaluate them).
+        // Opaque-EUF-token scalars: a combination scalar whose model value is an
+        // EUF equality-class token ("@e6") has its AUTHORITATIVE identity in the
+        // token channel (distinct token = distinct class). The typed numeric
+        // channel, however, can carry a SPURIOUS value for it — the unconstrained-
+        // scalar backfill mints 0, so two asserted-distinct scalars (i != j) both
+        // become 0 and `(not (= i j))` spuriously evaluates FALSE -> the genuine
+        // sat is over-floored to unknown (the alia_005/alra_010 class; verified by
+        // instrumenting ArithModelValidator: token pass = both assertions TRUE,
+        // real pass = i=j=0 -> assertion FALSE). Route these scalars through the
+        // token channel ONLY: drop them from numAsg, the 0-defaulting, AND the
+        // real channel. Sound (only ever sat->unknown; an unsat formula like read2
+        // is still violated under the EUF arrangement) and SCOPED to "@" tokens —
+        // NIA/LIA real models carry concrete rationals (never "@"), so the
+        // default-on niaSatFloor is untouched.
+        std::unordered_set<std::string> opaqueScalar;
+        for (const auto& [name, val] : lastModel_->assignments)
+            if (!val.empty() && val[0] == '@') opaqueScalar.insert(name);
+        // Prefer the typed numeric channel (RealValue): exact rationals + the
+        // combination shared-scalar's true arithmetic value. Skip opaque-token
+        // scalars (their numeric value is the spurious collapse).
+        std::unordered_map<std::string, RealValue> filteredReal;
         for (const auto& [name, rv] : lastModel_->numericAssignments) {
+            if (opaqueScalar.count(name)) continue;
+            filteredReal.emplace(name, rv);
             if (auto q = rv.tryAsRational()) numAsg[name] = *q;
         }
         // Mirror dumpModel's defaulting of unconstrained user variables so the
         // validated model matches the printed one (a var the theory left
-        // unassigned is emitted as 0 / false).
+        // unassigned is emitted as 0 / false) — EXCEPT opaque-token scalars,
+        // which keep their EUF token identity instead of collapsing to 0.
         if (parser) {
             for (const auto& var : parser->getDeclaredVariables()) {
                 if (!var) continue;
                 std::string nm = var->getName();
                 if (var->isVBool()) { if (!boolAsg.count(nm)) boolAsg[nm] = false; }
                 else if (var->isVInt() || var->isVReal()) {
-                    if (!numAsg.count(nm)) numAsg[nm] = mpq_class(0);
+                    if (!numAsg.count(nm) && !opaqueScalar.count(nm)) numAsg[nm] = mpq_class(0);
                 }
             }
         }
@@ -257,13 +276,13 @@ public:
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
-            validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setRealAssignments(&filteredReal);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
-            validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setRealAssignments(&filteredReal);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         }
@@ -535,7 +554,10 @@ public:
 
     bool parseFile(std::string_view filename) {
         parser = std::make_unique<SOMTParser::Parser>();
-        parser->setOption("expand_functions", true);
+        // DIAG (XOLVER_NO_EXPAND_FUNCTIONS): toggle define-fun inlining to confirm
+        // whether parse-time expansion is the Certora blowup. Not for production.
+        parser->setOption("expand_functions",
+                          std::getenv("XOLVER_NO_EXPAND_FUNCTIONS") == nullptr);
         if (!parser->parse(std::string(filename))) {
             return false;
         }
@@ -701,6 +723,20 @@ public:
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
 
+        // Coarse phase timing (SOLVE_PHASE_PROF) to localize a pre-solve hang.
+        // Flushed to stderr so a timeout-killed run shows the last phase entered.
+        static const bool phaseProf = std::getenv("SOLVE_PHASE_PROF") != nullptr;
+        auto phaseClock = std::chrono::steady_clock::now();
+        auto phase = [&](const char* nm) {
+            if (!phaseProf) return;
+            auto now = std::chrono::steady_clock::now();
+            std::cerr << "[PHASE] " << nm << "  +"
+                      << std::chrono::duration_cast<std::chrono::milliseconds>(now - phaseClock).count()
+                      << "ms (asserts=" << ir->assertions().size() << ")" << std::endl;
+            phaseClock = now;
+        };
+        phase("enter");
+
         // XOLVER_PP_REWRITE (Agent 5): generic DAG-safe memoized fixpoint
         // formula rewriter. Runs BEFORE ITE lowering so its simplifications
         // (boolean identities/absorption, const-fold, relational const-eval)
@@ -832,7 +868,19 @@ public:
                 return Result::Unknown;
             }
             const auto& req = dmLowerer.requirement();
-            bool hasEuf = (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
+            // QF_ANIA / QF_AUFNIA register an EufSolver (the array+NIA stack runs
+            // arrays on a shared EUF e-graph) — but ONLY when XOLVER_COMB_ARRAY_NIA
+            // routes them (without the flag they are not admitted at the array
+            // gate, so this code is never reached for them). So they have EUF
+            // available for the div/mod div-by-zero UF exactly when that flag is
+            // set. Missing here meant int div/mod-by-variable in QF_ANIA bailed to
+            // unknown (SVCOMP UltimateAutomizer family) despite EUF being present.
+            bool arrayNiaRoutedEuf =
+                std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr &&
+                (logic == "QF_ANIA" || logic == "ANIA" ||
+                 logic == "QF_AUFNIA" || logic == "AUFNIA");
+            bool hasEuf = arrayNiaRoutedEuf ||
+                          (logic == "QF_UF" || logic == "QF_UFLRA" || logic == "QF_UFLIA" ||
                            logic == "QF_UFNIA" || logic == "UFNIA" ||
                            logic == "QF_UFNRA" || logic == "UFNRA" ||
                            logic == "QF_AX" ||
@@ -906,6 +954,18 @@ public:
             ufPurifier.commit();
         }
 
+        // Purify real division by a non-constant denominator into a fresh var
+        // plus a guarded polynomial defining constraint, so CDCAC can reason
+        // about it (default-OFF; gated to nonlinear-real logics where variable
+        // real division is in-fragment). Capability addition: when OFF the
+        // enclosing atom is rejected by the atomizer -> unknown (status quo).
+        if (std::getenv("XOLVER_REAL_DIV_PURIFY") != nullptr &&
+            (logic.find("NRA") != std::string::npos ||
+             logic.find("NIRA") != std::string::npos)) {
+            RealDivLowerer rdLowerer(*ir);
+            if (rdLowerer.run()) rdLowerer.commit();
+        }
+
         // Normalize arithmetic casts (fold constant to_int/to_real)
         {
             ArithCastNormalizer normalizer(*ir);
@@ -929,6 +989,7 @@ public:
             ToIntDefinitionalLowerer t2i(*ir);
             t2i.run();
             t2i.commit();
+            phase("preprocess-done");
 
             if (t2i.hadNonlinearBridge()) {
                 // Upgrade declared logic to the nonlinear counterpart.
@@ -1001,6 +1062,7 @@ public:
         // Detect features from CoreIr for safe routing
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
+        phase("detect-done");
 
         // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
@@ -1068,12 +1130,23 @@ public:
         // Arrays are only handled by the array logics: pure QF_AX and the
         // combination logics QF_ALIA/QF_ALRA/QF_AUFLIA/QF_AUFLRA. Any other
         // logic that contains arrays is gated to Unknown (sound).
-        auto isArrayLogic = [](const std::string& l) {
-            return l == "QF_AX" ||
+        //
+        // XOLVER_COMB_ARRAY_NIA (default-OFF) additionally admits the
+        // array+nonlinear-integer logics QF_ANIA/QF_AUFNIA: arrays layered on
+        // the EUF e-graph with a purified NIA core underneath (see
+        // TheoryFactory). Gated until cross-validated; SAT results still pass
+        // the nonlinear validate-sat floor (unconfirmed → unknown).
+        bool arrayNiaEnabled = (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
+        auto isArrayLogic = [&](const std::string& l) {
+            bool base = l == "QF_AX" ||
                    l == "QF_ALIA" || l == "ALIA" ||
                    l == "QF_ALRA" || l == "ALRA" ||
                    l == "QF_AUFLIA" || l == "AUFLIA" ||
                    l == "QF_AUFLRA" || l == "AUFLRA";
+            bool arrayNia = arrayNiaEnabled &&
+                  (l == "QF_ANIA" || l == "ANIA" ||
+                   l == "QF_AUFNIA" || l == "AUFNIA");
+            return base || arrayNia;
         };
         if (features.hasArray && !isArrayLogic(logic)) {
             lastUnknownReason_ = "LogicFeatureDetector: array feature outside array logic (declared=" + logic + ")";
@@ -1097,6 +1170,31 @@ public:
             finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
             return Result::Unknown;
+        }
+
+        // -------------------------------------------------------------------
+        // Whole-formula EAGER BIT-BLAST portfolio arm (XOLVER_NIA_EAGER_BITBLAST,
+        // default OFF). BLAN-style: translate the ENTIRE QF_NIA formula (boolean
+        // skeleton + arith atoms, Int -> bit-vectors) into ONE SAT solve. It is
+        // a SOUND SAT-FINDER ONLY: the model is exact-validated inside
+        // EagerBitBlastSolver (invariant 1) and it NEVER returns Unsat
+        // (invariant 7). On Unknown it falls through to the CDCL(T) main loop —
+        // a parallel strategy, not main-loop surgery (invariant 5 intact).
+        // -------------------------------------------------------------------
+        if (std::getenv("XOLVER_NIA_EAGER_BITBLAST") &&
+            (logic == "QF_NIA" || logic == "NIA") &&
+            !features.hasRealVar && !features.hasMixedIntReal &&
+            !features.hasUF && !features.hasArray && !features.hasDatatype) {
+            phase("eager-bb-start");
+            bitblast::EagerBitBlastSolver eagerbb;
+            auto ibr = eagerbb.solve(*ir, ir->assertions());
+            phase("eager-bb-done");
+            if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                return Result::Sat;
+            }
         }
 
         // -------------------------------------------------------------------
@@ -1255,6 +1353,18 @@ public:
             atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
             atomizer.setCombinationArithTheory(TheoryId::NRA);
             if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
+        } else if (logic == "QF_ANIA" || logic == "ANIA" ||
+                   logic == "QF_AUFNIA" || logic == "AUFNIA") {
+            // Arrays + NIA (+ UF): combination atomizer routes array/UF atoms to
+            // EUF (which hosts the ArrayReasoner) and pure-arith atoms to NIA.
+            // Without this branch the dispatch falls to feature-routing and sets
+            // the default theory to LIA, bypassing combination routing — the
+            // (= bridge (select ...)) array-read bridges then go to the linear
+            // extractor, which cannot parse a Select. Mirrors QF_UFNIA.
+            atomizer.setDefaultTheory(TheoryId::Combination);
+            atomizer.setSharedTermRegistry(sharedTermRegistry_.get());
+            atomizer.setCombinationArithTheory(TheoryId::NIA);
+            if (polyKernelRaw) atomizer.setPolynomialKernel(polyKernelRaw);
         } else {
             // No declared logic: route by detected features.
             // Use hasIntVar / hasRealVar (not hasInt / hasReal) to avoid
@@ -1284,11 +1394,13 @@ public:
         // PG-CNF (XOLVER_PP_PG_CNF): pre-compute the occurrence polarity of every
         // subformula (each assertion is a positive root) so the monotone
         // connectives below emit only the required half of their definition.
+        phase("setup-done");
         atomizer.computePolarities(ir->assertions(), *ir);
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
             sat->addClause({lit});
         }
+        phase("atomize-done");
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,
@@ -1539,7 +1651,48 @@ public:
         // be over-floored to unknown); leave those to UF-aware validation.
         bool divModSatFloor = !divModOrigins_.empty() &&
                               !features.hasRealVar && !features.hasUF;
-        bool validateSat = niaSatFloor || divModSatFloor ||
+        // XOLVER_REAL_DIV_PURIFY introduces fresh `q` for real `(/ a b)` with the
+        // guarded def `b!=0 => q*b=a`. For b!=0 this pins q=a/b exactly; for b==0
+        // q is left free (SMT-LIB div-by-0 is unconstrained). The only residual
+        // soundness gap is the div-by-0 functional-consistency corner (distinct
+        // (/ a 0),(/ a' 0) with a=a' could diverge here). Co-activate the
+        // nonlinear-real SAT floor so every such sat is re-validated against the
+        // ORIGINAL `(/ a b)`: the validator computes a/b for b!=0 (confirms
+        // genuine sats) and returns Indeterminate for b==0 (downgrades the corner
+        // to unknown via CMS re-validation). Invariant 1 + corner soundness.
+        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar &&
+                                     std::getenv("XOLVER_REAL_DIV_PURIFY") != nullptr;
+        // Array-combination SAT floor (QF_ALIA/ALRA/AUFLIA/AUFLRA). In these
+        // Nelson-Oppen logics the arrangement between the array/EUF e-graph and
+        // the arith solver can declare a model "consistent" at the Full-effort
+        // check while a conflict found mid-search has ESCAPED (the read2
+        // conflict-stickiness class) — yielding a false-SAT (xolver=sat,
+        // z3=unsat). The definite-Violated array floor (arrayModelDefinitelyViolates)
+        // misses it because the combined model is only INDETERMINATE to the
+        // validator (incomplete cross-theory extraction), not a definite
+        // violation. Enforce invariant 1: a Result::Sat must be
+        // ModelValidator-backed -> require POSITIVE validation of the combined
+        // (array+arith) model; an unconfirmable array-combination sat downgrades
+        // to unknown (with CMS recovery first). Sound: only ever sat->unknown,
+        // never a wrong verdict. Eliminates the read2 false-SAT (verified).
+        // DEFAULT-OFF (XOLVER_ARRAY_COMB_VALIDATE_SAT): promotion to default-ON is
+        // GATED on combination model-recovery — CandidateModelSearch has no array
+        // support, so it cannot rebuild a positively-validatable model for genuine
+        // array-combination sats whose scalars/array-interps the theory left
+        // incomplete (e.g. alia_005 asserts i!=j but the model defaults i=j=0 ->
+        // spurious violation; alra_010 nested-row2). Default-ON today regresses
+        // those 2 genuine sats to unknown (suite 661->659). Promote once #12
+        // (N-O valid model construction: distinct asserted-diseq scalars + array
+        // interps for declared arrays) lets them validate positively. Pure QF_AX
+        // is excluded (opaque sorts -> definite-Violated floor already guards it).
+        auto isCombArrayLogic = [](const std::string& L) {
+            return L == "QF_ALIA" || L == "ALIA" || L == "QF_ALRA" || L == "ALRA" ||
+                   L == "QF_AUFLIA" || L == "AUFLIA" || L == "QF_AUFLRA" || L == "AUFLRA";
+        };
+        bool arrayCombSatFloor = features.hasArray && isCombArrayLogic(logic) &&
+                                 std::getenv("XOLVER_ARRAY_COMB_VALIDATE_SAT") != nullptr;
+        bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
+                           arrayCombSatFloor ||
                            (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
                            (features.hasNonlinear &&
                             std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);

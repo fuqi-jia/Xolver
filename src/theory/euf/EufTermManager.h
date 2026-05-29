@@ -59,6 +59,13 @@ public:
     EufTermManager() = default;
 
     EufTermId intern(ExprId eid, const CoreIr& ir);
+    // Non-mutating lookup: returns the interned term for `eid` or NullEufTerm if
+    // it was never interned. Unlike intern(), registers nothing and enqueues no
+    // merges — safe to call from read-only contexts (e.g. theory propagation).
+    EufTermId findTerm(ExprId eid) const {
+        auto it = exprToTerm_.find(eid);
+        return it == exprToTerm_.end() ? NullEufTerm : it->second;
+    }
     const ENode& node(EufTermId id) const { return nodes_[id]; }
     bool isApplication(EufTermId id) const {
         return id < nodes_.size() && !nodes_[id].args.empty();

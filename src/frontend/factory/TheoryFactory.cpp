@@ -101,6 +101,7 @@ SolverSetupResult setupSolvers(
     } else if (logic == "QF_UF") {
         auto euf = std::make_unique<EufSolver>();
         euf->setCoreIr(ir);
+        euf->setEqualityAtomRegistry(&registry);  // XOLVER_EUF_PROP theory propagation
         theoryManager.registerSolver(std::move(euf));
     } else if (logic == "QF_DT" || logic == "QF_UFDT" || logic == "DT" || logic == "UFDT") {
         // Algebraic datatypes (+ UF). One shared egraph hosts UF and the DT
@@ -331,6 +332,47 @@ SolverSetupResult setupSolvers(
         theoryManager.setRegistry(&registry);
         theoryManager.setCombinationMode(true);
         theoryManager.setNonConvexMode(true);
+    } else if (logic == "QF_ANIA" || logic == "ANIA" ||
+               logic == "QF_AUFNIA" || logic == "AUFNIA") {
+        // Arrays + NIA (+ UF). Mirrors QF_UFNIA's solver stack (NIA + its LIA
+        // sibling, Purifier with the NIA arith theory) crossed with QF_ALIA's
+        // array enablement: one shared EUF egraph hosts UF, the array operators,
+        // and the shared index/element terms; ArrayReasoner layers
+        // read-over-write on the e-graph; NIA owns the integer arithmetic.
+        // Non-convex (NIA emits disequalities) + array-combination arrangement
+        // splitting. UF is already provided by EUF, so QF_ANIA and QF_AUFNIA
+        // share this branch. Reached only when XOLVER_COMB_ARRAY_NIA admits the
+        // logic at the Solver-level array gate.
+        sharedTermRegistry = std::make_unique<SharedTermRegistry>();
+        sharedTermRegistry->setCoreIr(ir);
+        {
+            Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+            purifier.setArithTheory(TheoryId::NIA);
+            purifier.run();
+        }
+        auto polyKernel = createPolynomialKernel();
+        result.polyKernelRaw = polyKernel.get();
+        auto euf = std::make_unique<EufSolver>();
+        euf->setCoreIr(ir);
+        euf->setSharedTermRegistry(sharedTermRegistry.get());
+        euf->enableArrays(&registry);
+        theoryManager.registerSolver(std::move(euf));
+        auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+        nia->setCoreIr(ir);
+        nia->setSharedTermRegistry(sharedTermRegistry.get());
+        nia->setRegistry(&registry);
+        theoryManager.registerSolver(std::move(nia));
+        auto lia = std::make_unique<LiaSolver>();
+        lia->setCoreIr(ir);
+        lia->setSharedTermRegistry(sharedTermRegistry.get());
+        lia->setRegistry(&registry);
+        configureLia(*lia);
+        theoryManager.registerSolver(std::move(lia));
+        theoryManager.setSharedTermRegistry(sharedTermRegistry.get());
+        theoryManager.setRegistry(&registry);
+        theoryManager.setCombinationMode(true);
+        theoryManager.setNonConvexMode(true);
+        theoryManager.setArrayCombinationMode(true);
     } else if (logic == "UF") {
         result.success = false;
     } else {

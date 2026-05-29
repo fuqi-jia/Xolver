@@ -45,3 +45,29 @@ TEST_CASE("NiaLocalSearch: unlimited budget still finds the easy model") {
     REQUIRE(m.has_value());
     CHECK((*m)["x"] == 2);
 }
+
+// Enhanced WalkSAT (XOLVER_NIA_LOCALSEARCH) finds a model the basic ±[-3,3]
+// sweep misses: x*y = 12 and x + y = 7 have model {3,4}/{4,3}, with a
+// coordinate (4) outside the basic 2-var window. The accelerated critical move
+// jumps there. (Candidate-only; soundness is the caller's validator, so the
+// returned model must satisfy both constraints.)
+TEST_CASE("NiaLocalSearch enhanced: x*y=12 & x+y=7 -> finds {3,4}") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setBudgetMs(0);  // unlimited for the test
+    DomainStore ds;     // unbounded vars
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    NormalizedNiaConstraint prod{kernel->sub(kernel->mul(x, y), kernel->mkConst(mpq_class(12))),
+                                 Relation::Eq, mkReason(1)};
+    NormalizedNiaConstraint sum{kernel->sub(kernel->add(x, y), kernel->mkConst(mpq_class(7))),
+                                Relation::Eq, mkReason(2)};
+
+    auto m = ls.tryFindModel({prod, sum}, ds);
+    REQUIRE(m.has_value());
+    mpz_class xv = (*m)["x"], yv = (*m)["y"];
+    CHECK(xv * yv == 12);
+    CHECK(xv + yv == 7);
+}

@@ -1144,8 +1144,11 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             }
         }
 
+        // q is NOT a root of b's poly (val != 0 above) ⇒ q != α ⇒ DISTINCT, so
+        // refine-until-disjoint terminates; a generous bound (not 20) separates
+        // even ~2^-65-close pairs. Hit bound ⇒ sound Unknown.
         AlgebraicRoot mutableB = b.root;
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < 4096; ++iter) {
             if (!refineRootInterval(mutableB)) break;
             if (a.rational < mutableB.lower) return CompareResult::Less;
             if (a.rational > mutableB.upper) return CompareResult::Greater;
@@ -1187,9 +1190,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
                 : CompareResult::Greater;
         }
 
-        // Try gcd-based equality: locate both roots in gcd
+        // STEP 2 — exact equality via gcd-membership. gcd COPRIME (constant) ⇒ the
+        // two roots are PROVABLY DISTINCT (no common algebraic root). Otherwise
+        // locate both in the gcd: same gcd-root ⇒ Equal, different ⇒ ordered.
         UniPolyId d = gcdUni(a.root.definingPoly, b.root.definingPoly);
-        if (d != NullUniPolyId && !isConstantUni(d)) {
+        const bool provenDistinct = (d == NullUniPolyId) || isConstantUni(d);
+        if (!provenDistinct) {
             auto locA = locateRootInPolynomial(a.root, d);
             auto locB = locateRootInPolynomial(b.root, d);
             if (locA.status == RootLocateStatus::Belongs &&
@@ -1203,10 +1209,21 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             }
         }
 
-        // Refine until intervals separate
+        // STEP 3 — certified separation: refine the isolating intervals until
+        // DISJOINT, then the order is certified by disjoint intervals. SOUND: a
+        // hit bound falls through to Unknown — never a guessed order.
+        //   - When distinctness is PROVEN (coprime gcd), refinement is guaranteed
+        //     to terminate (the roots are a finite distance apart), so use a
+        //     GENEROUS bound (refine-until-disjoint) — meti-tarski trig/exp roots
+        //     can be ~2^-65 apart, well past a 64-cap. With the local sign-based
+        //     refineRootInterval each step is O(1) evals, so a large bound is cheap.
+        //   - When distinctness is NOT proven (non-coprime gcd whose membership
+        //     test was inconclusive), the roots MIGHT be equal — equal roots never
+        //     separate, so keep a TIGHT cap to avoid nontermination ⇒ sound Unknown.
+        const int refineCap = provenDistinct ? 4096 : 64;
         AlgebraicRoot mutableA = a.root;
         AlgebraicRoot mutableB = b.root;
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < refineCap; ++iter) {
             if (mutableA.upper < mutableB.lower) return CompareResult::Less;
             if (mutableB.upper < mutableA.lower) return CompareResult::Greater;
 
@@ -1214,7 +1231,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             bool okB = refineRootInterval(mutableB);
             if (!okA || !okB) break;
         }
-        return CompareResult::Unknown;
+        return CompareResult::Unknown;   // STEP 4 — budget exhausted: do NOT guess
     }
 
     return CompareResult::Unknown;
@@ -1232,67 +1249,52 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
     if (!libKernel_) return false;
     if (alpha.definingPoly == NullUniPolyId) return false;
 
-    const auto& rc = getUni(alpha.definingPoly);
-    std::vector<poly::Integer> rootLpCoeffs;
-    for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
-        rootLpCoeffs.emplace_back(*it);
-    }
-    poly::UPolynomial rootUp(rootLpCoeffs);
-    std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
-    if (alpha.rootIndex < 0 || alpha.rootIndex >= static_cast<int>(roots.size())) {
-        return false;
-    }
-
-    // libpoly's `refine` halves the bracketing interval per call, but we are
-    // re-isolating from scratch on every entry to this function — so the
-    // refinement state of `roots[alpha.rootIndex]` always starts at libpoly's
-    // initial bracket, not the caller's current `alpha.lower/upper`. Without
-    // compensation, caller-driven loops never make progress past the first
-    // refinement step.
+    // LOCAL root-preserving bisection of the CURRENT certified isolating interval
+    // [lo,hi]. The previous implementation RE-ISOLATED all roots from scratch on
+    // every call and refined libpoly's fresh bracket back down to the caller's
+    // width — that lost the caller's accumulated progress, paid full isolation
+    // cost per step, and (worse) risked root-matching errors on high-degree
+    // polynomials, so caller loops stalled and compareRealAlg returned a spurious
+    // Unknown on genuinely distinct roots ~1e-8 apart (meti-tarski trig/exp).
     //
-    // Strategy: refine repeatedly within this call until the resulting
-    // interval is strictly tighter than the caller's current bracket, or we
-    // hit a safety cap. The width-based progress check is the key — it
-    // succeeds even if the absolute endpoint values match libpoly's internal
-    // representation, as long as the bracket has shrunk.
-    auto extractInterval = [](const poly::AlgebraicNumber& a) {
-        const auto& lo = poly::get_lower_bound(a);
-        const auto& hi = poly::get_upper_bound(a);
-        poly::Integer loN = poly::numerator(lo);
-        poly::Integer loD = poly::denominator(lo);
-        poly::Integer hiN = poly::numerator(hi);
-        poly::Integer hiD = poly::denominator(hi);
-        mpz_class loNum = *poly::detail::cast_to_gmp(&loN);
-        mpz_class loDen = *poly::detail::cast_to_gmp(&loD);
-        mpz_class hiNum = *poly::detail::cast_to_gmp(&hiN);
-        mpz_class hiDen = *poly::detail::cast_to_gmp(&hiD);
-        return std::pair<mpq_class, mpq_class>{mpq_class(loNum, loDen),
-                                               mpq_class(hiNum, hiDen)};
-    };
+    // Instead: split [lo,hi] at its midpoint and keep the half that still
+    // contains exactly one real root of the SAME defining polynomial (root count
+    // via Sturm/sign-changes). Guarantees the refinement contract: the new
+    // interval is a strict sub-interval of the old, still isolating, contains the
+    // SAME root, and rootIndex/definingPoly are unchanged. If the count cannot
+    // certify a unique half (interval not cleanly isolating, or count
+    // unsupported) ⇒ return false: the caller treats "no progress" as Unknown and
+    // never guesses an order or swaps in an extraneous root (fail-closed).
+    const mpq_class lo = alpha.lower;
+    const mpq_class hi = alpha.upper;
+    if (hi <= lo) return false;                  // already a point ⇒ cannot shrink
 
-    auto [initLo, initHi] = extractInterval(roots[alpha.rootIndex]);
-    mpq_class initWidth = initHi - initLo;
-    mpq_class targetWidth = (alpha.upper - alpha.lower) / 2;
-    if (targetWidth < 0) targetWidth = 0;
-
-    constexpr int kMaxInnerRefines = 40;
-    for (int i = 0; i < kMaxInnerRefines; ++i) {
-        poly::refine(roots[alpha.rootIndex]);
-        auto [curLo, curHi] = extractInterval(roots[alpha.rootIndex]);
-        mpq_class curWidth = curHi - curLo;
-        if (curWidth < targetWidth || curWidth == 0) {
-            alpha.lower = curLo;
-            alpha.upper = curHi;
-            return true;
-        }
+    const mpq_class m = (lo + hi) / 2;
+    const auto& coeffs = getUni(alpha.definingPoly);
+    const mpq_class vm = evalUniAtRational(coeffs, m);
+    if (vm == 0) {                               // exact rational root at midpoint
+        alpha.lower = m; alpha.upper = m; return true;
     }
-
-    auto [finalLo, finalHi] = extractInterval(roots[alpha.rootIndex]);
-    alpha.lower = finalLo;
-    alpha.upper = finalHi;
-    // Return true only if width actually shrank vs caller's previous state.
-    return (finalHi - finalLo) < (alpha.upper - alpha.lower)
-        || (finalHi - finalLo) < initWidth;
+    // FAST sign-based bisection: for a SIMPLE root in an isolating interval the
+    // polynomial changes sign across the root, so the half whose endpoints differ
+    // in sign is the one containing it (one evalUniAtRational per endpoint — far
+    // cheaper than a Sturm count, which was timing out on degree-7 meti-tarski).
+    const mpq_class vlo = evalUniAtRational(coeffs, lo);
+    const mpq_class vhi = evalUniAtRational(coeffs, hi);
+    if (vlo != 0 && vhi != 0) {
+        const bool loNeg = vlo < 0, mNeg = vm < 0, hiNeg = vhi < 0;
+        if (loNeg != mNeg && mNeg == hiNeg) { alpha.upper = m; return true; }  // sole sign change in [lo,m]
+        if (loNeg == mNeg && mNeg != hiNeg) { alpha.lower = m; return true; }  // sole sign change in [m,hi]
+        // else: no clean single sign change (even multiplicity / non-squarefree /
+        // not sign-isolating) ⇒ fall through to the exact count-based split.
+    }
+    // EXACT fallback (root at an endpoint, or no clean sign bracket): root-count.
+    const int leftCount  = countRealRootsInInterval(alpha.definingPoly, lo, m);
+    const int rightCount = countRealRootsInInterval(alpha.definingPoly, m, hi);
+    if (leftCount < 0 || rightCount < 0) return false;                  // count unsupported
+    if (leftCount == 1 && rightCount == 0) { alpha.upper = m; return true; }
+    if (leftCount == 0 && rightCount == 1) { alpha.lower = m; return true; }
+    return false;   // 0 or >1 roots in a half ⇒ not cleanly isolating ⇒ no certified shrink
 #endif
 }
 
@@ -1420,7 +1422,11 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
     for (size_t i = 0; i < prefix.values.size(); ++i) {
         if (prefix.values[i].isAlgebraic()) { ++algCount; algIdx = static_cast<int>(i); }
     }
-    if (algCount != 1) return empty;     // tower / none → caller Unknown (follow-up)
+    if (algCount != 1) {                 // multi-extension / none → tower path takes over
+        static const bool kTd = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
+        if (kTd) std::cerr << "[LAZVAL] norm bail=algCount=" << algCount << std::endl;
+        return empty;
+    }
     VarId algVar = prefix.varOrder[algIdx];
     const AlgebraicRoot& alpha = prefix.values[algIdx].root;
     if (alpha.definingPoly == NullUniPolyId) return empty;
@@ -1518,6 +1524,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     RootSet empty;
     static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
+    auto TD = [&](const char* why) -> RootSet {
+        if (kDiagEntry) std::cerr << "[LAZVAL] tower bail=" << why << std::endl;
+        return empty;
+    };
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
     //    coordinates are substituted into p). Each algebraic coordinate becomes
@@ -1525,7 +1535,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     //    a MONIC minimal poly (TowerKernel requires monic). Soundness does NOT
     //    require the m_i to be irreducible (see RootMembershipOracle.h).
     auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
-    if (!rpOpt) return empty;
+    if (!rpOpt) return TD("fromPolyId");
     RationalPolynomial p1 = *rpOpt;
 
     TowerContext ctx;
@@ -1535,10 +1545,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         VarId v = prefix.varOrder[i];
         if (val.isRational()) { p1 = p1.substituteRational(v, val.rational); continue; }
         ++algCount;
-        if (val.root.definingPoly == NullUniPolyId) return empty;
+        if (val.root.definingPoly == NullUniPolyId) return TD("null-defining-poly");
         const auto& mco = getUni(val.root.definingPoly);   // high-to-low integer coeffs
         int deg = static_cast<int>(mco.size()) - 1;
-        if (deg < 1 || mco[0] == 0) return empty;
+        if (deg < 1 || mco[0] == 0) return TD("bad-minpoly-degree");
         mpq_class lead(mco[0]);
         RationalPolynomial mi;
         for (size_t j = 0; j < mco.size(); ++j) {
@@ -1553,14 +1563,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         ctx.minimalPolys.push_back(std::move(mi));
         ctx.generators.push_back(val);
     }
-    if (algCount < 1) return empty;                        // no tower => not our case
+    if (algCount < 1) return TD("algCount<1");             // no tower => not our case
 
     p1.normalize();
-    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return empty;
+    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return TD("p1-zero-const-or-no-mainVar");
     {
         std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
         for (VarId v : p1.variables())
-            if (v != mainVar && !ext.count(v)) return empty;   // residual var => Unknown
+            if (v != mainVar && !ext.count(v)) return TD("p1-stray-var");   // residual var => Unknown
     }
 
     // Tower-aware real-root isolation of a polynomial F (in mainVar + tower
@@ -1584,9 +1594,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             if (beta.isRational()) { lo = hi = beta.rational; }
             else { lo = beta.root.lower; hi = beta.root.upper; }
             RootMembership mm = lazardRootMembership(F, mainVar, nrF.norm, lo, hi, ctx);
-            if (mm == RootMembership::Keep) kept.roots.push_back(beta);
-            else if (mm == RootMembership::Unknown) return none;   // => caller Unknown
-            // Drop => conjugate/extraneous, discard
+            if (mm == RootMembership::Keep || mm == RootMembership::Unknown) {
+                kept.roots.push_back(beta);   // real boundary, or conservative over-refinement
+            }
+            // Drop => provably a conjugate/extraneous root here, omit (sound: not a boundary)
         }
         ok = true;
         return kept;
@@ -1598,7 +1609,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     auto nr = towerNorm(p1, mainVar, ctx);
     if (!nr.ok) {
         if (kDiag) std::cerr << "[LAZVAL] towerNorm(p1) not ok => Unknown" << std::endl;
-        return empty;
+        return TD("towerNorm-not-ok");
     }
     if (nr.norm.isConstant()) {
         // Nullification case: the Norm degenerated to a constant. Either p1
@@ -1620,7 +1631,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             // proof that p1 in <m_0..m_{k-1}>.)
             if (kDiag) std::cerr << "[LAZVAL] AllDerivativesZero => unsupported (conservative)" << std::endl;
             supported = false;
-            return empty;
+            return TD("AllDerivativesZero");
         }
         // status == Complete: residual is in mainVar + reduced tower coeffs.
         RationalPolynomial residual = std::move(val.univariate);
@@ -1638,14 +1649,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             for (VarId v : residual.variables())
                 if (v != mainVar && !ext.count(v)) {
                     if (kDiag) std::cerr << "[LAZVAL] residual has stray var => Unknown" << std::endl;
-                    return empty;   // residual var => Unknown
+                    return TD("residual-stray-var");   // residual var => Unknown
                 }
         }
         bool ok = false;
         RootSet recovered = isolateInTower(residual, ok);
         if (kDiag) std::cerr << "[LAZVAL] residual isolate ok=" << ok
                              << " roots=" << recovered.numRoots() << std::endl;
-        if (!ok) return empty;                              // unsupported => Unknown
+        if (!ok) return TD("isolateInTower-residual-not-ok");   // unsupported => Unknown
         supported = true;
         return recovered;
     }
@@ -1654,17 +1665,31 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     if (Nuni == NullUniPolyId) return empty;
     RootSet candidates = isolateRealRoots(Nuni);
 
-    // 3. Keep exactly the candidates that are roots of p1 at the real embedding,
-    //    via the exact three-state oracle. Any Unknown => not certifiable.
+    // 3. The Norm's real roots are a SOUND SUPERSET of p1's real boundaries at our
+    //    embedding: every real root β of p1's specialization q(mainVar) satisfies
+    //    N(β)=∏_σ p1^σ(β)=0, so β ∈ candidates. We then classify each candidate
+    //    with the exact three-state oracle:
+    //      - Keep    : provably a root of p1 here → a real boundary, include.
+    //      - Drop    : provably NOT a root here (a conjugate's root) → spurious, omit.
+    //      - Unknown : oracle can't decide → INCLUDE conservatively. Including an
+    //                  extra boundary only REFINES the covering (splits one sign-
+    //                  invariant region into two equally sign-invariant pieces); it
+    //                  can never merge regions of different sign, so the cell stays
+    //                  truth-invariant and UNSAT stays sound. This replaces the old
+    //                  bail-on-Unknown, which sacrificed completeness (CONVOI2-class
+    //                  multi-extension leaves) for no soundness gain.
+    //    Net: never miss a real boundary (superset), never bail (complete), never
+    //    merge sign regions (sound).
     RootSet out;
     for (const auto& beta : candidates.roots) {
         mpq_class lo, hi;
         if (beta.isRational()) { lo = hi = beta.rational; }
         else { lo = beta.root.lower; hi = beta.root.upper; }
         RootMembership m = lazardRootMembership(p1, mainVar, nr.norm, lo, hi, ctx);
-        if (m == RootMembership::Keep) out.roots.push_back(beta);
-        else if (m == RootMembership::Unknown) return empty;   // => caller Unknown
-        // Drop => conjugate/extraneous, discard
+        if (m == RootMembership::Keep || m == RootMembership::Unknown) {
+            out.roots.push_back(beta);   // real boundary, or conservative over-refinement
+        }
+        // Drop => provably a conjugate/extraneous root here, omit (sound: not a boundary)
     }
     supported = true;
     return out;

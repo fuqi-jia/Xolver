@@ -31,6 +31,15 @@ public:
                            DomainStore& domains,
                            TheoryLemmaStorage& lemmaDb);
 
+    // Complete divisor set of |n| (±), or complete=false if it cannot be
+    // enumerated completely AND cheaply. Sole path = prime factorization (the
+    // O(sqrt n) trial-division cap is dissolved): complete=true only when |n| is
+    // fully factored within the divisor-count cap; a large un-factorable cofactor
+    // (=> |n| > B^2) or an over-cap divisor count yields complete=false (=>
+    // unknown, never a hang and never UNSAT from a partial set).
+    // Public for direct unit testing of the soundness contract.
+    static std::set<mpz_class> completeDivisors(const mpz_class& n, bool& complete);
+
 private:
     PolynomialKernel& kernel_;
 
@@ -39,9 +48,6 @@ private:
 
     // Test if a value is a root.
     bool isRoot(PolyId poly, const std::string& var, const mpz_class& val);
-
-    // Enumerate all divisors of n (positive and negative).
-    static std::set<mpz_class> divisors(const mpz_class& n);
 
     // Handle x^2 <= c type bounds.
     NiaReasoningResult handleSquareBound(const NormalizedNiaConstraint& c,

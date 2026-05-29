@@ -119,8 +119,14 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
             bool isFalse = (falseTerm_ != NullEufTerm) && egraph_->same(tt, falseTerm_);
             if (!isTrue && !isFalse) continue;  // tester truth not decided
             EufTermId u = tn.args[0];
-            // The tester's target constructor name.
+            // The tester's TARGET constructor name. opName(tt) is the tester name
+            // "is-<ctor>" (e.g. "is-cons"); the constructor it tests for is the
+            // part after the "is-" prefix. Comparing the bare constructor name
+            // (opName(m), e.g. "cons") against the full tester name would NEVER
+            // match -> every true tester on a determined class would spuriously
+            // conflict (false-UNSAT, e.g. is_cons(x) with x already cons).
             std::string tnm = opName(tt);
+            if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
             // Find a known constructor in u's class.
             EClassId uc = egraph_->rep(u);
             for (EufTermId m : egraph_->classMembers(uc)) {

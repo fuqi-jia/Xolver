@@ -2,42 +2,93 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <cmath>
 #include <cstdlib>
+#include <map>
+#include <vector>
 
 namespace xolver {
+
+namespace {
+// Prime-factorize |m| by trial-dividing primes up to a bound B. After the loop
+// the residual has no factor <= B; if it also satisfies m <= B^2 it is
+// DETERMINISTICALLY prime (any composite below B^2 must have a factor below B,
+// which the loop would have found) — accept it. A residual above B^2 cannot be
+// split cheaply and we DELIBERATELY do not trust a probabilistic primality test
+// here: a false "prime" would under-enumerate divisors and could fabricate a
+// false UNSAT, so we mark factorization INCOMPLETE (=> caller -> unknown). For
+// 2^256 the `% 2` loop extracts {2:256} in 256 steps (residual 1, never hits the
+// large-cofactor branch) — O(log n), not O(sqrt n).
+std::map<mpz_class, int> primeFactorizeBounded(mpz_class m, bool& complete) {
+    std::map<mpz_class, int> f;
+    complete = true;
+    if (m < 0) m = -m;
+    if (m <= 1) return f;
+    while (m % 2 == 0) { f[2]++; m /= 2; }
+    // Trial-division bound: a residual with no factor <= B and <= B^2 is provably
+    // prime. 1e7 (~10ms worst case) at the competition budget factors more
+    // constants fully (vs the dev 1e6); 2^k constants never reach it anyway.
+    static const mpz_class B("10000000");
+    for (mpz_class d = 3; d <= B && d * d <= m; d += 2) {
+        if (m % d == 0) { while (m % d == 0) { f[d]++; m /= d; } }
+    }
+    if (m > 1) {
+        if (m <= B * B) f[m]++;       // no factor <= B and <= B^2 => provably prime
+        else complete = false;        // large cofactor: cannot factor soundly+cheaply
+    }
+    return f;
+}
+
+// All divisors (±) from a prime factorization. ok=false if the divisor count
+// (product of (exp+1)) would exceed maxCount (caller bails to Incomplete).
+std::set<mpz_class> divisorsFromFactors(const std::map<mpz_class, int>& f,
+                                        size_t maxCount, bool& ok) {
+    ok = true;
+    unsigned long long count = 1;
+    for (const auto& kv : f) {
+        count *= static_cast<unsigned long long>(kv.second + 1);
+        if (count > maxCount) { ok = false; return {}; }
+    }
+    std::vector<mpz_class> pos = {mpz_class(1)};
+    for (const auto& kv : f) {
+        std::vector<mpz_class> next;
+        next.reserve(pos.size() * (kv.second + 1));
+        mpz_class pe = 1;
+        for (int e = 0; e <= kv.second; ++e) {
+            for (const auto& d : pos) next.push_back(d * pe);
+            pe *= kv.first;
+        }
+        pos.swap(next);
+    }
+    std::set<mpz_class> result;
+    for (const auto& d : pos) { result.insert(d); result.insert(-d); }
+    return result;
+}
+} // namespace
 
 UnivariateIntegerReasoner::UnivariateIntegerReasoner(PolynomialKernel& kernel)
     : kernel_(kernel) {}
 
-std::set<mpz_class> UnivariateIntegerReasoner::divisors(const mpz_class& n) {
-    std::set<mpz_class> result;
-    mpz_class abs_n = abs(n);
-    if (abs_n == 0) return result;
-
-    mpz_class limit = sqrt(abs_n);
-    for (mpz_class d = 1; d <= limit; ++d) {
-        if (abs_n % d == 0) {
-            result.insert(d);
-            result.insert(-d);
-            mpz_class q = abs_n / d;
-            if (q != d) {
-                result.insert(q);
-                result.insert(-q);
-            }
-        }
-    }
-    return result;
-}
-
-// Rational-root divisor enumeration trial-divides up to sqrt(|a0|). For huge
-// constant terms (EVM mod-2^256 => |a0| ~ 2^256 => ~2^128 iterations) this is an
-// effective hang. XOLVER_NIA_DIVISOR_CAP (default-OFF; promote after A/B) bails
-// the root search to Incomplete when sqrt(|a0|) exceeds ~10^6 (|a0| > 10^12),
-// turning a hang into a sound `unknown` (Incomplete is never read as UNSAT).
-static bool divisorEnumerationInfeasible(const mpz_class& a0) {
-    static const bool capEnabled = std::getenv("XOLVER_NIA_DIVISOR_CAP") != nullptr;
-    if (!capEnabled) return false;
-    static const mpz_class kThreshold("1000000000000");  // 10^12 = (10^6)^2
-    return abs(a0) > kThreshold;
+std::set<mpz_class> UnivariateIntegerReasoner::completeDivisors(const mpz_class& n,
+                                                               bool& complete) {
+    // PRIME-FACTORIZATION is the SOLE path — it DISSOLVES the old O(sqrt n)
+    // divisor cap (2^256 -> {2:256} -> 257 divisors in O(log n), where trial
+    // division would do ~2^128 iterations). No env flag: factorization is always
+    // strictly better (sound + fast), so it is the default, not a toggle.
+    // complete=false (=> caller Incomplete => unknown, never the O(sqrt n) hang
+    // and never UNSAT from a partial set) only when:
+    //   (a) the constant has a large composite cofactor with no factor <= B and
+    //       > B^2 (un-factorable cheaply — then |n| > B^2, so trial division
+    //       would also be infeasible), or
+    //   (b) the full divisor set would exceed MAX_DIVISORS (each divisor is one
+    //       exact kernel root-test; 10000 is the competition-budget fallback cap).
+    constexpr size_t MAX_DIVISORS = 10000;
+    complete = true;
+    bool fullyFactored = false;
+    auto factors = primeFactorizeBounded(abs(n), fullyFactored);
+    if (!fullyFactored) { complete = false; return {}; }
+    bool ok = false;
+    auto divs = divisorsFromFactors(factors, MAX_DIVISORS, ok);
+    if (!ok) { complete = false; return {}; }
+    return divs;
 }
 
 bool UnivariateIntegerReasoner::isRoot(PolyId poly,
@@ -89,14 +140,9 @@ IntegerRootResult UnivariateIntegerReasoner::findIntegerRoots(
         }
 
         mpz_class a0_reduced = coeffs[effectiveSize - 1];
-        if (divisorEnumerationInfeasible(a0_reduced)) {
-            result.status = IntegerRootStatus::Incomplete;
-            return result;
-        }
-        auto divs = divisors(a0_reduced);
-
-        constexpr size_t MAX_DIVISORS = 1000;
-        if (divs.size() > MAX_DIVISORS) {
+        bool complete = true;
+        auto divs = completeDivisors(a0_reduced, complete);
+        if (!complete) {
             result.status = IntegerRootStatus::Incomplete;
             return result;
         }
@@ -109,20 +155,14 @@ IntegerRootResult UnivariateIntegerReasoner::findIntegerRoots(
         return result;
     }
 
-    // RRT: all integer roots divide |a0|. But enumerating divisors trial-divides
-    // up to sqrt(|a0|); for an EVM mod-2^256 constant term |a0| ~ 2^256 that is
-    // ~2^128 bignum modulos — an effective hang. Bail to Incomplete BEFORE the
-    // loop when sqrt(|a0|) exceeds a feasible trial bound (the existing
-    // post-enumeration MAX_DIVISORS cap was too late — it computed the full set
-    // first). Sound: Incomplete -> run() never derives UNSAT from empty roots.
-    if (divisorEnumerationInfeasible(a0)) {
-        result.status = IntegerRootStatus::Incomplete;
-        return result;
-    }
-    auto divs = divisors(a0);
-
-    constexpr size_t MAX_DIVISORS = 1000;
-    if (divs.size() > MAX_DIVISORS) {
+    // RRT: all integer roots divide |a0|. completeDivisors enumerates the full
+    // divisor set (factorization path for huge-but-factorable |a0| like 2^256,
+    // else O(sqrt n) trial division behind the cap) or returns complete=false
+    // when it cannot be enumerated soundly. Sound: Incomplete -> run() never
+    // derives UNSAT from an empty/partial root set.
+    bool complete = true;
+    auto divs = completeDivisors(a0, complete);
+    if (!complete) {
         result.status = IntegerRootStatus::Incomplete;
         return result;
     }

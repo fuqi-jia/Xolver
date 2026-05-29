@@ -111,6 +111,9 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
+        run.sh \
+        run_differential.sh \
+        run_z3.sh \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \
@@ -123,6 +126,8 @@ cmd_package() {
             cp "$src" "${TMPDIR}/xolver-dist/tools/"
         fi
     done
+    # 差分/一键脚本必须可执行
+    chmod +x "${TMPDIR}/xolver-dist/tools/"*.sh 2>/dev/null || true
 
     tar czf "$PKG" -C "$TMPDIR" xolver-dist
 
@@ -200,19 +205,27 @@ cmd_run() {
                XOLVER_NRA_LAZARD_LIFT=1 XOLVER_NRA_LIBPOLY_PSC=1 \
                XOLVER_NRA_VARORDER=1 XOLVER_NRA_VARORDER_SIMPLEX=1 \
                XOLVER_NRA_HYBRID=1 XOLVER_NRA_PREELIM=1 XOLVER_NRA_LINEARIZE=1 \
+               XOLVER_NRA_SUBTROPICAL=1 XOLVER_NRA_SIGN_REFUTE=1 \
+               XOLVER_NRA_CAC=1 XOLVER_NRA_CAC_TRUST_UNSAT=1 \
+               XOLVER_NIA_MODULAR=1 XOLVER_NIA_LOCALSEARCH=1 \
+               XOLVER_NIA_PRESOLVE_FULL=1 XOLVER_NIA_BITBLAST_FAST=1 \
+               XOLVER_NIA_DIVISOR_FACTOR=1 XOLVER_NIA_EAGER_BITBLAST=1 \
+               XOLVER_COMB_ARRAY_NIA=1 XOLVER_REAL_DIV_PURIFY=1 \
+               XOLVER_PRESOLVE_DEDUP_ROWS=1 XOLVER_PRESOLVE_IIS=1 \
                XOLVER_PP_REWRITE=1 XOLVER_PP_SOLVE_EQS=1 \
                XOLVER_PP_PG_CNF=1 XOLVER_PP_LET_ELIM=1 \
                XOLVER_SAT_LEMMA_MGMT=1 XOLVER_SAT_MIN=1 XOLVER_STRAT_PRESETS=1 \
                XOLVER_UF_DISEQ_WATCH=1 XOLVER_UF_FAST_CC=1
-        log "--allon: optimizations ON (incl. NIA gcd/icp/cdcac/cascade + Lazard hybrid + PG-CNF/let-elim), soundness floors OFF (bug-hunt; false answers surface vs z3)"
+        log "--allon: optimizations ON (incl. NIA modular/SLS/presolve-full/bitblast-fast/divisor-factor + gcd/icp/cdcac/cascade + NRA subtropical/sign-refute/CAC + Lazard hybrid + EQNA array-NIA/real-div-purify/presolve-dedup/IIS + PG-CNF/let-elim), soundness floors OFF (bug-hunt; false answers surface vs z3)"
     fi
 
     # --submit: SUBMISSION 预设 — 所有优化开关 + 全部 soundness FLOORS 都开 (= 实际参赛配置, 健全).
     # 用于参赛前 soundness 校验: 配合 --compare-with z3, xolver!=z3 (双方都确定) = 必须修的错误答案;
     # xolver=unknown 是健全的 (floor 兜底, 不算错). 与 --allon (floors off, 找 bug) 相反.
-    # 注意: Lazard 混合 (XOLVER_NRA_HYBRID/PREELIM/LINEARIZE) 故意不在此预设里 — 它们尚未通过
-    # 广 QF_NRA z3 差分 (default-path NRA 改动的硬晋级门)。先在 --allon 里跑差分确认 0-unsound,
-    # 再提升进 --submit / 默认。在此之前 NRA 走纯 Collins (= 已验证基线)。
+    # 注意: Lazard 混合 (XOLVER_NRA_HYBRID/PREELIM/LINEARIZE) 与 NRA subtropical SAT-fast-path
+    # (XOLVER_NRA_SUBTROPICAL) 故意不在此预设里 — 它们尚未通过广 QF_NRA z3 差分 (default-path NRA
+    # 改动的硬晋级门)。先在 --allon 里跑差分确认 0-unsound, 再提升进 --submit / 默认。subtropical 本身
+    # 是 model-validate→else fall-through (invariant 1, 设计上健全), 但晋级前仍需广差分验证。
     if [[ "$DO_SUBMIT" == "1" ]]; then
         export XOLVER_COMB_CAREGRAPH=1 XOLVER_COMB_MODEL_BASED=1 \
                XOLVER_COMB_SCALAR_BACKFILL=1 XOLVER_COMB_UFARG_ARRANGE=1 \

@@ -108,6 +108,10 @@ bool CadicalBackend::configure(const char* name, int64_t value) {
     return solver_->set(name, static_cast<int>(value));
 }
 
+bool CadicalBackend::limit(const char* name, int value) {
+    return solver_->limit(name, value);
+}
+
 void CadicalBackend::addObservedVar(SatVar v) {
     if (static_cast<size_t>(v) >= observedVars_.size()) {
         size_t newSize = std::max(static_cast<size_t>(v) + 1,

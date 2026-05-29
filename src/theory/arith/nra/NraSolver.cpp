@@ -3,8 +3,12 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/poly/RationalPolynomial.h"
+#include "util/RealValue.h"                                // XOLVER_NRA_SUBTROPICAL witness model
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
+#include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
+#include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
+#include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
 #include "theory/arith/nra/core/CdcacCore.h"               // XOLVER_NRA_PREELIM reduced CDCAC
 #include "theory/arith/nra/core/CdcacConstraint.h"         // XOLVER_NRA_PREELIM
 #include "theory/arith/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
@@ -27,6 +31,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); }));
+    // XOLVER_NRA_SIGN_REFUTE (default OFF): cheap positive-orthant sign-
+    // definiteness UNSAT refuter, right after presolve. nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.sign-refute",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
@@ -35,6 +44,17 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.preelim",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); }));
+    // XOLVER_NRA_SUBTROPICAL (default OFF): cheap SAT-fast-path before the full
+    // CAD. nullopt at the gate when OFF; runs only at Full effort.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.subtropical",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
+    // XOLVER_NRA_CAC (A/B for the Collins-vs-CAC differential): conflict-driven
+    // single-cell CAC as the primary engine, BEFORE the Collins buildClosure.
+    // nullopt at the gate when OFF or on CAC-Unknown ⇒ Collins fallback.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.cac",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); }));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
@@ -44,6 +64,12 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // default path is byte-identical.
     if (const char* e = std::getenv("XOLVER_NRA_PREELIM"); e && *e && *e != '0')
         enablePreElim_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_SUBTROPICAL"); e && *e && *e != '0')
+        enableSubtropical_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_CAC"); e && *e && *e != '0')
+        enableCac_ = true;
+    if (const char* e = std::getenv("XOLVER_NRA_SIGN_REFUTE"); e && *e && *e != '0')
+        enableSignRefute_ = true;
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
@@ -71,6 +97,7 @@ void NraSolver::onPop(uint32_t n) {
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     engine_.pop(n);
 }
 
@@ -84,11 +111,13 @@ void NraSolver::onReset() {
     activeSet_.reset();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
     // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
     preElimCore_.reset();
     preElimAlgebra_.reset();
+    cacBackend_.reset();   // XOLVER_NRA_CAC: release the CAC libpoly backend
 }
 
 void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
@@ -99,6 +128,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
     activeSet_.insert(reason);
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
 
     size_t oldSize = activeLits_.size();
     activeLits_.push_back(reason);
@@ -141,6 +171,7 @@ void NraSolver::onBacktrack(int level) {
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
+    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     engine_.backtrack(level);
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -172,6 +203,37 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkLemma(pr.lemma);
     }
     return std::nullopt;
+}
+
+// XOLVER_NRA_SIGN_REFUTE: positive-orthant sign-definiteness refuter. Cheap,
+// unconditionally sound UNSAT for sign-definite constraints (e.g. a sum of
+// strictly-positive monomials = 0 with all variables positive — the Sturm-MBO
+// family that CAD/CAC time out on).
+std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& /*lemmaDb*/,
+                                                            TheoryEffort /*effort*/) {
+    if (!enableSignRefute_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
+
+    std::vector<SignRefuteConstraint> cs;
+    cs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) continue;     // skip unrepresentable; a missing constraint only loses completeness
+        cs.push_back({std::move(*rp), c.rel, c.reason});
+    }
+    auto conflict = refuteBySignDefiniteness(cs);
+    if (!conflict) return std::nullopt;
+
+    TheoryConflict tc;
+    tc.clause = std::move(*conflict);
+    if (std::getenv("XOLVER_NRA_SIGN_REFUTE_DIAG")) {
+        std::ofstream st("/tmp/sign_refute.txt", std::ios::app);
+        st << "[SIGN-REFUTE] UNSAT cons=" << cs.size() << " clause=" << tc.clause.size() << "\n";
+        st.flush();
+    }
+    return TheoryCheckResult::mkConflict(std::move(tc));
 }
 
 // XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
@@ -369,9 +431,231 @@ std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& 
 #endif
 }
 
-// Stage 2: the CDCAC engine. Always yields a definite verdict.
+// XOLVER_NRA_SUBTROPICAL SAT-fast-path (default OFF). A cheap, incomplete
+// witness search "at infinity" run before the full CAD. It produces a CANDIDATE
+// assignment; every active original constraint is then exact-validated via the
+// kernel sign (invariant 1). SAT only on a validated model (stored in
+// satFastModel_ so getModel() reports it); otherwise nullopt → fall to CDCAC.
+std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage& /*lemmaDb*/,
+                                                             TheoryEffort effort) {
+    if (!enableSubtropical_) return std::nullopt;
+    if (effort != TheoryEffort::Full) return std::nullopt;  // fast path at full effort only
+    // Combination (Nelson-Oppen) mode: interface (dis)equalities live in the
+    // engine, not presolveConstraints_, so a witness validated only against the
+    // local atoms could violate them. Restrict the fast path to pure NRA.
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+
+    // --- Build the subtropical constraint set from the active polynomials. ---
+    // Bail (fall through) if ANY active constraint is non-polynomial or cannot be
+    // decomposed into integer-coefficient terms: a witness validated only against
+    // a SUBSET would be unsound to report as SAT.
+    std::vector<SubtropicalConstraint> subCons;
+    std::unordered_set<VarId> varSet;
+    subCons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        auto termsOpt = kernel_->terms(c.poly);
+        if (!termsOpt) return std::nullopt;
+        SubtropicalConstraint sc;
+        sc.rel = c.rel;
+        sc.monomials.reserve(termsOpt->size());
+        for (const auto& t : *termsOpt) {
+            if (t.coefficient == 0) continue;
+            SubtropicalMonomial m;
+            m.coeff = t.coefficient;
+            m.powers = t.powers;
+            for (const auto& pr : t.powers) varSet.insert(pr.first);
+            sc.monomials.push_back(std::move(m));
+        }
+        subCons.push_back(std::move(sc));
+    }
+    if (subCons.empty() || varSet.empty()) return std::nullopt;  // ground / nothing to do
+
+    std::vector<VarId> vars(varSet.begin(), varSet.end());
+
+    SubtropicalSatFinder finder;
+    SubtropicalResult r = finder.find(subCons, vars);
+    if (!r.found) return std::nullopt;
+
+    // Guard against pathological magnitudes (base^exp blow-up). Sound to skip.
+    for (const auto& [v, e] : r.dir.exponents) {
+        if (abs(e) > 64) return std::nullopt;
+    }
+
+    // --- Materialize over increasing bases and exact-validate (invariant 1). -
+    static const long kBases[] = {2, 4, 16, 256, 4096, 65536};
+    for (long b : kBases) {
+        auto vidModel = SubtropicalSatFinder::materialize(r.dir, vars, mpq_class(b));
+        std::unordered_map<std::string, mpq_class> model;
+        model.reserve(vidModel.size());
+        for (const auto& [v, val] : vidModel) model.emplace(std::string(kernel_->varName(v)), val);
+
+        bool allHold = true;
+        for (const auto& c : presolveConstraints_) {
+            std::unordered_map<std::string, mpq_class> evalModel = model;
+            for (const auto& vn : kernel_->variables(c.poly))
+                evalModel.emplace(vn, mpq_class(0));  // 0-fill (defensive)
+            const int s = kernel_->sgn(c.poly, evalModel);
+            bool ok = false;
+            switch (c.rel) {
+                case Relation::Eq:  ok = (s == 0); break;
+                case Relation::Geq: ok = (s >= 0); break;
+                case Relation::Leq: ok = (s <= 0); break;
+                case Relation::Gt:  ok = (s > 0);  break;
+                case Relation::Lt:  ok = (s < 0);  break;
+                case Relation::Neq: ok = (s != 0); break;
+            }
+            if (!ok) { allHold = false; break; }
+        }
+        if (allHold) {
+            // Sound: a concrete rational point validates ALL active constraints
+            // under the exact kernel sign. Stash it so getModel() reports it.
+            satFastModel_ = std::move(vidModel);
+            if (std::getenv("XOLVER_NRA_SUBTROP_DIAG")) {
+                std::ofstream st("/tmp/subtropical.txt", std::ios::app);
+                st << "[SUBTROP] SAT vars=" << vars.size()
+                   << " cons=" << subCons.size() << " base=" << b << "\n";
+                st.flush();
+            }
+            return TheoryCheckResult::consistent();
+        }
+    }
+    return std::nullopt;  // no base validated: fall through to CDCAC
+}
+
+// XOLVER_NRA_CAC: conflict-driven single-cell CAC engine (the "real" CDCAC) as
+// the primary NRA decision, run BEFORE the Collins buildClosure. A/B control for
+// the Collins-vs-CAC differential; promotion to default is decided by that diff.
+std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
+                                                     TheoryEffort effort) {
+    if (!enableCac_) return std::nullopt;
+    // EFFORT SCHEDULE (validated by the Collins-vs-CAC A/B + endorsed design):
+    //   Standard effort → cheap engines (Collins as cheap CAD, linearized checks);
+    //   Full effort     → the heavy CAC/Lazard hard path (this stage), then Collins
+    //                     as fallback on CAC-Unknown (stageCdcac runs at all efforts).
+    // So in the hybrid CAC runs ONLY at Full: it gets first refusal on the hard
+    // cases Collins times out on, while Collins disposes of the easy cases cheaply
+    // at Standard — running the heavy CAC at every Standard propagation instead
+    // STARVES the time budget (50/150 meti-tarski timeouts in the all-efforts A/B).
+    // A fair head-to-head still needs CAC at all efforts (else Collins preempts it
+    // at Standard and CAC never runs) — that is what XOLVER_NRA_CAC_ONLY enables
+    // (CAC at every effort + Collins disabled): CAC-only=95 vs Collins-only=64,
+    // 0-unsound, confirming CAC is the stronger engine on the hard path.
+    // Two orthogonal differential flags (decoupled so the full schedule matrix
+    // A-E is expressible): CAC_ALL_EFFORTS runs CAC at Standard+Full (else Full
+    // only); CAC_NO_COLLINS (read in stageCdcac) disables the Collins fallback.
+    static const bool cacAllEfforts = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_ALL_EFFORTS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
+    }();
+    if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
+    // Pure NRA only: interface (dis)equalities live in the engine, not
+    // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+#ifdef XOLVER_HAS_LIBPOLY
+    // Build the constraint set + active reasons + variable order.
+    std::vector<CacConstraint> cacCons;
+    std::vector<SatLit> activeReasons;
+    std::set<VarId> varSet;
+    cacCons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;          // non-polynomial ⇒ defer to Collins
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) return std::nullopt;
+        for (VarId v : rp->variables()) varSet.insert(v);
+        cacCons.push_back({std::move(*rp), c.rel});
+        activeReasons.push_back(c.reason);
+    }
+    if (cacCons.empty() || varSet.empty()) return std::nullopt;
+    std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
+
+    if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
+    // Wall-clock deadline: in the HYBRID (Collins fallback present) bound CAC@Full
+    // to a time-share so a hard covering YIELDS to Collins (Unknown→fallback)
+    // rather than grinding to the global timeout and starving it. When CAC is the
+    // SOLE engine (XOLVER_NRA_CAC_NO_COLLINS / _ONLY) leave it unbounded (0) and
+    // rely on the external timeout. Override via XOLVER_NRA_CAC_DEADLINE_MS.
+    static const bool soleEngine = [] {
+        const char* n = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");
+        return (n && *n && *n != '0') || (o && *o && *o != '0');
+    }();
+    static const long cacDeadlineMs = [] () -> long {
+        if (const char* e = std::getenv("XOLVER_NRA_CAC_DEADLINE_MS")) return std::atol(e);
+        return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
+                        // yields fast to Collins instead of grinding); rest of 1200s is Collins
+    }();
+    CacEngine::Config cfg;
+    cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
+    CacResult res = eng.solve();
+
+    const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
+    if (diag) {
+        std::ofstream st("/tmp/cac_diff.txt", std::ios::app);
+        st << "[CAC] vars=" << varOrder.size() << " cons=" << presolveConstraints_.size()
+           << " verdict=" << (res.status == CacStatus::Sat ? "sat"
+                              : res.status == CacStatus::Unsat ? "unsat" : "unknown")
+           << " depth=" << eng.maxDepthReached()
+           << (res.status == CacStatus::Unknown ? (" reason=" + eng.lastUnknown()) : std::string())
+           << "\n";
+        st.flush();
+    }
+
+    if (res.status == CacStatus::Unsat) {
+        // SOUNDNESS FLOOR: CAC's covering is NOT yet per-cell-certified, and the
+        // regression suite caught false-UNSAT from it (sat cases nra_014/022/047/
+        // 138 — an unverified characterization wrongly declared the covering
+        // gap-free; the rational-prefix nullification handling is incomplete).
+        // Per the no-UNSAT-from-unverified-characterization rule, do NOT trust
+        // CAC-UNSAT: defer to Collins (the validated baseline). UNSAT is re-enabled
+        // only once each conflict cell carries an exact, checkable certificate.
+        // (CAC's validated-SAT below is still sound and IS returned.)
+        // XOLVER_NRA_CAC_TRUST_UNSAT re-enables CAC-UNSAT (for validating the
+        // required-coefficients characterization fix before promotion); default
+        // OFF = the sound floor.
+        static const bool trustUnsat = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_TRUST_UNSAT");
+            return e && *e && *e != '0';
+        }();
+        if (!trustUnsat) return std::nullopt;   // floor: defer to Collins
+        TheoryConflict conflict;
+        conflict.clause = std::move(activeReasons);
+        return TheoryCheckResult::mkConflict(std::move(conflict));
+    }
+    if (res.status == CacStatus::Sat) {
+        // Report only an all-rational model (the typed channel is mpq); an
+        // algebraic witness ⇒ defer to Collins (still sound). The engine already
+        // validated the model against every constraint (invariant 1).
+        std::unordered_map<VarId, mpq_class> rationalModel;
+        for (size_t i = 0; i < res.model.values.size(); ++i) {
+            if (!res.model.values[i].isRational()) return std::nullopt;
+            rationalModel.emplace(res.model.varOrder[i], res.model.values[i].rational);
+        }
+        satFastModel_ = std::move(rationalModel);
+        return TheoryCheckResult::consistent();
+    }
+#endif
+    return std::nullopt;  // Unknown / no libpoly ⇒ fall through to Collins
+}
+
+// Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
+    // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
+    // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
+    // unknown when CAC cannot decide, rather than a default/false verdict.
+    static const bool noCollins = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
+    }();
+    if (noCollins) return TheoryCheckResult::unknown("cac-only-collins-disabled");
     return engine_.check();
 }
 
@@ -638,6 +922,19 @@ NraSolver::getDeducedSharedEqualities() {
 }
 
 std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
+    // XOLVER_NRA_SUBTROPICAL: if the SAT-fast-path produced a validated witness
+    // for the current assignment, report it (the CDCAC engine was bypassed, so
+    // its sample is stale/empty). Exact rational values.
+    if (satFastModel_) {
+        TheoryModel model;
+        for (const auto& [v, val] : *satFastModel_) {
+            std::string name(kernel_->varName(v));
+            model.numericAssignments.insert({name, RealValue::fromMpq(val)});
+            model.assignments[std::move(name)] = val.get_str();
+        }
+        return model;
+    }
+
     auto sampleOpt = engine_.getModel();
     if (!sampleOpt) return std::nullopt;
     const auto& sample = *sampleOpt;

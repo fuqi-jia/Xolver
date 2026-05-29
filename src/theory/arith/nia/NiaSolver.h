@@ -15,6 +15,7 @@
 #include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -128,11 +129,14 @@ private:
     bitblast::BitBlastSolver bitBlast_;
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
+    ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
+    bool enableModular_ = false;  // XOLVER_NIA_MODULAR: constant-pow2-modulus residue refutation (L3)
     bool enableRefute_ = false;   // XOLVER_NIA_REFUTE: bound-free product-positivity refutation
     bool enableGcd_ = false;      // XOLVER_NIA_GCD: multivariate GCD-divisibility refutation
     bool enableIcp_ = false;      // XOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
+    bool normCache_ = false;      // XOLVER_NIA_NORM_CACHE: incremental per-constraint normalize cache (kept in lockstep with active_)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
@@ -162,6 +166,7 @@ private:
     std::optional<TheoryCheckResult> stageAlgebraic(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
@@ -183,9 +188,25 @@ private:
         SharedTermId b;
         SatLit reason;
         int level;
+        // XOLVER_NIA_IFACE_LIFECYCLE: the converted (a - b) constraint, cached so
+        // stageNormalize can merge interface (dis)equalities into the solve
+        // WITHOUT placing them on the fragile active_/trail_ back-pop stack.
+        PolyId diff = NullPoly;
+        Relation rel = Relation::Eq;
     };
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
+
+    // XOLVER_NIA_IFACE_LIFECYCLE (read once in ctor): when set, Nelson-Oppen
+    // interface (dis)equalities are kept out of active_/trail_/activeSet_ and
+    // are instead merged into the constraint set at stageNormalize, with a
+    // level-correct remove_if backtrack and a full clear on a level-0 reset.
+    // Fixes the false "opposite polarity" Unknown that aborted QF_UFNIA/QF_ANIA
+    // model checks: interface eqs asserted during check() (after the ascending
+    // re-assert loop) made trail_ non-monotonic, so onBacktrack's back-pop left
+    // stale entries that polluted activeSet_ via rebuildFromActive, and level-0
+    // interface eqs accumulated across the many Full-effort model checks.
+    bool ifaceLifecycleEnabled_ = false;
 
     struct BranchSplitKey {
         std::string var;

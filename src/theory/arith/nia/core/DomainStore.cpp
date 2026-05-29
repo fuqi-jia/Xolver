@@ -198,7 +198,13 @@ std::vector<SatLit> DomainStore::collectEmptyReasons(const IntDomain& d) const {
         return reasons;
     }
 
-    // Finite set disjoint from bounds
+    // Finite set has no valid value: every member is killed by a bound or an
+    // exclusion. The conflict must carry finiteSetReasons (why the candidate set
+    // is what it is) PLUS, for each member, the reason it was killed — the bound
+    // reasons if out of range, or the EXCLUSION reasons if excluded. Dropping the
+    // exclusion reasons (older bug) yielded an over-strong clause like {4} that
+    // omits the `x != v` literal, which the SAT layer learns and uses to prune a
+    // genuinely satisfying assignment -> false UNSAT.
     if (d.finiteValues) {
         bool disjoint = true;
         for (const auto& v : *d.finiteValues) {
@@ -209,9 +215,16 @@ std::vector<SatLit> DomainStore::collectEmptyReasons(const IntDomain& d) const {
             break;
         }
         if (disjoint) {
-            add(d.lower.reasons);
-            add(d.upper.reasons);
             add(d.finiteSetReasons);
+            bool usedLower = false, usedUpper = false;
+            for (const auto& v : *d.finiteValues) {
+                if (d.hasLower && v < d.lower.value) { usedLower = true; continue; }
+                if (d.hasUpper && v > d.upper.value) { usedUpper = true; continue; }
+                auto eit = d.excludedValues.find(v);
+                if (eit != d.excludedValues.end()) { add(eit->second); }
+            }
+            if (usedLower) add(d.lower.reasons);
+            if (usedUpper) add(d.upper.reasons);
             return reasons;
         }
     }

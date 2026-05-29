@@ -44,6 +44,11 @@ public:
     virtual bool value(SatVar v) const = 0;
     virtual bool configure(const char* name, int64_t value) { (void)name; (void)value; return false; }
 
+    // Per-solve resource limit (e.g. "conflicts", "decisions"). Bounds the NEXT
+    // solve() so a single hard instance cannot consume an unbounded budget; a
+    // solve that hits the limit returns Unknown. Default no-op (returns false).
+    virtual bool limit(const char* name, int value) { (void)name; (void)value; return false; }
+
     // Assumption / unsat-core support
     virtual std::vector<SatLit> getFailedAssumptions() const { return {}; }
 

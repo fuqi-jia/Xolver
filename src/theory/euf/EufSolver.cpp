@@ -14,7 +14,88 @@ namespace xolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
+    eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
     initializeBoolConstants();
+}
+
+std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
+    std::vector<TheoryLemma> out;
+    if (!eufPropEnabled_ || !eqAtomRegistry_ || !coreIr_) return out;
+    // Propagate only from a clean, congruence-closed, conflict-free state: after
+    // a Consistent check the merge queue is drained and the explanation paths
+    // reflect the current assignment.
+    if (pendingConflict_ || pendingUnknown_ || !mergeQueue_.empty()) return out;
+
+    // Assigned EUF atom vars — only UNDECIDED atoms are propagation targets.
+    std::unordered_set<SatVar> assigned;
+    assigned.reserve(trail_.size() * 2 + 1);
+    for (const auto& e : trail_) assigned.insert(e.lit.var);
+
+    // Canonical (rep,rep) -> active-disequality index, for entailed-FALSE props.
+    // Single-theory only: the combination shared bus is gated off upstream
+    // (TheoryManager::takeEntailmentPropagations returns {} in combination).
+    auto repPairKey = [](EClassId r1, EClassId r2) -> uint64_t {
+        uint64_t lo = r1 < r2 ? r1 : r2, hi = r1 < r2 ? r2 : r1;
+        return (lo << 32) | hi;
+    };
+    std::unordered_map<uint64_t, size_t> diseqByRepPair;
+    diseqByRepPair.reserve(disequalities_.size() * 2 + 1);
+    for (size_t i = 0; i < disequalities_.size(); ++i) {
+        const auto& d = disequalities_[i];
+        if (d.lhs == NullEufTerm || d.rhs == NullEufTerm) continue;
+        EClassId ra = egraph_.rep(d.lhs), rb = egraph_.rep(d.rhs);
+        if (ra == rb) continue;  // violated diseq -> conflict path handles it
+        diseqByRepPair.emplace(repPairKey(ra, rb), i);
+    }
+
+    const auto& recs = eqAtomRegistry_->records();
+    const size_t kMaxProps = 256;
+    for (const auto& rec : recs) {
+        if (out.size() >= kMaxProps) break;
+        if (rec.theory != TheoryId::EUF) continue;
+        if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
+        const auto& p = std::get<EufAtomPayload>(rec.payload);
+        if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) continue;
+        SatVar v = rec.satVar;
+        if (assigned.count(v)) continue;
+        EufTermId s = termManager_.findTerm(p.lhs);
+        EufTermId t = termManager_.findTerm(p.rhs);
+        if (s == NullEufTerm || t == NullEufTerm) continue;
+        EClassId rs = egraph_.rep(s), rt = egraph_.rep(t);
+        if (rs == rt) {
+            // Entailed TRUE: (¬reasons ∨ (s=t)). Skip empty-reason (bare unit).
+            auto er = egraph_.explainEquality(s, t);
+            if (!er.ok || er.reasons.empty()) continue;
+            TheoryLemma lem;
+            lem.kind = LemmaKind::Entailment;
+            lem.lits.reserve(er.reasons.size() + 1);
+            for (SatLit r : er.reasons) lem.lits.push_back(r.negated());
+            lem.lits.push_back(SatLit{v, true});
+            out.push_back(std::move(lem));
+        } else {
+            // Entailed FALSE: s,t straddle an asserted diseq (s≅a, t≅b, a≠b).
+            auto it = diseqByRepPair.find(repPairKey(rs, rt));
+            if (it == diseqByRepPair.end()) continue;
+            const ActiveDisequality& d = disequalities_[it->second];
+            EClassId ra = egraph_.rep(d.lhs), rb = egraph_.rep(d.rhs);
+            EufTermId dS, dT;  // diseq endpoint in s's class / in t's class
+            if (rs == ra && rt == rb) { dS = d.lhs; dT = d.rhs; }
+            else if (rs == rb && rt == ra) { dS = d.rhs; dT = d.lhs; }
+            else continue;
+            auto e1 = egraph_.explainEquality(s, dS);
+            auto e2 = egraph_.explainEquality(t, dT);
+            if (!e1.ok || !e2.ok) continue;
+            TheoryLemma lem;
+            lem.kind = LemmaKind::Entailment;
+            lem.lits.reserve(e1.reasons.size() + e2.reasons.size() + 2);
+            for (SatLit r : e1.reasons) lem.lits.push_back(r.negated());
+            for (SatLit r : e2.reasons) lem.lits.push_back(r.negated());
+            lem.lits.push_back(d.reason.negated());
+            lem.lits.push_back(SatLit{v, false});
+            out.push_back(std::move(lem));
+        }
+    }
+    return out;
 }
 
 void EufSolver::rebuildDiseqIndex() {
@@ -307,9 +388,92 @@ std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
         if (t == NullEufTerm) return false;
         return coreIr_->arraySortParams(termManager_.node(t).sort).has_value();
     };
+    // Direct array disequalities (a != b asserted locally).
     for (const auto& d : disequalities_) {
         if (isArraySort(d.lhs) && isArraySort(d.rhs)) {
             out.push_back({d.lhs, d.rhs});
+        }
+    }
+
+    // Congruence-contrapositive extensionality routing (XOLVER_ARRAY_CONGR_EXT).
+    // A disequality  h(..p..) != h(..q..)  between two applications of the SAME
+    // function symbol that differ in EXACTLY ONE argument position soundly
+    // entails  arg_p != arg_q  at that position (if they were equal the apps
+    // would be congruent, hence equal, contradicting the diseq). When that arg
+    // is array-sorted we surface (arg_p, arg_q) so Extensionality splits on it
+    // (array_incompleteness1: g(a)!=g(b) ==> a!=b ==> select(a,k)!=select(b,k)).
+    //
+    // The diseq may live LOCALLY (disequalities_) or, after purification in
+    // combination, on the SHARED bus as a scalar  s1 != s2  with the egraph
+    // holding s1 = h(..p..), s2 = h(..q..). Matching disequalities by egraph
+    // CLASS (egraph_.same), not by literal endpoints, covers both — this is the
+    // "shared-bus scalar-only gap" fix.
+    //
+    // SOUNDNESS: the Ext lemma this feeds (a=b OR select(a,k)!=select(b,k)) is a
+    // tautology, so emitting it for any pair is sound regardless of whether the
+    // diseq is truly entailed; the contrapositive only governs WHICH pairs are
+    // worth splitting on (precision + termination), never the verdict. The Ext
+    // site re-checks array-sortedness as a second guard.
+    static const bool congrExt = std::getenv("XOLVER_ARRAY_CONGR_EXT") != nullptr;
+    if (congrExt) {
+        // Group application terms by (symbol, arity). Restrict to USER-declared
+        // functions: skip ALL internal symbols (#array.*, #builtin.*, #dt.*, …).
+        // Array builtins (select/store) have dedicated Row1/Row2/Ext reasoning;
+        // piggybacking the contrapositive on synthesized internal selects over a
+        // self-store class explodes Ext with fresh witness indices (alra_010).
+        // A user UF over arrays (g:Array->Int) is the genuine external observer
+        // whose result-diseq forces an array-arg diseq (array_incompleteness1).
+        std::unordered_map<uint64_t, std::vector<EufTermId>> byKind;
+        for (EufTermId t = 0; t < static_cast<EufTermId>(termManager_.termCount()); ++t) {
+            const auto& n = termManager_.node(t);
+            if (n.args.empty()) continue;
+            if (termManager_.symbolName(n.symbol).rfind("#", 0) == 0) continue;
+            uint64_t key = (static_cast<uint64_t>(n.symbol) << 8) | (n.args.size() & 0xff);
+            byKind[key].push_back(t);
+        }
+        auto appsKnownDisequal = [&](EufTermId t1, EufTermId t2) -> bool {
+            auto match = [&](const ActiveDisequality& d) {
+                return (egraph_.same(t1, d.lhs) && egraph_.same(t2, d.rhs)) ||
+                       (egraph_.same(t1, d.rhs) && egraph_.same(t2, d.lhs));
+            };
+            for (const auto& d : disequalities_)       if (match(d)) return true;
+            for (const auto& d : sharedDisequalities_) if (match(d)) return true;
+            return false;
+        };
+        std::unordered_set<uint64_t> emitted;
+        for (auto& kv : byKind) {
+            auto& apps = kv.second;
+            for (size_t p = 0; p < apps.size(); ++p) {
+                for (size_t q = p + 1; q < apps.size(); ++q) {
+                    EufTermId t1 = apps[p], t2 = apps[q];
+                    // Trigger only on SCALAR-result user applications (e.g.
+                    // g:Array->Int). A user UF returning an ARRAY (h:X->Array) being
+                    // disequal is itself array-level — handled by the direct
+                    // array-diseq scan above — so skip it here to avoid redundant
+                    // Ext fan-out.
+                    if (isArraySort(t1)) continue;
+                    if (egraph_.same(t1, t2)) continue;
+                    if (!appsKnownDisequal(t1, t2)) continue;
+                    const auto& a1 = termManager_.node(t1).args;
+                    const auto& a2 = termManager_.node(t2).args;
+                    if (a1.size() != a2.size()) continue;
+                    int diffPos = -1;
+                    bool single = true;
+                    for (size_t i = 0; i < a1.size(); ++i) {
+                        if (egraph_.same(a1[i], a2[i])) continue;
+                        if (diffPos != -1) { single = false; break; }
+                        diffPos = static_cast<int>(i);
+                    }
+                    if (!single || diffPos == -1) continue;
+                    EufTermId pArg = a1[diffPos], qArg = a2[diffPos];
+                    if (!isArraySort(pArg) || !isArraySort(qArg)) continue;
+                    uint64_t lo = pArg < qArg ? pArg : qArg;
+                    uint64_t hi = pArg < qArg ? qArg : pArg;
+                    uint64_t dk = (lo << 32) | hi;
+                    if (!emitted.insert(dk).second) continue;
+                    out.push_back({pArg, qArg});
+                }
+            }
         }
     }
     return out;
