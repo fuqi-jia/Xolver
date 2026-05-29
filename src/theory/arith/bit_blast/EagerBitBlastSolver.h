@@ -54,6 +54,15 @@ private:
     std::unordered_map<ExprId, AtomCs> atomCs_;
     std::vector<std::string> intVars_;
 
+    // Per-variable bounds extracted from simple bound atoms (x rel const). A
+    // both-sided-bounded var is encoded at its EXACT width (bitsToCover) instead
+    // of the uniform cascade width — BLAN's collector discipline. Shrinks the
+    // encoding massively on bound-heavy formulas (Farkas templates) and keeps
+    // products narrow. Sound: the value provably lies in [lb,ub] (the bound atom
+    // is still encoded), so the exact width always suffices.
+    std::unordered_map<std::string, mpz_class> lb_, ub_;
+    void tryExtractBound(PolyId diff, Relation rel);
+
     // Walk the DAG: reject unsupported constructs (UF/array/quantifier/real),
     // convert every arith atom, collect int vars. Returns false => bail Unknown.
     bool collect(const CoreIr& ir, const std::vector<ExprId>& assertions);
