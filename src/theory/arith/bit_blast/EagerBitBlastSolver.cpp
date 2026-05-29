@@ -113,7 +113,6 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case PolyConstraintStatus::Constraint:
                 cs.parts.push_back({cc.diff, rel});
                 for (const auto& v : kernel_->variables(cc.diff)) intVarSet.insert(v);
-                tryExtractBound(cc.diff, rel);
                 break;
             case PolyConstraintStatus::Tautology:
                 cs.parts.push_back({NullPoly, Relation::Eq});   // marker: always-true (0==0)
@@ -185,6 +184,26 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
     for (ExprId a : assertions) walk(a);
     if (!ok) return false;
     intVars_.assign(intVarSet.begin(), intVarSet.end());
+
+    // Bound extraction is POLARITY-AWARE: only atoms that are TOP-LEVEL POSITIVE
+    // CONJUNCTS (reachable from an assertion root through And nodes only) are
+    // genuinely asserted, so only those may set variable bounds (-> offset width)
+    // and be skipped in the encoding. An atom under not/or/ite/implies is NOT
+    // guaranteed true — extracting a bound from it (e.g. `(= rfc0 0)` under
+    // `(not ...)`) would wrongly pin rfc0=0 and produce an invalid model.
+    std::unordered_set<ExprId> topSeen;
+    std::function<void(ExprId)> markTop = [&](ExprId eid) {
+        if (!topSeen.insert(eid).second) return;
+        const CoreExpr& e = ir.get(eid);
+        if (e.kind == Kind::And) { for (ExprId c : e.children) markTop(c); return; }
+        auto it = atomCs_.find(eid);
+        if (it == atomCs_.end()) return;                 // not an asserted arith atom
+        if (it->second.parts.size() != 1) return;
+        PolyId diff = it->second.parts[0].first;
+        if (diff == NullPoly) return;
+        tryExtractBound(diff, it->second.parts[0].second);
+    };
+    for (ExprId a : assertions) markTop(a);
     return true;
 }
 
@@ -248,9 +267,10 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         enc.setVarBudget(budget);
 
         // Per-var width (BLAN collector discipline): both-sided-bounded vars get
-        // their EXACT width (the value provably fits — bound atom still encoded);
-        // unbounded vars get the cascade width K. This is the dominant size win on
-        // bound-heavy formulas (Farkas templates: invariant coeffs in [-1,1]).
+        // their EXACT width (value provably fits — bound atom still encoded);
+        // unbounded vars get the cascade width K. Bounds are POLARITY-AWARE (only
+        // top-level positive conjuncts set them — see markTop in collect), so a
+        // negated atom like `(not (= rfc0 0))` never wrongly pins rfc0.
         std::unordered_map<std::string, BitVec> varBits;
         for (const auto& v : intVars_) {
             unsigned w = K;

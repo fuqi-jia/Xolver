@@ -11,7 +11,7 @@
 
 namespace xolver::bitblast {
 
-// Whole-formula eager bit-blaster (whole-formula) (BLAN-style) as a SOUND PORTFOLIO ARM.
+// Whole-formula eager bit-blaster (BLAN-style) as a SOUND PORTFOLIO ARM.
 //
 // Translates the ENTIRE (lowered) QF_NIA formula — boolean skeleton via Tseitin
 // gates + each arithmetic atom reified via the ported bit-blaster (Int vars ->
@@ -62,6 +62,7 @@ private:
     // is still encoded), so the exact width always suffices.
     std::unordered_map<std::string, mpz_class> lb_, ub_;
     void tryExtractBound(PolyId diff, Relation rel);
+
 
     // Walk the DAG: reject unsupported constructs (UF/array/quantifier/real),
     // convert every arith atom, collect int vars. Returns false => bail Unknown.
