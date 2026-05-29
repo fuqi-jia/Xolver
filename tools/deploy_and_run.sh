@@ -111,6 +111,9 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
+        run.sh \
+        run_differential.sh \
+        run_z3.sh \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \
@@ -123,6 +126,8 @@ cmd_package() {
             cp "$src" "${TMPDIR}/xolver-dist/tools/"
         fi
     done
+    # 差分/一键脚本必须可执行
+    chmod +x "${TMPDIR}/xolver-dist/tools/"*.sh 2>/dev/null || true
 
     tar czf "$PKG" -C "$TMPDIR" xolver-dist
 
