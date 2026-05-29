@@ -1,5 +1,251 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
+The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
+combination logics** — ALL pre-existing (NOT caused by the Ext-witness array fix:
+verified default==fix-on==sat), ALL in my lane (EUF/array/combination), ALL
+DIVISION-SINKERS, NONE in the regression suite (escaped the 661/661 gate). This is
+the top soundness priority (user: "0-unsound paramount", "就算pre-existing也要解决").
+
+| logic | false-SATs | cases | floorable by XOLVER_ARRAY_COMB_VALIDATE_SAT? |
+|-------|-----------|-------|---------------------------------------------|
+| QF_ALIA | 1 | cvc/read2 | YES → unknown (verified) |
+| QF_AUFLIA | 9 | check/array_incompleteness1, cvc/{add5,add6,read6,read7,fb_var_12_11,fb_var_33_6,fb_var_5_12,fb_var_6_12} | YES → all 9 unknown (verified) |
+| QF_UFLIA | 4 | mathsat/Wisa/{xs-05,xs-06,xs-09}, wisas/xs_9_19 | NO (no arrays; strict-validation → TIMEOUT, not a clean floor) |
+
+**ROOT CAUSE (shared): combination SAT is not ModelValidator-backed (invariant 1
+violation).** The Nelson-Oppen arrangement declares a model "consistent" at the
+Full-effort check while a conflict found mid-search escaped (the read2/Wisa
+conflict-stickiness class). The array floor (XOLVER_ARRAY_COMB_VALIDATE_SAT,
+shipped b27d7b6) requires POSITIVE validation for QF_ALIA/ALRA/AUFLIA/AUFLRA →
+floors the 10 array-combination false-SATs. The 4 QF_UFLIA Wisa cases are EUF
+cross-equality soundness (the false-UNSAT direction was fixed earlier per
+[[project_wisa_varconst]]; this is the false-SAT residual) — NOT cleanly floorable
+(UF apps → validator Indeterminate; strict-validation recovery times out). They
+need EUF/combination conflict-soundness work = #12.
+
+**★ #12 ACTIONABLE DESIGN (diagnosed precisely 2026-05-29):** the over-floor root
+is NOT missing array interps — it is UNCONSTRAINED-SCALAR DEFAULTING. Dumped
+alia_005's model via (get-model): it is VALID + complete — `a=(store (const 0) 1 2)`,
+v=3, j=1, i=4 (i≠j satisfied, read-fallthrough holds). The get-model CLI path
+(Solver.cpp ~2042 `emit.resolve`) assigns unconstrained scalars DISTINCT FRESH
+values (freshNum/numericOpaque). But the floor's `modelPositivelyValidates`
+(Solver.cpp:245-253) validates the RAW theoryManager.getModel() and defaults
+unconstrained declared scalars to **0** → i=j=0 → spuriously violates `(not (= i j))`
+→ Violated → over-floored. FIX: route the floor's validation through the SAME
+distinct-scalar model construction the get-model path uses (assign unconstrained
+declared scalars distinct fresh values respecting asserted diseqs), OR add
+array+scalar-distinct support to CandidateModelSearch. read2 stays floored (unsat
+→ Violated under any completion). CAUTION: `modelPositivelyValidates` is SHARED
+with the default-ON niaSatFloor — changing scalar defaulting from 0→distinct-fresh
+could over-floor genuine NIA sats that validate at 0. Must SCOPE the change to the
+array-combination floor context + gate on full reg 661/661. Sound (only
+sat→unknown), but completeness-sensitive → dedicated #12 pass, full-reg-gated.
+Recovers alia_005/alra_010 (enables QF_ALIA default-ON) + the pure-array+arith
+subset of the 17 over-floored AUFLIA sats (UF-heavy ones stay Indeterminate →
+need UF model construction too).
+INSTRUMENTED (2026-05-29, diag reverted): alia_005's floor model has
+`numericAssignments: i=0 j=0` (COLLAPSED) but `assignments: i=@e6 j=@e3` (DISTINCT
+opaque EUF tokens) + `arrayInterps: a(deflt=@def2,n=1)` (interp PRESENT). So the
+numeric channel collapsed the EUF-distinct scalars to 0==0. ATTEMPT 2 (reverted):
+mapped distinct "@" tokens → distinct numbers, overriding numAsg — STILL did not
+recover alia_005 (read2 + the 9 AUFLIA false-SATs stayed floored throughout). So
+the validator evaluates EUF scalars via the OPAQUE-TOKEN channel (tokAsg), not
+numAsg, and the residual failure is in ArithModelValidator's select/equality
+evaluation over an opaque-token + array-interp model (deflt=@def2 comparison),
+NOT in the model extraction alone. TWO attempts failed (empty-interp, token→num).
+#12 NEXT STEP: instrument ArithModelValidator itself (per-assertion sub-verdict +
+how select(a,@e3) and (= @e6 @e3) evaluate) — likely the opaque-token equality /
+array-deflt-token handling returns Indeterminate where it should be definite.
+This is validator-internal, soundness-sensitive (it gates the floor's recovery) →
+dedicated instrumented pass on ArithModelValidator. Floor stays default-OFF until
+then (genuine sats over-floored). Floor itself is robust (all false-SATs floored
+across every attempt).
+
+**MEASURED COST (QF_AUFLIA sample, floor ON vs OFF):** UNSOUND 9→0 (all false-SATs
+floored) BUT correct 53→36 — the floor over-floors **17 of ~24 genuine sats** to
+unknown (UF apps + incomplete array models → validator Indeterminate → not
+positively confirmed). So the floor is a NECESSARY-FOR-ENTRY soundness gate (can't
+enter a division with 9 false-SATs) but BLUNT: it trades ~71% of genuine sats for
+soundness. The REAL fix is #12 (N-O valid model construction): complete the
+combined model so genuine sats validate positively → the floor then catches ONLY
+the false-SATs (recover the 17+2 lost sats). Floor = sound floor; #12 = recover.
+
+**PROMOTION RECOMMENDATION (for master):** XOLVER_ARRAY_COMB_VALIDATE_SAT is
+MANDATORY to enter QF_ALIA/QF_AUFLIA soundly (without it: 10 division-sinking
+false-SATs). But default-ON today costs heavy completeness (QF_AUFLIA 53→36 solved,
+2 suite sats alia_005/alra_010 → unknown). RECOMMENDATION: (a) the floor is the
+soundness prerequisite for entering these divisions — enable it whenever entering
+QF_ALIA/AUFLIA; (b) PRIORITIZE #12 combination model construction to recover the
+over-floored genuine sats (turns sound-but-low-solve into sound-AND-complete);
+(c) keep default-OFF until #12 lands (else suite 661→659 + ~18% AUFLIA solve loss).
+The 4 QF_UFLIA Wisa false-SATs are a SEPARATE EUF-soundness blocker (#17) with NO
+clean floor — QF_UFLIA CANNOT be entered until fixed at the EUF level.
+
+## ★★★ ENTRY-READINESS EVIDENCE (task #14 — for the master's division-entry call)
+Gate to enter a division: 0-unsound AND P(bug)<33%. My job = the evidence below.
+All numbers are family-split samples vs z3 (NOT full corpus — directional).
+
+| division | sample solved | 0-unsound? | gap class | entry posture |
+|----------|---------------|-----------|-----------|---------------|
+| QF_AX | 67/76 (88%) w/ array-fix ON | YES (MISMATCH 0) | array completeness mostly closed; residual = storecomm/swap (9) | STRONG: pure-array, fix shipped, 0-unsound across sample + 33 reg + 661 full reg. Promote XOLVER_AX_EXT_WITNESS_COMPLETE → enter. |
+| QF_UF | 55/99 (56%) | YES (MISMATCH 0) | EUF perf — 44 transitivity-diamond TIMEOUTS (not unknowns) | SOUND but perf-limited. Entry safe (0-unsound); solve-count gated on e-propagation (diagnosed, deferred). Half-won. |
+| QF_ALIA | 17/100 (17%) | NO — 1 false-SAT (read2) | array+LIA combination perf/completeness | BLOCKED on soundness: floor (XOLVER_ARRAY_COMB_VALIDATE_SAT) fixes read2 → then 0-unsound but low solve-rate (combination perf). Enter only floor-ON. |
+| QF_AUFLIA | 53/92 (58%) | NO — 9 false-SATs (all floorable) | array+UF+LIA | BLOCKED on soundness: 9 false-SATs → floor-ON makes 0-unsound (cost: measuring genuine-sat loss). Highest combination solve-rate; promising once floored. |
+| QF_UFLIA | 31/80 (39%) | NO — 4 Wisa false-SATs (NOT floorable) | UF+LIA combination | BLOCKED: 4 EUF Wisa false-SATs need EUF-soundness fix (#17), no clean floor. DO NOT ENTER until fixed. |
+| QF_UFLRA | 34/61 (56%) | YES (MISMATCH 0) | UF+LRA combination, perf-limited | SOUND. Entry-safe (0-unsound); perf-limited solve-rate. The only CLEAN combination division. |
+| QF_DT / QF_UFDT | NO CORPUS in-tree (12 reg cases only) | reg 0-unsound | — | CANNOT audit locally — needs corpus on E/panda before any entry call |
+
+KEY: **the cross-division audit's headline = a SOUNDNESS problem, not a perf one.**
+4 of 6 audited combination/array divisions have pre-existing false-SATs (QF_ALIA 1,
+QF_AUFLIA 9, QF_UFLIA 4); only QF_UF, QF_AX, QF_UFLRA are 0-unsound as-is. The
+array floor makes QF_ALIA+QF_AUFLIA sound (10 false-SATs → unknown). QF_UFLIA's 4
+Wisa false-SATs are an EUF-soundness blocker (#17). STRONGEST entry candidates:
+QF_AX (fix shipped, 88%, 0-unsound), QF_UFLRA (56%, 0-unsound clean), QF_UF (56%,
+0-unsound). NONE of the false-SAT divisions may be entered until floored/fixed.
+
+## ★★ NEW LANE (2026-05-29): cross-division capability audit (EUF/array/combination/DT)
+Mission: raise my solvers across the ~12 divisions they serve. The PURE divisions
+(QF_UF/AX/ALIA/AUFLIA/UFLIA/UFLRA/DT/UFDT) are NOT NIA/NRA-bound — the bottleneck
+there is MY solvers. Data-first audit (family-split sample @24s, ulimit -v 3000000,
+-j2, foreground) → fix highest-leverage my-lane gaps → entry-readiness evidence.
+Tooling: `eval.select --per-family-cap K --val-fraction 0.5` (cat train+val =
+family-balanced sample) → `tools/run_benchmark.py --file-list --compare-with z3
+--oracle-cache` → `NOTES/inv_parse.py`. Oracle binaries: z3 + cvc5 both present.
+
+### AUDIT RESULTS (family-split samples vs z3)
+| logic | sample | xolver solved | z3 | unsound | top loss family | gap class |
+|-------|--------|--------------|----|---------| ---------------|-----------|
+| QF_AX | 76 | 41 (54%) | 76 | **0** | storeinv (~all unk), storecomm, swap | array completeness (missed-axiom floor) |
+| QF_UF | 99 | 55 (56%) | 98 | **0** | eq_diamond 12, NEQ 11, PEQ 11, SEQ 5 (all TIMEOUT) | EUF perf (cc + SAT-search on transitivity diamonds) |
+| QF_ALIA | 100 | 17 (17%) array-fix ON | 100 | **1** (read2, floorable) | recoverable-slow 45 (combination timeout), recoverable 20 | array+LIA combination perf/completeness + read2 false-SAT |
+| QF_AUFLIA | 92 | 53 (58%) array-fix ON | 92 | **9** (all floorable) | recoverable 16, recoverable-slow 14 | array+UF+LIA: 9 pre-existing false-SATs (floored by XOLVER_ARRAY_COMB_VALIDATE_SAT) |
+| QF_UFLIA | 80 | 31 (39%) | 80 | **4** (Wisa, NOT floorable) | recoverable-slow 33 (combination timeout), other 12 | UF+LIA: 4 Wisa false-SATs (EUF soundness #17), 33 combination-perf timeouts |
+| QF_UFLRA | 61 | 34 (56%) | 61 | **0** | recoverable-slow 16, recoverable 2, other 9 | UF+LRA combination — CLEAN (0-unsound), perf-limited |
+
+**QF_ALIA — SOUNDNESS BUG FOUND + FIXED (task #16):** audit surfaced
+`QF_ALIA/cvc/read2.smt2` = **DEFAULT-PATH false-SAT** (xolver=sat, z3=unsat),
+PRE-EXISTING (sat OFF and ON — my Ext-witness flag did NOT cause it), NOT in the
+regression suite (escaped the 661/661 gate). It is the documented read2
+conflict-stickiness residual (N-O arrangement declares consistent while a found
+conflict escaped). Per user directive "就算pre-existing也要解决" + 0-unsound
+paramount, FIXED via `arrayCombSatFloor` (Solver.cpp, flag
+XOLVER_ARRAY_COMB_VALIDATE_SAT): QF_ALIA/ALRA/AUFLIA/AUFLRA SAT requires POSITIVE
+ModelValidator confirmation (invariant 1) → read2's unconfirmable model
+downgrades to unknown (VERIFIED: read2 sat→unknown under flag, sat with opt-out).
+**DEFAULT-OFF + promotion gate (campaign policy: no default-ON until genuine-sat
+losses recover).** Default-ON today regresses 2 GENUINE sats to unknown:
+alia_005_sat_read_fallthrough + alra_010_sat_selfstore_nested_row2 (suite
+661→659). Root cause of the over-floor: the combined model is INDETERMINATE to
+the validator — declared array vars lack an interp AND/OR asserted-distinct
+scalars (alia_005: i≠j) default to 0=0 → spurious violation; CandidateModelSearch
+has NO array support so recovery fails. PROMOTION (default-ON + final-all-on)
+GATED on #12 N-O valid model construction: assign asserted-distinct scalars
+distinct values + emit interps for declared arrays so genuine sats validate
+positively while read2 stays Violated→unknown. read2's correct-unsat recovery =
+deeper N-O conflict-stickiness (structural, open). NET NOW: read2 false-SAT
+eliminated under the flag (and in the final all-flags-ON build); default path
+keeps the green suite; promotion path tracked. Engaged, not walked away.
+**FAILED promotion attempt (don't retry):** hypothesized the over-floor was just
+missing array interps → added empty default interps for declared arrays in
+modelPositivelyValidates. alia_005/alra_010 STILL unknown flag-ON (read2 stayed
+floored, good). So the gap is NOT merely the array interp — it is the deeper
+combined-model construction (distinct asserted-diseq scalars in the typed
+channel + array model with matching var-namespacing across getModel/IR/validator).
+Reverted (ineffective). Default-ON promotion = genuine #12 work. Beyond read2, QF_ALIA
+is far from won (17/100): 45 recoverable-slow = combination-perf timeouts, 20
+instant recoverable = combination completeness gaps (next slices).
+
+**QF_UF deep-dive (task #10, EUF perf):** 0-unsound, 55/99. ALL 44 losses are
+TIMEOUTS (zero unknown) → PERFORMANCE, not incompleteness. Concentrated in the
+synthetic equality-stress families eq_diamond/NEQ/PEQ/SEQ (Strichman-Rozanov
+"minimum transitivity constraints for equality logic"). eq_diamond1 (trivial
+`(not (= x0 x0))`) solves instantly; the sampled eq_diamond27..96 (95-302 lines)
+are real transitivity chains → exponential without good conflict-learning /
+transitivity-constraint generation. DEEPER + single-division + riskier than the
+array lever. Documented; deferred behind the array fix.
+
+**★ PROFILE (gdb SIGINT, 6 samples, eq_diamond27) — REFUTES cc/union-find
+hypothesis.** Solve runs on a worker thread; ALL hot frames are in CaDiCaL, NONE
+in congruence-closure/union-find:
+- ~3/6 CaDiCaL inprocessing: `Closure::find_subsuming_clause` ←
+  `forward_subsume_matching_clauses` ← `extract_gates` ← `inprobe` ←
+  `cdcl_loop_with_inprocessing` (structural gate extraction / forward subsumption).
+- ~2/6 conflict-analysis→backtrack: `analyze` → `backtrack` → `notify_backtrack`
+  → `EufSolver::backtrackToLevel` (EUF only shows up as cheap backtrack bookkeeping).
+- ~1/6 `external_propagate` → `add_external_clause` → `add_new_original_clause`.
+ROOT CAUSE = lazy-SMT search explosion from MISSING EUF THEORY PROPAGATION: EUF
+emits only conflict/blocking clauses (no entailed-(dis)equality propagation), so
+CaDiCaL enumerates a huge tree → many conflicts → growing clause DB → expensive
+inprocessing. RollbackUnionFind is union-by-size O(log n) — NOT the bottleneck.
+Framework HAS the hook (`TheorySolver::takeEntailmentPropagations`, used by LRA
+via XOLVER_LRA_PROP, kind=Entailment); EufSolver does NOT override it.
+TWO LEVERS:
+- QUICK (TESTED → FAILED, reverted): `configure("probe",0)`. Measured on
+  eq_diamond27/35/41 + NEQ/PEQ: ALL still timeout OFF==ON. The search thrash
+  (analyze/backtrack, ~1/3 of samples) dominates independent of inprocessing, so
+  killing probing doesn't convert any diamond. Reverted (no value, keep tree clean).
+- DEEP (right fix): EUF e-propagation — propagate entailed equality atoms
+  (find(a)==find(b)) so the SAT solver never branches on chain equalities.
+  SOUND-BY-CONSTRUCTION recipe: propagation is OPTIONAL, so verify-then-emit —
+  before propagating, re-check via union-find over the explainEquality reason set
+  that the reasons actually entail the merge (mirrors TheoryManager::
+  conflictIsGenuine, TheoryManager.cpp:253); skip if unverified. A bad/incomplete
+  proof-forest explanation → missed propagation, NEVER false-UNSAT. Atom pool is
+  reachable via `registry_->records()`; combination mode already excluded
+  (TheoryManager.cpp:206) → scopes cleanly to pure QF_UF.
+  **WIRING BLOCKER (why deferred to a dedicated pass):** `takeEntailmentPropagations`
+  is DEFINED (LraSolver+TheoryManager) but NEVER DRAINED — the propagator does not
+  call it. And `cb_propagate` DROPS lemmas at Standard effort
+  (CadicalTheoryPropagator.cpp:464 `(void)isLemma` — only CONFLICT clauses
+  propagate during search; lemmas only flow from cb_check_found_model = full
+  model, too late to prune). True implied-LITERAL propagation (return the entailed
+  literal + lazy reason via CaDiCaL's cb_propagate-returns-lit + cb_add_reason_
+  clause_lit protocol) is UNIMPLEMENTED. So this lever = a core CaDiCaL-external-
+  propagator change, soundness-sensitive (division-sinking false-UNSAT risk if the
+  reason clause is wrong) → dedicated focused pass, NOT a rushed tail-end edit
+  (0-unsound is paramount). DIAGNOSIS COMPLETE; design + blocker handed off.
+
+**QF_AX deep-dive (TOP LEVER so far):** 0-unsound, 41/76 solved. The 35 losses
+(32 unknown + 3 timeout) ALL hit `array: SAT model violates an original assertion
+(missed array axiom instance) — gated to Unknown (sound)` (Solver.cpp:1526). The
+EUF/ArrayReasoner theory layer returns SAT before instantiating all needed
+read-over-write/extensionality instances; the post-solve ModelValidator catches
+the spurious model and the sound floor downgrades to unknown. BOTH directions hit
+it: sat cases (model spurious→would be valid with the missing instance) AND unsat
+cases (e.g. storeinv_t1: `(= nested-store nested-store) ∧ a1≠a2` → should be UNSAT
+but reasoner declares SAT, model violates → unknown).
+ROOT CAUSE HYPOTHESIS (ArrayReasoner.cpp:199): the fresh Extensionality witness k
+(minted for a1≠a2) is EXCLUDED from `completeStoreSelects` read-indices — so
+select(store-tower, k) is never interned, the witness never propagates THROUGH a
+positive store-equality hypothesis, and the contradiction/refinement is missed.
+Exclusion was a stability choice (witnesses fanning across every array
+destabilized storecomm genuine-sats). FIX = include witness k in completion but
+BOUND the target arrays to k's own disequality arrays (a1,a2 + towers equated to
+them), behind a default-OFF flag. Targets: storeinv + read2/read5 regression;
+guard: storecomm must not regress. → task #11.
+
+**FIX IMPLEMENTED (pending build+test): `XOLVER_AX_EXT_WITNESS_COMPLETE`
+(default-OFF), ArrayReasoner.{h,cpp}.** The witness k was blocked from completion
+by TWO gates: completeStoreSelects skips internalSelect_ (line 194 — Ext's own
+select(a,k)/select(b,k) are internal) AND skips extWitnessIdx_ (line 199). So I
+capture the interned witness INDEX term id at Ext mint time
+(extWitnessIdxTerms_), and under the flag append those to readIdx directly —
+completion then reads k across all array terms (store towers included), so Row2
+peels select(tower,k) → select(a,k)/select(b,k), congruence on the equal towers
+contradicts the Ext disequality → storeinv closes. Bounded (1 witness/diseq pair
+× finite arrays, deduped), sound (only tautological selects, never assertions;
+model-validation floor stays as backstop).
+
+**★ VERIFIED WIN (2026-05-29):** flag ON converts all sampled storeinv cases
+unknown→correct verdict (unsat→unsat, sat→sat, vs z3). **QF_AX slice: 41/76 →
+67/76 (+26 solved), MISMATCHES 0, DIFFS 35→9.** Array regression (ax/alia/alra/
+auflia/auflra, 33 cases) 33/33 PASS OFF + 33/33 PASS ON. storecomm no-regress
+(covered by the slice re-measure). Full reg flag-ON 0-unsound gate: running.
+Residual 9 (7 unknown + 2 timeout) = swap-family timeouts + a few harder unknowns
+(next slice). Promotion: default-OFF now; server z3-diff QF_AX/ALIA/AUFLIA full
+corpus, then default-ON (final = all-on).
+
 ## ★ MASTER HANDOFF SUMMARY (2026-05-29, branch agent/eqna-2)
 Full EQ+NA inventory done (UFNRA/AUFNIA/UFDTNIA/ANIA + UFNIA sample). **0 unsound
 everywhere.** Finding: after my 2 routing fixes, the EQ+NA medal is
