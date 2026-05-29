@@ -172,4 +172,48 @@ TEST_CASE("free infinite vars: distinct lists is sat without splitting") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
+// ---- Tester on a DIFFERENT constructor must be refuted ------------------
+// Regression for the QF_DT tester-on-constructor false-SAT class: the indexed
+// tester (_ is C) must be recognized as a datatype tester (not an opaque UF
+// apply) and refuted when applied to a known different constructor.
+
+TEST_CASE("tester clash: is_cons(null) is false -> unsat") {
+    // null is the `null` constructor of Lst, not cons.
+    Result r = solveDt(
+        "(set-logic QF_DT)\n"
+        "(declare-datatypes ((nat 0)(Lst 0)) "
+        "(((succ (pred nat)) (zero)) ((cons (car nat) (cdr Lst)) (null))))\n"
+        "(assert ((_ is cons) null))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("tester clash on applied ctor over mutual datatypes: is_node(leaf ..) -> unsat") {
+    // leaf and node are both `tree` constructors; is_node(leaf ...) is false.
+    Result r = solveDt(
+        "(set-logic QF_DT)\n"
+        "(declare-datatypes ((nat 0)(Lst 0)(tree 0)) (\n"
+        "  ((succ (pred nat)) (zero))\n"
+        "  ((cons (car tree) (cdr Lst)) (null))\n"
+        "  ((node (children Lst)) (leaf (data nat)))))\n"
+        "(declare-fun x () nat)\n"
+        "(assert ((_ is node) (leaf (data x))))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("tester matches its own applied ctor: is_cons(cons ..) -> not unsat") {
+    // Guards the false-UNSAT direction: the tester's TARGET constructor (cons)
+    // must match the class constructor (cons) and NOT conflict.
+    Result r = solveDt(
+        "(set-logic QF_DT)\n"
+        "(declare-datatypes ((nat 0)(Lst 0)(tree 0)) (\n"
+        "  ((succ (pred nat)) (zero))\n"
+        "  ((cons (car tree) (cdr Lst)) (null))\n"
+        "  ((node (children Lst)) (leaf (data nat)))))\n"
+        "(assert ((_ is cons) (cons (leaf zero) null)))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
+
 } // TEST_SUITE
