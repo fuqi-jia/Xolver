@@ -27,6 +27,9 @@ LraSolver::LraSolver() {
     // SAT solver during search. Read once.
     const char* prop = std::getenv("XOLVER_LRA_PROP");
     lraPropEnabled_ = (prop && *prop && *prop != '0');
+    // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
+    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
+    impliedEqEnabled_ = (impl && *impl && *impl != '0');
 }
 
 LraSolver::~LraSolver() {
@@ -587,12 +590,148 @@ LraSolver::getDeducedSharedEqualities() {
         sharedVars.push_back(stId);
     }
     std::vector<TheorySolver::SharedEqualityPropagation> result;
-    for (size_t i = 0; i < sharedVars.size(); ++i) {
-        for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+    const int n = static_cast<int>(sharedVars.size());
+
+    // Direct-pair edges: assertedVarEqualityReason catches both explicit
+    // 2-var Eq atoms and complementary-bound pairs that pin (a - b) to 0.
+    std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j < n; ++j) {
             auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
             if (reasons.empty()) continue;
+            adj[i].push_back({j, reasons});
+            adj[j].push_back({i, reasons});
+            // Always emit direct pairs (current behavior).
             result.push_back(TheorySolver::SharedEqualityPropagation{
                 sharedVars[i], sharedVars[j], std::move(reasons)});
+        }
+    }
+
+    // Track 2b (XOLVER_SIMPLEX_IMPLIED_EQ): closure beyond per-pair direct
+    // detection. Two sub-passes, deduped against each other and against the
+    // direct pairs emitted above:
+    //   Step 1 (transitivity): chain of asserted equalities through the
+    //     shared-var graph (x=z and z=y -> x=y) — chain reasons are the union
+    //     of SatLits along the BFS path. Sound by construction.
+    //   Step 2 (polyhedral implied-eq): aux-var tight-bound query — for each
+    //     existing interface aux var (the (a, b) pairs EUF already cares
+    //     about), if the simplex bound-propagation engine pins it to 0 on
+    //     BOTH sides, emit a = b with the union of lower + upper bound
+    //     reasons. Sound because the engine derives bounds from tableau rows
+    //     (Farkas-traceable), valid in every feasible model — not just the
+    //     current vertex. Free pairs (no tight bound, no equality
+    //     implication) are NOT emitted: the engine never derives a 0 bound
+    //     unless the constraints force it.
+    auto pairKey = [](int a, int b) -> uint64_t {
+        int lo = std::min(a, b), hi = std::max(a, b);
+        return (static_cast<uint64_t>(lo) << 32) | static_cast<uint32_t>(hi);
+    };
+    std::unordered_set<uint64_t> emittedPair;
+    for (int i = 0; i < n; ++i)
+        for (const auto& [j, rs] : adj[i])
+            if (i < j) emittedPair.insert(pairKey(i, j));
+    if (impliedEqEnabled_ && n > 2) {
+        // For each shared var i, BFS the equality graph. For every shared j>i
+        // reachable through a chain of >=2 edges (not already a direct edge),
+        // emit eq(i,j) with the concatenated, deduped reasons of the path.
+        for (int i = 0; i < n; ++i) {
+            std::vector<int> parent(n, -1);
+            std::vector<std::vector<SatLit>> edgeRs(n);
+            std::vector<int> bfs;
+            parent[i] = i;
+            bfs.push_back(i);
+            for (size_t head = 0; head < bfs.size(); ++head) {
+                int u = bfs[head];
+                for (const auto& [v, rs] : adj[u]) {
+                    if (parent[v] != -1) continue;
+                    parent[v] = u;
+                    edgeRs[v] = rs;
+                    bfs.push_back(v);
+                }
+            }
+            for (int j = i + 1; j < n; ++j) {
+                if (parent[j] == -1) continue;
+                if (emittedPair.count(pairKey(i, j))) continue;
+                // Reconstruct + dedup chain reasons.
+                std::vector<SatLit> chain;
+                for (int cur = j; cur != i; cur = parent[cur])
+                    for (SatLit s : edgeRs[cur]) chain.push_back(s);
+                std::sort(chain.begin(), chain.end(),
+                    [](SatLit a, SatLit b) {
+                        if (a.var != b.var) return a.var < b.var;
+                        return a.sign < b.sign;
+                    });
+                chain.erase(std::unique(chain.begin(), chain.end(),
+                    [](SatLit a, SatLit b) {
+                        return a.var == b.var && a.sign == b.sign;
+                    }), chain.end());
+                emittedPair.insert(pairKey(i, j));
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    sharedVars[i], sharedVars[j], std::move(chain)});
+            }
+        }
+    }
+
+    // Step 2: polyhedral implied-eq via the bound-propagation engine. PROACTIVE:
+    // we ensure an interface aux var exists for every shared-var pair before
+    // querying the engine, so the polyhedron can pin (a - b) to 0 without EUF
+    // having asked about (a, b) first (the chicken-and-egg with direct EUF
+    // queries). Aux creation is idempotent via interfaceEqAuxVars_ — first call
+    // grows the tableau by O(N choose 2) auxes; subsequent calls only query.
+    // Bounded: shared-var count is small for combination workloads (Wisa-class
+    // ~10), so the aux pool is ~50 in practice.
+    if (impliedEqEnabled_ && n >= 2) {
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j)
+                getOrCreateInterfaceEqAuxVar(sharedVars[i], sharedVars[j]);
+
+        std::unordered_map<SharedTermId, int> sharedTermToIdx;
+        sharedTermToIdx.reserve(sharedVars.size());
+        for (int k = 0; k < n; ++k) sharedTermToIdx[sharedVars[k]] = k;
+
+        auto derived = propagationEngine_.propagateAll(gs_);
+        // For each aux var, remember whether the engine derived a tight 0
+        // bound on each side and the reasons. The engine reports a derived
+        // bound whose DeltaRational has rational part .a and delta part .b;
+        // a bound that pins to exactly zero (a == 0 AND b == 0) is what we
+        // need — a strict (delta-bearing) bound is NOT an equality witness.
+        struct ZeroBound { bool have = false; std::vector<SatLit> reasons; };
+        std::unordered_map<int, std::pair<ZeroBound, ZeroBound>> auxZero;  // var -> (lower, upper)
+        for (const auto& eb : derived) {
+            if (!(eb.value.a == 0 && eb.value.b == 0)) continue;
+            auto& slot = auxZero[eb.var];
+            (eb.isLower ? slot.first : slot.second) = {true, eb.reasons};
+        }
+
+        for (const auto& [pk, aux] : interfaceEqAuxVars_) {
+            if (aux < 0) continue;  // const-conflict / unmapped aux
+            auto zit = auxZero.find(aux);
+            if (zit == auxZero.end()) continue;
+            if (!zit->second.first.have || !zit->second.second.have) continue;
+            SharedTermId lo = static_cast<SharedTermId>(pk >> 32);
+            SharedTermId hi = static_cast<SharedTermId>(pk & 0xFFFFFFFFu);
+            auto liIt = sharedTermToIdx.find(lo);
+            auto hiIt = sharedTermToIdx.find(hi);
+            if (liIt == sharedTermToIdx.end() || hiIt == sharedTermToIdx.end()) continue;
+            int i = liIt->second, j = hiIt->second;
+            uint64_t k = pairKey(i, j);
+            if (emittedPair.count(k)) continue;
+            std::vector<SatLit> rs = zit->second.first.reasons;
+            rs.insert(rs.end(),
+                      zit->second.second.reasons.begin(),
+                      zit->second.second.reasons.end());
+            std::sort(rs.begin(), rs.end(),
+                [](SatLit a, SatLit b) {
+                    if (a.var != b.var) return a.var < b.var;
+                    return a.sign < b.sign;
+                });
+            rs.erase(std::unique(rs.begin(), rs.end(),
+                [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), rs.end());
+            emittedPair.insert(k);
+            result.push_back(TheorySolver::SharedEqualityPropagation{
+                sharedVars[i], sharedVars[j], std::move(rs)});
         }
     }
     return result;

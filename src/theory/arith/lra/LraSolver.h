@@ -167,6 +167,17 @@ private:
     bool lraPropEnabled_ = false;
     std::vector<TheoryLemma> entailmentProps_;
 
+    // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): emit transitively-closed and/or
+    // polyhedrally-implied shared equalities through the Nelson-Oppen channel,
+    // not just the directly-asserted 2-var pairs the per-pair detector finds.
+    // Step 1 (transitivity): closes chains of asserted equalities (x=z and z=y
+    // -> x=y) over the shared-var graph; chain reasons are the union of the
+    // edge SatLits along the BFS path. Step 2 (polyhedral): aux-var tight-bound
+    // query — emits a=b when the simplex bound-propagation engine proves
+    // (a-b) in [0,0] across the whole polyhedron (every feasible model). Read
+    // once in the ctor.
+    bool impliedEqEnabled_ = false;
+
     // cb_decide feasibility-eval cache (v2): per atom satVar, the STATIC linear
     // form as (var-NAME, double coeff) pairs + double rhs + relation, resolved
     // ONCE from the atom record (the expensive findBySatVar / payload step).

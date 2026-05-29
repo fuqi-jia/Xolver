@@ -140,6 +140,11 @@ private:
     std::unordered_set<uint64_t> diseqBranchAuthorized_;
     bool safeMode_ = false;
     bool ultraSafeMode_ = false;
+    // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): augment getDeducedSharedEqualities
+    // with transitive closure of the variable-variable implied-eq graph. Closes
+    // chains x = z and z = y -> x = y over the shared-var graph; reasons are the
+    // union of SatLits along the BFS path. Sound by construction.
+    bool impliedEqEnabled_ = false;
     mutable int dumpCounter_ = 0;
 
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
