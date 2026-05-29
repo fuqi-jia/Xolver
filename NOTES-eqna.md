@@ -37,11 +37,18 @@ never saw it. THREE coordinated fixes:
 RESULT: QF_DT 54-sample UNSOUND **11→2** (correct 10→19); all 9 Barrett-jsat
 tester-on-constructor false-SATs → correct unsat. Gates: full reg 661/661 (global
 parser change clean), DT reg 12/12, unit 895/895, **0 new unsound**.
-RESIDUAL (2 blocksworld BMC, still false-SAT — #20): separate/harder DT class at
-BMC scale (656L, 54 testers, declare-datatype singular); not the tester-on-
-constructor bug. PENDING: SOMTParser gitlink bump (-> 2dd6dae) in the real
-NLColver checkout — the worktree's third_party/SOMTParser is a SYMLINK (type-change
-T) so the gitlink can't be committed here without corruption → master bumps it.
+RESIDUAL #20 (2 blocksworld BMC, still false-SAT) — DIAGNOSED: a DT COMPLETENESS
+gap, NOT the tester bug. Traced: DT terms register (ctor=99 tester=15 sel=51), so
+the tester fix applies here too — but DtReasoner returns Consistent (no conflict)
+on a genuinely-unsat BMC. The lazy axioms (clash/inj/proj/tester/acyclicity) miss
+the selector/tester/recursive-Tower interaction (24-Enum, recursive Tower
+stack/empty, top/rest selectors, 102 ites at BMC depth) that makes it unsat. TWO
+fixes (deep, differential-gated): (A) DT MODEL-VALIDATOR floor = sound backstop for
+ALL DT false-SATs (none exists; ArithModelValidator doesn't cover DT); (B) complete
+the DT procedure (exhaustive split + selector reasoning) = recovers correct unsat.
+Differential-gate: assess via QF_UFDTNIA on eb0644c whether the BMC class reaches
+the SUBMITTED division before investing. QF_DT off submission list until closed.
+SOMTParser gitlink bump DONE by master (eb0644c -> 2dd6dae); not pending.
 
 ## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
 The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
