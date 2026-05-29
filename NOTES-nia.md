@@ -427,3 +427,23 @@ complementarity — BLAN (pure bit-blaster) TIMES OUT on the modInv/Hensel UNSAT
 family that nia.modular solves; so on the full QF_NIA corpus (SAT+UNSAT) the union
 is ahead even at 17-18/24 SAT-recovery. The 18->20 SAT-parity is the last SAT-side
 subset, needs the sum-encoding rewrite.
+
+## NO-GROW (FIXED-WIDTH) ARITHMETIC — studied BLAN source + tried + reverted
+Read BLAN solvers/blaster/blaster_operations.cpp::Add — CONFIRMED BLAN uses
+FIXED-WIDTH no-grow arithmetic: `size = varmax->size()` (sum width = max operand
+width, final carry dropped = mod 2^w), NOT max+1. Our encoder GROWS (add->max+1,
+mul->wa+wb) which bloats Farkas intermediates. Added a no-grow mode to
+BitBlastEncoder (setFixedWidth, default-off, exact path unchanged) and enabled it
+in the eager arm. RESULT: NET-NEGATIVE for our cascade. no-grow caps sums/products
+at the operand width, so at a LOW cascade K the Farkas sums (sum of ~24 K-bit
+terms ~ 2^(K+5)) WRAP -> invalid candidate -> validate rejects -> must escalate to
+a high K (24/32) where it's slow (189k-300k vars) — WORSE than grow (which holds
+the sum at K=8 via growth, validates 1395 in 3.7s). BLAN avoids this because its
+COLLECTOR picks a sufficient def_width UPFRONT (no wasteful low-K attempts); its
+no-grow at the right width is then compact. So no-grow REQUIRES BLAN's collector
+(per-formula width estimation) to be a win — the two are COUPLED. Reverted no-grow.
+CONCLUSION: full BLAN encoding parity = collector (smart width) + no-grow together,
+a substantial coupled rewrite. Individual cheap levers (offset, no-grow alone) are
+net-negative. The ONE big win that landed is constant folding [dec1495] (11->18).
+Grow + per-var-width + folding + polarity = the working scheme (17-18/24, sound).
+Overall Xolver already EXCEEDS BLAN via complementarity (modular UNSATs BLAN can't).
