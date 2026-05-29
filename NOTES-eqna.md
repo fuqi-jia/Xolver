@@ -49,6 +49,16 @@ the DT procedure (exhaustive split + selector reasoning) = recovers correct unsa
 Differential-gate: assess via QF_UFDTNIA on eb0644c whether the BMC class reaches
 the SUBMITTED division before investing. QF_DT off submission list until closed.
 SOMTParser gitlink bump DONE by master (eb0644c -> 2dd6dae); not pending.
+ORACLE-BLIND FLAG (master ask, QF_UFDTNIA 24-sample, 15s xolver/z3/cvc5):
+11/24 oracle-blind (z3 AND cvc5 undecided) — large hard-for-everyone class the
+differential can't catch — BUT xolver returns 0 DEFINITE verdicts on them (all
+?/timeout); zero false answers in the whole sample (1 agreed unsat, rest timeout).
+QF_UFDTNIA is NIA-TIMEOUT-dominated (Certora EVM, the NIA-engine hang), so the DT
+layer never reaches a verdict on the oracle-blind cases → no oracle-blind DT
+false-SAT today. (A) DT model-validator floor NOT forced by oracle-blindness in
+this sample, but stays the MANDATED backstop the instant any DT false-SAT appears
+(differential-caught, or oracle-blind at the 1200s timeout where xolver may start
+deciding). Decision rule unchanged. Tool: NOTES/oracle_blind.py.
 
 ## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
 The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
