@@ -159,6 +159,34 @@ TEST_CASE("intervalFromCharacterization: leaf rational nullification -> skip (wh
     CHECK(r.interval.contains(Q(-1000)));
 }
 
+TEST_CASE("intervalFromCharacterization: square-free reduction preserves ALL roots (no too-big cell)") {
+    // ★ Soundness, the UNSOUND direction: the witness square-free reduction must
+    // never DROP a genuine root boundary (that would enlarge the cell ⇒ claim
+    // sign-invariance across a real root ⇒ false-UNSAT / wrong sample). Two
+    // boundary polys stress exactly what the reduction touches:
+    //   p1 = (y-1)^2 (y-2)  — a REPEATED factor (y-1) the square-free step collapses
+    //   p2 = (y-1)(y+3)     — a SHARED factor (y-1) the cross-poly dedup removes
+    // Genuine roots are {-3, 1, 2}. Sample y=-2 sits in (-3, 1); the cell must be
+    // bounded by BOTH neighboring roots — proving neither the collapsed multiplicity
+    // (root 1) nor the deduped/other factor (root -3) was lost.
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId y = kernel->getOrCreateVar("y");
+    auto lin = [&](long r) { RationalPolynomial p; p.addVar(y, 1, 1); p = p + konst(-r); p.normalize(); return p; };
+    RationalPolynomial p1 = lin(1) * lin(1) * lin(2);   // (y-1)^2 (y-2)
+    RationalPolynomial p2 = lin(1) * lin(-3);           // (y-1)(y+3)
+    p1.normalize(); p2.normalize();
+    SamplePoint prefix;   // y is level 0: empty prefix
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {p1, p2},
+                                          prefix, y, RealAlg::fromRational(mpq_class(-2)));
+    REQUIRE(r.supported);
+    CHECK(r.interval.contains(Q(-2)));        // sample inside
+    CHECK(r.interval.contains(Q(0)));         // interior of (-3, 1)
+    CHECK_FALSE(r.interval.contains(Q(-4)));  // PAST root -3 ⇒ -3 NOT dropped (cross-poly dedup safe)
+    CHECK_FALSE(r.interval.contains(Q(1)));   // bounded by root 1 (collapsed (y-1)^2 still a boundary)
+    CHECK_FALSE(r.interval.contains(Q(2)));   // root 2 is beyond the (-3,1) cell
+}
+
 TEST_CASE("intervalFromCharacterization: positive-definite x^2+1 -> whole axis") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend backend(kernel.get());

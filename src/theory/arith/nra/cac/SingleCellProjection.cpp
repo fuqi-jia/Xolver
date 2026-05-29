@@ -235,6 +235,27 @@ CellResult intervalFromCharacterization(
             auto norm = rp.toPrimitiveInteger(*kernel);
             if (!norm.ok()) return bail("toPrim");
             if (kernel->isConstant(norm.poly)) continue;
+            // A constraint's NULLIFICATION is a whole-poly property, so the vanish
+            // decision (step 1) must see the ORIGINAL poly — not its factors.
+            // Square-free factoring splits a poly that vanishes on the fiber into a
+            // vanishing factor and (possibly) NON-vanishing ones: e.g. (x-1)*y at
+            // x=1 → {(x-1) [vanishes], y [does NOT]}. The leaf skip ("≡0 on the
+            // fiber ⇒ uniform truth ⇒ no boundary") would then fire only for the
+            // vanishing factor while `y` wrongly adds a boundary y=0 (cell too
+            // small). So only factor polys that do NOT vanish: over an integral
+            // domain ∏fᵢ≡0 ⇔ some fᵢ≡0, hence a non-vanishing poly has no vanishing
+            // factor → factoring is sound and the dedup perf win still applies to
+            // the dominant non-vanishing projection polys. Vanishing polys pass
+            // through WHOLE; step 1 decides skip (leaf) vs Lazard-residual
+            // (non-leaf) on the original constraint. (Rational prefix only:
+            // vanishesAtPrefix is Unknown for algebraic prefixes, where factoring
+            // stays at-worst conservative — cell too small, never too big — so the
+            // covering remains sound, just possibly finer.)
+            if (!prefixHasAlgebraic &&
+                algebra->vanishesAtPrefix(norm.poly, prefix, var) == VanishResult::Vanishes) {
+                reduced.push_back(rp);
+                continue;
+            }
             for (PolyId f : kernel->squareFreeFactors(norm.poly)) {
                 if (kernel->isConstant(f)) continue;
                 auto frp = RationalPolynomial::fromPolyId(f, *kernel);
