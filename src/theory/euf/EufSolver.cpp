@@ -307,9 +307,92 @@ std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
         if (t == NullEufTerm) return false;
         return coreIr_->arraySortParams(termManager_.node(t).sort).has_value();
     };
+    // Direct array disequalities (a != b asserted locally).
     for (const auto& d : disequalities_) {
         if (isArraySort(d.lhs) && isArraySort(d.rhs)) {
             out.push_back({d.lhs, d.rhs});
+        }
+    }
+
+    // Congruence-contrapositive extensionality routing (XOLVER_ARRAY_CONGR_EXT).
+    // A disequality  h(..p..) != h(..q..)  between two applications of the SAME
+    // function symbol that differ in EXACTLY ONE argument position soundly
+    // entails  arg_p != arg_q  at that position (if they were equal the apps
+    // would be congruent, hence equal, contradicting the diseq). When that arg
+    // is array-sorted we surface (arg_p, arg_q) so Extensionality splits on it
+    // (array_incompleteness1: g(a)!=g(b) ==> a!=b ==> select(a,k)!=select(b,k)).
+    //
+    // The diseq may live LOCALLY (disequalities_) or, after purification in
+    // combination, on the SHARED bus as a scalar  s1 != s2  with the egraph
+    // holding s1 = h(..p..), s2 = h(..q..). Matching disequalities by egraph
+    // CLASS (egraph_.same), not by literal endpoints, covers both — this is the
+    // "shared-bus scalar-only gap" fix.
+    //
+    // SOUNDNESS: the Ext lemma this feeds (a=b OR select(a,k)!=select(b,k)) is a
+    // tautology, so emitting it for any pair is sound regardless of whether the
+    // diseq is truly entailed; the contrapositive only governs WHICH pairs are
+    // worth splitting on (precision + termination), never the verdict. The Ext
+    // site re-checks array-sortedness as a second guard.
+    static const bool congrExt = std::getenv("XOLVER_ARRAY_CONGR_EXT") != nullptr;
+    if (congrExt) {
+        // Group application terms by (symbol, arity). Restrict to USER-declared
+        // functions: skip ALL internal symbols (#array.*, #builtin.*, #dt.*, …).
+        // Array builtins (select/store) have dedicated Row1/Row2/Ext reasoning;
+        // piggybacking the contrapositive on synthesized internal selects over a
+        // self-store class explodes Ext with fresh witness indices (alra_010).
+        // A user UF over arrays (g:Array->Int) is the genuine external observer
+        // whose result-diseq forces an array-arg diseq (array_incompleteness1).
+        std::unordered_map<uint64_t, std::vector<EufTermId>> byKind;
+        for (EufTermId t = 0; t < static_cast<EufTermId>(termManager_.termCount()); ++t) {
+            const auto& n = termManager_.node(t);
+            if (n.args.empty()) continue;
+            if (termManager_.symbolName(n.symbol).rfind("#", 0) == 0) continue;
+            uint64_t key = (static_cast<uint64_t>(n.symbol) << 8) | (n.args.size() & 0xff);
+            byKind[key].push_back(t);
+        }
+        auto appsKnownDisequal = [&](EufTermId t1, EufTermId t2) -> bool {
+            auto match = [&](const ActiveDisequality& d) {
+                return (egraph_.same(t1, d.lhs) && egraph_.same(t2, d.rhs)) ||
+                       (egraph_.same(t1, d.rhs) && egraph_.same(t2, d.lhs));
+            };
+            for (const auto& d : disequalities_)       if (match(d)) return true;
+            for (const auto& d : sharedDisequalities_) if (match(d)) return true;
+            return false;
+        };
+        std::unordered_set<uint64_t> emitted;
+        for (auto& kv : byKind) {
+            auto& apps = kv.second;
+            for (size_t p = 0; p < apps.size(); ++p) {
+                for (size_t q = p + 1; q < apps.size(); ++q) {
+                    EufTermId t1 = apps[p], t2 = apps[q];
+                    // Trigger only on SCALAR-result user applications (e.g.
+                    // g:Array->Int). A user UF returning an ARRAY (h:X->Array) being
+                    // disequal is itself array-level — handled by the direct
+                    // array-diseq scan above — so skip it here to avoid redundant
+                    // Ext fan-out.
+                    if (isArraySort(t1)) continue;
+                    if (egraph_.same(t1, t2)) continue;
+                    if (!appsKnownDisequal(t1, t2)) continue;
+                    const auto& a1 = termManager_.node(t1).args;
+                    const auto& a2 = termManager_.node(t2).args;
+                    if (a1.size() != a2.size()) continue;
+                    int diffPos = -1;
+                    bool single = true;
+                    for (size_t i = 0; i < a1.size(); ++i) {
+                        if (egraph_.same(a1[i], a2[i])) continue;
+                        if (diffPos != -1) { single = false; break; }
+                        diffPos = static_cast<int>(i);
+                    }
+                    if (!single || diffPos == -1) continue;
+                    EufTermId pArg = a1[diffPos], qArg = a2[diffPos];
+                    if (!isArraySort(pArg) || !isArraySort(qArg)) continue;
+                    uint64_t lo = pArg < qArg ? pArg : qArg;
+                    uint64_t hi = pArg < qArg ? qArg : pArg;
+                    uint64_t dk = (lo << 32) | hi;
+                    if (!emitted.insert(dk).second) continue;
+                    out.push_back({pArg, qArg});
+                }
+            }
         }
     }
     return out;
