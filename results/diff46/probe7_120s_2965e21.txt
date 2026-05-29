@@ -1,0 +1,13 @@
+case                                                 z3       base     cand     class         
+------------------------------------------------------------------------------------------------
+qf_Select_700_values_123.smt2                        unsat    unknown  unknown  FLOORED        (z3=0.0s base=0.1s cand=29.7s)
+int_check_bvsgt_bvlshr0_ltr_inv_g.smt2               unsat    unknown  timeout  FLOORED        (z3=0.0s base=0.1s cand=117.8s)
+int_check_bvuge_bvlshr1_rtl.smt2                     sat      unknown  timeout  FLOORED        (z3=0.0s base=0.1s cand=117.9s)
+int_check_bvugt_bvadd_ltr_inv_g.smt2                 unsat    timeout  timeout  FLOORED        (z3=0.0s base=117.9s cand=117.8s)
+int_check_bvugt_bvlshr1_rtl.smt2                     sat      unknown  timeout  FLOORED        (z3=0.0s base=0.1s cand=117.5s)
+int_check_bvugt_bvudiv1_rtl.smt2                     unsat    unknown  unknown  FLOORED        (z3=0.0s base=0.1s cand=108.2s)
+int_check_bvugt_bvurem1_rtl.smt2                     unsat    timeout  timeout  FLOORED        (z3=0.0s base=117.5s cand=117.5s)
+------------------------------------------------------------------------------------------------
+  FLOORED        7
+
+UNSOUND total: 0
