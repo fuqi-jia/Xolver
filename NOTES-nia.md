@@ -480,3 +480,54 @@ solves (120s eager -> yield -> CDCL(T) unsat in 0.07s). The solver has NO timeou
 awareness (SMT-COMP uses external wall-clock kill), so the eager budget cannot
 auto-scale; the dev-reg-ON soundness check therefore runs with a dev budget
 override. Competition binary uses the high default (or the deploy --submit env).
+
+## TRACK 4 — NIA flag inventory for master's default-ON consolidation (2026-05-29)
+One-capability-one-flag. After the differential clears each, master collapses the
+optimization flags to default-ON; soundness-floor/disable toggles stay gated.
+DELETED (superseded, on sight): XOLVER_NIA_DIVISOR_CAP (factorization replaced it),
+XOLVER_NIA_DIVISOR_FACTOR (factorization is now the unconditional default path).
+
+OPTIMIZATION flags (default-OFF now; collapse to default-ON once differential-cleared):
+- XOLVER_NIA_MODULAR        — modular/Hensel/CRT residue UNSAT (Track-1 lever; sound UNSAT-only, inv-7 + brute-cert floor).
+- XOLVER_NIA_LOCALSEARCH    — WalkSAT SLS SAT-finder (candidate-only, validator-gated).
+- XOLVER_NIA_PRESOLVE_FULL  — L4: gate presolve fixpoint to Full effort (per-propagation perf).
+- XOLVER_NIA_UNIVARIATE_FULL— L2: gate univariate RRT to Full effort.
+- XOLVER_NIA_BITBLAST_FAST  — per-assignment bit-blast result cache (verdict-preserving).
+- XOLVER_NIA_EAGER_BITBLAST — whole-formula eager bit-blast portfolio arm (SAT-side; SAT 21/24 vs BLAN 20).
+    tunables: _BUDGET_MS (default 120000), _CONFLICTS (1000000), _BUDGET (var cap 20M), _GROW (A/B exact-width).
+- XOLVER_NIA_REFUTE         — bound-free product-positivity refutation (UNSAT via emptied domain).
+- XOLVER_NIA_GCD            — multivariate GCD-divisibility refutation (UNSAT).
+- XOLVER_NIA_ICP            — interval contraction fixpoint (domain narrowing/UNSAT).
+- XOLVER_NIA_CDCAC          — integer-aware CDCAC (complete UNSAT lever).
+- XOLVER_NIA_BV_CASCADE     — per-assignment bit-blast start-small width cascade.
+- XOLVER_NIA_BITBLAST_GATE_BUDGET — per-assignment bit-blast var cap (default 2M competition).
+DISABLE/DIAG toggles (KEEP gated, not consolidated):
+- XOLVER_NIA_NO_BITBLAST    — disable the per-assignment bit-blast stage (diagnostic/A-B isolation).
+- diagnostics (NOT flags): NIA_MODULAR_DIAG, NIA_DOM_DIAG, NIA_BITBLAST_PROF/DIAG, NIA_EAGER_BB_DIAG,
+  ARITH_STAGE_PROF/DIAG, SOLVE_PHASE_PROF — env-gated cerr traces, zero cost when unset.
+
+## TRACK 1 — SURPASS via UNSAT: modular-lever hunt on BLAN-undecided (2026-05-29)
+BLAN proves ~0 UNSAT (CSV: 2526+5142 timeout, 6 unsat total). UNSAT is the
+structural surpass axis. Hunted the modular lever (XOLVER_NIA_MODULAR + GCD +
+REFUTE + PRESOLVE_FULL + UNIVARIATE_FULL, bit-blast OFF for fast bail) over
+BLAN-undecided (10342 cases) in the residue-friendly families.
+RESULTS (sample):
+- MathProblems + UltimateAutomizer + sqrtmodinv (177 BLAN-undecided): 80 UNSAT,
+  72 unknown, 25 timeout. z3 on the 80: 0 sat, 1 unsat, 79 timeout. cvc5 on the
+  80: 0 sat, 1 unsat, 79 timeout. => 0 FALSE-UNSAT across BOTH oracles; ~78 are
+  ORACLE-BLIND (z3+cvc5+BLAN all timeout) = pure surpass, cert-floor-backed (#16).
+- AProVE (107 BLAN-undecided): only 5 UNSAT (78 timeout, 24 unknown — AProVE is
+  SAT/bit-blast territory, not residue). All 5: z3=unsat AND cvc5=unsat CONFIRMED.
+TOTAL sample: 85 modular UNSAT wins on BLAN-undecided cases, 0 false-UNSAT
+(z3+cvc5). Extrapolated corpus yield: 489 residue-family BLAN-undecided x ~45% +
+AProVE 747 x ~5% => ~250 UNSAT wins where Xolver surpasses BLAN. (Authoritative
+absolute count = master's full-corpus 1200s differential.)
+MISSES are NOT modular-reachable: MathProblems MC_*/MQ_* (magic square of cubes /
+fourth-power) need residue enum over 9 vars mod 9 = 9^9 >> enumBudget AND have
+uncertain ground-truth (a magic square may EXIST => SAT, modular can't prove
+UNSAT); sqrtmodinv misses are variable-modulus (mod (k*s+1)). Catching the
+magic-square class would need a NEW residue-PROPAGATION algorithm (constraint-aware,
+not brute 9^9 enumeration) with uncertain yield — scoped as a future lever, not
+built (speculative + ground-truth-unknown).
+VERDICT: the modular lever's reachable UNSAT is captured + 2-oracle-validated
+0-unsound; surpass demonstrated on the sample. nia reg OFF+ON 0-unsound, unit 890.
