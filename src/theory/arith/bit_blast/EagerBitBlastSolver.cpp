@@ -139,7 +139,12 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case Kind::Variable:
                 // A walked Variable is a boolean (arith vars live inside atoms,
                 // collected via convertConstraint). Non-bool bare var => reject.
-                if (e.sort != ir.boolSortId()) ok = false;
+                if (e.sort != ir.boolSortId()) {
+                    if (std::getenv("NIA_EAGER_BB_DIAG"))
+                        std::cerr << "[EAGER-BB] collect reject non-bool Variable eid=" << eid
+                                  << " sort=" << e.sort << "\n";
+                    ok = false;
+                }
                 return;
             case Kind::Not: case Kind::And: case Kind::Or:
             case Kind::Implies: case Kind::Xor: case Kind::Ite:
@@ -165,7 +170,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
                 AtomCs cs;
                 if (e.children.size() == 2) addPair(e.children[0], e.children[1], relOf(e.kind), cs);
-                else ok = false;
+                else { if (std::getenv("NIA_EAGER_BB_DIAG")) std::cerr << "[EAGER-BB] collect reject rel-arity=" << e.children.size() << " kind=" << (int)e.kind << "\n"; ok = false; }
                 atomCs_[eid] = std::move(cs);
                 return;
             }
@@ -202,10 +207,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     intVars_.clear();
     lb_.clear();
     ub_.clear();
-    if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
-
     static const bool diag = std::getenv("NIA_EAGER_BB_DIAG") != nullptr;
-    uint64_t budget = 20000000ull;
+    if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
+    if (diag) std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
+                        << " atoms=" << atomCs_.size() << "\n";
+
+    uint64_t budget = 2000000ull;   // var-budget cap: bail huge encodes (overflow) fast
     if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET")) {
         char* end = nullptr; long long v = std::strtoll(e, &end, 10);
         if (end != e && v > 0) budget = static_cast<uint64_t>(v);
@@ -257,8 +264,16 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         std::unordered_map<ExprId, SatLit> memo;
         std::unordered_map<ExprId, SatLit> boolVars;
         bool encodeOk = true;
+        long long encodeOps = 0;
 
         std::function<SatLit(ExprId)> encode = [&](ExprId eid) -> SatLit {
+            if (!encodeOk) return enc.constFalse();
+            // In-encode time guard: a single huge formula's encode must not blow
+            // the wall-clock budget (it's only checked between widths otherwise).
+            if (budgetMs > 0 && ((++encodeOps & 0x3FFF) == 0) && elapsedMs() >= budgetMs) {
+                encodeOk = false;
+                return enc.constFalse();
+            }
             auto m = memo.find(eid);
             if (m != memo.end()) return m->second;
             const CoreExpr& e = ir.get(eid);
