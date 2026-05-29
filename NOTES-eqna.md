@@ -17,11 +17,31 @@ like the #12 XOLVER_DIAG_AMV approach): (a) the tester term isn't merged with
 true/false so `isTrue/isFalse` stay false (line 120 skip), or (b) the empty-reason
 skip (line 136 `if (!reasons.empty())`) drops the conflict when the arg IS the
 constructor term (explainEquality(u,m) empty) — the correct conflict is the UNIT
-clause ¬(is_C(...)) with reason = the asserted tester literal. FIX = a DT
-reason-clause change → per master "rushed reason-clause sinks a division" =
-dedicated SUPERVISED pass (#19). QF_DT CANNOT be entered until fixed. No DT model
-validator exists as a backstop (ArithModelValidator doesn't cover DT), so these
-false-SATs escape unfloored. QF_UFDT entry-safe (0-unsound) but perf-limited.
+clause ¬(is_C(...)) with reason = the asserted tester literal. QF_UFDT entry-safe (0-unsound) but perf-limited.
+
+**★★ #19 FIXED (master-greenlit, 2026-05-29): the root was a PARSER bug, not the
+DtReasoner.** Pinned via instrumentation (testerTerms=0 even in regression): the
+indexed tester `(_ is C)` resolves to a registered FuncDec "is-C" and parseOper
+applied it via applyFun → generic UF apply, NEVER NT_DT_TESTER → opaque → DtReasoner
+never saw it. THREE coordinated fixes:
+1. SOMTParser `expr_parser.cpp` (submodule, commit 2dd6dae on iterative-rewriter,
+   PUSHED): route registered DT funcs through getDtFunctionKind before applyFun →
+   tag (_ is C)/applied ctors/selectors with their DT node kind.
+2. `Atomizer::isFormulaPositionTerm` += Kind::Tester (commit 1bb0ee3): a Bool-sorted
+   tester routes through BoolTermAsFormula → interned as "#dt.is.<C>" → DtReasoner
+   registers it.
+3. `DtReasoner` tester-consistency: opName(tt)="is-<ctor>" was compared against the
+   bare ctor name → never matched → a TRUE tester on a determined class spuriously
+   conflicted (false-UNSAT, exposed once testers registered: dt_tester_reconstruct).
+   Strip the "is-" prefix → compare the real target constructor.
+RESULT: QF_DT 54-sample UNSOUND **11→2** (correct 10→19); all 9 Barrett-jsat
+tester-on-constructor false-SATs → correct unsat. Gates: full reg 661/661 (global
+parser change clean), DT reg 12/12, unit 895/895, **0 new unsound**.
+RESIDUAL (2 blocksworld BMC, still false-SAT — #20): separate/harder DT class at
+BMC scale (656L, 54 testers, declare-datatype singular); not the tester-on-
+constructor bug. PENDING: SOMTParser gitlink bump (-> 2dd6dae) in the real
+NLColver checkout — the worktree's third_party/SOMTParser is a SYMLINK (type-change
+T) so the gitlink can't be committed here without corruption → master bumps it.
 
 ## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
 The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
