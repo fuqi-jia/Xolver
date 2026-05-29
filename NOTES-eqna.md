@@ -1,5 +1,48 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★★★ DT AUDIT (2026-05-29, corpus provisioned by master) — QF_DT SEVERELY UNSOUND
+QF_DT/QF_UFDT corpora now in-tree (QF_DT 8700/3-fam, QF_UFDT 203/2-fam). Family-
+split audit vs z3:
+- **QF_DT: 54-case sample, correct=10, UNSOUND=11, other=33 (z3 t/o).** ALL 11 are
+  FALSE-SATs (xolver=sat, z3=unsat) — 9 Barrett-jsat + 2 blocksworld-BMC.
+- QF_UFDT: 33-case sample, correct=3, UNSOUND=0, 30 t/o (z3 also t/o). 0-unsound
+  but low coverage (hard-for-everyone).
+**BUG CLASS (single, characterized): TESTER ON A CONSTRUCTOR-APPLICATION TERM not
+refuted.** `(_ is C) (D ...)` with C≠D is definitionally FALSE (e.g. is_cons(null),
+is_node(leaf …), is_null(cons …)), but DtReasoner returns sat — the tester is not
+constrained false → false-SAT. DtReasoner::checkConflict tester-consistency check
+(DtReasoner.cpp:109-140) SHOULD fire (arg's class holds constructor D; tester
+target C; C≠D → conflict) but doesn't. Likely causes (need instrumentation to pin,
+like the #12 XOLVER_DIAG_AMV approach): (a) the tester term isn't merged with
+true/false so `isTrue/isFalse` stay false (line 120 skip), or (b) the empty-reason
+skip (line 136 `if (!reasons.empty())`) drops the conflict when the arg IS the
+constructor term (explainEquality(u,m) empty) — the correct conflict is the UNIT
+clause ¬(is_C(...)) with reason = the asserted tester literal. QF_UFDT entry-safe (0-unsound) but perf-limited.
+
+**★★ #19 FIXED (master-greenlit, 2026-05-29): the root was a PARSER bug, not the
+DtReasoner.** Pinned via instrumentation (testerTerms=0 even in regression): the
+indexed tester `(_ is C)` resolves to a registered FuncDec "is-C" and parseOper
+applied it via applyFun → generic UF apply, NEVER NT_DT_TESTER → opaque → DtReasoner
+never saw it. THREE coordinated fixes:
+1. SOMTParser `expr_parser.cpp` (submodule, commit 2dd6dae on iterative-rewriter,
+   PUSHED): route registered DT funcs through getDtFunctionKind before applyFun →
+   tag (_ is C)/applied ctors/selectors with their DT node kind.
+2. `Atomizer::isFormulaPositionTerm` += Kind::Tester (commit 1bb0ee3): a Bool-sorted
+   tester routes through BoolTermAsFormula → interned as "#dt.is.<C>" → DtReasoner
+   registers it.
+3. `DtReasoner` tester-consistency: opName(tt)="is-<ctor>" was compared against the
+   bare ctor name → never matched → a TRUE tester on a determined class spuriously
+   conflicted (false-UNSAT, exposed once testers registered: dt_tester_reconstruct).
+   Strip the "is-" prefix → compare the real target constructor.
+RESULT: QF_DT 54-sample UNSOUND **11→2** (correct 10→19); all 9 Barrett-jsat
+tester-on-constructor false-SATs → correct unsat. Gates: full reg 661/661 (global
+parser change clean), DT reg 12/12, unit 895/895, **0 new unsound**.
+RESIDUAL (2 blocksworld BMC, still false-SAT — #20): separate/harder DT class at
+BMC scale (656L, 54 testers, declare-datatype singular); not the tester-on-
+constructor bug. PENDING: SOMTParser gitlink bump (-> 2dd6dae) in the real
+NLColver checkout — the worktree's third_party/SOMTParser is a SYMLINK (type-change
+T) so the gitlink can't be committed here without corruption → master bumps it.
+
 ## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
 The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
 combination logics** — ALL pre-existing (NOT caused by the Ext-witness array fix:
@@ -23,6 +66,33 @@ cross-equality soundness (the false-UNSAT direction was fixed earlier per
 [[project_wisa_varconst]]; this is the false-SAT residual) — NOT cleanly floorable
 (UF apps → validator Indeterminate; strict-validation recovery times out). They
 need EUF/combination conflict-soundness work = #12.
+
+**★★ #12 SOLVED (2026-05-29, master-greenlit):** the over-floor root is the
+VALIDATOR'S CHANNEL CHOICE for EUF-class scalars. Instrumented ArithModelValidator
+(XOLVER_DIAG_AMV, reverted): the floor runs TWO validations — pass 1
+(arrayModelDefinitelyViolates, NO real channel) resolves i,j via the TOKEN channel
+(@e6≠@e3 distinct) → both assertions TRUE → correctly not-violated; pass 2
+(modelPositivelyValidates, WITH setRealAssignments) resolves i,j via the REAL
+channel where numericAssignments collapsed them to 0,0 (unconstrained-scalar
+backfill mints 0) → `(not (= i j))` FALSE → spurious Violated → over-floor.
+FIX (committed, NO new flag — part of the ARRAY_COMB_VALIDATE_SAT capability):
+in modelPositivelyValidates, a scalar whose model value is an opaque EUF token
+(`@…`) is routed through the TOKEN channel ONLY — excluded from numAsg, the
+0-defaulting, AND the (filtered) real channel — so the authoritative EUF identity
+(distinct token = distinct class) is used, not the spurious numeric collapse.
+RESULT: alia_005/alra_010 → sat (recovered); read2 + all 9 QF_AUFLIA false-SATs →
+unknown (floored); full reg DEFAULT 661/661 (NIA untouched — no @tokens →
+filteredReal==numericAssignments); array-comb reg flag-ON 33/33. Sound (only
+sat→unknown). **ARRAY_COMB_VALIDATE_SAT STAYS GATED** (master: soundness-touching
+flags stay flags; master collapses into default in one batch after the
+differential, which needs the optimization flags OFF). The floor is now CLEAN
+(recovers genuine sats + floors all false-SATs) → ready for that collapse.
+SCOPE: the fix recovers the ARRAY+ARITH EUF-scalar class (the suite cases
+alia_005/alra_010). UF-HEAVY QF_AUFLIA benchmark sats are NOT recovered (correct
+stays 36/92, UNSOUND 0) — UF applications return Indeterminate in the validator
+regardless of scalar channel; recovering those needs UF MODEL CONSTRUCTION
+(function interps the validator can evaluate) = a further #12 sub-item, sound
+either way (the unrecovered ones stay free unknowns).
 
 **★ #12 ACTIONABLE DESIGN (diagnosed precisely 2026-05-29):** the over-floor root
 is NOT missing array interps — it is UNCONSTRAINED-SCALAR DEFAULTING. Dumped
@@ -94,7 +164,8 @@ All numbers are family-split samples vs z3 (NOT full corpus — directional).
 | QF_AUFLIA | 53/92 (58%) | NO — 9 false-SATs (all floorable) | array+UF+LIA | BLOCKED on soundness: 9 false-SATs → floor-ON makes 0-unsound (cost: measuring genuine-sat loss). Highest combination solve-rate; promising once floored. |
 | QF_UFLIA | 31/80 (39%) | NO — 4 Wisa false-SATs (NOT floorable) | UF+LIA combination | BLOCKED: 4 EUF Wisa false-SATs need EUF-soundness fix (#17), no clean floor. DO NOT ENTER until fixed. |
 | QF_UFLRA | 34/61 (56%) | YES (MISMATCH 0) | UF+LRA combination, perf-limited | SOUND. Entry-safe (0-unsound); perf-limited solve-rate. The only CLEAN combination division. |
-| QF_DT / QF_UFDT | NO CORPUS in-tree (12 reg cases only) | reg 0-unsound | — | CANNOT audit locally — needs corpus on E/panda before any entry call |
+| QF_DT | 10/54 | NO — 11 false-SATs (tester-on-ctor) | DT theory soundness | BLOCKED: 11 tester-on-constructor false-SATs (#19), no DT model-validator backstop. DO NOT ENTER until fixed. |
+| QF_UFDT | 3/33 | YES (MISMATCH 0) | DT+UF, mostly hard-for-everyone | SOUND but low coverage (30/33 timeout, z3 too). Entry-safe; few winnable. |
 
 KEY: **the cross-division audit's headline = a SOUNDNESS problem, not a perf one.**
 4 of 6 audited combination/array divisions have pre-existing false-SATs (QF_ALIA 1,

@@ -115,7 +115,15 @@ SatLit Atomizer::registerDynamicAtom(ExprId expr, TheoryId theory) {
 }
 
 bool Atomizer::isFormulaPositionTerm(Kind k) {
-    return k == Kind::Variable || k == Kind::UFApply;
+    // A datatype tester ((_ is C) x) is a Bool-sorted DT term that can appear in
+    // formula position; route it through BoolTermAsFormula so it is interned into
+    // the shared e-graph as a Tester term ("#dt.is.<C>") and the DtReasoner's
+    // tester-consistency check sees it. Without this, a Kind::Tester atom gets a
+    // fresh opaque Bool SAT var and the DT layer never constrains it -> the
+    // QF_DT tester-on-constructor false-SAT class (is_C(D ...) with C!=D left
+    // unrefuted). (Before the parser fix tagged it Tester it was a UFApply, which
+    // also routes here but only as an opaque application.)
+    return k == Kind::Variable || k == Kind::UFApply || k == Kind::Tester;
 }
 
 bool Atomizer::areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const {

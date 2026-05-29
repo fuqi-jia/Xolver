@@ -230,26 +230,43 @@ public:
                 try { numAsg[name] = mpq_class(val); } catch (...) {}
             }
         }
-        // Prefer the typed numeric channel (RealValue) over the lossy string
-        // channel: it carries exact rationals AND is the place combination
-        // logics put a shared scalar's true arithmetic value (the string
-        // `assignments` may instead hold an opaque EUF equality token like
-        // "@e6", which would otherwise default to 0 and spuriously collapse
-        // i==j). Algebraic values (e.g. √2) have no rational form -> left for
-        // the validator to report Indeterminate (it cannot evaluate them).
+        // Opaque-EUF-token scalars: a combination scalar whose model value is an
+        // EUF equality-class token ("@e6") has its AUTHORITATIVE identity in the
+        // token channel (distinct token = distinct class). The typed numeric
+        // channel, however, can carry a SPURIOUS value for it — the unconstrained-
+        // scalar backfill mints 0, so two asserted-distinct scalars (i != j) both
+        // become 0 and `(not (= i j))` spuriously evaluates FALSE -> the genuine
+        // sat is over-floored to unknown (the alia_005/alra_010 class; verified by
+        // instrumenting ArithModelValidator: token pass = both assertions TRUE,
+        // real pass = i=j=0 -> assertion FALSE). Route these scalars through the
+        // token channel ONLY: drop them from numAsg, the 0-defaulting, AND the
+        // real channel. Sound (only ever sat->unknown; an unsat formula like read2
+        // is still violated under the EUF arrangement) and SCOPED to "@" tokens —
+        // NIA/LIA real models carry concrete rationals (never "@"), so the
+        // default-on niaSatFloor is untouched.
+        std::unordered_set<std::string> opaqueScalar;
+        for (const auto& [name, val] : lastModel_->assignments)
+            if (!val.empty() && val[0] == '@') opaqueScalar.insert(name);
+        // Prefer the typed numeric channel (RealValue): exact rationals + the
+        // combination shared-scalar's true arithmetic value. Skip opaque-token
+        // scalars (their numeric value is the spurious collapse).
+        std::unordered_map<std::string, RealValue> filteredReal;
         for (const auto& [name, rv] : lastModel_->numericAssignments) {
+            if (opaqueScalar.count(name)) continue;
+            filteredReal.emplace(name, rv);
             if (auto q = rv.tryAsRational()) numAsg[name] = *q;
         }
         // Mirror dumpModel's defaulting of unconstrained user variables so the
         // validated model matches the printed one (a var the theory left
-        // unassigned is emitted as 0 / false).
+        // unassigned is emitted as 0 / false) — EXCEPT opaque-token scalars,
+        // which keep their EUF token identity instead of collapsing to 0.
         if (parser) {
             for (const auto& var : parser->getDeclaredVariables()) {
                 if (!var) continue;
                 std::string nm = var->getName();
                 if (var->isVBool()) { if (!boolAsg.count(nm)) boolAsg[nm] = false; }
                 else if (var->isVInt() || var->isVReal()) {
-                    if (!numAsg.count(nm)) numAsg[nm] = mpq_class(0);
+                    if (!numAsg.count(nm) && !opaqueScalar.count(nm)) numAsg[nm] = mpq_class(0);
                 }
             }
         }
@@ -259,13 +276,13 @@ public:
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
-            validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setRealAssignments(&filteredReal);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
-            validator.setRealAssignments(&lastModel_->numericAssignments);
+            validator.setRealAssignments(&filteredReal);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         }
