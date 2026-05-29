@@ -645,3 +645,29 @@ floor was guarding soundness — removing it must be paired with the sync fix, n
 alone). NIA-side robust alternative if EQNA can't: replace-stale-on-OppositePolarity
 (latest-wins) — sound under invariant 1 (SAT validated) + subset-conflict soundness,
 but needs active_/trail_/normalized_ index surgery; deferred pending the seam agreement.
+
+## 7 z3-UNSAT BV-as-NIA prep (master directive) — NOT NIA-only; they're combination-floor-blocked (2026-05-29)
+Directive: confirm the 7 z3-confirmed-UNSAT BV-as-NIA unknowns solve standalone via NIA
+(modular/GCD/CDCAC), bypassing combination, so they're ready when EQNA lifts the floor.
+RESULT: the premise doesn't hold — they are NOT NIA-only-provable. Evidence (harness
+/tmp/nia7/ackermann.py = sound Ackermann reduction: distinct ground UF apps -> fresh
+Int vars + pairwise functional-consistency => equisat; z3 confirms each .nia stays unsat):
+- z3.704095: f3 returns uninterpreted sort S1 => genuine EUF congruence (f3(arg1)=f3(arg2)
+  when NIA proves arg1=arg2). NIA-only impossible by construction.
+- 5 int_check/qf_Select: arithmetic-core unsat (e.g. ne_bvurem0 = s=1,t=0,(x0 mod s)!=t;
+  mod-by-1 is always 0). BUT the contradiction core M1/M2/M3 (s=1,t=0,(mod x0 s)!=t as
+  TOP-LEVEL asserts) IS NIA-provable (unsat). The full cases fail for TWO reasons:
+  (i) FRONTEND: when s=1/t=0 are packed in `(not (or (distinct s 1)(distinct t 0)))`
+      (De Morgan), the divisor s is NOT constant-folded, so `(mod x0 s)` stays mod-by-
+      VARIABLE -> IntDivModLowerer reports "needsEUF but logic=QF_NIA" -> unknown. 4-line
+      repro /tmp/nia7/g.smt2 (z3=unsat, xolver=unknown). E.smt2 (same but s=1 top-level
+      assert) -> unsat. So mod-by-variable INHERENTLY needs EUF (it's lowered via EUF terms).
+  (ii) Therefore they route through QF_UFNIA EUF+NIA COMBINATION, where they hit the SAME
+      opposite-polarity floor (EQNA backtrack-sync). Re-tested abstracted-as-QF_UFNIA
+      (user-UF removed, internal div/mod EUF kept): 1-3/6 now solve unsat, the rest show
+      "NIA: pending unknown (opposite polarity asserted)".
+CONCLUSION: these 7 are NOT a separate non-blocked NIA-only prep item. They are
+combination cases gated by the EQNA opp-polarity/backtrack-sync floor — same blocker as the
+22 z3-sat cases. Folded into #36: after EQNA's fix, re-validate all 29 (22 sat + 7 unsat)
+vs z3 through the EUF+NIA combination path; point modular/GCD/CDCAC at the 7 unsat THERE,
+not standalone. No NIA-side code change possible/needed pre-fix. Harness kept in /tmp/nia7.
