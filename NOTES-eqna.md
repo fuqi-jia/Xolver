@@ -1,5 +1,28 @@
 # NOTES-eqna — EQ+NA unknown→verdict campaign
 
+## ★★★★ DT AUDIT (2026-05-29, corpus provisioned by master) — QF_DT SEVERELY UNSOUND
+QF_DT/QF_UFDT corpora now in-tree (QF_DT 8700/3-fam, QF_UFDT 203/2-fam). Family-
+split audit vs z3:
+- **QF_DT: 54-case sample, correct=10, UNSOUND=11, other=33 (z3 t/o).** ALL 11 are
+  FALSE-SATs (xolver=sat, z3=unsat) — 9 Barrett-jsat + 2 blocksworld-BMC.
+- QF_UFDT: 33-case sample, correct=3, UNSOUND=0, 30 t/o (z3 also t/o). 0-unsound
+  but low coverage (hard-for-everyone).
+**BUG CLASS (single, characterized): TESTER ON A CONSTRUCTOR-APPLICATION TERM not
+refuted.** `(_ is C) (D ...)` with C≠D is definitionally FALSE (e.g. is_cons(null),
+is_node(leaf …), is_null(cons …)), but DtReasoner returns sat — the tester is not
+constrained false → false-SAT. DtReasoner::checkConflict tester-consistency check
+(DtReasoner.cpp:109-140) SHOULD fire (arg's class holds constructor D; tester
+target C; C≠D → conflict) but doesn't. Likely causes (need instrumentation to pin,
+like the #12 XOLVER_DIAG_AMV approach): (a) the tester term isn't merged with
+true/false so `isTrue/isFalse` stay false (line 120 skip), or (b) the empty-reason
+skip (line 136 `if (!reasons.empty())`) drops the conflict when the arg IS the
+constructor term (explainEquality(u,m) empty) — the correct conflict is the UNIT
+clause ¬(is_C(...)) with reason = the asserted tester literal. FIX = a DT
+reason-clause change → per master "rushed reason-clause sinks a division" =
+dedicated SUPERVISED pass (#19). QF_DT CANNOT be entered until fixed. No DT model
+validator exists as a backstop (ArithModelValidator doesn't cover DT), so these
+false-SATs escape unfloored. QF_UFDT entry-safe (0-unsound) but perf-limited.
+
 ## ★★★★ MAJOR SOUNDNESS FINDING (2026-05-29): 14 pre-existing combination false-SATs
 The cross-division audit surfaced **14 false-SATs (xolver=sat, z3=unsat) in the
 combination logics** — ALL pre-existing (NOT caused by the Ext-witness array fix:
@@ -121,7 +144,8 @@ All numbers are family-split samples vs z3 (NOT full corpus — directional).
 | QF_AUFLIA | 53/92 (58%) | NO — 9 false-SATs (all floorable) | array+UF+LIA | BLOCKED on soundness: 9 false-SATs → floor-ON makes 0-unsound (cost: measuring genuine-sat loss). Highest combination solve-rate; promising once floored. |
 | QF_UFLIA | 31/80 (39%) | NO — 4 Wisa false-SATs (NOT floorable) | UF+LIA combination | BLOCKED: 4 EUF Wisa false-SATs need EUF-soundness fix (#17), no clean floor. DO NOT ENTER until fixed. |
 | QF_UFLRA | 34/61 (56%) | YES (MISMATCH 0) | UF+LRA combination, perf-limited | SOUND. Entry-safe (0-unsound); perf-limited solve-rate. The only CLEAN combination division. |
-| QF_DT / QF_UFDT | NO CORPUS in-tree (12 reg cases only) | reg 0-unsound | — | CANNOT audit locally — needs corpus on E/panda before any entry call |
+| QF_DT | 10/54 | NO — 11 false-SATs (tester-on-ctor) | DT theory soundness | BLOCKED: 11 tester-on-constructor false-SATs (#19), no DT model-validator backstop. DO NOT ENTER until fixed. |
+| QF_UFDT | 3/33 | YES (MISMATCH 0) | DT+UF, mostly hard-for-everyone | SOUND but low coverage (30/33 timeout, z3 too). Entry-safe; few winnable. |
 
 KEY: **the cross-division audit's headline = a SOUNDNESS problem, not a perf one.**
 4 of 6 audited combination/array divisions have pre-existing false-SATs (QF_ALIA 1,
