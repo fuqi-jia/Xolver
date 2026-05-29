@@ -63,6 +63,17 @@ public:
     virtual bool eq(PolyId a, PolyId b) const = 0;
 
     // ------------------------------------------------------------------
+    // Square-free factorization (for CAC characterization reduction).
+    // ------------------------------------------------------------------
+    // Decompose `a` into its square-free factors (non-constant). The product of
+    // the factors has the SAME real-root set as `a` (multiplicity collapsed), so
+    // replacing `a` by its factors in a sign-invariance/root computation is
+    // ROOT-PRESERVING — sound. Default (stub / no factorizer): return {a}
+    // unchanged (a valid, conservative no-op). libpoly overrides with
+    // poly::square_free_factors.
+    virtual std::vector<PolyId> squareFreeFactors(PolyId a) { return {a}; }
+
+    // ------------------------------------------------------------------
     // Evaluation (for CAlC / sample checking)
     // ------------------------------------------------------------------
     virtual int sgn(PolyId a, const std::unordered_map<std::string, mpq_class>& sample) const = 0;

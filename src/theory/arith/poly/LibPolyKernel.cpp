@@ -659,6 +659,27 @@ PolyId LibPolyKernel::gcd(PolyId a, PolyId b) {
     }
 }
 
+std::vector<PolyId> LibPolyKernel::squareFreeFactors(PolyId a) {
+    // poly::square_free_factors returns the non-constant square-free factors whose
+    // product is the square-free part of `a` — i.e. their union of real roots is
+    // exactly a's real-root set (multiplicity collapsed). Replacing a by these
+    // factors in the CAC characterization is ROOT-PRESERVING (sound). On any
+    // failure, fall back to {a} (conservative no-op — never drops roots).
+    try {
+        std::vector<poly::Polynomial> facs = poly::square_free_factors(get(a));
+        std::vector<PolyId> out;
+        out.reserve(facs.size());
+        for (auto& f : facs) {
+            if (poly::is_constant(f)) continue;          // constants have no roots
+            out.push_back(alloc(std::move(f)));
+        }
+        if (out.empty()) out.push_back(a);                // all-constant / degenerate ⇒ keep a
+        return out;
+    } catch (...) {
+        return {a};
+    }
+}
+
 std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {
     auto termsOpt = terms(p);
     if (!termsOpt) return std::nullopt;

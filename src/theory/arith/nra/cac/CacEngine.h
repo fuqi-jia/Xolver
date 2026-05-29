@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace xolver {
 
@@ -58,8 +59,21 @@ struct CacResult {
 class CacEngine {
 public:
     struct Config {
-        long maxCellsPerLevel = 4000;   // covering blow-up guard (⇒ Unknown)
-        long maxNodes = 400000;         // total recursion-node budget (⇒ Unknown)
+        // Runaway/OOM guards (⇒ Unknown when hit — sound: a hit cap is never a
+        // wrong answer). Sized to the COMPETITION budget (1200s/30GB), NOT a
+        // dev-conservative throttle: at ~tens of ms/cell the 1200s wall-clock
+        // binds long before these, and the cell/node structures stay well under
+        // 30GB. (The old 4000/400000 could bail a hard covering in ~minutes,
+        // throttling CAC before its real time budget.)
+        long maxCellsPerLevel = 200000;     // per-level covering blow-up guard
+        long maxNodes = 20000000;           // total recursion-node budget (memory guard)
+        // Wall-clock deadline for the covering search (ms; 0 = unbounded). This is
+        // the PRIMARY time bound — the node/cell caps are just memory guards. In
+        // the HYBRID (Collins fallback present) CAC gets a bounded time-share so a
+        // hard covering yields to Collins (Unknown→fallback) instead of grinding
+        // to the global timeout and starving it. When CAC is the SOLE engine
+        // (no Collins), leave it 0 (unbounded) and rely on the external timeout.
+        long deadlineMillis = 0;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -75,24 +89,13 @@ public:
     const std::string& lastUnknown() const { return lastUnknown_; }
     long maxDepthReached() const { return maxDepth_; }
 
-    // ---- Per-cell UNSAT certificate (the oracle-blind soundness gate) --------
-    // The CacEngine's UNSAT rests on: every cell built from a COMPLETE
-    // characterization + a `supported` interval, and every covering gap-free.
-    // The control flow already returns Unknown on any incompleteness; this is an
-    // INDEPENDENT, auditable ledger that re-confirms it. `solve()` trusts an
-    // UNSAT verdict only when `certComplete()` holds — a belt-and-suspenders gate
-    // that catches a control-flow regression where UNSAT could escape despite an
-    // incomplete cell. Each excluded LEAF cell also records the constraint that
-    // witnesses its infeasibility (the exclusion is sound only if that constraint
-    // is actually violated at the cell sample — re-verified before trusting).
-    struct LeafExclusion {
-        VarId var = NullVar;
-        RealAlg sample;
-        PolyId violatedPoly = NullPoly;   // a constraint violated at `sample`
-        Relation rel = Relation::Eq;
-    };
-    bool certComplete() const { return unsatTrustworthy_ && certVerified_; }
-    const std::vector<LeafExclusion>& leafExclusions() const { return leafExclusions_; }
+    // ---- UNSAT completeness certificate (the oracle-blind soundness gate) -----
+    // The CacEngine's UNSAT rests on a gap-free covering with every cell built
+    // from a COMPLETE characterization + a `supported` interval. markIncomplete()
+    // drops `unsatTrustworthy_` at EVERY inconclusive step, so solve() trusts an
+    // UNSAT verdict only when this aggregate ledger held — a belt-and-suspenders
+    // gate that downgrades an uncertified UNSAT to Unknown (never emits it).
+    bool unsatCertified() const { return unsatTrustworthy_; }
 
 private:
     struct CoverOut {
@@ -113,12 +116,15 @@ private:
     std::string lastUnknown_;        // bail reason (diagnostics)
     long maxDepth_ = 0;              // deepest level reached
 
-    // Per-cell UNSAT certificate state (see public accessors above).
-    bool unsatTrustworthy_ = true;   // ANDed false at every incompleteness point
-    bool certVerified_ = false;      // set by an independent post-pass on UNSAT
-    std::vector<LeafExclusion> leafExclusions_;   // witness per excluded leaf cell
-    void markIncomplete(const char* why);         // unsatTrustworthy_=false + lastUnknown_
-    bool verifyCertificate();                     // independent re-check before trusting UNSAT
+    // UNSAT completeness certificate (see accessor above).
+    bool unsatTrustworthy_ = true;          // ANDed false at every incompleteness point
+    void markIncomplete(const char* why);   // unsatTrustworthy_=false + lastUnknown_
+
+    // Wall-clock deadline (cfg_.deadlineMillis). Set at solve() start; checked
+    // periodically in getUnsatCover. Returns true once the budget is exhausted.
+    std::chrono::steady_clock::time_point startTime_;
+    bool deadlineHit_ = false;
+    bool overDeadline();
 };
 
 } // namespace xolver

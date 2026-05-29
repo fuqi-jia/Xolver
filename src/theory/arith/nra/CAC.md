@@ -98,3 +98,91 @@ get_unsat_cover(level i, sample s = (x_1=a_1,…,x_{i-1}=a_{i-1})):
 Default-OFF flag + Unknown guardrail. unit + NRA-family reg 177/177 OFF+ON,
 0-unsound. Broad QF_NRA z3/cvc5 differential 0-unsound before promotion (server).
 Collins default path byte-identical when the flag is OFF.
+
+## compareRealAlg — certified comparator contract (review-pinned)
+
+Comparing algebraic numbers must NOT "let intervals overlap then keep guessing".
+Two separate certificates:
+  - EQUALITY certificate: identity / minimal-poly / gcd-membership proof.
+  - SEPARATION certificate: refine isolating intervals until DISJOINT.
+Invariant: `Less/Equal/Greater` require a mathematical certificate; with none,
+return `Unknown` — never guess (no interval-overlap→pick-first, no
+budget→assume-equal/distinct, no pointer order as math order).
+
+Steps (in order; first conclusive wins):
+1. exact identity — same canonical object id; or same certified minimal poly +
+   same rootIndex (different rootIndex on the SAME poly orders directly, no
+   refine). Same poly, missing index → locate a UNIQUE root ordinal by interval
+   refinement (multiple overlaps → refine; non-unique after budget → Unknown).
+2. exact equality — if both minimal and polys differ ⇒ distinct (→ step 3 for
+   order). Else g = gcd(defA,defB): deg(g)=0 ⇒ distinct; deg(g)>0 ⇒
+   exactRootMembership(g, ·) with priority: (a) minimal-poly divisibility,
+   (b) exact signAt(g, root)==0, (c) UNIQUE gcd-root interval membership (count-
+   based, never first-overlap). Both belong to the SAME gcd root ⇒ Equal; else
+   distinct.
+3. certified separation — ONLY after distinctness is proven: refine until the
+   isolating intervals are disjoint ⇒ Less/Greater. (Refining possibly-equal
+   roots can never separate, so distinctness must be established first.)
+4. budget exhausted ⇒ Unknown — do NOT guess.
+
+Caller rules: Unknown must make root isolation / cell construction UNSUPPORTED
+(→ Collins fallback), never a pointer/first-overlap order. A non-semantic
+stable-key comparator is allowed for map/set keys ONLY, never for cell order /
+sign reasoning / covering merge / SAT-UNSAT decisions. To reduce Unknown,
+strengthen steps 1/2 (exact equality), do NOT raise the step-3 refine cap.
+
+## Combination-aware CAC (UFNRA medal lane) — DESIGN SCOPE (not built; pair with EQNA)
+
+PROBLEM. Today the fast NRA stages (sign-refute, subtropical, CAC) DEFER (return
+nullopt) whenever interfaceEqualities_/interfaceDisequalities_ is non-empty, so in
+UFNRA the +volume CAC wins never apply — the base CDCAC handles the shared
+constraints. To score the medal lane, CAC must run UNDER the N-O interface
+constraints, not defer. This scopes the mechanism; the build is EQNA-paired
+(touches the combination loop EQNA owns — do NOT dual-edit that seam).
+
+MECHANISM (interface constraints → CAC constraints; root-/sign-preserving):
+1. Interface EQUALITY (shared a = shared b): add the constraint poly(a)-poly(b) = 0
+   to the CAC constraint set (Relation::Eq). A real algebraic constraint — CAC
+   treats it like any equality.
+2. Interface DISEQUALITY (a != b): add poly(a)-poly(b) != 0 (Relation::Neq). CAC's
+   covering must exclude cells where the diff vanishes; Neq is already in the
+   relation set. Both are sound: they are genuine constraints over the NRA vars.
+3. The shared terms must be NRA-polynomial-expressible (via sharedTermRegistry_ +
+   PolynomialConverter). If a shared term is not poly-expressible (e.g. a UF app
+   feeding a real var) → CAC must DEFER for that constraint (sound floor), exactly
+   as the purifier boundary requires.
+
+CELL CERTIFICATES UNDER COMBINATION (soundness generalizes directly):
+- A cell is truth-invariant for ALL constraints incl. the interface polys — the
+  same per-constraint sign-invariance argument; the interface (dis)eq polys are
+  just more delineators in the characterization. No new cert machinery: the
+  square-free reduction + the unsatTrustworthy_ ledger carry over unchanged.
+- SAT: the CAC model must assign every SHARED term a definite value (rational or
+  algebraic) so the combination layer can read the arrangement back. satModel_
+  already assigns the vars; expose the shared-term values (algebraic ok — the N-O
+  exchange compares them via compareRealAlg, now certified).
+- UNSAT: a gap-free covering of (NRA constraints ∧ interface (dis)eqs) is a
+  COMBINATION CONFLICT. The conflict clause MUST include the interface (dis)eq
+  REASONS (the SatLits the combination layer attached), not just the NRA
+  constraint reasons — else the SAT core relearns the same arrangement. CAC already
+  tracks activeReasons per constraint; extend to carry the interface-(dis)eq lits.
+
+INCREMENTALITY:
+- v1 (sound, simple): one-shot CAC re-run with the CURRENT interface set; re-run
+  when the set changes. Correct, just not incremental. Ship this first.
+- v2 (later): incremental covering reuse across interface-set deltas. Not now.
+
+SEAM / OWNERSHIP (the non-negotiable coordination point):
+- CAC's contract to the combination layer: consume interfaceEqualities_/
+  interfaceDisequalities_ (already populated via addInterfaceEquality) as extra
+  constraints; return SAT(model incl. shared-term values) / UNSAT(conflict whose
+  clause includes the interface-(dis)eq lits) / Unknown.
+- EQNA owns TheoryManager + SharedEqualityManager (the loop that populates the
+  interface set and consumes the conflict). The ONLY shared edit is the stageCac
+  gate (stop deferring on non-empty interface set) + the conflict-clause assembly.
+  Pair on: (a) the exact reason-lit plumbing for the conflict, (b) shared-term
+  value read-back for the arrangement, (c) when CAC is invoked in the combination
+  effort schedule (likely Full-effort, mirroring QF_NRA, with the same wall-clock
+  deadline yielding to the base CDCAC).
+GATE for the eventual build: combination reg (UFNRA) OFF+ON 0-unsound + the
+QF_NRA reg stays 143/143 (the gate change must be inert when no interface set).

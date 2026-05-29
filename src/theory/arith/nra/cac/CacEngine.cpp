@@ -133,6 +133,10 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     CoverOut out;
     if (level > maxDepth_) maxDepth_ = level;
     if (++nodes_ > cfg_.maxNodes) { out.status = CacStatus::Unknown; markIncomplete("node-budget"); return out; }
+    // Wall-clock deadline (primary time bound): check every 256 nodes (cheap) so
+    // a hard covering yields to the Collins fallback instead of grinding to the
+    // global timeout. Unknown is sound (never a wrong verdict).
+    if ((nodes_ & 255) == 0 && overDeadline()) { out.status = CacStatus::Unknown; markIncomplete("deadline"); return out; }
 
     const int n = static_cast<int>(varOrder_.size());
     const VarId var = varOrder_[level];
@@ -154,16 +158,11 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         if (isLeaf) {
             bool allHold = true;
             bool anyUnknown = false;
-            int firstViolated = -1;            // witness constraint for the per-cell cert
             std::vector<RationalPolynomial> violated;
             for (size_t ci = 0; ci < cons_.size(); ++ci) {
                 const Sign s = algebra_->signAt(consPoly_[ci], sample);
                 if (s == Sign::Unknown) { anyUnknown = true; break; }
-                if (!relationHolds(s, cons_[ci].rel)) {
-                    violated.push_back(cons_[ci].poly);
-                    allHold = false;
-                    if (firstViolated < 0) firstViolated = static_cast<int>(ci);
-                }
+                if (!relationHolds(s, cons_[ci].rel)) { violated.push_back(cons_[ci].poly); allHold = false; }
             }
             if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
                 std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
@@ -174,14 +173,6 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             }
             if (anyUnknown) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("signAt-unknown"); return out; }
             if (allHold)    { satModel_ = sample; sample.pop(); out.status = CacStatus::Sat; return out; }
-            // Per-cell UNSAT witness: this leaf cell is excluded because the sample
-            // violates constraint `firstViolated`, whose roots are cell boundaries
-            // (the leaf passes `violated` AS the boundary polys) ⇒ it is sign-
-            // invariant on the cell ⇒ violated on the WHOLE cell. signAt already
-            // gave a definite (non-Unknown) sign above. Record the witness.
-            if (leafExclusions_.size() < 4096)   // bounded audit ledger; aggregate gate is the soundness net
-                leafExclusions_.push_back(
-                    LeafExclusion{var, s_i, consPoly_[firstViolated], cons_[firstViolated].rel});
             cellBoundaries = std::move(violated);
         } else {
             CoverOut rec = getUnsatCover(level + 1, sample);
@@ -221,23 +212,13 @@ void CacEngine::markIncomplete(const char* why) {
     lastUnknown_ = why;
 }
 
-bool CacEngine::verifyCertificate() {
-    // Independent gate over the UNSAT certificate, evaluated separately from the
-    // covering control flow: it catches a regression where an UNSAT verdict
-    // escapes despite an incompleteness having been flagged. The soundness net is
-    // the AGGREGATE completeness ledger `unsatTrustworthy_`, which markIncomplete()
-    // drops at EVERY inconclusive step (budget, ambiguous round-trip, signAt
-    // Unknown, incomplete characterization, unsupported interval). Because UNSAT
-    // is returned only when the covering is gap-free with every cell `supported`,
-    // a trustworthy run never tripped the ledger.
-    //
-    // The leaf-exclusion ledger (`leafExclusions_`) is retained for audit / proof
-    // output, but is NOT re-evaluated here: each witness sample is only the leaf
-    // coordinate (the prefix is popped), so re-running signAt against it would be
-    // a PARTIAL assignment over a multivariate constraint — unreliable and, on the
-    // libpoly algebraic path, crash-prone. The witnesses were already computed
-    // from a complete (non-Unknown) signAt at record time on the full sample.
-    return unsatTrustworthy_;
+bool CacEngine::overDeadline() {
+    if (deadlineHit_) return true;
+    if (cfg_.deadlineMillis <= 0) return false;     // unbounded (CAC-only / sole engine)
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - startTime_).count();
+    if (elapsed >= cfg_.deadlineMillis) { deadlineHit_ = true; return true; }
+    return false;
 }
 
 CacResult CacEngine::solve() {
@@ -246,19 +227,19 @@ CacResult CacEngine::solve() {
         res.status = CacStatus::Unknown;
         return res;
     }
+    startTime_ = std::chrono::steady_clock::now();
     SamplePoint sample;
     const CoverOut o = getUnsatCover(0, sample);
     res.status = o.status;
     if (o.status == CacStatus::Sat) { res.model = satModel_; return res; }
-    if (o.status == CacStatus::Unsat) {
-        // Gate the UNSAT verdict on the independent per-cell certificate. If the
-        // ledger tripped or a witness fails to re-verify, DOWNGRADE to Unknown
-        // (never emit an uncertified UNSAT). certComplete() = ledger + witnesses.
-        certVerified_ = verifyCertificate();
-        if (!certComplete()) {
-            res.status = CacStatus::Unknown;
-            if (lastUnknown_.empty()) lastUnknown_ = "unsat-cert-unverified";
-        }
+    if (o.status == CacStatus::Unsat && !unsatTrustworthy_) {
+        // Gate UNSAT on the completeness ledger: markIncomplete() drops it at every
+        // inconclusive step, so an uncertified UNSAT is DOWNGRADED to Unknown
+        // (never emitted). UNSAT is returned only from a gap-free covering with
+        // every cell `supported`, so a sound run never trips the ledger; this is a
+        // belt-and-suspenders net against a control-flow regression.
+        res.status = CacStatus::Unknown;
+        if (lastUnknown_.empty()) lastUnknown_ = "unsat-cert-unverified";
     }
     return res;
 }

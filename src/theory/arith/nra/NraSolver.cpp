@@ -530,7 +530,28 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
     if (!enableCac_) return std::nullopt;
-    if (effort != TheoryEffort::Full) return std::nullopt;
+    // EFFORT SCHEDULE (validated by the Collins-vs-CAC A/B + endorsed design):
+    //   Standard effort → cheap engines (Collins as cheap CAD, linearized checks);
+    //   Full effort     → the heavy CAC/Lazard hard path (this stage), then Collins
+    //                     as fallback on CAC-Unknown (stageCdcac runs at all efforts).
+    // So in the hybrid CAC runs ONLY at Full: it gets first refusal on the hard
+    // cases Collins times out on, while Collins disposes of the easy cases cheaply
+    // at Standard — running the heavy CAC at every Standard propagation instead
+    // STARVES the time budget (50/150 meti-tarski timeouts in the all-efforts A/B).
+    // A fair head-to-head still needs CAC at all efforts (else Collins preempts it
+    // at Standard and CAC never runs) — that is what XOLVER_NRA_CAC_ONLY enables
+    // (CAC at every effort + Collins disabled): CAC-only=95 vs Collins-only=64,
+    // 0-unsound, confirming CAC is the stronger engine on the hard path.
+    // Two orthogonal differential flags (decoupled so the full schedule matrix
+    // A-E is expressible): CAC_ALL_EFFORTS runs CAC at Standard+Full (else Full
+    // only); CAC_NO_COLLINS (read in stageCdcac) disables the Collins fallback.
+    static const bool cacAllEfforts = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_ALL_EFFORTS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
+    }();
+    if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
     // Pure NRA only: interface (dis)equalities live in the engine, not
     // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
@@ -553,7 +574,24 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
 
     if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
-    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons));
+    // Wall-clock deadline: in the HYBRID (Collins fallback present) bound CAC@Full
+    // to a time-share so a hard covering YIELDS to Collins (Unknown→fallback)
+    // rather than grinding to the global timeout and starving it. When CAC is the
+    // SOLE engine (XOLVER_NRA_CAC_NO_COLLINS / _ONLY) leave it unbounded (0) and
+    // rely on the external timeout. Override via XOLVER_NRA_CAC_DEADLINE_MS.
+    static const bool soleEngine = [] {
+        const char* n = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");
+        return (n && *n && *n != '0') || (o && *o && *o != '0');
+    }();
+    static const long cacDeadlineMs = [] () -> long {
+        if (const char* e = std::getenv("XOLVER_NRA_CAC_DEADLINE_MS")) return std::atol(e);
+        return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
+                        // yields fast to Collins instead of grinding); rest of 1200s is Collins
+    }();
+    CacEngine::Config cfg;
+    cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 
     const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
@@ -605,9 +643,19 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     return std::nullopt;  // Unknown / no libpoly ⇒ fall through to Collins
 }
 
-// Stage 2: the CDCAC engine. Always yields a definite verdict.
+// Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
+    // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
+    // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
+    // unknown when CAC cannot decide, rather than a default/false verdict.
+    static const bool noCollins = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_NO_COLLINS");
+        if (e && *e && *e != '0') return true;
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
+        return o && *o && *o != '0';
+    }();
+    if (noCollins) return TheoryCheckResult::unknown("cac-only-collins-disabled");
     return engine_.check();
 }
 

@@ -219,9 +219,35 @@ CellResult intervalFromCharacterization(
     bool prefixHasAlgebraic = false;
     for (const auto& v : prefix.values) if (v.isAlgebraic()) { prefixHasAlgebraic = true; break; }
 
+    // 0. WITNESS-BASED CHARACTERIZATION REDUCTION: replace each boundary poly by
+    //    its SQUARE-FREE FACTORS and DEDUP across all boundary polys. This is
+    //    root-preserving (the factors' real roots = the poly's real roots, and
+    //    specialization commutes with the product: p(prefix,var)=∏ f_i(prefix,var)),
+    //    so the cell boundaries are IDENTICAL — sound. It only removes provably
+    //    redundant work: shared factors (resultants/discriminants of high-degree
+    //    meti-tarski polys overlap heavily) are specialized+isolated ONCE instead
+    //    of once per containing poly, cutting the dominant per-cell cost. NO
+    //    heuristic drop — only exact duplicates of square-free factors are removed.
+    std::vector<RationalPolynomial> reduced;
+    {
+        std::unordered_set<std::string> seenFac;
+        for (const auto& rp : boundaryPolys) {
+            auto norm = rp.toPrimitiveInteger(*kernel);
+            if (!norm.ok()) return bail("toPrim");
+            if (kernel->isConstant(norm.poly)) continue;
+            for (PolyId f : kernel->squareFreeFactors(norm.poly)) {
+                if (kernel->isConstant(f)) continue;
+                auto frp = RationalPolynomial::fromPolyId(f, *kernel);
+                if (!frp) { reduced.push_back(rp); continue; }   // fail-safe: keep the whole poly
+                frp->normalize();
+                if (seenFac.insert(unitKey(*frp)).second) reduced.push_back(std::move(*frp));
+            }
+        }
+    }
+
     // 1. Collect this level's delineating roots at the prefix.
     std::vector<RealAlg> roots;
-    for (const auto& rp : boundaryPolys) {
+    for (const auto& rp : reduced) {
         auto norm = rp.toPrimitiveInteger(*kernel);
         if (!norm.ok()) return bail("toPrim");
         const PolyId pid = norm.poly;
@@ -312,7 +338,27 @@ CellResult intervalFromCharacterization(
         if (c == CompareResult::Unknown) cmpFail = true;
         return c == CompareResult::Less;
     });
-    if (cmpFail) return bail("sort-compare-unknown");
+    if (cmpFail) {
+        // [P0 step1] Dump the exact RealAlg pairs compareRealAlg cannot order, as
+        // standalone algebraic-kernel reproducers (gated XOLVER_NRA_CAC_DUMP).
+        if (std::getenv("XOLVER_NRA_CAC_DUMP")) {
+            std::ofstream st("/tmp/cac_repro_compare.txt", std::ios::app);
+            auto ser = [&](const RealAlg& r) {
+                if (r.isRational()) { st << "R " << r.rational.get_str(); return; }
+                st << "A idx=" << r.root.rootIndex
+                   << " lo=" << r.root.lower.get_str() << " hi=" << r.root.upper.get_str()
+                   << " poly=";
+                for (const auto& c : algebra->getUni(r.root.definingPoly)) st << c.get_str() << " ";
+            };
+            for (size_t i = 0; i < roots.size(); ++i)
+                for (size_t j = i + 1; j < roots.size(); ++j)
+                    if (algebra->compareRealAlg(roots[i], roots[j]) == CompareResult::Unknown) {
+                        st << "PAIR\n  a: "; ser(roots[i]); st << "\n  b: "; ser(roots[j]); st << "\n";
+                    }
+            st.flush();
+        }
+        return bail("sort-compare-unknown");
+    }
     std::vector<RealAlg> distinct;
     for (auto& r : roots) {
         if (!distinct.empty()) {
