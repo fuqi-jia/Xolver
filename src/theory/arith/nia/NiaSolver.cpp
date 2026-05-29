@@ -197,6 +197,15 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
     if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
+        static const bool oppDiag = std::getenv("NIA_OPP_DIAG") != nullptr;
+        if (oppDiag) {
+            std::cerr << "[NIA-OPP] satVar=" << assertedLit.var
+                      << " sign=" << (int)assertedLit.sign
+                      << " level=" << level
+                      << " currentLevel=" << state_.currentLevel
+                      << " active=" << active_.size()
+                      << " trail=" << state_.trail.size() << "\n";
+        }
         pendingUnknown_ = PendingUnknown{level};
         return;
     }

@@ -607,3 +607,41 @@ hot paths. KEY FINDINGS:
    per-constraint cache (state interacts; conflict-explanation soundness risk).
    Incrementalizing it is a real project — deferred pending A/B evidence that
    per-propagation perf flips solved-count (vs the cases being SAT-hard / EUF-bound).
+
+## MEDAL-LANE ROOT CAUSE (★ HAND TO EQNA) — opposite-polarity floor masks a backtrack-sync bug (2026-05-29)
+The QF_UFNIA capability gap is BIG and concrete. On a 50-case sample @25s:
+10 TO / 7 sat / 27 unknown / 6 unsat. ALL 27 fast-unknowns are z3-solvable (20 sat,
+7 unsat) — pure capability loss, not perf. Reason tally over the 27:
+  22  "NIA: pending unknown (opposite polarity asserted)"   <-- dominant
+   1  strict-validation indeterminate
+(the rest no-reason/slow). Same floor loses QF_ANIA avg20 (z3=sat).
+
+DIAGNOSIS (NIA_OPP_DIAG env, added env-gated zero-cost): on int_check_bvsge_bvmul_rtl
+the floor fires repeatedly, e.g.:
+  [NIA-OPP] satVar=85 level=9815 currentLevel=0 active=60 trail=9
+i.e. AFTER a backtrack to level 0 (state_.currentLevel=0), NIA's active_ still holds
+~60 entries (state_.trail=9). active_-trail ~= 51 = the INTERFACE (dis)equalities,
+which TheoryManager replays at ev.decisionLevel (TheoryManager.cpp:358/385) and push
+into NIA active_/trail_ (NiaSolver.cpp:946-948/970-972) but which are NOT being
+truncated on backtrack — they ACCUMULATE across the search. Regular theory atoms
+(satVar 85,160) then trip ActiveLiteralSet::OppositePolarity because the stale
+opposite-sign stamp from a pre-backtrack context is still present.
+
+WHY THE FLOOR EXISTS: it MASKS this sync bug. If NIA reasoned over the stale
+(too-large) active_ it could emit a conflict whose reasons include lits no longer on
+the SAT trail => potential false UNSAT. Flooring to unknown is the safe-but-lossy
+guard. NRA does NOT floor (NraSolver.cpp:97 "left to engine defense-in-depth") — it
+just dedups same-polarity; that's why NRA doesn't bleed cases here.
+
+PROPER FIX = EQNA lane (do NOT dual-edit per master): the backtrack path
+notify_backtrack -> tm_.backtrackToLevel -> solver->backtrackToLevel -> onBacktrack
+must truncate NIA's interface-eq entries too. Either (a) the interface eqs need a
+correct decisionLevel so onBacktrack's `trail_.back().level > level` pops them, or
+(b) TheoryManager must re-drive interface-eq assertion fresh per decision level
+instead of letting them accumulate. Once active_ tracks the live SAT trail, the
+opposite-polarity floor stops firing and ~22/27 (this sample) UFNIA + the QF_ANIA
+sats become reachable; THEN re-validate each newly-reachable verdict vs z3 (the
+floor was guarding soundness — removing it must be paired with the sync fix, not
+alone). NIA-side robust alternative if EQNA can't: replace-stale-on-OppositePolarity
+(latest-wins) — sound under invariant 1 (SAT validated) + subset-conflict soundness,
+but needs active_/trail_/normalized_ index surgery; deferred pending the seam agreement.
