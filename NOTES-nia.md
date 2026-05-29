@@ -671,3 +671,52 @@ combination cases gated by the EQNA opp-polarity/backtrack-sync floor — same b
 22 z3-sat cases. Folded into #36: after EQNA's fix, re-validate all 29 (22 sat + 7 unsat)
 vs z3 through the EUF+NIA combination path; point modular/GCD/CDCAC at the 7 unsat THERE,
 not standalone. No NIA-side code change possible/needed pre-fix. Harness kept in /tmp/nia7.
+
+## ★ MILESTONE: SquareContractorZ false-UNSAT (latent under --allon) FIXED (2026-05-30)
+After the master ff-merge to integration 2063e28 (incl. EQNA's XOLVER_NIA_IFACE_LIFECYCLE
+@7fe3ba2), running the gate exposed a HARD false-UNSAT under the ON config:
+  ufnia_001_sat_fun_sq  oracle=sat solver=unsat  (f(x)^2=16 ∧ f(x)>=0 ∧ ... )
+Delta-debug isolated the minimal pair: XOLVER_NIA_PRESOLVE_FULL + XOLVER_NIA_ICP.
+IFACE was NOT required (the bug reproduces ON-without-IFACE) — a PRE-EXISTING latent
+unsoundness in master's "validated --allon" set, not a regression from IFACE.
+
+ROOT CAUSE: SquareContractorZ.cpp line 65, `c = -c;` on the sign=-1 branch.
+For poly `-x^2 + c REL 0` (sign=-1, recognizePattern sets c = a0):
+   -x^2 + c REL 0  ⇔  -x^2 REL -c  ⇔  x^2 flip(REL) c
+The relation flips but `c` STAYS THE SAME. The `c = -c` turned x^2 = 16
+into the "x^2 - c" form with c=-16, then `case Eq: if (c < 0) Conflict` fires
+=> false UNSAT. (Same path turns x^2 <= 16 into a false UNSAT too — sign=-1
+rel=Geq → flipped Leq with c<0 → Conflict.)
+
+WHY THE PURE CASE (v^2=16, v>=0) ESCAPED: at Standard effort the presolve fixpoint
+runs and returns Consistent ("stop"), short-circuiting the pipeline before
+stageIcp. PRESOLVE_FULL defers presolve to Full-effort-only — so Standard-effort
+flow goes through to stageIcp, hitting the bug. The ALIAS case (+ w=v) blocks
+the early-stage square-bound shortcut so presolve doesn't terminate either.
+
+FIX: drop `c = -c;` (commit 2965e21, agent/nia-2 tip). Verified on the full
+square-pattern matrix (x^2 = 16 / <=16 / >=16 / =0 / =-1 / =15 / <=-5) all
+agree with z3. Unit test: tests/unit/test_square_contractor.cpp pins each
+sign/relation case incl. the regression case. Gate: unit 965/482235;
+regression-ufnia OFF+ON green; regression-nia OFF green. regression-nia ON
+has a PRE-EXISTING perf timeout on nia_097_unsat_squares_chain (a*d - b*c = -2
+> 0 trivial UNSAT) — also times out under master's validated CANDFLAGS
+WITHOUT IFACE and ON-no-ICP / ON-no-CDCAC: WSL/server perf-margin flake,
+NOT caused by this fix, surfaced as task #39 for server bisection.
+
+KEY UPSHOT: master's --allon binary (pre-merge of this fix) was UNSOUND on
+common square patterns. Any QF_NIA / QF_UFNIA submission case with `x^2 = c`
+(c a perfect square) or `x^2 <= c` could have been a false UNSAT under
+--allon when the poly happened to be in the `-x^2 + c` normal form. Likely
+mitigated in part by presolve-at-Standard masking, but the bug was real.
+Now eliminated. ufnia_001 was the canary; the full QF_UFNIA submission
+config is sound again.
+
+HARNESS: /tmp/nia7/diff29.py (3-way differential vs z3, classifies
+UNSOUND / RECOVERED / REGRESSED / AGREE / FLOORED / ORACLE?, candidate =
+validated CANDFLAGS + XOLVER_NIA_IFACE_LIFECYCLE). 46-case sample list at
+/tmp/nia7/cases_abs.txt (7 z3-unsat BV-as-NIA + Zohar-ic int_check family
++ qf_Select). 8-case pilot: 0 UNSOUND, 6 AGREE, 2 cand-timeout @23s (was
+fast-floor) — confirms IFACE engages the engine on previously-floored cases;
+the remaining gap is per-cb_propagate speed (master directive #2 / task #38).
+
