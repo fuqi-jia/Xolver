@@ -54,6 +54,15 @@ BitVec BitBlastEncoder::mkVar(unsigned width) {
 
 SatLit BitBlastEncoder::andGate(SatLit a, SatLit b) {
     if (over_) return false_;        // budget exhausted: no more gates/clauses
+    // Constant folding (BLAN transformer simplifier): skip the fresh var/clauses
+    // when an input is constant or the inputs are (anti)identical. Bit-blasting
+    // produces MANY constant inputs (padding, sign-extension, zero partials), so
+    // this is the dominant SAT-var reduction. Exact (semantics-preserving).
+    if (a == false_ || b == false_) return false_;
+    if (a == true_)  return b;
+    if (b == true_)  return a;
+    if (a == b)      return a;
+    if (a == b.negated()) return false_;
     SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c});
     sat_.addClause({a, c.negated()});
@@ -63,6 +72,11 @@ SatLit BitBlastEncoder::andGate(SatLit a, SatLit b) {
 
 SatLit BitBlastEncoder::orGate(SatLit a, SatLit b) {
     if (over_) return false_;        // budget exhausted: no more gates/clauses
+    if (a == true_ || b == true_) return true_;
+    if (a == false_) return b;
+    if (b == false_) return a;
+    if (a == b)      return a;
+    if (a == b.negated()) return true_;
     SatLit c = freshVar();
     sat_.addClause({a, b, c.negated()});
     sat_.addClause({a.negated(), c});
@@ -72,6 +86,12 @@ SatLit BitBlastEncoder::orGate(SatLit a, SatLit b) {
 
 SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
     if (over_) return false_;        // budget exhausted: no more gates/clauses
+    if (a == false_) return b;
+    if (b == false_) return a;
+    if (a == true_)  return b.negated();
+    if (b == true_)  return a.negated();
+    if (a == b)      return false_;
+    if (a == b.negated()) return true_;
     SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c.negated()});
     sat_.addClause({a, b, c.negated()});
@@ -82,6 +102,15 @@ SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
 
 SatLit BitBlastEncoder::iteGate(SatLit s, SatLit t, SatLit e) {
     if (over_) return false_;        // budget exhausted: no more gates/clauses
+    if (s == true_)  return t;
+    if (s == false_) return e;
+    if (t == e)      return t;
+    if (t == true_  && e == false_) return s;
+    if (t == false_ && e == true_)  return s.negated();
+    if (t == true_)  return orGate(s, e);          // s ? 1 : e
+    if (e == false_) return andGate(s, t);         // s ? t : 0
+    if (t == false_) return andGate(s.negated(), e);
+    if (e == true_)  return orGate(s.negated(), t);
     SatLit c = freshVar();
     sat_.addClause({s.negated(), t.negated(), c});
     sat_.addClause({s.negated(), t, c.negated()});

@@ -352,3 +352,30 @@ tuning via the differential (3s default misses slow-SAT; calypto needs width>32)
 (2) BLAN encoding optimizations not yet ported — offset encoding for bounded vars
 (var=lb+t, narrower width), range-splitting, sorting-network addition; CSE is
 already ported. Validate-gate keeps all of these sound to add later.
+
+## ENCODING-PARITY WITH BLAN ("对拍", 2026-05-29) — closing the speed gap
+Head-to-head on 24 BLAN-sat cases: BLAN 20/24. Xolver eager-arm progression:
+11/24 (initial) -> 17/24 (per-var width) -> **18/24 (constant folding)**.
+Root-caused via minimal-case SAT-var counts (BLAN prints satVars):
+  m_mul (a*b=100): BLAN 231, ours 744->411 (folding).
+  m_sum (a+b+..=100): BLAN 159, ours 686->403 (folding).
+  1395.smt2: BLAN 25444 vars/1.48s; ours 153k/16.8s -> 98k/8.6s (per-var width)
+             -> 60k/3.7s (folding).
+
+FIXES SHIPPED:
+1. Per-var width [0a29ca2]: bounded vars at exact width not uniform cascade.
+2. **Constant folding in BitBlastEncoder gates [this commit]** — andGate/orGate/
+   xorGate/iteGate now short-circuit on constant/(anti)identical inputs instead of
+   always allocating a fresh var+clauses. Bit-blasting emits MANY constant inputs
+   (padding, sign-extension, zero partial products, LSB carry-in), so this is the
+   dominant systematic var reduction (~45% on minimal cases). SHARED ENCODER ->
+   benefits BOTH the eager arm AND the per-assignment nia.bit-blast. Exact
+   (semantics-preserving): unit 890/890, nia reg 113/113 OFF+ON, 0-unsound.
+3. Encode budget guard [a6727bd]: var-budget 2M + in-encode wall-clock check so a
+   single huge formula (3110 vars) can't hang the arm.
+
+REMAINING gap to BLAN (still ~1.8-2.5x var count): the bound atoms are still
+encoded as adder+comparator (BLAN's OFFSET encoding makes them free) — that's the
+next lever. The last 2 unsolved h2h cases are huge formulas (3110 vars) that need
+offset to fit. WHY-BLAN-IS-FASTER answer: more compact encoding (constant folding
+[now ported] + offset/unsigned vars [next] + tighter operators), not algorithm.
