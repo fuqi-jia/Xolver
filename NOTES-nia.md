@@ -531,3 +531,32 @@ not brute 9^9 enumeration) with uncertain yield — scoped as a future lever, no
 built (speculative + ground-truth-unknown).
 VERDICT: the modular lever's reachable UNSAT is captured + 2-oracle-validated
 0-unsound; surpass demonstrated on the sample. nia reg OFF+ON 0-unsound, unit 890.
+
+## TRACK A — independent validation of the oracle-blind modular UNSATs (DONE 2026-05-29)
+The oracle-blind UNSATs (z3+cvc5+BLAN all timeout) are the surpass axis + the
+single biggest soundness exposure (the n*q=a-r quotient-elimination must be
+equisat; nothing external confirms). Made them competition-safe via a STRICT
+independent-proof gate + a SECOND, fully-independent checker:
+1. STRICT GATE [da843e3]: the enum path emits UNSAT ONLY when the in-binary
+   brute-cert (raw constraints, NO quotient-elim — a path independent of the
+   transform) returns ConfirmedUnsat. OverBudget (un-cross-checkable) now FLOORS
+   to unknown; FoundModel floors. certBudget raised to enumBudget_ so every
+   enum-proven case is brute-re-verifiable. Hensel emits separately via its
+   kernel-verified polynomial-identity cert.
+2. SECOND INDEPENDENT CHECKER [tools/modular_indep_check.py]: separate Python +
+   separate evaluator (no shared kernel). Parses the dumped normalized
+   constraints, brute-forces a SUBSET (equalities ==0 mod m + Neqs on PROVABLY
+   BOUNDED remainder vars) over Z/m. Sound subset argument: subset-UNSAT-mod-m =>
+   full-system UNSAT; can only CONFIRM or be INCONCLUSIVE, never false-refute.
+RESULTS on the 80 BLAN-undecided modular UNSATs:
+- 65 brute-cert ConfirmedUnsat; the independent Python checker re-confirms 64/65
+  (1 = ps4, subset-inconclusive but C++-cert-confirmed; NOT a disagreement).
+- 6 Hensel-identity-backed (machine-checkable polynomial identity).
+- 8 un-cross-checkable -> FLOORED to unknown (sound; never ship unverified).
+- 0 FoundModel (C++), 0 Python disagreements, 0 z3 sat, 0 cvc5 sat.
+=> the n*q=a-r transformation is validated by THREE independent angles (C++
+brute-cert raw, Python separate-evaluator, z3+cvc5). The confirmed UNSATs are
+shippable; the un-cross-checkable are floored. unit 890/890, nia reg 113/113 OFF+ON.
+DECISION per master: score the confirmed, never gamble the division on an unaudited
+cert. (A formal Xolver-proof-checker-consumable modular cert is a further
+formalization; the empirical 3-path agreement provides the independent validation.)
