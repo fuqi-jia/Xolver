@@ -98,3 +98,35 @@ get_unsat_cover(level i, sample s = (x_1=a_1,…,x_{i-1}=a_{i-1})):
 Default-OFF flag + Unknown guardrail. unit + NRA-family reg 177/177 OFF+ON,
 0-unsound. Broad QF_NRA z3/cvc5 differential 0-unsound before promotion (server).
 Collins default path byte-identical when the flag is OFF.
+
+## compareRealAlg — certified comparator contract (review-pinned)
+
+Comparing algebraic numbers must NOT "let intervals overlap then keep guessing".
+Two separate certificates:
+  - EQUALITY certificate: identity / minimal-poly / gcd-membership proof.
+  - SEPARATION certificate: refine isolating intervals until DISJOINT.
+Invariant: `Less/Equal/Greater` require a mathematical certificate; with none,
+return `Unknown` — never guess (no interval-overlap→pick-first, no
+budget→assume-equal/distinct, no pointer order as math order).
+
+Steps (in order; first conclusive wins):
+1. exact identity — same canonical object id; or same certified minimal poly +
+   same rootIndex (different rootIndex on the SAME poly orders directly, no
+   refine). Same poly, missing index → locate a UNIQUE root ordinal by interval
+   refinement (multiple overlaps → refine; non-unique after budget → Unknown).
+2. exact equality — if both minimal and polys differ ⇒ distinct (→ step 3 for
+   order). Else g = gcd(defA,defB): deg(g)=0 ⇒ distinct; deg(g)>0 ⇒
+   exactRootMembership(g, ·) with priority: (a) minimal-poly divisibility,
+   (b) exact signAt(g, root)==0, (c) UNIQUE gcd-root interval membership (count-
+   based, never first-overlap). Both belong to the SAME gcd root ⇒ Equal; else
+   distinct.
+3. certified separation — ONLY after distinctness is proven: refine until the
+   isolating intervals are disjoint ⇒ Less/Greater. (Refining possibly-equal
+   roots can never separate, so distinctness must be established first.)
+4. budget exhausted ⇒ Unknown — do NOT guess.
+
+Caller rules: Unknown must make root isolation / cell construction UNSUPPORTED
+(→ Collins fallback), never a pointer/first-overlap order. A non-semantic
+stable-key comparator is allowed for map/set keys ONLY, never for cell order /
+sign reasoning / covering merge / SAT-UNSAT decisions. To reduce Unknown,
+strengthen steps 1/2 (exact equality), do NOT raise the step-3 refine cap.
