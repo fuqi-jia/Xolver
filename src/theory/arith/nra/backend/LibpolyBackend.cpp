@@ -1187,9 +1187,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
                 : CompareResult::Greater;
         }
 
-        // Try gcd-based equality: locate both roots in gcd
+        // STEP 2 — exact equality via gcd-membership. gcd COPRIME (constant) ⇒ the
+        // two roots are PROVABLY DISTINCT (no common algebraic root). Otherwise
+        // locate both in the gcd: same gcd-root ⇒ Equal, different ⇒ ordered.
         UniPolyId d = gcdUni(a.root.definingPoly, b.root.definingPoly);
-        if (d != NullUniPolyId && !isConstantUni(d)) {
+        const bool provenDistinct = (d == NullUniPolyId) || isConstantUni(d);
+        if (!provenDistinct) {
             auto locA = locateRootInPolynomial(a.root, d);
             auto locB = locateRootInPolynomial(b.root, d);
             if (locA.status == RootLocateStatus::Belongs &&
@@ -1203,19 +1206,21 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             }
         }
 
-        // STEP 3 — certified separation. (Steps 1/2 above: exact identity =
-        // same defining poly + same rootIndex; exact equality = gcd/membership.)
-        // Refine the isolating intervals until they are DISJOINT, then the order
-        // is certified. SOUND: a hit bound falls through to Unknown — never a
-        // guessed order. EQUAL roots SHOULD be caught by the exact equality tests
-        // above; IF NOT, the cap prevents nontermination (equal roots never
-        // separate) and returns a sound Unknown. To reduce Unknown the fix is to
-        // STRENGTHEN the exact-equality step (1/2), NOT to raise this cap blindly:
-        // genuinely distinct roots separate quickly, so a larger cap mostly just
-        // burns iterations on undetected-equal pairs.
+        // STEP 3 — certified separation: refine the isolating intervals until
+        // DISJOINT, then the order is certified by disjoint intervals. SOUND: a
+        // hit bound falls through to Unknown — never a guessed order.
+        //   - When distinctness is PROVEN (coprime gcd), refinement is guaranteed
+        //     to terminate (the roots are a finite distance apart), so use a
+        //     GENEROUS bound (refine-until-disjoint) — meti-tarski trig/exp roots
+        //     can be ~2^-65 apart, well past a 64-cap. With the local sign-based
+        //     refineRootInterval each step is O(1) evals, so a large bound is cheap.
+        //   - When distinctness is NOT proven (non-coprime gcd whose membership
+        //     test was inconclusive), the roots MIGHT be equal — equal roots never
+        //     separate, so keep a TIGHT cap to avoid nontermination ⇒ sound Unknown.
+        const int refineCap = provenDistinct ? 4096 : 64;
         AlgebraicRoot mutableA = a.root;
         AlgebraicRoot mutableB = b.root;
-        for (int iter = 0; iter < 64; ++iter) {
+        for (int iter = 0; iter < refineCap; ++iter) {
             if (mutableA.upper < mutableB.lower) return CompareResult::Less;
             if (mutableB.upper < mutableA.lower) return CompareResult::Greater;
 

@@ -97,6 +97,21 @@ TEST_CASE("compareRealAlg R1: high-degree meti-tarski pair (sort-compare-unknown
     CHECK((c == CompareResult::Less || c == CompareResult::Greater));
 }
 
+// R2: sin-problem-7-weak2 pair — roots ~2^-65 apart (a = 1000x^7-42000x^5+21*b),
+// so the 64-cap couldn't separate them; proven-distinct (coprime) refine must.
+TEST_CASE("compareRealAlg R2: ~2^-65-apart distinct roots (proven-distinct refine)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend algebra(kernel.get());
+    UniPolyId pa = algebra.allocUni({1000, 0, -42000, 0, 840000, 0, -4158000, 1323});
+    UniPolyId pb = algebra.allocUni({40000, 0, -198000, 63});
+    RealAlg a = algRoot(pa, 1, mpq_class(0), mpq_class(1, 4));
+    RealAlg b = algRoot(pb, 1, mpq_class(0), mpq_class(1, 4));
+    CompareResult c = algebra.compareRealAlg(a, b);
+    CHECK(c != CompareResult::Equal);
+    CHECK(c != CompareResult::Unknown);
+    CHECK((c == CompareResult::Less || c == CompareResult::Greater));
+}
+
 // T5: wide overlapping intervals must NOT be conflated (first-overlap bug guard).
 // sqrt(2) and sqrt(3), BOTH given the loose interval [1,2] (overlaps each other).
 TEST_CASE("compareRealAlg T5: wide overlapping intervals not conflated") {
