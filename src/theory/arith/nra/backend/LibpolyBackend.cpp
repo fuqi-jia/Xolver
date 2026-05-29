@@ -1203,10 +1203,19 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             }
         }
 
-        // Refine until intervals separate
+        // STEP 3 — certified separation. (Steps 1/2 above: exact identity =
+        // same defining poly + same rootIndex; exact equality = gcd/membership.)
+        // Refine the isolating intervals until they are DISJOINT, then the order
+        // is certified. SOUND: a hit bound falls through to Unknown — never a
+        // guessed order. EQUAL roots SHOULD be caught by the exact equality tests
+        // above; IF NOT, the cap prevents nontermination (equal roots never
+        // separate) and returns a sound Unknown. To reduce Unknown the fix is to
+        // STRENGTHEN the exact-equality step (1/2), NOT to raise this cap blindly:
+        // genuinely distinct roots separate quickly, so a larger cap mostly just
+        // burns iterations on undetected-equal pairs.
         AlgebraicRoot mutableA = a.root;
         AlgebraicRoot mutableB = b.root;
-        for (int iter = 0; iter < 20; ++iter) {
+        for (int iter = 0; iter < 64; ++iter) {
             if (mutableA.upper < mutableB.lower) return CompareResult::Less;
             if (mutableB.upper < mutableA.lower) return CompareResult::Greater;
 
@@ -1214,7 +1223,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             bool okB = refineRootInterval(mutableB);
             if (!okA || !okB) break;
         }
-        return CompareResult::Unknown;
+        return CompareResult::Unknown;   // STEP 4 — budget exhausted: do NOT guess
     }
 
     return CompareResult::Unknown;
