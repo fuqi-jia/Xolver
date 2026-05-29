@@ -1420,7 +1420,11 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
     for (size_t i = 0; i < prefix.values.size(); ++i) {
         if (prefix.values[i].isAlgebraic()) { ++algCount; algIdx = static_cast<int>(i); }
     }
-    if (algCount != 1) return empty;     // tower / none → caller Unknown (follow-up)
+    if (algCount != 1) {                 // multi-extension / none → tower path takes over
+        static const bool kTd = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
+        if (kTd) std::cerr << "[LAZVAL] norm bail=algCount=" << algCount << std::endl;
+        return empty;
+    }
     VarId algVar = prefix.varOrder[algIdx];
     const AlgebraicRoot& alpha = prefix.values[algIdx].root;
     if (alpha.definingPoly == NullUniPolyId) return empty;
@@ -1518,6 +1522,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     RootSet empty;
     static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
     if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
+    auto TD = [&](const char* why) -> RootSet {
+        if (kDiagEntry) std::cerr << "[LAZVAL] tower bail=" << why << std::endl;
+        return empty;
+    };
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
     //    coordinates are substituted into p). Each algebraic coordinate becomes
@@ -1525,7 +1533,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     //    a MONIC minimal poly (TowerKernel requires monic). Soundness does NOT
     //    require the m_i to be irreducible (see RootMembershipOracle.h).
     auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
-    if (!rpOpt) return empty;
+    if (!rpOpt) return TD("fromPolyId");
     RationalPolynomial p1 = *rpOpt;
 
     TowerContext ctx;
@@ -1535,10 +1543,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         VarId v = prefix.varOrder[i];
         if (val.isRational()) { p1 = p1.substituteRational(v, val.rational); continue; }
         ++algCount;
-        if (val.root.definingPoly == NullUniPolyId) return empty;
+        if (val.root.definingPoly == NullUniPolyId) return TD("null-defining-poly");
         const auto& mco = getUni(val.root.definingPoly);   // high-to-low integer coeffs
         int deg = static_cast<int>(mco.size()) - 1;
-        if (deg < 1 || mco[0] == 0) return empty;
+        if (deg < 1 || mco[0] == 0) return TD("bad-minpoly-degree");
         mpq_class lead(mco[0]);
         RationalPolynomial mi;
         for (size_t j = 0; j < mco.size(); ++j) {
@@ -1553,14 +1561,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         ctx.minimalPolys.push_back(std::move(mi));
         ctx.generators.push_back(val);
     }
-    if (algCount < 1) return empty;                        // no tower => not our case
+    if (algCount < 1) return TD("algCount<1");             // no tower => not our case
 
     p1.normalize();
-    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return empty;
+    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return TD("p1-zero-const-or-no-mainVar");
     {
         std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
         for (VarId v : p1.variables())
-            if (v != mainVar && !ext.count(v)) return empty;   // residual var => Unknown
+            if (v != mainVar && !ext.count(v)) return TD("p1-stray-var");   // residual var => Unknown
     }
 
     // Tower-aware real-root isolation of a polynomial F (in mainVar + tower
@@ -1584,9 +1592,10 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             if (beta.isRational()) { lo = hi = beta.rational; }
             else { lo = beta.root.lower; hi = beta.root.upper; }
             RootMembership mm = lazardRootMembership(F, mainVar, nrF.norm, lo, hi, ctx);
-            if (mm == RootMembership::Keep) kept.roots.push_back(beta);
-            else if (mm == RootMembership::Unknown) return none;   // => caller Unknown
-            // Drop => conjugate/extraneous, discard
+            if (mm == RootMembership::Keep || mm == RootMembership::Unknown) {
+                kept.roots.push_back(beta);   // real boundary, or conservative over-refinement
+            }
+            // Drop => provably a conjugate/extraneous root here, omit (sound: not a boundary)
         }
         ok = true;
         return kept;
@@ -1598,7 +1607,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     auto nr = towerNorm(p1, mainVar, ctx);
     if (!nr.ok) {
         if (kDiag) std::cerr << "[LAZVAL] towerNorm(p1) not ok => Unknown" << std::endl;
-        return empty;
+        return TD("towerNorm-not-ok");
     }
     if (nr.norm.isConstant()) {
         // Nullification case: the Norm degenerated to a constant. Either p1
@@ -1620,7 +1629,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             // proof that p1 in <m_0..m_{k-1}>.)
             if (kDiag) std::cerr << "[LAZVAL] AllDerivativesZero => unsupported (conservative)" << std::endl;
             supported = false;
-            return empty;
+            return TD("AllDerivativesZero");
         }
         // status == Complete: residual is in mainVar + reduced tower coeffs.
         RationalPolynomial residual = std::move(val.univariate);
@@ -1638,14 +1647,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
             for (VarId v : residual.variables())
                 if (v != mainVar && !ext.count(v)) {
                     if (kDiag) std::cerr << "[LAZVAL] residual has stray var => Unknown" << std::endl;
-                    return empty;   // residual var => Unknown
+                    return TD("residual-stray-var");   // residual var => Unknown
                 }
         }
         bool ok = false;
         RootSet recovered = isolateInTower(residual, ok);
         if (kDiag) std::cerr << "[LAZVAL] residual isolate ok=" << ok
                              << " roots=" << recovered.numRoots() << std::endl;
-        if (!ok) return empty;                              // unsupported => Unknown
+        if (!ok) return TD("isolateInTower-residual-not-ok");   // unsupported => Unknown
         supported = true;
         return recovered;
     }
@@ -1654,17 +1663,31 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     if (Nuni == NullUniPolyId) return empty;
     RootSet candidates = isolateRealRoots(Nuni);
 
-    // 3. Keep exactly the candidates that are roots of p1 at the real embedding,
-    //    via the exact three-state oracle. Any Unknown => not certifiable.
+    // 3. The Norm's real roots are a SOUND SUPERSET of p1's real boundaries at our
+    //    embedding: every real root β of p1's specialization q(mainVar) satisfies
+    //    N(β)=∏_σ p1^σ(β)=0, so β ∈ candidates. We then classify each candidate
+    //    with the exact three-state oracle:
+    //      - Keep    : provably a root of p1 here → a real boundary, include.
+    //      - Drop    : provably NOT a root here (a conjugate's root) → spurious, omit.
+    //      - Unknown : oracle can't decide → INCLUDE conservatively. Including an
+    //                  extra boundary only REFINES the covering (splits one sign-
+    //                  invariant region into two equally sign-invariant pieces); it
+    //                  can never merge regions of different sign, so the cell stays
+    //                  truth-invariant and UNSAT stays sound. This replaces the old
+    //                  bail-on-Unknown, which sacrificed completeness (CONVOI2-class
+    //                  multi-extension leaves) for no soundness gain.
+    //    Net: never miss a real boundary (superset), never bail (complete), never
+    //    merge sign regions (sound).
     RootSet out;
     for (const auto& beta : candidates.roots) {
         mpq_class lo, hi;
         if (beta.isRational()) { lo = hi = beta.rational; }
         else { lo = beta.root.lower; hi = beta.root.upper; }
         RootMembership m = lazardRootMembership(p1, mainVar, nr.norm, lo, hi, ctx);
-        if (m == RootMembership::Keep) out.roots.push_back(beta);
-        else if (m == RootMembership::Unknown) return empty;   // => caller Unknown
-        // Drop => conjugate/extraneous, discard
+        if (m == RootMembership::Keep || m == RootMembership::Unknown) {
+            out.roots.push_back(beta);   // real boundary, or conservative over-refinement
+        }
+        // Drop => provably a conjugate/extraneous root here, omit (sound: not a boundary)
     }
     supported = true;
     return out;

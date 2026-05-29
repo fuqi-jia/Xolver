@@ -114,6 +114,51 @@ TEST_CASE("intervalFromCharacterization: x^2-2, sample 2 -> (√2, +inf)") {
     CHECK_FALSE(r.interval.contains(Q(0)));
 }
 
+TEST_CASE("intervalFromCharacterization: non-leaf rational nullification -> Lazard residual root") {
+    // q = (x-1)*y nullifies at the rational prefix x=1 (q ≡ 0 in y). A non-leaf
+    // (projection-factor) nullification must NOT be skipped: its Lazard valuation
+    // residual is y (divide (x-1)*y by (x-1) -> y, substitute x=1 -> y), whose
+    // root y=0 is a genuine lifting boundary. Skipping it would give the whole
+    // y-axis (cell too large -> false UNSAT). With sample y=1 the cell is (0,+inf).
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial xm1; xm1.addVar(x, 1, 1); xm1 = xm1 + konst(-1); xm1.normalize();  // x-1
+    RationalPolynomial yy;  yy.addVar(y, 1, 1); yy.normalize();                            // y
+    RationalPolynomial q = xm1 * yy; q.normalize();                                        // (x-1)*y
+    SamplePoint prefix; prefix.push(x, RealAlg::fromRational(mpq_class(1)));               // x=1
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {q},
+                                          prefix, y, RealAlg::fromRational(mpq_class(1)),
+                                          /*skipVanishing=*/false);
+    REQUIRE(r.supported);                       // residual recovered (NOT bailed, NOT skipped)
+    CHECK(r.interval.contains(Q(1)));           // sample side
+    CHECK(r.interval.contains(Q(1000)));
+    CHECK_FALSE(r.interval.contains(Q(0)));     // boundary at residual root y=0
+    CHECK_FALSE(r.interval.contains(Q(-1)));    // other side excluded ⇒ cell is NOT the whole axis
+}
+
+TEST_CASE("intervalFromCharacterization: leaf rational nullification -> skip (whole axis)") {
+    // SAME nullifying q, but as a LEAF constraint (skipVanishing=true): a constraint
+    // ≡0 on the fiber has uniform truth (decided by signAt), so it adds no boundary
+    // and the cell is the whole axis. This is the leaf/non-leaf asymmetry.
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial xm1; xm1.addVar(x, 1, 1); xm1 = xm1 + konst(-1); xm1.normalize();
+    RationalPolynomial yy;  yy.addVar(y, 1, 1); yy.normalize();
+    RationalPolynomial q = xm1 * yy; q.normalize();
+    SamplePoint prefix; prefix.push(x, RealAlg::fromRational(mpq_class(1)));
+    auto r = intervalFromCharacterization(&backend, kernel.get(), {q},
+                                          prefix, y, RealAlg::fromRational(mpq_class(1)),
+                                          /*skipVanishing=*/true);
+    REQUIRE(r.supported);
+    CHECK(r.interval.contains(Q(1)));
+    CHECK(r.interval.contains(Q(0)));           // no boundary ⇒ whole axis
+    CHECK(r.interval.contains(Q(-1000)));
+}
+
 TEST_CASE("intervalFromCharacterization: positive-definite x^2+1 -> whole axis") {
     auto kernel = createPolynomialKernel();
     LibpolyBackend backend(kernel.get());

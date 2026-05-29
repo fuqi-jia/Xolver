@@ -136,6 +136,64 @@ RealValue toRealValue(LibpolyBackend& algebra, const RealAlg& r) {
     a.upperOpen = true;
     return RealValue::fromAlgebraic(std::move(a));
 }
+
+// Exact division of p (viewed univariate in xi) by the linear factor (xi - ai),
+// ai rational. Returns {quotient, divisible}: divisible iff (xi - ai) | p with
+// zero remainder (Horner synthetic division over the multivariate coefficients).
+std::pair<RationalPolynomial, bool> divideByLinearExact(const RationalPolynomial& p,
+                                                        VarId xi, const mpq_class& ai) {
+    std::vector<RationalPolynomial> c = p.coefficients(xi);   // c[j] = coeff of xi^j
+    const int d = static_cast<int>(c.size()) - 1;
+    if (d < 1) return {p, false};                             // no xi ⇒ not divisible
+    std::vector<RationalPolynomial> b(d);
+    b[d - 1] = c[d];
+    for (int j = d - 1; j >= 1; --j) {
+        RationalPolynomial t = b[j];
+        t *= ai;
+        b[j - 1] = c[j] + t;
+    }
+    RationalPolynomial t0 = b[0];
+    t0 *= ai;
+    RationalPolynomial rem = c[0] + t0;
+    rem.normalize();
+    if (!rem.isZero()) return {p, false};
+    RationalPolynomial quot;
+    for (int j = 0; j < d; ++j) {
+        // j==0 is the xi^0 (constant-in-xi) term; fromVar(xi,0,·) returns ZERO by
+        // design (exponents must be >0), so add b[0] directly — otherwise the
+        // constant quotient term is silently dropped and the residual collapses.
+        if (j == 0) quot += b[0];
+        else quot += b[j] * RationalPolynomial::fromVar(xi, j, mpq_class(1));
+    }
+    quot.normalize();
+    return {quot, true};
+}
+
+// Lazard valuation residual of p at a RATIONAL prefix (cvc5 LazardEvaluation::
+// reducePolynomial specialized to rational coordinates: the CoCoA tower reduction
+// degenerates to iterated vanishing-factor division). Processes the prefix coords
+// IN ORDER (the elimination order): for each xi=ai, divide out (xi-ai) to its full
+// multiplicity, then substitute xi=ai. The result is the residual whose real roots
+// are the genuine LIFTING boundaries a nullified projection factor still imposes
+// (NEVER atom truth). Sound: exact rational arithmetic, no algebraic extension ⇒
+// no spurious/conjugate roots (so cvc5's spurious-root filter is a no-op here).
+RationalPolynomial lazardResidualRational(RationalPolynomial p, const SamplePoint& prefix) {
+    for (size_t i = 0; i < prefix.varOrder.size(); ++i) {
+        if (!prefix.values[i].isRational()) return RationalPolynomial();   // caller guards rational-only
+        const VarId xi = prefix.varOrder[i];
+        const mpq_class ai = prefix.values[i].rational;
+        p.normalize();
+        while (p.contains(xi)) {
+            auto qd = divideByLinearExact(p, xi, ai);
+            if (!qd.second) break;
+            p = std::move(qd.first);
+            p.normalize();
+        }
+        p = p.substituteRational(xi, ai);
+        p.normalize();
+    }
+    return p;
+}
 } // namespace
 
 CellResult intervalFromCharacterization(
@@ -168,31 +226,81 @@ CellResult intervalFromCharacterization(
         if (!norm.ok()) return bail("toPrim");
         const PolyId pid = norm.poly;
         if (kernel->isConstant(pid)) continue;            // no boundary
-        const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
-        if (vr == VanishResult::Unknown) return bail("vanish-unknown");
-        if (vr == VanishResult::Vanishes) {
-            if (skipVanishing) continue;                  // leaf constraint: no var-boundary
-            // Non-leaf nullification: skipping it would be sound ONLY if the
-            // nullified poly's required-coefficients provably delineate the locus
-            // at lower levels — UNVERIFIED for frontier (no-oracle) cells, and the
-            // skip gave no measured benefit (CONVOI2 stayed unknown). Per the
-            // no-unverified-UNSAT mandate, FLOOR to Unknown. The sound recovery is
-            // the per-cell certificate (the documented next deep increment).
-            return bail("vanish-nonleaf");
-        }
-
-        const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);
         RootSet rs;
-        if (up == NullUniPolyId) {
-            if (!prefixHasAlgebraic) return bail("specialize-fail-rational");
+        if (prefixHasAlgebraic) {
+            // ALGEBRAIC prefix: route to the more-capable tower path, which
+            // isolates roots AND handles nullification via the [H3] valuation
+            // (lifting-boundary recovery — NEVER atom truth), gated FAIL-CLOSED by
+            // `supported` (any inconclusive sub-step ⇒ supported=false ⇒ caller
+            // Unknown, never UNSAT). We do NOT consult vanishesAtPrefix here: it
+            // returns Unknown for ANY algebraic prefix by design (LibpolyBackend),
+            // a cheap UNSUPPORTED check that, placed first, used to bail before
+            // this path was even reached (the unreachable-tower-path ordering bug
+            // found in the audit). The tower path is MORE capable, not total — it
+            // still has its own unsupported branches (→ bail), so this is a
+            // reachability fix, not a completeness claim.
+            // A boundary poly with NO dependence on `var` once the rational prefix
+            // coords are fixed contributes no boundary on the lift axis (it is
+            // constant along `var` at this prefix). Skip it — sound for leaf
+            // (uniform truth via signAt → whole fiber handled) and non-leaf (no
+            // delineation). This mirrors the rational fiber-constant skip; without
+            // it the tower path bails "p1-no-mainVar" for an outer-variable-only
+            // constraint at an algebraic leaf (the CONVOI2 gap), losing the case.
+            {
+                RationalPolynomial pr = rp;
+                for (size_t i = 0; i < prefix.numVars(); ++i)
+                    if (prefix.values[i].isRational())
+                        pr = pr.substituteRational(prefix.varOrder[i], prefix.values[i].rational);
+                pr.normalize();
+                if (!pr.contains(var)) continue;   // no var-boundary at this prefix
+            }
             bool supported = false;
             rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
             if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);
             if (!supported) return bail("algebraic-isolation-unsupported");
         } else {
-            rs = algebra->isolateRealRoots(up);
-            if (rs.crashOccurred) return bail("isolate-crash");
-            if (!algebra->validateRootIsolation(up, rs)) return bail("isolate-invalid");
+            // RATIONAL prefix: vanishesAtPrefix is decisive (exact substitution,
+            // no algebraic coords). Vanishes ⇒ pid ≡ 0 as a polynomial in `var` on
+            // the WHOLE fiber above this prefix (ALL coefficients in `var` vanish —
+            // a partial leading-coefficient drop is NotVanishes, giving a lower-
+            // degree but nonzero univariate that still isolates normally).
+            const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
+            if (vr == VanishResult::Unknown) return bail("vanish-unknown");
+            if (vr == VanishResult::Vanishes) {
+                if (skipVanishing) {
+                    // LEAF: pid is an original CONSTRAINT. ≡0 on the fiber ⇒ its
+                    // truth is UNIFORM there and was already decided by signAt
+                    // (pid≡0 ⇒ Sign::Zero ⇒ e.g. p>0 false on the whole fiber ⇒
+                    // the entire var-axis is excluded). No var-boundary to add.
+                    continue;
+                }
+                // NON-LEAF: pid is a PROJECTION FACTOR. ≡0 does NOT mean "no
+                // boundary" — its Lazard valuation residual still carries genuine
+                // lifting boundaries (cvc5 routes every char poly through
+                // LazardEvaluation::isolateRealRoots and NEVER skips; skipping
+                // enlarges the cell ⇒ false UNSAT). Recover the residual via the
+                // rational-coordinate Lazard valuation, then isolate ITS roots.
+                // This is lifting-boundary recovery ONLY, never atom truth.
+                RationalPolynomial residual = lazardResidualRational(rp, prefix);
+                residual.normalize();
+                if (residual.isZero() || !residual.contains(var)) continue;   // no var-boundary
+                for (VarId v : residual.variables())
+                    if (v != var) return bail("residual-stray-var");          // fail-closed
+                auto rnorm = residual.toPrimitiveInteger(*kernel);
+                if (!rnorm.ok()) return bail("residual-toPrim");
+                if (kernel->isConstant(rnorm.poly)) continue;
+                const UniPolyId rup = algebra->specializeToUnivariate(rnorm.poly, SamplePoint{}, var);
+                if (rup == NullUniPolyId) return bail("residual-specialize");
+                rs = algebra->isolateRealRoots(rup);
+                if (rs.crashOccurred) return bail("residual-isolate-crash");
+                if (!algebra->validateRootIsolation(rup, rs)) return bail("residual-isolate-invalid");
+            } else {
+                const UniPolyId up = algebra->specializeToUnivariate(pid, prefix, var);
+                if (up == NullUniPolyId) return bail("specialize-fail-rational");
+                rs = algebra->isolateRealRoots(up);
+                if (rs.crashOccurred) return bail("isolate-crash");
+                if (!algebra->validateRootIsolation(up, rs)) return bail("isolate-invalid");
+            }
         }
         for (auto& r : rs.roots) roots.push_back(std::move(r));
     }

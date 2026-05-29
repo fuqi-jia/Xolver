@@ -75,6 +75,25 @@ public:
     const std::string& lastUnknown() const { return lastUnknown_; }
     long maxDepthReached() const { return maxDepth_; }
 
+    // ---- Per-cell UNSAT certificate (the oracle-blind soundness gate) --------
+    // The CacEngine's UNSAT rests on: every cell built from a COMPLETE
+    // characterization + a `supported` interval, and every covering gap-free.
+    // The control flow already returns Unknown on any incompleteness; this is an
+    // INDEPENDENT, auditable ledger that re-confirms it. `solve()` trusts an
+    // UNSAT verdict only when `certComplete()` holds — a belt-and-suspenders gate
+    // that catches a control-flow regression where UNSAT could escape despite an
+    // incomplete cell. Each excluded LEAF cell also records the constraint that
+    // witnesses its infeasibility (the exclusion is sound only if that constraint
+    // is actually violated at the cell sample — re-verified before trusting).
+    struct LeafExclusion {
+        VarId var = NullVar;
+        RealAlg sample;
+        PolyId violatedPoly = NullPoly;   // a constraint violated at `sample`
+        Relation rel = Relation::Eq;
+    };
+    bool certComplete() const { return unsatTrustworthy_ && certVerified_; }
+    const std::vector<LeafExclusion>& leafExclusions() const { return leafExclusions_; }
+
 private:
     struct CoverOut {
         CacStatus status = CacStatus::Unknown;
@@ -93,6 +112,13 @@ private:
     long nodes_ = 0;
     std::string lastUnknown_;        // bail reason (diagnostics)
     long maxDepth_ = 0;              // deepest level reached
+
+    // Per-cell UNSAT certificate state (see public accessors above).
+    bool unsatTrustworthy_ = true;   // ANDed false at every incompleteness point
+    bool certVerified_ = false;      // set by an independent post-pass on UNSAT
+    std::vector<LeafExclusion> leafExclusions_;   // witness per excluded leaf cell
+    void markIncomplete(const char* why);         // unsatTrustworthy_=false + lastUnknown_
+    bool verifyCertificate();                     // independent re-check before trusting UNSAT
 };
 
 } // namespace xolver
