@@ -586,7 +586,8 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     }();
     static const long cacDeadlineMs = [] () -> long {
         if (const char* e = std::getenv("XOLVER_NRA_CAC_DEADLINE_MS")) return std::atol(e);
-        return 60000;   // hybrid default: 60s CAC@Full share, leaving Collins the rest of 1200s
+        return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
+                        // yields fast to Collins instead of grinding); rest of 1200s is Collins
     }();
     CacEngine::Config cfg;
     cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
