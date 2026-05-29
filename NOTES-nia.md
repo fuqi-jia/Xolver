@@ -720,3 +720,46 @@ validated CANDFLAGS + XOLVER_NIA_IFACE_LIFECYCLE). 46-case sample list at
 fast-floor) — confirms IFACE engages the engine on previously-floored cases;
 the remaining gap is per-cb_propagate speed (master directive #2 / task #38).
 
+## ★ STRUCTURAL PIVOT IDENTIFIED — Zohar pow2 encoding (2026-05-30)
+Profiled the 7 floored cases with XOLVER_SELFPROF (commit 833e665 era SELFPROF
+infrastructure, uses write(2,...) — survives SIGKILL on piped stderr where
+ARITH_STAGE_PROF was lost). Three reprofile passes:
+
+Pass 1 (full --allon): top frame distribution → CaDiCaL::Closure::find_equivalences
+inside Internal::extract_gates inside preprocess_quickly. A SINGLE bit-blast
+invocation burning 25s on CaDiCaL's gate-extraction preprocessing pass. Fix:
+XOLVER_NIA_BITBLAST_NOPRE (default-OFF, commit f46e8ba) — disables CaDiCaL
+elim/subsume/vivify/probe/ternary/transred/decompose for the bit-blast's
+INTERNAL solve. Sound by invariant 1 (bit-blast is candidate-only, validated).
+
+Pass 2 (with NOPRE on): bottleneck moves to CaDiCaL::Internal::propagate /
+cdcl_loop_with_inprocessing inside the same nia.bit-blast call — the SAT
+instance is just hard, the CDCL search itself takes >budget. Added
+XOLVER_NIA_BITBLAST_CONFLICTS=<N> (default-0=unlimited) as a SAT-conflicts
+cap so the bit-blast can hand off to other stages cleanly.
+
+Pass 3 (with NO_BITBLAST=1): bottleneck moves to CDCAC's
+principalSubresultantCoefficients -> determinant (the audit memory's #1 perf
+bottleneck). Even with bit-blast AND CDCAC off, still timeout.
+
+STRUCTURAL ROOT CAUSE: all 7 cases are the Zohar/Niemetz CADE-27 (2019)
+bit-width-independent encoding (declared `pow2 (Int) Int`, `intand/intor/intxor
+(Int Int Int) Int` UNINTERPRETED, with SYMBOLIC bit-width `k` not a constant).
+Confirmed by inspecting Zohar-ic/Zohar-alive headers. Implications:
+
+  - NIA modular reasoner needs CONSTANT modulus → can't apply to `mod (pow2 k)`
+  - CDCAC can't decide via uninterpreted functions → degrades to enumeration
+  - bit-blast can't bit-blast uninterpreted functions → falls back to brute
+    enumeration over boolean structure (hence the CaDiCaL CDCL load)
+
+None of these are perf bugs — each engine is doing the wrong thing for this
+class. The structural pivot is a new NIA-side axiomatic theory plugin for
+pow2/intand/intor/intxor (pow2(0)=1, pow2(k+1)=2*pow2(k), pow2(k)>=1; bitwise
+defs of intand/intor/intxor). Coordinates with EUF (Track 3) for pow2
+congruence. That's a real project — scoped as task #40, not perf tuning.
+
+Master's "definitively prove structural-pivot required" condition met:
+plain budget extension (120s probe) and L1/L2/L3 perf gating each fail
+because the cases require new theory capability, not faster reasoning.
+
+
