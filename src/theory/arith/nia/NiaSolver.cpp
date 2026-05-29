@@ -169,6 +169,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // the OFF+ON gate + differential hold.
     if (const char* e = std::getenv("XOLVER_NIA_NORM_CACHE"); e && *e && *e != '0')
         normCache_ = true;
+
+    // XOLVER_NIA_IFACE_LIFECYCLE (default-OFF): decouple Nelson-Oppen interface
+    // (dis)equalities from the active_/trail_/activeSet_ back-pop machinery (see
+    // member doc). Fixes the false-Unknown that blocked QF_UFNIA/QF_ANIA sats.
+    if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE"); e && *e && *e != '0')
+        ifaceLifecycleEnabled_ = true;
 }
 
 void NiaSolver::onReset() {
@@ -245,7 +251,9 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
 
 void NiaSolver::onBacktrack(int level) {
     // Base already removed state_.trail entries with level > target.
-    // Roll back the polynomial constraint stack in lockstep.
+    // Roll back the polynomial constraint stack in lockstep. With the lifecycle
+    // fix on, interface (dis)equalities are NOT on active_/trail_, so this loop
+    // touches only the (monotonic-by-level) normal-atom stack.
     while (!trail_.empty() && trail_.back().level > level) {
         active_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
@@ -263,11 +271,18 @@ void NiaSolver::onBacktrack(int level) {
     if (pendingUnknown_ && pendingUnknown_->level > level) {
         pendingUnknown_.reset();
     }
+    // A full reset (backtrack to level 0) clears ALL interface (dis)equalities so
+    // they are re-driven fresh by the next check(). This prevents level-0
+    // interface eqs — assigned at the SAT root, or given level 0 by the
+    // Full-effort model-check re-drive's levelOf() fallback — from accumulating
+    // across the many model checks (the back-pop never removes level-0 entries).
+    // Otherwise drop only those strictly above the backtrack target.
+    bool fullReset = ifaceLifecycleEnabled_ && level == 0;
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
+        [&](const auto& ie) { return fullReset || ie.level > level; });
     interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
     auto idIt = std::remove_if(interfaceDisequalities_.begin(), interfaceDisequalities_.end(),
-        [level](const auto& ie) { return ie.level > level; });
+        [&](const auto& ie) { return fullReset || ie.level > level; });
     interfaceDisequalities_.erase(idIt, interfaceDisequalities_.end());
 }
 
@@ -293,24 +308,50 @@ static std::unordered_set<std::string> collectVars(
 std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, TheoryEffort) {
     if (pendingUnknown_) return TheoryCheckResult::unknown("NIA: pending unknown (opposite polarity asserted)");
     if (pendingConflict_) return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
-    if (active_.empty()) return TheoryCheckResult::consistent();
+    // With the lifecycle fix on, interface (dis)equalities live off active_, so
+    // an empty active_ may still carry combination obligations to solve.
+    if (active_.empty() &&
+        (!ifaceLifecycleEnabled_ ||
+         (interfaceEqualities_.empty() && interfaceDisequalities_.empty())))
+        return TheoryCheckResult::consistent();
     return std::nullopt;
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
-    if (normCache_) {
-        // Incremental: normalized_ is kept in lockstep with active_ (a strict
-        // stack). Safety-truncate in case a backtrack left it longer (onBacktrack
-        // already truncates eagerly; this guards the boundary), then normalize
-        // only the new tail. normalizeOne is pure per-constraint, so the result
-        // is identical to a full re-normalize.
+    // Incremental normalize cache (XOLVER_NIA_NORM_CACHE): normalized_ is kept in
+    // lockstep with the strict active_ stack — normalize only the new tail
+    // (normalizeOne is pure per-constraint, so this is byte-identical to a full
+    // re-normalize). Safety-truncate in case a backtrack left it longer.
+    // VALID ONLY when the interface-eq lifecycle is NOT merging (dis)eqs into the
+    // set: those live off active_ and are re-driven per decision level, which
+    // breaks the stack invariant the cache relies on. So under IFACE_LIFECYCLE we
+    // fall back to a full re-normalize of the merged set every call.
+    if (normCache_ && !ifaceLifecycleEnabled_) {
         if (normalized_.size() > active_.size())
             normalized_.resize(active_.size());
         for (size_t i = normalized_.size(); i < active_.size(); ++i)
             normalized_.push_back(normalizer_.normalizeOne(active_[i]));
         return std::nullopt;
     }
-    auto normalizedOpt = normalizer_.normalize(active_);
+    // Full normalize. With the lifecycle fix on, merge the live interface
+    // (dis)equalities into the constraint set here (kept off active_/trail_/
+    // activeSet_ to avoid corrupting the back-pop stack — see ifaceLifecycleEnabled_).
+    // Each carries its converted (a-b) poly + relation and reason literal, so
+    // conflicts cite it correctly. The merge is read-only over active_.
+    const std::vector<ActiveNiaConstraint>* toNormalize = &active_;
+    std::vector<ActiveNiaConstraint> merged;
+    if (ifaceLifecycleEnabled_ &&
+        !(interfaceEqualities_.empty() && interfaceDisequalities_.empty())) {
+        merged.reserve(active_.size() + interfaceEqualities_.size() +
+                       interfaceDisequalities_.size());
+        merged = active_;
+        for (const auto& ie : interfaceEqualities_)
+            if (ie.diff != NullPoly) merged.push_back({ie.diff, ie.rel, ie.reason});
+        for (const auto& id : interfaceDisequalities_)
+            if (id.diff != NullPoly) merged.push_back({id.diff, id.rel, id.reason});
+        toNormalize = &merged;
+    }
+    auto normalizedOpt = normalizer_.normalize(*toNormalize);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     normalized_ = std::move(*normalizedOpt);
     return std::nullopt;
@@ -986,6 +1027,13 @@ TheoryCheckResult NiaSolver::assertInterfaceEquality(
     if (!cc.isConstraint())
         return TheoryCheckResult::consistent();
 
+    if (ifaceLifecycleEnabled_) {
+        // Keep the interface equality OUT of active_/trail_/activeSet_; record
+        // it (with its converted constraint) for level-correct backtracking and
+        // for merge at stageNormalize. See member doc on ifaceLifecycleEnabled_.
+        interfaceEqualities_.push_back({a, b, reason, level, cc.diff, Relation::Eq});
+        return TheoryCheckResult::consistent();
+    }
     size_t oldSize = active_.size();
     active_.push_back({cc.diff, Relation::Eq, reason});
     trail_.push_back({level, oldSize});
@@ -1010,6 +1058,10 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
     if (!cc.isConstraint())
         return TheoryCheckResult::consistent();
 
+    if (ifaceLifecycleEnabled_) {
+        interfaceDisequalities_.push_back({a, b, reason, level, cc.diff, Relation::Neq});
+        return TheoryCheckResult::consistent();
+    }
     size_t oldSize = active_.size();
     active_.push_back({cc.diff, Relation::Neq, reason});
     trail_.push_back({level, oldSize});

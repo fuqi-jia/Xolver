@@ -188,9 +188,25 @@ private:
         SharedTermId b;
         SatLit reason;
         int level;
+        // XOLVER_NIA_IFACE_LIFECYCLE: the converted (a - b) constraint, cached so
+        // stageNormalize can merge interface (dis)equalities into the solve
+        // WITHOUT placing them on the fragile active_/trail_ back-pop stack.
+        PolyId diff = NullPoly;
+        Relation rel = Relation::Eq;
     };
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
+
+    // XOLVER_NIA_IFACE_LIFECYCLE (read once in ctor): when set, Nelson-Oppen
+    // interface (dis)equalities are kept out of active_/trail_/activeSet_ and
+    // are instead merged into the constraint set at stageNormalize, with a
+    // level-correct remove_if backtrack and a full clear on a level-0 reset.
+    // Fixes the false "opposite polarity" Unknown that aborted QF_UFNIA/QF_ANIA
+    // model checks: interface eqs asserted during check() (after the ascending
+    // re-assert loop) made trail_ non-monotonic, so onBacktrack's back-pop left
+    // stale entries that polluted activeSet_ via rebuildFromActive, and level-0
+    // interface eqs accumulated across the many Full-effort model checks.
+    bool ifaceLifecycleEnabled_ = false;
 
     struct BranchSplitKey {
         std::string var;

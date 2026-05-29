@@ -463,6 +463,20 @@ int CadicalTheoryPropagator::cb_propagate() {
     // Early conflicts are still returned because they are sound pruning.
     (void)isLemma;
 
+    // Theory entailment propagation: pull each theory solver's entailed literals
+    // (EUF e-propagation under XOLVER_EUF_PROP; LRA Farkas under XOLVER_LRA_PROP)
+    // and enqueue them as reason-carrying clauses (¬reasons ∨ implied). Each is a
+    // theory-VALID clause (the reasons entail `implied`), so adding it is sound
+    // regardless of the current assignment; with the reasons currently true it
+    // is unit and CaDiCaL propagates `implied`. Producers self-gate (return {}
+    // when their flag is off / in combination), so the flag-off path is inert.
+    if (!hasPendingClause_) {
+        auto props = tm_.takeEntailmentPropagations();
+        for (auto& lem : props) {
+            if (!lem.lits.empty()) enqueuePendingClause(lem.lits);
+        }
+    }
+
     return 0;
 }
 

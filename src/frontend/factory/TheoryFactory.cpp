@@ -101,6 +101,7 @@ SolverSetupResult setupSolvers(
     } else if (logic == "QF_UF") {
         auto euf = std::make_unique<EufSolver>();
         euf->setCoreIr(ir);
+        euf->setEqualityAtomRegistry(&registry);  // XOLVER_EUF_PROP theory propagation
         theoryManager.registerSolver(std::move(euf));
     } else if (logic == "QF_DT" || logic == "QF_UFDT" || logic == "DT" || logic == "UFDT") {
         // Algebraic datatypes (+ UF). One shared egraph hosts UF and the DT

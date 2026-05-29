@@ -121,7 +121,16 @@ private:
     size_t currentPendingClausePos_ = 0;
     bool hasPendingClause_ = false;
     bool abortWithUnknown_ = false;
-    static constexpr int MAX_MODEL_CHECKS = 10000;
+    // Backstop against a pathologically looping theory solver (same model
+    // re-proposed without progress), NOT a performance budget. The real budget
+    // guard is the competition wall-clock (1200s) + the watchdog terminate; a
+    // hard combination/array problem can legitimately need far more than 10k
+    // Full-effort model refinements within 1200s, so the old dev-conservative
+    // 10k fuse cut off solvable instances (-> unknown) well before the budget.
+    // Retuned to the 1200s/30GB budget: high enough that the wall-clock dominates
+    // for genuine work, still finite so a true infinite loop is bounded. Sound to
+    // raise — the fuse only ever yields `unknown`, never a wrong verdict.
+    static constexpr int MAX_MODEL_CHECKS = 10000000;
     CadicalAssignmentView assignmentView_;
     CadicalAssignmentView partialAssignmentView_;
     std::string* unknownReasonSink_ = nullptr;
