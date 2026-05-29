@@ -24,6 +24,33 @@ cross-equality soundness (the false-UNSAT direction was fixed earlier per
 (UF apps → validator Indeterminate; strict-validation recovery times out). They
 need EUF/combination conflict-soundness work = #12.
 
+**★★ #12 SOLVED (2026-05-29, master-greenlit):** the over-floor root is the
+VALIDATOR'S CHANNEL CHOICE for EUF-class scalars. Instrumented ArithModelValidator
+(XOLVER_DIAG_AMV, reverted): the floor runs TWO validations — pass 1
+(arrayModelDefinitelyViolates, NO real channel) resolves i,j via the TOKEN channel
+(@e6≠@e3 distinct) → both assertions TRUE → correctly not-violated; pass 2
+(modelPositivelyValidates, WITH setRealAssignments) resolves i,j via the REAL
+channel where numericAssignments collapsed them to 0,0 (unconstrained-scalar
+backfill mints 0) → `(not (= i j))` FALSE → spurious Violated → over-floor.
+FIX (committed, NO new flag — part of the ARRAY_COMB_VALIDATE_SAT capability):
+in modelPositivelyValidates, a scalar whose model value is an opaque EUF token
+(`@…`) is routed through the TOKEN channel ONLY — excluded from numAsg, the
+0-defaulting, AND the (filtered) real channel — so the authoritative EUF identity
+(distinct token = distinct class) is used, not the spurious numeric collapse.
+RESULT: alia_005/alra_010 → sat (recovered); read2 + all 9 QF_AUFLIA false-SATs →
+unknown (floored); full reg DEFAULT 661/661 (NIA untouched — no @tokens →
+filteredReal==numericAssignments); array-comb reg flag-ON 33/33. Sound (only
+sat→unknown). **ARRAY_COMB_VALIDATE_SAT STAYS GATED** (master: soundness-touching
+flags stay flags; master collapses into default in one batch after the
+differential, which needs the optimization flags OFF). The floor is now CLEAN
+(recovers genuine sats + floors all false-SATs) → ready for that collapse.
+SCOPE: the fix recovers the ARRAY+ARITH EUF-scalar class (the suite cases
+alia_005/alra_010). UF-HEAVY QF_AUFLIA benchmark sats are NOT recovered (correct
+stays 36/92, UNSOUND 0) — UF applications return Indeterminate in the validator
+regardless of scalar channel; recovering those needs UF MODEL CONSTRUCTION
+(function interps the validator can evaluate) = a further #12 sub-item, sound
+either way (the unrecovered ones stay free unknowns).
+
 **★ #12 ACTIONABLE DESIGN (diagnosed precisely 2026-05-29):** the over-floor root
 is NOT missing array interps — it is UNCONSTRAINED-SCALAR DEFAULTING. Dumped
 alia_005's model via (get-model): it is VALID + complete — `a=(store (const 0) 1 2)`,
