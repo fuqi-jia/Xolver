@@ -53,5 +53,31 @@ class TestLogicFlags(unittest.TestCase):
         self.assertIn("XOLVER_NIA_GCD", flags.LOGIC_FLAGS["QF_NIA"])
 
 
+class TestFlagHygiene(unittest.TestCase):
+    def test_superseded_divisor_cap_removed_factor_present(self):
+        self.assertNotIn("XOLVER_NIA_DIVISOR_CAP", flags.OPTIMIZATION_FLAGS)
+        self.assertIn("XOLVER_NIA_DIVISOR_FACTOR", flags.OPTIMIZATION_FLAGS)
+
+    def test_soundness_gated_disjoint_and_excluded_from_opt(self):
+        self.assertTrue(flags.SOUNDNESS_GATED)
+        self.assertEqual(set(flags.SOUNDNESS_GATED) & set(flags.OPTIMIZATION_FLAGS), set())
+        self.assertEqual(set(flags.SOUNDNESS_GATED) & set(flags.SOUNDNESS_FLOORS), set())
+        self.assertIn("XOLVER_NRA_CAC_TRUST_UNSAT", flags.SOUNDNESS_GATED)
+        self.assertIn("XOLVER_ARRAY_COMB_VALIDATE_SAT", flags.SOUNDNESS_GATED)
+
+    def test_candidate_env_never_sets_a_soundness_gated_flag(self):
+        # Even if a caller passes one, candidate_env refuses it (master-controlled).
+        env = flags.candidate_env(["XOLVER_NRA_CAC_TRUST_UNSAT", "XOLVER_NIA_GCD"])
+        self.assertNotIn("XOLVER_NRA_CAC_TRUST_UNSAT", env)
+        self.assertEqual(env.get("XOLVER_NIA_GCD"), "1")
+
+    def test_no_diag_dump_numeric_or_disable_flags_in_opt(self):
+        for f in flags.OPTIMIZATION_FLAGS:
+            self.assertNotIn("_DIAG", f, f)
+            self.assertNotIn("_NO_", f, f)          # disable switches
+            self.assertFalse(f.endswith("_MS"), f)  # numeric budgets
+            self.assertNotIn("_DUMP", f, f)
+
+
 if __name__ == "__main__":
     unittest.main()
