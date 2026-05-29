@@ -1263,9 +1263,24 @@ bool LibpolyBackend::refineRootInterval(AlgebraicRoot& alpha) {
 
     const mpq_class m = (lo + hi) / 2;
     const auto& coeffs = getUni(alpha.definingPoly);
-    if (evalUniAtRational(coeffs, m) == 0) {     // exact rational root at midpoint
+    const mpq_class vm = evalUniAtRational(coeffs, m);
+    if (vm == 0) {                               // exact rational root at midpoint
         alpha.lower = m; alpha.upper = m; return true;
     }
+    // FAST sign-based bisection: for a SIMPLE root in an isolating interval the
+    // polynomial changes sign across the root, so the half whose endpoints differ
+    // in sign is the one containing it (one evalUniAtRational per endpoint — far
+    // cheaper than a Sturm count, which was timing out on degree-7 meti-tarski).
+    const mpq_class vlo = evalUniAtRational(coeffs, lo);
+    const mpq_class vhi = evalUniAtRational(coeffs, hi);
+    if (vlo != 0 && vhi != 0) {
+        const bool loNeg = vlo < 0, mNeg = vm < 0, hiNeg = vhi < 0;
+        if (loNeg != mNeg && mNeg == hiNeg) { alpha.upper = m; return true; }  // sole sign change in [lo,m]
+        if (loNeg == mNeg && mNeg != hiNeg) { alpha.lower = m; return true; }  // sole sign change in [m,hi]
+        // else: no clean single sign change (even multiplicity / non-squarefree /
+        // not sign-isolating) ⇒ fall through to the exact count-based split.
+    }
+    // EXACT fallback (root at an endpoint, or no clean sign bracket): root-count.
     const int leftCount  = countRealRootsInInterval(alpha.definingPoly, lo, m);
     const int rightCount = countRealRootsInInterval(alpha.definingPoly, m, hi);
     if (leftCount < 0 || rightCount < 0) return false;                  // count unsupported
