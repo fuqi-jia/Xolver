@@ -83,10 +83,10 @@ end-to-end.
         — gates every `sat`           — local search, learning, portfolio
 ```
 
-### The five stable APIs (`plan.md`)
-**User**, **Theory**, **Polynomial**, **Advisor**, **Certificate** — the seams the
-whole system is built around. `plan.md` (the architectural master document) is the
-source of truth; subsystems follow its data structures and invariants.
+### The five stable APIs
+**User**, **Theory**, **Polynomial**, **Advisor**, **Certificate** — the five seams
+the whole system is built around. Subsystems follow their data structures and
+invariants; nothing crosses these seams informally.
 
 ### Non-negotiable soundness invariants
 1. `Result::Sat` must pass `ModelValidator` over the original assertions —
@@ -117,8 +117,8 @@ a `Reasoner` pipeline (see `src/theory/arith/README.md`).
 
 ### Clone (with the parser submodule)
 ```bash
-git clone --recursive git@github.com:fuqi-jia/xolver.git
-cd xolver
+git clone --recursive git@github.com:fuqi-jia/Xolver.git
+cd Xolver
 # if you cloned without --recursive:
 git submodule update --init --recursive
 ```
@@ -215,8 +215,8 @@ The regression harness compares each verdict against z3/cvc5 and flags any
 | `tools/` | CLI, benchmark + deploy scripts, trace/proof/model checkers |
 | `tests/` | doctest unit suite + per-logic regression corpora |
 | `third_party/SOMTParser` | frontend parser (git submodule) |
-| `reference/` | in-tree cvc5 / z3 copies — for *reading* only, not linked |
-| `plan.md` | architectural master document (source of truth) |
+| `third_party/cadical` | CaDiCaL SAT backend (git submodule) |
+| `third_party/libpoly` | libpoly polynomial / algebraic kernel (git submodule) |
 
 ---
 
@@ -236,7 +236,26 @@ The regression harness compares each verdict against z3/cvc5 and flags any
 
 ## License & provenance
 
-Xolver is developed as autonomous-agent research. The `reference/` cvc5 and z3
-copies are vendored for study only; the licensing posture relative to those
-projects is unsettled, so no code is copied from them. See `plan.md` for the full
-design rationale and `CLAUDE.md` for contributor (agent) guidance.
+Xolver is licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE).
+Third-party dependencies remain under their own original licenses; the full
+dependency manifest is in [`NOTICE`](NOTICE).
+
+Xolver is developed as autonomous-agent research: every line of code is written
+by AI agents working against a fixed architectural plan. Source comments that
+cite cvc5, z3, or other SMT solvers are **algorithmic attribution** for published
+algorithms (Lazard projection, Cylindrical Algebraic Coverings, Nelson–Oppen,
+etc.); the implementations are independently written from the papers. Xolver
+does not call, wrap, link, or include source code from any existing SMT solver.
+
+### Submissions
+- SMT-COMP 2026 — see release tag and submission archive on [Zenodo](https://zenodo.org/records/20426099).
+
+### Citation
+```bibtex
+@software{xolver,
+  title  = {Xolver: an AI-grown SMT/OMT solver for nonlinear arithmetic},
+  author = {Jia, Fuqi and contributors},
+  year   = {2026},
+  url    = {https://github.com/fuqi-jia/Xolver}
+}
+```
