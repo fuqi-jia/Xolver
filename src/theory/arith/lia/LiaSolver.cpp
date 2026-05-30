@@ -399,9 +399,39 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             // LIA mirror behind a separate flag until the integer/LP edge is
             // understood and the alia_012 class re-passes.
             static const bool liaProbeOk = std::getenv("XOLVER_LIA_LP_DUALITY") != nullptr;
-            if (liaProbeOk && impliedEqEnabled_ && !fixedOpt) {
+            // Gate: skip the LIA LP-duality probe entirely when arrays are in
+            // play. ROOT CAUSE: GeneralSimplex::push/pop only restores the
+            // bound trail; the probe's internal check() can pivot the tableau,
+            // and those pivots persist past pop. The resulting tableau gives
+            // LIA's downstream model construction a different integer model
+            // that the array soundness gate then correctly rejects as
+            // "missed array axiom instance" — alia_012 transitions from sat
+            // to unknown. The two clean fixes are (a) snapshot+restore the
+            // full simplex state in ProbeScope (heavy), or (b) skip the probe
+            // when array-sort shared terms exist (cheap, narrow). Choosing
+            // (b) until (a) is justified by recovery numbers it would unlock.
+            // Pre-filter on current value also skips when polyhedron doesn't
+            // pin (probe would be Sat both directions = waste).
+            bool hasArrayShared = false;
+            if (liaProbeOk && impliedEqEnabled_ && !fixedOpt &&
+                sharedTermRegistry_ && sharedTermRegistry_->coreIr()) {
+                const CoreIr* ir = sharedTermRegistry_->coreIr();
+                for (SharedTermId st : sharedTermRegistry_->allSharedTerms()) {
+                    if (const auto* s = sharedTermRegistry_->get(st)) {
+                        if (ir->arraySortParams(s->sort)) {
+                            hasArrayShared = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (liaProbeOk && impliedEqEnabled_ && !fixedOpt && !hasArrayShared) {
+                DeltaRational cur = gs_.value(aux);
+                bool prefilterOk = (cur.a == 0 && cur.b == 0);
                 std::vector<SatLit> probeReasons;
-                if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
+                bool pinned = false;
+                if (prefilterOk) pinned = tryProvePairEqualityByLpDuality(aux, probeReasons);
+                if (pinned) {
                     TheoryConflict tc;
                     for (auto l : probeReasons) tc.clause.push_back(l);
                     tc.clause.push_back(ieq.reason);
