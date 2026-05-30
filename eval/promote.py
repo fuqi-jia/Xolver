@@ -51,17 +51,29 @@ def config_jiecuo(cr: ConfigReport) -> int:
     return sum(d.jiecuo for d in cr.divisions)
 
 
+def _verdict(cr: ConfigReport) -> str:
+    j = config_jiecuo(cr)
+    n = config_net(cr)
+    if j > 0:
+        return "BLOCKED (%d 解错 — triage stale vs real)" % j
+    if n > 0:
+        return "PROMOTABLE (0-解错, +%d solved)" % n
+    if n == 0:
+        return "GATE_CLEAR but NO GAIN (0-解错, %+d solved — sound, but worthless)" % n
+    return "GATE_CLEAR but REGRESSION (0-解错, %+d solved — sound, but loses ground)" % n
+
+
 def promotion_table(configs: List[ConfigReport]) -> str:
-    hdr = "{:<16} {:<12} {:>9} {:>7} {:>6}".format("config", "division", "net@1200", "解错", "PROMO")
+    hdr = "{:<16} {:<12} {:>9} {:>7} {:>5} {:>6}".format(
+        "config", "division", "net@1200", "解错", "GATE", "PROMO")
     lines = [hdr, "-" * len(hdr)]
     for cr in configs:
         for d in cr.divisions:
-            lines.append("{:<16} {:<12} {:>+9d} {:>7} {:>6}".format(
+            lines.append("{:<16} {:<12} {:>+9d} {:>7} {:>5} {:>6}".format(
                 cr.name[:16], d.division, d.net_delta, d.jiecuo,
-                "yes" if d.promotable else "NO"))
-        verdict = ("PROMOTABLE (0-解错, +%d solved)" % config_net(cr) if config_promotable(cr)
-                   else "BLOCKED (%d 解错 — triage stale vs real)" % config_jiecuo(cr))
-        lines.append("  => %-14s %s" % (cr.name, verdict))
+                "yes" if d.gate_clear else "NO",
+                "yes" if d.promotable else "no"))
+        lines.append("  => %-14s %s" % (cr.name, _verdict(cr)))
         lines.append("-" * len(hdr))
     return "\n".join(lines)
 

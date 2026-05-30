@@ -48,9 +48,16 @@ class DivisionScore:
         return self.candidate_solved - self.baseline_solved
 
     @property
-    def promotable(self) -> bool:
-        """0 解错 = a flag config may go default-ON (the paramount gate)."""
+    def gate_clear(self) -> bool:
+        """0 解错 = the soundness gate (paramount). Necessary, not sufficient."""
         return self.jiecuo == 0
+
+    @property
+    def promotable(self) -> bool:
+        """Worth promoting to default: soundness gate + positive net solved-delta.
+        net <= 0 with 0 解错 still means the bundle is sound but adds no value;
+        not a regression in the soundness sense but not a promotion candidate either."""
+        return self.gate_clear and self.net_delta > 0
 
 
 def _tally(rows, obj):
@@ -133,13 +140,16 @@ def stale_suspects(clusters: List[JiecuoCluster], min_count: int = 50,
 # Formatting
 # --------------------------------------------------------------------------- #
 def format_divisions(divs: List[DivisionScore]) -> str:
-    hdr = "{:<14} {:>6} {:>9} {:>9} {:>5} {:>6} {:>9} {:>7} {:>6}".format(
-        "division", "total", "base@1200", "cand@1200", "net", "recov", "regress", "解错", "PROMO")
+    hdr = "{:<14} {:>6} {:>9} {:>9} {:>6} {:>6} {:>9} {:>7} {:>5} {:>6}".format(
+        "division", "total", "base@1200", "cand@1200", "net", "recov", "regress",
+        "解错", "GATE", "PROMO")
     lines = [hdr, "-" * len(hdr)]
     for d in divs:
-        lines.append("{:<14} {:>6} {:>9} {:>9} {:>+5d} {:>6} {:>9} {:>7} {:>6}".format(
+        lines.append("{:<14} {:>6} {:>9} {:>9} {:>+6d} {:>6} {:>9} {:>7} {:>5} {:>6}".format(
             d.division, d.total, d.baseline_solved, d.candidate_solved, d.net_delta,
-            d.recovered, d.regressed, d.jiecuo, "yes" if d.promotable else "NO"))
+            d.recovered, d.regressed, d.jiecuo,
+            "yes" if d.gate_clear else "NO",
+            "yes" if d.promotable else "no"))
     return "\n".join(lines)
 
 
