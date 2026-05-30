@@ -99,6 +99,8 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/bin"
     cp "$BIN" "${TMPDIR}/xolver-dist/bin/xolver"
     chmod +x "${TMPDIR}/xolver-dist/bin/xolver"
+    # auto-strip: shrinks ~49M → ~11M + removes debug symbols (SMT-COMP standalone hygiene)
+    strip --strip-all "${TMPDIR}/xolver-dist/bin/xolver" 2>/dev/null || true
 
     # scrambler (for --scramble / SCRAMBLE=1)
     if [[ -f "${DIST_DIR}/bin/scrambler" ]]; then
@@ -111,6 +113,9 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
+        run.sh \
+        run_differential.sh \
+        run_z3.sh \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \

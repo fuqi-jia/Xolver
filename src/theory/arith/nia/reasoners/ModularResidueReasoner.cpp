@@ -84,6 +84,43 @@ PolyId buildFromTerms(PolynomialKernel& k, const std::vector<const Term*>& terms
     return acc;
 }
 
+// Factor n as p^K for a prime p (K >= 1). Returns nullopt for n <= 1 or n
+// composite (not a prime power). Used by the Hensel-doubling lift to extend
+// beyond pow2 modulus; the existing pow2 fast path (log2pow2) shortcuts a
+// popcount check, this is the general fallback. Costs O(sqrt(n)) trial
+// division on the smallest factor; for the modulus sizes we lift (n < 2^40),
+// that's ~2^20 trial divisions in the worst case — negligible per call.
+std::optional<std::pair<mpz_class, long>> factorAsPrimePower(const mpz_class& n) {
+    if (n < 2) return std::nullopt;
+    mpz_class m = n;
+    mpz_class p = 0;
+    // Strip 2's first (fast path for the common pow2 modulus).
+    if ((m & 1) == 0) {
+        p = 2;
+        while ((m & 1) == 0) m /= 2;
+        if (m == 1) {
+            long K = static_cast<long>(mpz_sizeinbase(n.get_mpz_t(), 2)) - 1;
+            return std::make_pair(p, K);
+        }
+        return std::nullopt;  // n = 2^a * b, b > 1 -> not a prime power
+    }
+    // Trial-divide odd primes up to sqrt(m).
+    mpz_class d = 3;
+    while (d * d <= m) {
+        if (m % d == 0) { p = d; break; }
+        d += 2;
+    }
+    if (p == 0) {
+        // m itself is prime
+        p = m;
+        return std::make_pair(p, 1L);
+    }
+    long K = 0;
+    while (m % p == 0) { m /= p; ++K; }
+    if (m != 1) return std::nullopt;  // multiple distinct prime factors
+    return std::make_pair(p, K);
+}
+
 // Parse a single-variable bound `coeff*v + c  rel  0` with coeff = ±1.
 struct ParsedBound { std::string var; bool isUpper; mpz_class val; };
 std::optional<ParsedBound> parseBound(PolynomialKernel& k, PolyId poly, Relation rel) {
@@ -662,18 +699,21 @@ NiaReasoningResult ModularResidueReasoner::run(
     }
 
     // --- 8. Hensel / Newton-doubling lifting (goal modulus past the enum cap) ---
-    // For a goal `r = a mod 2^K, r != 1` where a = mult*v_last and v_last is the
+    // For a goal `r = a mod p^K, r != 1` where a = mult*v_last and v_last is the
     // tail of a Newton chain v_{i+1} = v_i*(2 - mult*v_i): the error
     // E_i = mult*v_i - 1 satisfies E_{i+1} = -E_i^2 (a kernel-verified polynomial
-    // identity), so v_2(E_n) = 2^{steps} * v_2(E_1). Prove the small base
-    // v_2(E_1) >= k0 = ceil(K / 2^steps) by enumeration at 2^k0; then
-    // 2^K | (mult*v_last - 1) => r = 1, contradicting r != 1. Every step is exact
-    // => sound UNSAT-only (invariant 7). This lifts modInv32/64/128/Full and the
-    // 2^256 EVM cases without enumerating Z/2^K.
-    auto log2pow2 = [](const mpz_class& v) -> long {
-        if (v <= 0 || mpz_popcount(v.get_mpz_t()) != 1) return -1;
-        return static_cast<long>(mpz_sizeinbase(v.get_mpz_t(), 2)) - 1;
-    };
+    // identity over Z), so v_p(E_n) = 2^{steps} * v_p(E_1). Prove the small base
+    // v_p(E_1) >= k0 = ceil(K / 2^steps) by enumeration at p^k0; then
+    // p^K | (mult*v_last - 1) => r = 1, contradicting r != 1. Every step is exact
+    // => sound UNSAT-only (invariant 7).
+    //
+    // Generalization (Track B1, master directive): the Newton-doubling identity
+    // is independent of the prime p — it is a polynomial identity over Z. We
+    // therefore lift the original "p = 2" assumption to any prime: detect the
+    // modulus via factorAsPrimePower (n = p^K, K >= 1, p prime), and run the
+    // same chain over base modulus p^k0. The existing modInv*/EVM 2^k cases
+    // hit the p = 2 branch unchanged; non-pow2 prime-power moduli (e.g.
+    // `mod 3^K`, `mod 5^K`) now also lift.
     auto findDef = [&](const std::string& v) -> const SimpleDef* {
         for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
         return nullptr;
@@ -681,7 +721,11 @@ NiaReasoningResult ModularResidueReasoner::run(
     const mpz_class enumCap(static_cast<unsigned long>(enumBudget_));
 
     for (const auto& G : groups) {
-        long K = log2pow2(G.n);
+        auto pk = factorAsPrimePower(G.n);
+        if (!pk) continue;                  // not a prime power
+        mpz_class P;
+        long K = 0;
+        std::tie(P, K) = *pk;
         if (K < 1) continue;
         // goal Neq forbidding value 1 on G.rVar
         mpz_class targetC = 0; bool haveGoal = false; SatLit neqReason{SatLit::positive(0)};
@@ -735,8 +779,12 @@ NiaReasoningResult ModularResidueReasoner::run(
 
         long k0 = (K + (1L << steps) - 1) / (1L << steps);  // ceil(K / 2^steps)
         if (k0 < 1) k0 = 1;
-        if (2L * k0 < 0 || k0 > 40) continue;
-        mpz_class mBase = mpz_class(1) << k0;
+        if (k0 > 40) continue;              // hard k0 ceiling (prevents pow overflow regardless of p)
+        // mBase = p^k0. For the p = 2 fast path this matches the old shift;
+        // for p > 2 it can grow much faster, so we cap on the actual mBase
+        // value via modulusCap_ (already done below) rather than on k0 alone.
+        mpz_class mBase;
+        mpz_pow_ui(mBase.get_mpz_t(), P.get_mpz_t(), static_cast<unsigned long>(k0));
         if (mBase > mpz_class(static_cast<unsigned long>(modulusCap_))) continue;
 
         // dependency closure of (mult*baseVar - 1) -> restrict base primaries
@@ -802,11 +850,12 @@ NiaReasoningResult ModularResidueReasoner::run(
         if (static_cast<long long>(k0) * (1LL << steps) < K) continue;  // 2^steps*k0 >= K
 
         if (DIAG) {
-            std::cerr << "[MODRES-HENSEL] goal r=" << G.rVar << " K=" << K
+            std::cerr << "[MODRES-HENSEL] goal r=" << G.rVar
+                      << " p=" << P.get_str() << " K=" << K
                       << " vLast=" << vLast << " steps=" << steps
                       << " base=" << baseVar << " k0=" << k0 << " -> UNSAT\n";
         }
-        // UNSAT: 2^K | (mult*vLast - 1) => r = 1, contradicting r != 1.
+        // UNSAT: p^K | (mult*vLast - 1) => r = 1, contradicting r != 1.
         std::unordered_set<uint32_t> seen;
         std::vector<SatLit> clause;
         auto add = [&](SatLit l) { if (seen.insert(l.var).second) clause.push_back(l); };
