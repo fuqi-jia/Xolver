@@ -15,7 +15,13 @@ ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
-    extWitnessComplete_ = std::getenv("XOLVER_AX_EXT_WITNESS_COMPLETE") != nullptr;
+    // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
+    // (agent-array-deep, 2026-05-31) measured: fanning the fresh Ext witness k
+    // through store towers recovers ALL 38 QF_AX storeinv cases (18 sat + 20
+    // unsat) to the correct verdict, 0 unsound, regression 668/668 OFF+ON, and
+    // the feared storecomm genuine-sat regression did NOT reproduce (159
+    // already-solved storecomm cases stable). Explicit opt-out for A/B baseline.
+    extWitnessComplete_ = std::getenv("XOLVER_AX_NO_EXT_WITNESS_COMPLETE") == nullptr;
 }
 
 std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {

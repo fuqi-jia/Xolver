@@ -249,6 +249,11 @@ private:
     // since pure QF_UF already gets functionInterps from CandidateModelSearch.
     // Read once in the constructor.
     bool ufModelEnabled_ = false;
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF): use a level-bucketed map to drain
+    // the saturation mergeQueue_ in O(n log L) instead of the O(n^2) linear
+    // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
+    // Read once in the constructor.
+    bool minLevelHeapEnabled_ = false;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.
