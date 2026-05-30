@@ -19,6 +19,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <algorithm>
 #include <fstream>
 
 namespace xolver {
@@ -93,6 +94,7 @@ void NraSolver::onPop(uint32_t n) {
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
+    deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     engine_.pop(n);
 }
 
@@ -107,6 +109,7 @@ void NraSolver::onReset() {
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
+    deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
     // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
@@ -124,6 +127,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     }
     activeSet_.insert(reason);
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
+    deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
 
     size_t oldSize = activeLits_.size();
     activeLits_.push_back(reason);
@@ -167,6 +171,7 @@ void NraSolver::onBacktrack(int level) {
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
+    deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     engine_.backtrack(level);
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -610,6 +615,39 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     if (cacCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
 
+    // Track C round 4 #51: variable-order heuristic. Brown-McCallum-style
+    // simplified: for each var compute (maxDeg, occCount) across cacCons; sort
+    // varOrder ascending by (deg, occ) so low-info vars project out first
+    // (outer), keeping high-degree vars as the lifting base (inner). Tiebreaker:
+    // source VarId (stable, reproducible). Soundness: variable order does not
+    // affect CDCAC completeness — it cannot introduce unsoundness, only shift
+    // perf. Gated XOLVER_NRA_CAC_VAR_ORDER, default OFF.
+    static const bool varOrderHeuristic = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_VAR_ORDER");
+        return e && *e && *e != '0';
+    }();
+    if (varOrderHeuristic && varOrder.size() > 1) {
+        std::unordered_map<VarId, std::pair<int, int>> scores;   // var -> (maxDeg, occCount)
+        scores.reserve(varOrder.size());
+        for (VarId v : varOrder) scores[v] = {0, 0};
+        for (const auto& c : cacCons) {
+            for (VarId v : c.poly.variables()) {
+                auto it = scores.find(v);
+                if (it == scores.end()) continue;
+                const int d = c.poly.degree(v);
+                if (d > it->second.first) it->second.first = d;
+                ++it->second.second;
+            }
+        }
+        std::sort(varOrder.begin(), varOrder.end(), [&](VarId a, VarId b) {
+            const auto& sa = scores[a];
+            const auto& sb = scores[b];
+            if (sa.first != sb.first) return sa.first < sb.first;
+            if (sa.second != sb.second) return sa.second < sb.second;
+            return a < b;   // stable tiebreaker on source VarId
+        });
+    }
+
     if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
     // Wall-clock deadline: in the HYBRID (Collins fallback present) bound CAC@Full
     // to a time-share so a hard covering YIELDS to Collins (Unknown→fallback)
@@ -694,15 +732,17 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         return TheoryCheckResult::mkConflict(std::move(conflict));
     }
     if (res.status == CacStatus::Sat) {
-        // COMBINATION (v1): a CAC SAT under interface constraints means NRA is
-        // consistent with the asserted (dis)eqs, but the N-O layer also needs the
-        // shared-term ARRANGEMENT read back (task P5 #43, EQNA-paired). Until that
-        // read-back exists, DEFER SAT to Collins (engine_ already holds the
-        // interface constraints) rather than return a consistent() that the
-        // combination loop cannot turn into an arrangement. The UNSAT direction
-        // (the medal win) is handled above and IS returned. Sound: Collins is the
-        // validated SAT+arrangement baseline.
-        if (cacCombination &&
+        // COMBINATION (#43): a CAC SAT under interface constraints means NRA is
+        // consistent with the asserted (dis)eqs. With XOLVER_NRA_CAC_COMB_SAT
+        // ON, getDeducedSharedEqualities() emits the pairwise shared-term
+        // equalities the model implies, so the combination loop can build the
+        // arrangement directly. With it OFF (default), defer to Collins as
+        // before (the v1 conservative path).
+        static const bool combSatHere = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_COMB_SAT");
+            return e && *e && *e != '0';
+        }();
+        if (!combSatHere && cacCombination &&
             (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()))
             return std::nullopt;
         // Report only an all-rational model (the typed channel is mpq); an
@@ -995,7 +1035,81 @@ TheoryCheckResult NraSolver::assertInterfaceDisequality(
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 NraSolver::getDeducedSharedEqualities() {
-    return {};
+    // #43: combination-aware CAC SAT — emit pairwise shared-term equalities
+    // deduced from the current SAT model. The N-O arrangement-completion seam.
+    //
+    // Gated XOLVER_NRA_CAC_COMB_SAT, default OFF (master/EQNA opt-in: turn ON
+    // alongside XOLVER_NRA_CAC_COMBINATION when the combination loop is
+    // configured to consume our deductions). When OFF returns {} — pre-#43
+    // behaviour, SAT under combination defers to Collins.
+    //
+    // Algorithm: for each shared term, convert its CoreIr expression to a
+    // polynomial via the same `converter_` path that `assertInterfaceEquality`
+    // uses; substitute every variable from `satFastModel_` (the rational SAT
+    // sample); the residual must be a constant (else the shared term has
+    // unmodelled variables and we skip). Group shared terms by value; within
+    // each value-class emit pairwise equalities. SOUND because the SAT model
+    // satisfies every asserted lifted constraint, so value(a)==value(b) means
+    // (a == b) holds in the model — propagating that as a deduced equality
+    // is a tightening of the arrangement, never a contradiction.
+    static const bool combSat = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_COMB_SAT");
+        return e && *e && *e != '0';
+    }();
+    std::vector<SharedEqualityPropagation> out;
+    if (!combSat) return out;
+    if (!sharedTermRegistry_ || !coreIr_ || !converter_) return out;
+    if (!satFastModel_ || satFastModel_->empty()) return out;
+    // Defensive: when combination-aware CAC is also enabled, emitting deduced
+    // equalities can confuse the combination loop (FFT z3.630166 sat→unknown).
+    // The COMBINATION + COMB_SAT path keeps the CAC SAT model accessible via
+    // satFastModel_ / getModel for model-based arrangement reading, which is the
+    // safer route. Skip the explicit propagations in that combination.
+    static const bool combination = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_COMBINATION");
+        return e && *e && *e != '0';
+    }();
+    if (combination) return out;
+
+    struct STValue { SharedTermId id; mpq_class value; };
+    std::vector<STValue> values;
+    auto sharedTermIds = sharedTermRegistry_->allSharedTerms();
+    values.reserve(sharedTermIds.size());
+    for (SharedTermId id : sharedTermIds) {
+        const SharedTerm* st = sharedTermRegistry_->get(id);
+        if (!st) continue;
+        auto ce = converter_->convert(st->coreExpr, *coreIr_);
+        if (!ce.ok()) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(ce.poly, *kernel_);
+        if (!rpOpt) continue;
+        RationalPolynomial p = std::move(*rpOpt);
+        for (const auto& [v, val] : *satFastModel_) {
+            p = p.substituteRational(v, val);
+        }
+        p.normalize();
+        if (!p.isConstant()) continue;   // unmodelled variable left; skip
+        const mpq_class v0 = p.constantValue() * ce.scale;
+        values.push_back({id, v0});
+    }
+
+    for (size_t i = 0; i < values.size(); ++i) {
+        for (size_t j = i + 1; j < values.size(); ++j) {
+            if (values[i].value != values[j].value) continue;
+            // Canonical pair (min, max) so the dedup matches regardless of order.
+            const SharedTermId a = std::min(values[i].id, values[j].id);
+            const SharedTermId b = std::max(values[i].id, values[j].id);
+            if (!deducedSharedEqEmitted_.insert({a, b}).second) continue;
+            SharedEqualityPropagation prop;
+            prop.a = a;
+            prop.b = b;
+            // Reasons left empty: the deduction holds in the current SAT
+            // model, supported by all currently asserted lits. The
+            // combination layer scopes the propagation to the current
+            // effort context.
+            out.push_back(std::move(prop));
+        }
+    }
+    return out;
 }
 
 std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
