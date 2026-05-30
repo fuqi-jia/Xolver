@@ -56,12 +56,20 @@ VarSign signFromBound(const LinBound& b, Relation rel) {
     }
     const int sB = sgn(B);
     switch (R) {
-        case Relation::Gt:  if (sB >= 0) return VarSign::PosStrict; break;  // v > B >= 0
-        case Relation::Geq: if (sB > 0)  return VarSign::PosStrict;         // v >= B > 0
-                            if (sB == 0) return VarSign::NonNeg;   break;   // v >= 0
-        case Relation::Lt:  if (sB <= 0) return VarSign::NegStrict; break;
-        case Relation::Leq: if (sB < 0)  return VarSign::NegStrict;
-                            if (sB == 0) return VarSign::NonPos;   break;
+        case Relation::Gt:
+            if (sB >= 0) return VarSign::PosStrict;   // v > B >= 0  =>  v > 0
+            break;
+        case Relation::Geq:
+            if (sB > 0)  return VarSign::PosStrict;   // v >= B > 0  =>  v > 0
+            if (sB == 0) return VarSign::NonNeg;      // v >= 0
+            break;
+        case Relation::Lt:
+            if (sB <= 0) return VarSign::NegStrict;
+            break;
+        case Relation::Leq:
+            if (sB < 0)  return VarSign::NegStrict;
+            if (sB == 0) return VarSign::NonPos;
+            break;
         default: break;   // Eq/Neq: no sign derived
     }
     return VarSign::Unknown;
