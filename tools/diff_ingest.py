@@ -67,7 +67,11 @@ CREATE TABLE IF NOT EXISTS diff_results (
     run_timestamp TEXT,
     xolver_git_tip TEXT,
     file_dir_prefix TEXT,
-    file_name_stem TEXT
+    file_name_stem TEXT,
+
+    -- audit sentinel: source sqlite a refreshed row inherited its oracle_* from
+    -- (NULL = oracle ran fresh this batch). Set by diff_xolver_only.py.
+    oracle_inherited_from_run TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_division     ON diff_results(division);
 CREATE INDEX IF NOT EXISTS idx_oracle_blind ON diff_results(is_oracle_blind);
@@ -76,8 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_dir_prefix   ON diff_results(file_dir_prefix);
 """
 
 ALL_COLS = (
-    RAW_COLS[:12] + DERIVED_COLS + RAW_COLS[12:]
-)  # insertion order = table column order
+    RAW_COLS[:12] + DERIVED_COLS + RAW_COLS[12:] + ["oracle_inherited_from_run"]
+)  # insertion order = table column order; trailing audit col NULL for fresh runs
 
 
 def _int(v, default=0):
