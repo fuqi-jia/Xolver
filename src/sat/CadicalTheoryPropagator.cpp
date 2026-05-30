@@ -470,7 +470,20 @@ int CadicalTheoryPropagator::cb_propagate() {
     // regardless of the current assignment; with the reasons currently true it
     // is unit and CaDiCaL propagates `implied`. Producers self-gate (return {}
     // when their flag is off / in combination), so the flag-off path is inert.
-    if (!hasPendingClause_) {
+    //
+    // Call-frequency throttle (XOLVER_THEORY_ENTAIL_PROP_EVERY, default 1 =
+    // every call). Track 1 EUF e-prop is paired with EUF_PROP_BUDGET (inner
+    // iteration cap) but on EUF-heavy corpora (QG-classification) the per-call
+    // cost is still the bottleneck; throttling to every K cb_propagate calls
+    // amortises it. Sound — propagation is a refinement, not a verdict driver.
+    static const int entailPropEvery = []() {
+        const char* v = std::getenv("XOLVER_THEORY_ENTAIL_PROP_EVERY");
+        if (v && *v) { try { return std::max(1, std::atoi(v)); } catch (...) {} }
+        return 1;
+    }();
+    if (!hasPendingClause_ &&
+        (entailPropEvery == 1 ||
+         (stats_.propagateCallCount % entailPropEvery == 0))) {
         auto props = tm_.takeEntailmentPropagations();
         for (auto& lem : props) {
             if (!lem.lits.empty()) enqueuePendingClause(lem.lits);

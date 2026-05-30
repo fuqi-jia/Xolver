@@ -1,6 +1,7 @@
 #include "xolver/Solver.h"
 #include "xolver/Result.h"
 #include "expr/ir.h"
+#include "theory/euf/EufSolver.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
@@ -1277,6 +1278,18 @@ public:
             logicMismatch = true;
         }
         polyKernelRaw = setupResult.polyKernelRaw;
+
+        // Wire the DT model re-validator: hand the EUF solver a pointer to
+        // the original-formula assertions so its Full-effort check can
+        // independently re-evaluate them under the candidate e-graph. Sound
+        // floor for the QF_DT blocksworld false-SAT residual class (deep
+        // BMC ITE-chain violations that modelFullyDetermined accepts).
+        // Pointer outlives the solver (originalAssertions_ is a member).
+        if (auto* eufBase = theoryManager.solverFor(TheoryId::EUF)) {
+            if (auto* euf = dynamic_cast<EufSolver*>(eufBase)) {
+                euf->setOriginalAssertions(&originalAssertions_);
+            }
+        }
 
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);

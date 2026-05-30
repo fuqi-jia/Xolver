@@ -61,6 +61,18 @@ public:
         dtRegistry_ = registry;
     }
 
+    // DT model re-validator hook: original-formula assertions to re-evaluate
+    // at sat time using the live e-graph. Pointer must outlive this solver
+    // (Solver::originalAssertions_ provides it). When set, EufSolver::check
+    // at Full-effort runs DtModelValidator after modelFullyDetermined; if any
+    // assertion evaluates to DEFINITELY false under the candidate e-graph
+    // state, return Unknown (sound floor for the QF_DT blocksworld false-SAT
+    // residual class). SMT-LIB semantics respected: selector-on-wrong-ctor
+    // is Indeterminate, not Violated.
+    void setOriginalAssertions(const std::vector<ExprId>* p) {
+        originalAssertionsForDtValidate_ = p;
+    }
+
     // Nelson-Oppen combination hooks
     bool supportsCombination() const override { return true; }
 
@@ -272,6 +284,7 @@ private:
     TheoryAtomRegistry* dtRegistry_ = nullptr;
     DtReasoner dtReasoner_;
     void ensureDtContext();
+    const std::vector<ExprId>* originalAssertionsForDtValidate_ = nullptr;
 };
 
 } // namespace xolver

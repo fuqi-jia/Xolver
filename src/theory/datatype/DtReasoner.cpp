@@ -43,6 +43,24 @@ ExprId DtReasoner::originExpr(EufTermId t) const {
 }
 
 std::string DtReasoner::opName(EufTermId t) const {
+    // For DT terms (constructor/selector/tester), the AUTHORITATIVE name is
+    // the EUF symbol name (#dt.ctor.<C>, #dt.sel.<S>, #dt.is.<C>) that the
+    // lowering synthesizes. The CoreIr ORIGIN's payload is unreliable: in
+    // some lowering paths (e.g. nested let-bound Tester subexpressions inside
+    // BMC encoding) the origin's payload is set to a stringified Kind name
+    // like "UNKNOWN_KIND" by the parser, which then propagates to
+    // tester-consistency as opName(tt) = "UNKNOWN_KIND" -> name comparison
+    // against the actual constructor name ALWAYS mismatches, falsely emitting
+    // is-<C>(u) AND ctor=<C> as a conflict (the QF_DT blocksworld
+    // false-UNSAT 220/308 class). Read from the EUF symbol — that name was
+    // explicitly built from the constructor's user-declared name in the
+    // datatype lowering, so it is the ground truth.
+    const std::string& sym = tm_->symbolName(tm_->node(t).symbol);
+    if (sym.rfind(kCtorPrefix, 0) == 0)   return sym.substr(sizeof(kCtorPrefix) - 1);
+    if (sym.rfind(kSelPrefix, 0) == 0)    return sym.substr(sizeof(kSelPrefix) - 1);
+    if (sym.rfind(kTesterPrefix, 0) == 0) return sym.substr(sizeof(kTesterPrefix) - 1);
+    // Non-DT EUF term — fall back to the CoreIr payload (UF apps still keep
+    // their string name there).
     ExprId e = originExpr(t);
     if (e == NullExpr) return std::string();
     const auto* nm = std::get_if<std::string>(&ir_->get(e).payload.value);
@@ -493,6 +511,16 @@ bool DtReasoner::modelFullyDetermined() const {
     for (EClassId c : needing) {
         if (hasCtor.find(c) == hasCtor.end()) return false;  // observed-but-undetermined
     }
+    // Note on selector-owner ownership: SMT-LIB datatype semantics treat
+    // (sel x) when x is in a wrong-ctor class as UNDERSPECIFIED (any value),
+    // not as a conflict. So a "selector applied to wrong ctor" check is NOT
+    // a soundness gate — z3 agrees `(head nil) = red` is sat. The QF_DT
+    // blocksworld bmc_4 false-SAT residual is not from selector ownership
+    // but from BMC transition encoding (ITE-chain over (is-stack X)) where
+    // xolver's model accepts a state that violates an ITE constraint we
+    // don't independently re-validate. Proper fix requires a per-assertion
+    // re-validator (analog of ArithModelValidator) for QF_DT — out of
+    // single-edit scope.
     return true;
 }
 

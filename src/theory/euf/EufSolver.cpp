@@ -4,6 +4,7 @@
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"
+#include "theory/datatype/DtModelValidator.h"
 #include "expr/ir.h"
 #include <cassert>
 #include <algorithm>
@@ -1023,6 +1024,32 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         if (dtReasoner_.active() && !dtReasoner_.modelFullyDetermined()) {
             return TheoryCheckResult::unknown(
                 "dt: model not fully determined (observed datatype class has no constructor)");
+        }
+        // DT model re-validator: evaluate every original assertion under the
+        // live e-graph. Catches false-SATs where modelFullyDetermined accepts
+        // (every observed class has SOME ctor) but a deep BMC encoding
+        // (ITE-chain over testers/selectors) is actually violated. SMT-LIB-
+        // strict semantics: selector-on-wrong-ctor is Indeterminate, not
+        // Violated — never over-rejects sat cases like `(head nil) = red`.
+        // Default ON; XOLVER_DT_VALIDATE_OFF=1 disables (A/B escape).
+        static const bool dtValidateOff =
+            std::getenv("XOLVER_DT_VALIDATE_OFF") != nullptr;
+        if (!dtValidateOff && dtReasoner_.active() && coreIr_ &&
+            originalAssertionsForDtValidate_ &&
+            !originalAssertionsForDtValidate_->empty()) {
+            DtModelValidator v(*coreIr_, termManager_, egraph_, coreIr_->datatypes());
+            auto verdict = v.validate(*originalAssertionsForDtValidate_);
+            if (std::getenv("XOLVER_DT_VALIDATE_DIAG")) {
+                std::cerr << "[DT-VAL] assertions=" << originalAssertionsForDtValidate_->size()
+                          << " verdict=" << (verdict == DtModelValidator::Verdict::Satisfied ? "Sat"
+                                          : verdict == DtModelValidator::Verdict::Violated ? "Violated"
+                                          : "Indeterminate") << "\n";
+            }
+            if (verdict == DtModelValidator::Verdict::Violated) {
+                return TheoryCheckResult::unknown(
+                    "dt: candidate model violates an original assertion "
+                    "(DtModelValidator re-evaluation Violated; sound floor)");
+            }
         }
     }
 
