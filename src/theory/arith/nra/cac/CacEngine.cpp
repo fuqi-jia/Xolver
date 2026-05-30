@@ -1,6 +1,7 @@
 #include "theory/arith/nra/cac/CacEngine.h"
 
 #include "theory/arith/nra/cac/SingleCellProjection.h"
+#include "theory/arith/nra/projection/SubresultantChain.h"   // clearPscChainCache (#50)
 
 #include <algorithm>
 #include <cstdlib>
@@ -449,6 +450,10 @@ CacResult CacEngine::solve() {
         res.status = CacStatus::Unknown;
         return res;
     }
+    // #50: scope the PSC cache to a single solve() so VarId numbering and
+    // kernel state can't leak between solves (cache is keyed by VarId).
+    // The cache itself is gated on XOLVER_NRA_CAC_SR_CACHE in SubresultantChain.
+    clearPscChainCache();
     startTime_ = std::chrono::steady_clock::now();
     SamplePoint sample;
     const CoverOut o = getUnsatCover(0, sample);

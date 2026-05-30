@@ -3,6 +3,8 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #include <cstdlib>
+#include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace xolver {
@@ -18,6 +20,40 @@ bool libpolyPscEnabled() {
     }();
     return kEnabled;
 }
+
+// #50 PSC cache. XOLVER_NRA_CAC_SR_CACHE: gate the cache (default OFF). Per-
+// thread cache map of canonical-key → PscChainResult. PSC is a pure function
+// of its inputs, so same key ⇒ same value; sound. Scope is per-solve(),
+// cleared via clearPscChainCache() from CacEngine.
+bool srCacheEnabled() {
+    static const bool kEnabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_SR_CACHE");
+        return e && *e && *e != '0';
+    }();
+    return kEnabled;
+}
+
+// Canonical key for a RationalPolynomial — terms in canonical order with
+// rational coefficients and (var, exp) monomial signature. Cheap to compute
+// vs the matrix-determinant cost the cache aims to avoid.
+std::string polyKey(const RationalPolynomial& p) {
+    std::string k;
+    k.reserve(p.terms().size() * 16);
+    for (const auto& [mon, coeff] : p.terms()) {
+        k += coeff.get_str();
+        k += ':';
+        for (const auto& [v, e] : mon) {
+            k += std::to_string(v);
+            k += '^';
+            k += std::to_string(e);
+            k += ';';
+        }
+        k += '|';
+    }
+    return k;
+}
+
+thread_local std::unordered_map<std::string, PscChainResult> g_pscCache;
 
 // Recursive cofactor determinant over RationalPolynomial entries. Exact and
 // simple; exponential, so callers bound the dimension via maxMatrixDim.
@@ -58,9 +94,59 @@ RationalPolynomial shiftedCoeff(const std::vector<RationalPolynomial>& coef,
     return coef[idx];
 }
 
+PscChainResult principalSubresultantCoefficientsImpl(
+    const RationalPolynomial& pIn,
+    const RationalPolynomial& qIn,
+    VarId v,
+    int maxMatrixDim,
+    PolynomialKernel* kernel,
+    bool forcePsc);
+
 } // namespace
 
+void clearPscChainCache() {
+    g_pscCache.clear();
+}
+
 PscChainResult principalSubresultantCoefficients(
+    const RationalPolynomial& pIn,
+    const RationalPolynomial& qIn,
+    VarId v,
+    int maxMatrixDim,
+    PolynomialKernel* kernel,
+    bool forcePsc) {
+
+    if (!srCacheEnabled()) {
+        return principalSubresultantCoefficientsImpl(pIn, qIn, v, maxMatrixDim, kernel, forcePsc);
+    }
+    // Key includes every distinguishing input. Degenerate cases (degree < 1 on
+    // either side) are also keyed because they short-circuit to empty — caching
+    // them is still correct.
+    std::string key = polyKey(pIn);
+    key += "##";
+    key += polyKey(qIn);
+    key += '#';
+    key += std::to_string(static_cast<int>(v));
+    key += '#';
+    key += std::to_string(maxMatrixDim);
+    key += '#';
+    key += (forcePsc ? '1' : '0');
+    key += '#';
+    key += (kernel ? 'K' : 'N');
+    key += '#';
+    key += (libpolyPscEnabled() ? 'L' : 'D');
+
+    auto it = g_pscCache.find(key);
+    if (it != g_pscCache.end()) return it->second;
+
+    PscChainResult result = principalSubresultantCoefficientsImpl(
+        pIn, qIn, v, maxMatrixDim, kernel, forcePsc);
+    g_pscCache.emplace(std::move(key), result);
+    return result;
+}
+
+namespace {
+PscChainResult principalSubresultantCoefficientsImpl(
     const RationalPolynomial& pIn,
     const RationalPolynomial& qIn,
     VarId v,
@@ -149,5 +235,7 @@ PscChainResult principalSubresultantCoefficients(
 
     return out;
 }
+
+} // namespace (impl)
 
 } // namespace xolver
