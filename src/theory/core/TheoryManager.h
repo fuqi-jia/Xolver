@@ -70,6 +70,15 @@ public:
     SharedTermRegistry* sharedTermRegistry() { return sharedTermRegistry_; }
     const SharedTermRegistry* sharedTermRegistry() const { return sharedTermRegistry_; }
 
+    // Look up the registered solver for a given theory (nullptr if none).
+    // Used by Solver to wire optional model-validation hooks (e.g. the DT
+    // model re-validator needs the original-assertions vector handed to the
+    // EUF solver after setup).
+    TheorySolver* solverFor(TheoryId id) {
+        auto it = solverByTheory_.find(id);
+        return it == solverByTheory_.end() ? nullptr : it->second;
+    }
+
     /** Aggregate models from all registered theory solvers. */
     std::optional<TheorySolver::TheoryModel> getModel() const;
 
