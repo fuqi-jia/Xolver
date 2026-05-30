@@ -220,3 +220,47 @@ current `FULL` (no ALL_EFFORTS) on the same 714 cases. The delta could be:
 
 Recommendation: run lever 1 (broad bench), if net negative try lever 2,
 otherwise queue lever 3 as a polishing step.
+
+## Track C round 1 — OUTCOME: STOPPED (uncovered a CAC-core soundness bug)
+
+Broad bench of `FULL + XOLVER_NRA_CAC_ALL_EFFORTS=1` on the same 714-case
+corpus. Result (`results/track_a/full_alleff*`):
+
+  config              sat unsat unknown timeout UNSOUND
+  FULL                57   101    20      536      0
+  FULL + ALL_EFFORTS  96   114    28      476    **2**
+
+**+52 decisions, but 2 FALSE-UNSAT** in
+`20211101-Geogebra/IsoRightTriangle-Bottema1_12a.smt2` and
+`IsoRightTriangle-Bottema1_3a.smt2` (expected SAT, returned UNSAT).
+
+Bug isolation (see task #48): repros with `XOLVER_NRA_CAC=1
+XOLVER_NRA_CAC_TRUST_UNSAT=1 XOLVER_NRA_CAC_ALL_EFFORTS=1` AND with
+`XOLVER_NRA_CAC=1 XOLVER_NRA_CAC_TRUST_UNSAT=1 XOLVER_NRA_CAC_ONLY=1`
+(no EARLY_INFEAS needed). Bug is in **CAC core**, not in any new flag. The
+current shipped FULL config (with the 2s `XOLVER_NRA_CAC_DEADLINE_MS`)
+TIMES OUT on these cases before the wrong UNSAT emits — that is why
+Track A's 714-case FULL run was 0 unsound.
+
+Per master's standing rule ("any QF_NRA/QF_UFNRA 解错 in your lane is
+priority-zero"), Track C is STOPPED until #48 lands. ALL_EFFORTS is NOT
+shippable as a Track C lever. The lever menu items B1/B2/B3 are also paused
+because they all rely on CAC-UNSAT being trustworthy — any unsoundness fix
+to the core will rebase the projection paths they touch.
+
+### What the cases look like (for the eventual #48 fix)
+
+5 variables (`m`, `v10`, `v11`, `v8`, `v9`), 9 constraints:
+- 4 strict inequalities `m > 0 ∧ v10 > 0 ∧ v11 > 0 ∧ v9 > 0`,
+- 4 equalities — `-v8²+1 = 0`, `-v10²+v8²+1 = 0`, `-v11²+v8² = 0`,
+  `-v9+1 = 0`,
+- 1 big polynomial equation in `m, v10, v11` (the `(a+b+c)³(a+b-c)(b+c-a)
+  (c+a-b)` vs `a²b²c²` comparison from the Bottema problem),
+
+with SAT solution: `v8 = ±1, v10 = √2, v11 = 1, v9 = 1, m = ...` (forced
+by the bigpoly equation). The pairwise resultant of `-v8²+1` and
+`-v10²+v8²+1` w.r.t. `v8` is `(-v10²+2)²`, whose root `√2` is exactly the
+algebraic value CAC must sample to find SAT. Hypothesis to test: either
+(a) the propagation chain DROPS the `-v10²+2` resultant under some path,
+or (b) the algebraic-sample selection at level 1 (`v10`) does not land on
+`√2` for the prefixes it tries. cvc5 cdcac decides these cases.
