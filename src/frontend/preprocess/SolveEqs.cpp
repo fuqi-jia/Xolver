@@ -1,4 +1,8 @@
 #include "frontend/preprocess/SolveEqs.h"
+#include "theory/arith/linear/LinearExpr.h"
+
+#include <algorithm>
+#include <gmpxx.h>
 
 namespace xolver {
 
@@ -174,6 +178,13 @@ bool SolveEqs::run() {
             } else if (auto n2 = asNumericVar(rhs); n2 && !occurs(*n2, lhs) && isLinearReconstructable(lhs)) {
                 varName = *n2; defExpr = lhs; varSort = ir_.get(rhs).sort;
             } else {
+                // Bare-variable path did not match. Try the general ±1-pivot
+                // linear elimination on this equality (Farkas-style
+                // `expr = expr`), which the bare-var form cannot reach.
+                if (generalLinear_ && tryGeneralEliminate(idx)) {
+                    progress = true;
+                    break;  // indices shifted; restart scan
+                }
                 continue;
             }
 
@@ -192,6 +203,149 @@ bool SolveEqs::run() {
         }
     }
     return eliminated_ > 0;
+}
+
+bool SolveEqs::tryGeneralEliminate(size_t idx) {
+    ExprId c = conjuncts_[idx].second;
+
+    // Parse the equality into a canonical linear form Σ coeffs[v]·v = rhs.
+    // Returns false for anything nonlinear (e.g. the bilinear Farkas products
+    // in QF_NIA SAT14) — those are correctly skipped.
+    std::unordered_map<std::string, mpq_class> coeffs;
+    mpq_class rhs;
+    Relation rel;
+    if (!extractLinearConstraint(c, ir_, coeffs, rhs, rel)) return false;
+    if (rel != Relation::Eq) return false;
+
+    // Collect every variable's ExprId + sort from this equality's tree. The
+    // replacement we build reuses these exact (hash-consed) variable nodes, so
+    // we never need to reconstruct a Variable from its name (sort-agnostically).
+    std::unordered_map<std::string, ExprId> varExpr;
+    {
+        std::vector<ExprId> stack{c};
+        while (!stack.empty()) {
+            ExprId e = stack.back();
+            stack.pop_back();
+            const auto& node = ir_.get(e);
+            if (node.kind == Kind::Variable) {
+                if (auto* nm = std::get_if<std::string>(&node.payload.value))
+                    varExpr.emplace(*nm, e);
+            }
+            for (ExprId ch : node.children) stack.push_back(ch);
+        }
+    }
+
+    // Deterministic order: sort variable names so pivot choice is reproducible
+    // (unordered_map iteration order is not).
+    std::vector<std::string> names;
+    names.reserve(coeffs.size());
+    for (const auto& kv : coeffs)
+        if (kv.second != 0) names.push_back(kv.first);
+    std::sort(names.begin(), names.end());
+
+    // Helper: build a constant node of the given sort from an exact rational.
+    // Mirrors FormulaRewriter::mkIntOrReal — refuses non-integer/oversized Int
+    // literals (returns NullExpr) so we never emit an unsound or lossy constant.
+    auto mkConst = [&](const mpq_class& v, SortId sort) -> ExprId {
+        if (sort == realSortId_ && realSortId_ != NullSort) {
+            CoreExpr e; e.kind = Kind::ConstReal; e.sort = sort;
+            e.payload = Payload(v.get_str());
+            return ir_.add(std::move(e));
+        }
+        if (sort == intSortId_ && intSortId_ != NullSort) {
+            if (v.get_den() != 1) return NullExpr;
+            mpz_class num = v.get_num();
+            if (!num.fits_slong_p()) return NullExpr;
+            CoreExpr e; e.kind = Kind::ConstInt; e.sort = sort;
+            e.payload = Payload(static_cast<int64_t>(num.get_si()));
+            return ir_.add(std::move(e));
+        }
+        return NullExpr;
+    };
+
+    // Try each ±1-coefficient variable as the pivot, in deterministic order,
+    // and build its exact replacement. Use the first that succeeds.
+    for (const std::string& pivot : names) {
+        const mpq_class& cj = coeffs[pivot];
+        if (cj != 1 && cj != -1) continue;          // need |coeff| == 1 (exact)
+        if (unsafeVars_.count(pivot)) continue;     // UF/array shared (N-O)
+        auto pit = varExpr.find(pivot);
+        if (pit == varExpr.end()) continue;
+        SortId sort = ir_.get(pit->second).sort;
+        if (sort != intSortId_ && sort != realSortId_) continue;
+
+        // All other variables must share the pivot's sort (avoid Int/Real mixing
+        // through ToReal — keep the replacement homogeneous and reconstructable).
+        bool sortOk = true;
+        for (const std::string& v : names) {
+            if (v == pivot) continue;
+            auto vit = varExpr.find(v);
+            if (vit == varExpr.end() || ir_.get(vit->second).sort != sort) { sortOk = false; break; }
+        }
+        if (!sortOk) continue;
+
+        // xⱼ = (rhs − Σᵢ≠ⱼ aᵢ·xᵢ) / cⱼ, with cⱼ = ±1:
+        //   cⱼ = +1 →  xⱼ = Σᵢ≠ⱼ (−aᵢ)·xᵢ + rhs
+        //   cⱼ = −1 →  xⱼ = Σᵢ≠ⱼ ( aᵢ)·xᵢ − rhs
+        const bool pivotPos = (cj == 1);
+        SmallVector<ExprId, 4> terms;
+        bool buildOk = true;
+        for (const std::string& v : names) {
+            if (v == pivot) continue;
+            mpq_class tc = pivotPos ? -coeffs[v] : coeffs[v];
+            if (tc == 0) continue;
+            ExprId vexpr = varExpr[v];
+            ExprId term;
+            if (tc == 1) {
+                term = vexpr;
+            } else if (tc == -1) {
+                CoreExpr neg; neg.kind = Kind::Neg; neg.sort = sort;
+                neg.children.push_back(vexpr);
+                term = ir_.add(std::move(neg));
+            } else {
+                ExprId kc = mkConst(tc, sort);
+                if (kc == NullExpr) { buildOk = false; break; }
+                CoreExpr mul; mul.kind = Kind::Mul; mul.sort = sort;
+                mul.children.push_back(kc);
+                mul.children.push_back(vexpr);
+                term = ir_.add(std::move(mul));
+            }
+            terms.push_back(term);
+        }
+        if (!buildOk) continue;
+
+        mpq_class constTerm = pivotPos ? rhs : -rhs;
+        ExprId replacement;
+        if (terms.empty()) {
+            replacement = mkConst(constTerm, sort);
+            if (replacement == NullExpr) continue;
+        } else {
+            if (constTerm != 0) {
+                ExprId kc = mkConst(constTerm, sort);
+                if (kc == NullExpr) continue;
+                terms.push_back(kc);
+            }
+            if (terms.size() == 1) {
+                replacement = terms[0];
+            } else {
+                CoreExpr add; add.kind = Kind::Add; add.sort = sort;
+                add.children = terms;
+                replacement = ir_.add(std::move(add));
+            }
+        }
+
+        // Eliminate: drop this equality, substitute pivot ↦ replacement
+        // everywhere else, and record the (exact, linear) definition for model
+        // replay. The pivot cannot occur in `replacement` (it was excluded), so
+        // no self-reference is created.
+        conjuncts_.erase(conjuncts_.begin() + static_cast<long>(idx));
+        substMemo_.clear();
+        for (auto& cj2 : conjuncts_) cj2.second = substitute(cj2.second, pivot, replacement);
+        mc_.registerElimination(pivot, sort, replacement);
+        ++eliminated_;
+        return true;
+    }
+    return false;
 }
 
 void SolveEqs::commit() {

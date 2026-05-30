@@ -141,3 +141,90 @@ TEST_CASE("SolveEqs: does NOT eliminate into a non-reconstructable (div) term") 
     CHECK_FALSE(se.run());
     CHECK(mc.size() == 0);
 }
+
+// ---------------------------------------------------------------------------
+// General ±1-pivot linear elimination (setGeneralLinear / GAUSS).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SolveEqs[gauss]: general linear eq is NOT eliminated without the flag") {
+    // (= (+ x y) 5): neither side is a bare variable, so the default bare-var
+    // path leaves it untouched.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
+    ir.addAssertion(bin(ir, Kind::Eq, b, bin(ir, Kind::Add, i, x, y), cint(ir, i, 5)));
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    CHECK_FALSE(se.run());              // bare-var path: nothing to do
+    CHECK(mc.size() == 0);
+}
+
+TEST_CASE("SolveEqs[gauss]: eliminates a ±1-coefficient variable from a general eq") {
+    // (= (+ x y) 5) AND (>= x 0). With GAUSS, x (coeff +1) is isolated:
+    // x = 5 - y. x disappears; y remains.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
+    ir.addAssertion(bin(ir, Kind::Eq, b, bin(ir, Kind::Add, i, x, y), cint(ir, i, 5)));
+    ir.addAssertion(bin(ir, Kind::Geq, b, x, cint(ir, i, 0)));
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    se.setGeneralLinear(true);
+    CHECK(se.run());
+    se.commit();
+    CHECK(mc.size() == 1);
+    CHECK_FALSE(varInAssertions(ir, "x"));  // x eliminated
+    CHECK(varInAssertions(ir, "y"));        // y remains
+}
+
+TEST_CASE("SolveEqs[gauss]: pivots on the ±1 variable, never the scaled one") {
+    // (= (+ (* 2 x) y) 7) AND (>= x 0). Only y has |coeff|=1, so y is the pivot
+    // (y = 7 - 2x); x (coeff 2) must NOT be eliminated — eliminating it would
+    // require dividing by 2 and could drop integer solutions.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
+    ExprId twoX = bin(ir, Kind::Mul, i, cint(ir, i, 2), x);
+    ir.addAssertion(bin(ir, Kind::Eq, b, bin(ir, Kind::Add, i, twoX, y), cint(ir, i, 7)));
+    ir.addAssertion(bin(ir, Kind::Geq, b, x, cint(ir, i, 0)));
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    se.setGeneralLinear(true);
+    CHECK(se.run());
+    se.commit();
+    CHECK(mc.size() == 1);
+    CHECK(varInAssertions(ir, "x"));         // scaled var stays
+    CHECK_FALSE(varInAssertions(ir, "y"));   // ±1 var eliminated
+}
+
+TEST_CASE("SolveEqs[gauss]: no ±1 coefficient ⇒ no elimination") {
+    // (= (+ (* 2 x) (* 3 y)) 6): every coefficient has magnitude > 1, so there
+    // is no integer-exact pivot. Refuse (avoid introducing division).
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
+    ExprId twoX = bin(ir, Kind::Mul, i, cint(ir, i, 2), x);
+    ExprId threeY = bin(ir, Kind::Mul, i, cint(ir, i, 3), y);
+    ir.addAssertion(bin(ir, Kind::Eq, b, bin(ir, Kind::Add, i, twoX, threeY), cint(ir, i, 6)));
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    se.setGeneralLinear(true);
+    CHECK_FALSE(se.run());
+    CHECK(mc.size() == 0);
+}
+
+TEST_CASE("SolveEqs[gauss]: skips a UF-shared ±1 var, picks a safe one") {
+    // (= (+ x y) 5) AND (distinct (f x) (f 2)). x feeds f's argument (N-O shared,
+    // unsafe). GAUSS must skip x and pivot on the safe y instead.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x = var(ir, i, "x"), y = var(ir, i, "y");
+    ExprId fsym = var(ir, i, "f");
+    ExprId fX = ir.add(CoreExpr{Kind::UFApply, i, {fsym, x}, Payload(std::string("f"))});
+    ExprId f2 = ir.add(CoreExpr{Kind::UFApply, i, {fsym, cint(ir, i, 2)}, Payload(std::string("f"))});
+    ir.addAssertion(bin(ir, Kind::Eq, b, bin(ir, Kind::Add, i, x, y), cint(ir, i, 5)));
+    ir.addAssertion(bin(ir, Kind::Distinct, b, fX, f2));
+    ModelConverter mc;
+    SolveEqs se(ir, mc);
+    se.setGeneralLinear(true);
+    CHECK(se.run());
+    se.commit();
+    CHECK(mc.size() == 1);
+    CHECK(varInAssertions(ir, "x"));         // UF-shared var pinned
+    CHECK_FALSE(varInAssertions(ir, "y"));   // safe var eliminated
+}
