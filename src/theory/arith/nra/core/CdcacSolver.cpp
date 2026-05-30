@@ -174,10 +174,14 @@ TheoryCheckResult CdcacSolver::check() {
         input.varOrder.push_back(kernel_->getOrCreateVar(name));
     }
 
+#ifndef NDEBUG
     std::cerr << "[CDCAC-SOLVER] solving with " << input.constraints.size()
               << " constraints, " << input.varOrder.size() << " vars" << std::endl;
+#endif
     CdcacResult result = core_->solve(input);
+#ifndef NDEBUG
     std::cerr << "[CDCAC-SOLVER] result status=" << (int)result.status << std::endl;
+#endif
 
     switch (result.status) {
         case CdcacStatus::Sat:
