@@ -40,6 +40,25 @@ public:
         : kernel_(kernel), estimator_(kernel) {
         if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_FAST"); e && *e && *e != '0')
             fastMode_ = true;
+        // XOLVER_NIA_BITBLAST_NOPRE (default-OFF): disable CaDiCaL's expensive
+        // gate-extraction / equivalence-finding preprocessing in the bit-blast's
+        // internal SAT solve. Profiling QF_UFNIA floored cases showed 100% of
+        // CPU in CaDiCaL::Closure::find_equivalences (the gate-extraction pass)
+        // inside `nia.bit-blast` — a single internal solve burning the whole
+        // budget. Sound: bit-blast is candidate-only (every SAT result is
+        // re-validated by IntegerModelValidator per invariant 1) and the SAT
+        // verdict itself is not affected by preprocessing — only its speed.
+        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_NOPRE"); e && *e && *e != '0')
+            noPreprocess_ = true;
+        // XOLVER_NIA_BITBLAST_CONFLICTS=<N> (default-0=unlimited): cap CaDiCaL's
+        // conflict budget on the bit-blast's INTERNAL SAT solve. With NOPRE off,
+        // the bottleneck on QF_UFNIA floored cases moves to CDCL propagate/search;
+        // with no budget, a single internal solve burns the whole NIA stage
+        // budget. The bit-blast is candidate-only (invariant 1) — a SAT-Unknown
+        // result just falls through to the next NIA stage / wider bit-width.
+        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_CONFLICTS"); e && *e) {
+            satConflictBudget_ = std::atoll(e);
+        }
     }
 
     BitBlastResult solve(const std::vector<NormalizedNiaConstraint>& cs,
@@ -109,6 +128,8 @@ private:
     // redundant solves, freeing the time budget for the deciding width / other
     // stages. Verdict-preserving: identical input -> identical cached output.
     bool fastMode_ = false;
+    bool noPreprocess_ = false;  // XOLVER_NIA_BITBLAST_NOPRE
+    long satConflictBudget_ = 0; // XOLVER_NIA_BITBLAST_CONFLICTS (0 = unlimited)
     std::unordered_map<std::string, BitBlastResult> resultCache_;
     std::string fingerprint(const std::vector<NormalizedNiaConstraint>& cs,
                             const DomainStore& domains) const;
