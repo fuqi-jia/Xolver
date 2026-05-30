@@ -111,6 +111,9 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
+        run.sh \
+        run_differential.sh \
+        run_z3.sh \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \
