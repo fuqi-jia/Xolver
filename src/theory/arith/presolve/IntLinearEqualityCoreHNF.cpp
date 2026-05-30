@@ -39,19 +39,19 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
     struct Eq { std::map<VarId, mpq_class> coeffs; mpq_class cst; size_t atomIdx; };
     std::vector<Eq> eqs;
     std::set<VarId> varset;
-    // XOLVER_PRESOLVE_DEDUP_ROWS (default-OFF): skip an equality whose
-    // (coeffs, cst) is byte-identical to one already collected. Such a row is
-    // the SAME linear constraint (E ∧ E ≡ E), so its presence does not change
-    // the solution set, the existence/feasibility test, or any SNF-derived
-    // substitution/congruence — only the matrix row count. On EVM/SVCOMP-style
-    // QF_ANIA inputs the live equality set is up to ~98% exact duplicates
-    // (floppy2: 19847 rows → 415 unique), so SNF (super-linear in rows) is
-    // computed on a massively redundant matrix. Deduping is solution-set exact;
-    // we keep the FIRST occurrence's atomIdx as the reason representative (a
-    // valid, possibly tighter, conflict justification). Same-coeffs/different-
-    // cst rows have distinct keys → both kept → the SNF existence check still
-    // detects the contradiction. Gate proves no-verdict-change OFF vs ON.
-    const bool dedupRows = std::getenv("XOLVER_PRESOLVE_DEDUP_ROWS") != nullptr;
+    // Row dedup (promoted default-ON): skip an equality whose (coeffs, cst) is
+    // byte-identical to one already collected. Such a row is the SAME linear
+    // constraint (E ∧ E ≡ E), so its presence does not change the solution set,
+    // the existence/feasibility test, or any SNF-derived substitution/congruence
+    // — only the matrix row count. On EVM/SVCOMP-style QF_ANIA inputs the live
+    // equality set is up to ~98% exact duplicates (floppy2: 19847 rows → 415
+    // unique), so SNF (super-linear in rows) is computed on a massively
+    // redundant matrix. Deduping is solution-set exact; we keep the FIRST
+    // occurrence's atomIdx as the reason representative (a valid, possibly
+    // tighter, conflict justification). Same-coeffs/different-cst rows have
+    // distinct keys → both kept → the SNF existence check still detects the
+    // contradiction.
+    const bool dedupRows = true;
     std::set<std::pair<std::map<VarId, mpq_class>, mpq_class>> seenEq;
     for (size_t i = 0; i < st.atoms.size(); ++i) {
         const auto& A = st.atoms[i];
@@ -103,7 +103,7 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
 
     const int diagN = std::min(snf.m, snf.n);
 
-    // XOLVER_PRESOLVE_IIS (default-OFF): on an existence conflict, return a
+    // Minimal infeasible subset (promoted default-ON): on an existence conflict, return a
     // MINIMAL infeasible subset instead of every equality's literals. The SNF
     // row i is the integer combination U[i] of the original equalities (U·A·V=D,
     // so row i of U·A is Σ_j U[i][j]·A[j]); the infeasibility of row i is
@@ -113,7 +113,7 @@ bool IntLinearEqualityCoreHNF::run(PresolveState& st) {
     // set, which blocks only the current assignment → the SAT solver re-proposes
     // near-identical models (GrandProduct: 172 full model-checks, no
     // convergence). A tight conflict generalizes and prunes the search.
-    const bool iisEnabled = std::getenv("XOLVER_PRESOLVE_IIS") != nullptr;
+    const bool iisEnabled = true;  // promoted default-ON
     const int meq = static_cast<int>(eqs.size());
 
     // Existence: d_i | b'_i for nonzero diagonals; b'_i = 0 for zero rows.
