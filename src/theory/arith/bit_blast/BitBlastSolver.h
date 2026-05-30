@@ -38,8 +38,6 @@ class BitBlastSolver {
 public:
     explicit BitBlastSolver(PolynomialKernel& kernel)
         : kernel_(kernel), estimator_(kernel) {
-        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_FAST"); e && *e && *e != '0')
-            fastMode_ = true;
         // XOLVER_NIA_BITBLAST_NOPRE (default-OFF): disable CaDiCaL's expensive
         // gate-extraction / equivalence-finding preprocessing in the bit-blast's
         // internal SAT solve. Profiling QF_UFNIA floored cases showed 100% of
@@ -120,14 +118,14 @@ private:
     uint64_t gateBudget_ = defaultGateBudget();
     static uint64_t defaultGateBudget();
 
-    // XOLVER_NIA_BITBLAST_FAST (default-OFF): memoize solve() by a fingerprint of
+    // Bit-blast result memoization (default-ON): memoize solve() by a fingerprint of
     // (cs polys+rels, per-var domain bounds). The Full-effort bit-blast stage is
     // re-invoked across CDCL(T) theory checks with an unchanged constraint set;
     // profiling shows the SAME problem re-encoded+re-solved many times (e.g. an
     // always-overflow AProVE case attempted ~10x). The cache collapses those
     // redundant solves, freeing the time budget for the deciding width / other
     // stages. Verdict-preserving: identical input -> identical cached output.
-    bool fastMode_ = false;
+    bool fastMode_ = true;
     bool noPreprocess_ = false;  // XOLVER_NIA_BITBLAST_NOPRE
     long satConflictBudget_ = 0; // XOLVER_NIA_BITBLAST_CONFLICTS (0 = unlimited)
     std::unordered_map<std::string, BitBlastResult> resultCache_;

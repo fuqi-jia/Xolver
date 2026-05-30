@@ -175,20 +175,19 @@ private:
     std::unique_ptr<LibpolyBackend> preElimAlgebra_;
     std::unique_ptr<CdcacCore> preElimCore_;
 
-    // XOLVER_NRA_SUBTROPICAL: gate read once at construction (default OFF →
-    // stageSubtropical returns nullopt immediately, default path byte-identical).
-    bool enableSubtropical_ = false;
+    // Subtropical SAT-fast-path: promoted default-ON.
+    bool enableSubtropical_ = true;
     // The validated subtropical/CAC witness for the CURRENT full assignment, if a
     // SAT-fast-path fired. getModel() prefers it over the (bypassed) CDCAC engine
     // sample. Invalidated by any assignment change (assertLit/backtrack/pop/reset).
     std::optional<std::unordered_map<VarId, mpq_class>> satFastModel_;
 
-    // XOLVER_NRA_CAC: gate + lazily-built libpoly backend for the CAC engine.
-    bool enableCac_ = false;
+    // CAC (CDCAC) engine: promoted default-ON. Lazily-built libpoly backend.
+    bool enableCac_ = true;
     std::unique_ptr<LibpolyBackend> cacBackend_;
 
-    // XOLVER_NRA_SIGN_REFUTE: gate for the sign-definiteness refuter.
-    bool enableSignRefute_ = false;
+    // Sign-definiteness refuter: promoted default-ON.
+    bool enableSignRefute_ = true;
 };
 
 } // namespace xolver
