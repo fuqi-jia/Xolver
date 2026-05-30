@@ -376,6 +376,14 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     if (levelEarlyHit) {
         for (size_t ci = 0; ci < cons_.size(); ++ci) {
             if (consMainLevel_[ci] <= level) continue;
+            // Only equations drive the pairwise-resultant chain that exposes
+            // the #48 algebraic SAT boundaries (e.g. m²+4m-4 from
+            // Res_v8(-v8²+1, -v10²+v8²+1)). Strict inequalities at deeper
+            // levels don't contribute new resultant partners — they're
+            // handled by the standard cell construction at their own level.
+            // Filtering to equations only keeps the parent Lazard's projection
+            // input small while still recovering the soundness chain.
+            if (cons_[ci].rel != Relation::Eq) continue;
             levelChar.push_back(cons_[ci].poly);
         }
     }
