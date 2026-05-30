@@ -146,3 +146,14 @@ tools/smoke_manifest.txt
 
 # SMT-COMP submission staging (local only; archive lives on Zenodo)
 submission-smtcomp2026/
+
+# Internal doc / design notes (kept locally, not public)
+NOTES-eqna-track-c.md
+docs/cac/
+src/theory/arith/README.md
+src/theory/arith/nra/CAC.md
+src/theory/arith/nra/LAZARD.md
+tests/modular_ladder/README.md
+tests/regression/KNOWN_FAILURES.md
+tests/regression/REALVALUE_TOUCHPOINTS.md
+results/
