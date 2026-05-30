@@ -6,6 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <gmpxx.h>
+
 namespace xolver {
 
 ZoharBwiAxiomEmitter::ZoharBwiAxiomEmitter(CoreIr& ir, SortId boolSortId)
@@ -50,8 +52,15 @@ ExprId ZoharBwiAxiomEmitter::mkConstInt(int64_t v) {
     for (ExprId id = 0; id < static_cast<ExprId>(ir_.size()); ++id) {
         const CoreExpr& n = ir_.get(id);
         if (n.kind != Kind::ConstInt || n.sort != intSortId_) continue;
-        auto* iv = std::get_if<int64_t>(&n.payload.value);
-        if (iv && *iv == v) return id;
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
+            if (*iv == v) return id;
+        } else if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            // Large-literal ConstInt is stored as a decimal string; match
+            // those too so the hash-cons fold remains complete on big-literal
+            // formulas (otherwise we'd mint a redundant int64 ConstInt and
+            // the axiom would not share atoms with the user's literal).
+            try { if (mpz_class(*sv) == v) return id; } catch (...) {}
+        }
     }
     CoreExpr e;
     e.kind = Kind::ConstInt; e.sort = intSortId_;
