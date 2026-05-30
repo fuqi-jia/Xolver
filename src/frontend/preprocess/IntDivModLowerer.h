@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace xolver {
@@ -71,7 +72,23 @@ private:
 
     void emitConstDivisorConstraints(const DivModDef& def, const mpz_class& k, ScopeLevel level);
     void emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level);
+    void emitVariableDivisorConstraintsPositiveDivisor(const DivModDef& def, ScopeLevel level);
     void emitUndefZeroConstraints(const DivModDef& def, ScopeLevel level);
+
+    // Track C1 Phase 2 helper: scan all top-level assertions for syntactic
+    // strict-positive lower bounds on integer variables (`(> v 0)`,
+    // `(>= v 1)`, `(> v c)` for c>=0, `(>= v c)` for c>=1) and record them in
+    // `positiveVars_`. Conservative: only top-level conjuncts; no SAT-level
+    // reasoning. Called once at the start of run().
+    void scanPositiveBounds(const std::vector<std::pair<ScopeLevel, ExprId>>& asserts);
+
+    // Track C1 Phase 2 helper: structural strict-positive check on a divisor
+    // expression `b` given `positiveVars_`. Returns true iff `b > 0` follows
+    // from the asserted positive bounds, by treating `b` as a product /
+    // power of positive subterms (or a positive constant). Conservative: a
+    // non-matching shape returns false (caller falls through to the
+    // EUF-needing undef path).
+    bool divisorIsProvenStrictlyPositive(ExprId b) const;
 
     void updateRequirement(bool needsNonlinear, bool needsEUF);
 
@@ -138,6 +155,7 @@ private:
     std::vector<GeneratedAssertion> generatedAssertions_;
     std::vector<DivModOrigin> origins_;
     ArithmeticRequirement requirement_;
+    std::unordered_set<std::string> positiveVars_;  // Track C1 Phase 2
     ExprId undefDivSym_ = NullExpr;
     ExprId undefModSym_ = NullExpr;
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;
