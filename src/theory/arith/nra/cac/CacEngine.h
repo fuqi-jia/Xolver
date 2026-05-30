@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <set>
 
 namespace xolver {
 
@@ -54,6 +55,16 @@ enum class CacStatus { Sat, Unsat, Unknown };
 struct CacResult {
     CacStatus status = CacStatus::Unknown;
     SamplePoint model;   // a full assignment, valid iff status == Sat
+    // UNSAT core: indices (into the constructor's constraint vector) of the
+    // constraints that actually DELINEATED the gap-free covering — i.e. the
+    // ones whose violation/boundary produced an excluded cell. A conservative
+    // SUPERSET of a truly-minimal core (the union projection can't attribute
+    // per-cell), but strictly smaller than "all constraints" in general, so the
+    // combination/conflict layer can (a) minimize the learned lemma and (b)
+    // include exactly the interface-(dis)eq lits that participated. Valid iff
+    // status == Unsat; EMPTY means "could not attribute" ⇒ caller falls back to
+    // the full constraint set (sound).
+    std::vector<size_t> unsatCore;
 };
 
 class CacEngine {
@@ -74,6 +85,21 @@ public:
         // to the global timeout and starving it. When CAC is the SOLE engine
         // (no Collins), leave it 0 (unbounded) and rely on the external timeout.
         long deadlineMillis = 0;
+        // Track 1 #39: early-infeasibility probe at every non-leaf sample.
+        // signAt every constraint whose mainLevel ≤ current level; a definite-
+        // nonzero violating sign ⇒ exclude the cell on var WITHOUT recursing.
+        // signAt = Zero (nullification) routes via the existing characterize
+        // path (NOT a direct conflict). Default OFF; NraSolver stageCac flips
+        // it from XOLVER_NRA_CAC_EARLY_INFEAS.
+        bool earlyInfeas = false;
+        // Track 2 #40: prune subsumed cells before flattening to charPolys/
+        // origins (cvc5 cleanIntervals analog). Sound: the surviving cells
+        // still cover ℝ (a subsumed cell's interval is contained in the
+        // subsuming one, so removing it leaves the union unchanged); only
+        // PROPAGATION is trimmed — smaller projection input at the parent,
+        // tighter (still sound) unsatCore. Default OFF; NraSolver stageCac
+        // flips it from XOLVER_NRA_CAC_PRUNE_INTERVALS.
+        bool pruneIntervals = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -101,6 +127,10 @@ private:
     struct CoverOut {
         CacStatus status = CacStatus::Unknown;
         std::vector<RationalPolynomial> charPolys;   // delineate this level's covering
+        // Constraint indices (into cons_) that contributed to THIS level's UNSAT
+        // covering: at the leaf, every violated atom; at a non-leaf, the union of
+        // the child recursions' origins. Propagated up to form CacResult::unsatCore.
+        std::set<size_t> origins;
     };
     CoverOut getUnsatCover(int level, SamplePoint& sample);
 
@@ -108,7 +138,18 @@ private:
     PolynomialKernel* kernel_;
     std::vector<VarId> varOrder_;
     std::vector<CacConstraint> cons_;
+    // Per-constraint cache, parallel to cons_ (populated in the constructor):
+    //   consMainLevel_[ci] = highest level in varOrder_ that appears in cons_[ci].poly,
+    //                        or -1 if the poly is constant.  Used by the early-
+    //                        infeasibility probe to filter constraints whose sign
+    //                        is fully decidable at the current prefix (mvLevel<=level).
+    //   consPid_[ci]       = libpoly PolyId for signAt (one-time toPrimitiveInteger),
+    //                        avoiding per-probe re-normalization.
+    std::vector<int> consMainLevel_;
+    std::vector<PolyId> consPid_;
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
+    bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
+    bool pruneIntervals_ = false;    // XOLVER_NRA_CAC_PRUNE_INTERVALS gate
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;

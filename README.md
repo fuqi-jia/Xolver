@@ -1,37 +1,6 @@
 # Xolver
 
-**Z**ero-human-written SMT s**olver** — a research-grade SMT/OMT solver for
-(non)linear arithmetic in which **every line of code is written by AI agents**,
-not humans. The name is the thesis: a complete, sound constraint solver grown
-end-to-end by autonomous agents working against a fixed architectural plan.
-
-Xolver targets the quantifier-free arithmetic, array, and uninterpreted-function
-fragments of SMT-LIB, with a dual-engine design: an **exact CDCL(T) kernel** for
-sound `sat`/`unsat` reasoning and a heuristic **advisor** layer (local search,
-learning) that may only *propose* — never decide — so soundness is preserved
-end-to-end.
-
----
-
-## Highlights
-
-- **Sound by construction.** Every `sat` is replayed through a `ModelValidator`
-  over the original assertions; every `unsat` is backed by an explicit proof
-  (constant contradiction, empty root set, GCD/modular contradiction, or a
-  complete projection-certified covering). When reasoning is incomplete the
-  answer is `unknown` — never a guess.
-- **Exact arithmetic throughout.** Rational (GMP/MPFR) and real-algebraic
-  (libpoly) kernels; no floating point in the decision path.
-- **Nonlinear real arithmetic** via CDCAC (Cylindrical Algebraic Coverings) with
-  a theory-check presolve fixpoint, plus an experimental exact-algebraic **Lazard
-  tower** lifting path.
-- **Nonlinear integer arithmetic** (undecidable in general) via NIA-Core:
-  univariate real-root tightening, algebraic reasoning (square rules, GCD &
-  modular contradictions), bounded complete enumeration, and a sound bit-blasting
-  fallback.
-- **Combination & arrays** on a shared EUF e-graph (Nelson–Oppen style) covering
-  `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`.
-- **Differentially tested** against z3 and cvc5 over hundreds of regression cases.
+Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
 ---
 
@@ -44,156 +13,83 @@ end-to-end.
 | Difference logic | `QF_IDL`, `QF_RDL` |
 | Nonlinear | `QF_NRA`, `QF_NIA`, `QF_NIRA` |
 | UF + arithmetic | `QF_UFLRA`, `QF_UFLIA`, `QF_UFNRA`, `QF_UFNIA` |
-| Arrays (+arith, +UF) | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA` |
+| Arrays | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`, `QF_ANIA`, `QF_AUFNIA` |
+| Datatypes | `QF_DT`, `QF_UFDT`, `QF_UFDTNIA` |
 
 ---
 
 ## Architecture
 
 ```
-            SMT-LIB 2 input
-                  │
-            SOMTParser  (frontend, git submodule)
-                  │
-        Frontend lowering worklist
-   (ToInt / div-mod / ITE lowering, constant propagation)
-                  │
-   ┌──────────────┴───────────────────────────────┐
-   │  Core IR (Expr / Sort)  — hash-consed DAG     │  three separate views of an
-   │  Polynomial view (PolyId) — libpoly kernel    │  expression, kept distinct:
-   │  Evaluation view — local-search scoring        │  DAG / polynomial / eval
-   └──────────────┬───────────────────────────────┘
-                  │  Atomizer  (b_i ↔ theory atom_i)
-                  │
-            CaDiCaL SAT engine  (CDCL boolean core)
-                  │  CDCL(T) main loop   ┌─ MCSAT/NLSAT (research path)
-                  ▼                      ▼
-        ┌─────────────────────────────────────────────┐
-        │  Theory solvers (ArithSolverBase + Reasoner) │
-        │   • LRA / LIA      simplex + branch&bound     │
-        │   • IDL / RDL      Bellman–Ford difference    │
-        │   • NRA            CDCAC + presolve fixpoint   │
-        │   • NIA            NIA-Core + bit-blast        │
-        │   • NIRA / LIRA    mixed int/real              │
-        │   • Arrays / UF    shared EUF e-graph          │
-        └──────────────────────┬──────────────────────┘
-                  │  candidate models / conflicts
-                  ▼
-        ModelValidator (exact)        Advisor (heuristic, propose-only)
-        — gates every `sat`           — local search, learning, portfolio
+                  SMT-LIB 2 input
+                         │
+                  SOMTParser           (frontend, git submodule)
+                         │
+                  Frontend lowering    (ToInt / div-mod / ITE)
+                         │
+   ┌──────────────────────────────────────────────────┐
+   │ Core IR (Expr / Sort)        hash-consed DAG     │
+   │ Polynomial view (PolyId)     libpoly kernel      │
+   │ Evaluation view              local-search        │
+   └─────────────────────┬────────────────────────────┘
+                         │  Atomizer  (b_i ↔ theory atom_i)
+                         ▼
+                  CaDiCaL SAT engine   (CDCL(T) main loop)
+                         │
+                         ▼
+   ┌──────────────────────────────────────────────────┐
+   │ Theory solvers (ArithSolverBase + Reasoner)      │
+   │   LRA / LIA      simplex + branch&bound          │
+   │   IDL / RDL      Bellman-Ford difference         │
+   │   NRA            CDCAC + Collins/Lazard          │
+   │   NIA            NIA-Core + bit-blast            │
+   │   NIRA / LIRA    mixed int/real                  │
+   │   EUF / Arrays   e-graph + lazy axioms           │
+   │   Datatypes      lazy constructor plugin         │
+   └─────────────────────┬────────────────────────────┘
+                         │  candidate models / conflicts
+                         ▼
+            ModelValidator    (gates every sat — exact)
+            Advisor           (heuristic, propose-only)
 ```
-
-### The five stable APIs
-**User**, **Theory**, **Polynomial**, **Advisor**, **Certificate** — the five seams
-the whole system is built around. Subsystems follow their data structures and
-invariants; nothing crosses these seams informally.
-
-### Non-negotiable soundness invariants
-1. `Result::Sat` must pass `ModelValidator` over the original assertions —
-   local-search / MCSAT / bit-blasted results are *candidates only*.
-2. Anything heuristic flows through `Advisor::propose() → policy.accept()`;
-   heuristics never write solver state directly.
-3. Three expression views (DAG / polynomial / evaluation) are kept separate.
-4. The Atomizer keeps SAT literals distinct from theory atoms.
-5. CDCL(T) is the main loop; MCSAT is a parallel research path.
-6. NIA favors soundness over completeness — `unknown` is acceptable, a wrong
-   verdict is not.
-
-All arithmetic theory solvers share `src/theory/arith/ArithSolverBase` and drive
-a `Reasoner` pipeline (see `src/theory/arith/README.md`).
 
 ---
 
 ## Building
 
-### Prerequisites
-| Dependency | Role | If missing |
-|---|---|---|
-| CMake ≥ 3.16, C++17 compiler | build | required |
-| GMP, MPFR | exact rational/float | fatal error |
-| CaDiCaL | SAT backend | fatal error |
-| libpoly | polynomial / algebraic kernel | warning → kernel stubbed |
-| nlohmann/json, doctest | JSON, unit tests | fetched at configure time |
+Requires CMake ≥ 3.16, a C++17 compiler, GMP, and MPFR. CaDiCaL and libpoly are git submodules; nlohmann/json and doctest are fetched at configure time.
 
-### Clone (with the parser submodule)
 ```bash
 git clone --recursive git@github.com:fuqi-jia/Xolver.git
-cd Xolver
-# if you cloned without --recursive:
-git submodule update --init --recursive
-```
-
-### Configure & build
-```bash
-mkdir build && cd build
+cd Xolver && mkdir build && cd build
 cmake ..                 # Release (-O3) by default
-cmake --build . -j       # on WSL/low-RAM, prefer a bounded -j 2 to avoid OOM
+cmake --build . -j2      # on WSL / low-RAM, keep -j bounded
 ```
 
-The CLI binary is produced at `build/bin/xolver`.
-
-### CMake options (defaults shown)
-| Option | Default | Effect |
-|---|---|---|
-| `XOLVER_BUILD_TESTS` | ON | doctest unit suite + regression harness |
-| `XOLVER_BUILD_TOOLS` | ON | CLI, trace-viewer, model-checker, proof-checker |
-| `XOLVER_ENABLE_PROOFS` | ON | proof-production infrastructure + `proof-check` |
-| `XOLVER_ENABLE_TRACING` | ON | execution tracing for the learning layer |
-| `XOLVER_STATIC_BUILD` | OFF | fully static executable |
-
-For asserts/debugging: `cmake -DCMAKE_BUILD_TYPE=Debug ..`.
+CLI at `build/bin/xolver`. CMake options: `XOLVER_BUILD_TESTS`, `XOLVER_BUILD_TOOLS`, `XOLVER_ENABLE_PROOFS`, `XOLVER_STATIC_BUILD`.
 
 ---
 
 ## Usage
 
 ```bash
-# Solve an SMT-LIB 2 file (prints sat / unsat / unknown)
-./build/bin/xolver solve path/to/input.smt2
-
-# Produce a model for sat instances
-./build/bin/xolver solve --produce-models input.smt2
-
-# Other commands
-./build/bin/xolver model-check <model>   # validate a model against assertions
-./build/bin/xolver proof-check <proof>   # check a proof certificate
-./build/bin/xolver version
+./build/bin/xolver solve input.smt2                  # sat / unsat / unknown
+./build/bin/xolver solve --produce-models input.smt2 # with model
+./build/bin/xolver model-check <model>               # validate a model
+./build/bin/xolver proof-check <proof>               # check a proof certificate
 ```
-
-Useful options: `--logic QF_NRA`, `--produce-proofs`, `--seed <n>`,
-`-v/--verbose`. Run `xolver` with no arguments for the full list.
-
-### Experimental flags
-- `XOLVER_NRA_LAZARD_LIFT=1` (environment) — enables the exact-algebraic Lazard
-  tower lift for genuine algebraic-tower CDCAC cells. **Default off**; the default
-  projection path is Collins-style and the flag only *adds* certified isolations,
-  never changing the baseline behavior.
 
 ---
 
 ## Testing
 
 ```bash
-# Full CTest suite (unit + per-logic regression)
-cd build && ctest
-
-# Unit tests directly
-./build/tests/xolver_unit_tests
-./build/tests/xolver_unit_tests --test-case="<name>"
-./build/tests/xolver_unit_tests -ltc          # list cases
-
-# Differential regression vs z3 + cvc5 oracle
-python3 tools/run_regression.py --root tests/regression \
-        --solver build/bin/xolver --timeout 20 -j 2
-
-# Large-corpus benchmark runs (deploy + compare-with z3)
-./tools/deploy_and_run.sh build
-./tools/deploy_and_run.sh package
-./xolver-dist/tools/deploy_and_run.sh run nra,lra -j 200 -t 100 --compare-with z3
+cd build && ctest                          # unit + per-logic regression
+./build/tests/xolver_unit_tests            # unit only
+python3 tools/run_regression.py --root tests/regression --solver build/bin/xolver
 ```
 
-The regression harness compares each verdict against z3/cvc5 and flags any
-`MISMATCH` (a sound solver must produce **zero** sat↔unsat disagreements).
+The regression harness compares each verdict against z3/cvc5 and flags any sat↔unsat disagreement.
 
 ---
 
@@ -201,60 +97,32 @@ The regression harness compares each verdict against z3/cvc5 and flags any
 
 | Path | Contents |
 |---|---|
-| `include/xolver/` | public API headers (`Solver.h`, …) |
 | `src/expr/` | hash-consed Core IR, rewriter |
-| `src/parser/` | SOMTParser adapter |
-| `src/frontend/` | lowering passes, theory factory |
+| `src/parser/`, `src/frontend/` | SOMTParser adapter, lowering passes |
 | `src/sat/` | CaDiCaL wrapper |
-| `src/theory/core/` | TheoryManager, combination (Nelson–Oppen) |
-| `src/theory/arith/` | `ArithSolverBase`, `Reasoner`, per-theory solvers |
-| `src/theory/arith/nra/` | CDCAC engine, projection, Lazard tower |
-| `src/theory/arith/nia/` | NIA-Core, bit-blast |
-| `src/theory/arith/poly/` | libpoly polynomial kernel |
-| `src/mcsat/`, `src/search/`, `src/omt/`, `src/proof/`, `src/learning/` | research paths (skeleton → in progress) |
-| `tools/` | CLI, benchmark + deploy scripts, trace/proof/model checkers |
+| `src/theory/core/` | TheoryManager, Nelson–Oppen combination |
+| `src/theory/arith/` | per-theory solvers (LRA/LIA/IDL/RDL/NRA/NIA/NIRA/LIRA) |
+| `src/theory/{euf,array,datatype}/` | e-graph + lazy axioms |
+| `tools/` | CLI, build/test/benchmark scripts |
 | `tests/` | doctest unit suite + per-logic regression corpora |
-| `third_party/SOMTParser` | frontend parser (git submodule) |
-| `third_party/cadical` | CaDiCaL SAT backend (git submodule) |
-| `third_party/libpoly` | libpoly polynomial / algebraic kernel (git submodule) |
+| `third_party/SOMTParser`, `cadical`, `libpoly` | git submodules |
 
 ---
 
-## Project status
+## License
 
-| Stage | Area | Status |
-|---|---|---|
-| A | Core IR, SAT, parser, lowering | ✅ functional |
-| C / E | LRA, LIA | ✅ functional |
-| D | NRA (CDCAC + presolve) | ✅ functional |
-| I | NIA-Core (+ bit-blast) | ✅ functional |
-| — | Arrays / combination (5 array logics) | ✅ functional |
-| — | Lazard tower lift | 🧪 experimental (flag-gated) |
-| F / G / H / J / K | MCSAT, advisor, OMT, proofs, learning | 🏗️ skeleton → in progress |
+Apache License 2.0 — see [`LICENSE`](LICENSE). Third-party dependency manifest in [`NOTICE`](NOTICE).
 
----
+Xolver does not call, wrap, link, or include source from any existing SMT solver. Comments citing cvc5, z3, or others are algorithmic attribution for published algorithms (CDCAC, Lazard projection, Nelson–Oppen); the implementations are independently written.
 
-## License & provenance
-
-Xolver is licensed under the **Apache License 2.0** — see [`LICENSE`](LICENSE).
-Third-party dependencies remain under their own original licenses; the full
-dependency manifest is in [`NOTICE`](NOTICE).
-
-Xolver is developed as autonomous-agent research: every line of code is written
-by AI agents working against a fixed architectural plan. Source comments that
-cite cvc5, z3, or other SMT solvers are **algorithmic attribution** for published
-algorithms (Lazard projection, Cylindrical Algebraic Coverings, Nelson–Oppen,
-etc.); the implementations are independently written from the papers. Xolver
-does not call, wrap, link, or include source code from any existing SMT solver.
-
-### Submissions
-- SMT-COMP 2026 — see release tag and submission archive on [Zenodo](https://zenodo.org/records/20426099).
+Xolver was developed with substantial assistance from AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6), under the direction of the author.
 
 ### Citation
+
 ```bibtex
 @software{xolver,
-  title  = {Xolver: an AI-grown SMT/OMT solver for nonlinear arithmetic},
-  author = {Jia, Fuqi and contributors},
+  title  = {Xolver: an SMT solver for nonlinear arithmetic},
+  author = {Fuqi Jia and contributors},
   year   = {2026},
   url    = {https://github.com/fuqi-jia/Xolver}
 }

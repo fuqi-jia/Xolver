@@ -266,6 +266,11 @@ void CandidateModelSearch::detectActiveBounds() {
         const auto& n = ir_.get(eid);
         if (n.kind == Kind::ConstInt) {
             if (auto* v = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*v);
+            // Large literal (e.g. EVM 2^256) carried via ConstInt with a
+            // string payload — without this branch the bound is silently
+            // dropped (completeness loss on big constants).
+            if (auto* s = std::get_if<std::string>(&n.payload.value))
+                return mpq_class(*s);
         }
         if (n.kind == Kind::ConstReal) {
             if (auto* s = std::get_if<std::string>(&n.payload.value)) return mpq_class(*s);
@@ -592,6 +597,13 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
         case Kind::ConstInt:
             r.kind = TermVerdict::Number;
             if (auto* v = std::get_if<int64_t>(&n.payload.value)) r.numValue = mpq_class(*v);
+            // Large literal stored as ConstInt(string) — without this branch
+            // r.numValue stays default-constructed (0), turning eval into a
+            // false-Number whose value silently disagrees with the actual
+            // constant. Validator still catches any candidate that wrongly
+            // satisfies, so this is a completeness gap, not unsoundness.
+            else if (auto* s = std::get_if<std::string>(&n.payload.value))
+                r.numValue = mpq_class(*s);
             return r;
         case Kind::ConstReal:
             r.kind = TermVerdict::Number;

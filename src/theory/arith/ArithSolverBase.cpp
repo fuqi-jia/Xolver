@@ -40,6 +40,7 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
             for (const auto& [nm, mc] : acc)
                 std::cerr << "  " << nm << "  ms=" << (long)mc.first
                           << " calls=" << mc.second << "\n";
+            std::cerr.flush();  // survive SIGKILL on a piped-to-file stderr
         }
     };
     static ProfState prof;

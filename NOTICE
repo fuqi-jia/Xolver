@@ -1,34 +1,20 @@
 Xolver
 Copyright 2026 Fuqi Jia and the Xolver contributors
 
-This product includes software developed as part of the Xolver project.
+Licensed under the Apache License 2.0 (see LICENSE).
 
-Xolver dynamically/statically links the following third-party libraries.
-Each library remains under its own original license:
+Xolver does not call, wrap, or include source from any existing SMT solver.
+Source comments that cite cvc5, z3, or other SMT solvers are algorithmic
+attribution for published algorithms (Cylindrical Algebraic Coverings,
+Lazard projection, Nelson-Oppen); the implementations are independently
+written.
 
-  * CaDiCaL — MIT License
-    https://github.com/arminbiere/cadical
+Third-party dependencies (each under its own license):
 
-  * libpoly — LGPL v2.1 or later
-    https://github.com/SRI-CSL/libpoly
-
-  * GMP — LGPL v3 or GPL v2 (dual)
-    https://gmplib.org
-
-  * MPFR — LGPL v3 or later
-    https://www.mpfr.org
-
-  * nlohmann/json — MIT License
-    https://github.com/nlohmann/json
-
-  * doctest — MIT License
-    https://github.com/doctest/doctest
-
-  * SOMTParser — same license as Xolver (Apache 2.0)
-    https://github.com/fuqi-jia/SOMTParser
-
-Xolver does not call, wrap, or include source code from any existing
-SMT solver. Source comments that cite cvc5, z3, or other SMT solvers
-are algorithmic attribution for published algorithms (e.g. Cylindrical
-Algebraic Coverings, Lazard projection); the implementations are
-independently written.
+  CaDiCaL          MIT                       https://github.com/arminbiere/cadical
+  libpoly          LGPL v3 or later          https://github.com/SRI-CSL/libpoly
+  SOMTParser       MIT                       https://github.com/fuqi-jia/SOMTParser
+  nlohmann/json    MIT                       https://github.com/nlohmann/json
+  doctest          MIT                       https://github.com/doctest/doctest
+  GMP              LGPL v3 / GPL v2 (dual)   https://gmplib.org
+  MPFR             LGPL v3 or later          https://www.mpfr.org

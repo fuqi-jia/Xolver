@@ -196,7 +196,6 @@ private:
     static std::string linearFormToSmtLib(const LinearFormKey& form);
     static std::string mpqToSmtLib(const mpq_class& q);
     static std::string relationToSmtLib(Relation rel);
-    std::optional<bool> z3CheckCurrentState() const;
 
     std::string getVarNameForSharedTerm(SharedTermId s);
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
