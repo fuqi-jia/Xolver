@@ -66,4 +66,11 @@ PscChainResult principalSubresultantCoefficients(
     PolynomialKernel* kernel = nullptr,
     bool forcePsc = false);
 
+// Clear the per-thread PSC chain cache. Called from CacEngine::solve() so the
+// cache is scoped to a single solve(); subsequent solves see a clean state.
+// Cache is keyed by (p, q, v, maxMatrixDim, forcePsc, kernel-presence, libpoly-
+// flag); gated on XOLVER_NRA_CAC_SR_CACHE. Sound because PSC is a pure
+// mathematical function of its inputs — same key, same result.
+void clearPscChainCache();
+
 } // namespace xolver

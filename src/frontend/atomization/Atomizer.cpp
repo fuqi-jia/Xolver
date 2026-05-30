@@ -212,17 +212,6 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const CoreIr& ir) {
     return SatLit::positive(fv);
 }
 
-static bool containsUfApply(ExprId root, const CoreIr& ir) {
-    std::vector<ExprId> stack{root};  // iterative DFS (deep-term overflow guard)
-    while (!stack.empty()) {
-        const auto& e = ir.get(stack.back());
-        stack.pop_back();
-        if (e.kind == Kind::UFApply) return true;
-        for (ExprId child : e.children) stack.push_back(child);
-    }
-    return false;
-}
-
 // True if the expression tree contains a UF application OR an array operator
 // (select/store/const-array). In combination logics these are the operators
 // that must be routed to the EUF solver (which owns the shared egraph and the

@@ -374,6 +374,37 @@ void IntDivModLowerer::emitVariableDivisorConstraintsPositiveDivisor(
     ExprId zero = mkIntConst(0);
     ExprId one = mkIntConst(1);
 
+    // Track C1 Phase 2.7 — structural shortcut for `(* b b) div/mod b`.
+    //
+    // When `a` is syntactically `(* b b)` (b appears as both factors of a
+    // Mul, recognised by ExprId equality after CoreIr hash-consing) and the
+    // caller has already proven `b > 0`, the engagement of the standard
+    // `a = b*q + r` form on this dividend hangs in the NIA reasoner stack
+    // (see SYMBOLIC_DIVMOD_NONZERO defect: `(mod (* x x) x) = 5 ∧ x > 0`
+    // engaged path runs out of budget without refuting the trivial 0 = 5).
+    //
+    // Mathematically, for any b != 0:   (b * b) = b * b + 0
+    //                            i.e.   q = b,  r = 0.
+    // This is the unique Euclidean decomposition under the b > 0 case the
+    // caller guarantees, so emitting `q = b ∧ r = 0` linearly is sound and
+    // exact. The shortcut sidesteps the nonlinear engagement entirely.
+    //
+    // Soundness: gated on `divisorIsProvenStrictlyPositive(def.b)` (the
+    // function's precondition — the caller is `emitVariableDivisorConstraints`
+    // which checks it). At b = 0 the rewrite would be unsound (the SMT-LIB
+    // semantics for mod-by-zero are unspecified, so the model could pick any
+    // value); the b > 0 gate excludes that case entirely.
+    {
+        const auto& aNode = ir_.get(def.a);
+        if (aNode.kind == Kind::Mul && aNode.children.size() == 2 &&
+            aNode.children[0] == def.b && aNode.children[1] == def.b) {
+            generatedAssertions_.push_back({level, mkEq(def.q, def.b)});
+            generatedAssertions_.push_back({level, mkEq(def.r, zero)});
+            // Linear-only emit. No nonlinear engagement, no EUF.
+            return;
+        }
+    }
+
     // a = b*q + r
     generatedAssertions_.push_back(
         {level, mkEq(def.a, mkAdd(mkMul(def.b, def.q), def.r))});
