@@ -780,6 +780,24 @@ public:
         if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
             SolveEqs solveEqs(*ir, modelConverter_);
+            // General ±1-pivot linear elimination (XOLVER_PP_SOLVE_EQS_GAUSS):
+            // additionally solve Farkas-style `expr = expr` equalities for any
+            // ±1-coefficient variable. Independently gated for ablation; the
+            // reconstruction stays exact/integer-preserving (see SolveEqs).
+            //
+            // Restricted to LINEAR-arith logics. On nonlinear logics (NIA/NRA/
+            // NIRA) eliminating a linearly-defined variable substitutes its
+            // definition into NONLINEAR terms, changing the polynomial structure
+            // the theory reasoner relies on — sound (model replay is exact) but
+            // it can floor a previously-decided case to `unknown` (observed:
+            // nia_089 sat -> unknown). The cluster this targets (QF_LIA convert)
+            // is purely linear, so this restriction costs nothing here.
+            const bool nonlinearArithLogic =
+                logic.find("NIA") != std::string::npos ||
+                logic.find("NRA") != std::string::npos ||
+                logic.find("NIRA") != std::string::npos;
+            if (std::getenv("XOLVER_PP_SOLVE_EQS_GAUSS") && !nonlinearArithLogic)
+                solveEqs.setGeneralLinear(true);
             if (solveEqs.run()) {
                 solveEqs.commit();
                 std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
