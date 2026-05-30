@@ -942,6 +942,27 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
             return TheoryCheckResult::mkConflict(*br.conflict);
         }
         // UnknownBudget / UnknownUnsupported: continue pipeline
+    } else {
+        // Phase 3a (XOLVER_NIA_BOUNDED_PARTIAL, default-OFF). When the full
+        // domain isn't finite (some unbounded vars), try the partial
+        // enumerator: enumerate the tightly-bounded subset × small guess
+        // sets for unbounded vars, validate each candidate against the
+        // ORIGINAL constraints. Sound SAT-finding only — UnsatComplete is
+        // never returned from this path (unbounded search space is not
+        // exhausted).
+        static const bool partialEnabled = [] {
+            const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL");
+            return e && *e && *e != '0';
+        }();
+        if (partialEnabled) {
+            auto br = bounded_.solvePartial(normalized_, domains_, validator_);
+            if (br.status == BoundedSolveStatus::Sat) {
+                currentModel_ = br.model;
+                return TheoryCheckResult::consistent();
+            }
+            // Any other status (UnknownUnsupported / UnknownBudget) — fall
+            // through to the next pipeline stage.
+        }
     }
     return std::nullopt;
 }
