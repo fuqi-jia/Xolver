@@ -261,4 +261,67 @@ TEST_CASE("Covering: intervalSubsumes endpoint semantics") {
     CHECK(intervalSubsumes(cl, cl));
 }
 
+// ---- In-loop interval pruning (Track C round 2 / #49) ---------------------
+// XOLVER_NRA_CAC_INLOOP_PRUNE / Config::inloopPrune: after each cell add inside
+// the while loop, drop subsumed cells from cellsList immediately. Same
+// soundness as #40's post-loop prune (intervalSubsumes is sound; cov stays
+// consistent because dropped intervals were redundant). Verdict-invariant on
+// the canonical UNSAT/SAT shapes.
+
+TEST_CASE("CAC engine: inloop-prune preserves 1-var UNSAT (x^2<0)") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    RationalPolynomial xx; xx.addVar(x, 2, 1); xx.normalize();
+    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine eng(&backend, kernel.get(), {x}, {{xx, Relation::Lt}}, cfg);
+    CHECK(eng.solve().status == CacStatus::Unsat);
+}
+
+TEST_CASE("CAC engine: inloop-prune preserves 2-var SAT") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-4); circ.normalize();
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg.normalize();
+    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CHECK(eng.solve().status == CacStatus::Sat);
+}
+
+TEST_CASE("CAC engine: inloop-prune preserves 2-var UNSAT + core") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-1); circ.normalize();
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize();
+    CacEngine::Config cfg; cfg.inloopPrune = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+    CHECK_FALSE(r.unsatCore.empty());
+}
+
+TEST_CASE("CAC engine: inloop-prune composes with prune+early-infeas") {
+    auto kernel = createPolynomialKernel();
+    LibpolyBackend backend(kernel.get());
+    VarId x = kernel->getOrCreateVar("x");
+    VarId y = kernel->getOrCreateVar("y");
+    RationalPolynomial circ; circ.addVar(x, 2, 1); circ.addVar(y, 2, 1);
+    circ = circ + K(-1); circ.normalize();
+    RationalPolynomial xg; xg.addVar(x, 1, 1); xg = xg + K(-2); xg.normalize();
+    CacEngine::Config cfg;
+    cfg.inloopPrune = true; cfg.pruneIntervals = true; cfg.earlyInfeas = true;
+    CacEngine eng(&backend, kernel.get(), {x, y},
+                  {{circ, Relation::Lt}, {xg, Relation::Gt}}, cfg);
+    CacResult r = eng.solve();
+    CHECK(r.status == CacStatus::Unsat);
+}
+
 #endif  // XOLVER_HAS_LIBPOLY
