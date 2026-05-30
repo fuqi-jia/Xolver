@@ -273,6 +273,26 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
             break;
         }
         auto sat = createSatSolver();
+        // XOLVER_NIA_BITBLAST_NOPRE (default-OFF, same env as the regular
+        // nia.bit-blast). Disable CaDiCaL's heavy preprocessing on the eager
+        // bit-blast's INTERNAL solve. Profiled in the QF_NIA LassoRanker /
+        // AProVE termination cluster (Track A1 timeout taxonomy): a single
+        // EagerBitBlastSolver::solve burns the budget inside
+        // CaDiCaL::Closure::extract_and_gates -> extract_gates ->
+        // preprocess_quickly — same pathology the regular bit-blast had.
+        // Sound: eager bit-blast is candidate-only (validator-gated), and
+        // preprocessing only affects SAT speed, not its verdict.
+        static const bool nopre =
+            std::getenv("XOLVER_NIA_BITBLAST_NOPRE") != nullptr;
+        if (nopre) {
+            sat->configure("elim",      0);
+            sat->configure("subsume",   0);
+            sat->configure("vivify",    0);
+            sat->configure("probe",     0);
+            sat->configure("ternary",   0);
+            sat->configure("transred",  0);
+            sat->configure("decompose", 0);
+        }
         BitBlastEncoder enc(*sat);
         enc.setVarBudget(budget);
 

@@ -47,6 +47,8 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
         }
         earlyInfeas_ = cfg_.earlyInfeas;
         pruneIntervals_ = cfg_.pruneIntervals;
+        earlyInfeasSafe_ = cfg_.earlyInfeasSafe;
+        inloopPrune_ = cfg_.inloopPrune;
     } else {
         buildOk_ = false;
     }
@@ -167,6 +169,35 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     long iterCount = 0;
     bool levelEarlyHit = false;   // any EARLY_INFEAS hit at this level (#48 fix)
 
+    // In-loop interval pruning (#49, default OFF). After each cell add, check
+    // the newest cell vs existing: drop the new if subsumed by an existing
+    // one; drop existing ones subsumed by the new. cov stays consistent
+    // (it unions all intervals; dropping subsumed entries from cellsList
+    // doesn't affect coverage, just propagation size).
+    auto inloopPruneNew = [&]() {
+        if (!inloopPrune_ || cellsList.size() < 2) return;
+        const size_t newIdx = cellsList.size() - 1;
+        const LocalCell& fresh = cellsList[newIdx];
+        // Pass 1: new vs existing — if new subsumed by ANY, drop new.
+        for (size_t i = 0; i < newIdx; ++i) {
+            if (intervalSubsumes(cellsList[i].interval, fresh.interval)) {
+                cellsList.pop_back();
+                return;
+            }
+        }
+        // Pass 2: new subsumes any existing — drop existing in-place.
+        LocalCell newCopy = std::move(cellsList.back());
+        cellsList.pop_back();
+        size_t outIdx = 0;
+        for (size_t i = 0; i < cellsList.size(); ++i) {
+            if (intervalSubsumes(newCopy.interval, cellsList[i].interval)) continue;
+            if (outIdx != i) cellsList[outIdx] = std::move(cellsList[i]);
+            ++outIdx;
+        }
+        cellsList.resize(outIdx);
+        cellsList.push_back(std::move(newCopy));
+    };
+
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
         if (++iterCount > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; markIncomplete("cell-budget"); return out; }
         bool convExact = true;
@@ -218,6 +249,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 // cannot cross it as if nullification held on a whole sector.
                 cov.add(CacInterval::all());
                 cellsList.push_back({CacInterval::all(), std::move(violated), std::move(violatedIdx)});
+                inloopPruneNew();
                 sample.pop();
                 continue;
             }
@@ -297,6 +329,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         if (!cr.supported) { out.status = CacStatus::Unknown; markIncomplete(isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"); return out; }
         cov.add(cr.interval);
         cellsList.push_back({cr.interval, std::move(cellBoundaries), std::move(cellOrigins)});
+        inloopPruneNew();
     }
 
     // Prune subsumed cells (Track 2 #40, XOLVER_NRA_CAC_PRUNE_INTERVALS, default
@@ -361,15 +394,29 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     }
     // SOUNDNESS INJECTION (#48 _3a path): when EARLY_INFEAS fired at this level
     // for any cell, the leaf was short-circuited — the propagated charPolys
-    // would otherwise lack the EQUATION constraints needed by the parent's
-    // Lazard projection to compute the pairwise resultants that capture
-    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle). Inject
-    // every constraint poly into levelChar so the parent's characterize sees
-    // the full constraint set. The parent dedups via unitKey, so adding extra
-    // polys never inflates beyond the union.
-    if (levelEarlyHit) {
+    // would otherwise lack the constraints whose mainLevel > level (those that
+    // EARLY_INFEAS at this level SKIPPED, the ones leaf-propagation would have
+    // brought). The Lazard projection at parent levels then has no pairwise
+    // resultant partners — the equation-driven resultants that capture
+    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle) are NEVER
+    // computed. Inject ONLY those skipped-deeper constraints into levelChar.
+    // mainLevel ≤ level constraints are EITHER pushed as violated (already in
+    // cellBoundaries → propagated) OR satisfied at sample (don't constrain
+    // this cell's exclusion → no need to propagate). The mainLevel > level
+    // ones are the surgical minimum: enough to compute the pairwise
+    // resultants the leaf would have generated, without flooding the parent
+    // with redundant low-level polys. Parent dedups via unitKey.
+    if (levelEarlyHit && earlyInfeasSafe_) {
         for (size_t ci = 0; ci < cons_.size(); ++ci) {
-            if (consMainLevel_[ci] < 0) continue;
+            if (consMainLevel_[ci] <= level) continue;
+            // Only equations drive the pairwise-resultant chain that exposes
+            // the #48 algebraic SAT boundaries (e.g. m²+4m-4 from
+            // Res_v8(-v8²+1, -v10²+v8²+1)). Strict inequalities at deeper
+            // levels don't contribute new resultant partners — they're
+            // handled by the standard cell construction at their own level.
+            // Filtering to equations only keeps the parent Lazard's projection
+            // input small while still recovering the soundness chain.
+            if (cons_[ci].rel != Relation::Eq) continue;
             levelChar.push_back(cons_[ci].poly);
         }
     }

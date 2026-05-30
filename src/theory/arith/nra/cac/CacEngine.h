@@ -100,6 +100,25 @@ public:
         // tighter (still sound) unsatCore. Default OFF; NraSolver stageCac
         // flips it from XOLVER_NRA_CAC_PRUNE_INTERVALS.
         bool pruneIntervals = false;
+        // #48 fix toggle: inject equations with mainLevel > level into
+        // levelChar when EARLY_INFEAS fired anywhere at this level. Soundness
+        // fix for the false-UNSAT on equation-heavy cases (e.g. Geogebra
+        // IsoRightTriangle) when CAC has enough wall to complete its covering
+        // (ALL_EFFORTS / CAC_ONLY). Default OFF — the empty-downward gate
+        // alone catches the projection-collapse case; this extra injection
+        // helps the algebraic-resultant-chain case but costs measurable perf
+        // (broad-714 was -10 decisions). Flip ON via
+        // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE for extended-wall configs.
+        bool earlyInfeasSafe = false;
+        // Track C round 2 (#49): in-loop interval pruning. Extends #40's
+        // post-loop subsumption prune by checking each newly added cell vs
+        // existing cells INSIDE the while loop. Subsumed cells are dropped
+        // from cellsList immediately so it stays minimal during the loop —
+        // smaller levelChar at flatten, smaller parent Lazard projection
+        // input. cov stays consistent (merged() unions all intervals;
+        // dropping subsumed entries doesn't affect coverage). Default OFF;
+        // NraSolver flips it from XOLVER_NRA_CAC_INLOOP_PRUNE.
+        bool inloopPrune = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -150,6 +169,8 @@ private:
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
     bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
     bool pruneIntervals_ = false;    // XOLVER_NRA_CAC_PRUNE_INTERVALS gate
+    bool earlyInfeasSafe_ = false;   // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE gate (#48 injection)
+    bool inloopPrune_ = false;       // XOLVER_NRA_CAC_INLOOP_PRUNE gate (#49)
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;
