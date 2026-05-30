@@ -95,6 +95,7 @@ void NraSolver::onPop(uint32_t n) {
     activeRecords_.resize(activeLits_.size());
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
+    satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     engine_.pop(n);
 }
 
@@ -110,6 +111,7 @@ void NraSolver::onReset() {
     interfaceDisequalities_.clear();
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
+    satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
     // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
@@ -128,6 +130,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
     activeSet_.insert(reason);
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
+    satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
 
     size_t oldSize = activeLits_.size();
     activeLits_.push_back(reason);
@@ -163,6 +166,7 @@ void NraSolver::assertLit(const TheoryAtomRecord& atom, bool value,
 }
 
 void NraSolver::onBacktrack(int level) {
+    const size_t activeBefore = activeLits_.size();
     while (!trail_.empty() && trail_.back().level > level) {
         activeLits_.resize(trail_.back().activeSizeBefore);
         trail_.pop_back();
@@ -170,8 +174,18 @@ void NraSolver::onBacktrack(int level) {
     activeSet_.rebuildFromActive(activeLits_, [](const auto& lit) { return lit; });
     presolveConstraints_.resize(activeLits_.size());
     activeRecords_.resize(activeLits_.size());
-    satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
-    deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
+    // #55 Phase B: only invalidate the SAT stash when backtrack ACTUALLY shrank
+    // the trail. CaDiCaL may call notify_backtrack(currentLevel_) at the end of
+    // solve() — a no-op for trail/state, but unconditional reset() would destroy
+    // the just-stashed CAC/subtropical SAT model right before getModel() runs,
+    // turning genuine SAT verdicts into Indeterminate model-validation downgrades
+    // (the meti-tarski/sqrt cluster: sqrt-1mcosq-7-chunk-0027/0244/0453 recover).
+    const bool shrank = activeLits_.size() < activeBefore;
+    if (shrank) {
+        satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL: assignment changed → witness stale
+        deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
+        satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
+    }
     engine_.backtrack(level);
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -745,15 +759,61 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         if (!combSatHere && cacCombination &&
             (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()))
             return std::nullopt;
-        // Report only an all-rational model (the typed channel is mpq); an
-        // algebraic witness ⇒ defer to Collins (still sound). The engine already
-        // validated the model against every constraint (invariant 1).
-        std::unordered_map<VarId, mpq_class> rationalModel;
+        // Phase B (#55, XOLVER_NRA_CAC_SAT_ALGEBRAIC default OFF): accept
+        // CAC SAT models with algebraic values. CAC's engine validated
+        // allHold via exact signAt before returning SAT (existing invariant
+        // 1); the model — rational or algebraic — is a genuine satisfier of
+        // every constraint. Pre-#55 the algebraic case was deferred to
+        // Collins, which timed out on the meti-tarski/sqrt cluster (4 of 5
+        // sample cases had CAC verdict=sat repeatedly dropped here).
+        static const bool acceptAlgebraic = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_SAT_ALGEBRAIC");
+            return e && *e && *e != '0';
+        }();
+        bool anyAlgebraic = false;
         for (size_t i = 0; i < res.model.values.size(); ++i) {
-            if (!res.model.values[i].isRational()) return std::nullopt;
-            rationalModel.emplace(res.model.varOrder[i], res.model.values[i].rational);
+            if (!res.model.values[i].isRational()) { anyAlgebraic = true; break; }
         }
-        satFastModel_ = std::move(rationalModel);
+        if (anyAlgebraic && !acceptAlgebraic) return std::nullopt;
+        if (!anyAlgebraic) {
+            std::unordered_map<VarId, mpq_class> rationalModel;
+            for (size_t i = 0; i < res.model.values.size(); ++i)
+                rationalModel.emplace(res.model.varOrder[i], res.model.values[i].rational);
+            satFastModel_ = std::move(rationalModel);
+        } else {
+            // Algebraic channel: keep the full typed value (rational or
+            // RealAlg) for getModel to surface to ArithModelValidator and
+            // the printed-model channel.
+            std::vector<std::pair<VarId, RealValue>> alg;
+            alg.reserve(res.model.values.size());
+            for (size_t i = 0; i < res.model.values.size(); ++i) {
+                const auto& v = res.model.values[i];
+                if (v.isRational()) {
+                    alg.emplace_back(res.model.varOrder[i], RealValue::fromMpq(v.rational));
+                } else {
+                    // RealAlg → RealValue: mirror CdcacSolver::sampleValueToRealValue.
+                    // The backend stores coefficients high-to-low; AlgebraicNumber
+                    // wants low-to-high. Degenerate (no defining poly) → rational
+                    // midpoint of the isolating interval (fallback).
+                    RealValue rv;
+                    if (cacBackend_ && v.root.definingPoly != NullUniPolyId) {
+                        const auto& hiToLo = cacBackend_->getUni(v.root.definingPoly);
+                        AlgebraicNumber an;
+                        an.coefficients.assign(hiToLo.rbegin(), hiToLo.rend());
+                        an.lower = v.root.lower;
+                        an.upper = v.root.upper;
+                        an.lowerOpen = true;
+                        an.upperOpen = true;
+                        rv = RealValue::fromAlgebraic(std::move(an));
+                    } else {
+                        const mpq_class mid = (v.root.lower + v.root.upper) / 2;
+                        rv = RealValue::fromMpq(mid);
+                    }
+                    alg.emplace_back(res.model.varOrder[i], std::move(rv));
+                }
+            }
+            satCacAlgModel_ = std::move(alg);
+        }
         return TheoryCheckResult::consistent();
     }
 #endif
@@ -1122,6 +1182,19 @@ std::optional<TheorySolver::TheoryModel> NraSolver::getModel() const {
             std::string name(kernel_->varName(v));
             model.numericAssignments.insert({name, RealValue::fromMpq(val)});
             model.assignments[std::move(name)] = val.get_str();
+        }
+        return model;
+    }
+    // #55 Phase B: CAC SAT model with algebraic values (XOLVER_NRA_CAC_SAT_ALGEBRAIC).
+    if (satCacAlgModel_) {
+        TheoryModel model;
+        for (const auto& [v, rv] : *satCacAlgModel_) {
+            std::string name(kernel_->varName(v));
+            model.numericAssignments.insert({name, rv});
+            // Legacy string channel: rational => mpq.get_str; algebraic => "alg"
+            // marker (Solver.cpp model-validation reads numericAssignments).
+            if (rv.isRational()) model.assignments[std::move(name)] = rv.asRational().get_str();
+            else model.assignments[std::move(name)] = "alg";
         }
         return model;
     }

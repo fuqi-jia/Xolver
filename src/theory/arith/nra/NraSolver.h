@@ -7,6 +7,7 @@
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/core/ActiveLiteralSet.h"
 #include "theory/core/TheoryAtomTypes.h"
+#include "util/RealValue.h"   // #55 Phase B: algebraic SAT model channel
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -186,6 +187,13 @@ private:
     // SAT-fast-path fired. getModel() prefers it over the (bypassed) CDCAC engine
     // sample. Invalidated by any assignment change (assertLit/backtrack/pop/reset).
     std::optional<std::unordered_map<VarId, mpq_class>> satFastModel_;
+
+    // #55 Phase B: CAC SAT model with algebraic values (set when
+    // XOLVER_NRA_CAC_SAT_ALGEBRAIC is ON and the CAC SAT sample contains
+    // at least one RealAlg value). Surface via getModel() through the
+    // RealValue-typed numericAssignments channel. Cleared at every
+    // satFastModel_.reset() site.
+    std::optional<std::vector<std::pair<VarId, RealValue>>> satCacAlgModel_;
 
     // CAC (CDCAC) engine: promoted default-ON. Lazily-built libpoly backend.
     bool enableCac_ = true;
