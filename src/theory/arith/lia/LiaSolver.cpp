@@ -237,11 +237,6 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
         assert(ok && "complementary literal in pending conflict");
         (void)ok;
-        if (auto z3r = z3CheckCurrentState(); z3r && *z3r) {
-            std::cerr << "[UNSOUND_LIA_LEMMA] pending conflict but Z3 says SAT\n";
-            dumpState("unsat_pending_UNSOUND");
-            return TheoryCheckResult::unknown();
-        }
         dumpState("unsat_pending");
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
@@ -1731,73 +1726,6 @@ void LiaSolver::dumpState(const std::string& tag) const {
     }
 
     ofs.flush();
-}
-
-std::optional<bool> LiaSolver::z3CheckCurrentState() const {
-    const char* env = std::getenv("XOLVER_LIA_Z3_CHECK");
-    if (!env || !*env) return std::nullopt;
-
-    std::filesystem::path tmpDir = std::filesystem::temp_directory_path();
-    std::string base = "xolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
-    std::filesystem::path smtPath = tmpDir / (base + ".smt2");
-    std::filesystem::path outPath = tmpDir / (base + ".out");
-
-    {
-        std::ofstream ofs(smtPath);
-        if (!ofs) return std::nullopt;
-
-        ofs << "(set-logic QF_LIA)\n";
-        std::unordered_set<std::string> vars;
-        for (const auto& a : activeAtoms_) {
-            for (const auto& t : a.lhs.terms) vars.insert(t.first);
-        }
-        for (const auto& d : disequalities_) {
-            for (const auto& t : d.lhs.terms) vars.insert(t.first);
-        }
-        for (const auto& v : vars) {
-            ofs << "(declare-fun " << v << " () Int)\n";
-        }
-        for (const auto& a : activeAtoms_) {
-            Relation effectiveRel = a.value ? a.rel : negateRelation(a.rel);
-            std::string lhsStr = linearFormToSmtLib(a.lhs);
-            std::string rhsStr = mpqToSmtLib(a.rhs);
-            if (effectiveRel == Relation::Neq) {
-                ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
-            } else {
-                ofs << "(assert (" << relationToSmtLib(effectiveRel) << " " << lhsStr << " " << rhsStr << "))\n";
-            }
-        }
-        for (const auto& d : disequalities_) {
-            std::string lhsStr = linearFormToSmtLib(d.lhs);
-            std::string rhsStr = mpqToSmtLib(d.rhs);
-            ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
-        }
-        ofs << "(check-sat)\n";
-    }
-
-    std::string cmd = std::string("z3 -T:5 ") + smtPath.string() + " > " + outPath.string() + " 2>/dev/null";
-    int ret = std::system(cmd.c_str());
-    (void)ret;
-
-    std::ifstream ifs(outPath);
-    if (!ifs) {
-        std::filesystem::remove(smtPath);
-        std::filesystem::remove(outPath);
-        return std::nullopt;
-    }
-    std::string line;
-    bool isSat = false;
-    while (std::getline(ifs, line)) {
-        if (line.find("sat") != std::string::npos && line.find("unsat") == std::string::npos) {
-            isSat = true;
-        } else if (line.find("unsat") != std::string::npos) {
-            isSat = false;
-        }
-    }
-
-    std::filesystem::remove(smtPath);
-    std::filesystem::remove(outPath);
-    return isSat;
 }
 
 } // namespace xolver
