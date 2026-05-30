@@ -361,15 +361,21 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     }
     // SOUNDNESS INJECTION (#48 _3a path): when EARLY_INFEAS fired at this level
     // for any cell, the leaf was short-circuited — the propagated charPolys
-    // would otherwise lack the EQUATION constraints needed by the parent's
-    // Lazard projection to compute the pairwise resultants that capture
-    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle). Inject
-    // every constraint poly into levelChar so the parent's characterize sees
-    // the full constraint set. The parent dedups via unitKey, so adding extra
-    // polys never inflates beyond the union.
+    // would otherwise lack the constraints whose mainLevel > level (those that
+    // EARLY_INFEAS at this level SKIPPED, the ones leaf-propagation would have
+    // brought). The Lazard projection at parent levels then has no pairwise
+    // resultant partners — the equation-driven resultants that capture
+    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle) are NEVER
+    // computed. Inject ONLY those skipped-deeper constraints into levelChar.
+    // mainLevel ≤ level constraints are EITHER pushed as violated (already in
+    // cellBoundaries → propagated) OR satisfied at sample (don't constrain
+    // this cell's exclusion → no need to propagate). The mainLevel > level
+    // ones are the surgical minimum: enough to compute the pairwise
+    // resultants the leaf would have generated, without flooding the parent
+    // with redundant low-level polys. Parent dedups via unitKey.
     if (levelEarlyHit) {
         for (size_t ci = 0; ci < cons_.size(); ++ci) {
-            if (consMainLevel_[ci] < 0) continue;
+            if (consMainLevel_[ci] <= level) continue;
             levelChar.push_back(cons_[ci].poly);
         }
     }
