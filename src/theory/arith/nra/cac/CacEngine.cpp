@@ -165,6 +165,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     };
     std::vector<LocalCell> cellsList;
     long iterCount = 0;
+    bool levelEarlyHit = false;   // any EARLY_INFEAS hit at this level (#48 fix)
 
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
         if (++iterCount > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; markIncomplete("cell-budget"); return out; }
@@ -240,6 +241,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             // recurses as before, so SAT correctness is unchanged.
             bool earlyHit = false;
             if (earlyInfeas_) {
+                std::vector<size_t> earlyOriginSet;
                 for (size_t ci = 0; ci < cons_.size(); ++ci) {
                     if (consMainLevel_[ci] < 0 || consMainLevel_[ci] > level) continue;
                     if (consPid_[ci] == NullPoly) continue;
@@ -248,8 +250,11 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                     if (relationHolds(sig, cons_[ci].rel)) continue;            // satisfied
                     cellBoundaries.push_back(cons_[ci].poly);
                     cellOrigins.push_back(ci);
+                    earlyOriginSet.push_back(ci);
                     earlyHit = true;
                 }
+                (void)earlyOriginSet;
+                if (earlyHit) levelEarlyHit = true;
             }
             if (!earlyHit) {
                 CoverOut rec = getUnsatCover(level + 1, sample);
@@ -340,8 +345,9 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 st << "    p[" << pi << "] vars={";
                 bool first = true;
                 for (VarId v : c.polys[pi].variables()) { if (!first) st << ","; st << v; first = false; }
-                st << "} isConst=" << (c.polys[pi].isConstant()?1:0)
-                   << " isZero=" << (c.polys[pi].isZero()?1:0) << "\n";
+                st << "}";
+                for (VarId v : c.polys[pi].variables()) st << " deg" << v << "=" << c.polys[pi].degree(v);
+                st << " terms=" << c.polys[pi].terms().size() << "\n";
             }
         }
         st.flush();
@@ -355,6 +361,20 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     for (auto& c : cellsList) {
         for (auto& p : c.polys) levelChar.push_back(std::move(p));
         levelOrigins.insert(c.origins.begin(), c.origins.end());
+    }
+    // SOUNDNESS INJECTION (#48 _3a path): when EARLY_INFEAS fired at this level
+    // for any cell, the leaf was short-circuited — the propagated charPolys
+    // would otherwise lack the EQUATION constraints needed by the parent's
+    // Lazard projection to compute the pairwise resultants that capture
+    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle). Inject
+    // every constraint poly into levelChar so the parent's characterize sees
+    // the full constraint set. The parent dedups via unitKey, so adding extra
+    // polys never inflates beyond the union.
+    if (levelEarlyHit) {
+        for (size_t ci = 0; ci < cons_.size(); ++ci) {
+            if (consMainLevel_[ci] < 0) continue;
+            levelChar.push_back(cons_[ci].poly);
+        }
     }
 
     // The covering is gap-free over ℝ (loop exited) and every cell was a
