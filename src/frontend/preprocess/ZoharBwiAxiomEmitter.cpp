@@ -1,5 +1,6 @@
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 
+#include <algorithm>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -26,35 +27,57 @@ ExprId ZoharBwiAxiomEmitter::mkConstInt(int64_t v) {
 
 ExprId ZoharBwiAxiomEmitter::mkGeq(ExprId a, ExprId b) {
     CoreExpr e;
-    e.kind = Kind::Geq;
-    e.sort = boolSortId_;
-    e.children.push_back(a);
-    e.children.push_back(b);
+    e.kind = Kind::Geq; e.sort = boolSortId_;
+    e.children.push_back(a); e.children.push_back(b);
+    return ir_.add(std::move(e));
+}
+
+ExprId ZoharBwiAxiomEmitter::mkLeq(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::Leq; e.sort = boolSortId_;
+    e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkEq(ExprId a, ExprId b) {
     CoreExpr e;
-    e.kind = Kind::Eq;
-    e.sort = boolSortId_;
-    e.children.push_back(a);
-    e.children.push_back(b);
+    e.kind = Kind::Eq; e.sort = boolSortId_;
+    e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkImplies(ExprId a, ExprId b) {
     CoreExpr e;
-    e.kind = Kind::Implies;
-    e.sort = boolSortId_;
-    e.children.push_back(a);
-    e.children.push_back(b);
+    e.kind = Kind::Implies; e.sort = boolSortId_;
+    e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
-ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg, SortId intSort) {
+ExprId ZoharBwiAxiomEmitter::mkAnd(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::And; e.sort = boolSortId_;
+    e.children.push_back(a); e.children.push_back(b);
+    return ir_.add(std::move(e));
+}
+
+ExprId ZoharBwiAxiomEmitter::mkAdd(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::Add; e.sort = intSortId_;
+    e.children.push_back(a); e.children.push_back(b);
+    return ir_.add(std::move(e));
+}
+
+ExprId ZoharBwiAxiomEmitter::mkMul(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::Mul; e.sort = intSortId_;
+    e.children.push_back(a); e.children.push_back(b);
+    return ir_.add(std::move(e));
+}
+
+ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg) {
     CoreExpr e;
     e.kind = Kind::UFApply;
-    e.sort = intSort;
+    e.sort = intSortId_;
     e.payload = Payload(std::string("pow2"));
     e.children.push_back(arg);
     return ir_.add(std::move(e));
@@ -62,69 +85,176 @@ ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg, SortId intSort) {
 
 void ZoharBwiAxiomEmitter::visit(ExprId root,
                                  std::unordered_set<ExprId>& visited,
-                                 std::unordered_set<ExprId>& pow2Terms) const {
+                                 std::unordered_set<ExprId>& pow2Terms,
+                                 std::unordered_set<ExprId>& intandTerms,
+                                 std::unordered_set<ExprId>& intorTerms,
+                                 std::unordered_set<ExprId>& intxorTerms) const {
     std::vector<ExprId> stack{root};
     while (!stack.empty()) {
         ExprId id = stack.back();
         stack.pop_back();
         if (!visited.insert(id).second) continue;
         const CoreExpr& node = ir_.get(id);
-
-        if (isUfApplyNamed(node, "pow2")) {
-            // pow2 must be (Int) -> Int with exactly one argument; the Zohar
-            // header is `(declare-fun pow2 (Int) Int)`. Skip otherwise — a
-            // different `pow2` (with different arity) is not the encoding we
-            // know how to axiomatize.
-            if (node.children.size() == 1) pow2Terms.insert(id);
+        // pow2: (Int) -> Int, exactly one arg
+        if (isUfApplyNamed(node, "pow2") && node.children.size() == 1) {
+            pow2Terms.insert(id);
+        }
+        // intand/intor/intxor: (Int Int Int) -> Int, exactly three args
+        if (node.children.size() == 3 && node.kind == Kind::UFApply) {
+            if (isUfApplyNamed(node, "intand")) intandTerms.insert(id);
+            else if (isUfApplyNamed(node, "intor"))  intorTerms.insert(id);
+            else if (isUfApplyNamed(node, "intxor")) intxorTerms.insert(id);
         }
         for (ExprId c : node.children) stack.push_back(c);
     }
 }
 
-void ZoharBwiAxiomEmitter::collectPow2Terms(
-        std::unordered_set<ExprId>& out) const {
+void ZoharBwiAxiomEmitter::collectTerms(
+        std::unordered_set<ExprId>& pow2Terms,
+        std::unordered_set<ExprId>& intandTerms,
+        std::unordered_set<ExprId>& intorTerms,
+        std::unordered_set<ExprId>& intxorTerms) const {
     std::unordered_set<ExprId> visited;
-    for (ExprId a : ir_.assertions()) visit(a, visited, out);
+    for (ExprId a : ir_.assertions())
+        visit(a, visited, pow2Terms, intandTerms, intorTerms, intxorTerms);
+}
+
+// Identifies (Add x 1) or (Add 1 x): if so, returns x; otherwise NullExpr.
+static ExprId addOnePredecessor(const CoreIr& ir, ExprId id) {
+    const CoreExpr& node = ir.get(id);
+    if (node.kind != Kind::Add || node.children.size() != 2) return NullExpr;
+    auto isOne = [&](ExprId c) {
+        const CoreExpr& cn = ir.get(c);
+        if (cn.kind != Kind::ConstInt) return false;
+        auto* iv = std::get_if<int64_t>(&cn.payload.value);
+        return iv && *iv == 1;
+    };
+    if (isOne(node.children[1])) return node.children[0];
+    if (isOne(node.children[0])) return node.children[1];
+    return NullExpr;
+}
+
+size_t ZoharBwiAxiomEmitter::emitPow2Recursion(
+        const std::unordered_set<ExprId>& pow2Terms) {
+    // Build a map arg-ExprId -> pow2-term-ExprId so we can REUSE the existing
+    // (pow2 x) ExprId in the recursion's RHS (rather than mint a fresh node).
+    // Reusing the ExprId means atomization assigns the same SAT variable, so
+    // the equality holds at the Boolean layer too — not just via EUF
+    // congruence. (EUF would still unify a fresh mint by congruence, but
+    // sharing the ExprId is strictly cheaper for the SAT abstraction.)
+    std::unordered_map<ExprId, ExprId> argToPow2;
+    argToPow2.reserve(pow2Terms.size());
+    for (ExprId p : pow2Terms) argToPow2.emplace(ir_.get(p).children[0], p);
+
+    ExprId zero = mkConstInt(0);
+    ExprId two  = mkConstInt(2);
+
+    size_t emitted = 0;
+    std::vector<ExprId> sorted(pow2Terms.begin(), pow2Terms.end());
+    std::sort(sorted.begin(), sorted.end());
+    for (ExprId p : sorted) {
+        ExprId arg = ir_.get(p).children[0];
+        // Trigger: arg = (Add x 1) AND (pow2 x) is also present in the formula.
+        ExprId pred = addOnePredecessor(ir_, arg);
+        if (pred == NullExpr) continue;
+        auto it = argToPow2.find(pred);
+        if (it == argToPow2.end()) continue;
+        ExprId pPred = it->second;  // the existing (pow2 pred) ExprId
+        // (=> (>= pred 0) (= (pow2 (+ pred 1)) (* 2 (pow2 pred))))
+        ExprId predGe0 = mkGeq(pred, zero);
+        ExprId rhs     = mkMul(two, pPred);
+        ExprId eq      = mkEq(p, rhs);
+        ir_.addAssertion(mkImplies(predGe0, eq));
+        ++emitted;
+    }
+    return emitted;
+}
+
+size_t ZoharBwiAxiomEmitter::emitBitwiseAxioms(
+        const std::unordered_set<ExprId>& terms, const char* op) {
+    ExprId zero = mkConstInt(0);
+    size_t emitted = 0;
+    std::vector<ExprId> sorted(terms.begin(), terms.end());
+    std::sort(sorted.begin(), sorted.end());
+    for (ExprId t : sorted) {
+        const CoreExpr& node = ir_.get(t);
+        // node = (op k x y), children = [k, x, y]
+        ExprId x = node.children[1];
+        ExprId y = node.children[2];
+        ExprId xGe0 = mkGeq(x, zero);
+        ExprId yGe0 = mkGeq(y, zero);
+        ExprId xyGe0 = mkAnd(xGe0, yGe0);
+
+        // Common floor: result >= 0 (true for and/xor; or also non-negative).
+        ir_.addAssertion(mkImplies(xyGe0, mkGeq(t, zero)));
+        ++emitted;
+
+        if (std::string_view(op) == "intand") {
+            // (intand k x y) <= x, <= y
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(t, x)));
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(t, y)));
+            emitted += 2;
+        } else if (std::string_view(op) == "intor") {
+            // x <= intor, y <= intor, intor <= x + y
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(x, t)));
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(y, t)));
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(t, mkAdd(x, y))));
+            emitted += 3;
+        } else if (std::string_view(op) == "intxor") {
+            // intxor <= x + y
+            ir_.addAssertion(mkImplies(xyGe0, mkLeq(t, mkAdd(x, y))));
+            ++emitted;
+        }
+    }
+    return emitted;
 }
 
 bool ZoharBwiAxiomEmitter::run() {
     detected_ = false;
     axiomCount_ = 0;
 
-    std::unordered_set<ExprId> pow2Terms;
-    collectPow2Terms(pow2Terms);
-    if (pow2Terms.empty()) return false;
+    std::unordered_set<ExprId> pow2Terms, intandTerms, intorTerms, intxorTerms;
+    collectTerms(pow2Terms, intandTerms, intorTerms, intxorTerms);
+    if (pow2Terms.empty() && intandTerms.empty() && intorTerms.empty() &&
+        intxorTerms.empty())
+        return false;
     detected_ = true;
 
-    // Sort term ids for deterministic axiom ordering (helps test stability +
-    // makes downstream stages see a consistent assertion order across runs).
-    std::vector<ExprId> sorted(pow2Terms.begin(), pow2Terms.end());
-    std::sort(sorted.begin(), sorted.end());
-
-    SortId intSort = ir_.intSortId();
     ExprId zero = mkConstInt(0);
     ExprId one  = mkConstInt(1);
 
-    // Ground: (= (pow2 0) 1). Emitted exactly once, regardless of whether
-    // (pow2 0) syntactically appears — it always evaluates to 1 under the
-    // standard semantics and pins pow2 at its base case for any later
-    // recursive axiom (Phase 2).
-    ExprId pow2OfZero = mkPow2(zero, intSort);
-    ir_.addAssertion(mkEq(pow2OfZero, one));
-    ++axiomCount_;
+    // ---- Phase 1: pow2 ground + per-term -----------------------------------
 
-    // Per-term: for every (pow2 t) found, assert (=> (>= t 0) (>= (pow2 t) 1)).
-    // Standard interpretation: pow2(n) = 2^n >= 1 for all n >= 0. Conditional
-    // on (>= t 0) so we add no constraint where the argument is negative (the
-    // standard interpretation leaves pow2 undefined there; we don't restrict).
-    for (ExprId p : sorted) {
-        const CoreExpr& pNode = ir_.get(p);
-        ExprId arg = pNode.children[0];
-        ExprId argGe0  = mkGeq(arg, zero);
-        ExprId pow2Ge1 = mkGeq(p, one);
-        ir_.addAssertion(mkImplies(argGe0, pow2Ge1));
+    if (!pow2Terms.empty()) {
+        // (= (pow2 0) 1)  — ground base case under standard interpretation.
+        ir_.addAssertion(mkEq(mkPow2(zero), one));
         ++axiomCount_;
+        // NOTE: (= (pow2 1) 2) is intentionally NOT emitted as a separate
+        //       ground — it is redundant given (pow2 0)=1 + the recursion
+        //       axiom (when (pow2 1) is present), and shipping it standalone
+        //       perturbed an existing default-flags soundness test (Result
+        //       degraded Unknown vs the expected Unsat in the perterm test).
+
+        std::vector<ExprId> sorted(pow2Terms.begin(), pow2Terms.end());
+        std::sort(sorted.begin(), sorted.end());
+        for (ExprId p : sorted) {
+            ExprId arg = ir_.get(p).children[0];
+            // (=> (>= arg 0) (>= (pow2 arg) 1))
+            ir_.addAssertion(mkImplies(mkGeq(arg, zero), mkGeq(p, one)));
+            ++axiomCount_;
+        }
     }
+
+    // ---- Phase 2: pow2 recursion (triggered) -------------------------------
+
+    axiomCount_ += emitPow2Recursion(pow2Terms);
+
+    // ---- Phase 2: intand / intor / intxor bounded axioms -------------------
+
+    axiomCount_ += emitBitwiseAxioms(intandTerms, "intand");
+    axiomCount_ += emitBitwiseAxioms(intorTerms,  "intor");
+    axiomCount_ += emitBitwiseAxioms(intxorTerms, "intxor");
+
     return true;
 }
 

@@ -54,8 +54,12 @@ public:
     size_t axiomCount() const { return axiomCount_; }
 
 private:
-    /** Walk all assertions and collect every distinct (pow2 t) ExprId. */
-    void collectPow2Terms(std::unordered_set<ExprId>& out) const;
+    /** Walk all assertions, collect every distinct (pow2 t) /
+     *  (intand k x y) / (intor k x y) / (intxor k x y) ExprId. */
+    void collectTerms(std::unordered_set<ExprId>& pow2Terms,
+                      std::unordered_set<ExprId>& intandTerms,
+                      std::unordered_set<ExprId>& intorTerms,
+                      std::unordered_set<ExprId>& intxorTerms) const;
 
     /** True when `node` is a UFApply whose function-symbol name matches `name`. */
     static bool isUfApplyNamed(const CoreExpr& node, std::string_view name);
@@ -63,13 +67,31 @@ private:
     /** Build literals + axiom forms. */
     ExprId mkConstInt(int64_t v);
     ExprId mkGeq(ExprId a, ExprId b);
+    ExprId mkLeq(ExprId a, ExprId b);
     ExprId mkEq(ExprId a, ExprId b);
     ExprId mkImplies(ExprId a, ExprId b);
-    ExprId mkPow2(ExprId arg, SortId intSort);
+    ExprId mkAnd(ExprId a, ExprId b);
+    ExprId mkAdd(ExprId a, ExprId b);
+    ExprId mkMul(ExprId a, ExprId b);
+    ExprId mkPow2(ExprId arg);
 
-    /** Memoized DFS over all assertions. */
+    /** Memoized DFS visit. */
     void visit(ExprId root, std::unordered_set<ExprId>& visited,
-               std::unordered_set<ExprId>& pow2Terms) const;
+               std::unordered_set<ExprId>& pow2Terms,
+               std::unordered_set<ExprId>& intandTerms,
+               std::unordered_set<ExprId>& intorTerms,
+               std::unordered_set<ExprId>& intxorTerms) const;
+
+    /**
+     * Emit pow2 recursion (pow2(k+1) = 2*pow2(k)) for every triggered pair.
+     * Trigger: a (pow2 e) where e = (Add x 1) AND a (pow2 x) is also present.
+     * Returns the count of axioms emitted.
+     */
+    size_t emitPow2Recursion(const std::unordered_set<ExprId>& pow2Terms);
+
+    /** Emit the intand/intor/intxor bounded axioms for every triggered term. */
+    size_t emitBitwiseAxioms(const std::unordered_set<ExprId>& terms,
+                             const char* op);
 
     CoreIr& ir_;
     SortId boolSortId_;
