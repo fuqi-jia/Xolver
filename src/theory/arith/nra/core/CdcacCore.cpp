@@ -199,14 +199,14 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
             hybridEnabled_ = false;
         }
     }
-    // Explicit A/B switch, read last so it always wins. Symmetric now that the
-    // default is OFF: =1/t/y enables the hybrid (the --submit/--allon ON-pass),
-    // anything else (0/f/n/unset-with-value) forces pure Collins.
-    if (const char* e = std::getenv("XOLVER_NRA_HYBRID")) {
-        hybridEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
-    }
-    // Soundness floor for the meti-tarski sqrt false-UNSAT class. Default OFF for
-    // now (interim, while completeness recovery lands); intended default-ON.
+    // Hybrid projection (Collins-first, Lazard fallback on Collins-Unknown) is
+    // promoted default-ON; an explicit XOLVER_NRA_PROJECTION=collins above still
+    // forces pure Collins.
+    // Soundness floor for the meti-tarski sqrt false-UNSAT class. Kept gated
+    // default-OFF: ON it downgrades not-yet-certified UNSAT cells to unknown,
+    // which regresses cases like nra_015 (tower-zero) — the precise per-cell
+    // sign-invariance certifier that would recover them has not landed yet.
+    // Intended default-ON once that recovery lands.
     if (const char* e = std::getenv("XOLVER_NRA_UNSAT_CERT"))
         unsatCertEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
     // FAIL-SAFE per-cell UNSAT gate (Lazard mode). Default ON; only relevant in
