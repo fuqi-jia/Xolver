@@ -511,6 +511,50 @@ bool DtReasoner::modelFullyDetermined() const {
     for (EClassId c : needing) {
         if (hasCtor.find(c) == hasCtor.end()) return false;  // observed-but-undetermined
     }
+    // Optional stronger gate (XOLVER_DT_STRICT_SELECTOR_OWNER, default OFF):
+    // every applied selector at class c must be OWNED by some constructor in
+    // c. If `(top X)` exists but X's class has only `empty`, the selector
+    // reads no defined field — the model picked an inconsistent state. Sound
+    // (only floors), but over-restrictive for GUARDED selectors (e.g.
+    // `(if (is-cons x) (head x) ...)` where (head x) exists in EUF even in
+    // the branch where x is empty). Default OFF until a "selector is LIVE"
+    // tracker (selector's e-class referenced by a decided literal) is added.
+    // When ON: recovers the QF_DT blocksworld false-SAT residual (18/308 cases
+    // at deeper BMC where SAT picks a wrong-constructor state) at the cost of
+    // floating dt_guarded_selector_sat / dt_selector_split_sat to unknown.
+    static const bool strictSelectorOwner =
+        std::getenv("XOLVER_DT_STRICT_SELECTOR_OWNER") != nullptr;
+    if (strictSelectorOwner) {
+        std::unordered_map<EClassId, std::unordered_set<std::string>> ctorsInClass;
+        std::unordered_map<EClassId, std::unordered_set<std::string>> selectorReads;
+        for (EufTermId t = 0; t < total; ++t) {
+            const auto& n = tm_->node(t);
+            if (symIsConstructor(t)) {
+                ctorsInClass[egraph_->rep(t)].insert(opName(t));
+            }
+            if (symIsSelector(t) && !n.args.empty()) {
+                selectorReads[egraph_->rep(n.args[0])].insert(opName(t));
+            }
+        }
+        for (const auto& [c, sels] : selectorReads) {
+            auto cit = ctorsInClass.find(c);
+            if (cit == ctorsInClass.end()) return false;
+            for (const std::string& selName : sels) {
+                bool ownedByCtor = false;
+                for (EufTermId m : egraph_->classMembers(c)) {
+                    ExprId e = tm_->node(m).origin;
+                    if (e == NullExpr || e >= static_cast<ExprId>(ir_->size())) continue;
+                    SortId srt = ir_->get(e).sort;
+                    if (!ir_->datatypes().isDatatypeSort(srt)) continue;
+                    uint32_t argIdx = 0;
+                    const auto* ctorOwning = ir_->datatypes().selector(srt, selName, argIdx);
+                    if (ctorOwning && cit->second.count(ctorOwning->name)) ownedByCtor = true;
+                    break;  // any member's sort suffices
+                }
+                if (!ownedByCtor) return false;
+            }
+        }
+    }
     return true;
 }
 
