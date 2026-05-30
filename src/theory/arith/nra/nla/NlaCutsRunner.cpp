@@ -9,13 +9,17 @@ NlaCutsRunner::NlaCutsRunner(PolynomialKernel& kernel)
     : kernel_(kernel), gen_(kernel) {}
 
 bool NlaCutsRunner::enabled() const {
-    // Read once, cache. The runner is constructed per solver instance
-    // (or per check call); the flag intent is per-solver-run-anchored,
-    // matching the existing env-gated lever style in NiaSolver /
-    // NraSolver.
+    // Read once, cache. Either NRA-side (CDCAC hook) or NIA-side (Phase
+    // C-3 hook) flag enables the runner. The runner itself is theory-
+    // agnostic; the caller's gate decides when to invoke and which
+    // env var anchors it. Returning true when EITHER is set lets one
+    // generator implementation serve both lanes.
     static const bool en = [] {
-        const char* e = std::getenv("XOLVER_NRA_NLA_CUTS");
-        return e && *e && *e != '0';
+        const char* nra = std::getenv("XOLVER_NRA_NLA_CUTS");
+        const char* nia = std::getenv("XOLVER_NIA_NLA_CUTS");
+        bool nraOn = nra && *nra && *nra != '0';
+        bool niaOn = nia && *nia && *nia != '0';
+        return nraOn || niaOn;
     }();
     return en;
 }
