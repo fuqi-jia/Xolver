@@ -131,12 +131,12 @@ private:
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
-    bool enableModular_ = false;  // XOLVER_NIA_MODULAR: constant-pow2-modulus residue refutation (L3)
-    bool enableRefute_ = false;   // XOLVER_NIA_REFUTE: bound-free product-positivity refutation
-    bool enableGcd_ = false;      // XOLVER_NIA_GCD: multivariate GCD-divisibility refutation
-    bool enableIcp_ = false;      // XOLVER_NIA_ICP: interval contraction fixpoint (empty domain ⇒ UNSAT)
+    bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    bool enableRefute_ = true;    // bound-free product-positivity refutation (promoted default-ON)
+    bool enableGcd_ = true;       // multivariate GCD-divisibility refutation (promoted default-ON)
+    bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
-    bool normCache_ = false;      // XOLVER_NIA_NORM_CACHE: incremental per-constraint normalize cache (kept in lockstep with active_)
+    bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly

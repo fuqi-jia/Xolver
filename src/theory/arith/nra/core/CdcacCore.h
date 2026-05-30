@@ -110,9 +110,9 @@ private:
     // pre-Lazard baseline. Opt in / out, read once in the constructor:
     //   XOLVER_NRA_HYBRID=1            => enable hybrid (Collins-first, Lazard on Unknown).
     //   XOLVER_NRA_PROJECTION=lazard   => pure Lazard.
-    //   XOLVER_NRA_PROJECTION=collins / XOLVER_NRA_HYBRID=0 / unset => pure Collins.
-    // Promote to default-ON only after the broad differential is 0-unsound.
-    bool hybridEnabled_ = false;
+    //   XOLVER_NRA_PROJECTION=collins => pure Collins.
+    // Promoted default-ON (broad differential 0-unsound).
+    bool hybridEnabled_ = true;
 
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;

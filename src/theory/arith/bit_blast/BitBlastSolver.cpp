@@ -286,7 +286,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     BitBlastResult out;
     if (cs.empty() || !applicable(cs)) return out;   // Unknown
 
-    // XOLVER_NIA_BITBLAST_FAST: return the memoized result for an identical
+    // Bit-blast result memoization (default-ON): return the memoized result for an identical
     // (cs, domains) input instead of re-encoding+re-solving. Verdict-preserving.
     std::string key;
     if (fastMode_) {
@@ -300,7 +300,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     BitWidthPlan full = estimator_.estimate(cs, domains);
     if (full.width.empty()) return out;              // Unknown
 
-    // cvc5 solve-int-as-bv cascade (XOLVER_NIA_BV_CASCADE): for problems with an
+    // cvc5 solve-int-as-bv cascade (default-ON): for problems with an
     // unbounded variable (boxIsComplete=false ⇒ pure SAT search, UNSAT not
     // provable here anyway), start every unbounded var at a TINY uniform width
     // (K=2) and escalate ×2. Small widths fail fast and keep the encoding under
@@ -308,8 +308,7 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     // QF_NIA-sat that the estimator's heuristic initial width would over-widen
     // (and budget-overflow) on iteration 0. Bounded vars keep their exact width
     // so nothing about completeness changes. Sound: every SAT model is validated.
-    static const bool cascade = std::getenv("XOLVER_NIA_BV_CASCADE") != nullptr;
-    if (cascade && !full.boxIsComplete) {
+    if (!full.boxIsComplete) {
         std::unordered_set<std::string> bounded;
         for (const auto& kv : full.width) {
             const IntDomain* d = domains.getDomain(kv.first);
