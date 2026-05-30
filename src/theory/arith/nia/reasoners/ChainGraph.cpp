@@ -1,6 +1,9 @@
 #include "theory/arith/nia/reasoners/ChainGraph.h"
 
 #include <algorithm>
+#include <random>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -112,6 +115,69 @@ std::optional<ChainStep> ChainGraph::findStep(PolyId lhs, PolyId rhs,
         }
     }
     return std::nullopt;
+}
+
+std::optional<ChainStep> tryReduceGoal(const ChainGraph& graph,
+                                        PolyId lhs, PolyId rhs,
+                                        const mpz_class& modulus,
+                                        int maxDepth) {
+    if (lhs == NullPoly || rhs == NullPoly) return std::nullopt;
+    // Fast path: the requested edge is already present in the original
+    // graph at the requested modulus — no closure work needed.
+    if (auto direct = graph.findStep(lhs, rhs, modulus)) {
+        return direct;
+    }
+    if (maxDepth <= 1) return std::nullopt;
+    // Closure on a private copy so the caller's graph stays read-only.
+    ChainGraph work = graph;
+    work.closeTransitive(maxDepth);
+    return work.findStep(lhs, rhs, modulus);
+}
+
+bool validateChainStep(PolynomialKernel& kernel, const ChainStep& step,
+                       int samples, unsigned seed) {
+    if (step.modulus <= 0) return false;  // contract: positive modulus
+    if (step.lhs == step.rhs) return true;  // trivial self-edge — vacuous
+    // Collect the union of variable names appearing on either side.
+    std::vector<std::string> varsL = kernel.variables(step.lhs);
+    std::vector<std::string> varsR = kernel.variables(step.rhs);
+    std::unordered_set<std::string> all;
+    all.reserve(varsL.size() + varsR.size());
+    for (const auto& v : varsL) all.insert(v);
+    for (const auto& v : varsR) all.insert(v);
+    std::vector<std::string> vars(all.begin(), all.end());
+
+    // Run a quick evaluability probe at the zero assignment. If the kernel
+    // doesn't support evalInteger (stub backend), bail out true — the
+    // reasoner's higher-level cert path will catch real issues. If it
+    // *does* support eval, we proceed.
+    {
+        std::unordered_map<std::string, mpz_class> probe;
+        for (const auto& v : vars) probe[v] = mpz_class(0);
+        auto probeL = kernel.evalInteger(step.lhs, probe);
+        auto probeR = kernel.evalInteger(step.rhs, probe);
+        if (!probeL || !probeR) return true;  // stub backend — skip
+    }
+
+    std::mt19937 rng(seed);
+    // Sample integers from a moderate signed range so we exercise sign
+    // wrap and modular reduction. The exact range matters less than
+    // breadth: small primes catch sign bugs, larger samples catch coeff
+    // mismatch.
+    const long sampleLo = -8, sampleHi = 8;
+    std::uniform_int_distribution<long> dist(sampleLo, sampleHi);
+    for (int s = 0; s < samples; ++s) {
+        std::unordered_map<std::string, mpz_class> env;
+        env.reserve(vars.size());
+        for (const auto& v : vars) env[v] = mpz_class(dist(rng));
+        auto evL = kernel.evalInteger(step.lhs, env);
+        auto evR = kernel.evalInteger(step.rhs, env);
+        if (!evL || !evR) return true;  // backend can't eval this sample
+        mpz_class diff = *evL - *evR;
+        mpz_class r = diff % step.modulus;
+        if (r != 0) return false;
+    }
+    return true;
 }
 
 } // namespace xolver

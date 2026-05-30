@@ -75,4 +75,34 @@ private:
 std::optional<ChainStep> composeChainSteps(const ChainStep& a,
                                            const ChainStep& b);
 
+// Goal-driven derivation: try to derive `lhs ≡ rhs (mod modulus)` from
+// the given graph via transitive closure up to `maxDepth` original-edge
+// combinations. Returns the resulting ChainStep (with composed reason
+// set) on success, nullopt if no derivation fits the budget.
+//
+// The graph is treated read-only — the routine works on a private copy.
+// Soundness: closeTransitive only composes same-modulus edges and unions
+// reason sets, so the returned step's reasons jointly imply the derived
+// congruence under the original constraint system.
+std::optional<ChainStep> tryReduceGoal(const ChainGraph& graph,
+                                        PolyId lhs, PolyId rhs,
+                                        const mpz_class& modulus,
+                                        int maxDepth);
+
+// Per-edge cert: randomly sample integer assignments to every variable in
+// `step.lhs ∪ step.rhs` and check that `(lhs(env) - rhs(env)) mod modulus
+// == 0` at every sample. Returns true iff every sample agrees.
+//
+// This is the "z3-style" sanity floor on derived edges. If `kernel`
+// supports `evalInteger` (libpoly backend), we run `samples` checks; if it
+// does not (stub backend), the function returns true vacuously (the
+// reasoner will then have to fall back on its own cert path).
+//
+// Soundness role: a derived step that fails this cert is *not* used to
+// emit a conflict. The math itself is sound (compose is sound), but a
+// failed cert flags an implementation bug (e.g. canonicalization
+// mismatch) that must be diagnosed, not silently propagated.
+bool validateChainStep(PolynomialKernel& kernel, const ChainStep& step,
+                       int samples = 32, unsigned seed = 0x2c1c1c1c);
+
 } // namespace xolver

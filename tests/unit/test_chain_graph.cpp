@@ -175,6 +175,138 @@ TEST_CASE("ChainGraph: closeTransitive(D=2) does NOT derive a→z across 3-chain
     CHECK(!g.findStep(a, z, mpz_class(256)).has_value());
 }
 
+// Phase 2.7b — goal-driven reduction.
+TEST_CASE("ChainGraph: tryReduceGoal finds the direct edge without closure") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+
+    ChainGraph g;
+    g.addEdge({a, x, mpz_class(256), {lit(11)}});
+    auto out = tryReduceGoal(g, a, x, mpz_class(256), /*maxDepth=*/1);
+    REQUIRE(out.has_value());
+    CHECK(out->reasons.size() == 1);
+    CHECK(hasReason(*out, lit(11)));
+}
+
+TEST_CASE("ChainGraph: tryReduceGoal derives 2-step chain at D=2") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    ChainGraph g;
+    g.addEdge({a, x, mpz_class(256), {lit(1)}});
+    g.addEdge({x, y, mpz_class(256), {lit(2)}});
+
+    auto direct = tryReduceGoal(g, a, y, mpz_class(256), /*maxDepth=*/2);
+    REQUIRE(direct.has_value());
+    CHECK(direct->reasons.size() == 2);
+    CHECK(hasReason(*direct, lit(1)));
+    CHECK(hasReason(*direct, lit(2)));
+
+    // And the original graph is unchanged (tryReduceGoal works on a copy).
+    CHECK(g.edges().size() == 2);
+}
+
+TEST_CASE("ChainGraph: tryReduceGoal fails when target is unreachable at depth") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+    PolyId z = k->mkVar(k->getOrCreateVar("z"));
+
+    ChainGraph g;
+    g.addEdge({a, x, mpz_class(256), {lit(1)}});
+    g.addEdge({x, y, mpz_class(256), {lit(2)}});
+    g.addEdge({y, z, mpz_class(256), {lit(3)}});
+    // a→z requires depth 3; D=2 cannot derive it.
+    auto out = tryReduceGoal(g, a, z, mpz_class(256), /*maxDepth=*/2);
+    CHECK(!out.has_value());
+    // At D=3 it derives.
+    auto out3 = tryReduceGoal(g, a, z, mpz_class(256), /*maxDepth=*/3);
+    REQUIRE(out3.has_value());
+    CHECK(out3->reasons.size() == 3);
+}
+
+TEST_CASE("ChainGraph: tryReduceGoal fails on modulus mismatch") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    ChainGraph g;
+    g.addEdge({a, x, mpz_class(256), {lit(1)}});
+    g.addEdge({x, y, mpz_class(8),   {lit(2)}});
+    auto out256 = tryReduceGoal(g, a, y, mpz_class(256), /*maxDepth=*/2);
+    auto out8   = tryReduceGoal(g, a, y, mpz_class(8),   /*maxDepth=*/2);
+    CHECK(!out256.has_value());
+    CHECK(!out8.has_value());
+}
+
+// Phase 2.7b — per-edge cert.
+TEST_CASE("ChainGraph: validateChainStep accepts a mathematically sound edge") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    // Edge: x ≡ x + 5*256 (mod 256). True for every integer x.
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId five256 = k->mkConst(mpq_class(5 * 256));
+    PolyId rhs = k->add(x, five256);
+    ChainStep step{x, rhs, mpz_class(256), {lit(1)}};
+    CHECK(validateChainStep(*k, step));
+}
+
+TEST_CASE("ChainGraph: validateChainStep rejects an unsound edge") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    // Bogus edge: x ≡ x + 1 (mod 256). Fails at every assignment.
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId one = k->mkConst(mpq_class(1));
+    PolyId rhs = k->add(x, one);
+    ChainStep step{x, rhs, mpz_class(256), {lit(1)}};
+    CHECK(!validateChainStep(*k, step));
+}
+
+TEST_CASE("ChainGraph: validateChainStep — composed Newton-style edge passes cert") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    // For pow2 modulus m: 2*x*m ≡ 0 (mod m). Compose this with x ≡ x:
+    // assert (lhs=2*x*m, rhs=0, modulus=m) holds for all x.
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    long m = 64;
+    PolyId twoM = k->mkConst(mpq_class(2 * m));
+    PolyId lhs = k->mul(twoM, x);
+    PolyId zero = k->mkConst(mpq_class(0));
+    ChainStep step{lhs, zero, mpz_class(m), {lit(1)}};
+    CHECK(validateChainStep(*k, step));
+}
+
+TEST_CASE("ChainGraph: validateChainStep — composed reasons survive cert reject") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+    // Edges: x ≡ y+8 (mod 8) and y+8 ≡ x+1 (mod 8). The composition would
+    // claim x ≡ x+1 (mod 8), which is wrong — the cert must reject it.
+    // (Each input edge alone is sound: first is a tautology mod 8, second
+    // is FALSE, so the composition inherits the falsity.) This exercises
+    // that the cert catches a known-bad derivation rather than trusting
+    // the compose machinery.
+    PolyId eight = k->mkConst(mpq_class(8));
+    PolyId one   = k->mkConst(mpq_class(1));
+    PolyId yPlus8 = k->add(y, eight);
+    PolyId xPlus1 = k->add(x, one);
+    ChainStep e1{x, yPlus8, mpz_class(8), {lit(1)}};
+    ChainStep e2{yPlus8, xPlus1, mpz_class(8), {lit(2)}};
+    auto composed = composeChainSteps(e1, e2);
+    REQUIRE(composed.has_value());
+    CHECK(!validateChainStep(*k, *composed));
+}
+
 // Soundness grid: validate the underlying *mathematical* rule that the chain
 // graph encodes — that transitivity of ≡ (mod s) is sound. For each (y, s)
 // in a small signed grid, set x = y mod s and a = x mod s; then a ≡ y
