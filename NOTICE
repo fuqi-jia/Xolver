@@ -1,22 +1,36 @@
 Xolver
 Copyright 2026 Fuqi Jia and the Xolver contributors
 
-This product includes software developed as part of the Xolver project.
+This product includes software developed as part of the Xolver project,
+licensed under the Apache License 2.0 (see LICENSE).
 
-Xolver dynamically/statically links the following third-party libraries.
-Each library remains under its own original license:
+Xolver does not call, wrap, or include source code from any existing SMT
+solver. Source comments that cite cvc5, z3, or other SMT solvers are
+algorithmic attribution for published algorithms (e.g. Cylindrical Algebraic
+Coverings, Lazard projection, Nelson-Oppen); the implementations are
+independently written.
+
+================================================================================
+Third-party dependencies — each retained under its own original license
+================================================================================
+
+Bundled as git submodules under third_party/
 
   * CaDiCaL — MIT License
     https://github.com/arminbiere/cadical
+    third_party/cadical/LICENSE
 
-  * libpoly — LGPL v2.1 or later
+  * libpoly — GNU LGPL v3 or later
     https://github.com/SRI-CSL/libpoly
+    third_party/libpoly/LICENCE  (note: British spelling)
+    (per-source-file header: "either version 3 of the License, or
+     (at your option) any later version")
 
-  * GMP — LGPL v3 or GPL v2 (dual)
-    https://gmplib.org
+  * SOMTParser — MIT License
+    https://github.com/fuqi-jia/SOMTParser
+    third_party/SOMTParser/LICENSE
 
-  * MPFR — LGPL v3 or later
-    https://www.mpfr.org
+Fetched at CMake configure time
 
   * nlohmann/json — MIT License
     https://github.com/nlohmann/json
@@ -24,11 +38,28 @@ Each library remains under its own original license:
   * doctest — MIT License
     https://github.com/doctest/doctest
 
-  * SOMTParser — same license as Xolver (Apache 2.0)
-    https://github.com/fuqi-jia/SOMTParser
+Required system libraries (provided by the platform / package manager)
 
-Xolver does not call, wrap, or include source code from any existing
-SMT solver. Source comments that cite cvc5, z3, or other SMT solvers
-are algorithmic attribution for published algorithms (e.g. Cylindrical
-Algebraic Coverings, Lazard projection); the implementations are
-independently written.
+  * GMP — GNU LGPL v3 or GNU GPL v2 (dual)
+    https://gmplib.org
+
+  * MPFR — GNU LGPL v3 or later
+    https://www.mpfr.org
+
+================================================================================
+Notes on the LGPL-licensed dependencies (libpoly, GMP, MPFR)
+================================================================================
+
+These libraries are LGPL. Xolver as a whole is Apache 2.0, which is compatible
+with LGPL-licensed libraries when used as dynamically-linked or statically-
+linked libraries, provided that:
+
+  - the LGPL libraries' source code remains accessible to recipients
+    (satisfied: libpoly is a public git submodule pointing at the upstream
+     repository; GMP and MPFR are public packages from gmplib.org / mpfr.org)
+  - users are able to relink Xolver against a modified version of the LGPL
+    library (satisfied by Xolver's open build system: rebuild from source with
+    a different libpoly / GMP / MPFR is documented in README.md)
+
+For binary distributions, the original source of each LGPL library is
+reachable via the URLs above.
