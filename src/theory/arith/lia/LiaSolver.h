@@ -111,6 +111,10 @@ private:
     };
     std::vector<LiaTrailEntry> theoryTrail_;
     size_t appliedCursor_ = 0;
+    // XOLVER_LIA_INCREMENTAL (default OFF): replay only new trail entries into
+    // the simplex instead of re-asserting the whole trail every check. See the
+    // constructor for rationale (convert / nec-smt LIA-core-scale ceiling).
+    bool incrementalEnabled_ = false;
 
     struct PendingConflict {
         int level;
