@@ -388,6 +388,33 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
                 // sound-but-incomplete Unknown.
                 return TheoryCheckResult::unknown();
             }
+            // Track B fix (LIA): when proveFixedValue misses (Wisa class), try
+            // the LP-duality probe — true multi-row Farkas via feasibility
+            // query. Same RAII/marker discipline as LRA. Without this, SAT can
+            // satisfy by deciding the deduced eq atom FALSE and LIA would
+            // silently accept the diseq under a polyhedron that actually
+            // entails equality.
+            //
+            // GATED by XOLVER_LIA_LP_DUALITY (default OFF): the synthetic
+            // alia_012 case regressed from sat to unknown when this fired
+            // unconditionally — likely an integer-vs-LP interaction (the
+            // simplex relaxation pins what integer reasoning doesn't, and our
+            // probe over-fires in the LIA context). Keep the LRA Track B fix
+            // ON (it recovers pos_pinbounds without regressions); guard the
+            // LIA mirror behind a separate flag until the integer/LP edge is
+            // understood and the alia_012 class re-passes.
+            static const bool liaProbeOk = std::getenv("XOLVER_LIA_LP_DUALITY") != nullptr;
+            if (liaProbeOk && impliedEqEnabled_ && !fixedOpt) {
+                std::vector<SatLit> probeReasons;
+                if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
+                    TheoryConflict tc;
+                    for (auto l : probeReasons) tc.clause.push_back(l);
+                    tc.clause.push_back(ieq.reason);
+                    if (normalizeTheoryClause(tc.clause)) {
+                        return TheoryCheckResult::mkConflict(std::move(tc));
+                    }
+                }
+            }
             // Honor a DECIDED interface disequality the convex model violates:
             // (a != b) decided but the simplex point happens to set a = b
             // (both free -> defaulted equal). Branch the integer model apart:
@@ -1128,6 +1155,58 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     gs_.resetActiveBounds();
     appliedCursor_ = 0;
     return TheoryCheckResult::consistent();
+}
+
+// Track A mirror for LIA (see LraSolver::tryProvePairEqualityByLpDuality for
+// the discipline). Same RAII, marker filter, conflict-state clear.
+bool LiaSolver::tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons) {
+    static const SatLit MARKER{0, true};
+    struct ProbeScope {
+        GeneralSimplex& gs;
+        int level;
+        ProbeScope(GeneralSimplex& g, int lvl) : gs(g), level(lvl) { gs.push(); }
+        ~ProbeScope() { gs.pop(); gs.backtrackToLevel(level); }
+        ProbeScope(const ProbeScope&) = delete;
+        ProbeScope& operator=(const ProbeScope&) = delete;
+    };
+    auto collectAndFilter = [&](std::vector<SatLit>& out) {
+        for (const auto& br : gs_.getConflict()) {
+            if (br.reason == MARKER) continue;
+            out.push_back(br.reason);
+        }
+    };
+    std::vector<SatLit> upperReasons, lowerReasons;
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(-1))), MARKER);
+        bool ok = gs_.assertUpper(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(upperReasons);
+        if (!unsat) return false;
+    }
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(1))), MARKER);
+        bool ok = gs_.assertLower(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(lowerReasons);
+        if (!unsat) return false;
+    }
+    outReasons = std::move(upperReasons);
+    outReasons.insert(outReasons.end(), lowerReasons.begin(), lowerReasons.end());
+    std::sort(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+    outReasons.erase(std::unique(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), outReasons.end());
+    assert(std::none_of(outReasons.begin(), outReasons.end(),
+        [](const SatLit& r) { return r == MARKER; }) &&
+        "Track A LIA: marker bound leaked into emitted reason set");
+    return true;
 }
 
 std::vector<TheorySolver::SharedEqualityPropagation>

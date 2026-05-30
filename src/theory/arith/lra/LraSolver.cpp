@@ -319,6 +319,22 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     // to the convex LRA model (Stage A).
     for (const auto& ieq : interfaceDisequalities_) {
         auto eqReasons = assertedVarEqualityReason(ieq.a, ieq.b);
+        // Track B fix: when the narrow 2-var detector misses, also try the
+        // LP-duality probe (same detector Track A uses for deduced-eq emission).
+        // Without this, SAT can escape Track A's emit by deciding the deduced
+        // eq atom FALSE (interface diseq x != y) — LRA would silently accept
+        // that diseq even though the polyhedron entails x = y. Closing this
+        // path makes BOTH v10002=T (EUF congruence conflict) AND v10002=F
+        // (LRA polyhedron conflict) unsat → SAT terminates correctly.
+        if (eqReasons.empty() && impliedEqEnabled_) {
+            int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
+            if (aux >= 0) {
+                std::vector<SatLit> probeReasons;
+                if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
+                    eqReasons = std::move(probeReasons);
+                }
+            }
+        }
         if (eqReasons.empty()) continue;
         TheoryConflict tc;
         for (auto l : eqReasons) tc.clause.push_back(l);
