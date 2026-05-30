@@ -357,3 +357,20 @@ TEST_CASE("NlaCut math grid: lo_x * lo_y <= x*y <= hi_x * hi_y on non-neg quadra
         }
     }
 }
+
+// ---------- Phase C: NlaCutsRunner scaffold ----------
+#include "theory/arith/nra/nla/NlaCutsRunner.h"
+
+TEST_CASE("NlaCutsRunner: disabled by default emits nothing") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+
+    NlaCutsRunner runner(*k);
+    // Default (env unset): runner returns empty.
+    VarInterval xInt{x, mpq_class(2), mpq_class(5), {lit(1)}};
+    auto cuts = runner.runShapeCuts({xInt});
+    CHECK(cuts.empty());
+    auto tans = runner.runTangents({{x, mpq_class(3)}}, {});
+    CHECK(tans.empty());
+}
