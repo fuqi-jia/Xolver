@@ -116,6 +116,10 @@ cmd_package() {
         run.sh \
         run_differential.sh \
         run_z3.sh \
+        diff_common.sh \
+        diff_ingest.py \
+        diff_merge.py \
+        diff_report.py \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \

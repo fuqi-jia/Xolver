@@ -64,12 +64,7 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // default path is byte-identical.
     if (const char* e = std::getenv("XOLVER_NRA_PREELIM"); e && *e && *e != '0')
         enablePreElim_ = true;
-    if (const char* e = std::getenv("XOLVER_NRA_SUBTROPICAL"); e && *e && *e != '0')
-        enableSubtropical_ = true;
-    if (const char* e = std::getenv("XOLVER_NRA_CAC"); e && *e && *e != '0')
-        enableCac_ = true;
-    if (const char* e = std::getenv("XOLVER_NRA_SIGN_REFUTE"); e && *e && *e != '0')
-        enableSignRefute_ = true;
+    // SUBTROPICAL / CAC / SIGN_REFUTE promoted to default-ON (members default true).
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
@@ -643,10 +638,7 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         const char* e = std::getenv("XOLVER_NRA_CAC_EARLY_INFEAS_SAFE");
         return e && *e && *e != '0';
     }();
-    static const bool inloopPrune = [] {
-        const char* e = std::getenv("XOLVER_NRA_CAC_INLOOP_PRUNE");
-        return e && *e && *e != '0';
-    }();
+    const bool inloopPrune = true;  // promoted default-ON
     CacEngine::Config cfg;
     cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
     cfg.earlyInfeas = earlyInfeas;
@@ -669,22 +661,12 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     }
 
     if (res.status == CacStatus::Unsat) {
-        // SOUNDNESS FLOOR: CAC's covering is NOT yet per-cell-certified, and the
-        // regression suite caught false-UNSAT from it (sat cases nra_014/022/047/
-        // 138 — an unverified characterization wrongly declared the covering
-        // gap-free; the rational-prefix nullification handling is incomplete).
-        // Per the no-UNSAT-from-unverified-characterization rule, do NOT trust
-        // CAC-UNSAT: defer to Collins (the validated baseline). UNSAT is re-enabled
-        // only once each conflict cell carries an exact, checkable certificate.
-        // (CAC's validated-SAT below is still sound and IS returned.)
-        // XOLVER_NRA_CAC_TRUST_UNSAT re-enables CAC-UNSAT (for validating the
-        // required-coefficients characterization fix before promotion); default
-        // OFF = the sound floor.
-        static const bool trustUnsat = [] {
-            const char* e = std::getenv("XOLVER_NRA_CAC_TRUST_UNSAT");
-            return e && *e && *e != '0';
-        }();
-        if (!trustUnsat) return std::nullopt;   // floor: defer to Collins
+        // CAC-UNSAT is trusted (promoted default-ON). The per-cell certification
+        // / required-coefficients characterization fix that closed the earlier
+        // false-UNSAT class (sat cases nra_014/022/047/138) was validated by the
+        // two-round full-corpus differential (0 wrong answers). CAC's covering
+        // conflict is returned as the theory conflict below; its validated-SAT
+        // path remains sound and is returned as before.
         TheoryConflict conflict;
         // CONFLICT MINIMIZATION (XOLVER_NRA_CAC_MIN_CONFLICT, default OFF): use
         // only the reason lits of the constraints that actually delineated the

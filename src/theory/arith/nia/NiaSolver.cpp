@@ -67,11 +67,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
     // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
     // ~1.1s/call on dense Dartagnan, and re-run ~8000x at Standard effort on mcm).
-    // Gate it to Full-effort only, mirroring nia.univariate/bit-blast/cdcac:
-    // Standard propagation stays cheap; the fixpoint (and its UNSAT conflicts /
-    // complete enumeration) runs at the Full-effort model check. Sound +
-    // complete-preserving (the Full check still drains it). Promote after the
-    // OFF+ON gate + differential hold.
+    // Gating it to Full-effort only is a perf win, BUT it is NOT verdict-
+    // preserving in general: some Standard-effort presolve UNSATs are lost to
+    // unknown at Full effort (e.g. the Zohar intand/intor bit-width cases regress
+    // unsat -> unknown). So keep it gated default-OFF until that completeness gap
+    // is closed; promote only after the unit + regression gate stays green ON.
     if (const char* e = std::getenv("XOLVER_NIA_PRESOLVE_FULL"); e && *e && *e != '0')
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -80,17 +80,14 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
-    // L2 (XOLVER_NIA_UNIVARIATE_FULL, default-OFF). The univariate rational-root
-    // search (findIntegerRoots -> divisors, O(sqrt|a0|) bignum modulos) re-runs
-    // on EVERY Standard-effort cb_propagate. On EVM mod-2^256 inputs |a0| ~ 2^256
-    // => an effective per-propagation hang (profiled). Gate it to Full-effort
-    // only, mirroring nia.local-search / nia.bit-blast: Standard propagation stays
-    // cheap; the root search runs at the Full-effort model check and is validated,
-    // so completeness/soundness are preserved. Promote after the OFF+ON gate holds.
-    if (const char* e = std::getenv("XOLVER_NIA_UNIVARIATE_FULL"); e && *e && *e != '0')
-        addFull("nia.univariate", &NiaSolver::stageUnivariate);
-    else
-        add("nia.univariate",     &NiaSolver::stageUnivariate);
+    // L2 (default-ON). The univariate rational-root search (findIntegerRoots ->
+    // divisors, O(sqrt|a0|) bignum modulos) re-runs on EVERY Standard-effort
+    // cb_propagate. On EVM mod-2^256 inputs |a0| ~ 2^256 => an effective
+    // per-propagation hang (profiled). Gated to Full-effort only, mirroring
+    // nia.local-search / nia.bit-blast: Standard propagation stays cheap; the
+    // root search runs at the Full-effort model check and is validated, so
+    // completeness/soundness are preserved.
+    addFull("nia.univariate", &NiaSolver::stageUnivariate);
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
@@ -98,7 +95,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
     add("nia.bounded",        &NiaSolver::stageBounded);
-    // L3 modular residue refutation (XOLVER_NIA_MODULAR, default-OFF). Sound
+    // L3 modular residue refutation (default-ON). Sound
     // UNSAT-only (invariant 7). Full-effort only — the bounded residue
     // enumeration must not re-run on every Standard-effort cb_propagate (the
     // per-propagation pathology that motivated the L1/L2 gates). Registered
@@ -125,28 +122,20 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     if (const char* e = std::getenv("XOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
         enableBitBlast_ = false;
 
-    // Bound-free product-positivity refutation (default-OFF). Sound: only
+    // Bound-free product-positivity refutation (default-ON). Sound: only
     // derives lower bounds via valid integer implications and reports UNSAT
     // solely from an emptied domain (invariant 7).
-    if (const char* e = std::getenv("XOLVER_NIA_REFUTE"); e && *e && *e != '0')
-        enableRefute_ = true;
 
-    // Multivariate GCD-divisibility refutation (default-OFF). Sound: every
+    // Multivariate GCD-divisibility refutation (default-ON). Sound: every
     // monomial is an integer, so Σ aᵢmᵢ ≡ 0 (mod gcd aᵢ); g ∤ const ⇒ UNSAT.
-    if (const char* e = std::getenv("XOLVER_NIA_GCD"); e && *e && *e != '0')
-        enableGcd_ = true;
 
-    // L3 modular residue refutation (default-OFF). Sound: only emits UNSAT,
+    // L3 modular residue refutation (default-ON). Sound: only emits UNSAT,
     // and only when the system has no solution modulo a constant power-of-two
     // modulus (an integer solution would project to one) — invariant 7.
-    if (const char* e = std::getenv("XOLVER_NIA_MODULAR"); e && *e && *e != '0')
-        enableModular_ = true;
 
-    // Interval contraction fixpoint over the existing icp/ engine (default-OFF).
+    // Interval contraction fixpoint over the existing icp/ engine (default-ON).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
     // solely from a contractor conflict or an emptied domain (invariant 7).
-    if (const char* e = std::getenv("XOLVER_NIA_ICP"); e && *e && *e != '0')
-        enableIcp_ = true;
 
     // Integer-aware CDCAC (default-OFF). Sound: a CDCAC covering-UNSAT over the
     // real relaxation implies integer-UNSAT (ℤⁿ⊆ℝⁿ; gated by CdcacCore's own
@@ -155,7 +144,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     if (const char* e = std::getenv("XOLVER_NIA_CDCAC"); e && *e && *e != '0')
         enableCdcac_ = true;
 
-    // Incremental normalize cache (XOLVER_NIA_NORM_CACHE, default-OFF).
+    // Incremental normalize cache (default-ON).
     // nia.normalize re-normalized the FULL active_ set on every cb_propagate
     // (Standard effort) — profiled as the per-propagation hot stage on dense
     // QF_UFNIA (NiaNormalizer::normalize -> clearDenominators ->
@@ -165,10 +154,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // backtrack, clear on reset). So normalized_ is kept in lockstep with
     // active_: onBacktrack truncates it (killing the pop-then-push staleness
     // hazard), onReset clears it, and stageNormalize only normalizes the new
-    // tail. Output is byte-identical to the full re-normalize. Promote after
-    // the OFF+ON gate + differential hold.
-    if (const char* e = std::getenv("XOLVER_NIA_NORM_CACHE"); e && *e && *e != '0')
-        normCache_ = true;
+    // tail. Output is byte-identical to the full re-normalize. Default-ON; the
+    // cache is bypassed at runtime when ifaceLifecycleEnabled_ (see stageNormalize).
 
     // XOLVER_NIA_IFACE_LIFECYCLE (default-OFF): decouple Nelson-Oppen interface
     // (dis)equalities from the active_/trail_/activeSet_ back-pop machinery (see
@@ -318,7 +305,7 @@ std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, Th
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
-    // Incremental normalize cache (XOLVER_NIA_NORM_CACHE): normalized_ is kept in
+    // Incremental normalize cache (default-ON): normalized_ is kept in
     // lockstep with the strict active_ stack — normalize only the new tail
     // (normalizeOne is pure per-constraint, so this is byte-identical to a full
     // re-normalize). Safety-truncate in case a backtrack left it longer.
