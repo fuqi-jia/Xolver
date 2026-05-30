@@ -51,7 +51,21 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
 
     const auto& recs = eqAtomRegistry_->records();
     const size_t kMaxProps = 256;
+    // Cap inner ITERATIONS too — not just emissions. On QG-classification-class
+    // (qg5/qg6/qg7 quasigroup problems) the recs vector holds many thousands of
+    // EUF Eq atoms; even with the 256-cap on outputs, the full O(N) sweep per
+    // cb_propagate is what drives the 15-60% slowdown + loss of solves (e.g.
+    // dead_dnd005 sat→timeout under EUF_PROP). Default 512; override via
+    // XOLVER_EUF_PROP_BUDGET (0 = uncapped). Sound: a smaller cap only
+    // emits a SUBSET of entailed lits — never an unsound one.
+    static const size_t kMaxIter = [](){
+        const char* v = std::getenv("XOLVER_EUF_PROP_BUDGET");
+        if (v && *v) { try { return static_cast<size_t>(std::max(0, std::atoi(v))); } catch (...) {} }
+        return static_cast<size_t>(512);
+    }();
+    size_t iterations = 0;
     for (const auto& rec : recs) {
+        if (kMaxIter > 0 && ++iterations > kMaxIter) break;
         if (out.size() >= kMaxProps) break;
         if (rec.theory != TheoryId::EUF) continue;
         if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
