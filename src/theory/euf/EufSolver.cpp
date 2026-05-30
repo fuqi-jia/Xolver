@@ -17,6 +17,10 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
     eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
     ufModelEnabled_ = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    eufIncrementalProp_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP") != nullptr;
+    eufIncrementalVerify_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP_VERIFY") != nullptr;
+    if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
+    eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
     initializeBoolConstants();
 }
 
@@ -64,43 +68,43 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
         if (v && *v) { try { return static_cast<size_t>(std::max(0, std::atoi(v))); } catch (...) {} }
         return static_cast<size_t>(512);
     }();
-    size_t iterations = 0;
-    for (const auto& rec : recs) {
-        if (kMaxIter > 0 && ++iterations > kMaxIter) break;
-        if (out.size() >= kMaxProps) break;
-        if (rec.theory != TheoryId::EUF) continue;
-        if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
+
+    // Inner: try to produce an Entailment lemma from one rec idx, push to `dst`.
+    // Returns true if the rec was processed (eligible EUF Eq atom in any state),
+    // false if filtered out (theory mismatch, assigned, missing term).
+    auto processRec = [&](size_t idx, std::vector<TheoryLemma>& dst) -> bool {
+        const auto& rec = recs[idx];
+        if (rec.theory != TheoryId::EUF) return false;
+        if (!std::holds_alternative<EufAtomPayload>(rec.payload)) return false;
         const auto& p = std::get<EufAtomPayload>(rec.payload);
-        if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) continue;
+        if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) return false;
         SatVar v = rec.satVar;
-        if (assigned.count(v)) continue;
+        if (assigned.count(v)) return true;
         EufTermId s = termManager_.findTerm(p.lhs);
         EufTermId t = termManager_.findTerm(p.rhs);
-        if (s == NullEufTerm || t == NullEufTerm) continue;
+        if (s == NullEufTerm || t == NullEufTerm) return true;
         EClassId rs = egraph_.rep(s), rt = egraph_.rep(t);
         if (rs == rt) {
-            // Entailed TRUE: (¬reasons ∨ (s=t)). Skip empty-reason (bare unit).
             auto er = egraph_.explainEquality(s, t);
-            if (!er.ok || er.reasons.empty()) continue;
+            if (!er.ok || er.reasons.empty()) return true;
             TheoryLemma lem;
             lem.kind = LemmaKind::Entailment;
             lem.lits.reserve(er.reasons.size() + 1);
             for (SatLit r : er.reasons) lem.lits.push_back(r.negated());
             lem.lits.push_back(SatLit{v, true});
-            out.push_back(std::move(lem));
+            dst.push_back(std::move(lem));
         } else {
-            // Entailed FALSE: s,t straddle an asserted diseq (s≅a, t≅b, a≠b).
             auto it = diseqByRepPair.find(repPairKey(rs, rt));
-            if (it == diseqByRepPair.end()) continue;
+            if (it == diseqByRepPair.end()) return true;
             const ActiveDisequality& d = disequalities_[it->second];
             EClassId ra = egraph_.rep(d.lhs), rb = egraph_.rep(d.rhs);
-            EufTermId dS, dT;  // diseq endpoint in s's class / in t's class
+            EufTermId dS, dT;
             if (rs == ra && rt == rb) { dS = d.lhs; dT = d.rhs; }
             else if (rs == rb && rt == ra) { dS = d.rhs; dT = d.lhs; }
-            else continue;
+            else return true;
             auto e1 = egraph_.explainEquality(s, dS);
             auto e2 = egraph_.explainEquality(t, dT);
-            if (!e1.ok || !e2.ok) continue;
+            if (!e1.ok || !e2.ok) return true;
             TheoryLemma lem;
             lem.kind = LemmaKind::Entailment;
             lem.lits.reserve(e1.reasons.size() + e2.reasons.size() + 2);
@@ -108,7 +112,213 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
             for (SatLit r : e2.reasons) lem.lits.push_back(r.negated());
             lem.lits.push_back(d.reason.negated());
             lem.lits.push_back(SatLit{v, false});
-            out.push_back(std::move(lem));
+            dst.push_back(std::move(lem));
+        }
+        return true;
+    };
+
+    // ------------- INCREMENTAL PATH (XOLVER_EUF_INCREMENTAL_PROP) ------------
+    // Class-touch indexed scan: only re-evaluate EUF Eq atoms whose lhs/rhs term
+    // (or another member of its class, post-merge) sits in a class that has had
+    // a new merge since our last propagation call.
+    //
+    // Soundness invariants:
+    //   1. forceFullEntailmentScan_ is set on backtrack (assigned-set changed,
+    //      mergeRecord count regressed); next call does a full sweep that
+    //      re-establishes the steady state.
+    //   2. New atoms registered after last call are added to the dirty set via
+    //      lastIndexedEntailmentRecCount_ extension.
+    //   3. We index ONLY EUF Eq atoms (the only kind this routine emits).
+    //   4. Same per-rec body (`processRec`) for both paths — no logic drift.
+    // Verify mode (XOLVER_EUF_INCREMENTAL_PROP_VERIFY=1) runs the FULL scan and
+    // the incremental scan, asserts equal output-lit sets — used to validate
+    // the incremental implementation against the reference (assert at debug
+    // print; never falsifies a verdict).
+    if (eufIncrementalProp_ && !eufIncrementalVerify_) {
+        size_t currentMerges = egraph_.mergeRecordCount();
+        // Drift guard: if mergeRecord regressed (we missed a backtrack hook), force full.
+        if (currentMerges < lastSeenMergeRecord_) forceFullEntailmentScan_ = true;
+
+        // Lazily extend term-indexed atom map for new recs since last call.
+        for (size_t i = lastIndexedEntailmentRecCount_; i < recs.size(); ++i) {
+            const auto& rec = recs[i];
+            if (rec.theory != TheoryId::EUF) continue;
+            if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
+            const auto& p = std::get<EufAtomPayload>(rec.payload);
+            if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) continue;
+            EufTermId s = termManager_.findTerm(p.lhs);
+            EufTermId t = termManager_.findTerm(p.rhs);
+            if (s == NullEufTerm || t == NullEufTerm) continue;
+            size_t need = std::max((size_t)s, (size_t)t) + 1;
+            if (need > termToEntailmentAtomIdx_.size()) termToEntailmentAtomIdx_.resize(need);
+            termToEntailmentAtomIdx_[s].push_back(i);
+            if (s != t) termToEntailmentAtomIdx_[t].push_back(i);
+        }
+        lastIndexedEntailmentRecCount_ = recs.size();
+
+        // Build dirty set.
+        std::vector<size_t> toScan;
+        // Cap how many members we walk per merge before giving up (large classes
+        // make incremental scan more expensive than full scan).
+        const size_t kMemberWalkCap = 256;
+        bool fellBackToFull = false;
+        if (forceFullEntailmentScan_) {
+            fellBackToFull = true;
+        } else {
+            std::unordered_set<size_t> dirty;
+            for (size_t m = lastSeenMergeRecord_; m < currentMerges; ++m) {
+                const MergeRecord& mr = egraph_.mergeRecord(m);
+                // Walk classMembers of the merged class — catches atoms whose
+                // term is in the same class but isn't literally mr.lhs/mr.rhs.
+                EClassId rep = mr.kept != NullEClass ? mr.kept : egraph_.rep(mr.lhs);
+                const auto& mems = egraph_.classMembers(rep);
+                if (mems.size() > kMemberWalkCap) { fellBackToFull = true; break; }
+                for (EufTermId mem : mems) {
+                    if ((size_t)mem < termToEntailmentAtomIdx_.size()) {
+                        for (size_t idx : termToEntailmentAtomIdx_[mem]) dirty.insert(idx);
+                    }
+                }
+            }
+            if (!fellBackToFull) toScan.assign(dirty.begin(), dirty.end());
+        }
+        lastSeenMergeRecord_ = currentMerges;
+        forceFullEntailmentScan_ = false;
+
+        if (fellBackToFull) {
+            size_t iterations = 0;
+            for (size_t i = 0; i < recs.size(); ++i) {
+                if (kMaxIter > 0 && ++iterations > kMaxIter) break;
+                if (out.size() >= kMaxProps) break;
+                if (!processRec(i, out)) continue;
+            }
+        } else {
+            size_t iterations = 0;
+            for (size_t idx : toScan) {
+                if (kMaxIter > 0 && ++iterations > kMaxIter) break;
+                if (out.size() >= kMaxProps) break;
+                processRec(idx, out);
+            }
+        }
+        return out;
+    }
+
+    // ------------- VERIFY PATH: full + incremental compare ------------
+    if (eufIncrementalVerify_) {
+        std::vector<TheoryLemma> fullOut;
+        size_t iterations = 0;
+        for (size_t i = 0; i < recs.size(); ++i) {
+            if (kMaxIter > 0 && ++iterations > kMaxIter) break;
+            if (fullOut.size() >= kMaxProps) break;
+            processRec(i, fullOut);
+        }
+        // Now run incremental shadow.
+        std::vector<TheoryLemma> incOut;
+        {
+            size_t currentMerges = egraph_.mergeRecordCount();
+            if (currentMerges < lastSeenMergeRecord_) forceFullEntailmentScan_ = true;
+            for (size_t i = lastIndexedEntailmentRecCount_; i < recs.size(); ++i) {
+                const auto& rec = recs[i];
+                if (rec.theory != TheoryId::EUF) continue;
+                if (!std::holds_alternative<EufAtomPayload>(rec.payload)) continue;
+                const auto& p = std::get<EufAtomPayload>(rec.payload);
+                if (p.kind != EufAtomKind::Equality || p.rel != Relation::Eq) continue;
+                EufTermId s = termManager_.findTerm(p.lhs);
+                EufTermId t = termManager_.findTerm(p.rhs);
+                if (s == NullEufTerm || t == NullEufTerm) continue;
+                size_t need = std::max((size_t)s, (size_t)t) + 1;
+                if (need > termToEntailmentAtomIdx_.size()) termToEntailmentAtomIdx_.resize(need);
+                termToEntailmentAtomIdx_[s].push_back(i);
+                if (s != t) termToEntailmentAtomIdx_[t].push_back(i);
+            }
+            lastIndexedEntailmentRecCount_ = recs.size();
+            std::vector<size_t> toScan;
+            bool full = forceFullEntailmentScan_;
+            if (!full) {
+                std::unordered_set<size_t> dirty;
+                for (size_t m = lastSeenMergeRecord_; m < currentMerges; ++m) {
+                    const MergeRecord& mr = egraph_.mergeRecord(m);
+                    EClassId rep = mr.kept != NullEClass ? mr.kept : egraph_.rep(mr.lhs);
+                    for (EufTermId mem : egraph_.classMembers(rep)) {
+                        if ((size_t)mem < termToEntailmentAtomIdx_.size()) {
+                            for (size_t idx : termToEntailmentAtomIdx_[mem]) dirty.insert(idx);
+                        }
+                    }
+                }
+                toScan.assign(dirty.begin(), dirty.end());
+            }
+            lastSeenMergeRecord_ = currentMerges;
+            forceFullEntailmentScan_ = false;
+            if (full) {
+                size_t it = 0;
+                for (size_t i = 0; i < recs.size(); ++i) {
+                    if (kMaxIter > 0 && ++it > kMaxIter) break;
+                    if (incOut.size() >= kMaxProps) break;
+                    processRec(i, incOut);
+                }
+            } else {
+                size_t it = 0;
+                for (size_t idx : toScan) {
+                    if (kMaxIter > 0 && ++it > kMaxIter) break;
+                    if (incOut.size() >= kMaxProps) break;
+                    processRec(idx, incOut);
+                }
+            }
+        }
+        // Compare: incremental must be a SUBSET of full (the soundness check).
+        // The full sweep re-emits previously-fired lemmas on every call (the SAT
+        // layer is responsible for deduping them via assigned/lemmaDb); the
+        // incremental sweep only emits atoms whose entailment status JUST became
+        // visible since the last call. So inc ⊆ full is the correct invariant.
+        // Anything emitted by inc that is NOT emitted by full is a real bug
+        // (would mean inc invents an entailment).
+        auto lemmaKey = [](const TheoryLemma& l) -> std::string {
+            std::string s; s.reserve(l.lits.size() * 8);
+            for (SatLit lt : l.lits) {
+                s += std::to_string(lt.var);
+                s += (lt.sign ? '+' : '-');
+                s += '|';
+            }
+            return s;
+        };
+        std::unordered_set<std::string> fullKeys;
+        for (const auto& l : fullOut) fullKeys.insert(lemmaKey(l));
+        size_t spurious = 0;
+        for (const auto& l : incOut) {
+            if (!fullKeys.count(lemmaKey(l))) ++spurious;
+        }
+        if (spurious > 0) {
+            std::cerr << "[EUF-INC-VERIFY] SPURIOUS inc emissions: " << spurious
+                      << " (full=" << fullOut.size() << " inc=" << incOut.size() << ")\n";
+            for (const auto& l : incOut) {
+                auto k = lemmaKey(l);
+                if (!fullKeys.count(k)) std::cerr << "  spurious: " << k << "\n";
+            }
+        }
+        return fullOut;  // verify mode emits the reference output (sound)
+    }
+
+    // ------------- DEFAULT PATH: original full sweep ------------
+    // With XOLVER_EUF_PROP_DEDUP: skip atoms whose lemma we already emitted at a
+    // level still in scope (SAT's lemmaDb still holds it; re-emitting is wasted
+    // work). emittedAtomLevel_ is invalidated on backtrack via
+    // dropEmittedAboveLevel.
+    if (eufPropDedup_ && emittedAtomLevel_.size() < recs.size()) {
+        emittedAtomLevel_.resize(recs.size(), -1);
+    }
+    size_t iterations = 0;
+    for (size_t i = 0; i < recs.size(); ++i) {
+        if (kMaxIter > 0 && ++iterations > kMaxIter) break;
+        if (out.size() >= kMaxProps) break;
+        if (eufPropDedup_ && (size_t)i < emittedAtomLevel_.size()
+            && emittedAtomLevel_[i] >= 0 && emittedAtomLevel_[i] <= currentLevel_) {
+            continue;  // already emitted at a still-in-scope level
+        }
+        size_t before = out.size();
+        processRec(i, out);
+        if (eufPropDedup_ && out.size() > before) {
+            if ((size_t)i >= emittedAtomLevel_.size())
+                emittedAtomLevel_.resize((size_t)i + 1, -1);
+            emittedAtomLevel_[i] = currentLevel_;
         }
     }
     return out;
@@ -506,6 +716,19 @@ void EufSolver::recordEgraphBoundary(int level) {
 
 void EufSolver::backtrackToLevel(int target) {
     currentLevel_ = target;
+    // Force a full entailment sweep on the next propagation call: the assigned
+    // set changed and the mergeRecord count is about to regress, so the
+    // class-touch dirty index built from prior merges is no longer authoritative.
+    forceFullEntailmentScan_ = true;
+    lastSeenMergeRecord_ = 0;
+    // XOLVER_EUF_PROP_DEDUP: invalidate emissions at levels > target. The lemmas
+    // are still in SAT's lemmaDb (which has its own backtrack semantics), but
+    // their entailment condition may now be unmet so we must consider re-emitting.
+    if (eufPropDedup_) {
+        for (auto& lvl : emittedAtomLevel_) {
+            if (lvl > target) lvl = -1;
+        }
+    }
 
     // Trail: keep entries with level <= target. The SAT decision trail is
     // level-ordered (ascending), so the kept entries are a prefix.
