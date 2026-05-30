@@ -77,4 +77,11 @@ private:
 // A rational q with a < q < b. Precondition: a < b. Exposed for reuse/testing.
 mpq_class rationalStrictlyBetween(const RealValue& a, const RealValue& b);
 
+// True iff `outer` contains `inner` as a subset (every point of inner is in
+// outer). Allows equality (outer == inner ⇒ true). Endpoint-aware: an open
+// lower outer endpoint at the same value as a closed lower inner endpoint
+// FAILS to subsume that point; mirrored on the upper side. Used by interval-
+// covering pruning (Track 2 #40, cvc5 cleanIntervals analog).
+bool intervalSubsumes(const CacInterval& outer, const CacInterval& inner);
+
 } // namespace xolver

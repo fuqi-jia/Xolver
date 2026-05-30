@@ -48,6 +48,22 @@ mpq_class rationalStrictlyBetween(const RealValue& a, const RealValue& b) {
     return (lo + hi) / 2;  // unreachable for well-separated reals
 }
 
+// --- intervalSubsumes -------------------------------------------------------
+
+bool intervalSubsumes(const CacInterval& outer, const CacInterval& inner) {
+    // Lower side: outer.lo must be at-or-below inner.lo. If equal, outer must
+    // not be MORE open than inner (an open outer at the same point as a closed
+    // inner FAILS to include that boundary point).
+    const int cl = outer.lo.compare(inner.lo);
+    if (cl > 0) return false;
+    if (cl == 0 && outer.loOpen && !inner.loOpen) return false;
+    // Upper side: mirror.
+    const int ch = outer.hi.compare(inner.hi);
+    if (ch < 0) return false;
+    if (ch == 0 && outer.hiOpen && !inner.hiOpen) return false;
+    return true;
+}
+
 // --- CacCovering ---------------------------------------------------------------
 
 void CacCovering::add(const CacInterval& iv) {

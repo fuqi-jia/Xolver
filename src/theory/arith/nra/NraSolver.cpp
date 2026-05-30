@@ -552,9 +552,20 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         return o && *o && *o != '0';
     }();
     if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
-    // Pure NRA only: interface (dis)equalities live in the engine, not
-    // presolveConstraints_, so CAC's verdict could miss them (see stageSubtropical).
-    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+    // COMBINATION-AWARE CAC (XOLVER_NRA_CAC_COMBINATION, default OFF — the UFNRA
+    // medal lane; pairs with EQNA who owns the N-O loop). When OFF, CAC stays
+    // PURE-NRA: interface (dis)equalities live in engine_ (asserted via
+    // assertInterfaceEquality), not presolveConstraints_, so a CAC verdict that
+    // ignored them could be wrong → defer to Collins. When ON, we instead lift
+    // the interface (dis)eqs into the CAC constraint set below (root/sign-
+    // preserving real constraints poly(a)-poly(b) rel 0), so CAC decides under
+    // them and its UNSAT conflict carries their reason lits (see below).
+    static const bool cacCombination = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_COMBINATION");
+        return e && *e && *e != '0';
+    }();
+    if (!cacCombination &&
+        (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()))
         return std::nullopt;
 #ifdef XOLVER_HAS_LIBPOLY
     // Build the constraint set + active reasons + variable order.
@@ -569,6 +580,37 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         for (VarId v : rp->variables()) varSet.insert(v);
         cacCons.push_back({std::move(*rp), c.rel});
         activeReasons.push_back(c.reason);
+    }
+    // Combination: lift each N-O interface (dis)equality into a CAC constraint,
+    // keeping its reason lit aligned in activeReasons (index ⇒ reason). The
+    // conversion REUSES the exact path assertInterfaceEquality fed to engine_
+    // (PolynomialConverter::convertConstraint → cc.diff rel 0). If a shared term
+    // is not NRA-poly-expressible (UF app feeding a real var) → DEFER the whole
+    // CAC run to Collins (sound floor: engine_ already has the interface
+    // constraints). The unsatCore (origins) machinery then makes the combination
+    // conflict include exactly the interface lits that participated.
+    if (cacCombination) {
+        auto liftIface = [&](const std::vector<InterfaceEq>& ifaces, Relation rel) -> bool {
+            for (const auto& e : ifaces) {
+                if (!sharedTermRegistry_ || !coreIr_ || !converter_) return false;
+                const auto* stA = sharedTermRegistry_->get(e.a);
+                const auto* stB = sharedTermRegistry_->get(e.b);
+                if (!stA || !stB) return false;
+                auto cc = converter_->convertConstraint(stA->coreExpr, stB->coreExpr, rel, *coreIr_);
+                if (cc.status == PolyConstraintStatus::Tautology) continue;   // adds nothing
+                if (cc.status == PolyConstraintStatus::Conflict) return false; // constant clash → defer (engine_ caught it at assert)
+                if (!cc.isConstraint()) return false;                         // not poly-expressible → defer
+                auto rp = RationalPolynomial::fromPolyId(cc.diff, *kernel_);
+                if (!rp) return false;
+                for (VarId v : rp->variables()) varSet.insert(v);
+                cacCons.push_back({std::move(*rp), rel});
+                activeReasons.push_back(e.reason);
+            }
+            return true;
+        };
+        if (!liftIface(interfaceEqualities_, Relation::Eq) ||
+            !liftIface(interfaceDisequalities_, Relation::Neq))
+            return std::nullopt;   // shared term not poly-expressible ⇒ sound defer to Collins
     }
     if (cacCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
@@ -589,8 +631,18 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
                         // yields fast to Collins instead of grinding); rest of 1200s is Collins
     }();
+    static const bool earlyInfeas = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_EARLY_INFEAS");
+        return e && *e && *e != '0';
+    }();
+    static const bool pruneIntervals = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_PRUNE_INTERVALS");
+        return e && *e && *e != '0';
+    }();
     CacEngine::Config cfg;
     cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    cfg.earlyInfeas = earlyInfeas;
+    cfg.pruneIntervals = pruneIntervals;
     CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 
@@ -624,10 +676,43 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         }();
         if (!trustUnsat) return std::nullopt;   // floor: defer to Collins
         TheoryConflict conflict;
-        conflict.clause = std::move(activeReasons);
+        // CONFLICT MINIMIZATION (XOLVER_NRA_CAC_MIN_CONFLICT, default OFF): use
+        // only the reason lits of the constraints that actually delineated the
+        // covering (CacResult::unsatCore) instead of the whole asserted set.
+        // The sub-conjunction over those constraints is itself UNSAT (the covering
+        // proves it), so the learned lemma is sound and much tighter — less SAT-
+        // core churn. unsatCore is a conservative superset of the minimal core;
+        // an EMPTY core (could-not-attribute) falls back to all reasons (sound).
+        // This is ALSO the mechanism the combination conflict will reuse to carry
+        // the interface-(dis)eq lits that participated (see CAC.md / task P5).
+        static const bool minConflict = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_MIN_CONFLICT");
+            return e && *e && *e != '0';
+        }();
+        if (minConflict && !res.unsatCore.empty()) {
+            std::vector<SatLit> minimized;
+            minimized.reserve(res.unsatCore.size());
+            for (size_t idx : res.unsatCore)
+                if (idx < activeReasons.size()) minimized.push_back(activeReasons[idx]);
+            if (!minimized.empty()) conflict.clause = std::move(minimized);
+            else conflict.clause = std::move(activeReasons);   // defensive fallback
+        } else {
+            conflict.clause = std::move(activeReasons);
+        }
         return TheoryCheckResult::mkConflict(std::move(conflict));
     }
     if (res.status == CacStatus::Sat) {
+        // COMBINATION (v1): a CAC SAT under interface constraints means NRA is
+        // consistent with the asserted (dis)eqs, but the N-O layer also needs the
+        // shared-term ARRANGEMENT read back (task P5 #43, EQNA-paired). Until that
+        // read-back exists, DEFER SAT to Collins (engine_ already holds the
+        // interface constraints) rather than return a consistent() that the
+        // combination loop cannot turn into an arrangement. The UNSAT direction
+        // (the medal win) is handled above and IS returned. Sound: Collins is the
+        // validated SAT+arrangement baseline.
+        if (cacCombination &&
+            (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()))
+            return std::nullopt;
         // Report only an all-rational model (the typed channel is mpq); an
         // algebraic witness ⇒ defer to Collins (still sound). The engine already
         // validated the model against every constraint (invariant 1).

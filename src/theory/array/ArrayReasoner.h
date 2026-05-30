@@ -178,6 +178,20 @@ private:
     // exactly the formula's own select indices.
     std::unordered_set<EufTermId> internalSelect_;
 
+    // Incremental completeStoreSelects state (perf, QF_ANIA budget). Avoid
+    // re-iterating the O(arrays x indices) cross-product on every cb_check
+    // call: each call only processes pairs that involve a NEW array or a NEW
+    // read-index since the last call. termManager_ + selectTerms_ are monotonic
+    // (never shrink across backtracks), and selectCompleteDone_ is already
+    // persistent across backtracks in the existing code, so the incremental
+    // pass is strictly equivalent to the original full-sweep + dedup-skip
+    // behavior — just without paying the O(N*M) hash lookups every call.
+    size_t completeLastSelectScanEnd_ = 0;
+    EufTermId completeLastTermScanEnd_ = 0;
+    std::vector<EufTermId> completeArrayCache_;
+    std::vector<EufTermId> completeReadIdxCache_;
+    std::unordered_set<EufTermId> completeReadIdxSeen_;
+
     // A canonical token for t IF its origin is a numeric or boolean constant
     // literal (so distinct tokens ⇒ distinct values). Returns nullopt for
     // uninterpreted-sort constants (distinct names do NOT imply distinct
