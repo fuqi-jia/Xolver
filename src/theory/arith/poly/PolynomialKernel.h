@@ -189,6 +189,39 @@ public:
     }
 
     // ------------------------------------------------------------------
+    // Symbolic-modulus residue extraction (Track C1)
+    // ------------------------------------------------------------------
+    //
+    // Compute the polynomial residue of `poly` modulo a SYMBOLIC `modulus`,
+    // i.e. the canonical r such that poly = q * modulus + r with
+    // deg_var(r) < deg_var(modulus) for some variable `var` that the
+    // modulus is monic in.
+    //
+    // INTENDED USE — the modInvStep family from sqrtmodinv-hoenicke:
+    //
+    //     (assert (= (* denom inv2) (- 1 (* k k s s))))     -- denom*inv2 = 1 - k^2*s^2
+    //     (assert (not (= 1 (mod (* denom inv2) (* s s))))) -- but its mod s^2 != 1
+    //
+    // Then extractSymbolicResidue(1 - k^2*s^2, s^2) returns 1 (since
+    // -k^2*s^2 = (-k^2) * s^2 is divisible by s^2). The reasoner can then
+    // close the contradiction: (mod (denom*inv2) s^2) = 1, contradicting the
+    // assertion that it's != 1.
+    //
+    // PHASE 1 SCOPE (sound but conservative): only handles MONIC,
+    // SINGLE-VARIABLE modulus polynomials. That covers s, s^2, s^3, ... as
+    // generators — the modInvStep* shape — but rules out modulus s*t, s+1,
+    // etc. Non-monic or multi-variable modulus returns nullopt and the
+    // caller falls through to other reasoners (no soundness risk).
+    //
+    // SOUNDNESS: returns r such that poly ≡ r (mod modulus) holds in Z
+    // under ANY non-zero integer assignment to the modulus variable.
+    // Validated externally against z3 on s ∈ {2..7}.
+    virtual std::optional<PolyId> extractSymbolicResidue(PolyId poly, PolyId modulus) {
+        (void)poly; (void)modulus;
+        return std::nullopt;
+    }
+
+    // ------------------------------------------------------------------
     // Principal subresultant coefficient (PSC) chain (for CAD projection)
     // ------------------------------------------------------------------
     // Principal subresultant coefficient chain of a and b with respect to

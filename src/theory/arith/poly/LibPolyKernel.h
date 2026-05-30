@@ -62,6 +62,7 @@ public:
     PseudoRemainderResult pseudoRemainderWithScale(PolyId dividend, PolyId divisor, VarId mainVar) override;
     std::optional<PolyId> leadingCoefficient(PolyId p) override;
     std::optional<PolyId> substituteRational(PolyId p, VarId v, const mpq_class& value) override;
+    std::optional<PolyId> extractSymbolicResidue(PolyId poly, PolyId modulus) override;
 
     // Principal subresultant coefficient chain of a, b w.r.t. v, eliminating v
     // (guaranteed via a scoped variable-order push so v is the libpoly main
