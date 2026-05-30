@@ -626,12 +626,21 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     // Cap Gomory cuts per solve so branch-and-bound still terminates AND the
     // tableau doesn't bloat into degeneracy (too many near-degenerate cut rows
     // make the anti-cycling pivot rule blow past the iteration cap -> unknown,
-    // the CAV coef-size regression). Keep the budget small ("cut a little, then
-    // branch"); tunable for A/B.
+    // the CAV coef-size regression).
+    //
+    // Default 4 ("cut-and-branch"): measured on the QF_LIA panda regressors
+    // (dillig 25-*/45-*, Bromberger *.slack), every cut a fractional SAT node
+    // generates perturbs the branching search and mints a fresh bound atom that
+    // enlarges the boolean search — on SAT instances cuts are pure overhead and
+    // the old default of 32 turned 16-20s base solves into >30s timeouts. A
+    // small budget concentrates cuts near the root (where they tighten the
+    // initial relaxation, helping UNSAT) and then lets branch-and-bound run
+    // undisturbed. Tunable via XOLVER_LIA_CUT_MAXPERSOLVE; raise it for
+    // UNSAT-heavy divisions if a differential shows more root cuts help there.
     static const int kMaxCutsPerSolve = []() {
         const char* e = std::getenv("XOLVER_LIA_CUT_MAXPERSOLVE");
         int v = e ? std::atoi(e) : -1;
-        return v >= 0 ? v : 32;
+        return v >= 0 ? v : 4;
     }();
     int bestVar = -1;
     mpq_class bestFrac(-1);
@@ -685,10 +694,11 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
             tryIntegralityRepair()) {
             return TheoryCheckResult::consistent();
         }
-        // XOLVER_LIA_CUTS: try a Gomory fractional cut before splitting. A cut
-        // tightens the relaxation without branching; capped per solve so
-        // branch-and-bound still terminates. Only at Full effort (a real model).
-        if (cutsEnabled_ && effort == TheoryEffort::Full &&
+        // XOLVER_LIA_CUTS / XOLVER_LIA_GMI_CUTS: try a Gomory (or GMI) cut before
+        // splitting. A cut tightens the relaxation without branching; capped per
+        // solve so branch-and-bound still terminates. Only at Full effort (a real
+        // model). GMI implies the cut path so it can be enabled standalone.
+        if ((cutsEnabled_ || gmiCutsEnabled_) && effort == TheoryEffort::Full &&
             cutsThisSolve_ < kMaxCutsPerSolve) {
             if (auto cut = generateGomoryCut(bestVar)) {
                 if (!lemmaDb.contains(*cut)) {
