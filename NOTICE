@@ -1,0 +1,20 @@
+Xolver
+Copyright 2026 Fuqi Jia and the Xolver contributors
+
+Licensed under the Apache License 2.0 (see LICENSE).
+
+Xolver does not call, wrap, or include source from any existing SMT solver.
+Source comments that cite cvc5, z3, or other SMT solvers are algorithmic
+attribution for published algorithms (Cylindrical Algebraic Coverings,
+Lazard projection, Nelson-Oppen); the implementations are independently
+written.
+
+Third-party dependencies (each under its own license):
+
+  CaDiCaL          MIT                       https://github.com/arminbiere/cadical
+  libpoly          LGPL v3 or later          https://github.com/SRI-CSL/libpoly
+  SOMTParser       MIT                       https://github.com/fuqi-jia/SOMTParser
+  nlohmann/json    MIT                       https://github.com/nlohmann/json
+  doctest          MIT                       https://github.com/doctest/doctest
+  GMP              LGPL v3 / GPL v2 (dual)   https://gmplib.org
+  MPFR             LGPL v3 or later          https://www.mpfr.org
