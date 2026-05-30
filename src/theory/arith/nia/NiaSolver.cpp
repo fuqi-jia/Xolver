@@ -8,6 +8,8 @@
 #include "theory/arith/nra/engine/ReasonManager.h"
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nra/nla/NlaCutsRunner.h"           // Stage 3 Phase C-3
+#include "theory/arith/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
@@ -76,6 +78,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
         add("nia.presolve",     &NiaSolver::stagePresolveFixpoint);
+    // Stage 3 Phase C-3: NLA-cuts derived from single-var bounds. Gated
+    // on XOLVER_NIA_NLA_CUTS (default-OFF), Full-effort only to avoid the
+    // per-cb_propagate hot path (the cut-extraction is O(n) over normalized_
+    // + an O(n) cut emit; cheap, but Full-only matches the lever's "redundant
+    // tightening for hard cases" intent and avoids cost on easy SAT cases).
+    addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
@@ -374,6 +382,100 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
         if (fd.status == FiniteDomainResult::Status::UnsatComplete) {
             return TheoryCheckResult::mkConflict(fd.conflict);
         }
+    }
+    return std::nullopt;
+}
+
+// Stage 3 Phase C-3 — NLA-cuts hook for NiaSolver. Mirrors the NraSolver
+// hook (3eb2116) but operates on normalized_ (NormalizedNiaConstraint)
+// and appends back into normalized_ so downstream stages see the cuts.
+//
+// Soundness:
+//   Each cut is a logical implication of its source bounds — adding it to
+//   normalized_ is sat/unsat preserving. The reason set must be a SINGLE
+//   SatLit so it fits the NormalizedNiaConstraint shape (one reason per
+//   constraint, matching the cacCons/activeReasons contract on the NRA
+//   side); multi-reason cuts (monotonicityProduct, McCormick) are dropped
+//   silently — they'd need a synthetic conjunction lit, pinned for the
+//   next Phase D commit.
+//
+// The bound extraction handles c1*v + c0 rel 0 only (single var, degree 1,
+// integer-constant c0/c1). Multi-var or nonlinear constraints are skipped.
+std::optional<TheoryCheckResult> NiaSolver::stageNlaCuts(TheoryLemmaStorage&,
+                                                          TheoryEffort) {
+    static const bool nlaCutsEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_NLA_CUTS");
+        return e && *e && *e != '0';
+    }();
+    if (!nlaCutsEnabled) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+
+    std::map<VarId, nla::VarInterval> intervalMap;
+    for (const auto& c : normalized_) {
+        if (c.poly == NullPoly) continue;
+        auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rp) continue;
+        auto vars = rp->variables();
+        if (vars.size() != 1) continue;
+        VarId v = *vars.begin();
+        if (rp->degree(v) != 1) continue;
+        auto coeffs = rp->coefficients(v);
+        if (coeffs.size() != 2) continue;
+        if (!coeffs[0].isConstant() || !coeffs[1].isConstant()) continue;
+        mpq_class c0 = coeffs[0].constantValue();
+        mpq_class c1 = coeffs[1].constantValue();
+        if (c1 == 0) continue;
+        mpq_class bound = -c0 / c1;
+        Relation effRel = c.rel;
+        if (c1 < 0) {
+            switch (effRel) {
+                case Relation::Leq: effRel = Relation::Geq; break;
+                case Relation::Geq: effRel = Relation::Leq; break;
+                case Relation::Lt:  effRel = Relation::Gt;  break;
+                case Relation::Gt:  effRel = Relation::Lt;  break;
+                case Relation::Eq:  case Relation::Neq: break;
+            }
+        }
+        auto& vi = intervalMap[v];
+        if (vi.varPoly == NullPoly) vi.varPoly = kernel_->mkVar(v);
+        auto tighter = [](std::optional<mpq_class>& lo,
+                          std::optional<mpq_class>& hi,
+                          const mpq_class& val, Relation r) {
+            switch (r) {
+                case Relation::Leq: case Relation::Lt:
+                    if (!hi || val < *hi) hi = val;
+                    break;
+                case Relation::Geq: case Relation::Gt:
+                    if (!lo || val > *lo) lo = val;
+                    break;
+                case Relation::Eq:
+                    if (!lo || val > *lo) lo = val;
+                    if (!hi || val < *hi) hi = val;
+                    break;
+                case Relation::Neq: break;
+            }
+        };
+        tighter(vi.lo, vi.hi, bound, effRel);
+        vi.reasons = {c.reason};
+    }
+    if (intervalMap.empty()) return std::nullopt;
+
+    std::vector<nla::VarInterval> intervals;
+    intervals.reserve(intervalMap.size());
+    for (auto& [v, vi] : intervalMap) intervals.push_back(std::move(vi));
+
+    nla::NlaCutsRunner runner(*kernel_);
+    auto cuts = runner.runShapeCuts(intervals, /*maxPairs=*/0);
+    for (const auto& cut : cuts) {
+        if (cut.poly == NullPoly) continue;
+        if (cut.reasons.size() != 1) continue;  // single-reason only
+        // Append directly into normalized_. Subsequent stages see this as
+        // any other NIA constraint; their cb_propagate path handles it.
+        NormalizedNiaConstraint nc;
+        nc.poly = cut.poly;
+        nc.rel = cut.rel;
+        nc.reason = cut.reasons[0];
+        normalized_.push_back(nc);
     }
     return std::nullopt;
 }

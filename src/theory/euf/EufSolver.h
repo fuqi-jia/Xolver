@@ -282,6 +282,11 @@ private:
     // Set on backtrack — next propagation call must do a full sweep (assigned
     // set changed, mergeRecord count regressed).
     bool forceFullEntailmentScan_ = true;
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, master): use a level-bucketed map to
+    // drain the saturation mergeQueue_ in O(n log L) instead of the O(n^2) linear
+    // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
+    // Read once in the constructor.
+    bool minLevelHeapEnabled_ = false;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.

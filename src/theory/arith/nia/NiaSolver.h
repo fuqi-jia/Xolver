@@ -158,6 +158,10 @@ private:
     std::optional<TheoryCheckResult> stagePending(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageNormalize(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort);
+    // Stage 3 Phase C-3 (XOLVER_NIA_NLA_CUTS, default-OFF). Append redundant
+    // tightening cuts derived from single-variable bounds in normalized_.
+    // Cuts are sound by construction so appending is sat/unsat preserving.
+    std::optional<TheoryCheckResult> stageNlaCuts(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);

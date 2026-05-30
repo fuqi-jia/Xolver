@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <functional>
 #include <climits>
+#include <map>
+#include <optional>
 
 namespace xolver {
 
@@ -21,6 +23,14 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     eufIncrementalVerify_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP_VERIFY") != nullptr;
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
     eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, master): drain the saturation
+    // mergeQueue_ with a level-bucketed map (min-level = begin(), FIFO within
+    // level) instead of the O(n) linear min-level scan + O(n) erase per pop.
+    // Same processing ORDER (ascending level, insertion order within level) →
+    // identical egraph result; turns the O(n^2) drain into O(n log L). Targets
+    // the QF_ANIA / QF_AX swap saturation blowup where the queue holds
+    // thousands of array Row1/Row2/congruence merges at one decision level.
+    minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
     initializeBoolConstants();
 }
 
@@ -1017,16 +1027,16 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // backtrack relies on). At each level transition we record an egraph
     // boundary = the state before that level's merges, which backtrack restores.
     int processingLevel = INT_MIN;
-    while (!mergeQueue_.empty()) {
-        // Pick the minimum-level pending merge.
-        size_t mi = 0;
-        for (size_t i = 1; i < mergeQueue_.size(); ++i)
-            if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
-        PendingMerge req = mergeQueue_[mi];
-        mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
-        int L = req.level;
+    // Process one pending merge at its decision level L. `pushCong` re-enqueues
+    // each congruence this merge spawns (tagged with L). Returns nullopt to keep
+    // draining, or a TheoryCheckResult to early-return (unknown / conflict).
+    // Shared by both drivers below so the two paths are behaviourally identical;
+    // only the queue data structure differs.
+    auto applyMerge = [&](PendingMerge req, auto&& pushCong)
+                          -> std::optional<TheoryCheckResult> {
+        const int L = req.level;
 
-        if (egraph_.same(req.a, req.b)) continue;
+        if (egraph_.same(req.a, req.b)) return std::nullopt;
 
         // sort check
         const auto& na = termManager_.node(req.a);
@@ -1045,8 +1055,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         // can be tagged with this merge's level before re-entering the queue.
         std::deque<PendingMerge> cong;
         auto mr = egraph_.merge(req.a, req.b, req.reason, cong);
-        for (auto& c : cong) { c.level = L; mergeQueue_.push_back(c); }
-        if (!mr.merged) continue;
+        for (auto& c : cong) { c.level = L; pushCong(std::move(c)); }
+        if (!mr.merged) return std::nullopt;
 
         // Evaluate builtin constants in affected parent terms. Skip entirely
         // when no "#builtin.*" symbol exists (e.g. pure QF_UF): the loop below
@@ -1102,6 +1112,53 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             }
         }
         // refreshCongruence is now handled inside merge()
+        return std::nullopt;
+    };
+
+    if (!minLevelHeapEnabled_) {
+        // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
+        // to the historical loop). Congruences append to mergeQueue_.
+        while (!mergeQueue_.empty()) {
+            // Pick the minimum-level pending merge (earliest at that level).
+            size_t mi = 0;
+            for (size_t i = 1; i < mergeQueue_.size(); ++i)
+                if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
+            PendingMerge req = mergeQueue_[mi];
+            mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+            auto r = applyMerge(std::move(req),
+                                [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
+            if (r) return *r;
+        }
+    } else {
+        // XOLVER_EUF_MINLEVEL_HEAP: level-bucketed drain. begin() is the minimum
+        // level; each bucket is FIFO so the per-level order matches the baseline's
+        // "earliest at that level". O(n log L) total (L = #distinct levels) vs the
+        // baseline's O(n^2). Congruences spawned at level L (the current minimum)
+        // re-enter byLevel[L], so they are processed before any higher level —
+        // identical ordering to the linear scan's global-min re-pick.
+        std::map<int, std::deque<PendingMerge>> byLevel;
+        // Absorb any merges sitting in mergeQueue_ into the level buckets. Called
+        // initially AND after every applyMerge, because some merges are pushed to
+        // mergeQueue_ DIRECTLY (not via pushCong) from inside the merge body —
+        // notably tryEvaluateBuiltin's BuiltinEval folds (level 0). The baseline
+        // linear scan would re-pick those by global-min; absorbing keeps the map
+        // path behaviourally identical and source-agnostic.
+        auto absorb = [&]() {
+            if (mergeQueue_.empty()) return;
+            for (auto& m : mergeQueue_) byLevel[m.level].push_back(std::move(m));
+            mergeQueue_.clear();
+        };
+        absorb();
+        auto pushCong = [&](PendingMerge c) { byLevel[c.level].push_back(std::move(c)); };
+        while (!byLevel.empty()) {
+            auto it = byLevel.begin();
+            PendingMerge req = std::move(it->second.front());
+            it->second.pop_front();
+            if (it->second.empty()) byLevel.erase(it);
+            auto r = applyMerge(std::move(req), pushCong);
+            if (r) return *r;
+            absorb();
+        }
     }
 
     // true/false conflict

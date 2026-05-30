@@ -37,6 +37,15 @@ public:
     // if any variable was eliminated.
     bool run();
 
+    // Enable general linear ±1-pivot elimination (XOLVER_PP_SOLVE_EQS_GAUSS).
+    // When on, the pass additionally solves a general linear equality
+    // Σ aᵢ·xᵢ = c for any variable xⱼ whose coefficient is ±1 (so the
+    // reconstruction xⱼ = ∓(Σᵢ≠ⱼ aᵢ·xᵢ − c) is exact and integer-preserving —
+    // no division introduced). This unlocks the Farkas-style `expr = expr`
+    // equalities that the bare-var path (`x = t`) cannot touch. Off by default;
+    // independently gated for ablation.
+    void setGeneralLinear(bool b) { generalLinear_ = b; }
+
     // Replace the IR assertion list with the substituted conjuncts.
     void commit();
 
@@ -60,6 +69,13 @@ private:
     // Substitute Variable named `name` by `replacement` throughout `e` (memoized).
     ExprId substitute(ExprId e, const std::string& name, ExprId replacement);
 
+    // General ±1-pivot elimination: if conjunct `idx` is a linear equality with
+    // a variable whose coefficient is ±1 (and that variable is safe to
+    // eliminate), isolate it, build the exact linear replacement, substitute it
+    // out, drop the equality, and register the elimination. Returns true on
+    // success (caller restarts the scan). Only fires when generalLinear_ is set.
+    bool tryGeneralEliminate(size_t idx);
+
     CoreIr& ir_;
     ModelConverter& mc_;
     SortId boolSortId_;
@@ -71,6 +87,7 @@ private:
     std::unordered_map<ExprId, ExprId> substMemo_;  // cleared per substitution
     size_t eliminated_ = 0;
     bool didRun_ = false;
+    bool generalLinear_ = false;     // XOLVER_PP_SOLVE_EQS_GAUSS
 };
 
 } // namespace xolver
