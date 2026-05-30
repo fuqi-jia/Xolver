@@ -165,6 +165,11 @@ private:
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
 
+    // #43: dedup pairs already emitted by getDeducedSharedEqualities under the
+    // CURRENT satFastModel_, so the combination loop terminates. Cleared every
+    // time satFastModel_ is reset (assignment change ⇒ deductions stale).
+    std::set<std::pair<SharedTermId, SharedTermId>> deducedSharedEqEmitted_;
+
     // V5: scope stack for push/pop
     std::vector<size_t> scopeStack_;
 
