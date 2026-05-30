@@ -1,0 +1,2 @@
+/mnt/d/D_Study/BUAA/projects/NLColver/benchmark/non-incremental/QF_NRA/20211101-Geogebra/IsoRightTriangle-Bottema1_12a.smt2
+/mnt/d/D_Study/BUAA/projects/NLColver/benchmark/non-incremental/QF_NRA/20211101-Geogebra/IsoRightTriangle-Bottema1_3a.smt2
