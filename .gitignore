@@ -169,3 +169,5 @@ results/
 # Master-side panda dispatch scripts (operator paths, local-only)
 tools/deploy_pandas.sh
 tools/collect_pandas.sh
+tools/deploy_pandas.ps1
+tools/collect_pandas.ps1
