@@ -201,6 +201,136 @@ TEST_CASE("NlaCut monotonicity-square: only-lo interval, no hi cut") {
     CHECK(cuts[0].rel == Relation::Geq);
 }
 
+// Phase B — Tangent cut for x^2.
+TEST_CASE("NlaCut tangentSquare: x^2 >= 2m*x - m^2 holds for any x") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    NlaCutGenerator gen(*k);
+
+    for (long m = -5; m <= 5; ++m) {
+        NlaCut cut = gen.tangentSquare(x, mpq_class(m), {lit(1)});
+        CHECK(cut.kind == NlaCutKind::Tangent);
+        CHECK(cut.rel == Relation::Geq);
+        CHECK(cut.reasons.size() == 1);
+        // Validate at every integer x in [-7, 7].
+        for (long xv = -7; xv <= 7; ++xv) {
+            std::unordered_map<std::string, mpz_class> env{{"x", mpz_class(xv)}};
+            INFO("m=" << m << " xv=" << xv);
+            CHECK(cutHoldsAt(*k, cut, env));
+        }
+    }
+}
+
+TEST_CASE("NlaCut tangentSquare is tight at x = m (cut value = 0)") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    NlaCutGenerator gen(*k);
+    NlaCut cut = gen.tangentSquare(x, mpq_class(4), {});
+    // (x - 4)^2 evaluated at x=4 is 0.
+    std::unordered_map<std::string, mpz_class> env{{"x", mpz_class(4)}};
+    auto v = k->evalInteger(cut.poly, env);
+    REQUIRE(v.has_value());
+    CHECK(*v == 0);
+}
+
+// Phase B — Proportional cut.
+TEST_CASE("NlaCut proportionalMultiply: (lhs <= rhs) * (z >= 0) ⇒ lhs*z <= rhs*z") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId b = k->mkVar(k->getOrCreateVar("b"));
+    PolyId z = k->mkVar(k->getOrCreateVar("z"));
+
+    VarInterval zInt;
+    zInt.varPoly = z;
+    zInt.lo = mpq_class(0);
+    zInt.reasons = {lit(42)};
+
+    NlaCutGenerator gen(*k);
+    auto out = gen.proportionalMultiply(a, b, lit(7), zInt);
+    REQUIRE(out.has_value());
+    CHECK(out->kind == NlaCutKind::Proportional);
+    CHECK(out->rel == Relation::Geq);
+    CHECK(out->reasons.size() == 2);
+    CHECK(hasReason(*out, lit(7)));
+    CHECK(hasReason(*out, lit(42)));
+
+    // Grid: for a, b in [-3..5] with a <= b, z in [0..4], the cut must hold.
+    for (long av = -3; av <= 5; ++av) {
+        for (long bv = av; bv <= 5; ++bv) {
+            for (long zv = 0; zv <= 4; ++zv) {
+                std::unordered_map<std::string, mpz_class> env{
+                    {"a", mpz_class(av)}, {"b", mpz_class(bv)}, {"z", mpz_class(zv)}};
+                INFO("av=" << av << " bv=" << bv << " zv=" << zv);
+                CHECK(cutHoldsAt(*k, *out, env));
+            }
+        }
+    }
+}
+
+TEST_CASE("NlaCut proportionalMultiply rejects negative-z interval (would flip)") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId a = k->mkVar(k->getOrCreateVar("a"));
+    PolyId b = k->mkVar(k->getOrCreateVar("b"));
+    PolyId z = k->mkVar(k->getOrCreateVar("z"));
+
+    VarInterval zInt;
+    zInt.varPoly = z;
+    zInt.lo = mpq_class(-2);   // negative — multiplying flips direction
+    zInt.reasons = {lit(1)};
+
+    NlaCutGenerator gen(*k);
+    auto out = gen.proportionalMultiply(a, b, lit(7), zInt);
+    CHECK(!out.has_value());
+}
+
+// Phase B — McCormick bilinear envelope.
+TEST_CASE("NlaCut mccormickBilinear: 4 envelope cuts hold on the rectangle") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    VarInterval xInt{x, mpq_class(-2), mpq_class(3), {lit(1)}};
+    VarInterval yInt{y, mpq_class(1),  mpq_class(4), {lit(2)}};
+
+    NlaCutGenerator gen(*k);
+    auto cuts = gen.mccormickBilinear(xInt, yInt);
+    REQUIRE(cuts.size() == 4);
+
+    for (long xv = -2; xv <= 3; ++xv) {
+        for (long yv = 1; yv <= 4; ++yv) {
+            std::unordered_map<std::string, mpz_class> env{
+                {"x", mpz_class(xv)}, {"y", mpz_class(yv)}};
+            for (size_t i = 0; i < cuts.size(); ++i) {
+                INFO("cut=" << i << " xv=" << xv << " yv=" << yv);
+                CHECK(cutHoldsAt(*k, cuts[i], env));
+            }
+        }
+    }
+}
+
+TEST_CASE("NlaCut mccormickBilinear: omits when bound missing") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    // No hi_x.
+    VarInterval xInt;
+    xInt.varPoly = x;
+    xInt.lo = mpq_class(0);
+    xInt.reasons = {lit(1)};
+    VarInterval yInt{y, mpq_class(0), mpq_class(4), {lit(2)}};
+
+    NlaCutGenerator gen(*k);
+    auto cuts = gen.mccormickBilinear(xInt, yInt);
+    CHECK(cuts.empty());
+}
+
 // Soundness grid — the math that the cuts encode is sound for all
 // integer assignments respecting the interval, by hand.
 TEST_CASE("NlaCut math grid: lo_x * lo_y <= x*y <= hi_x * hi_y on non-neg quadrant") {

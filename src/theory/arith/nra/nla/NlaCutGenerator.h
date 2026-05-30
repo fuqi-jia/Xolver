@@ -53,6 +53,49 @@ public:
     //                                                  bounds present)
     std::vector<NlaCut> monotonicitySquare(const VarInterval& xInt);
 
+    // Tangent linearisation of `x^2` at a model point m:
+    //   x^2 >= 2*m*x - m^2
+    // (derivation: (x - m)^2 >= 0 ⇒ x^2 - 2mx + m^2 >= 0). Always sound
+    // for any integer or rational m, any integer or rational x. Tight at
+    // x = m, looser elsewhere. The cut is unconditional — no precondition
+    // on x, no reasons inherited (the user passes in any reasons that
+    // motivated picking m via the second argument).
+    //
+    // Returned cut polynomial: x^2 - 2*m*x + m^2, rel Geq.
+    NlaCut tangentSquare(PolyId xPoly, const mpq_class& modelPoint,
+                         const std::vector<SatLit>& reasons);
+
+    // Proportional cut: from the *atom* `lhs <= rhs` (linked to a SatLit
+    // reason) and a non-negative interval on a multiplier `z` (lo_z >= 0),
+    // derive `lhs * z <= rhs * z`. Sound — multiplying both sides of an
+    // inequality by a non-negative quantity preserves direction.
+    //
+    // The atom is given by its two sides as polynomials; the SatLit
+    // justifying it goes into the cut's reason set together with
+    // zInt.reasons (deduped).
+    //
+    // Returned cut polynomial: rhs*z - lhs*z, rel Geq → rhs*z >= lhs*z.
+    // Caller-supplied skip when lo_z < 0 (would flip the inequality and
+    // is therefore unsound for this rule).
+    std::optional<NlaCut> proportionalMultiply(
+            PolyId lhsPoly, PolyId rhsPoly, SatLit atomReason,
+            const VarInterval& zInt);
+
+    // McCormick bilinear envelope for `x*y`. Given intervals
+    // [lo_x, hi_x] x [lo_y, hi_y], produces up to 4 linear cuts that
+    // jointly bound `x*y`:
+    //   under-estimators:  xy >= lo_x*y + x*lo_y - lo_x*lo_y
+    //                      xy >= hi_x*y + x*hi_y - hi_x*hi_y
+    //   over-estimators:   xy <= hi_x*y + x*lo_y - hi_x*lo_y
+    //                      xy <= lo_x*y + x*hi_y - lo_x*hi_y
+    //
+    // Sound for any quadrant — does NOT require non-negativity (unlike
+    // monotonicityProduct). The trade-off: McCormick cuts are linear
+    // (cheaper for downstream LRA/LIA propagators) but loose unless the
+    // interval is small.
+    std::vector<NlaCut> mccormickBilinear(const VarInterval& xInt,
+                                          const VarInterval& yInt);
+
 private:
     PolynomialKernel& kernel_;
 };
