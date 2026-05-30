@@ -290,7 +290,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 #endif
 
     NO_DBG << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
-    if (!tr.reason.empty()) NO_DBG << " reason=" << tr.reason;
+    if (!tr.reason.empty()) { NO_DBG << " reason=" << tr.reason; }
     NO_DBG << " us=" << dur.count();
     NO_DBG << "\n";
 

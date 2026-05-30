@@ -17,10 +17,6 @@ namespace {
 
 using Term = PolynomialKernel::MonomialTerm;
 
-bool isPow2(const mpz_class& v) {
-    return v > 0 && mpz_popcount(v.get_mpz_t()) == 1;
-}
-
 // Reduce a into [0, m).
 mpz_class modPos(const mpz_class& a, const mpz_class& m) {
     mpz_class r = a % m;
