@@ -48,6 +48,7 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
         earlyInfeas_ = cfg_.earlyInfeas;
         pruneIntervals_ = cfg_.pruneIntervals;
         earlyInfeasSafe_ = cfg_.earlyInfeasSafe;
+        inloopPrune_ = cfg_.inloopPrune;
     } else {
         buildOk_ = false;
     }
@@ -168,6 +169,35 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     long iterCount = 0;
     bool levelEarlyHit = false;   // any EARLY_INFEAS hit at this level (#48 fix)
 
+    // In-loop interval pruning (#49, default OFF). After each cell add, check
+    // the newest cell vs existing: drop the new if subsumed by an existing
+    // one; drop existing ones subsumed by the new. cov stays consistent
+    // (it unions all intervals; dropping subsumed entries from cellsList
+    // doesn't affect coverage, just propagation size).
+    auto inloopPruneNew = [&]() {
+        if (!inloopPrune_ || cellsList.size() < 2) return;
+        const size_t newIdx = cellsList.size() - 1;
+        const LocalCell& fresh = cellsList[newIdx];
+        // Pass 1: new vs existing — if new subsumed by ANY, drop new.
+        for (size_t i = 0; i < newIdx; ++i) {
+            if (intervalSubsumes(cellsList[i].interval, fresh.interval)) {
+                cellsList.pop_back();
+                return;
+            }
+        }
+        // Pass 2: new subsumes any existing — drop existing in-place.
+        LocalCell newCopy = std::move(cellsList.back());
+        cellsList.pop_back();
+        size_t outIdx = 0;
+        for (size_t i = 0; i < cellsList.size(); ++i) {
+            if (intervalSubsumes(newCopy.interval, cellsList[i].interval)) continue;
+            if (outIdx != i) cellsList[outIdx] = std::move(cellsList[i]);
+            ++outIdx;
+        }
+        cellsList.resize(outIdx);
+        cellsList.push_back(std::move(newCopy));
+    };
+
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
         if (++iterCount > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; markIncomplete("cell-budget"); return out; }
         bool convExact = true;
@@ -219,6 +249,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 // cannot cross it as if nullification held on a whole sector.
                 cov.add(CacInterval::all());
                 cellsList.push_back({CacInterval::all(), std::move(violated), std::move(violatedIdx)});
+                inloopPruneNew();
                 sample.pop();
                 continue;
             }
@@ -298,6 +329,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         if (!cr.supported) { out.status = CacStatus::Unknown; markIncomplete(isLeaf ? "interval-unsupported-leaf" : "interval-unsupported-nonleaf"); return out; }
         cov.add(cr.interval);
         cellsList.push_back({cr.interval, std::move(cellBoundaries), std::move(cellOrigins)});
+        inloopPruneNew();
     }
 
     // Prune subsumed cells (Track 2 #40, XOLVER_NRA_CAC_PRUNE_INTERVALS, default

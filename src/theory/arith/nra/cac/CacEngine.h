@@ -110,6 +110,15 @@ public:
         // (broad-714 was -10 decisions). Flip ON via
         // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE for extended-wall configs.
         bool earlyInfeasSafe = false;
+        // Track C round 2 (#49): in-loop interval pruning. Extends #40's
+        // post-loop subsumption prune by checking each newly added cell vs
+        // existing cells INSIDE the while loop. Subsumed cells are dropped
+        // from cellsList immediately so it stays minimal during the loop —
+        // smaller levelChar at flatten, smaller parent Lazard projection
+        // input. cov stays consistent (merged() unions all intervals;
+        // dropping subsumed entries doesn't affect coverage). Default OFF;
+        // NraSolver flips it from XOLVER_NRA_CAC_INLOOP_PRUNE.
+        bool inloopPrune = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -161,6 +170,7 @@ private:
     bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
     bool pruneIntervals_ = false;    // XOLVER_NRA_CAC_PRUNE_INTERVALS gate
     bool earlyInfeasSafe_ = false;   // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE gate (#48 injection)
+    bool inloopPrune_ = false;       // XOLVER_NRA_CAC_INLOOP_PRUNE gate (#49)
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;
