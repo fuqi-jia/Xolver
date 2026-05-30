@@ -86,7 +86,7 @@ struct TryLocalProjectionResult {
     bool generatedProjectionPolys = false;
 };
 
-static TryLocalProjectionResult tryLocalProjection(
+[[maybe_unused]] static TryLocalProjectionResult tryLocalProjection(
     const std::vector<CdcacConstraint>& constraints,
     const SamplePoint& prefix,
     VarId var,
