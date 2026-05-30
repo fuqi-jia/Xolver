@@ -140,6 +140,21 @@ private:
     std::unordered_set<uint64_t> diseqBranchAuthorized_;
     bool safeMode_ = false;
     bool ultraSafeMode_ = false;
+    // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): augment getDeducedSharedEqualities
+    // with transitive closure of the variable-variable implied-eq graph. Closes
+    // chains x = z and z = y -> x = y over the shared-var graph; reasons are the
+    // union of SatLits along the BFS path. Sound by construction.
+    // Also gates the LP-duality probe used by the interfaceDisequalities
+    // conflict check (Track B fix: extend conflict detection beyond
+    // proveFixedValue, mirror of LRA's Track A — needed for Wisa-class
+    // pinnings that proveFixedValue's "row vars all fixed" recursion misses).
+    bool impliedEqEnabled_ = false;
+
+    // Track A mirror in LIA: per-pair LP-duality probe. Returns true and fills
+    // outReasons with the (filtered) Farkas reasons if the polyhedron pins
+    // (aux value) == 0; else false. Same RAII / conflict-state-clear /
+    // marker-bound-filter discipline as LraSolver::tryProvePairEqualityByLpDuality.
+    bool tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons);
     mutable int dumpCounter_ = 0;
 
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);

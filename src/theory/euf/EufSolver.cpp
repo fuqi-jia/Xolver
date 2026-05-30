@@ -15,6 +15,7 @@ namespace xolver {
 EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
     eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
+    ufModelEnabled_ = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
     initializeBoolConstants();
 }
 
@@ -1015,7 +1016,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // satisfying assignment. After solve() returns, the egraph is rolled back
     // and select/bridge merges are lost, so getModel() reads this snapshot.
     // Only at Full effort (a complete model check) is the state authoritative.
-    if (arrayMode_ && effort == TheoryEffort::Full) {
+    if ((arrayMode_ || (ufModelEnabled_ && sharedTermRegistry_)) &&
+        effort == TheoryEffort::Full) {
         modelSnapshot_ = buildModel();
     }
 
@@ -1182,40 +1184,59 @@ std::optional<TheorySolver::TheoryModel> EufSolver::getModel() const {
     return buildModel();
 }
 
-std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
-    if (!arrayMode_ || !coreIr_) return std::nullopt;
-
-    TheoryModel model;
-
-    // Token for an eclass, in the ArithModelValidator's CANONICAL namespaced
-    // form so the validator's asToken() and these tokens compare identically:
-    //   numeric literal  -> "#n:<canonical-rational>"
-    //   bool literal      -> "#b:1" / "#b:0"
-    //   otherwise         -> opaque per-class marker "@e<rep>"
-    // Index/element sorts may be uninterpreted; equality-by-token is exactly
-    // the QF_AX semantics.
-    auto classToken = [&](EufTermId t) -> std::string {
-        if (t == NullEufTerm) return "@nil";
-        EClassId rep = egraph_.rep(t);
-        for (EufTermId m : egraph_.classMembers(rep)) {
-            const auto& mn = termManager_.node(m);
-            if (mn.origin == NullExpr) continue;
-            if (mn.origin == TrueSentinelExpr || mn.origin == FalseSentinelExpr) continue;
-            const auto& e = coreIr_->get(mn.origin);
-            if (e.isConst()) {
-                if (auto* i = std::get_if<int64_t>(&e.payload.value))
-                    return "#n:" + mpq_class(*i).get_str();
-                if (auto* b = std::get_if<bool>(&e.payload.value))
-                    return std::string("#b:") + (*b ? "1" : "0");
-                if (auto* s = std::get_if<std::string>(&e.payload.value)) {
-                    // Numeric literal stored as string (Int/Real const).
-                    try { return "#n:" + mpq_class(*s).get_str(); } catch (...) {}
-                    return *s;
-                }
+// Canonical class token in the ArithModelValidator's namespaced form so the
+// validator's asToken() and these tokens compare identically:
+//   numeric literal  -> "#n:<canonical-rational>"
+//   bool literal      -> "#b:1" / "#b:0"
+//   otherwise         -> opaque per-class marker "@e<rep>"
+// Index/element sorts may be uninterpreted; equality-by-token is exactly the
+// QF_AX semantics (and, for Track 3, the UF argument/value identity).
+std::string EufSolver::classToken(EufTermId t) const {
+    if (t == NullEufTerm) return "@nil";
+    EClassId rep = egraph_.rep(t);
+    for (EufTermId m : egraph_.classMembers(rep)) {
+        const auto& mn = termManager_.node(m);
+        if (mn.origin == NullExpr) continue;
+        if (mn.origin == TrueSentinelExpr || mn.origin == FalseSentinelExpr) continue;
+        const auto& e = coreIr_->get(mn.origin);
+        if (e.isConst()) {
+            if (auto* i = std::get_if<int64_t>(&e.payload.value))
+                return "#n:" + mpq_class(*i).get_str();
+            if (auto* b = std::get_if<bool>(&e.payload.value))
+                return std::string("#b:") + (*b ? "1" : "0");
+            if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                // Numeric literal stored as string (Int/Real const).
+                try { return "#n:" + mpq_class(*s).get_str(); } catch (...) {}
+                return *s;
             }
         }
-        return "@e" + std::to_string(rep);
-    };
+    }
+    return "@e" + std::to_string(rep);
+}
+
+std::string EufSolver::sortName(SortId s) const {
+    auto sk = coreIr_->sortKind(s);
+    if (sk == SortKind::Int) return "Int";
+    if (sk == SortKind::Real) return "Real";
+    if (sk == SortKind::Bool) return "Bool";
+    return "U" + std::to_string(s);
+}
+
+std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
+    if (!coreIr_) return std::nullopt;
+    TheoryModel model;
+    if (arrayMode_) buildArrayModel(model);
+    // Track 3: token-keyed UF interps for combination model validation. Scoped
+    // to combination (sharedTermRegistry_); pure QF_UF gets them from CMS.
+    if (ufModelEnabled_ && sharedTermRegistry_) collectFunctionInterps(model);
+    if (model.arrayInterps.empty() && model.functionInterps.empty() &&
+        model.assignments.empty() && model.numericAssignments.empty())
+        return std::nullopt;
+    return model;
+}
+
+void EufSolver::buildArrayModel(TheoryModel& model) const {
+    if (!arrayMode_ || !coreIr_) return;
 
     // Group array variables by eclass so equal arrays share one interp.
     // Identify array variables in the CoreIr (Variable nodes with array sort).
@@ -1228,14 +1249,6 @@ std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
         std::unordered_set<EClassId> seenIdxClass;
     };
     std::unordered_map<EClassId, ArrBuild> byClass;
-
-    auto sortName = [&](SortId s) -> std::string {
-        auto sk = coreIr_->sortKind(s);
-        if (sk == SortKind::Int) return "Int";
-        if (sk == SortKind::Real) return "Real";
-        if (sk == SortKind::Bool) return "Bool";
-        return "U" + std::to_string(s);
-    };
 
     // Collect every array variable EufTermId.
     std::vector<std::pair<std::string, EufTermId>> arrayVars;
@@ -1250,7 +1263,7 @@ std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
         if (t == NullEufTerm) continue;
         arrayVars.push_back({std::get<std::string>(e.payload.value), t});
     }
-    if (arrayVars.empty()) return std::nullopt;
+    if (arrayVars.empty()) return;
 
     // Seed an ArrBuild per array class, recording sorts + const default.
     for (const auto& [name, t] : arrayVars) {
@@ -1312,7 +1325,7 @@ std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
         model.arrayInterps[name] = std::move(ai);
     }
 
-    if (model.arrayInterps.empty()) return std::nullopt;
+    if (model.arrayInterps.empty()) return;
 
     // Scalar token assignments for every non-array, non-bool variable that the
     // egraph knows about (index/element vars). The validator needs these to
@@ -1341,8 +1354,77 @@ std::optional<TheorySolver::TheoryModel> EufSolver::buildModel() const {
         }
         model.assignments[name] = classToken(t);
     }
+}
 
-    return model;
+void EufSolver::collectFunctionInterps(TheoryModel& model) const {
+    if (!coreIr_) return;
+
+    // One FuncInterp per uninterpreted function symbol, keyed on the argument
+    // CLASS TOKENS (canonical "#n:.."/"#b:.."/"@e.." form). Congruence closure
+    // guarantees the table is a genuine function: two applications whose args
+    // lie in the same classes are themselves congruent (same class), so they
+    // produce identical arg-token tuples AND identical value tokens. The only
+    // way the post-remap table (TheoryManager::getModel) could become
+    // inconsistent is two DISTINCT classes collapsing to one arith number; the
+    // remap's @CONFLICT guard + the per-function consistency check there reject
+    // that, so an unsound interp is dropped (-> validator Indeterminate -> floor)
+    // rather than confirming a wrong model.
+    for (EufTermId t = 0; t < static_cast<EufTermId>(termManager_.termCount()); ++t) {
+        const auto& n = termManager_.node(t);
+        if (n.args.empty()) continue;            // not an application
+        if (n.origin == NullExpr) continue;
+        const auto& oe = coreIr_->get(n.origin);
+        if (oe.kind != Kind::UFApply) continue;  // only genuine UF applications
+        if (!std::holds_alternative<std::string>(oe.payload.value)) continue;
+        const std::string& fname = std::get<std::string>(oe.payload.value);
+
+        auto& fi = model.functionInterps[fname];
+        if (fi.argSorts.empty() && !n.args.empty()) {
+            for (EufTermId a : n.args)
+                fi.argSorts.push_back(sortName(termManager_.node(a).sort));
+            fi.retSort = sortName(n.sort);
+            // Empty default: a tuple absent from the table -> the validator's
+            // UFApply lookup sees an empty value -> Indeterminate (sound floor),
+            // never a guessed value. Every UFApply in the ground assertions was
+            // interned, so the table is complete for what the validator evaluates.
+            fi.deflt = "";
+        }
+        TheoryModel::FuncEntry entry;
+        entry.args.reserve(n.args.size());
+        for (EufTermId a : n.args) entry.args.push_back(classToken(a));
+        entry.value = classToken(t);
+        bool dup = false;
+        for (const auto& ex : fi.entries)
+            if (ex.args == entry.args) { dup = true; break; }
+        if (!dup) fi.entries.push_back(std::move(entry));
+    }
+
+    if (model.functionInterps.empty()) return;
+
+    // Emit scalar var -> class-token assignments for every interned, non-array,
+    // non-bool variable the egraph knows (incl. purification vars that appear as
+    // UF arguments). TheoryManager::getModel pairs these tokens with the arith
+    // model's numeric value to remap the function-interp arg/value tokens to the
+    // bare rationals the validator expects. (Same mechanism the array path uses.)
+    for (ExprId id = 0; id < static_cast<ExprId>(coreIr_->size()); ++id) {
+        const auto& e = coreIr_->get(id);
+        if (e.kind != Kind::Variable) continue;
+        if (coreIr_->arraySortParams(e.sort)) continue;
+        if (!std::holds_alternative<std::string>(e.payload.value)) continue;
+        const std::string& name = std::get<std::string>(e.payload.value);
+        if (model.assignments.count(name)) continue;
+        EufTermId t = termManager_.findTerm(id);
+        if (t == NullEufTerm) continue;
+        auto sk = coreIr_->sortKind(e.sort);
+        if (sk == SortKind::Bool) {
+            if (trueTerm_ != NullEufTerm && egraph_.same(t, trueTerm_))
+                model.assignments[name] = "true";
+            else if (falseTerm_ != NullEufTerm && egraph_.same(t, falseTerm_))
+                model.assignments[name] = "false";
+            continue;
+        }
+        model.assignments[name] = classToken(t);
+    }
 }
 
 void EufSolver::tryEvaluateBuiltin(EufTermId t) {

@@ -855,6 +855,98 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             if (num != "@CONFLICT" && numCount[num] > 1) num = "@CONFLICT";
     }
 
+    // Track 3 (XOLVER_EUF_UF_MODEL): extend tokenToNum + numericAssignments for
+    // opaque numeric scalars that still carry an unresolved "@e.." token after
+    // the arith-backed remap. EUF tracks them only by eclass identity (no arith
+    // value), so the validator's UFApply lookup against the EUF-built table
+    // would never match the computed args. Mint a DISTINCT integer per distinct
+    // unresolved token, avoiding numbers already claimed by constrained
+    // scalars/literals (preserves disequalities); write into:
+    //   - tokenToNum: so the toBare remap rewrites function-interp arg/value
+    //     tokens to bare rationals.
+    //   - numericAssignments: so the validator's typed channel computes the
+    //     SAME value for the original-formula arg expression.
+    // Sound: only ever turns a Satisfied into a Violated (over-floors) when a
+    // constraint we missed exists; never the other way. Skips @CONFLICT tokens
+    // (distinctness was already violated; leaving them opaque correctly defeats
+    // the UFApply lookup -> Indeterminate -> floor). Gated on:
+    //   - functionInterps non-empty (only matters for UF table consistency)
+    //   - arrayInterps empty (array combination has axiom-pinned "unconstrained"
+    //     scalars whose mint would falsify Row2 — alra_010 class; recovery there
+    //     needs real array-aware model construction, not scalar minting).
+    static const bool t3UfMint = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    if (t3UfMint && !aggregated.functionInterps.empty() &&
+        aggregated.arrayInterps.empty()) {
+        std::unordered_set<long long> usedNums;
+        auto noteRat = [&](const std::string& v) {
+            std::string body = v.rfind("#n:", 0) == 0 ? v.substr(3) : v;
+            if (body.empty()) return;
+            try {
+                mpq_class q(body);
+                if (q.get_den() == 1 && q.get_num().fits_slong_p())
+                    usedNums.insert(q.get_num().get_si());
+            } catch (...) {}
+        };
+        for (const auto& [n, v] : aggregated.assignments) { (void)n; noteRat(v); }
+        for (const auto& [tok, num] : tokenToNum)
+            if (num != "@CONFLICT") noteRat(num);
+
+        // Distinct unresolved opaque tokens reached via scalar assignments, with
+        // the FIRST var name per token (deterministic) for numericAssignments.
+        std::vector<std::pair<std::string, std::string>> mintTargets;
+        std::unordered_set<std::string> seenTok;
+        for (const auto& [name, val] : aggregated.assignments) {
+            if (val.empty() || val[0] != '@') continue;
+            if (tokenToNum.count(val)) continue;
+            if (!seenTok.insert(val).second) continue;
+            mintTargets.push_back({val, name});
+        }
+        long long nextFree = 0;
+        for (const auto& [tok, name] : mintTargets) {
+            while (usedNums.count(nextFree)) ++nextFree;
+            long long v = nextFree++;
+            usedNums.insert(v);
+            std::string canon = "#n:" + std::to_string(v);
+            tokenToNum.emplace(tok, canon);
+            try {
+                aggregated.numericAssignments.emplace(
+                    name, RealValue::fromMpq(mpq_class(std::to_string(v))));
+            } catch (...) {}
+        }
+
+        // Chain-mint: opaque tokens that appear inside functionInterps but are
+        // NOT var-backed (UF-application class tokens). Without this, a chained
+        // f(g(x)) table -- where g's interp value is "@e.." and f's interp arg
+        // is "@e.." -- can't bridge: the validator's recursive eval gets g(x)=N
+        // via the table (g's value resolved), then looks up f's table with arg=N
+        // but the entry key is still "@e..". Minting distinct numbers per
+        // distinct chain token (preserving disequality) keeps the table
+        // internally consistent so f's entry now keys on the SAME number g
+        // returned. tokenToNum-only (no var name to backfill numericAssignments).
+        std::vector<std::string> chainTokens;
+        std::unordered_set<std::string> seenChain;
+        auto consider = [&](const std::string& s) {
+            if (s.empty() || s[0] != '@') return;
+            if (tokenToNum.count(s)) return;
+            if (!seenChain.insert(s).second) return;
+            chainTokens.push_back(s);
+        };
+        for (const auto& [fname, fi] : aggregated.functionInterps) {
+            (void)fname;
+            for (const auto& e : fi.entries) {
+                for (const auto& a : e.args) consider(a);
+                consider(e.value);
+            }
+            consider(fi.deflt);
+        }
+        for (const auto& tok : chainTokens) {
+            while (usedNums.count(nextFree)) ++nextFree;
+            long long v = nextFree++;
+            usedNums.insert(v);
+            tokenToNum.emplace(tok, "#n:" + std::to_string(v));
+        }
+    }
+
     auto remap = [&](std::string& v) {
         auto it = tokenToNum.find(v);
         if (it != tokenToNum.end() && it->second != "@CONFLICT") v = it->second;
@@ -865,6 +957,50 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     for (auto& [name, ai] : aggregated.arrayInterps) {
         remap(ai.defaultVal);
         for (auto& [idx, elem] : ai.entries) { remap(idx); remap(elem); }
+    }
+
+    // Track 3 (XOLVER_EUF_UF_MODEL): remap token-keyed UF interpretations to the
+    // bare-rational keys ArithModelValidator expects. The validator evaluates
+    // each UFApply argument to mpq::get_str() and matches entry.args EXACTLY, so
+    // arg/value tokens must become bare:
+    //   - remap() turns an opaque "@e.." into "#n:<rat>" when that class has a
+    //     UNIQUE arith value (conflict-/distinctness-guarded above); we then strip
+    //     the "#n:" prefix.
+    //   - a numeric-literal token "#n:.." strips directly; bool "#b:1"/"#b:0" ->
+    //     "1"/"0"; an opaque token with no resolved number stays "@e.." (its
+    //     entry then never matches a Number arg — harmless, falls to deflt).
+    // CMS-format interps (already bare rationals) pass through unchanged (the
+    // remap is idempotent on a bare rational). No-op when no function interps.
+    if (!aggregated.functionInterps.empty()) {
+        auto toBare = [&](std::string& v) {
+            remap(v);
+            if (v.rfind("#n:", 0) == 0) v = v.substr(3);
+            else if (v == "#b:1") v = "1";
+            else if (v == "#b:0") v = "0";
+        };
+        std::vector<std::string> dropFns;
+        for (auto& [fname, fi] : aggregated.functionInterps) {
+            for (auto& e : fi.entries) {
+                for (auto& a : e.args) toBare(a);
+                toBare(e.value);
+            }
+            toBare(fi.deflt);
+            // Soundness backstop: if after the remap two entries share an identical
+            // argument tuple but disagree on the value, the table is not a function
+            // (distinct EUF classes collapsed onto one arith number despite the
+            // @CONFLICT guard — e.g. a literal token vs an opaque token). Drop the
+            // whole interp so the validator floors (Indeterminate) rather than
+            // confirming against an inconsistent table.
+            bool inconsistent = false;
+            for (size_t i = 0; i < fi.entries.size() && !inconsistent; ++i)
+                for (size_t j = i + 1; j < fi.entries.size(); ++j)
+                    if (fi.entries[i].args == fi.entries[j].args &&
+                        fi.entries[i].value != fi.entries[j].value) {
+                        inconsistent = true; break;
+                    }
+            if (inconsistent) dropFns.push_back(fname);
+        }
+        for (const auto& f : dropFns) aggregated.functionInterps.erase(f);
     }
 
     // ---- Unconstrained-scalar model completion (numericAssignments backfill) ----
