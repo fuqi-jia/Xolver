@@ -38,6 +38,8 @@ LiaSolver::LiaSolver() {
     repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
     const char* cutsEnv = std::getenv("XOLVER_LIA_CUTS");
     cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
+    const char* gmiEnv = std::getenv("XOLVER_LIA_GMI_CUTS");
+    gmiCutsEnabled_ = (gmiEnv && *gmiEnv && *gmiEnv != '0');
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
@@ -860,7 +862,14 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     }
     if (terms.empty()) return std::nullopt;
 
-    auto cutOpt = deriveGomoryCut(f0, terms);
+    // GMI (XOLVER_LIA_GMI_CUTS) folds continuous nonbasics into the cut instead
+    // of bailing; the pure fractional cut requires every term integer. Both
+    // return the same {gamma>=0, rhs>0} shape, so the back-substitution below is
+    // shared. The coefficient bit-cap further down rejects any blown-up cut
+    // (GMI's f0/(1-f0) factor can compound rationals) so the exact simplex never
+    // bogs down.
+    auto cutOpt = gmiCutsEnabled_ ? deriveGmiCut(f0, terms)
+                                  : deriveGomoryCut(f0, terms);
     if (!cutOpt) return std::nullopt;              // non-integer term / vacuous
 
     // Re-express Σ gamma_j y_j >= R over original variables:

@@ -56,4 +56,27 @@ mpq_class gmiFractionalPart(const mpq_class& q);
 std::optional<GomoryCutResult> deriveGomoryCut(const mpq_class& f0,
                                                const std::vector<GmiNonbasicTerm>& terms);
 
+// ---------------------------------------------------------------------------
+// Gomory Mixed-Integer (GMI) cut — the strict generalization of the pure
+// fractional cut above. Same row orientation:
+//     x_i = beta_i + Σ_j chat_j * y_j ,   y_j = (x_j - bound_j) >= 0 ,
+// x_i constrained integer, f0 = frac(beta_i) ∈ (0,1). Mapping to the standard
+// tableau form x_B = b̄ - Σ ā_j x_j gives ā_j = -chat_j. The GMI cut is
+//     Σ_j psi_j * y_j >= f0 ,   psi_j >= 0 ,
+// with, for f_j = frac(ā_j) = frac(-chat_j):
+//     integer y_j  : psi_j = f_j                       if f_j <= f0
+//                    psi_j = (f0/(1-f0)) * (1 - f_j)    if f_j  > f0
+//     continuous y_j: psi_j = ā_j                       if ā_j >= 0
+//                     psi_j = (f0/(1-f0)) * (-ā_j)       if ā_j  < 0
+//
+// Unlike the pure cut, GMI NEVER bails on a continuous (non-integer) nonbasic
+// — it folds it in via the continuous branch — and is at least as tight on
+// integer nonbasics. At the current point (all y_j = 0) the LHS is 0 < f0, so
+// the cut is violated; validity for every integer-x_i / y_j>=0 assignment is
+// the classical GMI theorem (brute-force verified in the unit tests, exactly
+// like deriveGomoryCut). Returns nullopt only when the cut is vacuous (all
+// psi_j == 0), i.e. it carries no information beyond the row equation.
+std::optional<GomoryCutResult> deriveGmiCut(const mpq_class& f0,
+                                            const std::vector<GmiNonbasicTerm>& terms);
+
 } // namespace xolver
