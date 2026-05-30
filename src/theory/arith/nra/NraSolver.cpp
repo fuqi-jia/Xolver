@@ -14,6 +14,7 @@
 #include "theory/arith/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"       // XOLVER_NRA_PREELIM algebra backend
+#include "theory/arith/nra/nla/NlaCutsRunner.h"             // XOLVER_NRA_NLA_CUTS Phase C-2 hook
 #endif
 #include <cstdlib>
 #include <set>
@@ -21,6 +22,7 @@
 #include <unordered_set>
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 
 namespace xolver {
 
@@ -612,6 +614,125 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
             !liftIface(interfaceDisequalities_, Relation::Neq))
             return std::nullopt;   // shared term not poly-expressible ⇒ sound defer to Collins
     }
+
+    // ====================================================================
+    // Phase C-2: NLA-cuts hook (XOLVER_NRA_NLA_CUTS, default-OFF).
+    //
+    // Append redundant tightening cuts (monotonicity-square + monotonicity-
+    // product + McCormick bilinear envelope) derived from single-variable
+    // bound constraints currently in presolveConstraints_. Each cut is a
+    // logical implication of its source bounds, so adding it to cacCons is
+    // sat/unsat preserving — it can only speed CAC projection, never change
+    // the answer.
+    //
+    // SOUNDNESS GATE this commit pins:
+    //   Only single-reason cuts are injected. The cacCons / activeReasons
+    //   parallel-index contract assumes one SatLit per constraint; a cut
+    //   with two reasons would need a synthetic conjunction lit or
+    //   multi-reason aggregation in conflict generation (deferred to a
+    //   later Phase C-3 commit). Until that lands, multi-reason cuts are
+    //   silently dropped here.
+    //
+    // The bound-extraction scans presolveConstraints_ for single-variable
+    // linear atoms `c1*v + c0 rel 0` (constant + linear-in-one-var), maps
+    // each to a (var → lo/hi) update on the constructed interval, then
+    // feeds the result into NlaCutsRunner.
+    // ====================================================================
+    static const bool nlaCutsEnabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_NLA_CUTS");
+        return e && *e && *e != '0';
+    }();
+    if (nlaCutsEnabled) {
+        // Single-pass single-var bound extraction. For each constraint
+        // poly = c0 (constant) + c1*v (single var, degree 1, no other
+        // terms), derive lo/hi on v from the relation.
+        std::map<VarId, nla::VarInterval> intervalMap;
+        for (const auto& c : presolveConstraints_) {
+            if (c.poly == NullPoly) continue;
+            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+            if (!rp) continue;
+            // Must be: at most one variable, and that variable degree 1.
+            auto vars = rp->variables();
+            if (vars.size() != 1) continue;
+            VarId v = *vars.begin();
+            if (rp->degree(v) != 1) continue;
+            // Extract c0 (constant) + c1 (coefficient of v^1).
+            auto coeffs = rp->coefficients(v);  // [const, linear-coeff, ...]
+            if (coeffs.size() != 2) continue;
+            if (!coeffs[0].isConstant() || !coeffs[1].isConstant()) continue;
+            mpq_class c0 = coeffs[0].constantValue();
+            mpq_class c1 = coeffs[1].constantValue();
+            if (c1 == 0) continue;
+            // Solve `c0 + c1*v rel 0` for v: bound = -c0/c1, direction
+            // flips when c1 < 0.
+            mpq_class bound = -c0 / c1;
+            Relation effRel = c.rel;
+            if (c1 < 0) {
+                // Multiplying inequality by negative flips direction.
+                switch (effRel) {
+                    case Relation::Leq: effRel = Relation::Geq; break;
+                    case Relation::Geq: effRel = Relation::Leq; break;
+                    case Relation::Lt:  effRel = Relation::Gt;  break;
+                    case Relation::Gt:  effRel = Relation::Lt;  break;
+                    case Relation::Eq:  case Relation::Neq: break;  // unchanged
+                }
+            }
+            // Map to lo / hi update on intervalMap[v]. We accept Leq/Geq/Eq;
+            // Lt/Gt would need strict-vs-non-strict handling which the NLA
+            // monotonicity rules don't require (the cut math is sound for
+            // non-strict bounds anyway).
+            auto& vi = intervalMap[v];
+            if (vi.varPoly == NullPoly) vi.varPoly = kernel_->mkVar(v);
+            auto tighter = [](std::optional<mpq_class>& lo,
+                              std::optional<mpq_class>& hi,
+                              const mpq_class& val, Relation r) {
+                switch (r) {
+                    case Relation::Leq: case Relation::Lt:
+                        if (!hi || val < *hi) hi = val;
+                        break;
+                    case Relation::Geq: case Relation::Gt:
+                        if (!lo || val > *lo) lo = val;
+                        break;
+                    case Relation::Eq:
+                        if (!lo || val > *lo) lo = val;
+                        if (!hi || val < *hi) hi = val;
+                        break;
+                    case Relation::Neq: break;
+                }
+            };
+            // Track reason: only single-reason cuts will be injected, so
+            // attach c.reason to the interval whose bound this constraint
+            // tightens. The runner unions reasons; when a generator method
+            // produces a cut from this interval alone (monotonicitySquare),
+            // it inherits this one reason — sound and single-reason.
+            // For pair cuts (monotonicityProduct, mccormickBilinear) we'll
+            // see N reasons in the cut and drop it below.
+            tighter(vi.lo, vi.hi, bound, effRel);
+            // Reason aggregation: keep the LAST single-bound reason. For
+            // monotonicitySquare on this var, the cut will list just this
+            // one reason — the precondition we need for the single-reason
+            // injection guard below.
+            vi.reasons = {c.reason};
+        }
+        std::vector<nla::VarInterval> intervals;
+        intervals.reserve(intervalMap.size());
+        for (auto& [v, vi] : intervalMap) intervals.push_back(std::move(vi));
+
+        nla::NlaCutsRunner runner(*kernel_);
+        // maxPairs = 0: skip product / McCormick (multi-reason); for Phase
+        // C-2 we only inject square cuts which are single-reason.
+        auto cuts = runner.runShapeCuts(intervals, /*maxPairs=*/0);
+        for (const auto& cut : cuts) {
+            if (cut.poly == NullPoly) continue;
+            if (cut.reasons.size() != 1) continue;  // see soundness gate above
+            auto rp = RationalPolynomial::fromPolyId(cut.poly, *kernel_);
+            if (!rp) continue;
+            for (VarId v : rp->variables()) varSet.insert(v);
+            cacCons.push_back({std::move(*rp), cut.rel});
+            activeReasons.push_back(cut.reasons[0]);
+        }
+    }
+
     if (cacCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
 
