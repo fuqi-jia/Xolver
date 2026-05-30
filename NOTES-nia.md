@@ -672,6 +672,74 @@ combination cases gated by the EQNA opp-polarity/backtrack-sync floor — same b
 vs z3 through the EUF+NIA combination path; point modular/GCD/CDCAC at the 7 unsat THERE,
 not standalone. No NIA-side code change possible/needed pre-fix. Harness kept in /tmp/nia7.
 
+## ★ ZOHAR BWI PLUGIN — Track A Phase 1+2 SHIPPED, recovery insufficient (2026-05-30)
+
+Built ZoharBwiAxiomEmitter (#40 master Track A) for the 471-case Zohar/Niemetz
+CADE-27 (2019) BWI corpus (471 = 179 alive + 292 ic; QF_UFNIA only, 0 in
+QF_NIA — corpus profiled at docs/nia/zohar_axiom_profile.md). Plugin is a
+frontend preprocess pass that detects the pow2/intand/intor/intxor UF
+signature and injects sound axioms for the standard interpretation.
+
+SHIPPED:
+- Phase 1 (commit 56943b9): ground (= (pow2 0) 1) + per-term
+  (=> (>= t 0) (>= (pow2 t) 1)). 5 sanity tests pin axiom soundness
+  vs z3's view of pow2.
+- Phase 2 (commit 9ea64d3): pow2 recursion (=> (>= x 0)
+  (= (pow2 (+ x 1)) (* 2 (pow2 x)))) triggered when both (pow2 x) and
+  (pow2 (+ x 1)) appear, plus intand/intor/intxor bounded axioms (every
+  bound conditional on operands >= 0). +5 sanity tests (10 total).
+- Hash-cons + isOne fix (commit ea8955a): plugin now mints axiom atoms via
+  a find-or-create over the existing IR (scan O(N) per mint), so axiom
+  atoms share ExprIds (and thus SAT vars) with structurally-equal user
+  atoms. Also fixed addOnePredecessor to accept ConstReal/ConstInt with
+  string payload "1" (the parser's pre-ArithCastNormalizer form for
+  literal 1, which kept the recursion trigger from ever firing). Both
+  together turn the minimal recursion test (>= k 0) ∧ ¬(pow2(k+1) =
+  2*pow2(k)) from sat (Phase 2 pre-fix) → unsat (after fix), confirming
+  the axiom emission + atom-sharing now actually drives Boolean-layer
+  refutation without needing EUF UF-model channel.
+- Phase 3 contract pinned at docs/nia/ZOHAR_PHASE3_CONTRACT.md (local;
+  docs are .gitignored per c53ee34).
+- DIAG env var XOLVER_NIA_ZOHAR_DIAG to print axiom counts + trigger
+  firings for debugging.
+
+RECOVERY MEASUREMENTS (verdicts vs z3, candidate = --allon + IFACE + plugin):
+- 7 floored cases @25s: 0/7 recovered, 0 unsound, 0 regressed. Same
+  result as Phase 2-pre-fix despite recursion now firing — the cases
+  are computationally too hard for the axiom set even with proper SAT
+  refutation pathway working.
+- 30 stratified Zohar sample @15s: 8 AGREE, 22 FLOORED, 0 RECOVERED,
+  0 UNSOUND. Same population as Phase 2-pre-fix.
+
+★ CONCLUSION (master's "definitively prove the axiom set is insufficient
+and a wider theory move is needed" exit condition):
+
+The plugin's Phase 1+2 axioms are sound, the recursion trigger now fires
+correctly, and the synthetic refutation works — but the Zohar BWI corpus
+needs more than bounded-axiom reasoning. The actual int_check_* / qf_*
+proofs use bit-level structure (sign-extension, two's-complement,
+bitwise identity laws) that the per-term/inequality axioms can't
+re-derive. cvc5's BWI tactic explicitly bit-blasts the encoding into
+the underlying BV problem; z3 has dedicated BWI handling tactics. Our
+in-NIA axiomatic approach is the right discipline but the WRONG SCOPE
+for the corpus — it would need to grow into either:
+  (a) full bit-decomposition of intand/intor/intxor over a chosen
+      bit-width (Phase 4+ as Master mentioned: bounded blast),
+  (b) in-NIA pow2 specialization where pow2(t) is a recognized
+      polynomial variable with linked propagation,
+  (c) recognize the encoding and delegate to an underlying BV solver.
+
+None of these are a quick extension of the current plugin. Scope as
+the next phase project; Phase 1+2 ship as the sound scaffold + the
+proof of insufficiency.
+
+Phase 3 (EUF coordination with EQNA Track 3) is still useful for the
+Boolean-equivalence-of-equality case (verified by synthetic test) and
+deserves activation when Track 3 lands on integration — task #42 holds
+that work. It is NOT however the bottleneck for the 471-case recovery;
+that requires (a)–(c) above.
+
+
 ## ★ MILESTONE: SquareContractorZ false-UNSAT (latent under --allon) FIXED (2026-05-30)
 After the master ff-merge to integration 2063e28 (incl. EQNA's XOLVER_NIA_IFACE_LIFECYCLE
 @7fe3ba2), running the gate exposed a HARD false-UNSAT under the ON config:
