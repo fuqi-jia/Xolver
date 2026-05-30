@@ -111,6 +111,7 @@ bin/xolver
 # Internal campaign / agent artifacts — kept LOCALLY, untracked on the public repo
 .nra_wip_backup/
 docs/
+!docs/cac/
 .github/prompts/
 adam-warlock-terra-us-agent.md
 jean-grey-orion-donna-troy.md
