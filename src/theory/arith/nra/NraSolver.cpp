@@ -1060,6 +1060,16 @@ NraSolver::getDeducedSharedEqualities() {
     if (!combSat) return out;
     if (!sharedTermRegistry_ || !coreIr_ || !converter_) return out;
     if (!satFastModel_ || satFastModel_->empty()) return out;
+    // Defensive: when combination-aware CAC is also enabled, emitting deduced
+    // equalities can confuse the combination loop (FFT z3.630166 sat→unknown).
+    // The COMBINATION + COMB_SAT path keeps the CAC SAT model accessible via
+    // satFastModel_ / getModel for model-based arrangement reading, which is the
+    // safer route. Skip the explicit propagations in that combination.
+    static const bool combination = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_COMBINATION");
+        return e && *e && *e != '0';
+    }();
+    if (combination) return out;
 
     struct STValue { SharedTermId id; mpq_class value; };
     std::vector<STValue> values;
