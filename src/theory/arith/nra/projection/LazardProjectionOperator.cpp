@@ -2,6 +2,11 @@
 #include "theory/arith/nra/projection/Squarefree.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"
 
+#include <cstdlib>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace xolver {
 
 namespace {
@@ -89,9 +94,48 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
         }
     }
 
-    // Pairwise resultants between distinct squarefree factors.
-    for (size_t a = 0; a < factors.size(); ++a) {
-        for (size_t b = a + 1; b < factors.size(); ++b) {
+    // Track C round 4.5 / #52: SAFE Lazard shrink — dedup pairwise resultants
+    // when input polys produce identical squarefree factors (after normalization).
+    // Same factor ⇒ same pairwise resultant ⇒ redundant work. Gated by
+    // XOLVER_NRA_CAC_LAZARD_DEDUP; default OFF. Sound because we still emit
+    // ALL distinct factors' resultants — only the duplicates are skipped.
+    static const bool dedupFactors = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_LAZARD_DEDUP");
+        return e && *e && *e != '0';
+    }();
+
+    std::vector<size_t> uniqIdx;
+    if (dedupFactors && factors.size() > 1) {
+        std::unordered_map<std::string, size_t> seen;
+        for (size_t i = 0; i < factors.size(); ++i) {
+            // Canonical key: unit-normalize then serialize terms. Same key ⇒
+            // same factor up to a rational scalar ⇒ identical resultants up to
+            // a nonzero rational unit (irrelevant for projection — only real
+            // zero sets matter).
+            RationalPolynomial p = factors[i];
+            p.normalize();
+            if (!p.isZero()) {
+                const mpq_class lead = p.terms().rbegin()->second;
+                if (lead != 0 && lead != 1) { p *= (mpq_class(1) / lead); p.normalize(); }
+            }
+            std::string k;
+            for (const auto& [mon, coeff] : p.terms()) {
+                k += coeff.get_str(); k += ':';
+                for (const auto& [vid, e] : mon) { k += std::to_string(vid); k += '^'; k += std::to_string(e); k += ';'; }
+                k += '|';
+            }
+            if (seen.emplace(std::move(k), uniqIdx.size()).second) uniqIdx.push_back(i);
+        }
+    } else {
+        uniqIdx.reserve(factors.size());
+        for (size_t i = 0; i < factors.size(); ++i) uniqIdx.push_back(i);
+    }
+
+    // Pairwise resultants between distinct squarefree factors (deduped under
+    // XOLVER_NRA_CAC_LAZARD_DEDUP).
+    for (size_t ia = 0; ia < uniqIdx.size(); ++ia) {
+        for (size_t ib = ia + 1; ib < uniqIdx.size(); ++ib) {
+            const size_t a = uniqIdx[ia], b = uniqIdx[ib];
             auto res = topResultant(factors[a], factors[b], v, cfg.maxMatrixDim, kernel);
             if (res.budgetExceeded) {
                 r.complete = false;
