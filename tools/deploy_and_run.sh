@@ -111,16 +111,10 @@ cmd_package() {
     mkdir -p "${TMPDIR}/xolver-dist/tools"
     for script in \
         deploy_and_run.sh \
-        run.sh \
-        run_differential.sh \
-        run_z3.sh \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \
-        bench_server.py \
-        freeze_baseline.py \
-        lia_mismatch_replay.py \
-        run_lia_ablation.sh; do
+        freeze_baseline.py; do
         src="${SCRIPT_DIR}/${script}"
         if [[ -f "$src" ]]; then
             cp "$src" "${TMPDIR}/xolver-dist/tools/"
