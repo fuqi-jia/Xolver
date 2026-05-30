@@ -78,6 +78,25 @@ get_unsat_cover(level i, sample s = (x_1=a_1,…,x_{i-1}=a_{i-1})):
 4. Equational-constraint optimization (designate the single equality, project only
    w.r.t. it) is a **completeness/perf refinement layered later**, behind its own
    sub-gate, with McCallum well-orientedness checked or Lazard-EC obligations met.
+5. **#48 lessons (UNSAT-direction soundness, learned from Geogebra
+   IsoRightTriangle-Bottema1_3a / _12a):**
+   * **Empty downward characterization gate.** If `characterize` returns
+     `complete=true` but `downwardPolys` is EMPTY while the child's `charPolys`
+     was non-empty, the Lazard projection at this level dropped the lift info —
+     `intervalFromCharacterization` on empty input returns ℝ, and excluding ℝ
+     would mean "deeper UNSAT is independent of var" which is FALSE in general.
+     `markIncomplete("characterize-empty-downward")` and return Unknown.
+   * **EARLY_INFEAS must propagate the FULL constraint set.** EARLY_INFEAS
+     short-circuits the leaf visit, so the propagated `charPolys` would
+     otherwise contain only the violated polys. The Lazard projection at
+     parents then has no pairwise resultant partners — the equation-driven
+     resultants that capture ALGEBRAIC SAT boundaries (e.g. `m²+4m-4` arising
+     from a chain of pairwise resultants between the bigpoly and the
+     equations) are NEVER computed. When any cell at this level was an
+     EARLY_INFEAS hit, inject every constraint poly into `levelChar` so the
+     parent sees the full set. The cells themselves stay built from the
+     violated polys only (cell-construction unchanged); only the propagation
+     gets enriched. Parent dedups via `unitKey`.
 
 ## Module plan (A→E), each unit-tested before the next
 
