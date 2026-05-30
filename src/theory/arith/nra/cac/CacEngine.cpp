@@ -262,6 +262,23 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
                 if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("characterize-incomplete"); return out; }
                 cellBoundaries = std::move(ch.downwardPolys);
+                // SOUNDNESS GATE (#48 fix): if characterize collapsed to NO downward
+                // polys but the child UNSAT carried non-trivial charPolys, we cannot
+                // soundly delineate a cell on `var` — the projection chain lost the
+                // information needed to bound the excluded region. Building a cell
+                // from empty boundaries yields the whole axis (intervalFromChar with
+                // no boundaries returns ℝ); excluding ℝ here would mean "the deeper
+                // UNSAT is independent of var", which is FALSE in general — it's an
+                // artifact of an incomplete Lazard projection (e.g. the SAT region's
+                // m-defining algebraic polynomial got dropped between levels). Bail
+                // to Unknown rather than emit a false UNSAT. Surfaced by the Geogebra
+                // IsoRightTriangle cases (#48); UNSAT-direction soundness fix.
+                if (cellBoundaries.empty() && !rec.charPolys.empty()) {
+                    sample.pop();
+                    out.status = CacStatus::Unknown;
+                    markIncomplete("characterize-empty-downward");
+                    return out;
+                }
             }
         }
 
@@ -308,6 +325,26 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         for (size_t i = 0; i < cellsList.size(); ++i)
             if (!drop[i]) { if (outIdx != i) cellsList[outIdx] = std::move(cellsList[i]); ++outIdx; }
         cellsList.resize(outIdx);
+    }
+
+    // TRACE (XOLVER_NRA_CAC_TRACE=1): per-level UNSAT-covering dump to find
+    // where the projection chain loses an algebraic SAT boundary (#48 debug).
+    // MUST run BEFORE the flatten below — the flatten moves polys out of c.polys.
+    if (std::getenv("XOLVER_NRA_CAC_TRACE")) {
+        std::ofstream st("/tmp/cac_trace.txt", std::ios::app);
+        st << "[L" << level << "] var=" << var << " cells=" << cellsList.size() << "\n";
+        for (size_t i = 0; i < cellsList.size(); ++i) {
+            const auto& c = cellsList[i];
+            st << "  cell[" << i << "] polys=" << c.polys.size() << " origins=" << c.origins.size() << "\n";
+            for (size_t pi = 0; pi < c.polys.size() && pi < 12; ++pi) {
+                st << "    p[" << pi << "] vars={";
+                bool first = true;
+                for (VarId v : c.polys[pi].variables()) { if (!first) st << ","; st << v; first = false; }
+                st << "} isConst=" << (c.polys[pi].isConstant()?1:0)
+                   << " isZero=" << (c.polys[pi].isZero()?1:0) << "\n";
+            }
+        }
+        st.flush();
     }
 
     // Flatten surviving cells into the propagation set. charPolys carry the
