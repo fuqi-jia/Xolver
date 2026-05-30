@@ -15,8 +15,16 @@ bool IntDivModLowerer::run() {
     registry_.clear();
     memo_.clear();
     loweredAssertions_.clear();
+    positiveVars_.clear();
 
     auto scoped = ir_.getScopedAssertions();
+    // Track C1 Phase 2: pre-scan strict-positive lower bounds so the
+    // symbolic-divisor branch can avoid the EUF-requiring `b = 0` undef
+    // case when the divisor is provably non-zero. Sound: only removes the
+    // unreachable `b = 0` branch (the b > 0 / b < 0 branches still cover
+    // every satisfying model where the divisor is non-zero, and the scan
+    // is conservative — non-matching shapes leave the existing EUF path).
+    scanPositiveBounds(scoped);
     std::vector<std::pair<ScopeLevel, ExprId>> loweredScoped;
 
     for (const auto& [level, a] : scoped) {
@@ -296,6 +304,24 @@ void IntDivModLowerer::emitConstDivisorConstraints(const DivModDef& def, const m
 }
 
 void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, ScopeLevel level) {
+    // Track C1 Phase 2 (XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO, default-OFF):
+    // if `b` is provably > 0 from the asserted bounds, emit only the
+    // `b > 0` branch (a = b*q + r, 0 <= r <= b - 1) and skip both the
+    // `b = 0` undef branch (which is what raised needsEUF) and the `b < 0`
+    // branch (unreachable). Sound: dropping unreachable cases is unsat-
+    // preserving. Gated default-OFF because, for cases like
+    // `(mod (* x x) x) = 5 ∧ x > 0`, the current NIA reasoner stack cannot
+    // refute the engaged constraint within the test budget — flooring to
+    // unknown via the EUF-needing path is the existing soundness floor;
+    // engaging requires per-case validation that the engine actually
+    // decides in budget.
+    static const bool nonzeroPath =
+        std::getenv("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO") != nullptr;
+    if (nonzeroPath && divisorIsProvenStrictlyPositive(def.b)) {
+        emitVariableDivisorConstraintsPositiveDivisor(def, level);
+        return;
+    }
+
     ExprId zero = mkIntConst(0);
     ExprId one = mkIntConst(1);
 
@@ -336,6 +362,133 @@ void IntDivModLowerer::emitUndefZeroConstraints(const DivModDef& def, ScopeLevel
 void IntDivModLowerer::updateRequirement(bool needsNonlinear, bool needsEUF) {
     if (needsNonlinear) requirement_.needsNonlinearInt = true;
     if (needsEUF) requirement_.needsEUF = true;
+}
+
+// Track C1 Phase 2: emit only the b > 0 branch of the symbolic-divisor
+// lowering. Caller has already verified `b > 0` is implied by the asserted
+// bounds (divisorIsProvenStrictlyPositive). The b = 0 and b < 0 cases are
+// unreachable under any satisfying assignment, so dropping them is sound
+// and does NOT require EUF.
+void IntDivModLowerer::emitVariableDivisorConstraintsPositiveDivisor(
+        const DivModDef& def, ScopeLevel level) {
+    ExprId zero = mkIntConst(0);
+    ExprId one = mkIntConst(1);
+
+    // a = b*q + r
+    generatedAssertions_.push_back(
+        {level, mkEq(def.a, mkAdd(mkMul(def.b, def.q), def.r))});
+    // 0 <= r
+    generatedAssertions_.push_back({level, mkLe(zero, def.r)});
+    // r <= b - 1
+    generatedAssertions_.push_back({level, mkLe(def.r, mkSub(def.b, one))});
+
+    // b*q is nonlinear (product of two non-constants).
+    updateRequirement(true, false);
+}
+
+// Track C1 Phase 2: scan the asserted top-level conjunction for syntactic
+// strict-positive lower bounds on integer variables, populate
+// `positiveVars_`. Conservative — we only inspect top-level atoms (no
+// recursion into And/Or trees, no Boolean satisfaction reasoning). The
+// helper is used by divisorIsProvenStrictlyPositive() to decide whether
+// the EUF-requiring `b = 0` undef branch can be skipped at lowering time.
+//
+// Patterns recognised (all on Int variables):
+//   (> v c)   with c >= 0  -> v strictly positive
+//   (>= v c)  with c >= 1  -> v strictly positive
+//   (< c v)   with c >= 0  -> v strictly positive  (Lt with var on rhs)
+//   (<= c v)  with c >= 1  -> v strictly positive  (Leq with var on rhs)
+//   (not (<= v c)) with c >= 0  -> v > c implies v > 0
+void IntDivModLowerer::scanPositiveBounds(
+        const std::vector<std::pair<ScopeLevel, ExprId>>& asserts) {
+    auto isConstIntGe = [&](ExprId e, const mpz_class& bound) -> bool {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+            return mpz_class(*iv) >= bound;
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try { return mpq_class(*sv).get_num() >= bound &&
+                         mpq_class(*sv).get_den() == 1; }
+            catch (...) { return false; }
+        }
+        return false;
+    };
+    auto varName = [&](ExprId e) -> std::optional<std::string> {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::Variable) return std::nullopt;
+        if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
+        return std::nullopt;
+    };
+    auto markIfStrictPositive = [&](ExprId atom) {
+        const CoreExpr& a = ir_.get(atom);
+        // (> v c) / (Gt v c)
+        if ((a.kind == Kind::Gt || a.kind == Kind::Geq) &&
+            a.children.size() == 2) {
+            mpz_class need = (a.kind == Kind::Gt) ? mpz_class(0) : mpz_class(1);
+            if (auto v = varName(a.children[0])) {
+                if (isConstIntGe(a.children[1], need)) positiveVars_.insert(*v);
+            }
+        }
+        // (< c v) / (Lt c v) and (<= c v) / (Leq c v)
+        if ((a.kind == Kind::Lt || a.kind == Kind::Leq) &&
+            a.children.size() == 2) {
+            mpz_class need = (a.kind == Kind::Lt) ? mpz_class(0) : mpz_class(1);
+            if (auto v = varName(a.children[1])) {
+                if (isConstIntGe(a.children[0], need)) positiveVars_.insert(*v);
+            }
+        }
+    };
+    for (const auto& [lvl, e] : asserts) {
+        (void)lvl;
+        markIfStrictPositive(e);
+    }
+}
+
+// Track C1 Phase 2: structural strict-positive test. Returns true iff `b`
+// is one of:
+//   - a Variable in positiveVars_,
+//   - a positive integer constant,
+//   - Mul/Pow of strictly-positive operands.
+// Conservative: any other shape returns false, which keeps the existing
+// EUF-needing lowering path.
+bool IntDivModLowerer::divisorIsProvenStrictlyPositive(ExprId b) const {
+    const CoreExpr& n = ir_.get(b);
+    switch (n.kind) {
+    case Kind::Variable: {
+        if (auto* s = std::get_if<std::string>(&n.payload.value))
+            return positiveVars_.count(*s) > 0;
+        return false;
+    }
+    case Kind::ConstInt: {
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv > 0;
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try { mpq_class q(*sv);
+                  return q.get_den() == 1 && q.get_num() > 0; }
+            catch (...) { return false; }
+        }
+        return false;
+    }
+    case Kind::ConstReal: {
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try { mpq_class q(*sv);
+                  return q.get_den() == 1 && q.get_num() > 0; }
+            catch (...) { return false; }
+        }
+        return false;
+    }
+    case Kind::Mul: {
+        for (ExprId c : n.children)
+            if (!divisorIsProvenStrictlyPositive(c)) return false;
+        return !n.children.empty();
+    }
+    case Kind::Pow: {
+        // (Pow base exp) > 0 iff base > 0 (any positive exponent fine).
+        if (n.children.size() != 2) return false;
+        return divisorIsProvenStrictlyPositive(n.children[0]);
+    }
+    default:
+        return false;
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -545,6 +545,53 @@ std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
     }
 }
 
+// Track C1 / Phase 1. Symbolic-modulus residue extraction. See
+// PolynomialKernel.h for the API doc and modInvStep motivation.
+//
+// Implementation strategy: identify the (single) variable `v` the modulus
+// is in, run a polynomial long-division using v as the main variable, and
+// return the remainder when the modulus is monic in v (leading coefficient
+// 1). Non-monic or multi-variable modulus → nullopt (caller falls
+// through). pseudoRemainderWithScale is the existing primitive; for a monic
+// divisor in v, the scale factor lc(divisor)^k is 1^k = 1 so the
+// pseudo-remainder equals the true polynomial remainder. That property
+// gives the soundness guarantee (poly ≡ r mod modulus over Z under any
+// integer assignment to v).
+std::optional<PolyId> LibPolyKernel::extractSymbolicResidue(PolyId poly, PolyId modulus) {
+    if (poly == NullPoly || modulus == NullPoly) return std::nullopt;
+
+    // The modulus must be non-constant and univariate. A constant modulus
+    // belongs to the numeric path (ModularResidueReasoner step 8 Hensel).
+    if (isConstant(modulus)) return std::nullopt;
+    auto modVars = variables(modulus);
+    if (modVars.size() != 1) return std::nullopt;  // Phase 1: monovariate only
+
+    auto vidOpt = findVar(modVars[0]);
+    if (!vidOpt) return std::nullopt;
+    VarId v = *vidOpt;
+
+    // The modulus must be monic in v: lc_v(modulus) = 1 (constant). Without
+    // that, pseudoRemainder returns lc^k × residue rather than the true
+    // residue, and we cannot soundly normalize the scaling out at the
+    // polynomial level. Phase-1 fail-closed.
+    auto lcOpt = leadingCoefficient(modulus);
+    if (!lcOpt) return std::nullopt;
+    if (!isConstant(*lcOpt)) return std::nullopt;
+    if (toConstant(*lcOpt) != mpq_class(1)) return std::nullopt;
+
+    // Compute the pseudo-remainder w.r.t. v. For monic divisor in v, this
+    // is the actual polynomial remainder (deg_v(r) < deg_v(modulus)).
+    auto res = pseudoRemainderWithScale(poly, modulus, v);
+    if (res.remainder == NullPoly) return std::nullopt;
+    // Defensive: confirm the scale factor is 1 (or nullopt, which the
+    // wrapper uses to signal "no scale needed").
+    if (res.scaleFactor != NullPoly) {
+        if (!isConstant(res.scaleFactor)) return std::nullopt;
+        if (toConstant(res.scaleFactor) != mpq_class(1)) return std::nullopt;
+    }
+    return res.remainder;
+}
+
 std::vector<PolyId> LibPolyKernel::pscChain(PolyId a, PolyId b, VarId v) {
     // Degenerate: a side with degree < 1 in v has no subresultant chain.
     // (degree() works for non-main variables too, via term inspection.)
