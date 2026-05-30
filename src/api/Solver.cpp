@@ -9,6 +9,7 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
 #include "frontend/preprocess/ToRealLiteralFold.h"
@@ -855,6 +856,20 @@ public:
             IntDivModConstantFold dmFold(*ir);
             dmFold.run();
             dmFold.commit();
+        }
+
+        // ZoharBwiAxiomEmitter (Phase 1, XOLVER_NIA_ZOHAR_PLUGIN default-OFF).
+        // Detect the Zohar/Niemetz CADE-27 BWI signature (uninterpreted
+        // `pow2` UF) and inject sound axioms for the STANDARD interpretation
+        // pow2(n) = 2^n: ground (= (pow2 0) 1) + per-term
+        // (=> (>= t 0) (>= (pow2 t) 1)). Runs AFTER constant-fold so axioms
+        // are emitted on the canonical, post-fold shape; BEFORE
+        // IntDivModLowerer (our axioms contain no div/mod so the lowerer
+        // ignores them). Empty no-op when no pow2 UF is in the formula.
+        if (const char* e = std::getenv("XOLVER_NIA_ZOHAR_PLUGIN");
+            e && *e && *e != '0') {
+            ZoharBwiAxiomEmitter zohar(*ir, boolSortId_);
+            zohar.run();
         }
 
         // Lower integer div/mod before arithmetic extraction.
