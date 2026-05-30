@@ -165,3 +165,7 @@ tests/modular_ladder/README.md
 tests/regression/KNOWN_FAILURES.md
 tests/regression/REALVALUE_TOUCHPOINTS.md
 results/
+
+# Master-side panda dispatch scripts (operator paths, local-only)
+tools/deploy_pandas.sh
+tools/collect_pandas.sh
