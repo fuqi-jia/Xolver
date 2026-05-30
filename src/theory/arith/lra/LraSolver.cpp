@@ -27,6 +27,13 @@ LraSolver::LraSolver() {
     // SAT solver during search. Read once.
     const char* prop = std::getenv("XOLVER_LRA_PROP");
     lraPropEnabled_ = (prop && *prop && *prop != '0');
+    // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
+    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
+    impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    const char* budget = std::getenv("XOLVER_LRA_LP_DUALITY_BUDGET");
+    if (budget && *budget) {
+        try { lpDualityBudget_ = std::max(0, std::stoi(budget)); } catch (...) {}
+    }
 }
 
 LraSolver::~LraSolver() {
@@ -312,6 +319,22 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
     // to the convex LRA model (Stage A).
     for (const auto& ieq : interfaceDisequalities_) {
         auto eqReasons = assertedVarEqualityReason(ieq.a, ieq.b);
+        // Track B fix: when the narrow 2-var detector misses, also try the
+        // LP-duality probe (same detector Track A uses for deduced-eq emission).
+        // Without this, SAT can escape Track A's emit by deciding the deduced
+        // eq atom FALSE (interface diseq x != y) — LRA would silently accept
+        // that diseq even though the polyhedron entails x = y. Closing this
+        // path makes BOTH v10002=T (EUF congruence conflict) AND v10002=F
+        // (LRA polyhedron conflict) unsat → SAT terminates correctly.
+        if (eqReasons.empty() && impliedEqEnabled_) {
+            int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
+            if (aux >= 0) {
+                std::vector<SatLit> probeReasons;
+                if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
+                    eqReasons = std::move(probeReasons);
+                }
+            }
+        }
         if (eqReasons.empty()) continue;
         TheoryConflict tc;
         for (auto l : eqReasons) tc.clause.push_back(l);
@@ -570,6 +593,97 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
     return TheoryCheckResult::consistent();
 }
 
+// Track A (LP-duality polyhedral implied-equality probe). Per shared pair
+// (a, b), assert the strict negation of (a - b) = 0 on the aux var representing
+// (va - vb) and run feasibility check. If both directions are infeasible, the
+// polyhedron pins (a - b) = 0 in every feasible model — a true multi-row
+// Farkas implication, not just per-row chase. The simplex state is byte-
+// equivalent before push and after pop on the no-emit path (RAII pop guarantee).
+// The marker SatLit identifies the proof-by-contradiction probe bound so it can
+// be filtered out of the emitted reasons (the marker is NOT part of the
+// asserted state; leaking it into a reason would break downstream explanation).
+//
+// Marker SatLit = SatLit{0, true}. CaDiCaL allocates vars from 1 upward, so
+// var==0 never identifies a real solver literal. The triple-overspec — also
+// matching (var == aux) — is enforced at the assertion site by ensuring no
+// other code path passes MARKER. The runtime assert below enforces "marker
+// never in any emitted reason set" as a property invariant of this method.
+bool LraSolver::tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons) {
+    static const SatLit MARKER{0, true};
+
+    // RAII pop: even if check() throws or returns unexpectedly, pop runs.
+    // CRITICAL: pop() only restores bound state — it does NOT clear
+    // hasImmediateConflict_ / conflict_, which our probe's check() may have
+    // populated. Without explicit clear, the next real LRA check returns a
+    // STALE conflict from our probe (observed: TM gets a phantom conflict at
+    // NO check #2 right after a probe emit, dropping the recovery to sat).
+    // backtrackToLevel(level) clears those fields and leaves all bounds with
+    // level <= the level (so it is bound-state byte-equivalent to just pop).
+    struct ProbeScope {
+        GeneralSimplex& gs;
+        int level;
+        ProbeScope(GeneralSimplex& g, int lvl) : gs(g), level(lvl) { gs.push(); }
+        ~ProbeScope() { gs.pop(); gs.backtrackToLevel(level); }
+        ProbeScope(const ProbeScope&) = delete;
+        ProbeScope& operator=(const ProbeScope&) = delete;
+    };
+
+    auto collectAndFilter = [&](std::vector<SatLit>& out) {
+        // Skip BoundReasons whose reason == MARKER — those are the probe bound
+        // (proof-by-contradiction witness, not part of the asserted state).
+        for (const auto& br : gs_.getConflict()) {
+            if (br.reason == MARKER) continue;
+            out.push_back(br.reason);
+        }
+    };
+
+    std::vector<SatLit> upperReasons, lowerReasons;
+
+    // Probe 1: assert aux <= -δ (strict aux < 0). Unsat ⇒ aux ≥ 0 in every model.
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(-1))), MARKER);
+        bool ok = gs_.assertUpper(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(upperReasons);
+        if (!unsat) return false;
+    }
+
+    // Probe 2: assert aux >= +δ (strict aux > 0). Unsat ⇒ aux ≤ 0 in every model.
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(1))), MARKER);
+        bool ok = gs_.assertLower(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(lowerReasons);
+        if (!unsat) return false;
+    }
+
+    // Combine + dedup. Both directions infeasible ⇒ aux pinned at 0 in every
+    // feasible model, so (a - b) = 0 is implied for the pair the aux represents.
+    outReasons = std::move(upperReasons);
+    outReasons.insert(outReasons.end(), lowerReasons.begin(), lowerReasons.end());
+    std::sort(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+    outReasons.erase(std::unique(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), outReasons.end());
+
+    // Soundness invariant: marker MUST NEVER appear in the emitted reasons.
+    // This is the proof-by-contradiction probe — leaking it would cite an
+    // artificial bound and break downstream explanation chains. A debug assert
+    // here catches any filter regression at runtime.
+    assert(std::none_of(outReasons.begin(), outReasons.end(),
+        [](const SatLit& r) { return r == MARKER; }) &&
+        "Track A: marker bound leaked into emitted reason set");
+
+    return true;
+}
+
 std::vector<TheorySolver::SharedEqualityPropagation>
 LraSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return {};
@@ -587,12 +701,170 @@ LraSolver::getDeducedSharedEqualities() {
         sharedVars.push_back(stId);
     }
     std::vector<TheorySolver::SharedEqualityPropagation> result;
-    for (size_t i = 0; i < sharedVars.size(); ++i) {
-        for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+    const int n = static_cast<int>(sharedVars.size());
+
+    // Direct-pair edges: assertedVarEqualityReason catches both explicit
+    // 2-var Eq atoms and complementary-bound pairs that pin (a - b) to 0.
+    std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j < n; ++j) {
             auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
             if (reasons.empty()) continue;
+            adj[i].push_back({j, reasons});
+            adj[j].push_back({i, reasons});
+            // Always emit direct pairs (current behavior).
             result.push_back(TheorySolver::SharedEqualityPropagation{
                 sharedVars[i], sharedVars[j], std::move(reasons)});
+        }
+    }
+
+    // Track 2b (XOLVER_SIMPLEX_IMPLIED_EQ): closure beyond per-pair direct
+    // detection. Two sub-passes, deduped against each other and against the
+    // direct pairs emitted above:
+    //   Step 1 (transitivity): chain of asserted equalities through the
+    //     shared-var graph (x=z and z=y -> x=y) — chain reasons are the union
+    //     of SatLits along the BFS path. Sound by construction.
+    //   Step 2 (polyhedral implied-eq): aux-var tight-bound query — for each
+    //     existing interface aux var (the (a, b) pairs EUF already cares
+    //     about), if the simplex bound-propagation engine pins it to 0 on
+    //     BOTH sides, emit a = b with the union of lower + upper bound
+    //     reasons. Sound because the engine derives bounds from tableau rows
+    //     (Farkas-traceable), valid in every feasible model — not just the
+    //     current vertex. Free pairs (no tight bound, no equality
+    //     implication) are NOT emitted: the engine never derives a 0 bound
+    //     unless the constraints force it.
+    auto pairKey = [](int a, int b) -> uint64_t {
+        int lo = std::min(a, b), hi = std::max(a, b);
+        return (static_cast<uint64_t>(lo) << 32) | static_cast<uint32_t>(hi);
+    };
+    std::unordered_set<uint64_t> emittedPair;
+    for (int i = 0; i < n; ++i)
+        for (const auto& [j, rs] : adj[i])
+            if (i < j) emittedPair.insert(pairKey(i, j));
+    if (impliedEqEnabled_ && n > 2) {
+        // For each shared var i, BFS the equality graph. For every shared j>i
+        // reachable through a chain of >=2 edges (not already a direct edge),
+        // emit eq(i,j) with the concatenated, deduped reasons of the path.
+        for (int i = 0; i < n; ++i) {
+            std::vector<int> parent(n, -1);
+            std::vector<std::vector<SatLit>> edgeRs(n);
+            std::vector<int> bfs;
+            parent[i] = i;
+            bfs.push_back(i);
+            for (size_t head = 0; head < bfs.size(); ++head) {
+                int u = bfs[head];
+                for (const auto& [v, rs] : adj[u]) {
+                    if (parent[v] != -1) continue;
+                    parent[v] = u;
+                    edgeRs[v] = rs;
+                    bfs.push_back(v);
+                }
+            }
+            for (int j = i + 1; j < n; ++j) {
+                if (parent[j] == -1) continue;
+                if (emittedPair.count(pairKey(i, j))) continue;
+                // Reconstruct + dedup chain reasons.
+                std::vector<SatLit> chain;
+                for (int cur = j; cur != i; cur = parent[cur])
+                    for (SatLit s : edgeRs[cur]) chain.push_back(s);
+                std::sort(chain.begin(), chain.end(),
+                    [](SatLit a, SatLit b) {
+                        if (a.var != b.var) return a.var < b.var;
+                        return a.sign < b.sign;
+                    });
+                chain.erase(std::unique(chain.begin(), chain.end(),
+                    [](SatLit a, SatLit b) {
+                        return a.var == b.var && a.sign == b.sign;
+                    }), chain.end());
+                emittedPair.insert(pairKey(i, j));
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    sharedVars[i], sharedVars[j], std::move(chain)});
+            }
+        }
+    }
+
+    // Step 2: polyhedral implied-eq via gs_.proveFixedValue — multi-row Farkas
+    // through the tableau (LIA's existing detection uses the same primitive).
+    // PROACTIVELY ensure an interface aux var exists for every shared-var pair
+    // (idempotent via interfaceEqAuxVars_, bounded by shared-var count which is
+    // small for combination workloads). Each aux represents a (va - vb) linear
+    // combination; proveFixedValue chases tableau rows recursively to discover
+    // whether the constraint system pins it. If it proves the aux is fixed
+    // at 0 (rational a == 0 AND delta b == 0), the polyhedron entails va = vb
+    // in every feasible model — emit a = b with the collected bound reasons.
+    if (impliedEqEnabled_ && n >= 2) {
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j)
+                getOrCreateInterfaceEqAuxVar(sharedVars[i], sharedVars[j]);
+
+        std::unordered_map<SharedTermId, int> sharedTermToIdx;
+        sharedTermToIdx.reserve(sharedVars.size());
+        for (int k = 0; k < n; ++k) sharedTermToIdx[sharedVars[k]] = k;
+
+        for (const auto& [pk, aux] : interfaceEqAuxVars_) {
+            if (aux < 0) continue;
+            SharedTermId lo = static_cast<SharedTermId>(pk >> 32);
+            SharedTermId hi = static_cast<SharedTermId>(pk & 0xFFFFFFFFu);
+            auto liIt = sharedTermToIdx.find(lo);
+            auto hiIt = sharedTermToIdx.find(hi);
+            if (liIt == sharedTermToIdx.end() || hiIt == sharedTermToIdx.end()) continue;
+            int i = liIt->second, j = hiIt->second;
+            uint64_t k = pairKey(i, j);
+            if (emittedPair.count(k)) continue;
+            auto fixed = gs_.proveFixedValue(aux);
+            if (!fixed) continue;
+            // The aux's value at 0 means (va - vb) == 0 (since the constraint is
+            // aux = va - vb; the aux's bound being 0 is the equality witness).
+            if (!(fixed->first.a == 0 && fixed->first.b == 0)) continue;
+            std::vector<SatLit> rs;
+            rs.reserve(fixed->second.size());
+            for (const auto& br : fixed->second) rs.push_back(br.reason);
+            std::sort(rs.begin(), rs.end(),
+                [](SatLit a, SatLit b) {
+                    if (a.var != b.var) return a.var < b.var;
+                    return a.sign < b.sign;
+                });
+            rs.erase(std::unique(rs.begin(), rs.end(),
+                [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), rs.end());
+            emittedPair.insert(k);
+            result.push_back(TheorySolver::SharedEqualityPropagation{
+                sharedVars[i], sharedVars[j], std::move(rs)});
+        }
+
+        // Step 3 / Track A: LP-duality probe — true multi-row Farkas via
+        // push/assert-strict/check/pop. Catches the Wisa-style case where the
+        // polyhedron pins (a - b) = 0 by a combination of 3+ inequalities that
+        // doesn't bottom out via proveFixedValue. Pre-filter: skip pairs whose
+        // current simplex value isn't already 0 (the polyhedron doesn't pin
+        // them, so the probe would just return Sat). Budget: lpDualityBudget_
+        // probes per call (each up to 2 simplex checks); 0 disables.
+        int probesLeft = lpDualityBudget_;
+        if (probesLeft > 0) {
+            for (const auto& [pk, aux] : interfaceEqAuxVars_) {
+                if (probesLeft <= 0) break;
+                if (aux < 0) continue;
+                SharedTermId lo = static_cast<SharedTermId>(pk >> 32);
+                SharedTermId hi = static_cast<SharedTermId>(pk & 0xFFFFFFFFu);
+                auto liIt = sharedTermToIdx.find(lo);
+                auto hiIt = sharedTermToIdx.find(hi);
+                if (liIt == sharedTermToIdx.end() || hiIt == sharedTermToIdx.end()) continue;
+                int i = liIt->second, j = hiIt->second;
+                uint64_t k = pairKey(i, j);
+                if (emittedPair.count(k)) continue;
+                // Pre-filter: current model says aux != 0 ⇒ polyhedron does not
+                // pin ⇒ probe would be Sat in both directions ⇒ no emission.
+                DeltaRational cur = gs_.value(aux);
+                if (!(cur.a == 0 && cur.b == 0)) continue;
+                std::vector<SatLit> rs;
+                bool pinned = tryProvePairEqualityByLpDuality(aux, rs);
+                --probesLeft;
+                if (!pinned) continue;
+                emittedPair.insert(k);
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    sharedVars[i], sharedVars[j], std::move(rs)});
+            }
         }
     }
     return result;

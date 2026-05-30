@@ -76,6 +76,11 @@ void ArrayReasoner::reset() {
     extWitnessIdx_.clear();
     extWitnessIdxTerms_.clear();
     internalSelect_.clear();
+    completeLastSelectScanEnd_ = 0;
+    completeLastTermScanEnd_ = 0;
+    completeArrayCache_.clear();
+    completeReadIdxCache_.clear();
+    completeReadIdxSeen_.clear();
 }
 
 ExprId ArrayReasoner::originExpr(EufTermId t) const {
@@ -182,66 +187,73 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     if (!selectCompletionEnabled_) return;
     discoverArrayTerms();
 
-    // (1) OBSERVED read indices: the index arg of every existing select whose
-    // index is NOT a fresh extensionality witness. Excluding Ext witnesses keeps
-    // the index set finite (Ext mints one per array-disequality pair) — without
-    // this, completion fans an unbounded set of witnesses across every array and
-    // destabilizes genuine sats (storecomm). Snapshot the select count first:
-    // internSelect appends to selectTerms_ as we go.
-    std::vector<EufTermId> readIdx;
-    std::unordered_set<EufTermId> seenIdx;
+    // (1) Incrementally extend the read-index cache from NEW selectTerms_
+    // entries since the last call. ORIGINAL formula reads only (Ext witnesses
+    // are admitted separately under extWitnessComplete_). Each idx is added at
+    // most once; the cache is monotonic.
     size_t nSel = selectTerms_.size();
-    for (size_t k = 0; k < nSel; ++k) {
+    size_t newReadIdxStart = completeReadIdxCache_.size();
+    for (size_t k = completeLastSelectScanEnd_; k < nSel; ++k) {
         EufTermId sel = selectTerms_[k];
-        if (internalSelect_.count(sel)) continue;  // only ORIGINAL formula reads seed completion
+        if (internalSelect_.count(sel)) continue;
         const auto& sn = tm_->node(sel);
         if (sn.args.size() != 2) continue;
         EufTermId idx = sn.args[1];
         ExprId idxExpr = originExpr(idx);
-        if (idxExpr != NullExpr && extWitnessIdx_.count(idxExpr)) continue;  // skip Ext witness
-        if (seenIdx.insert(idx).second) readIdx.push_back(idx);
+        if (idxExpr != NullExpr && extWitnessIdx_.count(idxExpr)) continue;
+        if (completeReadIdxSeen_.insert(idx).second)
+            completeReadIdxCache_.push_back(idx);
     }
-    // extWitnessComplete_ (default-OFF): re-admit the Ext witness indices so the
-    // witness k from an array disequality a!=b is read THROUGH the store towers.
-    // Bounded: one witness per disequality pair, deduped via seenIdx, each read
-    // across the finite array set; internSelect adds only element-sorted reads
-    // (no new arrays/witnesses) so saturation stays finite. Sound: completion
-    // only interns tautological selects, never assertions.
+    completeLastSelectScanEnd_ = nSel;
+    // extWitnessComplete_ (default-OFF): admit Ext witness indices. Bounded:
+    // one witness per array-disequality pair; deduped via completeReadIdxSeen_.
     if (extWitnessComplete_) {
         for (EufTermId widx : extWitnessIdxTerms_) {
-            if (seenIdx.insert(widx).second) readIdx.push_back(widx);
+            if (completeReadIdxSeen_.insert(widx).second)
+                completeReadIdxCache_.push_back(widx);
         }
     }
-    if (readIdx.empty()) return;
+    if (completeReadIdxCache_.empty()) return;
 
-    // (2) TARGET arrays = read-closure over the array component: every
-    // array-sorted term (store towers + their bases, const-arrays, array
-    // variables — i.e. array-equality endpoints and store-tower terms). Reading
-    // each at every observed index lets Row1/Row2 fix the values and EUF
-    // congruence link selects on arrays asserted EQUAL (a positive array
-    // equality used as a hypothesis), which the lazy Row2 trigger alone misses.
-    std::vector<EufTermId> arrayTerms;
-    {
-        EufTermId total = static_cast<EufTermId>(tm_->termCount());
-        for (EufTermId t = 0; t < total; ++t) {
-            if (ir_->arraySortParams(tm_->node(t).sort)) arrayTerms.push_back(t);
-        }
+    // (2) Incrementally extend the array-term cache from NEW interned terms
+    // since the last call. EVERY array-sorted term (store towers + bases,
+    // const-arrays, array variables) participates in Row1/Row2 read-closure.
+    size_t newArrayStart = completeArrayCache_.size();
+    EufTermId total = static_cast<EufTermId>(tm_->termCount());
+    for (EufTermId t = completeLastTermScanEnd_; t < total; ++t) {
+        if (ir_->arraySortParams(tm_->node(t).sort))
+            completeArrayCache_.push_back(t);
     }
+    completeLastTermScanEnd_ = total;
 
-    // select(arr, idx) for every array term x observed read index not yet done.
-    // Row1 (enqueued into outQueue) fixes i==j eagerly; Row2 (full effort) peels
-    // i!=j; congruence links equal arrays. Dedup on (arr, idx) keeps it finite
-    // and idempotent. Bounded by |arrayTerms| x |observed read indices|.
-    for (EufTermId arr : arrayTerms) {
+    // (3) Cross-product, but only over the pair-frontier added since the last
+    // call: (NEW arrays x ALL indices) ∪ (OLD arrays x NEW indices). The
+    // remaining (OLD arrays x OLD indices) was processed in a prior call —
+    // every such pair is already in selectCompleteDone_, so the original
+    // full-sweep code's hash-dedup would skip them anyway. Skipping them at
+    // the iteration level removes the per-call O(arrays x indices) sweep cost
+    // that dominates QF_ANIA's budget once IFACE_LIFECYCLE removes the early
+    // abort. Soundness: identical to the original — same pairs reach
+    // internSelect, same skips, same merges enqueued.
+    auto processPairs = [&](EufTermId arr, size_t idxLo, size_t idxHi) {
         ExprId arrExpr = originExpr(arr);
-        if (arrExpr == NullExpr) continue;
-        for (EufTermId idx : readIdx) {
+        if (arrExpr == NullExpr) return;
+        for (size_t i = idxLo; i < idxHi; ++i) {
+            EufTermId idx = completeReadIdxCache_[i];
             uint64_t key = pairKey(arr, idx);
             if (!selectCompleteDone_.insert(key).second) continue;
             ExprId idxExpr = originExpr(idx);
             if (idxExpr == NullExpr) continue;
             internSelect(arrExpr, idxExpr, outQueue);
         }
+    };
+    // NEW arrays x ALL indices (covers new x new + new x old)
+    for (size_t a = newArrayStart; a < completeArrayCache_.size(); ++a)
+        processPairs(completeArrayCache_[a], 0, completeReadIdxCache_.size());
+    // OLD arrays x NEW indices (the remaining frontier)
+    if (newReadIdxStart < completeReadIdxCache_.size()) {
+        for (size_t a = 0; a < newArrayStart; ++a)
+            processPairs(completeArrayCache_[a], newReadIdxStart, completeReadIdxCache_.size());
     }
 }
 

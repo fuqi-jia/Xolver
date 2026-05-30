@@ -175,6 +175,29 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
 
     Attempt a;
     auto sat = createSatSolver();
+    if (noPreprocess_) {
+        // Disable CaDiCaL's expensive Bounded Variable Elimination (which calls
+        // extract_gates -> find_equivalences). Profile of QF_UFNIA floored cases
+        // (e.g. int_check_bvsgt_bvlshr0_ltr_inv_g) showed 100% of CPU in that
+        // chain inside a SINGLE bit-blast solve burning the whole budget.
+        // Bit-blast is candidate-only — any SAT verdict is re-validated by
+        // IntegerModelValidator (invariant 1) — and preprocessing changes only
+        // SAT-solver speed, not its verdict, so disabling these is sound.
+        // CaDiCaL option names per `cadical --help`:
+        sat->configure("elim",        0); // Bounded Variable Elimination (calls extract_gates)
+        sat->configure("subsume",     0); // global subsumption
+        sat->configure("vivify",      0); // clause vivification
+        sat->configure("probe",       0); // failed-literal probing
+        sat->configure("ternary",     0); // ternary resolution
+        sat->configure("transred",    0); // transitive reduction
+        sat->configure("decompose",   0); // SCC decomposition
+    }
+    if (satConflictBudget_ > 0) {
+        // Cap CaDiCaL's conflicts for THIS internal solve. CaDiCaL returns
+        // UNKNOWN when the limit is hit, which the bit-blast treats as
+        // "this width didn't decide" and falls through (sound).
+        sat->limit("conflicts", static_cast<int>(satConflictBudget_));
+    }
     BitBlastEncoder enc(*sat);
     enc.setVarBudget(gateBudget_);   // hard cap: stop encoding before OOM
     std::unordered_map<std::string, BitVec> varBits;

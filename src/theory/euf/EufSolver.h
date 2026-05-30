@@ -124,7 +124,24 @@ private:
     // Build the array/scalar model from the LIVE egraph state. Must be called
     // when the egraph reflects the satisfying assignment (i.e. at a consistent
     // Full-effort check), since merges are rolled back after solve() returns.
+    // Dispatches to buildArrayModel (QF_AX) and/or collectFunctionInterps
+    // (Track 3 UF model) and returns nullopt only if both produced nothing.
     std::optional<TheoryModel> buildModel() const;
+    // Array/scalar interpretation builder (QF_AX). Fills model.arrayInterps and
+    // scalar token assignments; no-op when there are no array variables.
+    void buildArrayModel(TheoryModel& model) const;
+    // Token-keyed UF function interpretations (Track 3, XOLVER_EUF_UF_MODEL).
+    // One FuncInterp per uninterpreted function symbol, keyed on argument
+    // class-tokens; TheoryManager::getModel remaps the tokens to the bare-rational
+    // keys the ArithModelValidator expects. Also emits scalar var -> class-token
+    // assignments so that remap can resolve each token to its arith value.
+    void collectFunctionInterps(TheoryModel& model) const;
+    // Canonical class token for the ArithModelValidator namespace: numeric
+    // literal -> "#n:<rational>", bool literal -> "#b:1"/"#b:0", else opaque
+    // per-class marker "@e<rep>". Shared by buildArrayModel + collectFunctionInterps.
+    std::string classToken(EufTermId t) const;
+    // Sort name as the validator expects ("Int"/"Real"/"Bool"/"U<id>").
+    std::string sortName(SortId s) const;
     // Snapshot captured at the last consistent Full-effort check, when the
     // egraph still reflects the satisfying assignment. getModel() returns this.
     mutable std::optional<TheoryModel> modelSnapshot_;
@@ -213,6 +230,13 @@ private:
     // XOLVER_EUF_PROP: enable EUF theory propagation (entailed equality/diseq
     // literals lifted to SAT). Read once in the constructor.
     bool eufPropEnabled_ = false;
+    // XOLVER_EUF_UF_MODEL (Track 3): build token-keyed function interpretations
+    // for non-array combination (UFNIA/UFNRA) so the ArithModelValidator can
+    // CONFIRM combination sats (UFApply table lookup) instead of flooring them
+    // to unknown on Indeterminate. Scoped to combination mode (sharedTermRegistry_)
+    // since pure QF_UF already gets functionInterps from CandidateModelSearch.
+    // Read once in the constructor.
+    bool ufModelEnabled_ = false;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.

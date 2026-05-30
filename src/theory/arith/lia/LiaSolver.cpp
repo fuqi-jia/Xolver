@@ -38,6 +38,8 @@ LiaSolver::LiaSolver() {
     repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
     const char* cutsEnv = std::getenv("XOLVER_LIA_CUTS");
     cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
+    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
+    impliedEqEnabled_ = (impl && *impl && *impl != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -235,11 +237,6 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         bool ok = normalizeTheoryClause(pendingConflict_->conflict.clause);
         assert(ok && "complementary literal in pending conflict");
         (void)ok;
-        if (auto z3r = z3CheckCurrentState(); z3r && *z3r) {
-            std::cerr << "[UNSOUND_LIA_LEMMA] pending conflict but Z3 says SAT\n";
-            dumpState("unsat_pending_UNSOUND");
-            return TheoryCheckResult::unknown();
-        }
         dumpState("unsat_pending");
         return TheoryCheckResult::mkConflict(pendingConflict_->conflict);
     }
@@ -385,6 +382,33 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
                 // complementary pair slipped in), fall back to the previous
                 // sound-but-incomplete Unknown.
                 return TheoryCheckResult::unknown();
+            }
+            // Track B fix (LIA): when proveFixedValue misses (Wisa class), try
+            // the LP-duality probe — true multi-row Farkas via feasibility
+            // query. Same RAII/marker discipline as LRA. Without this, SAT can
+            // satisfy by deciding the deduced eq atom FALSE and LIA would
+            // silently accept the diseq under a polyhedron that actually
+            // entails equality.
+            //
+            // GATED by XOLVER_LIA_LP_DUALITY (default OFF): the synthetic
+            // alia_012 case regressed from sat to unknown when this fired
+            // unconditionally — likely an integer-vs-LP interaction (the
+            // simplex relaxation pins what integer reasoning doesn't, and our
+            // probe over-fires in the LIA context). Keep the LRA Track B fix
+            // ON (it recovers pos_pinbounds without regressions); guard the
+            // LIA mirror behind a separate flag until the integer/LP edge is
+            // understood and the alia_012 class re-passes.
+            static const bool liaProbeOk = std::getenv("XOLVER_LIA_LP_DUALITY") != nullptr;
+            if (liaProbeOk && impliedEqEnabled_ && !fixedOpt) {
+                std::vector<SatLit> probeReasons;
+                if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
+                    TheoryConflict tc;
+                    for (auto l : probeReasons) tc.clause.push_back(l);
+                    tc.clause.push_back(ieq.reason);
+                    if (normalizeTheoryClause(tc.clause)) {
+                        return TheoryCheckResult::mkConflict(std::move(tc));
+                    }
+                }
             }
             // Honor a DECIDED interface disequality the convex model violates:
             // (a != b) decided but the simplex point happens to set a = b
@@ -1128,6 +1152,58 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     return TheoryCheckResult::consistent();
 }
 
+// Track A mirror for LIA (see LraSolver::tryProvePairEqualityByLpDuality for
+// the discipline). Same RAII, marker filter, conflict-state clear.
+bool LiaSolver::tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons) {
+    static const SatLit MARKER{0, true};
+    struct ProbeScope {
+        GeneralSimplex& gs;
+        int level;
+        ProbeScope(GeneralSimplex& g, int lvl) : gs(g), level(lvl) { gs.push(); }
+        ~ProbeScope() { gs.pop(); gs.backtrackToLevel(level); }
+        ProbeScope(const ProbeScope&) = delete;
+        ProbeScope& operator=(const ProbeScope&) = delete;
+    };
+    auto collectAndFilter = [&](std::vector<SatLit>& out) {
+        for (const auto& br : gs_.getConflict()) {
+            if (br.reason == MARKER) continue;
+            out.push_back(br.reason);
+        }
+    };
+    std::vector<SatLit> upperReasons, lowerReasons;
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(-1))), MARKER);
+        bool ok = gs_.assertUpper(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(upperReasons);
+        if (!unsat) return false;
+    }
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(1))), MARKER);
+        bool ok = gs_.assertLower(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(lowerReasons);
+        if (!unsat) return false;
+    }
+    outReasons = std::move(upperReasons);
+    outReasons.insert(outReasons.end(), lowerReasons.begin(), lowerReasons.end());
+    std::sort(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+    outReasons.erase(std::unique(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), outReasons.end());
+    assert(std::none_of(outReasons.begin(), outReasons.end(),
+        [](const SatLit& r) { return r == MARKER; }) &&
+        "Track A LIA: marker bound leaked into emitted reason set");
+    return true;
+}
+
 std::vector<TheorySolver::SharedEqualityPropagation>
 LiaSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return {};
@@ -1206,12 +1282,67 @@ LiaSolver::getDeducedSharedEqualities() {
             if (nameToVar.find(nm) == nameToVar.end()) continue;
             sharedVars.push_back(stId);
         }
-        for (size_t i = 0; i < sharedVars.size(); ++i) {
-            for (size_t j = i + 1; j < sharedVars.size(); ++j) {
+        const int n = static_cast<int>(sharedVars.size());
+        std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
                 auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
                 if (reasons.empty()) continue;
+                adj[i].push_back({j, reasons});
+                adj[j].push_back({i, reasons});
                 result.push_back(TheorySolver::SharedEqualityPropagation{
                     sharedVars[i], sharedVars[j], std::move(reasons)});
+            }
+        }
+
+        // Track 2b Step 1 (XOLVER_SIMPLEX_IMPLIED_EQ): transitive closure over
+        // the direct-pair edges. If two shared vars are linked through a chain
+        // of asserted equalities (x = z and z = y), emit x = y too with the
+        // UNION of all SatLits along the BFS path. Sound by construction.
+        // Deduped against direct pairs emitted above.
+        if (impliedEqEnabled_ && n > 2) {
+            auto pairKey = [](int a, int b) -> uint64_t {
+                int lo = std::min(a, b), hi = std::max(a, b);
+                return (static_cast<uint64_t>(lo) << 32) | static_cast<uint32_t>(hi);
+            };
+            std::unordered_set<uint64_t> emittedPair;
+            for (int i = 0; i < n; ++i)
+                for (const auto& [j, rs] : adj[i])
+                    if (i < j) emittedPair.insert(pairKey(i, j));
+            for (int i = 0; i < n; ++i) {
+                std::vector<int> parent(n, -1);
+                std::vector<std::vector<SatLit>> edgeRs(n);
+                std::vector<int> bfs;
+                parent[i] = i;
+                bfs.push_back(i);
+                for (size_t head = 0; head < bfs.size(); ++head) {
+                    int u = bfs[head];
+                    for (const auto& [v, rs] : adj[u]) {
+                        if (parent[v] != -1) continue;
+                        parent[v] = u;
+                        edgeRs[v] = rs;
+                        bfs.push_back(v);
+                    }
+                }
+                for (int j = i + 1; j < n; ++j) {
+                    if (parent[j] == -1) continue;
+                    if (emittedPair.count(pairKey(i, j))) continue;
+                    std::vector<SatLit> chain;
+                    for (int cur = j; cur != i; cur = parent[cur])
+                        for (SatLit s : edgeRs[cur]) chain.push_back(s);
+                    std::sort(chain.begin(), chain.end(),
+                        [](SatLit a, SatLit b) {
+                            if (a.var != b.var) return a.var < b.var;
+                            return a.sign < b.sign;
+                        });
+                    chain.erase(std::unique(chain.begin(), chain.end(),
+                        [](SatLit a, SatLit b) {
+                            return a.var == b.var && a.sign == b.sign;
+                        }), chain.end());
+                    emittedPair.insert(pairKey(i, j));
+                    result.push_back(TheorySolver::SharedEqualityPropagation{
+                        sharedVars[i], sharedVars[j], std::move(chain)});
+                }
             }
         }
     }
@@ -1595,73 +1726,6 @@ void LiaSolver::dumpState(const std::string& tag) const {
     }
 
     ofs.flush();
-}
-
-std::optional<bool> LiaSolver::z3CheckCurrentState() const {
-    const char* env = std::getenv("XOLVER_LIA_Z3_CHECK");
-    if (!env || !*env) return std::nullopt;
-
-    std::filesystem::path tmpDir = std::filesystem::temp_directory_path();
-    std::string base = "xolver_lia_z3check_" + std::to_string(getpid()) + "_" + std::to_string(dumpCounter_);
-    std::filesystem::path smtPath = tmpDir / (base + ".smt2");
-    std::filesystem::path outPath = tmpDir / (base + ".out");
-
-    {
-        std::ofstream ofs(smtPath);
-        if (!ofs) return std::nullopt;
-
-        ofs << "(set-logic QF_LIA)\n";
-        std::unordered_set<std::string> vars;
-        for (const auto& a : activeAtoms_) {
-            for (const auto& t : a.lhs.terms) vars.insert(t.first);
-        }
-        for (const auto& d : disequalities_) {
-            for (const auto& t : d.lhs.terms) vars.insert(t.first);
-        }
-        for (const auto& v : vars) {
-            ofs << "(declare-fun " << v << " () Int)\n";
-        }
-        for (const auto& a : activeAtoms_) {
-            Relation effectiveRel = a.value ? a.rel : negateRelation(a.rel);
-            std::string lhsStr = linearFormToSmtLib(a.lhs);
-            std::string rhsStr = mpqToSmtLib(a.rhs);
-            if (effectiveRel == Relation::Neq) {
-                ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
-            } else {
-                ofs << "(assert (" << relationToSmtLib(effectiveRel) << " " << lhsStr << " " << rhsStr << "))\n";
-            }
-        }
-        for (const auto& d : disequalities_) {
-            std::string lhsStr = linearFormToSmtLib(d.lhs);
-            std::string rhsStr = mpqToSmtLib(d.rhs);
-            ofs << "(assert (distinct " << lhsStr << " " << rhsStr << "))\n";
-        }
-        ofs << "(check-sat)\n";
-    }
-
-    std::string cmd = std::string("z3 -T:5 ") + smtPath.string() + " > " + outPath.string() + " 2>/dev/null";
-    int ret = std::system(cmd.c_str());
-    (void)ret;
-
-    std::ifstream ifs(outPath);
-    if (!ifs) {
-        std::filesystem::remove(smtPath);
-        std::filesystem::remove(outPath);
-        return std::nullopt;
-    }
-    std::string line;
-    bool isSat = false;
-    while (std::getline(ifs, line)) {
-        if (line.find("sat") != std::string::npos && line.find("unsat") == std::string::npos) {
-            isSat = true;
-        } else if (line.find("unsat") != std::string::npos) {
-            isSat = false;
-        }
-    }
-
-    std::filesystem::remove(smtPath);
-    std::filesystem::remove(outPath);
-    return isSat;
 }
 
 } // namespace xolver
