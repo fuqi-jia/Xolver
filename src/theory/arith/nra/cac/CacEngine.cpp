@@ -241,7 +241,6 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             // recurses as before, so SAT correctness is unchanged.
             bool earlyHit = false;
             if (earlyInfeas_) {
-                std::vector<size_t> earlyOriginSet;
                 for (size_t ci = 0; ci < cons_.size(); ++ci) {
                     if (consMainLevel_[ci] < 0 || consMainLevel_[ci] > level) continue;
                     if (consPid_[ci] == NullPoly) continue;
@@ -250,10 +249,8 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                     if (relationHolds(sig, cons_[ci].rel)) continue;            // satisfied
                     cellBoundaries.push_back(cons_[ci].poly);
                     cellOrigins.push_back(ci);
-                    earlyOriginSet.push_back(ci);
                     earlyHit = true;
                 }
-                (void)earlyOriginSet;
                 if (earlyHit) levelEarlyHit = true;
             }
             if (!earlyHit) {
