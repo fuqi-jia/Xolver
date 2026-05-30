@@ -1,6 +1,7 @@
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 
 #include <algorithm>
+#include <iostream>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -10,6 +11,31 @@ namespace xolver {
 ZoharBwiAxiomEmitter::ZoharBwiAxiomEmitter(CoreIr& ir, SortId boolSortId)
     : ir_(ir), boolSortId_(boolSortId), intSortId_(ir.intSortId()) {}
 
+// Find-or-create: scan existing exprs for a structurally-equal node before
+// minting a fresh one. Reusing an existing ExprId means the Atomizer (which
+// keys on ExprId) assigns the SAME SAT variable to the axiom's atom and the
+// user's structurally-equivalent atom, so the Boolean layer can directly
+// refute "axiom asserts P" + "user asserts not P" — no theory-level
+// atom-equivalence propagation needed.  This is what closes the
+// recursion-style axiom chains without EUF UF-model channel support.
+//
+// O(N) per call where N = current ir_.size(); acceptable because emitter
+// runs once at frontend time on a formula of bounded size.
+static ExprId findExisting(const CoreIr& ir, Kind kind, SortId sort,
+                           std::initializer_list<ExprId> kids) {
+    for (ExprId id = 0; id < static_cast<ExprId>(ir.size()); ++id) {
+        const CoreExpr& n = ir.get(id);
+        if (n.kind != kind) continue;
+        if (n.sort != sort) continue;
+        if (n.children.size() != kids.size()) continue;
+        bool eq = true;
+        size_t i = 0;
+        for (ExprId k : kids) { if (n.children[i++] != k) { eq = false; break; } }
+        if (eq) return id;
+    }
+    return NullExpr;
+}
+
 bool ZoharBwiAxiomEmitter::isUfApplyNamed(const CoreExpr& node,
                                           std::string_view name) {
     if (node.kind != Kind::UFApply) return false;
@@ -18,66 +44,84 @@ bool ZoharBwiAxiomEmitter::isUfApplyNamed(const CoreExpr& node,
 }
 
 ExprId ZoharBwiAxiomEmitter::mkConstInt(int64_t v) {
+    // Hash-cons ConstInts by value (the existing convention in CoreIr: const-fold
+    // passes already canonicalize repeated literals). Scan for an existing
+    // ConstInt with the same int64 payload.
+    for (ExprId id = 0; id < static_cast<ExprId>(ir_.size()); ++id) {
+        const CoreExpr& n = ir_.get(id);
+        if (n.kind != Kind::ConstInt || n.sort != intSortId_) continue;
+        auto* iv = std::get_if<int64_t>(&n.payload.value);
+        if (iv && *iv == v) return id;
+    }
     CoreExpr e;
-    e.kind = Kind::ConstInt;
-    e.sort = intSortId_;
+    e.kind = Kind::ConstInt; e.sort = intSortId_;
     e.payload = Payload(v);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkGeq(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Geq; e.sort = boolSortId_;
+    if (auto id = findExisting(ir_, Kind::Geq, boolSortId_, {a, b}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Geq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkLeq(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Leq; e.sort = boolSortId_;
+    if (auto id = findExisting(ir_, Kind::Leq, boolSortId_, {a, b}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Leq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkEq(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Eq; e.sort = boolSortId_;
+    // Eq is symmetric — accept either child order from the existing exprs.
+    if (auto id = findExisting(ir_, Kind::Eq, boolSortId_, {a, b}); id != NullExpr) return id;
+    if (auto id = findExisting(ir_, Kind::Eq, boolSortId_, {b, a}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Eq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkImplies(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Implies; e.sort = boolSortId_;
+    if (auto id = findExisting(ir_, Kind::Implies, boolSortId_, {a, b}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Implies; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkAnd(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::And; e.sort = boolSortId_;
+    // And is symmetric.
+    if (auto id = findExisting(ir_, Kind::And, boolSortId_, {a, b}); id != NullExpr) return id;
+    if (auto id = findExisting(ir_, Kind::And, boolSortId_, {b, a}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::And; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkAdd(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Add; e.sort = intSortId_;
+    if (auto id = findExisting(ir_, Kind::Add, intSortId_, {a, b}); id != NullExpr) return id;
+    if (auto id = findExisting(ir_, Kind::Add, intSortId_, {b, a}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Add; e.sort = intSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkMul(ExprId a, ExprId b) {
-    CoreExpr e;
-    e.kind = Kind::Mul; e.sort = intSortId_;
+    if (auto id = findExisting(ir_, Kind::Mul, intSortId_, {a, b}); id != NullExpr) return id;
+    if (auto id = findExisting(ir_, Kind::Mul, intSortId_, {b, a}); id != NullExpr) return id;
+    CoreExpr e; e.kind = Kind::Mul; e.sort = intSortId_;
     e.children.push_back(a); e.children.push_back(b);
     return ir_.add(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg) {
-    CoreExpr e;
-    e.kind = Kind::UFApply;
-    e.sort = intSortId_;
+    // Reuse an existing (pow2 arg) UFApply if one is already in the IR.
+    for (ExprId id = 0; id < static_cast<ExprId>(ir_.size()); ++id) {
+        const CoreExpr& n = ir_.get(id);
+        if (!isUfApplyNamed(n, "pow2")) continue;
+        if (n.children.size() == 1 && n.children[0] == arg) return id;
+    }
+    CoreExpr e; e.kind = Kind::UFApply; e.sort = intSortId_;
     e.payload = Payload(std::string("pow2"));
     e.children.push_back(arg);
     return ir_.add(std::move(e));
@@ -120,14 +164,20 @@ void ZoharBwiAxiomEmitter::collectTerms(
 }
 
 // Identifies (Add x 1) or (Add 1 x): if so, returns x; otherwise NullExpr.
+// `1` can be represented as either ConstInt(int64=1) (post-normalization) or
+// ConstReal/ConstInt(string="1") (parser default for numeric literals before
+// ArithCastNormalizer rewrites them) — accept both, since our plugin runs
+// before ArithCastNormalizer.
 static ExprId addOnePredecessor(const CoreIr& ir, ExprId id) {
     const CoreExpr& node = ir.get(id);
     if (node.kind != Kind::Add || node.children.size() != 2) return NullExpr;
     auto isOne = [&](ExprId c) {
         const CoreExpr& cn = ir.get(c);
-        if (cn.kind != Kind::ConstInt) return false;
-        auto* iv = std::get_if<int64_t>(&cn.payload.value);
-        return iv && *iv == 1;
+        if (cn.kind != Kind::ConstInt && cn.kind != Kind::ConstReal) return false;
+        if (auto* iv = std::get_if<int64_t>(&cn.payload.value)) return *iv == 1;
+        if (auto* sv = std::get_if<std::string>(&cn.payload.value))
+            return *sv == "1" || *sv == "1.0";
+        return false;
     };
     if (isOne(node.children[1])) return node.children[0];
     if (isOne(node.children[0])) return node.children[1];
@@ -136,6 +186,7 @@ static ExprId addOnePredecessor(const CoreIr& ir, ExprId id) {
 
 size_t ZoharBwiAxiomEmitter::emitPow2Recursion(
         const std::unordered_set<ExprId>& pow2Terms) {
+    static const bool diag = std::getenv("XOLVER_NIA_ZOHAR_DIAG") != nullptr;
     // Build a map arg-ExprId -> pow2-term-ExprId so we can REUSE the existing
     // (pow2 x) ExprId in the recursion's RHS (rather than mint a fresh node).
     // Reusing the ExprId means atomization assigns the same SAT variable, so
@@ -159,6 +210,10 @@ size_t ZoharBwiAxiomEmitter::emitPow2Recursion(
         if (pred == NullExpr) continue;
         auto it = argToPow2.find(pred);
         if (it == argToPow2.end()) continue;
+        if (diag) {
+            std::cerr << "[ZOHAR-REC] emitting for p=" << p << " pred=" << pred
+                      << " pPred=" << it->second << "\n";
+        }
         ExprId pPred = it->second;  // the existing (pow2 pred) ExprId
         // (=> (>= pred 0) (= (pow2 (+ pred 1)) (* 2 (pow2 pred))))
         ExprId predGe0 = mkGeq(pred, zero);

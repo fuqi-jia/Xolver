@@ -870,6 +870,10 @@ public:
             e && *e && *e != '0') {
             ZoharBwiAxiomEmitter zohar(*ir, boolSortId_);
             zohar.run();
+            if (std::getenv("XOLVER_NIA_ZOHAR_DIAG")) {
+                std::cerr << "[ZOHAR-PLUGIN] detected=" << zohar.detected()
+                          << " axioms=" << zohar.axiomCount() << "\n";
+            }
         }
 
         // Lower integer div/mod before arithmetic extraction.
