@@ -2,8 +2,6 @@
 
 Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
-Submitted as a Standalone solver to **SMT-COMP 2026** in the QF\_NonLinearIntArith, QF\_NonLinearRealArith, and QF\_Equality+NonLinearArith divisions.
-
 ---
 
 ## Supported logics
@@ -111,23 +109,6 @@ The regression harness compares each verdict against z3/cvc5 and flags any sat�
 
 ---
 
-## Status
-
-| Component | State |
-|---|---|
-| SMT-LIB frontend, lowering, atomizer | functional |
-| CaDiCaL SAT + CDCL(T) loop | functional |
-| LRA, LIA, IDL, RDL | functional |
-| NRA — CDCAC + Collins/Lazard | functional |
-| NIA — RRT + algebraic + modular + bit-blast + integer-CDCAC | functional |
-| NIRA, LIRA | functional |
-| EUF, arrays (read-over-write + extensionality) | functional |
-| Datatypes | functional |
-| Nelson–Oppen combination | functional |
-| MCSAT, advisor, proof emission, OMT | research |
-
----
-
 ## License
 
 Apache License 2.0 — see [`LICENSE`](LICENSE). Third-party dependency manifest in [`NOTICE`](NOTICE).
@@ -141,7 +122,7 @@ Xolver was developed with substantial assistance from AI coding agents (Claude O
 ```bibtex
 @software{xolver,
   title  = {Xolver: an SMT solver for nonlinear arithmetic},
-  author = {Jia, Fuqi and contributors},
+  author = {Fuqi Jia and contributors},
   year   = {2026},
   url    = {https://github.com/fuqi-jia/Xolver}
 }
