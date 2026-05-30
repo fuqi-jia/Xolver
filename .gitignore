@@ -134,7 +134,15 @@ eval/
 results/
 tools/inventory/
 
+# Differential run outputs (per-node data dumps emitted in CWD on the panda)
+panda*_*.sqlite
+panda*_*.csv
+diff_*_node*.csv
+
 # Campaign-specific tools (panda-host paths / server-bound / one-off ablations)
+# NOTE: tools/diff_common.sh + tools/diff_{ingest,merge,report}.py are intentionally
+# TRACKED (no host paths) — they are the per-case schema pipeline, shipped in the
+# deploy tarball alongside the ignored run scripts below.
 tools/run.sh
 tools/run_differential.sh
 tools/run_z3.sh
