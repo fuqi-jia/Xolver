@@ -120,6 +120,8 @@ cmd_package() {
         diff_ingest.py \
         diff_merge.py \
         diff_report.py \
+        diff_xolver_only.py \
+        diff_query.py \
         run_benchmark.py \
         analyze_benchmark.py \
         compare_benchmarks.py \
