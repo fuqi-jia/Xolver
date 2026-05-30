@@ -170,13 +170,28 @@ private:
     // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): emit transitively-closed and/or
     // polyhedrally-implied shared equalities through the Nelson-Oppen channel,
     // not just the directly-asserted 2-var pairs the per-pair detector finds.
-    // Step 1 (transitivity): closes chains of asserted equalities (x=z and z=y
-    // -> x=y) over the shared-var graph; chain reasons are the union of the
-    // edge SatLits along the BFS path. Step 2 (polyhedral): aux-var tight-bound
-    // query — emits a=b when the simplex bound-propagation engine proves
-    // (a-b) in [0,0] across the whole polyhedron (every feasible model). Read
-    // once in the ctor.
+    //   Step 1 (transitivity): closes chains of asserted equalities (x=z and
+    //     z=y -> x=y) over the shared-var graph.
+    //   Step 2 (proveFixedValue): emits eq when both vars of an aux are
+    //     individually fixed by tableau-row chase.
+    //   Step 3 / Track A (LP-duality probe): per shared pair, push/assert
+    //     strict opposite bound / check / pop; if both strict directions are
+    //     infeasible, the polyhedron pins (a - b) = 0 in every feasible model
+    //     (multi-row Farkas via feasibility query). Bounded by lpDualityBudget_
+    //     probes per call to keep big-corpus runs from regressing.
+    // Read once in the ctor.
     bool impliedEqEnabled_ = false;
+    int lpDualityBudget_ = 100;  // XOLVER_LRA_LP_DUALITY_BUDGET; 0 disables Track A.
+
+    // Track A helper: per-pair LP-duality probe. Returns true and fills
+    // outReasons with the (filtered) Farkas reasons if the polyhedron pins
+    // (aux value) == 0; returns false otherwise. Uses push/assertUpper/check/
+    // pop (and symmetric for lower) with a UNIQUE marker SatLit on the probe
+    // bound — every emission gets a debug assert that the marker is NEVER in
+    // the returned reasons (the proof-by-contradiction probe must not leak
+    // its artificial bound). RAII'd: the simplex state is byte-equivalent
+    // before push and after pop on the no-emit path.
+    bool tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons);
 
     // cb_decide feasibility-eval cache (v2): per atom satVar, the STATIC linear
     // form as (var-NAME, double coeff) pairs + double rhs + relation, resolved

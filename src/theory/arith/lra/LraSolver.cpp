@@ -30,6 +30,10 @@ LraSolver::LraSolver() {
     // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    const char* budget = std::getenv("XOLVER_LRA_LP_DUALITY_BUDGET");
+    if (budget && *budget) {
+        try { lpDualityBudget_ = std::max(0, std::stoi(budget)); } catch (...) {}
+    }
 }
 
 LraSolver::~LraSolver() {
@@ -573,6 +577,97 @@ TheoryCheckResult LraSolver::assertInterfaceDisequality(
     return TheoryCheckResult::consistent();
 }
 
+// Track A (LP-duality polyhedral implied-equality probe). Per shared pair
+// (a, b), assert the strict negation of (a - b) = 0 on the aux var representing
+// (va - vb) and run feasibility check. If both directions are infeasible, the
+// polyhedron pins (a - b) = 0 in every feasible model — a true multi-row
+// Farkas implication, not just per-row chase. The simplex state is byte-
+// equivalent before push and after pop on the no-emit path (RAII pop guarantee).
+// The marker SatLit identifies the proof-by-contradiction probe bound so it can
+// be filtered out of the emitted reasons (the marker is NOT part of the
+// asserted state; leaking it into a reason would break downstream explanation).
+//
+// Marker SatLit = SatLit{0, true}. CaDiCaL allocates vars from 1 upward, so
+// var==0 never identifies a real solver literal. The triple-overspec — also
+// matching (var == aux) — is enforced at the assertion site by ensuring no
+// other code path passes MARKER. The runtime assert below enforces "marker
+// never in any emitted reason set" as a property invariant of this method.
+bool LraSolver::tryProvePairEqualityByLpDuality(int aux, std::vector<SatLit>& outReasons) {
+    static const SatLit MARKER{0, true};
+
+    // RAII pop: even if check() throws or returns unexpectedly, pop runs.
+    // CRITICAL: pop() only restores bound state — it does NOT clear
+    // hasImmediateConflict_ / conflict_, which our probe's check() may have
+    // populated. Without explicit clear, the next real LRA check returns a
+    // STALE conflict from our probe (observed: TM gets a phantom conflict at
+    // NO check #2 right after a probe emit, dropping the recovery to sat).
+    // backtrackToLevel(level) clears those fields and leaves all bounds with
+    // level <= the level (so it is bound-state byte-equivalent to just pop).
+    struct ProbeScope {
+        GeneralSimplex& gs;
+        int level;
+        ProbeScope(GeneralSimplex& g, int lvl) : gs(g), level(lvl) { gs.push(); }
+        ~ProbeScope() { gs.pop(); gs.backtrackToLevel(level); }
+        ProbeScope(const ProbeScope&) = delete;
+        ProbeScope& operator=(const ProbeScope&) = delete;
+    };
+
+    auto collectAndFilter = [&](std::vector<SatLit>& out) {
+        // Skip BoundReasons whose reason == MARKER — those are the probe bound
+        // (proof-by-contradiction witness, not part of the asserted state).
+        for (const auto& br : gs_.getConflict()) {
+            if (br.reason == MARKER) continue;
+            out.push_back(br.reason);
+        }
+    };
+
+    std::vector<SatLit> upperReasons, lowerReasons;
+
+    // Probe 1: assert aux <= -δ (strict aux < 0). Unsat ⇒ aux ≥ 0 in every model.
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(-1))), MARKER);
+        bool ok = gs_.assertUpper(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(upperReasons);
+        if (!unsat) return false;
+    }
+
+    // Probe 2: assert aux >= +δ (strict aux > 0). Unsat ⇒ aux ≤ 0 in every model.
+    {
+        ProbeScope scope(gs_, currentLevel_);
+        BoundInfo strict(BoundValue(DeltaRational(mpq_class(0), mpq_class(1))), MARKER);
+        bool ok = gs_.assertLower(aux, strict, currentLevel_);
+        bool unsat = !ok || gs_.check() == GeneralSimplex::Result::Unsat;
+        if (unsat) collectAndFilter(lowerReasons);
+        if (!unsat) return false;
+    }
+
+    // Combine + dedup. Both directions infeasible ⇒ aux pinned at 0 in every
+    // feasible model, so (a - b) = 0 is implied for the pair the aux represents.
+    outReasons = std::move(upperReasons);
+    outReasons.insert(outReasons.end(), lowerReasons.begin(), lowerReasons.end());
+    std::sort(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            if (a.var != b.var) return a.var < b.var;
+            return a.sign < b.sign;
+        });
+    outReasons.erase(std::unique(outReasons.begin(), outReasons.end(),
+        [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), outReasons.end());
+
+    // Soundness invariant: marker MUST NEVER appear in the emitted reasons.
+    // This is the proof-by-contradiction probe — leaking it would cite an
+    // artificial bound and break downstream explanation chains. A debug assert
+    // here catches any filter regression at runtime.
+    assert(std::none_of(outReasons.begin(), outReasons.end(),
+        [](const SatLit& r) { return r == MARKER; }) &&
+        "Track A: marker bound leaked into emitted reason set");
+
+    return true;
+}
+
 std::vector<TheorySolver::SharedEqualityPropagation>
 LraSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return {};
@@ -720,6 +815,40 @@ LraSolver::getDeducedSharedEqualities() {
             emittedPair.insert(k);
             result.push_back(TheorySolver::SharedEqualityPropagation{
                 sharedVars[i], sharedVars[j], std::move(rs)});
+        }
+
+        // Step 3 / Track A: LP-duality probe — true multi-row Farkas via
+        // push/assert-strict/check/pop. Catches the Wisa-style case where the
+        // polyhedron pins (a - b) = 0 by a combination of 3+ inequalities that
+        // doesn't bottom out via proveFixedValue. Pre-filter: skip pairs whose
+        // current simplex value isn't already 0 (the polyhedron doesn't pin
+        // them, so the probe would just return Sat). Budget: lpDualityBudget_
+        // probes per call (each up to 2 simplex checks); 0 disables.
+        int probesLeft = lpDualityBudget_;
+        if (probesLeft > 0) {
+            for (const auto& [pk, aux] : interfaceEqAuxVars_) {
+                if (probesLeft <= 0) break;
+                if (aux < 0) continue;
+                SharedTermId lo = static_cast<SharedTermId>(pk >> 32);
+                SharedTermId hi = static_cast<SharedTermId>(pk & 0xFFFFFFFFu);
+                auto liIt = sharedTermToIdx.find(lo);
+                auto hiIt = sharedTermToIdx.find(hi);
+                if (liIt == sharedTermToIdx.end() || hiIt == sharedTermToIdx.end()) continue;
+                int i = liIt->second, j = hiIt->second;
+                uint64_t k = pairKey(i, j);
+                if (emittedPair.count(k)) continue;
+                // Pre-filter: current model says aux != 0 ⇒ polyhedron does not
+                // pin ⇒ probe would be Sat in both directions ⇒ no emission.
+                DeltaRational cur = gs_.value(aux);
+                if (!(cur.a == 0 && cur.b == 0)) continue;
+                std::vector<SatLit> rs;
+                bool pinned = tryProvePairEqualityByLpDuality(aux, rs);
+                --probesLeft;
+                if (!pinned) continue;
+                emittedPair.insert(k);
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    sharedVars[i], sharedVars[j], std::move(rs)});
+            }
         }
     }
     return result;
