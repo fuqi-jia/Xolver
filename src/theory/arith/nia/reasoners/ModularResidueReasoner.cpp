@@ -355,6 +355,501 @@ NiaReasoningResult ModularResidueReasoner::run(
     for (size_t ni : neqIdx)
         neqs.push_back({constraints[ni].poly, constraints[ni].reason});
 
+    // --- 4.5 Symbolic-modulus residue branch (Track C1 Phase 2.5) ---
+    // Gated on XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO (pairs with the
+    // IntDivModLowerer flag that lets symbolic-divisor mod/div pass through
+    // QF_NIA without EUF). Pattern:
+    //   (eq a (+ (* b q) r))         -- the lowered mod equation, b symbolic
+    //   (eq a polynomial_form)       -- a separate equality giving a's form
+    //   (not (= r const_c))          -- the negated mod-residue assertion
+    // We compute residue := extractSymbolicResidue(polynomial_form, b). If
+    // residue is a constant != const_c (so r MUST equal residue, but is
+    // asserted != const_c -> conflict), we then run a brute-force grid
+    // certification (s in {2,3,5,7}, free vars in a small range) to confirm
+    // the unsat verdict at every grid point before emitting the conflict.
+    // Sound: extractSymbolicResidue is z3-validated (Phase 1, 8438
+    // assertions); the grid cert is a second-path verification using
+    // kernel.evalInteger over a fresh evaluation strategy.
+    static const bool symbolicEnabled =
+        std::getenv("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO") != nullptr;
+    static const bool symbDiag =
+        std::getenv("XOLVER_NIA_MODULAR_DIAG") != nullptr;
+    // --- 4.6 Newton-chain derivation (Track C1 Phase 2.6) ---
+    // Synthesize a check-eq from a Newton-step simpleDef + a base mod that
+    // pins denom*B at residue 1 (mod s). Mathematics:
+    //
+    //   simpleDef inv2 := 2*B - C*B^2     (Newton step: inv2 = B*(2 - C*B))
+    //   checkEq    -s*q + C*B - r = 0     (base mod's lowered eq)
+    //   simpleDef r := 1                  (base assertion: C*B ≡ 1 mod s)
+    //
+    //   ⇒ C*B = s*q + 1
+    //   ⇒ C*inv2 = (s*q + 1)*(1 - s*q) = 1 - q^2 * s^2
+    //
+    // The derived check-eq C*inv2 + q^2*s^2 - 1 = 0 then feeds Phase 2.5,
+    // which computes extractSymbolicResidue(1 - q^2*s^2, s^2) = 1 and
+    // conflicts with `(neq r_goal != 1)`. Grid cert in Phase 2.5 validates
+    // the verdict at s ∈ {2,3,5,7}. Sound by Phase 1 polynomial identity +
+    // base substitution + standard polynomial algebra (all exact over Z).
+    std::vector<std::pair<PolyId, std::vector<SatLit>>> synthesizedCheckEqs;
+    if (symbolicEnabled) {
+        // Build a fast lookup: simpleDef var name -> (defPoly, reason).
+        std::unordered_map<std::string, const SimpleDef*> simpleDefByVar;
+        for (const auto& sd : simpleDefs) simpleDefByVar[sd.vVar] = &sd;
+
+        for (const auto& nSd : simpleDefs) {
+            // Newton step simpleDef: defPoly has 2 terms: `2*B` and `-C*B^2`.
+            auto sdT = kernel_.terms(nSd.defPoly);
+            if (!sdT || sdT->size() != 2) continue;
+
+            // Pick the two terms; identify which is the linear-coeff-2 term
+            // and which is the quadratic-in-B / linear-in-C term.
+            const Term* t2B = nullptr;     // expects 2*B
+            const Term* tCBSq = nullptr;   // expects -C*B^2
+            for (size_t i = 0; i < 2; ++i) {
+                const Term& tt = (*sdT)[i];
+                if (tt.powers.size() == 1 && tt.powers[0].second == 1 &&
+                    tt.coefficient == 2) {
+                    t2B = &tt;
+                } else if (tt.powers.size() == 2 && tt.coefficient == -1) {
+                    tCBSq = &tt;
+                }
+            }
+            if (!t2B || !tCBSq) continue;
+            VarId bVid = t2B->powers[0].first;
+            // In tCBSq, one var with deg 2 (= B) and one with deg 1 (= C).
+            VarId cVid = NullVar;
+            VarId tcsqBVid = NullVar;
+            for (auto& [vid, e] : tCBSq->powers) {
+                if (e == 2) tcsqBVid = vid;
+                else if (e == 1) cVid = vid;
+            }
+            if (tcsqBVid != bVid || cVid == NullVar) continue;
+
+            std::string inv1Var = std::string(kernel_.varName(bVid));
+            std::string denomVar = std::string(kernel_.varName(cVid));
+
+            // Now find a base checkEq with shape:
+            //   sign_q * s * q + sign_C * C * B + sign_r * r = 0
+            // with sign_C == -sign_q == -sign_r (so rearrangement is
+            // C*B = s*q + r), AND r is a simpleDef var pinned to 1.
+            for (const auto& ce : checkEqs) {
+                auto ceT = kernel_.terms(ce.poly);
+                if (!ceT || ceT->size() != 3) continue;
+
+                const Term* tSQ = nullptr;     // s * q term (multi-var, deg 1 in each)
+                const Term* tCB = nullptr;     // C * B term (deg 1 in both)
+                const Term* tR  = nullptr;     // r term (linear, unit coeff)
+                const Term* tConst = nullptr;  // constant term (used by modInvVar1
+                                                // shape: -C*B + s*q + 1 = 0)
+                for (const Term& tt : *ceT) {
+                    if (tt.powers.empty()) {
+                        if (tConst) { tConst = nullptr; break; }
+                        tConst = &tt;
+                    } else if (tt.powers.size() == 1 && tt.powers[0].second == 1 &&
+                        (tt.coefficient == 1 || tt.coefficient == -1)) {
+                        if (tR) { tR = nullptr; break; }  // ambiguous
+                        tR = &tt;
+                    } else if (tt.powers.size() == 2) {
+                        bool hasC = false, hasB = false;
+                        for (auto& [vid, e] : tt.powers) {
+                            if (vid == cVid && e == 1) hasC = true;
+                            if (vid == bVid && e == 1) hasB = true;
+                        }
+                        if (hasC && hasB) tCB = &tt;
+                        else tSQ = &tt;
+                    }
+                }
+                if (!tSQ || !tCB) continue;
+                if (tCB->coefficient != 1 && tCB->coefficient != -1) continue;
+                if (tSQ->coefficient != 1 && tSQ->coefficient != -1) continue;
+                // Two shapes accepted:
+                //  (a) tR present, tConst absent — r-var pinned to 1 elsewhere.
+                //  (b) tR absent, tConst = +/-1 — Bezout witness baked into eq.
+                // Both lead to the same canonical form `C*B = s*q + 1`, but we
+                // need to check the signs:
+                //    (a) C*B and r must have opposite signs; s*q must match r's sign.
+                //    (b) C*B coefficient and tConst coefficient must agree on sign,
+                //        such that rearrangement yields `C*B = s*q + 1`.
+                bool variantA = (tR != nullptr && tConst == nullptr);
+                bool variantB = (tR == nullptr && tConst != nullptr);
+                if (!variantA && !variantB) continue;
+                if (variantA) {
+                    if (tCB->coefficient != -tR->coefficient) continue;
+                    if (tSQ->coefficient != tR->coefficient) continue;
+                } else {
+                    if (tConst->coefficient != 1 && tConst->coefficient != -1) continue;
+                    // C*B and tConst must have OPPOSITE signs (so `C*B - tConst = -s*q`
+                    // or `C*B = s*q + |tConst|` after sign normalisation).
+                    if (tCB->coefficient == tConst->coefficient) continue;
+                    if (tSQ->coefficient != tConst->coefficient) continue;
+                }
+
+                // Identify s and q from tSQ (both deg 1; we don't know which is
+                // which, so try both orderings).
+                std::array<VarId, 2> sqVars = {tSQ->powers[0].first,
+                                                tSQ->powers[1].first};
+                for (int order = 0; order < 2; ++order) {
+                    VarId sVid = sqVars[order];
+                    VarId qVid = sqVars[1 - order];
+                    if (sVid == cVid || sVid == bVid) continue;
+                    if (qVid == cVid || qVid == bVid) continue;
+
+                    // Validate the base value = 1 (variantA: from r simpleDef;
+                    // variantB: from tConst sign, where canonical form
+                    // `C*B = s*q + 1` requires |tConst| = 1).
+                    const SimpleDef* rSdRef = nullptr;
+                    if (variantA) {
+                        std::string rVar = std::string(kernel_.varName(
+                            tR->powers[0].first));
+                        auto rIt = simpleDefByVar.find(rVar);
+                        if (rIt == simpleDefByVar.end()) continue;
+                        if (!kernel_.isConstant(rIt->second->defPoly)) continue;
+                        mpq_class rValQ = kernel_.toConstant(rIt->second->defPoly);
+                        if (rValQ.get_den() != 1) continue;
+                        if (rValQ.get_num() != 1) continue;
+                        rSdRef = rIt->second;
+                    } else {
+                        // variantB: tConst is +/-1; combined with the sign
+                        // constraints above we already verified canonical form.
+                        // The constant absolute value must equal 1 (Bezout).
+                        mpz_class absC = tConst->coefficient;
+                        if (absC < 0) absC = -absC;
+                        if (absC != 1) continue;
+                    }
+
+                    // Now synthesize: C*inv2 + q^2 * s^2 - 1 = 0.
+                    PolyId pC = kernel_.mkVar(cVid);
+                    PolyId pInv2 = kernel_.mkVar(
+                        kernel_.getOrCreateVar(nSd.vVar));
+                    PolyId pQ = kernel_.mkVar(qVid);
+                    PolyId pS = kernel_.mkVar(sVid);
+                    PolyId q2 = kernel_.mul(pQ, pQ);
+                    PolyId s2 = kernel_.mul(pS, pS);
+                    PolyId q2s2 = kernel_.mul(q2, s2);
+                    PolyId cInv2 = kernel_.mul(pC, pInv2);
+                    PolyId one = kernel_.mkConst(mpq_class(1));
+                    PolyId synthPoly = kernel_.sub(
+                        kernel_.add(cInv2, q2s2), one);
+
+                    // Reasons: Newton simpleDef + base checkEq + (variantA: r=1
+                    // simpleDef; variantB: Bezout constant already in checkEq).
+                    std::vector<SatLit> reasons = {nSd.reason, ce.reason};
+                    if (rSdRef) reasons.push_back(rSdRef->reason);
+                    synthesizedCheckEqs.push_back({synthPoly,
+                                                    std::move(reasons)});
+                    if (symbDiag) std::cerr
+                        << "[MODRES-SYMB] Newton derived: "
+                        << kernel_.toString(synthPoly) << " = 0\n";
+                    goto next_newton;
+                }
+            }
+            next_newton:;
+        }
+    }
+
+    if (symbolicEnabled) {
+        // Pattern matcher for the lowered symbolic-mod eq atom:
+        //   poly = a_terms + (b_poly * q_var) + sign_r * r_var
+        // We look for a single linear unit-coeff term (r-candidate), and a
+        // single term that includes a deg-1 var whose coefficient polynomial
+        // (in the remaining vars of that monomial) is non-constant.
+        auto buildPolyFromTerms = [&](const std::vector<const Term*>& ts) -> PolyId {
+            PolyId acc = kernel_.mkZero();
+            for (const Term* t : ts) {
+                PolyId mono = kernel_.mkConst(mpq_class(t->coefficient));
+                for (const auto& [vid, e] : t->powers)
+                    mono = kernel_.mul(mono, kernel_.pow(kernel_.mkVar(vid),
+                                                        static_cast<uint32_t>(e)));
+                acc = kernel_.add(acc, mono);
+            }
+            return acc;
+        };
+        // Build a polynomial representing all terms EXCEPT one monomial. For
+        // the symbolic-coefficient extraction: given a term `coeff * q * X^p`
+        // where X^p is the remaining-vars part, the coefficient polynomial
+        // (in X) is `coeff * X^p`. We use this to recover `b` from the
+        // `b * q` term.
+        auto buildCoeffPolyExcept = [&](const Term* t,
+                                        VarId excludedVar) -> PolyId {
+            PolyId mono = kernel_.mkConst(mpq_class(t->coefficient));
+            for (const auto& [vid, e] : t->powers) {
+                if (vid == excludedVar) continue;
+                mono = kernel_.mul(mono, kernel_.pow(kernel_.mkVar(vid),
+                                                    static_cast<uint32_t>(e)));
+            }
+            return mono;
+        };
+
+        for (size_t ei = 0; ei < constraints.size(); ++ei) {
+            const auto& c = constraints[ei];
+            if (c.rel != Relation::Eq) continue;
+            auto termsOpt = kernel_.terms(c.poly);
+            if (!termsOpt) continue;
+            const auto& terms = *termsOpt;
+            if (terms.size() < 3) continue;
+
+            for (size_t ri = 0; ri < terms.size(); ++ri) {
+                const Term& rt = terms[ri];
+                if (rt.powers.size() != 1 || rt.powers[0].second != 1) continue;
+                if (rt.coefficient != 1 && rt.coefficient != -1) continue;
+                VarId rVid = rt.powers[0].first;
+                std::string rVar = std::string(kernel_.varName(rVid));
+                int rSign = rt.coefficient > 0 ? 1 : -1;
+
+                for (size_t qi = 0; qi < terms.size(); ++qi) {
+                    if (qi == ri) continue;
+                    const Term& qt = terms[qi];
+                    // Find a deg-1 var inside qt; the remaining factor (across
+                    // remaining vars, with the term coefficient) is b.
+                    for (const auto& [qVid, qExp] : qt.powers) {
+                        if (qExp != 1) continue;
+                        if (qVid == rVid) continue;
+                        // Canonical lowering form: `<aTerms> + <-b*q> + <-r> = 0`
+                        // i.e. the q-term and the r-term share the same sign and the
+                        // a-terms have the opposite sign. Require qSign == rSign so
+                        // the rearrangement `a = b*q + r` gives a positive modulus.
+                        int qSign = qt.coefficient > 0 ? 1 : -1;
+                        if (qSign != rSign) continue;
+                        std::string qVar = std::string(kernel_.varName(qVid));
+                        PolyId bPolyRaw = buildCoeffPolyExcept(&qt, qVid);
+                        // Coefficient of q in the poly is bPolyRaw (= qt.coeff * remaining).
+                        // For the rearrangement `a = b*q + r`, modulus b = -bPolyRaw / rSign.
+                        // With rSign == qSign, that's just -bPolyRaw (the sign flip cancels).
+                        PolyId bPoly = kernel_.neg(bPolyRaw);
+                        if (kernel_.isConstant(bPoly)) continue;  // numeric path
+                        // a_terms = all terms except the r-term and the q-term.
+                        std::vector<const Term*> aTerms;
+                        for (size_t k = 0; k < terms.size(); ++k)
+                            if (k != ri && k != qi) aTerms.push_back(&terms[k]);
+                        if (aTerms.empty()) continue;
+                        // a_poly_lhs: the lhs `a` polynomial. From `a + b*q*sign_q + r*sign_r = 0`:
+                        // (with sign_r being rt.coefficient sign) → a = -(b*q*sign_q + r*sign_r),
+                        // but `a_terms` are EXACTLY the monomials of `a` already, so just sum.
+                        PolyId aPolyLhs = buildPolyFromTerms(aTerms);
+                        // Note: `aPolyLhs` here is the actual `a` expression in
+                        // the equation `a + (-b*q -r*sign_r? or +b*q +r*sign_r)=0`.
+                        // Because we MOVE r and q*b to the other side: a = sign_r * (-r) +
+                        // (-coeff_q * q * b_rest). The math: poly = aTerms + b*q + sign_r*r,
+                        // where b includes the qt.coefficient. Rearranged:
+                        // aTerms = -(b*q) - sign_r*r. The constraint reads:
+                        // `<aTerms> + <qt> + <rt> = 0`. After moving:
+                        // `<a_poly_term_sum> = -<qt> - <rt>`. So the "value of a" expressed
+                        // as the polynomial of the rest is the negation of -<qt> - <rt>:
+                        // value(a_terms) = -(b * q + sign_r * r). But we don't need this
+                        // form — we need a_poly_form FROM ANOTHER constraint.
+                        // What we have so far: aPolyLhs is the polynomial that exactly
+                        // matches the LHS aTerms (so any other constraint asserting
+                        // `aPolyLhs = something` gives us the closed form to feed to
+                        // extractSymbolicResidue).
+
+                        // Look for a check-eq P with the SAME aTerms (so P - aTerms is
+                        // purely in non-aTerm vars and = -aPolyForm). I.e., P =
+                        // aPolyLhs + remainder_poly = 0 → aPolyLhs = -remainder_poly.
+                        // The polynomial form of `a` is then -remainder_poly.
+                        // Iterate the natural check-eqs plus any Phase 2.6
+                        // Newton-derived synthesized check-eqs. Each entry is
+                        // (poly, vector<reason>); regular check-eqs wrap the
+                        // single reason in a one-element vector.
+                        std::vector<std::pair<PolyId, std::vector<SatLit>>>
+                            combinedCheckEqs;
+                        combinedCheckEqs.reserve(checkEqs.size() +
+                                                  synthesizedCheckEqs.size());
+                        for (const auto& ce0 : checkEqs)
+                            combinedCheckEqs.push_back({ce0.poly, {ce0.reason}});
+                        for (const auto& sce : synthesizedCheckEqs)
+                            combinedCheckEqs.push_back(sce);
+                        for (const auto& ce : combinedCheckEqs) {
+                            auto ctermsOpt = kernel_.terms(ce.first);
+                            if (!ctermsOpt) continue;
+                            const auto& cterms = *ctermsOpt;
+                            // Try BOTH sign patterns for the a-monomial sub-match.
+                            // s = +1 means we look for a-terms with the SAME coefficient
+                            // (check-eq has form `a + rest = 0` -> a = -rest).
+                            // s = -1 means we look for a-terms with NEGATED coefficient
+                            // (check-eq has form `-a + rest = 0` -> a = +rest).
+                            PolyId aPolyForm = NullPoly;
+                            for (int aSign : {+1, -1}) {
+                                std::vector<const Term*> usedFromC(cterms.size(), nullptr);
+                                bool allMatched = true;
+                                for (const Term* at : aTerms) {
+                                    mpz_class wantCoeff = aSign * at->coefficient;
+                                    bool found = false;
+                                    for (size_t k = 0; k < cterms.size(); ++k) {
+                                        if (usedFromC[k]) continue;
+                                        const Term& ct = cterms[k];
+                                        if (ct.powers.size() != at->powers.size()) continue;
+                                        if (ct.coefficient != wantCoeff) continue;
+                                        bool powersEq = true;
+                                        for (size_t pi = 0; pi < at->powers.size(); ++pi) {
+                                            if (ct.powers[pi].first != at->powers[pi].first ||
+                                                ct.powers[pi].second != at->powers[pi].second) {
+                                                powersEq = false; break;
+                                            }
+                                        }
+                                        if (!powersEq) continue;
+                                        usedFromC[k] = &ct;
+                                        found = true;
+                                        break;
+                                    }
+                                    if (!found) { allMatched = false; break; }
+                                }
+                                if (!allMatched) continue;
+                                std::vector<const Term*> restTerms;
+                                for (size_t k = 0; k < cterms.size(); ++k)
+                                    if (!usedFromC[k]) restTerms.push_back(&cterms[k]);
+                                PolyId restPoly = buildPolyFromTerms(restTerms);
+                                // Check-eq: aSign*a + rest = 0 -> a = -rest/aSign.
+                                // aSign=+1 -> aPolyForm = -rest
+                                // aSign=-1 -> aPolyForm = +rest
+                                aPolyForm = (aSign == 1) ? kernel_.neg(restPoly)
+                                                          : restPoly;
+                                break;
+                            }
+                            if (aPolyForm == NullPoly) continue;
+
+                            auto residueOpt = kernel_.extractSymbolicResidue(aPolyForm, bPoly);
+                            if (!residueOpt) continue;
+                            if (!kernel_.isConstant(*residueOpt)) continue;
+                            mpq_class residueValQ = kernel_.toConstant(*residueOpt);
+                            if (residueValQ.get_den() != 1) continue;
+                            mpz_class residueVal = residueValQ.get_num();
+
+                            // Scan neqs for r_var != const_c (parse locally — the file's
+                            // pinnedNeq lambda is defined later inside run()).
+                            auto parseSingleVarNeq = [&](PolyId p)
+                                -> std::optional<std::tuple<std::string,int,mpz_class>> {
+                                auto tOpt = kernel_.terms(p);
+                                if (!tOpt) return std::nullopt;
+                                const Term* vt = nullptr;
+                                mpz_class cc = 0;
+                                for (const auto& tm : *tOpt) {
+                                    if (tm.powers.empty()) { cc += tm.coefficient; continue; }
+                                    if (vt) return std::nullopt;
+                                    if (tm.powers.size() != 1 ||
+                                        tm.powers[0].second != 1) return std::nullopt;
+                                    if (tm.coefficient != 1 && tm.coefficient != -1)
+                                        return std::nullopt;
+                                    vt = &tm;
+                                }
+                                if (!vt) return std::nullopt;
+                                int sgnV = vt->coefficient > 0 ? 1 : -1;
+                                return std::make_tuple(
+                                    std::string(kernel_.varName(vt->powers[0].first)),
+                                    sgnV, cc);
+                            };
+                            for (const auto& nq : neqs) {
+                                auto pin = parseSingleVarNeq(nq.poly);
+                                if (!pin) continue;
+                                auto [pinVar, pinSign, pinCc] = *pin;
+                                if (pinVar != rVar) continue;
+                                mpz_class forbiddenVal = -pinCc / pinSign;
+                                // sign_r adjustment: in the eq `aTerms + b*q + rSign*r = 0`,
+                                // the canonical residue assertion is on `r` directly.
+                                // Conflict iff residueVal == forbiddenVal * rSign ... actually
+                                // we just want r == residueVal AND r != forbiddenVal, so
+                                // conflict iff residueVal == forbiddenVal. But the sign on r
+                                // in the eq matters only for the direction; the canonical
+                                // residue from extractSymbolicResidue applies directly to
+                                // the variable r (since we rebuilt a_poly = -rest and the
+                                // eq says a = b*q + r, so a mod b = r when 0 <= r < b).
+                                if (residueVal != forbiddenVal) continue;
+                                if (symbDiag) std::cerr
+                                    << "[MODRES-SYMB] candidate conflict r=" << rVar
+                                    << " residue=" << residueVal.get_str()
+                                    << " forbidden=" << forbiddenVal.get_str()
+                                    << " — running grid cert\n";
+
+                                // Grid cert: substitute s ∈ {2,3,5,7} into ALL constraints
+                                // (we substitute every variable from `bPoly` since b is
+                                // single-variable for Phase 2.5 / extractSymbolicResidue's
+                                // monovariate requirement). For each prime, brute-force
+                                // every other free variable in {-3..3} and check if any
+                                // assignment satisfies every Eq and every pinned-neq;
+                                // if so the symbolic verdict is wrong, bail.
+                                auto bVars = kernel_.variables(bPoly);
+                                if (bVars.size() != 1) continue;  // safety (matches Phase 1)
+                                const std::string& modVar = bVars[0];
+                                std::vector<std::string> otherVars;
+                                {
+                                    std::unordered_set<std::string> seen;
+                                    for (const auto& cc : constraints)
+                                        for (const auto& v : kernel_.variables(cc.poly))
+                                            if (v != modVar && seen.insert(v).second)
+                                                otherVars.push_back(v);
+                                }
+                                const std::vector<long> primes = {2, 3, 5, 7};
+                                // Range shrinks as the number of free vars
+                                // grows so the cert runtime stays bounded:
+                                //   <=3 vars : {-3..3} (49 per dim)
+                                //   <=5 vars : {-2..2} (5)
+                                //   else     : {-1..1} (3)
+                                long lo = -3, hi = 3;
+                                if (otherVars.size() > 5) { lo = -1; hi = 1; }
+                                else if (otherVars.size() > 3) { lo = -2; hi = 2; }
+                                bool certOk = true;
+                                for (long pSample : primes) {
+                                    if (!certOk) break;
+                                    std::unordered_map<std::string, mpz_class> env;
+                                    env[modVar] = mpz_class(pSample);
+                                    std::vector<long> odo(otherVars.size(), lo);
+                                    auto inc = [&]() -> bool {
+                                        for (size_t i = 0; i < odo.size(); ++i) {
+                                            if (++odo[i] <= hi) return true;
+                                            odo[i] = lo;
+                                        }
+                                        return false;
+                                    };
+                                    auto evalSat = [&]() -> bool {
+                                        for (size_t i = 0; i < otherVars.size(); ++i)
+                                            env[otherVars[i]] = mpz_class(odo[i]);
+                                        for (const auto& cc : constraints) {
+                                            auto vv = kernel_.evalInteger(cc.poly, env);
+                                            if (!vv) return false;
+                                            bool ok = true;
+                                            switch (cc.rel) {
+                                                case Relation::Eq:  ok = (*vv == 0); break;
+                                                case Relation::Leq: ok = (*vv <= 0); break;
+                                                case Relation::Geq: ok = (*vv >= 0); break;
+                                                case Relation::Neq: ok = (*vv != 0); break;
+                                                case Relation::Lt:  ok = (*vv <  0); break;
+                                                case Relation::Gt:  ok = (*vv >  0); break;
+                                            }
+                                            if (!ok) return false;
+                                        }
+                                        return true;
+                                    };
+                                    do {
+                                        if (evalSat()) { certOk = false; break; }
+                                    } while (inc());
+                                }
+                                if (!certOk) {
+                                    if (symbDiag) std::cerr
+                                        << "[MODRES-SYMB] grid cert disagreement — bail\n";
+                                    continue;
+                                }
+                                if (symbDiag) std::cerr
+                                    << "[MODRES-SYMB] grid cert PASS — emit conflict\n";
+                                // Build conflict reason: the eq atom, the check-eq, and
+                                // the neq.
+                                std::unordered_set<uint32_t> seen;
+                                std::vector<SatLit> clause;
+                                auto add = [&](SatLit l) {
+                                    if (seen.insert(l.var).second) clause.push_back(l);
+                                };
+                                add(c.reason);
+                                for (SatLit r : ce.second) add(r);
+                                add(nq.reason);
+                                return {NiaReasoningKind::Conflict,
+                                        TheoryConflict{std::move(clause)},
+                                        std::nullopt};
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // --- 5. Primary (free) variables ---
     std::unordered_set<std::string> allVars;
     for (const auto& c : constraints)
