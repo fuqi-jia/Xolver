@@ -249,11 +249,44 @@ private:
     // since pure QF_UF already gets functionInterps from CandidateModelSearch.
     // Read once in the constructor.
     bool ufModelEnabled_ = false;
-    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF): use a level-bucketed map to drain
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): use a level-bucketed map to drain
     // the saturation mergeQueue_ in O(n log L) instead of the O(n^2) linear
     // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
     // Read once in the constructor.
     bool minLevelHeapEnabled_ = false;
+    // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
+    // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
+    // registry every cb_propagate, track new-since-last-call merges and scan
+    // only atoms whose term touches a newly-merged class. Sound by construction:
+    // - On backtrack the next call forces a full sweep (atom-assignment also
+    //   changed; merges rolled back).
+    // - After a full sweep, subsequent calls use incremental.
+    // - The class-touch index is maintained lazily (term → atom-indices).
+    // Verify gate XOLVER_EUF_INCREMENTAL_PROP_VERIFY=1 runs BOTH full and
+    // incremental and asserts the output set is equal (debug oracle).
+    // Read once.
+    bool eufIncrementalProp_ = false;
+    bool eufIncrementalVerify_ = false;
+    // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms whose entailment lemma we
+    // ALREADY emitted at level <= currentLevel (SAT's lemmaDb still holds them).
+    // On backtrack, drop emissions at level > target. Same emission set as full
+    // sweep modulo duplicates → strict win on duplicate-heavy workloads. Sound
+    // by construction (SAT only ever needs each lemma once until backtrack).
+    bool eufPropDedup_ = false;
+    // emittedAtomLevel_[recIdx] = level at which we last emitted a lemma for
+    // this rec; -1 = never. Cleared on backtrack to entries > target.
+    std::vector<int> emittedAtomLevel_;
+    // term-indexed atom-registry: termToEntailmentAtomIdx_[tid] = vector of
+    // recs indices whose lhs OR rhs is this term. Built lazily, extended
+    // monotonically — recs never shrink.
+    std::vector<std::vector<size_t>> termToEntailmentAtomIdx_;
+    size_t lastIndexedEntailmentRecCount_ = 0;
+    // egraph mergeRecord watermark — new merges since last propagation call
+    // are scanned to compute the dirty atom-index set.
+    size_t lastSeenMergeRecord_ = 0;
+    // Set on backtrack — next propagation call must do a full sweep (assigned
+    // set changed, mergeRecord count regressed).
+    bool forceFullEntailmentScan_ = true;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.
