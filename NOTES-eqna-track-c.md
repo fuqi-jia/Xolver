@@ -1,51 +1,66 @@
-# QF_UFNIA polyhedral-recovery target (Track C output)
+# QF_UFNIA polyhedral-recovery target (Track C output, post Track A + Track B)
 
-Source: NOTES/oracle_QF_UFNIA_sample.json
-Cases sampled: 31
+Source: NOTES/oracle_QF_UFNIA_sample.json (200 cases, 30 sampled)
 Per-config timeout: 12s
 
-## Detector-capability histogram
+## Track B status — pos_pinbounds + pos_polyhedral now RECOVER
+
+The synthetic LRA cases used to validate Track A's seam (`pos_pinbounds.smt2`,
+`pos_polyhedral.smt2`) now return correct `unsat` with
+`XOLVER_SIMPLEX_IMPLIED_EQ=1`. The Track B fix in LraSolver's
+`interfaceDisequalities_` conflict loop closes the SAT-escape that previously
+let SAT satisfy by negating the deduced eq atom (`v10002=F`).
+
+| case | OFF | ON (Track A + B) |
+|---|---|---|
+| pos_pinbounds | sat | **unsat** (recovered) |
+| pos_polyhedral | sat | **unsat** (recovered) |
+| neg_free | sat | sat (sound; no false UNSAT) |
+| pos_transitive | unsat | unsat (already caught) |
+
+## Detector-capability histogram (30 cases, post Track A + Track B)
 
 | bucket | count | meaning |
 |---|---|---|
 | already_solves | 14 | baseline returns oracle verdict |
-| iface_recovers | 1 | needs XOLVER_NIA_IFACE_LIFECYCLE |
+| iface_recovers | 1 | needs XOLVER_NIA_IFACE_LIFECYCLE (AndOrXor_709) |
 | uf_model_recovers | 0 | needs +XOLVER_EUF_UF_MODEL |
 | track2b_recovers | 0 | needs +XOLVER_SIMPLEX_IMPLIED_EQ |
-| unrecovered | 15 | none of above; further capability needed |
-| wrong | 0 | sound regression — must be 0 |
+| unrecovered | 15 | timeout-or-unknown under all three flags |
+| wrong | 0 | (critical: 0 sound regression) |
 
-## Per-case classification
+The 0 track2b_recovers on this QF_UFNIA sample is because NiaSolver does NOT
+use the LRA-style `assertedVarEqualityReason` / `interfaceEqAuxVars_` pattern
+(it manages interfaceDisequalities through its constraint set with
+`Relation::Neq` directly). Track B's LRA fix doesn't reach the QF_UFNIA path
+without a symmetric extension in NiaSolver.
 
-| case | oracle | bucket | baseline | iface | uf_model | track2b |
-|---|---|---|---|---|---|---|
-| qf_AddSub_1043_values_0.smt2 | sat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AddSub_1164_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AddSub_1176_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AddSub_1202_values_0.smt2 | sat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AddSub_1295_values_0.smt2 | sat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AndOrXor_1006_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AddSub_1165_values_0.smt2 | unsat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AndOrXor_1230_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_1288_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_1294_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_151_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_1733_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_1829_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_1831_values_0.smt2 | unsat | already_solves | unsat | unsat | unsat | unsat |
-| qf_AndOrXor_1844_values_0.smt2 | unsat | already_solves | unsat | unsat | unsat | unsat |
-| qf_AndOrXor_1849_values_0.smt2 | unsat | already_solves | unsat | unsat | unsat | unsat |
-| qf_AndOrXor_1885_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_2008_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_1900_values_0.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_2247_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_2113_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_2284_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_2265_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
-| qf_AndOrXor_2663_values_65.smt2 | unsat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_273_values_7.smt2 | sat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AndOrXor_280_values_3.smt2 | sat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_290_values_7.smt2 | sat | unrecovered | unknown | timeout | timeout | timeout |
-| qf_AndOrXor_523_values_0.smt2 | sat | unrecovered | unknown | unknown | unknown | unknown |
-| qf_AndOrXor_709_values_0.smt2 | sat | iface_recovers | unknown | sat | sat | sat |
-| qf_AndOrXor_732-2_values_0.smt2 | sat | already_solves | sat | sat | sat | sat |
+## Wisa target — STILL false-sat
+
+`xs_10_20`, `xs_15_25` (QF_UFLIA) still return sat (expected unsat) with
+all three flags on. LiaSolver has a `tryProvePairEqualityByLpDuality` mirror
+of LRA's Track A, AND a Track B diseq-conflict hook, but the hook is
+**gated default-OFF** behind `XOLVER_LIA_LP_DUALITY` because firing it
+unconditionally regressed `alia_012_sat_selfstore_arith_arrangement` from
+sat to unknown — the LIA probe over-fires on the array-axiom-mediated
+constraints where the simplex relaxation pins what integer reasoning
+correctly leaves free.
+
+## What needs to happen next for Wisa
+
+1. Understand the alia_012 edge: why does the LIA LP-duality probe say
+   `(i0 - i1) = 0` is pinned when the formula's models include `i0 != i1`?
+   Hypothesis: the simplex doesn't model array equalities (`a = store(a, i, e)`),
+   so its polyhedron is broader; the probe might be confused by default
+   bounds on free integer vars.
+2. Either narrow the LIA probe to non-array-combination contexts, OR
+   teach the probe to recognize when array axioms constrain the integers.
+3. Then flip `XOLVER_LIA_LP_DUALITY` default-ON and re-mine the QF_UFLIA
+   Wisa-class cases.
+
+## Symmetric NiaSolver extension (separate work, NIA's #36)
+
+For QF_UFNIA recovery via Track B-style detection, NiaSolver needs an
+analog of `interfaceEqAuxVars_` + a polyhedral diseq-conflict check.
+That is a structural NIA change — NIA's lane, coordinated via the
+combination seam contract.
