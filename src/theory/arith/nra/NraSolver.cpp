@@ -19,6 +19,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <algorithm>
 #include <fstream>
 
 namespace xolver {
@@ -614,6 +615,39 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     }
     if (cacCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> varOrder(varSet.begin(), varSet.end());  // sorted (std::set)
+
+    // Track C round 4 #51: variable-order heuristic. Brown-McCallum-style
+    // simplified: for each var compute (maxDeg, occCount) across cacCons; sort
+    // varOrder ascending by (deg, occ) so low-info vars project out first
+    // (outer), keeping high-degree vars as the lifting base (inner). Tiebreaker:
+    // source VarId (stable, reproducible). Soundness: variable order does not
+    // affect CDCAC completeness — it cannot introduce unsoundness, only shift
+    // perf. Gated XOLVER_NRA_CAC_VAR_ORDER, default OFF.
+    static const bool varOrderHeuristic = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_VAR_ORDER");
+        return e && *e && *e != '0';
+    }();
+    if (varOrderHeuristic && varOrder.size() > 1) {
+        std::unordered_map<VarId, std::pair<int, int>> scores;   // var -> (maxDeg, occCount)
+        scores.reserve(varOrder.size());
+        for (VarId v : varOrder) scores[v] = {0, 0};
+        for (const auto& c : cacCons) {
+            for (VarId v : c.poly.variables()) {
+                auto it = scores.find(v);
+                if (it == scores.end()) continue;
+                const int d = c.poly.degree(v);
+                if (d > it->second.first) it->second.first = d;
+                ++it->second.second;
+            }
+        }
+        std::sort(varOrder.begin(), varOrder.end(), [&](VarId a, VarId b) {
+            const auto& sa = scores[a];
+            const auto& sb = scores[b];
+            if (sa.first != sb.first) return sa.first < sb.first;
+            if (sa.second != sb.second) return sa.second < sb.second;
+            return a < b;   // stable tiebreaker on source VarId
+        });
+    }
 
     if (!cacBackend_) cacBackend_ = std::make_unique<LibpolyBackend>(kernel_.get());
     // Wall-clock deadline: in the HYBRID (Collins fallback present) bound CAC@Full
