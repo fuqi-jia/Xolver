@@ -100,6 +100,16 @@ public:
         // tighter (still sound) unsatCore. Default OFF; NraSolver stageCac
         // flips it from XOLVER_NRA_CAC_PRUNE_INTERVALS.
         bool pruneIntervals = false;
+        // #48 fix toggle: inject equations with mainLevel > level into
+        // levelChar when EARLY_INFEAS fired anywhere at this level. Soundness
+        // fix for the false-UNSAT on equation-heavy cases (e.g. Geogebra
+        // IsoRightTriangle) when CAC has enough wall to complete its covering
+        // (ALL_EFFORTS / CAC_ONLY). Default OFF — the empty-downward gate
+        // alone catches the projection-collapse case; this extra injection
+        // helps the algebraic-resultant-chain case but costs measurable perf
+        // (broad-714 was -10 decisions). Flip ON via
+        // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE for extended-wall configs.
+        bool earlyInfeasSafe = false;
     };
 
     CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
@@ -150,6 +160,7 @@ private:
     bool buildOk_ = true;            // false ⇒ a constraint was not representable
     bool earlyInfeas_ = false;       // XOLVER_NRA_CAC_EARLY_INFEAS gate, cached at construction
     bool pruneIntervals_ = false;    // XOLVER_NRA_CAC_PRUNE_INTERVALS gate
+    bool earlyInfeasSafe_ = false;   // XOLVER_NRA_CAC_EARLY_INFEAS_SAFE gate (#48 injection)
     SamplePoint satModel_;           // captured at the SAT leaf
     Config cfg_;
     long nodes_ = 0;

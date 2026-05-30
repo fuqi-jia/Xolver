@@ -639,10 +639,15 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         const char* e = std::getenv("XOLVER_NRA_CAC_PRUNE_INTERVALS");
         return e && *e && *e != '0';
     }();
+    static const bool earlyInfeasSafe = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_EARLY_INFEAS_SAFE");
+        return e && *e && *e != '0';
+    }();
     CacEngine::Config cfg;
     cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
     cfg.earlyInfeas = earlyInfeas;
     cfg.pruneIntervals = pruneIntervals;
+    cfg.earlyInfeasSafe = earlyInfeasSafe;
     CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 

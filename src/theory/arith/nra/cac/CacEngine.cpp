@@ -47,6 +47,7 @@ CacEngine::CacEngine(LibpolyBackend* algebra, PolynomialKernel* kernel,
         }
         earlyInfeas_ = cfg_.earlyInfeas;
         pruneIntervals_ = cfg_.pruneIntervals;
+        earlyInfeasSafe_ = cfg_.earlyInfeasSafe;
     } else {
         buildOk_ = false;
     }
@@ -373,7 +374,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     // ones are the surgical minimum: enough to compute the pairwise
     // resultants the leaf would have generated, without flooding the parent
     // with redundant low-level polys. Parent dedups via unitKey.
-    if (levelEarlyHit) {
+    if (levelEarlyHit && earlyInfeasSafe_) {
         for (size_t ci = 0; ci < cons_.size(); ++ci) {
             if (consMainLevel_[ci] <= level) continue;
             // Only equations drive the pairwise-resultant chain that exposes
