@@ -374,6 +374,179 @@ NiaReasoningResult ModularResidueReasoner::run(
         std::getenv("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO") != nullptr;
     static const bool symbDiag =
         std::getenv("XOLVER_NIA_MODULAR_DIAG") != nullptr;
+    // --- 4.6 Newton-chain derivation (Track C1 Phase 2.6) ---
+    // Synthesize a check-eq from a Newton-step simpleDef + a base mod that
+    // pins denom*B at residue 1 (mod s). Mathematics:
+    //
+    //   simpleDef inv2 := 2*B - C*B^2     (Newton step: inv2 = B*(2 - C*B))
+    //   checkEq    -s*q + C*B - r = 0     (base mod's lowered eq)
+    //   simpleDef r := 1                  (base assertion: C*B ≡ 1 mod s)
+    //
+    //   ⇒ C*B = s*q + 1
+    //   ⇒ C*inv2 = (s*q + 1)*(1 - s*q) = 1 - q^2 * s^2
+    //
+    // The derived check-eq C*inv2 + q^2*s^2 - 1 = 0 then feeds Phase 2.5,
+    // which computes extractSymbolicResidue(1 - q^2*s^2, s^2) = 1 and
+    // conflicts with `(neq r_goal != 1)`. Grid cert in Phase 2.5 validates
+    // the verdict at s ∈ {2,3,5,7}. Sound by Phase 1 polynomial identity +
+    // base substitution + standard polynomial algebra (all exact over Z).
+    std::vector<std::pair<PolyId, std::vector<SatLit>>> synthesizedCheckEqs;
+    if (symbolicEnabled) {
+        // Build a fast lookup: simpleDef var name -> (defPoly, reason).
+        std::unordered_map<std::string, const SimpleDef*> simpleDefByVar;
+        for (const auto& sd : simpleDefs) simpleDefByVar[sd.vVar] = &sd;
+
+        for (const auto& nSd : simpleDefs) {
+            // Newton step simpleDef: defPoly has 2 terms: `2*B` and `-C*B^2`.
+            auto sdT = kernel_.terms(nSd.defPoly);
+            if (!sdT || sdT->size() != 2) continue;
+
+            // Pick the two terms; identify which is the linear-coeff-2 term
+            // and which is the quadratic-in-B / linear-in-C term.
+            const Term* t2B = nullptr;     // expects 2*B
+            const Term* tCBSq = nullptr;   // expects -C*B^2
+            for (size_t i = 0; i < 2; ++i) {
+                const Term& tt = (*sdT)[i];
+                if (tt.powers.size() == 1 && tt.powers[0].second == 1 &&
+                    tt.coefficient == 2) {
+                    t2B = &tt;
+                } else if (tt.powers.size() == 2 && tt.coefficient == -1) {
+                    tCBSq = &tt;
+                }
+            }
+            if (!t2B || !tCBSq) continue;
+            VarId bVid = t2B->powers[0].first;
+            // In tCBSq, one var with deg 2 (= B) and one with deg 1 (= C).
+            VarId cVid = NullVar;
+            VarId tcsqBVid = NullVar;
+            for (auto& [vid, e] : tCBSq->powers) {
+                if (e == 2) tcsqBVid = vid;
+                else if (e == 1) cVid = vid;
+            }
+            if (tcsqBVid != bVid || cVid == NullVar) continue;
+
+            std::string inv1Var = std::string(kernel_.varName(bVid));
+            std::string denomVar = std::string(kernel_.varName(cVid));
+
+            // Now find a base checkEq with shape:
+            //   sign_q * s * q + sign_C * C * B + sign_r * r = 0
+            // with sign_C == -sign_q == -sign_r (so rearrangement is
+            // C*B = s*q + r), AND r is a simpleDef var pinned to 1.
+            for (const auto& ce : checkEqs) {
+                auto ceT = kernel_.terms(ce.poly);
+                if (!ceT || ceT->size() != 3) continue;
+
+                const Term* tSQ = nullptr;     // s * q term (multi-var, deg 1 in each)
+                const Term* tCB = nullptr;     // C * B term (deg 1 in both)
+                const Term* tR  = nullptr;     // r term (linear, unit coeff)
+                const Term* tConst = nullptr;  // constant term (used by modInvVar1
+                                                // shape: -C*B + s*q + 1 = 0)
+                for (const Term& tt : *ceT) {
+                    if (tt.powers.empty()) {
+                        if (tConst) { tConst = nullptr; break; }
+                        tConst = &tt;
+                    } else if (tt.powers.size() == 1 && tt.powers[0].second == 1 &&
+                        (tt.coefficient == 1 || tt.coefficient == -1)) {
+                        if (tR) { tR = nullptr; break; }  // ambiguous
+                        tR = &tt;
+                    } else if (tt.powers.size() == 2) {
+                        bool hasC = false, hasB = false;
+                        for (auto& [vid, e] : tt.powers) {
+                            if (vid == cVid && e == 1) hasC = true;
+                            if (vid == bVid && e == 1) hasB = true;
+                        }
+                        if (hasC && hasB) tCB = &tt;
+                        else tSQ = &tt;
+                    }
+                }
+                if (!tSQ || !tCB) continue;
+                if (tCB->coefficient != 1 && tCB->coefficient != -1) continue;
+                if (tSQ->coefficient != 1 && tSQ->coefficient != -1) continue;
+                // Two shapes accepted:
+                //  (a) tR present, tConst absent — r-var pinned to 1 elsewhere.
+                //  (b) tR absent, tConst = +/-1 — Bezout witness baked into eq.
+                // Both lead to the same canonical form `C*B = s*q + 1`, but we
+                // need to check the signs:
+                //    (a) C*B and r must have opposite signs; s*q must match r's sign.
+                //    (b) C*B coefficient and tConst coefficient must agree on sign,
+                //        such that rearrangement yields `C*B = s*q + 1`.
+                bool variantA = (tR != nullptr && tConst == nullptr);
+                bool variantB = (tR == nullptr && tConst != nullptr);
+                if (!variantA && !variantB) continue;
+                if (variantA) {
+                    if (tCB->coefficient != -tR->coefficient) continue;
+                    if (tSQ->coefficient != tR->coefficient) continue;
+                } else {
+                    if (tConst->coefficient != 1 && tConst->coefficient != -1) continue;
+                    // C*B and tConst must have OPPOSITE signs (so `C*B - tConst = -s*q`
+                    // or `C*B = s*q + |tConst|` after sign normalisation).
+                    if (tCB->coefficient == tConst->coefficient) continue;
+                    if (tSQ->coefficient != tConst->coefficient) continue;
+                }
+
+                // Identify s and q from tSQ (both deg 1; we don't know which is
+                // which, so try both orderings).
+                std::array<VarId, 2> sqVars = {tSQ->powers[0].first,
+                                                tSQ->powers[1].first};
+                for (int order = 0; order < 2; ++order) {
+                    VarId sVid = sqVars[order];
+                    VarId qVid = sqVars[1 - order];
+                    if (sVid == cVid || sVid == bVid) continue;
+                    if (qVid == cVid || qVid == bVid) continue;
+
+                    // Validate the base value = 1 (variantA: from r simpleDef;
+                    // variantB: from tConst sign, where canonical form
+                    // `C*B = s*q + 1` requires |tConst| = 1).
+                    const SimpleDef* rSdRef = nullptr;
+                    if (variantA) {
+                        std::string rVar = std::string(kernel_.varName(
+                            tR->powers[0].first));
+                        auto rIt = simpleDefByVar.find(rVar);
+                        if (rIt == simpleDefByVar.end()) continue;
+                        if (!kernel_.isConstant(rIt->second->defPoly)) continue;
+                        mpq_class rValQ = kernel_.toConstant(rIt->second->defPoly);
+                        if (rValQ.get_den() != 1) continue;
+                        if (rValQ.get_num() != 1) continue;
+                        rSdRef = rIt->second;
+                    } else {
+                        // variantB: tConst is +/-1; combined with the sign
+                        // constraints above we already verified canonical form.
+                        // The constant absolute value must equal 1 (Bezout).
+                        mpz_class absC = tConst->coefficient;
+                        if (absC < 0) absC = -absC;
+                        if (absC != 1) continue;
+                    }
+
+                    // Now synthesize: C*inv2 + q^2 * s^2 - 1 = 0.
+                    PolyId pC = kernel_.mkVar(cVid);
+                    PolyId pInv2 = kernel_.mkVar(
+                        kernel_.getOrCreateVar(nSd.vVar));
+                    PolyId pQ = kernel_.mkVar(qVid);
+                    PolyId pS = kernel_.mkVar(sVid);
+                    PolyId q2 = kernel_.mul(pQ, pQ);
+                    PolyId s2 = kernel_.mul(pS, pS);
+                    PolyId q2s2 = kernel_.mul(q2, s2);
+                    PolyId cInv2 = kernel_.mul(pC, pInv2);
+                    PolyId one = kernel_.mkConst(mpq_class(1));
+                    PolyId synthPoly = kernel_.sub(
+                        kernel_.add(cInv2, q2s2), one);
+
+                    // Reasons: Newton simpleDef + base checkEq + (variantA: r=1
+                    // simpleDef; variantB: Bezout constant already in checkEq).
+                    std::vector<SatLit> reasons = {nSd.reason, ce.reason};
+                    if (rSdRef) reasons.push_back(rSdRef->reason);
+                    synthesizedCheckEqs.push_back({synthPoly,
+                                                    std::move(reasons)});
+                    if (symbDiag) std::cerr
+                        << "[MODRES-SYMB] Newton derived: "
+                        << kernel_.toString(synthPoly) << " = 0\n";
+                    goto next_newton;
+                }
+            }
+            next_newton:;
+        }
+    }
+
     if (symbolicEnabled) {
         // Pattern matcher for the lowered symbolic-mod eq atom:
         //   poly = a_terms + (b_poly * q_var) + sign_r * r_var
@@ -473,8 +646,20 @@ NiaReasoningResult ModularResidueReasoner::run(
                         // purely in non-aTerm vars and = -aPolyForm). I.e., P =
                         // aPolyLhs + remainder_poly = 0 → aPolyLhs = -remainder_poly.
                         // The polynomial form of `a` is then -remainder_poly.
-                        for (const auto& ce : checkEqs) {
-                            auto ctermsOpt = kernel_.terms(ce.poly);
+                        // Iterate the natural check-eqs plus any Phase 2.6
+                        // Newton-derived synthesized check-eqs. Each entry is
+                        // (poly, vector<reason>); regular check-eqs wrap the
+                        // single reason in a one-element vector.
+                        std::vector<std::pair<PolyId, std::vector<SatLit>>>
+                            combinedCheckEqs;
+                        combinedCheckEqs.reserve(checkEqs.size() +
+                                                  synthesizedCheckEqs.size());
+                        for (const auto& ce0 : checkEqs)
+                            combinedCheckEqs.push_back({ce0.poly, {ce0.reason}});
+                        for (const auto& sce : synthesizedCheckEqs)
+                            combinedCheckEqs.push_back(sce);
+                        for (const auto& ce : combinedCheckEqs) {
+                            auto ctermsOpt = kernel_.terms(ce.first);
                             if (!ctermsOpt) continue;
                             const auto& cterms = *ctermsOpt;
                             // Try BOTH sign patterns for the a-monomial sub-match.
@@ -593,7 +778,14 @@ NiaReasoningResult ModularResidueReasoner::run(
                                                 otherVars.push_back(v);
                                 }
                                 const std::vector<long> primes = {2, 3, 5, 7};
-                                const long lo = -3, hi = 3;
+                                // Range shrinks as the number of free vars
+                                // grows so the cert runtime stays bounded:
+                                //   <=3 vars : {-3..3} (49 per dim)
+                                //   <=5 vars : {-2..2} (5)
+                                //   else     : {-1..1} (3)
+                                long lo = -3, hi = 3;
+                                if (otherVars.size() > 5) { lo = -1; hi = 1; }
+                                else if (otherVars.size() > 3) { lo = -2; hi = 2; }
                                 bool certOk = true;
                                 for (long pSample : primes) {
                                     if (!certOk) break;
@@ -645,7 +837,7 @@ NiaReasoningResult ModularResidueReasoner::run(
                                     if (seen.insert(l.var).second) clause.push_back(l);
                                 };
                                 add(c.reason);
-                                add(ce.reason);
+                                for (SatLit r : ce.second) add(r);
                                 add(nq.reason);
                                 return {NiaReasoningKind::Conflict,
                                         TheoryConflict{std::move(clause)},
