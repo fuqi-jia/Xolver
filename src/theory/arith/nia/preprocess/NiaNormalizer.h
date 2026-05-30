@@ -42,7 +42,7 @@ public:
     // Normalize a single active constraint. The result is a pure function of
     // `c` (clear-denominators + strict-inequality rewrite, no cross-constraint
     // state), so callers may cache it per constraint — see NiaSolver's
-    // incremental normalize cache (XOLVER_NIA_NORM_CACHE).
+    // incremental normalize cache.
     NormalizedNiaConstraint normalizeOne(const ActiveNiaConstraint& c);
 
 private:
