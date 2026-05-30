@@ -628,9 +628,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     }
 
     VarId var = input.varOrder[k];
+#ifndef NDEBUG
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var)
               << " n=" << n << " constraints=" << input.constraints.size() << std::endl;
-#ifndef NDEBUG
     std::cerr << "[CDCAC] solveLevel k=" << k << " var=" << kernel_->varName(var) << std::endl;
 #endif
 
@@ -1132,11 +1132,15 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
     std::vector<CertificateReasonLit> certReasons;
 
     for (const auto& c : input.constraints) {
+#ifndef NDEBUG
         std::cerr << "[CDCAC-FULL] poly=" << kernel_->toString(c.poly)
                   << " rel=" << (int)c.rel
                   << " sampleVars=" << sample.numVars() << std::endl;
+#endif
         Sign sign = algebra_->signAt(c.poly, sample);
+#ifndef NDEBUG
         std::cerr << "[CDCAC-FULL]   sign=" << (int)sign << std::endl;
+#endif
         if (sign == Sign::Unknown) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::SignEvaluationInconclusive);
         }
