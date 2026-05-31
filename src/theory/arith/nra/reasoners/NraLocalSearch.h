@@ -136,6 +136,16 @@ private:
     bracketMidpointCandidates(const std::vector<Constraint>& cs,
                               const std::vector<VarId>& vars) const;
 
+    // Phase NRA-LS-B (XOLVER_NRA_LS_EQ_RELAX, default OFF): after a relaxed
+    // satisfier (|p| ≤ ε for every equality atom), exact-restore by finding
+    // a variable that p is linear in and solving p = 0 analytically. Mirrors
+    // master-spec step (b). Step (a) — zero-substitution — happens implicitly
+    // because asg starts at zero. Step (c) — micro-tune — defers to the
+    // walking loop after step (b). Step (d) — CDCAC exact validation —
+    // happens at the caller (NraSolver::check `validateCandidate`).
+    bool exactRestoreEqualities(const std::vector<Constraint>& cs,
+                                std::unordered_map<VarId, mpq_class>& asg) const;
+
     // Walk one round: pick a violated constraint, try every var × every
     // candidate value, accept the strictly-best move (lowest total violation).
     // Returns true if any move improved the total; false if local minimum.

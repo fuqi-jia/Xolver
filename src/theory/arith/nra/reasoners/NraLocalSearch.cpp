@@ -113,6 +113,72 @@ NraLocalSearch::totalScore(const std::vector<Constraint>& cs,
     return s;
 }
 
+bool
+NraLocalSearch::exactRestoreEqualities(
+        const std::vector<Constraint>& cs,
+        std::unordered_map<VarId, mpq_class>& asg) const {
+    // For each equality atom whose evaluation is within ε of zero (the
+    // relaxed-SAT condition), try to flip it to EXACT zero by solving
+    // p = 0 in a single variable. Linear-in-v solve: substitute every
+    // other var from asg, get q(v) = a·v + b, set v = -b/a.
+    //
+    // Sound (master-spec): we never accept a SAT verdict here — only mutate
+    // asg. The caller (NraSolver::check validateCandidate) exact-validates
+    // the full constraint set before emit. So restoration that breaks a
+    // previously-satisfied INEQUALITY simply drops the candidate at the
+    // gate, never a wrong answer.
+    static const mpq_class kEps{1, 1024};   // same default as the LS ε
+    for (const auto& c : cs) {
+        if (c.rel != Relation::Eq) continue;
+        auto vEval = evalAt(c.poly, asg);
+        if (!vEval) continue;                       // can't evaluate → skip
+        const mpq_class abs_v = (*vEval < 0) ? -*vEval : *vEval;
+        if (abs_v == 0) continue;                   // already exact
+        if (abs_v > kEps) continue;                 // outside relaxed band → skip
+
+        // Try each variable in c.poly: substitute others, check linearity.
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, kernel_);
+        if (!rpOpt) continue;
+        const auto vs = rpOpt->variables();
+        for (VarId v : vs) {
+            RationalPolynomial uni = *rpOpt;
+            static const mpq_class kZ{0};
+            for (VarId w : vs) {
+                if (w == v) continue;
+                auto it = asg.find(w);
+                uni = uni.substituteRational(w, (it != asg.end()) ? it->second : kZ);
+            }
+            if (!uni.contains(v) || uni.degree(v) != 1) continue;
+            // q(t) = a·t + b. b = q(0); a = q(1) - b.
+            auto b_opt = [&]() -> std::optional<mpq_class> {
+                RationalPolynomial t = uni.substituteRational(v, mpq_class{0});
+                if (!t.isConstant()) return std::nullopt;
+                return t.constantValue();
+            }();
+            if (!b_opt) continue;
+            auto v1_opt = [&]() -> std::optional<mpq_class> {
+                RationalPolynomial t = uni.substituteRational(v, mpq_class{1});
+                if (!t.isConstant()) return std::nullopt;
+                return t.constantValue();
+            }();
+            if (!v1_opt) continue;
+            const mpq_class a = *v1_opt - *b_opt;
+            if (a == 0) continue;                   // degenerate; try next var
+            const mpq_class newVal = -*b_opt / a;
+            // Master-spec: keep within reasonable denom — restoration that
+            // produces a 10^9-denom number is hard for downstream evaluators.
+            // We allow exactRestore to bypass the regular LS pool denom cap
+            // (the bracket-midpoint precedent) but cap at 10^9 to keep mpq
+            // ops fast and the printed model usable.
+            static const mpz_class kRestoreMaxDen{"1000000000"};
+            if (mpz_class(newVal.get_den()) > kRestoreMaxDen) continue;
+            asg[v] = newVal;
+            break;   // restored this equality; move to next equality atom
+        }
+    }
+    return true;   // restoration attempt complete — caller exact-validates
+}
+
 std::vector<std::pair<VarId, mpq_class>>
 NraLocalSearch::bracketMidpointCandidates(
         const std::vector<Constraint>& cs,
@@ -520,7 +586,15 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     for (int round = 0; round < maxRounds_; ++round) {
         if (budgetExpired()) break;
         const bool improved = walkOneRound(constraints, weights, vars, asg, score);
-        if (score.isSat()) return asg;
+        if (score.isSat()) {
+            if (eqRelax_) {
+                // Phase B: relaxed-SAT — try to convert any |p| ≤ ε equality
+                // hits to exact zero via single-var linear solve. The caller
+                // (NraSolver::check validateCandidate) gates the SAT verdict.
+                exactRestoreEqualities(constraints, asg);
+            }
+            return asg;
+        }
         if (!improved) {
             // Local minimum: PAWS-style bump on every still-violated atom +
             // restart from zero. (Master-spec lex score makes "violated" mean

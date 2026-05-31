@@ -219,9 +219,14 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 return 50;
             }();
             std::vector<VarId> vars(varSet.begin(), varSet.end());
+            static const bool eqRelax = [] {
+                const char* e = std::getenv("XOLVER_NRA_LS_EQ_RELAX");
+                return e && *e && *e != '0';
+            }();
             NraLocalSearch ls(*kernel_);
             ls.setBudgetMs(budgetMs);
             ls.setMaxRounds(maxRounds);
+            ls.setEqRelax(eqRelax);
             const auto t0 = std::chrono::steady_clock::now();
             auto candOpt = ls.tryFindModel(lsCons, vars);
             const auto t1 = std::chrono::steady_clock::now();
