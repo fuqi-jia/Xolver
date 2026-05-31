@@ -952,7 +952,20 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage
     }();
     if (!earlyEnabled) return std::nullopt;
     // Reuse the same algorithm; differs only in pipeline position.
-    auto br = bounded_.solvePartial(normalized_, domains_, validator_);
+    // Phase L1 step 3 — LS feedback hint (XOLVER_NIA_LS_FEEDBACK=1,
+    // default-OFF). The LS context's bestAssignment (when present) is
+    // tried as the FIRST candidate before cartesian enumeration. Sound:
+    // validator-gated like every other candidate.
+    static const bool lsFeedback = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
+        return e && *e && *e != '0';
+    }();
+    const IntegerModel* hint = nullptr;
+    if (lsFeedback) {
+        const auto& ctx = localSearch_.lsContext();
+        if (!ctx.bestAssignment.empty()) hint = &ctx.bestAssignment;
+    }
+    auto br = bounded_.solvePartialWithHint(normalized_, domains_, validator_, hint);
     if (br.status == BoundedSolveStatus::Sat) {
         currentModel_ = br.model;
         return TheoryCheckResult::consistent();
@@ -989,7 +1002,20 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
             return e && *e && *e != '0';
         }();
         if (partialEnabled) {
-            auto br = bounded_.solvePartial(normalized_, domains_, validator_);
+            // Phase L1 step 3 — LS feedback hint (XOLVER_NIA_LS_FEEDBACK=1,
+    // default-OFF). The LS context's bestAssignment (when present) is
+    // tried as the FIRST candidate before cartesian enumeration. Sound:
+    // validator-gated like every other candidate.
+    static const bool lsFeedback = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
+        return e && *e && *e != '0';
+    }();
+    const IntegerModel* hint = nullptr;
+    if (lsFeedback) {
+        const auto& ctx = localSearch_.lsContext();
+        if (!ctx.bestAssignment.empty()) hint = &ctx.bestAssignment;
+    }
+    auto br = bounded_.solvePartialWithHint(normalized_, domains_, validator_, hint);
             if (br.status == BoundedSolveStatus::Sat) {
                 currentModel_ = br.model;
                 return TheoryCheckResult::consistent();

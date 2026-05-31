@@ -153,6 +153,106 @@ TEST_CASE("BoundedNiaSolver::solvePartial — bilinear with bounded factor linea
     CHECK(res.status == BoundedSolveStatus::UnknownUnsupported);
 }
 
+// ---------- Phase L1 step 3: value-cache hint path ----------
+
+TEST_CASE("BoundedNiaSolver::solvePartialWithHint — valid hint returns Sat in 1 validation") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.push_back({k->sub(k->add(x, y), k->mkConst(mpq_class(7))),
+                  Relation::Eq, lit(1)});
+    DomainStore domains;
+    domains.addLowerBound("x", mpz_class(-1), lit(2));
+    domains.addUpperBound("x", mpz_class(1), lit(3));
+
+    // Hint = {x: 0, y: 7} — valid model for x + y = 7. The hint path
+    // returns Sat without cartesian enumeration.
+    IntegerModel hint{{"x", mpz_class(0)}, {"y", mpz_class(7)}};
+
+    IntegerModelValidator validator(*k);
+    BoundedNiaSolver solver(*k);
+    auto res = solver.solvePartialWithHint(cs, domains, validator, &hint);
+    REQUIRE(res.status == BoundedSolveStatus::Sat);
+    CHECK((*res.model).at("x") == 0);
+    CHECK((*res.model).at("y") == 7);
+}
+
+TEST_CASE("BoundedNiaSolver::solvePartialWithHint — invalid hint falls through to enumeration") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.push_back({k->sub(k->add(x, y), k->mkConst(mpq_class(0))),
+                  Relation::Eq, lit(1)});  // x + y = 0
+    DomainStore domains;
+    domains.addLowerBound("x", mpz_class(-1), lit(2));
+    domains.addUpperBound("x", mpz_class(1), lit(3));
+
+    // Bogus hint: x=99, y=99. Does NOT satisfy x+y=0. Falls through to
+    // the existing enumeration which finds {x=0, y=0} (or similar).
+    IntegerModel hint{{"x", mpz_class(99)}, {"y", mpz_class(99)}};
+
+    IntegerModelValidator validator(*k);
+    BoundedNiaSolver solver(*k);
+    auto res = solver.solvePartialWithHint(cs, domains, validator, &hint);
+    REQUIRE(res.status == BoundedSolveStatus::Sat);
+    // Result must satisfy the constraint — never the bogus hint.
+    CHECK((*res.model).at("x") + (*res.model).at("y") == 0);
+    // x must be in [-1, 1] (the bounded subset).
+    CHECK((*res.model).at("x") >= -1);
+    CHECK((*res.model).at("x") <= 1);
+}
+
+TEST_CASE("BoundedNiaSolver::solvePartialWithHint — null hint behaves as legacy solvePartial") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.push_back({k->sub(x, k->mkConst(mpq_class(0))),
+                  Relation::Eq, lit(1)});
+    DomainStore domains;
+    domains.addLowerBound("x", mpz_class(-3), lit(2));
+    domains.addUpperBound("x", mpz_class(3), lit(3));
+
+    IntegerModelValidator validator(*k);
+    BoundedNiaSolver solver(*k);
+    auto res = solver.solvePartialWithHint(cs, domains, validator, nullptr);
+    REQUIRE(res.status == BoundedSolveStatus::Sat);
+    CHECK((*res.model).at("x") == 0);
+}
+
+// Soundness pin: a hint that DOESN'T cover all variables in the
+// constraint set is harmless — the fast-path skips, enumeration proceeds.
+TEST_CASE("BoundedNiaSolver::solvePartialWithHint — partial-coverage hint skips fast-path") {
+    auto k = createPolynomialKernel();
+    if (!k) return;
+    PolyId x = k->mkVar(k->getOrCreateVar("x"));
+    PolyId y = k->mkVar(k->getOrCreateVar("y"));
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.push_back({k->sub(k->add(x, y), k->mkConst(mpq_class(5))),
+                  Relation::Eq, lit(1)});
+    DomainStore domains;
+    domains.addLowerBound("x", mpz_class(0), lit(2));
+    domains.addUpperBound("x", mpz_class(5), lit(3));
+
+    // Hint only names x, not y. Fast-path validation skipped; the
+    // unbounded-guess loop still PRIORITISES the cached x value.
+    IntegerModel hint{{"x", mpz_class(3)}};
+
+    IntegerModelValidator validator(*k);
+    BoundedNiaSolver solver(*k);
+    auto res = solver.solvePartialWithHint(cs, domains, validator, &hint);
+    REQUIRE(res.status == BoundedSolveStatus::Sat);
+    CHECK((*res.model).at("x") + (*res.model).at("y") == 5);
+}
+
 TEST_CASE("BoundedNiaSolver::solvePartial — fully-bounded system delegates correctly") {
     auto k = createPolynomialKernel();
     if (!k) return;

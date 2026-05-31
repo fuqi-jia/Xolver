@@ -60,6 +60,21 @@ public:
             const DomainStore& domains,
             const IntegerModelValidator& validator);
 
+    // Phase L1 step 3 — value-cache hint overload. Same algorithm as
+    // solvePartial, but `hint` (when non-null and non-empty) is consulted
+    // first for every variable's guess set. A cached LS bestAssignment
+    // becomes the FIRST candidate tried, so a still-valid warm-start
+    // returns Sat in O(1) validations instead of cartesian enumeration.
+    //
+    // Soundness: the hint values pass through IntegerModelValidator
+    // identical to any other guess — never bypass validation. A stale or
+    // bogus hint just causes one extra failed validation per variable.
+    BoundedSolveResult solvePartialWithHint(
+            const std::vector<NormalizedNiaConstraint>& constraints,
+            const DomainStore& domains,
+            const IntegerModelValidator& validator,
+            const IntegerModel* hint);
+
 private:
     PolynomialKernel& kernel_;
 

@@ -129,6 +129,14 @@ BoundedSolveResult BoundedNiaSolver::solvePartial(
         const std::vector<NormalizedNiaConstraint>& constraints,
         const DomainStore& domains,
         const IntegerModelValidator& validator) {
+    return solvePartialWithHint(constraints, domains, validator, /*hint=*/nullptr);
+}
+
+BoundedSolveResult BoundedNiaSolver::solvePartialWithHint(
+        const std::vector<NormalizedNiaConstraint>& constraints,
+        const DomainStore& domains,
+        const IntegerModelValidator& validator,
+        const IntegerModel* hint) {
     // Collect every variable mentioned by any constraint. We want the full
     // VARIABLE SET (bounded ∪ unbounded) so the candidate model can name
     // every variable the validator needs to evaluate the constraints.
@@ -145,6 +153,33 @@ BoundedSolveResult BoundedNiaSolver::solvePartial(
             return {BoundedSolveStatus::Sat, empty, std::nullopt};
         }
         return {BoundedSolveStatus::UnknownUnsupported, std::nullopt, std::nullopt};
+    }
+
+    // Phase L1 step 3 — fast-path hint validation. If the caller passed
+    // an LS bestAssignment hint that names every var in the system, try
+    // validating it FIRST. A successful hint returns Sat in a single
+    // validator call instead of cartesian enumeration. A failing hint
+    // costs one validation and falls through.
+    //
+    // Soundness: the hint passes through IntegerModelValidator like any
+    // other candidate — a Sat result is sound by construction. A bogus
+    // hint just adds one failed validation.
+    if (hint && !hint->empty()) {
+        bool covers = true;
+        for (const auto& v : varSet) {
+            if (hint->find(v) == hint->end()) { covers = false; break; }
+        }
+        if (covers) {
+            // Make a copy with only the vars we need (hint may carry
+            // extra vars from earlier sessions — irrelevant here).
+            IntegerModel m;
+            for (const auto& v : varSet) m[v] = hint->at(v);
+            auto vres = validator.validate(m, constraints);
+            if (vres == IntegerModelValidator::Result::Valid) {
+                return {BoundedSolveStatus::Sat, m, std::nullopt};
+            }
+            // Failed/Indeterminate hint → fall through to enumeration.
+        }
     }
 
     // Partition into bounded (small finite-range domain) vs unbounded.
@@ -199,7 +234,18 @@ BoundedSolveResult BoundedNiaSolver::solvePartial(
     // bound is known. We do NOT include random samples — keeps the
     // enumeration deterministic + bounded.
     auto unboundedGuesses = [&](const std::string& v) -> std::vector<mpz_class> {
-        std::vector<mpz_class> g{mpz_class(0), mpz_class(1), mpz_class(-1)};
+        std::vector<mpz_class> g;
+        // Phase L1 step 3: hint value comes FIRST when present. A
+        // still-valid LS bestAssignment that this enumerator can't
+        // construct from the const set ({0, ±1, ±bounds}) wins this
+        // way without a cartesian sweep.
+        if (hint) {
+            auto it = hint->find(v);
+            if (it != hint->end()) g.push_back(it->second);
+        }
+        g.push_back(mpz_class(0));
+        g.push_back(mpz_class(1));
+        g.push_back(mpz_class(-1));
         const IntDomain* d = domains.getDomain(v);
         if (d) {
             if (d->hasLower) {
