@@ -42,9 +42,13 @@ public:
     // NRA is a facade over CdcacSolver with its own active-literal
     // tracking (activeLits_/trail_/activeSet_), so it overrides
     // assertLit and routes push/pop/backtrack/reset through the base
-    // hooks rather than using the shared state_.trail. check() is the
-    // base default (runReasonerPipeline over the two stages below).
+    // hooks rather than using the shared state_.trail.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
+    // Phase NRA-LS-D sprint 3: override check() so the LS pre-pass runs at
+    // entry (BEFORE the Reasoner pipeline / CDCAC), so we can catch cases
+    // that hang in CDCAC at Standard effort. Falls through to the base
+    // pipeline on LS miss. XOLVER_NRA_LOCALSEARCH default-OFF.
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -107,6 +111,12 @@ private:
     // only on a validated model, else nullopt (fall through to CDCAC). Full
     // effort only. nullopt immediately when the flag is OFF.
     std::optional<TheoryCheckResult> stageSubtropical(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
+    // repair heuristic. Returns consistent() iff LS finds a rational assignment
+    // exact-validated against every active constraint (invariant 1 — Solver-level
+    // realDivPurifySatFloor re-validates before SAT is emitted). nullopt
+    // otherwise. Never emits UNSAT / Conflict (invariant 2).
+    std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_CAC (A/B control for the Collins-vs-CAC differential): run the
     // conflict-driven single-cell CAC engine (the "real" CDCAC) as the primary
     // NRA decision at Full effort, BEFORE the Collins buildClosure. SAT (a
@@ -194,6 +204,21 @@ private:
     // RealValue-typed numericAssignments channel. Cleared at every
     // satFastModel_.reset() site.
     std::optional<std::vector<std::pair<VarId, RealValue>>> satCacAlgModel_;
+
+    // Phase NRA-LS-A (post-master-review): per-solve one-shot gate. LS is a
+    // SEED pre-pass — runs ONCE per solve (first stageLocalSearch entry, any
+    // effort), then short-circuits. Per cb_check_found_model 200ms loops were
+    // the wrong shape: SAT solver makes 300+ Full checks on meti-tarski, so
+    // 300 × 200ms = 60s burned with nothing to show. Reset in onReset.
+    bool lsAttempted_ = false;
+    long lsTotalMs_ = 0;
+    int  lsCandidatesFound_ = 0;
+    int  lsExactSats_ = 0;
+    // Sprint 3: persistent rational candidate from the one-shot LS pre-pass
+    // (run from check() entry). Survives across cb_propagate (NOT cleared
+    // by assertLit) so we can re-validate it on each subsequent check()
+    // against the up-to-date active set. Cleared in onReset.
+    std::optional<std::unordered_map<VarId, mpq_class>> lsCachedCandidate_;
 
     // CAC (CDCAC) engine: promoted default-ON. Lazily-built libpoly backend.
     bool enableCac_ = true;
