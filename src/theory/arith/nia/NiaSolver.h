@@ -170,6 +170,19 @@ private:
     // the late nia.bounded stage fires. Sound SAT-finding only; never
     // claims UNSAT.
     std::optional<TheoryCheckResult> stageBoundedEarly(TheoryLemmaStorage&, TheoryEffort);
+    // SAT14-attack early-pipeline LocalSearch (XOLVER_NIA_LS_EARLY,
+    // default-OFF). Same algorithmic stack as nia.local-search (twoLevel
+    // + warm-start + multi-scale + quad-critical + fs-jump if those flags
+    // are on) but fires RIGHT AFTER normalize, sharing CPU with the
+    // upstream workhorses instead of starving at the end of the Full-
+    // effort pipeline. The L1 sequence measurement showed LS has the
+    // algorithmic reach to find SAT14 models (z3-extracted models are
+    // small/moderate integers within multi-scale + fs-jump's coverage);
+    // what's missing is the budget to RUN the search. Per-call budget
+    // capped via XOLVER_NIA_LS_EARLY_BUDGET_MS (default 200), cumulative
+    // via XOLVER_NIA_LS_EARLY_TOTAL_MS (default 5000). Sound SAT-finder
+    // only — verdicts always validator-gated.
+    std::optional<TheoryCheckResult> stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);

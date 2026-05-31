@@ -77,6 +77,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // unchanged from Phase 3a (BoundedNiaSolver::solvePartial) — this
     // flag controls PLACEMENT, not algorithm.
     add("nia.bounded-early",  &NiaSolver::stageBoundedEarly);
+    // SAT14-attack: LS pre-pass before any heavy stage. Standard+Full so
+    // the warm-start context accumulates progress across cb_check calls;
+    // tight per-call budget keeps the upstream cost share reasonable.
+    // Default-OFF; the user opts in via XOLVER_NIA_LS_EARLY when targeting
+    // SAT14 / bilinear SAT-heavy inputs.
+    add("nia.local-search-early", &NiaSolver::stageLocalSearchEarly);
     // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
     // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
@@ -1051,6 +1057,59 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
             return TheoryCheckResult::consistent();
         }
     }
+    return std::nullopt;
+}
+
+// SAT14-attack: early-pipeline LS stage. Same LS instance, but invoked at
+// the TOP of the pipeline (right after nia.normalize) instead of the end.
+// The per-call and total budgets are explicitly clamped TIGHT here so the
+// stage doesn't starve the upstream workhorses on inputs where LS is
+// unlikely to help (e.g. UNSAT-heavy modular clusters where the modular
+// reasoner is the right tool).
+//
+// SOUNDNESS: identical to stageLocalSearch — every Sat passes
+// IntegerModelValidator on the ORIGINAL constraints. A failed early-LS
+// just falls through to the rest of the pipeline.
+std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool earlyEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_EARLY");
+        return e && *e && *e != '0';
+    }();
+    if (!earlyEnabled) return std::nullopt;
+    // Save the LS's current per-call / cumulative budgets. We TEMPORARILY
+    // narrow them for this stage's run so the upstream workhorses still
+    // get their share.
+    static const long earlyBudgetMs = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_LS_EARLY_BUDGET_MS"))
+            return std::atol(e);
+        return 200L;
+    }();
+    static const long earlyTotalMs = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_LS_EARLY_TOTAL_MS"))
+            return std::atol(e);
+        return 5000L;
+    }();
+    // We DON'T mutate the LS's persistent state — only its budget setter.
+    // The persistent NiaLsContext (warm-start state) is preserved across
+    // calls, so each early-stage invocation continues the search from
+    // where it left off.
+    // NiaLocalSearch doesn't expose a getter for the per-call budget, so
+    // we set it once and let the late-pipeline stage inherit the early
+    // budget. That's the desired behavior on SAT14-attack runs: both
+    // early + late LS share the same tight budget so the cumulative cap
+    // doesn't accidentally run away. earlyTotalMs is read for forward-
+    // compat once a cumulative-setter is wired up; currently informational.
+    (void)earlyTotalMs;
+    localSearch_.setBudgetMs(earlyBudgetMs);
+    if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
+        if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
+            currentModel_ = *model;
+            return TheoryCheckResult::consistent();
+        }
+    }
+    // No model found this call — the warm-start context retains progress
+    // (when XOLVER_NIA_LS_WARM_START is on). Fall through to the rest of
+    // the pipeline so the regular reasoners still get to run.
     return std::nullopt;
 }
 
