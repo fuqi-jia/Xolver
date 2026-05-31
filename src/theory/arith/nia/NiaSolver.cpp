@@ -213,6 +213,7 @@ void NiaSolver::onReset() {
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
     localSearch_.resetBudget();
+    localSearch_.resetLsContext();
 }
 
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,

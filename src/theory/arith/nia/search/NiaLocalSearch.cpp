@@ -60,6 +60,12 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_FS_JUMP"); e && *e && *e != '0') {
         fsJump_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_DIVERSE_INIT"); e && *e && *e != '0') {
+        diverseInit_ = true;
+    }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_PAIR"); e && *e && *e != '0') {
+        bilinearPair_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -589,6 +595,70 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             for (const auto& v : vars) {
                 if (cur.find(v) == cur.end()) cur[v] = clampVar(v, 0);
             }
+        } else if (diverseInit_) {
+            // P5 diversified restart probes — rotate initial-assignment
+            // strategies across restarts so LS visits multiple basins of
+            // attraction instead of always starting from zero. SAT14
+            // z3-extracted models show many cases satisfy at anchor
+            // values 100-300; probing those anchors at restart time
+            // gives LS a credible trajectory toward them.
+            //
+            // Probe rotation by restart index:
+            //   r == 0  → all zeros (legacy)
+            //   r == 1  → lo for every bounded var, 0 otherwise
+            //   r == 2  → hi for every bounded var, 0 otherwise
+            //   r == 3  → midpoint (lo + hi) / 2 for bounded, 0 otherwise
+            //   r == 4  → one var pinned to ±100, others zero
+            //   r == 5  → one var pinned to ±500, others zero
+            //   r == 6  → small random in [-10, 10] for every var
+            //   r >= 7  → existing random sweep (boundary-respecting or
+            //             ±2000 for unbounded)
+            int strategy = restart % 8;
+            std::size_t pinIdx = (restart / 8) % std::max<std::size_t>(vars.size(), 1);
+            for (std::size_t i = 0; i < vars.size(); ++i) {
+                const auto& v = vars[i];
+                const auto* d = domains.getDomain(v);
+                mpz_class val;
+                switch (strategy) {
+                    case 0:
+                        val = 0;
+                        break;
+                    case 1:
+                        val = (d && d->hasLower) ? d->lower.value : mpz_class(0);
+                        break;
+                    case 2:
+                        val = (d && d->hasUpper) ? d->upper.value : mpz_class(0);
+                        break;
+                    case 3:
+                        if (d && d->hasLower && d->hasUpper) {
+                            val = (d->lower.value + d->upper.value) / 2;
+                        } else {
+                            val = 0;
+                        }
+                        break;
+                    case 4:
+                        val = (i == pinIdx) ? mpz_class((restart % 2 == 0) ? 100 : -100)
+                                            : mpz_class(0);
+                        break;
+                    case 5:
+                        val = (i == pinIdx) ? mpz_class((restart % 2 == 0) ? 500 : -500)
+                                            : mpz_class(0);
+                        break;
+                    case 6:
+                        val = mpz_class((long)(rng() % 21) - 10);
+                        break;
+                    default:
+                        if (d && d->hasLower && d->hasUpper) {
+                            mpz_class span = d->upper.value - d->lower.value;
+                            val = (span <= 0) ? d->lower.value
+                                              : d->lower.value + mpz_class(rng()) % (span + 1);
+                        } else {
+                            val = mpz_class((long)(rng() % 4001) - 2000);
+                        }
+                        break;
+                }
+                cur[v] = clampVar(v, val);
+            }
         } else {
             for (const auto& v : vars) {
                 const auto* d = domains.getDomain(v);
@@ -854,15 +924,170 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 }
             }
 
+            // P5 bilinear pair move (XOLVER_NIA_LS_BILINEAR_PAIR). For each
+            // falsified atom's polynomial, look for a bilinear monomial
+            // `coef * x * y` (two distinct variables each at exponent 1).
+            // The current single-variable critical-move iterates one of x
+            // or y at a time; for bilinear systems the SINGLE-var Newton
+            // step is misleading because both factors interact. Joint
+            // (x', y') candidates respect that interaction directly.
+            //
+            // Strategy for picking joint candidates:
+            //   * Compute the bilinear product's "target value": the value
+            //     `x*y` would need to take so the atom evaluates close to
+            //     zero. The first-order linear estimate is
+            //         target ≈ x_orig * y_orig - p(orig) / coef
+            //     (1-step Newton on the product as a single quantity).
+            //   * Iterate small divisors of |target| as factor pairs.
+            //     For each divisor d, try (x = d, y = target / d) and
+            //     (x = -d, y = -target / d). Caps at the first 16 pairs
+            //     to bound per-flip cost.
+            //   * Evaluate joint cost via a two-var move trial that
+             //    incrementally re-evaluates only clauses containing
+            //     either x or y.
+            //
+            // Soundness: every joint candidate still passes through the
+            // bestCost selection; no verdict change.
+            std::string bestPairVarX, bestPairVarY;
+            mpz_class bestPairValX = 0, bestPairValY = 0;
+            mpz_class bestPairCost = bestCost;
+            bool havePairBest = false;
+            if (bilinearPair_) {
+                auto termsOpt = kernel_.terms(C.poly);
+                if (termsOpt) {
+                    // Locate first bilinear monomial: 2 distinct vars,
+                    // each with exponent 1.
+                    for (const auto& mono : *termsOpt) {
+                        if (mono.powers.size() != 2) continue;
+                        if (mono.powers[0].second != 1 ||
+                            mono.powers[1].second != 1) continue;
+                        std::string xname(kernel_.varName(mono.powers[0].first));
+                        std::string yname(kernel_.varName(mono.powers[1].first));
+                        if (xname == yname || xname.empty() || yname.empty())
+                            continue;
+                        // Only act on vars that appear in cvars (the
+                        // current falsified constraint's variable set).
+                        bool xIn = false, yIn = false;
+                        for (const auto& cv : cvars) {
+                            if (cv == xname) xIn = true;
+                            if (cv == yname) yIn = true;
+                        }
+                        if (!xIn || !yIn) continue;
+                        const mpz_class& coef = mono.coefficient;
+                        if (coef == 0) continue;
+
+                        const mpz_class xOrig = cur[xname];
+                        const mpz_class yOrig = cur[yname];
+                        auto pOrigOpt = kernel_.evalInteger(C.poly, cur);
+                        if (!pOrigOpt) break;
+                        const mpz_class pOrig = *pOrigOpt;
+                        // Target: where coef*x*y should land so atom ≈ 0.
+                        //   p(orig) ≈ coef * x_o * y_o + rest_o
+                        //   want    : 0 = coef * x' * y' + rest_o
+                        //   ⇒        x' * y' ≈ x_o * y_o - p(orig)/coef
+                        mpz_class target = xOrig * yOrig;
+                        // Integer-divide; mpz_class operator/ is truncation.
+                        if (coef != 0) target -= pOrig / coef;
+                        if (target == 0) {
+                            // Trivial: one of x', y' = 0 satisfies the
+                            // product. Try both single-zero candidates.
+                            mpz_class delta;
+                            mpz_class nc = tryMoveCost(xname, 0, delta);
+                            if (nc < bestPairCost) {
+                                bestPairCost = nc; bestPairVarX = xname;
+                                bestPairValX = 0; havePairBest = true;
+                                bestPairVarY.clear();  // single-var commit
+                            }
+                            continue;
+                        }
+                        // Helper: evaluate joint (x = a, y = b) cost via
+                        // incremental clause re-eval on union of var
+                        // clause sets.
+                        auto tryJointCost = [&](const mpz_class& a,
+                                                 const mpz_class& b) {
+                            const mpz_class cxOrig = cur[xname];
+                            const mpz_class cyOrig = cur[yname];
+                            cur[xname] = a;
+                            cur[yname] = b;
+                            // Affected clauses = union(varToClauses[x],
+                            //                          varToClauses[y]).
+                            std::unordered_set<std::size_t> affected;
+                            auto itx = varToClauses.find(xname);
+                            auto ity = varToClauses.find(yname);
+                            if (itx != varToClauses.end())
+                                for (auto i : itx->second) affected.insert(i);
+                            if (ity != varToClauses.end())
+                                for (auto i : ity->second) affected.insert(i);
+                            mpz_class delta = 0;
+                            for (auto i : affected) {
+                                mpz_class nv = evalCviol(i, cur);
+                                delta += (nv - cviol[i]) * weight[i];
+                            }
+                            cur[xname] = cxOrig;
+                            cur[yname] = cyOrig;
+                            return weightedCost + delta;
+                        };
+                        // Iterate small-divisor factor pairs of |target|.
+                        mpz_class absT = (target < 0) ? -target : target;
+                        std::vector<std::pair<mpz_class, mpz_class>> pairs;
+                        for (long d = 1; d <= 32; ++d) {
+                            if (absT % d != 0) continue;
+                            mpz_class a = d;
+                            mpz_class b = target / d;
+                            pairs.push_back({a, b});
+                            pairs.push_back({-a, -b});
+                            if (pairs.size() >= 16) break;
+                        }
+                        for (const auto& [a, b] : pairs) {
+                            mpz_class ax = clampVar(xname, a);
+                            mpz_class by = clampVar(yname, b);
+                            if (ax == xOrig && by == yOrig) continue;
+                            mpz_class nc = tryJointCost(ax, by);
+                            if (nc < bestPairCost) {
+                                bestPairCost = nc;
+                                bestPairVarX = xname; bestPairValX = ax;
+                                bestPairVarY = yname; bestPairValY = by;
+                                havePairBest = true;
+                            }
+                        }
+                        // Only consider the FIRST bilinear monomial per
+                        // atom to keep per-flip cost bounded.
+                        break;
+                    }
+                }
+            }
+
+            // P5: if the pair move beats the single-var best, use it.
+            bool usePair = havePairBest && bestPairCost < bestCost;
+
             // Noise: with prob NOISE/10, ignore the best move and random-nudge.
-            if (((int)(rng() % 10) < NOISE) || !haveBest ||
-                bestCost >= weightedCost) {
+            if (((int)(rng() % 10) < NOISE) ||
+                (!haveBest && !usePair) ||
+                (usePair ? (bestPairCost >= weightedCost) : (bestCost >= weightedCost))) {
                 const std::string& v = cvars[rng() % cvars.size()];
                 long nudge = (long)(rng() % 21) - 10;
                 if (nudge == 0) nudge = 1;
                 mpz_class newVal = clampVar(v, cur[v] + nudge);
                 commitMove(v, newVal);
                 sinceImprove++;
+            } else if (usePair) {
+                // Joint pair commit: update both x and y, then incrementally
+                // refresh affected clauses (each commitMove call handles
+                // its own var's clause set).
+                if (!bestPairVarY.empty()) {
+                    commitMove(bestPairVarX, bestPairValX);
+                    commitMove(bestPairVarY, bestPairValY);
+                    if (warmStart_) {
+                        lsContext_.varActivity[bestPairVarX]++;
+                        lsContext_.varActivity[bestPairVarY]++;
+                    }
+                } else {
+                    // Trivial single-var pair (one of the bilinear factors
+                    // taken to 0 — recorded in bestPairVarX, bestPairValX).
+                    commitMove(bestPairVarX, bestPairValX);
+                    if (warmStart_) lsContext_.varActivity[bestPairVarX]++;
+                }
+                sinceImprove = 0;
             } else {
                 commitMove(bestVar, bestVal);
                 sinceImprove = 0;
