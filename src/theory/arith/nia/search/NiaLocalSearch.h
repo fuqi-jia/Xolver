@@ -4,8 +4,64 @@
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>
+#include <unordered_map>
 
 namespace xolver {
+
+// Phase L1 step 2 — persistent state carried across cb_check calls.
+// The original NiaLocalSearch ran a fresh restart on every call, which
+// wasted any progress accumulated by the previous walk-sat trajectory.
+// Yices2LS-style integration keeps a per-solver-instance context that
+// the next call resumes from.
+//
+// Soundness contract:
+//   - The context state NEVER influences a verdict. The caller (NiaSolver)
+//     validates any Sat with IntegerModelValidator on the original
+//     constraints. A bad context only wastes search effort, never produces
+//     a wrong answer.
+//   - On any structural change (assertion stack shrink, constraint set
+//     change, kernel reset), the context is invalidated and reset.
+//   - Signature mismatch ⇒ partial reinit (keep PAWS weights, drop
+//     assignment); active-set signature changed but the formula's overall
+//     hardness profile probably hasn't.
+struct NiaLsContext {
+    // Best assignment seen so far across calls (empty until first SAT
+    // attempt). Carried so a subsequent call can warm-start from it.
+    IntegerModel bestAssignment;
+    mpz_class bestCost = 0;     // linear LS-IA distance at bestAssignment
+    bool bestValid = false;     // false until at least one valid eval
+
+    // Most-recent in-progress assignment (may differ from best if the
+    // current trajectory has worsened beyond the best). Empty when no
+    // walk has run yet.
+    IntegerModel currentAssignment;
+
+    // PAWS clause weights keyed by stable constraint hash. Persists
+    // across calls so hard clauses stay hard.
+    std::unordered_map<uint64_t, mpz_class> clauseWeight;
+
+    // Variable activity boost: how many times each var participated in
+    // an improving move recently. Read by NiaSolver to bias decision
+    // priority (Phase L1 step 3 hooks this).
+    std::unordered_map<std::string, uint64_t> varActivity;
+
+    // Signature of the active constraint set on the call that last
+    // populated this context. Used to detect "structurally same" calls.
+    uint64_t lastSignature = 0;
+
+    // Reset the context to the empty state (used on assertion backtrack
+    // / solver reset / structural change). Sound at every point: a fresh
+    // context just means the next call starts cold.
+    void reset() {
+        bestAssignment.clear();
+        bestCost = 0;
+        bestValid = false;
+        currentAssignment.clear();
+        clauseWeight.clear();
+        varActivity.clear();
+        lastSignature = 0;
+    }
+};
 
 /**
  * NiaLocalSearch: heuristic SAT finder for NIA.
@@ -43,6 +99,21 @@ public:
     // improvement; soundness invariants unchanged (candidate-only,
     // validator-gated, never returns UNSAT).
     void setTwoLevel(bool e) { twoLevel_ = e; }
+    // Phase L1 step 2: enable persistent NiaLsContext warm-start across
+    // cb_check calls. Default-OFF (XOLVER_NIA_LS_WARM_START=1). The
+    // context survives across tryFindModel calls; structural change /
+    // backtrack invalidates it. SOUNDNESS: context state is heuristic
+    // bias only and never influences a verdict (every Sat is still
+    // validator-gated; every UNSAT-claim is impossible from LS).
+    void setWarmStart(bool e) { warmStart_ = e; }
+    // Reset the persistent LS context (e.g. on solver reset / backtrack
+    // beyond the level where the context was populated). Exposed for
+    // NiaSolver to call from onBacktrack / onReset, and for tests.
+    void resetLsContext() { lsContext_.reset(); }
+    // Read-only access to the persistent context (Phase L1 step 3 hooks:
+    // NiaSolver reads varActivity for decision-priority boost; reads
+    // bestAssignment to seed a candidate at decide time).
+    const NiaLsContext& lsContext() const { return lsContext_; }
 
 private:
     PolynomialKernel& kernel_;
@@ -51,6 +122,8 @@ private:
     long cumulativeMs_ = 0;
     bool enhanced_ = false;
     bool twoLevel_ = false;
+    bool warmStart_ = false;
+    NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,
                         const std::vector<NormalizedNiaConstraint>& constraints) const;

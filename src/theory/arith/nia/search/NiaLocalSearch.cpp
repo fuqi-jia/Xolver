@@ -48,6 +48,40 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_TWO_LEVEL"); e && *e && *e != '0') {
         twoLevel_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_WARM_START"); e && *e && *e != '0') {
+        warmStart_ = true;
+    }
+}
+
+// Stable signature of the current constraint set used by the warm-start
+// context to detect "structurally same" calls vs the assertion stack
+// having changed under us. We hash (poly-id, rel) pairs in order — order
+// matters because normalized_ is index-stable in NiaSolver's pipeline.
+static uint64_t computeConstraintSignature(
+    const std::vector<NormalizedNiaConstraint>& constraints) {
+    uint64_t h = 1469598103934665603ULL;  // FNV-1a basis
+    for (const auto& c : constraints) {
+        uint64_t p = static_cast<uint64_t>(c.poly);
+        uint64_t r = static_cast<uint64_t>(c.rel);
+        h ^= p;
+        h *= 1099511628211ULL;
+        h ^= r;
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+// Stable hash for a single constraint — used as a PAWS-weight key that
+// survives across cb_check calls. Same (poly, rel) ⇒ same hash; once a
+// clause becomes hard, its weight persists even if its position in
+// `constraints` shifts.
+static uint64_t hashConstraint(const NormalizedNiaConstraint& c) {
+    uint64_t h = 1469598103934665603ULL;
+    h ^= static_cast<uint64_t>(c.poly);
+    h *= 1099511628211ULL;
+    h ^= static_cast<uint64_t>(c.rel);
+    h *= 1099511628211ULL;
+    return h;
 }
 
 mpz_class NiaLocalSearch::violation(
@@ -482,23 +516,83 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
     const int NOISE = 3;                // out of 10
     const mpz_class STEP_CAP = mpz_class(1) << 24;  // cap accelerated step
 
+    // ── Phase L1 step 2 — persistent context (warm-start) integration ──
+    //
+    // When XOLVER_NIA_LS_WARM_START is on, we resume from lsContext_'s
+    // best assignment + PAWS weights as long as the constraint set's
+    // signature matches the last call. On structural change we reset the
+    // assignment but keep weights (clauses still hash-stable; carryover
+    // is a no-op for genuinely-new clauses).
+    //
+    // SOUNDNESS: lsContext_ holds heuristic bias only. Every Sat is
+    // validated by the caller against the ORIGINAL constraints; UNSAT
+    // is never claimed from LS. A stale context just wastes search
+    // effort; it cannot cause a wrong verdict.
+    // Only touch lsContext_ when warm-start is enabled. With warmStart_
+    // off, the entire persistence path is a no-op — tests pin this.
+    uint64_t sig = 0;
+    bool warmHit = false;
+    if (warmStart_) {
+        sig = computeConstraintSignature(constraints);
+        warmHit = (lsContext_.lastSignature == sig &&
+                   !lsContext_.bestAssignment.empty());
+        if (lsContext_.lastSignature != sig) {
+            // Signature changed: drop the cached assignment but KEEP
+            // weights (PAWS hardness is keyed by constraint hash; unrelated
+            // old entries are harmless; matching entries still boost
+            // current hard clauses).
+            lsContext_.bestAssignment.clear();
+            lsContext_.currentAssignment.clear();
+            lsContext_.bestValid = false;
+            lsContext_.bestCost = 0;
+        }
+        lsContext_.lastSignature = sig;
+    }
+    // Best-overall trajectory across all restarts in THIS call. Mirrored
+    // into lsContext_ at function exit.
+    IntegerModel bestOverallModel;
+    mpz_class bestOverallCost = 0;
+    bool haveBestOverall = false;
+
     for (int restart = 0; restart < RESTARTS && !timedOut(); ++restart) {
         IntegerModel cur;
-        for (const auto& v : vars) {
-            const auto* d = domains.getDomain(v);
-            if (restart == 0) {
-                cur[v] = clampVar(v, 0);
-            } else if (d && d->hasLower && d->hasUpper) {
-                mpz_class span = d->upper.value - d->lower.value;
-                cur[v] = (span <= 0) ? d->lower.value
-                                     : d->lower.value + mpz_class(rng()) % (span + 1);
-            } else {
-                cur[v] = clampVar(v, mpz_class((long)(rng() % 4001) - 2000));
+        // restart 0 warm-starts from lsContext_.bestAssignment when
+        // available; later restarts diversify (random/restart 0 zeros).
+        if (restart == 0 && warmHit) {
+            cur = lsContext_.bestAssignment;
+            // Fill in any vars that weren't present in the cached best.
+            for (const auto& v : vars) {
+                if (cur.find(v) == cur.end()) cur[v] = clampVar(v, 0);
+            }
+        } else {
+            for (const auto& v : vars) {
+                const auto* d = domains.getDomain(v);
+                if (restart == 0) {
+                    cur[v] = clampVar(v, 0);
+                } else if (d && d->hasLower && d->hasUpper) {
+                    mpz_class span = d->upper.value - d->lower.value;
+                    cur[v] = (span <= 0) ? d->lower.value
+                                         : d->lower.value + mpz_class(rng()) % (span + 1);
+                } else {
+                    cur[v] = clampVar(v, mpz_class((long)(rng() % 4001) - 2000));
+                }
             }
         }
 
         // Initial incremental state.
         std::vector<mpz_class> cviol(nC), weight(nC, mpz_class(1));
+        // Phase L1 step 2: restore PAWS weights from the persistent
+        // context when the constraint hash matches. New clauses (no
+        // hash entry) start at 1.
+        if (warmStart_) {
+            for (std::size_t i = 0; i < nC; ++i) {
+                uint64_t ch = hashConstraint(constraints[i]);
+                auto it = lsContext_.clauseWeight.find(ch);
+                if (it != lsContext_.clauseWeight.end() && it->second > 1) {
+                    weight[i] = it->second;
+                }
+            }
+        }
         mpz_class totalCost = 0;
         for (std::size_t i = 0; i < nC; ++i) {
             cviol[i] = evalCviol(i, cur);
@@ -624,6 +718,17 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             } else {
                 commitMove(bestVar, bestVal);
                 sinceImprove = 0;
+                // Phase L1 step 2: variable activity boost (heuristic
+                // hint for Phase L1 step 3 NIA decide-priority feedback).
+                // Cheap counter; no soundness implication.
+                if (warmStart_) lsContext_.varActivity[bestVar]++;
+            }
+
+            // Track best-overall across THIS call for write-back to context.
+            if (warmStart_ && (!haveBestOverall || totalCost < bestOverallCost)) {
+                bestOverallModel = cur;
+                bestOverallCost = totalCost;
+                haveBestOverall = true;
             }
 
             // PAWS plateau: bump every falsified clause's weight.
@@ -636,8 +741,42 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 }
                 sinceImprove = 0;
             }
-            if (totalCost == 0) return cur;
+            if (totalCost == 0) {
+                if (warmStart_) {
+                    // Persist a successful trajectory's PAWS profile +
+                    // record the satisfying assignment as the best seen.
+                    for (std::size_t i = 0; i < nC; ++i) {
+                        if (weight[i] > 1) {
+                            lsContext_.clauseWeight[hashConstraint(constraints[i])] = weight[i];
+                        }
+                    }
+                    lsContext_.bestAssignment = cur;
+                    lsContext_.currentAssignment = cur;
+                    lsContext_.bestCost = 0;
+                    lsContext_.bestValid = true;
+                }
+                return cur;
+            }
         }
+        // End of restart: write-back the per-restart weights to context.
+        if (warmStart_) {
+            for (std::size_t i = 0; i < nC; ++i) {
+                if (weight[i] > 1) {
+                    auto& w = lsContext_.clauseWeight[hashConstraint(constraints[i])];
+                    if (weight[i] > w) w = weight[i];
+                }
+            }
+        }
+    }
+    // Persist best-overall trajectory for the next cb_check warm-start.
+    // The best-overall may still violate some clauses (totalCost > 0);
+    // it's the LOWEST-cost assignment LS reached this call. Heuristic
+    // bias only — never affects soundness.
+    if (warmStart_ && haveBestOverall) {
+        lsContext_.bestAssignment = bestOverallModel;
+        lsContext_.currentAssignment = bestOverallModel;
+        lsContext_.bestCost = bestOverallCost;
+        lsContext_.bestValid = (bestOverallCost == 0);
     }
     return std::nullopt;
 }

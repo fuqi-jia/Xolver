@@ -168,6 +168,167 @@ TEST_CASE("NiaLocalSearch L1 (two-level): on trivially-UNSAT system, returns nul
     CHECK(!m.has_value());  // must NOT claim Sat
 }
 
+// ---------- Phase L1 step 2: persistent NiaLsContext (warm-start) ----------
+
+// Warm-start fast-path: first call solves and writes context; second call
+// with the SAME constraint set returns the same answer instantly via
+// warm-start. The activity counter is bumped on improving moves.
+TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): same-signature second call uses context") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setWarmStart(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    NormalizedNiaConstraint prod{kernel->sub(kernel->mul(x, y), kernel->mkConst(mpq_class(12))),
+                                 Relation::Eq, mkReason(1)};
+    NormalizedNiaConstraint sum{kernel->sub(kernel->add(x, y), kernel->mkConst(mpq_class(7))),
+                                Relation::Eq, mkReason(2)};
+
+    auto m1 = ls.tryFindModel({prod, sum}, ds);
+    REQUIRE(m1.has_value());
+    // After the first call, context should have a signature recorded
+    // AND varActivity should have entries (the search committed improving
+    // moves on x and y).
+    const auto& ctx = ls.lsContext();
+    CHECK(ctx.lastSignature != 0);
+    CHECK(ctx.bestValid);
+    CHECK(!ctx.bestAssignment.empty());
+    // Second call with same constraint set — same answer, warm-start
+    // returns it immediately.
+    auto m2 = ls.tryFindModel({prod, sum}, ds);
+    REQUIRE(m2.has_value());
+    CHECK((*m2)["x"] * (*m2)["y"] == 12);
+    CHECK((*m2)["x"] + (*m2)["y"] == 7);
+}
+
+// Signature mismatch correctness pin: if the constraint set changes
+// between calls, the cached bestAssignment must be DROPPED (a stale
+// assignment from constraint set A can't be reused on constraint set B
+// without re-validation). Heuristic state (PAWS weights) may persist.
+TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): signature mismatch drops stale assignment") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setWarmStart(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c1{
+        kernel->sub(x, kernel->mkConst(mpq_class(42))),
+        Relation::Eq, mkReason(1)};  // x = 42
+
+    auto m1 = ls.tryFindModel({c1}, ds);
+    REQUIRE(m1.has_value());
+    CHECK((*m1)["x"] == 42);
+
+    // Different constraint set: x = 7. Signature MUST mismatch and the
+    // cached x=42 assignment MUST be dropped. The model from this call
+    // must satisfy the new system.
+    NormalizedNiaConstraint c2{
+        kernel->sub(x, kernel->mkConst(mpq_class(7))),
+        Relation::Eq, mkReason(2)};
+    auto m2 = ls.tryFindModel({c2}, ds);
+    REQUIRE(m2.has_value());
+    CHECK((*m2)["x"] == 7);
+}
+
+// resetLsContext() invalidation: explicit reset clears the context so
+// the next call starts cold. Needed for solver-side onBacktrack hooks
+// that throw away derivation chains.
+TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): resetLsContext() clears state") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setWarmStart(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(99))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK(ls.lsContext().bestValid);
+
+    ls.resetLsContext();
+    const auto& ctx = ls.lsContext();
+    CHECK(!ctx.bestValid);
+    CHECK(ctx.bestAssignment.empty());
+    CHECK(ctx.clauseWeight.empty());
+    CHECK(ctx.varActivity.empty());
+    CHECK(ctx.lastSignature == 0);
+}
+
+// Soundness pin: warm-start NEVER claims Sat without a fresh validator
+// pass. The persistent context can hold a stale assignment that no
+// longer satisfies a changed system; tryFindModel must still verify by
+// running the search to fixpoint (cost = 0) on the CURRENT constraints,
+// not just rubber-stamp the cached bestAssignment.
+TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): never rubber-stamps stale cache") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setWarmStart(true);
+    ls.setBudgetMs(50);  // tiny budget
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // First call: solve x = 50.
+    NormalizedNiaConstraint c1{
+        kernel->sub(x, kernel->mkConst(mpq_class(50))),
+        Relation::Eq, mkReason(1)};
+    auto m1 = ls.tryFindModel({c1}, ds);
+    REQUIRE(m1.has_value());
+
+    // Second call: trivially UNSAT, x = 100 ∧ x ∈ [0, 10]. The cached
+    // x=50 must NOT be returned (it doesn't even satisfy the second
+    // constraint). Signature differs, cache is dropped, LS searches
+    // fresh, can't find a model, returns nullopt.
+    DomainStore ds2;
+    ds2.addLowerBound("x", mpz_class(0), mkReason(2));
+    ds2.addUpperBound("x", mpz_class(10), mkReason(3));
+    NormalizedNiaConstraint c2{
+        kernel->sub(x, kernel->mkConst(mpq_class(100))),
+        Relation::Eq, mkReason(4)};
+    auto m2 = ls.tryFindModel({c2}, ds2);
+    CHECK(!m2.has_value());  // must NOT claim sat with stale cache
+}
+
+// Warm-start disabled = baseline behavior. Confirms the flag actually
+// gates the entire persistence path (e.g. context stays empty).
+TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): default-OFF keeps context empty") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    // setWarmStart NOT called → default-OFF
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(33))),
+        Relation::Eq, mkReason(1)};
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    // Context must stay empty when warm-start is off.
+    const auto& ctx = ls.lsContext();
+    CHECK(!ctx.bestValid);
+    CHECK(ctx.bestAssignment.empty());
+    CHECK(ctx.lastSignature == 0);
+}
+
 // Accelerated step covers a slope-based target far from the initial point.
 // Constraint: x = 1000. Initial assignment puts x at 0; the discrete-Newton
 // step (slope=1, target -p(0)/slope = 1000) plus the acc=1.2 series should
