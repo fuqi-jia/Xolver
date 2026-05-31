@@ -126,6 +126,16 @@ private:
     univariateBoundaryCandidates(const Constraint& c, VarId var,
                                   const std::unordered_map<VarId, mpq_class>& asg) const;
 
+    // Sprint 5: detect pairs of linear bound atoms (var ≷ K1, var ≷ K2) on
+    // the SAME variable and produce the midpoint as a special candidate.
+    // For tight-bound clusters (meti-tarski's pi in (3.1415926, 3.1415927)
+    // — interval width 10⁻⁷, midpoint denom 2·10⁷ — the regular
+    // pushNear offsets are too coarse and the regular MAX_DEN cap rejects
+    // the midpoint). This bypass is targeted at exactly that pattern.
+    std::vector<std::pair<VarId, mpq_class>>
+    bracketMidpointCandidates(const std::vector<Constraint>& cs,
+                              const std::vector<VarId>& vars) const;
+
     // Walk one round: pick a violated constraint, try every var × every
     // candidate value, accept the strictly-best move (lowest total violation).
     // Returns true if any move improved the total; false if local minimum.

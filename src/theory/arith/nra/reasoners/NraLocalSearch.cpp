@@ -113,6 +113,80 @@ NraLocalSearch::totalScore(const std::vector<Constraint>& cs,
     return s;
 }
 
+std::vector<std::pair<VarId, mpq_class>>
+NraLocalSearch::bracketMidpointCandidates(
+        const std::vector<Constraint>& cs,
+        const std::vector<VarId>& vars) const {
+    // For each var, collect lower bounds (root with > / ≥ orientation) and
+    // upper bounds (with < / ≤ orientation) coming from LINEAR atoms in
+    // that var. For each (lower, upper) pair, push the midpoint AND a
+    // few interior offsets at fractions of the interval width so the
+    // candidate sits comfortably inside even very tight brackets (10⁻⁷
+    // wide for meti-tarski/pi). Denom cap bypassed at the consumer end —
+    // bracketMidpoint candidates are TARGETED: a single satisfier per
+    // narrow interval, not a search-space explosion.
+    std::vector<std::pair<VarId, mpq_class>> out;
+    for (VarId v : vars) {
+        std::vector<mpq_class> lowers;   // values t such that q(v) requires v > t (or v ≥ t)
+        std::vector<mpq_class> uppers;   // q(v) requires v < t (or v ≤ t)
+        for (const auto& c : cs) {
+            auto rpOpt = RationalPolynomial::fromPolyId(c.poly, kernel_);
+            if (!rpOpt) continue;
+            // poly must be LINEAR in v and constant in all other vars (after
+            // substituting their assignments — but here we just check the
+            // raw polynomial: linear in v, no other var).
+            auto varSet = rpOpt->variables();
+            if (varSet.size() != 1) continue;
+            if (varSet.find(v) == varSet.end()) continue;
+            if (rpOpt->degree(v) != 1) continue;
+            // poly = a·v + b. Compute a, b: a = (q(1) - q(0)), b = q(0).
+            auto b_opt = [&]() -> std::optional<mpq_class> {
+                RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{0});
+                if (!t.isConstant()) return std::nullopt;
+                return t.constantValue();
+            }();
+            auto v1_opt = [&]() -> std::optional<mpq_class> {
+                RationalPolynomial t = rpOpt->substituteRational(v, mpq_class{1});
+                if (!t.isConstant()) return std::nullopt;
+                return t.constantValue();
+            }();
+            if (!b_opt || !v1_opt) continue;
+            const mpq_class a = *v1_opt - *b_opt;
+            if (a == 0) continue;
+            const mpq_class root = -*b_opt / a;   // poly = 0 at v = root
+            // Direction: a > 0 means poly grows with v.
+            //   poly > 0 ⇒ v > root (lower bound)
+            //   poly < 0 ⇒ v < root (upper bound)
+            //   poly ≥ 0 / ≤ 0 same with non-strict
+            //   poly == 0 ⇒ v == root (skip — yields no interval)
+            const bool aPos = a > 0;
+            switch (c.rel) {
+                case Relation::Gt:  case Relation::Geq:
+                    if (aPos) lowers.push_back(root); else uppers.push_back(root);
+                    break;
+                case Relation::Lt:  case Relation::Leq:
+                    if (aPos) uppers.push_back(root); else lowers.push_back(root);
+                    break;
+                default: break;   // Eq / Neq: not a useful bracket source
+            }
+        }
+        // Pair each lower with each upper, push midpoint + a few interior
+        // offsets so the candidate sits comfortably inside the interval.
+        for (const auto& lo : lowers) {
+            for (const auto& hi : uppers) {
+                if (lo >= hi) continue;
+                const mpq_class mid = (lo + hi) / 2;
+                out.emplace_back(v, mid);
+                // 1/4 and 3/4 interior offsets (handle very lopsided
+                // bounds where the satisfier sits away from the centre).
+                out.emplace_back(v, lo + (hi - lo) / 4);
+                out.emplace_back(v, hi - (hi - lo) / 4);
+            }
+        }
+    }
+    return out;
+}
+
 std::vector<mpq_class>
 NraLocalSearch::univariateBoundaryCandidates(
         const Constraint& c, VarId var,
@@ -421,6 +495,26 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     };
 
     Score score = totalScore(constraints, weights, asg);
+    if (score.isSat()) return asg;
+
+    // Sprint 5 pre-seed: detect bracket-pair candidates (tight upper+lower
+    // bounds on the same var, e.g. meti-tarski's pi) and try each as a seed.
+    // These are special: denom cap bypassed, fixed-count probe BEFORE the
+    // walking loop. If any individual probe satisfies all atoms, return it.
+    auto bracketMids = bracketMidpointCandidates(constraints, vars);
+    for (const auto& [v, q] : bracketMids) {
+        const mpq_class saved = asg.count(v) ? asg[v] : mpq_class{0};
+        asg[v] = q;
+        if (totalScore(constraints, weights, asg).isSat()) return asg;
+        // Restore for the next probe so the assignment doesn't accumulate
+        // stale per-pair changes; the walking loop picks up from the
+        // unchanged baseline.
+        asg[v] = saved;
+    }
+    // Apply each bracket midpoint as a STARTING assignment for that var
+    // (multi-pair compositions are handled by the walking loop afterward).
+    for (const auto& [v, q] : bracketMids) asg[v] = q;
+    score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 
     for (int round = 0; round < maxRounds_; ++round) {
