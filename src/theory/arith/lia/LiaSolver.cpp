@@ -38,6 +38,20 @@ LiaSolver::LiaSolver() {
     repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
     const char* cutsEnv = std::getenv("XOLVER_LIA_CUTS");
     cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
+    const char* gmiEnv = std::getenv("XOLVER_LIA_GMI_CUTS");
+    gmiCutsEnabled_ = (gmiEnv && *gmiEnv && *gmiEnv != '0');
+    // XOLVER_LIA_INCREMENTAL (default OFF): incremental simplex replay instead
+    // of the full-rebuild-every-check baseline. The baseline resets all bounds
+    // and re-asserts the entire theory trail on every stageCore() call — O(checks
+    // x trail) — which dominates on large incremental instances (convert,
+    // nec-smt residual, mathsat FISCHER): lia.core is invoked hundreds of times
+    // and each call re-pivots from scratch. Incremental mode applies only new
+    // trail entries (appliedCursor_) and relies on gs_ push/pop + backtrackToLevel
+    // (already exercised incrementally by LRA) to undo bounds. activeAtoms_/
+    // disequalities_ are maintained by assertLit in both modes, so only the
+    // simplex bound application differs.
+    const char* incEnv = std::getenv("XOLVER_LIA_INCREMENTAL");
+    incrementalEnabled_ = (incEnv && *incEnv && *incEnv != '0');
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
@@ -174,56 +188,59 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t0 = std::chrono::steady_clock::now();
 #endif
 
-#ifndef XOLVER_LIA_INCREMENTAL
-    // -------------------------------------------------------------------------
-    // Full-rebuild mode (baseline for comparison)
-    // -------------------------------------------------------------------------
-    gs_.resetActiveBounds();
-    disequalities_.clear();
-    activeAtoms_.clear();
-    integerVars_.clear();
+    if (!incrementalEnabled_) {
+        // ---------------------------------------------------------------------
+        // Full-rebuild mode (default, safe baseline): reset all bounds and
+        // re-assert the entire theory trail every check.
+        // ---------------------------------------------------------------------
+        gs_.resetActiveBounds();
+        disequalities_.clear();
+        activeAtoms_.clear();
+        integerVars_.clear();
 
-    for (const auto& e : theoryTrail_) {
-        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+        for (const auto& e : theoryTrail_) {
+            const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
-        for (const auto& [name, coeff] : payload.lhs.terms) {
-            (void)coeff;
-            int v = manager_.getOrCreateVar(gs_, name);
-            integerVars_.insert(v);
-        }
-
-        if (e.isDiseq) {
-            disequalities_.push_back({e.auxVar, payload.lhs, payload.rhs, e.lit});
-        } else {
-            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
-                                           isIntegerLinearForm(payload));
-            if (!ok) {
-                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
-                break;
+            for (const auto& [name, coeff] : payload.lhs.terms) {
+                (void)coeff;
+                int v = manager_.getOrCreateVar(gs_, name);
+                integerVars_.insert(v);
             }
-            activeAtoms_.push_back({e.atom.exprId, e.auxVar, payload.rel, e.value, payload.lhs, payload.rhs, e.lit});
-        }
-    }
-#else
-    // -------------------------------------------------------------------------
-    // Phase 1: incremental replay of new trail entries
-    // -------------------------------------------------------------------------
-    while (appliedCursor_ < theoryTrail_.size()) {
-        const auto& e = theoryTrail_[appliedCursor_];
-        const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
-        if (!e.isDiseq) {
-            bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
-                                           isIntegerLinearForm(payload));
-            if (!ok) {
-                pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
-                break;
+            if (e.isDiseq) {
+                disequalities_.push_back({e.auxVar, payload.lhs, payload.rhs.asRational(), e.lit});
+            } else {
+                bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
+                                               isIntegerLinearForm(payload));
+                if (!ok) {
+                    pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
+                    break;
+                }
+                activeAtoms_.push_back({e.atom.exprId, e.auxVar, payload.rel, e.value, payload.lhs, payload.rhs.asRational(), e.lit});
             }
         }
+    } else {
+        // ---------------------------------------------------------------------
+        // Incremental replay (XOLVER_LIA_INCREMENTAL): apply only trail entries
+        // not yet pushed to the simplex. activeAtoms_/disequalities_ are kept by
+        // assertLit; gs_ push/pop + backtrackToLevel undo bounds on backtrack.
+        // ---------------------------------------------------------------------
+        while (appliedCursor_ < theoryTrail_.size()) {
+            const auto& e = theoryTrail_[appliedCursor_];
+            const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
-        ++appliedCursor_;
+            if (!e.isDiseq) {
+                bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
+                                               isIntegerLinearForm(payload));
+                if (!ok) {
+                    pendingConflict_ = PendingConflict{e.level, manager_.translateConflict(gs_)};
+                    break;
+                }
+            }
+
+            ++appliedCursor_;
+        }
     }
-#endif
 
     if (pendingConflict_) {
 #ifdef XOLVER_LIA_PROFILE
@@ -247,24 +264,25 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t2 = prof_t1;
 #endif
 
-#ifdef XOLVER_LIA_INCREMENTAL
-    // Rebuild integerVars_ from activeAtoms_ and disequalities_ (low overhead)
-    integerVars_.clear();
-    for (const auto& a : activeAtoms_) {
-        for (const auto& [name, coeff] : a.lhs.terms) {
-            (void)coeff;
-            int v = manager_.getOrCreateVar(gs_, name);
-            integerVars_.insert(v);
+    if (incrementalEnabled_) {
+        // Rebuild integerVars_ from activeAtoms_ and disequalities_ (the
+        // full-rebuild branch builds it inline; incremental did not touch it).
+        integerVars_.clear();
+        for (const auto& a : activeAtoms_) {
+            for (const auto& [name, coeff] : a.lhs.terms) {
+                (void)coeff;
+                int v = manager_.getOrCreateVar(gs_, name);
+                integerVars_.insert(v);
+            }
+        }
+        for (const auto& d : disequalities_) {
+            for (const auto& [name, coeff] : d.lhs.terms) {
+                (void)coeff;
+                int v = manager_.getOrCreateVar(gs_, name);
+                integerVars_.insert(v);
+            }
         }
     }
-    for (const auto& d : disequalities_) {
-        for (const auto& [name, coeff] : d.lhs.terms) {
-            (void)coeff;
-            int v = manager_.getOrCreateVar(gs_, name);
-            integerVars_.insert(v);
-        }
-    }
-#endif
 
     // Apply interface equalities from Nelson-Oppen combination
     for (const auto& ieq : interfaceEqualities_) {
@@ -624,12 +642,21 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     // Cap Gomory cuts per solve so branch-and-bound still terminates AND the
     // tableau doesn't bloat into degeneracy (too many near-degenerate cut rows
     // make the anti-cycling pivot rule blow past the iteration cap -> unknown,
-    // the CAV coef-size regression). Keep the budget small ("cut a little, then
-    // branch"); tunable for A/B.
+    // the CAV coef-size regression).
+    //
+    // Default 4 ("cut-and-branch"): measured on the QF_LIA panda regressors
+    // (dillig 25-*/45-*, Bromberger *.slack), every cut a fractional SAT node
+    // generates perturbs the branching search and mints a fresh bound atom that
+    // enlarges the boolean search — on SAT instances cuts are pure overhead and
+    // the old default of 32 turned 16-20s base solves into >30s timeouts. A
+    // small budget concentrates cuts near the root (where they tighten the
+    // initial relaxation, helping UNSAT) and then lets branch-and-bound run
+    // undisturbed. Tunable via XOLVER_LIA_CUT_MAXPERSOLVE; raise it for
+    // UNSAT-heavy divisions if a differential shows more root cuts help there.
     static const int kMaxCutsPerSolve = []() {
         const char* e = std::getenv("XOLVER_LIA_CUT_MAXPERSOLVE");
         int v = e ? std::atoi(e) : -1;
-        return v >= 0 ? v : 32;
+        return v >= 0 ? v : 4;
     }();
     int bestVar = -1;
     mpq_class bestFrac(-1);
@@ -683,10 +710,11 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
             tryIntegralityRepair()) {
             return TheoryCheckResult::consistent();
         }
-        // XOLVER_LIA_CUTS: try a Gomory fractional cut before splitting. A cut
-        // tightens the relaxation without branching; capped per solve so
-        // branch-and-bound still terminates. Only at Full effort (a real model).
-        if (cutsEnabled_ && effort == TheoryEffort::Full &&
+        // XOLVER_LIA_CUTS / XOLVER_LIA_GMI_CUTS: try a Gomory (or GMI) cut before
+        // splitting. A cut tightens the relaxation without branching; capped per
+        // solve so branch-and-bound still terminates. Only at Full effort (a real
+        // model). GMI implies the cut path so it can be enabled standalone.
+        if ((cutsEnabled_ || gmiCutsEnabled_) && effort == TheoryEffort::Full &&
             cutsThisSolve_ < kMaxCutsPerSolve) {
             if (auto cut = generateGomoryCut(bestVar)) {
                 if (!lemmaDb.contains(*cut)) {
@@ -860,7 +888,14 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     }
     if (terms.empty()) return std::nullopt;
 
-    auto cutOpt = deriveGomoryCut(f0, terms);
+    // GMI (XOLVER_LIA_GMI_CUTS) folds continuous nonbasics into the cut instead
+    // of bailing; the pure fractional cut requires every term integer. Both
+    // return the same {gamma>=0, rhs>0} shape, so the back-substitution below is
+    // shared. The coefficient bit-cap further down rejects any blown-up cut
+    // (GMI's f0/(1-f0) factor can compound rationals) so the exact simplex never
+    // bogs down.
+    auto cutOpt = gmiCutsEnabled_ ? deriveGmiCut(f0, terms)
+                                  : deriveGomoryCut(f0, terms);
     if (!cutOpt) return std::nullopt;              // non-integer term / vacuous
 
     // Re-express Σ gamma_j y_j >= R over original variables:
