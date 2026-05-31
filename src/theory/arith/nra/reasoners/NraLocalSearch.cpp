@@ -322,12 +322,22 @@ NraLocalSearch::univariateBoundaryCandidates(
     // chains and avoids the libpoly plumbing; sampling resolution is
     // tight enough to bracket typical meti-tarski roots.
     if (deg >= 3) {
+        // Denser grid catching common meti-tarski / Skolem roots (3, 5, 6, 7,
+        // 1.5, 2.5 for trig approximations near π/2, integer-Skolem witnesses,
+        // etc.) instead of the old powers-of-2-only sparse scan.
         static const mpq_class kGrid[] = {
-            mpq_class{-32}, mpq_class{-16}, mpq_class{-8}, mpq_class{-4},
-            mpq_class{-2}, mpq_class{-1}, mpq_class{-1, 2}, mpq_class{-1, 4},
+            mpq_class{-32}, mpq_class{-16}, mpq_class{-8}, mpq_class{-7},
+            mpq_class{-6}, mpq_class{-5}, mpq_class{-4}, mpq_class{-3},
+            mpq_class{-5, 2}, mpq_class{-2}, mpq_class{-7, 4},
+            mpq_class{-3, 2}, mpq_class{-5, 4}, mpq_class{-1},
+            mpq_class{-3, 4}, mpq_class{-1, 2}, mpq_class{-1, 3},
+            mpq_class{-1, 4}, mpq_class{-1, 8},
             mpq_class{0},
-            mpq_class{1, 4}, mpq_class{1, 2}, mpq_class{1}, mpq_class{2},
-            mpq_class{4}, mpq_class{8}, mpq_class{16}, mpq_class{32}
+            mpq_class{1, 8}, mpq_class{1, 4}, mpq_class{1, 3}, mpq_class{1, 2},
+            mpq_class{3, 4}, mpq_class{1}, mpq_class{5, 4}, mpq_class{4, 3},
+            mpq_class{3, 2}, mpq_class{5, 3}, mpq_class{7, 4}, mpq_class{2},
+            mpq_class{5, 2}, mpq_class{3}, mpq_class{4}, mpq_class{5},
+            mpq_class{6}, mpq_class{7}, mpq_class{8}, mpq_class{16}, mpq_class{32}
         };
         std::vector<std::pair<mpq_class, mpq_class>> samples;
         samples.reserve(sizeof(kGrid) / sizeof(kGrid[0]));
@@ -561,6 +571,13 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
                 bestVar = v;
                 bestVal = q;
                 improved = true;
+                // Early-exit on SAT — no point trying more candidates per round
+                // when the current move already drives every atom to satisfied.
+                if (sc.isSat()) {
+                    asg[v] = bestVal;
+                    currentScore = bestScore;
+                    return true;
+                }
             }
         }
         asg[v] = saved;
@@ -613,9 +630,14 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
         // unchanged baseline.
         asg[v] = saved;
     }
-    // Apply each bracket midpoint as a STARTING assignment for that var
-    // (multi-pair compositions are handled by the walking loop afterward).
-    for (const auto& [v, q] : bracketMids) asg[v] = q;
+    // Dedupe per-var: keep the FIRST candidate per var (which is the exact
+    // midpoint from bracketMidpointCandidates, before 1/4 and 3/4 offsets).
+    // The old "for (v,q) asg[v]=q" overwrote every var with the LAST emitted
+    // candidate (= 3/4 offset of the last pair processed), defeating the
+    // pre-seed combined attempt.
+    std::unordered_map<VarId, mpq_class> seenFirst;
+    for (const auto& [v, q] : bracketMids) seenFirst.try_emplace(v, q);
+    for (const auto& [v, q] : seenFirst) asg[v] = q;
     score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 
