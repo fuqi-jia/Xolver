@@ -1315,6 +1315,14 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             originalAssertionsForDtValidate_ &&
             !originalAssertionsForDtValidate_->empty()) {
             DtModelValidator v(*coreIr_, termManager_, egraph_, coreIr_->datatypes());
+            // Strict mode: floor on Indeterminate too. Master 5min batch
+            // surfaced 43 false-SATs the lenient default missed (the e-graph
+            // arrived at a sat verdict without enough constructor witnesses
+            // for structural eval to ground out). Sound but may over-floor
+            // true-sat opaque-DT cases. See validator header.
+            static const bool dtValidatorStrict =
+                std::getenv("XOLVER_DT_VALIDATOR_STRICT") != nullptr;
+            v.setStrictMode(dtValidatorStrict);
             auto verdict = v.validate(*originalAssertionsForDtValidate_);
             if (std::getenv("XOLVER_DT_VALIDATE_DIAG")) {
                 std::cerr << "[DT-VAL] assertions=" << originalAssertionsForDtValidate_->size()

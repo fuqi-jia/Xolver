@@ -59,6 +59,14 @@ public:
                      const DatatypeRegistry& dts)
         : ir_(ir), tm_(tm), egraph_(egraph), dts_(dts) {}
 
+    // XOLVER_DT_VALIDATOR_STRICT (default-OFF): when set, validate() promotes
+    // Indeterminate → Violated. Use when the candidate sat verdict reaches the
+    // top-level under conditions where eval can't fully ground out (e.g. the
+    // 5min batch surfaced 43 false-SATs the lenient mode missed). Sound but
+    // over-floors true-sat cases whose model uses opaque (non-constructor) DT
+    // classes — only enable when the false-SAT cost dominates lost recovery.
+    void setStrictMode(bool s) { strict_ = s; }
+
     /** Validate the given assertion roots (original-formula ExprIds). */
     Verdict validate(const std::vector<ExprId>& assertions);
 
@@ -117,6 +125,7 @@ private:
     std::unordered_map<ExprId, R> memo_;
     std::unordered_map<EClassId, TreePtr> treeMemo_;
     std::unordered_set<EClassId> inProgress_;  // cycle guard
+    bool strict_ = false;
 };
 
 } // namespace xolver
