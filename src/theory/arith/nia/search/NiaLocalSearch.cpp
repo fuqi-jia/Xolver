@@ -57,6 +57,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_QUAD_CRITICAL"); e && *e && *e != '0') {
         quadCritical_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_FS_JUMP"); e && *e && *e != '0') {
+        fsJump_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -696,6 +699,49 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 cur[v] = orig;
                 std::vector<mpz_class> targets = {orig + 1, orig - 1,
                                                    orig + 2, orig - 2};
+                // P4 feasible-set jump (XOLVER_NIA_LS_FS_JUMP). Pull the
+                // variable's DomainStore intervals into the candidate
+                // set: boundaries, midpoint, finite-set elements, and
+                // ±1 neighbours of excluded values. Yices2LS-style lazy
+                // cell jump — sound because every candidate still
+                // passes through the bestCost selection.
+                if (fsJump_) {
+                    const IntDomain* d = domains.getDomain(v);
+                    if (d) {
+                        if (d->hasLower) {
+                            targets.push_back(d->lower.value);
+                            targets.push_back(d->lower.value + 1);
+                        }
+                        if (d->hasUpper) {
+                            targets.push_back(d->upper.value);
+                            targets.push_back(d->upper.value - 1);
+                        }
+                        if (d->hasLower && d->hasUpper) {
+                            mpz_class mid = (d->lower.value + d->upper.value) / 2;
+                            targets.push_back(mid);
+                            targets.push_back(mid - 1);
+                            targets.push_back(mid + 1);
+                        }
+                        if (d->finiteValues) {
+                            // Cap the finite-set contribution to keep the
+                            // candidate loop bounded on pathological wide
+                            // sets; small finite domains hit the limit far
+                            // less than the cap.
+                            std::size_t fcap = 64;
+                            for (const auto& fv : *d->finiteValues) {
+                                targets.push_back(fv);
+                                if (--fcap == 0) break;
+                            }
+                        }
+                        // ±1 neighbours of excluded values (jump OUT of
+                        // the forbidden cell into the adjacent feasible
+                        // one).
+                        for (const auto& [ex, _r] : d->excludedValues) {
+                            targets.push_back(ex - 1);
+                            targets.push_back(ex + 1);
+                        }
+                    }
+                }
                 // P3 quadratic critical move (XOLVER_NIA_LS_QUAD_CRITICAL).
                 // Three probes (orig, orig+1, orig+2) fit
                 //   q(t) = a t² + b t + c   with t = (value - orig).

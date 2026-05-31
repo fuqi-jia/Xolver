@@ -555,6 +555,118 @@ TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): default-OFF still solves x^2 = 
     CHECK(xv * xv == 4);
 }
 
+// ---------- Phase L1 P4: feasible-set jump ----------
+
+TEST_CASE("NiaLocalSearch L1 P4 (fs-jump): tight bound x in [42,42] is jumped to directly") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setFsJump(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(42), mkReason(1));
+    ds.addUpperBound("x", mpz_class(42), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(42))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 42);
+}
+
+TEST_CASE("NiaLocalSearch L1 P4 (fs-jump): finite-set domain — iterates set members") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setFsJump(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.restrictToFiniteSet("x",
+        std::set<mpz_class>{mpz_class(7), mpz_class(13), mpz_class(19)},
+        mkReason(1));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // x = 13 — must satisfy.
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(13))),
+        Relation::Eq, mkReason(2)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 13);
+}
+
+TEST_CASE("NiaLocalSearch L1 P4 (fs-jump): default-OFF still solves the same case") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    // setFsJump NOT called
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(42), mkReason(1));
+    ds.addUpperBound("x", mpz_class(42), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(42))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 42);
+}
+
+TEST_CASE("NiaLocalSearch L1 P4 (fs-jump): excluded values' neighbours are tried") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setFsJump(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(0), mkReason(1));
+    ds.addUpperBound("x", mpz_class(10), mkReason(2));
+    ds.excludeValue("x", mpz_class(5), mkReason(3));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // x = 4 or x = 6 should satisfy (neighbours of the excluded 5).
+    NormalizedNiaConstraint c{
+        kernel->sub(kernel->mul(x, kernel->mkConst(mpq_class(2))),
+                    kernel->mkConst(mpq_class(8))),
+        Relation::Eq, mkReason(4)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 4);
+}
+
+TEST_CASE("NiaLocalSearch L1 P4 (fs-jump): contradictory bounds return nullopt") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setFsJump(true);
+    ls.setBudgetMs(50);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(50), mkReason(1));
+    ds.addUpperBound("x", mpz_class(50), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // x = 999 in domain x = 50 — no model.
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(999))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    CHECK(!m.has_value());
+}
+
 // Accelerated step covers a slope-based target far from the initial point.
 // Constraint: x = 1000. Initial assignment puts x at 0; the discrete-Newton
 // step (slope=1, target -p(0)/slope = 1000) plus the acc=1.2 series should

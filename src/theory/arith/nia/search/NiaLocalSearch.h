@@ -118,6 +118,13 @@ public:
     // for integer-rounded roots, and add them to the move target set.
     // LS-IA paper: degree ≥ 3 is skipped intentionally for performance.
     void setQuadCritical(bool e) { quadCritical_ = e; }
+    // Phase L1 P4 — feasible-set jump (XOLVER_NIA_LS_FS_JUMP=1,
+    // default-OFF). For each variable in a falsified atom, augment the
+    // move target set with the DomainStore's boundary/midpoint values
+    // and finite-set elements. Yices2LS-style: "lazy cell jumps" via
+    // the maintained feasibility intervals — no root isolation, sound
+    // by construction.
+    void setFsJump(bool e) { fsJump_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -137,6 +144,7 @@ private:
     bool warmStart_ = false;
     bool multiScale_ = false;
     bool quadCritical_ = false;
+    bool fsJump_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,
