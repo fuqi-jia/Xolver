@@ -7,6 +7,30 @@
 
 namespace xolver {
 
+// LS-IA-style linear distance for a single atom evaluated at `val` =
+// p(model). Returns 0 when the atom is satisfied; otherwise the
+// "distance to satisfaction" in integer steps.
+//
+// NOT squared. The original implementation summed val² across atoms,
+// which made high-magnitude polynomials (e.g. y² + y⁴ + y⁶ …) dominate
+// the entire cost — search direction got hijacked by the largest
+// monomial. LS-IA (arXiv:2211.10219) defines the cost as a sum of
+// LINEAR distances; strict integer inequalities use ε = 1.
+//
+// This is the load-bearing correctness fix for NIA local search per
+// the master review.
+static mpz_class atomDistance(Relation rel, const mpz_class& val) {
+    switch (rel) {
+        case Relation::Eq:  return abs(val);
+        case Relation::Neq: return (val == 0) ? mpz_class(1) : mpz_class(0);
+        case Relation::Lt:  return (val <  0) ? mpz_class(0) : (val + 1);
+        case Relation::Leq: return (val <= 0) ? mpz_class(0) : val;
+        case Relation::Gt:  return (val >  0) ? mpz_class(0) : (-val + 1);
+        case Relation::Geq: return (val >= 0) ? mpz_class(0) : -val;
+    }
+    return mpz_class(0);
+}
+
 NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     // Dev defaults were 200ms/1000ms (24s-screening). Competition has 1200s, so
     // give SLS a real budget: 5s per call, 60s cumulative. Candidate-only +
@@ -21,27 +45,22 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LOCALSEARCH"); e && *e && *e != '0') {
         enhanced_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_TWO_LEVEL"); e && *e && *e != '0') {
+        twoLevel_ = true;
+    }
 }
 
 mpz_class NiaLocalSearch::violation(
     const IntegerModel& model,
     const std::vector<NormalizedNiaConstraint>& constraints) const {
 
+    // LS-IA linear-distance sum. NOT squared (see atomDistance comment).
+    // For strict inequalities at integer arithmetic, ε = 1.
     mpz_class total = 0;
     for (const auto& c : constraints) {
         auto valOpt = kernel_.evalInteger(c.poly, model);
         if (!valOpt) continue;
-        mpz_class val = *valOpt;
-        mpz_class v = 0;
-        switch (c.rel) {
-            case Relation::Eq:  v = abs(val); break;
-            case Relation::Neq: v = (val == 0) ? mpz_class(1) : mpz_class(0); break;
-            case Relation::Lt:  v = (val < 0) ? mpz_class(0) : val; break;
-            case Relation::Leq: v = (val <= 0) ? mpz_class(0) : val; break;
-            case Relation::Gt:  v = (val > 0) ? mpz_class(0) : -val; break;
-            case Relation::Geq: v = (val >= 0) ? mpz_class(0) : -val; break;
-        }
-        total += v * v;
+        total += atomDistance(c.rel, *valOpt);
     }
     return total;
 }
@@ -84,6 +103,15 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     // first; on success the model is validated by the caller (sound). On
     // failure fall through to the basic candidate sweep below.
     if (enhanced_ && !vars.empty()) {
+        // Phase L1: when XOLVER_NIA_LS_TWO_LEVEL is on, run the LS-IA
+        // + Yices2LS-style variant (incremental score, PAWS weights,
+        // adaptive step). On miss, fall through to the original walkSat
+        // (covers cases the L1 heuristic misses) and then the candidate
+        // sweep.
+        if (twoLevel_) {
+            if (auto m = walkSatTwoLevel(constraints, vars, domains)) return m;
+            if (timedOut()) return std::nullopt;
+        }
         if (auto m = walkSat(constraints, vars, domains)) return m;
         if (timedOut()) return std::nullopt;
     }
@@ -371,6 +399,244 @@ std::optional<IntegerModel> NiaLocalSearch::walkSat(
                 curViol = bestViol;
             }
             if (curViol == 0) return cur;
+        }
+    }
+    return std::nullopt;
+}
+
+// Phase L1 — LS-IA + Yices2LS-style enhanced WalkSAT.
+//
+// The three load-bearing engineering improvements over walkSat:
+//
+// (1) Incremental per-clause violation tracking. The base walkSat re-evaluates
+//     the FULL constraint list per candidate move (line ~354) which is O(n)
+//     per try and O(n²) over a flip. Here we keep `cviol[i]` = current
+//     violation of constraint i, and a `varToClauses[v]` index. When we
+//     change variable v, only clauses in varToClauses[v] need re-evaluation;
+//     totalCost = Σ cviol[i] * weight[i] updates by Δ_v alone. This is the
+//     standard LS engineering fix (LS-NRA paper: "without incremental, perf
+//     collapses").
+//
+// (2) PAWS clause weights. Every plateau (no improvement for K=20 consecutive
+//     flips) bumps the weight of every currently-falsified constraint by 1.
+//     totalCost weights hard clauses heavier, so search prefers attacking
+//     them. The classical PAWS recipe.
+//
+// (3) Accelerated hill-climb with adaptive step. Successive step sizes
+//     k = 1, ⌊1.2⌋, ⌊1.44⌋, ⌊1.728⌋, ... up to a cap; keep the best, fall
+//     back on failure. Combined with the discrete-Newton step (slope-based
+//     target) this catches both small refinements and large jumps.
+//
+// Soundness: candidate-only, validator-gated. Never returns UNSAT;
+// returns Sat ONLY when total cost reaches 0 (all clauses satisfied with
+// the kernel's exact integer arithmetic) — the caller still validates.
+std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    const std::vector<std::string>& vars,
+    const DomainStore& domains) {
+
+    const auto t0 = std::chrono::steady_clock::now();
+    auto timedOut = [&]() -> bool {
+        if (budgetMs_ <= 0) return false;
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                      std::chrono::steady_clock::now() - t0).count();
+        return ms >= budgetMs_;
+    };
+
+    std::mt19937_64 rng(0x9e3779b97f4a7c15ULL);
+    const mpz_class RANGE = mpz_class(1) << 20;
+
+    auto clampVar = [&](const std::string& v, mpz_class val) -> mpz_class {
+        const auto* d = domains.getDomain(v);
+        if (d && d->hasLower && val < d->lower.value) val = d->lower.value;
+        if (d && d->hasUpper && val > d->upper.value) val = d->upper.value;
+        if (!(d && d->hasLower) && val < -RANGE) val = -RANGE;
+        if (!(d && d->hasUpper) && val >  RANGE) val =  RANGE;
+        return val;
+    };
+
+    const std::size_t nC = constraints.size();
+
+    // Build variable → clause-indices index. Variables not appearing in any
+    // constraint are simply absent; constants get an empty entry.
+    std::unordered_map<std::string, std::vector<std::size_t>> varToClauses;
+    for (std::size_t i = 0; i < nC; ++i) {
+        for (const auto& v : kernel_.variables(constraints[i].poly)) {
+            varToClauses[v].push_back(i);
+        }
+    }
+
+    // Per-constraint violation of the current assignment, LS-IA linear
+    // distance. NOT squared — the original implementation summed val²
+    // which let high-magnitude monomials dominate cost direction. See
+    // atomDistance() at file scope.
+    auto evalCviol = [&](std::size_t i, const IntegerModel& cur) -> mpz_class {
+        auto valOpt = kernel_.evalInteger(constraints[i].poly, cur);
+        if (!valOpt) return mpz_class(0);   // unsupported → treat as 0
+        return atomDistance(constraints[i].rel, *valOpt);
+    };
+
+    const int RESTARTS = 20;
+    const int MAX_FLIPS = 800;          // L1 raises max-flips to amortise PAWS
+    const int PLATEAU_K = 20;           // PAWS bump every K flips w/o improve
+    const int NOISE = 3;                // out of 10
+    const mpz_class STEP_CAP = mpz_class(1) << 24;  // cap accelerated step
+
+    for (int restart = 0; restart < RESTARTS && !timedOut(); ++restart) {
+        IntegerModel cur;
+        for (const auto& v : vars) {
+            const auto* d = domains.getDomain(v);
+            if (restart == 0) {
+                cur[v] = clampVar(v, 0);
+            } else if (d && d->hasLower && d->hasUpper) {
+                mpz_class span = d->upper.value - d->lower.value;
+                cur[v] = (span <= 0) ? d->lower.value
+                                     : d->lower.value + mpz_class(rng()) % (span + 1);
+            } else {
+                cur[v] = clampVar(v, mpz_class((long)(rng() % 4001) - 2000));
+            }
+        }
+
+        // Initial incremental state.
+        std::vector<mpz_class> cviol(nC), weight(nC, mpz_class(1));
+        mpz_class totalCost = 0;
+        for (std::size_t i = 0; i < nC; ++i) {
+            cviol[i] = evalCviol(i, cur);
+            totalCost += cviol[i];
+        }
+        if (totalCost == 0) return cur;
+
+        // weightedCost accounts for PAWS clause weights.
+        auto computeWeightedCost = [&]() -> mpz_class {
+            mpz_class wc = 0;
+            for (std::size_t i = 0; i < nC; ++i) wc += cviol[i] * weight[i];
+            return wc;
+        };
+        mpz_class weightedCost = computeWeightedCost();
+
+        // For a candidate `v := newVal`, return the delta to weightedCost
+        // by re-evaluating only the affected clauses.
+        auto tryMoveCost = [&](const std::string& v, mpz_class newVal,
+                                mpz_class& deltaOut) -> mpz_class {
+            auto it = varToClauses.find(v);
+            if (it == varToClauses.end()) { deltaOut = 0; return weightedCost; }
+            const mpz_class orig = cur[v];
+            cur[v] = newVal;
+            mpz_class delta = 0;
+            mpz_class newTotalRaw = 0;
+            for (std::size_t i : it->second) {
+                mpz_class nv = evalCviol(i, cur);
+                delta += (nv - cviol[i]) * weight[i];
+                newTotalRaw += nv;
+            }
+            cur[v] = orig;
+            deltaOut = delta;
+            (void)newTotalRaw;
+            return weightedCost + delta;
+        };
+
+        // Commit a move: update cviol[], totalCost, weightedCost in place.
+        auto commitMove = [&](const std::string& v, mpz_class newVal) {
+            auto it = varToClauses.find(v);
+            cur[v] = newVal;
+            if (it == varToClauses.end()) return;
+            for (std::size_t i : it->second) {
+                mpz_class nv = evalCviol(i, cur);
+                weightedCost += (nv - cviol[i]) * weight[i];
+                totalCost += (nv - cviol[i]);
+                cviol[i] = nv;
+            }
+        };
+
+        int sinceImprove = 0;
+        for (int flip = 0; flip < MAX_FLIPS; ++flip) {
+            if ((flip & 31) == 0 && timedOut()) return std::nullopt;
+            if (totalCost == 0) return cur;
+
+            // Find any currently-falsified constraint set.
+            std::vector<std::size_t> falsified;
+            for (std::size_t i = 0; i < nC; ++i) if (cviol[i] > 0) falsified.push_back(i);
+            if (falsified.empty()) return cur;
+
+            // Pick a random falsified constraint; collect its variables.
+            std::size_t ci = falsified[rng() % falsified.size()];
+            const NormalizedNiaConstraint& C = constraints[ci];
+            std::vector<std::string> cvars = kernel_.variables(C.poly);
+            if (cvars.empty()) break;
+
+            // Critical-move search with discrete-Newton + adaptive
+            // accelerated step. Try targets: ±1, ±2, slope-based root, and
+            // a geometric series at acc=1.2 around each slope-target.
+            std::string bestVar;
+            mpz_class bestVal = 0;
+            mpz_class bestCost = weightedCost;
+            bool haveBest = false;
+            for (const auto& v : cvars) {
+                const mpz_class orig = cur[v];
+                // Slope estimate from two probes (orig, orig+1).
+                auto p0 = kernel_.evalInteger(C.poly, cur);
+                cur[v] = orig + 1;
+                auto p1 = kernel_.evalInteger(C.poly, cur);
+                cur[v] = orig;
+                std::vector<mpz_class> targets = {orig + 1, orig - 1,
+                                                   orig + 2, orig - 2};
+                if (p0 && p1) {
+                    mpz_class slope = *p1 - *p0;
+                    if (slope != 0) {
+                        mpz_class step = -(*p0) / slope;  // discrete Newton
+                        if (step < -STEP_CAP) step = -STEP_CAP;
+                        if (step >  STEP_CAP) step =  STEP_CAP;
+                        // Accelerated series around the Newton step:
+                        // step * (1.2^k) for k = 0..3. Implemented in
+                        // integer math via successive 6/5 multiplies.
+                        mpz_class s = step;
+                        for (int k = 0; k < 4; ++k) {
+                            targets.push_back(orig + s);
+                            targets.push_back(orig + s + 1);
+                            targets.push_back(orig + s - 1);
+                            if (s == 0) break;
+                            s = (s * 6) / 5;  // ≈ ×1.2; integer rounding ok
+                            if (s < -STEP_CAP) s = -STEP_CAP;
+                            if (s >  STEP_CAP) s =  STEP_CAP;
+                        }
+                    }
+                }
+                for (mpz_class t : targets) {
+                    t = clampVar(v, t);
+                    if (t == orig) continue;
+                    mpz_class delta;
+                    mpz_class nc = tryMoveCost(v, t, delta);
+                    if (!haveBest || nc < bestCost) {
+                        bestCost = nc; bestVar = v; bestVal = t; haveBest = true;
+                    }
+                }
+            }
+
+            // Noise: with prob NOISE/10, ignore the best move and random-nudge.
+            if (((int)(rng() % 10) < NOISE) || !haveBest ||
+                bestCost >= weightedCost) {
+                const std::string& v = cvars[rng() % cvars.size()];
+                long nudge = (long)(rng() % 21) - 10;
+                if (nudge == 0) nudge = 1;
+                mpz_class newVal = clampVar(v, cur[v] + nudge);
+                commitMove(v, newVal);
+                sinceImprove++;
+            } else {
+                commitMove(bestVar, bestVal);
+                sinceImprove = 0;
+            }
+
+            // PAWS plateau: bump every falsified clause's weight.
+            if (sinceImprove >= PLATEAU_K) {
+                for (std::size_t i = 0; i < nC; ++i) {
+                    if (cviol[i] > 0) {
+                        weight[i] += 1;
+                        weightedCost += cviol[i];  // delta from weight bump
+                    }
+                }
+                sinceImprove = 0;
+            }
+            if (totalCost == 0) return cur;
         }
     }
     return std::nullopt;

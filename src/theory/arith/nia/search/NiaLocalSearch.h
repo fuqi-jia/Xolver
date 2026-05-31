@@ -36,6 +36,13 @@ public:
     // Enable the WalkSAT / accelerated-hill-climb search (XOLVER_NIA_LOCALSEARCH,
     // default-OFF). Settable for tests.
     void setEnhanced(bool e) { enhanced_ = e; }
+    // Phase L1: enable the LS-IA + Yices2LS-style enhancements on top of the
+    // base walkSat — incremental per-clause violation tracking, PAWS clause
+    // weights, accelerated hill-climb with adaptive step (acc=1.2).
+    // Default-OFF (XOLVER_NIA_LS_TWO_LEVEL=1). Pure perf / SAT-finder
+    // improvement; soundness invariants unchanged (candidate-only,
+    // validator-gated, never returns UNSAT).
+    void setTwoLevel(bool e) { twoLevel_ = e; }
 
 private:
     PolynomialKernel& kernel_;
@@ -43,6 +50,7 @@ private:
     long totalBudgetMs_;
     long cumulativeMs_ = 0;
     bool enhanced_ = false;
+    bool twoLevel_ = false;
 
     mpz_class violation(const IntegerModel& model,
                         const std::vector<NormalizedNiaConstraint>& constraints) const;
@@ -54,6 +62,17 @@ private:
     // nullopt; the result is a candidate only (the caller validates it), so the
     // search is always sound regardless of heuristic choices.
     std::optional<IntegerModel> walkSat(
+        const std::vector<NormalizedNiaConstraint>& constraints,
+        const std::vector<std::string>& vars,
+        const DomainStore& domains);
+
+    // Phase L1: enhanced WalkSAT with incremental clause-violation tracking
+    // (O(affected) per move instead of O(n) full re-evaluation), PAWS
+    // clause weights (hard clauses accumulate weight on plateau), and
+    // accelerated hill-climb with adaptive step size (acc=1.2 successive:
+    // step, step*acc, step*acc^2). Falls back semantically to walkSat
+    // (same Sat-finder contract — candidate only, validator-gated).
+    std::optional<IntegerModel> walkSatTwoLevel(
         const std::vector<NormalizedNiaConstraint>& constraints,
         const std::vector<std::string>& vars,
         const DomainStore& domains);
