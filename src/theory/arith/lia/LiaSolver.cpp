@@ -84,6 +84,7 @@ void LiaSolver::onReset() {
     appliedCursor_ = 0;
     activeAtoms_.clear();
     disequalities_.clear();
+    integerVars_.clear();   // incremental mode: grow-only set, cleared on full reset
     pendingConflict_.reset();
     diseqBranchAuthorized_.clear();
     repairModel_.reset();
@@ -145,6 +146,7 @@ void LiaSolver::onBacktrack(int level) {
         theoryTrail_.clear();
         disequalities_.clear();
         activeAtoms_.clear();
+        integerVars_.clear();   // incremental grow-only set: cleared on full reset
         interfaceEqualities_.clear();
         interfaceDisequalities_.clear();
     } else {
@@ -229,6 +231,17 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             const auto& e = theoryTrail_[appliedCursor_];
             const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
 
+            // Maintain integerVars_ incrementally: add this entry's variables as
+            // it is applied, instead of rebuilding the whole set every check.
+            // integerVars_ is grow-only between full resets (where it is cleared
+            // — onReset / backtrack-to-0 / interface-diseq reset). A variable left
+            // over from a backtracked atom is harmless: with no active bound it
+            // takes an integer value and is never branched on.
+            for (const auto& [name, coeff] : payload.lhs.terms) {
+                (void)coeff;
+                integerVars_.insert(manager_.getOrCreateVar(gs_, name));
+            }
+
             if (!e.isDiseq) {
                 bool ok = manager_.assertBound(gs_, e.auxVar, payload.rel, e.value, e.lit, e.level,
                                                isIntegerLinearForm(payload));
@@ -264,25 +277,8 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     auto prof_t2 = prof_t1;
 #endif
 
-    if (incrementalEnabled_) {
-        // Rebuild integerVars_ from activeAtoms_ and disequalities_ (the
-        // full-rebuild branch builds it inline; incremental did not touch it).
-        integerVars_.clear();
-        for (const auto& a : activeAtoms_) {
-            for (const auto& [name, coeff] : a.lhs.terms) {
-                (void)coeff;
-                int v = manager_.getOrCreateVar(gs_, name);
-                integerVars_.insert(v);
-            }
-        }
-        for (const auto& d : disequalities_) {
-            for (const auto& [name, coeff] : d.lhs.terms) {
-                (void)coeff;
-                int v = manager_.getOrCreateVar(gs_, name);
-                integerVars_.insert(v);
-            }
-        }
-    }
+    // integerVars_ is maintained incrementally in the replay loop above
+    // (incremental mode) or rebuilt inline in the full-rebuild branch.
 
     // Apply interface equalities from Nelson-Oppen combination
     for (const auto& ieq : interfaceEqualities_) {
