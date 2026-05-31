@@ -107,6 +107,12 @@ private:
     // only on a validated model, else nullopt (fall through to CDCAC). Full
     // effort only. nullopt immediately when the flag is OFF.
     std::optional<TheoryCheckResult> stageSubtropical(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
+    // repair heuristic. Returns consistent() iff LS finds a rational assignment
+    // exact-validated against every active constraint (invariant 1 — Solver-level
+    // realDivPurifySatFloor re-validates before SAT is emitted). nullopt
+    // otherwise. Never emits UNSAT / Conflict (invariant 2).
+    std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_CAC (A/B control for the Collins-vs-CAC differential): run the
     // conflict-driven single-cell CAC engine (the "real" CDCAC) as the primary
     // NRA decision at Full effort, BEFORE the Collins buildClosure. SAT (a
@@ -194,6 +200,16 @@ private:
     // RealValue-typed numericAssignments channel. Cleared at every
     // satFastModel_.reset() site.
     std::optional<std::vector<std::pair<VarId, RealValue>>> satCacAlgModel_;
+
+    // Phase NRA-LS-A (post-master-review): per-solve one-shot gate. LS is a
+    // SEED pre-pass — runs ONCE per solve (first stageLocalSearch entry, any
+    // effort), then short-circuits. Per cb_check_found_model 200ms loops were
+    // the wrong shape: SAT solver makes 300+ Full checks on meti-tarski, so
+    // 300 × 200ms = 60s burned with nothing to show. Reset in onReset.
+    bool lsAttempted_ = false;
+    long lsTotalMs_ = 0;       // wall-clock spent in LS this solve (statistics)
+    int  lsCandidatesFound_ = 0;
+    int  lsExactSats_ = 0;
 
     // CAC (CDCAC) engine: promoted default-ON. Lazily-built libpoly backend.
     bool enableCac_ = true;

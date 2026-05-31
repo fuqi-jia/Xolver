@@ -7,6 +7,7 @@
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
+#include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
 #include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
@@ -53,6 +54,13 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
+    // XOLVER_NRA_LOCALSEARCH (default OFF, Phase NRA-LS-A): rational-only local
+    // repair pre-pass — heuristic SAT-finder; on a satisfying rational candidate
+    // it stashes satFastModel_ and returns consistent (Solver-level realDivPurify
+    // SatFloor re-validates against original assertions before SAT is reported).
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.localsearch",
+        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLocalSearch(db, e); }));
     // XOLVER_NRA_CAC (A/B for the Collins-vs-CAC differential): conflict-driven
     // single-cell CAC as the primary engine, BEFORE the Collins buildClosure.
     // nullopt at the gate when OFF or on CAC-Unknown ⇒ Collins fallback.
@@ -116,6 +124,11 @@ void NraSolver::onReset() {
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // Phase NRA-LS-A: per-solve LS state — one-shot gate + statistics.
+    lsAttempted_ = false;
+    lsTotalMs_ = 0;
+    lsCandidatesFound_ = 0;
+    lsExactSats_ = 0;
     // XOLVER_NRA_PREELIM: the reduced core holds no cross-search state (rebuilt
     // per solve), but drop it so a reset releases the libpoly backend too.
     preElimCore_.reset();
@@ -539,6 +552,115 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
         }
     }
     return std::nullopt;  // no base validated: fall through to CDCAC
+}
+
+// XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF). Rational-only local
+// repair pre-pass. Builds the active polynomial constraint set, runs the
+// NraLocalSearch WalkSAT-style search, and on a satisfying rational candidate
+// exact-validates EVERY active constraint via the kernel sign (invariant 1).
+// SAT only on a kernel-validated model (stored in satFastModel_); otherwise
+// std::nullopt → fall to CAC / Collins. Never emits UNSAT (invariant 2).
+std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_LOCALSEARCH");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    // Per-solve ONE-SHOT gate (master-spec: LS is a pre-pass seed, NOT a per
+    // cb_check_found_model 200ms loop — that burns 60s+ on meti-tarski with
+    // ~300 Full checks). First entry runs LS with the full per-call budget;
+    // subsequent entries short-circuit. Reset in onReset.
+    if (lsAttempted_) return std::nullopt;
+    lsAttempted_ = true;
+    // Skip in N-O combination mode: a rational satisfier of the local atom set
+    // may still violate a pending interface (dis)equality. The pure-NRA path
+    // catches the same cases without the soundness risk.
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+
+    // Collect active polynomial constraints + var set. Bail if any active
+    // constraint is non-polynomial (NullPoly); validating a witness only over
+    // a subset would be unsound to report as SAT.
+    std::vector<NraLocalSearch::Constraint> lsCons;
+    std::set<VarId> varSet;
+    lsCons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        // Pull VarIds directly from the term decomposition (subtropical pattern).
+        // The earlier name → getOrCreateVar round-trip MUTATED the kernel's
+        // name→id table mid-solve and stalled CAC.
+        auto termsOpt = kernel_->terms(c.poly);
+        if (!termsOpt) return std::nullopt;
+        lsCons.push_back({c.poly, c.rel, c.reason});
+        for (const auto& t : *termsOpt)
+            for (const auto& [v, e] : t.powers) varSet.insert(v);
+    }
+    if (lsCons.empty() || varSet.empty()) return std::nullopt;
+    std::vector<VarId> vars(varSet.begin(), varSet.end());
+
+    static const long budgetMs = [] {
+        if (const char* e = std::getenv("XOLVER_NRA_LS_BUDGET_MS"))
+            return std::atol(e);
+        return 10L;   // micro-budget scaffold default per master-spec; raise after univariate boundary candidates ship
+    }();
+    static const int maxRounds = [] {
+        if (const char* e = std::getenv("XOLVER_NRA_LS_MAX_ROUNDS"))
+            return std::atoi(e);
+        return 10;
+    }();
+
+    NraLocalSearch ls(*kernel_);
+    ls.setBudgetMs(budgetMs);
+    ls.setMaxRounds(maxRounds);
+    const auto lsT0 = std::chrono::steady_clock::now();
+    auto candOpt = ls.tryFindModel(lsCons, vars);
+    const auto lsT1 = std::chrono::steady_clock::now();
+    const long roundtripMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(lsT1 - lsT0).count();
+    lsTotalMs_ += roundtripMs;
+    if (candOpt) ++lsCandidatesFound_;
+    if (std::getenv("XOLVER_NRA_LS_DIAG")) {
+        std::cerr << "[NRA-LS] entry vars=" << vars.size()
+                  << " cons=" << lsCons.size()
+                  << " candidate=" << (candOpt ? "yes" : "no") << "\n";
+    }
+    if (!candOpt) return std::nullopt;
+
+    // Exact validation — every active constraint MUST hold at the rational
+    // candidate under the kernel sign. The candidate is a heuristic guess;
+    // never trust it (invariant 1).
+    std::unordered_map<std::string, mpq_class> evalModel;
+    evalModel.reserve(candOpt->size());
+    for (const auto& [v, q] : *candOpt)
+        evalModel.emplace(std::string(kernel_->varName(v)), q);
+
+    for (const auto& c : presolveConstraints_) {
+        std::unordered_map<std::string, mpq_class> em = evalModel;
+        for (const auto& vn : kernel_->variables(c.poly))
+            em.emplace(vn, mpq_class(0));   // 0-fill defensively
+        const int s = kernel_->sgn(c.poly, em);
+        bool ok = false;
+        switch (c.rel) {
+            case Relation::Eq:  ok = (s == 0); break;
+            case Relation::Geq: ok = (s >= 0); break;
+            case Relation::Leq: ok = (s <= 0); break;
+            case Relation::Gt:  ok = (s > 0);  break;
+            case Relation::Lt:  ok = (s < 0);  break;
+            case Relation::Neq: ok = (s != 0); break;
+        }
+        if (!ok) return std::nullopt;   // LS lied — never report SAT.
+    }
+
+    // Sound: every active constraint exact-validates at the rational candidate.
+    satFastModel_ = std::move(*candOpt);
+    ++lsExactSats_;
+    if (std::getenv("XOLVER_NRA_LS_DIAG")) {
+        std::cerr << "[NRA-LS] SAT vars=" << vars.size()
+                  << " cons=" << lsCons.size()
+                  << " ms=" << lsTotalMs_ << "\n";
+    }
+    return TheoryCheckResult::consistent();
 }
 
 // XOLVER_NRA_CAC: conflict-driven single-cell CAC engine (the "real" CDCAC) as
