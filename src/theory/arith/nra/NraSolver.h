@@ -42,9 +42,13 @@ public:
     // NRA is a facade over CdcacSolver with its own active-literal
     // tracking (activeLits_/trail_/activeSet_), so it overrides
     // assertLit and routes push/pop/backtrack/reset through the base
-    // hooks rather than using the shared state_.trail. check() is the
-    // base default (runReasonerPipeline over the two stages below).
+    // hooks rather than using the shared state_.trail.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit reason) override;
+    // Phase NRA-LS-D sprint 3: override check() so the LS pre-pass runs at
+    // entry (BEFORE the Reasoner pipeline / CDCAC), so we can catch cases
+    // that hang in CDCAC at Standard effort. Falls through to the base
+    // pipeline on LS miss. XOLVER_NRA_LOCALSEARCH default-OFF.
+    TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
     void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
@@ -207,9 +211,14 @@ private:
     // the wrong shape: SAT solver makes 300+ Full checks on meti-tarski, so
     // 300 × 200ms = 60s burned with nothing to show. Reset in onReset.
     bool lsAttempted_ = false;
-    long lsTotalMs_ = 0;       // wall-clock spent in LS this solve (statistics)
+    long lsTotalMs_ = 0;
     int  lsCandidatesFound_ = 0;
     int  lsExactSats_ = 0;
+    // Sprint 3: persistent rational candidate from the one-shot LS pre-pass
+    // (run from check() entry). Survives across cb_propagate (NOT cleared
+    // by assertLit) so we can re-validate it on each subsequent check()
+    // against the up-to-date active set. Cleared in onReset.
+    std::optional<std::unordered_map<VarId, mpq_class>> lsCachedCandidate_;
 
     // CAC (CDCAC) engine: promoted default-ON. Lazily-built libpoly backend.
     bool enableCac_ = true;
