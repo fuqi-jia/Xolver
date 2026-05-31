@@ -77,11 +77,17 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // unchanged from Phase 3a (BoundedNiaSolver::solvePartial) — this
     // flag controls PLACEMENT, not algorithm.
     add("nia.bounded-early",  &NiaSolver::stageBoundedEarly);
-    // SAT14-attack: LS pre-pass before any heavy stage. Standard+Full so
-    // the warm-start context accumulates progress across cb_check calls;
-    // tight per-call budget keeps the upstream cost share reasonable.
-    // Default-OFF; the user opts in via XOLVER_NIA_LS_EARLY when targeting
-    // SAT14 / bilinear SAT-heavy inputs.
+    // SAT14-attack: LS pre-pass before any heavy stage. Standard+Full
+    // — Full-effort-only registration was tested empirically and loses
+    // 100% of the SAT14 wins, because by the time the Full check fires
+    // the upstream Full stages (modular, bit-blast, cdcac) have already
+    // consumed the budget. Standard-effort firing is what gives LS the
+    // CPU it needs to find SAT14 models BEFORE bit-blast starts grinding.
+    // The trade-off: on small cases where bit-blast was finding Sat
+    // quickly (e.g. 967.smt2, 117.smt2), Standard-effort LS adds enough
+    // per-cb_propagate cost to push them past the timeout. Default-OFF
+    // for that reason — opt in via XOLVER_NIA_LS_EARLY when explicitly
+    // targeting SAT14-class bilinear SAT instances.
     add("nia.local-search-early", &NiaSolver::stageLocalSearchEarly);
     // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
