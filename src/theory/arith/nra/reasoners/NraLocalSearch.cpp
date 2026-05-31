@@ -134,7 +134,15 @@ NraLocalSearch::univariateBoundaryCandidates(
     if (uni.isConstant()) return {};
     if (!uni.contains(var)) return {};
     const int deg = uni.degree(var);
-    if (deg <= 0 || deg > 2) return {};   // Phase D sprint 1: degree 1-2 only
+    if (deg <= 0) return {};
+    if (deg > 4) {
+        // Master-spec: degree > 4 only for "critical" atoms — skip the
+        // default path (CDCAC handles these via algebraic isolation).
+        return {};
+    }
+    // For degree 3-4 the analytic discriminant path doesn't apply. Fall
+    // through to the rational-scan path below (after the deg ≤ 2 exact
+    // analytic block returns).
 
     // Build a univariate over `var`: uni = Σ_k a_k · var^k. Extract a_0..a_deg.
     // We pull coefficients via repeated substitution: a_0 = uni|var=0, then
@@ -160,15 +168,49 @@ NraLocalSearch::univariateBoundaryCandidates(
     };
 
     if (deg == 1) {
-        // q(t) = a1·t + a0. Compute a1 via q(1)-a0.
         auto v1 = evalAtVarValue(uni, mpq_class{1});
         if (!v1) return {};
         const mpq_class a1 = *v1 - a0;
-        if (a1 == 0) return {};   // degenerate
+        if (a1 == 0) return {};
         const mpq_class root = -a0 / a1;
-        // Strict vs non-strict — push the root and nearby points; the
-        // walkOneRound score check filters infeasible candidates anyway.
         pushNear(root);
+        return out;
+    }
+    // Master-spec rational-scan path for deg 3-4: sample q(t) at a fixed
+    // grid of rationals, find sign changes between consecutive samples,
+    // push interval midpoints as boundary candidates. Cheaper than Sturm
+    // chains and avoids the libpoly plumbing; sampling resolution is
+    // tight enough to bracket typical meti-tarski roots.
+    if (deg >= 3) {
+        static const mpq_class kGrid[] = {
+            mpq_class{-32}, mpq_class{-16}, mpq_class{-8}, mpq_class{-4},
+            mpq_class{-2}, mpq_class{-1}, mpq_class{-1, 2}, mpq_class{-1, 4},
+            mpq_class{0},
+            mpq_class{1, 4}, mpq_class{1, 2}, mpq_class{1}, mpq_class{2},
+            mpq_class{4}, mpq_class{8}, mpq_class{16}, mpq_class{32}
+        };
+        std::vector<std::pair<mpq_class, mpq_class>> samples;
+        samples.reserve(sizeof(kGrid) / sizeof(kGrid[0]));
+        for (const auto& g : kGrid) {
+            auto vOpt = evalAtVarValue(uni, g);
+            if (!vOpt) continue;
+            samples.emplace_back(g, *vOpt);
+        }
+        for (size_t i = 0; i + 1 < samples.size(); ++i) {
+            const auto& [t0, q0] = samples[i];
+            const auto& [t1, q1] = samples[i + 1];
+            // Sign change ⇒ root between t0 and t1.
+            const bool s0pos = q0 > 0;
+            const bool s1pos = q1 > 0;
+            if (q0 == 0) { pushNear(t0); }
+            if (q1 == 0) { pushNear(t1); continue; }
+            if (s0pos != s1pos) {
+                const mpq_class mid = (t0 + t1) / 2;
+                pushNear(mid);
+            }
+        }
+        // Cap output to stay within the per-round candidate budget.
+        if (out.size() > 32) out.resize(32);
         return out;
     }
 
