@@ -65,6 +65,14 @@ struct CacResult {
     // status == Unsat; EMPTY means "could not attribute" ⇒ caller falls back to
     // the full constraint set (sound).
     std::vector<size_t> unsatCore;
+    // #63 Phase C2 follow-on: when status == Unknown and the failure came from
+    // `characterizeLeafAtom → signAt == Unknown` on an algebraic-prefix sample,
+    // expose the failing partial assignment so the caller (NraSolver) can retry
+    // with rational midpoints for the algebraic coords. Empty otherwise.
+    // Soundness: the rational retry is a candidate generator only — any SAT it
+    // produces must be model-validated against original constraints by the
+    // caller (invariant 1).
+    SamplePoint unknownSample;
 };
 
 class CacEngine {
@@ -150,6 +158,13 @@ private:
         // covering: at the leaf, every violated atom; at a non-leaf, the union of
         // the child recursions' origins. Propagated up to form CacResult::unsatCore.
         std::set<size_t> origins;
+        // #63 Phase C2 follow-on: failing partial sample carried up the recursion
+        // when status == Unknown originated from `leaf-atom-unsupported`. Populated
+        // at the leaf failure site BEFORE sample.pop(), then propagated unchanged
+        // through parent CoverOuts so solve() can hand it to NraSolver for the
+        // rational-fallback retry. Empty if the Unknown came from a different
+        // failure mode (interval-unsupported, characterize-incomplete, etc.).
+        SamplePoint unknownSample;
     };
     CoverOut getUnsatCover(int level, SamplePoint& sample);
 
