@@ -2,6 +2,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <iostream>
 
 namespace xolver {
@@ -113,6 +114,126 @@ NraLocalSearch::totalScore(const std::vector<Constraint>& cs,
 }
 
 std::vector<mpq_class>
+NraLocalSearch::univariateBoundaryCandidates(
+        const Constraint& c, VarId var,
+        const std::unordered_map<VarId, mpq_class>& asg) const {
+    // Substitute every other var from asg into c.poly → univariate in var.
+    auto rpOpt = RationalPolynomial::fromPolyId(c.poly, kernel_);
+    if (!rpOpt) return {};
+    RationalPolynomial uni = std::move(*rpOpt);
+    static const mpq_class kZ{0};
+    auto vs = uni.variables();
+    for (VarId v : vs) {
+        if (v == var) continue;
+        auto it = asg.find(v);
+        const mpq_class& q = (it != asg.end()) ? it->second : kZ;
+        uni = uni.substituteRational(v, q);
+    }
+    // After substitution either q(t) is constant (no candidate from this
+    // atom) or contains only `var`.
+    if (uni.isConstant()) return {};
+    if (!uni.contains(var)) return {};
+    const int deg = uni.degree(var);
+    if (deg <= 0 || deg > 2) return {};   // Phase D sprint 1: degree 1-2 only
+
+    // Build a univariate over `var`: uni = Σ_k a_k · var^k. Extract a_0..a_deg.
+    // We pull coefficients via repeated substitution: a_0 = uni|var=0, then
+    // u' = (uni - a_0)/var, a_1 = u'|var=0, etc. (Cheap for deg ≤ 2.)
+    auto evalAtVarValue = [&](const RationalPolynomial& p,
+                              const mpq_class& q) -> std::optional<mpq_class> {
+        RationalPolynomial t = p.substituteRational(var, q);
+        if (!t.isConstant()) return std::nullopt;
+        return t.constantValue();
+    };
+    auto a0Opt = evalAtVarValue(uni, mpq_class{0});
+    if (!a0Opt) return {};
+    const mpq_class a0 = *a0Opt;
+
+    std::vector<mpq_class> out;
+    auto pushNear = [&](const mpq_class& center) {
+        // Feasible-side sample + small offsets covering both sides.
+        out.push_back(center);
+        out.push_back(center + mpq_class{1, 16});
+        out.push_back(center - mpq_class{1, 16});
+        out.push_back(center + 1);
+        out.push_back(center - 1);
+    };
+
+    if (deg == 1) {
+        // q(t) = a1·t + a0. Compute a1 via q(1)-a0.
+        auto v1 = evalAtVarValue(uni, mpq_class{1});
+        if (!v1) return {};
+        const mpq_class a1 = *v1 - a0;
+        if (a1 == 0) return {};   // degenerate
+        const mpq_class root = -a0 / a1;
+        // Strict vs non-strict — push the root and nearby points; the
+        // walkOneRound score check filters infeasible candidates anyway.
+        pushNear(root);
+        return out;
+    }
+
+    // deg == 2: q(t) = a2·t² + a1·t + a0.
+    // q(1) = a2 + a1 + a0; q(-1) = a2 - a1 + a0.
+    // ⇒ a2 = (q(1) + q(-1))/2 - a0; a1 = (q(1) - q(-1))/2.
+    auto vp1 = evalAtVarValue(uni, mpq_class{1});
+    auto vm1 = evalAtVarValue(uni, mpq_class{-1});
+    if (!vp1 || !vm1) return {};
+    const mpq_class a1 = (*vp1 - *vm1) / 2;
+    const mpq_class a2 = (*vp1 + *vm1) / 2 - a0;
+    if (a2 == 0) {
+        // Linear in disguise: same as deg==1 branch.
+        if (a1 == 0) return {};
+        const mpq_class root = -a0 / a1;
+        pushNear(root);
+        return out;
+    }
+    // Discriminant Δ = a1² − 4 · a2 · a0.
+    const mpq_class disc = a1 * a1 - 4 * a2 * a0;
+    if (disc < 0) {
+        // No real roots: q(t) has constant sign sgn(a2) everywhere. Add
+        // the vertex t* = -a1/(2 a2) as a single representative sample.
+        const mpq_class vertex = -a1 / (2 * a2);
+        pushNear(vertex);
+        return out;
+    }
+    // Δ ≥ 0: real roots t± = (-a1 ± √Δ)/(2 a2). For an exact-rational √Δ
+    // we get exact roots; otherwise we approximate by the midpoint of a
+    // small rational bracket (via Newton-style sqrt approximation, capped
+    // by the denominator cap). Phase D sprint 1: approximate via double.
+    const double dDisc = disc.get_d();
+    if (dDisc < 0) return {};   // numerical guard
+    const double sqDisc = std::sqrt(dDisc);
+    const double da1 = a1.get_d();
+    const double da2 = a2.get_d();
+    if (da2 == 0.0) return {};
+    const double tPlus  = (-da1 + sqDisc) / (2.0 * da2);
+    const double tMinus = (-da1 - sqDisc) / (2.0 * da2);
+    auto rationalize = [](double x) -> mpq_class {
+        // Continued-fraction-bounded approximation with denominator ≤ 1e6.
+        // GMP's mpq_class(double) constructor uses the exact double
+        // representation which can blow up the denominator; cap via reduce.
+        mpq_class q;
+        try { q = mpq_class(x); } catch (...) { return mpq_class{0}; }
+        q.canonicalize();
+        // Bound denominator: if q.get_den() > 1e6, round to nearest 1/1e6.
+        if (q.get_den() > mpz_class{"1000000"}) {
+            const long N = 1000000;
+            const long num = static_cast<long>(x * N + (x >= 0 ? 0.5 : -0.5));
+            q = mpq_class(num, N);
+            q.canonicalize();
+        }
+        return q;
+    };
+    pushNear(rationalize(tPlus));
+    pushNear(rationalize(tMinus));
+    // Midpoint between roots is the vertex (often a feasible point under
+    // ≤0 / ≥0 relations).
+    const double tMid = (tPlus + tMinus) / 2.0;
+    pushNear(rationalize(tMid));
+    return out;
+}
+
+std::vector<mpq_class>
 NraLocalSearch::candidateValues(VarId /*var*/,
                                 const std::unordered_map<VarId, mpq_class>& asg) const {
     // Phase A: a coarse pool of small integers, perturbations of the current
@@ -193,6 +314,22 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
             if (c != 0) {
                 cands.push_back(c * 2);
                 cands.push_back(c / 2);
+            }
+        }
+        // Master-spec: univariate sign-boundary candidates from FALSE atoms.
+        // For each currently-violated constraint that references `v`, mine
+        // the rational samples on the feasible side after substituting the
+        // other vars. Degree ≤ 2 only in this sprint; bounded by an inner
+        // cap so no single atom can dominate the round.
+        int boundaryAdded = 0;
+        for (const auto& cc : cs) {
+            if (boundaryAdded >= 16) break;
+            if (atomViolation(cc, asg) == 0) continue;   // already SAT — skip
+            auto bcs = univariateBoundaryCandidates(cc, v, asg);
+            for (auto& q : bcs) {
+                if (boundaryAdded >= 16) break;
+                cands.push_back(std::move(q));
+                ++boundaryAdded;
             }
         }
         for (const auto& q : cands) {

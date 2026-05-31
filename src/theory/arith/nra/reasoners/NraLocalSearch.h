@@ -110,11 +110,21 @@ private:
     mpq_class scaleAt(PolyId p,
                       const std::unordered_map<VarId, mpq_class>& asg) const;
 
-    // Candidate value pool for `var` given the current assignment. Phase A:
-    // small integers near 0 + perturbations of the current value (×2, ÷2,
-    // +1, -1, +ε, -ε). Phase B will mine sign-interval brackets via Sturm.
+    // Candidate value pool for `var` given the current assignment. Phase A
+    // seed: small integers near 0 + perturbations of the current value (×2,
+    // ÷2, +1, -1, +ε, -ε). Augmented by `univariateBoundaryCandidates` per
+    // master-spec for the recovery lever.
     std::vector<mpq_class> candidateValues(VarId var,
                                            const std::unordered_map<VarId, mpq_class>& asg) const;
+
+    // Master-spec univariate sign-boundary candidate generation. Substitute
+    // every OTHER variable in `c.poly` from `asg`, get the univariate q(t)
+    // in `var`, find the feasible-side rational samples for `c.rel`. Degree
+    // ≤ 2 are exact via discriminant; degree 3-4 are deferred. Bounded by
+    // a per-call budget so a single false atom can't dominate one round.
+    std::vector<mpq_class>
+    univariateBoundaryCandidates(const Constraint& c, VarId var,
+                                  const std::unordered_map<VarId, mpq_class>& asg) const;
 
     // Walk one round: pick a violated constraint, try every var × every
     // candidate value, accept the strictly-best move (lowest total violation).
