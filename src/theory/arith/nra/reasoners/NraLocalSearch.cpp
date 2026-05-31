@@ -446,6 +446,42 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
                               Score& currentScore) {
     if (vars.empty()) return false;
 
+    // Master-spec "top-k vars": for large var sets (hycomp-style BMC with
+    // 144 vars), iterating every var × every candidate exhausts the
+    // budget on low-impact variables. Score vars by their occurrence in
+    // CURRENTLY-FALSE constraints (heaviest correction candidate) and
+    // only walk the top kTopVars; the others stay fixed this round.
+    static const size_t kTopVars = [] {
+        if (const char* e = std::getenv("XOLVER_NRA_LS_TOP_VARS"))
+            return static_cast<size_t>(std::atoi(e));
+        return size_t{8};
+    }();
+    std::vector<VarId> walkVars;
+    if (vars.size() <= kTopVars) {
+        walkVars = vars;
+    } else {
+        std::unordered_map<VarId, int> occ;
+        occ.reserve(vars.size());
+        for (size_t i = 0; i < cs.size(); ++i) {
+            if (atomViolation(cs[i], asg) == 0) continue;
+            auto termsOpt = kernel_.terms(cs[i].poly);
+            if (!termsOpt) continue;
+            for (const auto& t : *termsOpt)
+                for (const auto& [v, e] : t.powers) ++occ[v];
+        }
+        std::vector<std::pair<int, VarId>> sorted;
+        sorted.reserve(occ.size());
+        for (const auto& [v, c] : occ) sorted.emplace_back(c, v);
+        std::sort(sorted.begin(), sorted.end(),
+                  [](const auto& a, const auto& b) {
+                      if (a.first != b.first) return a.first > b.first;
+                      return a.second < b.second;   // stable VarId tiebreak
+                  });
+        for (size_t i = 0; i < sorted.size() && walkVars.size() < kTopVars; ++i)
+            walkVars.push_back(sorted[i].second);
+        if (walkVars.empty()) walkVars = vars;   // fallback: nothing violated
+    }
+
     // Master-spec denominator cap (default 10^6). For NRA cases whose
     // satisfier is irrational (e.g. x²=2 → sqrt(2)), perturbations of the
     // current value build continued-fraction convergents whose denominators
@@ -461,7 +497,7 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
         return mpz_class(q.get_den()) <= kMaxDen;
     };
 
-    VarId bestVar = vars.front();
+    VarId bestVar = walkVars.front();
     mpq_class bestVal = asg.count(bestVar) ? asg[bestVar] : mpq_class{0};
     Score bestScore = currentScore;
     bool improved = false;
@@ -483,7 +519,7 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
         return el >= budgetMs_;
     };
 
-    for (VarId v : vars) {
+    for (VarId v : walkVars) {
         if (roundBudgetHit()) break;
         mpq_class saved = asg.count(v) ? asg[v] : mpq_class{0};
         auto cands = candidateValues(v, asg);
