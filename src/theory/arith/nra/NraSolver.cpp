@@ -567,10 +567,12 @@ std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
         return e && *e && *e != '0';
     }();
     if (!enabled) return std::nullopt;
-    // Per-solve ONE-SHOT gate (master-spec: LS is a pre-pass seed, NOT a per
-    // cb_check_found_model 200ms loop — that burns 60s+ on meti-tarski with
-    // ~300 Full checks). First entry runs LS with the full per-call budget;
-    // subsequent entries short-circuit. Reset in onReset.
+    // Per-solve ONE-SHOT at FIRST Full effort. Standard-effort firing
+    // produces a candidate but subsequent cb_propagate's assertLit resets
+    // satFastModel_, so the candidate never reaches cb_check_found_model.
+    // At Full effort the SAT model is complete and no further assertLit
+    // intervenes before getModel(); the stashed candidate survives.
+    if (effort != TheoryEffort::Full) return std::nullopt;
     if (lsAttempted_) return std::nullopt;
     lsAttempted_ = true;
     // Skip in N-O combination mode: a rational satisfier of the local atom set
