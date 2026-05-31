@@ -54,6 +54,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_MULTI_SCALE"); e && *e && *e != '0') {
         multiScale_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_QUAD_CRITICAL"); e && *e && *e != '0') {
+        quadCritical_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -693,6 +696,57 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 cur[v] = orig;
                 std::vector<mpz_class> targets = {orig + 1, orig - 1,
                                                    orig + 2, orig - 2};
+                // P3 quadratic critical move (XOLVER_NIA_LS_QUAD_CRITICAL).
+                // Three probes (orig, orig+1, orig+2) fit
+                //   q(t) = a t² + b t + c   with t = (value - orig).
+                // Solve at² + bt + c = 0 (and the inequality form) by the
+                // discriminant; add integer-floor and -ceiling roots to
+                // the candidate set. For a = 0 the polynomial is linear in
+                // this variable and the Newton step below already handles
+                // it; skip.
+                if (quadCritical_ && p0 && p1) {
+                    cur[v] = orig + 2;
+                    auto p2 = kernel_.evalInteger(C.poly, cur);
+                    cur[v] = orig;
+                    if (p2) {
+                        // 2a = p(2) - 2 p(1) + p(0).
+                        mpz_class twoA = (*p2) - 2 * (*p1) + (*p0);
+                        if (twoA != 0 && (twoA % 2 == 0)) {
+                            mpz_class a = twoA / 2;
+                            mpz_class b = (*p1) - (*p0) - a;
+                            mpz_class c = *p0;
+                            mpz_class D = b * b - 4 * a * c;
+                            if (D >= 0) {
+                                mpz_class sqD = isqrt(D);
+                                mpz_class twoa = 2 * a;
+                                auto pushRoot = [&](const mpz_class& numer) {
+                                    if (twoa == 0) return;
+                                    // Integer-floor of numer / twoa via
+                                    // mpz fdiv (handles negative correctly).
+                                    mpz_class q;
+                                    mpz_fdiv_q(q.get_mpz_t(),
+                                               numer.get_mpz_t(),
+                                               twoa.get_mpz_t());
+                                    for (int k = -1; k <= 1; ++k) {
+                                        mpz_class t = q + k;
+                                        if (t < -STEP_CAP) t = -STEP_CAP;
+                                        if (t >  STEP_CAP) t =  STEP_CAP;
+                                        targets.push_back(orig + t);
+                                    }
+                                    // Also the integer-ceiling root.
+                                    mpz_class qc = q;
+                                    mpz_class rem = numer - q * twoa;
+                                    if (rem != 0) ++qc;
+                                    if (qc < -STEP_CAP) qc = -STEP_CAP;
+                                    if (qc >  STEP_CAP) qc =  STEP_CAP;
+                                    targets.push_back(orig + qc);
+                                };
+                                pushRoot(-b - sqD);
+                                pushRoot(-b + sqD);
+                            }
+                        }
+                    }
+                }
                 if (p0 && p1) {
                     mpz_class slope = *p1 - *p0;
                     if (slope != 0) {

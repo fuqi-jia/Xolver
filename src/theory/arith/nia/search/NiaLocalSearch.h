@@ -112,6 +112,12 @@ public:
     // √|val| target candidates for x²=N patterns. Better coverage on
     // bilinear/quadratic systems without changing soundness.
     void setMultiScale(bool e) { multiScale_ = e; }
+    // Phase L1 P3 — degree ≤ 2 critical move (XOLVER_NIA_LS_QUAD_CRITICAL=1,
+    // default-OFF). For each falsified constraint, fit a quadratic model
+    // q(t) = at² + bt + c via three probes (orig, orig+1, orig+2), solve
+    // for integer-rounded roots, and add them to the move target set.
+    // LS-IA paper: degree ≥ 3 is skipped intentionally for performance.
+    void setQuadCritical(bool e) { quadCritical_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -130,6 +136,7 @@ private:
     bool twoLevel_ = false;
     bool warmStart_ = false;
     bool multiScale_ = false;
+    bool quadCritical_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

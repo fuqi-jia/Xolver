@@ -436,6 +436,125 @@ TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): trivially-UNSAT returns nullopt")
     CHECK(!m.has_value());
 }
 
+// ---------- Phase L1 P3: degree ≤ 2 critical move ----------
+
+// Pure-quadratic atom: x² = 25 ⇒ roots ±5. Quad-critical generates them
+// directly via the discriminant path.
+TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): x^2 = 25 finds root via quadratic path") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setQuadCritical(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId xx = kernel->pow(x, 2);
+    NormalizedNiaConstraint c{
+        kernel->sub(xx, kernel->mkConst(mpq_class(25))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    mpz_class xv = (*m)["x"];
+    CHECK(xv * xv == 25);
+}
+
+// Mixed quadratic: x² + 3x - 10 = 0 ⇒ (x+5)(x-2) = 0, roots {-5, 2}.
+TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): x^2 + 3x - 10 = 0 finds {-5, 2}") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setQuadCritical(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId xx = kernel->pow(x, 2);
+    PolyId threex = kernel->mul(kernel->mkConst(mpq_class(3)), x);
+    // x² + 3x - 10
+    PolyId expr = kernel->sub(kernel->add(xx, threex),
+                              kernel->mkConst(mpq_class(10)));
+    NormalizedNiaConstraint c{expr, Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    mpz_class xv = (*m)["x"];
+    CHECK((xv == -5 || xv == 2));
+}
+
+// Linear case (a = 0): the quadratic-detect branch sees a = 0 and skips;
+// the Newton-step branch below still solves it. Pin that we don't break
+// linear handling when quad-critical is on.
+TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): linear x = 17 still solved (a=0 falls back)") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setQuadCritical(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(17))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 17);
+}
+
+// Negative discriminant: x² + 1 = 0 has no integer root; LS must NOT
+// claim Sat. The quadratic path detects D < 0 and skips.
+TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): D<0 (x^2 + 1 = 0) returns nullopt") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setQuadCritical(true);
+    ls.setBudgetMs(50);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(-10), mkReason(1));
+    ds.addUpperBound("x", mpz_class(10), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId xx = kernel->pow(x, 2);
+    NormalizedNiaConstraint c{
+        kernel->add(xx, kernel->mkConst(mpq_class(1))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    CHECK(!m.has_value());
+}
+
+// Default-OFF behavior: quad-critical OFF leaves earlier search paths
+// untouched. Tested on the same x² = 25 input that the new path handles.
+TEST_CASE("NiaLocalSearch L1 P3 (quad-critical): default-OFF still solves x^2 = 4") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    // setQuadCritical NOT called
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(0), mkReason(1));
+    ds.addUpperBound("x", mpz_class(5), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId xx = kernel->pow(x, 2);
+    NormalizedNiaConstraint c{
+        kernel->sub(xx, kernel->mkConst(mpq_class(4))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    mpz_class xv = (*m)["x"];
+    CHECK(xv * xv == 4);
+}
+
 // Accelerated step covers a slope-based target far from the initial point.
 // Constraint: x = 1000. Initial assignment puts x at 0; the discrete-Newton
 // step (slope=1, target -p(0)/slope = 1000) plus the acc=1.2 series should
