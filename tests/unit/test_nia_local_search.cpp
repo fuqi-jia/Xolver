@@ -329,6 +329,113 @@ TEST_CASE("NiaLocalSearch L1 step 2 (warm-start): default-OFF keeps context empt
     CHECK(ctx.lastSignature == 0);
 }
 
+// ---------- Phase L1 P2: multi-scale step ----------
+
+TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): x^2 = 100 finds x = 10 via sqrt target") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setMultiScale(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // x² = 100. Without the √|val| target the Newton series struggles;
+    // with multi-scale, sqrt(100) = 10 is generated directly.
+    PolyId xx = kernel->pow(x, 2);
+    NormalizedNiaConstraint c{
+        kernel->sub(xx, kernel->mkConst(mpq_class(100))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    mpz_class xv = (*m)["x"];
+    CHECK(xv * xv == 100);
+}
+
+TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): doubling reaches x = 1024 far jump") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setMultiScale(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(1024))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 1024);
+}
+
+TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): default-OFF uses legacy 6/5 series") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    // setMultiScale NOT called → multi-scale path off
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(7))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 7);
+}
+
+TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): handles x*y = N bilinear with multi-scale jump") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setMultiScale(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    // x * y = 256. {16, 16}, {8, 32}, {32, 8} all work.
+    NormalizedNiaConstraint c{
+        kernel->sub(kernel->mul(x, y), kernel->mkConst(mpq_class(256))),
+        Relation::Eq, mkReason(1)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] * (*m)["y"] == 256);
+}
+
+// Soundness pin: multi-scale step never finds a Sat that doesn't validate
+// against the original system. Same UNSAT case as the two-level test —
+// must return nullopt even with multi-scale.
+TEST_CASE("NiaLocalSearch L1 P2 (multi-scale): trivially-UNSAT returns nullopt") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setMultiScale(true);
+    ls.setBudgetMs(50);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(0), mkReason(1));
+    ds.addUpperBound("x", mpz_class(10), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    NormalizedNiaConstraint c{
+        kernel->sub(x, kernel->mkConst(mpq_class(999))),
+        Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    CHECK(!m.has_value());
+}
+
 // Accelerated step covers a slope-based target far from the initial point.
 // Constraint: x = 1000. Initial assignment puts x at 0; the discrete-Newton
 // step (slope=1, target -p(0)/slope = 1000) plus the acc=1.2 series should

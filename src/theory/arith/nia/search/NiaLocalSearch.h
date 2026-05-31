@@ -106,6 +106,12 @@ public:
     // bias only and never influences a verdict (every Sat is still
     // validator-gated; every UNSAT-claim is impossible from LS).
     void setWarmStart(bool e) { warmStart_ = e; }
+    // Phase L1 step P2 — multi-scale step (XOLVER_NIA_LS_MULTI_SCALE=1,
+    // default-OFF). Replaces the geometric (6/5)^k series around the
+    // discrete-Newton step with doubling (±1, ±2, ±4, ±8, ±16, ...) plus
+    // √|val| target candidates for x²=N patterns. Better coverage on
+    // bilinear/quadratic systems without changing soundness.
+    void setMultiScale(bool e) { multiScale_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -123,6 +129,7 @@ private:
     bool enhanced_ = false;
     bool twoLevel_ = false;
     bool warmStart_ = false;
+    bool multiScale_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

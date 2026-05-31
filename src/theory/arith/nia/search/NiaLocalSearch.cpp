@@ -51,6 +51,25 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_WARM_START"); e && *e && *e != '0') {
         warmStart_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_MULTI_SCALE"); e && *e && *e != '0') {
+        multiScale_ = true;
+    }
+}
+
+// Integer square root (floor). Used by multi-scale step to generate
+// targets for x²=N-style atoms: if violation is v at orig, a candidate
+// near orig + sign·√v often satisfies a quadratic atom in one move.
+// Newton iteration; mpz_sqrt would also work but we keep the routine
+// header-free here.
+static mpz_class isqrt(mpz_class n) {
+    if (n < 0) n = -n;
+    if (n < 2) return n;
+    mpz_class x = n, y = (x + 1) / 2;
+    while (y < x) {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    return x;
 }
 
 // Stable signature of the current constraint set used by the warm-start
@@ -680,18 +699,47 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         mpz_class step = -(*p0) / slope;  // discrete Newton
                         if (step < -STEP_CAP) step = -STEP_CAP;
                         if (step >  STEP_CAP) step =  STEP_CAP;
-                        // Accelerated series around the Newton step:
-                        // step * (1.2^k) for k = 0..3. Implemented in
-                        // integer math via successive 6/5 multiplies.
-                        mpz_class s = step;
-                        for (int k = 0; k < 4; ++k) {
-                            targets.push_back(orig + s);
-                            targets.push_back(orig + s + 1);
-                            targets.push_back(orig + s - 1);
-                            if (s == 0) break;
-                            s = (s * 6) / 5;  // ≈ ×1.2; integer rounding ok
-                            if (s < -STEP_CAP) s = -STEP_CAP;
-                            if (s >  STEP_CAP) s =  STEP_CAP;
+                        if (multiScale_) {
+                            // P2 multi-scale: doubling series ±1, ±2, ±4,
+                            // ±8, ... up to STEP_CAP. Exponential coverage
+                            // for big jumps; also adds the discrete-Newton
+                            // step and ±1 neighbours. NIA-distance LS-IA
+                            // analog of LS-NRA's accelerated step.
+                            for (int k = 0; (mpz_class(1) << k) <= STEP_CAP; ++k) {
+                                mpz_class d = mpz_class(1) << k;
+                                targets.push_back(orig + d);
+                                targets.push_back(orig - d);
+                            }
+                            // Newton anchor + ±1 neighbours.
+                            targets.push_back(orig + step);
+                            targets.push_back(orig + step + 1);
+                            targets.push_back(orig + step - 1);
+                            // P2 √|val| target — for x²=N-style atoms,
+                            // the satisfying x sits near ±√|val|. Cheap
+                            // to add and dramatically helps on quadratic
+                            // monomials that Newton-on-slope can miss.
+                            if (*p0 != 0) {
+                                mpz_class rt = isqrt(*p0);
+                                if (rt > 0) {
+                                    targets.push_back(orig + rt);
+                                    targets.push_back(orig - rt);
+                                    targets.push_back(orig + rt + 1);
+                                    targets.push_back(orig - rt - 1);
+                                }
+                            }
+                        } else {
+                            // Legacy accelerated series around Newton step:
+                            // step * (1.2^k) for k = 0..3 via ×6/5.
+                            mpz_class s = step;
+                            for (int k = 0; k < 4; ++k) {
+                                targets.push_back(orig + s);
+                                targets.push_back(orig + s + 1);
+                                targets.push_back(orig + s - 1);
+                                if (s == 0) break;
+                                s = (s * 6) / 5;
+                                if (s < -STEP_CAP) s = -STEP_CAP;
+                                if (s >  STEP_CAP) s =  STEP_CAP;
+                            }
                         }
                     }
                 }
