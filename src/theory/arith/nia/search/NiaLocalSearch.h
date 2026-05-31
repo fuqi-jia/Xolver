@@ -125,6 +125,22 @@ public:
     // the maintained feasibility intervals — no root isolation, sound
     // by construction.
     void setFsJump(bool e) { fsJump_ = e; }
+    // Phase L1 P5 — diversified restart probes
+    // (XOLVER_NIA_LS_DIVERSE_INIT=1, default-OFF). Rotate initial
+    // assignments across restarts: zeros, boundaries, ±10/±100/±500
+    // anchors, small-random. SAT14 z3 models show many cases satisfy at
+    // anchor values 100-300 outside the multi-scale doubling's grasp
+    // from a zero start. Probing those anchors at restart time gives the
+    // LS a credible starting trajectory.
+    void setDiverseInit(bool e) { diverseInit_ = e; }
+    // Phase L1 P5 — bilinear pair move
+    // (XOLVER_NIA_LS_BILINEAR_PAIR=1, default-OFF). When a falsified
+    // atom's polynomial contains a `(* x y)` product, propose joint
+    // (x, y) updates that bring the product close to its target. Targets
+    // integer factor pairs (1×n, 2×n/2, …) of the desired product value.
+    // Single-variable Newton is misleading on bilinear systems; joint
+    // updates respect the bilinear interaction directly.
+    void setBilinearPair(bool e) { bilinearPair_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -145,6 +161,8 @@ private:
     bool multiScale_ = false;
     bool quadCritical_ = false;
     bool fsJump_ = false;
+    bool diverseInit_ = false;
+    bool bilinearPair_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,
