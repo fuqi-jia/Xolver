@@ -8,6 +8,7 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
+#include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
 #include "theory/arith/nra/core/CdcacCore.h"               // XOLVER_NRA_PREELIM reduced CDCAC
 #include "theory/arith/nra/core/CdcacConstraint.h"         // XOLVER_NRA_PREELIM
@@ -818,6 +819,9 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     cfg.pruneIntervals = pruneIntervals;
     cfg.earlyInfeasSafe = earlyInfeasSafe;
     cfg.inloopPrune = inloopPrune;
+    // #63 Phase C2: keep a copy of cacCons for the rational-fallback validator.
+    // (CacEngine std::move's the constraint vector below, leaving cacCons empty.)
+    std::vector<CacConstraint> consCopy = cacCons;
     CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 
@@ -936,6 +940,95 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
             satCacAlgModel_ = std::move(alg);
         }
         return TheoryCheckResult::consistent();
+    }
+    // #63 Phase C2 follow-on: when CAC bails on `leaf-atom-unsupported` with a
+    // captured failing sample, attempt a rational-fallback retry. Replace each
+    // algebraic coord with its isolating-interval midpoint, then EXACT-sign-
+    // check every active CAC constraint at the rational sample. If ALL hold,
+    // the rational sample is a genuine satisfier — invariant 1: this is an
+    // exact-validated SAT, not a CAC-projected one. UNSAT verdicts from the
+    // rational system are NEVER returned (could be false-UNSAT since rounding
+    // algebraic to midpoint can miss the true satisfier); only sat is taken.
+    // The cluster-wide diagnostic shows 100% of atan/CMOS timeouts and 96% of
+    // exp timeouts hit this exact failure mode (see Phase C2 docs).
+    static const bool rationalFallback = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_RATIONAL_FALLBACK");
+        return e && *e && *e != '0';
+    }();
+    if (rationalFallback &&
+        res.status == CacStatus::Unknown &&
+        !res.unknownSample.varOrder.empty() &&
+        res.unknownSample.varOrder.size() == res.unknownSample.values.size()) {
+
+        // Build the set of candidate rational values for each var. For a rational
+        // sample value, the single value. For an algebraic value (root in (lo, hi)),
+        // probe at three offsets: lo + 1/4 * (hi-lo), 1/2 * (hi+lo), hi - 1/4 * (hi-lo)
+        // — covering both sides of the algebraic root so a sign-flipping constraint
+        // has a positive chance of being satisfied at one of the probes.
+        const size_t N = res.unknownSample.varOrder.size();
+        std::vector<std::vector<mpq_class>> candidates(N);
+        for (size_t i = 0; i < N; ++i) {
+            const auto& v = res.unknownSample.values[i];
+            if (v.isRational()) {
+                candidates[i].push_back(v.rational);
+            } else {
+                const mpq_class width = v.root.upper - v.root.lower;
+                candidates[i].push_back(v.root.lower + width / 4);
+                candidates[i].push_back(v.root.lower + width / 2);
+                candidates[i].push_back(v.root.upper - width / 4);
+            }
+        }
+
+        // Cap the cartesian product enumeration: at most 3^4 = 81 probes; for >4
+        // algebraic vars use midpoints only (1 probe).
+        size_t totalProbes = 1;
+        for (const auto& c : candidates) totalProbes *= c.size();
+        if (totalProbes > 81) {
+            for (size_t i = 0; i < N; ++i) {
+                if (candidates[i].size() > 1) candidates[i] = {candidates[i][1]};  // mid only
+            }
+            totalProbes = 1;
+        }
+
+        bool found = false;
+        SamplePoint chosen;
+        std::vector<size_t> idx(N, 0);
+        for (size_t probe = 0; probe < totalProbes; ++probe) {
+            SamplePoint ratSample;
+            for (size_t i = 0; i < N; ++i) {
+                ratSample.push(res.unknownSample.varOrder[i],
+                               RealAlg::fromRational(candidates[i][idx[i]]));
+            }
+            bool allHold = true;
+            for (const auto& c : consCopy) {
+                auto norm = c.poly.toPrimitiveInteger(*kernel_);
+                if (!norm.ok()) { allHold = false; break; }
+                const Sign s = cacBackend_->signAt(norm.poly, ratSample);
+                if (s == Sign::Unknown || !relationHolds(s, c.rel)) {
+                    allHold = false;
+                    break;
+                }
+            }
+            if (allHold) {
+                chosen = std::move(ratSample);
+                found = true;
+                break;
+            }
+            // increment idx (rightmost-first odometer)
+            for (size_t pos = 0; pos < N; ++pos) {
+                if (++idx[pos] < candidates[pos].size()) break;
+                idx[pos] = 0;
+            }
+        }
+        if (found) {
+            std::unordered_map<VarId, mpq_class> rationalModel;
+            for (size_t i = 0; i < chosen.varOrder.size(); ++i) {
+                rationalModel.emplace(chosen.varOrder[i],
+                                      chosen.values[i].rational);
+            }
+            satFastModel_ = std::move(rationalModel);
+            return TheoryCheckResult::consistent();
+        }
     }
 #endif
     return std::nullopt;  // Unknown / no libpoly ⇒ fall through to Collins

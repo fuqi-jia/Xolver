@@ -222,7 +222,16 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             for (size_t ci = 0; ci < cons_.size(); ++ci) {
                 const LeafCellResult lr = characterizeLeafAtom(
                     algebra_, kernel_, cons_[ci].poly, cons_[ci].rel, prefixLeaf, var, s_i);
-                if (!lr.supported) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("leaf-atom-unsupported"); return out; }
+                if (!lr.supported) {
+                    // #63 Phase C2: expose the failing FULL sample (incl. current
+                    // var = s_i) so NraSolver can retry with rational-midpoint
+                    // replacements for algebraic coords. Captured BEFORE pop().
+                    out.unknownSample = sample;
+                    sample.pop();
+                    out.status = CacStatus::Unknown;
+                    markIncomplete("leaf-atom-unsupported");
+                    return out;
+                }
                 if (lr.truth == LeafTruth::UniformFalse) {
                     // ≡0 (or constant) and violated for ALL var ⇒ whole fiber infeasible.
                     fiberInfeasible = true; allHold = false; violated.push_back(cons_[ci].poly); violatedIdx.push_back(ci);
@@ -289,7 +298,14 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
             if (!earlyHit) {
                 CoverOut rec = getUnsatCover(level + 1, sample);
                 if (rec.status == CacStatus::Sat)     { sample.pop(); out.status = CacStatus::Sat; return out; }
-                if (rec.status == CacStatus::Unknown) { sample.pop(); out.status = CacStatus::Unknown; return out; }
+                if (rec.status == CacStatus::Unknown) {
+                    // #63 Phase C2: bubble up the failing sample (leaf-atom-
+                    // unsupported propagation) so the NraSolver retry has it.
+                    out.unknownSample = std::move(rec.unknownSample);
+                    sample.pop();
+                    out.status = CacStatus::Unknown;
+                    return out;
+                }
                 cellOrigins.assign(rec.origins.begin(), rec.origins.end());
                 // rec UNSAT: project its characterization down, eliminating var_{level+1}.
                 // `sample` holds vars[0..level]; the required coefficients (in those
@@ -456,10 +472,11 @@ CacResult CacEngine::solve() {
     clearPscChainCache();
     startTime_ = std::chrono::steady_clock::now();
     SamplePoint sample;
-    const CoverOut o = getUnsatCover(0, sample);
+    CoverOut o = getUnsatCover(0, sample);
     res.status = o.status;
     if (o.status == CacStatus::Sat) { res.model = satModel_; return res; }
     if (o.status == CacStatus::Unsat) res.unsatCore.assign(o.origins.begin(), o.origins.end());
+    if (o.status == CacStatus::Unknown) res.unknownSample = std::move(o.unknownSample);
     if (o.status == CacStatus::Unsat && !unsatTrustworthy_) {
         // Gate UNSAT on the completeness ledger: markIncomplete() drops it at every
         // inconclusive step, so an uncertified UNSAT is DOWNGRADED to Unknown
