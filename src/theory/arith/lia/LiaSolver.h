@@ -111,6 +111,10 @@ private:
     };
     std::vector<LiaTrailEntry> theoryTrail_;
     size_t appliedCursor_ = 0;
+    // XOLVER_LIA_INCREMENTAL (default OFF): replay only new trail entries into
+    // the simplex instead of re-asserting the whole trail every check. See the
+    // constructor for rationale (convert / nec-smt LIA-core-scale ceiling).
+    bool incrementalEnabled_ = false;
 
     struct PendingConflict {
         int level;
@@ -186,6 +190,13 @@ private:
     // for all integer-feasible points (sound regardless of branch). cutsThisSolve_
     // caps cut generation per solve so branch-and-bound still terminates.
     bool cutsEnabled_ = false;
+    // XOLVER_LIA_GMI_CUTS (default OFF): use the Gomory Mixed-Integer cut
+    // (GomoryCut.h, deriveGmiCut) instead of the pure fractional cut. GMI never
+    // bails on a continuous nonbasic (the pure cut returns nullopt there — the
+    // common case for second-and-later cuts whose row references a prior cut's
+    // fractional-bound slack) and is at least as tight on integer nonbasics, so
+    // it strictly widens cut coverage. Sound regardless (brute-force verified).
+    bool gmiCutsEnabled_ = false;
     int cutsThisSolve_ = 0;
     std::optional<TheoryLemma> generateGomoryCut(int basicVar);
     // True iff the simplex variable is provably integer-valued (original integer

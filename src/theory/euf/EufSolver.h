@@ -249,6 +249,11 @@ private:
     // since pure QF_UF already gets functionInterps from CandidateModelSearch.
     // Read once in the constructor.
     bool ufModelEnabled_ = false;
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): use a level-bucketed map to drain
+    // the saturation mergeQueue_ in O(n log L) instead of the O(n^2) linear
+    // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
+    // Read once in the constructor.
+    bool minLevelHeapEnabled_ = false;
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
     // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
     // registry every cb_propagate, track new-since-last-call merges and scan
@@ -282,11 +287,6 @@ private:
     // Set on backtrack — next propagation call must do a full sweep (assigned
     // set changed, mergeRecord count regressed).
     bool forceFullEntailmentScan_ = true;
-    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, master): use a level-bucketed map to
-    // drain the saturation mergeQueue_ in O(n log L) instead of the O(n^2) linear
-    // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
-    // Read once in the constructor.
-    bool minLevelHeapEnabled_ = false;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.

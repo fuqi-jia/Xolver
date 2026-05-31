@@ -162,6 +162,14 @@ private:
     // tightening cuts derived from single-variable bounds in normalized_.
     // Cuts are sound by construction so appending is sat/unsat preserving.
     std::optional<TheoryCheckResult> stageNlaCuts(TheoryLemmaStorage&, TheoryEffort);
+    // Stage 3 Phase 3b (XOLVER_NIA_BOUNDED_PARTIAL_EARLY, default-OFF).
+    // Run partial bounded enumeration (BoundedNiaSolver::solvePartial)
+    // RIGHT AFTER normalize, BEFORE every heavy per-prop stage. Solves
+    // the same per-propagation budget exhaustion that motivated Phase 3a:
+    // on ANIA/AUFNIA / SAT14-class inputs the budget is gone by the time
+    // the late nia.bounded stage fires. Sound SAT-finding only; never
+    // claims UNSAT.
+    std::optional<TheoryCheckResult> stageBoundedEarly(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);

@@ -19,18 +19,15 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
     eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
     ufModelEnabled_ = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): drain saturation mergeQueue_
+    // with level-bucketed map; O(n^2) → O(n log L). Same order; targets QF_ANIA/QF_AX-swap blowup.
+    minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
+    // XOLVER_EUF_INCREMENTAL_PROP (Phase A, euf-deep): incremental entailment-prop scan.
     eufIncrementalProp_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP") != nullptr;
     eufIncrementalVerify_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP_VERIFY") != nullptr;
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
+    // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms with lemma already emitted at level<=current.
     eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
-    // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, master): drain the saturation
-    // mergeQueue_ with a level-bucketed map (min-level = begin(), FIFO within
-    // level) instead of the O(n) linear min-level scan + O(n) erase per pop.
-    // Same processing ORDER (ascending level, insertion order within level) →
-    // identical egraph result; turns the O(n^2) drain into O(n log L). Targets
-    // the QF_ANIA / QF_AX swap saturation blowup where the queue holds
-    // thousands of array Row1/Row2/congruence merges at one decision level.
-    minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
     initializeBoolConstants();
 }
 

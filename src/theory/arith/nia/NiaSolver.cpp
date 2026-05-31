@@ -65,6 +65,18 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     };
     add("nia.pending",        &NiaSolver::stagePending);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    // Phase 3b (XOLVER_NIA_BOUNDED_PARTIAL_EARLY, default-OFF). Run the
+    // partial bounded enumerator EARLY, right after normalize, before
+    // any of the heavy per-propagation stages. On QF_ANIA / QF_AUFNIA /
+    // SAT14-class inputs Phase 3a measurement showed the late
+    // nia.bounded stage never fires within budget because upstream
+    // stages exhaust it; placing solvePartial here gives it first crack
+    // on every cb_propagate while the work is still cheap. The lever
+    // is SAT-finding only; it returns Sat with a validator-confirmed
+    // model or falls through to the rest of the pipeline. Algorithm
+    // unchanged from Phase 3a (BoundedNiaSolver::solvePartial) — this
+    // flag controls PLACEMENT, not algorithm.
+    add("nia.bounded-early",  &NiaSolver::stageBoundedEarly);
     // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
     // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
@@ -927,6 +939,28 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearization(TheoryLemmaStorag
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage&, TheoryEffort) {
+    // Phase 3b: early-pipeline placement of the partial bounded
+    // enumerator. Reads its own flag XOLVER_NIA_BOUNDED_PARTIAL_EARLY
+    // (separate from the late-stage XOLVER_NIA_BOUNDED_PARTIAL — former
+    // controls placement, latter algorithm). Sound SAT-finding only;
+    // never returns UnsatComplete. On failure, falls through to the
+    // rest of the pipeline (so the standard reasoners still get to run).
+    static const bool earlyEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL_EARLY");
+        return e && *e && *e != '0';
+    }();
+    if (!earlyEnabled) return std::nullopt;
+    // Reuse the same algorithm; differs only in pipeline position.
+    auto br = bounded_.solvePartial(normalized_, domains_, validator_);
+    if (br.status == BoundedSolveStatus::Sat) {
+        currentModel_ = br.model;
+        return TheoryCheckResult::consistent();
+    }
+    // Any other status — fall through to the regular pipeline.
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     auto allVars = collectVars(normalized_, *kernel_);
     bool allFinite = domains_.allFinite(allVars);
@@ -942,6 +976,27 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
             return TheoryCheckResult::mkConflict(*br.conflict);
         }
         // UnknownBudget / UnknownUnsupported: continue pipeline
+    } else {
+        // Phase 3a (XOLVER_NIA_BOUNDED_PARTIAL, default-OFF). When the full
+        // domain isn't finite (some unbounded vars), try the partial
+        // enumerator: enumerate the tightly-bounded subset × small guess
+        // sets for unbounded vars, validate each candidate against the
+        // ORIGINAL constraints. Sound SAT-finding only — UnsatComplete is
+        // never returned from this path (unbounded search space is not
+        // exhausted).
+        static const bool partialEnabled = [] {
+            const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL");
+            return e && *e && *e != '0';
+        }();
+        if (partialEnabled) {
+            auto br = bounded_.solvePartial(normalized_, domains_, validator_);
+            if (br.status == BoundedSolveStatus::Sat) {
+                currentModel_ = br.model;
+                return TheoryCheckResult::consistent();
+            }
+            // Any other status (UnknownUnsupported / UnknownBudget) — fall
+            // through to the next pipeline stage.
+        }
     }
     return std::nullopt;
 }
