@@ -427,7 +427,22 @@ DtModelValidator::Verdict DtModelValidator::validate(
         }
     }
     if (diag) std::cerr << "[DT-VAL] tally true=" << nTrue << " indet=" << nIndet << " false=" << nFalse << "\n";
-    return anyIndet ? Verdict::Indeterminate : Verdict::Satisfied;
+    if (anyIndet) {
+        // Strict mode (XOLVER_DT_VALIDATOR_STRICT): promote Indeterminate to
+        // Violated. Sound: if validate() can't ground an assertion fully under
+        // the live e-graph at a Full-effort sat check, we cannot CERTIFY sat,
+        // so flooring to Violated → Unknown is correct. The trade-off is over-
+        // flooring true-sat cases whose model uses opaque DT classes. Master's
+        // 5min batch surfaced 43 false-SATs that lenient mode missed (e-graph
+        // state arrived at a sat verdict without enough constructor witnesses
+        // for structural eval) — use strict when the false-SAT cost dominates.
+        if (strict_) {
+            if (diag) std::cerr << "[DT-VAL] strict: Indet -> Violated (" << nIndet << " indet asserts)\n";
+            return Verdict::Violated;
+        }
+        return Verdict::Indeterminate;
+    }
+    return Verdict::Satisfied;
 }
 
 } // namespace xolver
