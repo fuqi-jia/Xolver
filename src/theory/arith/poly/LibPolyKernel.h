@@ -126,8 +126,20 @@ private:
     // prem depends on main_variable which pscChain mutates → caching would
     // bind to whichever order happened to be installed at first call.
     mutable std::unordered_map<PolyId, std::vector<PolyId>> sqfFactorsCache_;
+    // S1c (Task J) — terms() decomposition cache. terms() invokes
+    // lp_polynomial_traverse and rebuilds a vector<MonomialTerm>; both
+    // the libpoly call and the mpz_class allocations dominate the cost
+    // at 88 call sites. Caching by PolyId is sound because pool_ entries
+    // are immutable for the kernel's lifetime. Stores nullopt failures
+    // (eg non-integer coefficients) so repeated callers don't re-fail.
+    // Transitively benefits degree() and getIntegerCoefficients() which
+    // delegate to terms() for the non-main-variable path.
+    mutable std::unordered_map<PolyId, std::optional<std::vector<MonomialTerm>>>
+        termsCache_;
     mutable uint64_t binOpHits_ = 0;   // S1 stats (XOLVER_NRA_KERNEL_STATS)
     mutable uint64_t binOpMisses_ = 0;
+    mutable uint64_t termsHits_ = 0;
+    mutable uint64_t termsMisses_ = 0;
     static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
         return (op << 60) | (static_cast<uint64_t>(a) << 30) | static_cast<uint64_t>(b);
     }
