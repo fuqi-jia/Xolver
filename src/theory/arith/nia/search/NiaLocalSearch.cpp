@@ -544,45 +544,123 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
     // satisfiability. CInteger has these in every case (Farkas chains
     // + initial-state defs); ITS/SAT14 have them in initial-state defs.
     std::unordered_map<std::string, mpz_class> pinned;
+    // LS-VM1 extension: derived-var map. For each Eq atom
+    //   c1*v1 + c2*v2 + ... + ck*vk + const = 0
+    // with |c1| == 1, treat v1 as the "anchor" derived from the rest:
+    //   v1 = -sign(c1) * (c2*v2 + ... + ck*vk + const)
+    // We record (anchorVar, list of (otherVar, otherCoef), constSum, sign).
+    // The LS computes anchor values on init (or on cascade update when a
+    // dependency moves). The move-search SKIPS anchor vars; dependency
+    // moves trigger anchor cascade-evaluation. This generalises the
+    // single-var pin to the multi-var case master called out for
+    // VeryMax Farkas chains.
+    struct Derived {
+        std::vector<std::pair<std::string, mpz_class>> deps;  // (otherVar, otherCoef)
+        mpz_class constTerm = 0;  // constant
+        int anchorSign = 1;       // sign of anchor's coefficient (±1)
+    };
+    std::unordered_map<std::string, Derived> derived;
     if (pinEq_) {
         for (const auto& c : constraints) {
             if (c.rel != Relation::Eq) continue;
             auto termsOpt = kernel_.terms(c.poly);
             if (!termsOpt) continue;
             mpz_class constSum = 0;
-            std::string singleVar;
-            mpz_class singleCoef = 0;
+            // Collect per-var coefficients (linear-only — multi-degree terms
+            // disqualify the atom from pin/derive).
+            std::vector<std::pair<std::string, mpz_class>> linTerms;
             bool ok = true;
             for (const auto& t : *termsOpt) {
                 if (t.powers.empty()) { constSum += t.coefficient; continue; }
                 if (t.powers.size() != 1 || t.powers[0].second != 1) { ok = false; break; }
                 std::string nm(kernel_.varName(t.powers[0].first));
-                if (singleVar.empty()) { singleVar = nm; singleCoef = t.coefficient; }
-                else if (singleVar == nm) { singleCoef += t.coefficient; }
-                else { ok = false; break; }
-            }
-            if (!ok || singleVar.empty() || singleCoef == 0) continue;
-            // c*v + k = 0 -> v = -k/c (must be exact integer)
-            mpz_class neg = -constSum;
-            if ((neg % singleCoef) != 0) continue;
-            mpz_class root = neg / singleCoef;
-            // Respect existing domain bounds.
-            const auto* d = domains.getDomain(singleVar);
-            if (d) {
-                if (d->hasLower && root < d->lower.value) continue;
-                if (d->hasUpper && root > d->upper.value) continue;
-            }
-            // If a prior pin disagrees, drop both — the formula has
-            // conflicting linear pins, so let the main LS / theory
-            // engine handle it (we only pin when a single value forces).
-            auto pit = pinned.find(singleVar);
-            if (pit != pinned.end()) {
-                if (pit->second != root) {
-                    pinned.erase(pit);
+                // Merge same-var splits in the term list.
+                bool merged = false;
+                for (auto& lt : linTerms) {
+                    if (lt.first == nm) { lt.second += t.coefficient; merged = true; break; }
                 }
-            } else {
-                pinned[singleVar] = root;
+                if (!merged) linTerms.push_back({nm, t.coefficient});
             }
+            if (!ok || linTerms.empty()) continue;
+            // Single-var pin path (legacy).
+            if (linTerms.size() == 1) {
+                const auto& [singleVar, singleCoef] = linTerms[0];
+                if (singleCoef == 0) continue;
+                mpz_class neg = -constSum;
+                if ((neg % singleCoef) != 0) continue;
+                mpz_class root = neg / singleCoef;
+                const auto* d = domains.getDomain(singleVar);
+                if (d) {
+                    if (d->hasLower && root < d->lower.value) continue;
+                    if (d->hasUpper && root > d->upper.value) continue;
+                }
+                auto pit = pinned.find(singleVar);
+                if (pit != pinned.end()) {
+                    if (pit->second != root) pinned.erase(pit);
+                } else {
+                    pinned[singleVar] = root;
+                }
+                continue;
+            }
+            // Multi-var derive path: find an anchor with |c| == 1. The
+            // anchor is the var we'll DERIVE from the rest; dependencies
+            // remain free in LS.
+            int anchorIdx = -1;
+            for (size_t i = 0; i < linTerms.size(); ++i) {
+                if (linTerms[i].second == 1 || linTerms[i].second == -1) {
+                    anchorIdx = static_cast<int>(i);
+                    break;
+                }
+            }
+            if (anchorIdx < 0) continue;  // no anchor; skip
+            const std::string& anchor = linTerms[anchorIdx].first;
+            int sign = (linTerms[anchorIdx].second == 1) ? 1 : -1;
+            // Skip if already pinned or derived elsewhere — chains are
+            // tricky (cascading updates can be infinite); keep it linear.
+            if (pinned.count(anchor) || derived.count(anchor)) continue;
+            // Skip when any dependency var is itself an anchor of
+            // another derive — avoids cascade ambiguity.
+            bool depConflict = false;
+            for (size_t i = 0; i < linTerms.size(); ++i) {
+                if (static_cast<int>(i) == anchorIdx) continue;
+                if (derived.count(linTerms[i].first)) { depConflict = true; break; }
+            }
+            if (depConflict) continue;
+            Derived der;
+            der.constTerm = constSum;
+            der.anchorSign = sign;
+            for (size_t i = 0; i < linTerms.size(); ++i) {
+                if (static_cast<int>(i) == anchorIdx) continue;
+                der.deps.push_back(linTerms[i]);
+            }
+            derived[anchor] = std::move(der);
+        }
+    }
+    // Helper: cascade-evaluate an anchor var given a model snapshot.
+    // Defined as a captured-by-reference lambda that takes the model
+    // explicitly — `cur` is per-restart local, so we accept it as a
+    // parameter rather than capturing.
+    auto evalDerived = [&](const std::string& anchorVar,
+                            const IntegerModel& model) -> mpz_class {
+        auto it = derived.find(anchorVar);
+        if (it == derived.end()) return mpz_class(0);
+        const Derived& der = it->second;
+        // anchor + sum(c_i * v_i) + const = 0 * anchorSign
+        // => anchor = -anchorSign * (sum(c_i * v_i) + const)
+        mpz_class accum = der.constTerm;
+        for (const auto& [dv, dc] : der.deps) {
+            auto cit = model.find(dv);
+            if (cit == model.end()) return mpz_class(0);
+            accum += dc * cit->second;
+        }
+        return -der.anchorSign * accum;
+    };
+    // Reverse index: dep var -> list of anchor names that derive from it.
+    // Used by commitMove to cascade-update anchors when a dep moves.
+    std::unordered_map<std::string, std::vector<std::string>> depToAnchors;
+    for (const auto& [anchor, der] : derived) {
+        for (const auto& [dv, _dc] : der.deps) {
+            depToAnchors[dv].push_back(anchor);
         }
     }
 
@@ -745,6 +823,13 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         for (const auto& [pv, pval] : pinned) {
             cur[pv] = pval;
         }
+        // LS-VM1 multi-var: cascade-evaluate every derived anchor using
+        // the current cur[] state of its dependencies. The derived map
+        // is non-chained (we drop chains during detection), so a single
+        // pass suffices.
+        for (const auto& [anchor, _der] : derived) {
+            cur[anchor] = clampVar(anchor, evalDerived(anchor, cur));
+        }
 
         // Initial incremental state.
         std::vector<mpz_class> cviol(nC), weight(nC, mpz_class(1));
@@ -777,35 +862,87 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
 
         // For a candidate `v := newVal`, return the delta to weightedCost
         // by re-evaluating only the affected clauses.
+        // LS-VM1 multi-var: when v is a dependency for one or more
+        // anchor vars, also tentatively cascade-update those anchors so
+        // the score estimate reflects the actual post-commit state.
         auto tryMoveCost = [&](const std::string& v, mpz_class newVal,
                                 mpz_class& deltaOut) -> mpz_class {
             auto it = varToClauses.find(v);
-            if (it == varToClauses.end()) { deltaOut = 0; return weightedCost; }
+            if (it == varToClauses.end() && !depToAnchors.count(v)) {
+                deltaOut = 0; return weightedCost;
+            }
             const mpz_class orig = cur[v];
             cur[v] = newVal;
-            mpz_class delta = 0;
-            mpz_class newTotalRaw = 0;
-            for (std::size_t i : it->second) {
-                mpz_class nv = evalCviol(i, cur);
-                delta += (nv - cviol[i]) * weight[i];
-                newTotalRaw += nv;
+            // Cascade-update anchors that depend on v.
+            std::vector<std::pair<std::string, mpz_class>> savedAnchors;
+            auto cit = depToAnchors.find(v);
+            if (cit != depToAnchors.end()) {
+                for (const auto& anchor : cit->second) {
+                    savedAnchors.push_back({anchor, cur[anchor]});
+                    cur[anchor] = clampVar(anchor, evalDerived(anchor, cur));
+                }
             }
+            mpz_class delta = 0;
+            // v's direct clauses.
+            if (it != varToClauses.end()) {
+                for (std::size_t i : it->second) {
+                    mpz_class nv = evalCviol(i, cur);
+                    delta += (nv - cviol[i]) * weight[i];
+                }
+            }
+            // Anchor cascade clauses (avoid double-counting v's clauses).
+            std::unordered_set<std::size_t> seen;
+            if (it != varToClauses.end())
+                for (auto i : it->second) seen.insert(i);
+            for (const auto& [anchor, _orig] : savedAnchors) {
+                auto ait = varToClauses.find(anchor);
+                if (ait == varToClauses.end()) continue;
+                for (std::size_t i : ait->second) {
+                    if (!seen.insert(i).second) continue;
+                    mpz_class nv = evalCviol(i, cur);
+                    delta += (nv - cviol[i]) * weight[i];
+                }
+            }
+            // Restore.
             cur[v] = orig;
+            for (const auto& [anchor, orig_a] : savedAnchors) {
+                cur[anchor] = orig_a;
+            }
             deltaOut = delta;
-            (void)newTotalRaw;
             return weightedCost + delta;
         };
 
         // Commit a move: update cviol[], totalCost, weightedCost in place.
+        // LS-VM1 multi-var: also cascade-update any anchor whose value
+        // depends on v. The anchor's new value triggers re-evaluation of
+        // its own clause set so the equality atom defining the derive
+        // stays satisfied (and any atoms downstream of the anchor get
+        // their cviol refreshed).
         auto commitMove = [&](const std::string& v, mpz_class newVal) {
-            auto it = varToClauses.find(v);
             cur[v] = newVal;
-            if (it == varToClauses.end()) return;
-            for (std::size_t i : it->second) {
-                mpz_class nv = evalCviol(i, cur);
-                weightedCost += (nv - cviol[i]) * weight[i];
-                totalCost += (nv - cviol[i]);
-                cviol[i] = nv;
+            auto it = varToClauses.find(v);
+            if (it != varToClauses.end()) {
+                for (std::size_t i : it->second) {
+                    mpz_class nv = evalCviol(i, cur);
+                    weightedCost += (nv - cviol[i]) * weight[i];
+                    totalCost += (nv - cviol[i]);
+                    cviol[i] = nv;
+                }
+            }
+            auto cit = depToAnchors.find(v);
+            if (cit == depToAnchors.end()) return;
+            for (const auto& anchor : cit->second) {
+                mpz_class newAnchor = clampVar(anchor, evalDerived(anchor, cur));
+                if (newAnchor == cur[anchor]) continue;
+                cur[anchor] = newAnchor;
+                auto ait = varToClauses.find(anchor);
+                if (ait == varToClauses.end()) continue;
+                for (std::size_t i : ait->second) {
+                    mpz_class nv = evalCviol(i, cur);
+                    weightedCost += (nv - cviol[i]) * weight[i];
+                    totalCost += (nv - cviol[i]);
+                    cviol[i] = nv;
+                }
             }
         };
 
@@ -868,17 +1005,18 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             // perturbing it would just violate that equality without
             // helping the falsified atom (other moves toward the falsified
             // atom's satisfaction are tried via the remaining cvars).
-            if (!pinned.empty()) {
+            // Derived (anchor) vars are similarly skipped — their values
+            // are determined cascade-style by their dependency vars.
+            if (!pinned.empty() || !derived.empty()) {
                 std::vector<std::string> filtered;
                 filtered.reserve(cvars.size());
                 for (const auto& v : cvars) {
-                    if (!pinned.count(v)) filtered.push_back(v);
+                    if (pinned.count(v) || derived.count(v)) continue;
+                    filtered.push_back(v);
                 }
                 if (!filtered.empty()) cvars = std::move(filtered);
-                // If EVERY var in cvars is pinned, leave cvars as-is so
-                // the noise branch can still try a random nudge — the LS
-                // is then effectively stuck on this atom, but we don't
-                // skip the falsified atom (preserves walkSat semantics).
+                // If EVERY var in cvars is pinned/derived, leave cvars
+                // as-is so the noise branch can still try a random nudge.
             }
 
             // Critical-move search with discrete-Newton + adaptive
