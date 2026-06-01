@@ -90,24 +90,64 @@ PolyId LibPolyKernel::mkVar(VarId v) {
     return id;
 }
 
+// S1 (P6 cas/sqrtmodinv cac-deep): hash-cons every binary op. The wipeout
+// cluster's hot path is RationalPolynomial::toPrimitiveInteger's divide-and-
+// conquer build (RationalPolynomial.cpp:334-357) firing repeatedly for the
+// SAME RP (SingleCellProjection step 0+1 double round-trip + factor reconv).
+// libpoly polynomials are immutable post-alloc, so caching (op, operand-ids)
+// is sound — a NullPoly arg short-circuits the cache (low-30-bit truncation
+// would collide with a legitimate slot and silently return the wrong result;
+// the un-cached path matches the pre-S1 crash semantics for that bug class).
 PolyId LibPolyKernel::add(PolyId a, PolyId b) {
-    return alloc(poly::operator+(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator+(get(a), get(b)));
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
+    const uint64_t key = binOpKey(0, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) return it->second;
+    PolyId r = alloc(poly::operator+(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::sub(PolyId a, PolyId b) {
-    return alloc(poly::operator-(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator-(get(a), get(b)));
+    const uint64_t key = binOpKey(1, a, b);                 // NOT commutative
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) return it->second;
+    PolyId r = alloc(poly::operator-(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::neg(PolyId a) {
-    return alloc(poly::operator-(get(a)));
+    if (a == NullPoly) return alloc(poly::operator-(get(a)));
+    const uint64_t key = binOpKey(2, a, 0);                 // unary — slot b = 0
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) return it->second;
+    PolyId r = alloc(poly::operator-(get(a)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::mul(PolyId a, PolyId b) {
-    return alloc(poly::operator*(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator*(get(a), get(b)));
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
+    const uint64_t key = binOpKey(3, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) return it->second;
+    PolyId r = alloc(poly::operator*(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::pow(PolyId a, uint32_t k) {
-    return alloc(poly::pow(get(a), k));
+    if (a == NullPoly) return alloc(poly::pow(get(a), k));
+    const uint64_t key = binOpKey(4, a, k);                 // slot b carries k
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) return it->second;
+    PolyId r = alloc(poly::pow(get(a), k));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 bool LibPolyKernel::isZero(PolyId a) const {

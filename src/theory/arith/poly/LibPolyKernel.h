@@ -100,6 +100,17 @@ private:
     // Cache: VarId -> PolyId for single-variable polynomials
     std::unordered_map<VarId, PolyId> varToPoly_;
 
+    // S1 (P6 cas/sqrtmodinv cac-deep) — hash-cons cache for binary ops. Key is
+    // (op_tag<<60) | (a<<30) | b (or k for pow, 0 for neg). 30-bit operand
+    // slots → up to 2^30 PolyIds per session. NullPoly (uint32 max) is guarded
+    // at the call site so its low-30-bit truncation can never collide with a
+    // legitimate slot. Add and Mul canonicalize (min, max) before keying since
+    // libpoly polynomials commute. Grow-forever: bounded by #unique inputs.
+    mutable std::unordered_map<uint64_t, PolyId> binOpCache_;
+    static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
+        return (op << 60) | (static_cast<uint64_t>(a) << 30) | static_cast<uint64_t>(b);
+    }
+
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }
 };
