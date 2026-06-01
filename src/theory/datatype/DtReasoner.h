@@ -47,6 +47,7 @@ class TheoryAtomRegistry;
 class DtReasoner {
 public:
     DtReasoner() = default;
+    ~DtReasoner();  // env-gated XOLVER_DT_HC_STATS dump
 
     void setContext(EufTermManager* tm, IncrementalEGraph* egraph,
                     const CoreIr* ir, TheoryAtomRegistry* registry) {
@@ -129,6 +130,15 @@ private:
     // infinite (stably infinite for N-O). Used for the finite-DT combination
     // floor. `visiting` guards mutual recursion.
     bool isFiniteSort(SortId s, std::unordered_set<SortId>& visiting) const;
+    // Task W (S2-DT): cache top-level finiteness result by SortId. DatatypeInfo
+    // is set-once at registration so isFiniteSort is a pure function of
+    // SortId once the registry is sealed. Cache the result only when the
+    // call is a top-level entry (visiting empty on entry) to avoid storing
+    // mid-recursion cycle-detect false answers. Hit rate measured via
+    // XOLVER_DT_HC_STATS=1.
+    mutable std::unordered_map<SortId, bool> finiteSortCache_;
+    mutable uint64_t finiteHits_ = 0;
+    mutable uint64_t finiteMisses_ = 0;
 
     // The CoreExpr origin of a term (or NullExpr).
     ExprId originExpr(EufTermId t) const;

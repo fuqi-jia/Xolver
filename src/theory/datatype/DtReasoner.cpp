@@ -4,8 +4,23 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "expr/ir.h"
 #include <vector>
+#include <cstdio>
+#include <cstdlib>
 
 namespace xolver {
+
+DtReasoner::~DtReasoner() {
+    if (std::getenv("XOLVER_DT_HC_STATS")) {
+        const uint64_t total = finiteHits_ + finiteMisses_;
+        if (total > 0) {
+            const double rate = 100.0 * static_cast<double>(finiteHits_) / static_cast<double>(total);
+            std::fprintf(stderr,
+                "[XOLVER_DT_HC_STATS] isFiniteSort hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu\n",
+                (unsigned long long)finiteHits_, (unsigned long long)finiteMisses_,
+                rate, finiteSortCache_.size());
+        }
+    }
+}
 
 static constexpr char kCtorPrefix[] = "#dt.ctor.";
 static constexpr char kSelPrefix[]  = "#dt.sel.";
@@ -444,25 +459,45 @@ std::optional<std::vector<SatLit>> DtReasoner::instantiateLemma() {
 }
 
 bool DtReasoner::isFiniteSort(SortId s, std::unordered_set<SortId>& visiting) const {
-    auto sk = ir_->sortKind(s);
-    if (sk == SortKind::Bool) return true;
-    if (sk == SortKind::Int || sk == SortKind::Real || sk == SortKind::Array) return false;
-    if (sk == SortKind::Datatype) {
-        const DatatypeInfo* dt = ir_->datatypes().datatype(s);
-        if (!dt || dt->recursive) return false;        // recursive DT is infinite
-        if (!visiting.insert(s).second) return false;  // cycle (defensive) -> infinite
-        bool finite = true;
-        for (const auto& c : dt->constructors) {
-            for (const auto& sel : c.selectors) {
-                if (!isFiniteSort(sel.resultSort, visiting)) { finite = false; break; }
-            }
-            if (!finite) break;
+    // Task W (S2-DT): hash-cons by SortId. Cache only top-level entries
+    // (visiting empty on entry) so mid-recursion cycle-detect-false answers
+    // don't pollute. Pure function once DatatypeRegistry is sealed.
+    const bool topLevel = visiting.empty();
+    if (topLevel) {
+        auto it = finiteSortCache_.find(s);
+        if (it != finiteSortCache_.end()) {
+            ++finiteHits_;
+            return it->second;
         }
-        visiting.erase(s);
-        return finite;
+        ++finiteMisses_;
+    }
+    auto sk = ir_->sortKind(s);
+    bool result = false;
+    if (sk == SortKind::Bool) {
+        result = true;
+    } else if (sk == SortKind::Int || sk == SortKind::Real || sk == SortKind::Array) {
+        result = false;
+    } else if (sk == SortKind::Datatype) {
+        const DatatypeInfo* dt = ir_->datatypes().datatype(s);
+        if (!dt || dt->recursive) {
+            result = false;                                 // recursive DT is infinite
+        } else if (!visiting.insert(s).second) {
+            result = false;                                 // cycle (defensive)
+        } else {
+            bool finite = true;
+            for (const auto& c : dt->constructors) {
+                for (const auto& sel : c.selectors) {
+                    if (!isFiniteSort(sel.resultSort, visiting)) { finite = false; break; }
+                }
+                if (!finite) break;
+            }
+            visiting.erase(s);
+            result = finite;
+        }
     }
     // BV/FP/Other/uninterpreted: treat as infinite (stably infinite for N-O).
-    return false;
+    if (topLevel) finiteSortCache_.emplace(s, result);
+    return result;
 }
 
 bool DtReasoner::modelFullyDetermined() const {
