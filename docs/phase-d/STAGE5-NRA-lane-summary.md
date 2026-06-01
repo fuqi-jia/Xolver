@@ -138,6 +138,111 @@ unconditionally on every NRA invocation; no flag promotion needed.
 
 ---
 
+## Stage 5 ship-prep flag matrix (Task Y)
+
+Audit of all `XOLVER_NRA_*` flags as of `agent/nra-2 @ 078c3d6`.
+33 lever / parameter flags + 10 stats / diag-only env vars.
+
+### Promoted (env-string removed, default-ON, no opt-out)
+
+* `XOLVER_NRA_LOCALSEARCH` — Task Q (`01fab48`), polypaver +9 pp.
+* `XOLVER_NRA_CAC_SR_CACHE` — Task Q (`01fab48`), PSC dedup.
+
+### Source-default-flipped (env-tuned default value baked)
+
+* `XOLVER_NRA_LS_BUDGET_MS` — default `50` baked at Task G (`e9c323e`),
+  env still overrides for tuning.
+
+### Parameter flags (env-overridable, no boolean gate)
+
+| Flag | Default | Notes |
+|---|---|---|
+| `XOLVER_NRA_LS_BUDGET_MS` | 50 | numeric ms, Task G baked |
+| `XOLVER_NRA_LS_MAX_ROUNDS` | 10 | iteration cap, source-default |
+| `XOLVER_NRA_LS_MAX_DEN` | source-default | rational denominator cap |
+| `XOLVER_NRA_LS_TOP_VARS` | source-default | top-k var selection |
+| `XOLVER_NRA_CAC_DEADLINE_MS` | source-default | CAC wall budget |
+| `XOLVER_NRA_LINEARIZE_CAP` | source-default | linearization scope cap |
+
+### Default-OFF lever flags (server-batch promotion candidates)
+
+26 flags below stay default-OFF. Master action: each gets validated in
+the server differential before any default-ON promotion. Listed in
+priority order based on prior batch signal.
+
+**Strong candidates** (prior server differential surfaced + flips):
+
+* `XOLVER_NRA_SUBTROPICAL` — SAT-fast-path (`1656497`), shipped
+  default-OFF. Promote next batch.
+* `XOLVER_NRA_LAZARD_LIFT` — Lazard lifting variant. Promote after batch.
+* `XOLVER_NRA_LAZARD_CELL_CERT` — cell certificate; soundness audit
+  done.
+
+**Algorithmic variants** (correctness-derisked, perf-judged):
+
+* `XOLVER_NRA_CAC_COMBINATION` — combination-aware CAC v1.
+* `XOLVER_NRA_CAC_COMB_SAT` — combination SAT mode.
+* `XOLVER_NRA_CAC_LAZARD_DEDUP` — projection dedup.
+* `XOLVER_NRA_CAC_MIN_CONFLICT` — conflict-reason minimisation.
+* `XOLVER_NRA_CAC_RATIONAL_FALLBACK` — fallback on libpoly fail.
+* `XOLVER_NRA_CAC_SAT_ALGEBRAIC` — sat-direction algebraic.
+* `XOLVER_NRA_CAC_VAR_ORDER` — variable-order heuristic.
+* `XOLVER_NRA_LIBPOLY_PSC` — libpoly PSC backend variant.
+* `XOLVER_NRA_NLA_CUTS` — non-linear arithmetic cuts.
+* `XOLVER_NRA_PROJECTION` — alternate projection scheme.
+* `XOLVER_NRA_UNSAT_CERT` — UNSAT certificate emission.
+* `XOLVER_NRA_VARORDER` — degree-based variable order.
+* `XOLVER_NRA_VARORDER_SIMPLEX` — simplex-driven variable order.
+* `XOLVER_NRA_PREELIM` — pre-elimination pass.
+* `XOLVER_NRA_LINEARIZE` — incremental linearization.
+* `XOLVER_NRA_LS_EQ_RELAX` — Phase NRA-LS-B equality relaxation
+  (kept default-OFF for soundness reasons documented in NraLocalSearch.h).
+
+**Diagnostic / behaviour switches** (likely won't promote):
+
+* `XOLVER_NRA_CAC_ALL_EFFORTS` — run CAC at every effort level (debug).
+* `XOLVER_NRA_CAC_NO_COLLINS` — skip Collins (debug / portfolio arm).
+* `XOLVER_NRA_CAC_ONLY` — skip non-CAC stages (portfolio arm).
+* `XOLVER_NRA_CAC_EARLY_INFEAS` — early infeasibility detection.
+* `XOLVER_NRA_CAC_EARLY_INFEAS_SAFE` — safe variant.
+* `XOLVER_NRA_CAC_PRUNE_INTERVALS` — interval-pruning variant.
+* `XOLVER_NRA_CAC_DUMP` — debug dump.
+* `XOLVER_NRA_CAC_TRACE` — debug trace.
+* `XOLVER_NRA_LINEARIZE_DUMP` — debug dump.
+
+### Stats / diag-only (always env-gated, never promoted)
+
+* `XOLVER_NRA_KERNEL_STATS` — hash-cons stack hit rates.
+* `XOLVER_NRA_CAC_INSTR` — CAC cell + leaf counter.
+* `XOLVER_NRA_CAC_DIAG` — CAC verbose diagnostics.
+* `XOLVER_NRA_LAZARD_DIAG` — Lazard diagnostics.
+* `XOLVER_NRA_LS_DIAG` — LS diagnostics.
+* `XOLVER_NRA_LS_STATS` — LS cache stats (LS-C / LS-D).
+* `XOLVER_NRA_SIGN_REFUTE_DIAG` — sign-refute diagnostics.
+* `XOLVER_NRA_SUBTROP_DIAG` — subtropical diagnostics.
+
+### Cross-lane shipped via this branch
+
+* `XOLVER_DT_HC_STATS` — Task W instrumentation in DtReasoner (stats-only).
+
+### Stage 5 acceptance gate per flag class
+
+* Promoted: NRA reg 151/151 (Task U expanded suite).
+* Parameter: NRA reg 151/151 with default values.
+* Default-OFF levers: NOT in default ship binary; opt-in only. Stage 5
+  gate is "does default binary stay 0-unsound" — confirmed across the
+  20+ paired runs this session.
+* Diagnostic env vars: zero ship surface (no functional behaviour).
+
+### Pre-existing failures tracked (do not block Stage 5)
+
+* `dt_blocksworld_bmc_1_sat` — returns unsat, expected sat. Pre-existing
+  under pre-Q binary too; NOT introduced by Task W's `isFiniteSort`
+  cache. Tracked as task #112 in the session task list. Out of scope
+  for NRA-lane Stage 5; routes to DT / EQNA lane.
+
+---
+
 ## Don't-rewrite list (handoff-ready)
 
 These items were investigated and **deliberately not shipped**, with the reason
