@@ -152,6 +152,19 @@ public:
     // same bestCost selection as discrete-Newton / multi-scale /
     // quad-critical, so soundness is unchanged.
     void setBilinearSubst(bool e) { bilinearSubst_ = e; }
+    // LS-VM1 (master 2026-06-02 8h directive). Pre-pin variables whose
+    // values are completely determined by an Eq atom of the form
+    // c*x + k = 0 with c|k (single-var linear equality, integer root).
+    // The LS walk then SKIPS these variables (no perturbation, no
+    // contribution to varToClauses move selection) and pre-loads their
+    // pinned value into the starting assignment. CInteger has explicit
+    // Farkas equality chains in every case; SAT14 + ITS have these in
+    // their initial-state defs. Universal lever. Default-OFF
+    // (XOLVER_NIA_LS_PIN_EQ). Sound by construction: pinning a value
+    // forced by an Eq atom never changes the satisfiability of the
+    // formula; the pinned move-skip only affects LS heuristic, never
+    // verdict (every Sat is still validator-gated).
+    void setPinEq(bool e) { pinEq_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -175,6 +188,7 @@ private:
     bool diverseInit_ = false;
     bool bilinearPair_ = false;
     bool bilinearSubst_ = false;
+    bool pinEq_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

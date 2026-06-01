@@ -71,6 +71,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_SUBST"); e && *e && *e != '0') {
         bilinearSubst_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_PIN_EQ"); e && *e && *e != '0') {
+        pinEq_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -527,6 +530,56 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
 
     const std::size_t nC = constraints.size();
 
+    // LS-VM1 (master 2026-06-02): detect single-var linear Eq atoms
+    // (c*v + k = 0 with c|k) and pin v = -k/c. Pinned vars are skipped
+    // by the move-search and pre-loaded into every restart's starting
+    // assignment. Sound: the equality already forces v's value; pinning
+    // is just an LS-side acknowledgement that doesn't change
+    // satisfiability. CInteger has these in every case (Farkas chains
+    // + initial-state defs); ITS/SAT14 have them in initial-state defs.
+    std::unordered_map<std::string, mpz_class> pinned;
+    if (pinEq_) {
+        for (const auto& c : constraints) {
+            if (c.rel != Relation::Eq) continue;
+            auto termsOpt = kernel_.terms(c.poly);
+            if (!termsOpt) continue;
+            mpz_class constSum = 0;
+            std::string singleVar;
+            mpz_class singleCoef = 0;
+            bool ok = true;
+            for (const auto& t : *termsOpt) {
+                if (t.powers.empty()) { constSum += t.coefficient; continue; }
+                if (t.powers.size() != 1 || t.powers[0].second != 1) { ok = false; break; }
+                std::string nm(kernel_.varName(t.powers[0].first));
+                if (singleVar.empty()) { singleVar = nm; singleCoef = t.coefficient; }
+                else if (singleVar == nm) { singleCoef += t.coefficient; }
+                else { ok = false; break; }
+            }
+            if (!ok || singleVar.empty() || singleCoef == 0) continue;
+            // c*v + k = 0 -> v = -k/c (must be exact integer)
+            mpz_class neg = -constSum;
+            if ((neg % singleCoef) != 0) continue;
+            mpz_class root = neg / singleCoef;
+            // Respect existing domain bounds.
+            const auto* d = domains.getDomain(singleVar);
+            if (d) {
+                if (d->hasLower && root < d->lower.value) continue;
+                if (d->hasUpper && root > d->upper.value) continue;
+            }
+            // If a prior pin disagrees, drop both — the formula has
+            // conflicting linear pins, so let the main LS / theory
+            // engine handle it (we only pin when a single value forces).
+            auto pit = pinned.find(singleVar);
+            if (pit != pinned.end()) {
+                if (pit->second != root) {
+                    pinned.erase(pit);
+                }
+            } else {
+                pinned[singleVar] = root;
+            }
+        }
+    }
+
     // Build variable → clause-indices index. Variables not appearing in any
     // constraint are simply absent; constants get an empty entry.
     std::unordered_map<std::string, std::vector<std::size_t>> varToClauses;
@@ -679,6 +732,14 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             }
         }
 
+        // LS-VM1: pre-load pinned values into cur. The pinned-eq detection
+        // ran ONCE above; here we apply the fixed values per restart so
+        // every restart's starting trajectory respects the linear-equality
+        // pins. Sound: pinning v to its forced value is verdict-preserving.
+        for (const auto& [pv, pval] : pinned) {
+            cur[pv] = pval;
+        }
+
         // Initial incremental state.
         std::vector<mpz_class> cviol(nC), weight(nC, mpz_class(1));
         // Phase L1 step 2: restore PAWS weights from the persistent
@@ -757,6 +818,24 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             const NormalizedNiaConstraint& C = constraints[ci];
             std::vector<std::string> cvars = kernel_.variables(C.poly);
             if (cvars.empty()) break;
+
+            // LS-VM1: filter pinned vars out of the move-search candidate
+            // set. A pinned var's value is forced by a linear equality;
+            // perturbing it would just violate that equality without
+            // helping the falsified atom (other moves toward the falsified
+            // atom's satisfaction are tried via the remaining cvars).
+            if (!pinned.empty()) {
+                std::vector<std::string> filtered;
+                filtered.reserve(cvars.size());
+                for (const auto& v : cvars) {
+                    if (!pinned.count(v)) filtered.push_back(v);
+                }
+                if (!filtered.empty()) cvars = std::move(filtered);
+                // If EVERY var in cvars is pinned, leave cvars as-is so
+                // the noise branch can still try a random nudge — the LS
+                // is then effectively stuck on this atom, but we don't
+                // skip the falsified atom (preserves walkSat semantics).
+            }
 
             // Critical-move search with discrete-Newton + adaptive
             // accelerated step. Try targets: ±1, ±2, slope-based root, and
