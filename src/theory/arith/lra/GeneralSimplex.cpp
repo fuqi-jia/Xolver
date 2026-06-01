@@ -56,6 +56,15 @@ GeneralSimplex::GeneralSimplex() {
     // beta is already dirty (a structural new-var change is pending).
     const char* ibEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA");
     incrementalBetaEnabled_ = (ibEnv && *ibEnv && *ibEnv != '0');
+    // XOLVER_LRA_INCREMENTAL_BETA_REFRESH=K (default 0 = never): force a full
+    // canonical recomputeBeta every K-th incremental backtrack. Skipping recompute
+    // forever lets beta drift away from the canonical chooseValueWithinBounds
+    // point; that drift is what SAVES recompute-heavy instances (nec-smt) but can
+    // give a worse pivot path on others (CAV/dillig SAT regress under the
+    // LIA_INCREMENTAL+BETA pair). A periodic canonical refresh bounds the drift,
+    // keeping the throughput win while preventing the pathological path.
+    const char* refEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA_REFRESH");
+    betaRefreshPeriod_ = refEnv ? std::max(0, std::atoi(refEnv)) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -889,7 +898,11 @@ void GeneralSimplex::pop() {
     // a valid simplex start — skip the O(nnz) recompute and just refresh the
     // O(rows) violation queue. Fall back to full recompute when beta is dirty.
     if (incrementalBetaEnabled_ && !betaDirty_) {
-        rebuildViolationQueue();
+        if (betaRefreshPeriod_ > 0 && (++betaBacktrackCount_ % betaRefreshPeriod_ == 0)) {
+            betaDirty_ = true;          // periodic canonical refresh (bound the drift)
+        } else {
+            rebuildViolationQueue();
+        }
     } else {
         betaDirty_ = true;
     }
@@ -907,7 +920,8 @@ void GeneralSimplex::backtrackToLevel(int level) {
     // See pop(): with XOLVER_LRA_INCREMENTAL_BETA and a currently-valid beta, the
     // loosened bounds keep beta a valid simplex start, so refresh the violation
     // queue (O(rows)) instead of forcing a full O(nnz) recomputeBeta.
-    if (incrementalBetaEnabled_ && !betaDirty_) {
+    if (incrementalBetaEnabled_ && !betaDirty_ &&
+        !(betaRefreshPeriod_ > 0 && (++betaBacktrackCount_ % betaRefreshPeriod_ == 0))) {
         rebuildViolationQueue();
     } else {
         betaDirty_ = true;
