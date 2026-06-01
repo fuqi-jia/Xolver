@@ -1354,6 +1354,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
+    // HYB-X partition-hint wire-up (default-OFF).
+    {
+        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        if (partHint && !normalized_.empty()) {
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            localSearch_.setPartitionHint(pr);
+        }
+    }
     // Local search SAT finder (try before emitting pending linear lemmas)
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
@@ -1497,6 +1506,16 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaSto
     // compat once a cumulative-setter is wired up; currently informational.
     (void)earlyTotalMs;
     localSearch_.setBudgetMs(earlyBudgetMs);
+    // HYB-X: pass partition hint to LS (cheap; partition is recomputed
+    // here but the cost is bounded by normalized_.size()).
+    {
+        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        if (partHint && !normalized_.empty()) {
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            localSearch_.setPartitionHint(pr);
+        }
+    }
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
             currentModel_ = *model;

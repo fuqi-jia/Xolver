@@ -80,6 +80,14 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_DIVERSIFY"); e && *e && *e != '0') {
         diversify_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_PARTITION_HINT"); e && *e && *e != '0') {
+        partitionHint_ = true;
+    }
+}
+
+void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
+    unboundedVars_.clear();
+    for (const auto& u : pr.unbounded) unboundedVars_.insert(u);
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -400,7 +408,14 @@ std::optional<IntegerModel> NiaLocalSearch::walkSat(
                 cur[v] = (span <= 0) ? d->lower.value
                                      : d->lower.value + mpz_class(rng()) % (span + 1);
             } else {
-                cur[v] = clampVar(v, mpz_class((long)(rng() % 4001) - 2000));
+                // HYB-X: under partition hint, unbounded vars init to a
+                // NARROWER ±100 random range. Per H5, VeryMax SAT models
+                // (z3-extracted) have small values 0-300; the legacy
+                // ±2000 range over-explores. Sound: heuristic init only.
+                bool tightInit = partitionHint_ && unboundedVars_.count(v);
+                long range = tightInit ? 201 : 4001;
+                long offset = tightInit ? 100 : 2000;
+                cur[v] = clampVar(v, mpz_class((long)(rng() % range) - offset));
             }
         }
         mpz_class curViol = violation(cur, constraints);
@@ -795,7 +810,11 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             val = (span <= 0) ? d->lower.value
                                               : d->lower.value + mpz_class(rng()) % (span + 1);
                         } else {
-                            val = mpz_class((long)(rng() % 4001) - 2000);
+                            // HYB-X tight init for partition-hinted U vars.
+                            bool tight = partitionHint_ && unboundedVars_.count(v);
+                            long range = tight ? 201 : 4001;
+                            long offset = tight ? 100 : 2000;
+                            val = mpz_class((long)(rng() % range) - offset);
                         }
                         break;
                 }
@@ -811,7 +830,11 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     cur[v] = (span <= 0) ? d->lower.value
                                          : d->lower.value + mpz_class(rng()) % (span + 1);
                 } else {
-                    cur[v] = clampVar(v, mpz_class((long)(rng() % 4001) - 2000));
+                    // HYB-X tight init for partition-hinted U vars.
+                    bool tight = partitionHint_ && unboundedVars_.count(v);
+                    long range = tight ? 201 : 4001;
+                    long offset = tight ? 100 : 2000;
+                    cur[v] = clampVar(v, mpz_class((long)(rng() % range) - offset));
                 }
             }
         }

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -186,6 +188,18 @@ public:
     // Sound: random walks only mutate the LS state; verdict still
     // validator-gated.
     void setDiversify(bool e) { diversify_ = e; }
+    // HYB-X (user 2026-06-02 directive). Pass HYB-1 partition info to
+    // LS so the search uses bounded/unbounded classification for both
+    // initialization and clamp behavior. Per H5, SAT14 lambdas have
+    // small SAT models (z3 extracted values 0-300), so U vars are best
+    // initialized in [-100, 100] random rather than the legacy
+    // [-2000, 2000]. Sound: partition hint affects ONLY heuristic
+    // search; verdict is validator-gated. Default-OFF
+    // (XOLVER_NIA_LS_PARTITION_HINT). When the flag is off, LS ignores
+    // the passed partition.
+    void setPartitionHint(const PartitionResult& pr);
+    void setPartitionEnabled(bool e) { partitionHint_ = e; }
+    void clearPartitionHint() { unboundedVars_.clear(); }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -212,6 +226,8 @@ private:
     bool pinEq_ = false;
     bool modularEscalate_ = false;
     bool diversify_ = false;
+    bool partitionHint_ = false;
+    std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,
