@@ -10,6 +10,8 @@
 // vendored third_party/libpoly headers (duplicate typedefs / enums).
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <optional>
 #include <set>
@@ -18,6 +20,18 @@
 namespace xolver {
 
 LibPolyKernel::LibPolyKernel() = default;
+
+LibPolyKernel::~LibPolyKernel() {
+    // S1 (P6) — env-gated stats dump for hit-rate sanity. Default no-op.
+    if (std::getenv("XOLVER_NRA_KERNEL_STATS") != nullptr) {
+        const uint64_t total = binOpHits_ + binOpMisses_;
+        const double hitRate = total ? 100.0 * static_cast<double>(binOpHits_) / static_cast<double>(total) : 0.0;
+        std::fprintf(stderr,
+            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu total=%llu hit_rate=%.2f%% cache_size=%zu\n",
+            (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_,
+            (unsigned long long)total, hitRate, binOpCache_.size());
+    }
+}
 
 PolyId LibPolyKernel::alloc(poly::Polynomial p) {
     PolyId id = static_cast<PolyId>(pool_.size());
@@ -103,7 +117,8 @@ PolyId LibPolyKernel::add(PolyId a, PolyId b) {
     const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
     const uint64_t key = binOpKey(0, lo, hi);
     auto it = binOpCache_.find(key);
-    if (it != binOpCache_.end()) return it->second;
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     PolyId r = alloc(poly::operator+(get(a), get(b)));
     binOpCache_.emplace(key, r);
     return r;
@@ -113,7 +128,8 @@ PolyId LibPolyKernel::sub(PolyId a, PolyId b) {
     if (a == NullPoly || b == NullPoly) return alloc(poly::operator-(get(a), get(b)));
     const uint64_t key = binOpKey(1, a, b);                 // NOT commutative
     auto it = binOpCache_.find(key);
-    if (it != binOpCache_.end()) return it->second;
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     PolyId r = alloc(poly::operator-(get(a), get(b)));
     binOpCache_.emplace(key, r);
     return r;
@@ -123,7 +139,8 @@ PolyId LibPolyKernel::neg(PolyId a) {
     if (a == NullPoly) return alloc(poly::operator-(get(a)));
     const uint64_t key = binOpKey(2, a, 0);                 // unary — slot b = 0
     auto it = binOpCache_.find(key);
-    if (it != binOpCache_.end()) return it->second;
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     PolyId r = alloc(poly::operator-(get(a)));
     binOpCache_.emplace(key, r);
     return r;
@@ -134,7 +151,8 @@ PolyId LibPolyKernel::mul(PolyId a, PolyId b) {
     const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
     const uint64_t key = binOpKey(3, lo, hi);
     auto it = binOpCache_.find(key);
-    if (it != binOpCache_.end()) return it->second;
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     PolyId r = alloc(poly::operator*(get(a), get(b)));
     binOpCache_.emplace(key, r);
     return r;
@@ -144,7 +162,8 @@ PolyId LibPolyKernel::pow(PolyId a, uint32_t k) {
     if (a == NullPoly) return alloc(poly::pow(get(a), k));
     const uint64_t key = binOpKey(4, a, k);                 // slot b carries k
     auto it = binOpCache_.find(key);
-    if (it != binOpCache_.end()) return it->second;
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     PolyId r = alloc(poly::pow(get(a), k));
     binOpCache_.emplace(key, r);
     return r;

@@ -21,6 +21,7 @@ namespace xolver {
 class LibPolyKernel : public PolynomialKernel {
 public:
     LibPolyKernel();
+    ~LibPolyKernel() override;   // S1 stats dump on XOLVER_NRA_KERNEL_STATS
 
     // Variable registry
     VarId getOrCreateVar(std::string_view name) override;
@@ -107,6 +108,8 @@ private:
     // legitimate slot. Add and Mul canonicalize (min, max) before keying since
     // libpoly polynomials commute. Grow-forever: bounded by #unique inputs.
     mutable std::unordered_map<uint64_t, PolyId> binOpCache_;
+    mutable uint64_t binOpHits_ = 0;   // S1 stats (XOLVER_NRA_KERNEL_STATS)
+    mutable uint64_t binOpMisses_ = 0;
     static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
         return (op << 60) | (static_cast<uint64_t>(a) << 30) | static_cast<uint64_t>(b);
     }
