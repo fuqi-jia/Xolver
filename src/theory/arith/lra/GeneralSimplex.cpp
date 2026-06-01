@@ -44,6 +44,18 @@ GeneralSimplex::GeneralSimplex() {
     // is sound regardless of the heuristic chosen.
     const char* env = std::getenv("XOLVER_LRA_PIVOT_HEUR");
     useHeuristicPivot_ = (env && *env && *env != '0');
+    // XOLVER_LRA_INCREMENTAL_BETA (default OFF): on backtrack (pop / backtrackToLevel)
+    // skip the full O(nnz) recomputeBeta and just refresh the O(rows) violation
+    // queue. Sound because bound assertions are tighten-only (assertLower/Upper
+    // only proceed on a strictly tighter bound, recording the old for restore) and
+    // update() keeps nonbasic betas feasible — so popping bounds only LOOSENS them,
+    // leaving the current beta tableau-consistent and every nonbasic within its
+    // (looser) bounds, i.e. a valid simplex start with an unchanged verdict. Only
+    // basic-var bound feasibility can change (now within looser bounds), which the
+    // violation-queue refresh captures. Falls back to a full recompute whenever
+    // beta is already dirty (a structural new-var change is pending).
+    const char* ibEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA");
+    incrementalBetaEnabled_ = (ibEnv && *ibEnv && *ibEnv != '0');
 }
 
 // ---------------------------------------------------------------------------
@@ -872,7 +884,15 @@ void GeneralSimplex::pop() {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
+    // Incremental beta on backtrack (XOLVER_LRA_INCREMENTAL_BETA): if beta is
+    // currently valid (not dirty), popping bounds only loosens them, so beta stays
+    // a valid simplex start — skip the O(nnz) recompute and just refresh the
+    // O(rows) violation queue. Fall back to full recompute when beta is dirty.
+    if (incrementalBetaEnabled_ && !betaDirty_) {
+        rebuildViolationQueue();
+    } else {
+        betaDirty_ = true;
+    }
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
@@ -882,11 +902,18 @@ void GeneralSimplex::backtrackToLevel(int level) {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
     hasImmediateConflict_ = false;
     conflict_.clear();
-    violatedQueue_.clear();
-    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    // See pop(): with XOLVER_LRA_INCREMENTAL_BETA and a currently-valid beta, the
+    // loosened bounds keep beta a valid simplex start, so refresh the violation
+    // queue (O(rows)) instead of forcing a full O(nnz) recomputeBeta.
+    if (incrementalBetaEnabled_ && !betaDirty_) {
+        rebuildViolationQueue();
+    } else {
+        betaDirty_ = true;
+        violatedQueue_.clear();
+        std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    }
 }
 
 // ============================================================================

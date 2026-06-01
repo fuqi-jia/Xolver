@@ -247,6 +247,10 @@ private:
     // construction. Sound regardless of value (pivot choice never changes the
     // verdict); only affects the search path / pivot count.
     bool useHeuristicPivot_ = false;
+    // XOLVER_LRA_INCREMENTAL_BETA (default OFF): skip the full recomputeBeta on
+    // backtrack when beta is still valid; refresh only the violation queue. See
+    // pop() / the constructor for the soundness argument (tighten-only bounds).
+    bool incrementalBetaEnabled_ = false;
 
 #ifdef XOLVER_LRA_PROFILE
     int pivotCount_ = 0;
