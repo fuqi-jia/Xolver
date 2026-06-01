@@ -96,6 +96,16 @@ public:
     // did not run (flag off / incremental scope).
     ModelConverter modelConverter_;
 
+    // Constants bound by UnconditionalConstantPropagation (Cap 8a). Captured
+    // immediately after `cprop.commit()` so model emission and validators can
+    // fill in user vars that UCP substituted away (the post-UCP IR has only
+    // the source-of-binding equality at top-level; nested ones get folded to
+    // `true`, leaving the var absent from downstream theories and therefore
+    // absent from the printed model — defaults to 0, validator flags
+    // false-SAT). Sound: every model of the original formula satisfies these
+    // bindings by construction of UCP.
+    std::unordered_map<std::string, mpq_class> fixedBindings_;
+
     // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
     // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
     // extension at undefined inputs, built from the final model (see
@@ -119,6 +129,26 @@ public:
         if (!parser) return false;
         auto opts = parser->getOptions();
         return opts && opts->get_model;
+    }
+
+    // Merge UCP fixedBindings_ into lastModel_'s string + numeric channels for
+    // any var not already present. Called at every site that sets lastModel_
+    // so validators (modelViolatesOriginal, combinationModelDefinitelyViolates,
+    // arrayModelValidates) and emit (Solver::getModel, dumpModel) all see the
+    // eliminated user vars at their UCP-bound constants instead of defaulting
+    // to 0 and flagging a false-SAT.
+    void mergeFixedBindings() {
+        if (!lastModel_ || fixedBindings_.empty()) return;
+        for (const auto& [name, value] : fixedBindings_) {
+            if (lastModel_->assignments.find(name) == lastModel_->assignments.end()) {
+                lastModel_->assignments[name] = value.get_str();
+            }
+            if (lastModel_->numericAssignments.find(name) ==
+                lastModel_->numericAssignments.end()) {
+                lastModel_->numericAssignments.emplace(
+                    name, RealValue::fromMpq(value));
+            }
+        }
     }
 
     // True only on a DEFINITE violation of an original (pre-lowering)
@@ -863,6 +893,7 @@ public:
         // that the linear rational reconstructor cannot evaluate, which would
         // soundly but needlessly downgrade Sat -> Unknown (completeness loss).
         modelConverter_ = ModelConverter{};
+        fixedBindings_.clear();
         const bool algebraicModelLogic =
             logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
         if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
@@ -931,6 +962,16 @@ public:
 #endif
                 return Result::Unsat;
             }
+            // Capture UCP bindings BEFORE commit() rewrites the IR — the map is
+            // populated by run() (Phase 1: collection), commit() only rebuilds
+            // assertions. These bindings hold in every model of the original
+            // formula (UCP only collects unconditional top-level `(= v c)`),
+            // and are merged into lastModel_ at every set site so user vars
+            // UCP substituted away still appear in the printed model and pass
+            // the post-solve validators (xs-05-08 Wisa class root cause: UCP
+            // folds nested `(= x 120)` to `true`, x disappears from downstream
+            // theories and the model defaults to x=0, validator → false-SAT).
+            fixedBindings_ = cprop.fixedConstMap();
             cprop.commit();
         }
 
@@ -1652,6 +1693,7 @@ public:
                     lastModel_->assignments.emplace(name, val);
                 }
             }
+            mergeFixedBindings();
             // NOTE: we intentionally do NOT gate the SAT verdict on
             // re-validating the extracted model against the original
             // assertions. Verdict soundness ("a model exists", derived by
@@ -1689,6 +1731,7 @@ public:
                 if (repaired.found) {
                     auto saved = std::move(lastModel_);
                     lastModel_ = repaired.model;
+                    mergeFixedBindings();
                     if (modelViolatesOriginal()) lastModel_ = std::move(saved);
                 }
             }
@@ -1706,6 +1749,7 @@ public:
             auto cmsResult = cms.run();
             if (cmsResult.found) {
                 lastModel_ = cmsResult.model;
+                mergeFixedBindings();
                 ret = Result::Sat;
             } else {
                 if (lastUnknownReason_.empty()) {
@@ -1763,6 +1807,7 @@ public:
         // validator runs on every array sat verdict.
         if (ret == Result::Sat && features.hasArray) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
+            mergeFixedBindings();
             if (arrayModelDefinitelyViolates()) {
                 lastUnknownReason_ =
                     "array: SAT model violates an original assertion "
@@ -1806,36 +1851,17 @@ public:
                               isCombUfLogic(logic);
         if (ret == Result::Sat && combUfSatFloor) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
+            mergeFixedBindings();
             if (combinationModelDefinitelyViolates()) {
-                // RECOVERY: the theory model violates, but the formula IS sat
-                // (xolver wouldn't reach Sat otherwise modulo combination
-                // unsoundness). Try CandidateModelSearch to find an
-                // independently-validatable model. Sound — only accept Sat if
-                // the new model passes ModelValidator. Mirror of the strict-
-                // validation recovery pattern at line 1942.
-                auto saved = std::move(lastModel_);
-                CandidateModelSearch::Config cfg;
-                cfg.assertionRootsOverride = originalAssertions_;
-                cfg.allowUF = true;
-                CandidateModelSearch cms(*ir, logic, cfg);
-                auto rec = cms.run();
-                bool recovered = false;
-                if (rec.found) {
-                    lastModel_ = rec.model;
-                    for (const auto& [name, val] : boolVarVals) {
-                        lastModel_->assignments.emplace(name, val);
-                    }
-                    if (!combinationModelDefinitelyViolates()) recovered = true;
-                }
-                if (!recovered) {
-                    lastModel_ = std::move(saved);
-                    lastUnknownReason_ =
-                        "uf-comb: SAT model violates an original assertion "
-                        "(EUF+arith arrangement not closed; CMS recovery failed) "
-                        "— gated to Unknown (sound)";
-                    lastModel_.reset();
-                    ret = Result::Unknown;
-                }
+                // 2026-06-02 FORENSIC C1: CMS recovery removed — it hangs on
+                // hard Wisa cases without recovering (the formula's combination
+                // bug also defeats CMS's heuristic search). Plain floor →
+                // Unknown, sound by construction.
+                lastUnknownReason_ =
+                    "uf-comb: SAT model violates an original assertion "
+                    "(EUF+arith arrangement not closed) — gated to Unknown (sound)";
+                lastModel_.reset();
+                ret = Result::Unknown;
             }
         }
 
@@ -1952,6 +1978,7 @@ public:
             for (const auto& [name, val] : boolVarVals) {
                 lastModel_->assignments.emplace(name, val);
             }
+            mergeFixedBindings();
             if (!modelPositivelyValidates()) {
                 // RECOVERY (unknown -> correct sat): the theory's extracted
                 // model could not be positively confirmed, but the verdict is
@@ -1975,6 +2002,7 @@ public:
                     for (const auto& [name, val] : boolVarVals) {
                         lastModel_->assignments.emplace(name, val);
                     }
+                    mergeFixedBindings();
                     recovered = modelPositivelyValidates();
                 }
                 if (!recovered) {
