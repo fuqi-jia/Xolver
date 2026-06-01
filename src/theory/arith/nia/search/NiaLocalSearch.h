@@ -177,6 +177,15 @@ public:
     // otherwise burn all restarts to no avail. XOLVER_NIA_LS_MODULAR_ESCALATE
     // default-OFF. Sound: LS still never claims UNSAT.
     void setModularEscalate(bool e) { modularEscalate_ = e; }
+    // LS-VM5 (master 2026-06-02 bonus). Random-walk diversification:
+    // when sinceImprove exceeds DIVERSIFY_K (10 PAWS plateaus ~= 200
+    // flips), do K=10 random-walk steps (accept any move regardless
+    // of cost) to escape deep local minima. Complements PAWS clause-
+    // weight escapes — PAWS adjusts the cost landscape, diversify
+    // RANDOMIZES the trajectory. Default-OFF (XOLVER_NIA_LS_DIVERSIFY).
+    // Sound: random walks only mutate the LS state; verdict still
+    // validator-gated.
+    void setDiversify(bool e) { diversify_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -202,6 +211,7 @@ private:
     bool bilinearSubst_ = false;
     bool pinEq_ = false;
     bool modularEscalate_ = false;
+    bool diversify_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

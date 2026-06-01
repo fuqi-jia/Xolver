@@ -77,6 +77,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_MODULAR_ESCALATE"); e && *e && *e != '0') {
         modularEscalate_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_DIVERSIFY"); e && *e && *e != '0') {
+        diversify_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -807,9 +810,47 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         };
 
         int sinceImprove = 0;
+        // LS-VM5: random-walk diversification budget. When sinceImprove
+        // crosses the trigger, set this to K = 10 and decrement per flip;
+        // while >0, the move-search is bypassed and a random nudge is
+        // applied unconditionally (escape deep local minimum). After the
+        // 10-step burst, normal LS resumes.
+        int diversifyBudget = 0;
+        // Trigger: ~10 PAWS plateaus = 10 * PLATEAU_K(20) = 200 flips
+        // without improvement.
+        const int DIVERSIFY_TRIGGER = 10 * PLATEAU_K;
+        const int DIVERSIFY_K = 10;
         for (int flip = 0; flip < MAX_FLIPS; ++flip) {
             if ((flip & 31) == 0 && timedOut()) return std::nullopt;
             if (totalCost == 0) return cur;
+            // LS-VM5 trigger check (per-flip).
+            if (diversify_ && diversifyBudget == 0 &&
+                sinceImprove >= DIVERSIFY_TRIGGER) {
+                diversifyBudget = DIVERSIFY_K;
+                sinceImprove = 0;  // reset so PAWS doesn't immediately fire
+            }
+            // LS-VM5 active: do a random walk this flip and continue.
+            if (diversify_ && diversifyBudget > 0) {
+                // Find any falsified atom; nudge a random one of its vars.
+                std::vector<std::size_t> fset;
+                for (std::size_t i = 0; i < nC; ++i)
+                    if (cviol[i] > 0) fset.push_back(i);
+                if (!fset.empty()) {
+                    const NormalizedNiaConstraint& fc =
+                        constraints[fset[rng() % fset.size()]];
+                    std::vector<std::string> fcvars =
+                        kernel_.variables(fc.poly);
+                    if (!fcvars.empty()) {
+                        const std::string& v = fcvars[rng() % fcvars.size()];
+                        long nudge = (long)(rng() % 21) - 10;
+                        if (nudge == 0) nudge = 1;
+                        mpz_class newVal = clampVar(v, cur[v] + nudge);
+                        commitMove(v, newVal);
+                    }
+                }
+                --diversifyBudget;
+                continue;
+            }
 
             // Find any currently-falsified constraint set.
             std::vector<std::size_t> falsified;
