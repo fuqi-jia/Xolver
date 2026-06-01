@@ -1,4 +1,5 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/nia/search/NiaIcpAdapter.h"
@@ -237,6 +238,8 @@ void NiaSolver::onReset() {
     // Phase D: clear dispatch cache for the new solve.
     dispatchCacheValid_ = false;
     dispatchCacheSignature_ = 0;
+    // HYB-1: reset partition DIAG once-per-solve guard.
+    partitionDiagPrinted_ = false;
 }
 
 // L3.1 — per-solve LS pre-pass via check() override, ported from NRA
@@ -475,6 +478,24 @@ std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheRecord(TheoryLemma
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
+    // HYB-1 DIAG hook (XOLVER_NIA_VAR_PARTITION_DIAG=1) — once per solve.
+    // Placed at the TOP of stageNormalize so both the normCache fast-path
+    // and the full-normalize path are exercised. Fires after normalized_
+    // has been populated (i.e., after the cache update below). Cheap.
+    auto emitPartitionDiag = [this]() {
+        static const bool partDiag = std::getenv("XOLVER_NIA_VAR_PARTITION_DIAG") != nullptr;
+        if (partDiag && !partitionDiagPrinted_ && !normalized_.empty()) {
+            partitionDiagPrinted_ = true;
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            std::fprintf(stderr,
+                "[HYB-1] vars=%zu |B|=%zu (avgBW=%.1f maxBW=%u) |U|=%zu  asserts=%zu\n",
+                pr.totalVars(), pr.boundedCount(),
+                pr.averageBitWidthBounded(), pr.maxBitWidthBounded(),
+                pr.unboundedCount(), normalized_.size());
+            std::fflush(stderr);
+        }
+    };
     // Incremental normalize cache (default-ON): normalized_ is kept in
     // lockstep with the strict active_ stack — normalize only the new tail
     // (normalizeOne is pure per-constraint, so this is byte-identical to a full
@@ -488,6 +509,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
             normalized_.resize(active_.size());
         for (size_t i = normalized_.size(); i < active_.size(); ++i)
             normalized_.push_back(normalizer_.normalizeOne(active_[i]));
+        emitPartitionDiag();
         return std::nullopt;
     }
     // Full normalize. With the lifecycle fix on, merge the live interface
@@ -511,6 +533,12 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
     auto normalizedOpt = normalizer_.normalize(*toNormalize);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     normalized_ = std::move(*normalizedOpt);
+    // HYB-1 DIAG hook (XOLVER_NIA_VAR_PARTITION_DIAG=1) — once per solve.
+    // Fires here so downstream observers see the partition over the
+    // normalized constraint set. domains_ may be partially populated;
+    // VariablePartition compensates by directly scanning the constraint
+    // set for single-var bound atoms in addition to consulting DomainStore.
+    emitPartitionDiag();
     return std::nullopt;
 }
 

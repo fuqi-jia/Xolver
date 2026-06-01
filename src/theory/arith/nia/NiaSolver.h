@@ -154,6 +154,8 @@ private:
     // already validated by the full pipeline once at this signature.
     uint64_t dispatchCacheSignature_ = 0;
     bool dispatchCacheValid_ = false;
+    // HYB-1 partition DIAG: print once per solve (reset by onReset).
+    bool partitionDiagPrinted_ = false;
     bool enableRefute_ = true;    // bound-free product-positivity refutation (promoted default-ON)
     bool enableGcd_ = true;       // multivariate GCD-divisibility refutation (promoted default-ON)
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
