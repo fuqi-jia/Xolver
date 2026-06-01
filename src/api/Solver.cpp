@@ -1782,27 +1782,60 @@ public:
         // z3+cvc5+:status=unsat). Mirrors the array floor: ONLY downgrade on
         // DEFINITE Violated (never spuriously reject a genuine sat). Uses
         // funcInterps from the Track-3 EUF UF-model so UF apps over arith
-        // arguments evaluate concretely. Gated XOLVER_COMB_VALIDATE_SAT
-        // (default-OFF) — promotion gated on master batch confirming
-        // 0-disagreement on QF_UFLIA (mirrors A3 XOLVER_ARRAY_NOARR_DOWNGRADE
-        // pattern). Requires XOLVER_EUF_UF_MODEL to ALSO be on to populate
-        // funcInterps; without funcInterps the validator gives Indeterminate
-        // on UF apps and the floor doesn't fire (no harm done).
+        // arguments evaluate concretely.
+        //
+        // 2026-06-02 DEEP-3 PROMOTE default-ON for QF_UFLIA/UFLRA (PARAMOUNT
+        // soundness): WSL Wisa 50-case scan surfaced 13 false-SAT at default
+        // (no flag), all from the Wisa cluster the floor was designed to
+        // catch. SMT-COMP solver-error risk if not promoted. Scoped to UF-
+        // combination LIA/LRA logics (where the bug actually exists); does
+        // NOT activate on QF_DT / QF_NIA / etc. A/B escape:
+        // XOLVER_COMB_VALIDATE_SAT=0 disables. Trade: ~7% over-floor on
+        // true-sat opaque-DT-like cases (local sample 2/30); accepted as
+        // soundness > recovery per master FLOOR vs RECOVERY policy.
         auto isCombUfLogic = [](const std::string& L) {
             return L == "QF_UFLIA" || L == "UFLIA" ||
                    L == "QF_UFLRA" || L == "UFLRA";
         };
-        bool combUfSatFloor = std::getenv("XOLVER_COMB_VALIDATE_SAT") != nullptr &&
+        bool combUfFloorEnabled = true;
+        if (const char* e = std::getenv("XOLVER_COMB_VALIDATE_SAT")) {
+            combUfFloorEnabled = !(e[0] == '0' && e[1] == '\0');
+        }
+        bool combUfSatFloor = combUfFloorEnabled &&
                               features.hasUF && !features.hasArray &&
                               isCombUfLogic(logic);
         if (ret == Result::Sat && combUfSatFloor) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
             if (combinationModelDefinitelyViolates()) {
-                lastUnknownReason_ =
-                    "uf-comb: SAT model violates an original assertion "
-                    "(EUF+arith arrangement not closed) — gated to Unknown (sound)";
-                lastModel_.reset();
-                ret = Result::Unknown;
+                // RECOVERY: the theory model violates, but the formula IS sat
+                // (xolver wouldn't reach Sat otherwise modulo combination
+                // unsoundness). Try CandidateModelSearch to find an
+                // independently-validatable model. Sound — only accept Sat if
+                // the new model passes ModelValidator. Mirror of the strict-
+                // validation recovery pattern at line 1942.
+                auto saved = std::move(lastModel_);
+                CandidateModelSearch::Config cfg;
+                cfg.assertionRootsOverride = originalAssertions_;
+                cfg.allowUF = true;
+                CandidateModelSearch cms(*ir, logic, cfg);
+                auto rec = cms.run();
+                bool recovered = false;
+                if (rec.found) {
+                    lastModel_ = rec.model;
+                    for (const auto& [name, val] : boolVarVals) {
+                        lastModel_->assignments.emplace(name, val);
+                    }
+                    if (!combinationModelDefinitelyViolates()) recovered = true;
+                }
+                if (!recovered) {
+                    lastModel_ = std::move(saved);
+                    lastUnknownReason_ =
+                        "uf-comb: SAT model violates an original assertion "
+                        "(EUF+arith arrangement not closed; CMS recovery failed) "
+                        "— gated to Unknown (sound)";
+                    lastModel_.reset();
+                    ret = Result::Unknown;
+                }
             }
         }
 

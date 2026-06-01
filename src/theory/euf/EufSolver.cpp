@@ -21,7 +21,14 @@ namespace xolver {
 EufSolver::EufSolver() : egraph_(termManager_) {
     diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
     eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
-    ufModelEnabled_ = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    // Default-ON (2026-06-02 DEEP-3): Track-3 UF function-interp collection.
+    // Required by the QF_UFLIA combination soundness floor (COMB_VALIDATE_SAT)
+    // and harmless when not consumed downstream (just populates getModel()
+    // funcInterps). A/B escape: XOLVER_EUF_UF_MODEL=0 disables.
+    ufModelEnabled_ = true;
+    if (const char* e = std::getenv("XOLVER_EUF_UF_MODEL")) {
+        ufModelEnabled_ = !(e[0] == '0' && e[1] == '\0');
+    }
     // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): drain saturation mergeQueue_
     // with level-bucketed map; O(n^2) → O(n log L). Same order; targets QF_ANIA/QF_AX-swap blowup.
     minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
