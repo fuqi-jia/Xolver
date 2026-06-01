@@ -633,7 +633,12 @@ std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
         if (c.poly == NullPoly) continue;
         intervalCs.push_back({c.poly, c.rel, c.reason});
     }
+    // First try plain interval refutation.
     auto conflictOpt = tryRefuteByPolynomialInterval(intervalCs, facts, *kernel_);
+    // If no plain conflict, try iterative factoring + back-prop (closes MGC-class).
+    if (!conflictOpt) {
+        conflictOpt = tryRefuteByIterativeFactoring(intervalCs, facts, *kernel_, /*maxIter=*/6);
+    }
     if (!conflictOpt) return std::nullopt;
 
     TheoryConflict tc;

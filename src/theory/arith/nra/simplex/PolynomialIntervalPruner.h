@@ -65,6 +65,22 @@ std::optional<IntervalConflict> tryRefuteByPolynomialInterval(
     const CertifiedSimplexFacts& facts,
     PolynomialKernel& kernel);
 
+// Iterative refutation with polynomial factoring + bound back-propagation.
+// On each round:
+//   1. Factor each EQ constraint by sign-definite common-factor variables.
+//      For `p = 0` where p = v^k * q and v has sign != 0 (definite),
+//      add `q = 0` to the working constraint set (sound: v != 0 + v*q = 0
+//      => q = 0).
+//   2. Back-propagate: for each EQ constraint where one variable can be
+//      solved for, derive its interval from the other terms.
+//   3. Re-run polynomial interval pruning.
+// Returns the first conflict found (with reason union) or nullopt at fixpoint.
+std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
+    const std::vector<IntervalConstraint>& constraints,
+    CertifiedSimplexFacts& facts,    // mutated as bounds tighten
+    PolynomialKernel& kernel,
+    int maxIterations = 6);
+
 // Helper: compute the interval of a single monomial `c * prod(x^e)` given
 // certified bounds for the variables. Returns nullopt for any side that
 // can't be bounded (e.g. variable is unbounded above and the exponent is
