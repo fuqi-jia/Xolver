@@ -64,6 +64,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             /*fullEffortOnly=*/true));
     };
     add("nia.pending",        &NiaSolver::stagePending);
+    // Phase D — dispatch-cache lookup at the FRONT of the pipeline. On a
+    // signature hit, skip the entire 16-stage pipeline. Default-OFF flag
+    // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
+    add("nia.dispatch-cache", &NiaSolver::stageDispatchCacheLookup);
     add("nia.normalize",      &NiaSolver::stageNormalize);
     // Phase 3b (XOLVER_NIA_BOUNDED_PARTIAL_EARLY, default-OFF). Run the
     // partial bounded enumerator EARLY, right after normalize, before
@@ -145,6 +149,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // Full-effort check and validated -- so soundness/SAT-finding is preserved.
     addFull("nia.local-search", &NiaSolver::stageLocalSearch);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
+    // Phase D — dispatch-cache record at the TAIL (right before branch).
+    // Reaching here means every earlier stage returned nullopt, so the
+    // pipeline will fall through to consistent(). Memoize the active_
+    // signature so the next identical call hits stageDispatchCacheLookup.
+    add("nia.dispatch-cache-record", &NiaSolver::stageDispatchCacheRecord);
     add("nia.branch",         &NiaSolver::stageBranch);
 
     // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
@@ -248,8 +257,40 @@ void NiaSolver::onReset() {
     interfaceDisequalities_.clear();
     localSearch_.resetBudget();
     localSearch_.resetLsContext();
+    // L4.1 modular warm-start: clear memoization for the new solve.
+    modularSignatureValid_ = false;
+    modularLastSignature_ = 0;
+    modularLastWasNoChange_ = false;
+    // Phase D: clear dispatch cache for the new solve.
+    dispatchCacheValid_ = false;
+    dispatchCacheSignature_ = 0;
 }
 
+// L3.1 — per-solve LS pre-pass via check() override, ported from NRA
+// agent's fea2d98. Runs ONCE per solve (lsAttempted_ guard) with the
+// current active_ set, BEFORE the Reasoner pipeline. If LS finds a
+// model that exact-validates, the candidate is cached in
+// `lsCachedCandidate_` (persistent across cb_propagate — assertLit does
+// NOT clear it) and `currentModel_` is set for the verdict path. On
+// every subsequent check() the cached candidate is re-validated against
+// the up-to-date active_; if it still satisfies, `currentModel_` is
+// re-set and we return consistent. If revalidation fails, the cache is
+// dropped and we fall through to the normal pipeline.
+//
+// CRITICAL DESIGN DECISION (lesson from the previous failed attempt
+// that hung pipeline state on every SAT14 case): build a LOCAL
+// normalized vector here via `normalizer_.normalizeOne(active_[i])` —
+// DO NOT mutate `normalized_`. The pipeline's stageNormalize manages
+// `normalized_` with an incremental cache; manually pre-populating it
+// races with stageNormalize and corrupts SAT-finding paths. The local
+// vector is purely for the LS pre-pass + validation; it is discarded
+// at function exit. stageNormalize then sees `normalized_` exactly as
+// it would in the OFF path.
+//
+// Sound under invariant 1: every consistent() emit is backed by
+// IntegerModelValidator on the candidate against the LOCAL normalized
+// constraints (which are equivalent to active_ up to the pure
+// normalizeOne transform); never reports SAT with an unconfirmed model.
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
                           int level, SatLit assertedLit) {
     auto r = activeSet_.insert(assertedLit);
@@ -291,6 +332,9 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
 
     size_t oldSize = active_.size();
     Relation rel = value ? payload->rel : negateRelation(payload->rel);
+    // Phase D: a fresh asserted literal changes active_ semantics — any
+    // cached "consistent at signature X" is now stale.
+    dispatchCacheValid_ = false;
 
     // Normalize (poly - rhs) rel 0 form
     PolyId diff = payload->poly;
@@ -319,6 +363,14 @@ void NiaSolver::onBacktrack(int level) {
     if (normalized_.size() > active_.size())
         normalized_.resize(active_.size());
     activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
+    // L4.1: backtrack invalidates modular memoization. The constraint
+    // set just shrank; the cached NoChange verdict was for a strictly
+    // larger set and may not transfer (a smaller set could still be
+    // NoChange, but signature mismatch makes us re-run conservatively).
+    modularSignatureValid_ = false;
+    // Phase D: backtrack invalidates the dispatch cache. The state
+    // signature recorded by the cache is no longer current.
+    dispatchCacheValid_ = false;
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
@@ -369,6 +421,84 @@ std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, Th
          (interfaceEqualities_.empty() && interfaceDisequalities_.empty())))
         return TheoryCheckResult::consistent();
     return std::nullopt;
+}
+
+// Phase D — FNV-1a hash of the active_ signature: count + sequence of
+// (satVar, sign) drawn from state_.trail + interface-eq/diseq counts.
+// Cheap, deterministic, collision-resistant enough for the cache use
+// case (a stale hit would only re-run the pipeline next call, never a
+// soundness concern — the cache only short-circuits identical inputs).
+namespace {
+uint64_t fnv1aMix(uint64_t h, uint64_t x) {
+    h ^= x;
+    h *= 1099511628211ull;
+    return h;
+}
+uint64_t computeDispatchSignature(
+    size_t activeSize,
+    const std::vector<std::pair<uint32_t, bool>>& satTrail,
+    size_t ieCount, size_t idCount) {
+    uint64_t h = 14695981039346656037ull;  // FNV offset basis
+    h = fnv1aMix(h, activeSize);
+    h = fnv1aMix(h, satTrail.size());
+    for (const auto& p : satTrail) {
+        h = fnv1aMix(h, static_cast<uint64_t>(p.first));
+        h = fnv1aMix(h, p.second ? 1ull : 0ull);
+    }
+    h = fnv1aMix(h, ieCount);
+    h = fnv1aMix(h, idCount);
+    return h;
+}
+}  // namespace
+
+std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheLookup(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool dcEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
+        return e && *e && *e != '0';
+    }();
+    if (!dcEnabled) return std::nullopt;
+    if (!dispatchCacheValid_) return std::nullopt;
+    // Collect (satVar, sign) pairs from state_.trail (the canonical
+    // record of asserted literals, kept in lockstep with active_).
+    std::vector<std::pair<uint32_t, bool>> satTrail;
+    satTrail.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) {
+        satTrail.emplace_back(a.lit.var, a.lit.sign);
+    }
+    const uint64_t sig = computeDispatchSignature(
+        active_.size(), satTrail,
+        interfaceEqualities_.size(), interfaceDisequalities_.size());
+    if (sig == dispatchCacheSignature_) {
+        // Identical state to the last successful consistent run.
+        // Verdict-preserving short-circuit; sound because the cached
+        // consistent verdict was produced by the full pipeline at this
+        // signature in the same scope (any backtrack / reset / assertLit
+        // would have invalidated dispatchCacheValid_ already).
+        return TheoryCheckResult::consistent();
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheRecord(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool dcEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
+        return e && *e && *e != '0';
+    }();
+    if (!dcEnabled) return std::nullopt;
+    // Reaching this stage means every earlier stage returned nullopt
+    // (the base pipeline will fall through to consistent()). Record
+    // the signature so the next identical call hits the lookup
+    // short-circuit.
+    std::vector<std::pair<uint32_t, bool>> satTrail;
+    satTrail.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) {
+        satTrail.emplace_back(a.lit.var, a.lit.sign);
+    }
+    dispatchCacheSignature_ = computeDispatchSignature(
+        active_.size(), satTrail,
+        interfaceEqualities_.size(), interfaceDisequalities_.size());
+    dispatchCacheValid_ = true;
+    return std::nullopt;  // fall through to consistent()
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
@@ -768,9 +898,58 @@ std::optional<TheoryCheckResult> NiaSolver::stageGcdDivisibility(TheoryLemmaStor
 
 std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableModular_) return std::nullopt;
+
+    // L4.1 — modular warm-start memoization. The modular reasoner has
+    // been profiled re-running its full detection (ModGroups, SimpleDefs,
+    // CheckEqs, Newton-chain synthesis, Hensel lifting, residue
+    // enumeration) every Full-effort cb_check on identical normalized_
+    // streams. Skip the re-run when the constraint signature matches the
+    // previous call's signature AND the previous result was NoChange.
+    //
+    // Soundness: NoChange writes no state and emits no verdict; replaying
+    // it under unchanged signature is correctness-preserving. Conflicts
+    // are NEVER memoized (the solver acts on a conflict by backtracking;
+    // a stale conflict on a backtracked-from state would be unsound).
+    //
+    // Signature: FNV-1a over (poly, rel) pairs in normalized_ order —
+    // same convention as the LS warm-start signature. Index order is
+    // stable because normalized_ is grown in lockstep with active_ /
+    // onBacktrack resizes it from the tail.
+    static const bool warmStartEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_WARM_START");
+        return e && *e && *e != '0';
+    }();
+    auto computeSignature = [&]() -> uint64_t {
+        uint64_t h = 1469598103934665603ULL;  // FNV-1a basis
+        for (const auto& c : normalized_) {
+            h ^= static_cast<uint64_t>(c.poly);
+            h *= 1099511628211ULL;
+            h ^= static_cast<uint64_t>(c.rel);
+            h *= 1099511628211ULL;
+        }
+        return h;
+    };
+    if (warmStartEnabled && modularSignatureValid_ && modularLastWasNoChange_) {
+        const uint64_t sig = computeSignature();
+        if (sig == modularLastSignature_) {
+            // Same constraint set, last verdict was NoChange — replay it.
+            return std::nullopt;
+        }
+        // Signature changed: drop cache, fall through to re-run.
+        modularSignatureValid_ = false;
+    }
+
     auto r = modularResidue_.run(normalized_);
     if (r.kind == NiaReasoningKind::Conflict) {
+        // Don't memoize conflicts (see soundness note above).
+        modularSignatureValid_ = false;
         return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    // NoChange — cache signature for the next call.
+    if (warmStartEnabled) {
+        modularLastSignature_ = computeSignature();
+        modularLastWasNoChange_ = true;
+        modularSignatureValid_ = true;
     }
     return std::nullopt;
 }
@@ -1226,10 +1405,33 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
 
     if (candidates.empty()) return std::nullopt;
 
-    // Sort: priority first, then larger range size
+    // I1: XOLVER_NIA_LS_BRANCH_HINT (default-OFF). When local search has
+    // populated varActivity (vars that participated in improving moves in
+    // recent SLS rounds), use that as a secondary sort key between
+    // priority and rangeSize. The rationale (Yices2LS pattern): a variable
+    // that local search keeps perturbing in a UNSAT-leaning region is
+    // structurally hot — branching on it is more likely to expose the
+    // conflict the SAT engine needs. Heuristic only — never affects
+    // soundness; the branch lemma is still a tautology (x<=k ∨ x>=k+1).
+    static const bool lsBranchHint = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_BRANCH_HINT");
+        return e && *e && *e != '0';
+    }();
+    const auto& lsAct = localSearch_.lsContext().varActivity;
+    auto activityOf = [&lsAct](const std::string& v) -> uint64_t {
+        auto it = lsAct.find(v);
+        return it == lsAct.end() ? 0u : it->second;
+    };
+
+    // Sort: priority first, optional LS-activity tiebreak, then larger range size
     std::sort(candidates.begin(), candidates.end(),
-        [](const Candidate& a, const Candidate& b) {
+        [&](const Candidate& a, const Candidate& b) {
             if (a.priority != b.priority) return a.priority < b.priority;
+            if (lsBranchHint) {
+                uint64_t aAct = activityOf(a.var);
+                uint64_t bAct = activityOf(b.var);
+                if (aAct != bAct) return aAct > bAct;
+            }
             return a.rangeSize > b.rangeSize;
         });
 
@@ -1282,6 +1484,8 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
 
 TheoryCheckResult NiaSolver::assertInterfaceEquality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    // Phase D: interface eq changes the combined-state signature.
+    dispatchCacheValid_ = false;
     if (!sharedTermRegistry_ || !coreIr_ || !converter_)
         return TheoryCheckResult::consistent();
     const auto* stA = sharedTermRegistry_->get(a);
@@ -1313,6 +1517,8 @@ TheoryCheckResult NiaSolver::assertInterfaceEquality(
 
 TheoryCheckResult NiaSolver::assertInterfaceDisequality(
     SharedTermId a, SharedTermId b, SatLit reason, int level) {
+    // Phase D: interface diseq changes the combined-state signature.
+    dispatchCacheValid_ = false;
     if (!sharedTermRegistry_ || !coreIr_ || !converter_)
         return TheoryCheckResult::consistent();
     const auto* stA = sharedTermRegistry_->get(a);

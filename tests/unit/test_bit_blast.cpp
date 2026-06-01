@@ -427,3 +427,102 @@ TEST_CASE("NiaSolver: bit-blast stage registered between bounded and local-searc
     CHECK(bd < bb);    // after bounded
     CHECK(bb < ls);    // before local-search
 }
+
+// Phase D: dispatch-cache stages are present at the FRONT (after pending)
+// and at the TAIL (before branch). Default-OFF flag XOLVER_NIA_DISPATCH_CACHE
+// gates their behaviour; registration order is unconditional so we can pin
+// the pipeline shape here.
+TEST_CASE("NiaSolver D: dispatch-cache stages registered at front + tail") {
+    auto kernel = createPolynomialKernel();
+    NiaSolver solver(std::move(kernel));
+    auto names = solver.reasonerNames();
+    auto pend = std::find(names.begin(), names.end(), "nia.pending");
+    auto dcL  = std::find(names.begin(), names.end(), "nia.dispatch-cache");
+    auto norm = std::find(names.begin(), names.end(), "nia.normalize");
+    auto dcR  = std::find(names.begin(), names.end(), "nia.dispatch-cache-record");
+    auto br   = std::find(names.begin(), names.end(), "nia.branch");
+    REQUIRE(pend != names.end());
+    REQUIRE(dcL  != names.end());
+    REQUIRE(norm != names.end());
+    REQUIRE(dcR  != names.end());
+    REQUIRE(br   != names.end());
+    CHECK(pend < dcL);     // pending first
+    CHECK(dcL  < norm);    // lookup BEFORE normalize
+    CHECK(dcR  < br);      // record BEFORE branch (tail stage)
+    // Record must be after every regular reasoner — at minimum after
+    // bounded / local-search / bit-blast.
+    auto bd = std::find(names.begin(), names.end(), "nia.bounded");
+    auto bb = std::find(names.begin(), names.end(), "nia.bit-blast");
+    auto ls = std::find(names.begin(), names.end(), "nia.local-search");
+    CHECK(bd < dcR);
+    CHECK(bb < dcR);
+    CHECK(ls < dcR);
+}
+
+// I3: per-cluster bit-blast budget — env knobs that mirror the existing
+// setters, so a caller (eg. a wrapper script tuning per-cluster) can adjust
+// budget without recompiling. Defaults remain unchanged.
+//
+// These tests pin the env-read contract by setting the env vars BEFORE
+// constructing the solver and confirming the solver respects them via a
+// behavioural proxy (smaller maxIters => smaller-budget unbounded UNSAT path
+// still returns Unknown; smaller maxBW => contiguous box only narrows).
+TEST_CASE("BitBlastSolver I3: XOLVER_NIA_BITBLAST_MAX_ITERS honored") {
+    setenv("XOLVER_NIA_BITBLAST_MAX_ITERS", "1", 1);
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    PolyId p = kernel->sub(kernel->pow(kernel->mkVar(vx), 2), kernel->mkConst(2));
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{200, true}}};
+    DomainStore d;   // unbounded
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    // With maxIters=1, the unbounded loop runs at most 1 K-stage and returns
+    // Unknown (no SAT model in width 2). Verdict-preservation: still Unknown,
+    // never an unsoundness from the cap.
+    CHECK(r.status == bitblast::BitBlastResult::Status::Unknown);
+    unsetenv("XOLVER_NIA_BITBLAST_MAX_ITERS");
+}
+
+TEST_CASE("BitBlastSolver I3: XOLVER_NIA_BITBLAST_MAX_BITWIDTH clamps width plan") {
+    setenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH", "8", 1);
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId p = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{300, true}}};
+    DomainStore d;
+    for (auto n : {"x","y"}) {
+        d.addLowerBound(n, mpz_class(1), SatLit{301,true});
+        d.addUpperBound(n, mpz_class(6), SatLit{302,true});
+    }
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);   // env clamps maxBW to 8 (default 128)
+    auto r = solver.solve(cs, d, validator);
+    // x*y=6 with x,y in [1,6] fits comfortably in 8 bits; still SAT.
+    CHECK(r.status == bitblast::BitBlastResult::Status::Sat);
+    unsetenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH");
+}
+
+TEST_CASE("BitBlastSolver I3: env clamps refuse invalid values") {
+    // Out-of-range or non-numeric -> ignored, default kept.
+    setenv("XOLVER_NIA_BITBLAST_MAX_ITERS", "9999", 1);   // > 64 cap
+    setenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH", "4", 1);  // < 8 lower bound
+    auto kernel = createPolynomialKernel();
+    VarId vx = kernel->getOrCreateVar("x");
+    VarId vy = kernel->getOrCreateVar("y");
+    PolyId p = kernel->sub(kernel->mul(kernel->mkVar(vx), kernel->mkVar(vy)), kernel->mkConst(6));
+    std::vector<NormalizedNiaConstraint> cs{{p, Relation::Eq, SatLit{400, true}}};
+    DomainStore d;
+    for (auto n : {"x","y"}) {
+        d.addLowerBound(n, mpz_class(1), SatLit{401,true});
+        d.addUpperBound(n, mpz_class(6), SatLit{402,true});
+    }
+    IntegerModelValidator validator(*kernel);
+    bitblast::BitBlastSolver solver(*kernel);
+    auto r = solver.solve(cs, d, validator);
+    // With invalid env values, defaults are kept and x*y=6 in [1,6] is SAT.
+    CHECK(r.status == bitblast::BitBlastResult::Status::Sat);
+    unsetenv("XOLVER_NIA_BITBLAST_MAX_ITERS");
+    unsetenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH");
+}

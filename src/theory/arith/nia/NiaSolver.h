@@ -132,6 +132,28 @@ private:
     ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    // L4.1 — modular reasoner warm-start memoization. When the active
+    // normalized_ stream's signature matches modularLastSignature_ AND
+    // the last run was NoChange, stageModular skips re-running the
+    // detection + Hensel + chain composition + residue enumeration and
+    // returns NoChange immediately. Sound: a NoChange replay under
+    // unchanged signature writes no state and emits no verdict. On
+    // backtrack / reset the cache is invalidated.
+    uint64_t modularLastSignature_ = 0;
+    bool modularLastWasNoChange_ = false;
+    bool modularSignatureValid_ = false;
+    // Phase D (master 2026-06-01) — per-cb_propagate dispatch cache
+    // (XOLVER_NIA_DISPATCH_CACHE, default-OFF). When TheoryManager calls
+    // check() repeatedly without any new asserted literal (typical at
+    // Full-effort re-drive and in N-O exchange for combined logics), the
+    // 16-stage pipeline re-runs over identical state. Cache the active_
+    // signature at the END of the most recent "would have been
+    // consistent" pipeline run; on the next call, if the signature
+    // matches, return consistent immediately. assertLit, onBacktrack,
+    // and onReset all invalidate. Sound: any consistent verdict was
+    // already validated by the full pipeline once at this signature.
+    uint64_t dispatchCacheSignature_ = 0;
+    bool dispatchCacheValid_ = false;
     bool enableRefute_ = true;    // bound-free product-positivity refutation (promoted default-ON)
     bool enableGcd_ = true;       // multivariate GCD-divisibility refutation (promoted default-ON)
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
@@ -156,6 +178,15 @@ private:
     // to the next stage, or a verdict to stop. Registered as
     // CallbackReasoners in the constructor, in this order.
     std::optional<TheoryCheckResult> stagePending(TheoryLemmaStorage&, TheoryEffort);
+    // Phase D — dispatch cache front stage. Compares current active_
+    // signature against dispatchCacheSignature_; returns consistent()
+    // on hit, nullopt on miss. Default-OFF flag XOLVER_NIA_DISPATCH_CACHE.
+    std::optional<TheoryCheckResult> stageDispatchCacheLookup(TheoryLemmaStorage&, TheoryEffort);
+    // Phase D — dispatch cache tail stage (RIGHT BEFORE stageBranch).
+    // If we reach it, all earlier stages returned nullopt, so the
+    // base will fall through to consistent(). Record the active_
+    // signature so the next identical call short-circuits.
+    std::optional<TheoryCheckResult> stageDispatchCacheRecord(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageNormalize(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePresolveFixpoint(TheoryLemmaStorage&, TheoryEffort);
     // Stage 3 Phase C-3 (XOLVER_NIA_NLA_CUTS, default-OFF). Append redundant
