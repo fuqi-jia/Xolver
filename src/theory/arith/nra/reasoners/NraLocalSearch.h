@@ -21,6 +21,7 @@
 // re-validate against original assertions before SAT is reported.
 
 #include "expr/types.h"
+#include "theory/arith/poly/PolynomialKernel.h"   // LS-C: MonomialTerm in termsCache_
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include <gmpxx.h>
@@ -41,6 +42,7 @@ public:
     };
 
     NraLocalSearch(PolynomialKernel& kernel) : kernel_(kernel) {}
+    ~NraLocalSearch();   // LS-C: env-gated cache-stats dump (XOLVER_NRA_LS_STATS)
 
     // Wall-clock budget in ms (XOLVER_NRA_LS_BUDGET_MS). 0 or negative = unlimited.
     void setBudgetMs(long ms) { budgetMs_ = ms; }
@@ -67,6 +69,19 @@ private:
     bool eqRelax_ = false;
     mpq_class epsilon_{1, 1024};
     const mpq_class kZero_{0};   // sentinel for missing var lookups
+
+    // Phase NRA-LS-C — incremental boundary score cache. evalAt and scaleAt
+    // are called per (constraint × candidate × round); without caching, each
+    // call rebuilds the same RP from PolyId or re-extracts the kernel terms
+    // for an immutable poly. The two caches live on the LS instance (kernel
+    // outlives them; entries are valid for the kernel's lifetime). Mutable
+    // because evalAt/scaleAt/totalScore are const methods.
+    mutable std::unordered_map<PolyId, RationalPolynomial> rpCache_;
+    mutable std::unordered_map<PolyId, std::vector<PolynomialKernel::MonomialTerm>> termsCache_;
+    mutable uint64_t evalCacheHits_ = 0;
+    mutable uint64_t evalCacheMisses_ = 0;
+    mutable uint64_t scaleCacheHits_ = 0;
+    mutable uint64_t scaleCacheMisses_ = 0;
 
     // Evaluate poly at a rational assignment → exact mpq value (NaN-safe: if a
     // variable is missing from `asg`, defaults to 0; if the result isn't a

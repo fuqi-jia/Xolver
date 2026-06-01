@@ -3,16 +3,42 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 
 namespace xolver {
 
+NraLocalSearch::~NraLocalSearch() {
+    // LS-C: env-gated stats dump for cache hit-rate sanity. Default no-op.
+    if (std::getenv("XOLVER_NRA_LS_STATS") == nullptr) return;
+    const uint64_t evalTotal  = evalCacheHits_  + evalCacheMisses_;
+    const uint64_t scaleTotal = scaleCacheHits_ + scaleCacheMisses_;
+    const double evalRate  = evalTotal  ? 100.0 * static_cast<double>(evalCacheHits_)  / static_cast<double>(evalTotal)  : 0.0;
+    const double scaleRate = scaleTotal ? 100.0 * static_cast<double>(scaleCacheHits_) / static_cast<double>(scaleTotal) : 0.0;
+    std::fprintf(stderr,
+        "[XOLVER_NRA_LS_STATS] evalAt: hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | scaleAt: hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu\n",
+        (unsigned long long)evalCacheHits_,  (unsigned long long)evalCacheMisses_,  evalRate,  rpCache_.size(),
+        (unsigned long long)scaleCacheHits_, (unsigned long long)scaleCacheMisses_, scaleRate, termsCache_.size());
+}
+
 std::optional<mpq_class>
 NraLocalSearch::evalAt(PolyId p,
                        const std::unordered_map<VarId, mpq_class>& asg) const {
-    auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
-    if (!rpOpt) return std::nullopt;
-    RationalPolynomial cur = std::move(*rpOpt);
+    // LS-C: cache PolyId → RationalPolynomial. fromPolyId rebuilds the RP from
+    // the immutable kernel pool every call without it. Cache hit = O(1) lookup,
+    // miss = pay fromPolyId once and store. We then COPY the cached RP because
+    // substituteRational below mutates `cur` toward the constant.
+    auto cIt = rpCache_.find(p);
+    if (cIt == rpCache_.end()) {
+        ++evalCacheMisses_;
+        auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
+        if (!rpOpt) return std::nullopt;
+        cIt = rpCache_.emplace(p, std::move(*rpOpt)).first;
+    } else {
+        ++evalCacheHits_;
+    }
+    RationalPolynomial cur = cIt->second;          // copy — substitution mutates
     static const mpq_class kZero{0};
     auto varSet = cur.variables();
     std::vector<VarId> vs(varSet.begin(), varSet.end());
@@ -70,10 +96,24 @@ NraLocalSearch::scaleAt(PolyId p,
                         const std::unordered_map<VarId, mpq_class>& asg) const {
     // scale(p, α) = 1 + Σ_m |c_m| · |m(α)|
     // m(α) = ∏_{v in m} α[v]^{e_v}; if any var is missing from asg, defaults to 0.
-    auto termsOpt = kernel_.terms(p);
-    if (!termsOpt) return mpq_class{1};
+    //
+    // LS-C: cache PolyId → kernel.terms(). terms() is canonical for an
+    // immutable PolyId so the result never changes. The per-asg loop below
+    // still runs every call (it depends on asg) but it iterates a cached
+    // term vector instead of one freshly extracted from libpoly each time.
+    const std::vector<PolynomialKernel::MonomialTerm>* termsPtr = nullptr;
+    auto cIt = termsCache_.find(p);
+    if (cIt == termsCache_.end()) {
+        ++scaleCacheMisses_;
+        auto termsOpt = kernel_.terms(p);
+        if (!termsOpt) return mpq_class{1};
+        cIt = termsCache_.emplace(p, std::move(*termsOpt)).first;
+    } else {
+        ++scaleCacheHits_;
+    }
+    termsPtr = &cIt->second;
     mpq_class scale{1};
-    for (const auto& t : *termsOpt) {
+    for (const auto& t : *termsPtr) {
         if (t.coefficient == 0) continue;
         mpq_class mAbs{1};
         bool zeroTerm = false;
