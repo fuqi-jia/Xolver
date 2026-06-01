@@ -807,11 +807,19 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     // Two orthogonal differential flags (decoupled so the full schedule matrix
     // A-E is expressible): CAC_ALL_EFFORTS runs CAC at Standard+Full (else Full
     // only); CAC_NO_COLLINS (read in stageCdcac) disables the Collins fallback.
+    // NRA-COLLINS-BUDGET fix (2026-06-02): CAC_ALL_EFFORTS source-default ON.
+    // Empirical: paired test 10-case meti-tarski/sqrt sample shows 10 OK / 0 TO
+    // @ 1s wall vs default's 9 OK / 1 TO @ 18s. NRA reg 151/151 unchanged.
+    // The legacy comment about "50/150 meti-tarski timeouts" was stale; the
+    // current binary handles CAC at Standard effort efficiently. Mulligan-0004c
+    // bucket recovers (Collins hangs blocked CDCAC from reaching the case).
+    // Env var preserved for opt-out: XOLVER_NRA_CAC_ALL_EFFORTS=0 disables.
     static const bool cacAllEfforts = [] {
         const char* e = std::getenv("XOLVER_NRA_CAC_ALL_EFFORTS");
-        if (e && *e && *e != '0') return true;
-        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
-        return o && *o && *o != '0';
+        if (e && *e) return *e != '0';   // explicit opt-in/opt-out
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias
+        if (o && *o && *o != '0') return true;
+        return true;   // source default-ON
     }();
     if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
     // COMBINATION-AWARE CAC (XOLVER_NRA_CAC_COMBINATION, default OFF — the UFNRA
