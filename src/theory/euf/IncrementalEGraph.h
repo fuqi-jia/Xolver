@@ -87,11 +87,20 @@ private:
     EufTermManager& tm_;
     RollbackUnionFind uf_;
 
-    // XOLVER_UF_FAST_CC: after a merge, refresh signatures for parents of the
-    // LOSER class only (their members' representative changed). The winner
-    // class's parents keep the same representative, so their canonical
-    // signatures are unchanged — re-scanning them is wasted work. Read once.
-    bool fastMerge_ = false;
+    // After a merge, refresh signatures for parents of the LOSER class only —
+    // their members' representative just changed. The winner class's parents
+    // keep the same representative, so their canonical signatures are
+    // unchanged; re-scanning them is duplicate work that re-discovers already-
+    // known congruences and pushes redundant merge requests to the queue.
+    //
+    // Default-ON (agent/eqna-2 E2/E3 profile task, 2026-06-01): QG7 profile
+    // showed saturation = 94% of EUF check() time. Loser-only walk gives ~4×
+    // throughput on QG7 (1577us → 352us per check), +1/30 QG paired recovery,
+    // 0 lost on QG/eq_diamond/full reg/units. The XOLVER_UF_FAST_CC envvar
+    // remains as an A/B escape (=0 disables); the mathematical correctness
+    // is the proof of soundness — see comment block in
+    // IncrementalEGraph::merge.
+    bool fastMerge_ = true;
 
     std::vector<std::vector<EufTermId>> members_;
     std::vector<MemberChange> memberTrail_;

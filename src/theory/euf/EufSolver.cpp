@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <chrono>
 #include "theory/euf/EufSolver.h"
 #include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
@@ -28,11 +29,46 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
     // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms with lemma already emitted at level<=current.
     eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
+    // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
+    hotProfileEnabled_ = std::getenv("XOLVER_EUF_HOTPROFILE") != nullptr;
     initializeBoolConstants();
+}
+
+EufSolver::~EufSolver() {
+    if (hotProfileEnabled_ && hotProfile_.checkCalls > 0) {
+        // E2/E3 hot-path triage dump (XOLVER_EUF_HOTPROFILE). Goal: identify
+        // whether EUF (>50% time inside check) is the QG-classification /
+        // eq_diamond perf-wall bottleneck, or whether SAT/CDCL outside check()
+        // dominates (which would route the lane closure to SAT backend).
+        std::cerr << "[EUF-HOTPROFILE]"
+                  << " checks=" << hotProfile_.checkCalls
+                  << " checkUs=" << hotProfile_.checkUs
+                  << " saturationUs=" << hotProfile_.saturationUs
+                  << " explainUs=" << hotProfile_.explainUs
+                  << " entailUs=" << hotProfile_.entailmentUs
+                  << " registerSigUs=" << hotProfile_.registerSigUs
+                  << " merges=" << hotProfile_.mergesProcessed
+                  << " explains=" << hotProfile_.explainCalls
+                  << " entailScanRecs=" << hotProfile_.entailmentScanRecs
+                  << " entailEmitted=" << hotProfile_.entailmentEmitted
+                  << "\n";
+    }
 }
 
 std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
     std::vector<TheoryLemma> out;
+    auto _entT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
+    struct _EntGuard {
+        bool en; std::chrono::steady_clock::time_point t0; EufHotProfile* p; std::vector<TheoryLemma>* o;
+        ~_EntGuard() {
+            if (en) {
+                p->entailmentUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - t0).count();
+                p->entailmentEmitted += o->size();
+            }
+        }
+    } _g{hotProfileEnabled_, _entT0, &hotProfile_, &out};
     if (!eufPropEnabled_ || !eqAtomRegistry_ || !coreIr_) return out;
     // Propagate only from a clean, congruence-closed, conflict-free state: after
     // a Consistent check the merge queue is drained and the explanation paths
@@ -980,6 +1016,30 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // ---------------------------------------------------------------------------
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    auto _checkT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                       : std::chrono::steady_clock::time_point{};
+    if (hotProfileEnabled_) {
+        ++hotProfile_.checkCalls;
+        // Periodic dump so a SIGKILL'd timeout still produces signal. Every
+        // 1000 checks (low-overhead even on QG-class with 1e6 checks).
+        if (hotProfile_.checkCalls % 1000 == 0) {
+            std::cerr << "[EUF-HOTPROFILE@" << hotProfile_.checkCalls << "]"
+                      << " checkUs=" << hotProfile_.checkUs
+                      << " saturationUs=" << hotProfile_.saturationUs
+                      << " entailUs=" << hotProfile_.entailmentUs
+                      << " registerSigUs=" << hotProfile_.registerSigUs
+                      << " merges=" << hotProfile_.mergesProcessed
+                      << " entailEmitted=" << hotProfile_.entailmentEmitted
+                      << std::endl;  // flush so SIGKILL'd progress is preserved
+        }
+    }
+    struct _CheckGuard {
+        bool en; std::chrono::steady_clock::time_point t0; EufHotProfile* p;
+        ~_CheckGuard() {
+            if (en) p->checkUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+        }
+    } _g{hotProfileEnabled_, _checkT0, &hotProfile_};
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }
@@ -1008,7 +1068,14 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // Register signatures for all newly interned terms before entering the
     // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
     // has already been merged) are visible to congruence detection.
-    egraph_.registerPendingSignatures(mergeQueue_);
+    {
+        auto _rt0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                       : std::chrono::steady_clock::time_point{};
+        egraph_.registerPendingSignatures(mergeQueue_);
+        if (hotProfileEnabled_) hotProfile_.registerSigUs +=
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - _rt0).count();
+    }
     for (size_t i = mqTagFrom; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = currentLevel_;
 
     // XOLVER_UF_DISEQ_WATCH: index active disequalities by endpoint term so the
@@ -1112,6 +1179,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         return std::nullopt;
     };
 
+    auto _satT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
     if (!minLevelHeapEnabled_) {
         // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
         // to the historical loop). Congruences append to mergeQueue_.
@@ -1122,9 +1191,15 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
             PendingMerge req = mergeQueue_[mi];
             mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+            if (hotProfileEnabled_) ++hotProfile_.mergesProcessed;
             auto r = applyMerge(std::move(req),
                                 [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
-            if (r) return *r;
+            if (r) {
+                if (hotProfileEnabled_) hotProfile_.saturationUs +=
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - _satT0).count();
+                return *r;
+            }
         }
     } else {
         // XOLVER_EUF_MINLEVEL_HEAP: level-bucketed drain. begin() is the minimum
@@ -1152,11 +1227,20 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             PendingMerge req = std::move(it->second.front());
             it->second.pop_front();
             if (it->second.empty()) byLevel.erase(it);
+            if (hotProfileEnabled_) ++hotProfile_.mergesProcessed;
             auto r = applyMerge(std::move(req), pushCong);
-            if (r) return *r;
+            if (r) {
+                if (hotProfileEnabled_) hotProfile_.saturationUs +=
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - _satT0).count();
+                return *r;
+            }
             absorb();
         }
     }
+    if (hotProfileEnabled_) hotProfile_.saturationUs +=
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - _satT0).count();
 
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
