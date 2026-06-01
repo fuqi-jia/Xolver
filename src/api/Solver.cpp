@@ -205,6 +205,26 @@ public:
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
+        // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
+        // verdict so a floored array sat can be root-caused (which assertion,
+        // which interp). Never affects the verdict.
+        if (std::getenv("XOLVER_DIAG_AM")) {
+            std::cerr << "[DIAG_AM] arrayInterps (" << lastModel_->arrayInterps.size() << "):\n";
+            for (const auto& [nm, ai] : lastModel_->arrayInterps) {
+                std::cerr << "  " << nm << " deflt=" << ai.defaultVal
+                          << " entries=" << ai.entries.size() << ": ";
+                for (const auto& [i, v] : ai.entries) std::cerr << "[" << i << "->" << v << "]";
+                std::cerr << "\n";
+            }
+            std::cerr << "[DIAG_AM] scalar tokens: ";
+            for (const auto& [nm, val] : lastModel_->assignments) std::cerr << nm << "=" << val << " ";
+            std::cerr << "\n";
+            for (size_t ai = 0; ai < originalAssertions_.size(); ++ai) {
+                auto vd = validator.validate({originalAssertions_[ai]});
+                if (vd == ArithModelValidator::Verdict::Violated)
+                    std::cerr << "[DIAG_AM] VIOLATED assertion #" << ai << "\n";
+            }
+        }
         return validator.validate(originalAssertions_)
                == ArithModelValidator::Verdict::Violated;
     }
