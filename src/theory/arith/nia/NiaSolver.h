@@ -222,16 +222,19 @@ private:
     std::vector<InterfaceEq> interfaceEqualities_;
     std::vector<InterfaceEq> interfaceDisequalities_;
 
-    // XOLVER_NIA_IFACE_LIFECYCLE (read once in ctor): when set, Nelson-Oppen
-    // interface (dis)equalities are kept out of active_/trail_/activeSet_ and
-    // are instead merged into the constraint set at stageNormalize, with a
-    // level-correct remove_if backtrack and a full clear on a level-0 reset.
-    // Fixes the false "opposite polarity" Unknown that aborted QF_UFNIA/QF_ANIA
-    // model checks: interface eqs asserted during check() (after the ascending
-    // re-assert loop) made trail_ non-monotonic, so onBacktrack's back-pop left
-    // stale entries that polluted activeSet_ via rebuildFromActive, and level-0
-    // interface eqs accumulated across the many Full-effort model checks.
-    bool ifaceLifecycleEnabled_ = false;
+    // XOLVER_NIA_IFACE_LIFECYCLE (default-ON since 2026-06-02 COMB-1 audit):
+    // Nelson-Oppen interface (dis)equalities are kept out of active_/trail_/
+    // activeSet_ and instead merged into the constraint set at stageNormalize,
+    // with a level-correct remove_if backtrack and a full clear on a level-0
+    // reset. Fixes the false "opposite polarity" Unknown that aborted
+    // QF_UFNIA/QF_ANIA model checks: interface eqs asserted during check()
+    // (after the ascending re-assert loop) made trail_ non-monotonic, so
+    // onBacktrack's back-pop left stale entries that polluted activeSet_ via
+    // rebuildFromActive, and level-0 interface eqs accumulated across the many
+    // Full-effort model checks. Verified 0 unsound on 191 cases (100 uniform
+    // QF_UFNIA + 91 Zohar) with +recovery direction. A/B escape:
+    // XOLVER_NIA_IFACE_LIFECYCLE=0 disables.
+    bool ifaceLifecycleEnabled_ = true;
 
     struct BranchSplitKey {
         std::string var;
