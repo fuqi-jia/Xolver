@@ -8,6 +8,7 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
+#include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
 #include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
@@ -150,6 +151,19 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
     // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
     // guard removed (no env string in binary). Pre-promotion baseline lived
     // at commit eff76fa; master GREEN-LIT on Task I polypaver +9pp data.
+
+    // Task NRA-HYB Step 1: optional partition-stats dump. Report-only;
+    // does not modify solver state. One-shot per solve (first check entry).
+    static thread_local int hybStatsLastDumpedSize = -1;
+    if (std::getenv("XOLVER_NRA_HYB_PARTITION_STATS") &&
+        static_cast<int>(presolveConstraints_.size()) != hybStatsLastDumpedSize) {
+        std::vector<PolyId> activePolys;
+        activePolys.reserve(presolveConstraints_.size());
+        for (const auto& c : presolveConstraints_) activePolys.push_back(c.poly);
+        const auto partition = computePartition(activePolys, *kernel_);
+        maybeDumpPartitionReport(partition);
+        hybStatsLastDumpedSize = static_cast<int>(presolveConstraints_.size());
+    }
 
     // Helper: exact-validate a rational assignment against every active
     // polynomial constraint via the kernel sign.
