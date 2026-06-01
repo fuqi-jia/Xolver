@@ -165,6 +165,18 @@ public:
     // formula; the pinned move-skip only affects LS heuristic, never
     // verdict (every Sat is still validator-gated).
     void setPinEq(bool e) { pinEq_ = e; }
+    // LS-VM3 (master 2026-06-02). When LS plateaus across K consecutive
+    // restarts (cost minimum doesn't improve), break out early and run
+    // a CHEAP coefficient-GCD modular check on the equality atoms. If
+    // any `c*x*y + ... + k = 0` atom has gcd(coefficients) ∤ k, the
+    // atom (and hence the formula) has no integer solution — but LS
+    // alone cannot soundly claim UNSAT, so the check is informational
+    // and just lets us exit LS sooner (saving budget for upstream
+    // engines and/or downstream stages that DO emit UNSAT verdicts).
+    // The early exit also helps UNSAT-leaning cases where LS would
+    // otherwise burn all restarts to no avail. XOLVER_NIA_LS_MODULAR_ESCALATE
+    // default-OFF. Sound: LS still never claims UNSAT.
+    void setModularEscalate(bool e) { modularEscalate_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -189,6 +201,7 @@ private:
     bool bilinearPair_ = false;
     bool bilinearSubst_ = false;
     bool pinEq_ = false;
+    bool modularEscalate_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

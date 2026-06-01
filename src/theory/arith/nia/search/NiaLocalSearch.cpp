@@ -74,6 +74,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_PIN_EQ"); e && *e && *e != '0') {
         pinEq_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_MODULAR_ESCALATE"); e && *e && *e != '0') {
+        modularEscalate_ = true;
+    }
 }
 
 // Integer square root (floor). Used by multi-scale step to generate
@@ -1445,6 +1448,77 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     auto& w = lsContext_.clauseWeight[hashConstraint(constraints[i])];
                     if (weight[i] > w) w = weight[i];
                 }
+            }
+        }
+
+        // LS-VM3 (master 2026-06-02): plateau-detect early exit.
+        // Track the best cost seen across restarts. After K consecutive
+        // restarts with no improvement on bestOverallCost AND the
+        // bestOverallCost is non-zero, run a cheap coefficient-GCD
+        // modular check on the Eq atoms: if any `c1*v1 + c2*v2 + ... + k`
+        // has gcd(c1, c2, ...) ∤ k, the atom is integer-infeasible.
+        // LS can't soundly claim UNSAT, but the signal lets us break
+        // out early so the rest of the pipeline (e.g. modular reasoner,
+        // bit-blast UNSAT path) can decide.
+        if (modularEscalate_) {
+            // Track plateau via a simple counter on bestOverallCost
+            // re-equality across this restart's end.
+            static thread_local mpz_class lastBestCost = mpz_class(-1);
+            static thread_local int plateauCount = 0;
+            if (restart == 0) {
+                lastBestCost = mpz_class(-1);
+                plateauCount = 0;
+            }
+            if (haveBestOverall) {
+                if (lastBestCost == bestOverallCost && bestOverallCost > 0) {
+                    ++plateauCount;
+                } else {
+                    plateauCount = 0;
+                    lastBestCost = bestOverallCost;
+                }
+            }
+            if (plateauCount >= 3) {
+                // Cheap GCD-divisibility check on Eq atoms. For each Eq
+                // atom expanded to (sum of c_i * mono_i) + k = 0, compute
+                // g = gcd over all c_i. If g ∤ k, the atom has NO
+                // integer solution — strong signal the case is UNSAT.
+                // Just log + early-exit; never claim UNSAT.
+                bool infeasible = false;
+                for (const auto& c : constraints) {
+                    if (c.rel != Relation::Eq) continue;
+                    auto termsOpt = kernel_.terms(c.poly);
+                    if (!termsOpt) continue;
+                    mpz_class g = 0;
+                    mpz_class k = 0;
+                    for (const auto& t : *termsOpt) {
+                        if (t.powers.empty()) { k += t.coefficient; }
+                        else {
+                            mpz_class absC = abs(t.coefficient);
+                            if (g == 0) g = absC;
+                            else mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), absC.get_mpz_t());
+                        }
+                    }
+                    if (g > 1 && (k % g) != 0) {
+                        infeasible = true;
+                        break;
+                    }
+                }
+                static const bool diag = std::getenv("XOLVER_NIA_LS_DIAG") != nullptr;
+                if (diag) {
+                    std::fprintf(stderr,
+                        "[LS-VM3] plateau-exit restart=%d bestCost=%s infeasible=%d\n",
+                        restart, bestOverallCost.get_str().c_str(),
+                        infeasible ? 1 : 0);
+                }
+                // Whether or not modular hint flagged infeasibility,
+                // breaking the restart loop saves budget for upstream
+                // engines that DO emit UNSAT (the modular reasoner /
+                // bit-blast UNSAT path). The (void)infeasible silences
+                // an unused-variable warning when XOLVER_NIA_LS_DIAG is
+                // unset; downstream consumers may later wire it as a
+                // signal back to NiaSolver for an early pendingConflict.
+                (void)infeasible;
+                break;
             }
         }
     }
