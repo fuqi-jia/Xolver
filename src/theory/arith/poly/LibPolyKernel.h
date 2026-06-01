@@ -5,6 +5,7 @@
 #ifdef XOLVER_HAS_LIBPOLY
 
 #include <polyxx.h>
+#include <memory>           // S2 — std::unique_ptr<TpiCacheImpl>
 #include <optional>
 #include <unordered_map>
 
@@ -88,7 +89,18 @@ public:
     PolyId alloc(poly::Polynomial p);
     poly::Variable resolvePolyVar(VarId v);
 
+    // S2 (P6) — toPrimitiveInteger driver-level memoization. RationalPolynomial
+    // is forward-declared in PolynomialKernel.h to avoid pulling RP.h into
+    // every kernel consumer; the cache impl is hidden behind a pImpl pointer.
+    std::optional<std::pair<PolyId, mpq_class>>
+        tpiCacheLookup(const RationalPolynomial&) const override;
+    void tpiCacheStore(const RationalPolynomial&, PolyId, const mpq_class&) override;
+
 private:
+    struct TpiCacheImpl;                       // S2 — defined in .cpp (pImpl)
+    mutable std::unique_ptr<TpiCacheImpl> tpiCache_;
+    mutable uint64_t tpiHits_ = 0;
+    mutable uint64_t tpiMisses_ = 0;
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
 

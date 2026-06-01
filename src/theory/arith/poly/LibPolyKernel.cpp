@@ -16,21 +16,75 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <unordered_map>     // S2 — tpiCache_ map
 
 namespace xolver {
+
+// S2 (P6) — hash + equality for RationalPolynomial cache keys. Hash mixes
+// monomial-key (varId, exp) pairs with the leading mpz limbs of each rational
+// coefficient — sufficient for unordered_map bucket dispersion. Equality is
+// exact via FlatMonomialMap's operator==. O(N) per hash where N = #terms.
+namespace {
+struct RPHash {
+    size_t operator()(const RationalPolynomial& rp) const noexcept {
+        size_t h = 1469598103934665603ULL;             // FNV-1a 64 offset
+        const size_t fnvP = 1099511628211ULL;
+        for (const auto& [key, coeff] : rp.terms()) {
+            for (const auto& [v, e] : key) {
+                h ^= (static_cast<uint64_t>(v) << 16) | static_cast<uint64_t>(e);
+                h *= fnvP;
+            }
+            const mpz_srcptr num = coeff.get_num().get_mpz_t();
+            const mpz_srcptr den = coeff.get_den().get_mpz_t();
+            const int ns = num->_mp_size, ds = den->_mp_size;
+            const uint64_t nl0 = (ns != 0) ? mpz_getlimbn(num, 0) : 0ULL;
+            const uint64_t dl0 = (ds != 0) ? mpz_getlimbn(den, 0) : 0ULL;
+            h ^= static_cast<uint64_t>(ns) * 31ULL + nl0; h *= fnvP;
+            h ^= static_cast<uint64_t>(ds) * 31ULL + dl0; h *= fnvP;
+        }
+        return h;
+    }
+};
+struct RPEq {
+    bool operator()(const RationalPolynomial& a, const RationalPolynomial& b) const noexcept {
+        return a.terms() == b.terms();
+    }
+};
+} // anonymous
+
+struct LibPolyKernel::TpiCacheImpl {
+    std::unordered_map<RationalPolynomial, std::pair<PolyId, mpq_class>, RPHash, RPEq> map;
+};
+
+std::optional<std::pair<PolyId, mpq_class>>
+LibPolyKernel::tpiCacheLookup(const RationalPolynomial& rp) const {
+    if (!tpiCache_) { ++tpiMisses_; return std::nullopt; }
+    auto it = tpiCache_->map.find(rp);
+    if (it == tpiCache_->map.end()) { ++tpiMisses_; return std::nullopt; }
+    ++tpiHits_;
+    return it->second;
+}
+
+void LibPolyKernel::tpiCacheStore(const RationalPolynomial& rp, PolyId p, const mpq_class& scale) {
+    if (!tpiCache_) tpiCache_ = std::make_unique<TpiCacheImpl>();
+    tpiCache_->map.emplace(rp, std::pair<PolyId, mpq_class>{p, scale});
+}
 
 LibPolyKernel::LibPolyKernel() = default;
 
 LibPolyKernel::~LibPolyKernel() {
-    // S1 (P6) — env-gated stats dump for hit-rate sanity. Default no-op.
+    // S1 + S1b + S2 (P6) — env-gated stats dump for hit-rate sanity. Default no-op.
     if (std::getenv("XOLVER_NRA_KERNEL_STATS") != nullptr) {
         const uint64_t total = binOpHits_ + binOpMisses_;
         const double hitRate = total ? 100.0 * static_cast<double>(binOpHits_) / static_cast<double>(total) : 0.0;
+        const uint64_t tpiTotal = tpiHits_ + tpiMisses_;
+        const double tpiRate = tpiTotal ? 100.0 * static_cast<double>(tpiHits_) / static_cast<double>(tpiTotal) : 0.0;
+        const size_t tpiSize = tpiCache_ ? tpiCache_->map.size() : 0;
         std::fprintf(stderr,
-            "[XOLVER_NRA_KERNEL_STATS] hits=%llu misses=%llu total=%llu hit_rate=%.2f%% binOpCache=%zu sqfFactorsCache=%zu pool=%zu\n",
-            (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_,
-            (unsigned long long)total, hitRate,
-            binOpCache_.size(), sqfFactorsCache_.size(), pool_.size());
+            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
+            (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_, hitRate, binOpCache_.size(),
+            (unsigned long long)tpiHits_,   (unsigned long long)tpiMisses_,  tpiRate, tpiSize,
+            sqfFactorsCache_.size(), pool_.size());
     }
 }
 
