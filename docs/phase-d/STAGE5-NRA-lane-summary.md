@@ -28,7 +28,11 @@ promotion and for the Stage 5 ship cut-over decision.
 | `9d45652` | **LS-D / Task F** atom-violation cache | NraLocalSearch `violationCache_` keyed `(PolyId, Relation, sub-asg restricted to atom vars)`; `atomVarsCache_` per-poly; FNV-1a hash over mpz limbs | NRA reg 143/143; unit | **98.27% hit on nra_022**; evalAt calls 3354 → 58 |
 | `fb8bddb` | **Task E** NLA cluster sweep | 240-case sample × 8 NLA clusters under all levers | broad-corpus sample, 0 wrong | **7/8 ≥ 30% threshold** (see catalog below) |
 | `e09e160` | Task E doc fix-up | folded final 3 hycomp cases | non-functional | n=237 → n=240 final |
-| `4950213` | **S1c / Task J** `terms()` decomposition cache | `termsCache_` per PolyId (`mutable unordered_map<PolyId, optional<vector<MonomialTerm>>>`); stores nullopt failures; transitive win for `degree()` + `getIntegerCoefficients()` non-main-var paths. Always-built. | unit 1083/1083 (side build); NRA reg 143/143 | hit rate **97.30% / 87.46% / 95.65%** on nra_022 / nra_054 / nra_140 |
+| `4950213` | **S1c / Task J** `terms()` decomposition cache | `termsCache_` per PolyId (`mutable unordered_map<PolyId, optional<vector<MonomialTerm>>>`); stores nullopt failures; transitive win for `degree()` + `getIntegerCoefficients()` non-main-var paths. Always-built. | unit 1083/1083 (side build); NRA reg 143/143 | hit rate **97.30% / 87.46% / 95.65%** on nra_022 / nra_054 / nra_140; **97.56%** on Melquiond2 (3581-poly stress) |
+| `9c2338a` | **S1d / Task J bonus** `variables()` cache | `varsCache_` per PolyId; 92 call sites, structural sharing pattern. Always-built. | unit + NRA reg 143/143 | **96.84%** hit, only 12 distinct sets across 3581 polys |
+| `cac4be7` | Task N cross-lane pattern doc | `docs/CAMPAIGN-RULES-hash-cons-audit.md` — methodology for other agents | non-functional | 250-line doc, 4-step audit + 30-line cache template |
+| `d993531` | **S1e / Task M** `degree(p, v)` cache | `degreeCache_` keyed `(PolyId<<32)|VarId`. 55 call sites. `intCoeffs` reverted (cold). Always-built. | unit 1083/1083; NRA reg 143/143 | **98.37%** hit, only 6 entries on stress |
+| `134a5b0` | **Task I** 1200-case 4-arm NLA sweep | EQNA-trigger broad validation. hycomp+polypaver+Pine × 100 × 4 arms. | broad-corpus, 0 wrong | **polypaver +9 pp LS attribution = master-decision data** |
 
 ---
 
@@ -120,16 +124,17 @@ unconditionally on every NRA invocation; no flag promotion needed.
 
 ---
 
-## Decisions pending master
+## Decisions resolved by Task I (1200-case 4-arm sweep, `134a5b0`)
 
-1. **`XOLVER_NRA_LOCALSEARCH` default-ON** — prior 5 min batch contributed +743
-   from CANDFLAGS, most via LOCALSEARCH. Next batch (with S1/S1b/S2/LS-C/LS-D/
-   PSC cache) data will inform. If recovery sustains +500 +, source-flip
-   default-ON (17/20 promoted pattern).
-2. **`XOLVER_NRA_CAC_SR_CACHE` default-ON** — derisked sound by Task H, env-only
-   flag-flip with no code change needed.
-3. **`XOLVER_NRA_LS_BUDGET_MS=50` confirmation** — source default already
-   flipped in `e9c323e`; next server batch confirms no regression.
+1. **`XOLVER_NRA_LOCALSEARCH` default-ON** — **GREEN-LIT**. Polypaver
+   `arm_off` 87.0 % → `arm_lscd` **96.0 %** (+9 percentage points, +9
+   cases recovered). CAC tuning lever alone delivers +1 pp; LS delivers
+   the rest. Hycomp UNSAT-bound 4 arms identical 57.0 %, Pine 0/100
+   (architectural). 0 wrong across 1200 runs.
+2. **`XOLVER_NRA_CAC_SR_CACHE` default-ON** — derisked sound by Task H,
+   confirmed 0-unsound across 1200 runs in Task I.
+3. **`XOLVER_NRA_LS_BUDGET_MS=50`** — source default already flipped in
+   `e9c323e`, confirmed via Task I (no regression vs arm_off).
 
 ---
 
