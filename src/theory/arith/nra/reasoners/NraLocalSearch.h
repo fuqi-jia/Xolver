@@ -21,6 +21,7 @@
 // re-validate against original assertions before SAT is reported.
 
 #include "expr/types.h"
+#include "theory/arith/poly/PolynomialKernel.h"   // LS-C: MonomialTerm in termsCache_
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include <gmpxx.h>
@@ -41,6 +42,7 @@ public:
     };
 
     NraLocalSearch(PolynomialKernel& kernel) : kernel_(kernel) {}
+    ~NraLocalSearch();   // LS-C: env-gated cache-stats dump (XOLVER_NRA_LS_STATS)
 
     // Wall-clock budget in ms (XOLVER_NRA_LS_BUDGET_MS). 0 or negative = unlimited.
     void setBudgetMs(long ms) { budgetMs_ = ms; }
@@ -61,12 +63,57 @@ public:
 
 private:
     PolynomialKernel& kernel_;
-    long budgetMs_ = 10;      // Phase A default: micro-budget; master-spec recommends 1-5ms per callback,
-                              // 10ms one-shot per solve. Will raise once univariate boundary candidates land.
+    long budgetMs_ = 50;      // Task D-derisked default (raised from 10 → 50ms after the
+                              // local 14-case sweep showed 0 regression and the broad atan-problem-1
+                              // cluster showed identical pass + bounded overhead). Env var
+                              // XOLVER_NRA_LS_BUDGET_MS still overrides at solver setup.
     int  maxRounds_ = 10;     // coarse iteration cap (was 50; convergent rationals slowed evaluator).
     bool eqRelax_ = false;
     mpq_class epsilon_{1, 1024};
     const mpq_class kZero_{0};   // sentinel for missing var lookups
+
+    // Phase NRA-LS-C — incremental boundary score cache. evalAt and scaleAt
+    // are called per (constraint × candidate × round); without caching, each
+    // call rebuilds the same RP from PolyId or re-extracts the kernel terms
+    // for an immutable poly. The two caches live on the LS instance (kernel
+    // outlives them; entries are valid for the kernel's lifetime). Mutable
+    // because evalAt/scaleAt/totalScore are const methods.
+    mutable std::unordered_map<PolyId, RationalPolynomial> rpCache_;
+    mutable std::unordered_map<PolyId, std::vector<PolynomialKernel::MonomialTerm>> termsCache_;
+    mutable uint64_t evalCacheHits_ = 0;
+    mutable uint64_t evalCacheMisses_ = 0;
+    mutable uint64_t scaleCacheHits_ = 0;
+    mutable uint64_t scaleCacheMisses_ = 0;
+
+    // Phase NRA-LS-D (Task F) — atom-violation incremental cache. atomViolation
+    // is called per (atom × candidate × round); when LS proposes a move
+    // var=q, atoms NOT containing var keep their cached violation (sub-asg
+    // unchanged), atoms containing var miss and recompute. Cache key is
+    // (PolyId, Relation, sub-asg restricted to atom's vars); equality is
+    // exact (sub-asg compared element-by-element) so collisions never return
+    // a wrong violation. Per-poly var-set cached separately for cheap reuse.
+    mutable std::unordered_map<PolyId, std::vector<VarId>> atomVarsCache_;
+    struct ViolationKey {
+        PolyId poly;
+        Relation rel;
+        std::vector<std::pair<VarId, mpq_class>> subAsg;   // canonical sorted by VarId
+        bool operator==(const ViolationKey& o) const {
+            return poly == o.poly && rel == o.rel && subAsg == o.subAsg;
+        }
+    };
+    struct ViolationKeyHash {
+        size_t operator()(const ViolationKey& k) const noexcept;
+    };
+    mutable std::unordered_map<ViolationKey, mpq_class, ViolationKeyHash> violationCache_;
+    mutable uint64_t violationCacheHits_ = 0;
+    mutable uint64_t violationCacheMisses_ = 0;
+
+    // Build the sub-asg vector restricted to `vars` from the full `asg`.
+    std::vector<std::pair<VarId, mpq_class>> buildSubAsg(
+        const std::vector<VarId>& vars,
+        const std::unordered_map<VarId, mpq_class>& asg) const;
+    // Compute (and cache) the var-set of a constraint's polynomial.
+    const std::vector<VarId>& atomVars(PolyId p) const;
 
     // Evaluate poly at a rational assignment → exact mpq value (NaN-safe: if a
     // variable is missing from `asg`, defaults to 0; if the result isn't a

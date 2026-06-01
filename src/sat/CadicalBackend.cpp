@@ -1,4 +1,6 @@
 #include "sat/CadicalBackend.h"
+#include <cstdio>
+#include <cstdlib>
 #include "sat/CadicalTheoryPropagator.h"
 
 namespace xolver {
@@ -64,6 +66,11 @@ void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 
 SatSolver::SolveResult CadicalBackend::solve() {
     terminateRequested_ = false;
+    if (std::getenv("XOLVER_SAT_SIZE_DIAG")) {
+        std::fprintf(stderr, "[SAT-SIZE] maxVar=%u active=%d irredundant_clauses=%ld\n",
+                     (unsigned)maxVar_, solver_->active(),
+                     (long)solver_->irredundant());
+    }
     inSolving_ = true;
     int res = solver_->solve();
     inSolving_ = false;

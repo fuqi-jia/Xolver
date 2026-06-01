@@ -57,6 +57,28 @@ public:
         if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_CONFLICTS"); e && *e) {
             satConflictBudget_ = std::atoll(e);
         }
+        // I3 (per-cluster bit-blast budget, default-unchanged).
+        //
+        // XOLVER_NIA_BITBLAST_MAX_ITERS=<N> caps the width-growth iteration
+        // count (default 6). Lowering it skips the wide-width tail on
+        // clusters where the bit-blast is unlikely to converge (saves
+        // budget for upstream reasoners); raising it lets the bit-blast
+        // explore deeper on clusters whose SAT models do fit in many bits.
+        // Sound: bit-blast remains candidate-only; an early iteration cut
+        // just yields Unknown.
+        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_MAX_ITERS"); e && *e) {
+            long v = std::atol(e);
+            if (v > 0 && v <= 64) maxIters_ = static_cast<unsigned>(v);
+        }
+        // XOLVER_NIA_BITBLAST_MAX_BITWIDTH=<W> bounds the per-variable
+        // bit width (default 128). Lowering it forces the cascade to give
+        // up earlier on clusters whose models exceed the cap; raising it
+        // lets large bounded instances bit-blast more freely. Capped to
+        // [8, 4096] to prevent encoding pathology.
+        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH"); e && *e) {
+            long v = std::atol(e);
+            if (v >= 8 && v <= 4096) maxBW_ = static_cast<unsigned>(v);
+        }
     }
 
     BitBlastResult solve(const std::vector<NormalizedNiaConstraint>& cs,

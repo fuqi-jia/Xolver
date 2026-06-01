@@ -10,6 +10,8 @@
 
 namespace xolver {
 
+class RationalPolynomial;   // S2 (P6): cache key for toPrimitiveInteger memoization
+
 /**
  * Abstract interface for a polynomial kernel.
  *
@@ -285,6 +287,20 @@ public:
     // Debugging
     // ------------------------------------------------------------------
     virtual std::string toString(PolyId a) const = 0;
+
+    // ------------------------------------------------------------------
+    // S2 (P6) — optional driver-level memoization for toPrimitiveInteger.
+    // Backends may cache the canonical-RP → (PolyId, scale) mapping so the
+    // driver's LCM/GCD scan + d&c build runs ONCE per unique RP per session.
+    // T3 (SingleCellProjection instrumentation) proved step0/step1 each call
+    // toPrimitiveInteger with the SAME RP across cells — the inner-mul cache
+    // (S1+S1b) misses the driver itself. Default: no cache (caller pays full
+    // driver cost every call).
+    // ------------------------------------------------------------------
+    virtual std::optional<std::pair<PolyId, mpq_class>>
+        tpiCacheLookup(const RationalPolynomial&) const { return std::nullopt; }
+    virtual void
+        tpiCacheStore(const RationalPolynomial&, PolyId, const mpq_class&) {}
 };
 
 /**

@@ -255,6 +255,10 @@ private:
     // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
     // Read once in the constructor.
     bool minLevelHeapEnabled_ = false;
+    // XOLVER_AX_STORE_MODEL (default-OFF, array-deep A1): store-aware array model
+    // construction (follow store chains so a store-defined array inherits its
+    // base's entries). Verdict-sound; recovers the storecomm sat class.
+    bool storeModelEnabled_ = false;
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
     // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
     // registry every cb_propagate, track new-since-last-call merges and scan

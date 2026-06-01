@@ -2,13 +2,23 @@
 #include "theory/arith/linear/LinearExpr.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <gmpxx.h>
 
 namespace xolver {
 
 SolveEqs::SolveEqs(CoreIr& ir, ModelConverter& mc)
     : ir_(ir), mc_(mc),
-      boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {}
+      boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {
+    if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS_BUDGET")) {
+        if (unsigned long long v = std::strtoull(e, nullptr, 10)) workBudget_ = v;
+    }
+    if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS_GROWTH_CAP")) {
+        double v = std::strtod(e, nullptr);
+        if (v > 0.0) growthCap_ = v;
+    }
+}
 
 std::optional<std::string> SolveEqs::asNumericVar(ExprId e) const {
     const auto& node = ir_.get(e);
@@ -70,6 +80,7 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
     stack.push_back({root, false});
 
     while (!stack.empty()) {
+        ++substWork_;   // bound total substitution work (see run()'s budget guard)
         Frame& frame = stack.back();
         ExprId e = frame.e;
         if (substMemo_.find(e) != substMemo_.end()) { stack.pop_back(); continue; }
@@ -157,12 +168,74 @@ bool SolveEqs::run() {
         }
     }
 
+    // Densification measurement (XOLVER_PP_SOLVE_EQS_DIAG): total DAG node count
+    // over all conjuncts. Compared start vs end to see how much elimination
+    // grows the formula — the Option-C signal for whether general elimination
+    // is densifying (UNSAT-harmful) vs shrinking (SAT-helpful).
+    const bool diag = std::getenv("XOLVER_PP_SOLVE_EQS_DIAG") != nullptr;
+    auto dagSize = [&]() -> uint64_t {
+        std::unordered_set<ExprId> seen;
+        std::vector<ExprId> st;
+        for (const auto& cj : conjuncts_) st.push_back(cj.second);
+        while (!st.empty()) {
+            ExprId e = st.back(); st.pop_back();
+            if (!seen.insert(e).second) continue;
+            for (ExprId c : ir_.get(e).children) st.push_back(c);
+        }
+        return seen.size();
+    };
+    // Densification guard (general ±1-pivot only). General elimination SHRINKS
+    // the formula when it is genuinely simplifying (QF_LIA convert: ratio ~0.82)
+    // but GROWS it when it fans a hub variable's definition into many
+    // constraints (SMPT Petri-net Farkas systems, e.g. CircularTrains: ratio
+    // ~1.9–2.2). A grown formula keeps SAT model-search cheap but obscures the
+    // short UNSAT (Farkas) certificate, turning fast UNSATs into timeouts. So
+    // when the live DAG exceeds the initial size by growthCap_, we stop doing
+    // further general eliminations (bare-var elimination, which never densifies,
+    // continues). Measured periodically — recomputing the DAG every elimination
+    // would be quadratic. Only meaningful when general elimination is enabled.
+    const uint64_t dag0 = (generalLinear_ || diag) ? dagSize() : 0;
+    size_t lastGrowthCheck_ = 0;
+
     // Variables feeding an uninterpreted-function/array argument are shared
     // terms in Nelson-Oppen combination; eliminating them is unsound. Pin them.
     computeUnsafeVars();
 
     bool progress = true;
     while (progress) {
+        // Substitution-work budget. run() re-substitutes across ALL conjuncts
+        // after EVERY elimination, so the pass is O(eliminations × formula-size).
+        // On small formulas (e.g. QF_LIA convert) this is cheap, but on large
+        // chained-equality systems (SMPT/nec Petri-nets: thousands of `aᵢ = Σx`
+        // aux-defs over tens of thousands of conjuncts) it explodes into
+        // billions of node-visits and burns the whole solve budget in
+        // preprocessing — turning fast UNSATs into timeouts. When the work cap
+        // is hit we stop eliminating and proceed with what we have: every
+        // elimination performed so far is independently equisatisfiable and
+        // registered for model replay, so a partial pass is SOUND (it is not a
+        // verdict, only a simplification). Budget is generous enough to complete
+        // the small formulas the pass actually helps; env-overridable for tuning.
+        if (substWork_ > workBudget_) {
+            if (eliminated_ > 0 && std::getenv("XOLVER_PP_SOLVE_EQS_DIAG"))
+                std::fprintf(stderr, "[SolveEqs] work budget hit after %zu elims; stopping\n",
+                             eliminated_);
+            break;
+        }
+        // Periodic densification check (general elimination only). Once the live
+        // formula has grown past growthCap_×, further general eliminations are
+        // fanning out hub variables (UNSAT-harmful); disable them. Bare-var
+        // elimination continues (it never densifies). Checked every few
+        // eliminations to keep the DAG recomputation off the hot path.
+        if (generalLinear_ && !gaussDensifyAbort_ && dag0 > 0 &&
+            eliminated_ >= lastGrowthCheck_ + kGrowthCheckEvery_) {
+            lastGrowthCheck_ = eliminated_;
+            if ((double)dagSize() > (double)dag0 * growthCap_) {
+                gaussDensifyAbort_ = true;
+                if (std::getenv("XOLVER_PP_SOLVE_EQS_DIAG"))
+                    std::fprintf(stderr, "[SolveEqs] densify cap hit after %zu elims; "
+                                 "general elimination disabled\n", eliminated_);
+            }
+        }
         progress = false;
         for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
             ExprId c = conjuncts_[idx].second;
@@ -202,10 +275,18 @@ bool SolveEqs::run() {
             break;  // indices shifted; restart scan
         }
     }
+    if (diag) {
+        const uint64_t dag1 = dagSize();
+        std::fprintf(stderr, "[SolveEqs] elim=%zu dag %llu->%llu ratio=%.2f work=%llu\n",
+                     eliminated_, (unsigned long long)dag0, (unsigned long long)dag1,
+                     dag0 ? (double)dag1 / (double)dag0 : 0.0,
+                     (unsigned long long)substWork_);
+    }
     return eliminated_ > 0;
 }
 
 bool SolveEqs::tryGeneralEliminate(size_t idx) {
+    if (gaussDensifyAbort_) return false;   // densification cap reached
     ExprId c = conjuncts_[idx].second;
 
     // Parse the equality into a canonical linear form Σ coeffs[v]·v = rhs.

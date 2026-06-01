@@ -279,6 +279,14 @@ RationalPolynomial::toPrimitiveInteger(PolynomialKernel& kernel) const {
         PolyId zero = kernel.mkZero();
         return {zero, mpq_class(1)};
     }
+    // S2 (P6) — driver-level memoization. T3 showed the SAME RP enters this
+    // function multiple times per session (step-0/step-1 of each CAC cell,
+    // squarefree call sites). The kernel's tpiCache (default no-op base,
+    // active on LibPolyKernel) returns the cached NormalizedResult and skips
+    // the LCM/GCD/Item-build/divide-and-conquer driver entirely.
+    if (auto cached = kernel.tpiCacheLookup(*this)) {
+        return {cached->first, cached->second};
+    }
 
     // Step 1: LCM of all denominators
     mpz_class D = 1;
@@ -361,6 +369,7 @@ RationalPolynomial::toPrimitiveInteger(PolynomialKernel& kernel) const {
 
     mpq_class scale(g, D);
     scale.canonicalize();
+    kernel.tpiCacheStore(*this, result, scale);   // S2 — memoize for future calls
     return {result, scale};
 }
 

@@ -78,6 +78,30 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
     std::vector<PortfolioArm> arms;
     arms.push_back({base, "base", /*budgetMs=*/0});
 
+    // QF_LIA cut portfolio (S1): a second arm with Gomory + GMI cuts ON, for the
+    // UNSAT pure-conjunction ILP clusters (cut_lemmas) that pure branch-and-bound
+    // cannot close but a few root cuts crack in seconds. Cuts are root-dependent
+    // and regress SAT instances (the L1 cut-delay finding), so this arm must NOT
+    // preempt the SAT-friendly base arm: it runs ONLY on what arm 0 leaves Unknown.
+    // We therefore stamp a finite budget on arm 0 (so the executor falls through to
+    // the cut arm) — env-tunable; server defaults arm0 ~240s / cut arm ~60s of a
+    // 300s wall. Restricted to pure QF_LIA (combined logics route cuts through the
+    // combination layer; out of scope). Behaviour-neutral unless
+    // XOLVER_STRAT_PORTFOLIO is set (selectPortfolio is consulted only then).
+    if (logic == "QF_LIA") {
+        auto envMs = [](const char* n, long dflt) -> int {
+            const char* v = std::getenv(n);
+            if (!v) return static_cast<int>(dflt);
+            long x = std::atol(v);
+            return x > 0 ? static_cast<int>(x) : static_cast<int>(dflt);
+        };
+        arms[0].budgetMs = envMs("XOLVER_LIA_PORTFOLIO_ARM0_MS", 240000);
+        StrategyConfig cutArm = base;
+        cutArm.envFlags.push_back({"XOLVER_LIA_CUTS", "1"});
+        cutArm.envFlags.push_back({"XOLVER_LIA_GMI_CUTS", "1"});
+        arms.push_back({cutArm, "lia-cuts", envMs("XOLVER_LIA_PORTFOLIO_CUT_MS", 60000)});
+    }
+
     // Test-only hook: replicate the base arm so the multi-arm executor path is
     // exercised by the unit suite without depending on a not-yet-promoted flag.
     // Replicating an IDENTICAL arm must leave the verdict unchanged (proves the
