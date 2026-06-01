@@ -28,11 +28,11 @@ Sorted by recovery rate:
 | 4 | **meti-tarski-exp** | 30 | **24** | 0 | 6 | **0** | **80.0%** |
 | 5 | **meti-tarski-sqrt** | 30 | **22** | 6 | 2 | **0** | **73.3%** |
 | 6 | **meti-tarski-atan** | 30 | **21** | 0 | 9 | **0** | **70.0%** |
-| 7 | **hycomp** | 27 | **16** | 1 | 10 | **0** | **59.3%** |
+| 7 | **hycomp** | 30 | **17** | 2 | 11 | **0** | **56.7%** |
 | 8 | Pine | 30 | 7 | 0 | 23 | **0** | 23.3% |
-| | **Total** | **237** | **177** | **9** | **51** | **0** | **74.7%** |
+| | **Total** | **240** | **178** | **10** | **52** | **0** | **74.2%** |
 
-**0 unsound across 237 broad-corpus cases under combined-lever config.**
+**0 unsound across 240 broad-corpus cases under combined-lever config.**
 
 ## Per-cluster catalog decision
 
@@ -44,7 +44,7 @@ Sorted by recovery rate:
 - **meti-tarski-exp** (80%): 6 timeouts remain — server with full budget should resolve
 - **meti-tarski-sqrt** (73.3%): extends the 9/10 partial Task C signal at scale
 - **meti-tarski-atan** (70%): the +673-gap ATTACK target, 9 timeouts are cell-jump-bound
-- **hycomp** (59.3%): UNSAT subset reachable; BMC-SAT subset unchanged (post-SMT-COMP R&D)
+- **hycomp** (56.7%): UNSAT subset reachable; BMC-SAT subset unchanged (post-SMT-COMP R&D)
 
 **Pine (23.3%)**: below threshold but ALL 7 OKs were unknown-matches-unknown (Pine
 benchmarks declare `:status unknown`). Boundary confirmed — no engineering surface
@@ -56,7 +56,7 @@ to post-SMT-COMP NLA R&D.
 | Cluster | Task C (n=10) | Task E (n=30) | Trend |
 |---|---|---|---|
 | meti-tarski-sqrt | 9/10 (90%) | 22/30 (73.3%) | slight regress at scale, consistent ≥70% |
-| hycomp | 6/10 (60%) | 16/27 (59.3%) | confirmed |
+| hycomp | 6/10 (60%) | 17/30 (56.7%) | confirmed |
 | Pine | 5/10 (50% unknown-match) | 7/30 (23.3%) | down — Task C was easier subset |
 
 The Task C 9/10 sqrt over-represented the cluster's easy chunks. n=30 settles
