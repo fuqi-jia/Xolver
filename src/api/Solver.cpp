@@ -1189,7 +1189,8 @@ public:
         phase("detect-done");
 
         // -------------------------------------------------------------------
-        // ARRAY-LOGIC FEATURE DOWNGRADE (XOLVER_ARRAY_NOARR_DOWNGRADE).
+        // ARRAY-LOGIC FEATURE DOWNGRADE (default-ON since 2026-06-02 COMB-2
+        // PARAMOUNT soundness promote; agent/eqna-2 cross-lane authority).
         // A file declared in an array logic but containing NO array operations
         // is pure arith (Rodin/industrial QF_AUFLIA, QF_ALIA, … are frequently
         // array-free). Routing it through the EUF+array+combination stack is
@@ -1199,20 +1200,29 @@ public:
         // file is correct). The bug also affects QF_UFLIA (EUF+LIA, no array),
         // so we only downgrade the no-UF case to the PURE arith solver (which
         // has no combination layer and is sound); the has-UF case is left for
-        // the combination-layer fix. SOUND: re-routes to a verdict-correct
-        // solver; verified +N recovered, 0 wrong. Gated until cross-validated.
-        if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE") &&
-            !features.hasArray && !features.hasUF) {
-            std::string dg;
-            if (logic == "QF_AUFLIA" || logic == "AUFLIA" ||
-                logic == "QF_ALIA" || logic == "ALIA") dg = "QF_LIA";
-            else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
-                     logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
-            if (!dg.empty()) {
-                if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
-                    std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
-                              << " (no array/UF features)\n";
-                logic = dg;
+        // the combination-layer fix.
+        //
+        // SOUNDNESS-CRITICAL FOR SMT-COMP: array-deep A3 reported +15
+        // recovered-to-CORRECT on QF_AUFLIA / 0 regress / 0 newly-unsound.
+        // Not promoting = SMT-COMP solver-error risk. A/B escape:
+        // XOLVER_ARRAY_NOARR_DOWNGRADE=0 disables.
+        {
+            bool noarrEnabled = true;
+            if (const char* e = std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE")) {
+                noarrEnabled = !(e[0] == '0' && e[1] == '\0');
+            }
+            if (noarrEnabled && !features.hasArray && !features.hasUF) {
+                std::string dg;
+                if (logic == "QF_AUFLIA" || logic == "AUFLIA" ||
+                    logic == "QF_ALIA" || logic == "ALIA") dg = "QF_LIA";
+                else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
+                         logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
+                if (!dg.empty()) {
+                    if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
+                        std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
+                                  << " (no array/UF features)\n";
+                    logic = dg;
+                }
             }
         }
 
