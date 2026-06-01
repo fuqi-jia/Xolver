@@ -226,6 +226,13 @@ public:
     // (XOLVER_NIA_LS_TABU). Sound: tabu only affects move selection;
     // verdict still validator-gated.
     void setTabu(bool e) { tabu_ = e; }
+    // M17 (master 2026-06-02 move-explosion). Violation-core focused
+    // move-search: instead of picking a falsified atom uniformly at
+    // random, prefer atoms that contribute the largest fraction of
+    // total violation. Concentrates LS effort on the structurally
+    // hard atoms. Default-OFF (XOLVER_NIA_LS_VIOLATION_CORE). Sound:
+    // selection bias only; verdict still validator-gated.
+    void setViolationCore(bool e) { violationCore_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -256,6 +263,7 @@ private:
     bool smartInit_ = false;
     bool smartMove_ = false;
     bool tabu_ = false;
+    bool violationCore_ = false;
     std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 

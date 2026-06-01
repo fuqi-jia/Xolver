@@ -93,6 +93,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_TABU"); e && *e && *e != '0') {
         tabu_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_VIOLATION_CORE"); e && *e && *e != '0') {
+        violationCore_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -1077,8 +1080,31 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             for (std::size_t i = 0; i < nC; ++i) if (cviol[i] > 0) falsified.push_back(i);
             if (falsified.empty()) return cur;
 
-            // Pick a random falsified constraint; collect its variables.
-            std::size_t ci = falsified[rng() % falsified.size()];
+            // Pick a falsified constraint. Default is uniform random.
+            // M17 violation-core: weight the pick by cviol[i] * weight[i]
+            // so atoms contributing more to the weighted-cost get more
+            // probability mass. Focuses LS effort on the "hot" atoms.
+            std::size_t ci;
+            if (violationCore_) {
+                mpz_class total = 0;
+                for (std::size_t i : falsified) total += cviol[i] * weight[i];
+                if (total <= 0) {
+                    ci = falsified[rng() % falsified.size()];
+                } else {
+                    // mpz random within [0, total) — use the low 63 bits
+                    // of rng modulo total (sufficient for selection bias).
+                    mpz_class roll = mpz_class(static_cast<unsigned long>(rng() & 0x7FFFFFFFFFFFFFFFULL));
+                    roll %= total;
+                    mpz_class accum = 0;
+                    ci = falsified.back();  // fallback
+                    for (std::size_t i : falsified) {
+                        accum += cviol[i] * weight[i];
+                        if (accum > roll) { ci = i; break; }
+                    }
+                }
+            } else {
+                ci = falsified[rng() % falsified.size()];
+            }
             const NormalizedNiaConstraint& C = constraints[ci];
             std::vector<std::string> cvars = kernel_.variables(C.poly);
             if (cvars.empty()) break;
