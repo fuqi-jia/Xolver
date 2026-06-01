@@ -1275,10 +1275,33 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
 
     if (candidates.empty()) return std::nullopt;
 
-    // Sort: priority first, then larger range size
+    // I1: XOLVER_NIA_LS_BRANCH_HINT (default-OFF). When local search has
+    // populated varActivity (vars that participated in improving moves in
+    // recent SLS rounds), use that as a secondary sort key between
+    // priority and rangeSize. The rationale (Yices2LS pattern): a variable
+    // that local search keeps perturbing in a UNSAT-leaning region is
+    // structurally hot — branching on it is more likely to expose the
+    // conflict the SAT engine needs. Heuristic only — never affects
+    // soundness; the branch lemma is still a tautology (x<=k ∨ x>=k+1).
+    static const bool lsBranchHint = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_BRANCH_HINT");
+        return e && *e && *e != '0';
+    }();
+    const auto& lsAct = localSearch_.lsContext().varActivity;
+    auto activityOf = [&lsAct](const std::string& v) -> uint64_t {
+        auto it = lsAct.find(v);
+        return it == lsAct.end() ? 0u : it->second;
+    };
+
+    // Sort: priority first, optional LS-activity tiebreak, then larger range size
     std::sort(candidates.begin(), candidates.end(),
-        [](const Candidate& a, const Candidate& b) {
+        [&](const Candidate& a, const Candidate& b) {
             if (a.priority != b.priority) return a.priority < b.priority;
+            if (lsBranchHint) {
+                uint64_t aAct = activityOf(a.var);
+                uint64_t bAct = activityOf(b.var);
+                if (aAct != bAct) return aAct > bAct;
+            }
             return a.rangeSize > b.rangeSize;
         });
 

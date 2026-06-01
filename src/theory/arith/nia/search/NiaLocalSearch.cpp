@@ -1077,24 +1077,20 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 if (!bestPairVarY.empty()) {
                     commitMove(bestPairVarX, bestPairValX);
                     commitMove(bestPairVarY, bestPairValY);
-                    if (warmStart_) {
-                        lsContext_.varActivity[bestPairVarX]++;
-                        lsContext_.varActivity[bestPairVarY]++;
-                    }
+                    // I1: varActivity is a cheap counter and is needed as a
+                    // branch-hint signal even when warm-start state isn't
+                    // being persisted across cb_check (XOLVER_NIA_LS_BRANCH_HINT).
+                    lsContext_.varActivity[bestPairVarX]++;
+                    lsContext_.varActivity[bestPairVarY]++;
                 } else {
-                    // Trivial single-var pair (one of the bilinear factors
-                    // taken to 0 — recorded in bestPairVarX, bestPairValX).
                     commitMove(bestPairVarX, bestPairValX);
-                    if (warmStart_) lsContext_.varActivity[bestPairVarX]++;
+                    lsContext_.varActivity[bestPairVarX]++;
                 }
                 sinceImprove = 0;
             } else {
                 commitMove(bestVar, bestVal);
                 sinceImprove = 0;
-                // Phase L1 step 2: variable activity boost (heuristic
-                // hint for Phase L1 step 3 NIA decide-priority feedback).
-                // Cheap counter; no soundness implication.
-                if (warmStart_) lsContext_.varActivity[bestVar]++;
+                lsContext_.varActivity[bestVar]++;
             }
 
             // Track best-overall across THIS call for write-back to context.
