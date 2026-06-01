@@ -233,6 +233,14 @@ public:
     // hard atoms. Default-OFF (XOLVER_NIA_LS_VIOLATION_CORE). Sound:
     // selection bias only; verdict still validator-gated.
     void setViolationCore(bool e) { violationCore_ = e; }
+    // LS-SMART-Z3 (user 2026-06-02 directive: "结合move才行"). After
+    // LS-SMART-2 closed-form generates a candidate target for the
+    // current falsified atom, IMMEDIATELY commit if the target
+    // EXACTLY satisfies that atom (cviol becomes 0). This bypasses
+    // the global-bestCost gate, letting LS escape local minima via
+    // single-atom-greedy moves. Sound (validator-gated). Default-OFF
+    // XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT.
+    void setAtomLocalAccept(bool e) { atomLocalAccept_ = e; }
     // LBBB Phase 1 (master 2026-06-02). Bound tracking: record the
     // per-var min/max values LS visited during the search; expose via
     // getVarRange. Phase 2's stageBoundedBitBlast consumes these
@@ -294,6 +302,7 @@ private:
     bool smartMove_ = false;
     bool tabu_ = false;
     bool violationCore_ = false;
+    bool atomLocalAccept_ = false;
     bool boundTrack_ = false;
     bool failed_ = false;
     std::unordered_map<std::string, mpz_class> minSeen_;

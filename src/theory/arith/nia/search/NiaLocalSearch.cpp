@@ -96,6 +96,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_VIOLATION_CORE"); e && *e && *e != '0') {
         violationCore_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT"); e && *e && *e != '0') {
+        atomLocalAccept_ = true;
+    }
     if (const char* e = std::getenv("XOLVER_NIA_LS_BOUND_TRACK"); e && *e && *e != '0') {
         boundTrack_ = true;
     }
@@ -426,7 +429,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSat(
             } else {
                 // HYB-X: under partition hint, unbounded vars init to a
                 // NARROWER ±100 random range. Per H5, VeryMax SAT models
-                // (z3-extracted) have small values 0-300; the legacy
+                // (empirical model sweep) have small values 0-300; the legacy
                 // ±2000 range over-explores. Sound: heuristic init only.
                 bool tightInit = partitionHint_ && unboundedVars_.count(v);
                 long range = tightInit ? 201 : 4001;
@@ -796,7 +799,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             // P5 diversified restart probes — rotate initial-assignment
             // strategies across restarts so LS visits multiple basins of
             // attraction instead of always starting from zero. SAT14
-            // z3-extracted models show many cases satisfy at anchor
+            // empirical models show many cases satisfy at anchor
             // values 100-300; probing those anchors at restart time
             // gives LS a credible trajectory toward them.
             //
@@ -1149,6 +1152,10 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             mpz_class bestVal = 0;
             mpz_class bestCost = weightedCost;
             bool haveBest = false;
+            // LS-SMART-Z3: flag is set if an atom-local-perfect commit
+            // happened inside the move-search; subsequent move-commit
+            // blocks then skip their bestCost / bilinearPair logic.
+            bool atomLocalCommitted = false;
             for (const auto& v : cvars) {
                 const mpz_class orig = cur[v];
                 // Slope estimate from two probes (orig, orig+1).
@@ -1379,6 +1386,13 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         }
                     }
                 }
+                // LS-SMART-Z3 atom-local-perfect tracker: if any
+                // candidate t makes cviol[ci] (this falsified atom)
+                // become exactly 0, we'll commit it immediately
+                // after the loop regardless of global cost.
+                bool localPerfect = false;
+                std::string localPerfectVar;
+                mpz_class localPerfectVal = 0;
                 for (mpz_class t : targets) {
                     t = clampVar(v, t);
                     if (t == orig) continue;
@@ -1395,9 +1409,39 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     if (!haveBest || effectiveNc < bestCost) {
                         bestCost = effectiveNc; bestVar = v; bestVal = t; haveBest = true;
                     }
+                    // LS-SMART-Z3: check if this move EXACTLY satisfies
+                    // the current falsified atom (cviol[ci] -> 0).
+                    if (atomLocalAccept_ && !localPerfect) {
+                        const mpz_class origV = cur[v];
+                        cur[v] = t;
+                        mpz_class nv = evalCviol(ci, cur);
+                        cur[v] = origV;
+                        if (nv == 0) {
+                            localPerfect = true;
+                            localPerfectVar = v;
+                            localPerfectVal = t;
+                        }
+                    }
+                }
+                if (localPerfect) {
+                    // Commit the atom-local-perfect move directly,
+                    // bypassing the bestCost / bestPair selection
+                    // downstream. This is the user-directed escape
+                    // ("结合move才行"): big LS jumps that satisfy ONE
+                    // atom exactly even if others worsen temporarily.
+                    commitMove(localPerfectVar, localPerfectVal);
+                    sinceImprove = 0;
+                    lsContext_.varActivity[localPerfectVar]++;
+                    if (tabu_) recordTabu(localPerfectVar, localPerfectVal);
+                    atomLocalCommitted = true;
                 }
             }
 
+            // LS-SMART-Z3: when an atom-local-perfect commit fired
+            // inside the move-search, force haveBest=false so the
+            // downstream bestCost commit at end of flip becomes a
+            // no-op (the move was already committed).
+            if (atomLocalCommitted) haveBest = false;
             // P5 bilinear pair move (XOLVER_NIA_LS_BILINEAR_PAIR). For each
             // falsified atom's polynomial, look for a bilinear monomial
             // `coef * x * y` (two distinct variables each at exponent 1).
@@ -1426,7 +1470,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             mpz_class bestPairValX = 0, bestPairValY = 0;
             mpz_class bestPairCost = bestCost;
             bool havePairBest = false;
-            if (bilinearPair_) {
+            if (bilinearPair_ && !atomLocalCommitted) {
                 auto termsOpt = kernel_.terms(C.poly);
                 if (termsOpt) {
                     // Locate first bilinear monomial: 2 distinct vars,
@@ -1548,7 +1592,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             // (the `(2y+3)*x + (y-5)` residual is linear in x) get an
             // exact closed-form candidate that the product-pair strategy
             // misses entirely.
-            if (bilinearSubst_) {
+            if (bilinearSubst_ && !atomLocalCommitted) {
                 // I3-derisk diagnostic. XOLVER_NIA_LS_DIAG=1 prints
                 // per-flip the count of (var-pair, direction) attempts +
                 // accepted candidate roots. Lets us confirm bilinearSubst
