@@ -428,6 +428,37 @@ TEST_CASE("NiaSolver: bit-blast stage registered between bounded and local-searc
     CHECK(bb < ls);    // before local-search
 }
 
+// Phase D: dispatch-cache stages are present at the FRONT (after pending)
+// and at the TAIL (before branch). Default-OFF flag XOLVER_NIA_DISPATCH_CACHE
+// gates their behaviour; registration order is unconditional so we can pin
+// the pipeline shape here.
+TEST_CASE("NiaSolver D: dispatch-cache stages registered at front + tail") {
+    auto kernel = createPolynomialKernel();
+    NiaSolver solver(std::move(kernel));
+    auto names = solver.reasonerNames();
+    auto pend = std::find(names.begin(), names.end(), "nia.pending");
+    auto dcL  = std::find(names.begin(), names.end(), "nia.dispatch-cache");
+    auto norm = std::find(names.begin(), names.end(), "nia.normalize");
+    auto dcR  = std::find(names.begin(), names.end(), "nia.dispatch-cache-record");
+    auto br   = std::find(names.begin(), names.end(), "nia.branch");
+    REQUIRE(pend != names.end());
+    REQUIRE(dcL  != names.end());
+    REQUIRE(norm != names.end());
+    REQUIRE(dcR  != names.end());
+    REQUIRE(br   != names.end());
+    CHECK(pend < dcL);     // pending first
+    CHECK(dcL  < norm);    // lookup BEFORE normalize
+    CHECK(dcR  < br);      // record BEFORE branch (tail stage)
+    // Record must be after every regular reasoner — at minimum after
+    // bounded / local-search / bit-blast.
+    auto bd = std::find(names.begin(), names.end(), "nia.bounded");
+    auto bb = std::find(names.begin(), names.end(), "nia.bit-blast");
+    auto ls = std::find(names.begin(), names.end(), "nia.local-search");
+    CHECK(bd < dcR);
+    CHECK(bb < dcR);
+    CHECK(ls < dcR);
+}
+
 // I3: per-cluster bit-blast budget — env knobs that mirror the existing
 // setters, so a caller (eg. a wrapper script tuning per-cluster) can adjust
 // budget without recompiling. Defaults remain unchanged.
