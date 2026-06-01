@@ -229,6 +229,40 @@ public:
                == ArithModelValidator::Verdict::Violated;
     }
 
+    // UF-combination soundness floor (QF_UFLIA / QF_UFLRA proper, no array).
+    // Mirrors arrayModelDefinitelyViolates but routes function interpretations
+    // from the EUF Track-3 model so UF apps over arith args evaluate concretely
+    // instead of returning Indeterminate. Returns true ONLY on a DEFINITE
+    // Violated — Indeterminate / unknown stays sat (never spuriously reject a
+    // genuine sat). Catches the Wisa-class false-SAT: arith picks fmt1 such
+    // that select_format(fmt1) value matches percent locally, but EUF never
+    // had to merge them, so the negated goal is "satisfied" only because the
+    // joint model is inconsistent — the validator's funcInterp table resolves
+    // it concretely and exposes the violation.
+    bool combinationModelDefinitelyViolates() const {
+        if (!ir || !lastModel_) return false;
+        ArithModelValidator::NumAssignment numAsg;
+        ArithModelValidator::BoolAssignment boolAsg;
+        ArithModelValidator::TokenAssignment tokAsg;
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val == "true")  { boolAsg[name] = true;  tokAsg[name] = "#b:1"; continue; }
+            if (val == "false") { boolAsg[name] = false; tokAsg[name] = "#b:0"; continue; }
+            tokAsg[name] = val;
+            if (val.rfind("#n:", 0) == 0) {
+                try { numAsg[name] = mpq_class(val.substr(3)); } catch (...) {}
+            } else {
+                try { numAsg[name] = mpq_class(val); } catch (...) {}
+            }
+        }
+        ArithModelValidator validator(*ir, numAsg, boolAsg,
+                                      lastModel_->arrayInterps, tokAsg);
+        if (!lastModel_->functionInterps.empty()) {
+            validator.setFunctionInterps(&lastModel_->functionInterps);
+        }
+        return validator.validate(originalAssertions_)
+               == ArithModelValidator::Verdict::Violated;
+    }
+
     // STRICT model validation (XOLVER_PP_STRICT_VALIDATION). Returns true ONLY
     // when the extracted model POSITIVELY satisfies every original assertion
     // (Verdict::Satisfied). Unlike the *Violates helpers (which act only on a
@@ -1697,6 +1731,40 @@ public:
                 lastUnknownReason_ =
                     "array: SAT model violates an original assertion "
                     "(missed array axiom instance) — gated to Unknown (sound)";
+                lastModel_.reset();
+                ret = Result::Unknown;
+            }
+        }
+
+        // UF-COMBINATION SAT soundness floor (QF_UFLIA / QF_UFLRA proper —
+        // has UF op, no array). The Nelson-Oppen EUF+arith combination can
+        // return false-SAT when the arrangement over shared UF arguments is
+        // not closed (Wisa class: select_format(fmt1)=percent demanded by
+        // negated goal, where arith picks fmt1 such that select_format(fmt1)
+        // value matches percent locally but EUF never had to merge them).
+        // Verified on QF_UFLIA/mathsat/Wisa/xs-09-13-2-3-1-3.smt2 (xolver=sat,
+        // z3+cvc5+:status=unsat). Mirrors the array floor: ONLY downgrade on
+        // DEFINITE Violated (never spuriously reject a genuine sat). Uses
+        // funcInterps from the Track-3 EUF UF-model so UF apps over arith
+        // arguments evaluate concretely. Gated XOLVER_COMB_VALIDATE_SAT
+        // (default-OFF) — promotion gated on master batch confirming
+        // 0-disagreement on QF_UFLIA (mirrors A3 XOLVER_ARRAY_NOARR_DOWNGRADE
+        // pattern). Requires XOLVER_EUF_UF_MODEL to ALSO be on to populate
+        // funcInterps; without funcInterps the validator gives Indeterminate
+        // on UF apps and the floor doesn't fire (no harm done).
+        auto isCombUfLogic = [](const std::string& L) {
+            return L == "QF_UFLIA" || L == "UFLIA" ||
+                   L == "QF_UFLRA" || L == "UFLRA";
+        };
+        bool combUfSatFloor = std::getenv("XOLVER_COMB_VALIDATE_SAT") != nullptr &&
+                              features.hasUF && !features.hasArray &&
+                              isCombUfLogic(logic);
+        if (ret == Result::Sat && combUfSatFloor) {
+            if (!lastModel_) lastModel_ = theoryManager.getModel();
+            if (combinationModelDefinitelyViolates()) {
+                lastUnknownReason_ =
+                    "uf-comb: SAT model violates an original assertion "
+                    "(EUF+arith arrangement not closed) — gated to Unknown (sound)";
                 lastModel_.reset();
                 ret = Result::Unknown;
             }

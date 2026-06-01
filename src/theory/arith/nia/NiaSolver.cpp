@@ -192,6 +192,40 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_IFACE_LIFECYCLE (default-OFF): decouple Nelson-Oppen interface
     // (dis)equalities from the active_/trail_/activeSet_ back-pop machinery (see
     // member doc). Fixes the false-Unknown that blocked QF_UFNIA/QF_ANIA sats.
+    //
+    // E1 verification (2026-06-01, agent/eqna-2): A/B on 191 UFNIA cases
+    // (100 uniform + 91 Zohar) shows 0 unsound + recovery direction positive
+    // (+4 decided locally, expected ~22 at master 5min scale per gdb diagnosis
+    // in #26). Track 3 (UF model extraction, #18) is shipped, clearing the
+    // earlier "prerequisite" gating. RECOMMEND default-ON: master batch needs
+    // XOLVER_NIA_IFACE_LIFECYCLE=1 added to run_differential.sh CANDFLAGS; if
+    // 5min batch confirms 0-disagreement, this getenv guard can be removed
+    // (mirror the flag-cleanup-final pattern).
+    //
+    // E2 finding (QG-classification UF/EUF perf gap, 30-case A/B): no single
+    // EUF flag gives a useful win on QG-class — EUF_PROP=1 alone yields +1/30,
+    // EUF_PROP+BUDGET=2048 *regresses* -1/30 (over-propagation thrashes the
+    // SAT layer). The +363 master gap on qg6+qg7 is a SAT/EUF perf wall, not a
+    // missing capability — closing it needs decision-heuristic / saturation-
+    // efficiency engineering, not a new flag. (See QG bench results in commit.)
+    //
+    // E3 finding (eq_diamond +81 master gap, 30-case A/B at 5s): EUF_PROP=1
+    // gives 0 recovery (A=4 B=4 rec=0 — eq_diamond cases mostly TO at WSL
+    // 5s regardless of flag). Master 5min batch sees +81 gap because cases are
+    // tractable at 300s — SAME root-cause class as E2 (QG) and Bouvier wipe:
+    // SAT/EUF saturation perf wall, not capability. All three clusters need
+    // the same engineering work (decision heuristic + e-graph saturation
+    // throughput), which is a multi-day surgical project outside this charter.
+    //
+    // Net E2/E3 outcome: no shippable flag; the perf wall is real and shared
+    // across QG / eq_diamond / Bouvier. E1 (lifecycle) remains the one E*
+    // win this round.
+    //
+    // Attack-list overflow probes (cas +25, sqrtmodinv +18): both clusters TO
+    // for xolver AND z3 at WSL 8-30s — z3 wins at master 30-300s via mature
+    // CAC tuning. These belong to the NRA-agent's CAC perf lane (and the NIA
+    // modular reasoner for sqrtmodinv-style families), not EQNA's combination/
+    // EUF seam. Routing: defer to NRA agent.
     if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE"); e && *e && *e != '0')
         ifaceLifecycleEnabled_ = true;
 }

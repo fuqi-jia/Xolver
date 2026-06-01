@@ -8,7 +8,10 @@
 namespace xolver {
 
 IncrementalEGraph::IncrementalEGraph(EufTermManager& tm) : tm_(tm) {
-    fastMerge_ = std::getenv("XOLVER_UF_FAST_CC") != nullptr;
+    // fastMerge_ defaults ON (see header). Env =0 disables (A/B escape).
+    if (const char* e = std::getenv("XOLVER_UF_FAST_CC")) {
+        fastMerge_ = !(e[0] == '0' && e[1] == '\0');
+    }
 }
 
 void IncrementalEGraph::clear() {

@@ -17,6 +17,7 @@ namespace xolver {
 class EufSolver : public TheorySolver {
 public:
     EufSolver();
+    ~EufSolver();
 
     TheoryId id() const override { return TheoryId::EUF; }
 
@@ -291,6 +292,25 @@ private:
     // Set on backtrack — next propagation call must do a full sweep (assigned
     // set changed, mergeRecord count regressed).
     bool forceFullEntailmentScan_ = true;
+
+    // XOLVER_EUF_HOTPROFILE (default-OFF, agent/eqna-2 E2/E3 profile task):
+    // lightweight per-check counters + chrono accumulators. Dump on dtor when
+    // any call happened. Used to triage QG-classification / eq_diamond hot
+    // path (perf+flamegraph not available on WSL).
+    bool hotProfileEnabled_ = false;
+    struct EufHotProfile {
+        uint64_t checkCalls = 0;
+        uint64_t mergesProcessed = 0;       // saturation merges drained
+        uint64_t explainCalls = 0;          // explainEquality invocations
+        uint64_t entailmentScanRecs = 0;    // recs iterated in takeEntailmentPropagations
+        uint64_t entailmentEmitted = 0;     // lemmas emitted by entailment scan
+        int64_t  checkUs = 0;               // total wall in check()
+        int64_t  saturationUs = 0;          // wall inside saturation loop
+        int64_t  explainUs = 0;             // wall inside explainEquality
+        int64_t  entailmentUs = 0;          // wall inside takeEntailmentPropagations
+        int64_t  registerSigUs = 0;         // wall inside registerPendingSignatures
+    };
+    EufHotProfile hotProfile_;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.
