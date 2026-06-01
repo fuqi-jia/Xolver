@@ -27,9 +27,10 @@ LibPolyKernel::~LibPolyKernel() {
         const uint64_t total = binOpHits_ + binOpMisses_;
         const double hitRate = total ? 100.0 * static_cast<double>(binOpHits_) / static_cast<double>(total) : 0.0;
         std::fprintf(stderr,
-            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu total=%llu hit_rate=%.2f%% cache_size=%zu\n",
+            "[XOLVER_NRA_KERNEL_STATS] hits=%llu misses=%llu total=%llu hit_rate=%.2f%% binOpCache=%zu sqfFactorsCache=%zu pool=%zu\n",
             (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_,
-            (unsigned long long)total, hitRate, binOpCache_.size());
+            (unsigned long long)total, hitRate,
+            binOpCache_.size(), sqfFactorsCache_.size(), pool_.size());
     }
 }
 
@@ -594,12 +595,29 @@ PolynomialKernel::PseudoRemainderResult LibPolyKernel::pseudoRemainderWithScale(
 }
 
 std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
+    // S1b: hash-cons. Unary, deterministic given fixed construction-time main
+    // variable. nullopt cached as NullPoly value (cache value space is disjoint
+    // from key space, no collision risk).
+    if (p == NullPoly) return std::nullopt;
+    const uint64_t key = binOpKey(6, p, 0);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) {
+        ++binOpHits_;
+        return it->second == NullPoly ? std::optional<PolyId>{} : std::optional<PolyId>{it->second};
+    }
+    ++binOpMisses_;
     const auto& pp = get(p);
-    if (poly::is_constant(pp)) return std::nullopt;
+    if (poly::is_constant(pp)) {
+        binOpCache_.emplace(key, NullPoly);
+        return std::nullopt;
+    }
     try {
         poly::Polynomial lc = poly::leading_coefficient(pp);
-        return alloc(std::move(lc));
+        PolyId r = alloc(std::move(lc));
+        binOpCache_.emplace(key, r);
+        return r;
     } catch (...) {
+        // Don't cache transient exceptions
         return std::nullopt;
     }
 }
@@ -757,10 +775,23 @@ PolyId LibPolyKernel::gcd(PolyId a, PolyId b) {
     // Sign/scale: libpoly returns a representative of the gcd in its integer
     // ring; the Lazard caller treats it up to a positive rational unit (and
     // re-verifies it via exactDivide), so the exact normalization is benign.
+    //
+    // S1b: hash-cons. Order-independent, deterministic → commutative cache fit.
+    if (a == NullPoly || b == NullPoly) {
+        try { return alloc(poly::gcd(get(a), get(b))); } catch (...) { return NullPoly; }
+    }
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;
+    const uint64_t key = binOpKey(5, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     try {
         poly::Polynomial g = poly::gcd(get(a), get(b));
-        return alloc(std::move(g));
+        PolyId r = alloc(std::move(g));
+        binOpCache_.emplace(key, r);
+        return r;
     } catch (...) {
+        // Do NOT cache failures — could be transient (allocator OOM etc.)
         return NullPoly;
     }
 }
@@ -771,19 +802,29 @@ std::vector<PolyId> LibPolyKernel::squareFreeFactors(PolyId a) {
     // exactly a's real-root set (multiplicity collapsed). Replacing a by these
     // factors in the CAC characterization is ROOT-PRESERVING (sound). On any
     // failure, fall back to {a} (conservative no-op — never drops roots).
+    //
+    // S1b: hash-cons by input PolyId. This is the HOT path for cas/sqrtmodinv —
+    // SingleCellProjection.cpp:258 calls this per boundary, and the same
+    // boundary recurs across cell-jump iterations. Vector-valued cache (each
+    // entry stores the factor PolyIds, not the polynomials themselves).
+    if (a == NullPoly) return {a};
+    auto cIt = sqfFactorsCache_.find(a);
+    if (cIt != sqfFactorsCache_.end()) { ++binOpHits_; return cIt->second; }
+    ++binOpMisses_;
+    std::vector<PolyId> out;
     try {
         std::vector<poly::Polynomial> facs = poly::square_free_factors(get(a));
-        std::vector<PolyId> out;
         out.reserve(facs.size());
         for (auto& f : facs) {
             if (poly::is_constant(f)) continue;          // constants have no roots
             out.push_back(alloc(std::move(f)));
         }
         if (out.empty()) out.push_back(a);                // all-constant / degenerate ⇒ keep a
-        return out;
     } catch (...) {
-        return {a};
+        out = {a};
     }
+    sqfFactorsCache_.emplace(a, out);                     // cache even the fallback (deterministic)
+    return out;
 }
 
 std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {

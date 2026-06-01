@@ -108,6 +108,12 @@ private:
     // legitimate slot. Add and Mul canonicalize (min, max) before keying since
     // libpoly polynomials commute. Grow-forever: bounded by #unique inputs.
     mutable std::unordered_map<uint64_t, PolyId> binOpCache_;
+    // S1b cousin caches (gcd/leadingCoefficient reuse binOpCache_ at op codes
+    // 5/6; squareFreeFactors needs vector-valued storage so it gets its own
+    // map keyed by input PolyId). pseudoRemainder NOT cached because libpoly's
+    // prem depends on main_variable which pscChain mutates → caching would
+    // bind to whichever order happened to be installed at first call.
+    mutable std::unordered_map<PolyId, std::vector<PolyId>> sqfFactorsCache_;
     mutable uint64_t binOpHits_ = 0;   // S1 stats (XOLVER_NRA_KERNEL_STATS)
     mutable uint64_t binOpMisses_ = 0;
     static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
