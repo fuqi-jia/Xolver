@@ -4,6 +4,7 @@
 #include <functional>
 #include <chrono>
 #include <cstdlib>
+#include <cstdio>
 #include <map>
 
 namespace xolver {
@@ -1079,6 +1080,14 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             // exact closed-form candidate that the product-pair strategy
             // misses entirely.
             if (bilinearSubst_) {
+                // I3-derisk diagnostic. XOLVER_NIA_LS_DIAG=1 prints
+                // per-flip the count of (var-pair, direction) attempts +
+                // accepted candidate roots. Lets us confirm bilinearSubst
+                // fires on real VeryMax atoms before claiming the lever
+                // is broken vs just outbudget.
+                static const bool diag = std::getenv("XOLVER_NIA_LS_DIAG") != nullptr;
+                int diag_pairs = 0, diag_lin_roots = 0, diag_quad_roots = 0,
+                    diag_cands = 0, diag_accepted = 0;
                 auto termsOpt = kernel_.terms(C.poly);
                 if (termsOpt) {
                     // Collect candidate (solveVarName) values across all
@@ -1108,8 +1117,16 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         }
                     }
                     // For each pair (a, b), try fixing a and solving for
-                    // b, then fixing b and solving for a.
+                    // b, then fixing b and solving for a. Track BOTH
+                    // directions' roots so that a joint (root_x, root_y)
+                    // candidate can be proposed at the end — derisk
+                    // diagnostic showed single-var roots fire structurally
+                    // but lose to existing moves on the GLOBAL weighted
+                    // cost. A joint move respects the bilinear interaction
+                    // in both dimensions and is much more likely to
+                    // globally improve.
                     for (const auto& pair : bilPairs) {
+                        std::vector<mpz_class> rootsFirst, rootsSecond;
                         for (int dir = 0; dir < 2; ++dir) {
                             const std::string& solveVar = (dir == 0) ? pair.first : pair.second;
                             // Both pair members must be in cvars (they
@@ -1153,11 +1170,12 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             std::vector<mpz_class> roots;
                             mpz_class c0 = byDeg.count(0) ? byDeg[0] : mpz_class(0);
                             mpz_class c1 = byDeg.count(1) ? byDeg[1] : mpz_class(0);
+                            if (diag) ++diag_pairs;
                             if (maxDeg <= 1) {
                                 // a*v + b = 0 -> v = -b/a.
                                 if (c1 != 0) {
                                     mpz_class neg = -c0;
-                                    if ((neg % c1) == 0) roots.push_back(neg / c1);
+                                    if ((neg % c1) == 0) { roots.push_back(neg / c1); if (diag) ++diag_lin_roots; }
                                 }
                             } else if (maxDeg == 2) {
                                 mpz_class c2 = byDeg.count(2) ? byDeg[2] : mpz_class(0);
@@ -1165,7 +1183,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                                     // degenerate linear
                                     if (c1 != 0) {
                                         mpz_class neg = -c0;
-                                        if ((neg % c1) == 0) roots.push_back(neg / c1);
+                                        if ((neg % c1) == 0) { roots.push_back(neg / c1); if (diag) ++diag_lin_roots; }
                                     }
                                 } else {
                                     // a*v^2 + b*v + c = 0: D = b^2 - 4ac
@@ -1178,8 +1196,8 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                                             mpz_class num1 = -c1 + sq;
                                             mpz_class num2 = -c1 - sq;
                                             if (denom != 0) {
-                                                if ((num1 % denom) == 0) roots.push_back(num1 / denom);
-                                                if ((num2 % denom) == 0) roots.push_back(num2 / denom);
+                                                if ((num1 % denom) == 0) { roots.push_back(num1 / denom); if (diag) ++diag_quad_roots; }
+                                                if ((num2 % denom) == 0) { roots.push_back(num2 / denom); if (diag) ++diag_quad_roots; }
                                             }
                                         }
                                     }
@@ -1190,6 +1208,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             for (const auto& r : roots) {
                                 mpz_class cand = clampVar(solveVar, r);
                                 if (cand == cur[solveVar]) continue;
+                                if (diag) ++diag_cands;
                                 mpz_class delta;
                                 mpz_class nc = tryMoveCost(solveVar, cand, delta);
                                 if (!haveBest || nc < bestCost) {
@@ -1197,9 +1216,75 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                                     bestVar = solveVar;
                                     bestVal = cand;
                                     haveBest = true;
+                                    if (diag) ++diag_accepted;
                                 }
+                                // Capture for the JOINT-move attempt below.
+                                if (dir == 0) rootsFirst.push_back(cand);
+                                else          rootsSecond.push_back(cand);
                             }
                         }
+                        // JOINT-move attempt: for each (rx, ry) cross-
+                        // product, evaluate global cost of moving BOTH
+                        // pair members together. Most VeryMax atoms
+                        // share their vars across many clauses; moving
+                        // only one breaks neighbours, so the single-var
+                        // candidate is rejected on global cost. Moving
+                        // both jointly respects the bilinear interaction
+                        // and is the move design master called for
+                        // ("固定 y 找 x 范围, 固定 x 找 y 范围, 二维 cell").
+                        if (!rootsFirst.empty() && !rootsSecond.empty()) {
+                            const std::string& xn = pair.first;
+                            const std::string& yn = pair.second;
+                            int joint_tried = 0;
+                            for (const auto& rx : rootsFirst) {
+                                for (const auto& ry : rootsSecond) {
+                                    if (++joint_tried > 4) break;  // cap per pair
+                                    if (rx == cur[xn] && ry == cur[yn]) continue;
+                                    // Inline joint-cost evaluation:
+                                    // restore semantics identical to the
+                                    // bilinearPair_ block's tryJointCost.
+                                    const mpz_class cxOrig = cur[xn];
+                                    const mpz_class cyOrig = cur[yn];
+                                    cur[xn] = rx;
+                                    cur[yn] = ry;
+                                    std::unordered_set<std::size_t> affected;
+                                    auto itx = varToClauses.find(xn);
+                                    auto ity = varToClauses.find(yn);
+                                    if (itx != varToClauses.end())
+                                        for (auto i : itx->second) affected.insert(i);
+                                    if (ity != varToClauses.end())
+                                        for (auto i : ity->second) affected.insert(i);
+                                    mpz_class jdelta = 0;
+                                    for (auto i : affected) {
+                                        mpz_class nv = evalCviol(i, cur);
+                                        jdelta += (nv - cviol[i]) * weight[i];
+                                    }
+                                    cur[xn] = cxOrig;
+                                    cur[yn] = cyOrig;
+                                    mpz_class jc = weightedCost + jdelta;
+                                    if (jc < bestPairCost) {
+                                        bestPairCost = jc;
+                                        bestPairVarX = xn;
+                                        bestPairValX = rx;
+                                        bestPairVarY = yn;
+                                        bestPairValY = ry;
+                                        havePairBest = true;
+                                        if (diag) ++diag_accepted;
+                                    }
+                                }
+                                if (joint_tried > 4) break;
+                            }
+                        }
+                    }
+                }
+                if (diag && (diag_pairs > 0 || diag_lin_roots > 0 || diag_cands > 0)) {
+                    static thread_local int diag_flip = 0;
+                    ++diag_flip;
+                    if ((diag_flip & 63) == 1) {
+                        std::fprintf(stderr,
+                            "[LS-BSUBST] flip=%d pairs=%d lin=%d quad=%d cands=%d accepted=%d\n",
+                            diag_flip, diag_pairs, diag_lin_roots, diag_quad_roots,
+                            diag_cands, diag_accepted);
                     }
                 }
             }
