@@ -67,6 +67,13 @@ struct SmartInitVarInfo {
     // a value, it picks one residue then shifts by k*modulus.
     mpz_class modulus = 0;  // 0 = unset
     std::vector<mpz_class> allowedResidues;
+
+    // LS-SMART-5: coefficient-derived sample range. For each atom
+    // containing v with coefficient c_i and constant rhs_i, the
+    // plausible-|v| upper bound is |rhs_i / c_i| (the value v would
+    // need to balance the atom if all other vars were zero).
+    // coefRange = max of these over all atoms; 0 = no useful bound.
+    mpz_class coefRange = 0;
 };
 
 class SmartInit {

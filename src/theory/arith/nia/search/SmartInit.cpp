@@ -162,6 +162,56 @@ void SmartInit::analyze(
     varsInOrder_.clear();
     extractLinearInfo(constraints);
     tightenBounds(constraints, domains);
+
+    // LS-SMART-5: per-var coefficient-derived sample range. For each
+    // atom, compute |constSum / c_v| for each var v with linear
+    // coefficient c_v (degree-1 monomial). Take the max over atoms.
+    // For nonlinear atoms (degree >= 2 monomials), use the constSum
+    // magnitude as a rough scale signal regardless of var.
+    for (const auto& c : constraints) {
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        mpz_class constSum = 0;
+        std::unordered_map<std::string, mpz_class> linCoefs;
+        bool nonlinear = false;
+        for (const auto& t : *termsOpt) {
+            if (t.powers.empty()) { constSum += t.coefficient; continue; }
+            if (t.powers.size() == 1 && t.powers[0].second == 1) {
+                std::string nm(kernel_.varName(t.powers[0].first));
+                linCoefs[nm] += t.coefficient;
+            } else {
+                nonlinear = true;
+            }
+        }
+        const mpz_class absRhs = (constSum < 0) ? -constSum : constSum;
+        if (absRhs == 0) continue;
+        for (auto& [v, coef] : linCoefs) {
+            if (coef == 0) continue;
+            auto it = info_.find(v);
+            if (it == info_.end()) continue;
+            mpz_class absCoef = (coef < 0) ? -coef : coef;
+            // Plausible upper bound on |v|: |rhs / coef|, plus a small
+            // safety factor (×2) to allow LS to overshoot slightly.
+            mpz_class bound = (absRhs + absCoef - 1) / absCoef;  // ceil division
+            bound *= 2;
+            // Floor at 20 to ensure the existing narrow default is
+            // never narrower than coef-derived.
+            if (bound < 20) bound = 20;
+            if (bound > it->second.coefRange) it->second.coefRange = bound;
+        }
+        // For nonlinear atoms, propagate absRhs as a SCALE signal to
+        // every var mentioned in the atom (since LS may need to
+        // explore values up to that magnitude).
+        if (nonlinear) {
+            for (const auto& v : kernel_.variables(c.poly)) {
+                auto it = info_.find(v);
+                if (it == info_.end()) continue;
+                mpz_class bound = absRhs * 2;
+                if (bound < 20) bound = 20;
+                if (bound > it->second.coefRange) it->second.coefRange = bound;
+            }
+        }
+    }
 }
 
 mpz_class SmartInit::evalDerived(const std::string& anchor,
@@ -216,10 +266,19 @@ IntegerModel SmartInit::propose(std::mt19937_64& rng) const {
         } else if (info.hasUpper) {
             model[v] = info.upper;
         } else {
-            // Fully unbounded: narrow ±20 random (vs LS's ±2000). Per
-            // H5 VeryMax SAT models, values are typically small.
-            long r = static_cast<long>(rng() % 41) - 20;
-            model[v] = mpz_class(r);
+            // Fully unbounded: prefer the coefficient-derived range
+            // (LS-SMART-5) when set, else fall back to narrow ±20.
+            mpz_class range = info.coefRange;
+            if (range <= 0) range = 20;
+            // Cap to a sane maximum so wild atoms don't blow up the
+            // sample magnitude.
+            const mpz_class RANGE_CAP("1000000");
+            if (range > RANGE_CAP) range = RANGE_CAP;
+            // Sample uniformly in [-range, range].
+            uint64_t r = rng();
+            mpz_class span = 2 * range + 1;
+            mpz_class rmod = mpz_class(static_cast<unsigned long>(r)) % span;
+            model[v] = rmod - range;
         }
     }
     // Phase 3: cascade-evaluate derived vars using model[]'s
