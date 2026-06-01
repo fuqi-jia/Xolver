@@ -667,11 +667,19 @@ public:
 
         Result r = Result::Unknown;
         for (size_t i = 0; i < nArms; ++i) {
+            // Apply the arm's env flags BEFORE (re-)parsing. Theory solvers read
+            // their flags (e.g. XOLVER_LIA_CUTS / XOLVER_LIA_GMI_CUTS) once in
+            // their constructor, which runs inside parseFile -> setupSolvers; if
+            // applyArm ran after the reparse the reconstructed solvers would miss
+            // the arm's flags and every differentiated arm would silently collapse
+            // to the base config. Arm 0 reuses the already-parsed problem (parsed
+            // under the user env); a base arm 0 carries no extra flags, so that is
+            // exactly the user's configuration.
+            applyArm(arms[i]);
             if (i > 0) {                       // pristine state for arm 2..N
                 reset();
                 if (!parseFile(path)) break;   // source vanished -> stop, keep best
             }
-            applyArm(arms[i]);
             r = runArmWithBudget(arms[i].budgetMs);
             if (r == Result::Sat || r == Result::Unsat) break;  // definitive wins
         }
