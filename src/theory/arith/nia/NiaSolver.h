@@ -256,6 +256,15 @@ private:
     // ORIGINAL NIA constraints. Default-OFF (XOLVER_NIA_LBBB),
     // Full-effort only.
     std::optional<TheoryCheckResult> stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // HYB-2 (master 2026-06-02, post-Smart-LS). Coordinated LS-on-U +
+    // BB-on-B for partition profiles where B dominates (|B| > |U|;
+    // ITS-like, H5 finding). LS-tracked bounds give per-U-var
+    // midpoints; pin U vars at midpoint via DomainStore singletons;
+    // run BitBlastSolver on the residual formula (which is now bounded
+    // since the unbounded U vars are pinned). Validate any Sat candidate
+    // against the ORIGINAL constraints. Default-OFF XOLVER_NIA_HYB_LS_BB,
+    // Full-effort only.
+    std::optional<TheoryCheckResult> stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);

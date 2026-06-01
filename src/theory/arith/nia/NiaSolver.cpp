@@ -166,6 +166,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // marked itself failed. Bit-blast over the box LS explored.
     // Full-effort only; gated default-OFF behind XOLVER_NIA_LBBB.
     addFull("nia.lbbb", &NiaSolver::stageBoundedBitBlast);
+    // HYB-2 fires AFTER LBBB so it's the "second-shot" when LBBB also
+    // didn't find SAT. Pins U vars at LS-midpoint, leaves B vars free
+    // for BB. Full-effort only; gated default-OFF XOLVER_NIA_HYB_LS_BB.
+    addFull("nia.hyb-ls-bb", &NiaSolver::stageHybridLsBb);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
@@ -1529,6 +1533,59 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStor
     // BB returned UNSAT (within the bounded box) or Unknown — both
     // are inconclusive for LBBB. Box might be too small; main pipeline
     // can decide. Never claim UNSAT here.
+    return std::nullopt;
+}
+
+// HYB-2 (post-Smart-LS). For ITS-like partitions (|B| >= |U|), LS
+// has done the U-search and recorded per-var bounds. Pin U vars at
+// the midpoint of their LS-visited range via DomainStore singletons,
+// then run BitBlast on the residual (which now has only B-free vars,
+// plus the pinned-U linear influence factored in). Validate against
+// the original NIA formula.
+std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_HYB_LS_BB");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+
+    VariablePartition vp(*kernel_);
+    auto pr = vp.partition(normalized_, domains_, 32);
+    if (pr.totalVars() == 0) return std::nullopt;
+    // Gate: B-dominant partition (otherwise HYB-3 / LBBB are better).
+    if (pr.unboundedCount() == 0 || pr.boundedCount() < pr.unboundedCount()) {
+        return std::nullopt;
+    }
+    // Read LS-tracked bounds (LBBB Phase 1 prerequisite).
+    const auto& mins = localSearch_.trackedMin();
+    const auto& maxs = localSearch_.trackedMax();
+    if (mins.empty() || maxs.empty()) return std::nullopt;
+
+    DomainStore subset = domains_;
+    SatLit dummyReason = SatLit::positive(0);
+    bool pinnedAny = false;
+    for (const auto& u : pr.unbounded) {
+        auto miIt = mins.find(u);
+        auto mxIt = maxs.find(u);
+        if (miIt == mins.end() || mxIt == maxs.end()) continue;
+        mpz_class mid = (miIt->second + mxIt->second) / 2;
+        std::set<mpz_class> singleton{mid};
+        subset.restrictToFiniteSet(u, singleton, dummyReason);
+        pinnedAny = true;
+    }
+    if (!pinnedAny) return std::nullopt;
+
+    auto res = bitBlast_.solve(normalized_, subset, validator_);
+    if (res.status == bitblast::BitBlastResult::Status::Sat) {
+        if (validator_.validate(res.model, normalized_) ==
+            IntegerModelValidator::Result::Valid) {
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        }
+    }
     return std::nullopt;
 }
 
