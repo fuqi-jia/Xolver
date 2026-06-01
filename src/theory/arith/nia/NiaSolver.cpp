@@ -1106,10 +1106,24 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearization(TheoryLemmaStorag
     // 9.5: Incremental linearization for nonlinear constraints
     // V1 limited: abstraction lemma + square nonnegativity only.
     // No McCormick, secant, tangent until LIA aux-var handling is verified.
+    //
+    // H1 (master 2026-06-01 audit): XOLVER_NIA_SECANT (default-OFF)
+    // re-enables the upper-bounding square secant cut for NIA. The cut
+    // (x^2 <= ((hi+lo)*x - hi*lo)) over a bounded box is a sound valid
+    // linear inequality (cvc5 NLext canonical lemma). It was originally
+    // gated off pending LIA aux-var handling; the LIA simplex is now
+    // stable (lia P4 incremental-beta shipped), so re-enabling is a
+    // candidate ship. NRA's NraLinearizationAdapter already runs with
+    // emitSquareSecant=true, so the cut-generator code path is
+    // production-validated; only the wire-in is opt-in here.
     if (pendingLinLemmas_.empty() && registry_ && linAdapter_) {
         LinearizationConfig cfg;
         cfg.emitAllMcCormick = true;
-        cfg.emitSquareSecant = false;
+        static const bool secantOn = [] {
+            const char* e = std::getenv("XOLVER_NIA_SECANT");
+            return e && *e && *e != '0';
+        }();
+        cfg.emitSquareSecant = secantOn;
         cfg.emitSquareTangent = true;
         cfg.emitSquareNonneg = true;
         cfg.maxLemmas = 10;
