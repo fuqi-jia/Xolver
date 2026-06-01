@@ -16,6 +16,7 @@
 #include "frontend/preprocess/ToRealLiteralFold.h"
 #include "frontend/preprocess/UnconditionalConstantPropagation.h"
 #include "frontend/preprocess/FormulaRewriter.h"
+#include "frontend/preprocess/MonomialSharingPass.h"
 #include "frontend/preprocess/SolveEqs.h"
 #include "frontend/preprocess/ModelConverter.h"
 #include "frontend/factory/StrategyPresets.h"
@@ -763,6 +764,31 @@ public:
                 return Result::Unsat;
             }
             rewriter.commit();
+        }
+
+        // H2 (master 2026-06-01): MonomialSharingPass. Replace structurally-
+        // shared nonlinear monomials with fresh m_<n> variables anchored by
+        // ONE definitional assertion m_<n> = (* x y) per shared monomial.
+        // Targets the per-c.reason cut-lemma multiplicity in the linearizer.
+        // Default-OFF (XOLVER_PP_MONOMIAL_SHARE). Soundness: never eliminate
+        // nonlinearity — only NAME it (the definitional assertion is a
+        // theory atom the NIA solver still enforces). Restricted to base
+        // scope (substitution is global) AND to NIA-family logics only:
+        // NRA's CDCAC engine specifically handled MUL nodes via libpoly's
+        // variable ordering; renaming x*y -> m_xy under NRA caused a TO
+        // regression on nra_092 in the full reg gate. NIA's linearizer-
+        // based path is the design target of the pass.
+        const bool niaFamilyLogic =
+            logic.find("NIA") != std::string::npos;  // QF_NIA, QF_UFNIA, QF_ANIA, QF_AUFNIA, QF_UFDTNIA
+        if (std::getenv("XOLVER_PP_MONOMIAL_SHARE") &&
+            ir->currentScopeLevel() == 0 && niaFamilyLogic) {
+            MonomialSharingPass shareP(*ir, intSortId_, realSortId_, boolSortId_);
+            size_t selected = shareP.run();
+            if (selected > 0) {
+                shareP.commit();
+                std::cerr << "[MonomialShare] selected " << selected
+                          << " shared monomial(s)\n";
+            }
         }
 
         // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
