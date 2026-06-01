@@ -84,12 +84,15 @@ LibPolyKernel::~LibPolyKernel() {
         const double termsRate = termsTotal ? 100.0 * static_cast<double>(termsHits_) / static_cast<double>(termsTotal) : 0.0;
         const uint64_t varsTotal = varsHits_ + varsMisses_;
         const double varsRate = varsTotal ? 100.0 * static_cast<double>(varsHits_) / static_cast<double>(varsTotal) : 0.0;
+        const uint64_t degTotal = degreeHits_ + degreeMisses_;
+        const double degRate = degTotal ? 100.0 * static_cast<double>(degreeHits_) / static_cast<double>(degTotal) : 0.0;
         std::fprintf(stderr,
-            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | terms hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | vars hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
+            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | terms hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | vars hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | degree hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
             (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_, hitRate, binOpCache_.size(),
             (unsigned long long)tpiHits_,   (unsigned long long)tpiMisses_,  tpiRate, tpiSize,
             (unsigned long long)termsHits_, (unsigned long long)termsMisses_, termsRate, termsCache_.size(),
             (unsigned long long)varsHits_,  (unsigned long long)varsMisses_,  varsRate, varsCache_.size(),
+            (unsigned long long)degreeHits_, (unsigned long long)degreeMisses_, degRate, degreeCache_.size(),
             sqfFactorsCache_.size(), pool_.size());
     }
 }
@@ -376,40 +379,48 @@ std::optional<mpz_class> LibPolyKernel::evalIntegerVarId(
 }
 
 std::optional<int> LibPolyKernel::degree(PolyId a, std::string_view var) const {
+    // S1e (Task M): hash-cons by (PolyId, VarId). Resolve var name to
+    // VarId first so the key is stable across string_view lifetimes. Cache
+    // value is the int degree (always defined per current returns: 0 on
+    // missing var, main-var degree, or term-scan max). The (cheap)
+    // is_constant path is also cached because the lookup itself dominates
+    // at 55 call sites.
+    VarId vid = NullVar;
+    auto vit = nameToVar_.find(std::string(var));
+    if (vit != nameToVar_.end()) vid = vit->second;
+    const uint64_t key = (static_cast<uint64_t>(a) << 32) | static_cast<uint32_t>(vid);
+    {
+        auto it = degreeCache_.find(key);
+        if (it != degreeCache_.end()) {
+            ++degreeHits_;
+            return it->second;
+        }
+    }
+    ++degreeMisses_;
+
+    int result = 0;
     const auto& p = get(a);
-    // If polynomial is constant, degree is 0
-    if (poly::is_constant(p)) {
-        return 0;
-    }
-    auto it = nameToVar_.find(std::string(var));
-    if (it == nameToVar_.end()) {
-        // Variable not in this kernel's context → not present in polynomial
-        return 0;
-    }
-    poly::Variable pv = varIdToPolyVar_[it->second];
-    if (poly::main_variable(p) == pv) {
-        return static_cast<int>(poly::degree(p));
-    }
-    // Variable is not the main variable: iterate terms to find max exponent.
-    int maxDeg = 0;
-    bool found = false;
-    auto termsOpt = terms(a);
-    if (termsOpt) {
-        for (const auto& term : *termsOpt) {
-            for (const auto& [vid, exp] : term.powers) {
-                if (vid == it->second) {
-                    maxDeg = std::max(maxDeg, exp);
-                    found = true;
-                    break;
+    if (!poly::is_constant(p) && vid != NullVar) {
+        poly::Variable pv = varIdToPolyVar_[vid];
+        if (poly::main_variable(p) == pv) {
+            result = static_cast<int>(poly::degree(p));
+        } else {
+            // Variable is not the main variable: iterate terms to find max exponent.
+            auto termsOpt = terms(a);  // transitively cached via S1c
+            if (termsOpt) {
+                for (const auto& term : *termsOpt) {
+                    for (const auto& [tvid, exp] : term.powers) {
+                        if (tvid == vid) {
+                            if (exp > result) result = exp;
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
-    if (found) {
-        return maxDeg;
-    }
-    // Variable does not appear in any term.
-    return 0;
+    degreeCache_.emplace(key, result);
+    return result;
 }
 
 std::optional<std::vector<mpz_class>> LibPolyKernel::getIntegerCoefficients(
