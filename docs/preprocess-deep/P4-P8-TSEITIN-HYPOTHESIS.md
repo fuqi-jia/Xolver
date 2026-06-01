@@ -43,3 +43,28 @@ not the championship prize.
 
 Diagnostic shipped: `XOLVER_SAT_SIZE_DIAG` (prints CaDiCaL var/active/clause counts
 at each solve()) — reusable for any future CNF-size investigation.
+
+## Labyrinth follow-up (pursued per dispatch) — also engine-bound, not a PP lever
+Investigated the "DAG-sharing-aware CNF" hypothesis directly:
+- **All 187354 asserts are DISTINCT** (mostly binary/ternary theory ORs) — there
+  is **no shared OR sub-expression to dedup/share**. The hash-consed IR already
+  shares identical sub-exprs; the redundancy z3 removes is at the SAT clause level.
+- **PG_CNF (polarity, already shipped) cuts clauses 641 437 → 207 075 (3×)** but
+  Labyrinth still **times out @60 s** (z3 sat 5 s). Clause count is NOT the binding
+  constraint.
+- **gdb hot spot = `CaDiCaL::search_assign` / `decide`** — pure **SAT search**, no
+  theory frames. The bottleneck is CaDiCaL closing the boolean search over the
+  187 K-clause instance; z3's SAT engine does it in 5 s.
+- **Verdict: SAT-search-bound (CaDiCaL).** No preprocessing lever — the relevant
+  PP (PG-CNF) is shipped and reduces clauses but does not unlock the search.
+  Routed to SAT-layer (CaDiCaL config / clause-DB / restart tuning), not preprocess.
+
+## Final lane conclusion (P4–P8 + Labyrinth)
+**Every high-gap cluster diagnosed this round is engine-bound; none is
+preprocessing-recoverable.** The proposed PP hypotheses (Tseitin explosion,
+mod-2^k routing, array-sat bypass, sqrt elimination, DAG-sharing CNF) are each
+refuted by measurement or structure. The preprocess-deep actionable surface is
+**`convert` (GAUSS, shipped, net-positive)**. The remaining gap is theory/SAT
+engine throughput — lia-lra-deep (simplex), cac-deep (poly kernel), EQNA
+(combination), NIA (arch ceiling), SAT-layer (CaDiCaL). Recommend redirecting
+this gap's effort to the engine lanes.
