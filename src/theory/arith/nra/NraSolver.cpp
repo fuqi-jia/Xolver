@@ -165,6 +165,19 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
         hybStatsLastDumpedSize = static_cast<int>(presolveConstraints_.size());
     }
 
+    // Task NRA-HYB Step 2 (XOLVER_NRA_HYB_SIMPLEX_CAC, default OFF):
+    // Linear-first probe. Filter the active constraint set to L (linear
+    // only), call NraLocalSearch on the L subset; if it finds a rational
+    // candidate, validate it against the FULL original constraint set
+    // via validateCandidate below.
+    //
+    // The probe runs AFTER validateCandidate is in scope (see lambda
+    // below); the actual fire point is right before stageLocalSearch.
+    // Implemented as a stateful flag we check at the right moment.
+    bool hybProbeArmed =
+        (effort == TheoryEffort::Full) &&
+        std::getenv("XOLVER_NRA_HYB_SIMPLEX_CAC") != nullptr;
+
     // Helper: exact-validate a rational assignment against every active
     // polynomial constraint via the kernel sign.
     auto validateCandidate = [&](const std::unordered_map<VarId, mpq_class>& cand) -> bool {
@@ -252,6 +265,63 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                     satFastModel_ = std::move(*candOpt);
                     return TheoryCheckResult::consistent();
                 }
+            }
+        }
+    }
+
+    // Task NRA-HYB Step 2 firing point. validateCandidate is now in scope.
+    if (hybProbeArmed) {
+        std::vector<PolyId> activePolys;
+        activePolys.reserve(presolveConstraints_.size());
+        for (const auto& c : presolveConstraints_) activePolys.push_back(c.poly);
+        const auto partition = computePartition(activePolys, *kernel_);
+        const bool diag = std::getenv("XOLVER_NRA_HYB_DIAG") != nullptr;
+        if (partition.linearConstraints >= 2 &&
+            partition.linearConstraints * 2 >= partition.totalConstraints) {
+            std::vector<NraLocalSearch::Constraint> linOnly;
+            linOnly.reserve(partition.linearConstraints);
+            std::unordered_set<VarId> linVars;
+            for (const auto& c : presolveConstraints_) {
+                if (c.poly == NullPoly) continue;
+                auto termsOpt = kernel_->terms(c.poly);
+                bool isLinear = false;
+                if (termsOpt) {
+                    isLinear = true;
+                    for (const auto& term : *termsOpt) {
+                        int totalDeg = 0;
+                        for (const auto& [vid, exp] : term.powers) totalDeg += exp;
+                        if (totalDeg > 1) { isLinear = false; break; }
+                    }
+                }
+                if (isLinear) {
+                    linOnly.push_back({c.poly, c.rel, c.reason});
+                    for (const auto& vn : kernel_->variables(c.poly)) {
+                        auto vid = kernel_->findVar(vn);
+                        if (vid) linVars.insert(*vid);
+                    }
+                }
+            }
+            std::vector<VarId> varVec(linVars.begin(), linVars.end());
+            if (diag) {
+                std::fprintf(stderr,
+                    "[XOLVER_NRA_HYB_DIAG] linear-probe: L=%zu vars=%zu\n",
+                    linOnly.size(), varVec.size());
+            }
+            NraLocalSearch lsProbe(*kernel_);
+            lsProbe.setBudgetMs(20);
+            lsProbe.setMaxRounds(5);
+            auto model = lsProbe.tryFindModel(linOnly, varVec);
+            if (model && validateCandidate(*model)) {
+                if (diag) {
+                    std::fprintf(stderr,
+                        "[XOLVER_NRA_HYB_DIAG] linear-probe SAT — model validates\n");
+                }
+                satFastModel_ = std::move(*model);
+                return TheoryCheckResult::consistent();
+            }
+            if (diag) {
+                std::fprintf(stderr,
+                    "[XOLVER_NRA_HYB_DIAG] linear-probe miss — falling through\n");
             }
         }
     }
