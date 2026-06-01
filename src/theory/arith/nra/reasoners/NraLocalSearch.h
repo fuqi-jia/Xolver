@@ -85,6 +85,36 @@ private:
     mutable uint64_t scaleCacheHits_ = 0;
     mutable uint64_t scaleCacheMisses_ = 0;
 
+    // Phase NRA-LS-D (Task F) — atom-violation incremental cache. atomViolation
+    // is called per (atom × candidate × round); when LS proposes a move
+    // var=q, atoms NOT containing var keep their cached violation (sub-asg
+    // unchanged), atoms containing var miss and recompute. Cache key is
+    // (PolyId, Relation, sub-asg restricted to atom's vars); equality is
+    // exact (sub-asg compared element-by-element) so collisions never return
+    // a wrong violation. Per-poly var-set cached separately for cheap reuse.
+    mutable std::unordered_map<PolyId, std::vector<VarId>> atomVarsCache_;
+    struct ViolationKey {
+        PolyId poly;
+        Relation rel;
+        std::vector<std::pair<VarId, mpq_class>> subAsg;   // canonical sorted by VarId
+        bool operator==(const ViolationKey& o) const {
+            return poly == o.poly && rel == o.rel && subAsg == o.subAsg;
+        }
+    };
+    struct ViolationKeyHash {
+        size_t operator()(const ViolationKey& k) const noexcept;
+    };
+    mutable std::unordered_map<ViolationKey, mpq_class, ViolationKeyHash> violationCache_;
+    mutable uint64_t violationCacheHits_ = 0;
+    mutable uint64_t violationCacheMisses_ = 0;
+
+    // Build the sub-asg vector restricted to `vars` from the full `asg`.
+    std::vector<std::pair<VarId, mpq_class>> buildSubAsg(
+        const std::vector<VarId>& vars,
+        const std::unordered_map<VarId, mpq_class>& asg) const;
+    // Compute (and cache) the var-set of a constraint's polynomial.
+    const std::vector<VarId>& atomVars(PolyId p) const;
+
     // Evaluate poly at a rational assignment → exact mpq value (NaN-safe: if a
     // variable is missing from `asg`, defaults to 0; if the result isn't a
     // constant, returns nullopt — should never happen with a complete asg).
