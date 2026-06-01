@@ -360,6 +360,177 @@ std::vector<Term> computeResidual(
     return residual;
 }
 
+// Detect if a polynomial p can be solved for a variable v.
+// Looks for a monomial of the form ±coeff * v (var with exp 1, alone),
+// where the coefficient is a constant (no other variables). Returns:
+//   - (v, isolatedCoeffSign, restTerms): v = -restTerms / isolatedCoeffSign
+// where restTerms is the polynomial (p - coeff*v).
+struct SolveForResult {
+    VarId v = NullVar;
+    mpq_class coeffOfV;                       // coefficient of v in the isolated monomial
+    std::vector<Term> remainder;              // terms of p excluding the v monomial
+};
+
+std::optional<SolveForResult> trySolveForLinearVariable(
+        const std::vector<Term>& terms) {
+    // Look for monomials of form coeff*v^1 with no other variables.
+    for (size_t i = 0; i < terms.size(); ++i) {
+        const Term& t = terms[i];
+        if (t.coefficient == 0) continue;
+        if (t.powers.size() != 1) continue;
+        if (t.powers[0].second != 1) continue;
+        VarId v = t.powers[0].first;
+        // Confirm v doesn't appear in any other monomial.
+        bool clean = true;
+        for (size_t j = 0; j < terms.size(); ++j) {
+            if (j == i) continue;
+            for (const auto& [vv, e] : terms[j].powers) {
+                if (vv == v) { clean = false; break; }
+            }
+            if (!clean) break;
+        }
+        if (!clean) continue;
+        SolveForResult r;
+        r.v = v;
+        r.coeffOfV = mpq_class(t.coefficient);
+        for (size_t j = 0; j < terms.size(); ++j) {
+            if (j == i) continue;
+            r.remainder.push_back(terms[j]);
+        }
+        return r;
+    }
+    return std::nullopt;
+}
+
+// Multiply two term-lists (polynomial product) and return the product.
+std::vector<Term> multiplyTerms(const std::vector<Term>& a,
+                                 const std::vector<Term>& b) {
+    std::unordered_map<std::string, std::pair<mpq_class, PowerKey>> acc;
+    for (const auto& ta : a) {
+        for (const auto& tb : b) {
+            PowerKey pk = addPowers(canon(ta.powers), canon(tb.powers));
+            mpq_class c = mpq_class(ta.coefficient) * mpq_class(tb.coefficient);
+            std::string key = powerHash(pk);
+            auto it = acc.find(key);
+            if (it == acc.end()) acc[key] = {c, pk};
+            else                 it->second.first += c;
+        }
+    }
+    std::vector<Term> out;
+    out.reserve(acc.size());
+    for (auto& [k, vp] : acc) {
+        if (vp.first == 0) continue;
+        Term t;
+        t.coefficient = mpz_class(vp.first.get_num() / vp.first.get_den());
+        // Only handle integer coefficients (kernel constraint). If non-integer,
+        // skip this substitution (sound: dropping derived constraint preserves
+        // soundness, just loses completeness on this case).
+        if (vp.first.get_den() != 1) return {};
+        t.powers = vp.second;
+        out.push_back(std::move(t));
+    }
+    return out;
+}
+
+// Scale a term list by a constant rational.
+std::vector<Term> scaleTerms(const std::vector<Term>& a, const mpq_class& s) {
+    std::vector<Term> out;
+    out.reserve(a.size());
+    for (const auto& t : a) {
+        mpq_class c = mpq_class(t.coefficient) * s;
+        if (c == 0) continue;
+        if (c.get_den() != 1) return {};   // non-integer; bail
+        Term nt;
+        nt.coefficient = mpz_class(c.get_num() / c.get_den());
+        nt.powers = t.powers;
+        out.push_back(std::move(nt));
+    }
+    return out;
+}
+
+// Sum two term-lists.
+std::vector<Term> addTerms(const std::vector<Term>& a, const std::vector<Term>& b) {
+    std::unordered_map<std::string, std::pair<mpq_class, PowerKey>> acc;
+    auto pushAll = [&](const std::vector<Term>& lst) {
+        for (const auto& t : lst) {
+            PowerKey pk = canon(t.powers);
+            std::string key = powerHash(pk);
+            auto it = acc.find(key);
+            if (it == acc.end()) acc[key] = {mpq_class(t.coefficient), pk};
+            else                 it->second.first += mpq_class(t.coefficient);
+        }
+    };
+    pushAll(a);
+    pushAll(b);
+    std::vector<Term> out;
+    out.reserve(acc.size());
+    for (auto& [k, vp] : acc) {
+        if (vp.first == 0) continue;
+        Term t;
+        if (vp.first.get_den() != 1) return {};
+        t.coefficient = mpz_class(vp.first.get_num() / vp.first.get_den());
+        t.powers = vp.second;
+        out.push_back(std::move(t));
+    }
+    return out;
+}
+
+// Compute v^k as a term-list (single monomial).
+std::vector<Term> varPower(VarId v, int k) {
+    if (k == 0) {
+        Term t;
+        t.coefficient = mpz_class(1);
+        return {t};
+    }
+    Term t;
+    t.coefficient = mpz_class(1);
+    t.powers.push_back({v, k});
+    return {t};
+}
+
+// Substitute v -> replacement_poly in target_terms.
+// Walks each monomial of target. If monomial contains v^k for k>=1:
+//   monomial = coeff * v^k * other_factors
+//   contributes coeff * (replacement_poly)^k * other_factors
+// where other_factors are the non-v powers of the monomial.
+// Returns the substituted polynomial as a term list.
+std::vector<Term> substitutePolyInTerms(
+        const std::vector<Term>& target,
+        VarId v,
+        const std::vector<Term>& replacement) {
+    std::vector<Term> result;
+    for (const auto& t : target) {
+        int kOfV = 0;
+        std::vector<std::pair<VarId, int>> otherPowers;
+        for (const auto& [vv, e] : t.powers) {
+            if (vv == v) kOfV = e;
+            else         otherPowers.push_back({vv, e});
+        }
+        if (kOfV == 0) {
+            // No v in this monomial; keep as-is.
+            result.push_back(t);
+            continue;
+        }
+        // Build replacement^kOfV by repeated multiplication.
+        std::vector<Term> repK;
+        repK.push_back({mpz_class(1), {}});   // start with 1
+        for (int i = 0; i < kOfV; ++i) {
+            repK = multiplyTerms(repK, replacement);
+            if (repK.empty() && i+1 < kOfV) return {};  // failed mid-power
+        }
+        // Multiply by the other factors of the monomial (coeff * otherPowers).
+        Term otherMono;
+        otherMono.coefficient = t.coefficient;
+        otherMono.powers = otherPowers;
+        auto scaled = multiplyTerms(repK, {otherMono});
+        result = addTerms(result, scaled);
+        if (result.empty() && (!scaled.empty() || repK.size() > 1)) {
+            // Sum collapsed to zero -- this is fine, continue.
+        }
+    }
+    return result;
+}
+
 // Try to factor out a sign-definite variable v from EQ constraint c.
 // If every monomial of c.poly contains v with positive exponent, the
 // reduced polynomial (each exponent decremented by 1) is sound to add
@@ -496,6 +667,9 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     PolynomialKernel& kernel,
     int maxIterations) {
 
+    // Increase iteration cap for deeper substitution cascades like mgc_02.
+    if (maxIterations < 12) maxIterations = 12;
+
     // Round 0: try plain interval refutation.
     if (auto c = tryRefuteByPolynomialInterval(constraints, facts, kernel))
         return c;
@@ -509,12 +683,34 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     std::vector<DerivedConstraint> derived;
     std::unordered_set<std::string> seen;
 
+    // Cap on derived constraint count to prevent exponential explosion.
+    // mgc_02 needs ~50 derivations; cap at 200 as safety budget.
+    constexpr size_t kMaxDerivedCap = 200;
     auto addDerived = [&](DerivedConstraint d) -> bool {
+        if (derived.size() >= kMaxDerivedCap) return false;
         std::string k = termsKey(d.terms);
         if (seen.count(k)) return false;
         seen.insert(k);
         derived.push_back(std::move(d));
         return true;
+    };
+
+    // Eager refutation check on a single term-list -- emit conflict immediately
+    // so we don't spend cycles deriving more constraints.
+    auto eagerCheck = [&](const std::vector<Term>& terms,
+                          const std::vector<SatLit>& baseReasons)
+                            -> std::optional<IntervalConflict> {
+        std::vector<SatLit> used;
+        PolyInterval iv = intervalOfTerms(terms, facts, used);
+        if (iv.indeterminate) return std::nullopt;
+        if (!intervalRefutesEq(iv)) return std::nullopt;
+        IntervalConflict conf;
+        std::unordered_set<uint64_t> seenLit;
+        auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+        for (auto r : baseReasons) if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
+        for (auto r : used)        if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
+        conf.explanation = "polynomial substitution closes constraint";
+        return conf;
     };
 
     // Seed with original constraints (factored if possible).
@@ -701,6 +897,89 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             if (auto lo = facts.lower(pick)) for (auto r : lo->reasons) nd.reasons.push_back(r);
             if (auto hi = facts.upper(pick)) for (auto r : hi->reasons) nd.reasons.push_back(r);
             if (addDerived(std::move(nd))) changed = true;
+        }
+
+        // Polynomial substitution: for each derived constraint that can be
+        // solved for a variable v (i.e. v appears in only one monomial with
+        // coeff ±1 and exp 1), substitute v -> (the rest) into all original
+        // and derived constraints. This is the key step that closes mgc_02
+        // after the cascade gamma0 -> vv1*(vv3^2 + 1) -> ...
+        size_t derivedAtStartOfSubst = derived.size();
+        for (size_t di = 0; di < derivedAtStartOfSubst; ++di) {
+            const auto solveOpt = trySolveForLinearVariable(derived[di].terms);
+            if (!solveOpt) continue;
+            const VarId solveVar = solveOpt->v;
+            // Replacement poly: -remainder / coeffOfV (mpq for the scale).
+            mpq_class invScale = mpq_class(-1) / solveOpt->coeffOfV;
+            std::vector<Term> replacement = scaleTerms(solveOpt->remainder, invScale);
+            if (replacement.empty() && !solveOpt->remainder.empty()) continue;  // bail on fractional
+
+            // Eager-conflict-on-substitution return token.
+            std::optional<IntervalConflict> eagerConflict;
+            auto tryAddSubst = [&](const std::vector<Term>& pt,
+                                   const std::vector<SatLit>& baseReasons,
+                                   const char* label, size_t labelIdx) -> bool {
+                if (eagerConflict) return false;   // already found one
+                if (pt.empty()) return false;
+                bool hasVar = false;
+                for (const auto& t : pt) {
+                    for (const auto& [v, e] : t.powers) {
+                        if (v == solveVar) { hasVar = true; break; }
+                    }
+                    if (hasVar) break;
+                }
+                if (!hasVar) return false;
+                auto subst = substitutePolyInTerms(pt, solveVar, replacement);
+                if (subst.empty()) return false;
+                // Build combined reasons.
+                std::vector<SatLit> combined;
+                std::unordered_set<uint64_t> seenLit;
+                auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+                for (auto r : derived[di].reasons) if (seenLit.insert(key(r)).second) combined.push_back(r);
+                for (auto r : baseReasons)         if (seenLit.insert(key(r)).second) combined.push_back(r);
+                // Eager check BEFORE adding -- if this substitution closes
+                // the constraint, return conflict immediately.
+                auto cf = eagerCheck(subst, combined);
+                if (cf) {
+                    eagerConflict = std::move(cf);
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-DIAG] EAGER CONFLICT after subst on %s[%zu] var %u: %zu terms refute Eq\n",
+                                     label, labelIdx, (unsigned)solveVar, subst.size());
+                    }
+                    return true;
+                }
+                size_t outSize = subst.size();
+                DerivedConstraint nd;
+                nd.terms = std::move(subst);
+                nd.rel = Relation::Eq;
+                nd.reasons = combined;
+                if (addDerived(std::move(nd))) {
+                    changed = true;
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-DIAG] subst: %s[%zu] %zu -> %zu after subst var %u\n",
+                                     label, labelIdx, pt.size(), outSize, (unsigned)solveVar);
+                    }
+                }
+                return false;
+            };
+
+            // Substitute into each original EQ constraint.
+            for (size_t ci = 0; ci < constraints.size(); ++ci) {
+                if (constraints[ci].rel != Relation::Eq) continue;
+                tryAddSubst(origTerms[ci], {constraints[ci].reason}, "P", ci);
+                if (eagerConflict) return *eagerConflict;
+            }
+
+            // CHAINED substitution: also substitute into previously derived
+            // constraints. This is what unlocks mgc_02-style multi-step
+            // cascades (gamma0 -> eq2_subst -> solve lambda1 -> eq5_subst).
+            size_t derivedSnap = derived.size();
+            for (size_t dj = 0; dj < derivedSnap; ++dj) {
+                if (dj == di) continue;
+                if (derived[dj].rel != Relation::Eq) continue;
+                tryAddSubst(derived[dj].terms, derived[dj].reasons, "D", dj);
+                if (eagerConflict) return *eagerConflict;
+            }
         }
 
         if (!changed) break;
