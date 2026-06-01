@@ -200,6 +200,15 @@ public:
     void setPartitionHint(const PartitionResult& pr);
     void setPartitionEnabled(bool e) { partitionHint_ = e; }
     void clearPartitionHint() { unboundedVars_.clear(); }
+    // LS-SMART-1 (user 2026-06-02). Constraint-propagation init:
+    // replace blind random init with a SmartInit-proposed assignment
+    // that respects single-var pins, 2-var derived equalities, and
+    // tightened bounds. The proposed model is used as the starting
+    // assignment for restart 0; subsequent restarts continue to use
+    // the diversified-init / random branches. Default-OFF
+    // (XOLVER_NIA_LS_SMART_INIT). Sound: SmartInit produces a
+    // candidate model; LS validates any Sat as before.
+    void setSmartInit(bool e) { smartInit_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -227,6 +236,7 @@ private:
     bool modularEscalate_ = false;
     bool diversify_ = false;
     bool partitionHint_ = false;
+    bool smartInit_ = false;
     std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 

@@ -1,4 +1,5 @@
 #include "theory/arith/nia/search/NiaLocalSearch.h"
+#include "theory/arith/nia/search/SmartInit.h"
 #include <random>
 #include <algorithm>
 #include <functional>
@@ -82,6 +83,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     }
     if (const char* e = std::getenv("XOLVER_NIA_LS_PARTITION_HINT"); e && *e && *e != '0') {
         partitionHint_ = true;
+    }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_INIT"); e && *e && *e != '0') {
+        smartInit_ = true;
     }
 }
 
@@ -742,6 +746,17 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
     mpz_class bestOverallCost = 0;
     bool haveBestOverall = false;
 
+    // LS-SMART-1: precompute SmartInit analysis ONCE per LS call (cheap
+    // pass over constraints). The proposed assignment is used for
+    // restart 0 (instead of zeros / random) when XOLVER_NIA_LS_SMART_INIT
+    // is on. Subsequent restarts may also use it on diversification
+    // strategy 7 (controlled by smartInit_).
+    SmartInit smart(kernel_);
+    bool smartReady = false;
+    if (smartInit_) {
+        smart.analyze(constraints, domains);
+        smartReady = true;
+    }
     for (int restart = 0; restart < RESTARTS && !timedOut(); ++restart) {
         IntegerModel cur;
         // restart 0 warm-starts from lsContext_.bestAssignment when
@@ -751,6 +766,19 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             // Fill in any vars that weren't present in the cached best.
             for (const auto& v : vars) {
                 if (cur.find(v) == cur.end()) cur[v] = clampVar(v, 0);
+            }
+        } else if (smartReady && restart == 0) {
+            // LS-SMART-1: constraint-propagation init. Replace the
+            // legacy all-zeros init at restart 0 with SmartInit's
+            // proposal (single-var pins, 2-var derives, bound-tightened
+            // free vars within ±20 if unbounded). Sound: a candidate
+            // model — LS still validates any Sat downstream.
+            cur = smart.propose(rng);
+            // Ensure every var appears in cur (SmartInit only fills
+            // those it analyzed; new vars from rare paths get 0).
+            for (const auto& v : vars) {
+                if (cur.find(v) == cur.end()) cur[v] = clampVar(v, 0);
+                else cur[v] = clampVar(v, cur[v]);
             }
         } else if (diverseInit_) {
             // P5 diversified restart probes — rotate initial-assignment
