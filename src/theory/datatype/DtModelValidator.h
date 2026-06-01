@@ -126,6 +126,14 @@ private:
     std::unordered_map<EClassId, TreePtr> treeMemo_;
     std::unordered_set<EClassId> inProgress_;  // cycle guard
     bool strict_ = false;
+    // Set when an SMT-LIB-underspecified situation is encountered: extracting
+    // an opaque DT class (no ctor witness) OR a selector applied to a
+    // sibling ctor (e.g. (head nil) when nil≠cons). Strict promotion
+    // (Indet -> Violated) is GATED off when set — these cases are NOT
+    // structural conflicts, so flooring them over-floors true-sats.
+    // 2026-06-01 emergency fix: original strict (unconditional promote)
+    // showed adverse scaling at 5min wall (2693 over-floor vs 55 at 20s).
+    mutable bool sawUnderspecified_ = false;
 };
 
 } // namespace xolver
