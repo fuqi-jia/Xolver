@@ -219,6 +219,13 @@ public:
     // other move; never affects verdict. Default-OFF
     // (XOLVER_NIA_LS_SMART_MOVE).
     void setSmartMove(bool e) { smartMove_ = e; }
+    // M11 (master 2026-06-02 move-explosion). Tabu search: track the
+    // last N committed (var, value) pairs; deprioritize candidates
+    // that would re-visit a recent state. Prevents the LS from
+    // oscillating between two basins. Default-OFF
+    // (XOLVER_NIA_LS_TABU). Sound: tabu only affects move selection;
+    // verdict still validator-gated.
+    void setTabu(bool e) { tabu_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -248,6 +255,7 @@ private:
     bool partitionHint_ = false;
     bool smartInit_ = false;
     bool smartMove_ = false;
+    bool tabu_ = false;
     std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 

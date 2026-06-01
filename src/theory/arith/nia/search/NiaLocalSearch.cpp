@@ -90,6 +90,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_MOVE"); e && *e && *e != '0') {
         smartMove_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_TABU"); e && *e && *e != '0') {
+        tabu_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -1001,6 +1004,32 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         };
 
         int sinceImprove = 0;
+        // M11 tabu (XOLVER_NIA_LS_TABU). Track the last TABU_LEN
+        // committed (var, value) pairs; a candidate matching a tabu
+        // entry incurs a heavy cost penalty during selection, so we
+        // prefer non-tabu moves but still accept tabu as a last resort
+        // (Glover's aspiration: a tabu move is accepted if it would
+        // actually achieve a NEW global-best — captured here by the
+        // bestCost comparison still happening normally).
+        const std::size_t TABU_LEN = 16;
+        const mpz_class TABU_PENALTY("100000000");
+        std::vector<std::pair<std::string, mpz_class>> tabuList;
+        tabuList.reserve(TABU_LEN);
+        std::size_t tabuHead = 0;
+        auto isTabu = [&](const std::string& v, const mpz_class& val) {
+            for (const auto& [tv, tw] : tabuList) {
+                if (tv == v && tw == val) return true;
+            }
+            return false;
+        };
+        auto recordTabu = [&](const std::string& v, const mpz_class& val) {
+            if (tabuList.size() < TABU_LEN) {
+                tabuList.push_back({v, val});
+            } else {
+                tabuList[tabuHead] = {v, val};
+                tabuHead = (tabuHead + 1) % TABU_LEN;
+            }
+        };
         // LS-VM5: random-walk diversification budget. When sinceImprove
         // crosses the trigger, set this to K = 10 and decrement per flip;
         // while >0, the move-search is bypassed and a random nudge is
@@ -1315,8 +1344,16 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     if (t == orig) continue;
                     mpz_class delta;
                     mpz_class nc = tryMoveCost(v, t, delta);
-                    if (!haveBest || nc < bestCost) {
-                        bestCost = nc; bestVar = v; bestVal = t; haveBest = true;
+                    // M11 tabu penalty: a candidate matching a recent
+                    // committed (var, value) gets a large cost penalty
+                    // so we prefer non-tabu moves. Aspiration kept
+                    // implicit: if tabu IS the strict global best (the
+                    // nc + penalty is still less than current bestCost),
+                    // it can still win.
+                    mpz_class effectiveNc = nc;
+                    if (tabu_ && isTabu(v, t)) effectiveNc += TABU_PENALTY;
+                    if (!haveBest || effectiveNc < bestCost) {
+                        bestCost = effectiveNc; bestVar = v; bestVal = t; haveBest = true;
                     }
                 }
             }
@@ -1706,15 +1743,21 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     // being persisted across cb_check (XOLVER_NIA_LS_BRANCH_HINT).
                     lsContext_.varActivity[bestPairVarX]++;
                     lsContext_.varActivity[bestPairVarY]++;
+                    if (tabu_) {
+                        recordTabu(bestPairVarX, bestPairValX);
+                        recordTabu(bestPairVarY, bestPairValY);
+                    }
                 } else {
                     commitMove(bestPairVarX, bestPairValX);
                     lsContext_.varActivity[bestPairVarX]++;
+                    if (tabu_) recordTabu(bestPairVarX, bestPairValX);
                 }
                 sinceImprove = 0;
             } else {
                 commitMove(bestVar, bestVal);
                 sinceImprove = 0;
                 lsContext_.varActivity[bestVar]++;
+                if (tabu_) recordTabu(bestVar, bestVal);
             }
 
             // Track best-overall across THIS call for write-back to context.
