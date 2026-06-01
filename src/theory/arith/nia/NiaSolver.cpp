@@ -162,6 +162,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // inputs, Full-effort is unreachable in budget; HYB-3 must fire at
     // Standard effort to have any chance. Gated default-OFF.
     add("nia.hyb-bb-ls", &NiaSolver::stageHybridBbLs);
+    // LBBB Phase 2 — fires AFTER local-search has had its chance and
+    // marked itself failed. Bit-blast over the box LS explored.
+    // Full-effort only; gated default-OFF behind XOLVER_NIA_LBBB.
+    addFull("nia.lbbb", &NiaSolver::stageBoundedBitBlast);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
@@ -1462,6 +1466,69 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&,
             return TheoryCheckResult::consistent();
         }
     }
+    return std::nullopt;
+}
+
+// LBBB Phase 2 — stageBoundedBitBlast. After LS has failed (per
+// localSearch_.hasFailed()), bit-blast over the box LS visited,
+// extended by a buffer. Validate any Sat against the ORIGINAL NIA
+// constraints; UNSAT verdict from BB is treated as Unknown (only
+// the BOX is searched, not the full integer space). Default-OFF
+// (XOLVER_NIA_LBBB), Full-effort only via addFull registration.
+std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_LBBB");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+    // Gate: LS must have run AND failed. Otherwise BB would just be
+    // a redundant copy of stageBitBlast — we want LBBB to fire only
+    // on the box LS converged toward.
+    if (!localSearch_.hasFailed()) return std::nullopt;
+    const auto& mins = localSearch_.trackedMin();
+    const auto& maxs = localSearch_.trackedMax();
+    if (mins.empty() || maxs.empty()) return std::nullopt;
+
+    // Build a fresh DomainStore restricted to the LS-visited box +
+    // buffer. For each tracked var v: [min - buffer, max + buffer]
+    // where buffer = max(10, range * 0.1).
+    DomainStore subset = domains_;  // deep-copy
+    SatLit dummyReason = SatLit::positive(0);
+    for (const auto& [v, lo] : mins) {
+        auto mit = maxs.find(v);
+        if (mit == maxs.end()) continue;
+        const mpz_class& hi = mit->second;
+        mpz_class range = hi - lo;
+        mpz_class buffer = range / 10;
+        if (buffer < 10) buffer = 10;
+        mpz_class bbLo = lo - buffer;
+        mpz_class bbHi = hi + buffer;
+        // Intersect with any existing DomainStore bounds.
+        subset.addLowerBound(v, bbLo, dummyReason);
+        subset.addUpperBound(v, bbHi, dummyReason);
+    }
+    // Run BitBlast on the restricted box.
+    auto res = bitBlast_.solve(normalized_, subset, validator_);
+    if (res.status == bitblast::BitBlastResult::Status::Sat) {
+        // Validate against ORIGINAL constraints (not the box-bounded
+        // subset). LBBB soundness gate: the box restriction was
+        // heuristic, so a BB-SAT model must satisfy the unrestricted
+        // formula to count.
+        if (validator_.validate(res.model, normalized_) ==
+            IntegerModelValidator::Result::Valid) {
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        }
+        // BB found a model in the bounded box, but it doesn't satisfy
+        // the original — drop and fall through.
+        return std::nullopt;
+    }
+    // BB returned UNSAT (within the bounded box) or Unknown — both
+    // are inconclusive for LBBB. Box might be too small; main pipeline
+    // can decide. Never claim UNSAT here.
     return std::nullopt;
 }
 

@@ -247,6 +247,15 @@ private:
     // set. Default-OFF flag XOLVER_NIA_HYB_BB_LS. Full-effort only —
     // the heavy LS-probe loop should not run per Standard cb_propagate.
     std::optional<TheoryCheckResult> stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort);
+    // LBBB Phase 2 (master 2026-06-02). LS-Bounded Bit-Blast Fallback.
+    // After local-search exits without finding SAT (its `hasFailed()`
+    // flag is true), bit-blast the formula over the BOX that LS
+    // explored, extended by a buffer. The BV solve uses the existing
+    // BitBlastSolver with a custom DomainStore restricted to the
+    // LS-visited box, then validates any Sat candidate against the
+    // ORIGINAL NIA constraints. Default-OFF (XOLVER_NIA_LBBB),
+    // Full-effort only.
+    std::optional<TheoryCheckResult> stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
