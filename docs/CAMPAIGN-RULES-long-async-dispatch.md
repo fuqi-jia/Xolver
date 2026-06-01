@@ -172,6 +172,66 @@ lane's code. The execution rule:
    surfaced a find() optimization that's NOT a 30-line patch — defer
    with empirical evidence for the EUF-deep agent to pick up.
 
+## Cross-lane bug fix authority
+
+Once an agent has shipped substantive cross-lane work (Task W-style
+direct application), the agent **gains fix authority** within that
+scope on the next dispatch cycle. The pattern:
+
+```
+Round 1: Task W ships cross-lane (NRA -> DT) hash-cons cache.
+         Master accepts.
+Round 2: A pre-existing DT bug surfaces in NRA-DT (different category
+         but same module). Master dispatches NRA-DT directly to the
+         lane that cross-shipped, NOT back to the original lane agent
+         (who is standby clean).
+Round 3: NRA-DT diagnoses + fixes the bug in the SAME submodule
+         (DtReasoner / SOMTParser) using the authority earned in
+         Round 1.
+```
+
+The rule's purpose: avoid ping-pong between lanes when one lane has
+already crossed into the other. The cross-shipper has the context
+(they read the code, ran the diag, understand the data model).
+
+**Boundaries**:
+
+* Authority is **scope-limited to the module crossed into**. Task W
+  shipped into `src/theory/datatype/` and the NRA-DT fix lives in
+  `src/theory/datatype/` + `third_party/SOMTParser`. Authority does
+  not extend to e.g. `src/theory/array/` even though "it's all
+  combination".
+* The fix must still clear the **soundness gate**: paired test on
+  the lane's reg + the NRA-lane reg + unit suite.
+* If the bug touches **shared infrastructure** (e.g. `EufTermManager`,
+  `SharedTermRegistry`), notify the owning lane in the commit message
+  — they may have constraints you don't see.
+* **Pre-existing bugs surfaced during the cross-lane fix must be
+  tracked**, not silently ignored (per
+  `feedback_pre_existing_bugs_tracked`). The NRA-DT fix uncovered
+  the SOMTParser `expandLet` losing DT operator names; that became
+  a separate commit in the submodule and was tracked.
+
+**Worked example** (2026-06-02, agent/nra-2):
+
+* Task W (round 1): shipped `isFiniteSort` cache in DtReasoner
+  (commit `33a7914`), 62-96 % hit rate.
+* Pre-existing failure surfaced: `dt_blocksworld_bmc_1_sat`
+  returns unsat (expected sat). Tracked as task #112,
+  diagnosis pointed at `checkAcyclicity:213-218`.
+* Round 2 dispatch (NRA-DT): master assigned the fix to the
+  NRA-lane agent (cross-lane authority) rather than ping-ponging
+  to the EUF / EQNA lane.
+* Round 3 execution: actual diagnosis pivoted from
+  `checkAcyclicity` (false hypothesis) to
+  SOMTParser `expandLet` losing DT operator names (true root
+  cause). Fix at SOMTParser
+  `eval_parser.cpp:2286` (commit `7f546f0`), bumped via gitlink in
+  main repo (commit `c5caa1b`). Closed #112.
+
+This pattern reduces handoff cost dramatically and is the right
+default for the SMT-COMP final-version sprint window.
+
 ---
 
 ## What this session shipped
