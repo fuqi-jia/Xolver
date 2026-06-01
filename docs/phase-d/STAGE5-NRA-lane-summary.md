@@ -28,7 +28,11 @@ promotion and for the Stage 5 ship cut-over decision.
 | `9d45652` | **LS-D / Task F** atom-violation cache | NraLocalSearch `violationCache_` keyed `(PolyId, Relation, sub-asg restricted to atom vars)`; `atomVarsCache_` per-poly; FNV-1a hash over mpz limbs | NRA reg 143/143; unit | **98.27% hit on nra_022**; evalAt calls 3354 → 58 |
 | `fb8bddb` | **Task E** NLA cluster sweep | 240-case sample × 8 NLA clusters under all levers | broad-corpus sample, 0 wrong | **7/8 ≥ 30% threshold** (see catalog below) |
 | `e09e160` | Task E doc fix-up | folded final 3 hycomp cases | non-functional | n=237 → n=240 final |
-| `4950213` | **S1c / Task J** `terms()` decomposition cache | `termsCache_` per PolyId (`mutable unordered_map<PolyId, optional<vector<MonomialTerm>>>`); stores nullopt failures; transitive win for `degree()` + `getIntegerCoefficients()` non-main-var paths. Always-built. | unit 1083/1083 (side build); NRA reg 143/143 | hit rate **97.30% / 87.46% / 95.65%** on nra_022 / nra_054 / nra_140 |
+| `4950213` | **S1c / Task J** `terms()` decomposition cache | `termsCache_` per PolyId (`mutable unordered_map<PolyId, optional<vector<MonomialTerm>>>`); stores nullopt failures; transitive win for `degree()` + `getIntegerCoefficients()` non-main-var paths. Always-built. | unit 1083/1083 (side build); NRA reg 143/143 | hit rate **97.30% / 87.46% / 95.65%** on nra_022 / nra_054 / nra_140; **97.56%** on Melquiond2 (3581-poly stress) |
+| `9c2338a` | **S1d / Task J bonus** `variables()` cache | `varsCache_` per PolyId; 92 call sites, structural sharing pattern. Always-built. | unit + NRA reg 143/143 | **96.84%** hit, only 12 distinct sets across 3581 polys |
+| `cac4be7` | Task N cross-lane pattern doc | `docs/CAMPAIGN-RULES-hash-cons-audit.md` — methodology for other agents | non-functional | 250-line doc, 4-step audit + 30-line cache template |
+| `d993531` | **S1e / Task M** `degree(p, v)` cache | `degreeCache_` keyed `(PolyId<<32)|VarId`. 55 call sites. `intCoeffs` reverted (cold). Always-built. | unit 1083/1083; NRA reg 143/143 | **98.37%** hit, only 6 entries on stress |
+| `134a5b0` | **Task I** 1200-case 4-arm NLA sweep | EQNA-trigger broad validation. hycomp+polypaver+Pine × 100 × 4 arms. | broad-corpus, 0 wrong | **polypaver +9 pp LS attribution = master-decision data** |
 
 ---
 
@@ -120,16 +124,122 @@ unconditionally on every NRA invocation; no flag promotion needed.
 
 ---
 
-## Decisions pending master
+## Decisions resolved by Task I (1200-case 4-arm sweep, `134a5b0`)
 
-1. **`XOLVER_NRA_LOCALSEARCH` default-ON** — prior 5 min batch contributed +743
-   from CANDFLAGS, most via LOCALSEARCH. Next batch (with S1/S1b/S2/LS-C/LS-D/
-   PSC cache) data will inform. If recovery sustains +500 +, source-flip
-   default-ON (17/20 promoted pattern).
-2. **`XOLVER_NRA_CAC_SR_CACHE` default-ON** — derisked sound by Task H, env-only
-   flag-flip with no code change needed.
-3. **`XOLVER_NRA_LS_BUDGET_MS=50` confirmation** — source default already
-   flipped in `e9c323e`; next server batch confirms no regression.
+1. **`XOLVER_NRA_LOCALSEARCH` default-ON** — **GREEN-LIT**. Polypaver
+   `arm_off` 87.0 % → `arm_lscd` **96.0 %** (+9 percentage points, +9
+   cases recovered). CAC tuning lever alone delivers +1 pp; LS delivers
+   the rest. Hycomp UNSAT-bound 4 arms identical 57.0 %, Pine 0/100
+   (architectural). 0 wrong across 1200 runs.
+2. **`XOLVER_NRA_CAC_SR_CACHE` default-ON** — derisked sound by Task H,
+   confirmed 0-unsound across 1200 runs in Task I.
+3. **`XOLVER_NRA_LS_BUDGET_MS=50`** — source default already flipped in
+   `e9c323e`, confirmed via Task I (no regression vs arm_off).
+
+---
+
+## Stage 5 ship-prep flag matrix (Task Y)
+
+Audit of all `XOLVER_NRA_*` flags as of `agent/nra-2 @ 078c3d6`.
+33 lever / parameter flags + 10 stats / diag-only env vars.
+
+### Promoted (env-string removed, default-ON, no opt-out)
+
+* `XOLVER_NRA_LOCALSEARCH` — Task Q (`01fab48`), polypaver +9 pp.
+* `XOLVER_NRA_CAC_SR_CACHE` — Task Q (`01fab48`), PSC dedup.
+
+### Source-default-flipped (env-tuned default value baked)
+
+* `XOLVER_NRA_LS_BUDGET_MS` — default `50` baked at Task G (`e9c323e`),
+  env still overrides for tuning.
+
+### Parameter flags (env-overridable, no boolean gate)
+
+| Flag | Default | Notes |
+|---|---|---|
+| `XOLVER_NRA_LS_BUDGET_MS` | 50 | numeric ms, Task G baked |
+| `XOLVER_NRA_LS_MAX_ROUNDS` | 10 | iteration cap, source-default |
+| `XOLVER_NRA_LS_MAX_DEN` | source-default | rational denominator cap |
+| `XOLVER_NRA_LS_TOP_VARS` | source-default | top-k var selection |
+| `XOLVER_NRA_CAC_DEADLINE_MS` | source-default | CAC wall budget |
+| `XOLVER_NRA_LINEARIZE_CAP` | source-default | linearization scope cap |
+
+### Default-OFF lever flags (server-batch promotion candidates)
+
+26 flags below stay default-OFF. Master action: each gets validated in
+the server differential before any default-ON promotion. Listed in
+priority order based on prior batch signal.
+
+**Strong candidates** (prior server differential surfaced + flips):
+
+* `XOLVER_NRA_SUBTROPICAL` — SAT-fast-path (`1656497`), shipped
+  default-OFF. Promote next batch.
+* `XOLVER_NRA_LAZARD_LIFT` — Lazard lifting variant. Promote after batch.
+* `XOLVER_NRA_LAZARD_CELL_CERT` — cell certificate; soundness audit
+  done.
+
+**Algorithmic variants** (correctness-derisked, perf-judged):
+
+* `XOLVER_NRA_CAC_COMBINATION` — combination-aware CAC v1.
+* `XOLVER_NRA_CAC_COMB_SAT` — combination SAT mode.
+* `XOLVER_NRA_CAC_LAZARD_DEDUP` — projection dedup.
+* `XOLVER_NRA_CAC_MIN_CONFLICT` — conflict-reason minimisation.
+* `XOLVER_NRA_CAC_RATIONAL_FALLBACK` — fallback on libpoly fail.
+* `XOLVER_NRA_CAC_SAT_ALGEBRAIC` — sat-direction algebraic.
+* `XOLVER_NRA_CAC_VAR_ORDER` — variable-order heuristic.
+* `XOLVER_NRA_LIBPOLY_PSC` — libpoly PSC backend variant.
+* `XOLVER_NRA_NLA_CUTS` — non-linear arithmetic cuts.
+* `XOLVER_NRA_PROJECTION` — alternate projection scheme.
+* `XOLVER_NRA_UNSAT_CERT` — UNSAT certificate emission.
+* `XOLVER_NRA_VARORDER` — degree-based variable order.
+* `XOLVER_NRA_VARORDER_SIMPLEX` — simplex-driven variable order.
+* `XOLVER_NRA_PREELIM` — pre-elimination pass.
+* `XOLVER_NRA_LINEARIZE` — incremental linearization.
+* `XOLVER_NRA_LS_EQ_RELAX` — Phase NRA-LS-B equality relaxation
+  (kept default-OFF for soundness reasons documented in NraLocalSearch.h).
+
+**Diagnostic / behaviour switches** (likely won't promote):
+
+* `XOLVER_NRA_CAC_ALL_EFFORTS` — run CAC at every effort level (debug).
+* `XOLVER_NRA_CAC_NO_COLLINS` — skip Collins (debug / portfolio arm).
+* `XOLVER_NRA_CAC_ONLY` — skip non-CAC stages (portfolio arm).
+* `XOLVER_NRA_CAC_EARLY_INFEAS` — early infeasibility detection.
+* `XOLVER_NRA_CAC_EARLY_INFEAS_SAFE` — safe variant.
+* `XOLVER_NRA_CAC_PRUNE_INTERVALS` — interval-pruning variant.
+* `XOLVER_NRA_CAC_DUMP` — debug dump.
+* `XOLVER_NRA_CAC_TRACE` — debug trace.
+* `XOLVER_NRA_LINEARIZE_DUMP` — debug dump.
+
+### Stats / diag-only (always env-gated, never promoted)
+
+* `XOLVER_NRA_KERNEL_STATS` — hash-cons stack hit rates.
+* `XOLVER_NRA_CAC_INSTR` — CAC cell + leaf counter.
+* `XOLVER_NRA_CAC_DIAG` — CAC verbose diagnostics.
+* `XOLVER_NRA_LAZARD_DIAG` — Lazard diagnostics.
+* `XOLVER_NRA_LS_DIAG` — LS diagnostics.
+* `XOLVER_NRA_LS_STATS` — LS cache stats (LS-C / LS-D).
+* `XOLVER_NRA_SIGN_REFUTE_DIAG` — sign-refute diagnostics.
+* `XOLVER_NRA_SUBTROP_DIAG` — subtropical diagnostics.
+
+### Cross-lane shipped via this branch
+
+* `XOLVER_DT_HC_STATS` — Task W instrumentation in DtReasoner (stats-only).
+
+### Stage 5 acceptance gate per flag class
+
+* Promoted: NRA reg 151/151 (Task U expanded suite).
+* Parameter: NRA reg 151/151 with default values.
+* Default-OFF levers: NOT in default ship binary; opt-in only. Stage 5
+  gate is "does default binary stay 0-unsound" — confirmed across the
+  20+ paired runs this session.
+* Diagnostic env vars: zero ship surface (no functional behaviour).
+
+### Pre-existing failures tracked (do not block Stage 5)
+
+* `dt_blocksworld_bmc_1_sat` — returns unsat, expected sat. Pre-existing
+  under pre-Q binary too; NOT introduced by Task W's `isFiniteSort`
+  cache. Tracked as task #112 in the session task list. Out of scope
+  for NRA-lane Stage 5; routes to DT / EQNA lane.
 
 ---
 
