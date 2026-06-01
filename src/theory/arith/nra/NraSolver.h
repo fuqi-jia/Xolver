@@ -100,6 +100,13 @@ private:
     // becomes known, sign-refute fires. Closes the MGC + Mulligan sign-
     // blocked UNSAT class identified in NDEEP-3/4.
     std::optional<TheoryCheckResult> stageNraSignSplit(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // OSF-CDCAC P7 (XOLVER_NRA_OSF_PRUNE, default OFF): polynomial interval
+    // pruning. Build CertifiedSimplexFacts from single-var bounds, compute
+    // each constraint polynomial's interval via monomial arithmetic, emit
+    // conflict when the interval contradicts the relation. Distinct from
+    // SignDefinitenessRefuter: uses NUMERIC interval, not just sign, so
+    // bounds like x in [2,5] propagate through x*y monomials.
+    std::optional<TheoryCheckResult> stageOsfPrune(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts

@@ -9,6 +9,8 @@
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
+#include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
+#include "theory/arith/nra/simplex/PolynomialIntervalPruner.h" // OSF-CDCAC P7
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
 #include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
@@ -72,6 +74,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-split",
         stageWrap("sign-split", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraSignSplit(db, e); })));
+    // OSF-CDCAC P7: polynomial interval pruning right after sign-split, before
+    // linearize. XOLVER_NRA_OSF_PRUNE default-OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.osf-prune",
+        stageWrap("osf-prune", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageOsfPrune(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -549,6 +556,93 @@ std::optional<TheoryCheckResult> NraSolver::stageNraSignSplit(
             (unsigned)pick, bestCount);
     }
     return TheoryCheckResult::mkLemma(std::move(lemma));
+}
+
+// OSF-CDCAC P7: stageOsfPrune.
+//
+// Build a CertifiedSimplexFacts from the active single-variable linear
+// bounds in presolveConstraints_. Then run polynomial interval pruning:
+// for each constraint p rel 0, compute [L, U] via monomial arithmetic.
+// If the interval contradicts rel, emit a sound theory conflict.
+//
+// Distinct from SignDefinitenessRefuter: that one only tracks SIGN
+// (Pos/Neg/NonNeg/NonPos), this tracks NUMERIC bounds so constraints
+// like x in [2,5] and y in [3,4] propagate through x*y to [6, 20].
+//
+// Default OFF until paired-validated on broader corpus.
+std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = []() {
+        const char* e = std::getenv("XOLVER_NRA_OSF_PRUNE");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // Build CertifiedSimplexFacts from single-variable linear constraints.
+    CertifiedSimplexFacts facts;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rpOpt) continue;
+        const auto& rp = *rpOpt;
+        const auto vars = rp.variables();
+        if (vars.size() != 1) continue;
+        const VarId v = *vars.begin();
+        if (rp.degree(v) != 1) continue;
+        mpq_class coeff = 0, constTerm = 0;
+        for (const auto& [mon, k] : rp.terms()) {
+            if (mon.empty()) constTerm = k;
+            else if (mon.size() == 1 && mon[0].first == v && mon[0].second == 1) coeff = k;
+            else { coeff = 0; break; }
+        }
+        if (coeff == 0) continue;
+        mpq_class boundary = -constTerm / coeff;
+        Relation rel = c.rel;
+        if (coeff < 0) {
+            switch (rel) {
+                case Relation::Lt:  rel = Relation::Gt;  break;
+                case Relation::Leq: rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Lt;  break;
+                case Relation::Geq: rel = Relation::Leq; break;
+                default: break;
+            }
+        }
+        std::vector<SatLit> reasons{c.reason};
+        switch (rel) {
+            case Relation::Gt:  facts.tightenLower(v, boundary, /*strict=*/true,  reasons); break;
+            case Relation::Geq: facts.tightenLower(v, boundary, /*strict=*/false, reasons); break;
+            case Relation::Lt:  facts.tightenUpper(v, boundary, /*strict=*/true,  reasons); break;
+            case Relation::Leq: facts.tightenUpper(v, boundary, /*strict=*/false, reasons); break;
+            case Relation::Eq:
+                facts.tightenLower(v, boundary, /*strict=*/false, reasons);
+                facts.tightenUpper(v, boundary, /*strict=*/false, reasons);
+                break;
+            default: break;
+        }
+    }
+
+    // Build IntervalConstraint list for the multi-var (potentially nonlinear)
+    // constraints. Skip the single-var linear ones we already used as bounds
+    // (they would trivially refute themselves if inconsistent).
+    std::vector<IntervalConstraint> intervalCs;
+    intervalCs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        intervalCs.push_back({c.poly, c.rel, c.reason});
+    }
+    auto conflictOpt = tryRefuteByPolynomialInterval(intervalCs, facts, *kernel_);
+    if (!conflictOpt) return std::nullopt;
+
+    TheoryConflict tc;
+    tc.clause = std::move(conflictOpt->reasons);
+    if (std::getenv("XOLVER_NRA_OSF_DIAG")) {
+        std::fprintf(stderr, "[XOLVER_NRA_OSF_PRUNE] UNSAT: %s reasons=%zu\n",
+                     conflictOpt->explanation.c_str(), tc.clause.size());
+    }
+    return TheoryCheckResult::mkConflict(std::move(tc));
 }
 
 // XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
