@@ -229,6 +229,14 @@ private:
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // H3 (master 2026-06-01) — bit-blast EARLY stage. Same algorithm as
+    // stageBitBlast but registered Standard+Full so it fires at Standard
+    // effort on inputs (SAT14 class) where the SAT layer never reaches a
+    // complete assignment within budget (Full-effort never triggers).
+    // Mirrors the stageLocalSearchEarly pattern. Default-OFF flag
+    // XOLVER_NIA_BB_EARLY. Sound: bit-blast is candidate-only — every Sat
+    // model is validated against the original constraints (invariant 1).
+    std::optional<TheoryCheckResult> stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);

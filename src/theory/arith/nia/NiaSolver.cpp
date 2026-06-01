@@ -93,6 +93,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // for that reason — opt in via XOLVER_NIA_LS_EARLY when explicitly
     // targeting SAT14-class bilinear SAT instances.
     add("nia.local-search-early", &NiaSolver::stageLocalSearchEarly);
+    // H3 (master 2026-06-01) SAT14-attack routing. Bit-blast is the right
+    // tool for VeryMax-SAT14-class inputs (800+ bounded integer vars,
+    // termination certificate solving), but its Full-only registration
+    // means the SAT layer's incomplete assignment never triggers it
+    // within budget. Standard+Full registration follows the same pattern
+    // as nia.local-search-early. Gated default-OFF behind XOLVER_NIA_BB_EARLY.
+    add("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
     // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
@@ -1233,9 +1240,72 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool earlyEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_BB_EARLY");
+        return e && *e && *e != '0';
+    }();
+    if (!earlyEnabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    // H3 size-gate: BB_EARLY's per-call encoding+SAT cost is heavy
+    // (~5-6s on SAT14-class with 600+ active polynomial constraints).
+    // On small NIA cases (~1-10 active constraints) the upstream
+    // reasoning stages decide the verdict for free, and BB_EARLY's
+    // overhead pushes them past the per-case timeout. Local NIA reg
+    // verified this: BB_EARLY ON regressed 3 small UNSAT cases (nia_025,
+    // nia_056, nia_090) from unsat to unknown, and 3 to TIMEOUT.
+    // Threshold: require >= 50 active normalized constraints, the
+    // SAT14-pattern lower bound. Tunable via XOLVER_NIA_BB_EARLY_MIN_ACTIVE.
+    static const size_t minActive = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_BB_EARLY_MIN_ACTIVE"))
+            return static_cast<size_t>(std::atol(e));
+        return static_cast<size_t>(50);
+    }();
+    if (normalized_.size() < minActive) return std::nullopt;
+    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    if (h3Diag) {
+        static thread_local long earlyCount = 0;
+        ++earlyCount;
+        if ((earlyCount & 0xff) == 1 || earlyCount < 8) {
+            std::fprintf(stderr,
+                "[BB-EARLY] call=%ld active=%zu normalized=%zu\n",
+                earlyCount, active_.size(), normalized_.size());
+        }
+    }
+    // The bit-blast solver respects its own gate/iteration env caps
+    // (XOLVER_NIA_BITBLAST_MAX_ITERS / MAX_BITWIDTH / GATE_BUDGET /
+    // CONFLICTS). For early-stage operation users typically pair this
+    // flag with tighter caps so Standard-effort cb_propagate overhead
+    // stays bounded — same idiom as XOLVER_NIA_LS_EARLY_BUDGET_MS.
+    auto res = bitBlast_.solve(normalized_, domains_, validator_);
+    switch (res.status) {
+        case bitblast::BitBlastResult::Status::Sat:
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        case bitblast::BitBlastResult::Status::UnsatComplete:
+            return TheoryCheckResult::mkConflict(*res.conflict);
+        case bitblast::BitBlastResult::Status::Unknown:
+            return std::nullopt;
+    }
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableBitBlast_) return std::nullopt;
     if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag/A-B: isolate non-bit-blast NIA reasoning
+    // H3 (master 2026-06-01) entry counter: confirm whether bit-blast
+    // actually fires on SAT14-class inputs before the run TOs upstream.
+    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    if (h3Diag) {
+        static thread_local long bbEntryCount = 0;
+        ++bbEntryCount;
+        if ((bbEntryCount & 0xff) == 1 || bbEntryCount < 8) {
+            std::fprintf(stderr,
+                "[BB-ENTRY] call=%ld active=%zu normalized=%zu\n",
+                bbEntryCount, active_.size(), normalized_.size());
+        }
+    }
     auto res = bitBlast_.solve(normalized_, domains_, validator_);
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
