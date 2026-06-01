@@ -411,10 +411,63 @@ IntegerModel SmartInit::propose(std::mt19937_64& rng) const {
             // probability; the remaining 25% sample from coefRange /
             // modular as before. Cluster-specific tuning can refine
             // this later (LS-SMART-Z2 prefix-aware).
+            //
+            // LS-SMART-Z2 (2026-06-02 deeper z3 analysis): of the
+            // 25% non-zero, 87% of non-zero values in 55-case z3 model
+            // sweep are in {-2, -1, 1, 2}: aggregate distribution is
+            //   1:  62.7%,  -1: 12.6%,  2: 8.0%,  -2: 3.6%, other 13%
+            // Bias the non-zero branch to match this empirical
+            // distribution rather than uniform coefRange sampling.
             uint64_t zeroDie = rng() % 100;
             if (zeroDie < 75) {
                 model[v] = mpz_class(0);
                 continue;
+            }
+            // Z2 calibrated small-value bias (only when modular condition
+            // is NOT set — modular case has its own residue handling).
+            // Note: user 2026-06-02 noted that LARGE-magnitude cases
+            // (max|v| up to ~10^10 in ITS juHashMap chain) ARE precisely
+            // where LS is the right tool (BB would OOM). So Z2 also
+            // includes a log-uniform "spread" branch that reaches
+            // multi-order-of-magnitude values across restarts.
+            if (info.modulus <= 1) {
+                uint64_t smallDie = rng() % 1000;
+                // Calibrated z3-model distribution per-mille (sums to 1000):
+                //   1: 627    -1: 126    2: 80    -2: 36    3: 18
+                //   medium [10..1000]: 33
+                //   large [1000..1e5]: 33
+                //   huge [1e5..1e9]:   30  (LS-territory per user 2026-06-02:
+                //                          BB would OOM at 128 bits)
+                //   coefRange fall-through: 17
+                if (smallDie < 627)      { model[v] = mpz_class(1);  continue; }
+                else if (smallDie < 753) { model[v] = mpz_class(-1); continue; }
+                else if (smallDie < 833) { model[v] = mpz_class(2);  continue; }
+                else if (smallDie < 869) { model[v] = mpz_class(-2); continue; }
+                else if (smallDie < 887) { model[v] = mpz_class(3);  continue; }
+                else if (smallDie < 920) {
+                    long mag = 10 + static_cast<long>(rng() % 991);
+                    bool neg = (rng() & 1) != 0;
+                    model[v] = mpz_class(neg ? -mag : mag);
+                    continue;
+                }
+                else if (smallDie < 953) {
+                    long mag = 1000 + static_cast<long>(rng() % 99001);
+                    bool neg = (rng() & 1) != 0;
+                    model[v] = mpz_class(neg ? -mag : mag);
+                    continue;
+                }
+                else if (smallDie < 983) {
+                    // Huge log-uniform: pick exponent uniformly in [5, 9],
+                    // then mantissa uniform in [1, 10), then random sign.
+                    int exp = 5 + static_cast<int>(rng() % 5);
+                    long mant = 1 + static_cast<long>(rng() % 9);
+                    long mag = mant;
+                    for (int i = 0; i < exp; ++i) mag *= 10;
+                    bool neg = (rng() & 1) != 0;
+                    model[v] = mpz_class(neg ? -mag : mag);
+                    continue;
+                }
+                // 1.7% remainder falls through to coefRange random for variety.
             }
             // Fully unbounded: prefer the coefficient-derived range
             // (LS-SMART-5) when set, else fall back to narrow ±20.
