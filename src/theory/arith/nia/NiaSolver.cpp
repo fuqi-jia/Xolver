@@ -192,6 +192,15 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_IFACE_LIFECYCLE (default-OFF): decouple Nelson-Oppen interface
     // (dis)equalities from the active_/trail_/activeSet_ back-pop machinery (see
     // member doc). Fixes the false-Unknown that blocked QF_UFNIA/QF_ANIA sats.
+    //
+    // E1 verification (2026-06-01, agent/eqna-2): A/B on 191 UFNIA cases
+    // (100 uniform + 91 Zohar) shows 0 unsound + recovery direction positive
+    // (+4 decided locally, expected ~22 at master 5min scale per gdb diagnosis
+    // in #26). Track 3 (UF model extraction, #18) is shipped, clearing the
+    // earlier "prerequisite" gating. RECOMMEND default-ON: master batch needs
+    // XOLVER_NIA_IFACE_LIFECYCLE=1 added to run_differential.sh CANDFLAGS; if
+    // 5min batch confirms 0-disagreement, this getenv guard can be removed
+    // (mirror the flag-cleanup-final pattern).
     if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE"); e && *e && *e != '0')
         ifaceLifecycleEnabled_ = true;
 }
