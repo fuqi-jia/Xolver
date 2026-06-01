@@ -59,6 +59,8 @@ DtModelValidator::TreePtr DtModelValidator::extractTree(EClassId c) {
     if (ctorName.empty()) {
         t->opaqueCls = c;
         treeMemo_[c] = t;
+        // Mark: SMT-LIB underspecified situation present (open DT class).
+        sawUnderspecified_ = true;
         return t;
     }
 
@@ -223,7 +225,11 @@ DtModelValidator::R DtModelValidator::eval(ExprId e) {
                 const DtConstructorInfo* owner = dts_.selector(opSort, selName, argIdx);
                 if (!owner) return indeterminate();
                 if (owner->name != x.tree->ctorName) {
-                    return indeterminate();  // SMT-LIB underspecified
+                    // SMT-LIB underspecified: selector applied to a sibling
+                    // ctor (e.g. (head nil) when nil≠cons). Any value
+                    // satisfies — don't strict-promote this Indet.
+                    sawUnderspecified_ = true;
+                    return indeterminate();
                 }
                 if (argIdx >= x.tree->children.size()) return indeterminate();
                 TreePtr child = x.tree->children[argIdx];
@@ -429,17 +435,22 @@ DtModelValidator::Verdict DtModelValidator::validate(
     if (diag) std::cerr << "[DT-VAL] tally true=" << nTrue << " indet=" << nIndet << " false=" << nFalse << "\n";
     if (anyIndet) {
         // Strict mode (XOLVER_DT_VALIDATOR_STRICT): promote Indeterminate to
-        // Violated. Sound: if validate() can't ground an assertion fully under
-        // the live e-graph at a Full-effort sat check, we cannot CERTIFY sat,
-        // so flooring to Violated → Unknown is correct. The trade-off is over-
-        // flooring true-sat cases whose model uses opaque DT classes. Master's
-        // 5min batch surfaced 43 false-SATs that lenient mode missed (e-graph
-        // state arrived at a sat verdict without enough constructor witnesses
-        // for structural eval) — use strict when the false-SAT cost dominates.
-        if (strict_) {
-            if (diag) std::cerr << "[DT-VAL] strict: Indet -> Violated (" << nIndet << " indet asserts)\n";
+        // Violated ONLY when no opaque DT class was encountered in extraction.
+        //
+        // 2026-06-01 emergency fix: the original unconditional promote scaled
+        // adversely on the master 5min batch (2693 sat → unknown over-flood
+        // vs 55 at 20s), because longer wall times expose more candidate
+        // models that USE opaque DT classes (every selector-on-no-ctor
+        // operand makes a class opaque — SMT-LIB legal). Restricting the
+        // promote to fully-ground models keeps the 55-class structural-Indet
+        // floor and drops the opaque-Indet over-floor.
+        if (strict_ && !sawUnderspecified_) {
+            if (diag) std::cerr << "[DT-VAL] strict: Indet -> Violated (no underspec, "
+                                << nIndet << " indet asserts)\n";
             return Verdict::Violated;
         }
+        if (diag && strict_ && sawUnderspecified_)
+            std::cerr << "[DT-VAL] strict: Indet NOT promoted (SMT-LIB underspec encountered)\n";
         return Verdict::Indeterminate;
     }
     return Verdict::Satisfied;
