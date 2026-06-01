@@ -2,6 +2,7 @@
 
 #include "expr/ir.h"
 #include "frontend/preprocess/ModelConverter.h"
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -88,6 +89,15 @@ private:
     size_t eliminated_ = 0;
     bool didRun_ = false;
     bool generalLinear_ = false;     // XOLVER_PP_SOLVE_EQS_GAUSS
+
+    // Substitution-work guard (see run()). Counts node-visits across all
+    // substitute() calls; when it exceeds workBudget_ the elimination loop stops
+    // (partial pass is sound). Bounds the O(eliminations × formula-size) cost
+    // that otherwise turns large chained-equality UNSATs (SMPT/nec) into
+    // timeouts. Default tuned so small formulas (convert) finish; env-overridable
+    // via XOLVER_PP_SOLVE_EQS_BUDGET.
+    uint64_t substWork_ = 0;
+    uint64_t workBudget_ = 40'000'000;
 };
 
 } // namespace xolver

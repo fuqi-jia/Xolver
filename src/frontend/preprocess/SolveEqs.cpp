@@ -2,13 +2,19 @@
 #include "theory/arith/linear/LinearExpr.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <gmpxx.h>
 
 namespace xolver {
 
 SolveEqs::SolveEqs(CoreIr& ir, ModelConverter& mc)
     : ir_(ir), mc_(mc),
-      boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {}
+      boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {
+    if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS_BUDGET")) {
+        if (unsigned long long v = std::strtoull(e, nullptr, 10)) workBudget_ = v;
+    }
+}
 
 std::optional<std::string> SolveEqs::asNumericVar(ExprId e) const {
     const auto& node = ir_.get(e);
@@ -70,6 +76,7 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
     stack.push_back({root, false});
 
     while (!stack.empty()) {
+        ++substWork_;   // bound total substitution work (see run()'s budget guard)
         Frame& frame = stack.back();
         ExprId e = frame.e;
         if (substMemo_.find(e) != substMemo_.end()) { stack.pop_back(); continue; }
@@ -163,6 +170,24 @@ bool SolveEqs::run() {
 
     bool progress = true;
     while (progress) {
+        // Substitution-work budget. run() re-substitutes across ALL conjuncts
+        // after EVERY elimination, so the pass is O(eliminations × formula-size).
+        // On small formulas (e.g. QF_LIA convert) this is cheap, but on large
+        // chained-equality systems (SMPT/nec Petri-nets: thousands of `aᵢ = Σx`
+        // aux-defs over tens of thousands of conjuncts) it explodes into
+        // billions of node-visits and burns the whole solve budget in
+        // preprocessing — turning fast UNSATs into timeouts. When the work cap
+        // is hit we stop eliminating and proceed with what we have: every
+        // elimination performed so far is independently equisatisfiable and
+        // registered for model replay, so a partial pass is SOUND (it is not a
+        // verdict, only a simplification). Budget is generous enough to complete
+        // the small formulas the pass actually helps; env-overridable for tuning.
+        if (substWork_ > workBudget_) {
+            if (eliminated_ > 0 && std::getenv("XOLVER_PP_SOLVE_EQS_DIAG"))
+                std::fprintf(stderr, "[SolveEqs] work budget hit after %zu elims; stopping\n",
+                             eliminated_);
+            break;
+        }
         progress = false;
         for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
             ExprId c = conjuncts_[idx].second;
