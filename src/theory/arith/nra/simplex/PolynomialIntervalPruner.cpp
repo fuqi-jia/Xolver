@@ -360,38 +360,47 @@ std::vector<Term> computeResidual(
     return residual;
 }
 
-// Detect if a polynomial p can be solved for a variable v.
-// Looks for a monomial of the form ±coeff * v (var with exp 1, alone),
-// where the coefficient is a constant (no other variables). Returns:
-//   - (v, isolatedCoeffSign, restTerms): v = -restTerms / isolatedCoeffSign
-// where restTerms is the polynomial (p - coeff*v).
+// Detect if a polynomial p can be solved for a MONOMIAL pattern.
+// The general pattern: p contains a monomial `coeff * (target_pattern)` that
+// appears in EXACTLY ONE term, and the variables in target_pattern don't
+// appear in any other monomial of p (so target_pattern can be isolated).
+//
+// Single-variable case (target_pattern = v): same as before.
+// Compound case (target_pattern = v1^a1 * v2^a2 * ...): allows substituting
+// monomials like `lambda1*vv1` as a whole, which closes the mgc_02-class
+// cascade where lambda1 only appears multiplied by vv1.
 struct SolveForResult {
-    VarId v = NullVar;
-    mpq_class coeffOfV;                       // coefficient of v in the isolated monomial
-    std::vector<Term> remainder;              // terms of p excluding the v monomial
+    VarId v = NullVar;                        // primary variable (for backward compat)
+    PowerKey monomialPattern;                 // the FULL monomial pattern being solved for
+    mpq_class coeffOfV;                       // coefficient of the isolated monomial
+    std::vector<Term> remainder;              // terms of p excluding the isolated monomial
 };
 
 std::optional<SolveForResult> trySolveForLinearVariable(
         const std::vector<Term>& terms) {
-    // Look for monomials of form coeff*v^1 with no other variables.
+    // Try each monomial as the "isolated pattern" candidate.
     for (size_t i = 0; i < terms.size(); ++i) {
         const Term& t = terms[i];
         if (t.coefficient == 0) continue;
-        if (t.powers.size() != 1) continue;
-        if (t.powers[0].second != 1) continue;
-        VarId v = t.powers[0].first;
-        // Confirm v doesn't appear in any other monomial.
-        bool clean = true;
+        if (t.powers.empty()) continue;       // constant term can't be a pattern
+        PowerKey patternPK = canon(t.powers);
+        // The pattern's variable set.
+        std::unordered_set<VarId> patternVars;
+        for (const auto& [v, e] : patternPK) patternVars.insert(v);
+        // For pattern to be isolatable, NO variable in pattern can appear in
+        // any other monomial of p. This makes the pattern unique in p.
+        bool isolatable = true;
         for (size_t j = 0; j < terms.size(); ++j) {
             if (j == i) continue;
             for (const auto& [vv, e] : terms[j].powers) {
-                if (vv == v) { clean = false; break; }
+                if (patternVars.count(vv)) { isolatable = false; break; }
             }
-            if (!clean) break;
+            if (!isolatable) break;
         }
-        if (!clean) continue;
+        if (!isolatable) continue;
         SolveForResult r;
-        r.v = v;
+        r.v = patternPK[0].first;   // first var as primary (backward compat)
+        r.monomialPattern = patternPK;
         r.coeffOfV = mpq_class(t.coefficient);
         for (size_t j = 0; j < terms.size(); ++j) {
             if (j == i) continue;
@@ -488,12 +497,7 @@ std::vector<Term> varPower(VarId v, int k) {
     return {t};
 }
 
-// Substitute v -> replacement_poly in target_terms.
-// Walks each monomial of target. If monomial contains v^k for k>=1:
-//   monomial = coeff * v^k * other_factors
-//   contributes coeff * (replacement_poly)^k * other_factors
-// where other_factors are the non-v powers of the monomial.
-// Returns the substituted polynomial as a term list.
+// Substitute v -> replacement_poly in target_terms (single-variable version).
 std::vector<Term> substitutePolyInTerms(
         const std::vector<Term>& target,
         VarId v,
@@ -507,26 +511,69 @@ std::vector<Term> substitutePolyInTerms(
             else         otherPowers.push_back({vv, e});
         }
         if (kOfV == 0) {
-            // No v in this monomial; keep as-is.
             result.push_back(t);
             continue;
         }
-        // Build replacement^kOfV by repeated multiplication.
         std::vector<Term> repK;
-        repK.push_back({mpz_class(1), {}});   // start with 1
+        repK.push_back({mpz_class(1), {}});
         for (int i = 0; i < kOfV; ++i) {
             repK = multiplyTerms(repK, replacement);
-            if (repK.empty() && i+1 < kOfV) return {};  // failed mid-power
+            if (repK.empty() && i+1 < kOfV) return {};
         }
-        // Multiply by the other factors of the monomial (coeff * otherPowers).
         Term otherMono;
         otherMono.coefficient = t.coefficient;
         otherMono.powers = otherPowers;
         auto scaled = multiplyTerms(repK, {otherMono});
         result = addTerms(result, scaled);
-        if (result.empty() && (!scaled.empty() || repK.size() > 1)) {
-            // Sum collapsed to zero -- this is fine, continue.
+    }
+    return result;
+}
+
+// Substitute a compound monomial pattern -> replacement_poly in target_terms.
+// pattern_powers represents the "left-hand side" monomial (e.g. lambda1*vv1).
+// For each target monomial t whose powers include pattern_powers as a factor
+// (each pattern_var^pattern_exp <= target_var^target_exp), the substitution
+// computes:
+//   t.coefficient * replacement^pattern_match_count * other_factors
+// where pattern_match_count is the maximum number of times pattern fits in t.
+//
+// For most cases (mgc_02 pattern), pattern appears exactly once in target.
+// We handle pattern_match_count = floor(min target_exp / pattern_exp)
+// over the pattern variables, but for simplicity restrict to count = 1.
+std::vector<Term> substituteMonomialPatternInTerms(
+        const std::vector<Term>& target,
+        const PowerKey& patternPK,
+        const std::vector<Term>& replacement) {
+    if (patternPK.empty()) return target;
+    std::vector<Term> result;
+    for (const auto& t : target) {
+        // Check if t contains pattern as a factor: every (v, e) in patternPK
+        // must have e' >= e in t.powers.
+        std::unordered_map<VarId, int> tMap;
+        for (const auto& [v, e] : t.powers) tMap[v] = e;
+        bool contains = true;
+        for (const auto& [v, e] : patternPK) {
+            auto it = tMap.find(v);
+            if (it == tMap.end() || it->second < e) { contains = false; break; }
         }
+        if (!contains) {
+            result.push_back(t);
+            continue;
+        }
+        // Build "other factors" = t.powers minus patternPK.
+        std::vector<std::pair<VarId, int>> otherPowers;
+        for (const auto& [v, e] : t.powers) {
+            int patExp = 0;
+            for (const auto& [pv, pe] : patternPK) if (pv == v) { patExp = pe; break; }
+            int residualE = e - patExp;
+            if (residualE > 0) otherPowers.push_back({v, residualE});
+        }
+        Term otherMono;
+        otherMono.coefficient = t.coefficient;
+        otherMono.powers = otherPowers;
+        // Multiply replacement * other_mono.
+        auto scaled = multiplyTerms(replacement, {otherMono});
+        result = addTerms(result, scaled);
     }
     return result;
 }
@@ -683,9 +730,10 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     std::vector<DerivedConstraint> derived;
     std::unordered_set<std::string> seen;
 
-    // Cap on derived constraint count to prevent exponential explosion.
-    // mgc_02 needs ~50 derivations; cap at 200 as safety budget.
-    constexpr size_t kMaxDerivedCap = 200;
+    // Cap on derived constraint count. Raise to 1000 so the multi-step
+    // mgc_02 cascade (gamma0 subst -> lambda1*vv1 subst -> vv2=vv3 subst
+    // into final eq5) has enough budget to complete.
+    constexpr size_t kMaxDerivedCap = 1000;
     auto addDerived = [&](DerivedConstraint d) -> bool {
         if (derived.size() >= kMaxDerivedCap) return false;
         std::string k = termsKey(d.terms);
@@ -909,6 +957,7 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             const auto solveOpt = trySolveForLinearVariable(derived[di].terms);
             if (!solveOpt) continue;
             const VarId solveVar = solveOpt->v;
+            const PowerKey solvePattern = solveOpt->monomialPattern;
             // Replacement poly: -remainder / coeffOfV (mpq for the scale).
             mpq_class invScale = mpq_class(-1) / solveOpt->coeffOfV;
             std::vector<Term> replacement = scaleTerms(solveOpt->remainder, invScale);
@@ -919,17 +968,37 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             auto tryAddSubst = [&](const std::vector<Term>& pt,
                                    const std::vector<SatLit>& baseReasons,
                                    const char* label, size_t labelIdx) -> bool {
-                if (eagerConflict) return false;   // already found one
+                if (eagerConflict) return false;
                 if (pt.empty()) return false;
-                bool hasVar = false;
-                for (const auto& t : pt) {
-                    for (const auto& [v, e] : t.powers) {
-                        if (v == solveVar) { hasVar = true; break; }
+                // Use compound monomial substitution if pattern has >1 var
+                // (e.g. lambda1*vv1); else fall back to single-var.
+                std::vector<Term> subst;
+                if (solvePattern.size() == 1 && solvePattern[0].second == 1) {
+                    bool hasVar = false;
+                    for (const auto& t : pt) {
+                        for (const auto& [v, e] : t.powers) {
+                            if (v == solveVar) { hasVar = true; break; }
+                        }
+                        if (hasVar) break;
                     }
-                    if (hasVar) break;
+                    if (!hasVar) return false;
+                    subst = substitutePolyInTerms(pt, solveVar, replacement);
+                } else {
+                    // Compound: substitute lambda1*vv1 pattern.
+                    bool hasPattern = false;
+                    for (const auto& t : pt) {
+                        std::unordered_map<VarId, int> tMap;
+                        for (const auto& [v, e] : t.powers) tMap[v] = e;
+                        bool ok = true;
+                        for (const auto& [v, e] : solvePattern) {
+                            auto it = tMap.find(v);
+                            if (it == tMap.end() || it->second < e) { ok = false; break; }
+                        }
+                        if (ok) { hasPattern = true; break; }
+                    }
+                    if (!hasPattern) return false;
+                    subst = substituteMonomialPatternInTerms(pt, solvePattern, replacement);
                 }
-                if (!hasVar) return false;
-                auto subst = substitutePolyInTerms(pt, solveVar, replacement);
                 if (subst.empty()) return false;
                 // Build combined reasons.
                 std::vector<SatLit> combined;
@@ -963,11 +1032,50 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                 return false;
             };
 
-            // Substitute into each original EQ constraint.
+            // Substitute into each original constraint. INCLUDE inequalities:
+            // substitution into eq4 (an inequality) is sound -- if the
+            // substituted version becomes refutable by interval, we still
+            // emit conflict via eagerCheck which respects the relation.
             for (size_t ci = 0; ci < constraints.size(); ++ci) {
-                if (constraints[ci].rel != Relation::Eq) continue;
-                tryAddSubst(origTerms[ci], {constraints[ci].reason}, "P", ci);
-                if (eagerConflict) return *eagerConflict;
+                // For inequalities, the substituted constraint's relation
+                // is the same as the original. Pass via separate path.
+                Relation origRel = constraints[ci].rel;
+                if (origRel == Relation::Eq) {
+                    tryAddSubst(origTerms[ci], {constraints[ci].reason}, "P", ci);
+                    if (eagerConflict) return *eagerConflict;
+                } else {
+                    // For inequalities, manually substitute and check the
+                    // resulting interval against the original relation.
+                    std::vector<Term> subst;
+                    if (solvePattern.size() == 1 && solvePattern[0].second == 1) {
+                        bool hasVar = false;
+                        for (const auto& t : origTerms[ci]) {
+                            for (const auto& [v, e] : t.powers) {
+                                if (v == solveVar) { hasVar = true; break; }
+                            }
+                            if (hasVar) break;
+                        }
+                        if (!hasVar) continue;
+                        subst = substitutePolyInTerms(origTerms[ci], solveVar, replacement);
+                    } else {
+                        subst = substituteMonomialPatternInTerms(origTerms[ci], solvePattern, replacement);
+                    }
+                    if (subst.empty()) continue;
+                    // Build reasons and check refutation against ORIGINAL rel.
+                    std::vector<SatLit> combined;
+                    std::unordered_set<uint64_t> seenLit;
+                    auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+                    for (auto r : derived[di].reasons) if (seenLit.insert(key(r)).second) combined.push_back(r);
+                    if (seenLit.insert(key(constraints[ci].reason)).second) combined.push_back(constraints[ci].reason);
+                    auto cf = checkRefutation(subst, combined, origRel);
+                    if (cf) {
+                        if (diag) {
+                            std::fprintf(stderr, "[OSF-DIAG] INEQUALITY P[%zu] closed after subst (%zu terms)\n",
+                                         ci, subst.size());
+                        }
+                        return *cf;
+                    }
+                }
             }
 
             // CHAINED substitution: also substitute into previously derived
