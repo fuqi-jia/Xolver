@@ -90,6 +90,16 @@ private:
     // O(#monomials); unconditionally sound (refutes only the provably impossible)
     // — the cheap closer for the Sturm-MBO family that CAD/CAC time out on.
     std::optional<TheoryCheckResult> stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_SIGN_SPLIT (default OFF): when sign-refute is blocked by ONE
+    // sign-unknown variable in an otherwise refutable constraint, emit a
+    // 3-way case-split theory lemma (or (> v 0) (= v 0) (< v 0)) on that
+    // variable. The disjunction IS a tautology over R (covers strict-pos,
+    // zero, and strict-neg cases). v = 0 MUST be in the disjunction;
+    // excluding it would cut off feasible models and produce false UNSAT.
+    // SAT branches into the 3 sub-trees; in each, the variable's sign
+    // becomes known, sign-refute fires. Closes the MGC + Mulligan sign-
+    // blocked UNSAT class identified in NDEEP-3/4.
+    std::optional<TheoryCheckResult> stageNraSignSplit(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts
@@ -226,6 +236,10 @@ private:
 
     // Sign-definiteness refuter: promoted default-ON.
     bool enableSignRefute_ = true;
+    // XOLVER_NRA_SIGN_SPLIT: per-solve dedup of vars already split. Cleared
+    // on reset/onReset (no need for trail rollback — once split, the SAT
+    // layer carries the disjunction).
+    mutable std::unordered_set<VarId> signSplitDone_;
 
     // NRA-MGC-PROFILE: env-gated per-stage timing accounting (XOLVER_NRA_STAGE_TIMING).
     mutable std::unordered_map<std::string, uint64_t> stageTimingUs_;

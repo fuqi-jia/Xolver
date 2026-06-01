@@ -67,6 +67,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-refute",
         stageWrap("sign-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); })));
+    // XOLVER_NRA_SIGN_SPLIT (default OFF): case-split on sign-blocking variables
+    // when sign-refute can't fire. See NDEEP-3/4 / MGC R&D audit.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.sign-split",
+        stageWrap("sign-split", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraSignSplit(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -159,6 +164,7 @@ void NraSolver::onReset() {
     activeSet_.reset();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    signSplitDone_.clear();   // XOLVER_NRA_SIGN_SPLIT: fresh per solve
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
@@ -429,6 +435,120 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         st.flush();
     }
     return TheoryCheckResult::mkConflict(std::move(tc));
+}
+
+// XOLVER_NRA_SIGN_SPLIT (default OFF). MGC-RD closing lever.
+//
+// When sign-refute fails because exactly ONE variable's sign is unknown in
+// an otherwise-refutable equation/inequality, emit a 3-way case-split
+// theory lemma  (or (> v 0) (= v 0) (< v 0))  on that variable. The
+// disjunction is a tautology over R (covers every real number), so adding
+// it never alters the feasible region — soundness is structural. In each
+// branch the variable's sign becomes definite, sign-refute fires.
+//
+// Per-solve dedup via signSplitDone_; cleared in onReset to enable a fresh
+// split set per solve.
+std::optional<TheoryCheckResult> NraSolver::stageNraSignSplit(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = []() {
+        const char* e = std::getenv("XOLVER_NRA_SIGN_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    // Run at every effort: the lemma is a tautology so emitting early
+    // (Standard effort) lets SAT branch before propagation digs deep.
+    if (!registry_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // Pass 1: derive known signs from single-var linear bounds (mirrors
+    // SignDefinitenessRefuter so we agree on which vars are unknown).
+    enum class Sign : uint8_t { Unknown, PosStrict, NegStrict, NonNeg, NonPos };
+    std::unordered_map<VarId, Sign> known;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rpOpt) continue;
+        const auto& rp = *rpOpt;
+        const auto vars = rp.variables();
+        if (vars.size() != 1) continue;
+        const VarId v = *vars.begin();
+        if (rp.degree(v) != 1) continue;
+        mpq_class coeff = 0, constTerm = 0;
+        for (const auto& [mon, k] : rp.terms()) {
+            if (mon.empty()) constTerm = k;
+            else if (mon.size() == 1 && mon[0].first == v && mon[0].second == 1) coeff = k;
+            else { coeff = 0; break; }
+        }
+        if (coeff == 0) continue;
+        mpq_class boundary = -constTerm / coeff;
+        Relation rel = c.rel;
+        if (coeff < 0) {
+            switch (rel) {
+                case Relation::Lt:  rel = Relation::Gt; break;
+                case Relation::Leq: rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Lt;  break;
+                case Relation::Geq: rel = Relation::Leq; break;
+                default: break;
+            }
+        }
+        Sign s = Sign::Unknown;
+        if (rel == Relation::Gt && boundary >= 0) s = Sign::PosStrict;
+        else if (rel == Relation::Geq && boundary > 0) s = Sign::PosStrict;
+        else if (rel == Relation::Geq && boundary == 0) s = Sign::NonNeg;
+        else if (rel == Relation::Lt && boundary <= 0) s = Sign::NegStrict;
+        else if (rel == Relation::Leq && boundary < 0) s = Sign::NegStrict;
+        else if (rel == Relation::Leq && boundary == 0) s = Sign::NonPos;
+        if (s == Sign::Unknown) continue;
+        auto& slot = known[v];
+        // Strict wins over non-strict.
+        if (slot == Sign::Unknown ||
+            ((s == Sign::PosStrict || s == Sign::NegStrict) &&
+             !(slot == Sign::PosStrict || slot == Sign::NegStrict))) {
+            slot = s;
+        }
+    }
+
+    // Pass 2: find a sign-blocking variable. Heuristic: pick the unknown-sign
+    // variable that appears in the most constraints. Only consider vars that
+    // haven't been split before this solve.
+    std::unordered_map<VarId, int> unknownVarUseCount;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        for (const auto& vn : kernel_->variables(c.poly)) {
+            auto vid = kernel_->findVar(vn);
+            if (!vid) continue;
+            if (known.find(*vid) != known.end()) continue;
+            if (signSplitDone_.count(*vid)) continue;
+            unknownVarUseCount[*vid]++;
+        }
+    }
+    if (unknownVarUseCount.empty()) return std::nullopt;
+    VarId pick = NullVar;
+    int bestCount = 0;
+    for (const auto& [v, n] : unknownVarUseCount) {
+        if (n > bestCount) { pick = v; bestCount = n; }
+    }
+    if (pick == NullVar) return std::nullopt;
+
+    // Emit the 3-way disjunction lemma: (or (> v 0) (= v 0) (< v 0)).
+    // Each atom is on (v - 0), i.e. just the poly v.
+    PolyId vPoly = kernel_->mkVar(pick);
+    SatLit gt = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Gt, mpq_class(0), TheoryId::LRA);
+    SatLit eq = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Eq, mpq_class(0), TheoryId::LRA);
+    SatLit lt = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Lt, mpq_class(0), TheoryId::LRA);
+    if (gt.var == 0 || eq.var == 0 || lt.var == 0) return std::nullopt;
+
+    TheoryLemma lemma{{gt, eq, lt}};
+    signSplitDone_.insert(pick);
+
+    if (std::getenv("XOLVER_NRA_SIGN_SPLIT_DIAG")) {
+        std::fprintf(stderr,
+            "[XOLVER_NRA_SIGN_SPLIT] split on var=%u uses=%d  lemma=(>0 | =0 | <0)\n",
+            (unsigned)pick, bestCount);
+    }
+    return TheoryCheckResult::mkLemma(std::move(lemma));
 }
 
 // XOLVER_NRA_PREELIM (default OFF): affine-equality pre-elimination + reduced CDCAC.
