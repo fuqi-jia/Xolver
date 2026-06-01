@@ -136,10 +136,15 @@ private:
     // delegate to terms() for the non-main-variable path.
     mutable std::unordered_map<PolyId, std::optional<std::vector<MonomialTerm>>>
         termsCache_;
+    // S1d (Task J follow-up) — variables() cache. Pure traversal,
+    // 92 call sites, valid for kernel lifetime.
+    mutable std::unordered_map<PolyId, std::vector<std::string>> varsCache_;
     mutable uint64_t binOpHits_ = 0;   // S1 stats (XOLVER_NRA_KERNEL_STATS)
     mutable uint64_t binOpMisses_ = 0;
     mutable uint64_t termsHits_ = 0;
     mutable uint64_t termsMisses_ = 0;
+    mutable uint64_t varsHits_ = 0;
+    mutable uint64_t varsMisses_ = 0;
     static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
         return (op << 60) | (static_cast<uint64_t>(a) << 30) | static_cast<uint64_t>(b);
     }

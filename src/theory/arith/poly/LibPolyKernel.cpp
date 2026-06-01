@@ -82,11 +82,14 @@ LibPolyKernel::~LibPolyKernel() {
         const size_t tpiSize = tpiCache_ ? tpiCache_->map.size() : 0;
         const uint64_t termsTotal = termsHits_ + termsMisses_;
         const double termsRate = termsTotal ? 100.0 * static_cast<double>(termsHits_) / static_cast<double>(termsTotal) : 0.0;
+        const uint64_t varsTotal = varsHits_ + varsMisses_;
+        const double varsRate = varsTotal ? 100.0 * static_cast<double>(varsHits_) / static_cast<double>(varsTotal) : 0.0;
         std::fprintf(stderr,
-            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | terms hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
+            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | terms hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | vars hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
             (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_, hitRate, binOpCache_.size(),
             (unsigned long long)tpiHits_,   (unsigned long long)tpiMisses_,  tpiRate, tpiSize,
             (unsigned long long)termsHits_, (unsigned long long)termsMisses_, termsRate, termsCache_.size(),
+            (unsigned long long)varsHits_,  (unsigned long long)varsMisses_,  varsRate, varsCache_.size(),
             sqfFactorsCache_.size(), pool_.size());
     }
 }
@@ -248,6 +251,19 @@ mpq_class LibPolyKernel::toConstant(PolyId a) const {
 }
 
 std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
+    // S1d (Task J follow-up): hash-cons. Pure function — recursive
+    // coefficient traversal + set insertion is heavy at 92 call sites
+    // across atom-var resolution, CAC projection variable enumeration,
+    // and frontend lowering.
+    {
+        auto it = varsCache_.find(a);
+        if (it != varsCache_.end()) {
+            ++varsHits_;
+            return it->second;
+        }
+    }
+    ++varsMisses_;
+
     std::vector<std::string> result;
     const auto& p = get(a);
 
@@ -270,6 +286,7 @@ std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
             result.push_back(varNames_[it->second]);
         }
     }
+    varsCache_.emplace(a, result);
     return result;
 }
 
