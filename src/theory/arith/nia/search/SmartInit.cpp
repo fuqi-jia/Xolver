@@ -163,6 +163,74 @@ void SmartInit::analyze(
     extractLinearInfo(constraints);
     tightenBounds(constraints, domains);
 
+    // LS-SMART-3 short: exact 2x2 linear-system solver via Cramer's rule.
+    // For every pair of Eq atoms that BOTH reduce to a linear form
+    // {a*x + b*y + e = 0, c*x + d*y + f = 0} on the same two variables,
+    // compute the determinant ad - bc; if it's nonzero AND it divides
+    // both numerator polynomials -ed + bf and ec - af exactly, pin both
+    // x and y to the integer solution. This catches user's example
+    // (x + y = 1, x + 2y = 4) → x=-2, y=3 even when single-Eq derive
+    // would only chain one variable to the other.
+    //
+    // O(n^2) over Eq atoms; n is small (~10s of asserts even on
+    // VeryMax-class).
+    std::vector<std::tuple<size_t, std::vector<std::pair<std::string, mpz_class>>, mpz_class>> linEqs;
+    for (size_t i = 0; i < constraints.size(); ++i) {
+        if (constraints[i].rel != Relation::Eq) continue;
+        std::vector<std::pair<std::string, mpz_class>> lt;
+        mpz_class k;
+        if (!isLinearForm(constraints[i].poly, lt, k)) continue;
+        if (lt.size() == 2) linEqs.push_back({i, std::move(lt), k});
+    }
+    for (size_t i = 0; i < linEqs.size(); ++i) {
+        const auto& [_i1, ti, ki] = linEqs[i];
+        const auto& v1 = ti[0].first;
+        const auto& v2 = ti[1].first;
+        for (size_t j = i + 1; j < linEqs.size(); ++j) {
+            const auto& [_i2, tj, kj] = linEqs[j];
+            if (tj.size() != 2) continue;
+            // Match var names — could be in either order.
+            const std::string& uj1 = tj[0].first;
+            const std::string& uj2 = tj[1].first;
+            bool aligned = (uj1 == v1 && uj2 == v2);
+            bool swapped = (uj1 == v2 && uj2 == v1);
+            if (!aligned && !swapped) continue;
+            const mpz_class& a = ti[0].second;
+            const mpz_class& b = ti[1].second;
+            const mpz_class& c = aligned ? tj[0].second : tj[1].second;
+            const mpz_class& d = aligned ? tj[1].second : tj[0].second;
+            const mpz_class& e = ki;
+            const mpz_class& f = kj;
+            mpz_class det = a * d - b * c;
+            if (det == 0) continue;  // singular — drop
+            // {a*x + b*y + e = 0, c*x + d*y + f = 0}
+            // => x = (b*f - d*e) / det,  y = (c*e - a*f) / det
+            mpz_class numX = b * f - d * e;
+            mpz_class numY = c * e - a * f;
+            if (numX % det != 0 || numY % det != 0) continue;
+            mpz_class xVal = numX / det;
+            mpz_class yVal = numY / det;
+            auto pinIfFree = [&](const std::string& nm, const mpz_class& val) {
+                auto it = info_.find(nm);
+                if (it == info_.end()) return;
+                if (it->second.hasLower && val < it->second.lower) return;
+                if (it->second.hasUpper && val > it->second.upper) return;
+                if (!it->second.pinned) {
+                    it->second.pinned = true;
+                    it->second.pinnedValue = val;
+                    // Pinning supersedes any derive that may have been set
+                    it->second.derived = false;
+                } else if (it->second.pinnedValue != val) {
+                    // Conflicting pin — drop both pin and derive; main
+                    // pipeline will flag inconsistency.
+                    it->second.pinned = false;
+                }
+            };
+            pinIfFree(v1, xVal);
+            pinIfFree(v2, yVal);
+        }
+    }
+
     // LS-SMART-4: per-var modular pre-check. For each Eq atom
     //   c_v * v + sum_{u != v} c_u * u + k = 0
     // (after fully linear decomposition), compute the GCD g of the
