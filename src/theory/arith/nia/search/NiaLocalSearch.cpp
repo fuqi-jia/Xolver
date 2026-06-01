@@ -2,6 +2,7 @@
 #include "theory/arith/nia/search/SmartInit.h"
 #include <random>
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <chrono>
 #include <cstdlib>
@@ -1024,31 +1025,45 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         };
 
         int sinceImprove = 0;
-        // M11 tabu (XOLVER_NIA_LS_TABU). Track the last TABU_LEN
-        // committed (var, value) pairs; a candidate matching a tabu
-        // entry incurs a heavy cost penalty during selection, so we
-        // prefer non-tabu moves but still accept tabu as a last resort
-        // (Glover's aspiration: a tabu move is accepted if it would
-        // actually achieve a NEW global-best — captured here by the
-        // bestCost comparison still happening normally).
-        const std::size_t TABU_LEN = 16;
+        // M11 + LS-SMART-Z4 (XOLVER_NIA_LS_TABU). DIRECTION-aware tabu:
+        // per-variable forward (move increased) / backward (decreased)
+        // tabu step counts. After a commit on (var, newVal), the
+        // OPPOSITE direction is tabu'd for TENURE=3..12 steps (the
+        // direction we just moved in stays free, so monotonic
+        // progression is allowed; only oscillation is blocked).
+        //
+        // Also tracks last_move_step per (var, direction) for the
+        // 3rd tiebreaker (older moves preferred). NB: simple unordered_map
+        // backing — VeryMax has up to ~hundreds of vars per atom set;
+        // the overhead is negligible.
+        std::unordered_map<std::string, std::array<int, 2>> tabuStep;
+        std::unordered_map<std::string, std::array<int, 2>> lastMoveStep;
         const mpz_class TABU_PENALTY("100000000");
-        std::vector<std::pair<std::string, mpz_class>> tabuList;
-        tabuList.reserve(TABU_LEN);
-        std::size_t tabuHead = 0;
-        auto isTabu = [&](const std::string& v, const mpz_class& val) {
-            for (const auto& [tv, tw] : tabuList) {
-                if (tv == v && tw == val) return true;
-            }
-            return false;
+        auto curStep = [&]() -> int& { return sinceImprove; };  // step proxy
+        auto dirOf = [&](const std::string& v, const mpz_class& newVal) -> int {
+            auto it = cur.find(v);
+            if (it == cur.end()) return 0;
+            return (newVal > it->second) ? 0 : 1;  // 0 = forward, 1 = backward
         };
-        auto recordTabu = [&](const std::string& v, const mpz_class& val) {
-            if (tabuList.size() < TABU_LEN) {
-                tabuList.push_back({v, val});
-            } else {
-                tabuList[tabuHead] = {v, val};
-                tabuHead = (tabuHead + 1) % TABU_LEN;
-            }
+        auto isTabu = [&](const std::string& v, const mpz_class& val) {
+            auto it = tabuStep.find(v);
+            if (it == tabuStep.end()) return false;
+            int d = dirOf(v, val);
+            return curStep() < it->second[d];
+        };
+        auto lastMoveAt = [&](const std::string& v, int d) -> int {
+            auto it = lastMoveStep.find(v);
+            if (it == lastMoveStep.end()) return -1;
+            return it->second[d];
+        };
+        auto recordTabu = [&](const std::string& v, const mpz_class& newVal) {
+            int d = dirOf(v, newVal);
+            int s = curStep();
+            // Update last_move on the direction we just moved in.
+            lastMoveStep[v][d] = s;
+            // Tabu the OPPOSITE direction for 3..12 steps.
+            int tenure = 3 + (int)(rng() % 10);
+            tabuStep[v][(d + 1) % 2] = s + tenure;
         };
         // LS-VM5: random-walk diversification budget. When sinceImprove
         // crosses the trigger, set this to K = 10 and decrement per flip;
@@ -1406,7 +1421,27 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     // it can still win.
                     mpz_class effectiveNc = nc;
                     if (tabu_ && isTabu(v, t)) effectiveNc += TABU_PENALTY;
-                    if (!haveBest || effectiveNc < bestCost) {
+                    // LS-SMART-Z4 3-level tiebreaker:
+                    //   1) cost (primary)
+                    //   2) |new_val| smaller wins  (z3pp/NiLLS reference)
+                    //   3) older last_move wins (least-recently-moved)
+                    bool win = false;
+                    if (!haveBest) win = true;
+                    else if (effectiveNc < bestCost) win = true;
+                    else if (effectiveNc == bestCost) {
+                        const mpz_class& tAbs = abs(t);
+                        const mpz_class& bestAbs = abs(bestVal);
+                        if (tAbs < bestAbs) win = true;
+                        else if (tAbs == bestAbs) {
+                            int dT = dirOf(v, t);
+                            int lT = lastMoveAt(v, dT);
+                            int dB = bestVar.empty() ? 0 : dirOf(bestVar, bestVal);
+                            int lB = bestVar.empty() ? -1 : lastMoveAt(bestVar, dB);
+                            // Smaller last_move = older = preferred.
+                            if (lT < lB) win = true;
+                        }
+                    }
+                    if (win) {
                         bestCost = effectiveNc; bestVar = v; bestVal = t; haveBest = true;
                     }
                     // LS-SMART-Z3: check if this move EXACTLY satisfies
