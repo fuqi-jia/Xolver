@@ -821,6 +821,110 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     };
 
     bool diag = std::getenv("XOLVER_NRA_OSF_DIAG") != nullptr;
+
+    // Focused approach: pick the LARGEST EQ constraint and apply all
+    // solvable substitutions to IT directly, then check.
+    auto applyAllSubsToTarget = [&](
+            const std::vector<Term>& targetTerms,
+            const std::vector<SatLit>& targetReasons,
+            Relation targetRel,
+            int maxApplications) -> std::optional<IntervalConflict> {
+        std::vector<Term> current = targetTerms;
+        std::vector<SatLit> reasons = targetReasons;
+        std::unordered_set<uint64_t> reasonsSet;
+        auto rkey = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+        for (auto r : reasons) reasonsSet.insert(rkey(r));
+        for (int round = 0; round < maxApplications; ++round) {
+            bool anyApplied = false;
+            // Try every derived constraint as a substitution source.
+            for (size_t di = 0; di < derived.size(); ++di) {
+                auto sf = trySolveForLinearVariable(derived[di].terms);
+                if (!sf) continue;
+                mpq_class invScale = mpq_class(-1) / sf->coeffOfV;
+                auto replacement = scaleTerms(sf->remainder, invScale);
+                if (replacement.empty() && !sf->remainder.empty()) continue;
+                // Check if pattern appears in current.
+                std::vector<Term> after;
+                if (sf->monomialPattern.size() == 1 && sf->monomialPattern[0].second == 1) {
+                    VarId v = sf->v;
+                    bool hasVar = false;
+                    for (const auto& t : current) {
+                        for (const auto& [vv, e] : t.powers) {
+                            if (vv == v) { hasVar = true; break; }
+                        }
+                        if (hasVar) break;
+                    }
+                    if (!hasVar) continue;
+                    after = substitutePolyInTerms(current, v, replacement);
+                } else {
+                    bool hasPattern = false;
+                    for (const auto& t : current) {
+                        std::unordered_map<VarId, int> tMap;
+                        for (const auto& [v, e] : t.powers) tMap[v] = e;
+                        bool ok = true;
+                        for (const auto& [v, e] : sf->monomialPattern) {
+                            auto it = tMap.find(v);
+                            if (it == tMap.end() || it->second < e) { ok = false; break; }
+                        }
+                        if (ok) { hasPattern = true; break; }
+                    }
+                    if (!hasPattern) continue;
+                    after = substituteMonomialPatternInTerms(current, sf->monomialPattern, replacement);
+                }
+                if (after.empty()) continue;
+                current = std::move(after);
+                for (auto r : derived[di].reasons) {
+                    if (reasonsSet.insert(rkey(r)).second) reasons.push_back(r);
+                }
+                anyApplied = true;
+                if (diag) {
+                    std::fprintf(stderr, "[OSF-FOCUS] applied subst from D[%zu]; current now %zu terms\n",
+                                 di, current.size());
+                }
+                // Check refutation.
+                std::vector<SatLit> chkReasons = reasons;
+                std::vector<SatLit> usedR;
+                PolyInterval iv = intervalOfTerms(current, facts, usedR);
+                if (!iv.indeterminate) {
+                    bool refuted = false;
+                    switch (targetRel) {
+                        case Relation::Eq:
+                            if (iv.low && *iv.low > 0) refuted = true;
+                            if (iv.high && *iv.high < 0) refuted = true;
+                            break;
+                        case Relation::Geq:
+                            if (iv.high && *iv.high < 0) refuted = true;
+                            break;
+                        case Relation::Gt:
+                            if (iv.high && *iv.high <= 0) refuted = true;
+                            break;
+                        case Relation::Leq:
+                            if (iv.low && *iv.low > 0) refuted = true;
+                            break;
+                        case Relation::Lt:
+                            if (iv.low && *iv.low >= 0) refuted = true;
+                            break;
+                        default: break;
+                    }
+                    if (refuted) {
+                        IntervalConflict conf;
+                        for (auto r : reasons) conf.reasons.push_back(r);
+                        for (auto r : usedR) {
+                            if (reasonsSet.insert(rkey(r)).second) conf.reasons.push_back(r);
+                        }
+                        conf.explanation = "focused chained substitution closes target";
+                        if (diag) {
+                            std::fprintf(stderr, "[OSF-FOCUS] CONFLICT after %d substitutions; final %zu terms\n",
+                                         round + 1, current.size());
+                        }
+                        return conf;
+                    }
+                }
+            }
+            if (!anyApplied) break;
+        }
+        return std::nullopt;
+    };
     if (diag) {
         std::fprintf(stderr, "[OSF-DIAG] iter loop start: derived=%zu constraints=%zu\n",
                      derived.size(), constraints.size());
@@ -1090,6 +1194,19 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             }
         }
 
+        // After each iteration, try the focused approach: apply ALL solvable
+        // substitutions to each original constraint in cascade. This catches
+        // the mgc_02-class cascade where the right substitution sequence
+        // exists in derived but breadth-first never combines them on the
+        // right target.
+        for (size_t ci = 0; ci < constraints.size(); ++ci) {
+            const auto& pt = origTerms[ci];
+            if (pt.empty()) continue;
+            if (pt.size() < 4) continue;
+            std::vector<SatLit> baseReason{constraints[ci].reason};
+            auto cf = applyAllSubsToTarget(pt, baseReason, constraints[ci].rel, /*maxApps=*/15);
+            if (cf) return cf;
+        }
         if (!changed) break;
     }
     return std::nullopt;
