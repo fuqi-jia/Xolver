@@ -63,8 +63,10 @@ public:
 
 private:
     PolynomialKernel& kernel_;
-    long budgetMs_ = 10;      // Phase A default: micro-budget; master-spec recommends 1-5ms per callback,
-                              // 10ms one-shot per solve. Will raise once univariate boundary candidates land.
+    long budgetMs_ = 50;      // Task D-derisked default (raised from 10 → 50ms after the
+                              // local 14-case sweep showed 0 regression and the broad atan-problem-1
+                              // cluster showed identical pass + bounded overhead). Env var
+                              // XOLVER_NRA_LS_BUDGET_MS still overrides at solver setup.
     int  maxRounds_ = 10;     // coarse iteration cap (was 50; convergent rationals slowed evaluator).
     bool eqRelax_ = false;
     mpq_class epsilon_{1, 1024};
