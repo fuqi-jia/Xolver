@@ -337,6 +337,17 @@ IntegerModel SmartInit::propose(std::mt19937_64& rng) const {
         } else if (info.hasUpper) {
             model[v] = info.upper;
         } else {
+            // LS-SMART-Z1 (z3-discovery 2026-06-02): VeryMax z3 SAT
+            // models are DOMINATED by zeros (96% SAT14, 71% CInteger,
+            // 65% ITS). Bias unbounded free vars to 0 with ~75%
+            // probability; the remaining 25% sample from coefRange /
+            // modular as before. Cluster-specific tuning can refine
+            // this later (LS-SMART-Z2 prefix-aware).
+            uint64_t zeroDie = rng() % 100;
+            if (zeroDie < 75) {
+                model[v] = mpz_class(0);
+                continue;
+            }
             // Fully unbounded: prefer the coefficient-derived range
             // (LS-SMART-5) when set, else fall back to narrow ±20.
             mpz_class range = info.coefRange;
@@ -348,7 +359,6 @@ IntegerModel SmartInit::propose(std::mt19937_64& rng) const {
             // near 0, shift by allowed residue.
             if (info.modulus > 1 && !info.allowedResidues.empty()) {
                 const mpz_class& res = info.allowedResidues[0];
-                // How many full moduli fit in 2*range?
                 mpz_class numSteps = (2 * range) / info.modulus;
                 if (numSteps < 1) numSteps = 1;
                 uint64_t r = rng();
