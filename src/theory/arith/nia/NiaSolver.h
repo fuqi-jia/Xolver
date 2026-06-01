@@ -132,6 +132,16 @@ private:
     ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    // L4.1 — modular reasoner warm-start memoization. When the active
+    // normalized_ stream's signature matches modularLastSignature_ AND
+    // the last run was NoChange, stageModular skips re-running the
+    // detection + Hensel + chain composition + residue enumeration and
+    // returns NoChange immediately. Sound: a NoChange replay under
+    // unchanged signature writes no state and emits no verdict. On
+    // backtrack / reset the cache is invalidated.
+    uint64_t modularLastSignature_ = 0;
+    bool modularLastWasNoChange_ = false;
+    bool modularSignatureValid_ = false;
     bool enableRefute_ = true;    // bound-free product-positivity refutation (promoted default-ON)
     bool enableGcd_ = true;       // multivariate GCD-divisibility refutation (promoted default-ON)
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)

@@ -214,8 +214,37 @@ void NiaSolver::onReset() {
     interfaceDisequalities_.clear();
     localSearch_.resetBudget();
     localSearch_.resetLsContext();
+    // L4.1 modular warm-start: clear memoization for the new solve.
+    modularSignatureValid_ = false;
+    modularLastSignature_ = 0;
+    modularLastWasNoChange_ = false;
 }
 
+// L3.1 — per-solve LS pre-pass via check() override, ported from NRA
+// agent's fea2d98. Runs ONCE per solve (lsAttempted_ guard) with the
+// current active_ set, BEFORE the Reasoner pipeline. If LS finds a
+// model that exact-validates, the candidate is cached in
+// `lsCachedCandidate_` (persistent across cb_propagate — assertLit does
+// NOT clear it) and `currentModel_` is set for the verdict path. On
+// every subsequent check() the cached candidate is re-validated against
+// the up-to-date active_; if it still satisfies, `currentModel_` is
+// re-set and we return consistent. If revalidation fails, the cache is
+// dropped and we fall through to the normal pipeline.
+//
+// CRITICAL DESIGN DECISION (lesson from the previous failed attempt
+// that hung pipeline state on every SAT14 case): build a LOCAL
+// normalized vector here via `normalizer_.normalizeOne(active_[i])` —
+// DO NOT mutate `normalized_`. The pipeline's stageNormalize manages
+// `normalized_` with an incremental cache; manually pre-populating it
+// races with stageNormalize and corrupts SAT-finding paths. The local
+// vector is purely for the LS pre-pass + validation; it is discarded
+// at function exit. stageNormalize then sees `normalized_` exactly as
+// it would in the OFF path.
+//
+// Sound under invariant 1: every consistent() emit is backed by
+// IntegerModelValidator on the candidate against the LOCAL normalized
+// constraints (which are equivalent to active_ up to the pure
+// normalizeOne transform); never reports SAT with an unconfirmed model.
 void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
                           int level, SatLit assertedLit) {
     auto r = activeSet_.insert(assertedLit);
@@ -285,6 +314,11 @@ void NiaSolver::onBacktrack(int level) {
     if (normalized_.size() > active_.size())
         normalized_.resize(active_.size());
     activeSet_.rebuildFromActive(active_, [](const auto& c) { return c.reason; });
+    // L4.1: backtrack invalidates modular memoization. The constraint
+    // set just shrank; the cached NoChange verdict was for a strictly
+    // larger set and may not transfer (a smaller set could still be
+    // NoChange, but signature mismatch makes us re-run conservatively).
+    modularSignatureValid_ = false;
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
@@ -734,9 +768,58 @@ std::optional<TheoryCheckResult> NiaSolver::stageGcdDivisibility(TheoryLemmaStor
 
 std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableModular_) return std::nullopt;
+
+    // L4.1 — modular warm-start memoization. The modular reasoner has
+    // been profiled re-running its full detection (ModGroups, SimpleDefs,
+    // CheckEqs, Newton-chain synthesis, Hensel lifting, residue
+    // enumeration) every Full-effort cb_check on identical normalized_
+    // streams. Skip the re-run when the constraint signature matches the
+    // previous call's signature AND the previous result was NoChange.
+    //
+    // Soundness: NoChange writes no state and emits no verdict; replaying
+    // it under unchanged signature is correctness-preserving. Conflicts
+    // are NEVER memoized (the solver acts on a conflict by backtracking;
+    // a stale conflict on a backtracked-from state would be unsound).
+    //
+    // Signature: FNV-1a over (poly, rel) pairs in normalized_ order —
+    // same convention as the LS warm-start signature. Index order is
+    // stable because normalized_ is grown in lockstep with active_ /
+    // onBacktrack resizes it from the tail.
+    static const bool warmStartEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_WARM_START");
+        return e && *e && *e != '0';
+    }();
+    auto computeSignature = [&]() -> uint64_t {
+        uint64_t h = 1469598103934665603ULL;  // FNV-1a basis
+        for (const auto& c : normalized_) {
+            h ^= static_cast<uint64_t>(c.poly);
+            h *= 1099511628211ULL;
+            h ^= static_cast<uint64_t>(c.rel);
+            h *= 1099511628211ULL;
+        }
+        return h;
+    };
+    if (warmStartEnabled && modularSignatureValid_ && modularLastWasNoChange_) {
+        const uint64_t sig = computeSignature();
+        if (sig == modularLastSignature_) {
+            // Same constraint set, last verdict was NoChange — replay it.
+            return std::nullopt;
+        }
+        // Signature changed: drop cache, fall through to re-run.
+        modularSignatureValid_ = false;
+    }
+
     auto r = modularResidue_.run(normalized_);
     if (r.kind == NiaReasoningKind::Conflict) {
+        // Don't memoize conflicts (see soundness note above).
+        modularSignatureValid_ = false;
         return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    // NoChange — cache signature for the next call.
+    if (warmStartEnabled) {
+        modularLastSignature_ = computeSignature();
+        modularLastWasNoChange_ = true;
+        modularSignatureValid_ = true;
     }
     return std::nullopt;
 }
