@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include "theory/euf/EufSolver.h"
+#include "theory/array/AniaProfile.h"
 #include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -12,6 +13,7 @@
 #include <climits>
 #include <map>
 #include <optional>
+#include <tuple>
 
 namespace xolver {
 
@@ -28,6 +30,18 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
     // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms with lemma already emitted at level<=current.
     eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
+    // XOLVER_AX_STORE_MODEL (default-OFF, array-deep A1): store-aware array model
+    // construction. The baseline buildArrayModel collects each array's interp
+    // from DIRECT select terms only, so an array defined by a store chain
+    // (a2=store(a1,i,v), a3=store(a2,j,w), …) does NOT inherit the base's
+    // entries — its interp is missing the inherited writes, so the model fails
+    // the store-definition assertion and an otherwise-genuine sat floors to
+    // unknown (the storecomm class). This pass derives each class interp by
+    // following its store/const structure (inherit base entries + apply the
+    // override), then overlays explicit reads. Verdict-SOUND: model
+    // construction only; the arrayModelDefinitelyViolates floor still validates,
+    // so a better model recovers genuine sats and a wrong one still floors.
+    storeModelEnabled_ = std::getenv("XOLVER_AX_STORE_MODEL") != nullptr;
     initializeBoolConstants();
 }
 
@@ -980,6 +994,8 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // ---------------------------------------------------------------------------
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    aniaprof::init();
+    aniaprof::Scope _profCheck(aniaprof::EUF_CHECK);
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }
@@ -1112,6 +1128,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         return std::nullopt;
     };
 
+    {
+    aniaprof::Scope _profSat(aniaprof::EUF_SATURATE);
     if (!minLevelHeapEnabled_) {
         // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
         // to the historical loop). Congruences append to mergeQueue_.
@@ -1157,6 +1175,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             absorb();
         }
     }
+    }  // end EUF_SATURATE profiling scope
 
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
@@ -1615,6 +1634,7 @@ void EufSolver::buildArrayModel(TheoryModel& model) const {
         }
     }
 
+  if (!storeModelEnabled_) {
     // Populate entries from select terms. select(arr,idx): the arr-class gets
     // an entry idx-token -> value-token where value = the select term's class.
     for (EufTermId sel : arrayReasoner_.selectTerms()) {
@@ -1637,6 +1657,72 @@ void EufSolver::buildArrayModel(TheoryModel& model) const {
             ab.defaultVal = "@def" + std::to_string(rep);
         }
     }
+  } else {
+    // ---- Store-aware construction (XOLVER_AX_STORE_MODEL) -------------------
+    // Reads keyed by array class: (index-class, index-token, value-token).
+    std::unordered_map<EClassId,
+        std::vector<std::tuple<EClassId, std::string, std::string>>> readsByClass;
+    for (EufTermId sel : arrayReasoner_.selectTerms()) {
+        const auto& sn = termManager_.node(sel);
+        if (sn.args.size() != 2) continue;
+        EClassId arrRep = egraph_.rep(sn.args[0]);
+        readsByClass[arrRep].push_back(
+            {egraph_.rep(sn.args[1]), classToken(sn.args[1]), classToken(sel)});
+    }
+    struct Interp {
+        std::string deflt;
+        // index-class -> (index-token, value-token). Override semantics: a later
+        // write at the same index class replaces the inherited entry.
+        std::map<EClassId, std::pair<std::string, std::string>> ovr;
+    };
+    std::unordered_map<EClassId, Interp> memo;
+    std::unordered_set<EClassId> active;  // cycle guard (stores are acyclic)
+    std::function<Interp(EClassId)> build = [&](EClassId rep) -> Interp {
+        auto mit = memo.find(rep);
+        if (mit != memo.end()) return mit->second;
+        Interp self;
+        if (!active.insert(rep).second) {            // defensive: break a cycle
+            self.deflt = "@def" + std::to_string(rep);
+            memo[rep] = self;
+            return self;
+        }
+        // Pick a generator in the class: const-array (sets default) else a store.
+        EufTermId cMem = NullEufTerm, sMem = NullEufTerm;
+        for (EufTermId m : egraph_.classMembers(rep)) {
+            if (arrayReasoner_.isConstArray(m)) { if (cMem == NullEufTerm) cMem = m; }
+            else if (arrayReasoner_.isStore(m)) { if (sMem == NullEufTerm) sMem = m; }
+        }
+        if (cMem != NullEufTerm) {
+            const auto& cn = termManager_.node(cMem);
+            if (cn.args.size() == 1) self.deflt = classToken(cn.args[0]);
+        } else if (sMem != NullEufTerm) {
+            const auto& stn = termManager_.node(sMem);
+            if (stn.args.size() == 3) {
+                Interp base = build(egraph_.rep(stn.args[0]));  // recurse on base
+                self.deflt = base.deflt;
+                self.ovr = std::move(base.ovr);                 // inherit entries
+                self.ovr[egraph_.rep(stn.args[1])] =            // apply this write
+                    {classToken(stn.args[1]), classToken(stn.args[2])};
+            }
+        }
+        if (self.deflt.empty()) self.deflt = "@def" + std::to_string(rep);  // leaf
+        // Overlay explicit reads on THIS class (non-write indices + confirmation).
+        // Do not overwrite an inherited/own store write at the same index class.
+        auto rit = readsByClass.find(rep);
+        if (rit != readsByClass.end())
+            for (const auto& [ic, itok, vtok] : rit->second)
+                if (self.ovr.find(ic) == self.ovr.end()) self.ovr[ic] = {itok, vtok};
+        active.erase(rep);
+        memo[rep] = self;
+        return self;
+    };
+    for (auto& [rep, ab] : byClass) {
+        Interp it = build(rep);
+        ab.defaultVal = it.deflt;
+        ab.entries.clear();
+        for (const auto& [ic, pr] : it.ovr) ab.entries.push_back(pr);
+    }
+  }
 
     // Emit one ArrayInterp per array variable (sharing the class build).
     for (const auto& [name, t] : arrayVars) {

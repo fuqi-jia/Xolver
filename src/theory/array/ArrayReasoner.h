@@ -145,6 +145,12 @@ private:
     bool selectCompletionEnabled_ = true;
     // Dedup of (store-term-id, read-index-term-id) pairs already completed.
     std::unordered_set<uint64_t> selectCompleteDone_;
+    // XOLVER_AX_COMPLETE_BUDGET: cap on total completion selects interned over
+    // the whole solve (0 = unbounded). Once reached, completeStoreSelects is a
+    // no-op. Verdict-sound (arrayModelDefinitelyViolates floors any missed
+    // instance); bounds the driver-family O(arrays×indices) blowup.
+    size_t completeBudget_ = 0;
+    size_t completeInternsDone_ = 0;
     // Origin ExprIds of FRESH extensionality witness indices. These must be
     // EXCLUDED from the completion read-index set: Ext mints one per array
     // disequality pair, so treating them as read indices would (a) grow the

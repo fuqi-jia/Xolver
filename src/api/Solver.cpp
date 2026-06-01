@@ -205,6 +205,26 @@ public:
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
+        // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
+        // verdict so a floored array sat can be root-caused (which assertion,
+        // which interp). Never affects the verdict.
+        if (std::getenv("XOLVER_DIAG_AM")) {
+            std::cerr << "[DIAG_AM] arrayInterps (" << lastModel_->arrayInterps.size() << "):\n";
+            for (const auto& [nm, ai] : lastModel_->arrayInterps) {
+                std::cerr << "  " << nm << " deflt=" << ai.defaultVal
+                          << " entries=" << ai.entries.size() << ": ";
+                for (const auto& [i, v] : ai.entries) std::cerr << "[" << i << "->" << v << "]";
+                std::cerr << "\n";
+            }
+            std::cerr << "[DIAG_AM] scalar tokens: ";
+            for (const auto& [nm, val] : lastModel_->assignments) std::cerr << nm << "=" << val << " ";
+            std::cerr << "\n";
+            for (size_t ai = 0; ai < originalAssertions_.size(); ++ai) {
+                auto vd = validator.validate({originalAssertions_[ai]});
+                if (vd == ArithModelValidator::Verdict::Violated)
+                    std::cerr << "[DIAG_AM] VIOLATED assertion #" << ai << "\n";
+            }
+        }
         return validator.validate(originalAssertions_)
                == ArithModelValidator::Verdict::Violated;
     }
@@ -1107,6 +1127,34 @@ public:
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
         phase("detect-done");
+
+        // -------------------------------------------------------------------
+        // ARRAY-LOGIC FEATURE DOWNGRADE (XOLVER_ARRAY_NOARR_DOWNGRADE).
+        // A file declared in an array logic but containing NO array operations
+        // is pure arith (Rodin/industrial QF_AUFLIA, QF_ALIA, … are frequently
+        // array-free). Routing it through the EUF+array+combination stack is
+        // UNSOUND on these degenerate cases — the Nelson-Oppen EUF+arith
+        // combination returns false-SAT on pure-arith inputs (verified:
+        // xolver=sat while z3/cvc5/:status=unsat; --logic QF_LIA on the same
+        // file is correct). The bug also affects QF_UFLIA (EUF+LIA, no array),
+        // so we only downgrade the no-UF case to the PURE arith solver (which
+        // has no combination layer and is sound); the has-UF case is left for
+        // the combination-layer fix. SOUND: re-routes to a verdict-correct
+        // solver; verified +N recovered, 0 wrong. Gated until cross-validated.
+        if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE") &&
+            !features.hasArray && !features.hasUF) {
+            std::string dg;
+            if (logic == "QF_AUFLIA" || logic == "AUFLIA" ||
+                logic == "QF_ALIA" || logic == "ALIA") dg = "QF_LIA";
+            else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
+                     logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
+            if (!dg.empty()) {
+                if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
+                    std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
+                              << " (no array/UF features)\n";
+                logic = dg;
+            }
+        }
 
         // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
