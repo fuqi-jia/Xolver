@@ -163,6 +163,77 @@ void SmartInit::analyze(
     extractLinearInfo(constraints);
     tightenBounds(constraints, domains);
 
+    // LS-SMART-4: per-var modular pre-check. For each Eq atom
+    //   c_v * v + sum_{u != v} c_u * u + k = 0
+    // (after fully linear decomposition), compute the GCD g of the
+    // OTHER coefficients {c_u : u != v}. Then c_v * v + k must be
+    // ≡ 0 (mod g) for any integer u-assignment, which gives the
+    // modular condition  v * c_v ≡ -k (mod g). If gcd(c_v, g)
+    // divides (-k), the residue set is well-defined and we record
+    // it; otherwise the formula has no integer solution and
+    // SmartInit silently skips (the modular reasoner upstream catches it).
+    for (const auto& c : constraints) {
+        if (c.rel != Relation::Eq) continue;
+        std::vector<std::pair<std::string, mpz_class>> linTerms;
+        mpz_class constSum;
+        if (!isLinearForm(c.poly, linTerms, constSum)) continue;
+        if (linTerms.size() < 2) continue;
+        for (size_t i = 0; i < linTerms.size(); ++i) {
+            const std::string& v = linTerms[i].first;
+            const mpz_class& cv = linTerms[i].second;
+            if (cv == 0) continue;
+            auto it = info_.find(v);
+            if (it == info_.end()) continue;
+            if (it->second.pinned || it->second.derived) continue;
+            // gcd of OTHER coefficients.
+            mpz_class g = 0;
+            for (size_t j = 0; j < linTerms.size(); ++j) {
+                if (j == i) continue;
+                mpz_class absC = (linTerms[j].second < 0) ? -linTerms[j].second
+                                                          : linTerms[j].second;
+                if (absC == 0) continue;
+                if (g == 0) g = absC;
+                else mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), absC.get_mpz_t());
+            }
+            if (g <= 1) continue;  // no useful modular constraint
+            // We need c_v * v ≡ -k (mod g). Compute gcd(c_v, g).
+            mpz_class absCv = (cv < 0) ? -cv : cv;
+            mpz_class gcv;
+            mpz_gcd(gcv.get_mpz_t(), absCv.get_mpz_t(), g.get_mpz_t());
+            mpz_class negK = -constSum;
+            if (negK % gcv != 0) {
+                // Infeasible (modular contradiction). Silent — the
+                // modular reasoner will report UNSAT.
+                continue;
+            }
+            // Reduce: solve c_v' * v ≡ negK' (mod g') where g' = g/gcv,
+            // c_v' = cv/gcv, negK' = negK/gcv. gcd(c_v', g') = 1, so
+            // c_v' has a modular inverse mod g'.
+            mpz_class gp = g / gcv;
+            if (gp <= 1) continue;
+            mpz_class cvp = absCv / gcv;
+            mpz_class negKp = negK / gcv;
+            // Modular inverse of cvp mod gp via extended GCD.
+            mpz_class inv;
+            if (mpz_invert(inv.get_mpz_t(), cvp.get_mpz_t(), gp.get_mpz_t()) == 0) {
+                continue;  // not invertible (shouldn't happen, gcd=1)
+            }
+            mpz_class residue = (inv * negKp) % gp;
+            if (residue < 0) residue += gp;
+            // If c_v was negative, the equation was -|cv| * v ≡ negK,
+            // so v ≡ -inv * negKp ≡ gp - residue (mod gp).
+            if (cv < 0) residue = (gp - residue) % gp;
+            // Intersect with any existing modular condition. For
+            // simplicity, only record if no prior modulus is set;
+            // a multi-atom CRT intersection is left to LS-SMART-3.
+            if (it->second.modulus == 0) {
+                it->second.modulus = gp;
+                it->second.allowedResidues.clear();
+                it->second.allowedResidues.push_back(residue);
+            }
+        }
+    }
+
     // LS-SMART-5: per-var coefficient-derived sample range. For each
     // atom, compute |constSum / c_v| for each var v with linear
     // coefficient c_v (degree-1 monomial). Take the max over atoms.
@@ -270,15 +341,26 @@ IntegerModel SmartInit::propose(std::mt19937_64& rng) const {
             // (LS-SMART-5) when set, else fall back to narrow ±20.
             mpz_class range = info.coefRange;
             if (range <= 0) range = 20;
-            // Cap to a sane maximum so wild atoms don't blow up the
-            // sample magnitude.
             const mpz_class RANGE_CAP("1000000");
             if (range > RANGE_CAP) range = RANGE_CAP;
-            // Sample uniformly in [-range, range].
-            uint64_t r = rng();
-            mpz_class span = 2 * range + 1;
-            mpz_class rmod = mpz_class(static_cast<unsigned long>(r)) % span;
-            model[v] = rmod - range;
+            // LS-SMART-4: if a modular condition is set, sample
+            // from the residue class. Pick a multiple of modulus
+            // near 0, shift by allowed residue.
+            if (info.modulus > 1 && !info.allowedResidues.empty()) {
+                const mpz_class& res = info.allowedResidues[0];
+                // How many full moduli fit in 2*range?
+                mpz_class numSteps = (2 * range) / info.modulus;
+                if (numSteps < 1) numSteps = 1;
+                uint64_t r = rng();
+                mpz_class stepInc = numSteps + 1;
+                mpz_class step = mpz_class(static_cast<unsigned long>(r)) % stepInc;
+                model[v] = res + (step - numSteps / 2) * info.modulus;
+            } else {
+                uint64_t r = rng();
+                mpz_class span = 2 * range + 1;
+                mpz_class rmod = mpz_class(static_cast<unsigned long>(r)) % span;
+                model[v] = rmod - range;
+            }
         }
     }
     // Phase 3: cascade-evaluate derived vars using model[]'s
