@@ -579,9 +579,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         // current arith-model value (from whichever arith solver owns them).
         struct ValuedTerm { SharedTermId id; SortId sort; RealValue val; };
         std::vector<ValuedTerm> valued;
+        const bool arrangeInternals = std::getenv("XOLVER_COMB_ARRANGE_INTERNAL") != nullptr;
         for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
             const auto* st = sharedTermRegistry_->get(stId);
-            if (!st || st->isInternal) continue;   // scope to user terms only
+            if (!st) continue;
+            if (!arrangeInternals && st->isInternal) continue;   // scope to user terms only by default
             // Skip numeric-constant shared terms: a constant-vs-variable
             // arrangement is not needed (the variable's value already coincides
             // with the constant in this model, but they are NOT required equal),
