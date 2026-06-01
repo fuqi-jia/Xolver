@@ -233,10 +233,40 @@ public:
     // hard atoms. Default-OFF (XOLVER_NIA_LS_VIOLATION_CORE). Sound:
     // selection bias only; verdict still validator-gated.
     void setViolationCore(bool e) { violationCore_ = e; }
+    // LBBB Phase 1 (master 2026-06-02). Bound tracking: record the
+    // per-var min/max values LS visited during the search; expose via
+    // getVarRange. Phase 2's stageBoundedBitBlast consumes these
+    // bounds to encode a per-var-bitwidth BV formula over the LS-
+    // explored box. Sound (read-only observation; verdict unchanged).
+    // Default-OFF (XOLVER_NIA_LS_BOUND_TRACK).
+    void setBoundTrack(bool e) { boundTrack_ = e; }
+    // Return (min, max) of values cur[v] reached during recent LS
+    // calls. If v wasn't tracked, returns std::nullopt.
+    std::optional<std::pair<mpz_class, mpz_class>>
+    getVarRange(const std::string& v) const {
+        auto mi = minSeen_.find(v);
+        auto mx = maxSeen_.find(v);
+        if (mi == minSeen_.end() || mx == maxSeen_.end()) return std::nullopt;
+        return std::make_pair(mi->second, mx->second);
+    }
+    // All tracked vars (for LBBB Phase 2 iteration).
+    const std::unordered_map<std::string, mpz_class>& trackedMin() const { return minSeen_; }
+    const std::unordered_map<std::string, mpz_class>& trackedMax() const { return maxSeen_; }
+    // True if the most recent LS call exited due to a fail trigger
+    // (K_iterations / M_restarts / stuck). Phase 2's stage gates on
+    // this — only bit-blast when LS actually failed.
+    bool hasFailed() const { return failed_; }
+    void clearFailed() { failed_ = false; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
-    void resetLsContext() { lsContext_.reset(); }
+    void resetLsContext() {
+        lsContext_.reset();
+        // LBBB Phase 1: clear bound-tracking on new solve.
+        minSeen_.clear();
+        maxSeen_.clear();
+        failed_ = false;
+    }
     // Read-only access to the persistent context (Phase L1 step 3 hooks:
     // NiaSolver reads varActivity for decision-priority boost; reads
     // bestAssignment to seed a candidate at decide time).
@@ -264,6 +294,10 @@ private:
     bool smartMove_ = false;
     bool tabu_ = false;
     bool violationCore_ = false;
+    bool boundTrack_ = false;
+    bool failed_ = false;
+    std::unordered_map<std::string, mpz_class> minSeen_;
+    std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 

@@ -96,6 +96,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_VIOLATION_CORE"); e && *e && *e != '0') {
         violationCore_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_BOUND_TRACK"); e && *e && *e != '0') {
+        boundTrack_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -980,6 +983,17 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         // their cviol refreshed).
         auto commitMove = [&](const std::string& v, mpz_class newVal) {
             cur[v] = newVal;
+            // LBBB Phase 1: track per-var min/max across the LS run.
+            // Bounds accumulate across tryFindModel calls within a
+            // single solve; resetLsContext clears.
+            if (boundTrack_) {
+                auto mi = minSeen_.find(v);
+                if (mi == minSeen_.end()) minSeen_[v] = newVal;
+                else if (newVal < mi->second) mi->second = newVal;
+                auto mx = maxSeen_.find(v);
+                if (mx == maxSeen_.end()) maxSeen_[v] = newVal;
+                else if (newVal > mx->second) mx->second = newVal;
+            }
             auto it = varToClauses.find(v);
             if (it != varToClauses.end()) {
                 for (std::size_t i : it->second) {
@@ -1911,6 +1925,9 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         lsContext_.bestCost = bestOverallCost;
         lsContext_.bestValid = (bestOverallCost == 0);
     }
+    // LBBB Phase 1: mark this call as failed when we reach the end
+    // without returning a Sat. Phase 2's stage gates on this flag.
+    if (boundTrack_) failed_ = true;
     return std::nullopt;
 }
 
