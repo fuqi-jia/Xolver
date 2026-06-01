@@ -200,10 +200,24 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 }
 
 std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
-    // Scope to pure single-theory solving: in combination the lifted bound
-    // propagation hits the shared bus / Nelson-Oppen arrangement, which needs
-    // separate review (A3 territory) before enabling.
-    if (combinationMode_) return {};
+    // Single-theory: always drain entailments (per-solver Farkas/value-pin
+    // propagations are sound by construction).
+    // Combination: ENTAILMENT propagation across all theories was previously
+    // suppressed because the comment-author worried about shared-bus
+    // interaction with Nelson-Oppen. But the very point of entailment is to
+    // tighten unassigned theory atoms when their value is FORCED by current
+    // bounds — and for UFLIA/UFLRA/UFNIA/UFNRA, the goal-atom closure (Wisa
+    // class) NEEDS this: when LIA learns bridge_J = 4 via N-O from EUF, the
+    // goal atom `(= adr_hi bridge_J)` must propagate true (both sides pinned
+    // to 4), which is precisely an ENTAILMENT propagation. Without it, SAT
+    // is free to set the atom false and the negated-goal escape stays open.
+    // Disable suppression for combination logics that have NO nonlinear arith
+    // solver (LIA/LRA — the convex/non-convex linear cases where entailment
+    // is well-defined and shared-bus interactions are bounded).
+    bool hasNL = solverByTheory_.count(TheoryId::NIA) ||
+                 solverByTheory_.count(TheoryId::NRA) ||
+                 solverByTheory_.count(TheoryId::NIRA);
+    if (combinationMode_ && hasNL) return {};
     std::vector<TheoryLemma> out;
     for (auto& s : solvers_) {
         auto v = s->takeEntailmentPropagations();

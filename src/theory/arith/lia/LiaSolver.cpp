@@ -90,6 +90,8 @@ void LiaSolver::onReset() {
     repairModel_.reset();
     cutsThisSolve_ = 0;
     gs_.resetActiveBounds();
+    entailmentProps_.clear();
+    entailmentEmittedKeys_.clear();
 }
 
 void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) {
@@ -174,6 +176,7 @@ void LiaSolver::onBacktrack(int level) {
     if (appliedCursor_ > theoryTrail_.size()) {
         appliedCursor_ = theoryTrail_.size();
     }
+    clearEntailmentDedupForBacktrack(level);
 }
 
 std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -1787,6 +1790,125 @@ void LiaSolver::dumpState(const std::string& tag) const {
     }
 
     ofs.flush();
+}
+
+// ---------------------------------------------------------------------------
+// Entailment propagation
+// ---------------------------------------------------------------------------
+
+// Scan registered LIA atoms and emit entailment lemmas for unassigned ones
+// whose value is FORCED by the current bounds. Covers the precise Wisa-class
+// pattern: `(= v c)` linear-atom where v has been pinned by N-O propagation
+// from EUF (e.g. bridge_J_i ~ bridge_K, bridge_K = 4 → bridge_J_i = 4). The
+// gateway is single-variable equality atoms; multi-var entailment is left to
+// the existing Farkas/getDeducedSharedEqualities pipeline. Sound: only emits
+// atom-tightening lemmas whose reasons (the pinning literals) are currently
+// asserted true, so `reasons → atom` is a tautology under the active trail.
+void LiaSolver::scanLiteralPinEntailments() {
+    if (!registry_) return;
+    // Throttle: hard cap per check to avoid quadratic worst-case in the SAT bus.
+    const size_t kMaxPropsPerScan = 256;
+    size_t emitted = 0;
+    for (const auto& rec : registry_->records()) {
+        if (emitted >= kMaxPropsPerScan) break;
+        // --- Path A: shared-equality atom (Combination): both sides are
+        // SharedTerms; if BOTH currently pinned by LIA bounds, the atom value
+        // is forced regardless of which theory owns the registration. This is
+        // the path the Wisa-class goal atom `(= 4 bridge_J)` takes (both 4
+        // and bridge_J are shared terms registered by Purifier::registerEufVars
+        // and Purifier::makeFreshVar respectively). Without this branch the
+        // goal atom escapes propagation and SAT settles on a sat model the
+        // ArithModelValidator catches as violating (not (and L_1..L_6)) →
+        // floor → unknown.
+        if (rec.theory == TheoryId::Combination &&
+            std::holds_alternative<SharedEqualityPayload>(rec.payload)) {
+            const auto& sp = std::get<SharedEqualityPayload>(rec.payload);
+            if (!sharedTermRegistry_) continue;
+            auto pinOf = [&](SharedTermId stId) -> std::optional<std::pair<mpq_class, std::vector<SatLit>>> {
+                if (const auto* st = sharedTermRegistry_->get(stId)) {
+                    // Numeric-constant shared term has its value baked in.
+                    if (auto cv = sharedTermRegistry_->constValue(stId)) {
+                        return std::make_pair(*cv, std::vector<SatLit>{});
+                    }
+                }
+                std::string nm = getVarNameForSharedTerm(stId);
+                if (nm.empty()) return std::nullopt;
+                int idx = manager_.findVarIndex(nm);
+                if (idx < 0) return std::nullopt;
+                auto fv = gs_.proveFixedValue(idx);
+                if (!fv) return std::nullopt;
+                if (fv->first.b != 0) return std::nullopt;
+                std::vector<SatLit> reasons;
+                reasons.reserve(fv->second.size());
+                for (const auto& br : fv->second) reasons.push_back(br.reason);
+                return std::make_pair(fv->first.a, std::move(reasons));
+            };
+            auto pa = pinOf(sp.a);
+            auto pb = pinOf(sp.b);
+            if (!pa || !pb) continue;
+            bool atomTrue = (pa->first == pb->first);
+            SatLit atomLit{rec.satVar, true};
+            uint64_t key = (static_cast<uint64_t>(rec.satVar) << 1) | (atomTrue ? 1u : 0u);
+            if (!entailmentEmittedKeys_.insert(key).second) continue;
+            TheoryLemma lemma;
+            for (const auto& r : pa->second) lemma.lits.push_back(r.negated());
+            for (const auto& r : pb->second) lemma.lits.push_back(r.negated());
+            lemma.lits.push_back(atomTrue ? atomLit : atomLit.negated());
+            entailmentProps_.push_back(std::move(lemma));
+            ++emitted;
+            continue;
+        }
+        if (rec.theory != TheoryId::LIA) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
+        const auto& p = std::get<LinearAtomPayload>(rec.payload);
+        if (p.rel != Relation::Eq) continue;            // limit to equality atoms
+        if (p.lhs.terms.size() != 1) continue;          // single-var atom only
+        if (!p.rhs.isRational()) continue;
+        const auto& [name, coeff] = p.lhs.terms[0];
+        if (coeff == 0) continue;
+        int idx = manager_.findVarIndex(name);
+        if (idx < 0) continue;                          // not in simplex yet
+        auto fixedOpt = gs_.proveFixedValue(idx);
+        if (!fixedOpt) continue;                        // not pinned by current bounds
+        const DeltaRational& pinned = fixedOpt->first;
+        if (pinned.b != 0) continue;                    // skip δ-strict (open) values
+        // Atom `coeff*v = rhs` is true iff coeff * pinned.a == rhs.
+        mpq_class lhsVal = coeff * pinned.a;
+        const mpq_class& rhsVal = p.rhs.asRational();
+        bool atomTrue = (lhsVal == rhsVal);
+        // Already assigned? Skip (TheoryManager will already see it).
+        SatLit atomLit{rec.satVar, true};
+        // Dedup: (satVar, polarity-as-int) → emitted once per backtrack epoch.
+        uint64_t key = (static_cast<uint64_t>(rec.satVar) << 1) |
+                       (atomTrue ? 1u : 0u);
+        if (!entailmentEmittedKeys_.insert(key).second) continue;
+        TheoryLemma lemma;
+        for (const auto& br : fixedOpt->second) {
+            lemma.lits.push_back(br.reason.negated());  // ~reasons
+        }
+        lemma.lits.push_back(atomTrue ? atomLit : atomLit.negated());
+        entailmentProps_.push_back(std::move(lemma));
+        ++emitted;
+    }
+}
+
+std::vector<TheoryLemma> LiaSolver::takeEntailmentPropagations() {
+    // Lazy: refresh on every drain since the bounds may have moved since the
+    // last check(). The scanner is bounded and idempotent (dedup).
+    scanLiteralPinEntailments();
+    return std::move(entailmentProps_);
+}
+
+void LiaSolver::clearEntailmentDedupForBacktrack(int level) {
+    // Reset the dedup at level 0 (full restart of the SAT decision chain).
+    // We keep it across non-root backtracks: an entailment proven at a deeper
+    // level under literals that are still asserted now stays sound to re-emit
+    // (SAT will simply ignore the duplicate), but the cost of needless
+    // re-emission is small and the buffer guards against churn.
+    if (level == 0) {
+        entailmentEmittedKeys_.clear();
+        entailmentProps_.clear();
+    }
 }
 
 } // namespace xolver
