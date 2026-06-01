@@ -34,27 +34,52 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       engine_(kernel_.get()) {
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
+    // NRA-MGC-PROFILE diagnostic: env-gated per-stage wall-time accounting.
+    // Set XOLVER_NRA_STAGE_TIMING=1 for per-stage cumulative on exit.
+    // Set XOLVER_NRA_STAGE_TRACE=1 for real-time per-call logging (slower).
+    auto stageWrap = [this](const char* name, auto fn) {
+        return [this, name, fn](TheoryLemmaStorage& db, TheoryEffort e)
+                -> std::optional<TheoryCheckResult> {
+            static const bool timing = std::getenv("XOLVER_NRA_STAGE_TIMING") != nullptr;
+            static const bool trace = std::getenv("XOLVER_NRA_STAGE_TRACE") != nullptr;
+            if (!timing && !trace) return fn(db, e);
+            auto t0 = std::chrono::steady_clock::now();
+            auto result = fn(db, e);
+            auto t1 = std::chrono::steady_clock::now();
+            auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            stageTimingUs_[name] += us;
+            stageTimingCalls_[name] += 1;
+            if (trace) {
+                const char* effortName = (e == TheoryEffort::Full) ? "Full" : "Std";
+                std::fprintf(stderr, "[STAGE_TRACE] %s effort=%s %ld us total=%.1f ms\n",
+                             name, effortName, (long)us, stageTimingUs_[name] / 1000.0);
+                std::fflush(stderr);
+            }
+            return result;
+        };
+    };
+
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); }));
+        stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
     // XOLVER_NRA_SIGN_REFUTE (default OFF): cheap positive-orthant sign-
     // definiteness UNSAT refuter, right after presolve. nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-refute",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); }));
+        stageWrap("sign-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
+        stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
     // XOLVER_NRA_PREELIM (default OFF): affine pre-elimination then reduced CDCAC.
     // Runs BEFORE the full-variable CDCAC backstop; nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.preelim",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); }));
+        stageWrap("preelim", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); })));
     // XOLVER_NRA_SUBTROPICAL (default OFF): cheap SAT-fast-path before the full
     // CAD. nullopt at the gate when OFF; runs only at Full effort.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
+        stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
     // Sprint 3 (#69): LS pre-pass now runs from NraSolver::check() override
     // ABOVE the Reasoner pipeline so it executes BEFORE CDCAC. The old
     // stageLocalSearch stage was reach-limited (CDCAC hung at Standard before
@@ -64,10 +89,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // nullopt at the gate when OFF or on CAC-Unknown ⇒ Collins fallback.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cac",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); }));
+        stageWrap("cac", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
+        stageWrap("cdcac", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); })));
 
     // XOLVER_NRA_PREELIM: read the gate once at construction (mirrors A7's
     // enableCdcac_). OFF ⇒ stageNraPreElim returns nullopt immediately so the
@@ -78,7 +103,23 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
-NraSolver::~NraSolver() = default;
+NraSolver::~NraSolver() {
+    if (std::getenv("XOLVER_NRA_STAGE_TIMING") && !stageTimingUs_.empty()) {
+        // Sort stages by total time descending.
+        std::vector<std::pair<std::string, uint64_t>> rows(stageTimingUs_.begin(), stageTimingUs_.end());
+        std::sort(rows.begin(), rows.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::fprintf(stderr, "[XOLVER_NRA_STAGE_TIMING] per-stage cumulative:\n");
+        for (const auto& [name, us] : rows) {
+            auto calls = stageTimingCalls_[name];
+            std::fprintf(stderr, "  %-12s  %10.3f ms   %6llu calls   avg %8.1f us\n",
+                         name.c_str(),
+                         us / 1000.0,
+                         (unsigned long long)calls,
+                         calls > 0 ? (double)us / calls : 0.0);
+        }
+    }
+}
 
 void NraSolver::setRegistry(TheoryAtomRegistry* reg) {
     registry_ = reg;

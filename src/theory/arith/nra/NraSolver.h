@@ -226,6 +226,10 @@ private:
 
     // Sign-definiteness refuter: promoted default-ON.
     bool enableSignRefute_ = true;
+
+    // NRA-MGC-PROFILE: env-gated per-stage timing accounting (XOLVER_NRA_STAGE_TIMING).
+    mutable std::unordered_map<std::string, uint64_t> stageTimingUs_;
+    mutable std::unordered_map<std::string, uint64_t> stageTimingCalls_;
 };
 
 } // namespace xolver
