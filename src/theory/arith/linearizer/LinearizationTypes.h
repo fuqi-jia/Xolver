@@ -14,7 +14,14 @@ namespace xolver {
 // Nonlinear term classification
 // ---------------------------------------------------------------------------
 
-enum class NonlinearKind { Product, Square };
+// MGC-RD Phase 2A: extended to recognize higher-degree and mixed monomials.
+// Product/Square stay as before for back-compat with McCormick/SquareCut paths.
+// HigherMixed catches any monomial with total degree >= 3 (e.g. x^3, x*y*z,
+// theta*vv1*vv3^2) that the legacy detector rejected silently. The abstraction
+// emits a sign-based bound cut when factor signs are determined, giving the
+// SAT layer SOMETHING to branch on; previously these monomials produced no
+// cuts at all, forcing CDCAC to solve the high-degree system alone.
+enum class NonlinearKind { Product, Square, HigherMixed };
 
 /**
  * NonlinearTermKey: canonical identifier for a nonlinear subterm.

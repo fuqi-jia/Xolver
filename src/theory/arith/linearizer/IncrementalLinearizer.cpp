@@ -225,6 +225,96 @@ LinearizationResult IncrementalLinearizer::run(
                     }
                     ++idx;
                 }
+            } else if (aux.key.kind == NonlinearKind::HigherMixed) {
+                // MGC-RD Phase 2A: sign-based lemma for high-degree mixed
+                // monomials (x^3, x*y*z, theta*vv1*vv3^2, etc.). Walk each
+                // factor, derive its sign contribution, combine into a total
+                // sign. If definite, emit `aux > 0` (or < 0 etc.) so the SAT
+                // layer can propagate. Gated by XOLVER_NRA_NLEXT_HIGHER env
+                // var (default OFF until paired-validated).
+                static const bool enabled = []() {
+                    const char* e = std::getenv("XOLVER_NRA_NLEXT_HIGHER");
+                    return e && *e && *e != '0';
+                }();
+                if (!enabled || !registry_) {
+                    continue;
+                }
+                // Aggregate sign over each (var, exponent) factor.
+                // Sign codes: -1 strict-neg, 0 zero, +1 strict-pos, 2 nonneg, -2 nonpos, 0xFF unknown.
+                // For an even exponent: factor is nonneg (≥0) at minimum; strict (>0) if var ≠ 0.
+                // For an odd exponent: factor inherits the var's sign.
+                bool anyStrict = false;
+                int totalSign = 1;  // multiplicative accumulator
+                bool indeterminate = false;
+                for (const auto& [vid, exp] : aux.key.powers) {
+                    std::string vn = std::string(kernel_.varName(vid));
+                    auto vb = bounds.get(vn);
+                    if (!vb) { indeterminate = true; break; }
+                    int factorSign;  // -1/0/+1, indeterminate=0xFF
+                    bool factorStrict = false;
+                    if ((exp % 2) == 0) {
+                        // Even: factor ≥ 0; strict iff var bounded away from 0.
+                        factorSign = +1;   // nonneg side
+                        if ((vb->hasLower && vb->lower > 0) ||
+                            (vb->hasUpper && vb->upper < 0)) {
+                            factorStrict = true;
+                        }
+                    } else {
+                        // Odd: factor sign = var sign.
+                        if (vb->hasLower && vb->lower > 0) {
+                            factorSign = +1; factorStrict = true;
+                        } else if (vb->hasUpper && vb->upper < 0) {
+                            factorSign = -1; factorStrict = true;
+                        } else {
+                            indeterminate = true; break;
+                        }
+                    }
+                    if (factorSign == -1) totalSign = -totalSign;
+                    if (factorStrict) anyStrict = true;
+                }
+                if (indeterminate || !anyStrict) continue;
+                // Total monomial sign is `totalSign` (strict because at least one factor strict
+                // AND all factors have known sign in same parity).
+                Relation tRel = (totalSign > 0) ? Relation::Gt : Relation::Lt;
+                SatLit tLit = registry_->getOrCreatePolynomialAtom(
+                    aux.poly, tRel, mpq_class(0), linearTheory);
+                if (tLit.var == 0) continue;
+                // Conditional: for each factor, the bound condition is its sign
+                // assumption; the conclusion is the total sign on the aux. We
+                // emit a single clause: (¬cond1 ∨ ¬cond2 ∨ ... ∨ aux<tRel>).
+                std::vector<SatLit> clause;
+                clause.reserve(aux.key.powers.size() + 1);
+                bool litFailed = false;
+                for (const auto& [vid, exp] : aux.key.powers) {
+                    std::string vn = std::string(kernel_.varName(vid));
+                    auto vb = bounds.get(vn);
+                    PolyId vp = kernel_.mkVar(vid);
+                    if ((exp % 2) == 0) {
+                        // Need v != 0 condition; cleanest is `v > 0` OR `v < 0`.
+                        // Build whichever side the bound actually proves.
+                        Relation vrel;
+                        if (vb->hasLower && vb->lower > 0)      vrel = Relation::Gt;
+                        else if (vb->hasUpper && vb->upper < 0) vrel = Relation::Lt;
+                        else { litFailed = true; break; }
+                        SatLit vLit = registry_->getOrCreatePolynomialAtom(
+                            vp, vrel, mpq_class(0), linearTheory);
+                        if (vLit.var == 0) { litFailed = true; break; }
+                        clause.push_back(vLit.negated());
+                    } else {
+                        Relation vrel = (vb->hasLower && vb->lower > 0)
+                                          ? Relation::Gt : Relation::Lt;
+                        SatLit vLit = registry_->getOrCreatePolynomialAtom(
+                            vp, vrel, mpq_class(0), linearTheory);
+                        if (vLit.var == 0) { litFailed = true; break; }
+                        clause.push_back(vLit.negated());
+                    }
+                }
+                if (litFailed) continue;
+                clause.push_back(tLit);
+                TheoryLemma lemma{std::move(clause)};
+                result.lemmas.push_back({std::move(lemma), std::nullopt});
+                result.status = LinearizationStatus::Lemma;
+                if (result.lemmas.size() >= config.maxLemmas) return result;
             }
         }
     }
