@@ -220,6 +220,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // Net E2/E3 outcome: no shippable flag; the perf wall is real and shared
     // across QG / eq_diamond / Bouvier. E1 (lifecycle) remains the one E*
     // win this round.
+    //
+    // Attack-list overflow probes (cas +25, sqrtmodinv +18): both clusters TO
+    // for xolver AND z3 at WSL 8-30s — z3 wins at master 30-300s via mature
+    // CAC tuning. These belong to the NRA-agent's CAC perf lane (and the NIA
+    // modular reasoner for sqrtmodinv-style families), not EQNA's combination/
+    // EUF seam. Routing: defer to NRA agent.
     if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE"); e && *e && *e != '0')
         ifaceLifecycleEnabled_ = true;
 }
