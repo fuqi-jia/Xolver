@@ -280,9 +280,22 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
+    // recomputeBeta is a full O(rows*nnz) rebuild fired on every backtrack /
+    // new-var / reset (betaDirty_). The diagnostic below (env XOLVER_LRA_BETA_EVERY=N:
+    // dump call count + cumulative time every N calls) confirms whether it — not
+    // pivoting — is the LIA/LRA theory-throughput hot path. It is env-driven (not
+    // compile-gated) so it works on the shipped binary; zero-overhead when unset.
+    static const int betaEvery = []() {
+        const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
+        return (e && *e) ? std::atoi(e) : 0;
+    }();
+    bool betaTimed = (betaEvery > 0);
 #ifdef XOLVER_LRA_PROFILE
-    auto prof_t0 = std::chrono::steady_clock::now();
+    betaTimed = true;
 #endif
+    std::chrono::steady_clock::time_point bt0;
+    if (betaTimed) bt0 = std::chrono::steady_clock::now();
+
     for (int x : nonBasicVars_) {
         vars_[x].beta = chooseValueWithinBounds(x);
     }
@@ -300,32 +313,29 @@ void GeneralSimplex::recomputeBeta() {
 
     betaDirty_ = false;
     rebuildViolationQueue();
+
+    if (betaTimed) {
+        auto bt1 = std::chrono::steady_clock::now();
+        long long us = std::chrono::duration_cast<std::chrono::microseconds>(bt1 - bt0).count();
 #ifdef XOLVER_LRA_PROFILE
-    auto prof_t1 = std::chrono::steady_clock::now();
-    coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
-    // Diagnostic: recomputeBeta is a full O(rows*nnz) rebuild fired on every
-    // backtrack (betaDirty_). Track global call count + cumulative time to see
-    // whether it (not pivoting) is the QF_LRA hot path. env XOLVER_LRA_BETA_EVERY.
-    {
-        static int betaEvery = []() {
-            const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
-            return (e && *e) ? std::atoi(e) : 0;
-        }();
-        static long long gBetaCalls = 0;
-        static long long gBetaUs = 0;
-        ++gBetaCalls;
-        gBetaUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
-        if (betaEvery > 0 && gBetaCalls % betaEvery == 0) {
-            long long nnz = 0;
-            for (int r = 0; r < tab_.numRows(); ++r) nnz += static_cast<long long>(tab_.row(r).entries.size());
-            std::cerr << "[LRA-BETA] calls=" << gBetaCalls
-                      << " cumUs=" << gBetaUs
-                      << " rows=" << tab_.numRows()
-                      << " vars=" << vars_.size()
-                      << " nnz=" << nnz << std::endl;
+        coeffStats_.mpqOpTimeUs += us;
+#endif
+        if (betaEvery > 0) {
+            static long long gBetaCalls = 0;
+            static long long gBetaUs = 0;
+            ++gBetaCalls;
+            gBetaUs += us;
+            if (gBetaCalls % betaEvery == 0) {
+                long long nnz = 0;
+                for (int r = 0; r < tab_.numRows(); ++r) nnz += static_cast<long long>(tab_.row(r).entries.size());
+                std::cerr << "[LRA-BETA] calls=" << gBetaCalls
+                          << " cumUs=" << gBetaUs
+                          << " rows=" << tab_.numRows()
+                          << " vars=" << vars_.size()
+                          << " nnz=" << nnz << std::endl;
+            }
         }
     }
-#endif
 }
 
 DeltaRational GeneralSimplex::chooseValueWithinBounds(int var) const {
