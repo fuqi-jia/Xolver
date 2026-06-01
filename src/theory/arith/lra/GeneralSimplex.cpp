@@ -244,6 +244,23 @@ void GeneralSimplex::checkInvariants() const {
         }
     }
 #endif
+    // beta-consistency verifier (env XOLVER_LRA_VERIFY_BETA, works in release): every
+    // basic var's beta must equal its row evaluation (rhs + Σ coeff*nonbasic.beta) —
+    // the invariant the incremental-beta paths (backtrack-skip / new-var) must
+    // preserve. A mismatch means the incremental beta is WRONG (then the slowness is
+    // pivot-repair, i.e. a BUG, not a genuine drift tradeoff).
+    static const bool verifyBeta = std::getenv("XOLVER_LRA_VERIFY_BETA") != nullptr;
+    if (verifyBeta && !betaDirty_) {
+        for (int r = 0; r < tab_.numRows(); ++r) {
+            const SparseRow& row = tab_.row(r);
+            DeltaRational v(row.rhs);
+            for (const auto& e : row.entries) v += e.coeff * vars_[e.col].beta;
+            if (!(vars_[row.basicVar].beta == v)) {
+                std::cerr << "[BETA-INCONSISTENT] row=" << r << " basic=" << row.basicVar
+                          << " stored beta != row eval" << std::endl;
+            }
+        }
+    }
 }
 
 // ============================================================================
