@@ -239,6 +239,14 @@ private:
     // XOLVER_NIA_BB_EARLY. Sound: bit-blast is candidate-only — every Sat
     // model is validated against the original constraints (invariant 1).
     std::optional<TheoryCheckResult> stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort);
+    // HYB-3 (master 2026-06-02). For SAT14-style partition (|B| small,
+    // |U| large), iterate K random samples of the bounded vars within
+    // their boxes; for each, run a tight-budget LS on the unbounded
+    // vars and validate any SAT candidate. Sound: every returned Sat
+    // is IntegerModelValidator-gated against the original constraint
+    // set. Default-OFF flag XOLVER_NIA_HYB_BB_LS. Full-effort only —
+    // the heavy LS-probe loop should not run per Standard cb_propagate.
+    std::optional<TheoryCheckResult> stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);

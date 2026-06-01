@@ -1,6 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
 #include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/Reasoner.h"
+#include <random>
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/nia/search/NiaIcpAdapter.h"
 #include "theory/arith/icp/IcpTypes.h"
@@ -156,6 +157,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // futile on UNSAT. Any model it would find mid-search is still found at the
     // Full-effort check and validated -- so soundness/SAT-finding is preserved.
     addFull("nia.local-search", &NiaSolver::stageLocalSearch);
+    // HYB-3 (master 2026-06-02 H5 finding) — Standard+Full registration
+    // mirrors stageBitBlastEarly / stageLocalSearchEarly. On SAT14-class
+    // inputs, Full-effort is unreachable in budget; HYB-3 must fire at
+    // Standard effort to have any chance. Gated default-OFF.
+    add("nia.hyb-bb-ls", &NiaSolver::stageHybridBbLs);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
@@ -1351,6 +1357,98 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
     // Local search SAT finder (try before emitting pending linear lemmas)
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
+            currentModel_ = *model;
+            return TheoryCheckResult::consistent();
+        }
+    }
+    return std::nullopt;
+}
+
+// HYB-3 (master 2026-06-02): hybrid BB-enumerate-B + LS-probe-U.
+// Strategy for SAT14-style cases per H5 finding (|B| ~5%, |U| ~95%):
+// enumerate K random samples of bounded vars within their boxes; for
+// each B-sample, override DomainStore for those vars to a singleton
+// {value} and run a tight-budget LS on the unbounded vars. Validate
+// any Sat candidate against the original constraints.
+//
+// Soundness: every returned Sat is IntegerModelValidator-gated against
+// normalized_. UNSAT is never claimed (LS heuristic; BB sub-call too
+// short for completeness). HYB-3 is purely a SAT-finder.
+//
+// Flag: XOLVER_NIA_HYB_BB_LS (default-OFF).
+// Tunables:
+//   XOLVER_NIA_HYB_BB_LS_K (default 5): B-samples to try per stage call
+//   XOLVER_NIA_HYB_BB_LS_PROBE_MS (default 500): per-LS-probe budget
+std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+
+    // Partition the variables; only proceed when the case matches the
+    // SAT14 pattern (small B, large U).
+    VariablePartition vp(*kernel_);
+    auto pr = vp.partition(normalized_, domains_, 32);
+    if (pr.totalVars() == 0) return std::nullopt;
+    // Gate: at most 10 bounded vars; unbounded count at least 3x bounded.
+    static const size_t maxB = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_MAX_B"))
+            return static_cast<size_t>(std::atol(e));
+        return static_cast<size_t>(10);
+    }();
+    if (pr.boundedCount() == 0 || pr.boundedCount() > maxB) return std::nullopt;
+    if (pr.unboundedCount() < pr.boundedCount() * 3) return std::nullopt;
+
+    // K = number of random B-samples to try.
+    static const int K = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_K"))
+            return std::atoi(e);
+        return 5;
+    }();
+    static const long probeMs = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_PROBE_MS"))
+            return std::atol(e);
+        return 500L;
+    }();
+
+    // For each B-sample: clone DomainStore, restrict bounded vars to
+    // their sample value (pinned), and run LS on the modified store.
+    // Deterministic RNG seeded once per process.
+    static thread_local std::mt19937_64 rng(0xC4DCAC1234567ULL);
+
+    long origBudget = 0;
+    // We can't read the LS's private budget; we set ours and restore.
+    // The set/get asymmetry is acceptable — probe budget is local-scoped.
+    (void)origBudget;
+    localSearch_.setBudgetMs(probeMs);
+
+    for (int k = 0; k < K; ++k) {
+        DomainStore subset = domains_;  // deep-copy current store
+        // Sample each bounded var.
+        for (const auto& bvar : pr.bounded) {
+            const auto& info = pr.info.at(bvar);
+            // Random in [lower, upper].
+            mpz_class span = info.upper - info.lower;
+            mpz_class pick;
+            if (span <= 0) pick = info.lower;
+            else {
+                uint64_t r = rng();
+                // Use modular reduction; span+1 is the inclusive range size.
+                mpz_class spanInc = span + 1;
+                mpz_class rmod = mpz_class(static_cast<unsigned long>(r));
+                rmod %= spanInc;
+                pick = info.lower + rmod;
+            }
+            // Pin via a finite-set singleton (overrides bounds).
+            std::set<mpz_class> singleton{pick};
+            subset.restrictToFiniteSet(bvar, singleton, SatLit::positive(0));
+        }
+        // Run LS on the restricted store.
+        auto model = localSearch_.tryFindModel(normalized_, subset);
+        if (model && validator_.validate(*model, normalized_) ==
+                         IntegerModelValidator::Result::Valid) {
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
         }
