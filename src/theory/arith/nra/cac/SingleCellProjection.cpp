@@ -17,6 +17,37 @@
 namespace xolver {
 
 namespace {
+
+// P6-S3 preemptive diagnose: env-gated counters at the SingleCellProjection
+// step-0/step-1 round-trip and unitKey sites. Default no-op — only emits a
+// dump line when XOLVER_NRA_CAC_INSTR is set. After S1+S1b, this measures the
+// residual cost not covered by kernel-level hash-cons (RP→PolyId driver setup,
+// fromPolyId reconversion, unitKey string-key serialize) so S3 ship vs route
+// is decided from data, not from hypothesis.
+struct CacInstr {
+    uint64_t cellCalls = 0;
+    uint64_t leafCalls = 0;
+    uint64_t step0ToPrim = 0;
+    uint64_t step0FromPolyId = 0;
+    uint64_t step0UnitKey = 0;
+    uint64_t step0UnitKeyChars = 0;   // running sum to approximate avg key length
+    uint64_t step1ToPrim = 0;
+    uint64_t step1ResidualToPrim = 0;
+    uint64_t leafToPrim = 0;
+    ~CacInstr() {
+        if (std::getenv("XOLVER_NRA_CAC_INSTR") == nullptr) return;
+        const double avgKey = step0UnitKey ? static_cast<double>(step0UnitKeyChars) / static_cast<double>(step0UnitKey) : 0.0;
+        std::fprintf(stderr,
+            "[XOLVER_NRA_CAC_INSTR] cells=%llu leaves=%llu | step0: toPrim=%llu fromPolyId=%llu unitKey=%llu(avg=%.1f chars) | step1: toPrim=%llu residualToPrim=%llu | leaf: toPrim=%llu\n",
+            (unsigned long long)cellCalls, (unsigned long long)leafCalls,
+            (unsigned long long)step0ToPrim, (unsigned long long)step0FromPolyId,
+            (unsigned long long)step0UnitKey, avgKey,
+            (unsigned long long)step1ToPrim, (unsigned long long)step1ResidualToPrim,
+            (unsigned long long)leafToPrim);
+    }
+};
+static CacInstr g_cacInstr;
+
 // Canonical key (up to a rational unit) for deduping output polynomials, so a
 // coefficient and a discriminant that are proportional collapse to one boundary.
 std::string unitKey(RationalPolynomial p) {
@@ -31,6 +62,8 @@ std::string unitKey(RationalPolynomial p) {
         for (const auto& [v, e] : mon) key += std::to_string(v) + "^" + std::to_string(e) + ";";
         key += "|";
     }
+    ++g_cacInstr.step0UnitKey;
+    g_cacInstr.step0UnitKeyChars += key.size();
     return key;
 }
 // McCallum required coefficients of f w.r.t. elimVar (cvc5 requiredCoefficients-
@@ -203,6 +236,7 @@ CellResult intervalFromCharacterization(
 
     CellResult out;   // supported == false by default
     if (!algebra || !kernel) return out;
+    ++g_cacInstr.cellCalls;
 
     static const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
     auto bail = [&](const char* why) -> CellResult {
@@ -231,6 +265,7 @@ CellResult intervalFromCharacterization(
     {
         std::unordered_set<std::string> seenFac;
         for (const auto& rp : boundaryPolys) {
+            ++g_cacInstr.step0ToPrim;
             auto norm = rp.toPrimitiveInteger(*kernel);
             if (!norm.ok()) return bail("toPrim");
             if (kernel->isConstant(norm.poly)) continue;
@@ -257,6 +292,7 @@ CellResult intervalFromCharacterization(
             }
             for (PolyId f : kernel->squareFreeFactors(norm.poly)) {
                 if (kernel->isConstant(f)) continue;
+                ++g_cacInstr.step0FromPolyId;
                 auto frp = RationalPolynomial::fromPolyId(f, *kernel);
                 if (!frp) { reduced.push_back(rp); continue; }   // fail-safe: keep the whole poly
                 frp->normalize();
@@ -268,6 +304,7 @@ CellResult intervalFromCharacterization(
     // 1. Collect this level's delineating roots at the prefix.
     std::vector<RealAlg> roots;
     for (const auto& rp : reduced) {
+        ++g_cacInstr.step1ToPrim;
         auto norm = rp.toPrimitiveInteger(*kernel);
         if (!norm.ok()) return bail("toPrim");
         const PolyId pid = norm.poly;
@@ -327,6 +364,7 @@ CellResult intervalFromCharacterization(
                 if (residual.isZero() || !residual.contains(var)) continue;   // no var-boundary
                 for (VarId v : residual.variables())
                     if (v != var) return bail("residual-stray-var");          // fail-closed
+                ++g_cacInstr.step1ResidualToPrim;
                 auto rnorm = residual.toPrimitiveInteger(*kernel);
                 if (!rnorm.ok()) return bail("residual-toPrim");
                 if (kernel->isConstant(rnorm.poly)) continue;
@@ -417,6 +455,8 @@ LeafCellResult characterizeLeafAtom(
 
     LeafCellResult out;   // supported == false by default
     if (!algebra || !kernel) return out;
+    ++g_cacInstr.leafCalls;
+    ++g_cacInstr.leafToPrim;
 
     auto norm = poly.toPrimitiveInteger(*kernel);
     if (!norm.ok()) return out;
