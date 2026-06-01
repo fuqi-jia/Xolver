@@ -225,6 +225,141 @@ std::optional<IntervalConflict> tryRefuteByPolynomialInterval(
 
 namespace {
 
+using Term = PolynomialKernel::MonomialTerm;
+using PowerKey = std::vector<std::pair<VarId, int>>;
+
+// Canonical powers (sorted by VarId).
+PowerKey canon(const PowerKey& p) {
+    PowerKey r = p;
+    std::sort(r.begin(), r.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    return r;
+}
+
+// Pretty hash of a PowerKey for set comparison.
+std::string powerHash(const PowerKey& p) {
+    std::string s;
+    s.reserve(p.size() * 8);
+    for (const auto& [v, e] : p) {
+        s += std::to_string(v); s += '^'; s += std::to_string(e); s += ',';
+    }
+    return s;
+}
+
+// Subtract b from a, element-wise. Returns nullopt if any resulting exponent
+// is negative (i.e. a is not a multiple of b).
+std::optional<PowerKey> subtractPowers(const PowerKey& a, const PowerKey& b) {
+    std::unordered_map<VarId, int> m;
+    for (const auto& [v, e] : a) m[v] += e;
+    for (const auto& [v, e] : b) m[v] -= e;
+    PowerKey out;
+    out.reserve(m.size());
+    for (const auto& [v, e] : m) {
+        if (e < 0) return std::nullopt;
+        if (e > 0) out.push_back({v, e});
+    }
+    std::sort(out.begin(), out.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    return out;
+}
+
+// Add b to a, element-wise.
+PowerKey addPowers(const PowerKey& a, const PowerKey& b) {
+    std::unordered_map<VarId, int> m;
+    for (const auto& [v, e] : a) m[v] += e;
+    for (const auto& [v, e] : b) m[v] += e;
+    PowerKey out;
+    out.reserve(m.size());
+    for (const auto& [v, e] : m) if (e > 0) out.push_back({v, e});
+    std::sort(out.begin(), out.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+    return out;
+}
+
+// Try to find a single-monomial multiplier q = (q_coeff, q_powers) such that
+// for every term d_i of D, q * d_i appears in P with matching coefficient.
+// If found, returns (q_coeff, q_powers, set of P indices used). If not, nullopt.
+struct MultiplierMatch {
+    mpq_class q_coeff;
+    PowerKey  q_powers;
+    std::vector<size_t> usedPIndices;
+};
+
+std::optional<MultiplierMatch> findSingleMonomialMultiplier(
+        const std::vector<Term>& D_terms,
+        const std::vector<Term>& P_terms) {
+
+    if (D_terms.empty() || P_terms.empty()) return std::nullopt;
+
+    // Try EACH non-zero D term as a possible anchor. This lets a derived
+    // equality like `vv2 - vv3 = 0` substitute either direction into other
+    // constraints (anchor on vv2 or on -vv3).
+    for (size_t anchorIdx = 0; anchorIdx < D_terms.size(); ++anchorIdx) {
+        const Term& anchorT = D_terms[anchorIdx];
+        if (anchorT.coefficient == 0) continue;
+        PowerKey d_anchor_pk = canon(anchorT.powers);
+        mpq_class d_anchor_coeff(anchorT.coefficient);
+
+    // Try each P term as potential `q * d_anchor`.
+    for (size_t idx = 0; idx < P_terms.size(); ++idx) {
+        const Term& pcand = P_terms[idx];
+        if (pcand.coefficient == 0) continue;
+        PowerKey p_pk = canon(pcand.powers);
+        // q_powers = p_pk - d_anchor_pk
+        auto qPK = subtractPowers(p_pk, d_anchor_pk);
+        if (!qPK) continue;
+        mpq_class qC = mpq_class(pcand.coefficient) / d_anchor_coeff;
+
+        // Build P index by signature for fast lookup.
+        std::unordered_map<std::string, std::vector<size_t>> bySig;
+        for (size_t i = 0; i < P_terms.size(); ++i) {
+            bySig[powerHash(canon(P_terms[i].powers))].push_back(i);
+        }
+
+        // For each d_i, look for q * d_i in P with matching coefficient.
+        bool consistent = true;
+        std::vector<size_t> used;
+        std::unordered_set<size_t> usedSet;
+        for (const auto& d_i : D_terms) {
+            if (d_i.coefficient == 0) continue;
+            PowerKey target_pk = addPowers(canon(d_i.powers), *qPK);
+            mpq_class target_coeff = mpq_class(d_i.coefficient) * qC;
+            auto it = bySig.find(powerHash(target_pk));
+            if (it == bySig.end()) { consistent = false; break; }
+            bool found = false;
+            for (size_t pidx : it->second) {
+                if (usedSet.count(pidx)) continue;
+                if (mpq_class(P_terms[pidx].coefficient) == target_coeff) {
+                    used.push_back(pidx);
+                    usedSet.insert(pidx);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) { consistent = false; break; }
+        }
+        if (consistent) {
+            return MultiplierMatch{qC, *qPK, std::move(used)};
+        }
+    }
+    }   // close anchorIdx loop
+    return std::nullopt;
+}
+
+// Compute the residual: P - q * D, returned as a term list.
+std::vector<Term> computeResidual(
+        const std::vector<Term>& P_terms,
+        const MultiplierMatch& mm) {
+    std::vector<Term> residual;
+    residual.reserve(P_terms.size());
+    std::unordered_set<size_t> used(mm.usedPIndices.begin(), mm.usedPIndices.end());
+    for (size_t i = 0; i < P_terms.size(); ++i) {
+        if (used.count(i)) continue;
+        residual.push_back(P_terms[i]);
+    }
+    return residual;
+}
+
 // Try to factor out a sign-definite variable v from EQ constraint c.
 // If every monomial of c.poly contains v with positive exponent, the
 // reduced polynomial (each exponent decremented by 1) is sound to add
@@ -394,34 +529,180 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
         }
     }
 
+    // Cache original constraint term-lists once.
+    std::vector<std::vector<Term>> origTerms;
+    origTerms.reserve(constraints.size());
+    for (const auto& c : constraints) {
+        if (c.poly == NullPoly) { origTerms.emplace_back(); continue; }
+        auto t = kernel.terms(c.poly);
+        if (t) origTerms.push_back(*t);
+        else   origTerms.emplace_back();
+    }
+
+    auto checkRefutation = [&](const std::vector<Term>& terms,
+                               const std::vector<SatLit>& baseReasons,
+                               Relation rel)
+                                  -> std::optional<IntervalConflict> {
+        std::vector<SatLit> used;
+        PolyInterval iv = intervalOfTerms(terms, facts, used);
+        if (iv.indeterminate) return std::nullopt;
+        bool refuted = false;
+        switch (rel) {
+            case Relation::Eq:
+                if (iv.low && *iv.low > 0) refuted = true;
+                if (iv.high && *iv.high < 0) refuted = true;
+                break;
+            case Relation::Geq:
+                if (iv.high && *iv.high < 0) refuted = true;
+                break;
+            case Relation::Gt:
+                if (iv.high && *iv.high <= 0) refuted = true;
+                break;
+            case Relation::Leq:
+                if (iv.low && *iv.low > 0) refuted = true;
+                break;
+            case Relation::Lt:
+                if (iv.low && *iv.low >= 0) refuted = true;
+                break;
+            default: break;
+        }
+        if (!refuted) return std::nullopt;
+        IntervalConflict conf;
+        std::unordered_set<uint64_t> seenLit;
+        auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+        for (auto r : baseReasons) if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
+        for (auto r : used)        if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
+        conf.explanation = "iterative cross-equation reduction";
+        return conf;
+    };
+
+    bool diag = std::getenv("XOLVER_NRA_OSF_DIAG") != nullptr;
+    if (diag) {
+        std::fprintf(stderr, "[OSF-DIAG] iter loop start: derived=%zu constraints=%zu\n",
+                     derived.size(), constraints.size());
+    }
+
     for (int iter = 0; iter < maxIterations; ++iter) {
         bool changed = false;
 
-        // Check each derived constraint's interval for contradiction.
+        if (diag) {
+            std::fprintf(stderr, "[OSF-DIAG] iter %d: derived=%zu\n", iter, derived.size());
+        }
+
+        // First check each derived constraint's interval for contradiction.
         for (const auto& d : derived) {
-            std::vector<SatLit> used;
-            PolyInterval iv = intervalOfTerms(d.terms, facts, used);
-            if (iv.indeterminate) continue;
-            if (intervalRefutesEq(iv)) {
-                IntervalConflict conf;
+            auto cf = checkRefutation(d.terms, d.reasons, d.rel);
+            if (cf) return cf;
+        }
+
+        // S-pair reduction. Iterate by index + snapshot size to avoid
+        // reference invalidation when addDerived grows the vector.
+        size_t snapshotSize = derived.size();
+        for (size_t didx = 0; didx < snapshotSize; ++didx) {
+            // Take a copy of relevant fields BEFORE addDerived may invalidate
+            // references. This is critical for correctness.
+            std::vector<Term> d_terms_snapshot = derived[didx].terms;
+            std::vector<SatLit> d_reasons_snapshot = derived[didx].reasons;
+            for (size_t ci = 0; ci < constraints.size(); ++ci) {
+                const auto& cc = constraints[ci];
+                if (cc.rel != Relation::Eq) continue;
+                const auto& pterms = origTerms[ci];
+                if (pterms.empty()) continue;
+                if (pterms.size() < d_terms_snapshot.size()) continue;
+                auto mm = findSingleMonomialMultiplier(d_terms_snapshot, pterms);
+                if (!mm) continue;
+                auto residual = computeResidual(pterms, *mm);
+                if (residual.empty()) continue;
+                if (residual.size() >= pterms.size()) continue;
+                DerivedConstraint nd;
+                size_t residualSize = residual.size();
+                nd.terms = std::move(residual);
+                nd.rel = Relation::Eq;
                 std::unordered_set<uint64_t> seenLit;
                 auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
-                for (auto r : d.reasons) if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
-                for (auto r : used)      if (seenLit.insert(key(r)).second) conf.reasons.push_back(r);
-                conf.explanation = "iterative factoring + interval refutation";
-                return conf;
+                for (auto r : d_reasons_snapshot) if (seenLit.insert(key(r)).second) nd.reasons.push_back(r);
+                if (seenLit.insert(key(cc.reason)).second) nd.reasons.push_back(cc.reason);
+                if (addDerived(std::move(nd))) {
+                    changed = true;
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-DIAG] S-pair: P[%zu] %zu terms - q*D %zu = residual %zu\n",
+                                     ci, pterms.size(), d_terms_snapshot.size(), residualSize);
+                    }
+                }
             }
         }
 
-        // Try factoring the derived constraints further.
-        std::vector<DerivedConstraint> nextRound;
-        for (const auto& d : derived) {
-            // Build a temporary IntervalConstraint wrapper via PolyId construction;
-            // but for derived term-lists we operate on the term level directly.
-            // Reuse tryFactorOnce by reconstructing a poly? Skip for now:
-            // we focus on round-1 factoring (most cases need only one step).
+        // Also try cross-derived-to-derived S-pair reduction in subsequent rounds.
+        size_t derivedCount = derived.size();
+        for (size_t di = 0; di < derivedCount; ++di) {
+            for (size_t dj = di + 1; dj < derivedCount; ++dj) {
+                if (derived[di].rel != Relation::Eq) continue;
+                if (derived[dj].rel != Relation::Eq) continue;
+                if (derived[di].terms.size() > derived[dj].terms.size()) {
+                    auto mm = findSingleMonomialMultiplier(derived[dj].terms, derived[di].terms);
+                    if (!mm) continue;
+                    auto residual = computeResidual(derived[di].terms, *mm);
+                    if (residual.empty() || residual.size() >= derived[di].terms.size()) continue;
+                    DerivedConstraint nd;
+                    nd.terms = std::move(residual);
+                    nd.rel = Relation::Eq;
+                    std::unordered_set<uint64_t> seenLit;
+                    auto key = [](SatLit l) { return (uint64_t(l.var) << 1) | uint64_t(l.sign ? 1 : 0); };
+                    for (auto r : derived[di].reasons) if (seenLit.insert(key(r)).second) nd.reasons.push_back(r);
+                    for (auto r : derived[dj].reasons) if (seenLit.insert(key(r)).second) nd.reasons.push_back(r);
+                    if (addDerived(std::move(nd))) changed = true;
+                }
+            }
         }
-        (void)nextRound;
+
+        // After deriving new constraints, also try factoring them with the
+        // current facts (some derived constraints may become factorable).
+        for (size_t di = 0; di < derived.size(); ++di) {
+            // Skip if terms are too small to factor.
+            if (derived[di].terms.size() < 2) continue;
+            // Find a common variable across all monomials with definite sign.
+            std::unordered_map<VarId, int> minExp;
+            bool first = true;
+            for (const auto& t : derived[di].terms) {
+                std::unordered_map<VarId, int> here;
+                for (const auto& [v, e] : t.powers) here[v] = e;
+                if (first) { minExp = here; first = false; }
+                else {
+                    for (auto it = minExp.begin(); it != minExp.end();) {
+                        auto h = here.find(it->first);
+                        if (h == here.end()) { it = minExp.erase(it); continue; }
+                        if (h->second < it->second) it->second = h->second;
+                        ++it;
+                    }
+                }
+                if (minExp.empty()) break;
+            }
+            VarId pick = NullVar;
+            for (const auto& [v, e] : minExp) {
+                if (e < 1) continue;
+                int s = facts.certifiedSign(v);
+                if (s == +1 || s == -1) { pick = v; break; }
+            }
+            if (pick == NullVar) continue;
+            std::vector<Term> reduced;
+            for (const auto& t : derived[di].terms) {
+                Term nt;
+                nt.coefficient = t.coefficient;
+                for (const auto& [v, e] : t.powers) {
+                    int ne = (v == pick) ? (e - 1) : e;
+                    if (ne > 0) nt.powers.push_back({v, ne});
+                }
+                reduced.push_back(std::move(nt));
+            }
+            DerivedConstraint nd;
+            nd.terms = std::move(reduced);
+            nd.rel = Relation::Eq;
+            nd.reasons = derived[di].reasons;
+            if (auto lo = facts.lower(pick)) for (auto r : lo->reasons) nd.reasons.push_back(r);
+            if (auto hi = facts.upper(pick)) for (auto r : hi->reasons) nd.reasons.push_back(r);
+            if (addDerived(std::move(nd))) changed = true;
+        }
+
         if (!changed) break;
     }
     return std::nullopt;
