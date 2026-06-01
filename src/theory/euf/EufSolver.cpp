@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include "theory/euf/EufSolver.h"
+#include "theory/array/AniaProfile.h"
 #include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -980,6 +981,8 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // ---------------------------------------------------------------------------
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    aniaprof::init();
+    aniaprof::Scope _profCheck(aniaprof::EUF_CHECK);
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }
@@ -1112,6 +1115,8 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         return std::nullopt;
     };
 
+    {
+    aniaprof::Scope _profSat(aniaprof::EUF_SATURATE);
     if (!minLevelHeapEnabled_) {
         // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
         // to the historical loop). Congruences append to mergeQueue_.
@@ -1157,6 +1162,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             absorb();
         }
     }
+    }  // end EUF_SATURATE profiling scope
 
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
