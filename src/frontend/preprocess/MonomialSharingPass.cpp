@@ -1,5 +1,7 @@
 #include "frontend/preprocess/MonomialSharingPass.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <unordered_set>
 
@@ -102,6 +104,24 @@ size_t MonomialSharingPass::run() {
     const auto& scoped = ir_.getScopedAssertions();
     for (const auto& [_, a] : scoped) {
         collectMulRefs(a);
+    }
+    // H2 diagnostic (XOLVER_PP_MONOMIAL_SHARE_DIAG=1): print the Mul
+    // refcount histogram so we can confirm the pass IS scanning when
+    // selected=0 (i.e., distinguish "ran but no monomial is shared
+    // structurally" from "didn't run at all" on VeryMax-class inputs).
+    static const bool diag = std::getenv("XOLVER_PP_MONOMIAL_SHARE_DIAG") != nullptr;
+    if (diag) {
+        size_t total = refCount_.size();
+        size_t shared = 0;
+        int maxRef = 0;
+        for (const auto& [_, c] : refCount_) {
+            if (c >= 2) ++shared;
+            if (c > maxRef) maxRef = c;
+        }
+        std::fprintf(stderr,
+            "[MonomialShare-DIAG] assertions=%zu shareable-Mul-exprs=%zu "
+            "with-refCount>=2: %zu  max-refCount=%d\n",
+            scoped.size(), total, shared, maxRef);
     }
     // Sharing threshold: a Mul ExprId reached by >= 2 distinct assertions
     // benefits — under that bar, the linearizer would emit one cut anyway,
