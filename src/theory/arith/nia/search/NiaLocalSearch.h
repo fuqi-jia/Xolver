@@ -209,6 +209,16 @@ public:
     // (XOLVER_NIA_LS_SMART_INIT). Sound: SmartInit produces a
     // candidate model; LS validates any Sat as before.
     void setSmartInit(bool e) { smartInit_ = e; }
+    // LS-SMART-2 (user 2026-06-02 core idea). Per-violation closed-form
+    // move: when a violated atom is linear or quadratic in the move
+    // variable (after substituting cur[] for the other variables), the
+    // discrete-Newton slope estimate becomes EXACT. LS-SMART-2 adds the
+    // closed-form integer root (or quadratic discriminant roots) as a
+    // move candidate even for SINGLE-var atoms (B-v2 only handles 2+
+    // vars). Sound: candidate enters bestCost selection like every
+    // other move; never affects verdict. Default-OFF
+    // (XOLVER_NIA_LS_SMART_MOVE).
+    void setSmartMove(bool e) { smartMove_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -237,6 +247,7 @@ private:
     bool diversify_ = false;
     bool partitionHint_ = false;
     bool smartInit_ = false;
+    bool smartMove_ = false;
     std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 

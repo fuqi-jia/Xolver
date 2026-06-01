@@ -87,6 +87,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_INIT"); e && *e && *e != '0') {
         smartInit_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_MOVE"); e && *e && *e != '0') {
+        smartMove_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -1227,6 +1230,83 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                                 if (s < -STEP_CAP) s = -STEP_CAP;
                                 if (s >  STEP_CAP) s =  STEP_CAP;
                             }
+                        }
+                    }
+                }
+                // LS-SMART-2 (user 2026-06-02 core idea). For the variable
+                // `v` and the falsified atom C.poly, decompose the atom
+                // as a UNIVARIATE polynomial in v (substituting cur[]
+                // for all other vars). Solve the residual closed-form
+                // (linear / quadratic discriminant). The resulting
+                // integer roots are added as move candidates — these
+                // are EXACT under the rest of cur, whereas discrete-
+                // Newton's slope estimate is approximate for non-
+                // linear terms. Same algorithm as B-v2 (bilinearSubst)
+                // but applies to SINGLE-VAR atoms too (B-v2 skips
+                // those because it iterates bilinear monomial pairs).
+                if (smartMove_) {
+                    auto termsOpt = kernel_.terms(C.poly);
+                    if (termsOpt) {
+                        std::map<int, mpz_class> byDeg;
+                        int maxDeg = 0;
+                        bool subFailed = false;
+                        for (const auto& mono : *termsOpt) {
+                            int d = 0;
+                            mpz_class coef = mono.coefficient;
+                            for (const auto& [vid, e] : mono.powers) {
+                                std::string vn(kernel_.varName(vid));
+                                if (vn == v) {
+                                    d += e;
+                                } else {
+                                    auto cit = cur.find(vn);
+                                    if (cit == cur.end()) { subFailed = true; break; }
+                                    mpz_class pw;
+                                    mpz_pow_ui(pw.get_mpz_t(),
+                                               cit->second.get_mpz_t(),
+                                               static_cast<unsigned long>(e));
+                                    coef *= pw;
+                                }
+                            }
+                            if (subFailed) break;
+                            byDeg[d] += coef;
+                            if (d > maxDeg) maxDeg = d;
+                        }
+                        if (!subFailed) {
+                            mpz_class c0 = byDeg.count(0) ? byDeg[0] : mpz_class(0);
+                            mpz_class c1 = byDeg.count(1) ? byDeg[1] : mpz_class(0);
+                            if (maxDeg <= 1) {
+                                if (c1 != 0) {
+                                    mpz_class neg = -c0;
+                                    if ((neg % c1) == 0) targets.push_back(neg / c1);
+                                }
+                            } else if (maxDeg == 2) {
+                                mpz_class c2 = byDeg.count(2) ? byDeg[2] : mpz_class(0);
+                                if (c2 == 0) {
+                                    if (c1 != 0) {
+                                        mpz_class neg = -c0;
+                                        if ((neg % c1) == 0) targets.push_back(neg / c1);
+                                    }
+                                } else {
+                                    mpz_class D = c1 * c1 - 4 * c2 * c0;
+                                    if (D >= 0) {
+                                        mpz_class sq;
+                                        mpz_sqrt(sq.get_mpz_t(), D.get_mpz_t());
+                                        if (sq * sq == D) {
+                                            mpz_class denom = 2 * c2;
+                                            if (denom != 0) {
+                                                mpz_class n1 = -c1 + sq;
+                                                mpz_class n2 = -c1 - sq;
+                                                if ((n1 % denom) == 0) targets.push_back(n1 / denom);
+                                                if ((n2 % denom) == 0) targets.push_back(n2 / denom);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // maxDeg >= 3 in v: skipped (no general
+                            // integer closed-form). The existing
+                            // discrete-Newton + quad-critical fallbacks
+                            // remain for higher-degree atoms.
                         }
                     }
                 }
