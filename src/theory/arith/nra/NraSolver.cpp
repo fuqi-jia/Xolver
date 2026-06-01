@@ -147,11 +147,9 @@ void NraSolver::onReset() {
 // consistent() is backed by an exact-kernel sign check on every active atom.
 TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                                    TheoryEffort effort) {
-    static const bool lsEnabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_LOCALSEARCH");
-        return e && *e && *e != '0';
-    }();
-    if (!lsEnabled) return ArithSolverBase::check(lemmaDb, effort);
+    // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
+    // guard removed (no env string in binary). Pre-promotion baseline lived
+    // at commit eff76fa; master GREEN-LIT on Task I polypaver +9pp data.
 
     // Helper: exact-validate a rational assignment against every active
     // polynomial constraint via the kernel sign.
@@ -674,11 +672,8 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 // std::nullopt → fall to CAC / Collins. Never emits UNSAT (invariant 2).
 std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
-    static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_LOCALSEARCH");
-        return e && *e && *e != '0';
-    }();
-    if (!enabled) return std::nullopt;
+    // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
+    // guard removed (no env string in binary).
     // Per-solve ONE-SHOT at FIRST Full effort. Standard-effort firing
     // produces a candidate but subsequent cb_propagate's assertLit resets
     // satFastModel_, so the candidate never reaches cb_check_found_model.
