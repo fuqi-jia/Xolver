@@ -266,6 +266,16 @@ private:
     // Full-effort only.
     std::optional<TheoryCheckResult> stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
+    // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
+    // When stageLocalSearch's cost==0 gate fails, LS may still have visited a
+    // lowest-cost candidate (lsContext_.bestAssignment) that violates some
+    // active atom but satisfies the FULL original-formula because the violated
+    // atom appears in a disjunctive context whose other disjunct is true under
+    // the candidate. Walk the ORIGINAL coreIr_ assertions via ArithModelValidator
+    // and return Sat if Satisfied. Sound: ArithModelValidator is exact, the
+    // same validator used by Solver::Impl at the top-level soundness gate.
+    // Default-OFF XOLVER_NIA_LS_BOOL_EXTEND, Full-effort only.
+    std::optional<TheoryCheckResult> stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 

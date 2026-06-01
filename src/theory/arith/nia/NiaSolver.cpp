@@ -17,6 +17,7 @@
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
+#include "proof/ArithModelValidator.h"
 #include <unordered_set>
 #include <cstdlib>
 #include <iostream>
@@ -157,6 +158,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // futile on UNSAT. Any model it would find mid-search is still found at the
     // Full-effort check and validated -- so soundness/SAT-finding is preserved.
     addFull("nia.local-search", &NiaSolver::stageLocalSearch);
+    // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
+    // Fires AFTER stageLocalSearch — when LS's strict cost==0 gate failed
+    // but LS visited a lowest-cost candidate that may STILL satisfy the
+    // full formula via a different Boolean valuation than the SAT layer's
+    // current branch. Walks coreIr_ via ArithModelValidator (exact). Sound;
+    // never claims UNSAT. Default-OFF XOLVER_NIA_LS_BOOL_EXTEND.
+    addFull("nia.local-search-bool-extend", &NiaSolver::stageLocalSearchBoolExtend);
     // HYB-3 (master 2026-06-02 H5 finding) — Standard+Full registration
     // mirrors stageBitBlastEarly / stageLocalSearchEarly. On SAT14-class
     // inputs, Full-effort is unreachable in budget; HYB-3 must fire at
@@ -1377,6 +1385,57 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
             currentModel_ = *model;
             return TheoryCheckResult::consistent();
         }
+    }
+    return std::nullopt;
+}
+
+// LS-SMART-Z5 (master 2026-06-02) — Boolean-extend re-validate.
+//
+// stageLocalSearch's gate accepts only assignments where every active atom
+// (the SAT layer's currently-asserted polynomial-atom truth assignment)
+// is satisfied. But CaDiCaL's branch is one of many consistent Boolean
+// valuations of the CNF abstraction; LS may find an integer assignment m
+// that violates a few active atoms YET satisfies the ORIGINAL FORMULA
+// under a different Boolean valuation B' (the formula's disjunctive
+// structure tolerates the mismatch). Throwing m away is over-strict.
+//
+// Z5 walks the original CoreIr formula under m via ArithModelValidator
+// (the exact arithmetic + Boolean structure evaluator used by Solver::Impl
+// at the top-level soundness gate). If Satisfied → return Sat. Sound: AMV
+// is exact; SAT verdicts are never claimed on weaker evidence than what
+// Solver::Impl would itself accept. UNSAT is never claimed from this path.
+//
+// Default-OFF, Full-effort only via addFull. Flag XOLVER_NIA_LS_BOOL_EXTEND.
+std::optional<TheoryCheckResult>
+NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_BOOL_EXTEND");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled || coreIr_ == nullptr) return std::nullopt;
+
+    // Pull LS's best-effort partial assignment from the warm-start context.
+    // bestAssignment may be empty (LS never ran, or warm-start disabled).
+    const auto& best = localSearch_.lsContext().bestAssignment;
+    if (best.empty()) return std::nullopt;
+
+    // Translate the integer model into ArithModelValidator's numeric
+    // assignment (mpq over var names). AMV's BoolAssignment stays empty —
+    // pure NIA has no Boolean-typed variables (only polynomial-atom lits,
+    // which AMV computes itself from the formula structure).
+    ArithModelValidator::NumAssignment num;
+    num.reserve(best.size());
+    for (const auto& kv : best) {
+        num.emplace(kv.first, mpq_class(kv.second));
+    }
+    ArithModelValidator::BoolAssignment bools;
+
+    ArithModelValidator amv(*coreIr_, num, bools);
+    if (amv.validate(coreIr_->assertions()) ==
+        ArithModelValidator::Verdict::Satisfied) {
+        // Materialize as the NIA currentModel_ for the caller.
+        currentModel_ = best;
+        return TheoryCheckResult::consistent();
     }
     return std::nullopt;
 }
