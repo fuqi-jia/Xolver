@@ -15,7 +15,7 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
-    static const bool diag = std::getenv("XOLVER_DIAG_AMV") != nullptr;
+    const bool diag = std::getenv("XOLVER_DIAG_AMV") != nullptr;
     for (ExprId a : assertions) {
         TR r = eval(a);
         if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }
