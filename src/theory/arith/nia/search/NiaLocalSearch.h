@@ -141,6 +141,17 @@ public:
     // Single-variable Newton is misleading on bilinear systems; joint
     // updates respect the bilinear interaction directly.
     void setBilinearPair(bool e) { bilinearPair_ = e; }
+    // Phase B (VeryMax PRIMARY, master 2026-06-01) — bilinear-substitution
+    // move (XOLVER_NIA_LS_BILINEAR_SUBST=1, default-OFF). Generalises
+    // bilinear-pair from product-only targets to ANY 2-var atom: for each
+    // (x, y) appearing together in some monomial, fix one at its current
+    // value and treat the atom as a univariate polynomial in the other,
+    // then propose the integer root(s). Handles linear (closed-form
+    // -b/a) and quadratic (discriminant integer-root) residuals; degree
+    // >=3 in the solve-variable is skipped. The new candidate enters the
+    // same bestCost selection as discrete-Newton / multi-scale /
+    // quad-critical, so soundness is unchanged.
+    void setBilinearSubst(bool e) { bilinearSubst_ = e; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
@@ -163,6 +174,7 @@ private:
     bool fsJump_ = false;
     bool diverseInit_ = false;
     bool bilinearPair_ = false;
+    bool bilinearSubst_ = false;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,

@@ -4,6 +4,7 @@
 #include <functional>
 #include <chrono>
 #include <cstdlib>
+#include <map>
 
 namespace xolver {
 
@@ -65,6 +66,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     }
     if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_PAIR"); e && *e && *e != '0') {
         bilinearPair_ = true;
+    }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_SUBST"); e && *e && *e != '0') {
+        bilinearSubst_ = true;
     }
 }
 
@@ -1053,6 +1057,149 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         // Only consider the FIRST bilinear monomial per
                         // atom to keep per-flip cost bounded.
                         break;
+                    }
+                }
+            }
+
+            // Phase B (VeryMax PRIMARY) — bilinear-substitution move
+            // (XOLVER_NIA_LS_BILINEAR_SUBST). For each (x, y) appearing
+            // together in a monomial of the falsified atom, fix one at
+            // its current value and treat the atom as univariate in the
+            // other. If the residual is linear (a*v + b), solve directly
+            // for v = -b/a; if quadratic (a*v^2 + b*v + c), test the
+            // discriminant and admit integer roots. The candidates enter
+            // the same bestCost selection as the discrete-Newton search
+            // — soundness unchanged (validator-gated at function exit).
+            //
+            // Why it complements bilinearPair_: the pair move treats
+            // `coef*x*y` as a single quantity and probes factor pairs of
+            // its target. Substitution exploits the LINEAR structure left
+            // when one factor is pinned, so atoms like `2*x*y + 3*x + y - 5`
+            // (the `(2y+3)*x + (y-5)` residual is linear in x) get an
+            // exact closed-form candidate that the product-pair strategy
+            // misses entirely.
+            if (bilinearSubst_) {
+                auto termsOpt = kernel_.terms(C.poly);
+                if (termsOpt) {
+                    // Collect candidate (solveVarName) values across all
+                    // distinct pairs of vars appearing together in a
+                    // monomial, in both substitution directions. Cap on
+                    // total pairs per flip to bound per-flip cost.
+                    std::vector<std::pair<std::string,std::string>> bilPairs;
+                    {
+                        std::unordered_set<std::string> seen;
+                        for (const auto& mono : *termsOpt) {
+                            if (mono.powers.size() < 2) continue;
+                            // For each ordered pair (xi, xj) with i < j
+                            // record one canonical sorted (min,max) entry.
+                            for (size_t i = 0; i + 1 < mono.powers.size(); ++i) {
+                                for (size_t j = i + 1; j < mono.powers.size(); ++j) {
+                                    std::string a = std::string(kernel_.varName(mono.powers[i].first));
+                                    std::string b = std::string(kernel_.varName(mono.powers[j].first));
+                                    if (a.empty() || b.empty() || a == b) continue;
+                                    if (a > b) std::swap(a, b);
+                                    std::string key = a + "\x00" + b;
+                                    if (seen.insert(key).second) bilPairs.push_back({a, b});
+                                    if (bilPairs.size() >= 8) break;
+                                }
+                                if (bilPairs.size() >= 8) break;
+                            }
+                            if (bilPairs.size() >= 8) break;
+                        }
+                    }
+                    // For each pair (a, b), try fixing a and solving for
+                    // b, then fixing b and solving for a.
+                    for (const auto& pair : bilPairs) {
+                        for (int dir = 0; dir < 2; ++dir) {
+                            const std::string& solveVar = (dir == 0) ? pair.first : pair.second;
+                            // Both pair members must be in cvars (they
+                            // are by construction — they appeared in
+                            // C.poly's terms — but guard anyway).
+                            bool inCvars = false;
+                            for (const auto& cv : cvars) if (cv == solveVar) { inCvars = true; break; }
+                            if (!inCvars) continue;
+                            // Group residual polynomial by exponent of
+                            // solveVar after substituting current values
+                            // for every other variable. Resulting map:
+                            //   exp -> sum of (coef * prod(other_var^e))
+                            // where the product is over the term's
+                            // non-solveVar factors evaluated at cur.
+                            std::map<int, mpz_class> byDeg;
+                            int maxDeg = 0;
+                            bool subFailed = false;
+                            for (const auto& mono : *termsOpt) {
+                                int d = 0;
+                                mpz_class coef = mono.coefficient;
+                                for (const auto& [vid, e] : mono.powers) {
+                                    std::string vn(kernel_.varName(vid));
+                                    if (vn == solveVar) {
+                                        d += e;
+                                    } else {
+                                        auto it = cur.find(vn);
+                                        if (it == cur.end()) { subFailed = true; break; }
+                                        mpz_class pw;
+                                        mpz_pow_ui(pw.get_mpz_t(),
+                                                   it->second.get_mpz_t(),
+                                                   static_cast<unsigned long>(e));
+                                        coef *= pw;
+                                    }
+                                }
+                                if (subFailed) break;
+                                byDeg[d] += coef;
+                                if (d > maxDeg) maxDeg = d;
+                            }
+                            if (subFailed) continue;
+                            // Solve residual == 0 for integer roots.
+                            std::vector<mpz_class> roots;
+                            mpz_class c0 = byDeg.count(0) ? byDeg[0] : mpz_class(0);
+                            mpz_class c1 = byDeg.count(1) ? byDeg[1] : mpz_class(0);
+                            if (maxDeg <= 1) {
+                                // a*v + b = 0 -> v = -b/a.
+                                if (c1 != 0) {
+                                    mpz_class neg = -c0;
+                                    if ((neg % c1) == 0) roots.push_back(neg / c1);
+                                }
+                            } else if (maxDeg == 2) {
+                                mpz_class c2 = byDeg.count(2) ? byDeg[2] : mpz_class(0);
+                                if (c2 == 0) {
+                                    // degenerate linear
+                                    if (c1 != 0) {
+                                        mpz_class neg = -c0;
+                                        if ((neg % c1) == 0) roots.push_back(neg / c1);
+                                    }
+                                } else {
+                                    // a*v^2 + b*v + c = 0: D = b^2 - 4ac
+                                    mpz_class D = c1 * c1 - 4 * c2 * c0;
+                                    if (D >= 0) {
+                                        mpz_class sq;
+                                        mpz_sqrt(sq.get_mpz_t(), D.get_mpz_t());
+                                        if (sq * sq == D) {
+                                            mpz_class denom = 2 * c2;
+                                            mpz_class num1 = -c1 + sq;
+                                            mpz_class num2 = -c1 - sq;
+                                            if (denom != 0) {
+                                                if ((num1 % denom) == 0) roots.push_back(num1 / denom);
+                                                if ((num2 % denom) == 0) roots.push_back(num2 / denom);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // (maxDeg >= 3 in solveVar is skipped — the
+                            // closed form would lose integer guarantee.)
+                            for (const auto& r : roots) {
+                                mpz_class cand = clampVar(solveVar, r);
+                                if (cand == cur[solveVar]) continue;
+                                mpz_class delta;
+                                mpz_class nc = tryMoveCost(solveVar, cand, delta);
+                                if (!haveBest || nc < bestCost) {
+                                    bestCost = nc;
+                                    bestVar = solveVar;
+                                    bestVal = cand;
+                                    haveBest = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
