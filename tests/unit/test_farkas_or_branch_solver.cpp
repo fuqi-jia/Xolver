@@ -152,12 +152,85 @@ TEST_CASE("FarkasOrBranchSolver: B-substitution makes equality trivial") {
     CHECK(cands[0].lambdaRay[0] == 1);
 }
 
-TEST_CASE("FarkasOrBranchSolver: infeasible non-zero constant rejects ray") {
-    // Eq: (= lam0 1)  under any B — constant ≠ 0 → P1 v1 returns empty.
+TEST_CASE("FarkasOrBranchSolver: non-homogeneous unique solution (P1 v2)") {
+    // Eq: (= lam0 1)  under any B — particular solution lam0 = 1.
+    // P1 v1 rejected this; P1 v2 returns ray = [1].
     IrBuilder b;
     ExprId lam0 = b.mkVar("lam0", b.intSort);
     ExprId one  = b.mkConst(1);
     ExprId eq   = b.mk(Kind::Eq, {lam0, one});
+
+    FarkasBranch branch;
+    branch.lambdas = {"lam0"};
+    branch.equalities = {eq};
+
+    FarkasOrBranchSolver solver(b.ir);
+    auto cands = solver.solveBranch(branch, {}, {});
+    REQUIRE(!cands.empty());
+    bool found = false;
+    for (const auto& c : cands) {
+        if (c.lambdaRay.size() == 1 && c.lambdaRay[0] == 1) {
+            found = true; break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("FarkasOrBranchSolver: non-homogeneous parametric, B != 0 (P1 v2)") {
+    // Eq1: -4*lam0 + x*lam1 = 4*y    (rewritten so the RHS is non-zero)
+    // i.e. (= (- (+ (* -4 lam0) (* x lam1)) (* 4 y)) 0)
+    // Under B = {x:4, y:1}:
+    //   -4·lam0 + 4·lam1 - 4 = 0
+    //   → lam1 = lam0 + 1
+    //   particular lam0=0, lam1=1 — non-neg integer.
+    IrBuilder b;
+    ExprId lam0 = b.mkVar("lam0", b.intSort);
+    ExprId lam1 = b.mkVar("lam1", b.intSort);
+    ExprId X    = b.mkVar("x",    b.intSort);
+    ExprId Y    = b.mkVar("y",    b.intSort);
+    ExprId zero = b.mkConst(0);
+    ExprId neg4 = b.mk(Kind::Neg, {b.mkConst(4)});
+    ExprId four = b.mkConst(4);
+    ExprId mulA = b.mk(Kind::Mul, {neg4, lam0});
+    ExprId mulB = b.mk(Kind::Mul, {X, lam1});
+    ExprId mul4y = b.mk(Kind::Mul, {four, Y});
+    ExprId addLam = b.mk(Kind::Add, {mulA, mulB});
+    ExprId sub = b.mk(Kind::Sub, {addLam, mul4y});
+    ExprId eq = b.mk(Kind::Eq, {sub, zero});
+
+    FarkasBranch branch;
+    branch.lambdas = {"lam0", "lam1"};
+    branch.equalities = {eq};
+
+    std::unordered_map<std::string, mpz_class> B = {
+        {"x", mpz_class(4)},
+        {"y", mpz_class(1)},
+    };
+    FarkasOrBranchSolver solver(b.ir);
+    auto cands = solver.solveBranch(branch, B, {});
+    REQUIRE(!cands.empty());
+    bool found = false;
+    for (const auto& c : cands) {
+        // Verify the candidate satisfies -4·ray[0] + 4·ray[1] = 4.
+        if (c.lambdaRay.size() == 2) {
+            mpz_class lhs = mpz_class(-4) * c.lambdaRay[0] + mpz_class(4) * c.lambdaRay[1];
+            if (lhs == 4 && c.lambdaRay[0] >= 0 && c.lambdaRay[1] >= 0) {
+                found = true;
+                break;
+            }
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("FarkasOrBranchSolver: truly infeasible non-homogeneous (P1 v2)") {
+    // Eq: (= (* 2 lam0) 1)  — 2·lam0 = 1 has no integer solution.
+    IrBuilder b;
+    ExprId lam0 = b.mkVar("lam0", b.intSort);
+    ExprId two  = b.mkConst(2);
+    ExprId one  = b.mkConst(1);
+    ExprId mul  = b.mk(Kind::Mul, {two, lam0});
+    ExprId eq   = b.mk(Kind::Eq, {mul, one});
 
     FarkasBranch branch;
     branch.lambdas = {"lam0"};

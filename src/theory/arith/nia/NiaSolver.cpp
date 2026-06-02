@@ -1731,9 +1731,17 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     }
     traceWrite("  → CSP enumerated " + std::to_string(assignments.size()) + " candidates");
     farkas::FarkasOrModelAssembler assembler(*coreIr_);
+    int candIdx = 0;
     for (const auto& assignment : assignments) {
         auto candidate = assembler.assemble(profile, assignment);
-        if (!candidate) continue;
+        if (!candidate) { ++candIdx; continue; }
+        if (trace) {
+            std::string line = "  cand[" + std::to_string(candIdx) + "]:";
+            for (const auto& [v, val] : *candidate) {
+                line += " " + v + "=" + val.get_str();
+            }
+            traceWrite(line);
+        }
         ArithModelValidator::NumAssignment num;
         num.reserve(candidate->size());
         for (const auto& [v, val] : *candidate) num.emplace(v, mpq_class(val));
@@ -1741,10 +1749,11 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
         ArithModelValidator amv(*coreIr_, num, bools);
         auto vr = amv.validate(coreIr_->assertions());
         if (vr == ArithModelValidator::Verdict::Satisfied) {
-            traceWrite("  → validator SAT");
+            traceWrite("  → validator SAT (cand[" + std::to_string(candIdx) + "])");
             currentModel_ = std::move(*candidate);
             return TheoryCheckResult::consistent();
         }
+        ++candIdx;
     }
     traceWrite("  → no candidate validated");
     return std::nullopt;

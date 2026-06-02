@@ -123,6 +123,23 @@ private:
     std::vector<mpz_class> findPrimitiveNonNegRay(
         const std::vector<std::vector<mpq_class>>& A_S) const;
 
+    // P1 v2: solve A_S · λ_S = c over Q with λ ∈ Z^n_≥0. Handles both the
+    // homogeneous (c = 0, delegates to findPrimitiveNonNegRay) and the
+    // non-homogeneous (c ≠ 0, particular solution + 1D nullspace combine)
+    // cases. Returns ray of length |S| or empty if no non-neg integer
+    // solution exists / shape unsupported.
+    //
+    // Algorithm for non-homogeneous case:
+    //   1. RREF the augmented matrix [A_S | c].
+    //   2. Inconsistency check (zero row with non-zero RHS → empty).
+    //   3. Build particular solution (free vars = 0; pivot vars from RREF).
+    //   4. If 0 free vars (unique solution): check non-neg integer particular.
+    //   5. If 1 free var: bounded enumeration of t such that particular +
+    //      t·homog is non-neg integer (handles small Farkas certificates).
+    std::vector<mpz_class> findNonNegIntegerSolution(
+        const std::vector<std::vector<mpq_class>>& A_S,
+        const std::vector<mpq_class>& c) const;
+
     // From an IneqRow and a λ-ray, derive a CtBound. Substitutes λ = ray
     // (scaled by t) into the row; collects CT coefficients, derives the
     // bound interval.

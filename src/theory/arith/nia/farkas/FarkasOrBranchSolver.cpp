@@ -466,6 +466,125 @@ std::vector<mpz_class> FarkasOrBranchSolver::findPrimitiveNonNegRay(
     return intRay;
 }
 
+// ---- P1 v2: solve A·λ = c for non-neg integer λ (augmented system) ----
+std::vector<mpz_class> FarkasOrBranchSolver::findNonNegIntegerSolution(
+    const std::vector<std::vector<mpq_class>>& A_S_in,
+    const std::vector<mpq_class>& c_in) const
+{
+    // Homogeneous fast path.
+    bool homogeneous = true;
+    for (const auto& ci : c_in) if (ci != 0) { homogeneous = false; break; }
+    if (homogeneous) return findPrimitiveNonNegRay(A_S_in);
+
+    if (A_S_in.empty()) return {};
+    std::size_t rows = A_S_in.size();
+    std::size_t cols = A_S_in[0].size();
+    if (c_in.size() != rows) return {};
+
+    // Augment with c as final column.
+    std::vector<std::vector<mpq_class>> A(rows, std::vector<mpq_class>(cols + 1));
+    for (std::size_t i = 0; i < rows; ++i) {
+        for (std::size_t j = 0; j < cols; ++j) A[i][j] = A_S_in[i][j];
+        A[i][cols] = c_in[i];
+    }
+
+    // RREF on the first `cols` columns; the constant column carries the RHS.
+    std::vector<int> rowOfCol(cols, -1);
+    std::size_t r = 0;
+    for (std::size_t c = 0; c < cols && r < rows; ++c) {
+        std::size_t pivot = r;
+        bool found = false;
+        for (std::size_t i = r; i < rows; ++i) {
+            if (A[i][c] != 0) { pivot = i; found = true; break; }
+        }
+        if (!found) continue;
+        std::swap(A[r], A[pivot]);
+        mpq_class scale = A[r][c];
+        for (std::size_t j = c; j <= cols; ++j) A[r][j] /= scale;
+        for (std::size_t i = 0; i < rows; ++i) {
+            if (i == r) continue;
+            mpq_class f = A[i][c];
+            if (f != 0) {
+                for (std::size_t j = c; j <= cols; ++j) A[i][j] -= f * A[r][j];
+            }
+        }
+        rowOfCol[c] = (int)r;
+        ++r;
+    }
+
+    // Consistency: every all-zero A-row must have a zero RHS.
+    for (std::size_t i = r; i < rows; ++i) {
+        if (A[i][cols] != 0) return {};
+    }
+
+    std::vector<std::size_t> freeCols;
+    for (std::size_t c = 0; c < cols; ++c) {
+        if (rowOfCol[c] == -1) freeCols.push_back(c);
+    }
+
+    auto tryNonNegInt = [&](const std::vector<mpq_class>& sol)
+        -> std::vector<mpz_class> {
+        std::vector<mpz_class> out(sol.size());
+        for (std::size_t i = 0; i < sol.size(); ++i) {
+            if (sol[i].get_den() != 1) return {};
+            mpz_class num = sol[i].get_num();
+            if (num < 0) return {};
+            out[i] = num;
+        }
+        return out;
+    };
+
+    // Particular: free vars = 0, pivot vars from RHS column.
+    std::vector<mpq_class> particular(cols, mpq_class(0));
+    for (std::size_t c = 0; c < cols; ++c) {
+        if (rowOfCol[c] != -1) particular[c] = A[rowOfCol[c]][cols];
+    }
+
+    auto p_int = tryNonNegInt(particular);
+    if (!p_int.empty()) return p_int;
+
+    // 1D nullspace: try particular + t · homog for bounded rational t.
+    // homog[f] = 1, homog[pivot c] = -A[rowOfCol[c]][f], homog[other free] = 0.
+    if (freeCols.size() == 1) {
+        std::size_t f = freeCols[0];
+        std::vector<mpq_class> homog(cols, mpq_class(0));
+        homog[f] = 1;
+        for (std::size_t c = 0; c < cols; ++c) {
+            if (rowOfCol[c] != -1) homog[c] = -A[rowOfCol[c]][f];
+        }
+
+        // Find LCM of denominators across (particular, homog) and search t.
+        // Bounded integer t handles the typical small-coefficient case.
+        // For finer granularity (Stroeder occasionally needs t with a small
+        // rational), try t = k / D where D = LCM of homog denominators.
+        mpz_class denomLcm = 1;
+        for (const auto& q : homog) {
+            mpz_class d = q.get_den();
+            mpz_class g; mpz_gcd(g.get_mpz_t(), denomLcm.get_mpz_t(), d.get_mpz_t());
+            denomLcm = (denomLcm / g) * d;
+        }
+        // Try t ∈ {-200/D, ..., 200/D}.
+        for (long k = 1; k <= 200; ++k) {
+            mpq_class t(k);
+            t /= mpq_class(denomLcm);
+            std::vector<mpq_class> sol(cols);
+            for (std::size_t i = 0; i < cols; ++i) sol[i] = particular[i] + t * homog[i];
+            auto s = tryNonNegInt(sol);
+            if (!s.empty()) return s;
+        }
+        for (long k = -1; k >= -200; --k) {
+            mpq_class t(k);
+            t /= mpq_class(denomLcm);
+            std::vector<mpq_class> sol(cols);
+            for (std::size_t i = 0; i < cols; ++i) sol[i] = particular[i] + t * homog[i];
+            auto s = tryNonNegInt(sol);
+            if (!s.empty()) return s;
+        }
+    }
+
+    return {};
+}
+
 // ---- deriveCtBound: substitute ray into IneqRow, derive bound on CT ----
 CtBound FarkasOrBranchSolver::deriveCtBound(
     const IneqRow& row,
@@ -549,14 +668,14 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranch(
     std::vector<BranchCandidate> out;
     if (branch.lambdas.empty()) return out;
 
-    // Step 1: extract all equality rows.
+    // Step 1: extract all equality rows. P1 v2 accepts non-homogeneous
+    // (constant ≠ 0) rows: A·λ + constant = 0, equivalently A·λ = -constant,
+    // i.e. c[i] = -eqRows[i].constant for the augmented system.
     std::vector<EqRow> eqRows;
     eqRows.reserve(branch.equalities.size());
     for (ExprId atom : branch.equalities) {
         auto row = extractEqRow(atom, branch.lambdas, B);
         if (!row) return out;        // shape failure → infeasible
-        // Reject non-homogeneous (constant ≠ 0). P1 v1 assumes homogeneous.
-        if (row->constant != 0) return out;
         eqRows.push_back(std::move(*row));
     }
 
@@ -577,16 +696,25 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranch(
         std::vector<std::size_t> idx(supSize);
         std::iota(idx.begin(), idx.end(), 0);
         while (true) {
-            // Build A_S: rows = eqRows.size(), cols = supSize.
+            // Build A_S: rows = eqRows.size(), cols = supSize, plus
+            // c_S (RHS vector) for non-homogeneous handling.
             std::vector<std::vector<mpq_class>> A_S(
                 eqRows.size(), std::vector<mpq_class>(supSize, mpq_class(0)));
+            std::vector<mpq_class> c_S(eqRows.size(), mpq_class(0));
             for (std::size_t r = 0; r < eqRows.size(); ++r) {
                 for (std::size_t c = 0; c < supSize; ++c) {
                     A_S[r][c] = eqRows[r].coeffs[idx[c]];
                 }
+                // Equality is `coeffs·λ + constant = 0` so A·λ = -constant.
+                c_S[r] = -eqRows[r].constant;
             }
-            // Find primitive non-negative integer ray of A_S.
-            auto rayS = findPrimitiveNonNegRay(A_S);
+            // Check that out-of-support λ's are forced to 0 — i.e. the
+            // unsupported columns of the FULL coefficient matrix must not
+            // contribute to A_full · λ_full = -constant. Since λ_unsupp = 0,
+            // those columns drop out automatically; no extra check needed.
+            //
+            // Find non-neg integer solution of A_S · λ_S = c_S.
+            auto rayS = findNonNegIntegerSolution(A_S, c_S);
             if (!rayS.empty()) {
                 // Build full-width ray: zero outside support.
                 std::vector<mpz_class> ray(k, mpz_class(0));
