@@ -121,6 +121,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
         if (!restartsSet) restartsBudget_ = 80;
         if (!maxFlipsSet) maxFlipsBudget_ = 25000;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_RW_HUB"); e && *e && *e != '0') {
+        rwHub_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -1134,7 +1137,34 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         if (!filtered.empty()) fcvars = std::move(filtered);
                     }
                     if (!fcvars.empty()) {
-                        const std::string& v = fcvars[rng() % fcvars.size()];
+                        // LS-SMART-Z8: hub-weighted variable pick. Vars
+                        // appearing in many clauses ("hubs") get more
+                        // probability mass; mirrors the violation-core
+                        // pattern at L1132 (cviol[i] * weight[i] for
+                        // clause choice). Default uniform.
+                        std::string vChoice;
+                        if (rwHub_) {
+                            std::size_t total = 0;
+                            for (const auto& fv : fcvars) {
+                                auto it = varToClauses.find(fv);
+                                total += (it == varToClauses.end()) ? 1 : it->second.size();
+                            }
+                            if (total > 0) {
+                                std::size_t roll = (std::size_t)(rng() % total);
+                                std::size_t accum = 0;
+                                vChoice = fcvars.back();  // fallback
+                                for (const auto& fv : fcvars) {
+                                    auto it = varToClauses.find(fv);
+                                    accum += (it == varToClauses.end()) ? 1 : it->second.size();
+                                    if (accum > roll) { vChoice = fv; break; }
+                                }
+                            } else {
+                                vChoice = fcvars[rng() % fcvars.size()];
+                            }
+                        } else {
+                            vChoice = fcvars[rng() % fcvars.size()];
+                        }
+                        const std::string& v = vChoice;
                         long nudge = (long)(rng() % 21) - 10;
                         if (nudge == 0) nudge = 1;
                         mpz_class newVal = clampVar(v, cur[v] + nudge);

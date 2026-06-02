@@ -316,6 +316,13 @@ private:
     // search effort, never a wrong verdict.
     int restartsBudget_ = 20;
     int maxFlipsBudget_ = 800;
+    // LS-SMART-Z8 (master 2026-06-02). Hub-weighted variable pick in
+    // the random-walk diversification branch. z3pp's NIA-LS biases
+    // toward variables that appear in many clauses ("hubs") because
+    // moving them has bigger global impact per flip. Default-OFF
+    // XOLVER_NIA_LS_RW_HUB. Mirrors the existing violation-core clause
+    // weighting pattern (cviol[i] * weight[i]).
+    bool rwHub_ = false;
     std::unordered_map<std::string, mpz_class> minSeen_;
     std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;
