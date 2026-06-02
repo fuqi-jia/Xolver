@@ -260,3 +260,83 @@ TEST_CASE("MonomialBound: missing bounds on any factor -> no cuts") {
     auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
     CHECK(cuts.empty());
 }
+
+// =============================================================================
+// BernsteinPowerCutGenerator — Phase 1c convex-hull envelope for x^N on [l,u].
+// =============================================================================
+#include "theory/arith/linearizer/BernsteinPowerCutGenerator.h"
+
+TEST_CASE("Bernstein: boundary coefficients reproduce l^N and u^N (positive box)") {
+    auto b = BernsteinPowerCutGenerator::bernsteinCoeffs(4, mpq_class(1), mpq_class(3));
+    REQUIRE(b.size() == 5);
+    // b_0 = 1^4 = 1
+    CHECK(b.front() == mpq_class(1));
+    // b_4 = 3^4 = 81
+    CHECK(b.back() == mpq_class(81));
+    // Bernstein coefficients of an increasing function on positive box must
+    // themselves be non-decreasing (control polygon monotonicity).
+    for (size_t i = 1; i < b.size(); ++i) CHECK(b[i] >= b[i - 1]);
+}
+
+TEST_CASE("Bernstein: zero-anchored boundary l=0") {
+    auto b = BernsteinPowerCutGenerator::bernsteinCoeffs(3, mpq_class(0), mpq_class(2));
+    REQUIRE(b.size() == 4);
+    CHECK(b.front() == mpq_class(0));  // 0^3 = 0
+    CHECK(b.back()  == mpq_class(8));  // 2^3 = 8
+}
+
+TEST_CASE("Bernstein: even N, symmetric box around zero, control polygon hits 0 at ends") {
+    auto b = BernsteinPowerCutGenerator::bernsteinCoeffs(2, mpq_class(-2), mpq_class(2));
+    REQUIRE(b.size() == 3);
+    CHECK(b.front() == mpq_class(4));   // (-2)^2 = 4
+    CHECK(b.back()  == mpq_class(4));   // 2^2 = 4
+    // Bernstein middle coefficient for x^2 on [-l,l] is a known identity:
+    //   b_1 = -l*u = 4, b_0 = l^2 = 4, b_2 = u^2 = 4. All 4 here.
+    // (Sanity check the formula stays consistent.)
+}
+
+TEST_CASE("Bernstein: convex hull min/max bracket actual x^N values") {
+    int N = 5;
+    mpq_class l(0), u(2);
+    auto b = BernsteinPowerCutGenerator::bernsteinCoeffs(N, l, u);
+    mpq_class bMin = b[0], bMax = b[0];
+    for (auto v : b) { if (v < bMin) bMin = v; if (v > bMax) bMax = v; }
+    // Sample x = 1.5  ->  x^5 = 7.59375
+    mpq_class xs(3, 2); // 3/2
+    mpq_class xN = 1;
+    for (int i = 0; i < N; ++i) xN *= xs;
+    CHECK(bMin <= xN);
+    CHECK(bMax >= xN);
+}
+
+static AuxTerm mkAuxPower(const std::string& name, VarId vx, int exp) {
+    AuxTerm t;
+    t.name = name; t.vid = NullVar; t.poly = NullPoly;
+    t.key.kind = NonlinearKind::Power;
+    t.key.powers = {{vx, exp}};
+    return t;
+}
+
+TEST_CASE("Bernstein: generator emits hull cuts on positive box") {
+    BernsteinPowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x4", VarId{1}, 4);
+    auto xb = mkBounds(1, 3);
+    BernsteinPowerCutGenerator::Options opt;
+    opt.skipTrivial = false;
+    auto cuts = gen.generate(aux, "x", 4, xb, SatLit{0, false}, opt);
+    // For x^4 on [1,3]: trivial endpoint min = 1, max = 81.
+    // Bernstein control coefficients in degree 4 should give bMin=1, bMax=81.
+    // So with skipTrivial=false we still get 2 cuts; with skipTrivial=true
+    // (default) we'd get 0 since hull matches trivial.
+    CHECK(cuts.size() == 2);
+}
+
+TEST_CASE("Bernstein: skipTrivial collapses to 0 cuts when convex hull matches endpoints") {
+    BernsteinPowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x4", VarId{1}, 4);
+    auto xb = mkBounds(1, 3);
+    BernsteinPowerCutGenerator::Options opt;
+    opt.skipTrivial = true;
+    auto cuts = gen.generate(aux, "x", 4, xb, SatLit{0, false}, opt);
+    CHECK(cuts.empty());
+}

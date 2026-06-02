@@ -229,11 +229,20 @@ LinearizationResult IncrementalLinearizer::run(
                 // Phase 1: x^N with N >= 3. Convex-envelope cuts via
                 // PowerCutGenerator. Gated by XOLVER_NRA_NLEXT_POWER
                 // (default OFF until paired-validated).
+                //
+                // Phase 1c (Bernstein) optionally piggybacks on the same
+                // dispatch via XOLVER_NRA_NLEXT_BERNSTEIN; emits the tighter
+                // convex-hull bounds on s = x^N. Both can ride together;
+                // sound + cumulative.
                 static const bool powEnabled = []() {
                     const char* e = std::getenv("XOLVER_NRA_NLEXT_POWER");
                     return e && *e && *e != '0';
                 }();
-                if (!powEnabled) continue;
+                static const bool bernsteinEnabled = []() {
+                    const char* e = std::getenv("XOLVER_NRA_NLEXT_BERNSTEIN");
+                    return e && *e && *e != '0';
+                }();
+                if (!powEnabled && !bernsteinEnabled) continue;
                 VarId xVid = aux.key.powers[0].first;
                 int exponent = aux.key.powers[0].second;
                 std::string x = std::string(kernel_.varName(xVid));
@@ -243,36 +252,64 @@ LinearizationResult IncrementalLinearizer::run(
                     auto it = modelPoints->find(x);
                     if (it != modelPoints->end()) modelX = it->second;
                 }
-                auto pwCuts = pwGen_.generate(
-                    aux, x, exponent,
-                    xBounds ? *xBounds : BoundInfo{},
-                    c.reason, modelX,
-                    config.emitSquareNonneg,
-                    config.emitSquareSecant,
-                    config.emitSquareTangent,
-                    sort);
-                int idx = 0;
-                for (auto& cut : pwCuts) {
-                    if (static_cast<size_t>(idx) >= config.maxCutsPerTerm) break;
-                    std::vector<mpq_class> boundVals;
-                    if (xBounds && xBounds->hasFiniteCompleteBounds()) {
-                        boundVals = {xBounds->lower, xBounds->upper,
-                                     mpq_class(exponent),
-                                     modelX ? *modelX : (xBounds->lower + xBounds->upper) / 2};
+                std::vector<mpq_class> boundVals;
+                if (xBounds && xBounds->hasFiniteCompleteBounds()) {
+                    boundVals = {xBounds->lower, xBounds->upper,
+                                 mpq_class(exponent),
+                                 modelX ? *modelX : (xBounds->lower + xBounds->upper) / 2};
+                }
+                if (powEnabled) {
+                    auto pwCuts = pwGen_.generate(
+                        aux, x, exponent,
+                        xBounds ? *xBounds : BoundInfo{},
+                        c.reason, modelX,
+                        config.emitSquareNonneg,
+                        config.emitSquareSecant,
+                        config.emitSquareTangent,
+                        sort);
+                    int idx = 0;
+                    for (auto& cut : pwCuts) {
+                        if (static_cast<size_t>(idx) >= config.maxCutsPerTerm) break;
+                        if (cache_.hasEmitted(aux.key, c.reason, boundVals, idx)) {
+                            ++idx; continue;
+                        }
+                        SatLit cutLit = LinearConstraintNormalizer::registerLinearConstraint(
+                            *registry_, cut.constraint, linearTheory);
+                        if (cutLit.var != 0) {
+                            auto lemma = buildCutLemma(c.reason, cut.reasons, cutLit);
+                            CutCacheKey ck{aux.key, c.reason, boundVals, idx};
+                            result.lemmas.push_back({std::move(lemma), ck});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                        ++idx;
                     }
-                    if (cache_.hasEmitted(aux.key, c.reason, boundVals, idx)) {
-                        ++idx; continue;
+                }
+                // Phase 1c: Bernstein convex-hull envelope. Uses cache index
+                // offset 200+ to stay clear of Power (0..) and MonomialBound
+                // (100..) slots.
+                if (bernsteinEnabled && xBounds && xBounds->hasFiniteCompleteBounds()) {
+                    BernsteinPowerCutGenerator::Options bopt;
+                    bopt.maxCutsHere = config.maxCutsPerTerm;
+                    auto bCuts = bpGen_.generate(
+                        aux, x, exponent, *xBounds, c.reason, bopt, sort);
+                    int bIdx = 0;
+                    for (auto& cut : bCuts) {
+                        if (static_cast<size_t>(bIdx) >= config.maxCutsPerTerm) break;
+                        if (cache_.hasEmitted(aux.key, c.reason, boundVals, 200 + bIdx)) {
+                            ++bIdx; continue;
+                        }
+                        SatLit cutLit = LinearConstraintNormalizer::registerLinearConstraint(
+                            *registry_, cut.constraint, linearTheory);
+                        if (cutLit.var != 0) {
+                            auto lemma = buildCutLemma(c.reason, cut.reasons, cutLit);
+                            CutCacheKey ck{aux.key, c.reason, boundVals, 200 + bIdx};
+                            result.lemmas.push_back({std::move(lemma), ck});
+                            result.status = LinearizationStatus::Lemma;
+                            if (result.lemmas.size() >= config.maxLemmas) return result;
+                        }
+                        ++bIdx;
                     }
-                    SatLit cutLit = LinearConstraintNormalizer::registerLinearConstraint(
-                        *registry_, cut.constraint, linearTheory);
-                    if (cutLit.var != 0) {
-                        auto lemma = buildCutLemma(c.reason, cut.reasons, cutLit);
-                        CutCacheKey ck{aux.key, c.reason, boundVals, idx};
-                        result.lemmas.push_back({std::move(lemma), ck});
-                        result.status = LinearizationStatus::Lemma;
-                        if (result.lemmas.size() >= config.maxLemmas) return result;
-                    }
-                    ++idx;
                 }
             } else if (aux.key.kind == NonlinearKind::HigherMixed) {
                 // Phase 2 (this block): numeric monomial bounds via
