@@ -1136,7 +1136,19 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         const int DIVERSIFY_TRIGGER = 10 * PLATEAU_K;
         const int DIVERSIFY_K = 10;
         for (int flip = 0; flip < MAX_FLIPS; ++flip) {
-            if ((flip & 31) == 0 && timedOut()) return std::nullopt;
+            if ((flip & 31) == 0 && timedOut()) {
+                // LBBB Phase 1 BUGFIX (master 2026-06-02): a mid-flip
+                // timeout-exit returns std::nullopt without falling
+                // through to the end-of-function `failed_ = true`
+                // marker (line ~2131). That left hasFailed()==false
+                // after every timed-out LS call, which broke the
+                // stageBoundedBitBlast gate — it never fired because
+                // LS reported "didn't fail" despite not finding SAT.
+                // Mark failed here too so LBBB sees the box bounds
+                // LS visited.
+                if (boundTrack_) failed_ = true;
+                return std::nullopt;
+            }
             if (totalCost == 0) return cur;
             // LS-VM5 trigger check (per-flip).
             if (diversify_ && diversifyBudget == 0 &&
