@@ -136,6 +136,13 @@ private:
     // only on a validated model, else nullopt (fall through to CDCAC). Full
     // effort only. nullopt immediately when the flag is OFF.
     std::optional<TheoryCheckResult> stageSubtropical(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_INT_PROBE (default OFF): structural-integer probe for
+    // mgc-class SAT cases. Enumerates small integer/dyadic candidates for
+    // the highest-exponent variables (those z3-nlsat picks as decisions);
+    // for each candidate, validates the full model via the kernel sign
+    // (invariant 1). Returns consistent() on first validated model,
+    // nullopt otherwise. Full effort only.
+    std::optional<TheoryCheckResult> stageIntegerProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
     // repair heuristic. Returns consistent() iff LS finds a rational assignment
     // exact-validated against every active constraint (invariant 1 — Solver-level

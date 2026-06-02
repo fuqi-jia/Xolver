@@ -7,6 +7,7 @@
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
+#include "theory/arith/nra/StructuralIntegerProbe.h"          // XOLVER_NRA_INT_PROBE
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
@@ -101,6 +102,12 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
+    // XOLVER_NRA_INT_PROBE (default OFF): structural-integer probe for
+    // mgc-class SAT. Runs adjacent to subtropical — both are cheap
+    // pre-CDCAC fast paths; either can short-circuit to SAT.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.int-probe",
+        stageWrap("int-probe", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
     // Sprint 3 (#69): LS pre-pass now runs from NraSolver::check() override
     // ABOVE the Reasoner pipeline so it executes BEFORE CDCAC. The old
     // stageLocalSearch stage was reach-limited (CDCAC hung at Standard before
@@ -1119,6 +1126,72 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
         }
     }
     return std::nullopt;  // no base validated: fall through to CDCAC
+}
+
+// XOLVER_NRA_INT_PROBE — structural-integer probe (mgc-class SAT-fast-path).
+// Sibling of stageSubtropical. Enumerates small integer + dyadic candidates
+// for the highest-exponent variables (which z3-nlsat's decision heuristic
+// gravitates toward on mgc-style problems), validates each candidate via
+// the kernel sign (invariant 1). Pure NRA only; combination/N-O mode falls
+// through because interface (dis)equalities live outside presolveConstraints_.
+std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+    if (std::getenv("XOLVER_NRA_INT_PROBE_DIAG")) {
+        std::ofstream dst("/tmp/int_probe.txt", std::ios::app);
+        dst << "[INT-PROBE] called effort=" << (int)effort
+            << " presolve=" << presolveConstraints_.size() << "\n";
+        dst.flush();
+    }
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_INT_PROBE");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    // Run at FIRST effort entry (typically Standard) — CDCAC may not survive
+    // to Full effort on mgc-class. Sound: a kernel-validated rational point
+    // is SAT at any effort (invariant 1). One-shot per solve.
+    (void)effort;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    static thread_local bool intProbeAttempted = false;
+    if (intProbeAttempted) return std::nullopt;
+    intProbeAttempted = true;
+
+    bool diagOn = (std::getenv("XOLVER_NRA_INT_PROBE_DIAG") != nullptr);
+    std::ofstream st;
+    if (diagOn) {
+        st.open("/tmp/int_probe.txt", std::ios::app);
+        st << "[INT-PROBE] enter; constraints=" << presolveConstraints_.size() << "\n";
+        st.flush();
+    }
+
+    std::vector<StructuralIntegerProbe::Constraint> cons;
+    cons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) {
+            if (diagOn) { st << "[INT-PROBE] NullPoly bail\n"; st.flush(); }
+            return std::nullopt;
+        }
+        cons.push_back({c.poly, c.rel});
+    }
+
+    auto modelOpt = StructuralIntegerProbe::tryProbe(cons, *kernel_);
+    if (!modelOpt) {
+        if (diagOn) { st << "[INT-PROBE] no model found\n"; st.flush(); }
+        return std::nullopt;
+    }
+
+    if (diagOn) {
+        st << "[INT-PROBE] SAT model size=" << modelOpt->size() << "\n";
+        for (const auto& [v, q] : *modelOpt) {
+            st << "  " << kernel_->varName(v) << " = " << q.get_str(10) << "\n";
+        }
+        st.flush();
+    }
+    satFastModel_ = std::move(*modelOpt);
+    return TheoryCheckResult::consistent();
 }
 
 // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF). Rational-only local
