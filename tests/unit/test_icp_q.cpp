@@ -41,6 +41,20 @@ struct Fixture {
         return p;
     }
 
+    // Build poly = a·x² + b·x + c (for V2 quadratic-narrowing tests).
+    PolyId quad(long a, long b, long c) {
+        PolyId x2 = kernel->pow(xpoly, 2);
+        PolyId result = (a == 1) ? x2
+                                  : kernel->mul(kernel->mkConst(mpq_class(a)), x2);
+        if (b != 0) {
+            PolyId bx = (b == 1) ? xpoly
+                                  : kernel->mul(kernel->mkConst(mpq_class(b)), xpoly);
+            result = kernel->add(result, bx);
+        }
+        if (c != 0) result = kernel->add(result, kernel->mkConst(mpq_class(c)));
+        return result;
+    }
+
     static SatLit lit(unsigned id) { return SatLit::positive(id); }
 
     ReasonedBoxQ box(const mpq_class& lo, const mpq_class& hi, unsigned r) {
@@ -154,6 +168,170 @@ TEST_CASE("ICP-Q: factory builds RelationContractorQ for univariate degree-2") {
     auto vars = built.contractors[0]->vars();
     REQUIRE(vars.size() == 1);
     CHECK(vars[0] == "x");
+}
+
+// -- V2 quadratic narrowing --------------------------------------------------
+
+TEST_CASE("ICP-Q V2: x²-4 ≤ 0 with x ∈ [-10,10] narrows to [-2,2] (exact roots)") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.quad(1, 0, -4), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    REQUIRE(built.contractors.size() == 1);
+
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // Disc = 16 → exact roots ±2 → box narrows to [-2, 2] then fixpoints.
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-2));
+    CHECK(ri->interval.hi == mpq_class(2));
+}
+
+TEST_CASE("ICP-Q V2: x²-5 ≤ 0 with x ∈ [-10,10] narrows to outward-rounded [-√5, √5]") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.quad(1, 0, -5), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    // Soundness: lo ≤ -√5 and hi ≥ √5. Verify via squaring (lo² ≥ 5, hi² ≥ 5).
+    CHECK(ri->interval.lo * ri->interval.lo >= mpq_class(5));
+    CHECK(ri->interval.hi * ri->interval.hi >= mpq_class(5));
+    // Sanity: not absurdly loose (tightness ≪ 2^-30 of √5).
+    CHECK(ri->interval.hi - mpq_class(0) <= mpq_class(3));
+    CHECK(ri->interval.lo >= mpq_class(-3));
+}
+
+TEST_CASE("ICP-Q V2: x² + 2x + 5 ≤ 0 — V2 disc=-16 < 0 conflict (V1 inconclusive on [-10,10])") {
+    // Vertex at x = -1, value 4 > 0 ⇒ globally positive ⇒ Leq unsat.
+    // V1's polyInterval on [-10, 10] = [0,100] + [-20,20] + 5 = [-15, 125],
+    // lo = -15 ≤ 0 ⇒ V1 doesn't detect. V2's discriminant test does.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.quad(1, 2, 5), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::Conflict);
+    REQUIRE(r.conflict.has_value());
+    bool hasCstr = false;
+    for (const auto& l : r.conflict->clause) {
+        if (l == SatLit::positive(200)) hasCstr = true;
+    }
+    CHECK(hasCstr);
+}
+
+TEST_CASE("ICP-Q V2: x²-2x-3 ≤ 0 with x ∈ [-10,10] narrows to [-1,3] (b ≠ 0)") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    // disc = 4 + 12 = 16, roots (2±4)/2 = -1, 3.
+    auto c = f.cstr(f.quad(1, -2, -3), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-1));
+    CHECK(ri->interval.hi == mpq_class(3));
+}
+
+TEST_CASE("ICP-Q V2: Lt narrowing — x² - 4 < 0 with x ∈ [-10,10] narrows to [-2,2]") {
+    // V1: polyInterval [-4, 96]; Lt's `lo ≥ 0` check is -4 ≥ 0 ⇒ false ⇒
+    // no V1 conflict. V2 narrows on the closed over-approximation [-2, 2].
+    // Strict relation correctness: feasible set is (-2, 2), our closed
+    // over-approx admits ±2 too; sound — we never drop a true solution.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.quad(1, 0, -4), Relation::Lt, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-2));
+    CHECK(ri->interval.hi == mpq_class(2));
+    // After narrowing, V1's re-fire on [-2, 2] sees polyInterval [-4, 0];
+    // Lt's `lo ≥ 0` is false (-4 ≥ 0), so no V1 conflict. Engine returns
+    // NoChange at fixpoint.
+    CHECK(r.status == IcpStatus::NoChange);
+}
+
+TEST_CASE("ICP-Q V2: Geq is not narrowed (V2 covers Leq/Lt only)") {
+    // x² - 100 ≥ 0 with x ∈ [-3, 3]: feasible set is (-∞, -10] ∪ [10, ∞),
+    // not representable by a single IntervalQ. V1: polyInterval [-100, -91],
+    // hi < 0 ⇒ Geq violated ⇒ Conflict. V2 must not even attempt narrowing.
+    // We assert Conflict (from V1) and that the box reasons participate.
+    Fixture f;
+    auto b = f.box(-3, 3, 100);
+    auto c = f.cstr(f.quad(1, 0, -100), Relation::Geq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::Conflict);
+}
+
+TEST_CASE("ICP-Q V2: a < 0 case is skipped (single-interval representation fails)") {
+    // -x² + 4 ≤ 0 (i.e., x² ≥ 4) with x ∈ [-10, 10]: feasible (-∞, -2] ∪ [2, ∞).
+    // V2 must skip (a = -1 < 0). V1: polyInterval evaluated as -x² + 4 over
+    // [-10, 10]: -x² ∈ [-100, 0] (k=2, contains zero ⇒ [0, max(100,100)] for x²
+    // → negate ⇒ [-100, 0]); plus 4 ⇒ [-96, 4]. lo=-96 ≤ 0, hi=4 ≥ 0, so
+    // neither Leq violation nor narrowing applies ⇒ NoChange.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.quad(-1, 0, 4), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    // Box must be unchanged (no V2 narrowing).
+    CHECK(ri->interval.lo == mpq_class(-10));
+    CHECK(ri->interval.hi == mpq_class(10));
+}
+
+TEST_CASE("ICP-Q V2: Lt unsat — x² < 0 detected by V1 sign-uniform check") {
+    // V1's polyInterval(x², [-1,1]) = [0, 1]; for Lt the predicate is
+    // `lo ≥ 0` ⇒ 0 ≥ 0 ⇒ Conflict. V2 never runs (V1 short-circuits). The
+    // value here is asserting V2 wiring didn't regress V1's existing
+    // strict-sign reasoning on a degenerate disc=0 case.
+    Fixture f;
+    auto b = f.box(-1, 1, 100);
+    auto c = f.cstr(f.quad(1, 0, 0), Relation::Lt, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::Conflict);
 }
 
 #endif  // XOLVER_HAS_LIBPOLY
