@@ -2130,11 +2130,36 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
         if (normalizedOpt) {
             nNonlinearNormalized = static_cast<int>(normalizedOpt->size());
             // Tangent the cuts at the CURRENT (possibly perturbed) model point.
-            // When the sibling has no model yet, fall back to the bound-free
-            // linearizer (nonneg + abstraction).
+            // When the sibling has no model yet, fall back to the sign-bounded
+            // linearizer (positivity assertions derive one-sided bounds → Family
+            // 0 sign-only cuts fire) instead of the empty-bound path which
+            // emitted ZERO sign cuts for sign-pinned mgc-class formulas.
+            std::unordered_map<std::string, int> signMap;
+            for (const auto& c : presolveConstraints_) {
+                if (c.poly == NullPoly) continue;
+                if (c.rel != Relation::Lt && c.rel != Relation::Leq &&
+                    c.rel != Relation::Gt && c.rel != Relation::Geq) continue;
+                auto termsOpt = kernel_->terms(c.poly);
+                if (!termsOpt || termsOpt->size() != 1) continue;
+                const auto& t = (*termsOpt)[0];
+                if (t.powers.size() != 1 || t.powers[0].second != 1) continue;
+                std::string vn = std::string(kernel_->varName(t.powers[0].first));
+                int sign = 0;
+                if (c.rel == Relation::Lt && t.coefficient < 0) sign = 1;
+                else if (c.rel == Relation::Leq && t.coefficient < 0) sign = 1;
+                else if (c.rel == Relation::Gt && t.coefficient > 0) sign = 1;
+                else if (c.rel == Relation::Geq && t.coefficient > 0) sign = 1;
+                else if (c.rel == Relation::Lt && t.coefficient > 0) sign = -1;
+                else if (c.rel == Relation::Leq && t.coefficient > 0) sign = -1;
+                else if (c.rel == Relation::Gt && t.coefficient < 0) sign = -1;
+                else if (c.rel == Relation::Geq && t.coefficient < 0) sign = -1;
+                if (sign != 0) signMap[vn] = sign;
+            }
             auto lr = modelFilled
                 ? linAdapter_->runLinearizerAtModel(*normalizedOpt, linModel, lemmaDb)
-                : linAdapter_->runLinearizer(*normalizedOpt, lemmaDb);
+                : (signMap.empty()
+                    ? linAdapter_->runLinearizer(*normalizedOpt, lemmaDb)
+                    : linAdapter_->runLinearizerWithSignBounds(*normalizedOpt, signMap, lemmaDb));
             if (lr.status == LinearizationStatus::Lemma) {
                 for (auto& item : lr.lemmas) {
                     if (!lemmaDb.contains(item.lemma)) {

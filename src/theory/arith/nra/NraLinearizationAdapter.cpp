@@ -51,6 +51,45 @@ LinearizationResult NraLinearizationAdapter::runLinearizer(
     return linearizer_.run(nonlinearConstraints, emptyBounds, TheoryId::NRA);
 }
 
+LinearizationResult NraLinearizationAdapter::runLinearizerWithSignBounds(
+    const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
+    const std::unordered_map<std::string, int>& signMap,
+    TheoryLemmaStorage& /*lemmaDb*/) {
+
+    // SignBoundStore: derive sign-only one-sided bounds from positivity
+    // assertions. `var > 0` → lower=0 with lowerStrict=true, no upper.
+    // `var < 0` → upper=0 with upperStrict=true, no lower.
+    // BoundInfo::isStrictPositive() now returns true even for lower=0 with
+    // lowerStrict=true (added in earlier commits), which unblocks Family 0
+    // sign-only cuts in MonomialBound/McCormick — without these bounds the
+    // EmptyBoundStore path produced ZERO sign cuts for mgc-class formulas.
+    struct SignBoundStore : public BoundStore {
+        const std::unordered_map<std::string, int>& m;
+        explicit SignBoundStore(const std::unordered_map<std::string, int>& mm) : m(mm) {}
+        std::optional<BoundInfo> get(const std::string& v) const override {
+            auto it = m.find(v);
+            if (it == m.end()) return std::nullopt;
+            BoundInfo bi;
+            if (it->second > 0) {
+                bi.hasLower = true;
+                bi.lower = mpq_class(0);
+                bi.lowerStrict = true;
+                bi.lowerIsGlobal = true;
+            } else if (it->second < 0) {
+                bi.hasUpper = true;
+                bi.upper = mpq_class(0);
+                bi.upperStrict = true;
+                bi.upperIsGlobal = true;
+            } else {
+                return std::nullopt;
+            }
+            return bi;
+        }
+    };
+    SignBoundStore store(signMap);
+    return linearizer_.run(nonlinearConstraints, store, TheoryId::NRA);
+}
+
 LinearizationResult NraLinearizationAdapter::runLinearizerAtModel(
     const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
     const std::unordered_map<std::string, mpq_class>& model,
