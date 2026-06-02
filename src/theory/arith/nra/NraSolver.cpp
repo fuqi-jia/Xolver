@@ -176,6 +176,11 @@ void NraSolver::onReset() {
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // Phase 4: reset perturbation tracker; new search restart, fresh stuck-state.
+    lastLinFp_ = mpq_class(-1);
+    linStuckRounds_ = 0;
+    linLastNewCuts_ = -1;
+    linPerturbSeed_ = 0;
     // Phase NRA-LS-A: per-solve LS state — one-shot gate + statistics.
     lsAttempted_ = false;
     lsTotalMs_ = 0;
@@ -381,7 +386,12 @@ void NraSolver::onBacktrack(int level) {
         satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     }
     engine_.backtrack(level);
-    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
+    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // Phase 4: reset perturbation tracker; new search restart, fresh stuck-state.
+    lastLinFp_ = mpq_class(-1);
+    linStuckRounds_ = 0;
+    linLastNewCuts_ = -1;
+    linPerturbSeed_ = 0;
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
@@ -1722,17 +1732,97 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
         activeNonlinear.push_back({pc.poly, pc.rel, pc.reason});
     }
 
+    // Phase 4 (XOLVER_NRA_NLEXT_TANGENT_PERTURB): detect stuck-model. The
+    // refinement loop is "stuck" when (a) the candidate-model fingerprint is
+    // unchanged from the previous round AND (b) the previous round produced
+    // zero NEW cuts (every cut was already in the cache). In that situation
+    // every additional refinement at the same tangent point will keep hitting
+    // the cache, and we converge to no progress. Perturbing the tangent point
+    // breaks the loop by introducing fresh cuts at NEW points; convex tangent
+    // is sound at any point, so this is safe.
+    static const bool perturbEnabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB");
+        return e && (e[0]=='1'||e[0]=='t'||e[0]=='T'||e[0]=='y'||e[0]=='Y');
+    }();
+    // Cap perturbations per solve. Each perturbation injects fresh
+    // tangent cuts that may extend the refinement loop without
+    // converging; cap at a small number so we eventually fall through
+    // to CDCAC rather than spinning. nra_150 regression analysis:
+    // unbounded perturbation extended LIN refinement past its natural
+    // termination on a SAT case, never reaching validator.
+    static const int kPerturbCap = [] {
+        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP")) {
+            int v = std::atoi(c);
+            if (v >= 0) return v;
+        }
+        return 4;
+    }();
+    // Only activate perturbation AFTER the natural refinement loop has
+    // had time to converge on its own. Earlier-round stuck states usually
+    // resolve once McCormick/SquareCut emits its second-round refinement;
+    // perturbation early disturbs SAT cases that would have validated in
+    // a few more rounds (nra_150_sat regression analysis).
+    static const int kPerturbMinRound = [] {
+        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND")) {
+            int v = std::atoi(c);
+            if (v >= 0) return v;
+        }
+        return 30;  // half of default kRefineCap=60
+    }();
+    bool isStuck = perturbEnabled && modelFilled &&
+                   linRefineRound_ >= kPerturbMinRound &&
+                   fp == lastLinFp_ && linLastNewCuts_ == 0 &&
+                   static_cast<int>(linPerturbSeed_) < kPerturbCap;
+    if (isStuck) {
+        ++linStuckRounds_;
+    } else {
+        linStuckRounds_ = 0;
+    }
+    lastLinFp_ = fp;
+
+    // Build the model passed to the linearizer. When stuck, perturb ONE
+    // variable per round (round-robin via linPerturbSeed_) to a "diverse
+    // seed" value. The pool of seed offsets is small and bounded:
+    //   +1, -1, 0, +2, -2, model + small step, model - small step
+    std::unordered_map<std::string, mpq_class> linModel = model;
+    if (isStuck && !linModel.empty()) {
+        std::vector<std::string> baseVars;
+        baseVars.reserve(linModel.size());
+        for (const auto& [name, _] : linModel)
+            if (name.rfind("__nl_aux_", 0) != 0) baseVars.push_back(name);
+        if (!baseVars.empty()) {
+            std::sort(baseVars.begin(), baseVars.end()); // deterministic order
+            uint32_t vIdx = linPerturbSeed_ % baseVars.size();
+            uint32_t offIdx = (linPerturbSeed_ / baseVars.size()) % 7;
+            const std::string& vn = baseVars[vIdx];
+            const mpq_class& cur = linModel.at(vn);
+            mpq_class perturbed;
+            switch (offIdx) {
+                case 0: perturbed = cur + 1; break;
+                case 1: perturbed = cur - 1; break;
+                case 2: perturbed = mpq_class(0); break;
+                case 3: perturbed = cur + 2; break;
+                case 4: perturbed = cur - 2; break;
+                case 5: perturbed = cur + mpq_class(1, 2); break;   // +1/2
+                case 6: perturbed = cur - mpq_class(1, 2); break;
+                default: perturbed = cur;
+            }
+            linModel[vn] = perturbed;
+            ++linPerturbSeed_;
+        }
+    }
+
     int nNonlinearNormalized = 0;
     if (!activeNonlinear.empty()) {
         NiaNormalizer normalizer(*kernel_);
         auto normalizedOpt = normalizer.normalize(activeNonlinear);
         if (normalizedOpt) {
             nNonlinearNormalized = static_cast<int>(normalizedOpt->size());
-            // Tangent the cuts at the CURRENT model point so they refine around
-            // the candidate (model-construction). When the sibling has no model
-            // yet, fall back to the bound-free linearizer (nonneg + abstraction).
+            // Tangent the cuts at the CURRENT (possibly perturbed) model point.
+            // When the sibling has no model yet, fall back to the bound-free
+            // linearizer (nonneg + abstraction).
             auto lr = modelFilled
-                ? linAdapter_->runLinearizerAtModel(*normalizedOpt, model, lemmaDb)
+                ? linAdapter_->runLinearizerAtModel(*normalizedOpt, linModel, lemmaDb)
                 : linAdapter_->runLinearizer(*normalizedOpt, lemmaDb);
             if (lr.status == LinearizationStatus::Lemma) {
                 for (auto& item : lr.lemmas) {
@@ -1747,6 +1837,7 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
     }
 
     int nNewCuts = static_cast<int>(newLemmas.size());
+    linLastNewCuts_ = nNewCuts;  // Phase 4: feed into next-round stuck detection.
 
     // --- Step 4: loop control. -----------------------------------------------
     if (nNewCuts > 0 && linRefineRound_ < kRefineCap) {

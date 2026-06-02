@@ -183,6 +183,19 @@ private:
     // (reset on backtrack/reset so each search restarts the budget).
     TheorySolver* linearSibling_ = nullptr;
     int linRefineRound_ = 0;
+    // Phase 4 (XOLVER_NRA_NLEXT_TANGENT_PERTURB): tangent-point refinement.
+    // When the LRA-sibling candidate model doesn't change across consecutive
+    // refinement rounds AND no new cuts were produced last round, we say the
+    // linearization is "stuck": every tangent-cut emitted lies right at the
+    // current model point, so the LRA simplex keeps returning the same
+    // assignment. Phase 4 detects this via a cheap fingerprint and injects a
+    // perturbed model on the next call so the linearizer emits a fresh
+    // tangent at a different point. Each perturbed cut is independently sound
+    // (convex tangent is a global lower bound).
+    mpq_class lastLinFp_ = mpq_class(-1);
+    int linStuckRounds_ = 0;
+    int linLastNewCuts_ = -1;
+    uint32_t linPerturbSeed_ = 0;
 
     struct InterfaceEq {
         SharedTermId a;
