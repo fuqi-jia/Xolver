@@ -103,6 +103,24 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_BOUND_TRACK"); e && *e && *e != '0') {
         boundTrack_ = true;
     }
+    // LS-SMART-Z6 (master 2026-06-02): tunable restart/flip budgets for
+    // the production walkSatTwoLevel loop. Explicit numeric overrides
+    // win; the convenience knob XOLVER_NIA_LS_LONG (when neither numeric
+    // override is set) bumps to a z3pp-ballpark long-search profile
+    // (~2M flips total). Defaults preserve historical 20 × 800 = 16K.
+    bool restartsSet = false, maxFlipsSet = false;
+    if (const char* e = std::getenv("XOLVER_NIA_LS_RESTARTS")) {
+        long v = std::atol(e);
+        if (v > 0 && v < 100000) { restartsBudget_ = (int)v; restartsSet = true; }
+    }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_MAX_FLIPS")) {
+        long v = std::atol(e);
+        if (v > 0 && v < 10000000) { maxFlipsBudget_ = (int)v; maxFlipsSet = true; }
+    }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_LONG"); e && *e && *e != '0') {
+        if (!restartsSet) restartsBudget_ = 80;
+        if (!maxFlipsSet) maxFlipsBudget_ = 25000;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -718,8 +736,10 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
         return atomDistance(constraints[i].rel, *valOpt);
     };
 
-    const int RESTARTS = 20;
-    const int MAX_FLIPS = 800;          // L1 raises max-flips to amortise PAWS
+    // LS-SMART-Z6: read tunable restart/flip budgets (see header). Defaults
+    // 20 × 800 preserve historical behavior; long-search server runs widen.
+    const int RESTARTS = restartsBudget_;
+    const int MAX_FLIPS = maxFlipsBudget_;
     const int PLATEAU_K = 20;           // PAWS bump every K flips w/o improve
     const int NOISE = 3;                // out of 10
     const mpz_class STEP_CAP = mpz_class(1) << 24;  // cap accelerated step

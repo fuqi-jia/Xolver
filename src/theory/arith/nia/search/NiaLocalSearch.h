@@ -305,6 +305,17 @@ private:
     bool atomLocalAccept_ = false;
     bool boundTrack_ = false;
     bool failed_ = false;
+    // LS-SMART-Z6 (master 2026-06-02). Restart/flip budgets for the
+    // production walkSatTwoLevel path. Defaults preserve historical
+    // behavior (20 × 800 = 16K total flips). z3pp's NIA-LS targets
+    // far larger budgets (~500K flips per restart); server batch runs
+    // can dial up via XOLVER_NIA_LS_RESTARTS / XOLVER_NIA_LS_MAX_FLIPS,
+    // or via the convenience knob XOLVER_NIA_LS_LONG which sets both
+    // to a z3pp-ballpark profile. Candidate-only (top-level validator
+    // gates SAT), so larger budgets are SOUND — they only buy more
+    // search effort, never a wrong verdict.
+    int restartsBudget_ = 20;
+    int maxFlipsBudget_ = 800;
     std::unordered_map<std::string, mpz_class> minSeen_;
     std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;
