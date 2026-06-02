@@ -30,6 +30,16 @@ std::optional<NonlinearTermKey> NonlinearTermAbstraction::detectNonlinearTerm(
         return key;
     }
 
+    // Power: x^N for N >= 3 (single variable). Routes to PowerCutGenerator
+    // for proper convex-envelope cuts instead of the HigherMixed sign-only
+    // fallback. Phase 1 of incremental-linearization upgrade.
+    if (powers.size() == 1 && powers[0].second >= 3) {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::Power;
+        key.powers = powers;
+        return key;
+    }
+
     // Linear or constant: not nonlinear
     if (powers.empty() ||
         (powers.size() == 1 && powers[0].second == 1)) {

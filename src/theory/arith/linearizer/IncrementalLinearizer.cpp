@@ -225,6 +225,55 @@ LinearizationResult IncrementalLinearizer::run(
                     }
                     ++idx;
                 }
+            } else if (aux.key.kind == NonlinearKind::Power && aux.key.powers.size() == 1) {
+                // Phase 1: x^N with N >= 3. Convex-envelope cuts via
+                // PowerCutGenerator. Gated by XOLVER_NRA_NLEXT_POWER
+                // (default OFF until paired-validated).
+                static const bool powEnabled = []() {
+                    const char* e = std::getenv("XOLVER_NRA_NLEXT_POWER");
+                    return e && *e && *e != '0';
+                }();
+                if (!powEnabled) continue;
+                VarId xVid = aux.key.powers[0].first;
+                int exponent = aux.key.powers[0].second;
+                std::string x = std::string(kernel_.varName(xVid));
+                auto xBounds = bounds.get(x);
+                std::optional<mpq_class> modelX;
+                if (modelPoints) {
+                    auto it = modelPoints->find(x);
+                    if (it != modelPoints->end()) modelX = it->second;
+                }
+                auto pwCuts = pwGen_.generate(
+                    aux, x, exponent,
+                    xBounds ? *xBounds : BoundInfo{},
+                    c.reason, modelX,
+                    config.emitSquareNonneg,
+                    config.emitSquareSecant,
+                    config.emitSquareTangent,
+                    sort);
+                int idx = 0;
+                for (auto& cut : pwCuts) {
+                    if (static_cast<size_t>(idx) >= config.maxCutsPerTerm) break;
+                    std::vector<mpq_class> boundVals;
+                    if (xBounds && xBounds->hasFiniteCompleteBounds()) {
+                        boundVals = {xBounds->lower, xBounds->upper,
+                                     mpq_class(exponent),
+                                     modelX ? *modelX : (xBounds->lower + xBounds->upper) / 2};
+                    }
+                    if (cache_.hasEmitted(aux.key, c.reason, boundVals, idx)) {
+                        ++idx; continue;
+                    }
+                    SatLit cutLit = LinearConstraintNormalizer::registerLinearConstraint(
+                        *registry_, cut.constraint, linearTheory);
+                    if (cutLit.var != 0) {
+                        auto lemma = buildCutLemma(c.reason, cut.reasons, cutLit);
+                        CutCacheKey ck{aux.key, c.reason, boundVals, idx};
+                        result.lemmas.push_back({std::move(lemma), ck});
+                        result.status = LinearizationStatus::Lemma;
+                        if (result.lemmas.size() >= config.maxLemmas) return result;
+                    }
+                    ++idx;
+                }
             } else if (aux.key.kind == NonlinearKind::HigherMixed) {
                 // MGC-RD Phase 2A: sign-based lemma for high-degree mixed
                 // monomials (x^3, x*y*z, theta*vv1*vv3^2, etc.). Walk each
