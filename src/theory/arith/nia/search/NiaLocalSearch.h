@@ -248,6 +248,14 @@ public:
     // explored box. Sound (read-only observation; verdict unchanged).
     // Default-OFF (XOLVER_NIA_LS_BOUND_TRACK).
     void setBoundTrack(bool e) { boundTrack_ = e; }
+    // LS-SMART-Z6/Z8/Z9/Z10 (master 2026-06-02). Direct setters for
+    // the new tunables so unit tests and frontend wiring can set them
+    // without env-var games. Mirrors the existing set* convention.
+    void setRestartsBudget(int n) { if (n > 0) restartsBudget_ = n; }
+    void setMaxFlipsBudget(int n) { if (n > 0) maxFlipsBudget_ = n; }
+    void setRwHub(bool e) { rwHub_ = e; }
+    void setRwLadder(bool e) { rwLadder_ = e; }
+    void setAdaptivePlateau(bool e) { adaptivePlateau_ = e; }
     // Return (min, max) of values cur[v] reached during recent LS
     // calls. If v wasn't tracked, returns std::nullopt.
     std::optional<std::pair<mpz_class, mpz_class>>
