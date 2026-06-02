@@ -152,6 +152,29 @@ ContractorResultQ RelationContractorQ::contract(ReasonedBoxQ& box) {
         }
     }
 
+    // V5d — Cauchy bound on real roots for dense mixed-degree univariate.
+    // Fires only when V2/V3a/V3b declined. Loose but sound.
+    auto cauchyOpt = tryNarrowCauchyBracket(coeffs, constraint_.rel, xInterval);
+    if (cauchyOpt) {
+        const IntervalQ& newI = *cauchyOpt;
+        if (newI.isEmpty()) {
+            return ContractorResultQ{
+                IcpStatus::Conflict,
+                TheoryConflict{reasons},
+                {}
+            };
+        }
+        if (newI.lo != xInterval.lo || newI.hi != xInterval.hi) {
+            box.narrow(var, newI, reasons);
+            BoundUpdateQ update{var, newI, reasons};
+            return ContractorResultQ{
+                IcpStatus::DomainUpdate,
+                std::nullopt,
+                {update}
+            };
+        }
+    }
+
     return ContractorResultQ{IcpStatus::NoChange, std::nullopt, {}};
 }
 
@@ -449,6 +472,81 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
         }
         case Relation::Neq:
             return std::nullopt;
+        default:
+            return std::nullopt;
+    }
+}
+
+std::optional<IntervalQ> RelationContractorQ::tryNarrowCauchyBracket(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const {
+    // Scope: dense univariate where V2 (deg-2) and V3 (sparse monomial)
+    // can't help. Need degree ≥ 2 AND at least 3 non-zero coefficients
+    // (V3a/V3b cover sparse shapes with ≤ 2 non-zero).
+    if (coeffs.size() < 3) return std::nullopt;
+    if (coeffs[0] == 0) return std::nullopt;
+
+    int nonZero = 0;
+    for (const auto& c : coeffs) {
+        if (c != 0) ++nonZero;
+    }
+    if (nonZero < 3) return std::nullopt;
+
+    // |a_d|, then max_{i < d} |a_i| / |a_d|.
+    mpz_class an = coeffs[0];
+    if (an < 0) an = -an;
+
+    mpq_class maxRatio(0);
+    for (size_t i = 1; i < coeffs.size(); ++i) {
+        mpz_class ai = coeffs[i];
+        if (ai < 0) ai = -ai;
+        mpq_class ratio(ai, an);
+        ratio.canonicalize();
+        if (ratio > maxRatio) maxRatio = ratio;
+    }
+    mpq_class M = mpq_class(1) + maxRatio;
+    mpq_class negM(-M);  // materialize
+
+    // Normalize a > 0 by flipping rel when negating.
+    bool aPositive = (coeffs[0] > 0);
+    Relation r = aPositive ? rel : flipSign(rel);
+
+    size_t d = coeffs.size() - 1;
+    bool dEven = (d % 2 == 0);
+
+    const IntervalQ kEmpty{mpq_class(1), mpq_class(0)};
+
+    auto intersect = [&](const mpq_class& lo, const mpq_class& hi) -> IntervalQ {
+        mpq_class newLo = std::max(xBox.lo, lo);
+        mpq_class newHi = std::min(xBox.hi, hi);
+        if (newLo > newHi) return kEmpty;
+        return IntervalQ{newLo, newHi};
+    };
+
+    switch (r) {
+        case Relation::Eq:
+            // Roots ⊂ [-M, M].
+            return intersect(negM, M);
+        case Relation::Leq:
+        case Relation::Lt:
+            if (dEven) {
+                // a > 0 even-d: feasible ⊂ root span ⊂ [-M, M].
+                return intersect(negM, M);
+            } else {
+                // a > 0 odd-d: feasible extends to -∞; only upper bound informative.
+                return intersect(xBox.lo, M);
+            }
+        case Relation::Geq:
+        case Relation::Gt:
+            if (dEven) {
+                // a > 0 even-d Geq: feasible is "outside the roots" — a union
+                // of two unbounded sets ⇒ skip (not a single interval).
+                return std::nullopt;
+            } else {
+                // a > 0 odd-d Geq: feasible extends to +∞; only lower bound informative.
+                return intersect(negM, xBox.hi);
+            }
+        case Relation::Neq:
         default:
             return std::nullopt;
     }

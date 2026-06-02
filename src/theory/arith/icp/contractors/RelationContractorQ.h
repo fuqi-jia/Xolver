@@ -79,6 +79,21 @@ private:
     std::optional<IntervalQ> tryNarrowMonomialPlusConst(
         const std::vector<mpz_class>& coeffs, Relation rel,
         const IntervalQ& xBox) const;
+
+    // V5d: Cauchy bound on real roots for mixed-degree univariate. Fires
+    // when V2/V3a/V3b decline but the polynomial has ≥ 3 non-zero
+    // coefficients (the "dense" case, e.g. x³ + x + 5 or x⁴ + x² − 1).
+    //
+    // Cauchy's bound: all real roots satisfy |x| ≤ M where
+    //     M = 1 + max_{i < d} (|a_i| / |a_d|).
+    // For Eq, bracket [-M, M] over-approximates the root set. For Leq
+    // (a > 0): even-d → bracket [-M, M] (parabola dips ⇒ feasible ⊂
+    // root span); odd-d → upper bound x ≤ M only (p → -∞ on left).
+    // Geq symmetric. Sound but loose — meant as a final fallback when
+    // tighter helpers don't apply.
+    std::optional<IntervalQ> tryNarrowCauchyBracket(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const;
 };
 
 } // namespace xolver
