@@ -504,8 +504,12 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
 std::optional<IntervalQ> RelationContractorQ::tryNarrowSparseMonomialPair(
         const std::vector<mpz_class>& coeffs, Relation rel,
         const IntervalQ& xBox) const {
-    // Eq only — Leq/Geq case-split is complex and V5d's Cauchy covers them.
-    if (rel != Relation::Eq) return std::nullopt;
+    // Shape: a·x^d + b·x^(d-p) rel 0  (constant = 0, exactly one
+    // intermediate non-zero). Factor x^(d-p) · (a·x^p + b).
+    // Eq: bracket via {0} ∪ roots-of-second-factor (tight).
+    // Leq/Gt/Geq/Lt: parity case-split on k = d - p (the common-factor
+    // exponent). Tighter than V5d Cauchy for these specific shapes.
+    if (rel == Relation::Neq) return std::nullopt;
     if (coeffs.size() < 3) return std::nullopt;  // need degree ≥ 2
     if (coeffs[0] == 0) return std::nullopt;
     // Constant must be zero (V3b handles non-zero constant case tighter).
@@ -522,30 +526,43 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowSparseMonomialPair(
     }
     if (interIdx < 0) return std::nullopt;  // V3a's territory (pure monomial)
 
-    // Factor: a·x^d + b·x^(d-p) = x^(d-p) · (a·x^p + b), where p = interIdx
-    // (the degree of the intermediate's x-power as referenced from x^(d-p)).
-    // Wait — coeffs[interIdx] is the coeff of x^(d - interIdx). For the
-    // factoring, the second factor is a·x^(interIdx) + b... let me redo:
-    //
-    //   coeffs[0]   ↔ a · x^d
-    //   coeffs[k]   ↔ b · x^(d-k)     where k = interIdx
-    //   coeffs[end] ↔ 0               (we required this above)
-    //
-    // So poly = a·x^d + b·x^(d-k) = x^(d-k) · (a·x^k + b).
-    // → common factor x^(d-k); reduced polynomial in x has degree k = interIdx.
+    // Factor: a·x^d + b·x^(d-p) = x^(d-p) · (a·x^p + b).
+    //   coeffs[0]    ↔ a · x^d
+    //   coeffs[idx]  ↔ b · x^(d-idx)     where idx = interIdx
+    //   coeffs[end]  ↔ 0                 (required above)
+    // So the common factor is x^(d-idx) and the second factor is a·x^idx + b
+    // (degree idx). Below, p = degree of second factor; k = exponent of
+    // common factor = d - p.
     unsigned p = static_cast<unsigned>(interIdx);
+    unsigned d = static_cast<unsigned>(coeffs.size() - 1);
+    unsigned k = d - p;
 
-    const mpz_class& a = coeffs[0];
-    const mpz_class& b = coeffs[interIdx];
+    // Sign-normalize: if a < 0, flip the relation and negate (a, b).
+    // (Eq is sign-invariant; we just normalize T calculation.)
+    mpz_class aNorm = coeffs[0];
+    mpz_class bNorm = coeffs[interIdx];
+    Relation rNorm = rel;
+    if (aNorm < 0) {
+        aNorm = -aNorm;
+        bNorm = -bNorm;
+        // flipSign on the relation (Eq passes through).
+        switch (rNorm) {
+            case Relation::Leq: rNorm = Relation::Geq; break;
+            case Relation::Geq: rNorm = Relation::Leq; break;
+            case Relation::Lt:  rNorm = Relation::Gt;  break;
+            case Relation::Gt:  rNorm = Relation::Lt;  break;
+            default: break;
+        }
+    }
 
-    // T = -b/a as a rational; mpq_class requires positive denominator.
-    mpq_class T = (a > 0) ? mpq_class(-b, a) : mpq_class(b, -a);
+    // T = -bNorm/aNorm with aNorm > 0.
+    mpq_class T = mpq_class(-bNorm, aNorm);
     T.canonicalize();
 
     const mpq_class kZero(0);
     const IntervalQ kEmpty{mpq_class(1), mpq_class(0)};
 
-    // Outward d-th root helpers (handle T < 0 via floor/ceil flip).
+    // Outward p-th root helpers (handle T < 0 via floor/ceil flip).
     auto rootCeil = [p](const mpq_class& t) -> mpq_class {
         if (t >= 0) return mpqRootCeil(t, p);
         return -mpqRootFloor(-t, p);
@@ -555,34 +572,127 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowSparseMonomialPair(
         return -mpqRootCeil(-t, p);
     };
 
-    // Always include 0 in the bracket (root of the x^(d-p) factor).
-    mpq_class loBracket = kZero;
-    mpq_class hiBracket = kZero;
-
     bool pEven = (p % 2 == 0);
-    if (pEven) {
-        if (T > 0) {
-            // Two real roots: ±T^(1/p). Outward: ±rtCeil.
-            mpq_class rtCeil = mpqRootCeil(T, p);
-            mpq_class negRtCeil(-rtCeil);
-            if (negRtCeil < loBracket) loBracket = negRtCeil;
-            if (rtCeil > hiBracket) hiBracket = rtCeil;
+    bool kEven = (k % 2 == 0);
+
+    auto intersect = [&](const mpq_class& lo, const mpq_class& hi) -> IntervalQ {
+        mpq_class newLo = std::max(xBox.lo, lo);
+        mpq_class newHi = std::min(xBox.hi, hi);
+        if (newLo > newHi) return kEmpty;
+        return IntervalQ{newLo, newHi};
+    };
+
+    // --- Eq branch ---------------------------------------------------------
+    if (rNorm == Relation::Eq) {
+        // Bracket starts at {0} (root from common factor x^k).
+        mpq_class loBracket = kZero;
+        mpq_class hiBracket = kZero;
+        if (pEven) {
+            if (T > 0) {
+                mpq_class rtCeil = mpqRootCeil(T, p);
+                mpq_class negRtCeil(-rtCeil);
+                if (negRtCeil < loBracket) loBracket = negRtCeil;
+                if (rtCeil > hiBracket) hiBracket = rtCeil;
+            }
+            // T == 0: x = 0 already in bracket.
+            // T < 0: no real roots from second factor.
+        } else {
+            // p odd: single real root.
+            mpq_class rtLo = rootFloor(T);
+            mpq_class rtHi = rootCeil(T);
+            if (rtLo < loBracket) loBracket = rtLo;
+            if (rtHi > hiBracket) hiBracket = rtHi;
         }
-        // T = 0: x^p = 0 ⇒ x = 0, already in bracket.
-        // T < 0: no real roots from second factor; bracket stays at {0}.
-    } else {
-        // p odd: single real root x = T^(1/p) (sign follows T).
-        mpq_class rtLo = rootFloor(T);  // outward LOW
-        mpq_class rtHi = rootCeil(T);   // outward HIGH
-        if (rtLo < loBracket) loBracket = rtLo;
-        if (rtHi > hiBracket) hiBracket = rtHi;
+        return intersect(loBracket, hiBracket);
     }
 
-    // Intersect with xBox.
-    mpq_class newLo = std::max(xBox.lo, loBracket);
-    mpq_class newHi = std::min(xBox.hi, hiBracket);
-    if (newLo > newHi) return kEmpty;
-    return IntervalQ{newLo, newHi};
+    // --- Leq/Lt branch (a > 0 normalized) ---------------------------------
+    // Bracket of {x : x^k · g(x) ≤ 0} where g(x) = a·x^p + b. Strict Lt
+    // uses the same closed over-approximation (sound — never drops a
+    // strict solution).
+    if (rNorm == Relation::Leq || rNorm == Relation::Lt) {
+        if (kEven) {
+            // x^k ≥ 0. Product ≤ 0 iff x = 0 OR g(x) ≤ 0.
+            if (pEven) {
+                if (T < 0) {
+                    // g > 0 everywhere ⇒ only x = 0 satisfies.
+                    return intersect(kZero, kZero);
+                }
+                // T ≥ 0: bracket [-rt, rt] (contains 0).
+                mpq_class rtCeil = mpqRootCeil(T, p);
+                mpq_class negRtCeil(-rtCeil);
+                return intersect(negRtCeil, rtCeil);
+            }
+            // p odd: g ≤ 0 iff x ≤ rt. Union with {0}.
+            mpq_class rtHi = rootCeil(T);
+            // Over-approx: upper bound is max(rt, 0); lower is unbounded.
+            mpq_class upper = (rtHi > kZero) ? rtHi : kZero;
+            return intersect(xBox.lo, upper);
+        }
+        // k odd: product = x^k · g. Sign of x^k tracks sign of x.
+        if (pEven) {
+            if (T < 0) {
+                // g > 0 always. Need x^k · g ≤ 0 ⇒ x^k ≤ 0 ⇒ x ≤ 0.
+                return intersect(xBox.lo, kZero);
+            }
+            // T ≥ 0: g ≤ 0 in [-rt, rt]. Over-approx union: (-∞, rt].
+            mpq_class rtCeil = mpqRootCeil(T, p);
+            return intersect(xBox.lo, rtCeil);
+        }
+        // k odd, p odd: g ≤ 0 iff x ≤ rt; G+ = (0, rt] if rt > 0 else ∅;
+        //               G- = [rt, 0) if rt < 0 else ∅. Plus {0}.
+        if (T > 0) {
+            // rt > 0. Bracket [0, rt].
+            mpq_class rtCeil = mpqRootCeil(T, p);
+            return intersect(kZero, rtCeil);
+        }
+        if (T < 0) {
+            // rt < 0. Bracket [rt, 0].
+            mpq_class rtLo = rootFloor(T);
+            return intersect(rtLo, kZero);
+        }
+        // T == 0: bracket {0}.
+        return intersect(kZero, kZero);
+    }
+
+    // --- Geq/Gt branch (a > 0 normalized) ---------------------------------
+    // Bracket of {x : x^k · g(x) ≥ 0}. Many sub-cases produce no narrowing
+    // (union covering all of ℝ); we return nullopt for those so V5d's
+    // Cauchy fallback can try.
+    if (rNorm == Relation::Geq || rNorm == Relation::Gt) {
+        if (kEven) {
+            if (pEven) {
+                // T < 0: g > 0 always ⇒ all of ℝ. No narrowing.
+                // T ≥ 0: union of unbounded regions + {0}. No narrowing.
+                return std::nullopt;
+            }
+            // p odd: g ≥ 0 iff x ≥ rt. Bracket = {0} ∪ [rt, ∞).
+            if (T >= 0) {
+                // rt ≥ 0. Union {0} ∪ [rt, ∞) — over-approx [0, ∞).
+                return intersect(kZero, xBox.hi);
+            }
+            // T < 0: rt < 0. Union {0} ∪ [rt, ∞) = [rt, ∞).
+            mpq_class rtLo = rootFloor(T);
+            return intersect(rtLo, xBox.hi);
+        }
+        // k odd. x^k · g ≥ 0 iff (x > 0 ∧ g ≥ 0) ∨ (x < 0 ∧ g ≤ 0) ∨ x = 0.
+        if (pEven) {
+            if (T < 0) {
+                // g > 0 always. G+ = (0, ∞), G- = ∅. Bracket [0, ∞).
+                return intersect(kZero, xBox.hi);
+            }
+            // T ≥ 0: G+ = [rt, ∞); G- = [-rt, 0). Bracket [-rt, ∞).
+            mpq_class rtCeil = mpqRootCeil(T, p);
+            mpq_class negRtCeil(-rtCeil);
+            return intersect(negRtCeil, xBox.hi);
+        }
+        // k odd, p odd: G+ = (0, ∞) ∩ [rt, ∞); G- = (-∞, 0) ∩ (-∞, rt].
+        // All three cases (T >0, =0, <0) collapse to no useful narrowing
+        // (the union always spans both sides of zero).
+        return std::nullopt;
+    }
+
+    return std::nullopt;
 }
 
 std::optional<IntervalQ> RelationContractorQ::tryNarrowCauchyBracket(
