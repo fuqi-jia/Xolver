@@ -343,7 +343,7 @@ private:
     EufTermId internEufExpr(ExprId eid);
 
     // Constant arithmetic evaluation for #builtin terms
-    void tryEvaluateBuiltin(EufTermId t);
+    void tryEvaluateBuiltin(EufTermId t, int level);
 
     // QF_AX array support (layered on the shared egraph).
     bool arrayMode_ = false;

@@ -28,21 +28,22 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     // current trail). Verified: unit 1098/1098, regression 670/670, 0 unsound.
     // Escape: XOLVER_EUF_PROP=0.
     //
-    // XOLVER_UF_DISEQ_WATCH stays default-OFF (2026-06-02 findings): when
-    // enabled, the watch-based disequality conflict detector produces a wrong
-    // UNSAT on QF_UFLIA/mathsat/Wisa/xs-10-08-2-2-4-5.smt2 (expected SAT, got
-    // UNSAT) — a soundness regression worse than the validator-based floor it
-    // would otherwise replace. Until the DISEQ_WATCH explanation chain is
-    // audited (the conflict reason set likely under-includes a merge-step
-    // antecedent, so the learned clause forbids a model that is actually a
-    // valid sat), the floor remains the gate. Escape: XOLVER_UF_DISEQ_WATCH=1
-    // for opt-in (caller accepts the soundness risk).
+    // 2026-06-02 PROMOTE XOLVER_UF_DISEQ_WATCH default-ON after the UFE專項
+    // root-cause fix landed (BuiltinEval PendingMerge level tagging — earlier
+    // commit). The wrong-UNSAT bug class (xs-10-08 + 4 Wisa siblings) was
+    // caused by tryEvaluateBuiltin pushing PendingMerge with default level=0,
+    // which left BuiltinEval-folded merges surviving every backtrack and
+    // producing stale Congruence edges in the proof forest. Post-fix:
+    //   ProofForest invariant checker reports 0 stale edges on xs-10-08.
+    //   Wisa(30) DISEQ_WATCH=1: correct=6 unsound=0 (vs pre-fix unsound=4).
+    //   unit 1098/1098, reg 670/670 default AND with DISEQ_WATCH=1.
+    // Escape: XOLVER_UF_DISEQ_WATCH=0.
     auto envOnDefault = [](const char* name, bool def) {
         const char* e = std::getenv(name);
         if (!e) return def;
         return !(e[0] == '0' && e[1] == '\0');
     };
-    diseqWatchEnabled_ = envOnDefault("XOLVER_UF_DISEQ_WATCH", false);
+    diseqWatchEnabled_ = envOnDefault("XOLVER_UF_DISEQ_WATCH", true);
     eufPropEnabled_ = envOnDefault("XOLVER_EUF_PROP", true);
     // Default-ON (2026-06-02 DEEP-3): Track-3 UF function-interp collection.
     // Required by the QF_UFLIA combination soundness floor (COMB_VALIDATE_SAT)
@@ -502,19 +503,42 @@ bool EufSolver::checkProofForestInvariants(const char* where) const {
                 for (const auto& [a, b] : r.argPairs) {
                     if (!egraph_.same(a, b)) {
                         if (diag) {
+                            // Dump the actual EUF term structure for a and b
+                            // to expose interning subtlety (e.g. distinct
+                            // EufTermIds for the same logical bridge).
+                            auto dumpTerm = [&](EufTermId tid) {
+                                if (tid >= termManager_.termCount()) { std::fprintf(stderr, "<oob>"); return; }
+                                const auto& nd = termManager_.node(tid);
+                                std::fprintf(stderr, "%s",
+                                    termManager_.symbolName(nd.symbol).c_str());
+                                if (!nd.args.empty()) {
+                                    std::fprintf(stderr, "(");
+                                    for (size_t i = 0; i < nd.args.size(); ++i) {
+                                        if (i) std::fprintf(stderr, ",");
+                                        std::fprintf(stderr, "%u", nd.args[i]);
+                                    }
+                                    std::fprintf(stderr, ")");
+                                }
+                            };
                             std::fprintf(stderr,
                                 "[PF-INV][%s] STALE Congruence edge t=%u -> %u "
                                 "label_idx=%zu argPair (%u,%u) NOT same-class "
                                 "(mergeRecordCount=%zu curLevel=%d)\n",
                                 where, t, p, lid, a, b, egraph_.mergeRecordCount(),
                                 currentLevel_);
-                            for (size_t mi = 0; mi < egraph_.mergeRecordCount(); ++mi) {
-                                const auto& mr = egraph_.mergeRecord(mi);
-                                if ((mr.lhs == t && mr.rhs == p) ||
-                                    (mr.lhs == p && mr.rhs == t)) {
-                                    std::fprintf(stderr,
-                                        "  candidate mergeRecord[%zu]: kind=%d level=%d merged=%d\n",
-                                        mi, (int)mr.reason.kind, mr.level, mr.merged?1:0);
+                            std::fprintf(stderr, "  a=%u: ", a); dumpTerm(a);
+                            std::fprintf(stderr, "  rep(a)=%u\n", egraph_.rep(a));
+                            std::fprintf(stderr, "  b=%u: ", b); dumpTerm(b);
+                            std::fprintf(stderr, "  rep(b)=%u\n", egraph_.rep(b));
+                            // Also dump b's children (likely Add args) to see
+                            // if any of them are constants / folded.
+                            if (b < termManager_.termCount()) {
+                                const auto& nd = termManager_.node(b);
+                                for (size_t ci = 0; ci < nd.args.size(); ++ci) {
+                                    EufTermId arg = nd.args[ci];
+                                    std::fprintf(stderr, "    b.arg[%zu]=%u: ", ci, arg);
+                                    dumpTerm(arg);
+                                    std::fprintf(stderr, "  rep=%u\n", egraph_.rep(arg));
                                 }
                             }
                         }
@@ -1326,7 +1350,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             std::sort(toEval.begin(), toEval.end());
             toEval.erase(std::unique(toEval.begin(), toEval.end()), toEval.end());
             for (EufTermId p : toEval) {
-                tryEvaluateBuiltin(p);
+                tryEvaluateBuiltin(p, L);
             }
         }
 
@@ -2089,7 +2113,7 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
     }
 }
 
-void EufSolver::tryEvaluateBuiltin(EufTermId t) {
+void EufSolver::tryEvaluateBuiltin(EufTermId t, int level) {
     if (!coreIr_) return;
     const auto& node = termManager_.node(t);
     if (node.args.empty()) return;
@@ -2191,7 +2215,16 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
         // makes the BuiltinEval merge's explanation complete (reaches the base
         // literals that fixed the args to constants).
         mr.argPairs = std::move(argConstPairs);
-        mergeQueue_.push_back({t, constTerm, mr});
+        // 2026-06-02 ROOT-CAUSE FIX for the UFE wrong-UNSAT class: tag the
+        // PendingMerge with the CURRENT processing level — the BuiltinEval
+        // fold is caused by a merge at `level`, so the resulting fold (and
+        // any downstream congruences it triggers) must inherit `level` so
+        // they get rolled back together. Pre-fix this push had the default
+        // 0, which left BuiltinEval merges tagged level 0 and surviving any
+        // backtrack — the source of stale Congruence edges on Wisa xs-10-08.
+        PendingMerge pm{t, constTerm, mr};
+        pm.level = level;
+        mergeQueue_.push_back(pm);
     }
 }
 
