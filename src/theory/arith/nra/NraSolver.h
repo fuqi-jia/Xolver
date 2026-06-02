@@ -275,6 +275,8 @@ private:
     // on reset/onReset (no need for trail rollback — once split, the SAT
     // layer carries the disjunction).
     mutable std::unordered_set<VarId> signSplitDone_;
+    // XOLVER_NRA_INT_PROBE — value-split hint dedup (one emission per var).
+    mutable std::unordered_set<VarId> intProbeValueSplitDone_;
 
     // NRA-MGC-PROFILE: env-gated per-stage timing accounting (XOLVER_NRA_STAGE_TIMING).
     mutable std::unordered_map<std::string, uint64_t> stageTimingUs_;

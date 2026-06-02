@@ -188,6 +188,7 @@ void NraSolver::onReset() {
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
     signSplitDone_.clear();   // XOLVER_NRA_SIGN_SPLIT: fresh per solve
+    intProbeValueSplitDone_.clear();  // XOLVER_NRA_INT_PROBE: fresh per solve
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
@@ -1155,9 +1156,8 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
         return std::nullopt;
     if (presolveConstraints_.empty()) return std::nullopt;
 
-    static thread_local bool intProbeAttempted = false;
-    if (intProbeAttempted) return std::nullopt;
-    intProbeAttempted = true;
+    // No one-shot lock: each round the probe re-attempts; the value-split
+    // hint dedup is per-var in intProbeValueSplitDone_ (cleared on reset).
 
     bool diagOn = (std::getenv("XOLVER_NRA_INT_PROBE_DIAG") != nullptr);
     std::ofstream st;
@@ -1179,7 +1179,60 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
 
     auto modelOpt = StructuralIntegerProbe::tryProbe(cons, *kernel_);
     if (!modelOpt) {
-        if (diagOn) { st << "[INT-PROBE] no model found\n"; st.flush(); }
+        if (diagOn) { st << "[INT-PROBE] no model found; trying value-split hint\n"; st.flush(); }
+        // Hint path: even when full enum doesn't validate a model, the
+        // structural variable (highest exponent) and small-integer candidate
+        // are likely SAT decisions. Emit a tautological 3-way value-split
+        // lemma `(< v c) | (= v c) | (> v c)` so SAT branches on the
+        // hypothesis the way nlsat's decision heuristic does. This is the
+        // same pattern as stageNraSignSplit — biasing the SAT decision tree
+        // without committing to the guess.
+        if (registry_) {
+            // Pick highest-exponent variable that hasn't been hinted yet.
+            std::unordered_map<VarId, int> maxExp;
+            for (const auto& c : presolveConstraints_) {
+                if (c.poly == NullPoly) continue;
+                auto termsOpt = kernel_->terms(c.poly);
+                if (!termsOpt) continue;
+                for (const auto& term : *termsOpt) {
+                    for (const auto& [vid, exp] : term.powers) {
+                        if (exp > maxExp[vid]) maxExp[vid] = exp;
+                    }
+                }
+            }
+            VarId pick = NullVar;
+            int bestExp = 1;
+            for (const auto& [v, e] : maxExp) {
+                if (e <= bestExp) continue;
+                if (intProbeValueSplitDone_.count(v)) continue;
+                pick = v; bestExp = e;
+            }
+            if (pick != NullVar) {
+                // Try candidate value c = 2 first (matches z3 nlsat's
+                // preference on this benchmark family for high-exp vars).
+                static const mpq_class kHintValue(2);
+                PolyId vPoly = kernel_->mkVar(pick);
+                SatLit ltL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Lt, kHintValue, TheoryId::LRA);
+                SatLit eqL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Eq, kHintValue, TheoryId::LRA);
+                SatLit gtL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Gt, kHintValue, TheoryId::LRA);
+                if (ltL.var != 0 && eqL.var != 0 && gtL.var != 0) {
+                    TheoryLemma hint{{eqL, ltL, gtL}};
+                    intProbeValueSplitDone_.insert(pick);
+                    if (diagOn) {
+                        st << "[INT-PROBE] HINT emitted: ("
+                           << kernel_->varName(pick)
+                           << " = " << kHintValue.get_str()
+                           << ") | (< " << kHintValue.get_str()
+                           << ") | (> " << kHintValue.get_str() << ")\n";
+                        st.flush();
+                    }
+                    return TheoryCheckResult::mkLemma(std::move(hint));
+                }
+            }
+        }
         return std::nullopt;
     }
 
