@@ -194,37 +194,48 @@ bool RelationContractorQ::isDefinitelyViolated(const IntervalQ& polyInterval, Re
 
 std::optional<IntervalQ> RelationContractorQ::tryNarrowDeg2(
         const std::vector<mpz_class>& coeffs, Relation rel) const {
-    // V2 scope: only Leq and Lt give a single-interval feasible set when a > 0.
-    if (rel != Relation::Leq && rel != Relation::Lt) {
+    // V2 scope: Leq/Lt (single closed interval when a > 0) and Eq (closed
+    // bracket containing the two roots). Eq is sign-invariant so we can
+    // normalize a > 0 by negating all coefficients.
+    if (rel != Relation::Leq && rel != Relation::Lt && rel != Relation::Eq) {
         return std::nullopt;
     }
     if (coeffs.size() != 3) {
         return std::nullopt;
     }
 
-    const mpz_class& a = coeffs[0];
-    const mpz_class& b = coeffs[1];
-    const mpz_class& c = coeffs[2];
+    mpz_class a = coeffs[0];
+    mpz_class b = coeffs[1];
+    mpz_class c = coeffs[2];
 
-    // With a ≤ 0 the feasible set isn't a single closed interval (a < 0 ⇒
-    // parabola opens down, Leq gives a union of unbounded sets; a == 0 means
-    // the degree-2 invariant was broken — defensive bail).
-    if (a <= 0) {
+    if (a == 0) {
+        // Defensive: degree-2 invariant was broken.
         return std::nullopt;
+    }
+
+    if (a < 0) {
+        // Leq/Lt with a < 0 is a union of unbounded sets — skip.
+        // Eq is sign-invariant: negate all coefficients to renormalize a > 0.
+        if (rel != Relation::Eq) return std::nullopt;
+        a = -a;
+        b = -b;
+        c = -c;
     }
 
     // disc = b² − 4ac (integer arithmetic).
     mpz_class disc = b * b - 4 * a * c;
 
     if (disc < 0) {
-        // No real roots, parabola entirely above 0 ⇒ Leq/Lt impossible.
+        // No real roots, parabola entirely above 0 ⇒ Leq/Lt/Eq impossible.
         // Signal via an empty interval; caller converts to Conflict.
         return IntervalQ{mpq_class(1), mpq_class(0)};
     }
 
     // Outward sqrt: sqrtDisc ≥ √disc. With 2a > 0 the order is preserved
     // when we divide, so r1Lo ≤ true_r1 and r2Hi ≥ true_r2 — the returned
-    // interval is a superset of the true feasible set [r1, r2].
+    // interval is a superset of the true feasible set:
+    //   Leq/Lt: [r1, r2] (parabola dips below 0 between the roots)
+    //   Eq:     {r1, r2} ⊂ [r1, r2] (closed bracket over-approx)
     mpq_class sqrtDisc = mpqSqrtCeil(mpq_class(disc));
 
     mpq_class twoA(2 * a);
@@ -389,7 +400,11 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
         // T ≥ 0 — bidirectional bound via T^(1/d).
         switch (r) {
             case Relation::Leq:
-            case Relation::Lt: {
+            case Relation::Lt:
+            case Relation::Eq: {
+                // Leq/Lt: x^d ≤ T ⇔ x ∈ [-T^(1/d), T^(1/d)].
+                // Eq:     x^d = T ⇒ x ∈ {-T^(1/d), T^(1/d)}, over-approxed by
+                //         the same closed bracket.
                 mpq_class rt = rootCeil(T);  // upper bound rounded UP
                 mpq_class negRt(-rt);        // materialize the expression
                 mpq_class lo = std::max(xBox.lo, negRt);
@@ -400,9 +415,6 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
             case Relation::Geq:
             case Relation::Gt:
                 // |x| ≥ T^(1/d) is a union of two unbounded sets ⇒ skip.
-                return std::nullopt;
-            case Relation::Eq:
-                // {-T^(1/d), +T^(1/d)} ⇒ not a single interval ⇒ skip.
                 return std::nullopt;
             case Relation::Neq:
                 return std::nullopt;

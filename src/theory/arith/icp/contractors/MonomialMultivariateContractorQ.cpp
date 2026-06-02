@@ -225,26 +225,52 @@ ContractorResultQ MonomialMultivariateContractorQ::contract(ReasonedBoxQ& box) {
 
     // c_eff selection — Leq/Lt project against the loosest possible rhs (so
     // the bound on a·x^d is `≤ -gBox.lo`), Geq/Gt against the tightest. Eq
-    // is bidirectional and deferred (the bound on a·x^d becomes an
-    // interval, which our applyMonomialBound doesn't yet handle).
-    mpq_class cEff;
+    // is bidirectional: a·x^d + g = 0 ⇒ a·x^d ∈ [-gBox.hi, -gBox.lo], which
+    // we realize as two independent single-sided projections (Leq w/
+    // cEff=gBox.lo AND Geq w/ cEff=gBox.hi) intersected with xBox. Either
+    // projection may decline (nullopt) — for even-d Geq the lower side is
+    // always a union and adds nothing, for example — and we still use the
+    // other side when at least one fires.
+    std::optional<IntervalQ> newIOpt;
     switch (constraint_.rel) {
         case Relation::Leq:
         case Relation::Lt:
-            cEff = gBox.lo;
+            newIOpt = applyMonomialBound(liveA_, liveD_, gBox.lo,
+                                          constraint_.rel, xInterval);
             break;
         case Relation::Geq:
         case Relation::Gt:
-            cEff = gBox.hi;
+            newIOpt = applyMonomialBound(liveA_, liveD_, gBox.hi,
+                                          constraint_.rel, xInterval);
             break;
-        case Relation::Eq:
+        case Relation::Eq: {
+            auto upper = applyMonomialBound(liveA_, liveD_, gBox.lo,
+                                             Relation::Leq, xInterval);
+            auto lower = applyMonomialBound(liveA_, liveD_, gBox.hi,
+                                             Relation::Geq, xInterval);
+            if (!upper && !lower) break;  // newIOpt stays nullopt
+            IntervalQ cand = xInterval;
+            bool empty = false;
+            auto fold = [&](const std::optional<IntervalQ>& side) {
+                if (!side) return;
+                if (side->isEmpty()) { empty = true; return; }
+                cand.lo = std::max(cand.lo, side->lo);
+                cand.hi = std::min(cand.hi, side->hi);
+            };
+            fold(upper);
+            if (!empty) fold(lower);
+            if (empty || cand.lo > cand.hi) {
+                newIOpt = IntervalQ{mpq_class(1), mpq_class(0)};
+            } else {
+                newIOpt = cand;
+            }
+            break;
+        }
         case Relation::Neq:
         default:
             return ContractorResultQ{IcpStatus::NoChange, std::nullopt, {}};
     }
 
-    auto newIOpt = applyMonomialBound(liveA_, liveD_, cEff,
-                                       constraint_.rel, xInterval);
     if (!newIOpt) {
         return ContractorResultQ{IcpStatus::NoChange, std::nullopt, {}};
     }
