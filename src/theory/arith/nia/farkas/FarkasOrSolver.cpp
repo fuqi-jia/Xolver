@@ -302,4 +302,139 @@ FarkasOrSolver::solveCsp(const SupportTable& table,
     return result;
 }
 
+std::vector<FarkasOrAssignment>
+FarkasOrSolver::enumerateCsp(const SupportTable& table,
+                             const FarkasProfile& profile,
+                             std::size_t maxResults) const
+{
+    std::vector<FarkasOrAssignment> out;
+    if (table.rows.empty()) return out;
+
+    CspState init;
+    for (const auto& [v, dom] : table.initialBDomain) init.bDom[v] = dom;
+    for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
+        std::vector<int> branchIdx;
+        for (std::size_t k = 0; k < profile.blocks[j].branches.size(); ++k) {
+            branchIdx.push_back((int)k);
+        }
+        init.choiceDom[(int)j] = std::move(branchIdx);
+    }
+    for (const auto& v : table.ctVars) {
+        init.ctDom[v] = {mpq_class(0), mpq_class(0)};
+        init.ctFinite[v] = {false, false};
+    }
+
+    auto forwardCheck = [&](CspState& s) -> bool {
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (auto& [blockIdx, branches] : s.choiceDom) {
+                std::vector<int> surviving;
+                for (int k : branches) {
+                    auto it = table.byBlockBranch.find({blockIdx, k});
+                    if (it == table.byBlockBranch.end()) continue;
+                    bool anySupport = false;
+                    for (std::size_t rowIdx : it->second) {
+                        const SupportRow& row = table.rows[rowIdx];
+                        if (rowSurvivesBDom(row, s) && rowCtCompatible(row, s)) {
+                            anySupport = true;
+                            break;
+                        }
+                    }
+                    if (anySupport) surviving.push_back(k);
+                }
+                if (surviving.size() != branches.size()) {
+                    branches = std::move(surviving);
+                    changed = true;
+                }
+                if (branches.empty()) return false;
+            }
+        }
+        return true;
+    };
+
+    std::function<void(CspState&)> rec;
+    rec = [&](CspState& s) {
+        if (out.size() >= maxResults) return;
+        if (!forwardCheck(s)) return;
+
+        int pickBlock = -1;
+        std::size_t bestSize = SIZE_MAX;
+        for (const auto& [j, doms] : s.choiceDom) {
+            if (doms.size() == 1) continue;
+            if (doms.size() < bestSize) { pickBlock = j; bestSize = doms.size(); }
+        }
+        if (pickBlock == -1) {
+            std::string pickVar;
+            std::size_t bestB = SIZE_MAX;
+            for (const auto& [v, dom] : s.bDom) {
+                if (dom.size() == 1) continue;
+                if (dom.size() < bestB) { pickVar = v; bestB = dom.size(); }
+            }
+            if (pickVar.empty()) {
+                // Emit.
+                FarkasOrAssignment a;
+                for (const auto& [v, dom] : s.bDom) a.B[v] = dom.front();
+                for (const auto& [j, doms] : s.choiceDom) a.choice[j] = doms.front();
+                CspState s2 = s;
+                bool failed = false;
+                for (const auto& [j, k] : a.choice) {
+                    auto it = table.byBlockBranch.find({j, k});
+                    if (it == table.byBlockBranch.end()) { failed = true; break; }
+                    bool matched = false;
+                    for (std::size_t rowIdx : it->second) {
+                        const SupportRow& row = table.rows[rowIdx];
+                        bool eq = true;
+                        for (const auto& [v, val] : row.bTuple) {
+                            if (a.B[v] != val) { eq = false; break; }
+                        }
+                        if (eq) {
+                            a.rayPerBlock[j] = row.candidate.lambdaRay;
+                            a.lambdaNamesPerBlock[j] = row.candidate.lambdaNames;
+                            for (const auto& bd : row.candidate.ctBounds) {
+                                if (!bd.hasInterval) continue;
+                                auto fit = s2.ctFinite.find(bd.ctVar);
+                                std::pair<mpq_class, mpq_class> rowI{bd.ctLo, bd.ctHi};
+                                std::pair<bool, bool> rowF{bd.ctLoFinite, bd.ctHiFinite};
+                                if (!intersectInterval(s2.ctDom[bd.ctVar], fit->second,
+                                                       rowI, rowF)) {
+                                    failed = true;
+                                    break;
+                                }
+                            }
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched || failed) { failed = true; break; }
+                }
+                if (!failed) {
+                    a.ctInterval = s2.ctDom;
+                    a.ctFinite = s2.ctFinite;
+                    out.push_back(std::move(a));
+                }
+                return;
+            }
+            auto values = s.bDom[pickVar];
+            for (const auto& w : values) {
+                if (out.size() >= maxResults) return;
+                CspState child = s;
+                child.bDom[pickVar] = {w};
+                rec(child);
+            }
+            return;
+        }
+        auto branches = s.choiceDom[pickBlock];
+        for (int k : branches) {
+            if (out.size() >= maxResults) return;
+            CspState child = s;
+            child.choiceDom[pickBlock] = {k};
+            rec(child);
+        }
+    };
+    CspState s = init;
+    rec(s);
+    return out;
+}
+
 } // namespace xolver::farkas

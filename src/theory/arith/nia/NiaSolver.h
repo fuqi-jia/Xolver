@@ -265,6 +265,11 @@ private:
     // against the ORIGINAL constraints. Default-OFF XOLVER_NIA_HYB_LS_BB,
     // Full-effort only.
     std::optional<TheoryCheckResult> stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort);
+    // Farkas-Or model constructor stage (user 2026-06-02). For
+    // disjunctive Farkas-certificate-synthesis problems (VeryMax/Stroeder).
+    // Default-OFF XOLVER_NIA_FARKAS_OR. Returns SAT only after validating
+    // against the original CoreIr formula; never UNSAT.
+    std::optional<TheoryCheckResult> stageFarkasOr(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
     // When stageLocalSearch's cost==0 gate fails, LS may still have visited a

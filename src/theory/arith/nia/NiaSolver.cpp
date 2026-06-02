@@ -19,6 +19,8 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "proof/ArithModelValidator.h"
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
+#include "theory/arith/nia/farkas/FarkasOrSolver.h"
+#include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
 #include <iostream>
 
 namespace xolver {
@@ -202,6 +204,14 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // didn't find SAT. Pins U vars at LS-midpoint, leaves B vars free
     // for BB. Full-effort only; gated default-OFF XOLVER_NIA_HYB_LS_BB.
     addFull("nia.hyb-ls-bb", &NiaSolver::stageHybridLsBb);
+    // Farkas-Or model constructor (user 2026-06-02). For disjunctive
+    // Farkas-certificate-synthesis problems (VeryMax/Stroeder), build
+    // a structural CSP over (B, choice, CT), search via GAC backtrack,
+    // assemble candidate model, validate against original CoreIr via
+    // ArithModelValidator. Returns SAT on validation pass; never UNSAT.
+    // Standard+Full so it can fire BEFORE the expensive LS / BB stages
+    // that the SAT-layer's theory checks usually exhaust. Default-OFF.
+    add("nia.farkas-or", &NiaSolver::stageFarkasOr);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
@@ -1669,6 +1679,74 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&,
             return TheoryCheckResult::consistent();
         }
     }
+    return std::nullopt;
+}
+
+// Farkas-Or Phase 4: NiaSolver stage that runs the full
+// detector → CSP → assembler → ArithModelValidator pipeline.
+//
+// Soundness: every SAT verdict here is gated by ArithModelValidator
+// against the ORIGINAL coreIr_ assertions. Never returns UNSAT —
+// failed CSP / failed validation falls through to the rest of the
+// pipeline.
+//
+// Default-OFF behind XOLVER_NIA_FARKAS_OR. Full-effort only.
+std::optional<TheoryCheckResult>
+NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_FARKAS_OR");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (coreIr_ == nullptr) return std::nullopt;
+
+    // Run the structural detector. Cheap; bails immediately if no blocks.
+    farkas::FarkasOrDetector det(*coreIr_);
+    auto profile = det.detect();
+    if (!profile.good()) return std::nullopt;
+
+    // Build support table; bail if too large for the P2a prototype (P2b
+    // production lane will handle larger instances via lazy GAC).
+    farkas::FarkasOrSolver solver(*coreIr_);
+    auto table = solver.buildTable(profile);
+    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    auto traceWrite = [&](const std::string& s) {
+        if (!trace) return;
+        FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
+        if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
+    };
+    traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
+               + " feasibleTotal=" + std::to_string(table.feasibleTotal)
+               + " rows=" + std::to_string(table.rows.size()));
+    if (table.rows.empty()) {
+        traceWrite("  → empty table; bail");
+        return std::nullopt;
+    }
+
+    // Enumerate up to N candidate CSP assignments; iterate validator.
+    auto assignments = solver.enumerateCsp(table, profile, /*maxResults=*/64);
+    if (assignments.empty()) {
+        traceWrite("  → no CSP assignments; bail");
+        return std::nullopt;
+    }
+    traceWrite("  → CSP enumerated " + std::to_string(assignments.size()) + " candidates");
+    farkas::FarkasOrModelAssembler assembler(*coreIr_);
+    for (const auto& assignment : assignments) {
+        auto candidate = assembler.assemble(profile, assignment);
+        if (!candidate) continue;
+        ArithModelValidator::NumAssignment num;
+        num.reserve(candidate->size());
+        for (const auto& [v, val] : *candidate) num.emplace(v, mpq_class(val));
+        ArithModelValidator::BoolAssignment bools;
+        ArithModelValidator amv(*coreIr_, num, bools);
+        auto vr = amv.validate(coreIr_->assertions());
+        if (vr == ArithModelValidator::Verdict::Satisfied) {
+            traceWrite("  → validator SAT");
+            currentModel_ = std::move(*candidate);
+            return TheoryCheckResult::consistent();
+        }
+    }
+    traceWrite("  → no candidate validated");
     return std::nullopt;
 }
 

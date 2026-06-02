@@ -88,6 +88,14 @@ public:
     std::optional<FarkasOrAssignment>
     solveCsp(const SupportTable& table, const FarkasProfile& profile) const;
 
+    // Enumerate up to `maxResults` satisfying assignments. Useful for
+    // Phase 4 which validates each candidate against the original CoreIr;
+    // the FIRST CSP-consistent assignment may still violate residual
+    // outer assertions, so the caller iterates.
+    std::vector<FarkasOrAssignment>
+    enumerateCsp(const SupportTable& table, const FarkasProfile& profile,
+                 std::size_t maxResults = 100) const;
+
     // Intersect [lo1, hi1] with [lo2, hi2] (any side may be infinite).
     // Public so the anonymous-namespace helpers in the .cpp can call it.
     static bool intersectInterval(
