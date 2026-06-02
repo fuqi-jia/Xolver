@@ -61,6 +61,11 @@ public:
     size_t mergeRecordCount() const { return mergeRecords_.size(); }
     const MergeRecord& mergeRecord(size_t i) const { return mergeRecords_[i]; }
 
+    // Read-only access to the proof forest for invariant audit (UFE soundness
+    // gate). Used by EufSolver::checkProofForestInvariants to walk every
+    // reachable edge and verify its reason is consistent with the current trail.
+    const ProofForest& proofForest() const { return proofForest_; }
+
     // Register signatures for all terms that have been interned but not yet
     // registered.  Discovered congruences are pushed into outQueue.
     void registerPendingSignatures(std::deque<PendingMerge>& outQueue);

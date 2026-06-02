@@ -424,12 +424,114 @@ void EufSolver::rebuildDiseqIndex() {
 }
 
 TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
+    checkProofForestInvariants("buildDiseqConflict-enter");
     auto er = egraph_.explainEquality(d.lhs, d.rhs);
     std::vector<SatLit> reasons = er.ok ? std::move(er.reasons) : allActiveReasons();
     reasons.push_back(d.reason);
     return TheoryConflict{std::move(reasons)};
 }
 
+bool EufSolver::checkProofForestInvariants(const char* where) const {
+    const bool diag = std::getenv("XOLVER_DIAG_PF_INV") != nullptr;
+    const bool doAssert = std::getenv("XOLVER_ASSERT_PF_INV") != nullptr;
+    if (!diag && !doAssert) return true;
+
+    // "Currently asserted literal" must be sourced from BOTH:
+    //   - trail_: assertLit-driven assertions (theory atoms decided by SAT)
+    //   - mergeRecords_: combination interface (dis)equality reasons (assert
+    //     InterfaceEquality/Disequality bypasses trail_ entirely and stores
+    //     the reason in the merge record's MergeReason).
+    // Without including mergeRecords_, every interface-eq edge in proof forest
+    // would be falsely flagged "stale" since its reason literal isn't in
+    // trail_. The pair (trail_ + mergeRecord reasons) is the complete set of
+    // literals EUF observed as asserted.
+    auto litKey = [](SatLit l) {
+        return (static_cast<uint64_t>(l.var) << 1) | (l.sign ? 1u : 0u);
+    };
+    std::unordered_set<uint64_t> trailLits;
+    for (const auto& e : trail_) trailLits.insert(litKey(e.lit));
+    for (size_t i = 0; i < egraph_.mergeRecordCount(); ++i) {
+        const auto& mr = egraph_.mergeRecord(i);
+        if (mr.reason.kind == MergeReasonKind::AssertedEquality &&
+            mr.reason.lit.var != 0) {
+            trailLits.insert(litKey(mr.reason.lit));
+        }
+    }
+    for (const auto& d : sharedDisequalities_) trailLits.insert(litKey(d.reason));
+    for (const auto& d : disequalities_)       trailLits.insert(litKey(d.reason));
+
+    const ProofForest& pf = egraph_.proofForest();
+    const size_t n = pf.nodeCount();
+    int violations = 0;
+
+    for (EufTermId t = 0; t < static_cast<EufTermId>(n); ++t) {
+        EufTermId p = pf.parentOf(t);
+        if (p == t) continue;  // root has no outgoing edge
+        size_t lid = pf.labelIdxOf(t);
+        const MergeReason& r = pf.edgeReason(lid);
+        switch (r.kind) {
+            case MergeReasonKind::AssertedEquality: {
+                if (!trailLits.count(litKey(r.lit))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] STALE AssertedEquality edge t=%u -> %u "
+                            "label_idx=%zu reason=%c%d NOT on trail (level=%d)\n",
+                            where, t, p, lid,
+                            r.lit.sign ? '+' : '-', r.lit.var, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                // Polarity-opposite literal present on trail = catastrophic.
+                SatLit opp{r.lit.var, !r.lit.sign};
+                if (trailLits.count(litKey(opp))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] POLARITY-CONFLICT edge t=%u -> %u "
+                            "label has %c%d but trail has %c%d (level=%d)\n",
+                            where, t, p, r.lit.sign ? '+' : '-', r.lit.var,
+                            opp.sign ? '+' : '-', opp.var, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                break;
+            }
+            case MergeReasonKind::Congruence: {
+                // Each argPair must currently be same-class in the egraph.
+                for (const auto& [a, b] : r.argPairs) {
+                    if (!egraph_.same(a, b)) {
+                        if (diag) {
+                            std::fprintf(stderr,
+                                "[PF-INV][%s] STALE Congruence edge t=%u -> %u "
+                                "label_idx=%zu argPair (%u,%u) NOT same-class "
+                                "(mergeRecordCount=%zu)\n",
+                                where, t, p, lid, a, b, egraph_.mergeRecordCount());
+                        }
+                        ++violations;
+                        if (doAssert) std::abort();
+                        break;
+                    }
+                }
+                break;
+            }
+            case MergeReasonKind::BuiltinEval:
+            case MergeReasonKind::ArrayRow1:
+            case MergeReasonKind::ArrayConst:
+            case MergeReasonKind::ArrayRow2:
+                // Tautological theory axiom merges contribute no literal; their
+                // soundness depends on the axiom holding unconditionally (true
+                // for Row1/Row2/Const) or on argPairs (BuiltinEval — verified
+                // recursively by the explainEquality walk, not here).
+                break;
+        }
+    }
+    if (diag && violations > 0) {
+        std::fprintf(stderr, "[PF-INV][%s] TOTAL VIOLATIONS=%d (nodes=%zu)\n",
+                     where, violations, n);
+    }
+    return violations == 0;
+}
 
 int EufSolver::debugCountStaleMerges() const {
     std::unordered_set<uint64_t> asserted;
@@ -871,6 +973,7 @@ void EufSolver::backtrackToLevel(int target) {
 
     pendingConflict_.reset();
     pendingUnknown_ = false;
+    checkProofForestInvariants("backtrackToLevel-exit");
 }
 
 void EufSolver::initializeBoolConstants() {
@@ -1216,6 +1319,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                     const ActiveDisequality& d =
                         (which == 0) ? disequalities_[idx] : sharedDisequalities_[idx];
                     if (egraph_.same(d.lhs, d.rhs)) {
+                        checkProofForestInvariants("DISEQ_WATCH-fire");
                         pendingConflict_ = buildDiseqConflict(d);
                         return TheoryCheckResult::mkConflict(*pendingConflict_);
                     }
