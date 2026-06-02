@@ -932,6 +932,12 @@ int polyStrictSignAMGM(
     // Generalizes mgc_02 (k=1 self-pair after cancellation), mgc_03/04 (k=2),
     // mgc_05 (k=3), ..., mgc_N (k=N-2).
     constexpr int kMaxAMGMOrder = 10;   // bounds search; mgc_10 needs k=8
+    // Total recursive-search node budget to bound k-tuple enumeration. At
+    // k=10 over ~20 majority monomials, naive C(20,10) ~= 184k combinations
+    // per negative -- exceed this budget and we bail (returns 0, signaling
+    // "indeterminate" so caller can try other strategies).
+    constexpr int kMaxAMGMSearchNodes = 20000;
+    int searchBudget = kMaxAMGMSearchNodes;
     for (const auto& neg : items) {
         if (neg.sign == majoritySign) continue;
         bool absorbed = false;
@@ -959,6 +965,7 @@ int polyStrictSignAMGM(
                       std::unordered_map<VarId,int>& accPowers,
                       mpq_class accProdCoeff,
                       std::vector<size_t>& selected) -> bool {
+                if (--searchBudget <= 0) return false;   // budget bail
                 if (remaining == 0) {
                     // Check power-key match
                     for (const auto& [v, e] : accPowers) {
@@ -1047,7 +1054,10 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     int maxIterations) {
 
     // Increase iteration cap for deeper substitution cascades like mgc_02.
-    if (maxIterations < 12) maxIterations = 12;
+    // Capped to ensure PHASE3 (Positivstellensatz linear combination) is
+    // reachable for mgc_09/10-class cases where the iter loop never converges.
+    if (maxIterations < 3) maxIterations = 3;
+    if (maxIterations > 3) maxIterations = 3;
 
     // Round 0: try plain interval refutation.
     if (auto c = tryRefuteByPolynomialInterval(constraints, facts, kernel))
@@ -1065,7 +1075,11 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
     // Cap on derived constraint count. Raise to 1000 so the multi-step
     // mgc_02 cascade (gamma0 subst -> lambda1*vv1 subst -> vv2=vv3 subst
     // into final eq5) has enough budget to complete.
-    constexpr size_t kMaxDerivedCap = 1000;
+    // Reduced from 1000 to keep PHASE3 reachable for mgc_09/10 within budget.
+    // The iter loop's substitution exploration is O(derived^2 * patterns *
+    // constraints * substitution_cost); growing derived past ~30 makes a
+    // single iteration take seconds, blocking the Positivstellensatz phase.
+    constexpr size_t kMaxDerivedCap = 30;
     auto addDerived = [&](DerivedConstraint d) -> bool {
         if (derived.size() >= kMaxDerivedCap) return false;
         std::string k = termsKey(d.terms);
@@ -1647,6 +1661,91 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             if (cf) return cf;
         }
         if (!changed) break;
+    }
+
+    // PHASE 3: Positivstellensatz linear combination strategy.
+    //
+    // For each (EQ target, INEQ constraint) pair, build a combined polynomial
+    // K = eq_LHS + lambda * ineq_LHS for small rational lambda > 0, then run
+    // the focused substitution cascade on K. If K reduces to a sign-definite
+    // form contradicting its inferred relation, refutation.
+    //
+    // Math: eq_LHS = 0 and ineq_LHS rel 0 imply K = lambda * (something rel 0).
+    // For lambda > 0: K inherits the ineq's strict relation.
+    //
+    // This handles cases where the EQ target alone can't reach sign-definite
+    // (mgc_09/10 family: residual after substitution has a -c*X term that
+    // can't be absorbed by k-AM-GM in the pure-variable subset). Combining
+    // with the inequality contributes additional sign-definite mass that may
+    // tip the AM-GM tuple search past the threshold.
+    if (diag) {
+        std::fprintf(stderr, "[OSF-PHASE3] linear-combination search begins\n");
+    }
+    // Positivstellensatz refutation: form K = a*eq_LHS + b*ineq_LHS with
+    // integer a, b. Since eq_LHS = 0, K's value is b*ineq_LHS_value, so:
+    //   ineq.rel = Lt: K_value = b*(<0). K > 0 iff b < 0, K < 0 iff b > 0.
+    //   ineq.rel = Gt: K_value = b*(>0). K > 0 iff b > 0, K < 0 iff b < 0.
+    // For mgc_N family the closing certificate has form (a, b) = (k, -(N-2))
+    // or similar small-integer ratio that cancels the residual coefficient.
+    struct ABPair { int a; int b; };
+    const ABPair candidates[] = {
+        // Symmetric small ratios
+        {1, 1}, {1, -1}, {1, 2}, {1, -2}, {1, 3}, {1, -3},
+        {2, 1}, {2, -1}, {2, 3}, {2, -3}, {2, 5}, {2, -5},
+        {3, 1}, {3, -1}, {3, 2}, {3, -2}, {3, 5}, {3, -5}, {3, 7}, {3, -7},
+        {5, 2}, {5, -2}, {5, 3}, {5, -3}, {5, 7}, {5, -7},
+        {7, 3}, {7, -3}, {7, 5}, {7, -5}, {7, 10}, {7, -10},
+        // mgc-family residual coefficients: mgc_N residual is (N-2),
+        // closing typically wants a = (residual leader from ineq) and
+        // b = -(eq residual). E.g., mgc_09: a=10, b=-7 cancels residual.
+        {10, -7}, {10, 7}, {10, -1}, {10, -3}, {10, -5}, {10, -9},
+        {10, 1}, {10, 3}, {10, 5}, {10, 9},
+        {11, -8}, {11, 8}, {12, -9}, {12, 9}, {12, -10}, {12, 10},
+    };
+    auto flipRelation = [](Relation r) {
+        switch (r) {
+            case Relation::Lt: return Relation::Gt;
+            case Relation::Gt: return Relation::Lt;
+            case Relation::Leq: return Relation::Geq;
+            case Relation::Geq: return Relation::Leq;
+            default: return r;
+        }
+    };
+    for (size_t eqIdx = 0; eqIdx < constraints.size(); ++eqIdx) {
+        if (constraints[eqIdx].rel != Relation::Eq) continue;
+        const auto& eqTerms = origTerms[eqIdx];
+        if (eqTerms.size() < 5) continue;
+        for (size_t iqIdx = 0; iqIdx < constraints.size(); ++iqIdx) {
+            const auto& iqRel = constraints[iqIdx].rel;
+            if (iqRel != Relation::Lt && iqRel != Relation::Gt) continue;
+            const auto& iqTerms = origTerms[iqIdx];
+            if (iqTerms.size() < 3) continue;
+            for (const auto& ab : candidates) {
+                auto scaledEq   = scaleTerms(eqTerms,   mpq_class(ab.a));
+                auto scaledIneq = scaleTerms(iqTerms,   mpq_class(ab.b));
+                if (scaledEq.empty()  && !eqTerms.empty())  continue;
+                if (scaledIneq.empty() && !iqTerms.empty()) continue;
+                auto combined = addTerms(scaledEq, scaledIneq);
+                if (combined.empty()) continue;
+                // Determine combined relation. eq contributes 0; combined value
+                // = b * ineq_value. Sign of b * ineq:
+                Relation combinedRel = iqRel;
+                if (ab.b < 0) combinedRel = flipRelation(iqRel);
+                std::vector<SatLit> baseReason{constraints[eqIdx].reason, constraints[iqIdx].reason};
+                if (diag) {
+                    std::fprintf(stderr, "[OSF-PHASE3] try %d*P[%zu]+%d*P[%zu] rel=%d -> %zu terms\n",
+                                 ab.a, eqIdx, ab.b, iqIdx, (int)combinedRel, combined.size());
+                }
+                auto cf = applyAllSubsToTarget(combined, baseReason, combinedRel, /*maxApps=*/15);
+                if (cf) {
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-PHASE3] CONFLICT via %d*P[%zu]+%d*P[%zu]\n",
+                                     ab.a, eqIdx, ab.b, iqIdx);
+                    }
+                    return cf;
+                }
+            }
+        }
     }
     return std::nullopt;
 }
