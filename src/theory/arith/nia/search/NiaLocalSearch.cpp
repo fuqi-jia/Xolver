@@ -127,6 +127,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_RW_LADDER"); e && *e && *e != '0') {
         rwLadder_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_ADAPTIVE_PLATEAU"); e && *e && *e != '0') {
+        adaptivePlateau_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -746,7 +749,13 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
     // 20 × 800 preserve historical behavior; long-search server runs widen.
     const int RESTARTS = restartsBudget_;
     const int MAX_FLIPS = maxFlipsBudget_;
-    const int PLATEAU_K = 20;           // PAWS bump every K flips w/o improve
+    // LS-SMART-Z10: adaptive PLATEAU_K based on |vars|. Default 20
+    // fires PAWS too aggressively on instances with many vars; scale
+    // to max(20, |vars|/2) when enabled. Off → fixed 20 (no behavior
+    // change).
+    const int PLATEAU_K = adaptivePlateau_
+        ? std::max(20, (int)vars.size() / 2)
+        : 20;           // PAWS bump every K flips w/o improve
     const int NOISE = 3;                // out of 10
     const mpz_class STEP_CAP = mpz_class(1) << 24;  // cap accelerated step
 

@@ -331,6 +331,13 @@ private:
     // so it covers both fine and coarse escapes. Default-OFF
     // XOLVER_NIA_LS_RW_LADDER.
     bool rwLadder_ = false;
+    // LS-SMART-Z10 (master 2026-06-02). Adaptive PAWS PLATEAU_K based
+    // on |vars|. Default K=20 bumps PAWS weights every 20 flips; for
+    // instances with >40 vars this is less than a full pass over all
+    // variables, meaning PAWS adds noise before the move-search has
+    // even tried each var once. Scale K to max(20, |vars|/2). Default-
+    // OFF XOLVER_NIA_LS_ADAPTIVE_PLATEAU.
+    bool adaptivePlateau_ = false;
     std::unordered_map<std::string, mpz_class> minSeen_;
     std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;
