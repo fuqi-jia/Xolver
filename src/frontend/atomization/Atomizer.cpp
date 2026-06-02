@@ -263,6 +263,14 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
             SatVar v = freshVar();
             result = SatLit::positive(v);
             atoms_.push_back({v, eid, false, TheoryId::Bool});
+            // Expose the Bool var's SatVar to theory solvers by name
+            // (e.g. NIA Farkas-Or needs to pin boolpur_K Tseitin proxies
+            // matching its chosen Or branch so SAT-CDCL converges).
+            if (registry_) {
+                if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                    registry_->registerBoolVariable(*s, v);
+                }
+            }
             break;
         }
         case Kind::ConstBool: {

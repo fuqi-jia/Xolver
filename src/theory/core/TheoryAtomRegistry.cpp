@@ -82,6 +82,17 @@ void TheoryAtomRegistry::pinLiteral(SatVar satVar, bool value) {
     sat_->addClause({value ? SatLit::positive(satVar) : SatLit::negative(satVar)});
 }
 
+void TheoryAtomRegistry::registerBoolVariable(const std::string& name, SatVar satVar) {
+    boolVarSatVars_[name] = satVar;
+}
+
+std::optional<SatVar>
+TheoryAtomRegistry::findBoolVariableSatVar(const std::string& name) const {
+    auto it = boolVarSatVars_.find(name);
+    if (it == boolVarSatVars_.end()) return std::nullopt;
+    return it->second;
+}
+
 SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     const LinearFormKey& lhs,
     Relation rel,

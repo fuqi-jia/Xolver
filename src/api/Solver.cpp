@@ -28,6 +28,7 @@
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
 #include "frontend/atomization/Atomizer.h"
+#include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -1610,6 +1611,23 @@ public:
         // subformula (each assertion is a positive root) so the monotone
         // connectives below emit only the required half of their definition.
         phase("setup-done");
+        // Farkas-Or Phase 0 hook: dump pre-atomization structural profile
+        // to a file (env XOLVER_NIA_FARKAS_DUMP=1 enables; output goes to
+        // XOLVER_NIA_FARKAS_DUMP_FILE or /tmp/farkas_dump). Pure
+        // diagnostic — no behavioral change to the solve.
+        if (std::getenv("XOLVER_NIA_FARKAS_DUMP")) {
+            const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
+            if (!path || !*path) path = "/tmp/farkas_dump";
+            FILE* fdump = std::fopen(path, "a");
+            if (fdump) {
+                farkas::FarkasOrDetector det(*ir);
+                auto profile = det.detect();
+                std::string s = det.dump(profile);
+                std::fwrite(s.data(), 1, s.size(), fdump);
+                std::fputc('\n', fdump);
+                std::fclose(fdump);
+            }
+        }
         atomizer.computePolarities(ir->assertions(), *ir);
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
@@ -1745,17 +1763,46 @@ public:
             // one that the arithmetic evaluator confirms satisfies every
             // original assertion. This NEVER returns UNSAT/Conflict/Lemma
             // — at worst it reports `found=false` and we keep Unknown.
-            CandidateModelSearch cms(*ir, logic);
-            auto cmsResult = cms.run();
-            if (cmsResult.found) {
-                lastModel_ = cmsResult.model;
-                mergeFixedBindings();
-                ret = Result::Sat;
-            } else {
-                if (lastUnknownReason_.empty()) {
-                    lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+            //
+            // FIRST try the theory's currently held model
+            // (theoryManager.getModel()). When a theory stage like NIA
+            // Farkas-Or finds and validator-confirms a SAT model but the
+            // SAT-CDCL engine times out before its decisions trail aligns
+            // with the theory choice, the theory's currentModel_ already
+            // points at a valid witness. Validate it against the original
+            // assertions; accept on Satisfied. Sound: only ever
+            // Unknown -> Sat with a positively-validated model.
+            auto theoryCandidate = theoryManager.getModel();
+            bool theoryFlipped = false;
+            if (theoryCandidate && !theoryCandidate->assignments.empty()) {
+                auto saved = std::move(lastModel_);
+                lastModel_ = theoryCandidate;
+                if (!boolVarVals.empty()) {
+                    for (const auto& [name, val] : boolVarVals) {
+                        lastModel_->assignments.emplace(name, val);
+                    }
                 }
-                ret = Result::Unknown;
+                if (modelPositivelyValidates()) {
+                    mergeFixedBindings();
+                    ret = Result::Sat;
+                    theoryFlipped = true;
+                } else {
+                    lastModel_ = std::move(saved);
+                }
+            }
+            if (!theoryFlipped) {
+                CandidateModelSearch cms(*ir, logic);
+                auto cmsResult = cms.run();
+                if (cmsResult.found) {
+                    lastModel_ = cmsResult.model;
+                    mergeFixedBindings();
+                    ret = Result::Sat;
+                } else {
+                    if (lastUnknownReason_.empty()) {
+                        lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+                    }
+                    ret = Result::Unknown;
+                }
             }
         }
 

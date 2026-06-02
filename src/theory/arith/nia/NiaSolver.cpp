@@ -1,5 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/Reasoner.h"
+#include <random>
 #include "theory/arith/nia/search/NiaLinearizationAdapter.h"
 #include "theory/arith/nia/search/NiaIcpAdapter.h"
 #include "theory/arith/icp/IcpTypes.h"
@@ -15,6 +17,33 @@
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
+#include "proof/ArithModelValidator.h"
+#include "theory/arith/nia/farkas/FarkasOrDetector.h"
+#include "theory/arith/nia/farkas/FarkasOrSolver.h"
+#include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
+#include <iostream>
+
+namespace xolver {
+void NiaSolver::setCoreIr(const CoreIr* ir) {
+    coreIr_ = ir;
+    // Farkas-Or Phase 0: env-gated structural dump. Bypasses std::cerr
+    // (which xolver-cli silently consumes); writes to the file named by
+    // XOLVER_NIA_FARKAS_DUMP_FILE if set, else /tmp/farkas_dump.
+    if (std::getenv("XOLVER_NIA_FARKAS_DUMP") && ir != nullptr) {
+        const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
+        if (!path || !*path) path = "/tmp/farkas_dump";
+        FILE* f = std::fopen(path, "a");
+        if (f) {
+            farkas::FarkasOrDetector det(*ir);
+            auto profile = det.detect();
+            std::string s = det.dump(profile);
+            std::fwrite(s.data(), 1, s.size(), f);
+            std::fputc('\n', f);
+            std::fclose(f);
+        }
+    }
+}
+} // namespace xolver
 #include <unordered_set>
 #include <cstdlib>
 #include <iostream>
@@ -93,6 +122,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // for that reason — opt in via XOLVER_NIA_LS_EARLY when explicitly
     // targeting SAT14-class bilinear SAT instances.
     add("nia.local-search-early", &NiaSolver::stageLocalSearchEarly);
+    // H3 (master 2026-06-01) SAT14-attack routing. Bit-blast is the right
+    // tool for VeryMax-SAT14-class inputs (800+ bounded integer vars,
+    // termination certificate solving), but its Full-only registration
+    // means the SAT layer's incomplete assignment never triggers it
+    // within budget. Standard+Full registration follows the same pattern
+    // as nia.local-search-early. Gated default-OFF behind XOLVER_NIA_BB_EARLY.
+    add("nia.bit-blast-early", &NiaSolver::stageBitBlastEarly);
     // L4 (XOLVER_NIA_PRESOLVE_FULL, default-OFF). The presolve fixpoint
     // (PresolveEngine + IntLinearEqualityCoreHNF + CompleteFiniteDomainEnumerator)
     // is the per-propagation hot stage on engine-reaching QF_NIA (profiled:
@@ -148,6 +184,37 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // futile on UNSAT. Any model it would find mid-search is still found at the
     // Full-effort check and validated -- so soundness/SAT-finding is preserved.
     addFull("nia.local-search", &NiaSolver::stageLocalSearch);
+    // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
+    // Fires AFTER stageLocalSearch — when LS's strict cost==0 gate failed
+    // but LS visited a lowest-cost candidate that may STILL satisfy the
+    // full formula via a different Boolean valuation than the SAT layer's
+    // current branch. Walks coreIr_ via ArithModelValidator (exact). Sound;
+    // never claims UNSAT. Default-OFF XOLVER_NIA_LS_BOOL_EXTEND.
+    addFull("nia.local-search-bool-extend", &NiaSolver::stageLocalSearchBoolExtend);
+    // HYB-3 (master 2026-06-02 H5 finding) — Standard+Full registration
+    // mirrors stageBitBlastEarly / stageLocalSearchEarly. On SAT14-class
+    // inputs, Full-effort is unreachable in budget; HYB-3 must fire at
+    // Standard effort to have any chance. Gated default-OFF.
+    add("nia.hyb-bb-ls", &NiaSolver::stageHybridBbLs);
+    // LBBB Phase 2 — fires AFTER local-search has had its chance and
+    // marked itself failed. Bit-blast over the box LS explored.
+    // Full-effort only; gated default-OFF behind XOLVER_NIA_LBBB.
+    addFull("nia.lbbb", &NiaSolver::stageBoundedBitBlast);
+    // HYB-2 fires AFTER LBBB so it's the "second-shot" when LBBB also
+    // didn't find SAT. Pins U vars at LS-midpoint, leaves B vars free
+    // for BB. Full-effort only; gated default-OFF XOLVER_NIA_HYB_LS_BB.
+    addFull("nia.hyb-ls-bb", &NiaSolver::stageHybridLsBb);
+    // Farkas-Or model constructor (user 2026-06-02). For disjunctive
+    // Farkas-certificate-synthesis problems (VeryMax/Stroeder), build
+    // a structural CSP over (B, choice, CT), search via GAC backtrack,
+    // assemble candidate model, validate against original CoreIr via
+    // ArithModelValidator. Returns SAT on validation pass; never UNSAT.
+    // Standard+Full so it can fire BEFORE the expensive LS / BB stages
+    // that the SAT-layer's theory checks usually exhaust. Default-OFF.
+    // Standard+Full. cb_propagate now handles Unknown (mirrors
+    // cb_check_found_model), so the streak-3 Unknown bail terminates
+    // SAT and lets Cap. 10 promote the validated model.
+    add("nia.farkas-or", &NiaSolver::stageFarkasOr);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
@@ -266,6 +333,8 @@ void NiaSolver::onReset() {
     // Phase D: clear dispatch cache for the new solve.
     dispatchCacheValid_ = false;
     dispatchCacheSignature_ = 0;
+    // HYB-1: reset partition DIAG once-per-solve guard.
+    partitionDiagPrinted_ = false;
 }
 
 // L3.1 — per-solve LS pre-pass via check() override, ported from NRA
@@ -504,6 +573,24 @@ std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheRecord(TheoryLemma
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, TheoryEffort) {
+    // HYB-1 DIAG hook (XOLVER_NIA_VAR_PARTITION_DIAG=1) — once per solve.
+    // Placed at the TOP of stageNormalize so both the normCache fast-path
+    // and the full-normalize path are exercised. Fires after normalized_
+    // has been populated (i.e., after the cache update below). Cheap.
+    auto emitPartitionDiag = [this]() {
+        static const bool partDiag = std::getenv("XOLVER_NIA_VAR_PARTITION_DIAG") != nullptr;
+        if (partDiag && !partitionDiagPrinted_ && !normalized_.empty()) {
+            partitionDiagPrinted_ = true;
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            std::fprintf(stderr,
+                "[HYB-1] vars=%zu |B|=%zu (avgBW=%.1f maxBW=%u) |U|=%zu  asserts=%zu\n",
+                pr.totalVars(), pr.boundedCount(),
+                pr.averageBitWidthBounded(), pr.maxBitWidthBounded(),
+                pr.unboundedCount(), normalized_.size());
+            std::fflush(stderr);
+        }
+    };
     // Incremental normalize cache (default-ON): normalized_ is kept in
     // lockstep with the strict active_ stack — normalize only the new tail
     // (normalizeOne is pure per-constraint, so this is byte-identical to a full
@@ -517,6 +604,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
             normalized_.resize(active_.size());
         for (size_t i = normalized_.size(); i < active_.size(); ++i)
             normalized_.push_back(normalizer_.normalizeOne(active_[i]));
+        emitPartitionDiag();
         return std::nullopt;
     }
     // Full normalize. With the lifecycle fix on, merge the live interface
@@ -540,6 +628,12 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
     auto normalizedOpt = normalizer_.normalize(*toNormalize);
     if (!normalizedOpt) return TheoryCheckResult::unknown("NIA: normalizer failed (non-integer coefficients)");
     normalized_ = std::move(*normalizedOpt);
+    // HYB-1 DIAG hook (XOLVER_NIA_VAR_PARTITION_DIAG=1) — once per solve.
+    // Fires here so downstream observers see the partition over the
+    // normalized constraint set. domains_ may be partially populated;
+    // VariablePartition compensates by directly scanning the constraint
+    // set for single-var bound atoms in addition to consulting DomainStore.
+    emitPartitionDiag();
     return std::nullopt;
 }
 
@@ -1269,9 +1363,72 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool earlyEnabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_BB_EARLY");
+        return e && *e && *e != '0';
+    }();
+    if (!earlyEnabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    // H3 size-gate: BB_EARLY's per-call encoding+SAT cost is heavy
+    // (~5-6s on SAT14-class with 600+ active polynomial constraints).
+    // On small NIA cases (~1-10 active constraints) the upstream
+    // reasoning stages decide the verdict for free, and BB_EARLY's
+    // overhead pushes them past the per-case timeout. Local NIA reg
+    // verified this: BB_EARLY ON regressed 3 small UNSAT cases (nia_025,
+    // nia_056, nia_090) from unsat to unknown, and 3 to TIMEOUT.
+    // Threshold: require >= 50 active normalized constraints, the
+    // SAT14-pattern lower bound. Tunable via XOLVER_NIA_BB_EARLY_MIN_ACTIVE.
+    static const size_t minActive = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_BB_EARLY_MIN_ACTIVE"))
+            return static_cast<size_t>(std::atol(e));
+        return static_cast<size_t>(50);
+    }();
+    if (normalized_.size() < minActive) return std::nullopt;
+    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    if (h3Diag) {
+        static thread_local long earlyCount = 0;
+        ++earlyCount;
+        if ((earlyCount & 0xff) == 1 || earlyCount < 8) {
+            std::fprintf(stderr,
+                "[BB-EARLY] call=%ld active=%zu normalized=%zu\n",
+                earlyCount, active_.size(), normalized_.size());
+        }
+    }
+    // The bit-blast solver respects its own gate/iteration env caps
+    // (XOLVER_NIA_BITBLAST_MAX_ITERS / MAX_BITWIDTH / GATE_BUDGET /
+    // CONFLICTS). For early-stage operation users typically pair this
+    // flag with tighter caps so Standard-effort cb_propagate overhead
+    // stays bounded — same idiom as XOLVER_NIA_LS_EARLY_BUDGET_MS.
+    auto res = bitBlast_.solve(normalized_, domains_, validator_);
+    switch (res.status) {
+        case bitblast::BitBlastResult::Status::Sat:
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        case bitblast::BitBlastResult::Status::UnsatComplete:
+            return TheoryCheckResult::mkConflict(*res.conflict);
+        case bitblast::BitBlastResult::Status::Unknown:
+            return std::nullopt;
+    }
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableBitBlast_) return std::nullopt;
     if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag/A-B: isolate non-bit-blast NIA reasoning
+    // H3 (master 2026-06-01) entry counter: confirm whether bit-blast
+    // actually fires on SAT14-class inputs before the run TOs upstream.
+    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    if (h3Diag) {
+        static thread_local long bbEntryCount = 0;
+        ++bbEntryCount;
+        if ((bbEntryCount & 0xff) == 1 || bbEntryCount < 8) {
+            std::fprintf(stderr,
+                "[BB-ENTRY] call=%ld active=%zu normalized=%zu\n",
+                bbEntryCount, active_.size(), normalized_.size());
+        }
+    }
     auto res = bitBlast_.solve(normalized_, domains_, validator_);
     switch (res.status) {
         case bitblast::BitBlastResult::Status::Sat:
@@ -1286,6 +1443,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
+    // HYB-X partition-hint wire-up (default-OFF).
+    {
+        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        if (partHint && !normalized_.empty()) {
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            localSearch_.setPartitionHint(pr);
+        }
+    }
     // Local search SAT finder (try before emitting pending linear lemmas)
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
@@ -1293,6 +1459,625 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
             return TheoryCheckResult::consistent();
         }
     }
+    return std::nullopt;
+}
+
+// LS-SMART-Z5 (master 2026-06-02) — Boolean-extend re-validate.
+//
+// stageLocalSearch's gate accepts only assignments where every active atom
+// (the SAT layer's currently-asserted polynomial-atom truth assignment)
+// is satisfied. But CaDiCaL's branch is one of many consistent Boolean
+// valuations of the CNF abstraction; LS may find an integer assignment m
+// that violates a few active atoms YET satisfies the ORIGINAL FORMULA
+// under a different Boolean valuation B' (the formula's disjunctive
+// structure tolerates the mismatch). Throwing m away is over-strict.
+//
+// Z5 walks the original CoreIr formula under m via ArithModelValidator
+// (the exact arithmetic + Boolean structure evaluator used by Solver::Impl
+// at the top-level soundness gate). If Satisfied → return Sat. Sound: AMV
+// is exact; SAT verdicts are never claimed on weaker evidence than what
+// Solver::Impl would itself accept. UNSAT is never claimed from this path.
+//
+// Default-OFF, Full-effort only via addFull. Flag XOLVER_NIA_LS_BOOL_EXTEND.
+std::optional<TheoryCheckResult>
+NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_LS_BOOL_EXTEND");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled || coreIr_ == nullptr) return std::nullopt;
+
+    // Pull LS's best-effort partial assignment from the warm-start context.
+    // bestAssignment may be empty (LS never ran, or warm-start disabled).
+    const auto& best = localSearch_.lsContext().bestAssignment;
+    if (best.empty()) return std::nullopt;
+
+    // Translate the integer model into ArithModelValidator's numeric
+    // assignment (mpq over var names). AMV's BoolAssignment stays empty —
+    // pure NIA has no Boolean-typed variables (only polynomial-atom lits,
+    // which AMV computes itself from the formula structure).
+    ArithModelValidator::NumAssignment num;
+    num.reserve(best.size());
+    for (const auto& kv : best) {
+        num.emplace(kv.first, mpq_class(kv.second));
+    }
+    ArithModelValidator::BoolAssignment bools;
+
+    ArithModelValidator amv(*coreIr_, num, bools);
+    if (amv.validate(coreIr_->assertions()) ==
+        ArithModelValidator::Verdict::Satisfied) {
+        // Materialize as the NIA currentModel_ for the caller.
+        currentModel_ = best;
+        return TheoryCheckResult::consistent();
+    }
+    return std::nullopt;
+}
+
+// HYB-3 (master 2026-06-02): hybrid BB-enumerate-B + LS-probe-U.
+// Strategy for SAT14-style cases per H5 finding (|B| ~5%, |U| ~95%):
+// enumerate K random samples of bounded vars within their boxes; for
+// each B-sample, override DomainStore for those vars to a singleton
+// {value} and run a tight-budget LS on the unbounded vars. Validate
+// any Sat candidate against the original constraints.
+//
+// Soundness: every returned Sat is IntegerModelValidator-gated against
+// normalized_. UNSAT is never claimed (LS heuristic; BB sub-call too
+// short for completeness). HYB-3 is purely a SAT-finder.
+//
+// Flag: XOLVER_NIA_HYB_BB_LS (default-OFF).
+// Tunables:
+//   XOLVER_NIA_HYB_BB_LS_K (default 5): B-samples to try per stage call
+//   XOLVER_NIA_HYB_BB_LS_PROBE_MS (default 500): per-LS-probe budget
+std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+
+    // Partition the variables; only proceed when the case matches the
+    // SAT14 pattern (small B, large U).
+    VariablePartition vp(*kernel_);
+    auto pr = vp.partition(normalized_, domains_, 32);
+    if (pr.totalVars() == 0) return std::nullopt;
+    // Gate: at most 10 bounded vars; unbounded count at least 3x bounded.
+    static const size_t maxB = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_MAX_B"))
+            return static_cast<size_t>(std::atol(e));
+        return static_cast<size_t>(10);
+    }();
+    if (pr.boundedCount() == 0 || pr.boundedCount() > maxB) return std::nullopt;
+    if (pr.unboundedCount() < pr.boundedCount() * 3) return std::nullopt;
+
+    // K = number of random B-samples to try.
+    static const int K = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_K"))
+            return std::atoi(e);
+        return 5;
+    }();
+    static const long probeMs = [] {
+        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_PROBE_MS"))
+            return std::atol(e);
+        return 500L;
+    }();
+
+    // For each B-sample: clone DomainStore, restrict bounded vars to
+    // their sample value (pinned), and run LS on the modified store.
+    // Deterministic RNG seeded once per process.
+    static thread_local std::mt19937_64 rng(0xC4DCAC1234567ULL);
+
+    long origBudget = 0;
+    // We can't read the LS's private budget; we set ours and restore.
+    // The set/get asymmetry is acceptable — probe budget is local-scoped.
+    (void)origBudget;
+    localSearch_.setBudgetMs(probeMs);
+
+    for (int k = 0; k < K; ++k) {
+        DomainStore subset = domains_;  // deep-copy current store
+        // Sample each bounded var.
+        for (const auto& bvar : pr.bounded) {
+            const auto& info = pr.info.at(bvar);
+            // Random in [lower, upper].
+            mpz_class span = info.upper - info.lower;
+            mpz_class pick;
+            if (span <= 0) pick = info.lower;
+            else {
+                uint64_t r = rng();
+                // Use modular reduction; span+1 is the inclusive range size.
+                mpz_class spanInc = span + 1;
+                mpz_class rmod = mpz_class(static_cast<unsigned long>(r));
+                rmod %= spanInc;
+                pick = info.lower + rmod;
+            }
+            // Pin via a finite-set singleton (overrides bounds).
+            std::set<mpz_class> singleton{pick};
+            subset.restrictToFiniteSet(bvar, singleton, SatLit::positive(0));
+        }
+        // Run LS on the restricted store.
+        auto model = localSearch_.tryFindModel(normalized_, subset);
+        if (model && validator_.validate(*model, normalized_) ==
+                         IntegerModelValidator::Result::Valid) {
+            currentModel_ = *model;
+            return TheoryCheckResult::consistent();
+        }
+    }
+    return std::nullopt;
+}
+
+// LBBB Phase 2 — stageBoundedBitBlast. After LS has failed (per
+// localSearch_.hasFailed()), bit-blast over the box LS visited,
+// extended by a buffer. Validate any Sat against the ORIGINAL NIA
+// constraints; UNSAT verdict from BB is treated as Unknown (only
+// the BOX is searched, not the full integer space). Default-OFF
+// (XOLVER_NIA_LBBB), Full-effort only via addFull registration.
+std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_LBBB");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+    // Gate: LS must have run AND failed. Otherwise BB would just be
+    // a redundant copy of stageBitBlast — we want LBBB to fire only
+    // on the box LS converged toward.
+    if (!localSearch_.hasFailed()) return std::nullopt;
+    const auto& mins = localSearch_.trackedMin();
+    const auto& maxs = localSearch_.trackedMax();
+    if (mins.empty() || maxs.empty()) return std::nullopt;
+
+    // Build a fresh DomainStore restricted to the LS-visited box +
+    // buffer. For each tracked var v: [min - buffer, max + buffer]
+    // where buffer = max(10, range * 0.1).
+    DomainStore subset = domains_;  // deep-copy
+    SatLit dummyReason = SatLit::positive(0);
+    for (const auto& [v, lo] : mins) {
+        auto mit = maxs.find(v);
+        if (mit == maxs.end()) continue;
+        const mpz_class& hi = mit->second;
+        mpz_class range = hi - lo;
+        mpz_class buffer = range / 10;
+        if (buffer < 10) buffer = 10;
+        mpz_class bbLo = lo - buffer;
+        mpz_class bbHi = hi + buffer;
+        // Intersect with any existing DomainStore bounds.
+        subset.addLowerBound(v, bbLo, dummyReason);
+        subset.addUpperBound(v, bbHi, dummyReason);
+    }
+    // Run BitBlast on the restricted box.
+    auto res = bitBlast_.solve(normalized_, subset, validator_);
+    if (res.status == bitblast::BitBlastResult::Status::Sat) {
+        // Validate against ORIGINAL constraints (not the box-bounded
+        // subset). LBBB soundness gate: the box restriction was
+        // heuristic, so a BB-SAT model must satisfy the unrestricted
+        // formula to count.
+        if (validator_.validate(res.model, normalized_) ==
+            IntegerModelValidator::Result::Valid) {
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        }
+        // BB found a model in the bounded box, but it doesn't satisfy
+        // the original — drop and fall through.
+        return std::nullopt;
+    }
+    // BB returned UNSAT (within the bounded box) or Unknown — both
+    // are inconclusive for LBBB. Box might be too small; main pipeline
+    // can decide. Never claim UNSAT here.
+    return std::nullopt;
+}
+
+// HYB-2 (post-Smart-LS). For ITS-like partitions (|B| >= |U|), LS
+// has done the U-search and recorded per-var bounds. Pin U vars at
+// the midpoint of their LS-visited range via DomainStore singletons,
+// then run BitBlast on the residual (which now has only B-free vars,
+// plus the pinned-U linear influence factored in). Validate against
+// the original NIA formula.
+std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_HYB_LS_BB");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!enableBitBlast_) return std::nullopt;
+    if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    if (normalized_.empty()) return std::nullopt;
+
+    VariablePartition vp(*kernel_);
+    auto pr = vp.partition(normalized_, domains_, 32);
+    if (pr.totalVars() == 0) return std::nullopt;
+    // Gate: B-dominant partition (otherwise HYB-3 / LBBB are better).
+    if (pr.unboundedCount() == 0 || pr.boundedCount() < pr.unboundedCount()) {
+        return std::nullopt;
+    }
+    // Read LS-tracked bounds (LBBB Phase 1 prerequisite).
+    const auto& mins = localSearch_.trackedMin();
+    const auto& maxs = localSearch_.trackedMax();
+    if (mins.empty() || maxs.empty()) return std::nullopt;
+
+    DomainStore subset = domains_;
+    SatLit dummyReason = SatLit::positive(0);
+    bool pinnedAny = false;
+    for (const auto& u : pr.unbounded) {
+        auto miIt = mins.find(u);
+        auto mxIt = maxs.find(u);
+        if (miIt == mins.end() || mxIt == maxs.end()) continue;
+        mpz_class mid = (miIt->second + mxIt->second) / 2;
+        std::set<mpz_class> singleton{mid};
+        subset.restrictToFiniteSet(u, singleton, dummyReason);
+        pinnedAny = true;
+    }
+    if (!pinnedAny) return std::nullopt;
+
+    auto res = bitBlast_.solve(normalized_, subset, validator_);
+    if (res.status == bitblast::BitBlastResult::Status::Sat) {
+        if (validator_.validate(res.model, normalized_) ==
+            IntegerModelValidator::Result::Valid) {
+            currentModel_ = res.model;
+            return TheoryCheckResult::consistent();
+        }
+    }
+    return std::nullopt;
+}
+
+// Farkas-Or Phase 4: NiaSolver stage that runs the full
+// detector → CSP → assembler → ArithModelValidator pipeline.
+//
+// Soundness: every SAT verdict here is gated by ArithModelValidator
+// against the ORIGINAL coreIr_ assertions. Never returns UNSAT —
+// failed CSP / failed validation falls through to the rest of the
+// pipeline.
+//
+// Default-OFF behind XOLVER_NIA_FARKAS_OR. Full-effort only.
+std::optional<TheoryCheckResult>
+NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_FARKAS_OR");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (coreIr_ == nullptr) return std::nullopt;
+
+    // Memoize the detector profile + support table across stage calls.
+    // The CoreIr doesn't change during the check loop, so we can build
+    // once. With residual co-var grid enumeration this is the dominant
+    // cost (Stroeder p21258: ~100ms first time, 0ms thereafter).
+    static thread_local const CoreIr* cachedIr = nullptr;
+    static thread_local farkas::FarkasProfile cachedProfile;
+    static thread_local farkas::SupportTable cachedTable;
+    if (cachedIr != coreIr_) {
+        farkas::FarkasOrDetector det(*coreIr_);
+        cachedProfile = det.detect();
+        if (!cachedProfile.good()) {
+            cachedIr = coreIr_;
+            cachedTable = farkas::SupportTable{};
+            return std::nullopt;
+        }
+        farkas::FarkasOrSolver solverBuild(*coreIr_);
+        // Cap on the B cartesian product (number of bounded-tuple
+        // points the table-builder will enumerate). 500 was the
+        // initial conservative pick that floored p21258 (~81 tuples)
+        // while skipping p20185-class cases that other NIA stages
+        // solve fast. Larger Stroeder cases (Ex2.11 p21280+, 4Nested)
+        // have 4+ Or-blocks with 7-λ branches and a denser bounded
+        // domain — their B-product runs into the thousands. Bump to
+        // 8000: still tractable per-call (~ms-scale with the augmented
+        // Gauss + memoization), and unlocks more Stroeder cases.
+        //   override:  XOLVER_NIA_FARKAS_OR_MAX_B
+        std::size_t maxB = 8000;
+        if (const char* e = std::getenv("XOLVER_NIA_FARKAS_OR_MAX_B"))
+            maxB = (std::size_t)std::atoi(e);
+        cachedTable = solverBuild.buildTable(cachedProfile, maxB);
+        cachedIr = coreIr_;
+    }
+    if (!cachedProfile.good()) return std::nullopt;
+    const auto& profile = cachedProfile;
+    const auto& table = cachedTable;
+    farkas::FarkasOrSolver solver(*coreIr_);
+    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    auto traceWrite = [&](const std::string& s) {
+        if (!trace) return;
+        FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
+        if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
+    };
+    traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
+               + " feasibleTotal=" + std::to_string(table.feasibleTotal)
+               + " rows=" + std::to_string(table.rows.size()));
+    if (trace) {
+        for (std::size_t i = 0; i < profile.blocks.size(); ++i) {
+            const auto& blk = profile.blocks[i];
+            std::string line = "  block[" + std::to_string(i) + "] branches="
+                + std::to_string(blk.branches.size());
+            traceWrite(line);
+            for (std::size_t j = 0; j < blk.branches.size(); ++j) {
+                const auto& br = blk.branches[j];
+                std::string bl = "    branch[" + std::to_string(j) + "] λ=";
+                for (const auto& l : br.lambdas) bl += l + ",";
+                bl += " eqs=" + std::to_string(br.equalities.size())
+                    + " ineqs=" + std::to_string(br.inequalities.size())
+                    + " unclass=" + std::to_string(br.unclassified.size());
+                if (j < blk.branchProxies.size() && !blk.branchProxies[j].empty()) {
+                    bl += " proxy=" + blk.branchProxies[j];
+                }
+                traceWrite(bl);
+            }
+        }
+    }
+    if (trace) {
+        for (std::size_t i = 0; i < table.rows.size(); ++i) {
+            const auto& r = table.rows[i];
+            std::string line = "  row[" + std::to_string(i) + "] (block=" +
+                std::to_string(r.blockIdx) + " branch=" + std::to_string(r.branchIdx) + ") B={";
+            bool first = true;
+            for (const auto& [v, val] : r.bTuple) {
+                if (!first) line += ", ";
+                first = false;
+                line += v + "=" + val.get_str();
+            }
+            line += "} ray=[";
+            for (std::size_t j = 0; j < r.candidate.lambdaRay.size(); ++j) {
+                if (j) line += ",";
+                line += r.candidate.lambdaRay[j].get_str();
+            }
+            line += "]";
+            traceWrite(line);
+        }
+    }
+    if (table.rows.empty()) {
+        traceWrite("  → empty table; bail");
+        return std::nullopt;
+    }
+
+    // Enumerate up to N candidate CSP assignments; iterate validator.
+    auto assignments = solver.enumerateCsp(table, profile, /*maxResults=*/64);
+    if (assignments.empty()) {
+        traceWrite("  → no CSP assignments; bail");
+        return std::nullopt;
+    }
+    traceWrite("  → CSP enumerated " + std::to_string(assignments.size()) + " candidates");
+    farkas::FarkasOrModelAssembler assembler(*coreIr_);
+
+    // Residual repair helper: a Farkas-Or candidate fixes the Farkas-bound
+    // λ-rays, B-tuple and CT-vars, but the original formula often contains
+    // RESIDUAL vars (e.g. main_x, main_y in Stroeder) that appear in outer
+    // assertions like `(<= (+ Nl2CT (* Nl2main_x main_x) ...) 0)`. The
+    // assembler defaults residuals to 0, which forces the bilinear term to
+    // 0 and the assertion to `c0 ≤ 0` — guaranteed to fail when Farkas
+    // forced c0 ≥ 1. To recover, after a candidate's first validation fails
+    // we try a small grid of residual values and re-validate. Grid width
+    // adapts to residual count so the combo product stays bounded.
+    constexpr std::size_t COMBO_CAP = 16384;
+    auto gridFor = [](std::size_t n) -> std::vector<mpz_class> {
+        std::vector<mpz_class> v;
+        if (n == 0) return v;
+        if (n <= 3) {
+            for (long k : {0L, 1L, -1L, 2L, -2L, 10L, -10L, 100L, -100L})
+                v.emplace_back(k);
+        } else if (n <= 5) {
+            for (long k : {0L, 1L, -1L, 2L, -2L}) v.emplace_back(k);
+        } else if (n <= 8) {
+            for (long k : {0L, 1L, -1L}) v.emplace_back(k);
+        } // n > 8: empty → caller skips repair
+        return v;
+    };
+
+    // Per-stage-call validation budget: residual repair can otherwise dwarf
+    // the rest of the NIA pipeline. We cap total validator invocations per
+    // stage call. The stage runs many times during a check loop, so this
+    // is a per-call (not per-check) budget.
+    constexpr std::size_t VALIDATE_BUDGET = 200;
+    std::size_t validations = 0;
+    // Pre-compute var name → isBool map by walking all assertions once.
+    // Bool vars (e.g. boolpur_K Tseitin proxies) MUST go through
+    // BoolAssignment; if routed through NumAssignment the validator hits
+    // `(= boolpur_K (and ...))` with Number(0) LHS vs Bool RHS and
+    // returns Indeterminate — which the framework treats as failure.
+    std::unordered_set<std::string> boolVarNames;
+    {
+        SortId boolSort = coreIr_->boolSortId();
+        std::function<void(ExprId)> walkSort;
+        std::unordered_set<ExprId> seen;
+        walkSort = [&](ExprId id) {
+            if (!seen.insert(id).second) return;
+            const auto& e = coreIr_->get(id);
+            if (e.kind == Kind::Variable && e.sort == boolSort) {
+                if (auto* s = std::get_if<std::string>(&e.payload.value))
+                    boolVarNames.insert(*s);
+            }
+            for (ExprId c : e.children) walkSort(c);
+        };
+        for (ExprId aid : coreIr_->assertions()) walkSort(aid);
+    }
+
+    auto tryValidate = [&](IntegerModel& M) -> bool {
+        if (validations >= VALIDATE_BUDGET) return false;
+        ++validations;
+        ArithModelValidator::NumAssignment num;
+        ArithModelValidator::BoolAssignment bools;
+        num.reserve(M.size());
+        for (const auto& [v, val] : M) {
+            if (boolVarNames.count(v)) {
+                bools.emplace(v, val != 0);
+            } else {
+                num.emplace(v, mpq_class(val));
+            }
+        }
+        ArithModelValidator amv(*coreIr_, num, bools);
+        return amv.validate(coreIr_->assertions()) ==
+               ArithModelValidator::Verdict::Satisfied;
+    };
+
+    int candIdx = 0;
+    for (const auto& assignment : assignments) {
+        auto candidate = assembler.assemble(profile, assignment);
+        if (!candidate) { ++candIdx; continue; }
+        if (trace) {
+            std::string line = "  cand[" + std::to_string(candIdx) + "]:";
+            for (const auto& [v, val] : *candidate) {
+                line += " " + v + "=" + val.get_str();
+            }
+            traceWrite(line);
+        }
+        if (tryValidate(*candidate)) {
+            traceWrite("  → validator SAT (cand[" + std::to_string(candIdx) + "])");
+            currentModel_ = *candidate;
+            lastValidatedFarkasModel_ = std::move(*candidate);   // survives reset
+
+            // Queue unit-lemma propagations for the chosen branches'
+            // boolpur_K Tseitin proxies. Each unit lemma drives the
+            // SAT-CDCL engine onto a trail consistent with the Farkas-Or
+            // model so it actually returns Sat instead of looping in the
+            // decision search. They are drained by stagePendingLemma the
+            // next time the propagator polls, which routes through the
+            // proper lemma-database channel (CaDiCaL refuses raw
+            // addClause mid-solve, so we cannot use pinLiteral here).
+            //
+            // Sound: the model was validator-confirmed against the
+            // original CoreIr, so pinning the matching boolpur values
+            // only prunes explorations that contradict a positively
+            // confirmed witness. Each (proxy, truth) pair is queued at
+            // most once via pinnedProxies_ — these unit clauses are
+            // permanent in the SAT backend; duplicates are noise.
+            std::vector<TheoryLemma> newPinLemmas;
+            if (registry_) {
+                for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
+                    const auto& blk = profile.blocks[j];
+                    auto cit = assignment.choice.find((int)j);
+                    int chosen = (cit != assignment.choice.end()) ? cit->second : -1;
+                    for (std::size_t k = 0; k < blk.branchProxies.size(); ++k) {
+                        const auto& proxy = blk.branchProxies[k];
+                        if (proxy.empty()) continue;
+                        bool truth = ((int)k == chosen);
+                        auto pinKey = proxy + (truth ? ":1" : ":0");
+                        if (!pinnedProxies_.insert(pinKey).second) continue;
+                        auto sv = registry_->findBoolVariableSatVar(proxy);
+                        if (!sv) continue;
+                        TheoryLemma ulemma;
+                        ulemma.lits.push_back(truth ? SatLit::positive(*sv)
+                                                     : SatLit::negative(*sv));
+                        ulemma.kind = LemmaKind::Entailment;
+                        if (!lemmaDb.contains(ulemma)) {
+                            lemmaDb.insertIfNew(ulemma);
+                            newPinLemmas.push_back(ulemma);
+                            traceWrite("  → queue pin-lemma " + proxy + "=" +
+                                       (truth ? "true" : "false"));
+                        }
+                    }
+                }
+            }
+
+            // Emit pin-lemmas via the proper SAT-CDCL lemma channel. The
+            // first lemma is returned directly via mkLemma so it's installed
+            // immediately; the rest (if any) queue into pendingLinLemmas_
+            // and drain via stagePendingLemma on subsequent check() calls.
+            // Returning consistent() instead would short-circuit the
+            // pipeline and the lemmas would never reach SAT.
+            if (!newPinLemmas.empty()) {
+                auto first = std::move(newPinLemmas.front());
+                for (std::size_t i = 1; i < newPinLemmas.size(); ++i) {
+                    pendingLinLemmas_.push_back(std::move(newPinLemmas[i]));
+                }
+                return TheoryCheckResult::mkLemma(first);
+            }
+            // No new pin-lemmas to queue: every proxy that needed
+            // committing has already been committed. The framework has
+            // confirmed this validated SAT model farkasOrSatStreak_
+            // times in a row; if SAT-CDCL still hasn't converged on its
+            // own, return Unknown so cb_propagate / cb_check_found_model
+            // both terminate SAT and the Cap. 10 hook in Solver.cpp
+            // promotes the theory candidate directly via
+            // modelPositivelyValidates. SOUND: same Unknown-recovery
+            // contract — validator must positively confirm the model
+            // before Sat is emitted.
+            constexpr int kFarkasOrSatStreakLimit = 3;
+            if (++farkasOrSatStreak_ >= kFarkasOrSatStreakLimit) {
+                farkasOrSatStreak_ = 0;
+                return TheoryCheckResult::unknown(
+                    "NIA Farkas-Or: validated model, SAT-CDCL did not converge");
+            }
+            return TheoryCheckResult::consistent();
+        }
+
+        // First-pass failed. Identify residual vars: those assigned to 0
+        // by the default residual pass AND not present in any Farkas
+        // assignment (B, λ, CT, or ANY branch's λ in the detected blocks
+        // — unused-branch λ's are validly 0 since only one Or branch per
+        // block needs to hold; perturbing them is wasted search).
+        std::vector<std::string> residualVars;
+        std::unordered_set<std::string> fixed;
+        for (const auto& [v, _] : assignment.B) fixed.insert(v);
+        for (const auto& [_, names] : assignment.lambdaNamesPerBlock)
+            for (const auto& n : names) fixed.insert(n);
+        for (const auto& [v, _] : assignment.ctInterval) fixed.insert(v);
+        // Also pin ALL Or-branch λ's (chosen or not) — perturbing an
+        // unchosen branch's λ won't satisfy the Or unless that branch's
+        // full Farkas template is also satisfied, which we don't try.
+        for (const auto& blk : profile.blocks) {
+            for (const auto& br : blk.branches) {
+                for (const auto& n : br.lambdas) fixed.insert(n);
+            }
+        }
+        for (const auto& [v, val] : *candidate) {
+            if (fixed.count(v)) continue;
+            // Only sweep over vars defaulted to 0 (the residual repair target).
+            if (val != 0) continue;
+            residualVars.push_back(v);
+        }
+        auto values = gridFor(residualVars.size());
+        if (values.empty()) {
+            ++candIdx;
+            continue;
+        }
+        if (trace) {
+            std::string line = "  cand[" + std::to_string(candIdx) + "] residual-repair over "
+                + std::to_string(residualVars.size()) + " vars, grid=" + std::to_string(values.size())
+                + ", combos=" + std::to_string(values.size());
+            traceWrite(line);
+        }
+
+        // Geometric grid enumeration with combo cap.
+        std::size_t total = 1;
+        for (std::size_t i = 0; i < residualVars.size(); ++i) {
+            total *= values.size();
+            if (total > COMBO_CAP) { total = 0; break; }
+        }
+        if (total == 0) { ++candIdx; continue; }
+
+        std::vector<std::size_t> idx(residualVars.size(), 0);
+        while (true) {
+            if (validations >= VALIDATE_BUDGET) break;
+            // Skip the all-zero combo (already tried).
+            bool allZero = true;
+            for (std::size_t i = 0; i < idx.size(); ++i) {
+                if (values[idx[i]] != 0) { allZero = false; break; }
+            }
+            if (!allZero) {
+                IntegerModel repaired_M = *candidate;
+                for (std::size_t i = 0; i < residualVars.size(); ++i) {
+                    repaired_M[residualVars[i]] = values[idx[i]];
+                }
+                if (tryValidate(repaired_M)) {
+                    traceWrite("  → validator SAT after residual-repair (cand["
+                               + std::to_string(candIdx) + "])");
+                    currentModel_ = std::move(repaired_M);
+                    return TheoryCheckResult::consistent();
+                }
+            }
+            // Increment odometer-style.
+            std::size_t pos = 0;
+            while (pos < idx.size()) {
+                ++idx[pos];
+                if (idx[pos] < values.size()) break;
+                idx[pos] = 0;
+                ++pos;
+            }
+            if (pos == idx.size()) break;
+        }
+        if (validations >= VALIDATE_BUDGET) break;
+        ++candIdx;
+    }
+    traceWrite("  → no candidate validated");
     return std::nullopt;
 }
 
@@ -1337,6 +2122,16 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaSto
     // compat once a cumulative-setter is wired up; currently informational.
     (void)earlyTotalMs;
     localSearch_.setBudgetMs(earlyBudgetMs);
+    // HYB-X: pass partition hint to LS (cheap; partition is recomputed
+    // here but the cost is bounded by normalized_.size()).
+    {
+        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        if (partHint && !normalized_.empty()) {
+            VariablePartition vp(*kernel_);
+            auto pr = vp.partition(normalized_, domains_, 32);
+            localSearch_.setPartitionHint(pr);
+        }
+    }
     if (auto model = localSearch_.tryFindModel(normalized_, domains_)) {
         if (validator_.validate(*model, normalized_) == IntegerModelValidator::Result::Valid) {
             currentModel_ = *model;
@@ -1567,9 +2362,16 @@ NiaSolver::getDeducedSharedEqualities() {
 }
 
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
-    if (!currentModel_) return std::nullopt;
+    // Prefer currentModel_; fall back to lastValidatedFarkasModel_ which
+    // survives reset()/backtrack and represents the last validator-
+    // confirmed Farkas-Or witness. Used by Solver.cpp's Unknown-fallback
+    // to recover a SAT verdict when SAT-CDCL timed out.
+    const IntegerModel* src = nullptr;
+    if (currentModel_)               src = &*currentModel_;
+    else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+    if (!src) return std::nullopt;
     TheoryModel model;
-    for (const auto& [name, value] : *currentModel_) {
+    for (const auto& [name, value] : *src) {
         model.assignments[name] = value.get_str();
         model.numericAssignments.insert({name, RealValue::fromMpz(value)});
     }

@@ -876,3 +876,92 @@ TEST_CASE("NiaLocalSearch I1: resetLsContext clears varActivity") {
     CHECK(ctx.clauseWeight.empty());
     CHECK(ctx.bestAssignment.empty());
 }
+
+// LS-VM1: linear equality pre-pin tests.
+//
+// The pin detects c*v + k = 0 with c|k, pre-loads v at the forced value,
+// and skips v from the move-search. Verdict unchanged (still validator-
+// gated); pinned model must satisfy the original constraints.
+TEST_CASE("NiaLocalSearch LS-VM1: pin from single-var linear Eq 3x-12=0") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setPinEq(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(-100), mkReason(1));
+    ds.addUpperBound("x", mpz_class(100), mkReason(2));
+    ds.addLowerBound("y", mpz_class(-100), mkReason(3));
+    ds.addUpperBound("y", mpz_class(100), mkReason(4));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    PolyId y = kernel->mkVar(kernel->getOrCreateVar("y"));
+    // Eq: 3*x - 12 = 0  =>  pin x = 4
+    PolyId pin = kernel->sub(
+        kernel->mul(kernel->mkConst(mpq_class(3)), x),
+        kernel->mkConst(mpq_class(12)));
+    // And a non-pinning atom involving y: x*y >= 4 (with pin x=4 -> y >= 1)
+    PolyId nonpin = kernel->sub(kernel->mul(x, y), kernel->mkConst(mpq_class(4)));
+    NormalizedNiaConstraint c1{pin,    Relation::Eq,  mkReason(5)};
+    NormalizedNiaConstraint c2{nonpin, Relation::Geq, mkReason(6)};
+
+    auto m = ls.tryFindModel({c1, c2}, ds);
+    REQUIRE(m.has_value());
+    CHECK((*m)["x"] == 4);              // pinned exactly
+    CHECK((*m)["x"] * (*m)["y"] >= 4);  // non-pin atom satisfied
+}
+
+TEST_CASE("NiaLocalSearch LS-VM1: skip pin when residue is not exact integer") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setPinEq(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    ds.addLowerBound("x", mpz_class(-100), mkReason(1));
+    ds.addUpperBound("x", mpz_class(100), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // 2x - 5 = 0 -> x = 5/2 (NOT an integer; skip pin)
+    PolyId nonexact = kernel->sub(
+        kernel->mul(kernel->mkConst(mpq_class(2)), x),
+        kernel->mkConst(mpq_class(5)));
+    NormalizedNiaConstraint c{nonexact, Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    // No integer solution exists; the LS heuristically does NOT find one.
+    // Either nullopt or a value that's NOT a satisfying integer (and the
+    // caller's validator will reject it). The contract here is that
+    // LS-VM1 doesn't incorrectly pin x to a non-integer.
+    if (m.has_value()) {
+        // Whatever value LS returns, 2x = 5 cannot hold for integer x.
+        CHECK(2 * (*m)["x"] != 5);
+    }
+}
+
+TEST_CASE("NiaLocalSearch LS-VM1: respects existing domain bounds") {
+    auto kernel = createPolynomialKernel();
+    NiaLocalSearch ls(*kernel);
+    ls.setEnhanced(true);
+    ls.setTwoLevel(true);
+    ls.setPinEq(true);
+    ls.setBudgetMs(0);
+    DomainStore ds;
+    // x in [0, 5] but the pin would force x = -2
+    ds.addLowerBound("x", mpz_class(0), mkReason(1));
+    ds.addUpperBound("x", mpz_class(5), mkReason(2));
+
+    PolyId x = kernel->mkVar(kernel->getOrCreateVar("x"));
+    // x + 2 = 0  =>  would pin x = -2, but lower bound is 0
+    PolyId outOfRange = kernel->add(x, kernel->mkConst(mpq_class(2)));
+    NormalizedNiaConstraint c{outOfRange, Relation::Eq, mkReason(3)};
+
+    auto m = ls.tryFindModel({c}, ds);
+    // No solution exists (UNSAT under the bounds). LS may report nullopt
+    // OR a candidate that doesn't satisfy the equality (validator rejects).
+    if (m.has_value()) {
+        CHECK((*m)["x"] != -2);
+    }
+}

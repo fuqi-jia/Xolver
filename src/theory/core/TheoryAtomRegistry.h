@@ -28,6 +28,16 @@ public:
     // satisfy a provably-false atom vacuously (false-SAT).
     void pinLiteral(SatVar satVar, bool value);
 
+    // Bool-variable → SatVar lookup, populated by the Atomizer for every
+    // Bool Variable it processes (formula-position pure Bool vars, e.g.
+    // boolpur_K Tseitin proxies). Lets a theory solver locate the SAT
+    // literal corresponding to a known Bool var by NAME and pin it from
+    // a theory stage (e.g. NIA Farkas-Or committing the chosen Or
+    // branch's proxy literal so SAT-CDCL converges on the matching
+    // assignment instead of exploring competing branches).
+    void registerBoolVariable(const std::string& name, SatVar satVar);
+    std::optional<SatVar> findBoolVariableSatVar(const std::string& name) const;
+
     SatLit getOrCreateLinearBoundAtom(
         const LinearFormKey& lhs,
         Relation rel,
@@ -108,6 +118,8 @@ private:
     };
     std::unordered_map<PolyLookupKey, size_t, PolyLookupKeyHash> polyLookup_;
     std::unordered_map<uint64_t, size_t> sharedEqLookup_;
+    // Bool Variable name → SatVar (Atomizer-populated).
+    std::unordered_map<std::string, SatVar> boolVarSatVars_;
     // EUF equality dedup keyed by canonical (min,max) ExprId pair.
     std::unordered_map<uint64_t, size_t> eufEqLookup_;
 

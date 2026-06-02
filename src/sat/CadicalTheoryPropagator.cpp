@@ -457,6 +457,24 @@ int CadicalTheoryPropagator::cb_propagate() {
         return 0;
     }
 
+    // Theory-driven early termination from cb_propagate. A theory stage
+    // (e.g. NIA Farkas-Or) can have positively validated a SAT model
+    // already and want to bail SAT-CDCL so the top-level Cap. 10 hook
+    // can promote that model. Mirror cb_check_found_model's Unknown
+    // handling, but ONLY when the verdict explicitly opts in via the
+    // reason-string marker "NIA Farkas-Or:" — other theories return
+    // Unknown during normal exploration without intending to give up,
+    // and unconditionally terminating SAT here regresses LIA/e2e tests
+    // that rely on Standard-effort Unknown being a "skip this prop"
+    // signal rather than a verdict.
+    if (tr.kind == TheoryCheckResult::Kind::Unknown
+        && tr.reason.rfind("NIA Farkas-Or:", 0) == 0) {
+        writeReason(unknownReasonSink_, tr.reason);
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
+
     // NOTE: Lemmas from partial assignments (e.g. NIA branch lemmas) can
     // be based on incomplete information and may prune valid SAT branches.
     // Only propagate lemmas from complete model checks (cb_check_found_model).

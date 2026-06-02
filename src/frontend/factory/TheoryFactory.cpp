@@ -67,6 +67,7 @@ SolverSetupResult setupSolvers(
         result.polyKernelRaw = polyKernel.get();
         auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
         nia->setRegistry(&registry);
+        nia->setCoreIr(ir);  // needed by Z5 BOOL_EXTEND + Farkas-Or hooks (added 2026-06-02)
         theoryManager.registerSolver(std::move(nia));
         auto lia = std::make_unique<LiaSolver>();
         lia->setRegistry(&registry);

@@ -67,7 +67,7 @@ public:
                    int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    void setCoreIr(const CoreIr* ir);
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
     bool supportsCombination() const override { return true; }
@@ -154,6 +154,8 @@ private:
     // already validated by the full pipeline once at this signature.
     uint64_t dispatchCacheSignature_ = 0;
     bool dispatchCacheValid_ = false;
+    // HYB-1 partition DIAG: print once per solve (reset by onReset).
+    bool partitionDiagPrinted_ = false;
     bool enableRefute_ = true;    // bound-free product-positivity refutation (promoted default-ON)
     bool enableGcd_ = true;       // multivariate GCD-divisibility refutation (promoted default-ON)
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
@@ -166,7 +168,25 @@ private:
     std::unique_ptr<AlgebraBackend> cdcacAlgebra_;
     std::unique_ptr<CdcacCore> cdcacCore_;
 
+    // Set of "proxy_name:truth" tokens we've already pinned via
+    // registry->pinLiteral. Prevents the Farkas-Or stage's repeated
+    // verdict-SAT path from re-issuing the same unit clauses on each
+    // re-fire (those clauses are permanent in the SAT backend; emitting
+    // duplicates is harmless but noisy).
+    std::unordered_set<std::string> pinnedProxies_;
+    // Count of consecutive Farkas-Or check passes that all confirmed
+    // SAT but produced no new pin-lemma. After a small streak we bail
+    // out with Unknown so the Solver.cpp Cap. 10 hook can recover the
+    // theory-validated model directly.
+    int farkasOrSatStreak_ = 0;
+
     std::optional<IntegerModel> currentModel_;
+    // Survives reset()/backtrack — the last Farkas-Or candidate that the
+    // validator confirmed against the ORIGINAL formula. Used by the
+    // top-level Unknown fallback in Solver.cpp when the SAT engine times
+    // out before its decision trail aligns with the theory's choice.
+    // Sound: only ever supplements verdict via positively-validated model.
+    std::optional<IntegerModel> lastValidatedFarkasModel_;
 
     // Phase 2: the normalized active constraints, produced by the
     // normalize stage and consumed by every downstream stage. Lives as a
@@ -229,7 +249,56 @@ private:
     std::optional<TheoryCheckResult> stageLinearization(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBounded(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // H3 (master 2026-06-01) — bit-blast EARLY stage. Same algorithm as
+    // stageBitBlast but registered Standard+Full so it fires at Standard
+    // effort on inputs (SAT14 class) where the SAT layer never reaches a
+    // complete assignment within budget (Full-effort never triggers).
+    // Mirrors the stageLocalSearchEarly pattern. Default-OFF flag
+    // XOLVER_NIA_BB_EARLY. Sound: bit-blast is candidate-only — every Sat
+    // model is validated against the original constraints (invariant 1).
+    std::optional<TheoryCheckResult> stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort);
+    // HYB-3 (master 2026-06-02). For SAT14-style partition (|B| small,
+    // |U| large), iterate K random samples of the bounded vars within
+    // their boxes; for each, run a tight-budget LS on the unbounded
+    // vars and validate any SAT candidate. Sound: every returned Sat
+    // is IntegerModelValidator-gated against the original constraint
+    // set. Default-OFF flag XOLVER_NIA_HYB_BB_LS. Full-effort only —
+    // the heavy LS-probe loop should not run per Standard cb_propagate.
+    std::optional<TheoryCheckResult> stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort);
+    // LBBB Phase 2 (master 2026-06-02). LS-Bounded Bit-Blast Fallback.
+    // After local-search exits without finding SAT (its `hasFailed()`
+    // flag is true), bit-blast the formula over the BOX that LS
+    // explored, extended by a buffer. The BV solve uses the existing
+    // BitBlastSolver with a custom DomainStore restricted to the
+    // LS-visited box, then validates any Sat candidate against the
+    // ORIGINAL NIA constraints. Default-OFF (XOLVER_NIA_LBBB),
+    // Full-effort only.
+    std::optional<TheoryCheckResult> stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // HYB-2 (master 2026-06-02, post-Smart-LS). Coordinated LS-on-U +
+    // BB-on-B for partition profiles where B dominates (|B| > |U|;
+    // ITS-like, H5 finding). LS-tracked bounds give per-U-var
+    // midpoints; pin U vars at midpoint via DomainStore singletons;
+    // run BitBlastSolver on the residual formula (which is now bounded
+    // since the unbounded U vars are pinned). Validate any Sat candidate
+    // against the ORIGINAL constraints. Default-OFF XOLVER_NIA_HYB_LS_BB,
+    // Full-effort only.
+    std::optional<TheoryCheckResult> stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort);
+    // Farkas-Or model constructor stage (user 2026-06-02). For
+    // disjunctive Farkas-certificate-synthesis problems (VeryMax/Stroeder).
+    // Default-OFF XOLVER_NIA_FARKAS_OR. Returns SAT only after validating
+    // against the original CoreIr formula; never UNSAT.
+    std::optional<TheoryCheckResult> stageFarkasOr(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
+    // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
+    // When stageLocalSearch's cost==0 gate fails, LS may still have visited a
+    // lowest-cost candidate (lsContext_.bestAssignment) that violates some
+    // active atom but satisfies the FULL original-formula because the violated
+    // atom appears in a disjunctive context whose other disjunct is true under
+    // the candidate. Walk the ORIGINAL coreIr_ assertions via ArithModelValidator
+    // and return Sat if Satisfied. Sound: ArithModelValidator is exact, the
+    // same validator used by Solver::Impl at the top-level soundness gate.
+    // Default-OFF XOLVER_NIA_LS_BOOL_EXTEND, Full-effort only.
+    std::optional<TheoryCheckResult> stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 

@@ -1,10 +1,12 @@
 #pragma once
 
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
+#include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include "theory/arith/nia/core/DomainStore.h"
 #include <optional>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -152,10 +154,136 @@ public:
     // same bestCost selection as discrete-Newton / multi-scale /
     // quad-critical, so soundness is unchanged.
     void setBilinearSubst(bool e) { bilinearSubst_ = e; }
+    // LS-VM1 (master 2026-06-02 8h directive). Pre-pin variables whose
+    // values are completely determined by an Eq atom of the form
+    // c*x + k = 0 with c|k (single-var linear equality, integer root).
+    // The LS walk then SKIPS these variables (no perturbation, no
+    // contribution to varToClauses move selection) and pre-loads their
+    // pinned value into the starting assignment. CInteger has explicit
+    // Farkas equality chains in every case; SAT14 + ITS have these in
+    // their initial-state defs. Universal lever. Default-OFF
+    // (XOLVER_NIA_LS_PIN_EQ). Sound by construction: pinning a value
+    // forced by an Eq atom never changes the satisfiability of the
+    // formula; the pinned move-skip only affects LS heuristic, never
+    // verdict (every Sat is still validator-gated).
+    void setPinEq(bool e) { pinEq_ = e; }
+    // LS-VM3 (master 2026-06-02). When LS plateaus across K consecutive
+    // restarts (cost minimum doesn't improve), break out early and run
+    // a CHEAP coefficient-GCD modular check on the equality atoms. If
+    // any `c*x*y + ... + k = 0` atom has gcd(coefficients) ∤ k, the
+    // atom (and hence the formula) has no integer solution — but LS
+    // alone cannot soundly claim UNSAT, so the check is informational
+    // and just lets us exit LS sooner (saving budget for upstream
+    // engines and/or downstream stages that DO emit UNSAT verdicts).
+    // The early exit also helps UNSAT-leaning cases where LS would
+    // otherwise burn all restarts to no avail. XOLVER_NIA_LS_MODULAR_ESCALATE
+    // default-OFF. Sound: LS still never claims UNSAT.
+    void setModularEscalate(bool e) { modularEscalate_ = e; }
+    // LS-VM5 (master 2026-06-02 bonus). Random-walk diversification:
+    // when sinceImprove exceeds DIVERSIFY_K (10 PAWS plateaus ~= 200
+    // flips), do K=10 random-walk steps (accept any move regardless
+    // of cost) to escape deep local minima. Complements PAWS clause-
+    // weight escapes — PAWS adjusts the cost landscape, diversify
+    // RANDOMIZES the trajectory. Default-OFF (XOLVER_NIA_LS_DIVERSIFY).
+    // Sound: random walks only mutate the LS state; verdict still
+    // validator-gated.
+    void setDiversify(bool e) { diversify_ = e; }
+    // HYB-X (user 2026-06-02 directive). Pass HYB-1 partition info to
+    // LS so the search uses bounded/unbounded classification for both
+    // initialization and clamp behavior. Per H5, SAT14 lambdas have
+    // small SAT models (z3 extracted values 0-300), so U vars are best
+    // initialized in [-100, 100] random rather than the legacy
+    // [-2000, 2000]. Sound: partition hint affects ONLY heuristic
+    // search; verdict is validator-gated. Default-OFF
+    // (XOLVER_NIA_LS_PARTITION_HINT). When the flag is off, LS ignores
+    // the passed partition.
+    void setPartitionHint(const PartitionResult& pr);
+    void setPartitionEnabled(bool e) { partitionHint_ = e; }
+    void clearPartitionHint() { unboundedVars_.clear(); }
+    // LS-SMART-1 (user 2026-06-02). Constraint-propagation init:
+    // replace blind random init with a SmartInit-proposed assignment
+    // that respects single-var pins, 2-var derived equalities, and
+    // tightened bounds. The proposed model is used as the starting
+    // assignment for restart 0; subsequent restarts continue to use
+    // the diversified-init / random branches. Default-OFF
+    // (XOLVER_NIA_LS_SMART_INIT). Sound: SmartInit produces a
+    // candidate model; LS validates any Sat as before.
+    void setSmartInit(bool e) { smartInit_ = e; }
+    // LS-SMART-2 (user 2026-06-02 core idea). Per-violation closed-form
+    // move: when a violated atom is linear or quadratic in the move
+    // variable (after substituting cur[] for the other variables), the
+    // discrete-Newton slope estimate becomes EXACT. LS-SMART-2 adds the
+    // closed-form integer root (or quadratic discriminant roots) as a
+    // move candidate even for SINGLE-var atoms (B-v2 only handles 2+
+    // vars). Sound: candidate enters bestCost selection like every
+    // other move; never affects verdict. Default-OFF
+    // (XOLVER_NIA_LS_SMART_MOVE).
+    void setSmartMove(bool e) { smartMove_ = e; }
+    // M11 (master 2026-06-02 move-explosion). Tabu search: track the
+    // last N committed (var, value) pairs; deprioritize candidates
+    // that would re-visit a recent state. Prevents the LS from
+    // oscillating between two basins. Default-OFF
+    // (XOLVER_NIA_LS_TABU). Sound: tabu only affects move selection;
+    // verdict still validator-gated.
+    void setTabu(bool e) { tabu_ = e; }
+    // M17 (master 2026-06-02 move-explosion). Violation-core focused
+    // move-search: instead of picking a falsified atom uniformly at
+    // random, prefer atoms that contribute the largest fraction of
+    // total violation. Concentrates LS effort on the structurally
+    // hard atoms. Default-OFF (XOLVER_NIA_LS_VIOLATION_CORE). Sound:
+    // selection bias only; verdict still validator-gated.
+    void setViolationCore(bool e) { violationCore_ = e; }
+    // LS-SMART-Z3 (user 2026-06-02 directive: "结合move才行"). After
+    // LS-SMART-2 closed-form generates a candidate target for the
+    // current falsified atom, IMMEDIATELY commit if the target
+    // EXACTLY satisfies that atom (cviol becomes 0). This bypasses
+    // the global-bestCost gate, letting LS escape local minima via
+    // single-atom-greedy moves. Sound (validator-gated). Default-OFF
+    // XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT.
+    void setAtomLocalAccept(bool e) { atomLocalAccept_ = e; }
+    // LBBB Phase 1 (master 2026-06-02). Bound tracking: record the
+    // per-var min/max values LS visited during the search; expose via
+    // getVarRange. Phase 2's stageBoundedBitBlast consumes these
+    // bounds to encode a per-var-bitwidth BV formula over the LS-
+    // explored box. Sound (read-only observation; verdict unchanged).
+    // Default-OFF (XOLVER_NIA_LS_BOUND_TRACK).
+    void setBoundTrack(bool e) { boundTrack_ = e; }
+    // LS-SMART-Z6/Z8/Z9/Z10 (master 2026-06-02). Direct setters for
+    // the new tunables so unit tests and frontend wiring can set them
+    // without env-var games. Mirrors the existing set* convention.
+    void setRestartsBudget(int n) { if (n > 0) restartsBudget_ = n; }
+    void setMaxFlipsBudget(int n) { if (n > 0) maxFlipsBudget_ = n; }
+    void setRwHub(bool e) { rwHub_ = e; }
+    void setRwLadder(bool e) { rwLadder_ = e; }
+    void setAdaptivePlateau(bool e) { adaptivePlateau_ = e; }
+    void setFarkasInit(bool e) { farkasInit_ = e; }
+    // Return (min, max) of values cur[v] reached during recent LS
+    // calls. If v wasn't tracked, returns std::nullopt.
+    std::optional<std::pair<mpz_class, mpz_class>>
+    getVarRange(const std::string& v) const {
+        auto mi = minSeen_.find(v);
+        auto mx = maxSeen_.find(v);
+        if (mi == minSeen_.end() || mx == maxSeen_.end()) return std::nullopt;
+        return std::make_pair(mi->second, mx->second);
+    }
+    // All tracked vars (for LBBB Phase 2 iteration).
+    const std::unordered_map<std::string, mpz_class>& trackedMin() const { return minSeen_; }
+    const std::unordered_map<std::string, mpz_class>& trackedMax() const { return maxSeen_; }
+    // True if the most recent LS call exited due to a fail trigger
+    // (K_iterations / M_restarts / stuck). Phase 2's stage gates on
+    // this — only bit-blast when LS actually failed.
+    bool hasFailed() const { return failed_; }
+    void clearFailed() { failed_ = false; }
     // Reset the persistent LS context (e.g. on solver reset / backtrack
     // beyond the level where the context was populated). Exposed for
     // NiaSolver to call from onBacktrack / onReset, and for tests.
-    void resetLsContext() { lsContext_.reset(); }
+    void resetLsContext() {
+        lsContext_.reset();
+        // LBBB Phase 1: clear bound-tracking on new solve.
+        minSeen_.clear();
+        maxSeen_.clear();
+        failed_ = false;
+    }
     // Read-only access to the persistent context (Phase L1 step 3 hooks:
     // NiaSolver reads varActivity for decision-priority boost; reads
     // bestAssignment to seed a candidate at decide time).
@@ -175,6 +303,64 @@ private:
     bool diverseInit_ = false;
     bool bilinearPair_ = false;
     bool bilinearSubst_ = false;
+    bool pinEq_ = false;
+    bool modularEscalate_ = false;
+    bool diversify_ = false;
+    bool partitionHint_ = false;
+    bool smartInit_ = false;
+    bool smartMove_ = false;
+    bool tabu_ = false;
+    bool violationCore_ = false;
+    bool atomLocalAccept_ = false;
+    bool boundTrack_ = false;
+    bool failed_ = false;
+    // LS-SMART-Z6 (master 2026-06-02). Restart/flip budgets for the
+    // production walkSatTwoLevel path. Defaults preserve historical
+    // behavior (20 × 800 = 16K total flips). z3pp's NIA-LS targets
+    // far larger budgets (~500K flips per restart); server batch runs
+    // can dial up via XOLVER_NIA_LS_RESTARTS / XOLVER_NIA_LS_MAX_FLIPS,
+    // or via the convenience knob XOLVER_NIA_LS_LONG which sets both
+    // to a z3pp-ballpark profile. Candidate-only (top-level validator
+    // gates SAT), so larger budgets are SOUND — they only buy more
+    // search effort, never a wrong verdict.
+    int restartsBudget_ = 20;
+    int maxFlipsBudget_ = 800;
+    // LS-SMART-Z8 (master 2026-06-02). Hub-weighted variable pick in
+    // the random-walk diversification branch. z3pp's NIA-LS biases
+    // toward variables that appear in many clauses ("hubs") because
+    // moving them has bigger global impact per flip. Default-OFF
+    // XOLVER_NIA_LS_RW_HUB. Mirrors the existing violation-core clause
+    // weighting pattern (cviol[i] * weight[i]).
+    bool rwHub_ = false;
+    // LS-SMART-Z9 (master 2026-06-02). Power-of-2 ladder nudge in the
+    // random-walk diversification branch. Default nudge is uniform
+    // [-10,+10], which is too small to escape on instances whose
+    // satisfying values are in the 100s+. Ladder samples from
+    // ±{1,2,4,8,16,32,64,128} with geometric bias (smaller more likely)
+    // so it covers both fine and coarse escapes. Default-OFF
+    // XOLVER_NIA_LS_RW_LADDER.
+    bool rwLadder_ = false;
+    // LS-SMART-Z10 (master 2026-06-02). Adaptive PAWS PLATEAU_K based
+    // on |vars|. Default K=20 bumps PAWS weights every 20 flips; for
+    // instances with >40 vars this is less than a full pass over all
+    // variables, meaning PAWS adds noise before the move-search has
+    // even tried each var once. Scale K to max(20, |vars|/2). Default-
+    // OFF XOLVER_NIA_LS_ADAPTIVE_PLATEAU.
+    bool adaptivePlateau_ = false;
+    // LS-SMART-Z11 (user 2026-06-02 redirect: solve VeryMax). Farkas
+    // single-1 diverse-init strategy. Stroeder/VeryMax termination
+    // encodings produce constraints whose SAT model has exactly one
+    // "lambda multiplier" set to 1 with all other vars at 0; existing
+    // diverse-init strategies (zero, lo, hi, mid, ±100, ±500, random)
+    // never hit this pattern. Add two new rotation slots: (7) one
+    // randomly-chosen var ← 1, rest ← 0; (8) one randomly-chosen var
+    // ← -1, rest ← 0. Composes with XOLVER_NIA_LS_DIVERSE_INIT (which
+    // owns the rotation cycle); no-op if DIVERSE_INIT off. Default-OFF
+    // XOLVER_NIA_LS_FARKAS_INIT.
+    bool farkasInit_ = false;
+    std::unordered_map<std::string, mpz_class> minSeen_;
+    std::unordered_map<std::string, mpz_class> maxSeen_;
+    std::unordered_set<std::string> unboundedVars_;
     NiaLsContext lsContext_;
 
     mpz_class violation(const IntegerModel& model,
