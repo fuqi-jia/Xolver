@@ -411,6 +411,46 @@ std::optional<SolveForResult> trySolveForLinearVariable(
     return std::nullopt;
 }
 
+// Enumerate EVERY isolatable monomial pattern in the given term list.
+// Necessary because a single derived constraint may admit multiple
+// independent substitution directions, e.g. eq2 = gamma0*mu + lambda1*vv1 - vv2
+// is isolatable on (gamma0*mu), (lambda1*vv1), and (vv2) — and downstream
+// targets may only contain ONE of those patterns. The single-pattern
+// variant above (used as fast path) returns whichever comes first in
+// term order, which for mgc_02 happens to miss the lambda1*vv1 pattern
+// that closes eq5.
+std::vector<SolveForResult> trySolveForAllIsolatablePatterns(
+        const std::vector<Term>& terms) {
+    std::vector<SolveForResult> out;
+    for (size_t i = 0; i < terms.size(); ++i) {
+        const Term& t = terms[i];
+        if (t.coefficient == 0) continue;
+        if (t.powers.empty()) continue;
+        PowerKey patternPK = canon(t.powers);
+        std::unordered_set<VarId> patternVars;
+        for (const auto& [v, e] : patternPK) patternVars.insert(v);
+        bool isolatable = true;
+        for (size_t j = 0; j < terms.size(); ++j) {
+            if (j == i) continue;
+            for (const auto& [vv, e] : terms[j].powers) {
+                if (patternVars.count(vv)) { isolatable = false; break; }
+            }
+            if (!isolatable) break;
+        }
+        if (!isolatable) continue;
+        SolveForResult r;
+        r.v = patternPK[0].first;
+        r.monomialPattern = patternPK;
+        r.coeffOfV = mpq_class(t.coefficient);
+        for (size_t j = 0; j < terms.size(); ++j) {
+            if (j == i) continue;
+            r.remainder.push_back(terms[j]);
+        }
+        out.push_back(std::move(r));
+    }
+    return out;
+}
+
 // Multiply two term-lists (polynomial product) and return the product.
 std::vector<Term> multiplyTerms(const std::vector<Term>& a,
                                  const std::vector<Term>& b) {
@@ -688,6 +728,71 @@ bool intervalRefutesEq(const PolyInterval& iv) {
     return false;
 }
 
+// Returns +1 if the single monomial is provably strictly positive given the
+// CertifiedSimplexFacts; -1 if strictly negative; 0 if indeterminate.
+//
+// Soundness: certifiedSign() returns +1 only when the variable's certified
+// lower bound is strictly > 0 (either lo.value > 0, or lo.value == 0 with
+// strict). So a +1-tagged monomial is genuinely > 0 in every model, and
+// the reasons backing certifiedSign are exactly the bounds we need.
+//
+// This complements interval analysis: a sum of strict-positive monomials
+// has interval lower bound 0 (since each monomial's interval lower is
+// open at 0), but the SUM is provably > 0. The interval check would
+// miss this; the strict-sign check catches it.
+int monomialStrictSign(
+        const PolynomialKernel::MonomialTerm& t,
+        const CertifiedSimplexFacts& facts,
+        std::vector<SatLit>& reasonsOut) {
+    if (t.coefficient == 0) return 0;
+    int sign = (t.coefficient > 0) ? +1 : -1;
+    std::vector<SatLit> local;
+    for (const auto& [v, e] : t.powers) {
+        int vs = facts.certifiedSign(v);
+        if (e % 2 == 0) {
+            // v^e >= 0 always; > 0 strict iff vs is strict-positive or strict-negative
+            // certifiedSign: +1 = strict>0, -1 = strict<0, +2 = nonneg, -2 = nonpos, 0 = indeterminate
+            if (vs != +1 && vs != -1) return 0;
+            // sign contribution from v^e (even power) is always +1
+            if (vs == +1) { if (auto lo = facts.lower(v)) for (auto r : lo->reasons) local.push_back(r); }
+            else            { if (auto hi = facts.upper(v)) for (auto r : hi->reasons) local.push_back(r); }
+        } else {
+            if (vs == +1) {
+                if (auto lo = facts.lower(v)) for (auto r : lo->reasons) local.push_back(r);
+            } else if (vs == -1) {
+                sign = -sign;
+                if (auto hi = facts.upper(v)) for (auto r : hi->reasons) local.push_back(r);
+            } else {
+                return 0;
+            }
+        }
+    }
+    for (auto r : local) reasonsOut.push_back(r);
+    return sign;
+}
+
+// Returns +1 if every monomial is strict-positive (with at least one nonzero),
+// -1 if every is strict-negative, 0 if indeterminate. Collects supporting
+// reasons from the strict-sign chain.
+int polyStrictSign(
+        const std::vector<PolynomialKernel::MonomialTerm>& terms,
+        const CertifiedSimplexFacts& facts,
+        std::vector<SatLit>& reasonsOut) {
+    int polySign = 0;
+    std::vector<SatLit> local;
+    for (const auto& t : terms) {
+        if (t.coefficient == 0) continue;
+        int ms = monomialStrictSign(t, facts, local);
+        if (ms == 0) return 0;
+        if (polySign == 0) polySign = ms;
+        else if (polySign != ms) return 0;
+    }
+    if (polySign != 0) {
+        for (auto r : local) reasonsOut.push_back(r);
+    }
+    return polySign;
+}
+
 // Key for dedup of derived term-lists (so we don't loop forever).
 std::string termsKey(const std::vector<PolynomialKernel::MonomialTerm>& terms) {
     std::string s;
@@ -783,6 +888,7 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
         else   origTerms.emplace_back();
     }
 
+
     auto checkRefutation = [&](const std::vector<Term>& terms,
                                const std::vector<SatLit>& baseReasons,
                                Relation rel)
@@ -836,74 +942,101 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
         for (auto r : reasons) reasonsSet.insert(rkey(r));
         for (int round = 0; round < maxApplications; ++round) {
             bool anyApplied = false;
-            // Try every derived constraint as a substitution source.
+            // 1-STEP LOOKAHEAD: enumerate every (derived constraint, isolatable
+            // pattern) pair, compute the after-substitution polynomial, and
+            // pick the substitution that yields the SMALLEST result. This is
+            // the difference between a greedy in-order pass that blows up
+            // (substituting vv3 -> 2-term replacement into eq5 grows to 50+
+            // terms because eq5 contains vv3^2,vv3^3,vv3^4) and a min-growth
+            // pass that prefers surgical compound substitutions (lambda1*vv1
+            // -> vv2 - gamma0*mu replaces exactly ONE term with a 2-term
+            // expansion, keeping the polynomial controllable).
+            //
+            // Equivalent to: at each round, look one step ahead at all moves,
+            // commit to the move with the smallest result. Quadratic per
+            // round (n_derived * patterns_per * cost_to_subst) but each
+            // application moves us closer to fixpoint.
+            constexpr size_t kMaxFocusedTerms = 200;
+            std::optional<size_t> bestDi;
+            std::optional<SolveForResult> bestSf;
+            std::vector<Term> bestAfter;
+            std::vector<Term> bestReplacement;
+            size_t bestAfterSize = SIZE_MAX;
+
             for (size_t di = 0; di < derived.size(); ++di) {
-                auto sf = trySolveForLinearVariable(derived[di].terms);
-                if (!sf) continue;
-                mpq_class invScale = mpq_class(-1) / sf->coeffOfV;
-                auto replacement = scaleTerms(sf->remainder, invScale);
-                if (replacement.empty() && !sf->remainder.empty()) continue;
-                // Check if pattern appears in current.
-                std::vector<Term> after;
-                if (sf->monomialPattern.size() == 1 && sf->monomialPattern[0].second == 1) {
-                    VarId v = sf->v;
-                    bool hasVar = false;
-                    for (const auto& t : current) {
-                        for (const auto& [vv, e] : t.powers) {
-                            if (vv == v) { hasVar = true; break; }
+                auto allPatterns = trySolveForAllIsolatablePatterns(derived[di].terms);
+                if (allPatterns.empty()) continue;
+                for (const auto& sf : allPatterns) {
+                    mpq_class invScale = mpq_class(-1) / sf.coeffOfV;
+                    auto replacement = scaleTerms(sf.remainder, invScale);
+                    if (replacement.empty() && !sf.remainder.empty()) continue;
+                    std::vector<Term> after;
+                    if (sf.monomialPattern.size() == 1 && sf.monomialPattern[0].second == 1) {
+                        VarId v = sf.v;
+                        bool hasVar = false;
+                        for (const auto& t : current) {
+                            for (const auto& [vv, e] : t.powers) {
+                                if (vv == v) { hasVar = true; break; }
+                            }
+                            if (hasVar) break;
                         }
-                        if (hasVar) break;
-                    }
-                    if (!hasVar) continue;
-                    after = substitutePolyInTerms(current, v, replacement);
-                } else {
-                    bool hasPattern = false;
-                    for (const auto& t : current) {
-                        std::unordered_map<VarId, int> tMap;
-                        for (const auto& [v, e] : t.powers) tMap[v] = e;
-                        bool ok = true;
-                        for (const auto& [v, e] : sf->monomialPattern) {
-                            auto it = tMap.find(v);
-                            if (it == tMap.end() || it->second < e) { ok = false; break; }
+                        if (!hasVar) continue;
+                        after = substitutePolyInTerms(current, v, replacement);
+                    } else {
+                        bool hasPattern = false;
+                        for (const auto& t : current) {
+                            std::unordered_map<VarId, int> tMap;
+                            for (const auto& [v, e] : t.powers) tMap[v] = e;
+                            bool ok = true;
+                            for (const auto& [v, e] : sf.monomialPattern) {
+                                auto it = tMap.find(v);
+                                if (it == tMap.end() || it->second < e) { ok = false; break; }
+                            }
+                            if (ok) { hasPattern = true; break; }
                         }
-                        if (ok) { hasPattern = true; break; }
+                        if (!hasPattern) continue;
+                        after = substituteMonomialPatternInTerms(current, sf.monomialPattern, replacement);
                     }
-                    if (!hasPattern) continue;
-                    after = substituteMonomialPatternInTerms(current, sf->monomialPattern, replacement);
-                }
-                if (after.empty()) continue;
-                // Soundness-preserving completeness cap: skip substitutions
-                // that would explode the polynomial beyond a useful refutation
-                // size. Dropping a substitution is sound (we just lose
-                // completeness on this path; the constraint is unchanged).
-                // 200 terms is enough for the cvc5 NLext-style refutations we
-                // can actually evaluate via interval arithmetic; beyond that
-                // the interval becomes (-inf,+inf) anyway and we're burning
-                // cycles for nothing. mgc_02 cascade hit 22301 terms = pure
-                // waste.
-                constexpr size_t kMaxFocusedTerms = 200;
-                if (after.size() > kMaxFocusedTerms) {
-                    if (diag) {
-                        std::fprintf(stderr, "[OSF-FOCUS] skip D[%zu]: subst -> %zu terms (cap %zu)\n",
-                                     di, after.size(), kMaxFocusedTerms);
+                    if (after.empty()) continue;
+                    if (after.size() > kMaxFocusedTerms) continue;
+                    // Pick smallest result (greedy-min-growth). Tiebreak: prefer
+                    // strict size reduction (after < current) over identity moves.
+                    if (after.size() < bestAfterSize ||
+                        (after.size() == bestAfterSize && after.size() < current.size() && bestAfterSize >= current.size())) {
+                        bestAfterSize = after.size();
+                        bestAfter = after;
+                        bestDi = di;
+                        bestSf = sf;
+                        bestReplacement = replacement;
                     }
-                    continue;
                 }
-                current = std::move(after);
+            }
+            if (!bestDi) break;   // no applicable substitution this round
+            {
+                size_t di = *bestDi;
+                const auto& sf = *bestSf;
+                current = std::move(bestAfter);
                 for (auto r : derived[di].reasons) {
                     if (reasonsSet.insert(rkey(r)).second) reasons.push_back(r);
                 }
                 anyApplied = true;
                 if (diag) {
-                    std::fprintf(stderr, "[OSF-FOCUS] applied subst from D[%zu]; current now %zu terms\n",
-                                 di, current.size());
+                    std::fprintf(stderr, "[OSF-FOCUS] applied D[%zu] pattern=[", di);
+                    for (const auto& [v, e] : sf.monomialPattern) {
+                        std::fprintf(stderr, "%u^%d,", (unsigned)v, e);
+                    }
+                    std::fprintf(stderr, "] repl=%zu terms; current now %zu terms\n",
+                                 bestReplacement.size(), current.size());
                 }
-                // Check refutation.
-                std::vector<SatLit> chkReasons = reasons;
+                // Check refutation. Use both the additive interval bound
+                // AND the strict-sign-definite test (which catches the
+                // sum-of-strict-positives-equals-zero contradiction that
+                // additive interval analysis misses because each monomial's
+                // interval lower is open at 0).
                 std::vector<SatLit> usedR;
                 PolyInterval iv = intervalOfTerms(current, facts, usedR);
+                bool refuted = false;
                 if (!iv.indeterminate) {
-                    bool refuted = false;
                     switch (targetRel) {
                         case Relation::Eq:
                             if (iv.low && *iv.low > 0) refuted = true;
@@ -923,21 +1056,48 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                             break;
                         default: break;
                     }
-                    if (refuted) {
-                        IntervalConflict conf;
-                        for (auto r : reasons) conf.reasons.push_back(r);
-                        for (auto r : usedR) {
-                            if (reasonsSet.insert(rkey(r)).second) conf.reasons.push_back(r);
+                }
+                std::vector<SatLit> strictR;
+                if (!refuted) {
+                    int ssign = polyStrictSign(current, facts, strictR);
+                    if (ssign != 0) {
+                        switch (targetRel) {
+                            case Relation::Eq:
+                                refuted = true;   // strict positive != 0 or strict negative != 0
+                                break;
+                            case Relation::Geq:
+                                if (ssign < 0) refuted = true;
+                                break;
+                            case Relation::Gt:
+                                if (ssign <= 0) refuted = true;  // ssign==0 already excluded
+                                break;
+                            case Relation::Leq:
+                                if (ssign > 0) refuted = true;
+                                break;
+                            case Relation::Lt:
+                                if (ssign >= 0) refuted = true;
+                                break;
+                            default: break;
                         }
-                        conf.explanation = "focused chained substitution closes target";
-                        if (diag) {
-                            std::fprintf(stderr, "[OSF-FOCUS] CONFLICT after %d substitutions; final %zu terms\n",
-                                         round + 1, current.size());
-                        }
-                        return conf;
                     }
                 }
-            }
+                if (refuted) {
+                    IntervalConflict conf;
+                    for (auto r : reasons) conf.reasons.push_back(r);
+                    for (auto r : usedR) {
+                        if (reasonsSet.insert(rkey(r)).second) conf.reasons.push_back(r);
+                    }
+                    for (auto r : strictR) {
+                        if (reasonsSet.insert(rkey(r)).second) conf.reasons.push_back(r);
+                    }
+                    conf.explanation = "focused chained substitution closes target";
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-FOCUS] CONFLICT after %d substitutions; final %zu terms\n",
+                                     round + 1, current.size());
+                    }
+                    return conf;
+                }
+            } // end apply-best block
             if (!anyApplied) break;
         }
         return std::nullopt;
@@ -1075,14 +1235,20 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
         // after the cascade gamma0 -> vv1*(vv3^2 + 1) -> ...
         size_t derivedAtStartOfSubst = derived.size();
         for (size_t di = 0; di < derivedAtStartOfSubst; ++di) {
-            const auto solveOpt = trySolveForLinearVariable(derived[di].terms);
-            if (!solveOpt) continue;
-            const VarId solveVar = solveOpt->v;
-            const PowerKey solvePattern = solveOpt->monomialPattern;
+            // Enumerate ALL isolatable patterns per derived constraint, not
+            // just the first. mgc_02 specifically needs the lambda1*vv1
+            // pattern in eq2 (which is the second isolatable pattern, the
+            // first being gamma0*mu — irrelevant to eq5 since eq5 has no
+            // gamma0).
+            const auto allPatterns = trySolveForAllIsolatablePatterns(derived[di].terms);
+            if (allPatterns.empty()) continue;
+            for (const auto& patternResult : allPatterns) {
+            const VarId solveVar = patternResult.v;
+            const PowerKey solvePattern = patternResult.monomialPattern;
             // Replacement poly: -remainder / coeffOfV (mpq for the scale).
-            mpq_class invScale = mpq_class(-1) / solveOpt->coeffOfV;
-            std::vector<Term> replacement = scaleTerms(solveOpt->remainder, invScale);
-            if (replacement.empty() && !solveOpt->remainder.empty()) continue;  // bail on fractional
+            mpq_class invScale = mpq_class(-1) / patternResult.coeffOfV;
+            std::vector<Term> replacement = scaleTerms(patternResult.remainder, invScale);
+            if (replacement.empty() && !patternResult.remainder.empty()) continue;  // bail on fractional
 
             // Eager-conflict-on-substitution return token.
             std::optional<IntervalConflict> eagerConflict;
@@ -1215,6 +1381,7 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                 tryAddSubst(dj_terms_snap, dj_reasons_snap, "D", dj);
                 if (eagerConflict) return *eagerConflict;
             }
+            } // end for (const auto& patternResult : allPatterns)
         }
 
         // After each iteration, try the focused approach: apply ALL solvable
