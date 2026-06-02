@@ -326,12 +326,17 @@ LinearizationResult IncrementalLinearizer::run(
                 if (monoBoundEnabled && registry_ && aux.key.powers.size() >= 2) {
                     std::vector<MonomialBoundGenerator::Factor> factors;
                     factors.reserve(aux.key.powers.size());
-                    bool allBounded = true;
+                    // Family 0 (sign-only, NEW) only needs sign-pinned
+                    // bounds, not finite ones — so we collect what we can.
+                    // Families 1-3 self-decline inside the generator when
+                    // ranges are missing. We still require every factor to
+                    // have a bound entry so reason tracking holds.
+                    bool haveAllBoundEntries = true;
                     for (const auto& [vid, exp] : aux.key.powers) {
                         std::string vn = std::string(kernel_.varName(vid));
                         auto vb = bounds.get(vn);
-                        if (!vb || !vb->hasFiniteCompleteBounds()) {
-                            allBounded = false; break;
+                        if (!vb) {
+                            haveAllBoundEntries = false; break;
                         }
                         MonomialBoundGenerator::Factor f;
                         f.var = vn;
@@ -343,7 +348,7 @@ LinearizationResult IncrementalLinearizer::run(
                         }
                         factors.push_back(std::move(f));
                     }
-                    if (allBounded) {
+                    if (haveAllBoundEntries) {
                         MonomialBoundGenerator::Options mbOpt;
                         mbOpt.maxCutsHere = config.maxCutsPerTerm + 4;
                         auto mbCuts = mbGen_.generate(

@@ -96,8 +96,68 @@ std::vector<LinearCut> MonomialBoundGenerator::generate(
                               f.bounds.upperReasons.begin(),
                               f.bounds.upperReasons.end());
     }
-    // Without finite ranges on every factor, none of the three families
-    // can produce a sound numeric bound. Bail.
+    // ------------------------------------------------------------------
+    // Family 0: sign-only cuts (NEW). Fires even when factors lack upper
+    // bounds — only requires each factor to be sign-pinned (lower > 0
+    // OR upper < 0 with odd exponent collapsing the sign). This was the
+    // hole my Phase 2 generator had: every mgc-style benchmark has
+    // strictly-positive vars with no upper bound, so the previous code
+    // emitted zero cuts. cvc5's ARITH_NL_COMPARISON sits at this layer.
+    //
+    // Soundness: for each factor, even exponent ⇒ x^e ≥ 0 always; odd
+    // exponent ⇒ sign(x^e) = sign(x), strict-pinned to sign(lower) when
+    // lower > 0 (the only one-sided case the cut needs). Combined with
+    // coefficient sign, the monomial's strict sign is determined.
+    // Emit `s > 0` (as `-s < 0`) or `s < 0` (as `s < 0`).
+    if (opt.emitSignOnly) {
+        int monoSign = (coefficient > 0) ? 1 : (coefficient < 0 ? -1 : 0);
+        bool signPinned = (monoSign != 0);
+        std::vector<SatLit> signReasons{nonlinearReason};
+        for (const auto& f : factors) {
+            if (!signPinned) break;
+            int factorSign;
+            const bool eEven = (f.exponent % 2) == 0;
+            if (f.bounds.hasLower && f.bounds.lower > 0) {
+                // x > 0 ⇒ x^e > 0 regardless of parity.
+                factorSign = 1;
+                signReasons.insert(signReasons.end(),
+                                   f.bounds.lowerReasons.begin(),
+                                   f.bounds.lowerReasons.end());
+            } else if (f.bounds.hasUpper && f.bounds.upper < 0) {
+                // x < 0 ⇒ x^e > 0 if even, < 0 if odd.
+                factorSign = eEven ? 1 : -1;
+                signReasons.insert(signReasons.end(),
+                                   f.bounds.upperReasons.begin(),
+                                   f.bounds.upperReasons.end());
+            } else if (eEven) {
+                // Even exponent and sign-unpinned: x^e ≥ 0, but could be 0
+                // at x = 0. The MONOMIAL becomes non-strict (≥ 0 or ≤ 0),
+                // which the strict `<` cut doesn't capture. Drop this case
+                // to keep the cut strict and sound.
+                signPinned = false;
+                break;
+            } else {
+                // Odd exponent without sign-pinned bound ⇒ no sign info.
+                signPinned = false;
+                break;
+            }
+            monoSign *= factorSign;
+        }
+        if (signPinned && monoSign != 0) {
+            // monoSign > 0 ⇒ s > 0 ⇒ `-s < 0`; monoSign < 0 ⇒ s < 0.
+            ZeroLinearConstraint z;
+            z.expr.terms.push_back({s.name, mpq_class(monoSign > 0 ? -1 : 1)});
+            z.expr.constant = 0;
+            z.rel = Relation::Lt;
+            z.sort = sort;
+            z.debugTag = "mono_sign_only";
+            cuts.push_back({std::move(z), signReasons, "mono_sign_only"});
+        }
+    }
+
+    // Without finite ranges on every factor, the three numeric families
+    // can't produce a sound bound. Family 0 above doesn't depend on
+    // ranges so it's already emitted; this gate only blocks Families 1-3.
     for (const auto& r : ranges) if (!r) return cuts;
 
     auto totalRange = productRange(coefficient, ranges);

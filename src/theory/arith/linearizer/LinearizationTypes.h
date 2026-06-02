@@ -86,6 +86,20 @@ struct BoundInfo {
     bool lowerReasonComplete = false;
     bool upperReasonComplete = false;
 
+    // Strict-bound markers (NEW). `lowerStrict=true` means the constraint
+    // is `x > lower` (not `x >= lower`); same for upper. Required for the
+    // sign-only Family 0 cut: without these, `x > 0` would register as
+    // `lower=0` and the strict-positive sign check would silently fail.
+    bool lowerStrict = false;
+    bool upperStrict = false;
+
+    bool isStrictPositive() const {
+        return hasLower && (lower > 0 || (lower == 0 && lowerStrict));
+    }
+    bool isStrictNegative() const {
+        return hasUpper && (upper < 0 || (upper == 0 && upperStrict));
+    }
+
     bool isFinite() const { return hasLower && hasUpper; }
 
     bool hasFiniteCompleteBounds() const {

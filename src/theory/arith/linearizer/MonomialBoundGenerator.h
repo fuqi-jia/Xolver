@@ -90,6 +90,7 @@ public:
     };
 
     struct Options {
+        bool emitSignOnly     = true;  // cut family 0 (NEW: sign-only, no upper bound)
         bool emitInterval     = true;  // cut family 1
         bool emitPivotCorner  = true;  // cut family 2
         bool emitTangentPlane = true;  // cut family 3

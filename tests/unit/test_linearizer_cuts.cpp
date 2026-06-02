@@ -195,6 +195,7 @@ TEST_CASE("MonomialBound: interval-only emits 2 cuts on tight positive box") {
         mkF("x", 1, 1, 2), mkF("y", 1, 1, 2), mkF("z", 1, 1, 2)
     };
     MonomialBoundGenerator::Options opt;
+    opt.emitSignOnly = false;  // measure only the interval family
     opt.emitPivotCorner = false;
     opt.emitTangentPlane = false;
     auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
@@ -209,6 +210,7 @@ TEST_CASE("MonomialBound: tangent plane lower bound on all-positive box") {
         mkF("y", 1, mpq_class(1), mpq_class(2), mpq_class(1))
     };
     MonomialBoundGenerator::Options opt;
+    opt.emitSignOnly = false;  // measure only the tangent-plane family
     opt.emitInterval = false;
     opt.emitPivotCorner = false;
     opt.emitTangentPlane = true;
@@ -226,6 +228,7 @@ TEST_CASE("MonomialBound: pivot-corner emits when even-exponent factor present")
         mkF("y", 2, mpq_class(1), mpq_class(2))     // pivot on y is exp=2 -> kicks in
     };
     MonomialBoundGenerator::Options opt;
+    opt.emitSignOnly = false;  // measure only the pivot-corner family
     opt.emitInterval = false;
     opt.emitTangentPlane = false;
     opt.emitPivotCorner = true;
