@@ -679,16 +679,25 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // Phase 1 (XOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
-    // congruences the scalar loop above cannot reach — the bridge-vars/const
-    // args (internal or constant shared terms used as UF/select arguments) that
-    // are value-equal to a sibling argument but not yet merged. EUF reports the
-    // value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split per
-    // pair. TERMINATION: the UF applications and (purification-created) bridge
-    // vars are fixed pre-solve and arranging spawns no new pairs, so the
+    // Phase 1 (XOLVER_COMB_UFARG_ARRANGE, default ON): arrange unresolved UF-
+    // argument congruences the scalar loop above cannot reach — the bridge-vars/
+    // const args (internal or constant shared terms used as UF/select arguments)
+    // that are value-equal to a sibling argument but not yet merged. EUF reports
+    // the value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split
+    // per pair. TERMINATION: the UF applications and (purification-created)
+    // bridge vars are fixed pre-solve and arranging spawns no new pairs, so the
     // candidate set is finite and emittedArrangementSplits_ dedup bounds it.
+    //
+    // 2026-06-02 PROMOTE default-ON: closes Wisa-class false-Unknown floors in
+    // QF_UFLIA. xs-05-08/12/16/20 all move unknown -> correct unsat. Unit
+    // 1098/1098 + reg 670/670 unchanged, 0 unsound. Escape: XOLVER_COMB_UFARG_ARRANGE=0.
+    auto ufargArrangeOn = []() {
+        const char* e = std::getenv("XOLVER_COMB_UFARG_ARRANGE");
+        if (!e) return true;
+        return !(e[0] == '0' && e[1] == '\0');
+    };
     if (effort == TheoryEffort::Full && combinationMode_ && sharedTermRegistry_ &&
-        registry_ && std::getenv("XOLVER_COMB_UFARG_ARRANGE")) {
+        registry_ && ufargArrangeOn()) {
         TheorySolver* eufS = nullptr;
         auto it = solverByTheory_.find(TheoryId::EUF);
         if (it != solverByTheory_.end()) eufS = it->second;
