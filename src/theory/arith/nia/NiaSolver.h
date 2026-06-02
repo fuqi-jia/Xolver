@@ -67,7 +67,7 @@ public:
                    int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
+    void setCoreIr(const CoreIr* ir);
     void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
 
     bool supportsCombination() const override { return true; }

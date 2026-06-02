@@ -18,6 +18,30 @@
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "proof/ArithModelValidator.h"
+#include "theory/arith/nia/farkas/FarkasOrDetector.h"
+#include <iostream>
+
+namespace xolver {
+void NiaSolver::setCoreIr(const CoreIr* ir) {
+    coreIr_ = ir;
+    // Farkas-Or Phase 0: env-gated structural dump. Bypasses std::cerr
+    // (which xolver-cli silently consumes); writes to the file named by
+    // XOLVER_NIA_FARKAS_DUMP_FILE if set, else /tmp/farkas_dump.
+    if (std::getenv("XOLVER_NIA_FARKAS_DUMP") && ir != nullptr) {
+        const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
+        if (!path || !*path) path = "/tmp/farkas_dump";
+        FILE* f = std::fopen(path, "a");
+        if (f) {
+            farkas::FarkasOrDetector det(*ir);
+            auto profile = det.detect();
+            std::string s = det.dump(profile);
+            std::fwrite(s.data(), 1, s.size(), f);
+            std::fputc('\n', f);
+            std::fclose(f);
+        }
+    }
+}
+} // namespace xolver
 #include <unordered_set>
 #include <cstdlib>
 #include <iostream>

@@ -28,6 +28,7 @@
 #include "parser/adapter.h"
 #include "sat/SatSolver.h"
 #include "frontend/atomization/Atomizer.h"
+#include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -1469,6 +1470,23 @@ public:
         // subformula (each assertion is a positive root) so the monotone
         // connectives below emit only the required half of their definition.
         phase("setup-done");
+        // Farkas-Or Phase 0 hook: dump pre-atomization structural profile
+        // to a file (env XOLVER_NIA_FARKAS_DUMP=1 enables; output goes to
+        // XOLVER_NIA_FARKAS_DUMP_FILE or /tmp/farkas_dump). Pure
+        // diagnostic — no behavioral change to the solve.
+        if (std::getenv("XOLVER_NIA_FARKAS_DUMP")) {
+            const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
+            if (!path || !*path) path = "/tmp/farkas_dump";
+            FILE* fdump = std::fopen(path, "a");
+            if (fdump) {
+                farkas::FarkasOrDetector det(*ir);
+                auto profile = det.detect();
+                std::string s = det.dump(profile);
+                std::fwrite(s.data(), 1, s.size(), fdump);
+                std::fputc('\n', fdump);
+                std::fclose(fdump);
+            }
+        }
         atomizer.computePolarities(ir->assertions(), *ir);
         for (ExprId assertion : ir->assertions()) {
             SatLit lit = atomizer.atomize(assertion, *ir);
