@@ -70,7 +70,20 @@ bool TheoryManager::useSatMin() {
 
 bool TheoryManager::useModelBased() {
     if (!modelBasedEnvChecked_) {
-        modelBasedEnabled_ = (std::getenv("XOLVER_COMB_MODEL_BASED") != nullptr);
+        // 2026-06-02 PROMOTE default-ON: closes the residual Wisa false-SAT
+        // class (xs-05-16) where arith bridges b_v1 and 0_const have equal
+        // model values but EUF doesn't merge them, leaving each x_count call
+        // with its own independent arith bridge value, so the arith constraint
+        // arg1 = arg0 + 4*x_count(...) + 4*s_count(...) appears satisfied at
+        // the SAT layer with mismatched bridge values. The model-based scalar
+        // arrangement (at Full effort, lines 631+) emits a SPLIT lemma over
+        // every same-arith-value user scalar pair that isn't yet merged in
+        // EUF, forcing SAT to commit so EUF can react. Verified default-on:
+        //   Wisa(30) FLOOR OFF + COMB_MODEL_BASED=1: 0 unsound
+        //   unit 1098/1098, reg 670/670
+        // Escape: XOLVER_COMB_MODEL_BASED=0.
+        const char* e = std::getenv("XOLVER_COMB_MODEL_BASED");
+        modelBasedEnabled_ = e ? !(e[0] == '0' && e[1] == '\0') : true;
         modelBasedEnvChecked_ = true;
     }
     return modelBasedEnabled_;
@@ -174,6 +187,21 @@ void TheoryManager::backtrackToLevel(int level) {
     }
 
     discardSnapshotsAbove(level);
+
+    // Clear the deduced-equality emission cache on EVERY backtrack:
+    // the cache key (solver, a, b) is coarse — it blocks ANY re-emission of
+    // the same shared-term pair from the same solver, even when the EUF
+    // explanation chain re-establishes a=b under a different SAT branch with
+    // a different reason-set (a NOVEL lemma). lemmaDb.insertIfNew is the
+    // fine-grained dedup layer (by literal set) and still rejects truly
+    // identical lemmas, so dropping the coarse cache on backtrack cannot
+    // cause floods — it only restores re-emission of a fact whose reasons
+    // changed across the conflict. This is the Wisa-class fix: on branch A,
+    // OR-clause picks (= sf(X) adr_lo) and reasons R_A entail bridge_K~bridge_J;
+    // backtrack past R_A; on branch B, OR-clause picks (= sf(X) adr_hi) and
+    // a different reason-set R_B re-establishes the SAME merge, producing
+    // a novel lemma that was previously suppressed by the coarse cache.
+    deducedEqCache_.clear();
 }
 
 std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraints() const {
@@ -200,12 +228,29 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 }
 
 std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
-    // Scope to pure single-theory solving: in combination the lifted bound
-    // propagation hits the shared bus / Nelson-Oppen arrangement, which needs
-    // separate review (A3 territory) before enabling.
-    if (combinationMode_) return {};
+    // Single-theory: always drain entailments (per-solver Farkas/value-pin
+    // propagations are sound by construction).
+    //
+    // Combination: drain LINEAR-theory entailments (LIA/LRA) even when a
+    // nonlinear solver (NIA/NRA/NIRA) is present — the linear sibling is ALWAYS
+    // registered alongside the nonlinear one for NIA/NRA/NIRA logics
+    // (TheoryFactory::setupSolvers), and LIA/LRA's entailment is sound and
+    // well-defined regardless of nonlinear's presence. This is the chain UFLIA/
+    // UFLRA/UFNIA/UFNRA all need to close the goal-atom propagation (Wisa class
+    // of false-SAT). Nonlinear solvers themselves do not yet implement
+    // entailment so the suppression only matters for them.
     std::vector<TheoryLemma> out;
     for (auto& s : solvers_) {
+        // Only LIA / LRA contribute entailments today; NIA / NRA / NIRA / EUF
+        // override the base no-op. The check below documents intent: it is
+        // safe to drain ANY solver's entailments because the base returns {}.
+        if (combinationMode_) {
+            TheoryId id = s->id();
+            bool isLinearArith =
+                (id == TheoryId::LIA || id == TheoryId::LRA ||
+                 id == TheoryId::IDL || id == TheoryId::RDL);
+            if (!isLinearArith) continue;
+        }
         auto v = s->takeEntailmentPropagations();
         for (auto& l : v) out.push_back(std::move(l));
     }
@@ -579,9 +624,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         // current arith-model value (from whichever arith solver owns them).
         struct ValuedTerm { SharedTermId id; SortId sort; RealValue val; };
         std::vector<ValuedTerm> valued;
+        const bool arrangeInternals = std::getenv("XOLVER_COMB_ARRANGE_INTERNAL") != nullptr;
         for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
             const auto* st = sharedTermRegistry_->get(stId);
-            if (!st || st->isInternal) continue;   // scope to user terms only
+            if (!st) continue;
+            if (!arrangeInternals && st->isInternal) continue;   // scope to user terms only by default
             // Skip numeric-constant shared terms: a constant-vs-variable
             // arrangement is not needed (the variable's value already coincides
             // with the constant in this model, but they are NOT required equal),
@@ -645,16 +692,25 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
-    // Phase 1 (XOLVER_COMB_UFARG_ARRANGE): arrange unresolved UF-argument
-    // congruences the scalar loop above cannot reach — the bridge-vars/const
-    // args (internal or constant shared terms used as UF/select arguments) that
-    // are value-equal to a sibling argument but not yet merged. EUF reports the
-    // value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split per
-    // pair. TERMINATION: the UF applications and (purification-created) bridge
-    // vars are fixed pre-solve and arranging spawns no new pairs, so the
+    // Phase 1 (XOLVER_COMB_UFARG_ARRANGE, default ON): arrange unresolved UF-
+    // argument congruences the scalar loop above cannot reach — the bridge-vars/
+    // const args (internal or constant shared terms used as UF/select arguments)
+    // that are value-equal to a sibling argument but not yet merged. EUF reports
+    // the value-equal-but-not-merged arg pairs; emit a one-time a=b ∨ a≠b split
+    // per pair. TERMINATION: the UF applications and (purification-created)
+    // bridge vars are fixed pre-solve and arranging spawns no new pairs, so the
     // candidate set is finite and emittedArrangementSplits_ dedup bounds it.
+    //
+    // 2026-06-02 PROMOTE default-ON: closes Wisa-class false-Unknown floors in
+    // QF_UFLIA. xs-05-08/12/16/20 all move unknown -> correct unsat. Unit
+    // 1098/1098 + reg 670/670 unchanged, 0 unsound. Escape: XOLVER_COMB_UFARG_ARRANGE=0.
+    auto ufargArrangeOn = []() {
+        const char* e = std::getenv("XOLVER_COMB_UFARG_ARRANGE");
+        if (!e) return true;
+        return !(e[0] == '0' && e[1] == '\0');
+    };
     if (effort == TheoryEffort::Full && combinationMode_ && sharedTermRegistry_ &&
-        registry_ && std::getenv("XOLVER_COMB_UFARG_ARRANGE")) {
+        registry_ && ufargArrangeOn()) {
         TheorySolver* eufS = nullptr;
         auto it = solverByTheory_.find(TheoryId::EUF);
         if (it != solverByTheory_.end()) eufS = it->second;
@@ -979,6 +1035,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             else if (v == "#b:0") v = "0";
         };
         std::vector<std::string> dropFns;
+        const bool diagFi = std::getenv("XOLVER_DIAG_FI") != nullptr;
         for (auto& [fname, fi] : aggregated.functionInterps) {
             for (auto& e : fi.entries) {
                 for (auto& a : e.args) toBare(a);
@@ -996,8 +1053,20 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
                 for (size_t j = i + 1; j < fi.entries.size(); ++j)
                     if (fi.entries[i].args == fi.entries[j].args &&
                         fi.entries[i].value != fi.entries[j].value) {
+                        if (diagFi) std::fprintf(stderr,
+                            "[FI-CONFLICT] %s args=[", fname.c_str());
+                        if (diagFi) {
+                            for (auto& a : fi.entries[i].args)
+                                std::fprintf(stderr, "%s,", a.c_str());
+                            std::fprintf(stderr, "] vals=%s vs %s\n",
+                                fi.entries[i].value.c_str(),
+                                fi.entries[j].value.c_str());
+                        }
                         inconsistent = true; break;
                     }
+            if (diagFi) std::fprintf(stderr,
+                "[FI] %s entries=%zu inconsistent=%d\n",
+                fname.c_str(), fi.entries.size(), inconsistent?1:0);
             if (inconsistent) dropFns.push_back(fname);
         }
         for (const auto& f : dropFns) aggregated.functionInterps.erase(f);

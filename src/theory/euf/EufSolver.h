@@ -233,6 +233,18 @@ private:
     // UNSAT sound). Shared by the eager watch and the post-loop diseq scan.
     TheoryConflict buildDiseqConflict(const ActiveDisequality& d);
 
+    // UFE INVARIANT CHECKER (XOLVER_DIAG_PF_INV / XOLVER_ASSERT_PF_INV gated).
+    // Walks every reachable edge in the proof forest; for each AssertedEquality
+    // edge, verifies its literal is currently asserted on trail at the same
+    // polarity. For each Congruence edge, verifies every (a_i, b_i) in
+    // argPairs is currently same-class in the egraph. Returns true if all
+    // invariants hold; logs the first violation to stderr when DIAG is on, and
+    // (when ASSERT is on) aborts so the bisection lands on the operation that
+    // broke the invariant. This is the soundness gate for XOLVER_UF_DISEQ_WATCH:
+    // the watcher's conflict clause only makes sense if proof-forest labels are
+    // coherent with the current trail.
+    bool checkProofForestInvariants(const char* where) const;
+
     // XOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
     // after each merge in the saturation loop we check only the disequalities
     // that touch the just-merged (loser) class, catching the conflict the moment
@@ -331,7 +343,7 @@ private:
     EufTermId internEufExpr(ExprId eid);
 
     // Constant arithmetic evaluation for #builtin terms
-    void tryEvaluateBuiltin(EufTermId t);
+    void tryEvaluateBuiltin(EufTermId t, int level);
 
     // QF_AX array support (layered on the shared egraph).
     bool arrayMode_ = false;

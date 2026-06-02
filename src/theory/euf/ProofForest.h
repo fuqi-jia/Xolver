@@ -29,9 +29,22 @@ public:
     // addEdge is only ever called to merge two DISTINCT classes (the caller
     // checks union-find first), so u and v are always in different trees here.
     void addEdge(EufTermId u, EufTermId v, const MergeReason& reason);
+    // Level-tagged variant: every parent change pushed during this addEdge is
+    // tagged with `level`, enabling a level-FILTER rollback that complements
+    // the standard count-based rollback (see rollbackByLevel below).
+    void addEdgeAtLevel(EufTermId u, EufTermId v, const MergeReason& reason, int level);
 
     size_t snapshot() const { return trail_.size(); }
     void rollback(size_t snap);
+    // Level-FILTER rollback: pop trail entries from the end as long as the top
+    // entry has level > targetLevel. Together with the count-based rollback
+    // this catches "out-of-monotonic-order" entries that the count-based
+    // truncation alone would leave behind (combination interface (dis)equality
+    // can append a low-level merge after a high-level boundary was already
+    // recorded — count-based truncation drops level=high merges but keeps the
+    // level=low one whose dependency was rolled back). Idempotent and safe to
+    // call after rollback(snap).
+    void rollbackByLevel(int targetLevel);
     void clear();
 
     // Label indices along the unique tree path u → NCA → v. Empty if u == v or
@@ -55,11 +68,19 @@ private:
         EufTermId node;
         EufTermId oldParent;
         size_t oldLabelIdx;
+        // Level at which the parent change was made. Used by rollbackByLevel
+        // to drop trail entries whose creating merge was at level > target,
+        // catching out-of-monotonic-order merges that count-based rollback
+        // alone leaves stale. 0 = pre-fix (level-0 / unknown) is safe default.
+        int level = 0;
     };
     std::vector<ParentChange> trail_;
 
     void ensureNode(EufTermId t);
     void setParent(EufTermId node, EufTermId newParent, size_t newLabelIdx);
+    // currentLevel_ is captured into ParentChange.level at every setParent.
+    // addEdgeAtLevel sets it before reorienting; addEdge legacy keeps it 0.
+    int currentLevel_ = 0;
     void makeRoot(EufTermId u);
 };
 

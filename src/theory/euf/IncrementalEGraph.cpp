@@ -194,6 +194,7 @@ void IncrementalEGraph::rollbackCurrentSig(size_t snap) {
 
 MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
                                        const MergeReason& reason,
+                                       int level,
                                        std::deque<PendingMerge>& outQueue) {
     // Register any newly interned terms' signatures
     for (EufTermId t = nextTermToRegister_; t < tm_.termCount(); ++t) {
@@ -221,6 +222,7 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
         rec.rhsRootBefore = rb;
         rec.merged = false;
         rec.reason = reason;
+        rec.level = level;
         mergeRecords_.push_back(rec);
         return {false, NullEClass, NullEClass};
     }
@@ -245,6 +247,7 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
     rec.lhsRootBefore = ra;
     rec.rhsRootBefore = rb;
     rec.reason = reason;
+    rec.level = level;
 
     auto ur = uf_.unite(ra, rb);
     if (!ur.merged) {
@@ -260,7 +263,7 @@ MergeResult IncrementalEGraph::merge(EufTermId a, EufTermId b,
     rec.merged = true;
     mergeRecords_.push_back(rec);
 
-    proofForest_.addEdge(a, b, reason);
+    proofForest_.addEdgeAtLevel(a, b, reason, level);
 
     // Fast-CC: collect the LOSER class's parents now (before the member append
     // below — members_[src] still holds exactly the loser's pre-merge members,

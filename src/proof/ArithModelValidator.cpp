@@ -1,6 +1,10 @@
 #include "proof/ArithModelValidator.h"
+#include <iostream>
 
 namespace xolver {
+
+// Forward decl for diag helper at bottom of file
+static void amvDumpExpr(const CoreIr& ir, ExprId eid, int depth, int maxDepth);
 
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
@@ -11,11 +15,45 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
+    const bool diag = std::getenv("XOLVER_DIAG_AMV") != nullptr;
+    const bool diagDeep = std::getenv("XOLVER_DIAG_AMV_DEEP") != nullptr;
     for (ExprId a : assertions) {
         TR r = eval(a);
         if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }
         if (r.kind != Kind2::Bool) { anyIndeterminate = true; continue; }
-        if (!r.b) { verdict = Verdict::Violated; break; }  // definite false
+        if (!r.b) {
+            if (diag) {
+                std::cerr << "[AMV] VIOLATED assertion eid=" << a << "\n";
+                amvDumpExpr(ir_, a, 0, 4);
+            }
+            if (diagDeep) {
+                // Deep value drill — print every sub-expression's evaluated
+                // value (Bool/Num/Token/Indet). Useful for triaging false-SATs
+                // where the floor caught a model violation but the cause is in
+                // a complex arith+UF subterm. Depth-capped at 12 to bound output.
+                std::function<void(ExprId, int)> drill = [&](ExprId e, int depth) {
+                    TR sr = eval(e);
+                    std::string val;
+                    if (sr.kind == Kind2::Bool) val = sr.b ? "TRUE" : "FALSE";
+                    else if (sr.kind == Kind2::Number) val = "Num(" + sr.n.tryAsRational().value_or(mpq_class(0)).get_str() + ")";
+                    else if (sr.kind == Kind2::Token) val = "Tok(" + sr.tok + ")";
+                    else val = "Indet";
+                    const auto& n = ir_.get(e);
+                    std::cerr << std::string(depth*2,' ') << "eid=" << e
+                              << " kind=" << (int)n.kind << " val=" << val;
+                    if (auto* nm = std::get_if<std::string>(&n.payload.value))
+                        std::cerr << " name=" << *nm;
+                    if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+                        std::cerr << " int=" << *iv;
+                    std::cerr << "\n";
+                    if (depth < 12) {
+                        for (ExprId c : n.children) drill(c, depth+1);
+                    }
+                };
+                drill(a, 0);
+            }
+            verdict = Verdict::Violated; break;
+        }  // definite false
     }
     prepassCache_ = nullptr;
     if (verdict == Verdict::Violated) return verdict;
@@ -459,6 +497,18 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         default:
             return r;  // quantifiers, BV/FP, … → indeterminate
     }
+}
+
+static void amvDumpExpr(const CoreIr& ir, ExprId eid, int depth, int maxDepth) {
+    if (depth > maxDepth) { std::cerr << std::string(depth*2,' ') << "[...]\n"; return; }
+    const auto& e = ir.get(eid);
+    std::cerr << std::string(depth*2,' ') << "eid=" << eid
+              << " kind=" << static_cast<int>(e.kind);
+    if (auto* nm = std::get_if<std::string>(&e.payload.value)) std::cerr << " name=" << *nm;
+    if (auto* iv = std::get_if<int64_t>(&e.payload.value)) std::cerr << " int=" << *iv;
+    std::cerr << " sort=" << e.sort << " #ch=" << e.children.size() << "\n";
+    for (size_t i = 0; i < e.children.size() && i < 12; ++i)
+        amvDumpExpr(ir, e.children[i], depth+1, maxDepth);
 }
 
 } // namespace xolver

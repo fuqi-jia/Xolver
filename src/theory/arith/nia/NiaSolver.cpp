@@ -235,8 +235,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // CAC tuning. These belong to the NRA-agent's CAC perf lane (and the NIA
     // modular reasoner for sqrtmodinv-style families), not EQNA's combination/
     // EUF seam. Routing: defer to NRA agent.
-    if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE"); e && *e && *e != '0')
-        ifaceLifecycleEnabled_ = true;
+    // Default-ON (header). Env =0 disables (A/B escape).
+    if (const char* e = std::getenv("XOLVER_NIA_IFACE_LIFECYCLE")) {
+        ifaceLifecycleEnabled_ = !(e[0] == '0' && e[1] == '\0');
+    }
 }
 
 void NiaSolver::onReset() {

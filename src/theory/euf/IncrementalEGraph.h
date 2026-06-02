@@ -42,8 +42,22 @@ public:
     // UF unite + proof-forest + member-merge.
     // Registers new term signatures, refreshes affected parent signatures
     // (including congruence detection), all pushed to outQueue.
+    // `level` is the SAT decision level at which the merge is caused — stored
+    // on the resulting MergeRecord (and propagated to the proof-forest trail)
+    // so EufSolver::backtrackToLevel can run a level-FILTER cleanup pass to
+    // catch records and edges whose level > target but were inserted out of
+    // monotonic order (combination interface eq breaks the monotonic
+    // assumption that count-based snapshot rollback alone relies on).
     MergeResult merge(EufTermId a, EufTermId b, const MergeReason& reason,
+                      int level,
                       std::deque<PendingMerge>& outQueue);
+    // 3-arg overload (level defaulted to 0): preserves legacy unit-test call
+    // sites that don't exercise multi-level backtrack. Production callers in
+    // EufSolver::applyMerge always pass the explicit level via the 4-arg form.
+    MergeResult merge(EufTermId a, EufTermId b, const MergeReason& reason,
+                      std::deque<PendingMerge>& outQueue) {
+        return merge(a, b, reason, 0, outQueue);
+    }
 
     // 扫描 kept/killed 的 parents，refresh signature，
     // 把发现的 congruence merges 推到 outQueue。
@@ -60,6 +74,30 @@ public:
 
     size_t mergeRecordCount() const { return mergeRecords_.size(); }
     const MergeRecord& mergeRecord(size_t i) const { return mergeRecords_[i]; }
+
+    // Read-only access to the proof forest for invariant audit (UFE soundness
+    // gate). Used by EufSolver::checkProofForestInvariants to walk every
+    // reachable edge and verify its reason is consistent with the current trail.
+    const ProofForest& proofForest() const { return proofForest_; }
+
+    // Mutable access used by EufSolver::backtrackToLevel for the level-filter
+    // cleanup pass (rollbackByLevel). Keep narrow — do NOT use elsewhere; the
+    // proof forest is otherwise modified only through merge() / rollback().
+    ProofForest& proofForestMutable() { return proofForest_; }
+
+    // Drop trailing mergeRecords_ whose level > targetLevel. Used in tandem
+    // with proofForestMutable().rollbackByLevel(target) to clean up entries
+    // that survived the count-based snapshot rollback because they were
+    // inserted out of monotonic level order (combination interface eq class).
+    // Only drops from the END — an entry with level > target before a kept
+    // entry would be a different bug class (the level-tagging discipline
+    // breaks). Sound by construction: dropped records were already disabled
+    // in the union-find by the snapshot rollback.
+    void dropMergeRecordsAboveLevel(int targetLevel) {
+        while (!mergeRecords_.empty() && mergeRecords_.back().level > targetLevel) {
+            mergeRecords_.pop_back();
+        }
+    }
 
     // Register signatures for all terms that have been interned but not yet
     // registered.  Discovered congruences are pushed into outQueue.

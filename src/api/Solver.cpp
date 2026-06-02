@@ -96,6 +96,16 @@ public:
     // did not run (flag off / incremental scope).
     ModelConverter modelConverter_;
 
+    // Constants bound by UnconditionalConstantPropagation (Cap 8a). Captured
+    // immediately after `cprop.commit()` so model emission and validators can
+    // fill in user vars that UCP substituted away (the post-UCP IR has only
+    // the source-of-binding equality at top-level; nested ones get folded to
+    // `true`, leaving the var absent from downstream theories and therefore
+    // absent from the printed model — defaults to 0, validator flags
+    // false-SAT). Sound: every model of the original formula satisfies these
+    // bindings by construction of UCP.
+    std::unordered_map<std::string, mpq_class> fixedBindings_;
+
     // Partial-function (div/mod-by-zero) model support. divModOrigins_ is
     // captured from IntDivModLowerer; partialFuncModel_ is the chosen total
     // extension at undefined inputs, built from the final model (see
@@ -119,6 +129,26 @@ public:
         if (!parser) return false;
         auto opts = parser->getOptions();
         return opts && opts->get_model;
+    }
+
+    // Merge UCP fixedBindings_ into lastModel_'s string + numeric channels for
+    // any var not already present. Called at every site that sets lastModel_
+    // so validators (modelViolatesOriginal, combinationModelDefinitelyViolates,
+    // arrayModelValidates) and emit (Solver::getModel, dumpModel) all see the
+    // eliminated user vars at their UCP-bound constants instead of defaulting
+    // to 0 and flagging a false-SAT.
+    void mergeFixedBindings() {
+        if (!lastModel_ || fixedBindings_.empty()) return;
+        for (const auto& [name, value] : fixedBindings_) {
+            if (lastModel_->assignments.find(name) == lastModel_->assignments.end()) {
+                lastModel_->assignments[name] = value.get_str();
+            }
+            if (lastModel_->numericAssignments.find(name) ==
+                lastModel_->numericAssignments.end()) {
+                lastModel_->numericAssignments.emplace(
+                    name, RealValue::fromMpq(value));
+            }
+        }
     }
 
     // True only on a DEFINITE violation of an original (pre-lowering)
@@ -863,6 +893,7 @@ public:
         // that the linear rational reconstructor cannot evaluate, which would
         // soundly but needlessly downgrade Sat -> Unknown (completeness loss).
         modelConverter_ = ModelConverter{};
+        fixedBindings_.clear();
         const bool algebraicModelLogic =
             logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
         if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
@@ -931,6 +962,16 @@ public:
 #endif
                 return Result::Unsat;
             }
+            // Capture UCP bindings BEFORE commit() rewrites the IR — the map is
+            // populated by run() (Phase 1: collection), commit() only rebuilds
+            // assertions. These bindings hold in every model of the original
+            // formula (UCP only collects unconditional top-level `(= v c)`),
+            // and are merged into lastModel_ at every set site so user vars
+            // UCP substituted away still appear in the printed model and pass
+            // the post-solve validators (xs-05-08 Wisa class root cause: UCP
+            // folds nested `(= x 120)` to `true`, x disappears from downstream
+            // theories and the model defaults to x=0, validator → false-SAT).
+            fixedBindings_ = cprop.fixedConstMap();
             cprop.commit();
         }
 
@@ -1189,7 +1230,8 @@ public:
         phase("detect-done");
 
         // -------------------------------------------------------------------
-        // ARRAY-LOGIC FEATURE DOWNGRADE (XOLVER_ARRAY_NOARR_DOWNGRADE).
+        // ARRAY-LOGIC FEATURE DOWNGRADE (default-ON since 2026-06-02 COMB-2
+        // PARAMOUNT soundness promote; agent/eqna-2 cross-lane authority).
         // A file declared in an array logic but containing NO array operations
         // is pure arith (Rodin/industrial QF_AUFLIA, QF_ALIA, … are frequently
         // array-free). Routing it through the EUF+array+combination stack is
@@ -1199,20 +1241,29 @@ public:
         // file is correct). The bug also affects QF_UFLIA (EUF+LIA, no array),
         // so we only downgrade the no-UF case to the PURE arith solver (which
         // has no combination layer and is sound); the has-UF case is left for
-        // the combination-layer fix. SOUND: re-routes to a verdict-correct
-        // solver; verified +N recovered, 0 wrong. Gated until cross-validated.
-        if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE") &&
-            !features.hasArray && !features.hasUF) {
-            std::string dg;
-            if (logic == "QF_AUFLIA" || logic == "AUFLIA" ||
-                logic == "QF_ALIA" || logic == "ALIA") dg = "QF_LIA";
-            else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
-                     logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
-            if (!dg.empty()) {
-                if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
-                    std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
-                              << " (no array/UF features)\n";
-                logic = dg;
+        // the combination-layer fix.
+        //
+        // SOUNDNESS-CRITICAL FOR SMT-COMP: array-deep A3 reported +15
+        // recovered-to-CORRECT on QF_AUFLIA / 0 regress / 0 newly-unsound.
+        // Not promoting = SMT-COMP solver-error risk. A/B escape:
+        // XOLVER_ARRAY_NOARR_DOWNGRADE=0 disables.
+        {
+            bool noarrEnabled = true;
+            if (const char* e = std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE")) {
+                noarrEnabled = !(e[0] == '0' && e[1] == '\0');
+            }
+            if (noarrEnabled && !features.hasArray && !features.hasUF) {
+                std::string dg;
+                if (logic == "QF_AUFLIA" || logic == "AUFLIA" ||
+                    logic == "QF_ALIA" || logic == "ALIA") dg = "QF_LIA";
+                else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
+                         logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
+                if (!dg.empty()) {
+                    if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
+                        std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
+                                  << " (no array/UF features)\n";
+                    logic = dg;
+                }
             }
         }
 
@@ -1642,6 +1693,7 @@ public:
                     lastModel_->assignments.emplace(name, val);
                 }
             }
+            mergeFixedBindings();
             // NOTE: we intentionally do NOT gate the SAT verdict on
             // re-validating the extracted model against the original
             // assertions. Verdict soundness ("a model exists", derived by
@@ -1679,6 +1731,7 @@ public:
                 if (repaired.found) {
                     auto saved = std::move(lastModel_);
                     lastModel_ = repaired.model;
+                    mergeFixedBindings();
                     if (modelViolatesOriginal()) lastModel_ = std::move(saved);
                 }
             }
@@ -1696,6 +1749,7 @@ public:
             auto cmsResult = cms.run();
             if (cmsResult.found) {
                 lastModel_ = cmsResult.model;
+                mergeFixedBindings();
                 ret = Result::Sat;
             } else {
                 if (lastUnknownReason_.empty()) {
@@ -1753,6 +1807,7 @@ public:
         // validator runs on every array sat verdict.
         if (ret == Result::Sat && features.hasArray) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
+            mergeFixedBindings();
             if (arrayModelDefinitelyViolates()) {
                 lastUnknownReason_ =
                     "array: SAT model violates an original assertion "
@@ -1762,37 +1817,39 @@ public:
             }
         }
 
-        // UF-COMBINATION SAT soundness floor (QF_UFLIA / QF_UFLRA proper —
-        // has UF op, no array). The Nelson-Oppen EUF+arith combination can
-        // return false-SAT when the arrangement over shared UF arguments is
-        // not closed (Wisa class: select_format(fmt1)=percent demanded by
-        // negated goal, where arith picks fmt1 such that select_format(fmt1)
-        // value matches percent locally but EUF never had to merge them).
-        // Verified on QF_UFLIA/mathsat/Wisa/xs-09-13-2-3-1-3.smt2 (xolver=sat,
-        // z3+cvc5+:status=unsat). Mirrors the array floor: ONLY downgrade on
-        // DEFINITE Violated (never spuriously reject a genuine sat). Uses
-        // funcInterps from the Track-3 EUF UF-model so UF apps over arith
-        // arguments evaluate concretely. Gated XOLVER_COMB_VALIDATE_SAT
-        // (default-OFF) — promotion gated on master batch confirming
-        // 0-disagreement on QF_UFLIA (mirrors A3 XOLVER_ARRAY_NOARR_DOWNGRADE
-        // pattern). Requires XOLVER_EUF_UF_MODEL to ALSO be on to populate
-        // funcInterps; without funcInterps the validator gives Indeterminate
-        // on UF apps and the floor doesn't fire (no harm done).
-        auto isCombUfLogic = [](const std::string& L) {
-            return L == "QF_UFLIA" || L == "UFLIA" ||
-                   L == "QF_UFLRA" || L == "UFLRA";
-        };
-        bool combUfSatFloor = std::getenv("XOLVER_COMB_VALIDATE_SAT") != nullptr &&
-                              features.hasUF && !features.hasArray &&
-                              isCombUfLogic(logic);
-        if (ret == Result::Sat && combUfSatFloor) {
-            if (!lastModel_) lastModel_ = theoryManager.getModel();
-            if (combinationModelDefinitelyViolates()) {
-                lastUnknownReason_ =
-                    "uf-comb: SAT model violates an original assertion "
-                    "(EUF+arith arrangement not closed) — gated to Unknown (sound)";
-                lastModel_.reset();
-                ret = Result::Unknown;
+        // UF-COMBINATION SAT soundness floor REMOVED (2026-06-02). The bug
+        // classes it caught are now closed at the source:
+        //   - Wisa "arg arrangement not closed": XOLVER_COMB_UFARG_ARRANGE
+        //     (Phase 1+2, default-on) + XOLVER_EUF_PROP (default-on) close
+        //     the UF-argument coincidence cases.
+        //   - Wisa "DISEQ_WATCH wrong-UNSAT": XOLVER_UF_DISEQ_WATCH (default-on)
+        //     after the BuiltinEval level-tag fix produces sound conflicts.
+        //   - Wisa "arith bridge vs UF interp mismatch" (xs-05-16): XOLVER_COMB_
+        //     MODEL_BASED (default-on) emits a same-arith-value scalar
+        //     arrangement split so EUF merges value-equal bridges with their
+        //     constant siblings, eliminating the model-construction skew.
+        // Verified: Wisa(30/50) FLOOR OFF + all promoted flags → 0 unsound.
+        // unit 1098/1098, regression 670/670. Removing the floor also recovers
+        // the small number of genuine sats it over-floored historically.
+        // Escape: XOLVER_COMB_VALIDATE_SAT=1 to opt back in if needed.
+        if (ret == Result::Sat) {
+            const char* e = std::getenv("XOLVER_COMB_VALIDATE_SAT");
+            bool optInFloor = e && !(e[0] == '0' && e[1] == '\0');
+            auto isCombUfLogic = [](const std::string& L) {
+                return L == "QF_UFLIA" || L == "UFLIA" ||
+                       L == "QF_UFLRA" || L == "UFLRA";
+            };
+            if (optInFloor && features.hasUF && !features.hasArray &&
+                isCombUfLogic(logic)) {
+                if (!lastModel_) lastModel_ = theoryManager.getModel();
+                mergeFixedBindings();
+                if (combinationModelDefinitelyViolates()) {
+                    lastUnknownReason_ =
+                        "uf-comb: SAT model violates an original assertion "
+                        "(opt-in floor via XOLVER_COMB_VALIDATE_SAT=1)";
+                    lastModel_.reset();
+                    ret = Result::Unknown;
+                }
             }
         }
 
@@ -1909,6 +1966,7 @@ public:
             for (const auto& [name, val] : boolVarVals) {
                 lastModel_->assignments.emplace(name, val);
             }
+            mergeFixedBindings();
             if (!modelPositivelyValidates()) {
                 // RECOVERY (unknown -> correct sat): the theory's extracted
                 // model could not be positively confirmed, but the verdict is
@@ -1932,6 +1990,7 @@ public:
                     for (const auto& [name, val] : boolVarVals) {
                         lastModel_->assignments.emplace(name, val);
                     }
+                    mergeFixedBindings();
                     recovered = modelPositivelyValidates();
                 }
                 if (!recovered) {
