@@ -175,17 +175,20 @@ void TheoryManager::backtrackToLevel(int level) {
 
     discardSnapshotsAbove(level);
 
-    // Clear the deduced-equality emission cache on backtrack to level 0:
-    // a shared-eq propagation that was emitted once under a deeper trail may
-    // re-establish under a different SAT branch, and without resetting we'd
-    // silently drop the re-emission (lemmaDb already holds the dedup key, but
-    // a stale lemma whose reasons are no longer asserted does not propagate
-    // any literal — the Wisa goal-atom chain stalls on this). Sound: re-emission
-    // produces the same lemma; lemmaDb deduplicates on insert and SAT learns
-    // it again only if novel under the current trail.
-    if (level == 0) {
-        deducedEqCache_.clear();
-    }
+    // Clear the deduced-equality emission cache on EVERY backtrack:
+    // the cache key (solver, a, b) is coarse — it blocks ANY re-emission of
+    // the same shared-term pair from the same solver, even when the EUF
+    // explanation chain re-establishes a=b under a different SAT branch with
+    // a different reason-set (a NOVEL lemma). lemmaDb.insertIfNew is the
+    // fine-grained dedup layer (by literal set) and still rejects truly
+    // identical lemmas, so dropping the coarse cache on backtrack cannot
+    // cause floods — it only restores re-emission of a fact whose reasons
+    // changed across the conflict. This is the Wisa-class fix: on branch A,
+    // OR-clause picks (= sf(X) adr_lo) and reasons R_A entail bridge_K~bridge_J;
+    // backtrack past R_A; on branch B, OR-clause picks (= sf(X) adr_hi) and
+    // a different reason-set R_B re-establishes the SAME merge, producing
+    // a novel lemma that was previously suppressed by the coarse cache.
+    deducedEqCache_.clear();
 }
 
 std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraints() const {
