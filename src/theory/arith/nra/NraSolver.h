@@ -107,6 +107,14 @@ private:
     // SignDefinitenessRefuter: uses NUMERIC interval, not just sign, so
     // bounds like x in [2,5] propagate through x*y monomials.
     std::optional<TheoryCheckResult> stageOsfPrune(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_ICP (default OFF): orthogonal interval-constraint-propagation
+    // probe. Builds a ReasonedBoxQ from linear single-variable bounds, then runs
+    // RelationContractorQ over univariate polynomial atoms via IcpEngineQ. Emits
+    // a Conflict (UNSAT) only when a contractor reports definite violation with
+    // sound reasons (constraint reason + bound reasons). Never emits Lemma or
+    // SAT — runs as a cheap closer between presolve and sign-refute. nullopt at
+    // the gate when the flag is OFF (default path byte-identical).
+    std::optional<TheoryCheckResult> stageIcpProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts

@@ -11,6 +11,9 @@
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
 #include "theory/arith/nra/simplex/PolynomialIntervalPruner.h" // OSF-CDCAC P7
+#include "theory/arith/icp/IcpEngineQ.h"                       // XOLVER_NRA_ICP rational ICP engine
+#include "theory/arith/icp/ContractorFactoryQ.h"               // XOLVER_NRA_ICP factory
+#include "theory/arith/icp/IcpTypes.h"                         // XOLVER_NRA_ICP IcpConstraint
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
 #include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
@@ -64,6 +67,12 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
+    // XOLVER_NRA_ICP (default OFF): orthogonal interval-propagation probe,
+    // between presolve (linear) and sign-refute (sign). Cheap univariate
+    // narrowing; nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.icp",
+        stageWrap("icp", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIcpProbe(db, e); })));
     // XOLVER_NRA_SIGN_REFUTE (default OFF): cheap positive-orthant sign-
     // definiteness UNSAT refuter, right after presolve. nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -419,6 +428,156 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkConflict(pr.conflict);
         if (pr.kind == PresolveResult::Kind::Lemma)
             return TheoryCheckResult::mkLemma(pr.lemma);
+    }
+    return std::nullopt;
+}
+
+// XOLVER_NRA_ICP: rational ICP probe. Sound by construction — emits Conflict
+// only when a contractor reports a definitively-violated constraint with
+// reasons that union the constraint's reason and the box's bound reasons.
+// V1 scope: univariate atoms only. Linear single-var bounds seed the box;
+// degree-≥2 single-var polynomials run through RelationContractorQ. Bypassed
+// in combination mode (interface (dis)eqs not in presolveConstraints_, matches
+// sign-refute's bailout).
+std::optional<TheoryCheckResult> NraSolver::stageIcpProbe(TheoryLemmaStorage& /*lemmaDb*/,
+                                                          TheoryEffort /*effort*/) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_ICP");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+
+    // Pass 1: seed partial bounds from univariate linear atoms.
+    // Closed-interval over-approximation for strict atoms is sound — it only
+    // weakens conflict detection, never adds spurious conflicts.
+    struct PartialBound {
+        bool hasLo = false; mpq_class lo;
+        bool hasHi = false; mpq_class hi;
+        std::vector<SatLit> reasonsLo;
+        std::vector<SatLit> reasonsHi;
+    };
+    std::unordered_map<std::string, PartialBound> partial;
+
+    auto narrowLo = [&partial](const std::string& v, const mpq_class& val, SatLit r) {
+        auto& pb = partial[v];
+        if (!pb.hasLo || val > pb.lo) {
+            pb.lo = val; pb.reasonsLo.clear();
+        }
+        if (!pb.hasLo || val >= pb.lo) {
+            pb.reasonsLo.push_back(r);
+        }
+        pb.hasLo = true;
+    };
+    auto narrowHi = [&partial](const std::string& v, const mpq_class& val, SatLit r) {
+        auto& pb = partial[v];
+        if (!pb.hasHi || val < pb.hi) {
+            pb.hi = val; pb.reasonsHi.clear();
+        }
+        if (!pb.hasHi || val <= pb.hi) {
+            pb.reasonsHi.push_back(r);
+        }
+        pb.hasHi = true;
+    };
+
+    std::vector<IcpConstraint> nonlinearAtoms;
+    nonlinearAtoms.reserve(presolveConstraints_.size());
+
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto vars = kernel_->variables(c.poly);
+        if (vars.size() != 1) continue;  // V1: univariate only
+
+        const std::string& v = vars[0];
+        auto degOpt = kernel_->degree(c.poly, v);
+        if (!degOpt) continue;
+
+        if (*degOpt == 1) {
+            // Linear: c1*x + c0 rel 0  ⇒  bound on x.
+            auto coeffsOpt = kernel_->getIntegerCoefficients(c.poly, v);
+            if (!coeffsOpt || coeffsOpt->size() != 2) continue;
+            const mpz_class& c1 = (*coeffsOpt)[0];
+            const mpz_class& c0 = (*coeffsOpt)[1];
+            if (c1 == 0) continue;  // shouldn't happen at degree 1, defense-in-depth
+
+            mpq_class bound(-c0, c1);
+            bound.canonicalize();
+            bool flip = (c1 < 0);
+
+            // After flip, work in the canonical c1>0 frame.
+            Relation rel = c.rel;
+            switch (rel) {
+                case Relation::Eq:
+                    narrowLo(v, bound, c.reason);
+                    narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Leq:
+                    if (flip) narrowLo(v, bound, c.reason);
+                    else      narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Geq:
+                    if (flip) narrowHi(v, bound, c.reason);
+                    else      narrowLo(v, bound, c.reason);
+                    break;
+                case Relation::Lt:
+                    // Strict over-approximated to non-strict (sound: feasible
+                    // set ⊆ closed-interval). No precision loss for sound
+                    // conflict detection.
+                    if (flip) narrowLo(v, bound, c.reason);
+                    else      narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Gt:
+                    if (flip) narrowHi(v, bound, c.reason);
+                    else      narrowLo(v, bound, c.reason);
+                    break;
+                case Relation::Neq:
+                default:
+                    break;  // V1: skip (would need disjunctive narrowing)
+            }
+        } else if (*degOpt >= 2) {
+            // Univariate degree ≥ 2 — gather for contractor pass.
+            IcpConstraint ic;
+            ic.expr = std::nullopt;
+            ic.poly = c.poly;
+            ic.rel = c.rel;
+            ic.reason = c.reason;
+            ic.owner = TheoryId::NRA;
+            nonlinearAtoms.push_back(ic);
+        }
+    }
+
+    // Pass 2: build the box only from variables with BOTH endpoints — no
+    // infinity sentinel exists in IntervalQ, so a half-bounded var is unsafe
+    // for interval polynomial evaluation (would need ±∞ propagation rules).
+    ReasonedBoxQ box;
+    for (auto& [v, pb] : partial) {
+        if (!pb.hasLo || !pb.hasHi) continue;
+        if (pb.lo > pb.hi) {
+            // Linear seeds alone already proved infeasibility on x — emit the
+            // direct conflict; presolve normally catches this too, this is
+            // defense-in-depth so ICP never runs over an empty box.
+            std::vector<SatLit> reasons = pb.reasonsLo;
+            reasons.insert(reasons.end(), pb.reasonsHi.begin(), pb.reasonsHi.end());
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+        }
+        std::vector<SatLit> reasons = pb.reasonsLo;
+        reasons.insert(reasons.end(), pb.reasonsHi.begin(), pb.reasonsHi.end());
+        box.set(v, ReasonedIntervalQ{IntervalQ{pb.lo, pb.hi}, std::move(reasons)});
+    }
+
+    // Without any seeded variable, no contractor can fire. Skip the engine.
+    if (box.entries().empty()) return std::nullopt;
+    if (nonlinearAtoms.empty()) return std::nullopt;
+
+    auto built = ContractorFactoryQ::build(nonlinearAtoms, *kernel_);
+    if (built.contractors.empty()) return std::nullopt;
+
+    IcpConfig cfg;  // defaults are fine; budget keeps the worklist bounded
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, box, cfg);
+    if (r.status == IcpStatus::Conflict && r.conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
     }
     return std::nullopt;
 }
