@@ -113,12 +113,31 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             break;
         }
         case Kind::Sub: {
-            if (e.children.size() == 2) {
-                auto l = collectRec(e.children[0], ir);
-                auto r = collectRec(e.children[1], ir);
-                if (!l || !r) { result = std::nullopt; break; }
-                result = *l - *r;
+            // SMT-LIB n-ary `(- a b c ...)` parses left-associatively as
+            // `((a - b) - c) - ...`. The old code only handled size == 2,
+            // silently dropping size >= 3 cases — every formula containing
+            // a 3-arg `(- a b c)` rejected with "[ATOM] unsupported NRA/NIA
+            // kind=21" because the polynomial converter returned nullopt
+            // → atom marked unsupported → solver returns unknown without
+            // any reasoning. This was a long-standing parser blind spot.
+            if (e.children.empty()) break;
+            if (e.children.size() == 1) {
+                // Unary `(- a)` — same as Neg.
+                auto sub = collectRec(e.children[0], ir);
+                if (!sub) { result = std::nullopt; break; }
+                result = -(*sub);
+                break;
             }
+            auto first = collectRec(e.children[0], ir);
+            if (!first) { result = std::nullopt; break; }
+            RationalPolynomial running = std::move(*first);
+            bool ok = true;
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                auto next = collectRec(e.children[i], ir);
+                if (!next) { ok = false; break; }
+                running = running - *next;
+            }
+            if (ok) result = std::move(running);
             break;
         }
         case Kind::Neg: {
@@ -144,41 +163,48 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             break;
         }
         case Kind::Div: {
-            // Supported: polynomial / numeric constant  ->  polynomial * (1/constant)
+            // Supported: polynomial / numeric constant(s)  ->  polynomial * (1/c1/c2/...)
             // Unsupported: polynomial / variable  or  polynomial / polynomial
-            if (e.children.size() == 2) {
-                auto num = collectRec(e.children[0], ir);
-                if (!num) { result = std::nullopt; break; }
-                const CoreExpr& denNode = ir.get(e.children[1]);
-                mpq_class denomValue;
-                bool isConstantDenominator = false;
+            //
+            // SMT-LIB n-ary `(/ a b c)` is `(a / b) / c` (left-associative);
+            // the old code only handled size == 2 and silently dropped n >= 3
+            // — same parser blind-spot pattern as Kind::Sub.
+            if (e.children.size() < 2) break;
+            auto num = collectRec(e.children[0], ir);
+            if (!num) { result = std::nullopt; break; }
+            // Accumulate each divisor as a constant; bail if any divisor isn't.
+            auto tryGetConst = [&](ExprId denId, mpq_class& out) -> bool {
+                const CoreExpr& denNode = ir.get(denId);
                 if (denNode.kind == Kind::ConstInt) {
                     if (auto* i = std::get_if<int64_t>(&denNode.payload.value)) {
-                        if (*i != 0) {
-                            denomValue = mpq_class(1, *i);
-                            isConstantDenominator = true;
-                        }
+                        if (*i == 0) return false;
+                        out = mpq_class(1, *i);
+                        return true;
                     } else if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
-                        mpq_class q = mpqFromString(*s);  // large divisor (string payload)
-                        if (q != 0) { denomValue = mpq_class(1) / q; isConstantDenominator = true; }
+                        mpq_class q = mpqFromString(*s);
+                        if (q == 0) return false;
+                        out = mpq_class(1) / q;
+                        return true;
                     }
                 } else if (denNode.kind == Kind::ConstReal) {
                     if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
                         mpq_class q(*s);
-                        if (q != 0) {
-                            denomValue = mpq_class(1) / q;
-                            isConstantDenominator = true;
-                        }
+                        if (q == 0) return false;
+                        out = mpq_class(1) / q;
+                        return true;
                     }
                 }
-                if (!isConstantDenominator) {
-                    result = std::nullopt;
-                } else {
-                    RationalPolynomial rp = std::move(*num);
-                    rp *= denomValue;
-                    result = std::move(rp);
-                }
+                return false;
+            };
+            RationalPolynomial rp = std::move(*num);
+            bool ok = true;
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                mpq_class invDen;
+                if (!tryGetConst(e.children[i], invDen)) { ok = false; break; }
+                rp *= invDen;
             }
+            if (ok) result = std::move(rp);
+            else    result = std::nullopt;
             break;
         }
         case Kind::Pow: {
