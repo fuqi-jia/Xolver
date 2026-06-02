@@ -1,6 +1,7 @@
 #include "theory/arith/icp/ContractorFactoryQ.h"
 #include "theory/arith/icp/contractors/RelationContractorQ.h"
 #include "theory/arith/icp/contractors/MonomialMultivariateContractorQ.h"
+#include "theory/arith/icp/contractors/MixedQuadraticContractorQ.h"
 
 namespace xolver {
 
@@ -24,18 +25,31 @@ ContractorFactoryQ::BuildResult ContractorFactoryQ::build(
             result.contractors.push_back(std::move(contractor));
             ++id;
         } else if (vars.size() >= 2) {
-            // Multivariate: one V4 contractor per candidate live var. The
-            // contractor itself rejects non-V4 shapes via isUsable() — we
-            // drop those instead of registering them. A polynomial that
-            // doesn't match V4 for ANY variable contributes zero contractors.
+            // Multivariate: try the available shape contractors per
+            // candidate live var. Each contractor self-checks via
+            // isUsable() and the shapes are mutually exclusive by
+            // construction (V4 = pure live^d + rest with NO live^1
+            // mixed terms; V5b = quadratic with at least one live^1
+            // term). A polynomial may match V4 on one live var and V5b
+            // on another — both register.
             for (const auto& liveVar : vars) {
-                auto contractor = std::make_unique<MonomialMultivariateContractorQ>(
+                auto v4 = std::make_unique<MonomialMultivariateContractorQ>(
                     c, kernel, liveVar);
-                if (!contractor->isUsable()) continue;
-                for (const auto& w : contractor->vars()) {
+                if (v4->isUsable()) {
+                    for (const auto& w : v4->vars()) {
+                        result.watchers.addWatcher(w, id);
+                    }
+                    result.contractors.push_back(std::move(v4));
+                    ++id;
+                    continue;  // V5b doesn't co-fire when V4 fits
+                }
+                auto v5b = std::make_unique<MixedQuadraticContractorQ>(
+                    c, kernel, liveVar);
+                if (!v5b->isUsable()) continue;
+                for (const auto& w : v5b->vars()) {
                     result.watchers.addWatcher(w, id);
                 }
-                result.contractors.push_back(std::move(contractor));
+                result.contractors.push_back(std::move(v5b));
                 ++id;
             }
         }
