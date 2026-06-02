@@ -36,11 +36,22 @@ std::optional<std::string> FarkasOrDetector::asVarName(ExprId id) const {
 
 std::optional<mpz_class> FarkasOrDetector::asIntConst(ExprId id) const {
     const auto& e = ir_.get(id);
-    if (e.kind == Kind::ConstInt) {
+    if (e.kind == Kind::ConstInt || e.kind == Kind::ConstReal) {
+        // Frontend lifts QF_NIA integer literals to ConstReal; we accept both
+        // when the value is integer-valued (no "/" denominator).
         if (auto* i = std::get_if<int64_t>(&e.payload.value)) {
             return mpz_class(static_cast<long>(*i));
         }
         if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+            // Reject only true fractions (e.g. "1/3"); "5" or "-3" are integer.
+            if (s->find('/') != std::string::npos) {
+                // Try to parse as rational and check denominator == 1.
+                try {
+                    mpq_class q(*s);
+                    if (q.get_den() == 1) return q.get_num();
+                } catch (...) {}
+                return std::nullopt;
+            }
             try { return mpz_class(*s); } catch (...) { return std::nullopt; }
         }
     }
@@ -60,74 +71,110 @@ bool FarkasOrDetector::isZeroConst(ExprId id) const {
 std::optional<std::string>
 FarkasOrDetector::extractLambdaVar(ExprId atomId) const {
     const auto& e = ir_.get(atomId);
-    if (e.kind != Kind::Geq) return std::nullopt;
     if (e.children.size() != 2) return std::nullopt;
-    auto vname = asVarName(e.children[0]);
-    if (!vname) return std::nullopt;
-    if (!isZeroConst(e.children[1])) return std::nullopt;
-    return vname;
+    // Accept any of the canonical "v >= 0" forms after frontend normalization:
+    //   Geq(v, 0)        original SMT-LIB shape
+    //   Leq(0, v)        flip-encoding (common in Stroeder/VeryMax IR)
+    //   Gt(v, -1)        strict-int rewrite to non-strict (rare)
+    if (e.kind == Kind::Geq) {
+        auto v = asVarName(e.children[0]);
+        if (v && isZeroConst(e.children[1])) return v;
+    } else if (e.kind == Kind::Leq) {
+        auto v = asVarName(e.children[1]);
+        if (v && isZeroConst(e.children[0])) return v;
+    }
+    return std::nullopt;
 }
 
-// Walk a polynomial expression tree (Add/Sub/Neg/Mul/Variable/Const) and
-// check that every leaf monomial is one of:
-//   - c (constant)
-//   - c * λ_j (linear in some λ)
-//   - c * λ_j * v_k (bilinear λ × non-λ var)
-//   - c * v_k * λ_j (commutative)
-// Returns false on any other shape (e.g. λ²-monomial, 3-var product).
+// Walk a polynomial expression tree and check that every leaf monomial fits
+// the Farkas template: constant, c·λ_j (degree 1 in λ), or c·λ_j·v_k
+// (bilinear λ × non-λ). Add/Sub/Neg are treated transparently as monomial
+// distributors; any nested polynomial sub-expression is flattened by
+// recursion. Mul is the only operator that consumes a degree-counting
+// argument.
 bool FarkasOrDetector::monomialsLinearInLambda(
     ExprId polyId,
     const std::vector<std::string>& lambdas) const
 {
     std::unordered_set<std::string> lset(lambdas.begin(), lambdas.end());
 
-    // Walker returns true on monomial-shaped sub-tree.
-    std::function<bool(ExprId, int /*lambdaDeg*/, int /*nonLambdaDeg*/)> walk;
-    walk = [&](ExprId id, int lDeg, int nDeg) -> bool {
+    // monomialOk: this expr is a single monomial of acceptable shape.
+    // Mul children may themselves be Neg/Const/Variable but NOT Add/Sub
+    // (a Mul with Add child would be a polynomial-times-polynomial, which
+    // is not a single monomial — those go through the polyWalk path).
+    std::function<bool(ExprId)> monomialOk;
+    // polyWalk: this expr is a polynomial; iterate its monomial summands.
+    std::function<bool(ExprId)> polyWalk;
+
+    monomialOk = [&](ExprId id) -> bool {
         const auto& e = ir_.get(id);
         switch (e.kind) {
             case Kind::ConstInt:
             case Kind::ConstReal:
-                return lDeg <= 1 && nDeg <= 1;
-            case Kind::Variable: {
-                auto vn = asVarName(id);
-                if (!vn) return false;
-                bool isLam = lset.count(*vn) > 0;
-                if (isLam) ++lDeg; else ++nDeg;
-                return lDeg <= 1 && nDeg <= 1;
-            }
+                return true;
+            case Kind::Variable:
+                return asVarName(id).has_value();
             case Kind::Neg:
                 if (e.children.size() != 1) return false;
-                return walk(e.children[0], lDeg, nDeg);
+                return monomialOk(e.children[0]);
             case Kind::Mul: {
-                int lTotal = lDeg, nTotal = nDeg;
+                int lDeg = 0, nDeg = 0;
                 for (ExprId c : e.children) {
-                    // Count contributions of each factor by recursive walking.
-                    if (!walk(c, 0, 0)) return false;
                     const auto& ce = ir_.get(c);
+                    if (ce.kind == Kind::ConstInt || ce.kind == Kind::ConstReal) continue;
+                    if (ce.kind == Kind::Neg && ce.children.size() == 1) {
+                        // Recurse on the negated operand (degree-counted).
+                        const auto& ne = ir_.get(ce.children[0]);
+                        if (ne.kind == Kind::Variable) {
+                            auto vn = asVarName(ce.children[0]);
+                            if (!vn) return false;
+                            if (lset.count(*vn)) ++lDeg; else ++nDeg;
+                            continue;
+                        }
+                        if (ne.kind == Kind::ConstInt || ne.kind == Kind::ConstReal) continue;
+                        return false;
+                    }
                     if (ce.kind == Kind::Variable) {
                         auto vn = asVarName(c);
-                        if (vn && lset.count(*vn)) ++lTotal; else ++nTotal;
+                        if (!vn) return false;
+                        if (lset.count(*vn)) ++lDeg; else ++nDeg;
+                        continue;
                     }
-                    // Constants and Neg(const) contribute 0 to degree.
+                    // Mul has a non-monomial child (Add/Sub/...) — reject.
+                    return false;
                 }
-                return lTotal <= 1 && nTotal <= 1;
+                return lDeg <= 1 && nDeg <= 1;
             }
             default:
-                // Pow / Div / Mod / Ite / nested polys not in our template.
                 return false;
         }
     };
 
-    const auto& e = ir_.get(polyId);
-    // Top-level may be Add (sum of monomials) or Sub or a single monomial.
-    if (e.kind == Kind::Add || e.kind == Kind::Sub) {
-        for (ExprId c : e.children) {
-            if (!walk(c, 0, 0)) return false;
+    polyWalk = [&](ExprId id) -> bool {
+        const auto& e = ir_.get(id);
+        if (e.kind == Kind::Add) {
+            for (ExprId c : e.children) {
+                if (!polyWalk(c)) return false;
+            }
+            return true;
         }
-        return true;
-    }
-    return walk(polyId, 0, 0);
+        if (e.kind == Kind::Sub) {
+            // Sub(a, b, ...) = a + (-b) + (-c) ... each summand is a sub-poly.
+            for (ExprId c : e.children) {
+                if (!polyWalk(c)) return false;
+            }
+            return true;
+        }
+        if (e.kind == Kind::Neg) {
+            // Neg(p) where p might itself be a polynomial.
+            if (e.children.size() != 1) return false;
+            return polyWalk(e.children[0]);
+        }
+        // Otherwise treat as single monomial.
+        return monomialOk(id);
+    };
+
+    return polyWalk(polyId);
 }
 
 bool FarkasOrDetector::isLinearInLambdaEquality(
@@ -281,13 +328,16 @@ bool FarkasOrDetector::extractBoundsFromAnd(ExprId andId,
             const mpz_class& lo = *lh.first;
             const mpz_class& hi = *lh.second;
             if (lo <= hi) {
-                auto& cur = p.boundedGlobals[v];
-                // Keep the TIGHTEST bound across multiple assertions.
-                if (p.boundedGlobals.count(v) == 0) {
-                    cur = {lo, hi};
+                // Use find() BEFORE operator[] to avoid auto-insertion of
+                // a default-constructed (0,0) that would later be
+                // mistaken for an existing bound to intersect with.
+                auto it = p.boundedGlobals.find(v);
+                if (it == p.boundedGlobals.end()) {
+                    p.boundedGlobals.emplace(v, std::make_pair(lo, hi));
                 } else {
-                    if (lo > cur.first) cur.first = lo;
-                    if (hi < cur.second) cur.second = hi;
+                    // Tighten existing bounds (intersect).
+                    if (lo > it->second.first)  it->second.first  = lo;
+                    if (hi < it->second.second) it->second.second = hi;
                 }
             }
         }
@@ -349,8 +399,31 @@ void FarkasOrDetector::classifyBilinearCovars(FarkasProfile& p) const {
     }
 }
 
+// P0.5 diagnostic: detect-time per-rejected-branch dump (env-gated). When
+// XOLVER_NIA_FARKAS_REJECT_DUMP=1 and the dump file is open (set by
+// detect() at start), print for every Or assertion that didn't pass
+// allBranchesFarkas(): per-branch lambdas/eqs/ineqs/unclassified counts +
+// the kind of each unclassified atom. This is the cheapest possible
+// "why didn't it classify" signal.
+namespace {
+std::FILE* gRejectDumpFile = nullptr;
+
+void openRejectDump() {
+    if (!std::getenv("XOLVER_NIA_FARKAS_REJECT_DUMP")) return;
+    if (gRejectDumpFile) return;
+    const char* path = std::getenv("XOLVER_NIA_FARKAS_REJECT_FILE");
+    if (!path || !*path) path = "/tmp/farkas_reject";
+    gRejectDumpFile = std::fopen(path, "a");
+}
+
+void closeRejectDump() {
+    if (gRejectDumpFile) { std::fclose(gRejectDumpFile); gRejectDumpFile = nullptr; }
+}
+} // namespace
+
 FarkasProfile FarkasOrDetector::detect() const {
     FarkasProfile p;
+    openRejectDump();
 
     // Pre-pass: build Tseitin / Boolean-Purification var-definition map.
     // The frontend's purify-bool pass replaces an Or-branch's And with a
@@ -421,6 +494,62 @@ FarkasProfile FarkasOrDetector::detect() const {
                 p.blocks.push_back(std::move(block));
                 continue;
             }
+            // P0.5: dump why this block was rejected. Helps fix classifyAnd.
+            if (gRejectDumpFile) {
+                static const char* kindNames[] = {
+                    "ConstBool","ConstInt","ConstReal","ConstBV","ConstFP",
+                    "Variable","UFApply",
+                    "Not","And","Or","Implies","Xor","Ite",
+                    "Add","Sub","Neg","Mul","Div","Mod","Abs","Pow",
+                    "Eq","Distinct","Lt","Leq","Gt","Geq",
+                    "BvNot","BvAnd","BvOr","BvAdd","BvMul",
+                    "Forall","Exists",
+                    "ToInt","ToReal","IsInt",
+                    "Select","Store","ConstArray",
+                    "Constructor","Selector","Tester",
+                    "Unknown"
+                };
+                auto kname = [&](Kind k) -> const char* {
+                    unsigned i = static_cast<unsigned>(k);
+                    return i < sizeof(kindNames)/sizeof(kindNames[0]) ? kindNames[i] : "??";
+                };
+                std::fprintf(gRejectDumpFile, "REJECT Or id=%u branches=%zu\n",
+                             aid, block.branches.size());
+                for (std::size_t j = 0; j < block.branches.size(); ++j) {
+                    const auto& br = block.branches[j];
+                    std::fprintf(gRejectDumpFile,
+                                 "  branch[%zu] λ=%zu eq=%zu ineq=%zu UNCLASS=%zu farkasShape=%d\n",
+                                 j, br.lambdas.size(), br.equalities.size(),
+                                 br.inequalities.size(), br.unclassified.size(),
+                                 br.farkasShape() ? 1 : 0);
+                    // List λ names (first 6).
+                    if (!br.lambdas.empty()) {
+                        std::fprintf(gRejectDumpFile, "    λ:");
+                        for (std::size_t li = 0; li < br.lambdas.size() && li < 6; ++li) {
+                            std::fprintf(gRejectDumpFile, " %s", br.lambdas[li].c_str());
+                        }
+                        std::fprintf(gRejectDumpFile, "\n");
+                    }
+                    // Per unclassified atom: kind + child kinds.
+                    for (std::size_t ui = 0; ui < br.unclassified.size() && ui < 8; ++ui) {
+                        ExprId uid = br.unclassified[ui];
+                        const auto& ue = ir_.get(uid);
+                        std::fprintf(gRejectDumpFile, "    U[%zu] id=%u kind=%s children=%zu",
+                                     ui, uid, kname(ue.kind), ue.children.size());
+                        if (!ue.children.empty()) {
+                            std::fprintf(gRejectDumpFile, " [");
+                            for (std::size_t ci = 0; ci < ue.children.size() && ci < 6; ++ci) {
+                                const auto& ce = ir_.get(ue.children[ci]);
+                                std::fprintf(gRejectDumpFile, "%s%s",
+                                             ci ? "," : "", kname(ce.kind));
+                            }
+                            std::fprintf(gRejectDumpFile, "]");
+                        }
+                        std::fprintf(gRejectDumpFile, "\n");
+                    }
+                }
+                std::fflush(gRejectDumpFile);
+            }
         }
         if (a.kind == Kind::And) {
             extractBoundsFromAnd(aid, p);
@@ -441,6 +570,7 @@ FarkasProfile FarkasOrDetector::detect() const {
         skip_outer:;
     }
     classifyBilinearCovars(p);
+    closeRejectDump();
     return p;
 }
 
