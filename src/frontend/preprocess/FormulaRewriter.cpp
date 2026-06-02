@@ -411,12 +411,12 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
         }
         case Kind::Sub: {
             // SMT-LIB n-ary `(- a b c ...)` = `((a-b)-c) - ...`. Old code
-            // only handled size == 2 (silently passing n != 2 through
-            // unrewritten). Fold constants from positions ≥ 1 into a
-            // running scalar; preserve non-constants in order. Mirrors
-            // the fix the user shipped in the NRA worktree.
+            // only handled size == 2 (and silently passed n >= 3 through
+            // unrewritten). Now folds n-ary by collapsing all constant
+            // operands into a running scalar.
             if (children.empty()) break;
             if (children.size() == 1) {
+                // `(- a)` = -a (unary form).
                 ExprId a = children[0];
                 if (auto va = tryRational(ir_, a)) {
                     ExprId folded = mkIntOrReal(-*va, sort);
@@ -434,9 +434,10 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 if (vb && *vb == 0) return a;          // x − 0 → x
                 return mk(kind, sort, std::move(children), Payload());
             }
-            // n-ary (n >= 3): fold constants in positions ≥ 1.
+            // n-ary (n >= 3): fold constants from positions ≥ 1 into a
+            // running scalar; preserve non-constants in order.
             mpq_class subConst(0);
-            std::vector<ExprId> nonConst{children[0]};
+            std::vector<ExprId> nonConst{children[0]};  // first arg untouched
             bool anyFolded = false;
             for (size_t i = 1; i < children.size(); ++i) {
                 if (auto v = tryRational(ir_, children[i])) {
@@ -452,7 +453,14 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                     if (cterm != NullExpr) nonConst.push_back(cterm);
                     else return mk(kind, sort, std::move(children), Payload());
                 }
-                if (nonConst.size() == 1) return nonConst[0];
+                if (nonConst.size() == 1) {
+                    // First arg minus nothing (all constants were zero).
+                    if (auto v0 = tryRational(ir_, nonConst[0])) {
+                        ExprId folded = mkIntOrReal(*v0, sort);
+                        if (folded != NullExpr) return folded;
+                    }
+                    return nonConst[0];
+                }
                 return mk(kind, sort, std::move(nonConst), Payload());
             }
             return mk(kind, sort, std::move(children), Payload());

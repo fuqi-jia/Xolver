@@ -22,7 +22,7 @@ void ProofForest::ensureNode(EufTermId t) {
 }
 
 void ProofForest::setParent(EufTermId node, EufTermId newParent, size_t newLabelIdx) {
-    trail_.push_back({node, parent_[node], edgeLabelIdx_[node]});
+    trail_.push_back({node, parent_[node], edgeLabelIdx_[node], currentLevel_});
     parent_[node] = newParent;
     edgeLabelIdx_[node] = newLabelIdx;
 }
@@ -59,6 +59,13 @@ void ProofForest::addEdge(EufTermId u, EufTermId v, const MergeReason& reason) {
     setParent(u, v, labelIdx);       // attach u (and its reoriented tree) under v
 }
 
+void ProofForest::addEdgeAtLevel(EufTermId u, EufTermId v, const MergeReason& reason, int level) {
+    int saved = currentLevel_;
+    currentLevel_ = level;
+    addEdge(u, v, reason);
+    currentLevel_ = saved;
+}
+
 void ProofForest::rollback(size_t snap) {
     while (trail_.size() > snap) {
         ParentChange c = trail_.back();
@@ -68,6 +75,22 @@ void ProofForest::rollback(size_t snap) {
     }
     // labels_ is append-only: entries added after `snap` are now unreferenced
     // (their edges were rolled back) and are never read again.
+}
+
+void ProofForest::rollbackByLevel(int targetLevel) {
+    // Pop trail entries from the end as long as the top entry's level is >
+    // targetLevel. This handles the non-monotonic case where an addEdge for
+    // a higher-level merge happened EARLIER in the trail than a now-stale
+    // lower-level entry (the lower-level entry was pushed AFTER the high-level
+    // boundary snapshot was recorded, so the count-based rollback dropped the
+    // high-level entry but left the low-level one whose dependency was undone).
+    // Iterates only from the end; safe to call repeatedly.
+    while (!trail_.empty() && trail_.back().level > targetLevel) {
+        ParentChange c = trail_.back();
+        trail_.pop_back();
+        parent_[c.node] = c.oldParent;
+        edgeLabelIdx_[c.node] = c.oldLabelIdx;
+    }
 }
 
 std::vector<size_t> ProofForest::path(EufTermId u, EufTermId v) const {

@@ -115,12 +115,14 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
         case Kind::Sub: {
             // SMT-LIB n-ary `(- a b c ...)` parses left-associatively as
             // `((a - b) - c) - ...`. The old code only handled size == 2,
-            // silently dropping size >= 3 and unary cases — every formula
-            // containing them returned unknown because the converter
-            // returned nullopt → atom marked unsupported → solver bailed.
-            // Mirrors the fix the user shipped in the NRA worktree.
+            // silently dropping size >= 3 cases — every formula containing
+            // a 3-arg `(- a b c)` rejected with "[ATOM] unsupported NRA/NIA
+            // kind=21" because the polynomial converter returned nullopt
+            // → atom marked unsupported → solver returns unknown without
+            // any reasoning. This was a long-standing parser blind spot.
             if (e.children.empty()) break;
             if (e.children.size() == 1) {
+                // Unary `(- a)` — same as Neg.
                 auto sub = collectRec(e.children[0], ir);
                 if (!sub) { result = std::nullopt; break; }
                 result = -(*sub);
@@ -136,7 +138,6 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 running = running - *next;
             }
             if (ok) result = std::move(running);
-            else    result = std::nullopt;
             break;
         }
         case Kind::Neg: {
@@ -162,31 +163,34 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             break;
         }
         case Kind::Div: {
-            // n-ary `(/ a b c)` = ((a/b)/c). All but the first must be
-            // constants for this converter; supported pattern: polynomial
-            // divided by a chain of numeric constants.
-            if (e.children.empty()) break;
+            // Supported: polynomial / numeric constant(s)  ->  polynomial * (1/c1/c2/...)
+            // Unsupported: polynomial / variable  or  polynomial / polynomial
+            //
+            // SMT-LIB n-ary `(/ a b c)` is `(a / b) / c` (left-associative);
+            // the old code only handled size == 2 and silently dropped n >= 3
+            // — same parser blind-spot pattern as Kind::Sub.
+            if (e.children.size() < 2) break;
             auto num = collectRec(e.children[0], ir);
             if (!num) { result = std::nullopt; break; }
-            if (e.children.size() == 1) { result = std::move(*num); break; }
-            auto tryInvDen = [&](ExprId childId, mpq_class& outInv) -> bool {
-                const CoreExpr& denNode = ir.get(childId);
+            // Accumulate each divisor as a constant; bail if any divisor isn't.
+            auto tryGetConst = [&](ExprId denId, mpq_class& out) -> bool {
+                const CoreExpr& denNode = ir.get(denId);
                 if (denNode.kind == Kind::ConstInt) {
                     if (auto* i = std::get_if<int64_t>(&denNode.payload.value)) {
                         if (*i == 0) return false;
-                        outInv = mpq_class(1, *i);
+                        out = mpq_class(1, *i);
                         return true;
                     } else if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
                         mpq_class q = mpqFromString(*s);
                         if (q == 0) return false;
-                        outInv = mpq_class(1) / q;
+                        out = mpq_class(1) / q;
                         return true;
                     }
                 } else if (denNode.kind == Kind::ConstReal) {
                     if (auto* s = std::get_if<std::string>(&denNode.payload.value)) {
                         mpq_class q(*s);
                         if (q == 0) return false;
-                        outInv = mpq_class(1) / q;
+                        out = mpq_class(1) / q;
                         return true;
                     }
                 }
@@ -196,7 +200,7 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             bool ok = true;
             for (size_t i = 1; i < e.children.size(); ++i) {
                 mpq_class invDen;
-                if (!tryInvDen(e.children[i], invDen)) { ok = false; break; }
+                if (!tryGetConst(e.children[i], invDen)) { ok = false; break; }
                 rp *= invDen;
             }
             if (ok) result = std::move(rp);

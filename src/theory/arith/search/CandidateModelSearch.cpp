@@ -680,13 +680,19 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
             return r;
         }
         case Kind::Div: {
-            if (n.children.size() != 2) return r;
+            // SMT-LIB n-ary `(/ a b c)` = a / b / c (left-associative).
+            if (n.children.size() < 2) return r;
             TermResult a = evalTerm(n.children[0], assignment);
-            TermResult b = evalTerm(n.children[1], assignment);
-            if (a.kind != TermVerdict::Number || b.kind != TermVerdict::Number) return r;
-            if (b.numValue == 0) return r;  // undefined; indeterminate
+            if (a.kind != TermVerdict::Number) return r;
+            mpq_class acc = a.numValue;
+            for (size_t i = 1; i < n.children.size(); ++i) {
+                TermResult bi = evalTerm(n.children[i], assignment);
+                if (bi.kind != TermVerdict::Number) return r;
+                if (bi.numValue == 0) return r;
+                acc /= bi.numValue;
+            }
             r.kind = TermVerdict::Number;
-            r.numValue = a.numValue / b.numValue;
+            r.numValue = acc;
             return r;
         }
         case Kind::Pow: {

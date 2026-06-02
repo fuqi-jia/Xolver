@@ -10,14 +10,92 @@
 // vendored third_party/libpoly headers (duplicate typedefs / enums).
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <functional>
 #include <optional>
 #include <set>
 #include <sstream>
+#include <unordered_map>     // S2 — tpiCache_ map
 
 namespace xolver {
 
+// S2 (P6) — hash + equality for RationalPolynomial cache keys. Hash mixes
+// monomial-key (varId, exp) pairs with the leading mpz limbs of each rational
+// coefficient — sufficient for unordered_map bucket dispersion. Equality is
+// exact via FlatMonomialMap's operator==. O(N) per hash where N = #terms.
+namespace {
+struct RPHash {
+    size_t operator()(const RationalPolynomial& rp) const noexcept {
+        size_t h = 1469598103934665603ULL;             // FNV-1a 64 offset
+        const size_t fnvP = 1099511628211ULL;
+        for (const auto& [key, coeff] : rp.terms()) {
+            for (const auto& [v, e] : key) {
+                h ^= (static_cast<uint64_t>(v) << 16) | static_cast<uint64_t>(e);
+                h *= fnvP;
+            }
+            const mpz_srcptr num = coeff.get_num().get_mpz_t();
+            const mpz_srcptr den = coeff.get_den().get_mpz_t();
+            const int ns = num->_mp_size, ds = den->_mp_size;
+            const uint64_t nl0 = (ns != 0) ? mpz_getlimbn(num, 0) : 0ULL;
+            const uint64_t dl0 = (ds != 0) ? mpz_getlimbn(den, 0) : 0ULL;
+            h ^= static_cast<uint64_t>(ns) * 31ULL + nl0; h *= fnvP;
+            h ^= static_cast<uint64_t>(ds) * 31ULL + dl0; h *= fnvP;
+        }
+        return h;
+    }
+};
+struct RPEq {
+    bool operator()(const RationalPolynomial& a, const RationalPolynomial& b) const noexcept {
+        return a.terms() == b.terms();
+    }
+};
+} // anonymous
+
+struct LibPolyKernel::TpiCacheImpl {
+    std::unordered_map<RationalPolynomial, std::pair<PolyId, mpq_class>, RPHash, RPEq> map;
+};
+
+std::optional<std::pair<PolyId, mpq_class>>
+LibPolyKernel::tpiCacheLookup(const RationalPolynomial& rp) const {
+    if (!tpiCache_) { ++tpiMisses_; return std::nullopt; }
+    auto it = tpiCache_->map.find(rp);
+    if (it == tpiCache_->map.end()) { ++tpiMisses_; return std::nullopt; }
+    ++tpiHits_;
+    return it->second;
+}
+
+void LibPolyKernel::tpiCacheStore(const RationalPolynomial& rp, PolyId p, const mpq_class& scale) {
+    if (!tpiCache_) tpiCache_ = std::make_unique<TpiCacheImpl>();
+    tpiCache_->map.emplace(rp, std::pair<PolyId, mpq_class>{p, scale});
+}
+
 LibPolyKernel::LibPolyKernel() = default;
+
+LibPolyKernel::~LibPolyKernel() {
+    // S1 + S1b + S2 + S1c (P6 / Task J) — env-gated stats dump for hit-rate sanity. Default no-op.
+    if (std::getenv("XOLVER_NRA_KERNEL_STATS") != nullptr) {
+        const uint64_t total = binOpHits_ + binOpMisses_;
+        const double hitRate = total ? 100.0 * static_cast<double>(binOpHits_) / static_cast<double>(total) : 0.0;
+        const uint64_t tpiTotal = tpiHits_ + tpiMisses_;
+        const double tpiRate = tpiTotal ? 100.0 * static_cast<double>(tpiHits_) / static_cast<double>(tpiTotal) : 0.0;
+        const size_t tpiSize = tpiCache_ ? tpiCache_->map.size() : 0;
+        const uint64_t termsTotal = termsHits_ + termsMisses_;
+        const double termsRate = termsTotal ? 100.0 * static_cast<double>(termsHits_) / static_cast<double>(termsTotal) : 0.0;
+        const uint64_t varsTotal = varsHits_ + varsMisses_;
+        const double varsRate = varsTotal ? 100.0 * static_cast<double>(varsHits_) / static_cast<double>(varsTotal) : 0.0;
+        const uint64_t degTotal = degreeHits_ + degreeMisses_;
+        const double degRate = degTotal ? 100.0 * static_cast<double>(degreeHits_) / static_cast<double>(degTotal) : 0.0;
+        std::fprintf(stderr,
+            "[XOLVER_NRA_KERNEL_STATS] binOp hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | tpi hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | terms hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | vars hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | degree hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | sqfFactorsCache=%zu pool=%zu\n",
+            (unsigned long long)binOpHits_, (unsigned long long)binOpMisses_, hitRate, binOpCache_.size(),
+            (unsigned long long)tpiHits_,   (unsigned long long)tpiMisses_,  tpiRate, tpiSize,
+            (unsigned long long)termsHits_, (unsigned long long)termsMisses_, termsRate, termsCache_.size(),
+            (unsigned long long)varsHits_,  (unsigned long long)varsMisses_,  varsRate, varsCache_.size(),
+            (unsigned long long)degreeHits_, (unsigned long long)degreeMisses_, degRate, degreeCache_.size(),
+            sqfFactorsCache_.size(), pool_.size());
+    }
+}
 
 PolyId LibPolyKernel::alloc(poly::Polynomial p) {
     PolyId id = static_cast<PolyId>(pool_.size());
@@ -90,24 +168,69 @@ PolyId LibPolyKernel::mkVar(VarId v) {
     return id;
 }
 
+// S1 (P6 cas/sqrtmodinv cac-deep): hash-cons every binary op. The wipeout
+// cluster's hot path is RationalPolynomial::toPrimitiveInteger's divide-and-
+// conquer build (RationalPolynomial.cpp:334-357) firing repeatedly for the
+// SAME RP (SingleCellProjection step 0+1 double round-trip + factor reconv).
+// libpoly polynomials are immutable post-alloc, so caching (op, operand-ids)
+// is sound — a NullPoly arg short-circuits the cache (low-30-bit truncation
+// would collide with a legitimate slot and silently return the wrong result;
+// the un-cached path matches the pre-S1 crash semantics for that bug class).
 PolyId LibPolyKernel::add(PolyId a, PolyId b) {
-    return alloc(poly::operator+(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator+(get(a), get(b)));
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
+    const uint64_t key = binOpKey(0, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
+    PolyId r = alloc(poly::operator+(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::sub(PolyId a, PolyId b) {
-    return alloc(poly::operator-(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator-(get(a), get(b)));
+    const uint64_t key = binOpKey(1, a, b);                 // NOT commutative
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
+    PolyId r = alloc(poly::operator-(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::neg(PolyId a) {
-    return alloc(poly::operator-(get(a)));
+    if (a == NullPoly) return alloc(poly::operator-(get(a)));
+    const uint64_t key = binOpKey(2, a, 0);                 // unary — slot b = 0
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
+    PolyId r = alloc(poly::operator-(get(a)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::mul(PolyId a, PolyId b) {
-    return alloc(poly::operator*(get(a), get(b)));
+    if (a == NullPoly || b == NullPoly) return alloc(poly::operator*(get(a), get(b)));
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;   // commutative canonical
+    const uint64_t key = binOpKey(3, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
+    PolyId r = alloc(poly::operator*(get(a), get(b)));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 PolyId LibPolyKernel::pow(PolyId a, uint32_t k) {
-    return alloc(poly::pow(get(a), k));
+    if (a == NullPoly) return alloc(poly::pow(get(a), k));
+    const uint64_t key = binOpKey(4, a, k);                 // slot b carries k
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
+    PolyId r = alloc(poly::pow(get(a), k));
+    binOpCache_.emplace(key, r);
+    return r;
 }
 
 bool LibPolyKernel::isZero(PolyId a) const {
@@ -131,6 +254,19 @@ mpq_class LibPolyKernel::toConstant(PolyId a) const {
 }
 
 std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
+    // S1d (Task J follow-up): hash-cons. Pure function — recursive
+    // coefficient traversal + set insertion is heavy at 92 call sites
+    // across atom-var resolution, CAC projection variable enumeration,
+    // and frontend lowering.
+    {
+        auto it = varsCache_.find(a);
+        if (it != varsCache_.end()) {
+            ++varsHits_;
+            return it->second;
+        }
+    }
+    ++varsMisses_;
+
     std::vector<std::string> result;
     const auto& p = get(a);
 
@@ -153,6 +289,7 @@ std::vector<std::string> LibPolyKernel::variables(PolyId a) const {
             result.push_back(varNames_[it->second]);
         }
     }
+    varsCache_.emplace(a, result);
     return result;
 }
 
@@ -242,40 +379,48 @@ std::optional<mpz_class> LibPolyKernel::evalIntegerVarId(
 }
 
 std::optional<int> LibPolyKernel::degree(PolyId a, std::string_view var) const {
+    // S1e (Task M): hash-cons by (PolyId, VarId). Resolve var name to
+    // VarId first so the key is stable across string_view lifetimes. Cache
+    // value is the int degree (always defined per current returns: 0 on
+    // missing var, main-var degree, or term-scan max). The (cheap)
+    // is_constant path is also cached because the lookup itself dominates
+    // at 55 call sites.
+    VarId vid = NullVar;
+    auto vit = nameToVar_.find(std::string(var));
+    if (vit != nameToVar_.end()) vid = vit->second;
+    const uint64_t key = (static_cast<uint64_t>(a) << 32) | static_cast<uint32_t>(vid);
+    {
+        auto it = degreeCache_.find(key);
+        if (it != degreeCache_.end()) {
+            ++degreeHits_;
+            return it->second;
+        }
+    }
+    ++degreeMisses_;
+
+    int result = 0;
     const auto& p = get(a);
-    // If polynomial is constant, degree is 0
-    if (poly::is_constant(p)) {
-        return 0;
-    }
-    auto it = nameToVar_.find(std::string(var));
-    if (it == nameToVar_.end()) {
-        // Variable not in this kernel's context → not present in polynomial
-        return 0;
-    }
-    poly::Variable pv = varIdToPolyVar_[it->second];
-    if (poly::main_variable(p) == pv) {
-        return static_cast<int>(poly::degree(p));
-    }
-    // Variable is not the main variable: iterate terms to find max exponent.
-    int maxDeg = 0;
-    bool found = false;
-    auto termsOpt = terms(a);
-    if (termsOpt) {
-        for (const auto& term : *termsOpt) {
-            for (const auto& [vid, exp] : term.powers) {
-                if (vid == it->second) {
-                    maxDeg = std::max(maxDeg, exp);
-                    found = true;
-                    break;
+    if (!poly::is_constant(p) && vid != NullVar) {
+        poly::Variable pv = varIdToPolyVar_[vid];
+        if (poly::main_variable(p) == pv) {
+            result = static_cast<int>(poly::degree(p));
+        } else {
+            // Variable is not the main variable: iterate terms to find max exponent.
+            auto termsOpt = terms(a);  // transitively cached via S1c
+            if (termsOpt) {
+                for (const auto& term : *termsOpt) {
+                    for (const auto& [tvid, exp] : term.powers) {
+                        if (tvid == vid) {
+                            if (exp > result) result = exp;
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
-    if (found) {
-        return maxDeg;
-    }
-    // Variable does not appear in any term.
-    return 0;
+    degreeCache_.emplace(key, result);
+    return result;
 }
 
 std::optional<std::vector<mpz_class>> LibPolyKernel::getIntegerCoefficients(
@@ -383,24 +528,48 @@ poly::Variable LibPolyKernel::getVariable(const std::string& name) const {
 
 std::optional<std::vector<PolynomialKernel::MonomialTerm>>
 LibPolyKernel::terms(PolyId a) const {
+    // S1c (Task J): hash-cons. PolyId is immutable for the kernel's
+    // lifetime so any prior decomposition (including a nullopt failure)
+    // is still valid. Returns by-value to preserve the existing API.
+    {
+        auto it = termsCache_.find(a);
+        if (it != termsCache_.end()) {
+            ++termsHits_;
+            return it->second;
+        }
+    }
+    ++termsMisses_;
+
     const auto& p = get(a);
 
     // Constant polynomial: return single term with empty powers
     if (poly::is_constant(p)) {
         poly::Assignment empty(ctx_);
         poly::Value v = poly::evaluate(p, empty);
-        if (!poly::is_rational(v)) return std::nullopt;
+        if (!poly::is_rational(v)) {
+            termsCache_.emplace(a, std::nullopt);
+            return std::nullopt;
+        }
         const poly::Rational& r = poly::as_rational(v);
         mpq_class c = *poly::detail::cast_to_gmp(&r);
-        if (c.get_den() != 1) return std::nullopt;
-        return std::vector<MonomialTerm>{{c.get_num(), {}}};
+        if (c.get_den() != 1) {
+            termsCache_.emplace(a, std::nullopt);
+            return std::nullopt;
+        }
+        std::vector<MonomialTerm> result{{c.get_num(), {}}};
+        termsCache_.emplace(a, result);
+        return result;
     }
 
     TermsTraverseData data;
     data.kernel = this;
     lp_polynomial_traverse(p.get_internal(), termsTraverseCallback, &data);
 
-    if (data.failed) return std::nullopt;
+    if (data.failed) {
+        termsCache_.emplace(a, std::nullopt);
+        return std::nullopt;
+    }
+    termsCache_.emplace(a, data.terms);
     return data.terms;
 }
 
@@ -535,12 +704,29 @@ PolynomialKernel::PseudoRemainderResult LibPolyKernel::pseudoRemainderWithScale(
 }
 
 std::optional<PolyId> LibPolyKernel::leadingCoefficient(PolyId p) {
+    // S1b: hash-cons. Unary, deterministic given fixed construction-time main
+    // variable. nullopt cached as NullPoly value (cache value space is disjoint
+    // from key space, no collision risk).
+    if (p == NullPoly) return std::nullopt;
+    const uint64_t key = binOpKey(6, p, 0);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) {
+        ++binOpHits_;
+        return it->second == NullPoly ? std::optional<PolyId>{} : std::optional<PolyId>{it->second};
+    }
+    ++binOpMisses_;
     const auto& pp = get(p);
-    if (poly::is_constant(pp)) return std::nullopt;
+    if (poly::is_constant(pp)) {
+        binOpCache_.emplace(key, NullPoly);
+        return std::nullopt;
+    }
     try {
         poly::Polynomial lc = poly::leading_coefficient(pp);
-        return alloc(std::move(lc));
+        PolyId r = alloc(std::move(lc));
+        binOpCache_.emplace(key, r);
+        return r;
     } catch (...) {
+        // Don't cache transient exceptions
         return std::nullopt;
     }
 }
@@ -698,10 +884,23 @@ PolyId LibPolyKernel::gcd(PolyId a, PolyId b) {
     // Sign/scale: libpoly returns a representative of the gcd in its integer
     // ring; the Lazard caller treats it up to a positive rational unit (and
     // re-verifies it via exactDivide), so the exact normalization is benign.
+    //
+    // S1b: hash-cons. Order-independent, deterministic → commutative cache fit.
+    if (a == NullPoly || b == NullPoly) {
+        try { return alloc(poly::gcd(get(a), get(b))); } catch (...) { return NullPoly; }
+    }
+    const PolyId lo = a < b ? a : b, hi = a < b ? b : a;
+    const uint64_t key = binOpKey(5, lo, hi);
+    auto it = binOpCache_.find(key);
+    if (it != binOpCache_.end()) { ++binOpHits_; return it->second; }
+    ++binOpMisses_;
     try {
         poly::Polynomial g = poly::gcd(get(a), get(b));
-        return alloc(std::move(g));
+        PolyId r = alloc(std::move(g));
+        binOpCache_.emplace(key, r);
+        return r;
     } catch (...) {
+        // Do NOT cache failures — could be transient (allocator OOM etc.)
         return NullPoly;
     }
 }
@@ -712,19 +911,29 @@ std::vector<PolyId> LibPolyKernel::squareFreeFactors(PolyId a) {
     // exactly a's real-root set (multiplicity collapsed). Replacing a by these
     // factors in the CAC characterization is ROOT-PRESERVING (sound). On any
     // failure, fall back to {a} (conservative no-op — never drops roots).
+    //
+    // S1b: hash-cons by input PolyId. This is the HOT path for cas/sqrtmodinv —
+    // SingleCellProjection.cpp:258 calls this per boundary, and the same
+    // boundary recurs across cell-jump iterations. Vector-valued cache (each
+    // entry stores the factor PolyIds, not the polynomials themselves).
+    if (a == NullPoly) return {a};
+    auto cIt = sqfFactorsCache_.find(a);
+    if (cIt != sqfFactorsCache_.end()) { ++binOpHits_; return cIt->second; }
+    ++binOpMisses_;
+    std::vector<PolyId> out;
     try {
         std::vector<poly::Polynomial> facs = poly::square_free_factors(get(a));
-        std::vector<PolyId> out;
         out.reserve(facs.size());
         for (auto& f : facs) {
             if (poly::is_constant(f)) continue;          // constants have no roots
             out.push_back(alloc(std::move(f)));
         }
         if (out.empty()) out.push_back(a);                // all-constant / degenerate ⇒ keep a
-        return out;
     } catch (...) {
-        return {a};
+        out = {a};
     }
+    sqfFactorsCache_.emplace(a, out);                     // cache even the fallback (deterministic)
+    return out;
 }
 
 std::optional<PolyId> LibPolyKernel::substituteRational(PolyId p, VarId v, const mpq_class& value) {

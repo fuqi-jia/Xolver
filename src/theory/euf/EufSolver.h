@@ -17,6 +17,7 @@ namespace xolver {
 class EufSolver : public TheorySolver {
 public:
     EufSolver();
+    ~EufSolver();
 
     TheoryId id() const override { return TheoryId::EUF; }
 
@@ -232,6 +233,18 @@ private:
     // UNSAT sound). Shared by the eager watch and the post-loop diseq scan.
     TheoryConflict buildDiseqConflict(const ActiveDisequality& d);
 
+    // UFE INVARIANT CHECKER (XOLVER_DIAG_PF_INV / XOLVER_ASSERT_PF_INV gated).
+    // Walks every reachable edge in the proof forest; for each AssertedEquality
+    // edge, verifies its literal is currently asserted on trail at the same
+    // polarity. For each Congruence edge, verifies every (a_i, b_i) in
+    // argPairs is currently same-class in the egraph. Returns true if all
+    // invariants hold; logs the first violation to stderr when DIAG is on, and
+    // (when ASSERT is on) aborts so the bisection lands on the operation that
+    // broke the invariant. This is the soundness gate for XOLVER_UF_DISEQ_WATCH:
+    // the watcher's conflict clause only makes sense if proof-forest labels are
+    // coherent with the current trail.
+    bool checkProofForestInvariants(const char* where) const;
+
     // XOLVER_UF_DISEQ_WATCH: eager disequality-conflict detection. When enabled,
     // after each merge in the saturation loop we check only the disequalities
     // that touch the just-merged (loser) class, catching the conflict the moment
@@ -254,6 +267,10 @@ private:
     // min-level scan. Same processing order; targets QF_ANIA/QF_AX-swap blowup.
     // Read once in the constructor.
     bool minLevelHeapEnabled_ = false;
+    // XOLVER_AX_STORE_MODEL (default-OFF, array-deep A1): store-aware array model
+    // construction (follow store chains so a store-defined array inherits its
+    // base's entries). Verdict-sound; recovers the storecomm sat class.
+    bool storeModelEnabled_ = false;
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
     // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
     // registry every cb_propagate, track new-since-last-call merges and scan
@@ -287,6 +304,25 @@ private:
     // Set on backtrack — next propagation call must do a full sweep (assigned
     // set changed, mergeRecord count regressed).
     bool forceFullEntailmentScan_ = true;
+
+    // XOLVER_EUF_HOTPROFILE (default-OFF, agent/eqna-2 E2/E3 profile task):
+    // lightweight per-check counters + chrono accumulators. Dump on dtor when
+    // any call happened. Used to triage QG-classification / eq_diamond hot
+    // path (perf+flamegraph not available on WSL).
+    bool hotProfileEnabled_ = false;
+    struct EufHotProfile {
+        uint64_t checkCalls = 0;
+        uint64_t mergesProcessed = 0;       // saturation merges drained
+        uint64_t explainCalls = 0;          // explainEquality invocations
+        uint64_t entailmentScanRecs = 0;    // recs iterated in takeEntailmentPropagations
+        uint64_t entailmentEmitted = 0;     // lemmas emitted by entailment scan
+        int64_t  checkUs = 0;               // total wall in check()
+        int64_t  saturationUs = 0;          // wall inside saturation loop
+        int64_t  explainUs = 0;             // wall inside explainEquality
+        int64_t  entailmentUs = 0;          // wall inside takeEntailmentPropagations
+        int64_t  registerSigUs = 0;         // wall inside registerPendingSignatures
+    };
+    EufHotProfile hotProfile_;
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.
@@ -307,7 +343,7 @@ private:
     EufTermId internEufExpr(ExprId eid);
 
     // Constant arithmetic evaluation for #builtin terms
-    void tryEvaluateBuiltin(EufTermId t);
+    void tryEvaluateBuiltin(EufTermId t, int level);
 
     // QF_AX array support (layered on the shared egraph).
     bool arrayMode_ = false;

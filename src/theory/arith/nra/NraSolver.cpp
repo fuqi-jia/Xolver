@@ -8,6 +8,12 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
+#include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
+#include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
+#include "theory/arith/nra/simplex/PolynomialIntervalPruner.h" // OSF-CDCAC P7
+#include "theory/arith/icp/IcpEngineQ.h"                       // XOLVER_NRA_ICP rational ICP engine
+#include "theory/arith/icp/ContractorFactoryQ.h"               // XOLVER_NRA_ICP factory
+#include "theory/arith/icp/IcpTypes.h"                         // XOLVER_NRA_ICP IcpConstraint
 #include "theory/arith/nra/cac/CacEngine.h"                    // XOLVER_NRA_CAC conflict-driven coverings
 #include "theory/arith/nra/core/CdcacCommon.h"                 // #63 relationHolds() for rational-fallback
 #include "theory/arith/refute/SignDefinitenessRefuter.h"       // XOLVER_NRA_SIGN_REFUTE
@@ -33,27 +39,68 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
       engine_(kernel_.get()) {
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
+    // NRA-MGC-PROFILE diagnostic: env-gated per-stage wall-time accounting.
+    // Set XOLVER_NRA_STAGE_TIMING=1 for per-stage cumulative on exit.
+    // Set XOLVER_NRA_STAGE_TRACE=1 for real-time per-call logging (slower).
+    auto stageWrap = [this](const char* name, auto fn) {
+        return [this, name, fn](TheoryLemmaStorage& db, TheoryEffort e)
+                -> std::optional<TheoryCheckResult> {
+            static const bool timing = std::getenv("XOLVER_NRA_STAGE_TIMING") != nullptr;
+            static const bool trace = std::getenv("XOLVER_NRA_STAGE_TRACE") != nullptr;
+            if (!timing && !trace) return fn(db, e);
+            auto t0 = std::chrono::steady_clock::now();
+            auto result = fn(db, e);
+            auto t1 = std::chrono::steady_clock::now();
+            auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
+            stageTimingUs_[name] += us;
+            stageTimingCalls_[name] += 1;
+            if (trace) {
+                const char* effortName = (e == TheoryEffort::Full) ? "Full" : "Std";
+                std::fprintf(stderr, "[STAGE_TRACE] %s effort=%s %ld us total=%.1f ms\n",
+                             name, effortName, (long)us, stageTimingUs_[name] / 1000.0);
+                std::fflush(stderr);
+            }
+            return result;
+        };
+    };
+
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); }));
+        stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
+    // XOLVER_NRA_ICP (default OFF): orthogonal interval-propagation probe,
+    // between presolve (linear) and sign-refute (sign). Cheap univariate
+    // narrowing; nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.icp",
+        stageWrap("icp", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIcpProbe(db, e); })));
     // XOLVER_NRA_SIGN_REFUTE (default OFF): cheap positive-orthant sign-
     // definiteness UNSAT refuter, right after presolve. nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-refute",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); }));
+        stageWrap("sign-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); })));
+    // XOLVER_NRA_SIGN_SPLIT (default OFF): case-split on sign-blocking variables
+    // when sign-refute can't fire. See NDEEP-3/4 / MGC R&D audit.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.sign-split",
+        stageWrap("sign-split", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraSignSplit(db, e); })));
+    // OSF-CDCAC P7: polynomial interval pruning right after sign-split, before
+    // linearize. XOLVER_NRA_OSF_PRUNE default-OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.osf-prune",
+        stageWrap("osf-prune", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageOsfPrune(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); }));
+        stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
     // XOLVER_NRA_PREELIM (default OFF): affine pre-elimination then reduced CDCAC.
     // Runs BEFORE the full-variable CDCAC backstop; nullopt at the gate when OFF.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.preelim",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); }));
+        stageWrap("preelim", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageNraPreElim(db, e); })));
     // XOLVER_NRA_SUBTROPICAL (default OFF): cheap SAT-fast-path before the full
     // CAD. nullopt at the gate when OFF; runs only at Full effort.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); }));
+        stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
     // Sprint 3 (#69): LS pre-pass now runs from NraSolver::check() override
     // ABOVE the Reasoner pipeline so it executes BEFORE CDCAC. The old
     // stageLocalSearch stage was reach-limited (CDCAC hung at Standard before
@@ -63,10 +110,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     // nullopt at the gate when OFF or on CAC-Unknown ⇒ Collins fallback.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cac",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); }));
+        stageWrap("cac", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCac(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.cdcac",
-        [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); }));
+        stageWrap("cdcac", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCdcac(db, e); })));
 
     // XOLVER_NRA_PREELIM: read the gate once at construction (mirrors A7's
     // enableCdcac_). OFF ⇒ stageNraPreElim returns nullopt immediately so the
@@ -77,7 +124,23 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
 }
 
 // Out-of-line: NraLinearizationAdapter is an incomplete type in the header.
-NraSolver::~NraSolver() = default;
+NraSolver::~NraSolver() {
+    if (std::getenv("XOLVER_NRA_STAGE_TIMING") && !stageTimingUs_.empty()) {
+        // Sort stages by total time descending.
+        std::vector<std::pair<std::string, uint64_t>> rows(stageTimingUs_.begin(), stageTimingUs_.end());
+        std::sort(rows.begin(), rows.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::fprintf(stderr, "[XOLVER_NRA_STAGE_TIMING] per-stage cumulative:\n");
+        for (const auto& [name, us] : rows) {
+            auto calls = stageTimingCalls_[name];
+            std::fprintf(stderr, "  %-12s  %10.3f ms   %6llu calls   avg %8.1f us\n",
+                         name.c_str(),
+                         us / 1000.0,
+                         (unsigned long long)calls,
+                         calls > 0 ? (double)us / calls : 0.0);
+        }
+    }
+}
 
 void NraSolver::setRegistry(TheoryAtomRegistry* reg) {
     registry_ = reg;
@@ -117,10 +180,16 @@ void NraSolver::onReset() {
     activeSet_.reset();
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
+    signSplitDone_.clear();   // XOLVER_NRA_SIGN_SPLIT: fresh per solve
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // Phase 4: reset perturbation tracker; new search restart, fresh stuck-state.
+    lastLinFp_ = mpq_class(-1);
+    linStuckRounds_ = 0;
+    linLastNewCuts_ = -1;
+    linPerturbSeed_ = 0;
     // Phase NRA-LS-A: per-solve LS state — one-shot gate + statistics.
     lsAttempted_ = false;
     lsTotalMs_ = 0;
@@ -147,11 +216,22 @@ void NraSolver::onReset() {
 // consistent() is backed by an exact-kernel sign check on every active atom.
 TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                                    TheoryEffort effort) {
-    static const bool lsEnabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_LOCALSEARCH");
-        return e && *e && *e != '0';
-    }();
-    if (!lsEnabled) return ArithSolverBase::check(lemmaDb, effort);
+    // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
+    // guard removed (no env string in binary). Pre-promotion baseline lived
+    // at commit eff76fa; master GREEN-LIT on Task I polypaver +9pp data.
+
+    // Task NRA-HYB Step 1: optional partition-stats dump. Report-only;
+    // does not modify solver state. One-shot per solve (first check entry).
+    static thread_local int hybStatsLastDumpedSize = -1;
+    if (std::getenv("XOLVER_NRA_HYB_PARTITION_STATS") &&
+        static_cast<int>(presolveConstraints_.size()) != hybStatsLastDumpedSize) {
+        std::vector<PolyId> activePolys;
+        activePolys.reserve(presolveConstraints_.size());
+        for (const auto& c : presolveConstraints_) activePolys.push_back(c.poly);
+        const auto partition = computePartition(activePolys, *kernel_);
+        maybeDumpPartitionReport(partition);
+        hybStatsLastDumpedSize = static_cast<int>(presolveConstraints_.size());
+    }
 
     // Helper: exact-validate a rational assignment against every active
     // polynomial constraint via the kernel sign.
@@ -315,7 +395,12 @@ void NraSolver::onBacktrack(int level) {
         satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
     }
     engine_.backtrack(level);
-    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget on backtrack
+    linRefineRound_ = 0;  // XOLVER_NRA_LINEARIZE: restart refinement budget
+    // Phase 4: reset perturbation tracker; new search restart, fresh stuck-state.
+    lastLinFp_ = mpq_class(-1);
+    linStuckRounds_ = 0;
+    linLastNewCuts_ = -1;
+    linPerturbSeed_ = 0;
     auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [level](const auto& ie) { return ie.level > level; });
     interfaceEqualities_.erase(ieIt, interfaceEqualities_.end());
@@ -347,6 +432,170 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
     return std::nullopt;
 }
 
+// XOLVER_NRA_ICP: rational ICP probe. Sound by construction — emits Conflict
+// only when a contractor reports a definitively-violated constraint with
+// reasons that union the constraint's reason and the box's bound reasons.
+// V1 scope: univariate atoms only. Linear single-var bounds seed the box;
+// degree-≥2 single-var polynomials run through RelationContractorQ. Bypassed
+// in combination mode (interface (dis)eqs not in presolveConstraints_, matches
+// sign-refute's bailout).
+std::optional<TheoryCheckResult> NraSolver::stageIcpProbe(TheoryLemmaStorage& /*lemmaDb*/,
+                                                          TheoryEffort /*effort*/) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_ICP");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+
+    // Pass 1: seed partial bounds from univariate linear atoms.
+    // Closed-interval over-approximation for strict atoms is sound — it only
+    // weakens conflict detection, never adds spurious conflicts.
+    struct PartialBound {
+        bool hasLo = false; mpq_class lo;
+        bool hasHi = false; mpq_class hi;
+        std::vector<SatLit> reasonsLo;
+        std::vector<SatLit> reasonsHi;
+    };
+    std::unordered_map<std::string, PartialBound> partial;
+
+    auto narrowLo = [&partial](const std::string& v, const mpq_class& val, SatLit r) {
+        auto& pb = partial[v];
+        if (!pb.hasLo || val > pb.lo) {
+            pb.lo = val; pb.reasonsLo.clear();
+        }
+        if (!pb.hasLo || val >= pb.lo) {
+            pb.reasonsLo.push_back(r);
+        }
+        pb.hasLo = true;
+    };
+    auto narrowHi = [&partial](const std::string& v, const mpq_class& val, SatLit r) {
+        auto& pb = partial[v];
+        if (!pb.hasHi || val < pb.hi) {
+            pb.hi = val; pb.reasonsHi.clear();
+        }
+        if (!pb.hasHi || val <= pb.hi) {
+            pb.reasonsHi.push_back(r);
+        }
+        pb.hasHi = true;
+    };
+
+    std::vector<IcpConstraint> nonlinearAtoms;
+    nonlinearAtoms.reserve(presolveConstraints_.size());
+
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto vars = kernel_->variables(c.poly);
+
+        if (vars.size() >= 2) {
+            // Multivariate: feed to V4 (the factory will discard non-V4
+            // shapes). No bound-seeding — V4 reads the rest-vars' boxes
+            // populated by the univariate linear pass.
+            IcpConstraint ic;
+            ic.expr = std::nullopt;
+            ic.poly = c.poly;
+            ic.rel = c.rel;
+            ic.reason = c.reason;
+            ic.owner = TheoryId::NRA;
+            nonlinearAtoms.push_back(ic);
+            continue;
+        }
+        if (vars.size() != 1) continue;  // 0 vars (constant): handled by presolve
+
+        const std::string& v = vars[0];
+        auto degOpt = kernel_->degree(c.poly, v);
+        if (!degOpt) continue;
+
+        if (*degOpt == 1) {
+            // Linear: c1*x + c0 rel 0  ⇒  bound on x.
+            auto coeffsOpt = kernel_->getIntegerCoefficients(c.poly, v);
+            if (!coeffsOpt || coeffsOpt->size() != 2) continue;
+            const mpz_class& c1 = (*coeffsOpt)[0];
+            const mpz_class& c0 = (*coeffsOpt)[1];
+            if (c1 == 0) continue;  // shouldn't happen at degree 1, defense-in-depth
+
+            mpq_class bound(-c0, c1);
+            bound.canonicalize();
+            bool flip = (c1 < 0);
+
+            // After flip, work in the canonical c1>0 frame.
+            Relation rel = c.rel;
+            switch (rel) {
+                case Relation::Eq:
+                    narrowLo(v, bound, c.reason);
+                    narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Leq:
+                    if (flip) narrowLo(v, bound, c.reason);
+                    else      narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Geq:
+                    if (flip) narrowHi(v, bound, c.reason);
+                    else      narrowLo(v, bound, c.reason);
+                    break;
+                case Relation::Lt:
+                    // Strict over-approximated to non-strict (sound: feasible
+                    // set ⊆ closed-interval). No precision loss for sound
+                    // conflict detection.
+                    if (flip) narrowLo(v, bound, c.reason);
+                    else      narrowHi(v, bound, c.reason);
+                    break;
+                case Relation::Gt:
+                    if (flip) narrowHi(v, bound, c.reason);
+                    else      narrowLo(v, bound, c.reason);
+                    break;
+                case Relation::Neq:
+                default:
+                    break;  // V1: skip (would need disjunctive narrowing)
+            }
+        } else if (*degOpt >= 2) {
+            // Univariate degree ≥ 2 — gather for contractor pass.
+            IcpConstraint ic;
+            ic.expr = std::nullopt;
+            ic.poly = c.poly;
+            ic.rel = c.rel;
+            ic.reason = c.reason;
+            ic.owner = TheoryId::NRA;
+            nonlinearAtoms.push_back(ic);
+        }
+    }
+
+    // Pass 2: build the box only from variables with BOTH endpoints — no
+    // infinity sentinel exists in IntervalQ, so a half-bounded var is unsafe
+    // for interval polynomial evaluation (would need ±∞ propagation rules).
+    ReasonedBoxQ box;
+    for (auto& [v, pb] : partial) {
+        if (!pb.hasLo || !pb.hasHi) continue;
+        if (pb.lo > pb.hi) {
+            // Linear seeds alone already proved infeasibility on x — emit the
+            // direct conflict; presolve normally catches this too, this is
+            // defense-in-depth so ICP never runs over an empty box.
+            std::vector<SatLit> reasons = pb.reasonsLo;
+            reasons.insert(reasons.end(), pb.reasonsHi.begin(), pb.reasonsHi.end());
+            return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+        }
+        std::vector<SatLit> reasons = pb.reasonsLo;
+        reasons.insert(reasons.end(), pb.reasonsHi.begin(), pb.reasonsHi.end());
+        box.set(v, ReasonedIntervalQ{IntervalQ{pb.lo, pb.hi}, std::move(reasons)});
+    }
+
+    // Without any seeded variable, no contractor can fire. Skip the engine.
+    if (box.entries().empty()) return std::nullopt;
+    if (nonlinearAtoms.empty()) return std::nullopt;
+
+    auto built = ContractorFactoryQ::build(nonlinearAtoms, *kernel_);
+    if (built.contractors.empty()) return std::nullopt;
+
+    IcpConfig cfg;  // defaults are fine; budget keeps the worklist bounded
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, box, cfg);
+    if (r.status == IcpStatus::Conflict && r.conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    return std::nullopt;
+}
+
 // XOLVER_NRA_SIGN_REFUTE: positive-orthant sign-definiteness refuter. Cheap,
 // unconditionally sound UNSAT for sign-definite constraints (e.g. a sum of
 // strictly-positive monomials = 0 with all variables positive — the Sturm-MBO
@@ -374,6 +623,212 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         std::ofstream st("/tmp/sign_refute.txt", std::ios::app);
         st << "[SIGN-REFUTE] UNSAT cons=" << cs.size() << " clause=" << tc.clause.size() << "\n";
         st.flush();
+    }
+    return TheoryCheckResult::mkConflict(std::move(tc));
+}
+
+// XOLVER_NRA_SIGN_SPLIT (default OFF). MGC-RD closing lever.
+//
+// When sign-refute fails because exactly ONE variable's sign is unknown in
+// an otherwise-refutable equation/inequality, emit a 3-way case-split
+// theory lemma  (or (> v 0) (= v 0) (< v 0))  on that variable. The
+// disjunction is a tautology over R (covers every real number), so adding
+// it never alters the feasible region — soundness is structural. In each
+// branch the variable's sign becomes definite, sign-refute fires.
+//
+// Per-solve dedup via signSplitDone_; cleared in onReset to enable a fresh
+// split set per solve.
+std::optional<TheoryCheckResult> NraSolver::stageNraSignSplit(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = []() {
+        const char* e = std::getenv("XOLVER_NRA_SIGN_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    // Run at every effort: the lemma is a tautology so emitting early
+    // (Standard effort) lets SAT branch before propagation digs deep.
+    if (!registry_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // Pass 1: derive known signs from single-var linear bounds (mirrors
+    // SignDefinitenessRefuter so we agree on which vars are unknown).
+    enum class Sign : uint8_t { Unknown, PosStrict, NegStrict, NonNeg, NonPos };
+    std::unordered_map<VarId, Sign> known;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rpOpt) continue;
+        const auto& rp = *rpOpt;
+        const auto vars = rp.variables();
+        if (vars.size() != 1) continue;
+        const VarId v = *vars.begin();
+        if (rp.degree(v) != 1) continue;
+        mpq_class coeff = 0, constTerm = 0;
+        for (const auto& [mon, k] : rp.terms()) {
+            if (mon.empty()) constTerm = k;
+            else if (mon.size() == 1 && mon[0].first == v && mon[0].second == 1) coeff = k;
+            else { coeff = 0; break; }
+        }
+        if (coeff == 0) continue;
+        mpq_class boundary = -constTerm / coeff;
+        Relation rel = c.rel;
+        if (coeff < 0) {
+            switch (rel) {
+                case Relation::Lt:  rel = Relation::Gt; break;
+                case Relation::Leq: rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Lt;  break;
+                case Relation::Geq: rel = Relation::Leq; break;
+                default: break;
+            }
+        }
+        Sign s = Sign::Unknown;
+        if (rel == Relation::Gt && boundary >= 0) s = Sign::PosStrict;
+        else if (rel == Relation::Geq && boundary > 0) s = Sign::PosStrict;
+        else if (rel == Relation::Geq && boundary == 0) s = Sign::NonNeg;
+        else if (rel == Relation::Lt && boundary <= 0) s = Sign::NegStrict;
+        else if (rel == Relation::Leq && boundary < 0) s = Sign::NegStrict;
+        else if (rel == Relation::Leq && boundary == 0) s = Sign::NonPos;
+        if (s == Sign::Unknown) continue;
+        auto& slot = known[v];
+        // Strict wins over non-strict.
+        if (slot == Sign::Unknown ||
+            ((s == Sign::PosStrict || s == Sign::NegStrict) &&
+             !(slot == Sign::PosStrict || slot == Sign::NegStrict))) {
+            slot = s;
+        }
+    }
+
+    // Pass 2: find a sign-blocking variable. Heuristic: pick the unknown-sign
+    // variable that appears in the most constraints. Only consider vars that
+    // haven't been split before this solve.
+    std::unordered_map<VarId, int> unknownVarUseCount;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        for (const auto& vn : kernel_->variables(c.poly)) {
+            auto vid = kernel_->findVar(vn);
+            if (!vid) continue;
+            if (known.find(*vid) != known.end()) continue;
+            if (signSplitDone_.count(*vid)) continue;
+            unknownVarUseCount[*vid]++;
+        }
+    }
+    if (unknownVarUseCount.empty()) return std::nullopt;
+    VarId pick = NullVar;
+    int bestCount = 0;
+    for (const auto& [v, n] : unknownVarUseCount) {
+        if (n > bestCount) { pick = v; bestCount = n; }
+    }
+    if (pick == NullVar) return std::nullopt;
+
+    // Emit the 3-way disjunction lemma: (or (> v 0) (= v 0) (< v 0)).
+    // Each atom is on (v - 0), i.e. just the poly v.
+    PolyId vPoly = kernel_->mkVar(pick);
+    SatLit gt = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Gt, mpq_class(0), TheoryId::LRA);
+    SatLit eq = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Eq, mpq_class(0), TheoryId::LRA);
+    SatLit lt = registry_->getOrCreatePolynomialAtom(vPoly, Relation::Lt, mpq_class(0), TheoryId::LRA);
+    if (gt.var == 0 || eq.var == 0 || lt.var == 0) return std::nullopt;
+
+    TheoryLemma lemma{{gt, eq, lt}};
+    signSplitDone_.insert(pick);
+
+    if (std::getenv("XOLVER_NRA_SIGN_SPLIT_DIAG")) {
+        std::fprintf(stderr,
+            "[XOLVER_NRA_SIGN_SPLIT] split on var=%u uses=%d  lemma=(>0 | =0 | <0)\n",
+            (unsigned)pick, bestCount);
+    }
+    return TheoryCheckResult::mkLemma(std::move(lemma));
+}
+
+// OSF-CDCAC P7: stageOsfPrune.
+//
+// Build a CertifiedSimplexFacts from the active single-variable linear
+// bounds in presolveConstraints_. Then run polynomial interval pruning:
+// for each constraint p rel 0, compute [L, U] via monomial arithmetic.
+// If the interval contradicts rel, emit a sound theory conflict.
+//
+// Distinct from SignDefinitenessRefuter: that one only tracks SIGN
+// (Pos/Neg/NonNeg/NonPos), this tracks NUMERIC bounds so constraints
+// like x in [2,5] and y in [3,4] propagate through x*y to [6, 20].
+//
+// Default OFF until paired-validated on broader corpus.
+std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = []() {
+        const char* e = std::getenv("XOLVER_NRA_OSF_PRUNE");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // Build CertifiedSimplexFacts from single-variable linear constraints.
+    CertifiedSimplexFacts facts;
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        auto rpOpt = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+        if (!rpOpt) continue;
+        const auto& rp = *rpOpt;
+        const auto vars = rp.variables();
+        if (vars.size() != 1) continue;
+        const VarId v = *vars.begin();
+        if (rp.degree(v) != 1) continue;
+        mpq_class coeff = 0, constTerm = 0;
+        for (const auto& [mon, k] : rp.terms()) {
+            if (mon.empty()) constTerm = k;
+            else if (mon.size() == 1 && mon[0].first == v && mon[0].second == 1) coeff = k;
+            else { coeff = 0; break; }
+        }
+        if (coeff == 0) continue;
+        mpq_class boundary = -constTerm / coeff;
+        Relation rel = c.rel;
+        if (coeff < 0) {
+            switch (rel) {
+                case Relation::Lt:  rel = Relation::Gt;  break;
+                case Relation::Leq: rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Lt;  break;
+                case Relation::Geq: rel = Relation::Leq; break;
+                default: break;
+            }
+        }
+        std::vector<SatLit> reasons{c.reason};
+        switch (rel) {
+            case Relation::Gt:  facts.tightenLower(v, boundary, /*strict=*/true,  reasons); break;
+            case Relation::Geq: facts.tightenLower(v, boundary, /*strict=*/false, reasons); break;
+            case Relation::Lt:  facts.tightenUpper(v, boundary, /*strict=*/true,  reasons); break;
+            case Relation::Leq: facts.tightenUpper(v, boundary, /*strict=*/false, reasons); break;
+            case Relation::Eq:
+                facts.tightenLower(v, boundary, /*strict=*/false, reasons);
+                facts.tightenUpper(v, boundary, /*strict=*/false, reasons);
+                break;
+            default: break;
+        }
+    }
+
+    // Build IntervalConstraint list for the multi-var (potentially nonlinear)
+    // constraints. Skip the single-var linear ones we already used as bounds
+    // (they would trivially refute themselves if inconsistent).
+    std::vector<IntervalConstraint> intervalCs;
+    intervalCs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        intervalCs.push_back({c.poly, c.rel, c.reason});
+    }
+    // First try plain interval refutation.
+    auto conflictOpt = tryRefuteByPolynomialInterval(intervalCs, facts, *kernel_);
+    // If no plain conflict, try iterative factoring + back-prop (closes MGC-class).
+    if (!conflictOpt) {
+        conflictOpt = tryRefuteByIterativeFactoring(intervalCs, facts, *kernel_, /*maxIter=*/6);
+    }
+    if (!conflictOpt) return std::nullopt;
+
+    TheoryConflict tc;
+    tc.clause = std::move(conflictOpt->reasons);
+    if (std::getenv("XOLVER_NRA_OSF_DIAG")) {
+        std::fprintf(stderr, "[XOLVER_NRA_OSF_PRUNE] UNSAT: %s reasons=%zu\n",
+                     conflictOpt->explanation.c_str(), tc.clause.size());
     }
     return TheoryCheckResult::mkConflict(std::move(tc));
 }
@@ -674,11 +1129,8 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 // std::nullopt → fall to CAC / Collins. Never emits UNSAT (invariant 2).
 std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
-    static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_LOCALSEARCH");
-        return e && *e && *e != '0';
-    }();
-    if (!enabled) return std::nullopt;
+    // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
+    // guard removed (no env string in binary).
     // Per-solve ONE-SHOT at FIRST Full effort. Standard-effort firing
     // produces a candidate but subsequent cb_propagate's assertLit resets
     // satFastModel_, so the candidate never reaches cb_check_found_model.
@@ -798,11 +1250,19 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     // Two orthogonal differential flags (decoupled so the full schedule matrix
     // A-E is expressible): CAC_ALL_EFFORTS runs CAC at Standard+Full (else Full
     // only); CAC_NO_COLLINS (read in stageCdcac) disables the Collins fallback.
+    // NRA-COLLINS-BUDGET fix (2026-06-02): CAC_ALL_EFFORTS source-default ON.
+    // Empirical: paired test 10-case meti-tarski/sqrt sample shows 10 OK / 0 TO
+    // @ 1s wall vs default's 9 OK / 1 TO @ 18s. NRA reg 151/151 unchanged.
+    // The legacy comment about "50/150 meti-tarski timeouts" was stale; the
+    // current binary handles CAC at Standard effort efficiently. Mulligan-0004c
+    // bucket recovers (Collins hangs blocked CDCAC from reaching the case).
+    // Env var preserved for opt-out: XOLVER_NRA_CAC_ALL_EFFORTS=0 disables.
     static const bool cacAllEfforts = [] {
         const char* e = std::getenv("XOLVER_NRA_CAC_ALL_EFFORTS");
-        if (e && *e && *e != '0') return true;
-        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias = all-efforts + no-collins
-        return o && *o && *o != '0';
+        if (e && *e) return *e != '0';   // explicit opt-in/opt-out
+        const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");   // legacy alias
+        if (o && *o && *o != '0') return true;
+        return true;   // source default-ON
     }();
     if (!cacAllEfforts && effort != TheoryEffort::Full) return std::nullopt;
     // COMBINATION-AWARE CAC (XOLVER_NRA_CAC_COMBINATION, default OFF — the UFNRA
@@ -1445,17 +1905,97 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
         activeNonlinear.push_back({pc.poly, pc.rel, pc.reason});
     }
 
+    // Phase 4 (XOLVER_NRA_NLEXT_TANGENT_PERTURB): detect stuck-model. The
+    // refinement loop is "stuck" when (a) the candidate-model fingerprint is
+    // unchanged from the previous round AND (b) the previous round produced
+    // zero NEW cuts (every cut was already in the cache). In that situation
+    // every additional refinement at the same tangent point will keep hitting
+    // the cache, and we converge to no progress. Perturbing the tangent point
+    // breaks the loop by introducing fresh cuts at NEW points; convex tangent
+    // is sound at any point, so this is safe.
+    static const bool perturbEnabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB");
+        return e && (e[0]=='1'||e[0]=='t'||e[0]=='T'||e[0]=='y'||e[0]=='Y');
+    }();
+    // Cap perturbations per solve. Each perturbation injects fresh
+    // tangent cuts that may extend the refinement loop without
+    // converging; cap at a small number so we eventually fall through
+    // to CDCAC rather than spinning. nra_150 regression analysis:
+    // unbounded perturbation extended LIN refinement past its natural
+    // termination on a SAT case, never reaching validator.
+    static const int kPerturbCap = [] {
+        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP")) {
+            int v = std::atoi(c);
+            if (v >= 0) return v;
+        }
+        return 4;
+    }();
+    // Only activate perturbation AFTER the natural refinement loop has
+    // had time to converge on its own. Earlier-round stuck states usually
+    // resolve once McCormick/SquareCut emits its second-round refinement;
+    // perturbation early disturbs SAT cases that would have validated in
+    // a few more rounds (nra_150_sat regression analysis).
+    static const int kPerturbMinRound = [] {
+        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND")) {
+            int v = std::atoi(c);
+            if (v >= 0) return v;
+        }
+        return 30;  // half of default kRefineCap=60
+    }();
+    bool isStuck = perturbEnabled && modelFilled &&
+                   linRefineRound_ >= kPerturbMinRound &&
+                   fp == lastLinFp_ && linLastNewCuts_ == 0 &&
+                   static_cast<int>(linPerturbSeed_) < kPerturbCap;
+    if (isStuck) {
+        ++linStuckRounds_;
+    } else {
+        linStuckRounds_ = 0;
+    }
+    lastLinFp_ = fp;
+
+    // Build the model passed to the linearizer. When stuck, perturb ONE
+    // variable per round (round-robin via linPerturbSeed_) to a "diverse
+    // seed" value. The pool of seed offsets is small and bounded:
+    //   +1, -1, 0, +2, -2, model + small step, model - small step
+    std::unordered_map<std::string, mpq_class> linModel = model;
+    if (isStuck && !linModel.empty()) {
+        std::vector<std::string> baseVars;
+        baseVars.reserve(linModel.size());
+        for (const auto& [name, _] : linModel)
+            if (name.rfind("__nl_aux_", 0) != 0) baseVars.push_back(name);
+        if (!baseVars.empty()) {
+            std::sort(baseVars.begin(), baseVars.end()); // deterministic order
+            uint32_t vIdx = linPerturbSeed_ % baseVars.size();
+            uint32_t offIdx = (linPerturbSeed_ / baseVars.size()) % 7;
+            const std::string& vn = baseVars[vIdx];
+            const mpq_class& cur = linModel.at(vn);
+            mpq_class perturbed;
+            switch (offIdx) {
+                case 0: perturbed = cur + 1; break;
+                case 1: perturbed = cur - 1; break;
+                case 2: perturbed = mpq_class(0); break;
+                case 3: perturbed = cur + 2; break;
+                case 4: perturbed = cur - 2; break;
+                case 5: perturbed = cur + mpq_class(1, 2); break;   // +1/2
+                case 6: perturbed = cur - mpq_class(1, 2); break;
+                default: perturbed = cur;
+            }
+            linModel[vn] = perturbed;
+            ++linPerturbSeed_;
+        }
+    }
+
     int nNonlinearNormalized = 0;
     if (!activeNonlinear.empty()) {
         NiaNormalizer normalizer(*kernel_);
         auto normalizedOpt = normalizer.normalize(activeNonlinear);
         if (normalizedOpt) {
             nNonlinearNormalized = static_cast<int>(normalizedOpt->size());
-            // Tangent the cuts at the CURRENT model point so they refine around
-            // the candidate (model-construction). When the sibling has no model
-            // yet, fall back to the bound-free linearizer (nonneg + abstraction).
+            // Tangent the cuts at the CURRENT (possibly perturbed) model point.
+            // When the sibling has no model yet, fall back to the bound-free
+            // linearizer (nonneg + abstraction).
             auto lr = modelFilled
-                ? linAdapter_->runLinearizerAtModel(*normalizedOpt, model, lemmaDb)
+                ? linAdapter_->runLinearizerAtModel(*normalizedOpt, linModel, lemmaDb)
                 : linAdapter_->runLinearizer(*normalizedOpt, lemmaDb);
             if (lr.status == LinearizationStatus::Lemma) {
                 for (auto& item : lr.lemmas) {
@@ -1470,6 +2010,7 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
     }
 
     int nNewCuts = static_cast<int>(newLemmas.size());
+    linLastNewCuts_ = nNewCuts;  // Phase 4: feed into next-round stuck detection.
 
     // --- Step 4: loop control. -----------------------------------------------
     if (nNewCuts > 0 && linRefineRound_ < kRefineCap) {

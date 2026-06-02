@@ -5,6 +5,7 @@
 #ifdef XOLVER_HAS_LIBPOLY
 
 #include <polyxx.h>
+#include <memory>           // S2 — std::unique_ptr<TpiCacheImpl>
 #include <optional>
 #include <unordered_map>
 
@@ -21,6 +22,7 @@ namespace xolver {
 class LibPolyKernel : public PolynomialKernel {
 public:
     LibPolyKernel();
+    ~LibPolyKernel() override;   // S1 stats dump on XOLVER_NRA_KERNEL_STATS
 
     // Variable registry
     VarId getOrCreateVar(std::string_view name) override;
@@ -87,7 +89,18 @@ public:
     PolyId alloc(poly::Polynomial p);
     poly::Variable resolvePolyVar(VarId v);
 
+    // S2 (P6) — toPrimitiveInteger driver-level memoization. RationalPolynomial
+    // is forward-declared in PolynomialKernel.h to avoid pulling RP.h into
+    // every kernel consumer; the cache impl is hidden behind a pImpl pointer.
+    std::optional<std::pair<PolyId, mpq_class>>
+        tpiCacheLookup(const RationalPolynomial&) const override;
+    void tpiCacheStore(const RationalPolynomial&, PolyId, const mpq_class&) override;
+
 private:
+    struct TpiCacheImpl;                       // S2 — defined in .cpp (pImpl)
+    mutable std::unique_ptr<TpiCacheImpl> tpiCache_;
+    mutable uint64_t tpiHits_ = 0;
+    mutable uint64_t tpiMisses_ = 0;
     poly::Context ctx_;
     std::vector<poly::Polynomial> pool_;
 
@@ -99,6 +112,48 @@ private:
 
     // Cache: VarId -> PolyId for single-variable polynomials
     std::unordered_map<VarId, PolyId> varToPoly_;
+
+    // S1 (P6 cas/sqrtmodinv cac-deep) — hash-cons cache for binary ops. Key is
+    // (op_tag<<60) | (a<<30) | b (or k for pow, 0 for neg). 30-bit operand
+    // slots → up to 2^30 PolyIds per session. NullPoly (uint32 max) is guarded
+    // at the call site so its low-30-bit truncation can never collide with a
+    // legitimate slot. Add and Mul canonicalize (min, max) before keying since
+    // libpoly polynomials commute. Grow-forever: bounded by #unique inputs.
+    mutable std::unordered_map<uint64_t, PolyId> binOpCache_;
+    // S1b cousin caches (gcd/leadingCoefficient reuse binOpCache_ at op codes
+    // 5/6; squareFreeFactors needs vector-valued storage so it gets its own
+    // map keyed by input PolyId). pseudoRemainder NOT cached because libpoly's
+    // prem depends on main_variable which pscChain mutates → caching would
+    // bind to whichever order happened to be installed at first call.
+    mutable std::unordered_map<PolyId, std::vector<PolyId>> sqfFactorsCache_;
+    // S1c (Task J) — terms() decomposition cache. terms() invokes
+    // lp_polynomial_traverse and rebuilds a vector<MonomialTerm>; both
+    // the libpoly call and the mpz_class allocations dominate the cost
+    // at 88 call sites. Caching by PolyId is sound because pool_ entries
+    // are immutable for the kernel's lifetime. Stores nullopt failures
+    // (eg non-integer coefficients) so repeated callers don't re-fail.
+    // Transitively benefits degree() and getIntegerCoefficients() which
+    // delegate to terms() for the non-main-variable path.
+    mutable std::unordered_map<PolyId, std::optional<std::vector<MonomialTerm>>>
+        termsCache_;
+    // S1d (Task J follow-up) — variables() cache. Pure traversal,
+    // 92 call sites, valid for kernel lifetime.
+    mutable std::unordered_map<PolyId, std::vector<std::string>> varsCache_;
+    // S1e (Task M) — degree(PolyId, var) cache. 55 call sites in CAC
+    // variable-order selection + projection. Key packs (PolyId, VarId)
+    // into a u64; NullVar=uint32_t::max acts as "var unknown" sentinel.
+    mutable std::unordered_map<uint64_t, int> degreeCache_;
+    mutable uint64_t binOpHits_ = 0;   // S1 stats (XOLVER_NRA_KERNEL_STATS)
+    mutable uint64_t binOpMisses_ = 0;
+    mutable uint64_t termsHits_ = 0;
+    mutable uint64_t termsMisses_ = 0;
+    mutable uint64_t varsHits_ = 0;
+    mutable uint64_t varsMisses_ = 0;
+    mutable uint64_t degreeHits_ = 0;
+    mutable uint64_t degreeMisses_ = 0;
+    static constexpr uint64_t binOpKey(uint64_t op, PolyId a, uint32_t b) {
+        return (op << 60) | (static_cast<uint64_t>(a) << 30) | static_cast<uint64_t>(b);
+    }
 
     const poly::Polynomial& get(PolyId id) const { return pool_[id]; }
     poly::Polynomial& get(PolyId id) { return pool_[id]; }

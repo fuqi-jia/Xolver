@@ -30,14 +30,38 @@ std::optional<NonlinearTermKey> NonlinearTermAbstraction::detectNonlinearTerm(
         return key;
     }
 
+    // Power: x^N for N >= 3 (single variable). Routes to PowerCutGenerator
+    // for proper convex-envelope cuts instead of the HigherMixed sign-only
+    // fallback. Phase 1 of incremental-linearization upgrade.
+    if (powers.size() == 1 && powers[0].second >= 3) {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::Power;
+        key.powers = powers;
+        return key;
+    }
+
     // Linear or constant: not nonlinear
     if (powers.empty() ||
         (powers.size() == 1 && powers[0].second == 1)) {
         return std::nullopt;
     }
 
-    // V1 unsupported (e.g., x^3, x*y*z, etc.)
-    return std::nullopt;
+    // MGC-RD Phase 2A: HigherMixed catches every other monomial (x^3, x*y*z,
+    // x*y^2, theta*vv1*vv3^2, etc.) so the linearizer no longer drops the
+    // entire equation as unsupported. The cut generator emits a simple
+    // sign-based bound when the factor signs are known; otherwise the
+    // monomial gets an aux var and the SAT layer treats it as opaque (still
+    // strictly better than silent rejection). Gated by XOLVER_NRA_NLEXT_HIGHER
+    // at the caller; the detector returns the key unconditionally so the
+    // abstraction cache stays consistent.
+    {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::HigherMixed;
+        key.powers = powers;
+        std::sort(key.powers.begin(), key.powers.end(),
+                  [](auto& a, auto& b) { return a.first < b.first; });
+        return key;
+    }
 }
 
 AuxTerm NonlinearTermAbstraction::getOrCreateAux(const NonlinearTermKey& key) {

@@ -3,16 +3,105 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
+#include <unordered_set>   // LS-D atomVars var-set construction
 
 namespace xolver {
+
+// LS-D (Task F) — sub-asg-aware hash for atom-violation cache. Combines PolyId
+// + Relation + each (VarId, mpq) pair. Hash collisions are tolerated because
+// equality (operator==) does an exact comparison element-by-element.
+size_t NraLocalSearch::ViolationKeyHash::operator()(const ViolationKey& k) const noexcept {
+    size_t h = 1469598103934665603ULL;
+    const size_t fnvP = 1099511628211ULL;
+    h ^= static_cast<uint64_t>(k.poly);              h *= fnvP;
+    h ^= static_cast<uint64_t>(k.rel);               h *= fnvP;
+    for (const auto& [v, q] : k.subAsg) {
+        h ^= static_cast<uint64_t>(v);               h *= fnvP;
+        const mpz_srcptr nz = q.get_num().get_mpz_t();
+        const mpz_srcptr dz = q.get_den().get_mpz_t();
+        const uint64_t nl0 = (nz->_mp_size != 0) ? mpz_getlimbn(nz, 0) : 0ULL;
+        const uint64_t dl0 = (dz->_mp_size != 0) ? mpz_getlimbn(dz, 0) : 0ULL;
+        h ^= static_cast<uint64_t>(nz->_mp_size) * 31ULL + nl0; h *= fnvP;
+        h ^= static_cast<uint64_t>(dz->_mp_size) * 31ULL + dl0; h *= fnvP;
+    }
+    return h;
+}
+
+const std::vector<VarId>& NraLocalSearch::atomVars(PolyId p) const {
+    auto it = atomVarsCache_.find(p);
+    if (it != atomVarsCache_.end()) return it->second;
+    // Build var-set from cached terms (LS-C termsCache_) — same canonical
+    // source as scaleAt uses. Falls through to kernel.terms() on first miss.
+    std::vector<VarId> vars;
+    auto tIt = termsCache_.find(p);
+    const std::vector<PolynomialKernel::MonomialTerm>* tp = nullptr;
+    if (tIt != termsCache_.end()) {
+        tp = &tIt->second;
+    } else {
+        auto tOpt = kernel_.terms(p);
+        if (tOpt) tp = &termsCache_.emplace(p, std::move(*tOpt)).first->second;
+    }
+    if (tp) {
+        std::unordered_set<VarId> seen;
+        for (const auto& t : *tp) {
+            for (const auto& [v, e] : t.powers) {
+                (void)e;
+                if (seen.insert(v).second) vars.push_back(v);
+            }
+        }
+        std::sort(vars.begin(), vars.end());
+    }
+    return atomVarsCache_.emplace(p, std::move(vars)).first->second;
+}
+
+std::vector<std::pair<VarId, mpq_class>> NraLocalSearch::buildSubAsg(
+    const std::vector<VarId>& vars,
+    const std::unordered_map<VarId, mpq_class>& asg) const {
+    std::vector<std::pair<VarId, mpq_class>> out;
+    out.reserve(vars.size());
+    for (VarId v : vars) {                            // vars is already sorted
+        auto it = asg.find(v);
+        out.emplace_back(v, (it != asg.end()) ? it->second : kZero_);
+    }
+    return out;
+}
+
+NraLocalSearch::~NraLocalSearch() {
+    // LS-C + LS-D: env-gated stats dump for cache hit-rate sanity. Default no-op.
+    if (std::getenv("XOLVER_NRA_LS_STATS") == nullptr) return;
+    const uint64_t evalTotal      = evalCacheHits_      + evalCacheMisses_;
+    const uint64_t scaleTotal     = scaleCacheHits_     + scaleCacheMisses_;
+    const uint64_t violationTotal = violationCacheHits_ + violationCacheMisses_;
+    const double evalRate      = evalTotal      ? 100.0 * static_cast<double>(evalCacheHits_)      / static_cast<double>(evalTotal)      : 0.0;
+    const double scaleRate     = scaleTotal     ? 100.0 * static_cast<double>(scaleCacheHits_)     / static_cast<double>(scaleTotal)     : 0.0;
+    const double violationRate = violationTotal ? 100.0 * static_cast<double>(violationCacheHits_) / static_cast<double>(violationTotal) : 0.0;
+    std::fprintf(stderr,
+        "[XOLVER_NRA_LS_STATS] evalAt: hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | scaleAt: hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu | atomViolation: hits=%llu misses=%llu hit_rate=%.2f%% cache=%zu\n",
+        (unsigned long long)evalCacheHits_,      (unsigned long long)evalCacheMisses_,      evalRate,      rpCache_.size(),
+        (unsigned long long)scaleCacheHits_,     (unsigned long long)scaleCacheMisses_,     scaleRate,     termsCache_.size(),
+        (unsigned long long)violationCacheHits_, (unsigned long long)violationCacheMisses_, violationRate, violationCache_.size());
+}
 
 std::optional<mpq_class>
 NraLocalSearch::evalAt(PolyId p,
                        const std::unordered_map<VarId, mpq_class>& asg) const {
-    auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
-    if (!rpOpt) return std::nullopt;
-    RationalPolynomial cur = std::move(*rpOpt);
+    // LS-C: cache PolyId → RationalPolynomial. fromPolyId rebuilds the RP from
+    // the immutable kernel pool every call without it. Cache hit = O(1) lookup,
+    // miss = pay fromPolyId once and store. We then COPY the cached RP because
+    // substituteRational below mutates `cur` toward the constant.
+    auto cIt = rpCache_.find(p);
+    if (cIt == rpCache_.end()) {
+        ++evalCacheMisses_;
+        auto rpOpt = RationalPolynomial::fromPolyId(p, kernel_);
+        if (!rpOpt) return std::nullopt;
+        cIt = rpCache_.emplace(p, std::move(*rpOpt)).first;
+    } else {
+        ++evalCacheHits_;
+    }
+    RationalPolynomial cur = cIt->second;          // copy — substitution mutates
     static const mpq_class kZero{0};
     auto varSet = cur.variables();
     std::vector<VarId> vs(varSet.begin(), varSet.end());
@@ -28,41 +117,52 @@ NraLocalSearch::evalAt(PolyId p,
 mpq_class
 NraLocalSearch::atomViolation(const Constraint& c,
                               const std::unordered_map<VarId, mpq_class>& asg) const {
+    // LS-D (Task F) — atom-violation incremental cache. When LS proposes a
+    // var=q move, atoms NOT containing that var keep their cached value
+    // (sub-asg unchanged). Atoms containing the moved var miss, recompute,
+    // and re-cache. Key includes Relation so atoms over the same poly with
+    // different relations don't alias. Exact equality on lookup → never
+    // returns a wrong violation.
+    const auto& vars = atomVars(c.poly);
+    ViolationKey key{c.poly, c.rel, buildSubAsg(vars, asg)};
+    auto cIt = violationCache_.find(key);
+    if (cIt != violationCache_.end()) { ++violationCacheHits_; return cIt->second; }
+    ++violationCacheMisses_;
+
     auto vOpt = evalAt(c.poly, asg);
     if (!vOpt) {
         // Cannot evaluate ⇒ pessimistically violated by 1 (a finite penalty;
         // never +∞ so the move-selection still ranks better candidates).
+        violationCache_.emplace(std::move(key), mpq_class{1});
         return mpq_class{1};
     }
     const mpq_class& v = *vOpt;
+    mpq_class result;
     switch (c.rel) {
         case Relation::Lt:   // p < 0  → violation = max(0, p) + (p==0 ? ε : 0)
-            if (v < 0) return mpq_class{0};
-            return v + epsilon_;
+            result = (v < 0) ? mpq_class{0} : (v + epsilon_); break;
         case Relation::Leq:  // p ≤ 0 → violation = max(0, p)
-            if (v <= 0) return mpq_class{0};
-            return v;
+            result = (v <= 0) ? mpq_class{0} : v; break;
         case Relation::Gt:   // p > 0
-            if (v > 0) return mpq_class{0};
-            return -v + epsilon_;
+            result = (v > 0) ? mpq_class{0} : (-v + epsilon_); break;
         case Relation::Geq:  // p ≥ 0
-            if (v >= 0) return mpq_class{0};
-            return -v;
+            result = (v >= 0) ? mpq_class{0} : -v; break;
         case Relation::Eq: {  // p == 0
             mpq_class a = v < 0 ? -v : v;
             if (eqRelax_) {
                 // ε-relaxed: |p| ≤ ε is "ok-enough"; LS-NRA Layer B exact
                 // restoration follows after.
-                if (a <= epsilon_) return mpq_class{0};
-                return a - epsilon_;
+                result = (a <= epsilon_) ? mpq_class{0} : (a - epsilon_);
+            } else {
+                result = std::move(a);
             }
-            return a;
+            break;
         }
         case Relation::Neq:  // p ≠ 0
-            if (v != 0) return mpq_class{0};
-            return epsilon_;
+            result = (v != 0) ? mpq_class{0} : epsilon_; break;
     }
-    return mpq_class{0};  // unreachable
+    violationCache_.emplace(std::move(key), result);
+    return result;
 }
 
 mpq_class
@@ -70,10 +170,24 @@ NraLocalSearch::scaleAt(PolyId p,
                         const std::unordered_map<VarId, mpq_class>& asg) const {
     // scale(p, α) = 1 + Σ_m |c_m| · |m(α)|
     // m(α) = ∏_{v in m} α[v]^{e_v}; if any var is missing from asg, defaults to 0.
-    auto termsOpt = kernel_.terms(p);
-    if (!termsOpt) return mpq_class{1};
+    //
+    // LS-C: cache PolyId → kernel.terms(). terms() is canonical for an
+    // immutable PolyId so the result never changes. The per-asg loop below
+    // still runs every call (it depends on asg) but it iterates a cached
+    // term vector instead of one freshly extracted from libpoly each time.
+    const std::vector<PolynomialKernel::MonomialTerm>* termsPtr = nullptr;
+    auto cIt = termsCache_.find(p);
+    if (cIt == termsCache_.end()) {
+        ++scaleCacheMisses_;
+        auto termsOpt = kernel_.terms(p);
+        if (!termsOpt) return mpq_class{1};
+        cIt = termsCache_.emplace(p, std::move(*termsOpt)).first;
+    } else {
+        ++scaleCacheHits_;
+    }
+    termsPtr = &cIt->second;
     mpq_class scale{1};
-    for (const auto& t : *termsOpt) {
+    for (const auto& t : *termsPtr) {
         if (t.coefficient == 0) continue;
         mpq_class mAbs{1};
         bool zeroTerm = false;
@@ -322,12 +436,22 @@ NraLocalSearch::univariateBoundaryCandidates(
     // chains and avoids the libpoly plumbing; sampling resolution is
     // tight enough to bracket typical meti-tarski roots.
     if (deg >= 3) {
+        // Denser grid catching common meti-tarski / Skolem roots (3, 5, 6, 7,
+        // 1.5, 2.5 for trig approximations near π/2, integer-Skolem witnesses,
+        // etc.) instead of the old powers-of-2-only sparse scan.
         static const mpq_class kGrid[] = {
-            mpq_class{-32}, mpq_class{-16}, mpq_class{-8}, mpq_class{-4},
-            mpq_class{-2}, mpq_class{-1}, mpq_class{-1, 2}, mpq_class{-1, 4},
+            mpq_class{-32}, mpq_class{-16}, mpq_class{-8}, mpq_class{-7},
+            mpq_class{-6}, mpq_class{-5}, mpq_class{-4}, mpq_class{-3},
+            mpq_class{-5, 2}, mpq_class{-2}, mpq_class{-7, 4},
+            mpq_class{-3, 2}, mpq_class{-5, 4}, mpq_class{-1},
+            mpq_class{-3, 4}, mpq_class{-1, 2}, mpq_class{-1, 3},
+            mpq_class{-1, 4}, mpq_class{-1, 8},
             mpq_class{0},
-            mpq_class{1, 4}, mpq_class{1, 2}, mpq_class{1}, mpq_class{2},
-            mpq_class{4}, mpq_class{8}, mpq_class{16}, mpq_class{32}
+            mpq_class{1, 8}, mpq_class{1, 4}, mpq_class{1, 3}, mpq_class{1, 2},
+            mpq_class{3, 4}, mpq_class{1}, mpq_class{5, 4}, mpq_class{4, 3},
+            mpq_class{3, 2}, mpq_class{5, 3}, mpq_class{7, 4}, mpq_class{2},
+            mpq_class{5, 2}, mpq_class{3}, mpq_class{4}, mpq_class{5},
+            mpq_class{6}, mpq_class{7}, mpq_class{8}, mpq_class{16}, mpq_class{32}
         };
         std::vector<std::pair<mpq_class, mpq_class>> samples;
         samples.reserve(sizeof(kGrid) / sizeof(kGrid[0]));
@@ -561,6 +685,13 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
                 bestVar = v;
                 bestVal = q;
                 improved = true;
+                // Early-exit on SAT — no point trying more candidates per round
+                // when the current move already drives every atom to satisfied.
+                if (sc.isSat()) {
+                    asg[v] = bestVal;
+                    currentScore = bestScore;
+                    return true;
+                }
             }
         }
         asg[v] = saved;
@@ -613,9 +744,14 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
         // unchanged baseline.
         asg[v] = saved;
     }
-    // Apply each bracket midpoint as a STARTING assignment for that var
-    // (multi-pair compositions are handled by the walking loop afterward).
-    for (const auto& [v, q] : bracketMids) asg[v] = q;
+    // Dedupe per-var: keep the FIRST candidate per var (which is the exact
+    // midpoint from bracketMidpointCandidates, before 1/4 and 3/4 offsets).
+    // The old "for (v,q) asg[v]=q" overwrote every var with the LAST emitted
+    // candidate (= 3/4 offset of the last pair processed), defeating the
+    // pre-seed combined attempt.
+    std::unordered_map<VarId, mpq_class> seenFirst;
+    for (const auto& [v, q] : bracketMids) seenFirst.try_emplace(v, q);
+    for (const auto& [v, q] : seenFirst) asg[v] = q;
     score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 

@@ -44,6 +44,27 @@ GeneralSimplex::GeneralSimplex() {
     // is sound regardless of the heuristic chosen.
     const char* env = std::getenv("XOLVER_LRA_PIVOT_HEUR");
     useHeuristicPivot_ = (env && *env && *env != '0');
+    // XOLVER_LRA_INCREMENTAL_BETA (default OFF): on backtrack (pop / backtrackToLevel)
+    // skip the full O(nnz) recomputeBeta and just refresh the O(rows) violation
+    // queue. Sound because bound assertions are tighten-only (assertLower/Upper
+    // only proceed on a strictly tighter bound, recording the old for restore) and
+    // update() keeps nonbasic betas feasible — so popping bounds only LOOSENS them,
+    // leaving the current beta tableau-consistent and every nonbasic within its
+    // (looser) bounds, i.e. a valid simplex start with an unchanged verdict. Only
+    // basic-var bound feasibility can change (now within looser bounds), which the
+    // violation-queue refresh captures. Falls back to a full recompute whenever
+    // beta is already dirty (a structural new-var change is pending).
+    const char* ibEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA");
+    incrementalBetaEnabled_ = (ibEnv && *ibEnv && *ibEnv != '0');
+    // XOLVER_LRA_INCREMENTAL_BETA_REFRESH=K (default 0 = never): force a full
+    // canonical recomputeBeta every K-th incremental backtrack. Skipping recompute
+    // forever lets beta drift away from the canonical chooseValueWithinBounds
+    // point; that drift is what SAVES recompute-heavy instances (nec-smt) but can
+    // give a worse pivot path on others (CAV/dillig SAT regress under the
+    // LIA_INCREMENTAL+BETA pair). A periodic canonical refresh bounds the drift,
+    // keeping the throughput win while preventing the pathological path.
+    const char* refEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA_REFRESH");
+    betaRefreshPeriod_ = refEnv ? std::max(0, std::atoi(refEnv)) : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -223,6 +244,23 @@ void GeneralSimplex::checkInvariants() const {
         }
     }
 #endif
+    // beta-consistency verifier (env XOLVER_LRA_VERIFY_BETA, works in release): every
+    // basic var's beta must equal its row evaluation (rhs + Σ coeff*nonbasic.beta) —
+    // the invariant the incremental-beta paths (backtrack-skip / new-var) must
+    // preserve. A mismatch means the incremental beta is WRONG (then the slowness is
+    // pivot-repair, i.e. a BUG, not a genuine drift tradeoff).
+    static const bool verifyBeta = std::getenv("XOLVER_LRA_VERIFY_BETA") != nullptr;
+    if (verifyBeta && !betaDirty_) {
+        for (int r = 0; r < tab_.numRows(); ++r) {
+            const SparseRow& row = tab_.row(r);
+            DeltaRational v(row.rhs);
+            for (const auto& e : row.entries) v += e.coeff * vars_[e.col].beta;
+            if (!(vars_[row.basicVar].beta == v)) {
+                std::cerr << "[BETA-INCONSISTENT] row=" << r << " basic=" << row.basicVar
+                          << " stored beta != row eval" << std::endl;
+            }
+        }
+    }
 }
 
 // ============================================================================
@@ -280,9 +318,22 @@ bool GeneralSimplex::assertUpper(int var, const BoundInfo& info, int level) {
 // ============================================================================
 
 void GeneralSimplex::recomputeBeta() {
+    // recomputeBeta is a full O(rows*nnz) rebuild fired on every backtrack /
+    // new-var / reset (betaDirty_). The diagnostic below (env XOLVER_LRA_BETA_EVERY=N:
+    // dump call count + cumulative time every N calls) confirms whether it — not
+    // pivoting — is the LIA/LRA theory-throughput hot path. It is env-driven (not
+    // compile-gated) so it works on the shipped binary; zero-overhead when unset.
+    static const int betaEvery = []() {
+        const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
+        return (e && *e) ? std::atoi(e) : 0;
+    }();
+    bool betaTimed = (betaEvery > 0);
 #ifdef XOLVER_LRA_PROFILE
-    auto prof_t0 = std::chrono::steady_clock::now();
+    betaTimed = true;
 #endif
+    std::chrono::steady_clock::time_point bt0;
+    if (betaTimed) bt0 = std::chrono::steady_clock::now();
+
     for (int x : nonBasicVars_) {
         vars_[x].beta = chooseValueWithinBounds(x);
     }
@@ -300,32 +351,29 @@ void GeneralSimplex::recomputeBeta() {
 
     betaDirty_ = false;
     rebuildViolationQueue();
+
+    if (betaTimed) {
+        auto bt1 = std::chrono::steady_clock::now();
+        long long us = std::chrono::duration_cast<std::chrono::microseconds>(bt1 - bt0).count();
 #ifdef XOLVER_LRA_PROFILE
-    auto prof_t1 = std::chrono::steady_clock::now();
-    coeffStats_.mpqOpTimeUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
-    // Diagnostic: recomputeBeta is a full O(rows*nnz) rebuild fired on every
-    // backtrack (betaDirty_). Track global call count + cumulative time to see
-    // whether it (not pivoting) is the QF_LRA hot path. env XOLVER_LRA_BETA_EVERY.
-    {
-        static int betaEvery = []() {
-            const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
-            return (e && *e) ? std::atoi(e) : 0;
-        }();
-        static long long gBetaCalls = 0;
-        static long long gBetaUs = 0;
-        ++gBetaCalls;
-        gBetaUs += std::chrono::duration_cast<std::chrono::microseconds>(prof_t1 - prof_t0).count();
-        if (betaEvery > 0 && gBetaCalls % betaEvery == 0) {
-            long long nnz = 0;
-            for (int r = 0; r < tab_.numRows(); ++r) nnz += static_cast<long long>(tab_.row(r).entries.size());
-            std::cerr << "[LRA-BETA] calls=" << gBetaCalls
-                      << " cumUs=" << gBetaUs
-                      << " rows=" << tab_.numRows()
-                      << " vars=" << vars_.size()
-                      << " nnz=" << nnz << std::endl;
+        coeffStats_.mpqOpTimeUs += us;
+#endif
+        if (betaEvery > 0) {
+            static long long gBetaCalls = 0;
+            static long long gBetaUs = 0;
+            ++gBetaCalls;
+            gBetaUs += us;
+            if (gBetaCalls % betaEvery == 0) {
+                long long nnz = 0;
+                for (int r = 0; r < tab_.numRows(); ++r) nnz += static_cast<long long>(tab_.row(r).entries.size());
+                std::cerr << "[LRA-BETA] calls=" << gBetaCalls
+                          << " cumUs=" << gBetaUs
+                          << " rows=" << tab_.numRows()
+                          << " vars=" << vars_.size()
+                          << " nnz=" << nnz << std::endl;
+            }
         }
     }
-#endif
 }
 
 DeltaRational GeneralSimplex::chooseValueWithinBounds(int var) const {
@@ -862,7 +910,19 @@ void GeneralSimplex::pop() {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
+    // Incremental beta on backtrack (XOLVER_LRA_INCREMENTAL_BETA): if beta is
+    // currently valid (not dirty), popping bounds only loosens them, so beta stays
+    // a valid simplex start — skip the O(nnz) recompute and just refresh the
+    // O(rows) violation queue. Fall back to full recompute when beta is dirty.
+    if (incrementalBetaEnabled_ && !betaDirty_) {
+        if (betaRefreshPeriod_ > 0 && (++betaBacktrackCount_ % betaRefreshPeriod_ == 0)) {
+            betaDirty_ = true;          // periodic canonical refresh (bound the drift)
+        } else {
+            rebuildViolationQueue();
+        }
+    } else {
+        betaDirty_ = true;
+    }
 }
 
 void GeneralSimplex::backtrackToLevel(int level) {
@@ -872,11 +932,19 @@ void GeneralSimplex::backtrackToLevel(int level) {
         else           vars_[e.var].upper = e.oldBound;
         trail_.pop_back();
     }
-    betaDirty_ = true;
     hasImmediateConflict_ = false;
     conflict_.clear();
-    violatedQueue_.clear();
-    std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    // See pop(): with XOLVER_LRA_INCREMENTAL_BETA and a currently-valid beta, the
+    // loosened bounds keep beta a valid simplex start, so refresh the violation
+    // queue (O(rows)) instead of forcing a full O(nnz) recomputeBeta.
+    if (incrementalBetaEnabled_ && !betaDirty_ &&
+        !(betaRefreshPeriod_ > 0 && (++betaBacktrackCount_ % betaRefreshPeriod_ == 0))) {
+        rebuildViolationQueue();
+    } else {
+        betaDirty_ = true;
+        violatedQueue_.clear();
+        std::fill(inViolationQueue_.begin(), inViolationQueue_.end(), false);
+    }
 }
 
 // ============================================================================

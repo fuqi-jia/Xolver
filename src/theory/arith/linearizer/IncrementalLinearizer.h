@@ -4,6 +4,9 @@
 #include "theory/arith/linearizer/NonlinearTermAbstraction.h"
 #include "theory/arith/linearizer/McCormickGenerator.h"
 #include "theory/arith/linearizer/SquareCutGenerator.h"
+#include "theory/arith/linearizer/PowerCutGenerator.h"
+#include "theory/arith/linearizer/BernsteinPowerCutGenerator.h"
+#include "theory/arith/linearizer/MonomialBoundGenerator.h"
 #include "theory/arith/linearizer/LinearizationCache.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
@@ -53,6 +56,9 @@ private:
     NonlinearTermAbstraction abstraction_;
     McCormickGenerator mcGen_;
     SquareCutGenerator sqGen_;
+    PowerCutGenerator   pwGen_;   // Phase 1: x^N for N >= 3
+    BernsteinPowerCutGenerator bpGen_; // Phase 1c: Bernstein convex-hull
+    MonomialBoundGenerator mbGen_;// Phase 2: c · ∏ x_i^{e_i}, k >= 2 factors
     LinearizationCache cache_;
 
     TheoryLemma buildAbstractionLemma(SatLit nonlinearReason, SatLit linearizedLit);

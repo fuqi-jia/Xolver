@@ -233,7 +233,8 @@ std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
             }
             break;
         case Kind::Add:
-            // n-ary `(+ a b c)` = a + b + c. Old code only handled size == 2.
+            // n-ary SMT-LIB `(+ a b c)` = a + b + c. Old code only
+            // handled size == 2 — n-ary constants didn't fold here.
             if (!node.children.empty()) {
                 mpz_class sum(0);
                 bool allOk = true;
@@ -290,9 +291,10 @@ bool IntDivModLowerer::containsNonlinear(ExprId root) const {
         const auto& node = ir_.get(e);
         switch (node.kind) {
         case Kind::Mul:
-            // n-ary `(* a b c)`: nonlinear iff ≥ 2 non-constant factors.
-            // Old code only checked size == 2 — missed n-ary nonlinearity
-            // detection and could mis-route lowering decisions.
+            // n-ary Mul: nonlinear if at least 2 non-constant operands.
+            // Old code only checked the binary case; n-ary `(* a b c)` with
+            // multiple non-constants was silently treated as linear and
+            // missed downstream lowering decisions.
             if (!node.children.empty()) {
                 int nonConst = 0;
                 for (ExprId c : node.children) {

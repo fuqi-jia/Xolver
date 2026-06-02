@@ -1,5 +1,7 @@
 #include <cstdlib>
+#include <chrono>
 #include "theory/euf/EufSolver.h"
+#include "theory/array/AniaProfile.h"
 #include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -12,13 +14,45 @@
 #include <climits>
 #include <map>
 #include <optional>
+#include <tuple>
 
 namespace xolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
-    diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
-    eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
-    ufModelEnabled_ = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    // 2026-06-02 PROMOTE XOLVER_EUF_PROP default-ON: EUF entailment propagation
+    // makes EUF tell SAT about merge-implied equality atom truths, which closes
+    // a subset of the Wisa-class false-SAT chain (xs-06-15 still needs DISEQ_WATCH
+    // for full closure, but DISEQ_WATCH has an outstanding soundness bug — see
+    // below — so it stays default-off). EUF_PROP alone is sound by construction
+    // (propagation of an implied equality whose reasons are all asserted in the
+    // current trail). Verified: unit 1098/1098, regression 670/670, 0 unsound.
+    // Escape: XOLVER_EUF_PROP=0.
+    //
+    // 2026-06-02 PROMOTE XOLVER_UF_DISEQ_WATCH default-ON after the UFE專項
+    // root-cause fix landed (BuiltinEval PendingMerge level tagging — earlier
+    // commit). The wrong-UNSAT bug class (xs-10-08 + 4 Wisa siblings) was
+    // caused by tryEvaluateBuiltin pushing PendingMerge with default level=0,
+    // which left BuiltinEval-folded merges surviving every backtrack and
+    // producing stale Congruence edges in the proof forest. Post-fix:
+    //   ProofForest invariant checker reports 0 stale edges on xs-10-08.
+    //   Wisa(30) DISEQ_WATCH=1: correct=6 unsound=0 (vs pre-fix unsound=4).
+    //   unit 1098/1098, reg 670/670 default AND with DISEQ_WATCH=1.
+    // Escape: XOLVER_UF_DISEQ_WATCH=0.
+    auto envOnDefault = [](const char* name, bool def) {
+        const char* e = std::getenv(name);
+        if (!e) return def;
+        return !(e[0] == '0' && e[1] == '\0');
+    };
+    diseqWatchEnabled_ = envOnDefault("XOLVER_UF_DISEQ_WATCH", true);
+    eufPropEnabled_ = envOnDefault("XOLVER_EUF_PROP", true);
+    // Default-ON (2026-06-02 DEEP-3): Track-3 UF function-interp collection.
+    // Required by the QF_UFLIA combination soundness floor (COMB_VALIDATE_SAT)
+    // and harmless when not consumed downstream (just populates getModel()
+    // funcInterps). A/B escape: XOLVER_EUF_UF_MODEL=0 disables.
+    ufModelEnabled_ = true;
+    if (const char* e = std::getenv("XOLVER_EUF_UF_MODEL")) {
+        ufModelEnabled_ = !(e[0] == '0' && e[1] == '\0');
+    }
     // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): drain saturation mergeQueue_
     // with level-bucketed map; O(n^2) → O(n log L). Same order; targets QF_ANIA/QF_AX-swap blowup.
     minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
@@ -28,11 +62,58 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
     // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms with lemma already emitted at level<=current.
     eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
+    // XOLVER_AX_STORE_MODEL (default-OFF, array-deep A1): store-aware array model
+    // construction. The baseline buildArrayModel collects each array's interp
+    // from DIRECT select terms only, so an array defined by a store chain
+    // (a2=store(a1,i,v), a3=store(a2,j,w), …) does NOT inherit the base's
+    // entries — its interp is missing the inherited writes, so the model fails
+    // the store-definition assertion and an otherwise-genuine sat floors to
+    // unknown (the storecomm class). This pass derives each class interp by
+    // following its store/const structure (inherit base entries + apply the
+    // override), then overlays explicit reads. Verdict-SOUND: model
+    // construction only; the arrayModelDefinitelyViolates floor still validates,
+    // so a better model recovers genuine sats and a wrong one still floors.
+    storeModelEnabled_ = std::getenv("XOLVER_AX_STORE_MODEL") != nullptr;
+    // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
+    hotProfileEnabled_ = std::getenv("XOLVER_EUF_HOTPROFILE") != nullptr;
     initializeBoolConstants();
+}
+
+EufSolver::~EufSolver() {
+    if (hotProfileEnabled_ && hotProfile_.checkCalls > 0) {
+        // E2/E3 hot-path triage dump (XOLVER_EUF_HOTPROFILE). Goal: identify
+        // whether EUF (>50% time inside check) is the QG-classification /
+        // eq_diamond perf-wall bottleneck, or whether SAT/CDCL outside check()
+        // dominates (which would route the lane closure to SAT backend).
+        std::cerr << "[EUF-HOTPROFILE]"
+                  << " checks=" << hotProfile_.checkCalls
+                  << " checkUs=" << hotProfile_.checkUs
+                  << " saturationUs=" << hotProfile_.saturationUs
+                  << " explainUs=" << hotProfile_.explainUs
+                  << " entailUs=" << hotProfile_.entailmentUs
+                  << " registerSigUs=" << hotProfile_.registerSigUs
+                  << " merges=" << hotProfile_.mergesProcessed
+                  << " explains=" << hotProfile_.explainCalls
+                  << " entailScanRecs=" << hotProfile_.entailmentScanRecs
+                  << " entailEmitted=" << hotProfile_.entailmentEmitted
+                  << "\n";
+    }
 }
 
 std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
     std::vector<TheoryLemma> out;
+    auto _entT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
+    struct _EntGuard {
+        bool en; std::chrono::steady_clock::time_point t0; EufHotProfile* p; std::vector<TheoryLemma>* o;
+        ~_EntGuard() {
+            if (en) {
+                p->entailmentUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - t0).count();
+                p->entailmentEmitted += o->size();
+            }
+        }
+    } _g{hotProfileEnabled_, _entT0, &hotProfile_, &out};
     if (!eufPropEnabled_ || !eqAtomRegistry_ || !coreIr_) return out;
     // Propagate only from a clean, congruence-closed, conflict-free state: after
     // a Consistent check the merge queue is drained and the explanation paths
@@ -344,10 +425,146 @@ void EufSolver::rebuildDiseqIndex() {
 }
 
 TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
+    checkProofForestInvariants("buildDiseqConflict-enter");
     auto er = egraph_.explainEquality(d.lhs, d.rhs);
     std::vector<SatLit> reasons = er.ok ? std::move(er.reasons) : allActiveReasons();
     reasons.push_back(d.reason);
     return TheoryConflict{std::move(reasons)};
+}
+
+bool EufSolver::checkProofForestInvariants(const char* where) const {
+    const bool diag = std::getenv("XOLVER_DIAG_PF_INV") != nullptr;
+    const bool doAssert = std::getenv("XOLVER_ASSERT_PF_INV") != nullptr;
+    if (!diag && !doAssert) return true;
+
+    // "Currently asserted literal" must be sourced from BOTH:
+    //   - trail_: assertLit-driven assertions (theory atoms decided by SAT)
+    //   - mergeRecords_: combination interface (dis)equality reasons (assert
+    //     InterfaceEquality/Disequality bypasses trail_ entirely and stores
+    //     the reason in the merge record's MergeReason).
+    // Without including mergeRecords_, every interface-eq edge in proof forest
+    // would be falsely flagged "stale" since its reason literal isn't in
+    // trail_. The pair (trail_ + mergeRecord reasons) is the complete set of
+    // literals EUF observed as asserted.
+    auto litKey = [](SatLit l) {
+        return (static_cast<uint64_t>(l.var) << 1) | (l.sign ? 1u : 0u);
+    };
+    std::unordered_set<uint64_t> trailLits;
+    for (const auto& e : trail_) trailLits.insert(litKey(e.lit));
+    for (size_t i = 0; i < egraph_.mergeRecordCount(); ++i) {
+        const auto& mr = egraph_.mergeRecord(i);
+        if (mr.reason.kind == MergeReasonKind::AssertedEquality &&
+            mr.reason.lit.var != 0) {
+            trailLits.insert(litKey(mr.reason.lit));
+        }
+    }
+    for (const auto& d : sharedDisequalities_) trailLits.insert(litKey(d.reason));
+    for (const auto& d : disequalities_)       trailLits.insert(litKey(d.reason));
+
+    const ProofForest& pf = egraph_.proofForest();
+    const size_t n = pf.nodeCount();
+    int violations = 0;
+
+    for (EufTermId t = 0; t < static_cast<EufTermId>(n); ++t) {
+        EufTermId p = pf.parentOf(t);
+        if (p == t) continue;  // root has no outgoing edge
+        size_t lid = pf.labelIdxOf(t);
+        const MergeReason& r = pf.edgeReason(lid);
+        switch (r.kind) {
+            case MergeReasonKind::AssertedEquality: {
+                if (!trailLits.count(litKey(r.lit))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] STALE AssertedEquality edge t=%u -> %u "
+                            "label_idx=%zu reason=%c%d NOT on trail (level=%d)\n",
+                            where, t, p, lid,
+                            r.lit.sign ? '+' : '-', r.lit.var, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                // Polarity-opposite literal present on trail = catastrophic.
+                SatLit opp{r.lit.var, !r.lit.sign};
+                if (trailLits.count(litKey(opp))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] POLARITY-CONFLICT edge t=%u -> %u "
+                            "label has %c%d but trail has %c%d (level=%d)\n",
+                            where, t, p, r.lit.sign ? '+' : '-', r.lit.var,
+                            opp.sign ? '+' : '-', opp.var, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                break;
+            }
+            case MergeReasonKind::Congruence: {
+                // Each argPair must currently be same-class in the egraph.
+                for (const auto& [a, b] : r.argPairs) {
+                    if (!egraph_.same(a, b)) {
+                        if (diag) {
+                            // Dump the actual EUF term structure for a and b
+                            // to expose interning subtlety (e.g. distinct
+                            // EufTermIds for the same logical bridge).
+                            auto dumpTerm = [&](EufTermId tid) {
+                                if (tid >= termManager_.termCount()) { std::fprintf(stderr, "<oob>"); return; }
+                                const auto& nd = termManager_.node(tid);
+                                std::fprintf(stderr, "%s",
+                                    termManager_.symbolName(nd.symbol).c_str());
+                                if (!nd.args.empty()) {
+                                    std::fprintf(stderr, "(");
+                                    for (size_t i = 0; i < nd.args.size(); ++i) {
+                                        if (i) std::fprintf(stderr, ",");
+                                        std::fprintf(stderr, "%u", nd.args[i]);
+                                    }
+                                    std::fprintf(stderr, ")");
+                                }
+                            };
+                            std::fprintf(stderr,
+                                "[PF-INV][%s] STALE Congruence edge t=%u -> %u "
+                                "label_idx=%zu argPair (%u,%u) NOT same-class "
+                                "(mergeRecordCount=%zu curLevel=%d)\n",
+                                where, t, p, lid, a, b, egraph_.mergeRecordCount(),
+                                currentLevel_);
+                            std::fprintf(stderr, "  a=%u: ", a); dumpTerm(a);
+                            std::fprintf(stderr, "  rep(a)=%u\n", egraph_.rep(a));
+                            std::fprintf(stderr, "  b=%u: ", b); dumpTerm(b);
+                            std::fprintf(stderr, "  rep(b)=%u\n", egraph_.rep(b));
+                            // Also dump b's children (likely Add args) to see
+                            // if any of them are constants / folded.
+                            if (b < termManager_.termCount()) {
+                                const auto& nd = termManager_.node(b);
+                                for (size_t ci = 0; ci < nd.args.size(); ++ci) {
+                                    EufTermId arg = nd.args[ci];
+                                    std::fprintf(stderr, "    b.arg[%zu]=%u: ", ci, arg);
+                                    dumpTerm(arg);
+                                    std::fprintf(stderr, "  rep=%u\n", egraph_.rep(arg));
+                                }
+                            }
+                        }
+                        ++violations;
+                        if (doAssert) std::abort();
+                        break;
+                    }
+                }
+                break;
+            }
+            case MergeReasonKind::BuiltinEval:
+            case MergeReasonKind::ArrayRow1:
+            case MergeReasonKind::ArrayConst:
+            case MergeReasonKind::ArrayRow2:
+                // Tautological theory axiom merges contribute no literal; their
+                // soundness depends on the axiom holding unconditionally (true
+                // for Row1/Row2/Const) or on argPairs (BuiltinEval — verified
+                // recursively by the explainEquality walk, not here).
+                break;
+        }
+    }
+    if (diag && violations > 0) {
+        std::fprintf(stderr, "[PF-INV][%s] TOTAL VIOLATIONS=%d (nodes=%zu)\n",
+                     where, violations, n);
+    }
+    return violations == 0;
 }
 
 int EufSolver::debugCountStaleMerges() const {
@@ -771,6 +988,27 @@ void EufSolver::backtrackToLevel(int target) {
     while (!egraphBoundaries_.empty() && egraphBoundaries_.back().level > target)
         egraphBoundaries_.pop_back();
 
+    // SECOND PASS — level-filter cleanup. The count-based snapshot rollback
+    // above assumes mergeRecords_ are inserted in monotonically non-decreasing
+    // level order. Combination interface (dis)equalities can violate that
+    // assumption: an assertInterfaceEquality at SAT level L_late may be queued
+    // and processed AFTER a higher-level merge was already inserted into
+    // mergeRecords_. The level=L_late record then sits AFTER the level=high
+    // record in mergeRecords_, so the count-based truncation either keeps the
+    // high-level merge (leaving a stale congruence whose arg merge was rolled
+    // back) or drops a low-level merge (leaving a stale congruence whose
+    // dependency was kept but the congruence itself is gone). Either way, the
+    // proof forest references edges whose semantic justification doesn't hold.
+    //
+    // Walk mergeRecords_ from the END, dropping any entry with level > target.
+    // Mirror the drop in the proof forest via rollbackByLevel(target). The
+    // egraph union-find was already rolled back to the boundary snapshot, so
+    // any merge dropped here had its UF effect already undone; we just need to
+    // synchronize the mergeRecords_ and proofForest_ trail with that state.
+    // See project-euf-proof-forest-rollback memory for the full diagnosis.
+    egraph_.dropMergeRecordsAboveLevel(target);
+    egraph_.proofForestMutable().rollbackByLevel(target);
+
     // clean scope stack if needed
     while (!scopeLimits_.empty() && scopeLimits_.back() > trail_.size()) {
         scopeLimits_.pop_back();
@@ -790,6 +1028,7 @@ void EufSolver::backtrackToLevel(int target) {
 
     pendingConflict_.reset();
     pendingUnknown_ = false;
+    checkProofForestInvariants("backtrackToLevel-exit");
 }
 
 void EufSolver::initializeBoolConstants() {
@@ -980,6 +1219,32 @@ void EufSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
 // ---------------------------------------------------------------------------
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    aniaprof::init();
+    aniaprof::Scope _profCheck(aniaprof::EUF_CHECK);
+    auto _checkT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                       : std::chrono::steady_clock::time_point{};
+    if (hotProfileEnabled_) {
+        ++hotProfile_.checkCalls;
+        // Periodic dump so a SIGKILL'd timeout still produces signal. Every
+        // 1000 checks (low-overhead even on QG-class with 1e6 checks).
+        if (hotProfile_.checkCalls % 1000 == 0) {
+            std::cerr << "[EUF-HOTPROFILE@" << hotProfile_.checkCalls << "]"
+                      << " checkUs=" << hotProfile_.checkUs
+                      << " saturationUs=" << hotProfile_.saturationUs
+                      << " entailUs=" << hotProfile_.entailmentUs
+                      << " registerSigUs=" << hotProfile_.registerSigUs
+                      << " merges=" << hotProfile_.mergesProcessed
+                      << " entailEmitted=" << hotProfile_.entailmentEmitted
+                      << std::endl;  // flush so SIGKILL'd progress is preserved
+        }
+    }
+    struct _CheckGuard {
+        bool en; std::chrono::steady_clock::time_point t0; EufHotProfile* p;
+        ~_CheckGuard() {
+            if (en) p->checkUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+        }
+    } _g{hotProfileEnabled_, _checkT0, &hotProfile_};
     if (pendingUnknown_) {
         return TheoryCheckResult::unknown();
     }
@@ -1008,7 +1273,14 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // Register signatures for all newly interned terms before entering the
     // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
     // has already been merged) are visible to congruence detection.
-    egraph_.registerPendingSignatures(mergeQueue_);
+    {
+        auto _rt0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                       : std::chrono::steady_clock::time_point{};
+        egraph_.registerPendingSignatures(mergeQueue_);
+        if (hotProfileEnabled_) hotProfile_.registerSigUs +=
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - _rt0).count();
+    }
     for (size_t i = mqTagFrom; i < mergeQueue_.size(); ++i) mergeQueue_[i].level = currentLevel_;
 
     // XOLVER_UF_DISEQ_WATCH: index active disequalities by endpoint term so the
@@ -1051,7 +1323,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         // Apply the merge into a fresh side-queue so the congruences it spawns
         // can be tagged with this merge's level before re-entering the queue.
         std::deque<PendingMerge> cong;
-        auto mr = egraph_.merge(req.a, req.b, req.reason, cong);
+        auto mr = egraph_.merge(req.a, req.b, req.reason, L, cong);
         for (auto& c : cong) { c.level = L; pushCong(std::move(c)); }
         if (!mr.merged) return std::nullopt;
 
@@ -1078,7 +1350,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             std::sort(toEval.begin(), toEval.end());
             toEval.erase(std::unique(toEval.begin(), toEval.end()), toEval.end());
             for (EufTermId p : toEval) {
-                tryEvaluateBuiltin(p);
+                tryEvaluateBuiltin(p, L);
             }
         }
 
@@ -1102,6 +1374,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                     const ActiveDisequality& d =
                         (which == 0) ? disequalities_[idx] : sharedDisequalities_[idx];
                     if (egraph_.same(d.lhs, d.rhs)) {
+                        checkProofForestInvariants("DISEQ_WATCH-fire");
                         pendingConflict_ = buildDiseqConflict(d);
                         return TheoryCheckResult::mkConflict(*pendingConflict_);
                     }
@@ -1112,6 +1385,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         return std::nullopt;
     };
 
+    auto _satT0 = hotProfileEnabled_ ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
+    {
+    aniaprof::Scope _profSat(aniaprof::EUF_SATURATE);
     if (!minLevelHeapEnabled_) {
         // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
         // to the historical loop). Congruences append to mergeQueue_.
@@ -1122,9 +1399,15 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
             PendingMerge req = mergeQueue_[mi];
             mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+            if (hotProfileEnabled_) ++hotProfile_.mergesProcessed;
             auto r = applyMerge(std::move(req),
                                 [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
-            if (r) return *r;
+            if (r) {
+                if (hotProfileEnabled_) hotProfile_.saturationUs +=
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - _satT0).count();
+                return *r;
+            }
         }
     } else {
         // XOLVER_EUF_MINLEVEL_HEAP: level-bucketed drain. begin() is the minimum
@@ -1152,11 +1435,21 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             PendingMerge req = std::move(it->second.front());
             it->second.pop_front();
             if (it->second.empty()) byLevel.erase(it);
+            if (hotProfileEnabled_) ++hotProfile_.mergesProcessed;
             auto r = applyMerge(std::move(req), pushCong);
-            if (r) return *r;
+            if (r) {
+                if (hotProfileEnabled_) hotProfile_.saturationUs +=
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - _satT0).count();
+                return *r;
+            }
             absorb();
         }
     }
+    }  // end EUF_SATURATE profiling scope
+    if (hotProfileEnabled_) hotProfile_.saturationUs +=
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - _satT0).count();
 
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
@@ -1615,6 +1908,7 @@ void EufSolver::buildArrayModel(TheoryModel& model) const {
         }
     }
 
+  if (!storeModelEnabled_) {
     // Populate entries from select terms. select(arr,idx): the arr-class gets
     // an entry idx-token -> value-token where value = the select term's class.
     for (EufTermId sel : arrayReasoner_.selectTerms()) {
@@ -1637,6 +1931,72 @@ void EufSolver::buildArrayModel(TheoryModel& model) const {
             ab.defaultVal = "@def" + std::to_string(rep);
         }
     }
+  } else {
+    // ---- Store-aware construction (XOLVER_AX_STORE_MODEL) -------------------
+    // Reads keyed by array class: (index-class, index-token, value-token).
+    std::unordered_map<EClassId,
+        std::vector<std::tuple<EClassId, std::string, std::string>>> readsByClass;
+    for (EufTermId sel : arrayReasoner_.selectTerms()) {
+        const auto& sn = termManager_.node(sel);
+        if (sn.args.size() != 2) continue;
+        EClassId arrRep = egraph_.rep(sn.args[0]);
+        readsByClass[arrRep].push_back(
+            {egraph_.rep(sn.args[1]), classToken(sn.args[1]), classToken(sel)});
+    }
+    struct Interp {
+        std::string deflt;
+        // index-class -> (index-token, value-token). Override semantics: a later
+        // write at the same index class replaces the inherited entry.
+        std::map<EClassId, std::pair<std::string, std::string>> ovr;
+    };
+    std::unordered_map<EClassId, Interp> memo;
+    std::unordered_set<EClassId> active;  // cycle guard (stores are acyclic)
+    std::function<Interp(EClassId)> build = [&](EClassId rep) -> Interp {
+        auto mit = memo.find(rep);
+        if (mit != memo.end()) return mit->second;
+        Interp self;
+        if (!active.insert(rep).second) {            // defensive: break a cycle
+            self.deflt = "@def" + std::to_string(rep);
+            memo[rep] = self;
+            return self;
+        }
+        // Pick a generator in the class: const-array (sets default) else a store.
+        EufTermId cMem = NullEufTerm, sMem = NullEufTerm;
+        for (EufTermId m : egraph_.classMembers(rep)) {
+            if (arrayReasoner_.isConstArray(m)) { if (cMem == NullEufTerm) cMem = m; }
+            else if (arrayReasoner_.isStore(m)) { if (sMem == NullEufTerm) sMem = m; }
+        }
+        if (cMem != NullEufTerm) {
+            const auto& cn = termManager_.node(cMem);
+            if (cn.args.size() == 1) self.deflt = classToken(cn.args[0]);
+        } else if (sMem != NullEufTerm) {
+            const auto& stn = termManager_.node(sMem);
+            if (stn.args.size() == 3) {
+                Interp base = build(egraph_.rep(stn.args[0]));  // recurse on base
+                self.deflt = base.deflt;
+                self.ovr = std::move(base.ovr);                 // inherit entries
+                self.ovr[egraph_.rep(stn.args[1])] =            // apply this write
+                    {classToken(stn.args[1]), classToken(stn.args[2])};
+            }
+        }
+        if (self.deflt.empty()) self.deflt = "@def" + std::to_string(rep);  // leaf
+        // Overlay explicit reads on THIS class (non-write indices + confirmation).
+        // Do not overwrite an inherited/own store write at the same index class.
+        auto rit = readsByClass.find(rep);
+        if (rit != readsByClass.end())
+            for (const auto& [ic, itok, vtok] : rit->second)
+                if (self.ovr.find(ic) == self.ovr.end()) self.ovr[ic] = {itok, vtok};
+        active.erase(rep);
+        memo[rep] = self;
+        return self;
+    };
+    for (auto& [rep, ab] : byClass) {
+        Interp it = build(rep);
+        ab.defaultVal = it.deflt;
+        ab.entries.clear();
+        for (const auto& [ic, pr] : it.ovr) ab.entries.push_back(pr);
+    }
+  }
 
     // Emit one ArrayInterp per array variable (sharing the class build).
     for (const auto& [name, t] : arrayVars) {
@@ -1753,7 +2113,7 @@ void EufSolver::collectFunctionInterps(TheoryModel& model) const {
     }
 }
 
-void EufSolver::tryEvaluateBuiltin(EufTermId t) {
+void EufSolver::tryEvaluateBuiltin(EufTermId t, int level) {
     if (!coreIr_) return;
     const auto& node = termManager_.node(t);
     if (node.args.empty()) return;
@@ -1855,7 +2215,16 @@ void EufSolver::tryEvaluateBuiltin(EufTermId t) {
         // makes the BuiltinEval merge's explanation complete (reaches the base
         // literals that fixed the args to constants).
         mr.argPairs = std::move(argConstPairs);
-        mergeQueue_.push_back({t, constTerm, mr});
+        // 2026-06-02 ROOT-CAUSE FIX for the UFE wrong-UNSAT class: tag the
+        // PendingMerge with the CURRENT processing level — the BuiltinEval
+        // fold is caused by a merge at `level`, so the resulting fold (and
+        // any downstream congruences it triggers) must inherit `level` so
+        // they get rolled back together. Pre-fix this push had the default
+        // 0, which left BuiltinEval merges tagged level 0 and surviving any
+        // backtrack — the source of stale Congruence edges on Wisa xs-10-08.
+        PendingMerge pm{t, constTerm, mr};
+        pm.level = level;
+        mergeQueue_.push_back(pm);
     }
 }
 

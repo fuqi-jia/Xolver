@@ -92,13 +92,27 @@ ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
     if (node.kind == Kind::And) {
         // Per-conjunct: source-of-binding conjuncts are kept verbatim;
         // all other conjuncts are globally rewritten.
+        // RECURSE through nested Ands so a source-of-binding deep inside a
+        // nested `(and (and ... (= x c) ...) ...)` is still preserved verbatim
+        // — without this, `(= x c)` would be rewritten to `(= c c)` and folded
+        // to `true`, removing x from the IR. Downstream theories then never
+        // see x as a shared term (Purifier::registerEufVars walks live leaves),
+        // and the N-O value-collision propagation (LiaSolver::
+        // getDeducedSharedEqualities) misses the chain (Wisa adr_lo=adr_hi=4
+        // class is the canonical instance).
         std::vector<ExprId> newChildren;
         newChildren.reserve(node.children.size());
         bool changed = false;
         for (ExprId child : node.children) {
-            ExprId rewritten = isSourceOfBinding(child)
-                ? child
-                : substituteRec(child);
+            const auto& childNode = ir_.get(child);
+            ExprId rewritten;
+            if (childNode.kind == Kind::And) {
+                rewritten = substituteAssertion(child);
+            } else if (isSourceOfBinding(child)) {
+                rewritten = child;
+            } else {
+                rewritten = substituteRec(child);
+            }
             if (rewritten != child) changed = true;
             newChildren.push_back(rewritten);
         }

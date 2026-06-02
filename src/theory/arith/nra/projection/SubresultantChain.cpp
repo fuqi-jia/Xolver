@@ -21,16 +21,12 @@ bool libpolyPscEnabled() {
     return kEnabled;
 }
 
-// #50 PSC cache. XOLVER_NRA_CAC_SR_CACHE: gate the cache (default OFF). Per-
-// thread cache map of canonical-key → PscChainResult. PSC is a pure function
-// of its inputs, so same key ⇒ same value; sound. Scope is per-solve(),
-// cleared via clearPscChainCache() from CacEngine.
+// #50 PSC cache. Task Q: promoted source-default-ON; getenv guard removed.
+// Per-thread cache map of canonical-key → PscChainResult. PSC is a pure
+// function of its inputs, so same key ⇒ same value; sound. Scope is
+// per-solve(), cleared via clearPscChainCache() from CacEngine.
 bool srCacheEnabled() {
-    static const bool kEnabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_CAC_SR_CACHE");
-        return e && *e && *e != '0';
-    }();
-    return kEnabled;
+    return true;
 }
 
 // Canonical key for a RationalPolynomial — terms in canonical order with

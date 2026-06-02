@@ -63,6 +63,16 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    // Entailment propagations buffered during check(). Drained by
+    // TheoryManager::takeEntailmentPropagations and forwarded to SAT as
+    // unit/learned clauses. Wisa-class closure depends on this: when
+    // bridge_J_i is pinned to a value via N-O propagation from EUF and an
+    // unassigned LIA equality atom `(= bridge_J_i c)` exists, this propagates
+    // the atom to true (or false on value mismatch), forcing SAT to honor
+    // the consequence and closing the goal-atom escape that the floor
+    // currently catches as a SAT model violating the original assertion.
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
+
     std::vector<SharedEqualityPropagation>
     deduceIndexEqualitiesByGaussian(const std::vector<SharedTermId>& idxTerms) override;
 
@@ -126,6 +136,14 @@ private:
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
 
     std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
+
+    // Buffered entailment lemmas; drained by takeEntailmentPropagations().
+    std::vector<TheoryLemma> entailmentProps_;
+    // Per-(satVar, value) dedup — emit each entailment at most once per
+    // SAT-decision cycle. Cleared on backtrack to level 0 / reset.
+    std::unordered_set<uint64_t> entailmentEmittedKeys_;
+    void scanLiteralPinEntailments();
+    void clearEntailmentDedupForBacktrack(int level);
 
     struct InterfaceEq {
         SharedTermId a;

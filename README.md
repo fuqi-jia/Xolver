@@ -115,7 +115,7 @@ Apache License 2.0 — see [`LICENSE`](LICENSE). Third-party dependency manifest
 
 Xolver does not call, wrap, link, or include source from any existing SMT solver. Comments citing cvc5, z3, or others are algorithmic attribution for published algorithms (CDCAC, Lazard projection, Nelson–Oppen); the implementations are independently written.
 
-Xolver was developed with substantial assistance from AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6), under the direction of the author.
+Xolver's source code was authored almost entirely by AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6), coordinated by the author through a multi-agent campaign harness with role-specialised agents per theory lane (LRA/LIA, NRA, NIA, EUF/arrays, combination, infrastructure). To the author's knowledge this is the first competition-grade SMT solver for quantifier-free nonlinear arithmetic developed in this regime; the exact soundness gates — every `sat` validated against the original formula, every `unsat` backed by a sound proof obligation — are what made the regime viable at this scale.
 
 ### Citation
 

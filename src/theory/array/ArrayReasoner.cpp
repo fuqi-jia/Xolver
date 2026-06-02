@@ -1,4 +1,5 @@
 #include "theory/array/ArrayReasoner.h"
+#include "theory/array/AniaProfile.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -22,6 +23,22 @@ ArrayReasoner::ArrayReasoner() {
     // the feared storecomm genuine-sat regression did NOT reproduce (159
     // already-solved storecomm cases stable). Explicit opt-out for A/B baseline.
     extWitnessComplete_ = std::getenv("XOLVER_AX_NO_EXT_WITNESS_COMPLETE") == nullptr;
+    // XOLVER_AX_COMPLETE_BUDGET (default 0 = unbounded): cap the TOTAL number of
+    // read-over-write completion selects interned across the whole solve. The
+    // driver-verification QF_ANIA/QF_AUFNIA family (cdaudio/floppy/kbfiltr/…)
+    // has ~100 arrays × ~600 read indices, so unbounded completion interns tens
+    // of thousands of select terms (40-87% of the solve wall — agent-array-deep
+    // B2-alt profiling) and the case times out. completeStoreSelects only adds
+    // TAUTOLOGICAL selects, and any genuinely-missed read-over-write instance is
+    // caught by the arrayModelDefinitelyViolates floor (sat→unknown, never a
+    // wrong verdict). So capping is verdict-SOUND: it can only lose completeness
+    // (a borderline case floors to unknown), and it RECOVERS the many driver
+    // sats whose completion was largely wasteful (independent arrays) by letting
+    // the solver reach a consistent model the floor then validates.
+    if (const char* e = std::getenv("XOLVER_AX_COMPLETE_BUDGET"); e && *e) {
+        long v = std::atol(e);
+        if (v > 0) completeBudget_ = static_cast<size_t>(v);
+    }
 }
 
 std::optional<std::string> ArrayReasoner::constToken(EufTermId t) const {
@@ -79,6 +96,7 @@ void ArrayReasoner::reset() {
     row2Done_.clear();
     extDone_.clear();
     selectCompleteDone_.clear();
+    completeInternsDone_ = 0;
     extWitnessIdx_.clear();
     extWitnessIdxTerms_.clear();
     internalSelect_.clear();
@@ -190,7 +208,12 @@ void ArrayReasoner::collectIndexSharedTerms(std::unordered_set<SharedTermId>& ou
 }
 
 void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
+    aniaprof::Scope _prof(aniaprof::ARR_COMPLETE);
     if (!selectCompletionEnabled_) return;
+    // Total-completion budget reached (XOLVER_AX_COMPLETE_BUDGET): stop interning
+    // further read-over-write selects. Sound — the model floor guards any
+    // missed instance; this only bounds the driver-family blowup.
+    if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) return;
     discoverArrayTerms();
 
     // (1) Incrementally extend the read-index cache from NEW selectTerms_
@@ -241,29 +264,38 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     // that dominates QF_ANIA's budget once IFACE_LIFECYCLE removes the early
     // abort. Soundness: identical to the original — same pairs reach
     // internSelect, same skips, same merges enqueued.
+    bool budgetHit = false;
     auto processPairs = [&](EufTermId arr, size_t idxLo, size_t idxHi) {
         ExprId arrExpr = originExpr(arr);
         if (arrExpr == NullExpr) return;
         for (size_t i = idxLo; i < idxHi; ++i) {
+            // Total-completion budget: stop interning once reached (leave the
+            // remaining pairs un-done; the model floor guards soundness).
+            if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) {
+                budgetHit = true;
+                return;
+            }
             EufTermId idx = completeReadIdxCache_[i];
             uint64_t key = pairKey(arr, idx);
             if (!selectCompleteDone_.insert(key).second) continue;
             ExprId idxExpr = originExpr(idx);
             if (idxExpr == NullExpr) continue;
             internSelect(arrExpr, idxExpr, outQueue);
+            ++completeInternsDone_;
         }
     };
     // NEW arrays x ALL indices (covers new x new + new x old)
-    for (size_t a = newArrayStart; a < completeArrayCache_.size(); ++a)
+    for (size_t a = newArrayStart; a < completeArrayCache_.size() && !budgetHit; ++a)
         processPairs(completeArrayCache_[a], 0, completeReadIdxCache_.size());
     // OLD arrays x NEW indices (the remaining frontier)
-    if (newReadIdxStart < completeReadIdxCache_.size()) {
-        for (size_t a = 0; a < newArrayStart; ++a)
+    if (!budgetHit && newReadIdxStart < completeReadIdxCache_.size()) {
+        for (size_t a = 0; a < newArrayStart && !budgetHit; ++a)
             processPairs(completeArrayCache_[a], newReadIdxStart, completeReadIdxCache_.size());
     }
 }
 
 void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
+    aniaprof::Scope _prof(aniaprof::ARR_EAGER);
     if (!active()) return;
     discoverArrayTerms();
     // Push read indices through store towers BEFORE the Row1/Const pass so the
@@ -368,6 +400,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
 
 std::optional<std::vector<SatLit>>
 ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
+    aniaprof::Scope _prof(aniaprof::ARR_LEMMA);
     if (!active() || !registry_) return std::nullopt;
     discoverArrayTerms();
 
