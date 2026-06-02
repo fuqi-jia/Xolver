@@ -19,8 +19,31 @@
 namespace xolver {
 
 EufSolver::EufSolver() : egraph_(termManager_) {
-    diseqWatchEnabled_ = std::getenv("XOLVER_UF_DISEQ_WATCH") != nullptr;
-    eufPropEnabled_ = std::getenv("XOLVER_EUF_PROP") != nullptr;
+    // 2026-06-02 PROMOTE XOLVER_EUF_PROP default-ON: EUF entailment propagation
+    // makes EUF tell SAT about merge-implied equality atom truths, which closes
+    // a subset of the Wisa-class false-SAT chain (xs-06-15 still needs DISEQ_WATCH
+    // for full closure, but DISEQ_WATCH has an outstanding soundness bug — see
+    // below — so it stays default-off). EUF_PROP alone is sound by construction
+    // (propagation of an implied equality whose reasons are all asserted in the
+    // current trail). Verified: unit 1098/1098, regression 670/670, 0 unsound.
+    // Escape: XOLVER_EUF_PROP=0.
+    //
+    // XOLVER_UF_DISEQ_WATCH stays default-OFF (2026-06-02 findings): when
+    // enabled, the watch-based disequality conflict detector produces a wrong
+    // UNSAT on QF_UFLIA/mathsat/Wisa/xs-10-08-2-2-4-5.smt2 (expected SAT, got
+    // UNSAT) — a soundness regression worse than the validator-based floor it
+    // would otherwise replace. Until the DISEQ_WATCH explanation chain is
+    // audited (the conflict reason set likely under-includes a merge-step
+    // antecedent, so the learned clause forbids a model that is actually a
+    // valid sat), the floor remains the gate. Escape: XOLVER_UF_DISEQ_WATCH=1
+    // for opt-in (caller accepts the soundness risk).
+    auto envOnDefault = [](const char* name, bool def) {
+        const char* e = std::getenv(name);
+        if (!e) return def;
+        return !(e[0] == '0' && e[1] == '\0');
+    };
+    diseqWatchEnabled_ = envOnDefault("XOLVER_UF_DISEQ_WATCH", false);
+    eufPropEnabled_ = envOnDefault("XOLVER_EUF_PROP", true);
     // Default-ON (2026-06-02 DEEP-3): Track-3 UF function-interp collection.
     // Required by the QF_UFLIA combination soundness floor (COMB_VALIDATE_SAT)
     // and harmless when not consumed downstream (just populates getModel()
@@ -406,6 +429,7 @@ TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
     reasons.push_back(d.reason);
     return TheoryConflict{std::move(reasons)};
 }
+
 
 int EufSolver::debugCountStaleMerges() const {
     std::unordered_set<uint64_t> asserted;
