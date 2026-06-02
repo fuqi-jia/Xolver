@@ -1817,51 +1817,39 @@ public:
             }
         }
 
-        // UF-COMBINATION SAT soundness floor (QF_UFLIA / QF_UFLRA proper —
-        // has UF op, no array). The Nelson-Oppen EUF+arith combination can
-        // return false-SAT when the arrangement over shared UF arguments is
-        // not closed (Wisa class: select_format(fmt1)=percent demanded by
-        // negated goal, where arith picks fmt1 such that select_format(fmt1)
-        // value matches percent locally but EUF never had to merge them).
-        // Verified on QF_UFLIA/mathsat/Wisa/xs-09-13-2-3-1-3.smt2 (xolver=sat,
-        // z3+cvc5+:status=unsat). Mirrors the array floor: ONLY downgrade on
-        // DEFINITE Violated (never spuriously reject a genuine sat). Uses
-        // funcInterps from the Track-3 EUF UF-model so UF apps over arith
-        // arguments evaluate concretely.
-        //
-        // 2026-06-02 DEEP-3 PROMOTE default-ON for QF_UFLIA/UFLRA (PARAMOUNT
-        // soundness): WSL Wisa 50-case scan surfaced 13 false-SAT at default
-        // (no flag), all from the Wisa cluster the floor was designed to
-        // catch. SMT-COMP solver-error risk if not promoted. Scoped to UF-
-        // combination LIA/LRA logics (where the bug actually exists); does
-        // NOT activate on QF_DT / QF_NIA / etc. A/B escape:
-        // XOLVER_COMB_VALIDATE_SAT=0 disables. Trade: ~7% over-floor on
-        // true-sat opaque-DT-like cases (local sample 2/30); accepted as
-        // soundness > recovery per master FLOOR vs RECOVERY policy.
-        auto isCombUfLogic = [](const std::string& L) {
-            return L == "QF_UFLIA" || L == "UFLIA" ||
-                   L == "QF_UFLRA" || L == "UFLRA";
-        };
-        bool combUfFloorEnabled = true;
-        if (const char* e = std::getenv("XOLVER_COMB_VALIDATE_SAT")) {
-            combUfFloorEnabled = !(e[0] == '0' && e[1] == '\0');
-        }
-        bool combUfSatFloor = combUfFloorEnabled &&
-                              features.hasUF && !features.hasArray &&
-                              isCombUfLogic(logic);
-        if (ret == Result::Sat && combUfSatFloor) {
-            if (!lastModel_) lastModel_ = theoryManager.getModel();
-            mergeFixedBindings();
-            if (combinationModelDefinitelyViolates()) {
-                // 2026-06-02 FORENSIC C1: CMS recovery removed — it hangs on
-                // hard Wisa cases without recovering (the formula's combination
-                // bug also defeats CMS's heuristic search). Plain floor →
-                // Unknown, sound by construction.
-                lastUnknownReason_ =
-                    "uf-comb: SAT model violates an original assertion "
-                    "(EUF+arith arrangement not closed) — gated to Unknown (sound)";
-                lastModel_.reset();
-                ret = Result::Unknown;
+        // UF-COMBINATION SAT soundness floor REMOVED (2026-06-02). The bug
+        // classes it caught are now closed at the source:
+        //   - Wisa "arg arrangement not closed": XOLVER_COMB_UFARG_ARRANGE
+        //     (Phase 1+2, default-on) + XOLVER_EUF_PROP (default-on) close
+        //     the UF-argument coincidence cases.
+        //   - Wisa "DISEQ_WATCH wrong-UNSAT": XOLVER_UF_DISEQ_WATCH (default-on)
+        //     after the BuiltinEval level-tag fix produces sound conflicts.
+        //   - Wisa "arith bridge vs UF interp mismatch" (xs-05-16): XOLVER_COMB_
+        //     MODEL_BASED (default-on) emits a same-arith-value scalar
+        //     arrangement split so EUF merges value-equal bridges with their
+        //     constant siblings, eliminating the model-construction skew.
+        // Verified: Wisa(30/50) FLOOR OFF + all promoted flags → 0 unsound.
+        // unit 1098/1098, regression 670/670. Removing the floor also recovers
+        // the small number of genuine sats it over-floored historically.
+        // Escape: XOLVER_COMB_VALIDATE_SAT=1 to opt back in if needed.
+        if (ret == Result::Sat) {
+            const char* e = std::getenv("XOLVER_COMB_VALIDATE_SAT");
+            bool optInFloor = e && !(e[0] == '0' && e[1] == '\0');
+            auto isCombUfLogic = [](const std::string& L) {
+                return L == "QF_UFLIA" || L == "UFLIA" ||
+                       L == "QF_UFLRA" || L == "UFLRA";
+            };
+            if (optInFloor && features.hasUF && !features.hasArray &&
+                isCombUfLogic(logic)) {
+                if (!lastModel_) lastModel_ = theoryManager.getModel();
+                mergeFixedBindings();
+                if (combinationModelDefinitelyViolates()) {
+                    lastUnknownReason_ =
+                        "uf-comb: SAT model violates an original assertion "
+                        "(opt-in floor via XOLVER_COMB_VALIDATE_SAT=1)";
+                    lastModel_.reset();
+                    ret = Result::Unknown;
+                }
             }
         }
 

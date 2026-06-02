@@ -70,7 +70,20 @@ bool TheoryManager::useSatMin() {
 
 bool TheoryManager::useModelBased() {
     if (!modelBasedEnvChecked_) {
-        modelBasedEnabled_ = (std::getenv("XOLVER_COMB_MODEL_BASED") != nullptr);
+        // 2026-06-02 PROMOTE default-ON: closes the residual Wisa false-SAT
+        // class (xs-05-16) where arith bridges b_v1 and 0_const have equal
+        // model values but EUF doesn't merge them, leaving each x_count call
+        // with its own independent arith bridge value, so the arith constraint
+        // arg1 = arg0 + 4*x_count(...) + 4*s_count(...) appears satisfied at
+        // the SAT layer with mismatched bridge values. The model-based scalar
+        // arrangement (at Full effort, lines 631+) emits a SPLIT lemma over
+        // every same-arith-value user scalar pair that isn't yet merged in
+        // EUF, forcing SAT to commit so EUF can react. Verified default-on:
+        //   Wisa(30) FLOOR OFF + COMB_MODEL_BASED=1: 0 unsound
+        //   unit 1098/1098, reg 670/670
+        // Escape: XOLVER_COMB_MODEL_BASED=0.
+        const char* e = std::getenv("XOLVER_COMB_MODEL_BASED");
+        modelBasedEnabled_ = e ? !(e[0] == '0' && e[1] == '\0') : true;
         modelBasedEnvChecked_ = true;
     }
     return modelBasedEnabled_;
@@ -1022,6 +1035,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             else if (v == "#b:0") v = "0";
         };
         std::vector<std::string> dropFns;
+        const bool diagFi = std::getenv("XOLVER_DIAG_FI") != nullptr;
         for (auto& [fname, fi] : aggregated.functionInterps) {
             for (auto& e : fi.entries) {
                 for (auto& a : e.args) toBare(a);
@@ -1039,8 +1053,20 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
                 for (size_t j = i + 1; j < fi.entries.size(); ++j)
                     if (fi.entries[i].args == fi.entries[j].args &&
                         fi.entries[i].value != fi.entries[j].value) {
+                        if (diagFi) std::fprintf(stderr,
+                            "[FI-CONFLICT] %s args=[", fname.c_str());
+                        if (diagFi) {
+                            for (auto& a : fi.entries[i].args)
+                                std::fprintf(stderr, "%s,", a.c_str());
+                            std::fprintf(stderr, "] vals=%s vs %s\n",
+                                fi.entries[i].value.c_str(),
+                                fi.entries[j].value.c_str());
+                        }
                         inconsistent = true; break;
                     }
+            if (diagFi) std::fprintf(stderr,
+                "[FI] %s entries=%zu inconsistent=%d\n",
+                fname.c_str(), fi.entries.size(), inconsistent?1:0);
             if (inconsistent) dropFns.push_back(fname);
         }
         for (const auto& f : dropFns) aggregated.functionInterps.erase(f);
