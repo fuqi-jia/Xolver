@@ -358,6 +358,43 @@ FarkasOrSolver::enumerateCsp(const SupportTable& table,
         if (out.size() >= maxResults) return;
         if (!forwardCheck(s)) return;
 
+        // B-FIRST priority: pick bounded-global vars BEFORE choice blocks.
+        // Rationale: if we fix choices first, the chosen branches' CT
+        // bounds shrink ctDom (e.g. to [2, ∞)), and the subsequent B
+        // iteration prunes B-tuples whose support row has a CT bound
+        // incompatible with the now-tight ctDom — collapsing the search
+        // to the B-tuple that happened to feed the FIRST chosen branch
+        // (usually B=(0,0)). By picking B first we present each B-tuple
+        // a fresh choice subtree with unconstrained ctDom, yielding
+        // diverse candidates for the validator to try.
+        std::string pickVar;
+        std::size_t bestB = SIZE_MAX;
+        for (const auto& [v, dom] : s.bDom) {
+            if (dom.size() == 1) continue;
+            if (dom.size() < bestB) { pickVar = v; bestB = dom.size(); }
+        }
+        if (!pickVar.empty()) {
+            // Order: try non-zero values BEFORE zero. For Farkas-Or with
+            // bilinear outer constraints `c0 + c1·B·main + c2·B·main ≤ 0`,
+            // B=0 nullifies the residual main slack, so the constraint
+            // collapses to c0 ≤ 0 which Farkas (forcing c0 ≥ 1 via strict)
+            // can never satisfy. Non-zero B gives residual repair a chance.
+            auto values = s.bDom[pickVar];
+            std::stable_sort(values.begin(), values.end(),
+                [](const mpz_class& a, const mpz_class& b) {
+                    if ((a != 0) != (b != 0)) return a != 0;   // non-zero first
+                    return false;
+                });
+            for (const auto& w : values) {
+                if (out.size() >= maxResults) return;
+                CspState child = s;
+                child.bDom[pickVar] = {w};
+                rec(child);
+            }
+            return;
+        }
+
+        // All B fixed; now pick the smallest-domain choice block.
         int pickBlock = -1;
         std::size_t bestSize = SIZE_MAX;
         for (const auto& [j, doms] : s.choiceDom) {
@@ -365,13 +402,15 @@ FarkasOrSolver::enumerateCsp(const SupportTable& table,
             if (doms.size() < bestSize) { pickBlock = j; bestSize = doms.size(); }
         }
         if (pickBlock == -1) {
-            std::string pickVar;
-            std::size_t bestB = SIZE_MAX;
+            // Fallthrough: original B-fallback for the case where there
+            // were no bounded vars at all (defensive).
+            std::string pickVar2;
+            std::size_t bestB2 = SIZE_MAX;
             for (const auto& [v, dom] : s.bDom) {
                 if (dom.size() == 1) continue;
-                if (dom.size() < bestB) { pickVar = v; bestB = dom.size(); }
+                if (dom.size() < bestB2) { pickVar2 = v; bestB2 = dom.size(); }
             }
-            if (pickVar.empty()) {
+            if (pickVar2.empty()) {
                 // Emit.
                 FarkasOrAssignment a;
                 for (const auto& [v, dom] : s.bDom) a.B[v] = dom.front();
@@ -415,11 +454,11 @@ FarkasOrSolver::enumerateCsp(const SupportTable& table,
                 }
                 return;
             }
-            auto values = s.bDom[pickVar];
+            auto values = s.bDom[pickVar2];
             for (const auto& w : values) {
                 if (out.size() >= maxResults) return;
                 CspState child = s;
-                child.bDom[pickVar] = {w};
+                child.bDom[pickVar2] = {w};
                 rec(child);
             }
             return;

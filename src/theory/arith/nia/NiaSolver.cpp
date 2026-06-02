@@ -1707,8 +1707,12 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
 
     // Build support table; bail if too large for the P2a prototype (P2b
     // production lane will handle larger instances via lazy GAC).
+    // 500 keeps the per-stage cost roughly bounded: buildTable is
+    // O(B-product × #blocks × #branches × P1 cost), and 500 × few × few
+    // × few-microseconds = a few ms per stage call. p21258-style cases
+    // (≤ 9² = 81 B-tuples) fire; p20185-style (3⁶ = 729) get skipped.
     farkas::FarkasOrSolver solver(*coreIr_);
-    auto table = solver.buildTable(profile);
+    auto table = solver.buildTable(profile, /*maxBProduct=*/500);
     static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
@@ -1718,6 +1722,26 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
                + " feasibleTotal=" + std::to_string(table.feasibleTotal)
                + " rows=" + std::to_string(table.rows.size()));
+    if (trace) {
+        for (std::size_t i = 0; i < table.rows.size(); ++i) {
+            const auto& r = table.rows[i];
+            std::string line = "  row[" + std::to_string(i) + "] (block=" +
+                std::to_string(r.blockIdx) + " branch=" + std::to_string(r.branchIdx) + ") B={";
+            bool first = true;
+            for (const auto& [v, val] : r.bTuple) {
+                if (!first) line += ", ";
+                first = false;
+                line += v + "=" + val.get_str();
+            }
+            line += "} ray=[";
+            for (std::size_t j = 0; j < r.candidate.lambdaRay.size(); ++j) {
+                if (j) line += ",";
+                line += r.candidate.lambdaRay[j].get_str();
+            }
+            line += "]";
+            traceWrite(line);
+        }
+    }
     if (table.rows.empty()) {
         traceWrite("  → empty table; bail");
         return std::nullopt;
@@ -1731,6 +1755,49 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     }
     traceWrite("  → CSP enumerated " + std::to_string(assignments.size()) + " candidates");
     farkas::FarkasOrModelAssembler assembler(*coreIr_);
+
+    // Residual repair helper: a Farkas-Or candidate fixes the Farkas-bound
+    // λ-rays, B-tuple and CT-vars, but the original formula often contains
+    // RESIDUAL vars (e.g. main_x, main_y in Stroeder) that appear in outer
+    // assertions like `(<= (+ Nl2CT (* Nl2main_x main_x) ...) 0)`. The
+    // assembler defaults residuals to 0, which forces the bilinear term to
+    // 0 and the assertion to `c0 ≤ 0` — guaranteed to fail when Farkas
+    // forced c0 ≥ 1. To recover, after a candidate's first validation fails
+    // we try a small grid of residual values and re-validate. Grid width
+    // adapts to residual count so the combo product stays bounded.
+    constexpr std::size_t COMBO_CAP = 16384;
+    auto gridFor = [](std::size_t n) -> std::vector<mpz_class> {
+        std::vector<mpz_class> v;
+        if (n == 0) return v;
+        if (n <= 3) {
+            for (long k : {0L, 1L, -1L, 2L, -2L, 10L, -10L, 100L, -100L})
+                v.emplace_back(k);
+        } else if (n <= 5) {
+            for (long k : {0L, 1L, -1L, 2L, -2L}) v.emplace_back(k);
+        } else if (n <= 8) {
+            for (long k : {0L, 1L, -1L}) v.emplace_back(k);
+        } // n > 8: empty → caller skips repair
+        return v;
+    };
+
+    // Per-stage-call validation budget: residual repair can otherwise dwarf
+    // the rest of the NIA pipeline. We cap total validator invocations per
+    // stage call. The stage runs many times during a check loop, so this
+    // is a per-call (not per-check) budget.
+    constexpr std::size_t VALIDATE_BUDGET = 200;
+    std::size_t validations = 0;
+    auto tryValidate = [&](IntegerModel& M) -> bool {
+        if (validations >= VALIDATE_BUDGET) return false;
+        ++validations;
+        ArithModelValidator::NumAssignment num;
+        num.reserve(M.size());
+        for (const auto& [v, val] : M) num.emplace(v, mpq_class(val));
+        ArithModelValidator::BoolAssignment bools;
+        ArithModelValidator amv(*coreIr_, num, bools);
+        return amv.validate(coreIr_->assertions()) ==
+               ArithModelValidator::Verdict::Satisfied;
+    };
+
     int candIdx = 0;
     for (const auto& assignment : assignments) {
         auto candidate = assembler.assemble(profile, assignment);
@@ -1742,17 +1809,88 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
             }
             traceWrite(line);
         }
-        ArithModelValidator::NumAssignment num;
-        num.reserve(candidate->size());
-        for (const auto& [v, val] : *candidate) num.emplace(v, mpq_class(val));
-        ArithModelValidator::BoolAssignment bools;
-        ArithModelValidator amv(*coreIr_, num, bools);
-        auto vr = amv.validate(coreIr_->assertions());
-        if (vr == ArithModelValidator::Verdict::Satisfied) {
+        if (tryValidate(*candidate)) {
             traceWrite("  → validator SAT (cand[" + std::to_string(candIdx) + "])");
             currentModel_ = std::move(*candidate);
             return TheoryCheckResult::consistent();
         }
+
+        // First-pass failed. Identify residual vars: those assigned to 0
+        // by the default residual pass AND not present in any Farkas
+        // assignment (B, λ, CT, or ANY branch's λ in the detected blocks
+        // — unused-branch λ's are validly 0 since only one Or branch per
+        // block needs to hold; perturbing them is wasted search).
+        std::vector<std::string> residualVars;
+        std::unordered_set<std::string> fixed;
+        for (const auto& [v, _] : assignment.B) fixed.insert(v);
+        for (const auto& [_, names] : assignment.lambdaNamesPerBlock)
+            for (const auto& n : names) fixed.insert(n);
+        for (const auto& [v, _] : assignment.ctInterval) fixed.insert(v);
+        // Also pin ALL Or-branch λ's (chosen or not) — perturbing an
+        // unchosen branch's λ won't satisfy the Or unless that branch's
+        // full Farkas template is also satisfied, which we don't try.
+        for (const auto& blk : profile.blocks) {
+            for (const auto& br : blk.branches) {
+                for (const auto& n : br.lambdas) fixed.insert(n);
+            }
+        }
+        for (const auto& [v, val] : *candidate) {
+            if (fixed.count(v)) continue;
+            // Only sweep over vars defaulted to 0 (the residual repair target).
+            if (val != 0) continue;
+            residualVars.push_back(v);
+        }
+        auto values = gridFor(residualVars.size());
+        if (values.empty()) {
+            ++candIdx;
+            continue;
+        }
+        if (trace) {
+            std::string line = "  cand[" + std::to_string(candIdx) + "] residual-repair over "
+                + std::to_string(residualVars.size()) + " vars, grid=" + std::to_string(values.size())
+                + ", combos=" + std::to_string(values.size());
+            traceWrite(line);
+        }
+
+        // Geometric grid enumeration with combo cap.
+        std::size_t total = 1;
+        for (std::size_t i = 0; i < residualVars.size(); ++i) {
+            total *= values.size();
+            if (total > COMBO_CAP) { total = 0; break; }
+        }
+        if (total == 0) { ++candIdx; continue; }
+
+        std::vector<std::size_t> idx(residualVars.size(), 0);
+        while (true) {
+            if (validations >= VALIDATE_BUDGET) break;
+            // Skip the all-zero combo (already tried).
+            bool allZero = true;
+            for (std::size_t i = 0; i < idx.size(); ++i) {
+                if (values[idx[i]] != 0) { allZero = false; break; }
+            }
+            if (!allZero) {
+                IntegerModel repaired_M = *candidate;
+                for (std::size_t i = 0; i < residualVars.size(); ++i) {
+                    repaired_M[residualVars[i]] = values[idx[i]];
+                }
+                if (tryValidate(repaired_M)) {
+                    traceWrite("  → validator SAT after residual-repair (cand["
+                               + std::to_string(candIdx) + "])");
+                    currentModel_ = std::move(repaired_M);
+                    return TheoryCheckResult::consistent();
+                }
+            }
+            // Increment odometer-style.
+            std::size_t pos = 0;
+            while (pos < idx.size()) {
+                ++idx[pos];
+                if (idx[pos] < values.size()) break;
+                idx[pos] = 0;
+                ++pos;
+            }
+            if (pos == idx.size()) break;
+        }
+        if (validations >= VALIDATE_BUDGET) break;
         ++candIdx;
     }
     traceWrite("  → no candidate validated");
