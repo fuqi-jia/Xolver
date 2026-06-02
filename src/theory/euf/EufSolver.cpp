@@ -505,8 +505,18 @@ bool EufSolver::checkProofForestInvariants(const char* where) const {
                             std::fprintf(stderr,
                                 "[PF-INV][%s] STALE Congruence edge t=%u -> %u "
                                 "label_idx=%zu argPair (%u,%u) NOT same-class "
-                                "(mergeRecordCount=%zu)\n",
-                                where, t, p, lid, a, b, egraph_.mergeRecordCount());
+                                "(mergeRecordCount=%zu curLevel=%d)\n",
+                                where, t, p, lid, a, b, egraph_.mergeRecordCount(),
+                                currentLevel_);
+                            for (size_t mi = 0; mi < egraph_.mergeRecordCount(); ++mi) {
+                                const auto& mr = egraph_.mergeRecord(mi);
+                                if ((mr.lhs == t && mr.rhs == p) ||
+                                    (mr.lhs == p && mr.rhs == t)) {
+                                    std::fprintf(stderr,
+                                        "  candidate mergeRecord[%zu]: kind=%d level=%d merged=%d\n",
+                                        mi, (int)mr.reason.kind, mr.level, mr.merged?1:0);
+                                }
+                            }
                         }
                         ++violations;
                         if (doAssert) std::abort();
@@ -954,6 +964,27 @@ void EufSolver::backtrackToLevel(int target) {
     while (!egraphBoundaries_.empty() && egraphBoundaries_.back().level > target)
         egraphBoundaries_.pop_back();
 
+    // SECOND PASS — level-filter cleanup. The count-based snapshot rollback
+    // above assumes mergeRecords_ are inserted in monotonically non-decreasing
+    // level order. Combination interface (dis)equalities can violate that
+    // assumption: an assertInterfaceEquality at SAT level L_late may be queued
+    // and processed AFTER a higher-level merge was already inserted into
+    // mergeRecords_. The level=L_late record then sits AFTER the level=high
+    // record in mergeRecords_, so the count-based truncation either keeps the
+    // high-level merge (leaving a stale congruence whose arg merge was rolled
+    // back) or drops a low-level merge (leaving a stale congruence whose
+    // dependency was kept but the congruence itself is gone). Either way, the
+    // proof forest references edges whose semantic justification doesn't hold.
+    //
+    // Walk mergeRecords_ from the END, dropping any entry with level > target.
+    // Mirror the drop in the proof forest via rollbackByLevel(target). The
+    // egraph union-find was already rolled back to the boundary snapshot, so
+    // any merge dropped here had its UF effect already undone; we just need to
+    // synchronize the mergeRecords_ and proofForest_ trail with that state.
+    // See project-euf-proof-forest-rollback memory for the full diagnosis.
+    egraph_.dropMergeRecordsAboveLevel(target);
+    egraph_.proofForestMutable().rollbackByLevel(target);
+
     // clean scope stack if needed
     while (!scopeLimits_.empty() && scopeLimits_.back() > trail_.size()) {
         scopeLimits_.pop_back();
@@ -1268,7 +1299,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         // Apply the merge into a fresh side-queue so the congruences it spawns
         // can be tagged with this merge's level before re-entering the queue.
         std::deque<PendingMerge> cong;
-        auto mr = egraph_.merge(req.a, req.b, req.reason, cong);
+        auto mr = egraph_.merge(req.a, req.b, req.reason, L, cong);
         for (auto& c : cong) { c.level = L; pushCong(std::move(c)); }
         if (!mr.merged) return std::nullopt;
 

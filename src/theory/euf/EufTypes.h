@@ -78,6 +78,15 @@ struct MergeRecord {
     EClassId killed = NullEClass;
     bool merged = false;
     MergeReason reason;
+    // SAT decision level at which this merge was caused (level of the asserted
+    // equality or, for congruence merges, the level of the parent merge that
+    // triggered the saturation). Used by EufSolver::backtrackToLevel to filter
+    // out merges whose level > target in a SECOND pass after the count-based
+    // egraph rollback — the count-based snapshot assumes monotonic level order
+    // in mergeRecords_ which combination interface equalities violate, leaving
+    // stale Congruence edges that survive backtrack and produce wrong UNSAT
+    // (Wisa xs-10-08 class). Default 0 = pre-fix records / asserted at level 0.
+    int level = 0;
 };
 
 struct EGraphSnapshot {
