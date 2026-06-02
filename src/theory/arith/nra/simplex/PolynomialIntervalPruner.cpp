@@ -1,5 +1,6 @@
 #include "theory/arith/nra/simplex/PolynomialIntervalPruner.h"
 #include <algorithm>
+#include <functional>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -793,6 +794,232 @@ int polyStrictSign(
     return polySign;
 }
 
+// AM-GM monomial absorption refutation.
+//
+// Given a polynomial that is sum of mixed-sign monomials, prove it is strict-
+// positive (or strict-negative) by ABSORBING each opposite-sign monomial into
+// a pair of same-sign monomials via the AM-GM inequality.
+//
+// Recall AM-GM: for a, b >= 0, (a + b) / 2 >= sqrt(a * b).
+// Apply to monomials c_a * X_a and c_b * X_b (with c_a, c_b > 0, X_a, X_b
+// strict-positive products of vars):
+//   (c_a * X_a + c_b * X_b) / 2 >= sqrt(c_a * c_b) * sqrt(X_a * X_b)
+// So if X_a * X_b = X^2 (geometric-mean condition) and c_a * c_b >= c^2,
+//   c_a * X_a + c_b * X_b >= 2 * c * X
+// Therefore -c * X + (c_a * X_a + c_b * X_b) / 2 >= 0.
+//
+// This handles mgc_03-class refutations: after substitution, eq5 reduces to
+// (positives) - delta*theta*vv3^3 = 0. delta^2 and theta^2*vv3^6 are both in
+// the positives, and (delta^2)(theta^2*vv3^6) = (delta*theta*vv3^3)^2, so
+// AM-GM absorbs the negative; remaining positives are strict-positive.
+//
+// Returns +1 if the polynomial is provably strict-positive via AM-GM absorption,
+// -1 for strict-negative, 0 if no proof found.
+//
+// Per-positive-monomial absorption budget: 1.0 (each positive monomial can
+// donate at most half of itself to absorptions; reserved half stays as strict-
+// positive residual).
+namespace {
+    // Helper: hash a canonical power-key for matching X_a * X_b == X^2.
+    std::string powerKeyHash(const std::vector<std::pair<VarId, int>>& pk) {
+        std::string s;
+        for (const auto& [v, e] : pk) {
+            s += std::to_string(v);
+            s += '^';
+            s += std::to_string(e);
+            s += ';';
+        }
+        return s;
+    }
+    std::vector<std::pair<VarId, int>> doublePowerKey(
+            const std::vector<std::pair<VarId, int>>& pk) {
+        std::vector<std::pair<VarId, int>> out;
+        out.reserve(pk.size());
+        for (const auto& [v, e] : pk) out.push_back({v, 2 * e});
+        return out;
+    }
+    std::vector<std::pair<VarId, int>> sumPowerKeys(
+            const std::vector<std::pair<VarId, int>>& a,
+            const std::vector<std::pair<VarId, int>>& b) {
+        std::unordered_map<VarId, int> m;
+        for (const auto& [v, e] : a) m[v] += e;
+        for (const auto& [v, e] : b) m[v] += e;
+        std::vector<std::pair<VarId, int>> out;
+        out.reserve(m.size());
+        for (auto& [v, e] : m) out.push_back({v, e});
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+} // anon
+
+int polyStrictSignAMGM(
+        const std::vector<PolynomialKernel::MonomialTerm>& terms,
+        const CertifiedSimplexFacts& facts,
+        std::vector<SatLit>& reasonsOut) {
+    // First, the no-absorption test (fast path).
+    {
+        std::vector<SatLit> r0;
+        int ss = polyStrictSign(terms, facts, r0);
+        if (ss != 0) { reasonsOut = r0; return ss; }
+    }
+    // Classify each monomial by its strict-sign.
+    struct Item {
+        mpq_class absCoeff;
+        int sign;
+        std::vector<std::pair<VarId, int>> powers;
+        std::string keyHash;
+        size_t idx;
+    };
+    std::vector<Item> items;
+    std::vector<SatLit> chainReasons;
+    for (size_t i = 0; i < terms.size(); ++i) {
+        const auto& t = terms[i];
+        if (t.coefficient == 0) continue;
+        std::vector<SatLit> tmp;
+        int s = monomialStrictSign(t, facts, tmp);
+        if (s == 0) return 0;
+        Item it;
+        it.absCoeff = mpq_class(t.coefficient > 0 ? t.coefficient : -t.coefficient);
+        it.sign = s;
+        for (const auto& [v, e] : t.powers) it.powers.push_back({v, e});
+        std::sort(it.powers.begin(), it.powers.end());
+        it.keyHash = powerKeyHash(it.powers);
+        it.idx = i;
+        items.push_back(std::move(it));
+        for (auto r : tmp) chainReasons.push_back(r);
+    }
+    if (items.empty()) return 0;
+    // Determine majority sign (the polysign we want to prove).
+    int posCount = 0, negCount = 0;
+    for (const auto& it : items) {
+        if (it.sign > 0) ++posCount;
+        else if (it.sign < 0) ++negCount;
+    }
+    if (posCount == 0 || negCount == 0) {
+        // All same sign already; would have been caught by fast path above
+        // unless monomialStrictSign disagreed -- in that case bail.
+        return 0;
+    }
+    int majoritySign = (posCount >= negCount) ? +1 : -1;
+    // Build an index of MAJORITY-sign items by their key (for X_a * X_b = X^2
+    // lookup). Each item gets a remaining-budget of 1.0 (can be partially
+    // consumed across absorptions; we reserve half for residual strict
+    // positivity).
+    struct MajorityItem { mpq_class budget; const Item* ref; };
+    std::vector<MajorityItem> majority;
+    majority.reserve(items.size());
+    for (const auto& it : items) {
+        if (it.sign == majoritySign) {
+            majority.push_back({mpq_class(1), &it});
+        }
+    }
+    // Index majority items by power-key for fast lookup.
+    std::unordered_map<std::string, std::vector<size_t>> byKey;
+    for (size_t i = 0; i < majority.size(); ++i) {
+        byKey[majority[i].ref->keyHash].push_back(i);
+    }
+    // For each MINORITY-sign monomial, find an absorbing k-tuple in majority.
+    // k-monomial AM-GM: m_1 + ... + m_k >= k * (c_1*c_2*...*c_k)^(1/k) * X,
+    // where X_1 * X_2 * ... * X_k = X^k. To absorb -c*X with full budget of
+    // each contributor:
+    //   k * (c_1*...*c_k)^(1/k) >= c   <=>   c_1*...*c_k >= (c/k)^k
+    // (and equivalently k^k * c_1*...*c_k >= c^k).
+    //
+    // Recursive enumeration: try k = 1, 2, 3, ... up to maxK. At each k,
+    // search combinations of majority monomials with sum-of-powers = k*neg.powers
+    // and coefficient product >= (c/k)^k. Use full budget of each contributor.
+    //
+    // Generalizes mgc_02 (k=1 self-pair after cancellation), mgc_03/04 (k=2),
+    // mgc_05 (k=3), ..., mgc_N (k=N-2).
+    constexpr int kMaxAMGMOrder = 10;   // bounds search; mgc_10 needs k=8
+    for (const auto& neg : items) {
+        if (neg.sign == majoritySign) continue;
+        bool absorbed = false;
+        // Try increasing tuple sizes k = 1, 2, ..., maxK.
+        for (int k = 1; k <= kMaxAMGMOrder && !absorbed; ++k) {
+            // Target: powers sum = k * neg.powers, coeff product >= (c/k)^k
+            // Equivalently k^k * prod(c_i) >= c^k.
+            // Compute c^k once.
+            mpq_class cToK = mpq_class(1);
+            for (int i = 0; i < k; ++i) cToK *= neg.absCoeff;
+            mpq_class kToK = mpq_class(1);
+            for (int i = 0; i < k; ++i) kToK *= mpq_class(k);
+            // Target power: k * neg.powers.
+            std::unordered_map<VarId, int> targetPowers;
+            for (const auto& [v, e] : neg.powers) targetPowers[v] = k * e;
+            // Recursive search. We allow REPEATED selection of the same majority
+            // index (with budget sharing) -- but to keep it simple here, we
+            // enumerate combinations with repetition disabled (each majority
+            // monomial used at most once). For repetition cases the multi-pass
+            // outer loop over negatives can pick up slack.
+            std::function<bool(int, size_t, std::unordered_map<VarId,int>&,
+                               mpq_class, std::vector<size_t>&)> rec;
+            std::vector<size_t> chosen;
+            rec = [&](int remaining, size_t startIdx,
+                      std::unordered_map<VarId,int>& accPowers,
+                      mpq_class accProdCoeff,
+                      std::vector<size_t>& selected) -> bool {
+                if (remaining == 0) {
+                    // Check power-key match
+                    for (const auto& [v, e] : accPowers) {
+                        auto it = targetPowers.find(v);
+                        if (it == targetPowers.end() || it->second != e) return false;
+                    }
+                    if (accPowers.size() != targetPowers.size()) return false;
+                    // Check coefficient AMGM bound: k^k * prod_c >= c^k
+                    mpq_class lhs = kToK * accProdCoeff;
+                    if (lhs < cToK) return false;
+                    return true;
+                }
+                for (size_t i = startIdx; i < majority.size(); ++i) {
+                    if (majority[i].budget <= 0) continue;
+                    const auto& mi = *majority[i].ref;
+                    // Prune: any power in mi must not exceed target
+                    bool exceeds = false;
+                    for (const auto& [v, e] : mi.powers) {
+                        auto it = targetPowers.find(v);
+                        if (it == targetPowers.end()) { exceeds = true; break; }
+                        auto cur = accPowers[v];
+                        if (cur + e > it->second) { exceeds = true; break; }
+                    }
+                    if (exceeds) continue;
+                    // Recurse
+                    std::unordered_map<VarId,int> savedAcc = accPowers;
+                    for (const auto& [v, e] : mi.powers) accPowers[v] += e;
+                    selected.push_back(i);
+                    if (rec(remaining - 1, i + 1, accPowers,
+                            accProdCoeff * mi.absCoeff, selected)) {
+                        return true;
+                    }
+                    selected.pop_back();
+                    accPowers = savedAcc;
+                }
+                return false;
+            };
+            std::unordered_map<VarId,int> accPowers;
+            chosen.clear();
+            if (rec(k, 0, accPowers, mpq_class(1), chosen)) {
+                // Found a k-tuple absorbing -c*X. Consume full budget of each
+                // contributor in `chosen`.
+                for (size_t i : chosen) majority[i].budget = mpq_class(0);
+                absorbed = true;
+            }
+        }
+        if (!absorbed) return 0;
+    }
+    // After absorption, the remaining budgets are all >= 0. The polynomial is
+    // (absorbed parts) + (sum of remaining-budget * positive monomials).
+    // For STRICT positivity, we need AT LEAST ONE majority monomial with strict
+    // positive remaining budget (so the sum has a strict-positive contribution).
+    bool anyStrictPositiveRemaining = false;
+    for (const auto& mi : majority) {
+        if (mi.budget > 0) { anyStrictPositiveRemaining = true; break; }
+    }
+    if (!anyStrictPositiveRemaining) return 0;
+    for (auto r : chainReasons) reasonsOut.push_back(r);
+    return majoritySign;
+}
+
 // Key for dedup of derived term-lists (so we don't loop forever).
 std::string termsKey(const std::vector<PolynomialKernel::MonomialTerm>& terms) {
     std::string s;
@@ -999,10 +1226,25 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                     }
                     if (after.empty()) continue;
                     if (after.size() > kMaxFocusedTerms) continue;
-                    // Pick smallest result (greedy-min-growth). Tiebreak: prefer
-                    // strict size reduction (after < current) over identity moves.
-                    if (after.size() < bestAfterSize ||
-                        (after.size() == bestAfterSize && after.size() < current.size() && bestAfterSize >= current.size())) {
+                    // Pick smallest result (greedy-min-growth). Tiebreaks:
+                    //  (a) strict size reduction over identity moves
+                    //  (b) compound pattern (>1 var) over single-var, so
+                    //      vv2<->vv3 var-rename oscillations don't dominate
+                    //      and starve the closing lambda1*vv1 substitution.
+                    bool betterPrimary = (after.size() < bestAfterSize);
+                    bool tiedPrimary   = (after.size() == bestAfterSize);
+                    bool betterSecondary = false;
+                    if (tiedPrimary && bestSf) {
+                        size_t curBestVars = bestSf->monomialPattern.size();
+                        size_t candVars    = sf.monomialPattern.size();
+                        // Prefer compound (more vars) when same result size,
+                        // breaks var-rename oscillation that blocks mgc_03+.
+                        if (candVars > curBestVars) betterSecondary = true;
+                    }
+                    if (tiedPrimary && !bestSf && after.size() <= current.size()) {
+                        betterSecondary = true;   // first applicable
+                    }
+                    if (betterPrimary || betterSecondary) {
                         bestAfterSize = after.size();
                         bestAfter = after;
                         bestDi = di;
@@ -1060,6 +1302,13 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                 std::vector<SatLit> strictR;
                 if (!refuted) {
                     int ssign = polyStrictSign(current, facts, strictR);
+                    if (ssign == 0) {
+                        ssign = polyStrictSignAMGM(current, facts, strictR);
+                        if (diag) {
+                            std::fprintf(stderr, "[OSF-FOCUS] AMGM on %zu-term -> sign=%d\n",
+                                         current.size(), ssign);
+                        }
+                    }
                     if (ssign != 0) {
                         switch (targetRel) {
                             case Relation::Eq:
