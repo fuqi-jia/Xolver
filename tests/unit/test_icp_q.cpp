@@ -55,6 +55,13 @@ struct Fixture {
         return result;
     }
 
+    // Build poly = a·x^d (pure monomial, for V3a tests).
+    PolyId monomial(long a, uint32_t d) {
+        PolyId xd = kernel->pow(xpoly, d);
+        if (a == 1) return xd;
+        return kernel->mul(kernel->mkConst(mpq_class(a)), xd);
+    }
+
     static SatLit lit(unsigned id) { return SatLit::positive(id); }
 
     ReasonedBoxQ box(const mpq_class& lo, const mpq_class& hi, unsigned r) {
@@ -332,6 +339,158 @@ TEST_CASE("ICP-Q V2: Lt unsat — x² < 0 detected by V1 sign-uniform check") {
     auto r = engine.run(built.contractors, built.watchers, b, cfg);
 
     CHECK(r.status == IcpStatus::Conflict);
+}
+
+// -- V3a pure-monomial narrowing (degree ≥ 3) --------------------------------
+
+TEST_CASE("ICP-Q V3a: x^3 ≤ 0 with x ∈ [-5,5] narrows upper to 0 (odd d, Leq)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    auto c = f.cstr(f.monomial(1, 3), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // sign(x^3) = sign(x); Leq ⇒ x ≤ 0.
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-5));
+    CHECK(ri->interval.hi == mpq_class(0));
+}
+
+TEST_CASE("ICP-Q V3a: 2x^5 > 0 with x ∈ [-5,5] narrows lower to 0 (odd d, Gt)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    auto c = f.cstr(f.monomial(2, 5), Relation::Gt, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // x^5 > 0 ⇔ x > 0; closed over-approx ⇒ x ∈ [0, 5].
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(0));
+    CHECK(ri->interval.hi == mpq_class(5));
+}
+
+TEST_CASE("ICP-Q V3a: x^4 ≤ 0 with x ∈ [-5,5] narrows to {0} (even d, Leq)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    auto c = f.cstr(f.monomial(1, 4), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // Even d, a > 0: x^d ≤ 0 ⇔ x = 0; intersect with xBox = {0}.
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(0));
+    CHECK(ri->interval.hi == mpq_class(0));
+}
+
+TEST_CASE("ICP-Q V3a: x^4 < 0 is unsat regardless of box (even d, Lt)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    auto c = f.cstr(f.monomial(1, 4), Relation::Lt, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // V1 catches first: polyInterval(x⁴, [-5,5]) = [0, 625]; Lt's lo ≥ 0 ⇒
+    // Conflict. The test asserts no regression: even-d Lt remains unsat.
+    CHECK(r.status == IcpStatus::Conflict);
+}
+
+TEST_CASE("ICP-Q V3a: -x^3 ≤ 0 normalizes a > 0 then narrows lower to 0 (sign flip)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    // a = -1, d = 3 (odd). After normalization: a > 0, rel = Geq ⇒ x ≥ 0.
+    auto c = f.cstr(f.monomial(-1, 3), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(0));
+    CHECK(ri->interval.hi == mpq_class(5));
+}
+
+TEST_CASE("ICP-Q V3a: x^3 = 0 with x ∈ [-5,5] narrows to {0} (odd d, Eq)") {
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    auto c = f.cstr(f.monomial(1, 3), Relation::Eq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(0));
+    CHECK(ri->interval.hi == mpq_class(0));
+}
+
+TEST_CASE("ICP-Q V3a: x^4 ≤ 0 with x ∈ [2,5] (0 ∉ box) is unsat") {
+    Fixture f;
+    auto b = f.box(2, 5, 100);
+    auto c = f.cstr(f.monomial(1, 4), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    // V1: polyInterval = [16, 625], lo > 0 ⇒ Leq Conflict. (V3a would also
+    // emit Conflict via {0} ∩ [2,5] = empty, but V1 fires first.)
+    CHECK(r.status == IcpStatus::Conflict);
+    REQUIRE(r.conflict.has_value());
+    bool hasBox = false, hasCstr = false;
+    for (const auto& l : r.conflict->clause) {
+        if (l == SatLit::positive(100)) hasBox = true;
+        if (l == SatLit::positive(200)) hasCstr = true;
+    }
+    CHECK(hasBox);
+    CHECK(hasCstr);
+}
+
+TEST_CASE("ICP-Q V3a: non-monomial with degree ≥ 3 falls through (V3 not applicable)") {
+    // x³ - 1 ≤ 0 is degree 3 but has a nonzero constant ⇒ tryNarrowPureMonomial
+    // returns nullopt. V1's polyInterval over [-5, 5] is x³ ∈ [-125, 125], minus
+    // 1 ⇒ [-126, 124]; Leq: lo ≤ 0, no V1 conflict. So we expect NoChange and
+    // the box unchanged — confirming V3a doesn't over-reach to mixed polynomials.
+    Fixture f;
+    auto b = f.box(-5, 5, 100);
+    PolyId p = f.kernel->add(f.monomial(1, 3),
+                              f.kernel->mkConst(mpq_class(-1)));
+    auto c = f.cstr(p, Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-5));
+    CHECK(ri->interval.hi == mpq_class(5));
 }
 
 #endif  // XOLVER_HAS_LIBPOLY

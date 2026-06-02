@@ -41,6 +41,23 @@ private:
     // the outward-rounded feasible-set over-approximation.
     std::optional<IntervalQ> tryNarrowDeg2(const std::vector<mpz_class>& coeffs,
                                            Relation rel) const;
+
+    // V3a: pure-monomial sign narrowing for a·x^d with d ≥ 3. (V2 handles
+    // d == 2 strictly better via discriminant; this helper guards d ≥ 3.)
+    //
+    // Even d: x^d ≥ 0, so the feasible set collapses based on the constant
+    // side of `rel` (Leq/Eq narrow to {0}; Lt is unsatisfiable; Geq/Gt/Neq
+    // either always-true or x ≠ 0 which is not single-interval).
+    //
+    // Odd d: sign(x^d) = sign(x), so the feasible set is a half-line that
+    // becomes a closed interval after intersection with xBox.
+    //
+    // Returns nullopt if not applicable. An empty IntervalQ signals a
+    // conflict. A non-empty IntervalQ is the result ALREADY intersected
+    // with xBox — caller only checks identity vs xBox for change detection.
+    std::optional<IntervalQ> tryNarrowPureMonomial(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const;
 };
 
 } // namespace xolver

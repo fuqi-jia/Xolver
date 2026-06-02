@@ -104,6 +104,33 @@ ContractorResultQ RelationContractorQ::contract(ReasonedBoxQ& box) {
         }
     }
 
+    // V3a — pure-monomial sign narrowing (degree d ≥ 3). Mutually exclusive
+    // with V2's degree-2 path (V2 returns DomainUpdate or Conflict and
+    // short-circuits before we get here when applicable; we only reach V3
+    // if V2 returned nullopt — i.e., this is not a degree-2 trinomial).
+    auto monomialOpt = tryNarrowPureMonomial(coeffs, constraint_.rel, xInterval);
+    if (monomialOpt) {
+        const IntervalQ& newI = *monomialOpt;
+        if (newI.isEmpty()) {
+            return ContractorResultQ{
+                IcpStatus::Conflict,
+                TheoryConflict{reasons},
+                {}
+            };
+        }
+        // V3 already intersects with xBox internally — change detection is a
+        // plain identity check on the bounds.
+        if (newI.lo != xInterval.lo || newI.hi != xInterval.hi) {
+            box.narrow(var, newI, reasons);
+            BoundUpdateQ update{var, newI, reasons};
+            return ContractorResultQ{
+                IcpStatus::DomainUpdate,
+                std::nullopt,
+                {update}
+            };
+        }
+    }
+
     return ContractorResultQ{IcpStatus::NoChange, std::nullopt, {}};
 }
 
@@ -186,6 +213,102 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowDeg2(
     r2Hi.canonicalize();
 
     return IntervalQ{r1Lo, r2Hi};
+}
+
+namespace {
+
+// Flip `r` so that the predicate `p rel 0` becomes equivalent after negating
+// p. Used to normalize the leading coefficient sign in pure-monomial
+// reasoning. Eq/Neq are sign-invariant.
+Relation flipSign(Relation r) {
+    switch (r) {
+        case Relation::Leq: return Relation::Geq;
+        case Relation::Geq: return Relation::Leq;
+        case Relation::Lt:  return Relation::Gt;
+        case Relation::Gt:  return Relation::Lt;
+        default:            return r;
+    }
+}
+
+} // namespace
+
+std::optional<IntervalQ> RelationContractorQ::tryNarrowPureMonomial(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const {
+    // V3a scope: degree d ≥ 3. V2's discriminant path strictly dominates for
+    // d == 2, so we don't compete on that case.
+    if (coeffs.size() < 4) return std::nullopt;
+
+    if (coeffs[0] == 0) return std::nullopt;  // defensive: leading-coeff invariant
+
+    // All non-leading coefficients must be zero (pure monomial a·x^d).
+    for (size_t i = 1; i < coeffs.size(); ++i) {
+        if (coeffs[i] != 0) return std::nullopt;
+    }
+
+    size_t d = coeffs.size() - 1;
+    bool aPositive = (coeffs[0] > 0);
+
+    // Normalize a > 0 by flipping the relation when negating. Eq/Neq pass
+    // through (multiplying both sides by -1 preserves equality predicates).
+    Relation r = aPositive ? rel : flipSign(rel);
+
+    const mpq_class kZero(0);
+    const IntervalQ kEmpty{mpq_class(1), mpq_class(0)};
+
+    if (d % 2 == 0) {
+        // Even d ≥ 4: x^d ≥ 0, with strict equality only at x = 0.
+        switch (r) {
+            case Relation::Leq:
+            case Relation::Eq:
+                // {x : x^d ≤ 0} = {0}; intersect with xBox.
+                return xBox.contains(kZero)
+                    ? IntervalQ{kZero, kZero}
+                    : kEmpty;
+            case Relation::Lt:
+                // x^d < 0 unsatisfiable (a > 0, d even).
+                return kEmpty;
+            case Relation::Geq:
+                // x^d ≥ 0 vacuously true; nothing to narrow.
+                return std::nullopt;
+            case Relation::Gt:
+            case Relation::Neq:
+                // {x : x ≠ 0} ∩ xBox is two pieces when xBox straddles 0,
+                // not representable as a single IntervalQ — skip.
+                return std::nullopt;
+            default:
+                return std::nullopt;
+        }
+    } else {
+        // Odd d ≥ 3: sign(x^d) = sign(x), so feasibility reduces to a
+        // sign condition on x itself. Strict relations (Lt, Gt) get a
+        // closed over-approximation (admitting x = 0) — sound: we never
+        // drop a strict solution, only delay conflict detection by an
+        // iteration when the box collapses to {0}.
+        switch (r) {
+            case Relation::Leq:
+            case Relation::Lt: {
+                mpq_class newHi = std::min(xBox.hi, kZero);
+                if (xBox.lo > newHi) return kEmpty;
+                return IntervalQ{xBox.lo, newHi};
+            }
+            case Relation::Geq:
+            case Relation::Gt: {
+                mpq_class newLo = std::max(xBox.lo, kZero);
+                if (newLo > xBox.hi) return kEmpty;
+                return IntervalQ{newLo, xBox.hi};
+            }
+            case Relation::Eq:
+                return xBox.contains(kZero)
+                    ? IntervalQ{kZero, kZero}
+                    : kEmpty;
+            case Relation::Neq:
+                // Same single-interval limitation as the even-d case.
+                return std::nullopt;
+            default:
+                return std::nullopt;
+        }
+    }
 }
 
 } // namespace xolver
