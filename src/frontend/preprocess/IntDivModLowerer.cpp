@@ -233,21 +233,45 @@ std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
             }
             break;
         case Kind::Add:
-            if (node.children.size() == 2) {
-                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
-                if (a && b) r = *a + *b;
+            // n-ary `(+ a b c)` = a + b + c. Old code only handled size == 2.
+            if (!node.children.empty()) {
+                mpz_class sum(0);
+                bool allOk = true;
+                for (ExprId c : node.children) {
+                    if (auto v = memo[c]) sum += *v;
+                    else { allOk = false; break; }
+                }
+                if (allOk) r = sum;
             }
             break;
         case Kind::Sub:
-            if (node.children.size() == 2) {
-                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
-                if (a && b) r = *a - *b;
+            // n-ary `(- a b c)` = (a - b) - c. Old code only handled size == 2.
+            if (!node.children.empty()) {
+                if (auto first = memo[node.children[0]]) {
+                    if (node.children.size() == 1) {
+                        r = -(*first);
+                    } else {
+                        mpz_class acc = *first;
+                        bool allOk = true;
+                        for (size_t i = 1; i < node.children.size(); ++i) {
+                            if (auto v = memo[node.children[i]]) acc -= *v;
+                            else { allOk = false; break; }
+                        }
+                        if (allOk) r = acc;
+                    }
+                }
             }
             break;
         case Kind::Mul:
-            if (node.children.size() == 2) {
-                auto a = memo[node.children[0]]; auto b = memo[node.children[1]];
-                if (a && b) r = *a * *b;
+            // n-ary `(* a b c)` = a * b * c. Old code only handled size == 2.
+            if (!node.children.empty()) {
+                mpz_class prod(1);
+                bool allOk = true;
+                for (ExprId c : node.children) {
+                    if (auto v = memo[c]) prod *= *v;
+                    else { allOk = false; break; }
+                }
+                if (allOk) r = prod;
             }
             break;
         default: break;
@@ -266,10 +290,16 @@ bool IntDivModLowerer::containsNonlinear(ExprId root) const {
         const auto& node = ir_.get(e);
         switch (node.kind) {
         case Kind::Mul:
-            if (node.children.size() == 2) {
-                bool leftConst = evalIntConstTerm(node.children[0]).has_value();
-                bool rightConst = evalIntConstTerm(node.children[1]).has_value();
-                if (!leftConst && !rightConst) return true;
+            // n-ary `(* a b c)`: nonlinear iff ≥ 2 non-constant factors.
+            // Old code only checked size == 2 — missed n-ary nonlinearity
+            // detection and could mis-route lowering decisions.
+            if (!node.children.empty()) {
+                int nonConst = 0;
+                for (ExprId c : node.children) {
+                    if (!evalIntConstTerm(c).has_value()) {
+                        if (++nonConst >= 2) return true;
+                    }
+                }
             }
             break;
         case Kind::Pow:

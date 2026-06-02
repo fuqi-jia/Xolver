@@ -482,12 +482,17 @@ FarkasProfile FarkasOrDetector::detect() const {
             for (ExprId c : a.children) {
                 ExprId resolved = resolve(c);
                 const auto& re = ir_.get(c);
+                std::string proxyName;
                 if (re.kind == Kind::Variable) {
                     if (auto* s = std::get_if<std::string>(&re.payload.value)) {
-                        if (tseitinDefs.count(*s)) resolvedProxies.push_back(*s);
+                        if (tseitinDefs.count(*s)) {
+                            resolvedProxies.push_back(*s);
+                            proxyName = *s;
+                        }
                     }
                 }
                 block.branches.push_back(classifyAnd(resolved));
+                block.branchProxies.push_back(std::move(proxyName));
             }
             if (block.allBranchesFarkas()) {
                 for (const auto& v : resolvedProxies) usedDefs.insert(v);

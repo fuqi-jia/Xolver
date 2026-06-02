@@ -59,6 +59,12 @@ struct FarkasBranch {
 struct FarkasOrBlock {
     ExprId originalOr = NullExpr;
     std::vector<FarkasBranch> branches;
+    // Per branch: the boolpur_K / Tseitin proxy variable name the
+    // frontend substituted in for `(and ...)`. Empty string if the
+    // child was an explicit And rather than a proxy. The assembler
+    // uses this to set proxy=1 for the chosen branch, =0 for others,
+    // so the original `(= boolpur_K (and ...))` assertion validates.
+    std::vector<std::string> branchProxies;
 
     bool allBranchesFarkas() const {
         if (branches.empty()) return false;

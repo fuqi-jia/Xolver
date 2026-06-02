@@ -108,12 +108,14 @@ private:
     // explicitly). Returns nullopt on shape failure.
     struct EqRow {
         std::vector<mpq_class> coeffs;   // size == |lambdas|
+        std::unordered_map<std::string, mpq_class> residCoeffs;  // resid var → coef
         mpq_class constant = 0;          // poly constant after B substitution
     };
     std::optional<EqRow> extractEqRow(
         ExprId atomId,
         const std::vector<std::string>& lambdas,
-        const std::unordered_map<std::string, mpz_class>& B) const;
+        const std::unordered_map<std::string, mpz_class>& B,
+        const std::unordered_set<std::string>& residCoVars = {}) const;
 
     // Same for an inequality atom: extract λ-coefficient row + the
     // CT-side (which is a linear function of CT-vars).
@@ -126,6 +128,7 @@ private:
     struct IneqRow {
         std::vector<mpq_class> lambdaCoeffs;             // size == |lambdas|
         std::unordered_map<std::string, mpq_class> ctCoeffs;  // CT-var → coef
+        std::unordered_map<std::string, mpq_class> residCoeffs;  // resid var → coef
         // bilinear[(lambdaIdx, ctVar)] = coefficient
         std::vector<std::tuple<int, std::string, mpq_class>> bilinearCoeffs;
         mpq_class constant = 0;
@@ -135,7 +138,8 @@ private:
         ExprId atomId,
         const std::vector<std::string>& lambdas,
         const std::unordered_map<std::string, mpz_class>& B,
-        const std::vector<std::string>& ctVars) const;
+        const std::vector<std::string>& ctVars,
+        const std::unordered_set<std::string>& residCoVars = {}) const;
 
     // Helpers: substitute B into a polynomial sub-expression, returning
     // a rational constant. If the sub-expression contains a CT-like var,
@@ -148,6 +152,35 @@ private:
     // ray. Returns ray of length |S| or empty if infeasible / multiple rays.
     std::vector<mpz_class> findPrimitiveNonNegRay(
         const std::vector<std::vector<mpq_class>>& A_S) const;
+
+    // Augmented Farkas solver (P1 v3 / task #151). Given:
+    //   A_λ ∈ Q^{m × L}  (λ coefficients per equation)
+    //   A_r ∈ Q^{m × R}  (residual coefficients per equation)
+    //   c   ∈ Q^m        (RHS = -constants)
+    // find (λ ∈ Z^L_≥0, r ∈ Z^R) such that A_λ·λ + A_r·r = c.
+    //
+    // Algorithm: build augmented matrix [A_r | A_λ | c] of size m × (R+L+1),
+    // RREF with residual columns pivoted FIRST. After RREF:
+    //   - r-pivot rows give r_i = (RHS) − Σ (coef · free vars)
+    //   - λ-pivot rows give λ_j = (RHS) − Σ (coef · free vars)
+    //   - pure-zero rows must have zero RHS (else infeasible)
+    // Then enumerate free λ vars in a bounded integer range (0..maxFree);
+    // for each enumeration, pivot λs and residuals are determined. If
+    // pivot λs are non-neg integers, emit (λ, r) solution.
+    //
+    // Returns (λ, r) on success or empty λ on failure. residNames must
+    // be in stable order matching the columns the caller uses.
+    struct AugmentedSolution {
+        std::vector<mpz_class> lambdaValues;
+        std::unordered_map<std::string, mpz_class> residValues;
+    };
+    std::vector<AugmentedSolution> solveAugmentedFarkas(
+        const std::vector<std::vector<mpq_class>>& A_lambda,
+        const std::vector<std::vector<mpq_class>>& A_resid,
+        const std::vector<mpq_class>& c,
+        const std::vector<std::string>& residNames,
+        std::size_t maxFreeRange = 30,
+        std::size_t maxSolutions = 4) const;
 
     // P1 v2: solve A_S · λ_S = c over Q with λ ∈ Z^n_≥0. Handles both the
     // homogeneous (c = 0, delegates to findPrimitiveNonNegRay) and the

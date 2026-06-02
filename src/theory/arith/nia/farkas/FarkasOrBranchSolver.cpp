@@ -111,6 +111,7 @@ std::optional<mpq_class> evalConst(
 struct MonomialInfo {
     int lambdaIdx = -1;
     std::string ctVar;          // empty when no CT factor
+    std::string residName;      // empty when no residual co-var factor
     mpq_class coef = 1;
 };
 
@@ -120,6 +121,7 @@ bool extractMonomial(
     const std::unordered_map<std::string, int>& lambdaIndexOf,
     const std::unordered_map<std::string, mpz_class>& B,
     const std::unordered_set<std::string>& ctVars,
+    const std::unordered_set<std::string>& residCoVars,
     MonomialInfo& out)
 {
     const auto& e = ir.get(id);
@@ -160,7 +162,7 @@ bool extractMonomial(
             // Neg of a non-constant — recurse into the inner factor.
             if (fe.children.size() != 1) return false;
             MonomialInfo inner;
-            if (!extractMonomial(ir, fe.children[0], lambdaIndexOf, B, ctVars, inner)) return false;
+            if (!extractMonomial(ir, fe.children[0], lambdaIndexOf, B, ctVars, residCoVars, inner)) return false;
             // Multiply by -1.
             out.coef *= -inner.coef;
             if (inner.lambdaIdx >= 0) {
@@ -173,12 +175,16 @@ bool extractMonomial(
                 out.ctVar = inner.ctVar;
                 ctSeen = 1;
             }
+            if (!inner.residName.empty()) {
+                if (!out.residName.empty()) return false;
+                out.residName = inner.residName;
+            }
             continue;
         }
         if (fe.kind == Kind::Variable) {
             auto vn = varName(ir, f);
             if (!vn) return false;
-            // Classify: λ, CT, or bounded (B-substitutable).
+            // Classify: λ, CT, residual, or bounded (B-substitutable).
             auto lit = lambdaIndexOf.find(*vn);
             if (lit != lambdaIndexOf.end()) {
                 if (lambdaSeen) return false;
@@ -190,6 +196,11 @@ bool extractMonomial(
                 if (ctSeen) return false;
                 out.ctVar = *vn;
                 ctSeen = 1;
+                continue;
+            }
+            if (residCoVars.count(*vn)) {
+                if (!out.residName.empty()) return false;  // 2 resid factors
+                out.residName = *vn;
                 continue;
             }
             // Bounded → substitute from B.
@@ -224,7 +235,8 @@ std::optional<FarkasOrBranchSolver::EqRow>
 FarkasOrBranchSolver::extractEqRow(
     ExprId atomId,
     const std::vector<std::string>& lambdas,
-    const std::unordered_map<std::string, mpz_class>& B) const
+    const std::unordered_map<std::string, mpz_class>& B,
+    const std::unordered_set<std::string>& residCoVars) const
 {
     const auto& e = ir_.get(atomId);
     if (e.kind != Kind::Eq || e.children.size() != 2) return std::nullopt;
@@ -244,10 +256,9 @@ FarkasOrBranchSolver::extractEqRow(
 
     EqRow row;
     row.coeffs.assign(lambdas.size(), mpq_class(0));
-    row.constant = -rhsValue;   // poly = rhs → poly - rhs = 0
+    row.constant = -rhsValue;
 
-    // Walk the poly tree: Add/Sub/Neg distribute over monomials.
-    std::function<bool(ExprId, int /*sign*/)> walk;
+    std::function<bool(ExprId, int)> walk;
     walk = [&](ExprId id, int sign) -> bool {
         const auto& pe = ir_.get(id);
         if (pe.kind == Kind::Add) {
@@ -267,12 +278,15 @@ FarkasOrBranchSolver::extractEqRow(
             return walk(pe.children[0], -sign);
         }
         MonomialInfo m;
-        if (!extractMonomial(ir_, id, lambdaIndexOf, B, emptyCt, m)) return false;
+        if (!extractMonomial(ir_, id, lambdaIndexOf, B, emptyCt, residCoVars, m)) return false;
         if (!m.ctVar.empty()) return false;   // equality must be CT-free
+        mpq_class scoef = mpq_class(sign) * m.coef;
         if (m.lambdaIdx >= 0) {
-            row.coeffs[m.lambdaIdx] += mpq_class(sign) * m.coef;
+            row.coeffs[m.lambdaIdx] += scoef;
+        } else if (!m.residName.empty()) {
+            row.residCoeffs[m.residName] += scoef;
         } else {
-            row.constant += mpq_class(sign) * m.coef;
+            row.constant += scoef;
         }
         return true;
     };
@@ -285,7 +299,8 @@ FarkasOrBranchSolver::extractIneqRow(
     ExprId atomId,
     const std::vector<std::string>& lambdas,
     const std::unordered_map<std::string, mpz_class>& B,
-    const std::vector<std::string>& ctVars) const
+    const std::vector<std::string>& ctVars,
+    const std::unordered_set<std::string>& residCoVars) const
 {
     const auto& e = ir_.get(atomId);
     IneqRow::Rel rel;
@@ -350,12 +365,9 @@ FarkasOrBranchSolver::extractIneqRow(
             return walk(pe.children[0], -sign);
         }
         MonomialInfo m;
-        if (!extractMonomial(ir_, id, lambdaIndexOf, B, ctSet, m)) return false;
+        if (!extractMonomial(ir_, id, lambdaIndexOf, B, ctSet, residCoVars, m)) return false;
         mpq_class signed_coef = mpq_class(sign) * m.coef;
         if (m.lambdaIdx >= 0 && !m.ctVar.empty()) {
-            // λ · CT bilinear: under λ_j = ray[j], this contributes
-            // ray[j] · m.coef to the CT-coefficient. Keep raw here;
-            // deriveCtBound applies the ray weighting.
             row.bilinearCoeffs.emplace_back(m.lambdaIdx, m.ctVar, signed_coef);
             return true;
         }
@@ -363,6 +375,8 @@ FarkasOrBranchSolver::extractIneqRow(
             row.lambdaCoeffs[m.lambdaIdx] += signed_coef;
         } else if (!m.ctVar.empty()) {
             row.ctCoeffs[m.ctVar] += signed_coef;
+        } else if (!m.residName.empty()) {
+            row.residCoeffs[m.residName] += signed_coef;
         } else {
             row.constant += signed_coef;
         }
@@ -464,6 +478,176 @@ std::vector<mpz_class> FarkasOrBranchSolver::findPrimitiveNonNegRay(
     for (const auto& v : intRay) if (v < 0) return {};
 
     return intRay;
+}
+
+// ---- Task #151: solve A_λ·λ + A_r·r = c with λ ∈ Z^L_≥0, r ∈ Z^R ----
+//
+// Replaces the brittle residual-grid enumeration. RREF the full
+// augmented matrix [A_r | A_λ | c] with residual columns pivoted FIRST,
+// so residuals become *dependent* on (free vars + RHS), and the
+// remaining pure-λ rows form the only constraint on λ. Then enumerate
+// free λ variables in {0..maxFreeRange} and recover pivot λs.
+//
+// Stroeder p21258 (z3-verified SAT): RFN1_main_x=20, RFN1_main_y=-26,
+// RFN1_CT=-7, λ=(6,1,22,1,22,1). No grid covers ±26; only an augmented
+// solve recovers these values from λ via the residual-pivot rows.
+std::vector<FarkasOrBranchSolver::AugmentedSolution>
+FarkasOrBranchSolver::solveAugmentedFarkas(
+    const std::vector<std::vector<mpq_class>>& A_lambda,
+    const std::vector<std::vector<mpq_class>>& A_resid,
+    const std::vector<mpq_class>& c,
+    const std::vector<std::string>& residNames,
+    std::size_t maxFreeRange,
+    std::size_t maxSolutions) const
+{
+    std::vector<AugmentedSolution> out;
+    if (A_lambda.empty()) return out;
+    std::size_t m = A_lambda.size();
+    std::size_t L = A_lambda[0].empty() ? 0 : A_lambda[0].size();
+    std::size_t R = residNames.size();
+    if (R > 0 && (A_resid.empty() || A_resid[0].size() != R)) return out;
+    if (c.size() != m) return out;
+
+    // Build augmented matrix M of size m × (R + L + 1).
+    // Column order: [resid_0..resid_{R-1} | lam_0..lam_{L-1} | c]
+    std::vector<std::vector<mpq_class>> M(m, std::vector<mpq_class>(R + L + 1, mpq_class(0)));
+    for (std::size_t i = 0; i < m; ++i) {
+        for (std::size_t j = 0; j < R; ++j) {
+            M[i][j] = A_resid[i][j];
+        }
+        for (std::size_t j = 0; j < L; ++j) {
+            M[i][R + j] = A_lambda[i][j];
+        }
+        M[i][R + L] = c[i];
+    }
+
+    // RREF with column priority: residuals first (cols 0..R-1), then
+    // lambdas (cols R..R+L-1). The constant column (R+L) is the RHS;
+    // never pivot on it.
+    std::vector<int> rowOfCol(R + L, -1);
+    std::vector<int> pivotColOfRow(m, -1);
+    std::size_t r = 0;
+    for (std::size_t cc = 0; cc < R + L && r < m; ++cc) {
+        std::size_t pivot = r;
+        bool found = false;
+        for (std::size_t i = r; i < m; ++i) {
+            if (M[i][cc] != 0) { pivot = i; found = true; break; }
+        }
+        if (!found) continue;
+        std::swap(M[r], M[pivot]);
+        mpq_class scale = M[r][cc];
+        for (std::size_t j = cc; j <= R + L; ++j) M[r][j] /= scale;
+        for (std::size_t i = 0; i < m; ++i) {
+            if (i == r) continue;
+            mpq_class f = M[i][cc];
+            if (f != 0) {
+                for (std::size_t j = cc; j <= R + L; ++j) M[i][j] -= f * M[r][j];
+            }
+        }
+        rowOfCol[cc] = (int)r;
+        pivotColOfRow[r] = (int)cc;
+        ++r;
+    }
+
+    // Consistency: rows with no pivot must have c entry = 0.
+    for (std::size_t i = r; i < m; ++i) {
+        if (M[i][R + L] != 0) return out;   // infeasible
+    }
+
+    // Identify free variables (non-pivot columns).
+    std::vector<std::size_t> freeLambdaCols;
+    std::vector<std::size_t> freeResidCols;
+    for (std::size_t cc = 0; cc < R; ++cc) {
+        if (rowOfCol[cc] == -1) freeResidCols.push_back(cc);
+    }
+    for (std::size_t cc = R; cc < R + L; ++cc) {
+        if (rowOfCol[cc] == -1) freeLambdaCols.push_back(cc);
+    }
+
+    // Helper: compute pivoted-var value given free-var assignments.
+    //   M[pivotRow] is the row x[pivotCol] + Σ_{free f} M[pivotRow][f] · x[f] = M[pivotRow][R+L]
+    //   So x[pivotCol] = M[pivotRow][R+L] − Σ_{free f} M[pivotRow][f] · x[f]
+    auto computePivotValue = [&](std::size_t pivotRow,
+                                 const std::vector<mpq_class>& xFull) -> mpq_class {
+        mpq_class val = M[pivotRow][R + L];
+        for (std::size_t f = 0; f < R + L; ++f) {
+            if (rowOfCol[f] == -1) {   // free col
+                val -= M[pivotRow][f] * xFull[f];
+            }
+        }
+        return val;
+    };
+
+    // Bounded enumeration of free λ values in {0..maxFreeRange}.
+    // Free residuals are fixed at 0 (any integer would work; 0 is the
+    // simplest representative for the residual nullspace).
+    // For ≥3 free λs, restrict range to keep combos ≤ ~30³ = 27000.
+    std::size_t numFreeL = freeLambdaCols.size();
+    std::size_t actualRange = (maxFreeRange + 1);
+    if (numFreeL >= 3) actualRange = 8;     // 8³ = 512
+    if (numFreeL >= 4) actualRange = 5;     // 5⁴ = 625
+    if (numFreeL >= 5) return out;          // too many free dims
+
+    std::vector<std::size_t> idx(numFreeL, 0);
+    auto enumerate = [&]() -> bool {
+        // Build full xFull vector with current free assignments.
+        std::vector<mpq_class> xFull(R + L, mpq_class(0));
+        // Free residuals → 0 (already).
+        // Free lambdas → idx[i].
+        for (std::size_t i = 0; i < numFreeL; ++i) {
+            xFull[freeLambdaCols[i]] = mpq_class((long)idx[i]);
+        }
+        // Compute pivot vars.
+        for (std::size_t cc = 0; cc < R + L; ++cc) {
+            if (rowOfCol[cc] != -1) {
+                xFull[cc] = computePivotValue(rowOfCol[cc], xFull);
+            }
+        }
+        // Check all λ vars are non-neg integers.
+        std::vector<mpz_class> lambdaVals(L);
+        for (std::size_t j = 0; j < L; ++j) {
+            const auto& v = xFull[R + j];
+            if (v.get_den() != 1) return false;
+            mpz_class num = v.get_num();
+            if (num < 0) return false;
+            lambdaVals[j] = num;
+        }
+        // Reject the all-zero ray (caller can handle trivial-ray separately).
+        bool allZero = true;
+        for (const auto& v : lambdaVals) if (v != 0) { allZero = false; break; }
+        if (allZero) return false;
+        // Check residuals are integers.
+        std::unordered_map<std::string, mpz_class> rVals;
+        for (std::size_t j = 0; j < R; ++j) {
+            const auto& v = xFull[j];
+            if (v.get_den() != 1) return false;
+            rVals[residNames[j]] = v.get_num();
+        }
+        AugmentedSolution sol;
+        sol.lambdaValues = std::move(lambdaVals);
+        sol.residValues  = std::move(rVals);
+        out.push_back(std::move(sol));
+        return true;
+    };
+
+    if (numFreeL == 0) {
+        enumerate();   // single forced solution
+    } else {
+        while (true) {
+            if (out.size() >= maxSolutions) break;
+            enumerate();
+            // Increment odometer.
+            std::size_t pos = 0;
+            while (pos < numFreeL) {
+                ++idx[pos];
+                if (idx[pos] < actualRange) break;
+                idx[pos] = 0;
+                ++pos;
+            }
+            if (pos == numFreeL) break;
+        }
+    }
+    return out;
 }
 
 // ---- P1 v2: solve A·λ = c for non-neg integer λ (augmented system) ----
@@ -700,109 +884,100 @@ std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranch(
 {
     auto residCoVars = collectResidualCoVars(ir_, branch, B, ctVars);
     if (residCoVars.empty()) {
-        // No residuals — single call to the inner solver.
         return solveBranchCore(branch, B, ctVars);
     }
-    // Cap residual count; otherwise the grid blows up.
-    if (residCoVars.size() > 4) return {};
 
-    // Adaptive grid: widen for ≤3 residuals to include ±4 (matches the
-    // common Stroeder bounded-global range). Cap total ≤ ~3000 combos.
-    std::vector<mpz_class> grid;
-    if (residCoVars.size() <= 2) {
-        for (long k : {0L, 1L, -1L, 2L, -2L, 3L, -3L, 4L, -4L}) grid.emplace_back(k);
-    } else if (residCoVars.size() == 3) {
-        // 9^3 = 729 — needed to catch linked residuals like RFN1_main_x=-4
-        // forced by Stroeder's lam4+lam5 cross-equation system.
-        for (long k : {0L, 1L, -1L, 2L, -2L, 3L, -3L, 4L, -4L}) grid.emplace_back(k);
-    } else { // 4
-        for (long k : {0L, 1L, -1L, 2L, -2L}) grid.emplace_back(k);
+    // Task #151: replace residual-grid enumeration with the augmented
+    // Farkas solver. Build A_λ, A_r, c from equality rows, RREF with
+    // residual pivots first, enumerate free λs in a bounded range.
+    std::vector<std::string> residNames(residCoVars.begin(), residCoVars.end());
+    std::sort(residNames.begin(), residNames.end());
+
+    // Extract equality rows with residual coefficients populated.
+    std::vector<EqRow> eqRows;
+    eqRows.reserve(branch.equalities.size());
+    for (ExprId atom : branch.equalities) {
+        auto row = extractEqRow(atom, branch.lambdas, B, residCoVars);
+        if (!row) return {};
+        eqRows.push_back(std::move(*row));
+    }
+    if (eqRows.empty()) {
+        return solveBranchCore(branch, B, ctVars);
     }
 
-    std::vector<std::string> residNames(residCoVars.begin(), residCoVars.end());
-    std::sort(residNames.begin(), residNames.end());   // determinism
+    const std::size_t L = branch.lambdas.size();
+    const std::size_t R = residNames.size();
+    const std::size_t m = eqRows.size();
+
+    std::vector<std::vector<mpq_class>> A_lambda(m, std::vector<mpq_class>(L, mpq_class(0)));
+    std::vector<std::vector<mpq_class>> A_resid(m,  std::vector<mpq_class>(R, mpq_class(0)));
+    std::vector<mpq_class> cVec(m);
+    for (std::size_t i = 0; i < m; ++i) {
+        for (std::size_t j = 0; j < L; ++j) A_lambda[i][j] = eqRows[i].coeffs[j];
+        for (std::size_t j = 0; j < R; ++j) {
+            auto it = eqRows[i].residCoeffs.find(residNames[j]);
+            A_resid[i][j] = (it != eqRows[i].residCoeffs.end()) ? it->second : mpq_class(0);
+        }
+        // eqRow: coeffs·λ + residCoeffs·r + constant = 0 → A·x = -constant.
+        cVec[i] = -eqRows[i].constant;
+    }
+
+    auto sols = solveAugmentedFarkas(A_lambda, A_resid, cVec, residNames,
+                                     /*maxFreeRange=*/30, /*maxSolutions=*/4);
+
+    // Extract inequality rows once (residual-aware) for ctBound derivation.
+    std::vector<IneqRow> ineqRowsTemplate;
+    ineqRowsTemplate.reserve(branch.inequalities.size());
+    bool ineqOk = true;
+    for (ExprId atom : branch.inequalities) {
+        auto row = extractIneqRow(atom, branch.lambdas, B, ctVars, residCoVars);
+        if (!row) { ineqOk = false; break; }
+        ineqRowsTemplate.push_back(std::move(*row));
+    }
+    if (!ineqOk) return {};
 
     std::vector<BranchCandidate> out;
-    std::vector<std::size_t> idx(residNames.size(), 0);
-    while (true) {
-        // Build augmented B = original B ∪ current residual values.
-        auto augB = B;
-        std::unordered_map<std::string, mpz_class> residVals;
-        for (std::size_t i = 0; i < residNames.size(); ++i) {
-            augB[residNames[i]] = grid[idx[i]];
-            residVals[residNames[i]] = grid[idx[i]];
-        }
-        auto cands = solveBranchCore(branch, augB, ctVars);
-        for (auto& c : cands) {
-            c.residValues = residVals;
-            out.push_back(std::move(c));
-        }
-        // Also try the trivial-ray candidate: all-λ=0, equalities hold
-        // by constant matching at this (B, resid), strict ineqs hold via
-        // residual+constant contribution alone.
-        bool trivialOk = true;
-        for (ExprId atom : branch.equalities) {
-            auto row = extractEqRow(atom, branch.lambdas, augB);
-            if (!row || row->constant != 0) { trivialOk = false; break; }
-        }
-        if (trivialOk) {
-            std::vector<IneqRow> ineqRows;
-            ineqRows.reserve(branch.inequalities.size());
-            for (ExprId atom : branch.inequalities) {
-                auto row = extractIneqRow(atom, branch.lambdas, augB, ctVars);
-                if (!row) { trivialOk = false; break; }
-                ineqRows.push_back(std::move(*row));
-            }
-            if (trivialOk) {
-                // Build trivial-ray candidate (all λ = 0) with CT bounds.
-                std::vector<mpz_class> zeroRay(branch.lambdas.size(), mpz_class(0));
-                BranchCandidate cand;
-                cand.lambdaNames = branch.lambdas;
-                cand.lambdaRay = zeroRay;
-                cand.scaleT = 1;
-                cand.trivialRay = true;
-                cand.residValues = residVals;
-                cand.ctBounds.reserve(ineqRows.size());
-                for (const auto& row : ineqRows) {
-                    cand.ctBounds.push_back(deriveCtBound(row, zeroRay, branch.lambdas));
+    for (const auto& sol : sols) {
+        // Build per-candidate ineqRows with residual values substituted
+        // into the constant term.
+        std::vector<IneqRow> ineqRows = ineqRowsTemplate;
+        for (auto& row : ineqRows) {
+            for (auto it = row.residCoeffs.begin(); it != row.residCoeffs.end(); ) {
+                auto rv = sol.residValues.find(it->first);
+                if (rv != sol.residValues.end()) {
+                    row.constant += it->second * mpq_class(rv->second);
+                    it = row.residCoeffs.erase(it);
+                } else {
+                    ++it;
                 }
-                // Reject if any ctBound is infeasible (empty interval or
-                // unsatisfiable trivial residual).
-                bool feasible = true;
-                for (const auto& b : cand.ctBounds) {
-                    if (b.hasInterval && b.ctLoFinite && b.ctHiFinite
-                        && b.ctLo > b.ctHi) { feasible = false; break; }
-                    // Trivial-residual unsat: residualCoefs empty AND
-                    // residualConst violates residualRel.
-                    if (!b.hasInterval) {
-                        bool ctEmpty = b.residualCoefs.empty()
-                            || std::all_of(b.residualCoefs.begin(), b.residualCoefs.end(),
-                                [](const auto& p){ return p.second == 0; });
-                        if (ctEmpty) {
-                            if (b.residualRel == CtBound::Rel::Geq && b.residualConst < 0) {
-                                feasible = false; break;
-                            }
-                            if (b.residualRel == CtBound::Rel::Leq && b.residualConst > 0) {
-                                feasible = false; break;
-                            }
-                            if (b.residualRel == CtBound::Rel::Eq && b.residualConst != 0) {
-                                feasible = false; break;
-                            }
-                        }
-                    }
-                }
-                if (feasible) out.push_back(std::move(cand));
             }
         }
-        // Increment odometer.
-        std::size_t pos = 0;
-        while (pos < idx.size()) {
-            ++idx[pos];
-            if (idx[pos] < grid.size()) break;
-            idx[pos] = 0;
-            ++pos;
+        BranchCandidate cand;
+        cand.lambdaNames = branch.lambdas;
+        cand.lambdaRay = sol.lambdaValues;
+        cand.scaleT = 1;
+        cand.residValues = sol.residValues;
+        cand.ctBounds.reserve(ineqRows.size());
+        for (const auto& row : ineqRows) {
+            cand.ctBounds.push_back(deriveCtBound(row, sol.lambdaValues, branch.lambdas));
         }
-        if (pos == idx.size()) break;
+        // Reject if any ctBound is infeasible at this λ ray.
+        bool feasible = true;
+        for (const auto& b : cand.ctBounds) {
+            if (b.hasInterval && b.ctLoFinite && b.ctHiFinite
+                && b.ctLo > b.ctHi) { feasible = false; break; }
+            if (!b.hasInterval) {
+                bool ctEmpty = b.residualCoefs.empty()
+                    || std::all_of(b.residualCoefs.begin(), b.residualCoefs.end(),
+                        [](const auto& p){ return p.second == 0; });
+                if (ctEmpty) {
+                    if (b.residualRel == CtBound::Rel::Geq && b.residualConst < 0) { feasible = false; break; }
+                    if (b.residualRel == CtBound::Rel::Leq && b.residualConst > 0) { feasible = false; break; }
+                    if (b.residualRel == CtBound::Rel::Eq  && b.residualConst != 0) { feasible = false; break; }
+                }
+            }
+        }
+        if (feasible) out.push_back(std::move(cand));
     }
     return out;
 }

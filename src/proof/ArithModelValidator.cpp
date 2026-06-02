@@ -4,18 +4,26 @@ namespace xolver {
 
 ArithModelValidator::Verdict
 ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
-    // Warm a local cache bottom-up so eval() below never recurses deeply.
     std::unordered_map<ExprId, TR> prepass;
     prepassCache_ = &prepass;
     for (ExprId a : assertions) warmEval(a, prepass);
 
+    static const bool trace = std::getenv("XOLVER_VALIDATOR_TRACE");
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
-    for (ExprId a : assertions) {
+    for (std::size_t i = 0; i < assertions.size(); ++i) {
+        ExprId a = assertions[i];
         TR r = eval(a);
+        if (trace) {
+            const char* k = (r.kind == Kind2::Bool ? (r.b ? "Bool(true)" : "Bool(FALSE)")
+                          : r.kind == Kind2::Indeterminate ? "Indeterminate"
+                          : "Number/Token");
+            FILE* f = std::fopen("/tmp/validator_trace", "a");
+            if (f) { std::fprintf(f, "assert[%zu] eid=%u → %s\n", i, (unsigned)a, k); std::fclose(f); }
+        }
         if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }
         if (r.kind != Kind2::Bool) { anyIndeterminate = true; continue; }
-        if (!r.b) { verdict = Verdict::Violated; break; }  // definite false
+        if (!r.b) { verdict = Verdict::Violated; break; }
     }
     prepassCache_ = nullptr;
     if (verdict == Verdict::Violated) return verdict;

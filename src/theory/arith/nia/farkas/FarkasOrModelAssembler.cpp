@@ -39,14 +39,18 @@ FarkasOrModelAssembler::collectFreeVars(const FarkasProfile& profile) const {
         for (ExprId c : e.children) walk(c);
     };
     for (ExprId aid : profile.outerAssertions) walk(aid);
-    // Also collect vars from each block's branches (in case some referenced
-    // var is only inside Farkas branches and we forget it later).
     for (const auto& blk : profile.blocks) {
         for (const auto& br : blk.branches) {
             for (ExprId atom : br.equalities)   walk(atom);
             for (ExprId atom : br.inequalities) walk(atom);
         }
     }
+    // ALSO walk ALL CoreIr assertions — the validator evaluates over the
+    // original assertion list (which includes Tseitin `(= boolpur_K …)`
+    // proxies + assertions that the detector consumed). Any variable used
+    // in any assertion needs a value in M or the validator will see it as
+    // unconstrained-but-referenced.
+    for (ExprId aid : ir_.assertions()) walk(aid);
     return out;
 }
 
@@ -108,6 +112,26 @@ FarkasOrModelAssembler::assemble(const FarkasProfile& profile,
         (void)blockIdx;
         for (const auto& [v, val] : residMap) {
             M[v] = val;
+        }
+    }
+
+    // 3c. Boolean-Purification proxies (boolpur_K). For each Farkas block,
+    //     the detector substituted Or children that were `boolpur_K`
+    //     proxies with their `(and ...)` definitions. The original
+    //     `(= boolpur_K (and ...))` Eq remains in the formula, so the
+    //     validator demands proxy = eval(and ...). For the CHOSEN branch
+    //     the and-body evaluates true → proxy = 1; for all others, the
+    //     and-body may evaluate to either truth — we set proxy = 0 by
+    //     default. Without this the validator fails to confirm SAT even
+    //     when the underlying Farkas certificate is correct.
+    for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
+        const auto& blk = profile.blocks[j];
+        auto cit = assignment.choice.find((int)j);
+        int chosen = (cit != assignment.choice.end()) ? cit->second : -1;
+        for (std::size_t k = 0; k < blk.branchProxies.size(); ++k) {
+            const auto& proxy = blk.branchProxies[k];
+            if (proxy.empty()) continue;
+            M[proxy] = ((int)k == chosen) ? mpz_class(1) : mpz_class(0);
         }
     }
 

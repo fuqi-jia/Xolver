@@ -1745,6 +1745,9 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
                 bl += " eqs=" + std::to_string(br.equalities.size())
                     + " ineqs=" + std::to_string(br.inequalities.size())
                     + " unclass=" + std::to_string(br.unclassified.size());
+                if (j < blk.branchProxies.size() && !blk.branchProxies[j].empty()) {
+                    bl += " proxy=" + blk.branchProxies[j];
+                }
                 traceWrite(bl);
             }
         }
@@ -1813,13 +1816,41 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     // is a per-call (not per-check) budget.
     constexpr std::size_t VALIDATE_BUDGET = 200;
     std::size_t validations = 0;
+    // Pre-compute var name → isBool map by walking all assertions once.
+    // Bool vars (e.g. boolpur_K Tseitin proxies) MUST go through
+    // BoolAssignment; if routed through NumAssignment the validator hits
+    // `(= boolpur_K (and ...))` with Number(0) LHS vs Bool RHS and
+    // returns Indeterminate — which the framework treats as failure.
+    std::unordered_set<std::string> boolVarNames;
+    {
+        SortId boolSort = coreIr_->boolSortId();
+        std::function<void(ExprId)> walkSort;
+        std::unordered_set<ExprId> seen;
+        walkSort = [&](ExprId id) {
+            if (!seen.insert(id).second) return;
+            const auto& e = coreIr_->get(id);
+            if (e.kind == Kind::Variable && e.sort == boolSort) {
+                if (auto* s = std::get_if<std::string>(&e.payload.value))
+                    boolVarNames.insert(*s);
+            }
+            for (ExprId c : e.children) walkSort(c);
+        };
+        for (ExprId aid : coreIr_->assertions()) walkSort(aid);
+    }
+
     auto tryValidate = [&](IntegerModel& M) -> bool {
         if (validations >= VALIDATE_BUDGET) return false;
         ++validations;
         ArithModelValidator::NumAssignment num;
-        num.reserve(M.size());
-        for (const auto& [v, val] : M) num.emplace(v, mpq_class(val));
         ArithModelValidator::BoolAssignment bools;
+        num.reserve(M.size());
+        for (const auto& [v, val] : M) {
+            if (boolVarNames.count(v)) {
+                bools.emplace(v, val != 0);
+            } else {
+                num.emplace(v, mpq_class(val));
+            }
+        }
         ArithModelValidator amv(*coreIr_, num, bools);
         return amv.validate(coreIr_->assertions()) ==
                ArithModelValidator::Verdict::Satisfied;
