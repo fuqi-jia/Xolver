@@ -214,24 +214,27 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
 std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
     // Single-theory: always drain entailments (per-solver Farkas/value-pin
     // propagations are sound by construction).
-    // Combination: ENTAILMENT propagation across all theories was previously
-    // suppressed because the comment-author worried about shared-bus
-    // interaction with Nelson-Oppen. But the very point of entailment is to
-    // tighten unassigned theory atoms when their value is FORCED by current
-    // bounds — and for UFLIA/UFLRA/UFNIA/UFNRA, the goal-atom closure (Wisa
-    // class) NEEDS this: when LIA learns bridge_J = 4 via N-O from EUF, the
-    // goal atom `(= adr_hi bridge_J)` must propagate true (both sides pinned
-    // to 4), which is precisely an ENTAILMENT propagation. Without it, SAT
-    // is free to set the atom false and the negated-goal escape stays open.
-    // Disable suppression for combination logics that have NO nonlinear arith
-    // solver (LIA/LRA — the convex/non-convex linear cases where entailment
-    // is well-defined and shared-bus interactions are bounded).
-    bool hasNL = solverByTheory_.count(TheoryId::NIA) ||
-                 solverByTheory_.count(TheoryId::NRA) ||
-                 solverByTheory_.count(TheoryId::NIRA);
-    if (combinationMode_ && hasNL) return {};
+    //
+    // Combination: drain LINEAR-theory entailments (LIA/LRA) even when a
+    // nonlinear solver (NIA/NRA/NIRA) is present — the linear sibling is ALWAYS
+    // registered alongside the nonlinear one for NIA/NRA/NIRA logics
+    // (TheoryFactory::setupSolvers), and LIA/LRA's entailment is sound and
+    // well-defined regardless of nonlinear's presence. This is the chain UFLIA/
+    // UFLRA/UFNIA/UFNRA all need to close the goal-atom propagation (Wisa class
+    // of false-SAT). Nonlinear solvers themselves do not yet implement
+    // entailment so the suppression only matters for them.
     std::vector<TheoryLemma> out;
     for (auto& s : solvers_) {
+        // Only LIA / LRA contribute entailments today; NIA / NRA / NIRA / EUF
+        // override the base no-op. The check below documents intent: it is
+        // safe to drain ANY solver's entailments because the base returns {}.
+        if (combinationMode_) {
+            TheoryId id = s->id();
+            bool isLinearArith =
+                (id == TheoryId::LIA || id == TheoryId::LRA ||
+                 id == TheoryId::IDL || id == TheoryId::RDL);
+            if (!isLinearArith) continue;
+        }
         auto v = s->takeEntailmentPropagations();
         for (auto& l : v) out.push_back(std::move(l));
     }
