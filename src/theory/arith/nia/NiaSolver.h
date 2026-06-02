@@ -168,6 +168,18 @@ private:
     std::unique_ptr<AlgebraBackend> cdcacAlgebra_;
     std::unique_ptr<CdcacCore> cdcacCore_;
 
+    // Set of "proxy_name:truth" tokens we've already pinned via
+    // registry->pinLiteral. Prevents the Farkas-Or stage's repeated
+    // verdict-SAT path from re-issuing the same unit clauses on each
+    // re-fire (those clauses are permanent in the SAT backend; emitting
+    // duplicates is harmless but noisy).
+    std::unordered_set<std::string> pinnedProxies_;
+    // Count of consecutive Farkas-Or check passes that all confirmed
+    // SAT but produced no new pin-lemma. After a small streak we bail
+    // out with Unknown so the Solver.cpp Cap. 10 hook can recover the
+    // theory-validated model directly.
+    int farkasOrSatStreak_ = 0;
+
     std::optional<IntegerModel> currentModel_;
     // Survives reset()/backtrack — the last Farkas-Or candidate that the
     // validator confirmed against the ORIGINAL formula. Used by the

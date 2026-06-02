@@ -211,6 +211,9 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // ArithModelValidator. Returns SAT on validation pass; never UNSAT.
     // Standard+Full so it can fire BEFORE the expensive LS / BB stages
     // that the SAT-layer's theory checks usually exhaust. Default-OFF.
+    // Standard+Full. cb_propagate now handles Unknown (mirrors
+    // cb_check_found_model), so the streak-3 Unknown bail terminates
+    // SAT and lets Cap. 10 promote the validated model.
     add("nia.farkas-or", &NiaSolver::stageFarkasOr);
     add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
@@ -1728,7 +1731,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&,
 //
 // Default-OFF behind XOLVER_NIA_FARKAS_OR. Full-effort only.
 std::optional<TheoryCheckResult>
-NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
+NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     static const bool enabled = [] {
         const char* e = std::getenv("XOLVER_NIA_FARKAS_OR");
         return e && *e && *e != '0';
@@ -1907,6 +1910,79 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
             traceWrite("  → validator SAT (cand[" + std::to_string(candIdx) + "])");
             currentModel_ = *candidate;
             lastValidatedFarkasModel_ = std::move(*candidate);   // survives reset
+
+            // Queue unit-lemma propagations for the chosen branches'
+            // boolpur_K Tseitin proxies. Each unit lemma drives the
+            // SAT-CDCL engine onto a trail consistent with the Farkas-Or
+            // model so it actually returns Sat instead of looping in the
+            // decision search. They are drained by stagePendingLemma the
+            // next time the propagator polls, which routes through the
+            // proper lemma-database channel (CaDiCaL refuses raw
+            // addClause mid-solve, so we cannot use pinLiteral here).
+            //
+            // Sound: the model was validator-confirmed against the
+            // original CoreIr, so pinning the matching boolpur values
+            // only prunes explorations that contradict a positively
+            // confirmed witness. Each (proxy, truth) pair is queued at
+            // most once via pinnedProxies_ — these unit clauses are
+            // permanent in the SAT backend; duplicates are noise.
+            std::vector<TheoryLemma> newPinLemmas;
+            if (registry_) {
+                for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
+                    const auto& blk = profile.blocks[j];
+                    auto cit = assignment.choice.find((int)j);
+                    int chosen = (cit != assignment.choice.end()) ? cit->second : -1;
+                    for (std::size_t k = 0; k < blk.branchProxies.size(); ++k) {
+                        const auto& proxy = blk.branchProxies[k];
+                        if (proxy.empty()) continue;
+                        bool truth = ((int)k == chosen);
+                        auto pinKey = proxy + (truth ? ":1" : ":0");
+                        if (!pinnedProxies_.insert(pinKey).second) continue;
+                        auto sv = registry_->findBoolVariableSatVar(proxy);
+                        if (!sv) continue;
+                        TheoryLemma ulemma;
+                        ulemma.lits.push_back(truth ? SatLit::positive(*sv)
+                                                     : SatLit::negative(*sv));
+                        ulemma.kind = LemmaKind::Entailment;
+                        if (!lemmaDb.contains(ulemma)) {
+                            lemmaDb.insertIfNew(ulemma);
+                            newPinLemmas.push_back(ulemma);
+                            traceWrite("  → queue pin-lemma " + proxy + "=" +
+                                       (truth ? "true" : "false"));
+                        }
+                    }
+                }
+            }
+
+            // Emit pin-lemmas via the proper SAT-CDCL lemma channel. The
+            // first lemma is returned directly via mkLemma so it's installed
+            // immediately; the rest (if any) queue into pendingLinLemmas_
+            // and drain via stagePendingLemma on subsequent check() calls.
+            // Returning consistent() instead would short-circuit the
+            // pipeline and the lemmas would never reach SAT.
+            if (!newPinLemmas.empty()) {
+                auto first = std::move(newPinLemmas.front());
+                for (std::size_t i = 1; i < newPinLemmas.size(); ++i) {
+                    pendingLinLemmas_.push_back(std::move(newPinLemmas[i]));
+                }
+                return TheoryCheckResult::mkLemma(first);
+            }
+            // No new pin-lemmas to queue: every proxy that needed
+            // committing has already been committed. The framework has
+            // confirmed this validated SAT model farkasOrSatStreak_
+            // times in a row; if SAT-CDCL still hasn't converged on its
+            // own, return Unknown so cb_propagate / cb_check_found_model
+            // both terminate SAT and the Cap. 10 hook in Solver.cpp
+            // promotes the theory candidate directly via
+            // modelPositivelyValidates. SOUND: same Unknown-recovery
+            // contract — validator must positively confirm the model
+            // before Sat is emitted.
+            constexpr int kFarkasOrSatStreakLimit = 3;
+            if (++farkasOrSatStreak_ >= kFarkasOrSatStreakLimit) {
+                farkasOrSatStreak_ = 0;
+                return TheoryCheckResult::unknown(
+                    "NIA Farkas-Or: validated model, SAT-CDCL did not converge");
+            }
             return TheoryCheckResult::consistent();
         }
 
