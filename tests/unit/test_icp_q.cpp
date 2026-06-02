@@ -628,7 +628,8 @@ TEST_CASE("ICP-Q V3b: -x³ + 8 ≤ 0 normalizes to x ≥ 2 (a < 0 sign flip)") {
 
 TEST_CASE("ICP-Q V3b: middle-coeff nonzero (x³ + 2x ≤ 0) falls through") {
     // coeffs = [1, 0, 2, 0]; coeffs[2] != 0 ⇒ V3b returns nullopt.
-    // V1's polyInterval is wide ([-1020, 1020]) so it also doesn't fire.
+    // V5d (relaxed guard nonZero >= 2) catches it: M = 1 + max(0, 2, 0) = 3.
+    // Odd-d Leq → x ≤ M = 3. Lower untouched.
     Fixture f;
     auto b = f.box(-10, 10, 100);
     PolyId xCubed = f.kernel->pow(f.xpoly, 3);
@@ -641,11 +642,11 @@ TEST_CASE("ICP-Q V3b: middle-coeff nonzero (x³ + 2x ≤ 0) falls through") {
     IcpEngineQ engine;
     auto r = engine.run(built.contractors, built.watchers, b, cfg);
 
-    CHECK(r.status == IcpStatus::NoChange);
     auto ri = b.get("x");
     REQUIRE(ri.has_value());
+    // V5d Cauchy narrows the upper bound only.
     CHECK(ri->interval.lo == mpq_class(-10));
-    CHECK(ri->interval.hi == mpq_class(10));
+    CHECK(ri->interval.hi <= mpq_class(3));
 }
 
 #endif  // XOLVER_HAS_LIBPOLY

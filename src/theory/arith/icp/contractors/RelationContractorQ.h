@@ -80,9 +80,25 @@ private:
         const std::vector<mpz_class>& coeffs, Relation rel,
         const IntervalQ& xBox) const;
 
+    // V5e: sparse-pair Eq narrowing for `a·x^d + b·x^(d-p) = 0` (k =
+    // d-p ≥ 1, p ≥ 1, intermediate coeff at exactly one position,
+    // constant zero, leading non-zero). Factor as
+    //     x^(d-p) · (a·x^p + b)
+    // The roots are {0} (with multiplicity d-p) ∪ {roots of a·x^p + b}.
+    // The second factor is a V3b-shape monomial+constant; we reuse the
+    // d-th-root math (with p, not d) to bracket its roots. Outward
+    // bracket `[min(0, root), max(0, root)]` (or `[-rt, rt]` when even-p
+    // gives ±roots). Tighter than V5d's Cauchy bound by 2-5×.
+    //
+    // Eq only — Leq/Geq case-splits on (parity of k, sign of second
+    // factor) and falls back to V5d's Cauchy bracket.
+    std::optional<IntervalQ> tryNarrowSparseMonomialPair(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const;
+
     // V5d: Cauchy bound on real roots for mixed-degree univariate. Fires
-    // when V2/V3a/V3b decline but the polynomial has ≥ 3 non-zero
-    // coefficients (the "dense" case, e.g. x³ + x + 5 or x⁴ + x² − 1).
+    // when V2/V3a/V3b/V5e decline. Fires on any polynomial with degree ≥ 2
+    // and ≥ 2 non-zero coefficients — the catch-all sound fallback.
     //
     // Cauchy's bound: all real roots satisfy |x| ≤ M where
     //     M = 1 + max_{i < d} (|a_i| / |a_d|).

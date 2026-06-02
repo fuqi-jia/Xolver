@@ -152,8 +152,32 @@ ContractorResultQ RelationContractorQ::contract(ReasonedBoxQ& box) {
         }
     }
 
+    // V5e — sparse-pair Eq narrowing for `a·x^d + b·x^(d-p) = 0`. Tighter
+    // than V5d's Cauchy for this exact shape. Eq only; Leq/Geq fall
+    // through to V5d.
+    auto sparsePairOpt = tryNarrowSparseMonomialPair(coeffs, constraint_.rel, xInterval);
+    if (sparsePairOpt) {
+        const IntervalQ& newI = *sparsePairOpt;
+        if (newI.isEmpty()) {
+            return ContractorResultQ{
+                IcpStatus::Conflict,
+                TheoryConflict{reasons},
+                {}
+            };
+        }
+        if (newI.lo != xInterval.lo || newI.hi != xInterval.hi) {
+            box.narrow(var, newI, reasons);
+            BoundUpdateQ update{var, newI, reasons};
+            return ContractorResultQ{
+                IcpStatus::DomainUpdate,
+                std::nullopt,
+                {update}
+            };
+        }
+    }
+
     // V5d — Cauchy bound on real roots for dense mixed-degree univariate.
-    // Fires only when V2/V3a/V3b declined. Loose but sound.
+    // Fires only when V2/V3a/V3b/V5e declined. Loose but sound.
     auto cauchyOpt = tryNarrowCauchyBracket(coeffs, constraint_.rel, xInterval);
     if (cauchyOpt) {
         const IntervalQ& newI = *cauchyOpt;
@@ -477,12 +501,99 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
     }
 }
 
+std::optional<IntervalQ> RelationContractorQ::tryNarrowSparseMonomialPair(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const {
+    // Eq only — Leq/Geq case-split is complex and V5d's Cauchy covers them.
+    if (rel != Relation::Eq) return std::nullopt;
+    if (coeffs.size() < 3) return std::nullopt;  // need degree ≥ 2
+    if (coeffs[0] == 0) return std::nullopt;
+    // Constant must be zero (V3b handles non-zero constant case tighter).
+    if (coeffs.back() != 0) return std::nullopt;
+
+    // Find exactly one intermediate non-zero. coeffs is stored
+    // highest-degree-first: coeffs[i] is the coefficient of x^(d - i).
+    int interIdx = -1;
+    for (size_t i = 1; i + 1 < coeffs.size(); ++i) {
+        if (coeffs[i] != 0) {
+            if (interIdx >= 0) return std::nullopt;  // more than one intermediate
+            interIdx = static_cast<int>(i);
+        }
+    }
+    if (interIdx < 0) return std::nullopt;  // V3a's territory (pure monomial)
+
+    // Factor: a·x^d + b·x^(d-p) = x^(d-p) · (a·x^p + b), where p = interIdx
+    // (the degree of the intermediate's x-power as referenced from x^(d-p)).
+    // Wait — coeffs[interIdx] is the coeff of x^(d - interIdx). For the
+    // factoring, the second factor is a·x^(interIdx) + b... let me redo:
+    //
+    //   coeffs[0]   ↔ a · x^d
+    //   coeffs[k]   ↔ b · x^(d-k)     where k = interIdx
+    //   coeffs[end] ↔ 0               (we required this above)
+    //
+    // So poly = a·x^d + b·x^(d-k) = x^(d-k) · (a·x^k + b).
+    // → common factor x^(d-k); reduced polynomial in x has degree k = interIdx.
+    unsigned p = static_cast<unsigned>(interIdx);
+
+    const mpz_class& a = coeffs[0];
+    const mpz_class& b = coeffs[interIdx];
+
+    // T = -b/a as a rational; mpq_class requires positive denominator.
+    mpq_class T = (a > 0) ? mpq_class(-b, a) : mpq_class(b, -a);
+    T.canonicalize();
+
+    const mpq_class kZero(0);
+    const IntervalQ kEmpty{mpq_class(1), mpq_class(0)};
+
+    // Outward d-th root helpers (handle T < 0 via floor/ceil flip).
+    auto rootCeil = [p](const mpq_class& t) -> mpq_class {
+        if (t >= 0) return mpqRootCeil(t, p);
+        return -mpqRootFloor(-t, p);
+    };
+    auto rootFloor = [p](const mpq_class& t) -> mpq_class {
+        if (t >= 0) return mpqRootFloor(t, p);
+        return -mpqRootCeil(-t, p);
+    };
+
+    // Always include 0 in the bracket (root of the x^(d-p) factor).
+    mpq_class loBracket = kZero;
+    mpq_class hiBracket = kZero;
+
+    bool pEven = (p % 2 == 0);
+    if (pEven) {
+        if (T > 0) {
+            // Two real roots: ±T^(1/p). Outward: ±rtCeil.
+            mpq_class rtCeil = mpqRootCeil(T, p);
+            mpq_class negRtCeil(-rtCeil);
+            if (negRtCeil < loBracket) loBracket = negRtCeil;
+            if (rtCeil > hiBracket) hiBracket = rtCeil;
+        }
+        // T = 0: x^p = 0 ⇒ x = 0, already in bracket.
+        // T < 0: no real roots from second factor; bracket stays at {0}.
+    } else {
+        // p odd: single real root x = T^(1/p) (sign follows T).
+        mpq_class rtLo = rootFloor(T);  // outward LOW
+        mpq_class rtHi = rootCeil(T);   // outward HIGH
+        if (rtLo < loBracket) loBracket = rtLo;
+        if (rtHi > hiBracket) hiBracket = rtHi;
+    }
+
+    // Intersect with xBox.
+    mpq_class newLo = std::max(xBox.lo, loBracket);
+    mpq_class newHi = std::min(xBox.hi, hiBracket);
+    if (newLo > newHi) return kEmpty;
+    return IntervalQ{newLo, newHi};
+}
+
 std::optional<IntervalQ> RelationContractorQ::tryNarrowCauchyBracket(
         const std::vector<mpz_class>& coeffs, Relation rel,
         const IntervalQ& xBox) const {
-    // Scope: dense univariate where V2 (deg-2) and V3 (sparse monomial)
-    // can't help. Need degree ≥ 2 AND at least 3 non-zero coefficients
-    // (V3a/V3b cover sparse shapes with ≤ 2 non-zero).
+    // Scope: any univariate where V2 (deg-2) / V3a (pure monomial) /
+    // V3b (monomial + non-zero constant) and the sparse-pair Eq helper
+    // can't help. Need degree ≥ 2 and at least 2 non-zero coefficients
+    // (the all-but-leading-zero case is V3a's territory and reaches
+    // here only when V3a's rel-specific case-split declines, in which
+    // case Cauchy is still sound but rarely informative).
     if (coeffs.size() < 3) return std::nullopt;
     if (coeffs[0] == 0) return std::nullopt;
 
@@ -490,7 +601,7 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowCauchyBracket(
     for (const auto& c : coeffs) {
         if (c != 0) ++nonZero;
     }
-    if (nonZero < 3) return std::nullopt;
+    if (nonZero < 2) return std::nullopt;
 
     // |a_d|, then max_{i < d} |a_i| / |a_d|.
     mpz_class an = coeffs[0];
