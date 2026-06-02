@@ -130,6 +130,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_ADAPTIVE_PLATEAU"); e && *e && *e != '0') {
         adaptivePlateau_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_FARKAS_INIT"); e && *e && *e != '0') {
+        farkasInit_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -849,8 +852,20 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
             //   r == 6  → small random in [-10, 10] for every var
             //   r >= 7  → existing random sweep (boundary-respecting or
             //             ±2000 for unbounded)
-            int strategy = restart % 8;
-            std::size_t pinIdx = (restart / 8) % std::max<std::size_t>(vars.size(), 1);
+            // LS-SMART-Z11: extend rotation cycle to 10 when Farkas
+            // init is on. Slots 7 (single-1) and 8 (single-(-1)) are
+            // Farkas-pattern inits; slot 9 falls through to the
+            // existing default (boundary-respecting random sweep).
+            const int cycle = farkasInit_ ? 10 : 8;
+            int strategy = restart % cycle;
+            std::size_t pinIdx = (restart / cycle) % std::max<std::size_t>(vars.size(), 1);
+            // Z11: for Farkas slots, randomize which var gets the 1.
+            // Without this, the same var is picked on every cycle hit
+            // and we cover only ⌈RESTARTS/cycle⌉ distinct vars across
+            // the whole LS call (= 2 with defaults, 8 with LONG).
+            // Random pick gives uniform-random coverage instead.
+            const std::size_t farkasPin = vars.empty()
+                ? 0 : (std::size_t)(rng() % vars.size());
             for (std::size_t i = 0; i < vars.size(); ++i) {
                 const auto& v = vars[i];
                 const auto* d = domains.getDomain(v);
@@ -882,6 +897,16 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         break;
                     case 6:
                         val = mpz_class((long)(rng() % 21) - 10);
+                        break;
+                    case 7:
+                        // LS-SMART-Z11: single-1 positive Farkas init.
+                        val = (i == farkasPin) ? mpz_class(1) : mpz_class(0);
+                        break;
+                    case 8:
+                        // LS-SMART-Z11: single-(-1) negative Farkas init.
+                        // Mirrors slot 7 for constraints whose canonical
+                        // SAT model has a negative single-coefficient var.
+                        val = (i == farkasPin) ? mpz_class(-1) : mpz_class(0);
                         break;
                     default:
                         if (d && d->hasLower && d->hasUpper) {

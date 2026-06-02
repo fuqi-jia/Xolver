@@ -256,6 +256,7 @@ public:
     void setRwHub(bool e) { rwHub_ = e; }
     void setRwLadder(bool e) { rwLadder_ = e; }
     void setAdaptivePlateau(bool e) { adaptivePlateau_ = e; }
+    void setFarkasInit(bool e) { farkasInit_ = e; }
     // Return (min, max) of values cur[v] reached during recent LS
     // calls. If v wasn't tracked, returns std::nullopt.
     std::optional<std::pair<mpz_class, mpz_class>>
@@ -346,6 +347,17 @@ private:
     // even tried each var once. Scale K to max(20, |vars|/2). Default-
     // OFF XOLVER_NIA_LS_ADAPTIVE_PLATEAU.
     bool adaptivePlateau_ = false;
+    // LS-SMART-Z11 (user 2026-06-02 redirect: solve VeryMax). Farkas
+    // single-1 diverse-init strategy. Stroeder/VeryMax termination
+    // encodings produce constraints whose SAT model has exactly one
+    // "lambda multiplier" set to 1 with all other vars at 0; existing
+    // diverse-init strategies (zero, lo, hi, mid, ±100, ±500, random)
+    // never hit this pattern. Add two new rotation slots: (7) one
+    // randomly-chosen var ← 1, rest ← 0; (8) one randomly-chosen var
+    // ← -1, rest ← 0. Composes with XOLVER_NIA_LS_DIVERSE_INIT (which
+    // owns the rotation cycle); no-op if DIVERSE_INIT off. Default-OFF
+    // XOLVER_NIA_LS_FARKAS_INIT.
+    bool farkasInit_ = false;
     std::unordered_map<std::string, mpz_class> minSeen_;
     std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;
