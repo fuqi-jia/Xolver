@@ -1869,7 +1869,8 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
         }
         if (tryValidate(*candidate)) {
             traceWrite("  → validator SAT (cand[" + std::to_string(candIdx) + "])");
-            currentModel_ = std::move(*candidate);
+            currentModel_ = *candidate;
+            lastValidatedFarkasModel_ = std::move(*candidate);   // survives reset
             return TheoryCheckResult::consistent();
         }
 
@@ -2236,9 +2237,16 @@ NiaSolver::getDeducedSharedEqualities() {
 }
 
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
-    if (!currentModel_) return std::nullopt;
+    // Prefer currentModel_; fall back to lastValidatedFarkasModel_ which
+    // survives reset()/backtrack and represents the last validator-
+    // confirmed Farkas-Or witness. Used by Solver.cpp's Unknown-fallback
+    // to recover a SAT verdict when SAT-CDCL timed out.
+    const IntegerModel* src = nullptr;
+    if (currentModel_)               src = &*currentModel_;
+    else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+    if (!src) return std::nullopt;
     TheoryModel model;
-    for (const auto& [name, value] : *currentModel_) {
+    for (const auto& [name, value] : *src) {
         model.assignments[name] = value.get_str();
         model.numericAssignments.insert({name, RealValue::fromMpz(value)});
     }

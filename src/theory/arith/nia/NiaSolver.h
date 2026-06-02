@@ -169,6 +169,12 @@ private:
     std::unique_ptr<CdcacCore> cdcacCore_;
 
     std::optional<IntegerModel> currentModel_;
+    // Survives reset()/backtrack — the last Farkas-Or candidate that the
+    // validator confirmed against the ORIGINAL formula. Used by the
+    // top-level Unknown fallback in Solver.cpp when the SAT engine times
+    // out before its decision trail aligns with the theory's choice.
+    // Sound: only ever supplements verdict via positively-validated model.
+    std::optional<IntegerModel> lastValidatedFarkasModel_;
 
     // Phase 2: the normalized active constraints, produced by the
     // normalize stage and consumed by every downstream stage. Lives as a

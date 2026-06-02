@@ -1620,16 +1620,44 @@ public:
             // one that the arithmetic evaluator confirms satisfies every
             // original assertion. This NEVER returns UNSAT/Conflict/Lemma
             // — at worst it reports `found=false` and we keep Unknown.
-            CandidateModelSearch cms(*ir, logic);
-            auto cmsResult = cms.run();
-            if (cmsResult.found) {
-                lastModel_ = cmsResult.model;
-                ret = Result::Sat;
-            } else {
-                if (lastUnknownReason_.empty()) {
-                    lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+            //
+            // FIRST try the theory's currently held model
+            // (theoryManager.getModel()). When a theory stage like NIA
+            // Farkas-Or finds and validator-confirms a SAT model but the
+            // SAT-CDCL engine times out before its decisions trail aligns
+            // with the theory choice, the theory's currentModel_ already
+            // points at a valid witness. Validate it against the original
+            // assertions; accept on Satisfied. Sound: only ever
+            // Unknown -> Sat with a positively-validated model.
+            auto theoryCandidate = theoryManager.getModel();
+            bool theoryFlipped = false;
+            if (theoryCandidate && !theoryCandidate->assignments.empty()) {
+                auto saved = std::move(lastModel_);
+                lastModel_ = theoryCandidate;
+                if (!boolVarVals.empty()) {
+                    for (const auto& [name, val] : boolVarVals) {
+                        lastModel_->assignments.emplace(name, val);
+                    }
                 }
-                ret = Result::Unknown;
+                if (modelPositivelyValidates()) {
+                    ret = Result::Sat;
+                    theoryFlipped = true;
+                } else {
+                    lastModel_ = std::move(saved);
+                }
+            }
+            if (!theoryFlipped) {
+                CandidateModelSearch cms(*ir, logic);
+                auto cmsResult = cms.run();
+                if (cmsResult.found) {
+                    lastModel_ = cmsResult.model;
+                    ret = Result::Sat;
+                } else {
+                    if (lastUnknownReason_.empty()) {
+                        lastUnknownReason_ = "SAT: solve returned Unknown (propagator abort or timeout)";
+                    }
+                    ret = Result::Unknown;
+                }
             }
         }
 
