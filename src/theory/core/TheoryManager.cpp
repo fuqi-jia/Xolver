@@ -174,6 +174,18 @@ void TheoryManager::backtrackToLevel(int level) {
     }
 
     discardSnapshotsAbove(level);
+
+    // Clear the deduced-equality emission cache on backtrack to level 0:
+    // a shared-eq propagation that was emitted once under a deeper trail may
+    // re-establish under a different SAT branch, and without resetting we'd
+    // silently drop the re-emission (lemmaDb already holds the dedup key, but
+    // a stale lemma whose reasons are no longer asserted does not propagate
+    // any literal — the Wisa goal-atom chain stalls on this). Sound: re-emission
+    // produces the same lemma; lemmaDb deduplicates on insert and SAT learns
+    // it again only if novel under the current trail.
+    if (level == 0) {
+        deducedEqCache_.clear();
+    }
 }
 
 std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraints() const {
