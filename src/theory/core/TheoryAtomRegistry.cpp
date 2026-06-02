@@ -24,6 +24,57 @@ void TheoryAtomRegistry::registerParsedTheoryAtom(
     records_.push_back({satVar, theory, false, exprId, payload});
     satVarToIdx_[satVar] = idx;
     observeIfNeeded(satVar);
+
+    // Populate the (poly,rel,rhs) / (linear,rel,rhs) lookup maps so a
+    // later getOrCreate* call for the SAME canonical atom REUSES this
+    // SatVar instead of allocating a fresh one. Without this:
+    //   • Two syntactically-different but semantically-equivalent atoms
+    //     (e.g. `(= 0 (+ a b))` parsed AND `(= (+ a b) 0)` synthesized
+    //     by a linearization cut) get DIFFERENT SatVars.
+    //   • SAT enumerates assignments where one is true and the other
+    //     false; conflict clauses learned for one don't transfer to
+    //     the other.
+    //   • UNSAT proofs that hinge on recognizing two SAT vars as the
+    //     same atom never close.
+    // This is the "same value used different ids" pathology.
+    //
+    // If a canonical key already exists for a DIFFERENT SatVar (rare
+    // for parsed atoms but possible when parser-side preprocessing
+    // collapses different parser nodes to the same canonical poly),
+    // wire `S_new <-> S_existing` so SAT keeps them in lockstep.
+    auto wireEquivalence = [&](SatVar a, SatVar b) {
+        if (!sat_ || a == b) return;
+        sat_->addClause({SatLit::negative(a), SatLit::positive(b)});
+        sat_->addClause({SatLit::positive(a), SatLit::negative(b)});
+    };
+
+    if (std::holds_alternative<PolynomialAtomPayload>(payload)) {
+        const auto& p = std::get<PolynomialAtomPayload>(payload);
+        auto rhsQ = p.rhs.tryAsRational();
+        if (rhsQ) {
+            PolyLookupKey key{p.poly, p.rel, *rhsQ};
+            auto it = polyLookup_.find(key);
+            if (it == polyLookup_.end()) {
+                polyLookup_[key] = idx;
+            } else {
+                const auto& existing = records_[it->second];
+                wireEquivalence(satVar, existing.satVar);
+            }
+        }
+    } else if (std::holds_alternative<LinearAtomPayload>(payload)) {
+        const auto& p = std::get<LinearAtomPayload>(payload);
+        auto rhsQ = p.rhs.tryAsRational();
+        if (rhsQ) {
+            LinearLookupKey key{p.lhs, p.rel, *rhsQ};
+            auto it = linearLookup_.find(key);
+            if (it == linearLookup_.end()) {
+                linearLookup_[key] = idx;
+            } else {
+                const auto& existing = records_[it->second];
+                wireEquivalence(satVar, existing.satVar);
+            }
+        }
+    }
 }
 
 void TheoryAtomRegistry::pinLiteral(SatVar satVar, bool value) {
