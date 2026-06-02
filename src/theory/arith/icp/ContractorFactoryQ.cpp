@@ -3,6 +3,7 @@
 #include "theory/arith/icp/contractors/MonomialMultivariateContractorQ.h"
 #include "theory/arith/icp/contractors/MixedQuadraticContractorQ.h"
 #include "theory/arith/icp/contractors/BilinearContractorQ.h"
+#include "theory/arith/icp/contractors/MultivariateCauchyContractorQ.h"
 
 namespace xolver {
 
@@ -56,11 +57,21 @@ ContractorFactoryQ::BuildResult ContractorFactoryQ::build(
                 }
                 auto v5c = std::make_unique<BilinearContractorQ>(
                     c, kernel, liveVar);
-                if (!v5c->isUsable()) continue;
-                for (const auto& w : v5c->vars()) {
+                if (v5c->isUsable()) {
+                    for (const auto& w : v5c->vars()) {
+                        result.watchers.addWatcher(w, id);
+                    }
+                    result.contractors.push_back(std::move(v5c));
+                    ++id;
+                    continue;
+                }
+                auto v7 = std::make_unique<MultivariateCauchyContractorQ>(
+                    c, kernel, liveVar);
+                if (!v7->isUsable()) continue;
+                for (const auto& w : v7->vars()) {
                     result.watchers.addWatcher(w, id);
                 }
-                result.contractors.push_back(std::move(v5c));
+                result.contractors.push_back(std::move(v7));
                 ++id;
             }
         }
