@@ -3,6 +3,9 @@
 #include <vector>
 #include <unordered_set>
 #include <string>
+#include <map>
+#include <fstream>
+#include <cstdlib>
 
 namespace xolver {
 
@@ -90,6 +93,155 @@ bool validates(const std::vector<StructuralIntegerProbe::Constraint>& constraint
     return true;
 }
 
+// Propagation pass: given a partial pinning + set of sign-pinned-positive vars,
+// walk each Eq constraint, substitute pinned vars, factor out positive
+// sign-pinned common factors (sign-aware division by Q > 0 reduces P=0 to R=0
+// where P = Q*R), and derive any single-variable forced bindings (degree-1
+// univariate or constant-must-be-zero).
+//
+// Returns the augmented pinning, or nullopt on detected infeasibility for
+// this branch (a constant residual that doesn't equal 0, or a univariate
+// derivation that gives a non-positive value when the var is sign-pinned).
+//
+// Implementation is one-pass over each constraint with a fixpoint loop;
+// each iteration may add bindings that enable further factor-and-derive.
+std::optional<std::unordered_map<VarId, mpq_class>> propagateForcedBindings(
+    const std::vector<StructuralIntegerProbe::Constraint>& constraints,
+    PolynomialKernel& kernel,
+    const std::unordered_map<VarId, mpq_class>& initial,
+    const std::unordered_set<VarId>& signPinnedPositive) {
+
+    std::unordered_map<VarId, mpq_class> pinned = initial;
+    bool changed = true;
+    int rounds = 0;
+    constexpr int kMaxRounds = 12;
+    while (changed && rounds++ < kMaxRounds) {
+        changed = false;
+        for (const auto& c : constraints) {
+            if (c.rel != Relation::Eq) continue;
+            if (c.poly == NullPoly) continue;
+
+            // Substitute all currently-pinned vars into the polynomial.
+            PolyId p = c.poly;
+            bool ok = true;
+            for (const auto& [v, val] : pinned) {
+                auto next = kernel.substituteRational(p, v, val);
+                if (!next) { ok = false; break; }
+                p = *next;
+            }
+            if (!ok) continue;
+
+            auto termsOpt = kernel.terms(p);
+            if (!termsOpt) continue;
+            const auto& terms = *termsOpt;
+            if (terms.empty()) continue;
+
+            // Identify free vars in the residual (post-substitution).
+            std::unordered_set<VarId> freeVars;
+            for (const auto& t : terms) {
+                for (const auto& [v, e] : t.powers) freeVars.insert(v);
+            }
+
+            // CASE 1 — residual is constant: relation must hold.
+            if (freeVars.empty()) {
+                bool nonzero = false;
+                for (const auto& t : terms) if (t.coefficient != 0) { nonzero = true; break; }
+                if (nonzero) return std::nullopt;  // const != 0 with Eq → infeasible
+                continue;
+            }
+
+            // CASE 2 — monomial-GCD across all terms is a product of
+            // sign-pinned-positive vars. Divide out, derive R = 0.
+            std::map<VarId, int> gcd;
+            bool gcdInit = false;
+            for (const auto& t : terms) {
+                if (t.coefficient == 0) continue;
+                std::map<VarId, int> tp;
+                for (const auto& [v, e] : t.powers) tp[v] = e;
+                if (!gcdInit) { gcd = std::move(tp); gcdInit = true; continue; }
+                std::map<VarId, int> next;
+                for (const auto& [v, e] : gcd) {
+                    auto it = tp.find(v);
+                    if (it != tp.end()) next[v] = std::min(e, it->second);
+                }
+                gcd = std::move(next);
+                if (gcd.empty()) break;
+            }
+            // Check every gcd factor is sign-pinned positive.
+            bool factorIsPositive = !gcd.empty();
+            for (const auto& [v, e] : gcd) {
+                (void)e;
+                if (!signPinnedPositive.count(v)) { factorIsPositive = false; break; }
+            }
+            if (!factorIsPositive) {
+                // Skip (gcd contains a sign-unknown factor; can't divide).
+            }
+
+            // Build R = P / Q where Q is the GCD monomial. Then proceed
+            // on R for univariate derivation.
+            std::vector<PolynomialKernel::MonomialTerm> rTerms;
+            if (factorIsPositive) {
+                rTerms.reserve(terms.size());
+                for (const auto& t : terms) {
+                    if (t.coefficient == 0) continue;
+                    PolynomialKernel::MonomialTerm r;
+                    r.coefficient = t.coefficient;
+                    std::map<VarId, int> tp;
+                    for (const auto& [v, e] : t.powers) tp[v] = e;
+                    for (const auto& [v, e] : gcd) tp[v] -= e;
+                    for (const auto& [v, e] : tp) {
+                        if (e > 0) r.powers.push_back({v, e});
+                    }
+                    rTerms.push_back(std::move(r));
+                }
+            } else {
+                rTerms.assign(terms.begin(), terms.end());
+            }
+
+            // CASE 3 — residual R is univariate degree-1 in some var v.
+            //   coeff * v + const = 0  ⇒  v = -const / coeff.
+            std::unordered_set<VarId> rFree;
+            for (const auto& t : rTerms) {
+                for (const auto& [v, e] : t.powers) rFree.insert(v);
+            }
+            if (rFree.size() == 1) {
+                VarId v = *rFree.begin();
+                mpz_class coeff(0), constTerm(0);
+                bool simple = true;
+                for (const auto& t : rTerms) {
+                    if (t.coefficient == 0) continue;
+                    if (t.powers.empty()) {
+                        constTerm += t.coefficient;
+                    } else if (t.powers.size() == 1 && t.powers[0].first == v &&
+                               t.powers[0].second == 1) {
+                        coeff += t.coefficient;
+                    } else {
+                        // Higher degree or different shape → not simple linear.
+                        simple = false;
+                        break;
+                    }
+                }
+                if (simple && coeff != 0) {
+                    mpq_class derived(-constTerm, coeff);
+                    derived.canonicalize();
+                    auto it = pinned.find(v);
+                    if (it == pinned.end()) {
+                        // New binding.
+                        if (signPinnedPositive.count(v) && derived <= 0) {
+                            return std::nullopt;  // contradicts positivity
+                        }
+                        pinned[v] = derived;
+                        changed = true;
+                    } else if (it->second != derived) {
+                        return std::nullopt;  // conflicting bindings
+                    }
+                }
+            }
+        }
+    }
+    return pinned;
+}
+
 } // namespace
 
 std::optional<std::unordered_map<VarId, mpq_class>>
@@ -100,6 +252,30 @@ StructuralIntegerProbe::tryProbe(
     int maxBudget) {
 
     if (constraints.empty()) return std::nullopt;
+
+    // Detect sign-pinned-positive vars: constraints of shape
+    //   `var > 0`  ≡  `-var < 0`  ≡  poly = -var, rel = Lt
+    //   `var ≥ ε` for ε > 0 reduces here too.
+    // Captured for the propagation pass's sign-aware factoring division.
+    std::unordered_set<VarId> positiveVars;
+    for (const auto& c : constraints) {
+        if (c.poly == NullPoly) continue;
+        if (c.rel != Relation::Lt && c.rel != Relation::Leq &&
+            c.rel != Relation::Gt && c.rel != Relation::Geq) continue;
+        auto termsOpt = kernel.terms(c.poly);
+        if (!termsOpt || termsOpt->size() != 1) continue;
+        const auto& t = (*termsOpt)[0];
+        if (t.powers.size() != 1 || t.powers[0].second != 1) continue;
+        VarId v = t.powers[0].first;
+        // `-v < 0` ⇒ v > 0;  `-v <= 0` ⇒ v ≥ 0 (treat as positive for our use);
+        // `v > 0` directly.
+        bool isPos = false;
+        if (c.rel == Relation::Lt && t.coefficient < 0) isPos = true;
+        if (c.rel == Relation::Leq && t.coefficient < 0) isPos = true;
+        if (c.rel == Relation::Gt && t.coefficient > 0) isPos = true;
+        if (c.rel == Relation::Geq && t.coefficient > 0) isPos = true;
+        if (isPos) positiveVars.insert(v);
+    }
 
     // Rank vars by max exponent (high-degree vars are likely "structural"
     // in the mgc-class sense: their values force everything else via the
@@ -152,23 +328,60 @@ StructuralIntegerProbe::tryProbe(
         // vars ONE AT A TIME (single-flip sweep).
         if (++trials > maxBudget) return std::nullopt;
 
-        // Build base model: structural vars from structIdx, non-structural
-        // all = 1.
-        std::unordered_map<VarId, mpq_class> base;
+        // Step A — Pin structural vars only (no defaults yet).
+        std::unordered_map<VarId, mpq_class> initial;
         for (size_t i = 0; i < structural.size(); ++i) {
-            base.emplace(structural[i], structCands[structIdx[i]]);
+            initial.emplace(structural[i], structCands[structIdx[i]]);
         }
-        for (VarId v : nonStructural) {
+
+        // Step B — Run propagation: factor + sign-aware divide derives
+        // forced bindings (mgc-class: vv3=2 → gamma0=513 → vv2=2 → ...).
+        auto propagated = propagateForcedBindings(constraints, kernel,
+                                                   initial, positiveVars);
+        // Diag: how many bindings were derived?
+        // Diag only on each new structural pinning (skip the single-flip
+        // sub-trials so the log stays readable).
+        if (std::getenv("XOLVER_NRA_INT_PROBE_DIAG")) {
+            std::ofstream dst("/tmp/int_probe.txt", std::ios::app);
+            dst << "[INT-PROBE] trial=" << trials
+                << " structural={";
+            for (auto& [v, q] : initial) dst << kernel.varName(v) << "=" << q.get_str() << " ";
+            dst << "} prop=";
+            if (!propagated) dst << "INFEASIBLE";
+            else {
+                dst << propagated->size() << " bindings: ";
+                for (auto& [v, q] : *propagated) dst << kernel.varName(v) << "=" << q.get_str() << " ";
+            }
+            dst << "\n";
+            dst.flush();
+        }
+        if (!propagated) {
+            // Branch infeasible (constant !=0 or contradiction). Skip.
+            // Advance below; continue normally.
+        }
+
+        // Step C — Build full model: propagation bindings, plus defaults
+        // (1) for remaining free vars.
+        std::unordered_map<VarId, mpq_class> base;
+        if (propagated) base = *propagated; else base = initial;
+        for (VarId v : allVars) {
             base.emplace(v, mpq_class(1));
         }
 
         if (validates(constraints, kernel, base)) return base;
 
         // Single-flip sweep over non-structural vars and fill candidates.
+        // Skip vars that propagation already pinned (they have a forced value
+        // — flipping them would contradict the substitution chain).
+        std::unordered_set<VarId> pinnedFromProp;
+        if (propagated) {
+            for (const auto& [v, _] : *propagated) pinnedFromProp.insert(v);
+        }
         for (VarId v : nonStructural) {
+            if (pinnedFromProp.count(v)) continue;
             for (const auto& cand : fillCands) {
                 if (++trials > maxBudget) return std::nullopt;
-                if (cand == mpq_class(1)) continue;  // base already tried this
+                if (cand == mpq_class(1)) continue;
                 auto try_ = base;
                 try_[v] = cand;
                 if (validates(constraints, kernel, try_)) return try_;
