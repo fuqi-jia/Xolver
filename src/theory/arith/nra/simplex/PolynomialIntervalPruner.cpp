@@ -872,6 +872,23 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
                     after = substituteMonomialPatternInTerms(current, sf->monomialPattern, replacement);
                 }
                 if (after.empty()) continue;
+                // Soundness-preserving completeness cap: skip substitutions
+                // that would explode the polynomial beyond a useful refutation
+                // size. Dropping a substitution is sound (we just lose
+                // completeness on this path; the constraint is unchanged).
+                // 200 terms is enough for the cvc5 NLext-style refutations we
+                // can actually evaluate via interval arithmetic; beyond that
+                // the interval becomes (-inf,+inf) anyway and we're burning
+                // cycles for nothing. mgc_02 cascade hit 22301 terms = pure
+                // waste.
+                constexpr size_t kMaxFocusedTerms = 200;
+                if (after.size() > kMaxFocusedTerms) {
+                    if (diag) {
+                        std::fprintf(stderr, "[OSF-FOCUS] skip D[%zu]: subst -> %zu terms (cap %zu)\n",
+                                     di, after.size(), kMaxFocusedTerms);
+                    }
+                    continue;
+                }
                 current = std::move(after);
                 for (auto r : derived[di].reasons) {
                     if (reasonsSet.insert(rkey(r)).second) reasons.push_back(r);
@@ -1185,11 +1202,17 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
             // CHAINED substitution: also substitute into previously derived
             // constraints. This is what unlocks mgc_02-style multi-step
             // cascades (gamma0 -> eq2_subst -> solve lambda1 -> eq5_subst).
+            //
+            // CORRECTNESS: tryAddSubst calls addDerived which can grow the
+            // `derived` vector and invalidate references. Snapshot terms +
+            // reasons BEFORE the call (same fix shape as S-pair loop above).
             size_t derivedSnap = derived.size();
             for (size_t dj = 0; dj < derivedSnap; ++dj) {
                 if (dj == di) continue;
                 if (derived[dj].rel != Relation::Eq) continue;
-                tryAddSubst(derived[dj].terms, derived[dj].reasons, "D", dj);
+                std::vector<Term> dj_terms_snap = derived[dj].terms;
+                std::vector<SatLit> dj_reasons_snap = derived[dj].reasons;
+                tryAddSubst(dj_terms_snap, dj_reasons_snap, "D", dj);
                 if (eagerConflict) return *eagerConflict;
             }
         }
