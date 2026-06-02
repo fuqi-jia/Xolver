@@ -1115,6 +1115,24 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         constraints[fset[rng() % fset.size()]];
                     std::vector<std::string> fcvars =
                         kernel_.variables(fc.poly);
+                    // LS-SMART-Z7 (master 2026-06-02). Align random walk
+                    // with the deterministic move-search at L1144: skip
+                    // pinned/derived vars whose values are fixed by linear
+                    // equalities. A random nudge to a pinned var would
+                    // just violate the equality it's pinned to without
+                    // helping the falsified atom — wasted budget. When
+                    // every var is pinned, fall back to the original list
+                    // so we still take SOME step. Gate-free: pinned/derived
+                    // are non-empty only when XOLVER_NIA_LS_PIN_EQ is on.
+                    if (!pinned.empty() || !derived.empty()) {
+                        std::vector<std::string> filtered;
+                        filtered.reserve(fcvars.size());
+                        for (const auto& fv : fcvars) {
+                            if (pinned.count(fv) || derived.count(fv)) continue;
+                            filtered.push_back(fv);
+                        }
+                        if (!filtered.empty()) fcvars = std::move(filtered);
+                    }
                     if (!fcvars.empty()) {
                         const std::string& v = fcvars[rng() % fcvars.size()];
                         long nudge = (long)(rng() % 21) - 10;
