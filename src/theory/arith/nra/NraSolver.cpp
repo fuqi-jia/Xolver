@@ -89,6 +89,15 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.osf-prune",
         stageWrap("osf-prune", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageOsfPrune(db, e); })));
+    // XOLVER_NRA_INT_PROBE — moved BEFORE linearize so value-split hints
+    // (`(= vv3 2) | (< vv3 2) | (> vv3 2)`) hit SAT BEFORE linearize's
+    // LRA sibling resolves its first model. In the SAT branch that picks
+    // `= 2`, LRA's model includes vv3=2 from the start → linearize cuts
+    // get tangented around an informative base-var point instead of
+    // around all-zero, which is what made the loop bail at round=1.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.int-probe-early",
+        stageWrap("int-probe-early", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -102,12 +111,9 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
-    // XOLVER_NRA_INT_PROBE (default OFF): structural-integer probe for
-    // mgc-class SAT. Runs adjacent to subtropical — both are cheap
-    // pre-CDCAC fast paths; either can short-circuit to SAT.
-    reasoners_.push_back(std::make_unique<CallbackReasoner>(
-        "nra.int-probe",
-        stageWrap("int-probe", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
+    // (XOLVER_NRA_INT_PROBE now registered EARLY above, before linearize.
+    //  Per-var dedup via intProbeValueSplitDone_ makes a second registration
+    //  here harmless but redundant; removed.)
     // Sprint 3 (#69): LS pre-pass now runs from NraSolver::check() override
     // ABOVE the Reasoner pipeline so it executes BEFORE CDCAC. The old
     // stageLocalSearch stage was reach-limited (CDCAC hung at Standard before
