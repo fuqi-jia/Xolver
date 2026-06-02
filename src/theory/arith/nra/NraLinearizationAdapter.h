@@ -31,6 +31,17 @@ public:
         const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
         TheoryLemmaStorage& lemmaDb);
 
+    // NEW: same as runLinearizer but seeds BoundStore with sign-only bounds
+    // derived from positivity assertions. Required to make Family 0 sign-only
+    // cuts in MonomialBound/McCormick actually fire when LRA sibling has no
+    // model yet (first round) and every var is sign-pinned via assertions
+    // like `(< (- var) 0)`. signMap is `var-name -> +1 (positive) / -1
+    // (negative)`. Vars not in the map get no bounds (same as before).
+    LinearizationResult runLinearizerWithSignBounds(
+        const std::vector<NormalizedNiaConstraint>& nonlinearConstraints,
+        const std::unordered_map<std::string, int>& signMap,
+        TheoryLemmaStorage& lemmaDb);
+
     // XOLVER_NRA_LINEARIZE model-driven overload: the sibling's candidate
     // relaxation model (base var name -> rational value) seeds tight point
     // bounds [v, v] for every base var, so McCormick envelopes and the square

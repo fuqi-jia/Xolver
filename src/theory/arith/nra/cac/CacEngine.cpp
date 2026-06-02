@@ -199,6 +199,77 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         cellsList.push_back(std::move(newCopy));
     };
 
+    // XOLVER_NRA_CAC_SAT_SAMPLE — small-rational sweep at SHALLOW levels
+    // before the projection cover loop. We try fixed small int + dyadic
+    // candidates at the current variable; for leaf, validate directly; for
+    // non-leaf, recurse into the child. To avoid K^N explosion we restrict
+    // the sweep to the top ≤ kMaxSweepDepth levels (default 2): at deeper
+    // levels we trust projection. Budget bounds total recursive trials.
+    //
+    // Why: projection-driven samples are algebraic (cell-boundary roots).
+    // mgc-class SAT models live at small dyadic rationals (vv3=2, theta=1/256,
+    // ...). z3 nlsat finds these in 0.13s precisely because it tries them
+    // directly. We mirror that lightweight hint without rebuilding nlsat.
+    static const bool satSampleEnabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_SAT_SAMPLE");
+        return e && *e && *e != '0';
+    }();
+    static const int kMaxSweepDepth = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_SAT_SAMPLE_DEPTH");
+        if (e && *e) { int v = std::atoi(e); if (v > 0) return v; }
+        return 2;  // top 2 variables only — keeps cost O(K^2 × cells)
+    }();
+    if (satSampleEnabled && level < kMaxSweepDepth) {
+        if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
+            std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
+            std::string vname = std::string(kernel_->varName(var));
+            st << "[SAT-SAMPLE-ENTER] level=" << level << " var=" << var
+               << "(" << vname << ")"
+               << " isLeaf=" << isLeaf << "\n";
+            st.flush();
+        }
+        static const std::vector<mpq_class> kSatCands = {
+            mpq_class(1), mpq_class(2), mpq_class(3),
+            mpq_class(1, 2), mpq_class(1, 4),
+            mpq_class(1, 256), mpq_class(1, 1024), mpq_class(1, 524288),
+        };
+        for (const auto& cand : kSatCands) {
+            RealAlg s_i = RealAlg::fromRational(cand);
+            sample.push(var, s_i);
+
+            if (isLeaf) {
+                SamplePoint prefixLeaf = sample;
+                prefixLeaf.pop();
+                bool allHold = true;
+                for (size_t ci = 0; ci < cons_.size(); ++ci) {
+                    const LeafCellResult lr = characterizeLeafAtom(
+                        algebra_, kernel_, cons_[ci].poly, cons_[ci].rel,
+                        prefixLeaf, var, s_i);
+                    if (!lr.supported ||
+                        lr.truth == LeafTruth::UniformFalse ||
+                        !lr.holdsAtSample) {
+                        allHold = false; break;
+                    }
+                }
+                if (allHold) {
+                    satModel_ = sample;
+                    sample.pop();
+                    out.status = CacStatus::Sat;
+                    return out;
+                }
+            } else {
+                SamplePoint childSample = sample;
+                CoverOut child = getUnsatCover(level + 1, childSample);
+                if (child.status == CacStatus::Sat) {
+                    sample.pop();
+                    out.status = CacStatus::Sat;
+                    return out;
+                }
+            }
+            sample.pop();
+        }
+    }
+
     while (auto sOpt = cov.sampleUncovered()) {   // nullopt ⇒ covering gap-free
         if (++iterCount > cfg_.maxCellsPerLevel) { out.status = CacStatus::Unknown; markIncomplete("cell-budget"); return out; }
         bool convExact = true;

@@ -7,6 +7,7 @@
 #include "theory/arith/nra/NraLinearizationAdapter.h"     // XOLVER_NRA_LINEARIZE cut-feeder
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
+#include "theory/arith/nra/StructuralIntegerProbe.h"          // XOLVER_NRA_INT_PROBE
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
@@ -88,6 +89,15 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.osf-prune",
         stageWrap("osf-prune", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageOsfPrune(db, e); })));
+    // XOLVER_NRA_INT_PROBE — moved BEFORE linearize so value-split hints
+    // (`(= vv3 2) | (< vv3 2) | (> vv3 2)`) hit SAT BEFORE linearize's
+    // LRA sibling resolves its first model. In the SAT branch that picks
+    // `= 2`, LRA's model includes vv3=2 from the start → linearize cuts
+    // get tangented around an informative base-var point instead of
+    // around all-zero, which is what made the loop bail at round=1.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.int-probe-early",
+        stageWrap("int-probe-early", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -101,6 +111,9 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.subtropical",
         stageWrap("subtropical", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSubtropical(db, e); })));
+    // (XOLVER_NRA_INT_PROBE now registered EARLY above, before linearize.
+    //  Per-var dedup via intProbeValueSplitDone_ makes a second registration
+    //  here harmless but redundant; removed.)
     // Sprint 3 (#69): LS pre-pass now runs from NraSolver::check() override
     // ABOVE the Reasoner pipeline so it executes BEFORE CDCAC. The old
     // stageLocalSearch stage was reach-limited (CDCAC hung at Standard before
@@ -181,6 +194,7 @@ void NraSolver::onReset() {
     interfaceEqualities_.clear();
     interfaceDisequalities_.clear();
     signSplitDone_.clear();   // XOLVER_NRA_SIGN_SPLIT: fresh per solve
+    intProbeValueSplitDone_.clear();  // XOLVER_NRA_INT_PROBE: fresh per solve
     satFastModel_.reset();  // XOLVER_NRA_SUBTROPICAL
     deducedSharedEqEmitted_.clear();  // #43: dedup window scoped to current SAT
     satCacAlgModel_.reset();  // #55 Phase B: CAC algebraic SAT model stale
@@ -1121,6 +1135,124 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
     return std::nullopt;  // no base validated: fall through to CDCAC
 }
 
+// XOLVER_NRA_INT_PROBE — structural-integer probe (mgc-class SAT-fast-path).
+// Sibling of stageSubtropical. Enumerates small integer + dyadic candidates
+// for the highest-exponent variables (which z3-nlsat's decision heuristic
+// gravitates toward on mgc-style problems), validates each candidate via
+// the kernel sign (invariant 1). Pure NRA only; combination/N-O mode falls
+// through because interface (dis)equalities live outside presolveConstraints_.
+std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+    if (std::getenv("XOLVER_NRA_INT_PROBE_DIAG")) {
+        std::ofstream dst("/tmp/int_probe.txt", std::ios::app);
+        dst << "[INT-PROBE] called effort=" << (int)effort
+            << " presolve=" << presolveConstraints_.size() << "\n";
+        dst.flush();
+    }
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_INT_PROBE");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    // Run at FIRST effort entry (typically Standard) — CDCAC may not survive
+    // to Full effort on mgc-class. Sound: a kernel-validated rational point
+    // is SAT at any effort (invariant 1). One-shot per solve.
+    (void)effort;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // No one-shot lock: each round the probe re-attempts; the value-split
+    // hint dedup is per-var in intProbeValueSplitDone_ (cleared on reset).
+
+    bool diagOn = (std::getenv("XOLVER_NRA_INT_PROBE_DIAG") != nullptr);
+    std::ofstream st;
+    if (diagOn) {
+        st.open("/tmp/int_probe.txt", std::ios::app);
+        st << "[INT-PROBE] enter; constraints=" << presolveConstraints_.size() << "\n";
+        st.flush();
+    }
+
+    std::vector<StructuralIntegerProbe::Constraint> cons;
+    cons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) {
+            if (diagOn) { st << "[INT-PROBE] NullPoly bail\n"; st.flush(); }
+            return std::nullopt;
+        }
+        cons.push_back({c.poly, c.rel});
+    }
+
+    auto modelOpt = StructuralIntegerProbe::tryProbe(cons, *kernel_);
+    if (!modelOpt) {
+        if (diagOn) { st << "[INT-PROBE] no model found; trying value-split hint\n"; st.flush(); }
+        // Hint path: even when full enum doesn't validate a model, the
+        // structural variable (highest exponent) and small-integer candidate
+        // are likely SAT decisions. Emit a tautological 3-way value-split
+        // lemma `(< v c) | (= v c) | (> v c)` so SAT branches on the
+        // hypothesis the way nlsat's decision heuristic does. This is the
+        // same pattern as stageNraSignSplit — biasing the SAT decision tree
+        // without committing to the guess.
+        if (registry_) {
+            // Pick highest-exponent variable that hasn't been hinted yet.
+            std::unordered_map<VarId, int> maxExp;
+            for (const auto& c : presolveConstraints_) {
+                if (c.poly == NullPoly) continue;
+                auto termsOpt = kernel_->terms(c.poly);
+                if (!termsOpt) continue;
+                for (const auto& term : *termsOpt) {
+                    for (const auto& [vid, exp] : term.powers) {
+                        if (exp > maxExp[vid]) maxExp[vid] = exp;
+                    }
+                }
+            }
+            VarId pick = NullVar;
+            int bestExp = 1;
+            for (const auto& [v, e] : maxExp) {
+                if (e <= bestExp) continue;
+                if (intProbeValueSplitDone_.count(v)) continue;
+                pick = v; bestExp = e;
+            }
+            if (pick != NullVar) {
+                // Try candidate value c = 2 first (matches z3 nlsat's
+                // preference on this benchmark family for high-exp vars).
+                static const mpq_class kHintValue(2);
+                PolyId vPoly = kernel_->mkVar(pick);
+                SatLit ltL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Lt, kHintValue, TheoryId::LRA);
+                SatLit eqL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Eq, kHintValue, TheoryId::LRA);
+                SatLit gtL = registry_->getOrCreatePolynomialAtom(
+                    vPoly, Relation::Gt, kHintValue, TheoryId::LRA);
+                if (ltL.var != 0 && eqL.var != 0 && gtL.var != 0) {
+                    TheoryLemma hint{{eqL, ltL, gtL}};
+                    intProbeValueSplitDone_.insert(pick);
+                    if (diagOn) {
+                        st << "[INT-PROBE] HINT emitted: ("
+                           << kernel_->varName(pick)
+                           << " = " << kHintValue.get_str()
+                           << ") | (< " << kHintValue.get_str()
+                           << ") | (> " << kHintValue.get_str() << ")\n";
+                        st.flush();
+                    }
+                    return TheoryCheckResult::mkLemma(std::move(hint));
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    if (diagOn) {
+        st << "[INT-PROBE] SAT model size=" << modelOpt->size() << "\n";
+        for (const auto& [v, q] : *modelOpt) {
+            st << "  " << kernel_->varName(v) << " = " << q.get_str(10) << "\n";
+        }
+        st.flush();
+    }
+    satFastModel_ = std::move(*modelOpt);
+    return TheoryCheckResult::consistent();
+}
+
 // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF). Rational-only local
 // repair pre-pass. Builds the active polynomial constraint set, runs the
 // NraLocalSearch WalkSAT-style search, and on a satisfying rational candidate
@@ -1471,11 +1603,23 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
                 ++it->second.second;
             }
         }
+        // XOLVER_NRA_CAC_VAR_ORDER_DIR: "asc" (default, classic Collins —
+        // low-degree first) or "desc" (high-degree first — matches z3-nlsat
+        // decision heuristic; needed for SAT-sample sweep to hit structural
+        // vars like vv3^9 at level 0 instead of being projected last).
+        static const bool descOrder = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_VAR_ORDER_DESC");
+            return e && *e && *e != '0';
+        }();
         std::sort(varOrder.begin(), varOrder.end(), [&](VarId a, VarId b) {
             const auto& sa = scores[a];
             const auto& sb = scores[b];
-            if (sa.first != sb.first) return sa.first < sb.first;
-            if (sa.second != sb.second) return sa.second < sb.second;
+            if (sa.first != sb.first) {
+                return descOrder ? (sa.first > sb.first) : (sa.first < sb.first);
+            }
+            if (sa.second != sb.second) {
+                return descOrder ? (sa.second > sb.second) : (sa.second < sb.second);
+            }
             return a < b;   // stable tiebreaker on source VarId
         });
     }
@@ -1992,11 +2136,36 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
         if (normalizedOpt) {
             nNonlinearNormalized = static_cast<int>(normalizedOpt->size());
             // Tangent the cuts at the CURRENT (possibly perturbed) model point.
-            // When the sibling has no model yet, fall back to the bound-free
-            // linearizer (nonneg + abstraction).
+            // When the sibling has no model yet, fall back to the sign-bounded
+            // linearizer (positivity assertions derive one-sided bounds → Family
+            // 0 sign-only cuts fire) instead of the empty-bound path which
+            // emitted ZERO sign cuts for sign-pinned mgc-class formulas.
+            std::unordered_map<std::string, int> signMap;
+            for (const auto& c : presolveConstraints_) {
+                if (c.poly == NullPoly) continue;
+                if (c.rel != Relation::Lt && c.rel != Relation::Leq &&
+                    c.rel != Relation::Gt && c.rel != Relation::Geq) continue;
+                auto termsOpt = kernel_->terms(c.poly);
+                if (!termsOpt || termsOpt->size() != 1) continue;
+                const auto& t = (*termsOpt)[0];
+                if (t.powers.size() != 1 || t.powers[0].second != 1) continue;
+                std::string vn = std::string(kernel_->varName(t.powers[0].first));
+                int sign = 0;
+                if (c.rel == Relation::Lt && t.coefficient < 0) sign = 1;
+                else if (c.rel == Relation::Leq && t.coefficient < 0) sign = 1;
+                else if (c.rel == Relation::Gt && t.coefficient > 0) sign = 1;
+                else if (c.rel == Relation::Geq && t.coefficient > 0) sign = 1;
+                else if (c.rel == Relation::Lt && t.coefficient > 0) sign = -1;
+                else if (c.rel == Relation::Leq && t.coefficient > 0) sign = -1;
+                else if (c.rel == Relation::Gt && t.coefficient < 0) sign = -1;
+                else if (c.rel == Relation::Geq && t.coefficient < 0) sign = -1;
+                if (sign != 0) signMap[vn] = sign;
+            }
             auto lr = modelFilled
                 ? linAdapter_->runLinearizerAtModel(*normalizedOpt, linModel, lemmaDb)
-                : linAdapter_->runLinearizer(*normalizedOpt, lemmaDb);
+                : (signMap.empty()
+                    ? linAdapter_->runLinearizer(*normalizedOpt, lemmaDb)
+                    : linAdapter_->runLinearizerWithSignBounds(*normalizedOpt, signMap, lemmaDb));
             if (lr.status == LinearizationStatus::Lemma) {
                 for (auto& item : lr.lemmas) {
                     if (!lemmaDb.contains(item.lemma)) {
