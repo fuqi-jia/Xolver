@@ -487,7 +487,21 @@ std::optional<TheoryCheckResult> NraSolver::stageIcpProbe(TheoryLemmaStorage& /*
     for (const auto& c : presolveConstraints_) {
         if (c.poly == NullPoly) continue;
         auto vars = kernel_->variables(c.poly);
-        if (vars.size() != 1) continue;  // V1: univariate only
+
+        if (vars.size() >= 2) {
+            // Multivariate: feed to V4 (the factory will discard non-V4
+            // shapes). No bound-seeding — V4 reads the rest-vars' boxes
+            // populated by the univariate linear pass.
+            IcpConstraint ic;
+            ic.expr = std::nullopt;
+            ic.poly = c.poly;
+            ic.rel = c.rel;
+            ic.reason = c.reason;
+            ic.owner = TheoryId::NRA;
+            nonlinearAtoms.push_back(ic);
+            continue;
+        }
+        if (vars.size() != 1) continue;  // 0 vars (constant): handled by presolve
 
         const std::string& v = vars[0];
         auto degOpt = kernel_->degree(c.poly, v);
