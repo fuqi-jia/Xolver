@@ -1597,11 +1597,23 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
                 ++it->second.second;
             }
         }
+        // XOLVER_NRA_CAC_VAR_ORDER_DIR: "asc" (default, classic Collins —
+        // low-degree first) or "desc" (high-degree first — matches z3-nlsat
+        // decision heuristic; needed for SAT-sample sweep to hit structural
+        // vars like vv3^9 at level 0 instead of being projected last).
+        static const bool descOrder = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_VAR_ORDER_DESC");
+            return e && *e && *e != '0';
+        }();
         std::sort(varOrder.begin(), varOrder.end(), [&](VarId a, VarId b) {
             const auto& sa = scores[a];
             const auto& sb = scores[b];
-            if (sa.first != sb.first) return sa.first < sb.first;
-            if (sa.second != sb.second) return sa.second < sb.second;
+            if (sa.first != sb.first) {
+                return descOrder ? (sa.first > sb.first) : (sa.first < sb.first);
+            }
+            if (sa.second != sb.second) {
+                return descOrder ? (sa.second > sb.second) : (sa.second < sb.second);
+            }
             return a < b;   // stable tiebreaker on source VarId
         });
     }
