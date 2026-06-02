@@ -2,6 +2,7 @@
 #include "theory/arith/icp/contractors/RelationContractorQ.h"
 #include "theory/arith/icp/contractors/MonomialMultivariateContractorQ.h"
 #include "theory/arith/icp/contractors/MixedQuadraticContractorQ.h"
+#include "theory/arith/icp/contractors/BilinearContractorQ.h"
 
 namespace xolver {
 
@@ -41,15 +42,25 @@ ContractorFactoryQ::BuildResult ContractorFactoryQ::build(
                     }
                     result.contractors.push_back(std::move(v4));
                     ++id;
-                    continue;  // V5b doesn't co-fire when V4 fits
+                    continue;  // mutually exclusive with V5b/V5c
                 }
                 auto v5b = std::make_unique<MixedQuadraticContractorQ>(
                     c, kernel, liveVar);
-                if (!v5b->isUsable()) continue;
-                for (const auto& w : v5b->vars()) {
+                if (v5b->isUsable()) {
+                    for (const auto& w : v5b->vars()) {
+                        result.watchers.addWatcher(w, id);
+                    }
+                    result.contractors.push_back(std::move(v5b));
+                    ++id;
+                    continue;
+                }
+                auto v5c = std::make_unique<BilinearContractorQ>(
+                    c, kernel, liveVar);
+                if (!v5c->isUsable()) continue;
+                for (const auto& w : v5c->vars()) {
                     result.watchers.addWatcher(w, id);
                 }
-                result.contractors.push_back(std::move(v5b));
+                result.contractors.push_back(std::move(v5c));
                 ++id;
             }
         }

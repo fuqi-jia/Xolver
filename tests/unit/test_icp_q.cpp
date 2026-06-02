@@ -163,7 +163,10 @@ TEST_CASE("ICP-Q: Lt soundness — x^2 - 4 < 0 with x in [2,3], polyInterval [0,
     CHECK(r.status == IcpStatus::Conflict);
 }
 
-TEST_CASE("ICP-Q: multi-var atom is skipped by factory (V1 univariate-only)") {
+TEST_CASE("ICP-Q: pure bilinear x·y = 0 routes through V5c (one contractor per live var)") {
+    // Originally documented "multi-var skipped by V1", but V5c now covers
+    // the bilinear shape — each variable becomes a live-var candidate and
+    // produces a BilinearContractorQ. Total: 2 (one for x as live, one for y).
     Fixture f;
     VarId y = f.kernel->getOrCreateVar("y");
     PolyId yp = f.kernel->mkVar(y);
@@ -171,7 +174,7 @@ TEST_CASE("ICP-Q: multi-var atom is skipped by factory (V1 univariate-only)") {
     auto c = f.cstr(xy, Relation::Eq, 200);
 
     auto built = ContractorFactoryQ::build({c}, *f.kernel);
-    CHECK(built.contractors.empty());  // multi-var rejected before contractor build
+    CHECK(built.contractors.size() == 2);
 }
 
 TEST_CASE("ICP-Q: factory builds RelationContractorQ for univariate degree-2") {

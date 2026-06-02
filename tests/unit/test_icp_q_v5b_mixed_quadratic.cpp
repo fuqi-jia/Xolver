@@ -316,7 +316,7 @@ TEST_CASE("ICP-Q V5b: -x² + xy + 1 = 0 with y ∈ [0, 0] brackets x to [-1, 1]"
 
 // -- Factory routing ---------------------------------------------------------
 
-TEST_CASE("ICP-Q V5b: factory routes x²+xy+1 multivariate to V5b (1 contractor for x; declines for y)") {
+TEST_CASE("ICP-Q V5b/V5c: factory routes x²+xy+1 (V5b for x, V5c for y)") {
     Fixture f;
     PolyId xy = f.kernel->mul(f.xp, f.yp);
     PolyId poly = f.kernel->add(f.kernel->add(f.kernel->pow(f.xp, 2), xy),
@@ -324,11 +324,11 @@ TEST_CASE("ICP-Q V5b: factory routes x²+xy+1 multivariate to V5b (1 contractor 
     auto c = f.cstr(poly, Relation::Leq, 200);
 
     auto built = ContractorFactoryQ::build({c}, *f.kernel);
-    // For x: V4 declines (x·y mixed term), V5b accepts → 1 contractor.
-    // For y: V4 declines (no pure y^d term — y only in xy), V5b also
-    //   declines (no live^2 for y) → 0 contractors.
-    // Total: 1.
-    CHECK(built.contractors.size() == 1);
+    // For x: V4 declines (x·y mixed term), V5b accepts (live^2 + live^1 mixed).
+    // For y: V4 declines, V5b declines (no y² term), V5c accepts
+    //   (y has live^1 via xy, no live^2 ⇒ bilinear shape).
+    // Total: 2.
+    CHECK(built.contractors.size() == 2);
 }
 
 #endif  // XOLVER_HAS_LIBPOLY
