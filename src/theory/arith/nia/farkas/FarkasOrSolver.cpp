@@ -57,16 +57,20 @@ SupportTable FarkasOrSolver::buildTable(
             for (std::size_t k = 0; k < block.branches.size(); ++k) {
                 auto cands = p1_.solveBranch(block.branches[k], B, t.ctVars);
                 if (cands.empty()) continue;
-                // Keep the first candidate (lowest-support primitive ray).
-                SupportRow row;
-                row.blockIdx = (int)j;
-                row.branchIdx = (int)k;
-                for (const auto& [vn, val] : B) row.bTuple[vn] = val;
-                row.candidate = cands.front();
-                row.candidate.branchIndex = (int)k;
-                t.byBlockBranch[{(int)j, (int)k}].push_back(t.rows.size());
-                t.rows.push_back(std::move(row));
-                ++t.feasibleTotal;
+                // Keep ALL candidates: P1 may emit one per residual-grid
+                // point, each carrying a distinct residValues map. The
+                // CSP layer chooses among them at solve time.
+                for (auto& cand : cands) {
+                    SupportRow row;
+                    row.blockIdx = (int)j;
+                    row.branchIdx = (int)k;
+                    for (const auto& [vn, val] : B) row.bTuple[vn] = val;
+                    row.candidate = std::move(cand);
+                    row.candidate.branchIndex = (int)k;
+                    t.byBlockBranch[{(int)j, (int)k}].push_back(t.rows.size());
+                    t.rows.push_back(std::move(row));
+                    ++t.feasibleTotal;
+                }
             }
         }
         // Increment idx odometer-style.
@@ -258,6 +262,7 @@ FarkasOrSolver::solveCsp(const SupportTable& table,
                         if (matches) {
                             a.rayPerBlock[j] = row.candidate.lambdaRay;
                             a.lambdaNamesPerBlock[j] = row.candidate.lambdaNames;
+                            a.residPerBlock[j] = row.candidate.residValues;
                             // Intersect CT bounds.
                             for (const auto& bd : row.candidate.ctBounds) {
                                 if (!bd.hasInterval) continue;
@@ -430,6 +435,7 @@ FarkasOrSolver::enumerateCsp(const SupportTable& table,
                         if (eq) {
                             a.rayPerBlock[j] = row.candidate.lambdaRay;
                             a.lambdaNamesPerBlock[j] = row.candidate.lambdaNames;
+                            a.residPerBlock[j] = row.candidate.residValues;
                             for (const auto& bd : row.candidate.ctBounds) {
                                 if (!bd.hasInterval) continue;
                                 auto fit = s2.ctFinite.find(bd.ctVar);

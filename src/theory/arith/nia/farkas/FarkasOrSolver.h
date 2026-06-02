@@ -45,6 +45,12 @@ struct SupportRow {
     // ACTUALLY appear in this branch's atoms — not all bounded globals).
     std::map<std::string, mpz_class> bTuple;
     BranchCandidate candidate;
+    // For non-empty residValues, the row carries the (B, resid) pair that
+    // P1 used to make the branch feasible. The CSP layer treats residuals
+    // as branch-local — different rows of the same (block, branch) may
+    // have different resid values, and matching against a chosen B-tuple
+    // picks the row whose B matches; the row's resid then feeds back to
+    // the assembler.
 };
 
 struct SupportTable {
@@ -70,6 +76,11 @@ struct FarkasOrAssignment {
     std::map<int, std::vector<std::string>> lambdaNamesPerBlock;
     std::map<std::string, std::pair<mpq_class, mpq_class>> ctInterval;  // per CT var
     std::map<std::string, std::pair<bool, bool>> ctFinite;
+    // Per-block residual co-var values committed by the chosen support row.
+    // These get merged into the IntegerModel by the assembler. Different
+    // blocks may write to overlapping residual var names; we keep the LAST
+    // write (assembler merges into a single map).
+    std::map<int, std::unordered_map<std::string, mpz_class>> residPerBlock;
 };
 
 class FarkasOrSolver {

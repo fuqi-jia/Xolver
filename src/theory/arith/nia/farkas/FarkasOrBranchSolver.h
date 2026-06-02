@@ -60,6 +60,16 @@ struct BranchCandidate {
     std::vector<mpz_class>   lambdaRay;          // primitive non-negative integer ray
     int scaleT = 1;                              // multiplier; final λ = scaleT · ray
     std::vector<CtBound> ctBounds;               // one per branch inequality
+    // Residual co-var assignments used to make the branch feasible. These
+    // are non-λ non-B non-CT vars (e.g. Stroeder's RFN1_main_x, RFN1_CT)
+    // that appear in branch atoms; we grid-enumerate them and the assembler
+    // must commit to these specific values for the model to validate.
+    std::unordered_map<std::string, mpz_class> residValues;
+    // Trivial ray flag: the all-λ=0 candidate (equalities hold by constant
+    // matching at this (B, resid); strict ineqs hold via residual+constant
+    // alone, no λ contribution). Useful for branches whose strict ineq has
+    // a free residual slack that already meets the > 0 threshold.
+    bool trivialRay = false;
 };
 
 class FarkasOrBranchSolver {
@@ -68,9 +78,25 @@ public:
 
     // Top-level: solve a branch under bounded assignment B. Returns
     // candidates (possibly empty if no non-trivial ray exists).
+    //
+    // Two-tier strategy:
+    //   1. Identify residual co-vars (non-λ non-B non-CT vars appearing
+    //      in branch atoms — e.g. Stroeder's RFN1_main_x, RFN1_main_y,
+    //      RFN1_CT inside the lam6+lam4+lam5 flattened branch). Grid-
+    //      enumerate them.
+    //   2. For each (B, resid) combo, call solveBranchCore. Also try the
+    //      "trivial ray" λ=0 candidate when equalities and strict ineqs
+    //      hold via residual + constant alone.
     std::vector<BranchCandidate> solveBranch(
         const FarkasBranch& branch,
         const std::unordered_map<std::string, mpz_class>& B,
+        const std::vector<std::string>& ctVars) const;
+
+    // Inner solver: original support-enumeration logic over a fixed
+    // (B ∪ resid) substitution. Caller is responsible for grid iteration.
+    std::vector<BranchCandidate> solveBranchCore(
+        const FarkasBranch& branch,
+        const std::unordered_map<std::string, mpz_class>& BAugmented,
         const std::vector<std::string>& ctVars) const;
 
 private:

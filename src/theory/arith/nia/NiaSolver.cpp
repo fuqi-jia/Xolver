@@ -1700,19 +1700,29 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     if (!enabled) return std::nullopt;
     if (coreIr_ == nullptr) return std::nullopt;
 
-    // Run the structural detector. Cheap; bails immediately if no blocks.
-    farkas::FarkasOrDetector det(*coreIr_);
-    auto profile = det.detect();
-    if (!profile.good()) return std::nullopt;
-
-    // Build support table; bail if too large for the P2a prototype (P2b
-    // production lane will handle larger instances via lazy GAC).
-    // 500 keeps the per-stage cost roughly bounded: buildTable is
-    // O(B-product × #blocks × #branches × P1 cost), and 500 × few × few
-    // × few-microseconds = a few ms per stage call. p21258-style cases
-    // (≤ 9² = 81 B-tuples) fire; p20185-style (3⁶ = 729) get skipped.
+    // Memoize the detector profile + support table across stage calls.
+    // The CoreIr doesn't change during the check loop, so we can build
+    // once. With residual co-var grid enumeration this is the dominant
+    // cost (Stroeder p21258: ~100ms first time, 0ms thereafter).
+    static thread_local const CoreIr* cachedIr = nullptr;
+    static thread_local farkas::FarkasProfile cachedProfile;
+    static thread_local farkas::SupportTable cachedTable;
+    if (cachedIr != coreIr_) {
+        farkas::FarkasOrDetector det(*coreIr_);
+        cachedProfile = det.detect();
+        if (!cachedProfile.good()) {
+            cachedIr = coreIr_;
+            cachedTable = farkas::SupportTable{};
+            return std::nullopt;
+        }
+        farkas::FarkasOrSolver solverBuild(*coreIr_);
+        cachedTable = solverBuild.buildTable(cachedProfile, /*maxBProduct=*/500);
+        cachedIr = coreIr_;
+    }
+    if (!cachedProfile.good()) return std::nullopt;
+    const auto& profile = cachedProfile;
+    const auto& table = cachedTable;
     farkas::FarkasOrSolver solver(*coreIr_);
-    auto table = solver.buildTable(profile, /*maxBProduct=*/500);
     static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
@@ -1722,6 +1732,23 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage&, TheoryEffort) {
     traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
                + " feasibleTotal=" + std::to_string(table.feasibleTotal)
                + " rows=" + std::to_string(table.rows.size()));
+    if (trace) {
+        for (std::size_t i = 0; i < profile.blocks.size(); ++i) {
+            const auto& blk = profile.blocks[i];
+            std::string line = "  block[" + std::to_string(i) + "] branches="
+                + std::to_string(blk.branches.size());
+            traceWrite(line);
+            for (std::size_t j = 0; j < blk.branches.size(); ++j) {
+                const auto& br = blk.branches[j];
+                std::string bl = "    branch[" + std::to_string(j) + "] λ=";
+                for (const auto& l : br.lambdas) bl += l + ",";
+                bl += " eqs=" + std::to_string(br.equalities.size())
+                    + " ineqs=" + std::to_string(br.inequalities.size())
+                    + " unclass=" + std::to_string(br.unclassified.size());
+                traceWrite(bl);
+            }
+        }
+    }
     if (trace) {
         for (std::size_t i = 0; i < table.rows.size(); ++i) {
             const auto& r = table.rows[i];

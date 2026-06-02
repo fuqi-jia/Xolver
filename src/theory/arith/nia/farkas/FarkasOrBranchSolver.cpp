@@ -659,8 +659,155 @@ CtBound FarkasOrBranchSolver::deriveCtBound(
     return bound;
 }
 
-// ---- Top-level solveBranch ----
+// ---- Identify residual co-vars in a branch ----
+namespace {
+// Walk all atoms of a branch and collect Variable names that are NOT
+// λ vars, NOT in B, and NOT in ctVars. These are the residual co-vars
+// that we grid-enumerate in the top-level solveBranch.
+std::unordered_set<std::string> collectResidualCoVars(
+    const CoreIr& ir,
+    const FarkasBranch& branch,
+    const std::unordered_map<std::string, mpz_class>& B,
+    const std::vector<std::string>& ctVars)
+{
+    std::unordered_set<std::string> lambdaSet(branch.lambdas.begin(), branch.lambdas.end());
+    std::unordered_set<std::string> ctSet(ctVars.begin(), ctVars.end());
+    std::unordered_set<std::string> result;
+    std::function<void(ExprId)> walk;
+    walk = [&](ExprId id) {
+        const auto& e = ir.get(id);
+        if (e.kind == Kind::Variable) {
+            if (auto vn = varName(ir, id)) {
+                if (lambdaSet.count(*vn)) return;
+                if (B.count(*vn)) return;
+                if (ctSet.count(*vn)) return;
+                result.insert(*vn);
+            }
+            return;
+        }
+        for (ExprId c : e.children) walk(c);
+    };
+    for (ExprId atom : branch.equalities)   walk(atom);
+    for (ExprId atom : branch.inequalities) walk(atom);
+    return result;
+}
+} // namespace
+
 std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranch(
+    const FarkasBranch& branch,
+    const std::unordered_map<std::string, mpz_class>& B,
+    const std::vector<std::string>& ctVars) const
+{
+    auto residCoVars = collectResidualCoVars(ir_, branch, B, ctVars);
+    if (residCoVars.empty()) {
+        // No residuals — single call to the inner solver.
+        return solveBranchCore(branch, B, ctVars);
+    }
+    // Cap residual count; otherwise the grid blows up.
+    if (residCoVars.size() > 4) return {};
+
+    // Adaptive grid: widen for ≤3 residuals to include ±4 (matches the
+    // common Stroeder bounded-global range). Cap total ≤ ~3000 combos.
+    std::vector<mpz_class> grid;
+    if (residCoVars.size() <= 2) {
+        for (long k : {0L, 1L, -1L, 2L, -2L, 3L, -3L, 4L, -4L}) grid.emplace_back(k);
+    } else if (residCoVars.size() == 3) {
+        // 9^3 = 729 — needed to catch linked residuals like RFN1_main_x=-4
+        // forced by Stroeder's lam4+lam5 cross-equation system.
+        for (long k : {0L, 1L, -1L, 2L, -2L, 3L, -3L, 4L, -4L}) grid.emplace_back(k);
+    } else { // 4
+        for (long k : {0L, 1L, -1L, 2L, -2L}) grid.emplace_back(k);
+    }
+
+    std::vector<std::string> residNames(residCoVars.begin(), residCoVars.end());
+    std::sort(residNames.begin(), residNames.end());   // determinism
+
+    std::vector<BranchCandidate> out;
+    std::vector<std::size_t> idx(residNames.size(), 0);
+    while (true) {
+        // Build augmented B = original B ∪ current residual values.
+        auto augB = B;
+        std::unordered_map<std::string, mpz_class> residVals;
+        for (std::size_t i = 0; i < residNames.size(); ++i) {
+            augB[residNames[i]] = grid[idx[i]];
+            residVals[residNames[i]] = grid[idx[i]];
+        }
+        auto cands = solveBranchCore(branch, augB, ctVars);
+        for (auto& c : cands) {
+            c.residValues = residVals;
+            out.push_back(std::move(c));
+        }
+        // Also try the trivial-ray candidate: all-λ=0, equalities hold
+        // by constant matching at this (B, resid), strict ineqs hold via
+        // residual+constant contribution alone.
+        bool trivialOk = true;
+        for (ExprId atom : branch.equalities) {
+            auto row = extractEqRow(atom, branch.lambdas, augB);
+            if (!row || row->constant != 0) { trivialOk = false; break; }
+        }
+        if (trivialOk) {
+            std::vector<IneqRow> ineqRows;
+            ineqRows.reserve(branch.inequalities.size());
+            for (ExprId atom : branch.inequalities) {
+                auto row = extractIneqRow(atom, branch.lambdas, augB, ctVars);
+                if (!row) { trivialOk = false; break; }
+                ineqRows.push_back(std::move(*row));
+            }
+            if (trivialOk) {
+                // Build trivial-ray candidate (all λ = 0) with CT bounds.
+                std::vector<mpz_class> zeroRay(branch.lambdas.size(), mpz_class(0));
+                BranchCandidate cand;
+                cand.lambdaNames = branch.lambdas;
+                cand.lambdaRay = zeroRay;
+                cand.scaleT = 1;
+                cand.trivialRay = true;
+                cand.residValues = residVals;
+                cand.ctBounds.reserve(ineqRows.size());
+                for (const auto& row : ineqRows) {
+                    cand.ctBounds.push_back(deriveCtBound(row, zeroRay, branch.lambdas));
+                }
+                // Reject if any ctBound is infeasible (empty interval or
+                // unsatisfiable trivial residual).
+                bool feasible = true;
+                for (const auto& b : cand.ctBounds) {
+                    if (b.hasInterval && b.ctLoFinite && b.ctHiFinite
+                        && b.ctLo > b.ctHi) { feasible = false; break; }
+                    // Trivial-residual unsat: residualCoefs empty AND
+                    // residualConst violates residualRel.
+                    if (!b.hasInterval) {
+                        bool ctEmpty = b.residualCoefs.empty()
+                            || std::all_of(b.residualCoefs.begin(), b.residualCoefs.end(),
+                                [](const auto& p){ return p.second == 0; });
+                        if (ctEmpty) {
+                            if (b.residualRel == CtBound::Rel::Geq && b.residualConst < 0) {
+                                feasible = false; break;
+                            }
+                            if (b.residualRel == CtBound::Rel::Leq && b.residualConst > 0) {
+                                feasible = false; break;
+                            }
+                            if (b.residualRel == CtBound::Rel::Eq && b.residualConst != 0) {
+                                feasible = false; break;
+                            }
+                        }
+                    }
+                }
+                if (feasible) out.push_back(std::move(cand));
+            }
+        }
+        // Increment odometer.
+        std::size_t pos = 0;
+        while (pos < idx.size()) {
+            ++idx[pos];
+            if (idx[pos] < grid.size()) break;
+            idx[pos] = 0;
+            ++pos;
+        }
+        if (pos == idx.size()) break;
+    }
+    return out;
+}
+
+std::vector<BranchCandidate> FarkasOrBranchSolver::solveBranchCore(
     const FarkasBranch& branch,
     const std::unordered_map<std::string, mpz_class>& B,
     const std::vector<std::string>& ctVars) const

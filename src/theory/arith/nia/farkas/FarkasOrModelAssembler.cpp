@@ -102,6 +102,15 @@ FarkasOrModelAssembler::assemble(const FarkasProfile& profile,
         M[ctVar] = pick;
     }
 
+    // 3b. Residual co-vars committed by each block's chosen branch (RFN1_*
+    //     in Stroeder). Apply BEFORE defaulting to 0 so these values stick.
+    for (const auto& [blockIdx, residMap] : assignment.residPerBlock) {
+        (void)blockIdx;
+        for (const auto& [v, val] : residMap) {
+            M[v] = val;
+        }
+    }
+
     // 4. Residual vars: every Variable referenced in the formula but not yet
     //    assigned. Default to 0 (best effort).
     auto allVars = collectFreeVars(profile);
