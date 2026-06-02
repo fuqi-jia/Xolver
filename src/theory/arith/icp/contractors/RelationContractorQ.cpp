@@ -118,8 +118,29 @@ ContractorResultQ RelationContractorQ::contract(ReasonedBoxQ& box) {
                 {}
             };
         }
-        // V3 already intersects with xBox internally — change detection is a
-        // plain identity check on the bounds.
+        if (newI.lo != xInterval.lo || newI.hi != xInterval.hi) {
+            box.narrow(var, newI, reasons);
+            BoundUpdateQ update{var, newI, reasons};
+            return ContractorResultQ{
+                IcpStatus::DomainUpdate,
+                std::nullopt,
+                {update}
+            };
+        }
+    }
+
+    // V3b — monomial + constant via rational d-th root (d ≥ 3, c ≠ 0).
+    // Same return-contract as V3a (interval already intersected with xBox).
+    auto monConstOpt = tryNarrowMonomialPlusConst(coeffs, constraint_.rel, xInterval);
+    if (monConstOpt) {
+        const IntervalQ& newI = *monConstOpt;
+        if (newI.isEmpty()) {
+            return ContractorResultQ{
+                IcpStatus::Conflict,
+                TheoryConflict{reasons},
+                {}
+            };
+        }
         if (newI.lo != xInterval.lo || newI.hi != xInterval.hi) {
             box.narrow(var, newI, reasons);
             BoundUpdateQ update{var, newI, reasons};
@@ -308,6 +329,116 @@ std::optional<IntervalQ> RelationContractorQ::tryNarrowPureMonomial(
             default:
                 return std::nullopt;
         }
+    }
+}
+
+std::optional<IntervalQ> RelationContractorQ::tryNarrowMonomialPlusConst(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const {
+    if (coeffs.size() < 4) return std::nullopt;  // d ≥ 3 (V2 handles d=2)
+    if (coeffs[0] == 0) return std::nullopt;
+
+    // Shape: a·x^d + c (intermediate coefficients are all zero).
+    for (size_t i = 1; i + 1 < coeffs.size(); ++i) {
+        if (coeffs[i] != 0) return std::nullopt;
+    }
+    const mpz_class& c = coeffs.back();
+    if (c == 0) return std::nullopt;  // V3a's territory
+
+    unsigned d = static_cast<unsigned>(coeffs.size() - 1);
+    const mpz_class& a = coeffs[0];
+
+    // Normalize a > 0 by flipping rel when negating.
+    bool aPositive = (a > 0);
+    Relation r = aPositive ? rel : flipSign(rel);
+
+    // T = -c/a (the same expression in both branches; we build it from
+    // positive components to keep mpq's invariant that den > 0).
+    mpq_class T = aPositive ? mpq_class(-c, a)
+                            : mpq_class(c, -a);
+    T.canonicalize();
+
+    const mpq_class kZero(0);
+    const IntervalQ kEmpty{mpq_class(1), mpq_class(0)};
+
+    // Outward d-th root helpers that handle arbitrary-sign T. For T < 0 with
+    // odd d (the only meaningful case), negation flips floor and ceil.
+    auto rootCeil = [d](const mpq_class& t) -> mpq_class {
+        if (t >= 0) return mpqRootCeil(t, d);
+        return -mpqRootFloor(-t, d);
+    };
+    auto rootFloor = [d](const mpq_class& t) -> mpq_class {
+        if (t >= 0) return mpqRootFloor(t, d);
+        return -mpqRootCeil(-t, d);
+    };
+
+    bool dEven = (d % 2 == 0);
+
+    if (dEven) {
+        if (T < 0) {
+            // x^d ≥ 0 > T: Leq/Lt/Eq unsat; Geq/Gt/Neq vacuous.
+            switch (r) {
+                case Relation::Leq:
+                case Relation::Lt:
+                case Relation::Eq:
+                    return kEmpty;
+                default:
+                    return std::nullopt;
+            }
+        }
+        // T ≥ 0 — bidirectional bound via T^(1/d).
+        switch (r) {
+            case Relation::Leq:
+            case Relation::Lt: {
+                mpq_class rt = rootCeil(T);  // upper bound rounded UP
+                mpq_class negRt(-rt);        // materialize the expression
+                mpq_class lo = std::max(xBox.lo, negRt);
+                mpq_class hi = std::min(xBox.hi, rt);
+                if (lo > hi) return kEmpty;
+                return IntervalQ{lo, hi};
+            }
+            case Relation::Geq:
+            case Relation::Gt:
+                // |x| ≥ T^(1/d) is a union of two unbounded sets ⇒ skip.
+                return std::nullopt;
+            case Relation::Eq:
+                // {-T^(1/d), +T^(1/d)} ⇒ not a single interval ⇒ skip.
+                return std::nullopt;
+            case Relation::Neq:
+                return std::nullopt;
+            default:
+                return std::nullopt;
+        }
+    }
+
+    // d odd: x^d is strictly monotone.
+    switch (r) {
+        case Relation::Leq:
+        case Relation::Lt: {
+            mpq_class rt = rootCeil(T);  // closed over-approx of strict for Lt
+            mpq_class hi = std::min(xBox.hi, rt);
+            if (xBox.lo > hi) return kEmpty;
+            return IntervalQ{xBox.lo, hi};
+        }
+        case Relation::Geq:
+        case Relation::Gt: {
+            mpq_class rt = rootFloor(T);
+            mpq_class lo = std::max(xBox.lo, rt);
+            if (lo > xBox.hi) return kEmpty;
+            return IntervalQ{lo, xBox.hi};
+        }
+        case Relation::Eq: {
+            mpq_class rLo = rootFloor(T);
+            mpq_class rHi = rootCeil(T);
+            mpq_class lo = std::max(xBox.lo, rLo);
+            mpq_class hi = std::min(xBox.hi, rHi);
+            if (lo > hi) return kEmpty;
+            return IntervalQ{lo, hi};
+        }
+        case Relation::Neq:
+            return std::nullopt;
+        default:
+            return std::nullopt;
     }
 }
 

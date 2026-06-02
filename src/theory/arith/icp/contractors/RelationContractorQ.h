@@ -58,6 +58,27 @@ private:
     std::optional<IntervalQ> tryNarrowPureMonomial(
         const std::vector<mpz_class>& coeffs, Relation rel,
         const IntervalQ& xBox) const;
+
+    // V3b: monomial + constant `a·x^d + c rel 0` with d ≥ 3, c ≠ 0, all
+    // intermediate coefficients zero. (V3a covers c == 0; V2 covers d == 2.)
+    //
+    // Normalize to `x^d rel' T` where T = -c/a and rel' = rel (if a > 0) or
+    // sign-flipped rel (if a < 0). Then case-split on (d parity, sign of T):
+    //   - d even, T < 0: x^d ≥ 0 > T ⇒ Leq/Lt/Eq unsat; Geq/Gt/Neq vacuous.
+    //   - d even, T ≥ 0: |x| ≤ T^(1/d) for Leq/Lt (bidirectional narrowing);
+    //                    |x| ≥ T^(1/d) for Geq/Gt (union, skipped).
+    //   - d odd, any T: x ≤ T^(1/d) for Leq/Lt (closed over-approx for Lt);
+    //                   x ≥ T^(1/d) for Geq/Gt; x ∈ [floor, ceil] for Eq.
+    //
+    // Rational d-th roots come from mpqRootFloor/mpqRootCeil (outward-rounded
+    // via mpz_root on a scaled radicand). For odd d and T < 0, the helpers
+    // are called on |T| with floor/ceil swapped before negation.
+    //
+    // Same return contract as V3a: nullopt = not applicable, empty interval
+    // = conflict, non-empty interval = result already intersected with xBox.
+    std::optional<IntervalQ> tryNarrowMonomialPlusConst(
+        const std::vector<mpz_class>& coeffs, Relation rel,
+        const IntervalQ& xBox) const;
 };
 
 } // namespace xolver

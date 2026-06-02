@@ -62,6 +62,13 @@ struct Fixture {
         return kernel->mul(kernel->mkConst(mpq_class(a)), xd);
     }
 
+    // Build poly = a·x^d + c (monomial + constant, for V3b tests).
+    PolyId monomialPlus(long a, uint32_t d, long c) {
+        PolyId result = monomial(a, d);
+        if (c != 0) result = kernel->add(result, kernel->mkConst(mpq_class(c)));
+        return result;
+    }
+
     static SatLit lit(unsigned id) { return SatLit::positive(id); }
 
     ReasonedBoxQ box(const mpq_class& lo, const mpq_class& hi, unsigned r) {
@@ -470,16 +477,12 @@ TEST_CASE("ICP-Q V3a: x^4 ≤ 0 with x ∈ [2,5] (0 ∉ box) is unsat") {
     CHECK(hasCstr);
 }
 
-TEST_CASE("ICP-Q V3a: non-monomial with degree ≥ 3 falls through (V3 not applicable)") {
-    // x³ - 1 ≤ 0 is degree 3 but has a nonzero constant ⇒ tryNarrowPureMonomial
-    // returns nullopt. V1's polyInterval over [-5, 5] is x³ ∈ [-125, 125], minus
-    // 1 ⇒ [-126, 124]; Leq: lo ≤ 0, no V1 conflict. So we expect NoChange and
-    // the box unchanged — confirming V3a doesn't over-reach to mixed polynomials.
+TEST_CASE("ICP-Q V3a: non-monomial with degree ≥ 3 routes to V3b (covered below)") {
+    // x³ - 1 ≤ 0 has a nonzero constant ⇒ V3a returns nullopt; V3b takes
+    // over. T = 1, d = 3 odd, rootCeil(1, 3) = 1 ⇒ narrow upper to 1.
     Fixture f;
     auto b = f.box(-5, 5, 100);
-    PolyId p = f.kernel->add(f.monomial(1, 3),
-                              f.kernel->mkConst(mpq_class(-1)));
-    auto c = f.cstr(p, Relation::Leq, 200);
+    auto c = f.cstr(f.monomialPlus(1, 3, -1), Relation::Leq, 200);
 
     auto built = ContractorFactoryQ::build({c}, *f.kernel);
     IcpConfig cfg;
@@ -490,7 +493,156 @@ TEST_CASE("ICP-Q V3a: non-monomial with degree ≥ 3 falls through (V3 not appli
     auto ri = b.get("x");
     REQUIRE(ri.has_value());
     CHECK(ri->interval.lo == mpq_class(-5));
-    CHECK(ri->interval.hi == mpq_class(5));
+    CHECK(ri->interval.hi == mpq_class(1));
+}
+
+// -- V3b monomial + constant (rational d-th root) ----------------------------
+
+TEST_CASE("ICP-Q V3b: x³ - 8 ≤ 0 narrows upper to 2 (exact cube root)") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 3, -8), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-10));
+    CHECK(ri->interval.hi == mpq_class(2));
+}
+
+TEST_CASE("ICP-Q V3b: x³ + 8 ≤ 0 narrows upper to -2 (odd d, T < 0)") {
+    // Negative T exercises the odd-d sign-flip path:
+    //   rootCeil(-8, 3) = -mpqRootFloor(8, 3) = -2.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 3, 8), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-10));
+    CHECK(ri->interval.hi == mpq_class(-2));
+}
+
+TEST_CASE("ICP-Q V3b: x⁴ - 16 ≤ 0 narrows to [-2, 2] (even d, T > 0)") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 4, -16), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-2));
+    CHECK(ri->interval.hi == mpq_class(2));
+}
+
+TEST_CASE("ICP-Q V3b: x⁴ + 1 ≤ 0 is unsat (even d, T < 0)") {
+    // V1 catches first (polyInterval [1, 10001], lo > 0); V3b would also
+    // emit empty via the even-d T<0 case. Test asserts the outcome.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 4, 1), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::Conflict);
+}
+
+TEST_CASE("ICP-Q V3b: x³ = 27 narrows to {3} (Eq, exact cube root)") {
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 3, -27), Relation::Eq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(3));
+    CHECK(ri->interval.hi == mpq_class(3));
+}
+
+TEST_CASE("ICP-Q V3b: x³ - 10 ≤ 0 narrows upper to outward 10^(1/3)") {
+    // 10^(1/3) ≈ 2.154; rootCeil yields a rational strictly above it.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(1, 3, -10), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-10));
+    // Soundness: hi³ ≥ 10 (outward UP).
+    CHECK(ri->interval.hi * ri->interval.hi * ri->interval.hi >= mpq_class(10));
+    // Tightness sanity: hi ≤ 3 (≪ a trivial upper bound).
+    CHECK(ri->interval.hi <= mpq_class(3));
+}
+
+TEST_CASE("ICP-Q V3b: -x³ + 8 ≤ 0 normalizes to x ≥ 2 (a < 0 sign flip)") {
+    // a = -1, flip Leq → Geq. T = 8/1 = 8. rootFloor(8, 3) = 2. Narrow
+    // lower to 2.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    auto c = f.cstr(f.monomialPlus(-1, 3, 8), Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(2));
+    CHECK(ri->interval.hi == mpq_class(10));
+}
+
+TEST_CASE("ICP-Q V3b: middle-coeff nonzero (x³ + 2x ≤ 0) falls through") {
+    // coeffs = [1, 0, 2, 0]; coeffs[2] != 0 ⇒ V3b returns nullopt.
+    // V1's polyInterval is wide ([-1020, 1020]) so it also doesn't fire.
+    Fixture f;
+    auto b = f.box(-10, 10, 100);
+    PolyId xCubed = f.kernel->pow(f.xpoly, 3);
+    PolyId twoX = f.kernel->mul(f.kernel->mkConst(mpq_class(2)), f.xpoly);
+    PolyId p = f.kernel->add(xCubed, twoX);
+    auto c = f.cstr(p, Relation::Leq, 200);
+
+    auto built = ContractorFactoryQ::build({c}, *f.kernel);
+    IcpConfig cfg;
+    IcpEngineQ engine;
+    auto r = engine.run(built.contractors, built.watchers, b, cfg);
+
+    CHECK(r.status == IcpStatus::NoChange);
+    auto ri = b.get("x");
+    REQUIRE(ri.has_value());
+    CHECK(ri->interval.lo == mpq_class(-10));
+    CHECK(ri->interval.hi == mpq_class(10));
 }
 
 #endif  // XOLVER_HAS_LIBPOLY

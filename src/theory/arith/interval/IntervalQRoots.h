@@ -20,4 +20,20 @@ namespace xolver {
 mpq_class mpqSqrtFloor(const mpq_class& p, unsigned scaleBits = 32);
 mpq_class mpqSqrtCeil(const mpq_class& p, unsigned scaleBits = 32);
 
+// Sound rational d-th root with outward rounding, d ≥ 1.
+//
+// Domain: nonneg rationals only. For odd d, callers needing T^(1/d) with
+// T < 0 should compute -mpqRootFloor(-T, d) (for ceil) or -mpqRootCeil(-T, d)
+// (for floor) themselves — negation flips floor/ceil.
+//
+// Soundness contract:
+//   mpqRootFloor(p, d) ≤ p^(1/d)    (largest q so q^d ≤ p, within precision)
+//   mpqRootCeil(p, d)  ≥ p^(1/d)    (smallest q so q^d ≥ p, within precision)
+//
+// Precision: scaleBits same meaning as for sqrt — independent of soundness.
+// d == 1 returns p exactly (degenerate case). d == 2 matches mpqSqrt*.
+
+mpq_class mpqRootFloor(const mpq_class& p, unsigned d, unsigned scaleBits = 32);
+mpq_class mpqRootCeil(const mpq_class& p, unsigned d, unsigned scaleBits = 32);
+
 } // namespace xolver
