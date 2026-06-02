@@ -323,6 +323,14 @@ private:
     // XOLVER_NIA_LS_RW_HUB. Mirrors the existing violation-core clause
     // weighting pattern (cviol[i] * weight[i]).
     bool rwHub_ = false;
+    // LS-SMART-Z9 (master 2026-06-02). Power-of-2 ladder nudge in the
+    // random-walk diversification branch. Default nudge is uniform
+    // [-10,+10], which is too small to escape on instances whose
+    // satisfying values are in the 100s+. Ladder samples from
+    // ±{1,2,4,8,16,32,64,128} with geometric bias (smaller more likely)
+    // so it covers both fine and coarse escapes. Default-OFF
+    // XOLVER_NIA_LS_RW_LADDER.
+    bool rwLadder_ = false;
     std::unordered_map<std::string, mpz_class> minSeen_;
     std::unordered_map<std::string, mpz_class> maxSeen_;
     std::unordered_set<std::string> unboundedVars_;

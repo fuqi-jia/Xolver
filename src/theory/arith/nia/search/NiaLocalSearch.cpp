@@ -124,6 +124,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LS_RW_HUB"); e && *e && *e != '0') {
         rwHub_ = true;
     }
+    if (const char* e = std::getenv("XOLVER_NIA_LS_RW_LADDER"); e && *e && *e != '0') {
+        rwLadder_ = true;
+    }
 }
 
 void NiaLocalSearch::setPartitionHint(const PartitionResult& pr) {
@@ -1165,8 +1168,25 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             vChoice = fcvars[rng() % fcvars.size()];
                         }
                         const std::string& v = vChoice;
-                        long nudge = (long)(rng() % 21) - 10;
-                        if (nudge == 0) nudge = 1;
+                        // LS-SMART-Z9: power-of-2 ladder nudge. Default
+                        // uniform [-10,+10] is too small to escape when
+                        // SAT values live in 100s+; ladder samples ±2^k
+                        // for k ∈ [0,7] with geometric bias (k=0 most
+                        // likely, k=7 rarest). Sign uniform random.
+                        long nudge;
+                        if (rwLadder_) {
+                            // Geometric pick of magnitude bit:
+                            //   tail = rng()'s low byte → count trailing 1s
+                            //   capped at 7 → magnitude ∈ {1,2,4,...,128}
+                            unsigned r = (unsigned)(rng() & 0xff);
+                            int k = 0;
+                            while (k < 7 && (r & (1u << k))) ++k;
+                            long mag = 1L << k;
+                            nudge = (rng() & 1u) ? mag : -mag;
+                        } else {
+                            nudge = (long)(rng() % 21) - 10;
+                            if (nudge == 0) nudge = 1;
+                        }
                         mpz_class newVal = clampVar(v, cur[v] + nudge);
                         commitMove(v, newVal);
                     }
