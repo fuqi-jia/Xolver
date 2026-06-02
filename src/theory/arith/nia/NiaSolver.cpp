@@ -1755,7 +1755,20 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             return std::nullopt;
         }
         farkas::FarkasOrSolver solverBuild(*coreIr_);
-        cachedTable = solverBuild.buildTable(cachedProfile, /*maxBProduct=*/500);
+        // Cap on the B cartesian product (number of bounded-tuple
+        // points the table-builder will enumerate). 500 was the
+        // initial conservative pick that floored p21258 (~81 tuples)
+        // while skipping p20185-class cases that other NIA stages
+        // solve fast. Larger Stroeder cases (Ex2.11 p21280+, 4Nested)
+        // have 4+ Or-blocks with 7-λ branches and a denser bounded
+        // domain — their B-product runs into the thousands. Bump to
+        // 8000: still tractable per-call (~ms-scale with the augmented
+        // Gauss + memoization), and unlocks more Stroeder cases.
+        //   override:  XOLVER_NIA_FARKAS_OR_MAX_B
+        std::size_t maxB = 8000;
+        if (const char* e = std::getenv("XOLVER_NIA_FARKAS_OR_MAX_B"))
+            maxB = (std::size_t)std::atoi(e);
+        cachedTable = solverBuild.buildTable(cachedProfile, maxB);
         cachedIr = coreIr_;
     }
     if (!cachedProfile.good()) return std::nullopt;

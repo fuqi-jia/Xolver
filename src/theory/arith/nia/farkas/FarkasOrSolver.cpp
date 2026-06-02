@@ -34,43 +34,100 @@ SupportTable FarkasOrSolver::buildTable(
     t.ctVars.assign(profile.unboundedCT.begin(), profile.unboundedCT.end());
     std::sort(t.ctVars.begin(), t.ctVars.end());
 
-    // Compute cartesian-product size; bail if too large for P2a.
+    // Compute cartesian-product size. For small B-products (≤ maxBProduct)
+    // we enumerate every tuple. For LARGE products (e.g. Stroeder Ex2.11
+    // p21280 has 6 bounded vars × 9 values = 531k tuples), enumerate ONLY
+    // sparse B-tuples (≤ kMaxNonZero non-zero entries). Stroeder-class
+    // Farkas certificates only succeed at sparse B (most components must
+    // be zero for the equality system to have integer solutions), so a
+    // sparsity filter loses very few real candidates while staying within
+    // the per-call work budget.
     std::size_t productSize = 1;
+    bool overflow = false;
     for (const auto& v : t.boundedVarOrder) {
         productSize *= t.initialBDomain[v].size();
-        if (productSize > maxBProduct) {
-            return SupportTable{};   // signal: too large
+        if (productSize > maxBProduct) { overflow = true; break; }
+    }
+    constexpr std::size_t kMaxNonZero = 2;  // sparse-mode: at most K non-zero coords
+    const bool sparseMode = overflow;
+    if (sparseMode) {
+        // Estimate sparse-mode work: Σ_{k=0..K} C(n,k) × (D-1)^k where
+        // n = #bounded-vars, D = avg domain size. Cap at 32× maxBProduct
+        // — generous since each P1 call is fast.
+        std::size_t sparseEstimate = 1;  // the all-zero tuple
+        std::size_t n = t.boundedVarOrder.size();
+        for (std::size_t k = 1; k <= kMaxNonZero && k <= n; ++k) {
+            std::size_t comb = 1;
+            for (std::size_t i = 0; i < k; ++i) comb = comb * (n - i) / (i + 1);
+            std::size_t nzVals = 1;
+            for (const auto& v : t.boundedVarOrder) {
+                std::size_t d = t.initialBDomain[v].size();
+                nzVals = std::max(nzVals, (d > 0 ? d - 1 : 0));
+            }
+            std::size_t term = comb;
+            for (std::size_t i = 0; i < k; ++i) term *= nzVals;
+            sparseEstimate += term;
         }
+        if (sparseEstimate > 32 * maxBProduct) return SupportTable{};
     }
 
-    // Enumerate all B-tuples and call P1 for every (block, branch, B).
+    // Enumerate B-tuples and call P1 for every (block, branch, B).
     std::vector<std::size_t> idx(t.boundedVarOrder.size(), 0);
-    bool done = t.boundedVarOrder.empty();   // edge case: no bounded vars
+    bool done = t.boundedVarOrder.empty();
     do {
         std::unordered_map<std::string, mpz_class> B;
+        std::size_t nonZeroCount = 0;
         for (std::size_t i = 0; i < t.boundedVarOrder.size(); ++i) {
             const auto& v = t.boundedVarOrder[i];
             B[v] = t.initialBDomain[v][idx[i]];
+            if (B[v] != 0) ++nonZeroCount;
         }
-        for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
-            const auto& block = profile.blocks[j];
-            for (std::size_t k = 0; k < block.branches.size(); ++k) {
-                auto cands = p1_.solveBranch(block.branches[k], B, t.ctVars);
-                if (cands.empty()) continue;
-                // Keep ALL candidates: P1 may emit one per residual-grid
-                // point, each carrying a distinct residValues map. The
-                // CSP layer chooses among them at solve time.
-                for (auto& cand : cands) {
-                    SupportRow row;
-                    row.blockIdx = (int)j;
-                    row.branchIdx = (int)k;
-                    for (const auto& [vn, val] : B) row.bTuple[vn] = val;
-                    row.candidate = std::move(cand);
-                    row.candidate.branchIndex = (int)k;
-                    t.byBlockBranch[{(int)j, (int)k}].push_back(t.rows.size());
-                    t.rows.push_back(std::move(row));
-                    ++t.feasibleTotal;
+        // Sparsity filter (only in sparseMode).
+        if (sparseMode && nonZeroCount > kMaxNonZero) {
+            // Skip — advance odometer and continue.
+            std::size_t pos = 0;
+            while (pos < idx.size()) {
+                ++idx[pos];
+                if (idx[pos] < t.initialBDomain[t.boundedVarOrder[pos]].size()) break;
+                idx[pos] = 0;
+                ++pos;
+            }
+            if (pos == idx.size()) done = true;
+            continue;
+        }
+        // Cap total table rows to keep downstream CSP work bounded.
+        // sparseMode floods (many B-tuples × many residual-grid points)
+        // and the CSP can't usefully explore millions of rows.
+        constexpr std::size_t kMaxTableRows = 8000;
+        if (t.rows.size() >= kMaxTableRows) {
+            // Skip generating more rows but keep advancing the odometer
+            // (the early-exit below handles termination).
+        } else {
+            // Per (block, branch, B) cap to spread coverage broadly.
+            constexpr std::size_t kMaxRowsPerCell = 4;
+            for (std::size_t j = 0; j < profile.blocks.size(); ++j) {
+                const auto& block = profile.blocks[j];
+                for (std::size_t k = 0; k < block.branches.size(); ++k) {
+                    auto cands = p1_.solveBranch(block.branches[k], B, t.ctVars);
+                    if (cands.empty()) continue;
+                    std::size_t emitted = 0;
+                    for (auto& cand : cands) {
+                        if (emitted >= kMaxRowsPerCell) break;
+                        SupportRow row;
+                        row.blockIdx = (int)j;
+                        row.branchIdx = (int)k;
+                        for (const auto& [vn, val] : B) row.bTuple[vn] = val;
+                        row.candidate = std::move(cand);
+                        row.candidate.branchIndex = (int)k;
+                        t.byBlockBranch[{(int)j, (int)k}].push_back(t.rows.size());
+                        t.rows.push_back(std::move(row));
+                        ++t.feasibleTotal;
+                        ++emitted;
+                        if (t.rows.size() >= kMaxTableRows) break;
+                    }
+                    if (t.rows.size() >= kMaxTableRows) break;
                 }
+                if (t.rows.size() >= kMaxTableRows) break;
             }
         }
         // Increment idx odometer-style.
