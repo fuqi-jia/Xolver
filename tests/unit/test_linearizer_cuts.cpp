@@ -151,3 +151,112 @@ TEST_CASE("Linearizer: SquareCut with sample outside bounds — graceful") {
     // remains a valid lower bound (tangent of convex function is always below).
     CHECK(cuts.size() == 1);
 }
+
+// =============================================================================
+// MonomialBoundGenerator — Phase 2 cuts on compound monomials.
+// =============================================================================
+#include "theory/arith/linearizer/MonomialBoundGenerator.h"
+
+static AuxTerm mkAuxHigher(const std::string& name,
+                            std::vector<std::pair<VarId,int>> powers) {
+    AuxTerm t;
+    t.name = name;
+    t.vid = NullVar;
+    t.poly = NullPoly;
+    t.key.kind = NonlinearKind::HigherMixed;
+    t.key.powers = std::move(powers);
+    return t;
+}
+
+static MonomialBoundGenerator::Factor mkF(const std::string& name, int exp,
+                                            const mpq_class& lo, const mpq_class& hi,
+                                            std::optional<mpq_class> mv = std::nullopt) {
+    MonomialBoundGenerator::Factor f;
+    f.var = name;
+    f.exponent = exp;
+    f.bounds = mkBounds(lo, hi);
+    f.modelVal = mv;
+    return f;
+}
+
+TEST_CASE("MonomialBound: <2 factors -> no cuts") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_x3", {{VarId{1}, 3}});
+    std::vector<MonomialBoundGenerator::Factor> fs{ mkF("x", 3, 1, 2) };
+    MonomialBoundGenerator::Options opt;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    CHECK(cuts.empty());
+}
+
+TEST_CASE("MonomialBound: interval-only emits 2 cuts on tight positive box") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_xyz", {{VarId{1},1},{VarId{2},1},{VarId{3},1}});
+    std::vector<MonomialBoundGenerator::Factor> fs{
+        mkF("x", 1, 1, 2), mkF("y", 1, 1, 2), mkF("z", 1, 1, 2)
+    };
+    MonomialBoundGenerator::Options opt;
+    opt.emitPivotCorner = false;
+    opt.emitTangentPlane = false;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    CHECK(cuts.size() == 2);   // lower + upper
+}
+
+TEST_CASE("MonomialBound: tangent plane lower bound on all-positive box") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_xy", {{VarId{1},1},{VarId{2},1}});
+    std::vector<MonomialBoundGenerator::Factor> fs{
+        mkF("x", 1, mpq_class(1), mpq_class(2), mpq_class(1)),
+        mkF("y", 1, mpq_class(1), mpq_class(2), mpq_class(1))
+    };
+    MonomialBoundGenerator::Options opt;
+    opt.emitInterval = false;
+    opt.emitPivotCorner = false;
+    opt.emitTangentPlane = true;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    CHECK(cuts.size() == 1);
+    // Encoded as "-s + y*x + x*y + (xy - x*y - y*x) <= 0", here m=(1,1) so
+    // T(x,y) = 1 + 1*(x-1) + 1*(y-1) = x + y - 1; -s + x + y - 1 <= 0  =>  s >= x+y-1
+}
+
+TEST_CASE("MonomialBound: pivot-corner emits when even-exponent factor present") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_xy2", {{VarId{1},1},{VarId{2},2}});
+    std::vector<MonomialBoundGenerator::Factor> fs{
+        mkF("x", 1, mpq_class(1), mpq_class(3)),    // pivot on x is exp=1 -> skipped
+        mkF("y", 2, mpq_class(1), mpq_class(2))     // pivot on y is exp=2 -> kicks in
+    };
+    MonomialBoundGenerator::Options opt;
+    opt.emitInterval = false;
+    opt.emitTangentPlane = false;
+    opt.emitPivotCorner = true;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    // Only y is a valid pivot. R = c * x has Rlo=1, Rhi=3 (both >=0), branch convex
+    // (y in [1,2] all-positive). Family emits exactly 1 cut (the upper).
+    CHECK(cuts.size() == 1);
+}
+
+TEST_CASE("MonomialBound: mixed-sign odd-exponent skipped on pivot, family stays sound") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_xy3", {{VarId{1},1},{VarId{2},3}});
+    std::vector<MonomialBoundGenerator::Factor> fs{
+        mkF("x", 1, mpq_class(1), mpq_class(2)),
+        mkF("y", 3, mpq_class(-1), mpq_class(1))   // mixed-sign odd: skip pivot, but interval still works
+    };
+    MonomialBoundGenerator::Options opt;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    // Interval cuts should still emit (2). Pivot family on y skipped (mixed sign).
+    // Pivot on x is exp=1, skipped. Tangent requires l_i>=0 for all i — y has
+    // l=-1 so this is skipped too.
+    CHECK(cuts.size() == 2);
+}
+
+TEST_CASE("MonomialBound: missing bounds on any factor -> no cuts") {
+    MonomialBoundGenerator gen;
+    auto aux = mkAuxHigher("__nl_aux_xy", {{VarId{1},1},{VarId{2},1}});
+    MonomialBoundGenerator::Factor fx; fx.var = "x"; fx.exponent = 1; // no bounds
+    auto fy = mkF("y", 1, 1, 2);
+    std::vector<MonomialBoundGenerator::Factor> fs{ fx, fy };
+    MonomialBoundGenerator::Options opt;
+    auto cuts = gen.generate(aux, mpq_class(1), fs, SatLit{0, false}, opt);
+    CHECK(cuts.empty());
+}

@@ -275,6 +275,70 @@ LinearizationResult IncrementalLinearizer::run(
                     ++idx;
                 }
             } else if (aux.key.kind == NonlinearKind::HigherMixed) {
+                // Phase 2 (this block): numeric monomial bounds via
+                // MonomialBoundGenerator. Three cut families — interval
+                // envelope, pivot-corner secant, multi-variable tangent.
+                // Gated by XOLVER_NRA_NLEXT_MONO_BOUND, runs BEFORE the
+                // sign-only path (which the previous phase produced). Both
+                // are cumulative; the sign lemma is a cheap structural cut
+                // even when numeric bounds are produced.
+                static const bool monoBoundEnabled = []() {
+                    const char* e = std::getenv("XOLVER_NRA_NLEXT_MONO_BOUND");
+                    return e && *e && *e != '0';
+                }();
+                if (monoBoundEnabled && registry_ && aux.key.powers.size() >= 2) {
+                    std::vector<MonomialBoundGenerator::Factor> factors;
+                    factors.reserve(aux.key.powers.size());
+                    bool allBounded = true;
+                    for (const auto& [vid, exp] : aux.key.powers) {
+                        std::string vn = std::string(kernel_.varName(vid));
+                        auto vb = bounds.get(vn);
+                        if (!vb || !vb->hasFiniteCompleteBounds()) {
+                            allBounded = false; break;
+                        }
+                        MonomialBoundGenerator::Factor f;
+                        f.var = vn;
+                        f.exponent = exp;
+                        f.bounds = *vb;
+                        if (modelPoints) {
+                            auto it = modelPoints->find(vn);
+                            if (it != modelPoints->end()) f.modelVal = it->second;
+                        }
+                        factors.push_back(std::move(f));
+                    }
+                    if (allBounded) {
+                        MonomialBoundGenerator::Options mbOpt;
+                        mbOpt.maxCutsHere = config.maxCutsPerTerm + 4;
+                        auto mbCuts = mbGen_.generate(
+                            aux, mpq_class(1), factors, c.reason, mbOpt, sort);
+                        int idx = 0;
+                        std::vector<mpq_class> boundVals;
+                        boundVals.reserve(factors.size() * 2 + 1);
+                        for (const auto& f : factors) {
+                            boundVals.push_back(f.bounds.lower);
+                            boundVals.push_back(f.bounds.upper);
+                            if (f.modelVal) boundVals.push_back(*f.modelVal);
+                        }
+                        boundVals.push_back(mpq_class(factors.size()));
+                        for (auto& cut : mbCuts) {
+                            if (static_cast<size_t>(idx) >= config.maxCutsPerTerm) break;
+                            if (cache_.hasEmitted(aux.key, c.reason, boundVals, 100 + idx)) {
+                                ++idx; continue;
+                            }
+                            SatLit cutLit = LinearConstraintNormalizer::registerLinearConstraint(
+                                *registry_, cut.constraint, linearTheory);
+                            if (cutLit.var != 0) {
+                                auto lemma = buildCutLemma(c.reason, cut.reasons, cutLit);
+                                CutCacheKey ck{aux.key, c.reason, boundVals, 100 + idx};
+                                result.lemmas.push_back({std::move(lemma), ck});
+                                result.status = LinearizationStatus::Lemma;
+                                if (result.lemmas.size() >= config.maxLemmas) return result;
+                            }
+                            ++idx;
+                        }
+                    }
+                }
+
                 // MGC-RD Phase 2A: sign-based lemma for high-degree mixed
                 // monomials (x^3, x*y*z, theta*vv1*vv3^2, etc.). Walk each
                 // factor, derive its sign contribution, combine into a total
