@@ -22,6 +22,7 @@
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
+#include "util/MpqUtils.h"
 #include <iostream>
 
 namespace xolver {
@@ -2388,6 +2389,65 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
     trail_.push_back({level, oldSize});
     interfaceDisequalities_.push_back({a, b, reason, level});
     return TheoryCheckResult::consistent();
+}
+
+std::optional<RealValue>
+NiaSolver::sharedTermArithValue(SharedTermId s) const {
+    // Gated default-ON for QF_ANIA / QF_AUFNIA: without this, the combination
+    // layer's model-based arrangement (TheoryManager §4) skips every shared
+    // term because the loop's `if (!v) continue;` fires when the arith solver
+    // returns nullopt (the inherited base default). Closing this gap is what
+    // lets array combination ever emit a same-value scalar-arrangement split
+    // for QF_ANIA cases (the long-standing 0/157 hole — iter#1-#4 emitted
+    // shared-eqs into a layer that wasn't running). Opt-out via
+    // XOLVER_NIA_SHARED_ARITH_VALUE=0 if the arrangement+nonlinear-branch
+    // interaction starts to oscillate.
+    static const bool enabled =
+        env::paramInt("XOLVER_NIA_SHARED_ARITH_VALUE", 1) != 0;
+    if (!enabled) return std::nullopt;
+
+    if (!sharedTermRegistry_ || !coreIr_) return std::nullopt;
+    const auto* st = sharedTermRegistry_->get(s);
+    if (!st) return std::nullopt;
+    const auto& expr = coreIr_->get(st->coreExpr);
+
+    // Constants — return the literal value directly. Mirrors LiaSolver's
+    // constant handling so an arithmetic constant participates in the
+    // arrangement on equal terms with a variable bound to that value.
+    if (expr.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpq_class(*iv));
+        }
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpqFromString(*sv));
+        }
+    }
+    if (expr.kind == Kind::ConstReal) {
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpqFromString(*sv));
+        }
+    }
+
+    // Variables — read the latest NIA model entry. currentModel_ holds the
+    // current check()'s candidate model; lastValidatedFarkasModel_ is the
+    // fallback Farkas-Or witness that survives reset/backtrack. Either is
+    // sound for the arrangement's "what value does NIA think this term has
+    // right now?" query — the arrangement only emits TAUTOLOGY splits
+    // `(a = b) ∨ ¬(a = b)`, so a wrong-guess split costs one SAT-layer commit
+    // cycle but never a soundness violation. ModelValidator at the
+    // Solver::Impl boundary still catches a globally-inconsistent model.
+    if (expr.kind != Kind::Variable ||
+        !std::holds_alternative<std::string>(expr.payload.value)) {
+        return std::nullopt;
+    }
+    const std::string& name = std::get<std::string>(expr.payload.value);
+    const IntegerModel* src = nullptr;
+    if (currentModel_)                  src = &*currentModel_;
+    else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+    if (!src) return std::nullopt;
+    auto it = src->find(name);
+    if (it == src->end()) return std::nullopt;
+    return RealValue::fromMpz(it->second);
 }
 
 std::vector<TheorySolver::SharedEqualityPropagation>

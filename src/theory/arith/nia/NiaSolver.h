@@ -81,6 +81,16 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    // Look up the current NIA model value for a shared term so the combination
+    // layer's model-based arrangement (TheoryManager.cpp §4) can see same-value
+    // shared scalar pairs in array-combination mode (QF_ANIA / QF_AUFNIA).
+    // Returns the literal value for shared constants and the currentModel_ /
+    // lastValidatedFarkasModel_ entry for shared variables; nullopt otherwise.
+    // Gated by XOLVER_NIA_SHARED_ARITH_VALUE (default-ON) so the historical
+    // "NIA returns nullopt -> arrangement skipped" behaviour can be restored
+    // if the arrangement loop turns out to oscillate on QF_(AUF)NIA.
+    std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
+
     std::optional<TheoryModel> getModel() const override;
 
 protected:
