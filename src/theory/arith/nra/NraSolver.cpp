@@ -11,6 +11,8 @@
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
+#include "theory/arith/nra/simplex/NraLinearExtractor.h"      // §4.2 classifyConstraints
+#include "theory/arith/nra/simplex/SimplexTableauFacts.h"     // §4.2 linearSubsetUnsat
 #include "theory/arith/nra/simplex/PolynomialIntervalPruner.h" // OSF-CDCAC P7
 #include "theory/arith/icp/IcpEngineQ.h"                       // XOLVER_NRA_ICP rational ICP engine
 #include "theory/arith/icp/ContractorFactoryQ.h"               // XOLVER_NRA_ICP factory
@@ -68,6 +70,16 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
+    // §4.2 linear-subset UNSAT pre-check (XOLVER_NRA_LINEAR_SUBSET_UNSAT,
+    // default OFF). If the linear subset of presolveConstraints_ is
+    // already simplex-UNSAT, emit a SAT-level conflict over those atoms'
+    // SAT lits and short-circuit the CAC/CDCAC engines. Sound: the
+    // reasons are original active literals, not NLSAT prefix values
+    // (§15.1). nullopt at the gate when OFF.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.linear-subset-unsat",
+        stageWrap("linear-subset-unsat",
+                  [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearSubsetUnsat(db, e); })));
     // XOLVER_NRA_ICP (default OFF): orthogonal interval-propagation probe,
     // between presolve (linear) and sign-refute (sign). Cheap univariate
     // narrowing; nullopt at the gate when OFF.
@@ -444,6 +456,63 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
             return TheoryCheckResult::mkLemma(pr.lemma);
     }
     return std::nullopt;
+}
+
+// §4.2 linear-subset UNSAT pre-check.
+//
+// Reads presolveConstraints_, classifies them into linear and nonlinear,
+// and runs SimplexTableauFacts on the linear subset. If the linear
+// subset alone is infeasible, the full NRA query is infeasible — the
+// linear contradiction is a sound theory conflict witnessed entirely by
+// original active SAT literals.
+//
+// The conflict clause includes the SAT literals of EVERY linear atom
+// (a non-minimal Farkas witness). Sound: the clause `OR ¬lit_i` is
+// theory-valid because the conjunction of all linear atoms is UNSAT,
+// so at least one lit_i must be false in any model.
+//
+// Default-OFF — opt-in via XOLVER_NRA_LINEAR_SUBSET_UNSAT=1 until a
+// production validation pass measures the perf impact (the simplex runs
+// per cb_propagate when enabled).
+std::optional<TheoryCheckResult> NraSolver::stageLinearSubsetUnsat(
+    TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_LINEAR_SUBSET_UNSAT");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    // Build a CdcacConstraint view (skip placeholders). NraSolver's
+    // PresolveCstr carries the same {poly, rel, reason} triple — copy
+    // the live entries into the shape classifyConstraints wants.
+    std::vector<CdcacConstraint> cs;
+    cs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        CdcacConstraint cc;
+        cc.poly = c.poly;
+        cc.rel = c.rel;
+        cc.reason = c.reason;
+        cs.push_back(std::move(cc));
+    }
+    if (cs.empty()) return std::nullopt;
+
+    auto classified = classifyConstraints(*kernel_, cs);
+    if (classified.linear.empty()) return std::nullopt;
+
+    auto facts = computeSimplexTableauFacts(*kernel_, classified.linear);
+    if (!facts.linearSubsetUnsat()) return std::nullopt;
+
+    // Sound conflict: union all linear-atom SAT lits. At least one must
+    // be false in any model since their conjunction is UNSAT.
+    TheoryConflict conflict;
+    conflict.clause.reserve(classified.linear.size());
+    for (const auto& la : classified.linear) {
+        conflict.clause.push_back(la.reason);
+    }
+    if (conflict.clause.empty()) return std::nullopt;
+    return TheoryCheckResult::mkConflict(std::move(conflict));
 }
 
 // XOLVER_NRA_ICP: rational ICP probe. Sound by construction — emits Conflict

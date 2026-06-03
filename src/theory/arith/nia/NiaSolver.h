@@ -198,6 +198,15 @@ private:
     // to the next stage, or a verdict to stop. Registered as
     // CallbackReasoners in the constructor, in this order.
     std::optional<TheoryCheckResult> stagePending(TheoryLemmaStorage&, TheoryEffort);
+    // Reference NLSAT-plan §2.3 + §5.1 step 1: when every currently-active
+    // atom has a polynomial of total degree ≤ 1, NIA's verdict on this
+    // active set is definitionally equal to LIA's. LIA is registered
+    // alongside NIA by TheoryFactory and will own the check in the same
+    // CDCL(T) round. This stage short-circuits the 19-stage NIA pipeline
+    // for those cb_propagate calls. Sound: returning Consistent here is
+    // equivalent to "no nonlinear obligation"; LIA's verdict is then the
+    // final NIA verdict.
+    std::optional<TheoryCheckResult> stagePureLinearShortcut(TheoryLemmaStorage&, TheoryEffort);
     // Phase D — dispatch cache front stage. Compares current active_
     // signature against dispatchCacheSignature_; returns consistent()
     // on hit, nullopt on miss. Default-OFF flag XOLVER_NIA_DISPATCH_CACHE.

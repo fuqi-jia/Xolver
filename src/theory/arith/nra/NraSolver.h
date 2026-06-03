@@ -83,6 +83,13 @@ protected:
 private:
     // Reasoner pipeline stages (Phase 2). nullopt = continue.
     std::optional<TheoryCheckResult> stagePresolve(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // §4.2 — pre-check whether the linear subset of active atoms is
+    // already infeasible. When detected, emit a conflict over the
+    // linear atoms' SAT lits and short-circuit CDCAC. Gated by
+    // XOLVER_NRA_LINEAR_SUBSET_UNSAT (default-OFF — opt-in until
+    // panda-validated). Sound: the conflict reasons are original
+    // asserted SAT literals, no NLSAT prefix is referenced (§15.1).
+    std::optional<TheoryCheckResult> stageLinearSubsetUnsat(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_SIGN_REFUTE (default OFF): positive-orthant sign-definiteness
     // refuter. From single-variable bounds, fix each var's sign; if some
     // constraint g rel 0 is sign-definite over that orthant and contradicts rel

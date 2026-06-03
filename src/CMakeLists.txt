@@ -13,6 +13,8 @@ file(GLOB_RECURSE XOLVER_SOURCES CONFIGURE_DEPENDS
     "theory/**/*.cpp"
     "proof/*.cpp"
     "util/*.cpp"
+    "experimental/*.cpp"
+    "experimental/**/*.cpp"
 )
 
 file(GLOB_RECURSE XOLVER_HEADERS CONFIGURE_DEPENDS
@@ -27,6 +29,8 @@ file(GLOB_RECURSE XOLVER_HEADERS CONFIGURE_DEPENDS
     "theory/**/*.h"
     "proof/*.h"
     "util/*.h"
+    "experimental/*.h"
+    "experimental/**/*.h"
 )
 
 add_library(xolver_core STATIC

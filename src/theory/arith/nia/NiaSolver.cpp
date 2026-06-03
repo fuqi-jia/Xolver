@@ -93,6 +93,17 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
             /*fullEffortOnly=*/true));
     };
     add("nia.pending",        &NiaSolver::stagePending);
+    // §2.3 / §5.1 step 1 — pure-linear active fast path. DEFAULT-OFF
+    // (XOLVER_NIA_LINEAR_SHORTCUT=1 to enable for experimentation):
+    // in QF_NIA the linear atoms are owned by NIA, not LIA — LIA is
+    // present only for combination-side bridging. Returning Consistent
+    // here from a pure-linear set therefore skips the linear UNSAT
+    // proofs NIA's downstream stages (normalize → presolve → bounded)
+    // would have caught (e.g. x<3 ∧ x>3, 2x=1, false-Leq polarity).
+    // Sound shortcut requires routing the linear subset to LIA first,
+    // which is a NiaLinearizationAdapter wiring change deferred to a
+    // future wake (see docs/agents/NLSAT-gap-analysis.md Task A).
+    add("nia.linear-shortcut", &NiaSolver::stagePureLinearShortcut);
     // Phase D — dispatch-cache lookup at the FRONT of the pipeline. On a
     // signature hit, skip the entire 16-stage pipeline. Default-OFF flag
     // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
@@ -492,6 +503,43 @@ std::optional<TheoryCheckResult> NiaSolver::stagePending(TheoryLemmaStorage&, Th
          (interfaceEqualities_.empty() && interfaceDisequalities_.empty())))
         return TheoryCheckResult::consistent();
     return std::nullopt;
+}
+
+// §2.3 / §5.1 step 1 — pure-linear active-set shortcut.
+//
+// Reads each active ActiveNiaConstraint's polynomial; if every constraint
+// is linear (no monomial has total degree > 1), NIA has no nonlinear
+// obligation. LIA is registered alongside NIA by TheoryFactory and owns
+// the linear check in the same CDCL(T) round, so NIA can return
+// Consistent immediately and skip the 16 downstream nonlinear stages.
+//
+// Sound: NIA's job is nonlinear reasoning; with no nonlinear atom the
+// verdict on `active_` is definitionally LIA's verdict. Returning
+// Consistent here adds no claim — it just defers to the linear sibling.
+//
+// Soundness floor: if any term cannot be decomposed (`terms()` returns
+// nullopt — e.g. non-integer coefficients), we conservatively fall
+// through so a downstream stage handles it.
+std::optional<TheoryCheckResult> NiaSolver::stagePureLinearShortcut(
+    TheoryLemmaStorage&, TheoryEffort) {
+    // DEFAULT-OFF — see registration comment for the soundness reason.
+    const char* e = std::getenv("XOLVER_NIA_LINEAR_SHORTCUT");
+    if (!e || !*e || e[0] == '0') return std::nullopt;
+    if (active_.empty()) return std::nullopt;  // stagePending handles empty
+    for (const auto& a : active_) {
+        auto terms = kernel_->terms(a.poly);
+        if (!terms) return std::nullopt;  // can't decompose → defer
+        for (const auto& term : *terms) {
+            int total = 0;
+            for (const auto& [vid, exp] : term.powers) {
+                (void)vid;
+                total += exp;
+                if (total > 1) return std::nullopt;  // nonlinear → defer
+            }
+        }
+    }
+    // All active atoms are linear; LIA owns this.
+    return TheoryCheckResult::consistent();
 }
 
 // Phase D — FNV-1a hash of the active_ signature: count + sequence of

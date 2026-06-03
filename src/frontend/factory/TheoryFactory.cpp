@@ -9,6 +9,11 @@
 #include "theory/arith/rdl/RdlSolver.h"
 #include "theory/euf/EufSolver.h"
 #include "theory/combination/Purifier.h"
+#include "experimental/mcsat/McsatSolver.h"
+#include "theory/arith/nia/mcsat/NiaMcsatEngine.h"
+#include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nra/nlsat/NlsatEngine.h"
+#include <cstdlib>
 #include <iostream>
 
 namespace xolver {
@@ -50,29 +55,75 @@ SolverSetupResult setupSolvers(
         theoryManager.registerSolver(std::move(lra));
         theoryManager.setRegistry(&registry);  // needed by cb_decide evalTheoryAtom
     } else if (logic == "QF_NRA" || logic == "NRA") {
-        auto polyKernel = createPolynomialKernel();
-        result.polyKernelRaw = polyKernel.get();
-        // Create the LRA sibling first so NRA can hold a raw pointer to it for
-        // the XOLVER_NRA_LINEARIZE relaxation-model read (harmless when OFF).
-        auto lra = std::make_unique<LraSolver>();
-        lra->setRegistry(&registry);
-        LraSolver* lraPtr = lra.get();
-        auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
-        nra->setRegistry(&registry);  // XOLVER_NRA_LINEARIZE cut-feeder
-        nra->setLinearSibling(lraPtr);  // XOLVER_NRA_LINEARIZE relaxation-model source
-        theoryManager.registerSolver(std::move(nra));
-        theoryManager.registerSolver(std::move(lra));
+        // XOLVER_NRA_MCSAT (default-OFF): swap NraSolver out for the
+        // experimental MCSAT-style NlsatEngine. The LRA sibling is still
+        // registered so combination/linearization paths keep working —
+        // the engine declares TheoryId::NRA so TheoryManager routes NRA
+        // atoms to it. Sound: NlsatEngine returns Unknown when it cannot
+        // decide; it never produces UNSAT (see MCSatEngine.h §15.6).
+        if (const char* e = std::getenv("XOLVER_NRA_MCSAT"); e && *e && *e != '0') {
+            auto polyKernel = createPolynomialKernel();
+            result.polyKernelRaw = polyKernel.get();
+            // Limitation-(b) fix: wire the libpoly-backed AlgebraBackend so
+            // NlsatEngine can use isolateRealRoots / specializeToUnivariate
+            // for algebraic-root explain in future extensions. The backend
+            // is owned by McsatSolver so its lifetime matches the engine's.
+            auto algebra = std::make_unique<LibpolyBackend>(polyKernel.get());
+            auto engine = std::make_unique<nlsat::NlsatEngine>();
+            engine->setAlgebra(polyKernel.get(), algebra.get());
+            engine->setCoreIr(ir);
+            auto mcsat = std::make_unique<McsatSolver>();
+            mcsat->setEngine(std::move(engine), TheoryId::NRA);
+            mcsat->setKernel(std::move(polyKernel));
+            mcsat->setAlgebra(std::move(algebra));
+            theoryManager.registerSolver(std::move(mcsat));
+            auto lra = std::make_unique<LraSolver>();
+            lra->setRegistry(&registry);
+            theoryManager.registerSolver(std::move(lra));
+        } else {
+            auto polyKernel = createPolynomialKernel();
+            result.polyKernelRaw = polyKernel.get();
+            // Create the LRA sibling first so NRA can hold a raw pointer to it for
+            // the XOLVER_NRA_LINEARIZE relaxation-model read (harmless when OFF).
+            auto lra = std::make_unique<LraSolver>();
+            lra->setRegistry(&registry);
+            LraSolver* lraPtr = lra.get();
+            auto nra = std::make_unique<NraSolver>(std::move(polyKernel));
+            nra->setRegistry(&registry);  // XOLVER_NRA_LINEARIZE cut-feeder
+            nra->setLinearSibling(lraPtr);  // XOLVER_NRA_LINEARIZE relaxation-model source
+            theoryManager.registerSolver(std::move(nra));
+            theoryManager.registerSolver(std::move(lra));
+        }
     } else if (logic == "QF_NIA" || logic == "NIA") {
-        auto polyKernel = createPolynomialKernel();
-        result.polyKernelRaw = polyKernel.get();
-        auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
-        nia->setRegistry(&registry);
-        nia->setCoreIr(ir);  // needed by Z5 BOOL_EXTEND + Farkas-Or hooks (added 2026-06-02)
-        theoryManager.registerSolver(std::move(nia));
-        auto lia = std::make_unique<LiaSolver>();
-        lia->setRegistry(&registry);
-        configureLia(*lia);
-        theoryManager.registerSolver(std::move(lia));
+        // XOLVER_NIA_MCSAT (default-OFF): swap NiaSolver out for the
+        // experimental MCSAT NiaMcsatEngine. Sound floor identical to
+        // the NRA variant — Unknown on indecision, never wrong UNSAT.
+        if (const char* e = std::getenv("XOLVER_NIA_MCSAT"); e && *e && *e != '0') {
+            auto polyKernel = createPolynomialKernel();
+            result.polyKernelRaw = polyKernel.get();
+            auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
+            engine->setKernel(polyKernel.get());
+            engine->setCoreIr(ir);
+            auto mcsat = std::make_unique<McsatSolver>();
+            mcsat->setEngine(std::move(engine), TheoryId::NIA);
+            mcsat->setKernel(std::move(polyKernel));
+            theoryManager.registerSolver(std::move(mcsat));
+            auto lia = std::make_unique<LiaSolver>();
+            lia->setRegistry(&registry);
+            configureLia(*lia);
+            theoryManager.registerSolver(std::move(lia));
+        } else {
+            auto polyKernel = createPolynomialKernel();
+            result.polyKernelRaw = polyKernel.get();
+            auto nia = std::make_unique<NiaSolver>(std::move(polyKernel));
+            nia->setRegistry(&registry);
+            nia->setCoreIr(ir);  // needed by Z5 BOOL_EXTEND + Farkas-Or hooks (added 2026-06-02)
+            theoryManager.registerSolver(std::move(nia));
+            auto lia = std::make_unique<LiaSolver>();
+            lia->setRegistry(&registry);
+            configureLia(*lia);
+            theoryManager.registerSolver(std::move(lia));
+        }
     } else if (logic == "QF_LIRA" || logic == "LIRA") {
         auto lira = std::make_unique<LiraSolver>();
         lira->setRegistry(&registry);
