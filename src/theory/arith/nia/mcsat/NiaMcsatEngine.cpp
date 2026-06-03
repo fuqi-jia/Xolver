@@ -1,6 +1,7 @@
 #include "theory/arith/nia/mcsat/NiaMcsatEngine.h"
 
 #include "expr/ir.h"
+#include "util/EnvParam.h"
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds (shared)
 #include "theory/arith/poly/PolynomialKernel.h"
@@ -149,8 +150,9 @@ PolyId polyMinusRhs(PolynomialKernel& kernel, PolyId poly,
 namespace {
 
 // NIA DFS — mirrors NlsatEngine's complete-assignment search but
-// integer-only.
-static constexpr int NIA_DFS_NODE_BUDGET = 50000;
+// integer-only. Default 50000; tunable via env for autotuning.
+static const int NIA_DFS_NODE_BUDGET =
+    env::paramInt("XOLVER_NIA_MCSAT_DFS_BUDGET", 50000);
 
 bool niaFullSampleSatisfiesAtoms(
     PolynomialKernel& kernel,

@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include "util/EnvParam.h"
 #include <chrono>
 #include "theory/euf/EufSolver.h"
 #include "theory/array/AniaProfile.h"
@@ -152,9 +153,8 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
     // XOLVER_EUF_PROP_BUDGET (0 = uncapped). Sound: a smaller cap only
     // emits a SUBSET of entailed lits — never an unsound one.
     static const size_t kMaxIter = [](){
-        const char* v = std::getenv("XOLVER_EUF_PROP_BUDGET");
-        if (v && *v) { try { return static_cast<size_t>(std::max(0, std::atoi(v))); } catch (...) {} }
-        return static_cast<size_t>(512);
+        return static_cast<size_t>(
+            std::max(0, env::paramInt("XOLVER_EUF_PROP_BUDGET", 512)));
     }();
 
     // Inner: try to produce an Entailment lemma from one rec idx, push to `dst`.

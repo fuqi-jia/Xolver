@@ -1,4 +1,5 @@
 #include "theory/arith/bit_blast/BitBlastSolver.h"
+#include "util/EnvParam.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "sat/SatSolver.h"
@@ -20,10 +21,9 @@ uint64_t BitBlastSolver::defaultGateBudget() {
     // NIA suite (tiny encodings) unaffected, and turns the AProVE blow-ups into
     // a clean Unknown. Env-tunable: competition runs with more RAM should raise
     // XOLVER_NIA_BITBLAST_GATE_BUDGET to solve larger bounded instances.
-    if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_GATE_BUDGET")) {
-        char* end = nullptr;
-        unsigned long long v = std::strtoull(e, &end, 10);
-        if (end != e && v > 0) return static_cast<uint64_t>(v);
+    {
+        long long v = env::paramLong("XOLVER_NIA_BITBLAST_GATE_BUDGET", 2000000);
+        if (v > 0) return static_cast<uint64_t>(v);
     }
     // Competition retune: 30GB (not the dev 2GB) allows far more vars before OOM
     // (~0.2-0.5M vars per 2GB => ~3-7M for 30GB). 2M is safely under that and lets

@@ -2,11 +2,17 @@
 
 #include <unordered_set>
 
+#include "util/EnvParam.h"
+
 namespace xolver {
 
-const mpz_class BoundedNiaSolver::ENUMERATION_THRESHOLD = mpz_class(10000);
-const mpz_class BoundedNiaSolver::PARTIAL_VAR_RANGE_CAP = mpz_class(16);
-const mpz_class BoundedNiaSolver::PARTIAL_BUDGET = mpz_class(4096);
+// Tunable budgets — defaults preserved; override via env for autotuning.
+const mpz_class BoundedNiaSolver::ENUMERATION_THRESHOLD =
+    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000));
+const mpz_class BoundedNiaSolver::PARTIAL_VAR_RANGE_CAP =
+    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_RANGE_CAP", 16));
+const mpz_class BoundedNiaSolver::PARTIAL_BUDGET =
+    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_BUDGET", 4096));
 
 BoundedNiaSolver::BoundedNiaSolver(PolynomialKernel& kernel) : kernel_(kernel) {}
 

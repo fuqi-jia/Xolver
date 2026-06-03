@@ -1,6 +1,8 @@
 #include "theory/arith/lia/InternalMilpEngine.h"
 #include <algorithm>
 
+#include "util/EnvParam.h"
+
 namespace xolver {
 
 void InternalMilpEngine::clear() {
@@ -131,7 +133,10 @@ InternalMilpEngine::MilpResult InternalMilpEngine::solve(MilpMode mode) {
         case MilpMode::RelaxationOnly:
             return r;
         case MilpMode::Budgeted: {
-            int budget = FAST_BRANCH_BUDGET;
+            // Default FAST_BRANCH_BUDGET; tunable for autotuning.
+            static const int kFastBranchBudget =
+                env::paramInt("XOLVER_LIA_MILP_BRANCH_BUDGET", FAST_BRANCH_BUDGET);
+            int budget = kFastBranchBudget;
             auto ir = checkIntegrality(/*useBudget=*/true, budget);
             return ir;
         }

@@ -2,6 +2,7 @@
 
 #include "theory/arith/bit_blast/BitBlastEncoder.h"   // BitVec, BitBlastEncoder
 #include "theory/arith/bit_blast/SpaceEstimator.h"
+#include "util/EnvParam.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/nia/core/DomainStore.h"
@@ -54,9 +55,8 @@ public:
         // with no budget, a single internal solve burns the whole NIA stage
         // budget. The bit-blast is candidate-only (invariant 1) — a SAT-Unknown
         // result just falls through to the next NIA stage / wider bit-width.
-        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_CONFLICTS"); e && *e) {
-            satConflictBudget_ = std::atoll(e);
-        }
+        satConflictBudget_ =
+            env::paramLong("XOLVER_NIA_BITBLAST_CONFLICTS", satConflictBudget_);
         // I3 (per-cluster bit-blast budget, default-unchanged).
         //
         // XOLVER_NIA_BITBLAST_MAX_ITERS=<N> caps the width-growth iteration
@@ -66,8 +66,9 @@ public:
         // explore deeper on clusters whose SAT models do fit in many bits.
         // Sound: bit-blast remains candidate-only; an early iteration cut
         // just yields Unknown.
-        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_MAX_ITERS"); e && *e) {
-            long v = std::atol(e);
+        {
+            long v = env::paramLong("XOLVER_NIA_BITBLAST_MAX_ITERS",
+                                    static_cast<long>(maxIters_));
             if (v > 0 && v <= 64) maxIters_ = static_cast<unsigned>(v);
         }
         // XOLVER_NIA_BITBLAST_MAX_BITWIDTH=<W> bounds the per-variable
@@ -75,8 +76,9 @@ public:
         // up earlier on clusters whose models exceed the cap; raising it
         // lets large bounded instances bit-blast more freely. Capped to
         // [8, 4096] to prevent encoding pathology.
-        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_MAX_BITWIDTH"); e && *e) {
-            long v = std::atol(e);
+        {
+            long v = env::paramLong("XOLVER_NIA_BITBLAST_MAX_BITWIDTH",
+                                    static_cast<long>(maxBW_));
             if (v >= 8 && v <= 4096) maxBW_ = static_cast<unsigned>(v);
         }
     }

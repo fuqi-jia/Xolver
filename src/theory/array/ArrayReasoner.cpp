@@ -1,4 +1,5 @@
 #include "theory/array/ArrayReasoner.h"
+#include "util/EnvParam.h"
 #include "theory/array/AniaProfile.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
@@ -35,8 +36,9 @@ ArrayReasoner::ArrayReasoner() {
     // (a borderline case floors to unknown), and it RECOVERS the many driver
     // sats whose completion was largely wasteful (independent arrays) by letting
     // the solver reach a consistent model the floor then validates.
-    if (const char* e = std::getenv("XOLVER_AX_COMPLETE_BUDGET"); e && *e) {
-        long v = std::atol(e);
+    {
+        long v = env::paramLong("XOLVER_AX_COMPLETE_BUDGET",
+                                static_cast<long>(completeBudget_));
         if (v > 0) completeBudget_ = static_cast<size_t>(v);
     }
 }

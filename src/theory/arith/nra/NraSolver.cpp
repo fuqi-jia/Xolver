@@ -1,4 +1,5 @@
 #include "theory/arith/nra/NraSolver.h"
+#include "util/EnvParam.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
@@ -313,17 +314,12 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 for (const auto& [v, e] : t.powers) varSet.insert(v);
         }
         if (poly_ok && !lsCons.empty() && !varSet.empty()) {
-            static const long budgetMs = [] {
-                if (const char* e = std::getenv("XOLVER_NRA_LS_BUDGET_MS"))
-                    return std::atol(e);
-                return 50L;   // pre-pass: slightly more wall-clock than the
-                              // old per-stage 10ms since we only fire once.
-            }();
-            static const int maxRounds = [] {
-                if (const char* e = std::getenv("XOLVER_NRA_LS_MAX_ROUNDS"))
-                    return std::atoi(e);
-                return 50;
-            }();
+            // pre-pass: slightly more wall-clock (50ms) than the old per-stage
+            // 10ms since we only fire once.
+            static const long budgetMs =
+                env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 50);
+            static const int maxRounds =
+                env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 50);
             std::vector<VarId> vars(varSet.begin(), varSet.end());
             static const bool eqRelax = [] {
                 const char* e = std::getenv("XOLVER_NRA_LS_EQ_RELAX");
@@ -1366,16 +1362,12 @@ std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
     if (lsCons.empty() || varSet.empty()) return std::nullopt;
     std::vector<VarId> vars(varSet.begin(), varSet.end());
 
-    static const long budgetMs = [] {
-        if (const char* e = std::getenv("XOLVER_NRA_LS_BUDGET_MS"))
-            return std::atol(e);
-        return 10L;   // micro-budget scaffold default per master-spec; raise after univariate boundary candidates ship
-    }();
-    static const int maxRounds = [] {
-        if (const char* e = std::getenv("XOLVER_NRA_LS_MAX_ROUNDS"))
-            return std::atoi(e);
-        return 10;
-    }();
+    // micro-budget scaffold default (10ms) per master-spec; raise after
+    // univariate boundary candidates ship.
+    static const long budgetMs =
+        env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 10);
+    static const int maxRounds =
+        env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 10);
 
     NraLocalSearch ls(*kernel_);
     ls.setBudgetMs(budgetMs);
@@ -1704,11 +1696,10 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         const char* o = std::getenv("XOLVER_NRA_CAC_ONLY");
         return (n && *n && *n != '0') || (o && *o && *o != '0');
     }();
-    static const long cacDeadlineMs = [] () -> long {
-        if (const char* e = std::getenv("XOLVER_NRA_CAC_DEADLINE_MS")) return std::atol(e);
-        return 2000;    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering
-                        // yields fast to Collins instead of grinding); rest of 1200s is Collins
-    }();
+    // hybrid default: 2s CAC@Full share (2s-beats-60s: a hard covering yields
+    // fast to Collins instead of grinding); rest of 1200s is Collins.
+    static const long cacDeadlineMs =
+        env::paramLong("XOLVER_NRA_CAC_DEADLINE_MS", 2000);
     static const bool earlyInfeas = [] {
         const char* e = std::getenv("XOLVER_NRA_CAC_EARLY_INFEAS");
         return e && *e && *e != '0';
@@ -1993,11 +1984,8 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
     if (!registry_ || !linAdapter_) return std::nullopt;
 
     static const int kRefineCap = [] {
-        if (const char* c = std::getenv("XOLVER_NRA_LINEARIZE_CAP")) {
-            int v = std::atoi(c);
-            if (v > 0) return v;
-        }
-        return 60;
+        int v = env::paramInt("XOLVER_NRA_LINEARIZE_CAP", 60);
+        return v > 0 ? v : 60;
     }();
 
     std::ofstream lp("/tmp/linprobe.txt", std::ios::app);
@@ -2137,11 +2125,8 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
     // unbounded perturbation extended LIN refinement past its natural
     // termination on a SAT case, never reaching validator.
     static const int kPerturbCap = [] {
-        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP")) {
-            int v = std::atoi(c);
-            if (v >= 0) return v;
-        }
-        return 4;
+        int v = env::paramInt("XOLVER_NRA_NLEXT_TANGENT_PERTURB_CAP", 4);
+        return v >= 0 ? v : 4;
     }();
     // Only activate perturbation AFTER the natural refinement loop has
     // had time to converge on its own. Earlier-round stuck states usually
@@ -2149,11 +2134,9 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearizeProbe(TheoryLemmaStora
     // perturbation early disturbs SAT cases that would have validated in
     // a few more rounds (nra_150_sat regression analysis).
     static const int kPerturbMinRound = [] {
-        if (const char* c = std::getenv("XOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND")) {
-            int v = std::atoi(c);
-            if (v >= 0) return v;
-        }
-        return 30;  // half of default kRefineCap=60
+        // default 30 = half of default kRefineCap=60
+        int v = env::paramInt("XOLVER_NRA_NLEXT_TANGENT_PERTURB_MINROUND", 30);
+        return v >= 0 ? v : 30;
     }();
     bool isStuck = perturbEnabled && modelFilled &&
                    linRefineRound_ >= kPerturbMinRound &&

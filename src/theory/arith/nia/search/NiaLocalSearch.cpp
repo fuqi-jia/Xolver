@@ -1,4 +1,5 @@
 #include "theory/arith/nia/search/NiaLocalSearch.h"
+#include "util/EnvParam.h"
 #include "theory/arith/nia/search/SmartInit.h"
 #include <random>
 #include <algorithm>
@@ -40,12 +41,9 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     // give SLS a real budget: 5s per call, 60s cumulative. Candidate-only +
     // validator-gated, so raising is SOUND (no model found = just unknown).
     : kernel_(kernel), budgetMs_(5000), totalBudgetMs_(60000) {
-    if (const char* e = std::getenv("XOLVER_NIA_LS_BUDGET_MS")) {
-        budgetMs_ = std::atol(e);   // 0 or negative = unlimited
-    }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_TOTAL_MS")) {
-        totalBudgetMs_ = std::atol(e);   // 0 or negative = unlimited
-    }
+    // 0 or negative = unlimited; unset keeps the ctor-init default.
+    budgetMs_ = env::paramLong("XOLVER_NIA_LS_BUDGET_MS", budgetMs_);
+    totalBudgetMs_ = env::paramLong("XOLVER_NIA_LS_TOTAL_MS", totalBudgetMs_);
     if (const char* e = std::getenv("XOLVER_NIA_LOCALSEARCH"); e && *e && *e != '0') {
         enhanced_ = true;
     }

@@ -1,6 +1,7 @@
 #include "util/MpqUtils.h"
 #include "theory/arith/lia/LiaSolver.h"
 #include "util/MpqUtils.h"
+#include "util/EnvParam.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/TheoryAtomTypes.h"
@@ -653,8 +654,7 @@ TheoryCheckResult LiaSolver::checkIntegrality(TheoryLemmaStorage& lemmaDb, Theor
     // undisturbed. Tunable via XOLVER_LIA_CUT_MAXPERSOLVE; raise it for
     // UNSAT-heavy divisions if a differential shows more root cuts help there.
     static const int kMaxCutsPerSolve = []() {
-        const char* e = std::getenv("XOLVER_LIA_CUT_MAXPERSOLVE");
-        int v = e ? std::atoi(e) : -1;
+        int v = env::paramInt("XOLVER_LIA_CUT_MAXPERSOLVE", 4);
         return v >= 0 ? v : 4;
     }();
     int bestVar = -1;
@@ -934,8 +934,7 @@ std::optional<TheoryLemma> LiaSolver::generateGomoryCut(int xi) {
     // the solver fall back to branching, which is fast. Tunable for A/B.
     {
         static const int kMaxBits = []() {
-            const char* e = std::getenv("XOLVER_LIA_CUT_MAXBITS");
-            int v = e ? std::atoi(e) : 0;
+            int v = env::paramInt("XOLVER_LIA_CUT_MAXBITS", 8);
             return v > 0 ? v : 8;
         }();
         auto bits = [](const mpq_class& q) -> size_t {

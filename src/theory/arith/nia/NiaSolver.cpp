@@ -18,6 +18,7 @@
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "proof/ArithModelValidator.h"
+#include "util/EnvParam.h"
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
@@ -1590,25 +1591,15 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&,
     auto pr = vp.partition(normalized_, domains_, 32);
     if (pr.totalVars() == 0) return std::nullopt;
     // Gate: at most 10 bounded vars; unbounded count at least 3x bounded.
-    static const size_t maxB = [] {
-        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_MAX_B"))
-            return static_cast<size_t>(std::atol(e));
-        return static_cast<size_t>(10);
-    }();
+    static const size_t maxB = static_cast<size_t>(
+        env::paramLong("XOLVER_NIA_HYB_BB_LS_MAX_B", 10));
     if (pr.boundedCount() == 0 || pr.boundedCount() > maxB) return std::nullopt;
     if (pr.unboundedCount() < pr.boundedCount() * 3) return std::nullopt;
 
     // K = number of random B-samples to try.
-    static const int K = [] {
-        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_K"))
-            return std::atoi(e);
-        return 5;
-    }();
-    static const long probeMs = [] {
-        if (const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS_PROBE_MS"))
-            return std::atol(e);
-        return 500L;
-    }();
+    static const int K = env::paramInt("XOLVER_NIA_HYB_BB_LS_K", 5);
+    static const long probeMs =
+        env::paramLong("XOLVER_NIA_HYB_BB_LS_PROBE_MS", 500);
 
     // For each B-sample: clone DomainStore, restrict bounded vars to
     // their sample value (pinned), and run LS on the modified store.
@@ -1813,9 +1804,8 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         // 8000: still tractable per-call (~ms-scale with the augmented
         // Gauss + memoization), and unlocks more Stroeder cases.
         //   override:  XOLVER_NIA_FARKAS_OR_MAX_B
-        std::size_t maxB = 8000;
-        if (const char* e = std::getenv("XOLVER_NIA_FARKAS_OR_MAX_B"))
-            maxB = (std::size_t)std::atoi(e);
+        std::size_t maxB = static_cast<std::size_t>(
+            env::paramLong("XOLVER_NIA_FARKAS_OR_MAX_B", 8000));
         cachedTable = solverBuild.buildTable(cachedProfile, maxB);
         cachedIr = coreIr_;
     }
@@ -1895,7 +1885,8 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // forced c0 ≥ 1. To recover, after a candidate's first validation fails
     // we try a small grid of residual values and re-validate. Grid width
     // adapts to residual count so the combo product stays bounded.
-    constexpr std::size_t COMBO_CAP = 16384;
+    static const std::size_t COMBO_CAP = static_cast<std::size_t>(
+        env::paramLong("XOLVER_NIA_FARKAS_COMBO_CAP", 16384));
     auto gridFor = [](std::size_t n) -> std::vector<mpz_class> {
         std::vector<mpz_class> v;
         if (n == 0) return v;
@@ -1914,7 +1905,8 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // the rest of the NIA pipeline. We cap total validator invocations per
     // stage call. The stage runs many times during a check loop, so this
     // is a per-call (not per-check) budget.
-    constexpr std::size_t VALIDATE_BUDGET = 200;
+    static const std::size_t VALIDATE_BUDGET = static_cast<std::size_t>(
+        env::paramLong("XOLVER_NIA_FARKAS_VALIDATE_BUDGET", 200));
     std::size_t validations = 0;
     // Pre-compute var name → isBool map by walking all assertions once.
     // Bool vars (e.g. boolpur_K Tseitin proxies) MUST go through
@@ -2148,16 +2140,10 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaSto
     // Save the LS's current per-call / cumulative budgets. We TEMPORARILY
     // narrow them for this stage's run so the upstream workhorses still
     // get their share.
-    static const long earlyBudgetMs = [] {
-        if (const char* e = std::getenv("XOLVER_NIA_LS_EARLY_BUDGET_MS"))
-            return std::atol(e);
-        return 200L;
-    }();
-    static const long earlyTotalMs = [] {
-        if (const char* e = std::getenv("XOLVER_NIA_LS_EARLY_TOTAL_MS"))
-            return std::atol(e);
-        return 5000L;
-    }();
+    static const long earlyBudgetMs =
+        env::paramLong("XOLVER_NIA_LS_EARLY_BUDGET_MS", 200);
+    static const long earlyTotalMs =
+        env::paramLong("XOLVER_NIA_LS_EARLY_TOTAL_MS", 5000);
     // We DON'T mutate the LS's persistent state — only its budget setter.
     // The persistent NiaLsContext (warm-start state) is preserved across
     // calls, so each early-stage invocation continues the search from

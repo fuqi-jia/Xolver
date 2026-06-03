@@ -1,6 +1,7 @@
 #include "util/MpqUtils.h"
 #include "theory/arith/lra/LraSolver.h"
 #include "util/MpqUtils.h"
+#include "util/EnvParam.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/core/DebugTrace.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -30,10 +31,8 @@ LraSolver::LraSolver() {
     // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
-    const char* budget = std::getenv("XOLVER_LRA_LP_DUALITY_BUDGET");
-    if (budget && *budget) {
-        try { lpDualityBudget_ = std::max(0, std::stoi(budget)); } catch (...) {}
-    }
+    lpDualityBudget_ = std::max(
+        0, env::paramInt("XOLVER_LRA_LP_DUALITY_BUDGET", lpDualityBudget_));
 }
 
 LraSolver::~LraSolver() {

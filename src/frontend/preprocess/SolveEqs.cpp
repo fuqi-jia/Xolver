@@ -1,5 +1,6 @@
 #include "frontend/preprocess/SolveEqs.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "util/EnvParam.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -11,11 +12,13 @@ namespace xolver {
 SolveEqs::SolveEqs(CoreIr& ir, ModelConverter& mc)
     : ir_(ir), mc_(mc),
       boolSortId_(ir.boolSortId()), intSortId_(ir.intSortId()), realSortId_(ir.realSortId()) {
-    if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS_BUDGET")) {
-        if (unsigned long long v = std::strtoull(e, nullptr, 10)) workBudget_ = v;
+    {
+        long long v = env::paramLong("XOLVER_PP_SOLVE_EQS_BUDGET",
+                                     static_cast<long>(workBudget_));
+        if (v > 0) workBudget_ = static_cast<uint64_t>(v);
     }
-    if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS_GROWTH_CAP")) {
-        double v = std::strtod(e, nullptr);
+    {
+        double v = env::paramDouble("XOLVER_PP_SOLVE_EQS_GROWTH_CAP", growthCap_);
         if (v > 0.0) growthCap_ = v;
     }
 }

@@ -1,4 +1,5 @@
 #include "theory/arith/nra/cac/CacEngine.h"
+#include "util/EnvParam.h"
 
 #include "theory/arith/nra/cac/SingleCellProjection.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"   // clearPscChainCache (#50)
@@ -215,9 +216,9 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         return e && *e && *e != '0';
     }();
     static const int kMaxSweepDepth = [] {
-        const char* e = std::getenv("XOLVER_NRA_CAC_SAT_SAMPLE_DEPTH");
-        if (e && *e) { int v = std::atoi(e); if (v > 0) return v; }
-        return 2;  // top 2 variables only — keeps cost O(K^2 × cells)
+        // top 2 variables only — keeps cost O(K^2 × cells)
+        int v = env::paramInt("XOLVER_NRA_CAC_SAT_SAMPLE_DEPTH", 2);
+        return v > 0 ? v : 2;
     }();
     if (satSampleEnabled && level < kMaxSweepDepth) {
         if (std::getenv("XOLVER_NRA_CAC_DIAG")) {

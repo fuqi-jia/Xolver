@@ -1,4 +1,5 @@
 #include "theory/arith/bit_blast/EagerBitBlastSolver.h"
+#include "util/EnvParam.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "theory/arith/bit_blast/BitVec.h"
@@ -236,9 +237,9 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // 20M fresh vars (~a few GB of CNF) is safe; the per-attempt cap keeps any one
     // width from exploding while the cascade/wall-clock control total time.
     uint64_t budget = 20000000ull;
-    if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET")) {
-        char* end = nullptr; long long v = std::strtoll(e, &end, 10);
-        if (end != e && v > 0) budget = static_cast<uint64_t>(v);
+    {
+        long long v = env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET", 20000000);
+        if (v > 0) budget = static_cast<uint64_t>(v);
     }
     // Wall-clock budget for the WHOLE arm. This is the single biggest QF_NIA
     // recovery throttle: a small budget cuts off slow-SAT before the deciding
@@ -247,19 +248,15 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // Raising is SOUND (the arm only finds validated SAT or yields). Per-attempt
     // is still bounded by confLimit + var budget, so this does not break short
     // (dev-timeout) runs on small formulas.
-    long long budgetMs = 120000;
-    if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS")) {
-        char* end = nullptr; long long v = std::strtoll(e, &end, 10);
-        if (end != e && v >= 0) budgetMs = v;
-    }
+    long long budgetMs =
+        env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
+    if (budgetMs < 0) budgetMs = 120000;
     // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
     // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
     // gets a real chance, while still capping a futile width.
-    int confLimit = 1000000;
-    if (const char* e = std::getenv("XOLVER_NIA_EAGER_BITBLAST_CONFLICTS")) {
-        char* end = nullptr; long long v = std::strtoll(e, &end, 10);
-        if (end != e && v > 0) confLimit = static_cast<int>(v);
-    }
+    int confLimit = static_cast<int>(
+        env::paramLong("XOLVER_NIA_EAGER_BITBLAST_CONFLICTS", 1000000));
+    if (confLimit <= 0) confLimit = 1000000;
     const auto t0 = std::chrono::steady_clock::now();
     auto elapsedMs = [&]() {
         return std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -1,4 +1,5 @@
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"
+#include "util/EnvParam.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <algorithm>
 #include <chrono>
@@ -575,11 +576,8 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
     // budget on low-impact variables. Score vars by their occurrence in
     // CURRENTLY-FALSE constraints (heaviest correction candidate) and
     // only walk the top kTopVars; the others stay fixed this round.
-    static const size_t kTopVars = [] {
-        if (const char* e = std::getenv("XOLVER_NRA_LS_TOP_VARS"))
-            return static_cast<size_t>(std::atoi(e));
-        return size_t{8};
-    }();
+    static const size_t kTopVars = static_cast<size_t>(
+        env::paramLong("XOLVER_NRA_LS_TOP_VARS", 8));
     std::vector<VarId> walkVars;
     if (vars.size() <= kTopVars) {
         walkVars = vars;
@@ -612,11 +610,10 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
     // explode; mpq ops cost grows with size and a 50-round loop runs in
     // seconds (the nra_140 reg-runaway). Skipping any candidate above the cap
     // bounds per-round mpq cost to a small constant.
-    static const mpz_class kMaxDen = []() {
-        if (const char* e = std::getenv("XOLVER_NRA_LS_MAX_DEN"))
-            return mpz_class{e};
-        return mpz_class{"1000000"};
-    }();
+    // Denominator cap (default 1e6). Routed through paramLong for autotuner
+    // discovery; a cap above LONG_MAX is meaningless for mpq sizes.
+    static const mpz_class kMaxDen{
+        env::paramLong("XOLVER_NRA_LS_MAX_DEN", 1000000)};
     auto withinDenCap = [](const mpq_class& q) -> bool {
         return mpz_class(q.get_den()) <= kMaxDen;
     };

@@ -1,4 +1,5 @@
 #include "theory/arith/linear/BoundAxiomGenerator.h"
+#include "util/EnvParam.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/core/LinearFormKey.h"
@@ -134,10 +135,7 @@ bool BoundAxiomGenerator::enabled() {
 }
 
 int BoundAxiomGenerator::maxGroupSize() {
-    static int m = []() {
-        const char* v = std::getenv("XOLVER_LRA_BOUND_AXIOMS_MAXGROUP");
-        return (v && *v) ? std::atoi(v) : 256;
-    }();
+    static int m = env::paramInt("XOLVER_LRA_BOUND_AXIOMS_MAXGROUP", 256);
     return m;
 }
 
