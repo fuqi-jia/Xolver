@@ -134,10 +134,32 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         case Kind::ConstBool:
             return bl(std::get<bool>(n.payload.value));
         case Kind::ConstInt:
+            // int64_t fast path for typed literals.
             if (auto* v = std::get_if<int64_t>(&n.payload.value)) return num(RealValue::fromInt(*v));
+            // String payload: the frontend promotes string-typed ConstReal nodes
+            // to ConstInt when the literal has no decimal/slash (frontend/adapter
+            // .cpp, importNode). Without this fallback, every such integer literal
+            // is Indeterminate and the whole evaluation chain (Add/Mul/Eq/...)
+            // collapses to Indeterminate — silently masking SAT witnesses inside
+            // any (= poly 0) sub-expression of nested (not (and ...)) structures
+            // on AProVE/SVCOMP-class formulas. Mirrors the ConstReal handling
+            // below.
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                try {
+                    return num(RealValue::fromMpq(mpq_class(*s)));
+                } catch (...) {
+                    return r;  // unparseable → indeterminate (sound)
+                }
+            }
             return r;
         case Kind::ConstReal:
-            if (auto* s = std::get_if<std::string>(&n.payload.value)) return num(RealValue::fromMpq(mpq_class(*s)));
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                try {
+                    return num(RealValue::fromMpq(mpq_class(*s)));
+                } catch (...) {
+                    return r;
+                }
+            }
             return r;
         case Kind::Variable: {
             if (auto* s = std::get_if<std::string>(&n.payload.value)) {
