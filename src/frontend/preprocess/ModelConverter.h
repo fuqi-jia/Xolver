@@ -34,37 +34,59 @@ namespace xolver {
  */
 class ModelConverter {
 public:
-    // Record that `name` (sort `sort`) was eliminated and equals the value of
-    // `definingExpr`. Replayed in reverse registration order.
+    // Relation of an eliminated *unconstrained* variable to its bound term:
+    // x ⋈ bound. Used by witness reconstruction (unconstrained-elim).
+    enum class Rel { Ge, Gt, Le, Lt, Ne };
+
+    // solve-eqs: `name` was eliminated and EQUALS the value of `definingExpr`.
     void registerElimination(std::string name, SortId sort, ExprId definingExpr);
 
-    bool empty() const { return elims_.empty(); }
-    size_t size() const { return elims_.size(); }
+    // unconstrained-elim: `name` occurred only in a dropped atom `x ⋈ bound`
+    // (rel) and is otherwise free. Reconstruct it to a WITNESS satisfying the
+    // atom, given bound's value under the model.
+    void registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr);
 
-    // Reconstruct every eliminated variable into the model, evaluating its
-    // defining term under the current assignment, newest elimination first.
-    // Writes BOTH channels the solver reads: `numAsg` (typed RealValue) and
-    // `strAsg` (the legacy string map that Solver::modelMatchesOriginal and
-    // dumpModel consume, in bare mpq form e.g. "5" / "3/2"). Returns true iff
-    // every eliminated variable was reconstructed; false if some defining term
-    // could not be evaluated (model left without that variable).
+    // term-subst (bool): boolean variable `name` was eliminated and EQUALS the
+    // value of bool expression `definingExpr`. Reconstruct via evalBool.
+    void registerBoolElimination(std::string name, ExprId definingExpr);
+
+    bool empty() const { return steps_.empty(); }
+    size_t size() const { return steps_.size(); }
+
+    // Reconstruct every eliminated variable into the model, newest step first
+    // (a step's term may reference a later-eliminated var). Writes BOTH channels
+    // the solver reads: `numAsg` (typed RealValue) and `strAsg` (the legacy
+    // string map Solver::modelMatchesOriginal and dumpModel consume, bare mpq
+    // form e.g. "5" / "3/2"). Returns true iff every step was reconstructed.
     bool reconstruct(std::unordered_map<std::string, RealValue>& numAsg,
                      std::unordered_map<std::string, std::string>& strAsg,
                      const CoreIr& ir) const;
 
 private:
-    struct Elim {
+    enum class StepKind { Elim, Witness, BoolElim };
+    struct Step {
+        StepKind kind;
         std::string name;
         SortId sort;
-        ExprId expr;
+        ExprId expr;     // Elim/BoolElim: defining term;  Witness: bound term
+        Rel rel{Rel::Ge}; // Witness only
     };
-    std::vector<Elim> elims_;
+    std::vector<Step> steps_;
 
     // Iterative post-order evaluation of a linear arithmetic term over the
     // rational environment `env` (name -> value). nullopt if a leaf variable is
     // missing or a node is not linear-arithmetic-evaluable.
     static std::optional<mpq_class> evalRational(
         ExprId root, const CoreIr& ir,
+        const std::unordered_map<std::string, mpq_class>& env);
+
+    // Iterative evaluation of a boolean expression over `boolEnv` (bool vars)
+    // and `env` (rationals, for arithmetic relations). Missing bool vars default
+    // to false (matching dumpModel's unconstrained default). nullopt if a node
+    // is not evaluable (e.g. an unevaluable numeric relation operand).
+    static std::optional<bool> evalBool(
+        ExprId root, const CoreIr& ir,
+        const std::unordered_map<std::string, bool>& boolEnv,
         const std::unordered_map<std::string, mpq_class>& env);
 };
 

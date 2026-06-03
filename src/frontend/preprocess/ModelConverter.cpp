@@ -5,7 +5,121 @@
 namespace xolver {
 
 void ModelConverter::registerElimination(std::string name, SortId sort, ExprId definingExpr) {
-    elims_.push_back({std::move(name), sort, definingExpr});
+    steps_.push_back({StepKind::Elim, std::move(name), sort, definingExpr, Rel::Ge});
+}
+
+void ModelConverter::registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr) {
+    steps_.push_back({StepKind::Witness, std::move(name), sort, boundExpr, rel});
+}
+
+void ModelConverter::registerBoolElimination(std::string name, ExprId definingExpr) {
+    steps_.push_back({StepKind::BoolElim, std::move(name), NullSort, definingExpr, Rel::Ge});
+}
+
+std::optional<bool> ModelConverter::evalBool(
+    ExprId root, const CoreIr& ir,
+    const std::unordered_map<std::string, bool>& boolEnv,
+    const std::unordered_map<std::string, mpq_class>& env) {
+    const SortId boolSort = ir.boolSortId();
+    std::unordered_map<ExprId, bool> val;
+
+    auto boolOperands = [&](const CoreExpr& n) -> bool {
+        return !n.children.empty() && ir.get(n.children[0]).sort == boolSort;
+    };
+
+    struct Frame { ExprId e; bool processed; };
+    std::vector<Frame> stack;
+    stack.push_back({root, false});
+
+    while (!stack.empty()) {
+        Frame& frame = stack.back();
+        ExprId e = frame.e;
+        if (val.count(e)) { stack.pop_back(); continue; }
+        const CoreExpr node = ir.get(e);
+
+        if (!frame.processed) {
+            frame.processed = true;
+            // Numeric relation / numeric (dis)equality: leaf, via evalRational.
+            const bool numRel = (node.kind == Kind::Lt || node.kind == Kind::Leq ||
+                                 node.kind == Kind::Gt || node.kind == Kind::Geq) ||
+                                ((node.kind == Kind::Eq || node.kind == Kind::Distinct) &&
+                                 node.children.size() == 2 && !boolOperands(node));
+            if (numRel) {
+                if (node.children.size() != 2) return std::nullopt;
+                auto a = evalRational(node.children[0], ir, env);
+                auto b = evalRational(node.children[1], ir, env);
+                if (!a || !b) return std::nullopt;
+                bool r;
+                switch (node.kind) {
+                    case Kind::Lt:  r = (*a <  *b); break;
+                    case Kind::Leq: r = (*a <= *b); break;
+                    case Kind::Gt:  r = (*a >  *b); break;
+                    case Kind::Geq: r = (*a >= *b); break;
+                    case Kind::Eq:  r = (*a == *b); break;
+                    case Kind::Distinct: r = (*a != *b); break;
+                    default: return std::nullopt;
+                }
+                val[e] = r; stack.pop_back(); continue;
+            }
+            if (node.kind == Kind::ConstBool) {
+                auto* b = std::get_if<bool>(&node.payload.value);
+                if (!b) return std::nullopt;
+                val[e] = *b; stack.pop_back(); continue;
+            }
+            if (node.kind == Kind::Variable) {
+                auto* nm = std::get_if<std::string>(&node.payload.value);
+                if (!nm) return std::nullopt;
+                auto it = boolEnv.find(*nm);
+                val[e] = (it != boolEnv.end()) ? it->second : false;  // unconstrained -> false
+                stack.pop_back(); continue;
+            }
+            switch (node.kind) {
+                case Kind::Not: case Kind::And: case Kind::Or:
+                case Kind::Implies: case Kind::Xor: case Kind::Ite:
+                case Kind::Eq: case Kind::Distinct:  // (bool operands)
+                    for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                        ExprId c = node.children[i];
+                        if (!val.count(c)) stack.push_back({c, false});
+                    }
+                    continue;
+                default:
+                    return std::nullopt;  // UFApply/Select/... not bool-evaluable
+            }
+        }
+
+        stack.pop_back();
+        switch (node.kind) {
+            case Kind::Not:
+                if (node.children.size() != 1) return std::nullopt;
+                val[e] = !val.at(node.children[0]); break;
+            case Kind::And: { bool r = true;  for (ExprId c : node.children) r = r && val.at(c); val[e] = r; break; }
+            case Kind::Or:  { bool r = false; for (ExprId c : node.children) r = r || val.at(c); val[e] = r; break; }
+            case Kind::Implies:
+                if (node.children.size() != 2) return std::nullopt;
+                val[e] = (!val.at(node.children[0])) || val.at(node.children[1]); break;
+            case Kind::Xor:
+                if (node.children.size() != 2) return std::nullopt;
+                val[e] = val.at(node.children[0]) != val.at(node.children[1]); break;
+            case Kind::Ite:
+                if (node.children.size() != 3) return std::nullopt;
+                val[e] = val.at(node.children[0]) ? val.at(node.children[1]) : val.at(node.children[2]); break;
+            case Kind::Eq: {  // bool operands: all equal
+                bool r = true;
+                for (size_t i = 1; i < node.children.size(); ++i)
+                    r = r && (val.at(node.children[i]) == val.at(node.children[0]));
+                val[e] = r; break;
+            }
+            case Kind::Distinct:  // bool: 2 args -> !=, >2 args can't be pairwise distinct
+                val[e] = (node.children.size() == 2)
+                             ? (val.at(node.children[0]) != val.at(node.children[1]))
+                             : false;
+                break;
+            default: return std::nullopt;
+        }
+    }
+    auto it = val.find(root);
+    if (it == val.end()) return std::nullopt;
+    return it->second;
 }
 
 std::optional<mpq_class> ModelConverter::evalRational(
@@ -119,7 +233,7 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
     // string channel for vars only present there. Algebraic values are not
     // usable by the linear evaluator and are simply absent from env.
     std::unordered_map<std::string, mpq_class> env;
-    env.reserve(numAsg.size() + strAsg.size() + elims_.size());
+    env.reserve(numAsg.size() + strAsg.size() + steps_.size());
     for (const auto& [name, rv] : numAsg) {
         if (auto q = rv.tryAsRational()) env.emplace(name, *q);
     }
@@ -129,14 +243,44 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
         try { env.emplace(name, mpqFromString(s)); } catch (...) {}
     }
 
+    // Boolean environment from the string channel (for bool-var reconstruction).
+    std::unordered_map<std::string, bool> boolEnv;
+    for (const auto& [name, s] : strAsg) {
+        if (s == "true")  boolEnv.emplace(name, true);
+        else if (s == "false") boolEnv.emplace(name, false);
+    }
+
     bool allOk = true;
-    // Newest elimination first: a term may reference a later-eliminated var.
-    for (auto it = elims_.rbegin(); it != elims_.rend(); ++it) {
-        auto v = evalRational(it->expr, ir, env);
-        if (!v) { allOk = false; continue; }
-        numAsg[it->name] = RealValue::fromMpq(*v);
-        strAsg[it->name] = v->get_str();   // bare mpq form: "5", "3/2", "-7/2"
-        env[it->name] = *v;
+    // Newest step first: a term may reference a later-eliminated variable.
+    for (auto it = steps_.rbegin(); it != steps_.rend(); ++it) {
+        if (it->kind == StepKind::BoolElim) {
+            auto bv = evalBool(it->expr, ir, boolEnv, env);
+            if (!bv) { allOk = false; continue; }
+            strAsg[it->name] = *bv ? "true" : "false";
+            boolEnv[it->name] = *bv;
+            continue;
+        }
+
+        auto vb = evalRational(it->expr, ir, env);   // Elim: defining term; Witness: bound
+        if (!vb) { allOk = false; continue; }
+
+        mpq_class value;
+        if (it->kind == StepKind::Elim) {
+            value = *vb;                              // x == defining term
+        } else {
+            // Witness: pick any value satisfying  x ⋈ bound.  vt±1 satisfies the
+            // strict relations for both Int (integral) and Real.
+            switch (it->rel) {
+                case Rel::Ge: value = *vb; break;          // x >= b   -> b
+                case Rel::Le: value = *vb; break;          // x <= b   -> b
+                case Rel::Gt: value = *vb + 1; break;      // x >  b   -> b+1
+                case Rel::Lt: value = *vb - 1; break;      // x <  b   -> b-1
+                case Rel::Ne: value = *vb + 1; break;      // x != b   -> b+1
+            }
+        }
+        numAsg[it->name] = RealValue::fromMpq(value);
+        strAsg[it->name] = value.get_str();           // bare mpq form
+        env[it->name] = value;
     }
     return allOk;
 }

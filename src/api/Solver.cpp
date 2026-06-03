@@ -19,6 +19,7 @@
 #include "frontend/preprocess/MonomialSharingPass.h"
 #include "frontend/preprocess/SolveEqs.h"
 #include "frontend/preprocess/ModelConverter.h"
+#include "frontend/preprocess/UnconstrainedElim.h"
 #include "frontend/factory/StrategyPresets.h"
 #include <cstdlib>
 #include "theory/arith/search/CandidateModelSearch.h"
@@ -924,6 +925,20 @@ public:
                 solveEqs.commit();
                 std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
                           << " variable(s)\n";
+            }
+        }
+
+        // unconstrained-elim (↔SAT, P1): drop a relational atom whose variable
+        // occurs exactly once (it is then vacuously satisfiable); reconstruct
+        // that variable to a witness via modelConverter_. Same gating as
+        // solve-eqs (default-OFF, base scope, non-algebraic-model logics).
+        if (std::getenv("XOLVER_PP_UNCONSTRAINED_ELIM") && ir->currentScopeLevel() == 0 &&
+            !algebraicModelLogic) {
+            UnconstrainedElim unc(*ir, modelConverter_);
+            if (unc.run()) {
+                unc.commit();
+                std::cerr << "[UnconstrainedElim] dropped " << unc.eliminatedCount()
+                          << " atom(s)\n";
             }
         }
 
