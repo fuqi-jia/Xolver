@@ -1269,6 +1269,36 @@ public:
         }
 
         // -------------------------------------------------------------------
+        // LINEAR QF_NRA DOWNGRADE (default-ON). A QF_NRA file with NO nonlinear
+        // term is genuine linear arithmetic. The full CAD (NraSolver) is
+        // doubly-exponential in the variable count and can hang on large
+        // linear/Boolean encodings declared QF_NRA (e.g. the ezsmt CASP family)
+        // that the LRA Simplex decides in ~0s. Downgrade to QF_LRA so the
+        // complete LraSolver handles it (bounds, disequalities, ITE via SAT
+        // branching).
+        //
+        // SOUNDNESS: this never produces a wrong verdict even if the nonlinearity
+        // detector ever under-reports. The LRA atom extractor (extractLinearExpr)
+        // is an INDEPENDENT, reliable linearity gate — it rejects any Mul of >=2
+        // non-constants, any Pow, and any Div by a non-constant. A nonlinear atom
+        // that slips through the detector therefore fails extraction, which the
+        // Atomizer turns into setUnsupportedTheorySeen() -> the solver returns
+        // UNKNOWN, never SAT/UNSAT. So the worst case of a detector miss is a lost
+        // answer, not an unsound one. A/B escape: XOLVER_NRA_LINEAR_DOWNGRADE=0.
+        {
+            bool linDgEnabled = true;
+            if (const char* e = std::getenv("XOLVER_NRA_LINEAR_DOWNGRADE"))
+                linDgEnabled = !(e[0] == '0' && e[1] == '\0');
+            if (linDgEnabled && !features.hasNonlinear &&
+                (logic == "QF_NRA" || logic == "NRA")) {
+                if (std::getenv("XOLVER_NRA_LINEAR_DOWNGRADE_DIAG"))
+                    std::cerr << "[NRA-LINEAR-DOWNGRADE] " << logic
+                              << " -> QF_LRA (no nonlinear terms)\n";
+                logic = "QF_LRA";
+            }
+        }
+
+        // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
         // -------------------------------------------------------------------
         bool logicMismatch = false;

@@ -144,13 +144,14 @@ void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordere
             break;
         case Kind::Mul: {
             f.hasInterpretedArithmetic = true;
-            if (e.children.size() >= 2) {
-                bool leftNonConst = isNonConstantExpr(e.children[0], visited);
-                bool rightNonConst = isNonConstantExpr(e.children[1], visited);
-                if (leftNonConst && rightNonConst) {
-                    f.hasNonlinear = true;
-                }
+            // SMT-LIB '*' is VARIADIC: nonlinear iff >= 2 non-constant factors
+            // (e.g. (* 3 x y) is degree 2). The old code only inspected the first
+            // two children, so (* const var var) was misreported as linear.
+            int nonConst = 0;
+            for (ExprId ch : e.children) {
+                if (isNonConstantExpr(ch, visited) && ++nonConst >= 2) break;
             }
+            if (nonConst >= 2) f.hasNonlinear = true;
             break;
         }
         case Kind::Div: {
@@ -161,6 +162,10 @@ void LogicFeatureDetector::scanExpr(ExprId root, LogicFeatures& f, std::unordere
                 f.hasInt = true;
             } else {
                 f.hasReal = true;
+            }
+            // Division by a NON-CONSTANT denominator is nonlinear (x / y).
+            for (size_t i = 1; i < e.children.size(); ++i) {
+                if (isNonConstantExpr(e.children[i], visited)) { f.hasNonlinear = true; break; }
             }
             break;
         }
