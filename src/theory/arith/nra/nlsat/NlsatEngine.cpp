@@ -482,7 +482,12 @@ mcsat::ValueChoice NlsatEngine::pickValue(VarId var,
     //    (sign-invariance, exact algebra). Algebraic (non-rational)
     //    coordinates are skipped — remaining vars then fall through
     //    to GiveUp → Unknown, never a wrong verdict.
-    if (algebra_ && kernel_ && !cachedAssignmentSucceeded_) {
+    //
+    // XOLVER_NRA_MCSAT_NO_CDCAC=1 disables the fallback for
+    // diagnosis of high-degree benchmarks where CdcacCore hangs.
+    const char* noFallback = std::getenv("XOLVER_NRA_MCSAT_NO_CDCAC");
+    bool fallbackEnabled = !(noFallback && *noFallback && *noFallback != '0');
+    if (fallbackEnabled && algebra_ && kernel_ && !cachedAssignmentSucceeded_) {
         if (!cdcacFallback_) {
             cdcacFallback_ = std::make_unique<CdcacCore>(kernel_, algebra_);
         }
