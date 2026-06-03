@@ -760,6 +760,25 @@ std::vector<mpq_class> collectRootCandidates(
     VarId v) {
     std::vector<mpq_class> out;
     if (!algebra) return out;
+
+    // Root-isolation candidate harvesting is OPT-IN (default OFF). This is the
+    // ONLY libpoly call on the MCSAT DFS path, and on raw high-degree
+    // multivariate mgc atoms libpoly's root isolation CORRUPTS THE HEAP deep in
+    // rational_interval_pow. The backend's sigsetjmp recovery siglongjmps out
+    // of the SIGSEGV, but the heap is already poisoned → a later "double free
+    // or corruption" abort (masked under -O3/NDEBUG, which made the path appear
+    // to limp to `unknown`; surfaced immediately by a debug malloc). The
+    // degree/magnitude guards below REDUCE but cannot GUARANTEE elimination of
+    // the corrupting call, and siglongjmp-out-of-SIGSEGV is fundamentally
+    // unsound after heap corruption. So default to NOT harvesting roots: base
+    // candidates + exact mpq validation (exactSignAt) are entirely
+    // libpoly-free and provably crash-safe. The equality-cascade solver (the
+    // real mgc path) likewise uses exact substitution, never libpoly
+    // isolation. Re-enable for experiments via the flag.
+    static const bool kHarvestRoots =
+        env::paramInt("XOLVER_NRA_NLSAT_ROOT_CANDIDATES", 0) != 0;
+    if (!kHarvestRoots) return out;
+
     // Bit-length cap for harvested rational candidates (see filter below).
     static constexpr size_t kCandidateMaxBits = 256;
     // Prefix-magnitude early-out: libpoly evaluates each atom's coefficients
