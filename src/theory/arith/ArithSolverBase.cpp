@@ -1,16 +1,49 @@
 #include "theory/arith/ArithSolverBase.h"
 #include "theory/arith/Reasoner.h"
+#include "expr/ir.h"
+#include "theory/combination/SharedTermRegistry.h"
 #include <cassert>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <map>
 #include <string>
+#include <variant>
 
 namespace xolver {
 
 ArithSolverBase::ArithSolverBase() = default;
 ArithSolverBase::~ArithSolverBase() = default;
+
+std::string ArithSolverBase::getVarNameForSharedTerm(SharedTermId s) {
+    auto it = sharedTermToVarName_.find(s);
+    if (it != sharedTermToVarName_.end()) return it->second;
+
+    if (!sharedTermRegistry_ || !coreIr_) return "";
+    const auto* st = sharedTermRegistry_->get(s);
+    if (!st) return "";
+
+    const auto& expr = coreIr_->get(st->coreExpr);
+    std::string name;
+    if (expr.kind == Kind::Variable) {
+        if (std::holds_alternative<std::string>(expr.payload.value)) {
+            name = std::get<std::string>(expr.payload.value);
+        }
+    } else if (expr.isConst()) {
+        // Constants participate in LIA's interface-equality channel via a
+        // synthetic "__const_<sharedName>" var; the LIA simplex pins it to
+        // the actual constant value via a bound assertion. Solvers whose
+        // DomainStore-equivalent has no entry for such tags (e.g. NIA)
+        // naturally skip them in their getDeducedSharedEqualities loop --
+        // fine, since EUF merges identical constants by signature without
+        // needing an arith propagation.
+        name = "__const_" + st->name;
+    }
+    if (!name.empty()) {
+        sharedTermToVarName_[s] = name;
+    }
+    return name;
+}
 
 TheoryCheckResult ArithSolverBase::check(TheoryLemmaStorage& lemmaDb,
                                          TheoryEffort effort) {

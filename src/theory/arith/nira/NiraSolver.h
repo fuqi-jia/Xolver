@@ -36,7 +36,8 @@ public:
     }
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir);
+    // setCoreIr inherited from ArithSolverBase (2026-06-04). Default base impl
+    // (assign coreIr_) is what NiraSolver wants; no override needed.
 
     std::optional<TheoryModel> getModel() const override;
 
@@ -47,7 +48,7 @@ protected:
     void onReset() override;
 
 private:
-    const CoreIr* coreIr_ = nullptr;
+    // coreIr_ hoisted to ArithSolverBase (2026-06-04).
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     TheoryAtomRegistry* registry_ = nullptr;

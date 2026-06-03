@@ -2392,7 +2392,82 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
 
 std::vector<TheorySolver::SharedEqualityPropagation>
 NiaSolver::getDeducedSharedEqualities() {
-    return {};
+    // Nelson-Oppen fixed-value seam: when two shared integer variables both
+    // have their NIA domain pinned to the same singleton {v}, propagate the
+    // equality to EUF so the e-graph can fire array/UF axioms (read-over-
+    // write, congruence) that depend on the equality.
+    //
+    // Without this, QF_ANIA / QF_AUFNIA combination instances where the
+    // equality is implied by NIA bounds (e.g. `a = b` follows from
+    // `a >= n /\ a <= n /\ b >= n /\ b <= n`) are unreachable: NIA never
+    // tells EUF, EUF never closes the read-over-write, and the combined
+    // verdict stays Unknown. NiaSolver previously returned {} unconditionally,
+    // closing this seam entirely (the LIA path was the only one open).
+    //
+    // SOUND: a pair is emitted only when both vars' integer domains pin them
+    // to the same value, and the propagation reasons are the (deduped) union
+    // of the four bound-reason literals (lo_a, hi_a, lo_b, hi_b). If any
+    // bound is later relaxed by backtrack, the propagation's reason becomes
+    // unsatisfied and the SAT layer retracts it through normal conflict
+    // analysis. Same proof contract as LiaSolver::getDeducedSharedEqualities'
+    // fixed-value loop.
+    if (!sharedTermRegistry_) return {};
+
+    struct Entry {
+        SharedTermId stId;
+        std::vector<SatLit> reasons;
+    };
+    // map<mpz_class, ...> for determinism (autotuner / oracle reproducibility).
+    std::map<mpz_class, std::vector<Entry>> groups;
+
+    for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        std::string name = getVarNameForSharedTerm(stId);
+        if (name.empty()) continue;
+        const IntDomain* d = domains_.getDomain(name);
+        if (!d) continue;
+        if (!(d->hasLower && d->hasUpper)) continue;
+        if (d->lower.value != d->upper.value) continue;
+
+        std::vector<SatLit> reasons;
+        reasons.insert(reasons.end(), d->lower.reasons.begin(),
+                       d->lower.reasons.end());
+        reasons.insert(reasons.end(), d->upper.reasons.begin(),
+                       d->upper.reasons.end());
+        std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+            return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                  [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), reasons.end());
+
+        groups[d->lower.value].push_back({stId, std::move(reasons)});
+    }
+
+    std::vector<TheorySolver::SharedEqualityPropagation> result;
+    for (auto& [val, entries] : groups) {
+        if (entries.size() < 2) continue;
+        for (size_t i = 0; i < entries.size(); ++i) {
+            for (size_t j = i + 1; j < entries.size(); ++j) {
+                std::vector<SatLit> combined;
+                combined.insert(combined.end(), entries[i].reasons.begin(),
+                                entries[i].reasons.end());
+                combined.insert(combined.end(), entries[j].reasons.begin(),
+                                entries[j].reasons.end());
+                std::sort(combined.begin(), combined.end(),
+                          [](SatLit a, SatLit b) {
+                    return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+                });
+                combined.erase(std::unique(combined.begin(), combined.end(),
+                                           [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), combined.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    entries[i].stId, entries[j].stId, std::move(combined)});
+            }
+        }
+    }
+    return result;
 }
 
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {

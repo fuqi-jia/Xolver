@@ -67,8 +67,9 @@ public:
                    int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir);
-    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // setCoreIr override: stores via base + does NIA-specific Farkas-dump side
+    // effect. setSharedTermRegistry uses the base implementation.
+    void setCoreIr(const CoreIr* ir) override;
 
     bool supportsCombination() const override { return true; }
 
@@ -311,8 +312,8 @@ private:
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    // coreIr_, sharedTermRegistry_, sharedTermToVarName_, getVarNameForSharedTerm
+    // now live in ArithSolverBase (hoisted 2026-06-04; was duplicated 4x).
     TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<NiaLinearizationAdapter> linAdapter_;
     std::deque<TheoryLemma> pendingLinLemmas_;

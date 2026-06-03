@@ -1017,30 +1017,7 @@ TheoryLemma LiaSolver::buildBranchSplitLemma(int var, const DeltaRational& val) 
 // Nelson-Oppen combination hooks (experimental skeleton for non-convex LIA)
 // ---------------------------------------------------------------------------
 
-std::string LiaSolver::getVarNameForSharedTerm(SharedTermId s) {
-    auto it = sharedTermToVarName_.find(s);
-    if (it != sharedTermToVarName_.end()) return it->second;
-
-    if (!sharedTermRegistry_ || !coreIr_) return "";
-    const auto* st = sharedTermRegistry_->get(s);
-    if (!st) return "";
-
-    const auto& expr = coreIr_->get(st->coreExpr);
-    std::string name;
-    if (expr.kind == Kind::Variable) {
-        if (std::holds_alternative<std::string>(expr.payload.value)) {
-            name = std::get<std::string>(expr.payload.value);
-        }
-    } else if (expr.isConst()) {
-        // Constants participate in interface equalities via a synthetic variable.
-        // The actual constant value is enforced via bound assertion in check().
-        name = "__const_" + st->name;
-    }
-    if (!name.empty()) {
-        sharedTermToVarName_[s] = name;
-    }
-    return name;
-}
+// getVarNameForSharedTerm hoisted to ArithSolverBase (2026-06-04).
 
 int LiaSolver::getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b) {
     SharedTermId lo = a < b ? a : b;

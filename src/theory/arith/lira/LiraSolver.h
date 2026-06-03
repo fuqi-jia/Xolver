@@ -32,7 +32,8 @@ public:
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir);
+    // setCoreIr inherited from ArithSolverBase (2026-06-04). Base default
+    // (assign coreIr_) matches LiraSolver's previous behaviour.
 
     std::optional<TheoryModel> getModel() const override;
 
@@ -69,7 +70,7 @@ private:
 
     // CDCL state
     TheoryAtomRegistry* registry_ = nullptr;
-    const CoreIr* coreIr_ = nullptr;
+    // coreIr_ hoisted to ArithSolverBase (2026-06-04).
 
     struct DiseqInfo {
         LinearFormKey lhs;
