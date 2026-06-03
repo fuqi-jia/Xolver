@@ -846,7 +846,20 @@ std::vector<mpq_class> collectRootCandidates(
         auto rhsQ = pp->rhs.tryAsRational();
         if (!rhsQ) continue;
         PolyId effective = polyMinusRhs(kernel, pp->poly, *rhsQ);
-        RootSet rs = algebra->isolateRealRootsAlgebraic(effective, prefix, v);
+        // Isolate via the SAFE univariate path (specialize the rational prefix in,
+        // then isolate univariate roots) — the SAME path CDCAC uses. The prefix
+        // here is fully rational (built from the DFS sample, which is rational),
+        // so this is exact. This deliberately AVOIDS libpoly's multivariate
+        // isolate_real_roots(poly, assignment) (isolateRealRootsAlgebraic), which
+        // has a heap-corruption bug (a stack-pointer free in coefficient_value_approx
+        // / lp_rational_interval_destruct, glibc SIGABRT, not catchable by the
+        // sigsetjmp/SIGSEGV harness) on high-degree multivariate atoms — the reason
+        // root-candidate harvesting was gated OFF. Harvesting only consumes RATIONAL
+        // roots anyway, which the univariate path returns identically. Sound: this
+        // is a candidate source, validated downstream by exactSignAt.
+        UniPolyId uni = algebra->specializeToUnivariate(effective, prefix, v);
+        if (uni == NullUniPolyId) continue;
+        RootSet rs = algebra->isolateRealRoots(uni);
         if (rs.crashOccurred) continue;
         for (const auto& r : rs.roots) {
             if (!r.isRational()) continue;
