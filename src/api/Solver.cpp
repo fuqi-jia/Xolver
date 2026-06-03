@@ -1054,14 +1054,13 @@ public:
             }
             const auto& req = dmLowerer.requirement();
             // QF_ANIA / QF_AUFNIA register an EufSolver (the array+NIA stack runs
-            // arrays on a shared EUF e-graph) — but ONLY when XOLVER_COMB_ARRAY_NIA
-            // routes them (without the flag they are not admitted at the array
-            // gate, so this code is never reached for them). So they have EUF
-            // available for the div/mod div-by-zero UF exactly when that flag is
-            // set. Missing here meant int div/mod-by-variable in QF_ANIA bailed to
-            // unknown (SVCOMP UltimateAutomizer family) despite EUF being present.
+            // arrays on a shared EUF e-graph) — gated by XOLVER_COMB_ARRAY_NIA,
+            // which is default-ON (2026-06-04 overnight iter #4): without EUF
+            // available, int div/mod-by-variable in QF_ANIA bailed to unknown
+            // (SVCOMP UltimateAutomizer family). Opt-out via
+            // XOLVER_COMB_ARRAY_NIA=0 if the array+NIA combination misbehaves.
             bool arrayNiaRoutedEuf =
-                std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr &&
+                env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0 &&
                 (logic == "QF_ANIA" || logic == "ANIA" ||
                  logic == "QF_AUFNIA" || logic == "AUFNIA");
             bool hasEuf = arrayNiaRoutedEuf ||
@@ -1382,12 +1381,13 @@ public:
         // combination logics QF_ALIA/QF_ALRA/QF_AUFLIA/QF_AUFLRA. Any other
         // logic that contains arrays is gated to Unknown (sound).
         //
-        // XOLVER_COMB_ARRAY_NIA (default-OFF) additionally admits the
-        // array+nonlinear-integer logics QF_ANIA/QF_AUFNIA: arrays layered on
-        // the EUF e-graph with a purified NIA core underneath (see
-        // TheoryFactory). Gated until cross-validated; SAT results still pass
-        // the nonlinear validate-sat floor (unconfirmed → unknown).
-        bool arrayNiaEnabled = (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
+        // XOLVER_COMB_ARRAY_NIA (default-ON since 2026-06-04 overnight iter #4)
+        // additionally admits the array+nonlinear-integer logics
+        // QF_ANIA/QF_AUFNIA: arrays layered on the EUF e-graph with a purified
+        // NIA core underneath (see TheoryFactory). SAT results still pass the
+        // nonlinear validate-sat floor (unconfirmed → unknown). Opt-out via
+        // XOLVER_COMB_ARRAY_NIA=0 if a regression is suspected.
+        bool arrayNiaEnabled = env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0;
         auto isArrayLogic = [&](const std::string& l) {
             bool base = l == "QF_AX" ||
                    l == "QF_ALIA" || l == "ALIA" ||
