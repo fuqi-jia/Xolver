@@ -112,10 +112,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.int-probe-early",
         stageWrap("int-probe-early", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
-    // XOLVER_NRA_EQ_CASCADE (default OFF): equality-cascade SAT solver for
-    // mgc-class systems — assign the high-degree generator vars, collapse the
-    // residual equalities to linear, derive the rest, validate exactly. Sibling
-    // of int-probe; runs before linearize so a found model short-circuits CDCAC.
+    // XOLVER_NRA_EQ_CASCADE (default ON; XOLVER_NRA_EQ_CASCADE=0 disables):
+    // equality-cascade SAT solver for mgc-class systems — assign the high-degree
+    // generator vars, collapse the residual equalities to linear, derive the
+    // rest, validate exactly. Sibling of int-probe; runs before linearize so a
+    // found model short-circuits CDCAC.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.eq-cascade",
         stageWrap("eq-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCascade(db, e); })));
@@ -1350,8 +1351,13 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
 std::optional<TheoryCheckResult> NraSolver::stageCascade(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
     static const bool enabled = [] {
+        // Promoted default-ON (#NRA-LS-E iter 2): pure-rational + exact-validated
+        // over ALL active constraints (invariant 1) ⇒ sound by construction, and
+        // it never invokes libpoly root isolation, so it dodges the nlsat-path
+        // heap-corruption class entirely. Recovers mgc_09/mgc_10 (CDCAC times out
+        // projecting their degree-16/18 atoms). Disable with XOLVER_NRA_EQ_CASCADE=0.
         const char* e = std::getenv("XOLVER_NRA_EQ_CASCADE");
-        return e && *e && *e != '0';
+        return !(e && *e == '0');
     }();
     if (!enabled) return std::nullopt;
     (void)effort;
