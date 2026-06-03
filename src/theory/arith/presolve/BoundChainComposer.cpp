@@ -1,6 +1,9 @@
 #include "theory/arith/presolve/BoundChainComposer.h"
+#include "util/EnvParam.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 
 namespace xolver {
 
@@ -39,6 +42,26 @@ bool BoundChainComposer::run(PresolveState& st) {
     bool made = false;
     const size_t origN = st.atoms.size();  // don't process freshly-added atoms here
 
+    // Budget: this is a heuristic Fourier-Motzkin bound-chain pre-pass. On
+    // many-variable rational-coefficient systems (e.g. Pine loop-invariant
+    // checks) it generates a combinatorial blowup of derived 1-var atoms, and
+    // the O(atoms) dedup scan per push makes one run() quadratic in the atoms
+    // generated — a 15s+ hang where z3 decides in ~0s. Cap the input size and
+    // total work so composition can never dominate solving. SOUND: a skipped
+    // composition only forgoes a derived fact (and any conflict it would expose
+    // is still found by the main solver); we never emit a wrong fact.
+    static const size_t kMaxAtoms =
+        static_cast<size_t>(std::max(1, env::paramInt("XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS", 2000)));
+    static const long kMaxWork =
+        static_cast<long>(std::max(1, env::paramInt("XOLVER_NRA_BOUNDCHAIN_MAX_WORK", 1500000)));
+    static const bool diag = std::getenv("XOLVER_PRESOLVE_DIAG") != nullptr;
+    if (origN > kMaxAtoms) {
+        if (diag) std::cerr << "[BOUNDCHAIN] skip: origN=" << origN
+                            << " > cap=" << kMaxAtoms << "\n";
+        return false;
+    }
+    long work = 0;
+
     for (size_t ai = 0; ai < origN; ++ai) {
         if (!st.atoms[ai].live) continue;
         Relation ra = st.atoms[ai].rel;
@@ -54,6 +77,12 @@ bool BoundChainComposer::run(PresolveState& st) {
             ReasonNode reasonsB = st.atoms[bi].reasons;
 
             for (VarId v : polyA.variables()) {
+                if (work > kMaxWork) {
+                    if (diag) std::cerr << "[BOUNDCHAIN] work budget hit: origN=" << origN
+                                        << " work=" << work << " made=" << made << "\n";
+                    return made;
+                }
+                ++work;
                 if (polyA.degree(v) != 1 || polyB.degree(v) != 1) continue;
                 mpq_class cA = linearCoeff(polyA, v);
                 mpq_class cB = linearCoeff(polyB, v);
@@ -87,6 +116,7 @@ bool BoundChainComposer::run(PresolveState& st) {
                         if (!eqPoly.isZero()) {
                             bool dupEq = false;
                             for (const auto& E : st.atoms) {
+                                ++work;
                                 if (E.live && E.rel == Relation::Eq && polyEqual(E.poly, eqPoly)) { dupEq = true; break; }
                             }
                             if (!dupEq) {
@@ -106,6 +136,7 @@ bool BoundChainComposer::run(PresolveState& st) {
                 // Deduplicate against existing atoms.
                 bool dup = false;
                 for (const auto& E : st.atoms) {
+                    ++work;
                     if (E.live && E.rel == rr && polyEqual(E.poly, combo)) { dup = true; break; }
                 }
                 if (dup) continue;
