@@ -187,6 +187,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // BEFORE nia.bit-blast so it refutes the modular `mod 2^k` structure before
     // the blaster (which times out / OOMs on those inputs) is even attempted.
     addFull("nia.modular",    &NiaSolver::stageModular);
+    // Escalating-bounded SAT-finder for unbounded-≥0 vars (XOLVER_NIA_BOUNDED_
+    // ESCALATE, default-OFF). Runs BEFORE bit-blast because exact-integer
+    // enumeration on a small cap is cheaper than encoding+SAT-solving for the
+    // AProVE-class cases where K=2..3 already finds a witness. Sound: every
+    // SAT validated by validator_ over the ORIGINAL constraint set.
+    addFull("nia.escalating-bounded", &NiaSolver::stageEscalatingBounded);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
     // residual. Full-effort only (heavy); runs after the SAT workhorses.
@@ -1488,6 +1494,72 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
             return TheoryCheckResult::mkConflict(*res.conflict);
         case bitblast::BitBlastResult::Status::Unknown:
             return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult>
+NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    static const bool enabled =
+        env::paramInt("XOLVER_NIA_BOUNDED_ESCALATE", 0) != 0;
+    if (!enabled) return std::nullopt;
+    (void)effort;  // Full-effort-only is enforced by the addFull() registration.
+    if (normalized_.empty()) return std::nullopt;
+
+    // Detect vars with a finite lower bound but no upper bound. These are
+    // exactly the inputs BoundedNiaSolver can't enumerate today (it bails to
+    // UnknownUnsupported in solve()). Be conservative: if there are vars with
+    // no domain info OR unbounded below, skip — those are outside this
+    // stage's sound lane.
+    auto allVars = collectVars(normalized_, *kernel_);
+    std::vector<std::pair<std::string, mpz_class>> unboundedLow;
+    for (const auto& v : allVars) {
+        const IntDomain* d = domains_.getDomain(v);
+        if (!d) return std::nullopt;
+        if (d->hasLower && d->hasUpper) continue;   // bounded both sides — nia.bounded covers
+        if (!d->hasLower) return std::nullopt;       // unbounded below — outside lane
+        unboundedLow.push_back({v, d->lower.value});
+    }
+    if (unboundedLow.empty()) return std::nullopt; // nothing to escalate.
+
+    // Snapshot of current domains (deep copy via the addLower/addUpper API).
+    auto buildAugmented = [&](const mpz_class& widthMinus1) -> DomainStore {
+        DomainStore aug;
+        for (const auto& [name, dom] : domains_.getAllDomains()) {
+            if (dom.hasLower) aug.addLowerBound(name, dom.lower.value, dom.lower.reasons);
+            if (dom.hasUpper) aug.addUpperBound(name, dom.upper.value, dom.upper.reasons);
+        }
+        std::vector<SatLit> noReasons;
+        for (const auto& [name, lb] : unboundedLow) {
+            aug.addUpperBound(name, lb + widthMinus1, noReasons);
+        }
+        return aug;
+    };
+
+    // Escalate width = 2^k - 1, starting at k=1 (width 1: per-var ∈ [lb, lb+1])
+    // and doubling each iteration. Termination is STRUCTURAL via
+    // ENUMERATION_THRESHOLD (autotunable): bounded_.solve returns
+    // UnknownBudget once the product enumeration size exceeds the threshold
+    // for the augmented box, and we stop. No artificial k cap.
+    //
+    // Per-iteration cost is bounded by the threshold (which scales with
+    // wall::scaledCount under XOLVER_WALLCLOCK_SCALE, iter#5 work), so the
+    // total escalation cost over the solve is also bounded.
+    for (int k = 1; ; ++k) {
+        mpz_class widthMinus1 = (mpz_class(1) << k) - 1; // 2^k - 1
+        DomainStore aug = buildAugmented(widthMinus1);
+        auto br = bounded_.solve(normalized_, aug, validator_, lemmaDb);
+        if (br.status == BoundedSolveStatus::Sat) {
+            // bounded_.solve already validated the model against the original
+            // constraint set (which carries the unbounded lower bound), so SAT
+            // here is a sound witness for the original unbounded problem.
+            currentModel_ = br.model;
+            return TheoryCheckResult::consistent();
+        }
+        // UnsatComplete in the augmented box is NOT a global UNSAT — just
+        // means no model fits within [lb, lb+2^k-1]^|unbounded|. Escalate.
+        // UnknownBudget / UnknownUnsupported / anything else: stop.
+        if (br.status != BoundedSolveStatus::UnsatComplete) break;
     }
     return std::nullopt;
 }

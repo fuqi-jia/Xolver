@@ -294,6 +294,20 @@ private:
     // ORIGINAL NIA constraints. Default-OFF (XOLVER_NIA_LBBB),
     // Full-effort only.
     std::optional<TheoryCheckResult> stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // Escalating-bounded SAT-finder for the unbounded-≥0 NIA pattern (AProVE
+    // class, ~4,571 cases per master). When some variable has a finite lower
+    // bound but no upper bound, BoundedNiaSolver bails to UnknownUnsupported
+    // and downstream stages (bit-blast, modular, LS) may also miss the case.
+    // This stage augments domains_ in a SCRATCH copy by adding upper bounds
+    // `lower + 2^k - 1` for each unbounded-low var, then calls bounded_.solve
+    // on the augmented store, escalating k each iteration. SAT in any
+    // augmented box is also SAT in the original (smaller domain ⊆ original
+    // domain), and bounded_.solve validates every candidate via validator_
+    // against the original constraints — sound by invariant 1. The escalation
+    // terminates structurally when ENUMERATION_THRESHOLD bites
+    // (UnknownBudget) on the augmented box, never via an artificial k cap.
+    // Default-OFF XOLVER_NIA_BOUNDED_ESCALATE, Full-effort only.
+    std::optional<TheoryCheckResult> stageEscalatingBounded(TheoryLemmaStorage&, TheoryEffort);
     // HYB-2 (master 2026-06-02, post-Smart-LS). Coordinated LS-on-U +
     // BB-on-B for partition profiles where B dominates (|B| > |U|;
     // ITS-like, H5 finding). LS-tracked bounds give per-U-var
