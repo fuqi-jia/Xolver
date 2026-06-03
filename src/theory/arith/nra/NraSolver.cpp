@@ -1,5 +1,6 @@
 #include "theory/arith/nra/NraSolver.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
@@ -1714,7 +1715,11 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     }();
     const bool inloopPrune = true;  // promoted default-ON
     CacEngine::Config cfg;
-    cfg.deadlineMillis = soleEngine ? 0 : cacDeadlineMs;
+    // Scale CAC's deadline to ~1/4 of the wall-clock remaining when
+    // XOLVER_WALLCLOCK_SCALE is on (else == cacDeadlineMs). Lets CAC keep
+    // working when the competition timeout leaves time, instead of yielding
+    // to Collins at a flat 2s and then idling.
+    cfg.deadlineMillis = soleEngine ? 0 : wall::scaledBudgetMs(cacDeadlineMs, 1, 4);
     cfg.earlyInfeas = earlyInfeas;
     cfg.pruneIntervals = pruneIntervals;
     cfg.earlyInfeasSafe = earlyInfeasSafe;

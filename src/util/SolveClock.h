@@ -39,5 +39,19 @@ long elapsedMs();
 // their existing default budget.
 long remainingMs();
 
+// Scale a per-engine budget to the wall-clock actually remaining, so the
+// solver uses its full timeout instead of giving up at a flat hardcoded cutoff
+// (the "2s of CAC then idle 1190s" problem). Returns `baseMs` UNCHANGED unless
+// BOTH a deadline is set AND XOLVER_WALLCLOCK_SCALE is enabled — so by default
+// this is inert and every consumer keeps its existing budget.
+//
+// When active: returns clamp(remainingMs()*shareNum/shareDen, baseMs,
+// remainingMs()) — i.e. at least the original budget, at most the time left,
+// typically a 1/shareDen slice of what remains. baseMs <= 0 (an "unlimited"
+// sentinel) is returned unchanged. SOUND: only grows an engine's effort budget
+// and never past the real deadline; never affects a verdict's correctness,
+// only how long the engine is willing to search.
+long scaledBudgetMs(long baseMs, int shareNum = 1, int shareDen = 4);
+
 } // namespace wall
 } // namespace xolver

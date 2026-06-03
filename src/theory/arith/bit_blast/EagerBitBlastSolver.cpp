@@ -1,5 +1,6 @@
 #include "theory/arith/bit_blast/EagerBitBlastSolver.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "theory/arith/bit_blast/BitVec.h"
@@ -251,6 +252,9 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     long long budgetMs =
         env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
     if (budgetMs < 0) budgetMs = 120000;
+    // Grow this arm's wall budget to ~1/2 of the time remaining when
+    // XOLVER_WALLCLOCK_SCALE is on (else unchanged); 0 stays unlimited.
+    budgetMs = wall::scaledBudgetMs(static_cast<long>(budgetMs), 1, 2);
     // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
     // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
     // gets a real chance, while still capping a futile width.

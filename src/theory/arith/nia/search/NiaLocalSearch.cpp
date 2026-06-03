@@ -1,5 +1,6 @@
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 #include "theory/arith/nia/search/SmartInit.h"
 #include <random>
 #include <algorithm>
@@ -207,7 +208,11 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
     if (constraints.empty()) return IntegerModel{};
 
     // Per-solve cumulative budget exhausted: skip the search entirely.
-    if (totalBudgetMs_ > 0 && cumulativeMs_ >= totalBudgetMs_) return std::nullopt;
+    // Budget grows to ~1/3 of wall-clock remaining when XOLVER_WALLCLOCK_SCALE
+    // is on (else == totalBudgetMs_), computed live so it tracks time left.
+    if (totalBudgetMs_ > 0 &&
+        cumulativeMs_ >= wall::scaledBudgetMs(totalBudgetMs_, 1, 3))
+        return std::nullopt;
 
     const auto t0 = std::chrono::steady_clock::now();
     struct Accum {  // record this call's wall time into cumulativeMs_ on exit

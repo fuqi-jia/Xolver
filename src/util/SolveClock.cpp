@@ -3,6 +3,8 @@
 #include <atomic>
 #include <chrono>
 
+#include "util/EnvParam.h"
+
 namespace xolver {
 namespace wall {
 namespace {
@@ -46,6 +48,26 @@ long remainingMs() {
     if (!hasDeadline()) return NO_DEADLINE;
     long rem = g_budgetMs.load(std::memory_order_relaxed) - elapsedMs();
     return rem > 0 ? rem : 0;
+}
+
+namespace {
+// Read once: the autotuner / competition wrapper sets this before launch.
+bool scaleEnabled() {
+    static const bool e = env::paramInt("XOLVER_WALLCLOCK_SCALE", 0) != 0;
+    return e;
+}
+} // namespace
+
+long scaledBudgetMs(long baseMs, int shareNum, int shareDen) {
+    // baseMs <= 0 is an "unlimited" sentinel in several budgets — never cap it.
+    if (baseMs <= 0) return baseMs;
+    if (!scaleEnabled() || !hasDeadline() || shareDen <= 0) return baseMs;
+    long rem = remainingMs();
+    if (rem <= 0) return baseMs; // deadline gone: keep the engine's own cutoff
+    long share = (rem / shareDen) * shareNum; // divide first to avoid overflow
+    if (share < baseMs) share = baseMs;       // at least the original budget
+    if (share > rem) share = rem;             // never exceed time remaining
+    return share;
 }
 
 } // namespace wall
