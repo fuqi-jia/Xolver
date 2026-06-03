@@ -97,6 +97,9 @@ bool UnivariatePolySignAnalyzer::run(PresolveState& st) {
         // Isolate real roots.
         UniPolyId up = backend_->allocUni(hi2lo);
         RootSet rs = backend_->isolateRealRoots(up);
+        // Firewall bail (oversize coeffs): empty roots here would falsely imply a
+        // sign-invariant line ⇒ unsound domain narrowing. Skip this atom instead.
+        if (rs.crashOccurred) continue;
         std::vector<RealAlg> roots = rs.roots;
         std::sort(roots.begin(), roots.end(),
                   [](const RealAlg& a, const RealAlg& b) { return rootRep(a) < rootRep(b); });
