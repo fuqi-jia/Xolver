@@ -40,6 +40,8 @@
 #include "util/CaseStats.h"
 #endif
 #endif
+#include "util/EnvParam.h"
+#include "util/SolveClock.h"
 
 #include "sat/CadicalBackend.h"
 #include "sat/CadicalTheoryPropagator.h"
@@ -2199,9 +2201,14 @@ void Solver::assertFormula(Term t) {
 }
 
 Result Solver::checkSat() {
-    if (std::getenv("XOLVER_STRAT_PORTFOLIO"))
-        return pImpl->checkSatPortfolio();
-    return pImpl->checkSatInternal();
+    // Start the global solve wall-clock so per-engine budgets can scale to the
+    // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
+    wall::beginSolve(env::paramLong("XOLVER_WALLCLOCK_MS", 0));
+    Result r = std::getenv("XOLVER_STRAT_PORTFOLIO")
+                   ? pImpl->checkSatPortfolio()
+                   : pImpl->checkSatInternal();
+    wall::endSolve();
+    return r;
 }
 
 Result Solver::checkSatAssuming(std::vector<Term> assumptions) {
