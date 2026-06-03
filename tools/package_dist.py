@@ -82,6 +82,12 @@ def main():
             "compare_benchmarks.py",
             "lia_mismatch_replay.py",
             "run_lia_ablation.sh",
+            # The per-panda differential driver + the helper it sources. Without
+            # these the deployed tarball has no run.sh and deploy_one_panda.sh's
+            # `bash tools/run.sh` finds nothing (and CANDFLAGS variants like
+            # `wallclock` never reach the node).
+            "run.sh",
+            "diff_common.sh",
         ]:
             src = Path("tools") / script
             if src.exists():

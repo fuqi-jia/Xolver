@@ -44,8 +44,10 @@ cmake .. \
     -DXOLVER_BUILD_TESTS=OFF
 
 # Build
-echo "[3/4] Building..."
-cmake --build . -j$(nproc)
+# WSL-safe: default to 2 jobs (unbounded -j$(nproc) has OOM-crashed WSL).
+# Override on a beefy build server with BUILD_JOBS=$(nproc) or similar.
+echo "[3/4] Building (-j${BUILD_JOBS:-2})..."
+cmake --build . -j"${BUILD_JOBS:-2}"
 
 # Verify
 echo "[4/4] Verifying static binary..."
