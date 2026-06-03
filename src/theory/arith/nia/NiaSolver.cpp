@@ -1500,10 +1500,12 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
 
 std::optional<TheoryCheckResult>
 NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    (void)lemmaDb;
     static const bool enabled =
         env::paramInt("XOLVER_NIA_BOUNDED_ESCALATE", 0) != 0;
     if (!enabled) return std::nullopt;
     (void)effort;  // Full-effort-only is enforced by the addFull() registration.
+    if (!coreIr_) return std::nullopt;  // need the original formula for AMV.
     if (normalized_.empty()) return std::nullopt;
 
     // Detect vars with a finite lower bound but no upper bound. These are
@@ -1512,54 +1514,96 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
     // no domain info OR unbounded below, skip — those are outside this
     // stage's sound lane.
     auto allVars = collectVars(normalized_, *kernel_);
-    std::vector<std::pair<std::string, mpz_class>> unboundedLow;
-    for (const auto& v : allVars) {
+    std::vector<std::string> vars(allVars.begin(), allVars.end());
+    std::sort(vars.begin(), vars.end()); // determinism
+    std::vector<std::pair<mpz_class, mpz_class>> ranges; // (lo, hi) per var
+    ranges.reserve(vars.size());
+    bool anyUnboundedAbove = false;
+    for (const auto& v : vars) {
         const IntDomain* d = domains_.getDomain(v);
         if (!d) return std::nullopt;
-        if (d->hasLower && d->hasUpper) continue;   // bounded both sides — nia.bounded covers
-        if (!d->hasLower) return std::nullopt;       // unbounded below — outside lane
-        unboundedLow.push_back({v, d->lower.value});
+        if (!d->hasLower) return std::nullopt;   // unbounded below — out of lane
+        mpz_class lo = d->lower.value;
+        if (d->hasUpper) {
+            // already capped — keep the existing window
+            ranges.push_back({lo, d->upper.value});
+        } else {
+            ranges.push_back({lo, lo});          // placeholder; widened per k
+            anyUnboundedAbove = true;
+        }
     }
-    if (unboundedLow.empty()) return std::nullopt; // nothing to escalate.
+    if (!anyUnboundedAbove) return std::nullopt; // nia.bounded covers this.
 
-    // Snapshot of current domains (deep copy via the addLower/addUpper API).
-    auto buildAugmented = [&](const mpz_class& widthMinus1) -> DomainStore {
-        DomainStore aug;
-        for (const auto& [name, dom] : domains_.getAllDomains()) {
-            if (dom.hasLower) aug.addLowerBound(name, dom.lower.value, dom.lower.reasons);
-            if (dom.hasUpper) aug.addUpperBound(name, dom.upper.value, dom.upper.reasons);
-        }
-        std::vector<SatLit> noReasons;
-        for (const auto& [name, lb] : unboundedLow) {
-            aug.addUpperBound(name, lb + widthMinus1, noReasons);
-        }
-        return aug;
-    };
+    // Cap on per-iteration enumeration size (autotunable knob, iter#5 hoist).
+    // STRUCTURAL bound — no artificial k cap; the loop terminates when the
+    // augmented box exceeds this threshold for any k.
+    const long enumThreshold =
+        env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
 
-    // Escalate width = 2^k - 1, starting at k=1 (width 1: per-var ∈ [lb, lb+1])
-    // and doubling each iteration. Termination is STRUCTURAL via
-    // ENUMERATION_THRESHOLD (autotunable): bounded_.solve returns
-    // UnknownBudget once the product enumeration size exceeds the threshold
-    // for the augmented box, and we stop. No artificial k cap.
-    //
-    // Per-iteration cost is bounded by the threshold (which scales with
-    // wall::scaledCount under XOLVER_WALLCLOCK_SCALE, iter#5 work), so the
-    // total escalation cost over the solve is also bounded.
+    // AMV input scaffold reused across candidates (zero-alloc inner loop).
+    ArithModelValidator::NumAssignment num;
+    num.reserve(vars.size());
+    ArithModelValidator::BoolAssignment bools;  // empty — pure NIA has no bool vars
+
+    // Escalate width = 2^k - 1 on UNBOUNDED vars; keep bounded vars' ranges
+    // intact. Compute totalSize first; if > threshold, stop escalating.
     for (int k = 1; ; ++k) {
         mpz_class widthMinus1 = (mpz_class(1) << k) - 1; // 2^k - 1
-        DomainStore aug = buildAugmented(widthMinus1);
-        auto br = bounded_.solve(normalized_, aug, validator_, lemmaDb);
-        if (br.status == BoundedSolveStatus::Sat) {
-            // bounded_.solve already validated the model against the original
-            // constraint set (which carries the unbounded lower bound), so SAT
-            // here is a sound witness for the original unbounded problem.
-            currentModel_ = br.model;
-            return TheoryCheckResult::consistent();
+
+        // Build per-var (lo, hi) for THIS k, and compute totalSize.
+        std::vector<std::pair<mpz_class, mpz_class>> kRanges = ranges;
+        mpz_class totalSize = 1;
+        bool overBudget = false;
+        for (size_t i = 0; i < vars.size(); ++i) {
+            const IntDomain* d = domains_.getDomain(vars[i]);
+            if (d && !d->hasUpper) {
+                kRanges[i] = {kRanges[i].first, kRanges[i].first + widthMinus1};
+            }
+            mpz_class span = kRanges[i].second - kRanges[i].first + 1;
+            if (span <= 0) { overBudget = true; break; }
+            totalSize *= span;
+            if (totalSize > enumThreshold) { overBudget = true; break; }
         }
-        // UnsatComplete in the augmented box is NOT a global UNSAT — just
-        // means no model fits within [lb, lb+2^k-1]^|unbounded|. Escalate.
-        // UnknownBudget / UnknownUnsupported / anything else: stop.
-        if (br.status != BoundedSolveStatus::UnsatComplete) break;
+        if (overBudget) break;
+
+        // Cartesian-product enumeration. For each candidate, validate via
+        // ArithModelValidator against the ORIGINAL coreIr_ assertions —
+        // identical pattern to stageLocalSearchBoolExtend (the CDCL-branch
+        // independence layer). SOUND for SAT: a model that satisfies the
+        // ORIGINAL boolean+arith formula is a sound SAT witness regardless
+        // of the partial constraint subset in normalized_.
+        const size_t N = vars.size();
+        std::vector<mpz_class> cur(N);
+        for (size_t i = 0; i < N; ++i) cur[i] = kRanges[i].first;
+        while (true) {
+            // Build NumAssignment from `cur`.
+            num.clear();
+            for (size_t i = 0; i < N; ++i) {
+                num.emplace(vars[i], mpq_class(cur[i]));
+            }
+            ArithModelValidator amv(*coreIr_, num, bools);
+            if (amv.validate(coreIr_->assertions()) ==
+                ArithModelValidator::Verdict::Satisfied) {
+                // Materialize as NIA's currentModel_ — IntegerModel is a
+                // map<string, mpz_class>, same shape as `cur`.
+                IntegerModel model;
+                for (size_t i = 0; i < N; ++i) model[vars[i]] = cur[i];
+                currentModel_ = std::move(model);
+                return TheoryCheckResult::consistent();
+            }
+            // Indeterminate is treated as not-Satisfied (sound: we never claim
+            // SAT without a Satisfied verdict). Continue scanning.
+            // Increment cur in odometer order.
+            size_t j = 0;
+            while (j < N) {
+                ++cur[j];
+                if (cur[j] <= kRanges[j].second) break;
+                cur[j] = kRanges[j].first;
+                ++j;
+            }
+            if (j == N) break; // exhausted
+        }
+        // No SAT in this k's box; escalate (any unbounded var grows).
     }
     return std::nullopt;
 }
