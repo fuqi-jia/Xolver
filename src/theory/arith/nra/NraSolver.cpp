@@ -347,8 +347,20 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 return e && *e && *e != '0';
             }();
             NraLocalSearch ls(*kernel_);
-            ls.setBudgetMs(budgetMs);
-            ls.setMaxRounds(maxRounds);
+            // Wall-clock-anytime scaling (#NRA-LS-E iter 3). INERT by default:
+            // wall::scaled* return the base unchanged unless XOLVER_WALLCLOCK_SCALE
+            // is on AND a deadline (XOLVER_WALLCLOCK_MS) is set — so the default
+            // gate is byte-identical. In a competition profile (per-instance
+            // ~1200s) the budget grows to ~12s and the round cap to ~60k, which
+            // recovers the larger zankl-matrix / Geogebra SAT clusters that need
+            // a longer WalkSAT run (matrix-1-all-30 found at ~5s). SAT-only +
+            // exact-validated ⇒ growing the search budget never affects a verdict,
+            // only how long it looks (mirrors the CAC-deadline scaling at the
+            // CacEngine config below; shareDen=100 keeps the up-front slice small
+            // so an UNSAT case — WalkSAT has no plateau-exit — front-loads ~12s of
+            // a 1200s instance budget, not a 1/4 slice).
+            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 100));
+            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds)));
             ls.setEqRelax(eqRelax);
             const auto t0 = std::chrono::steady_clock::now();
             auto candOpt = ls.tryFindModel(lsCons, vars);
