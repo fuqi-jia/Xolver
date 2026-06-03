@@ -2467,6 +2467,162 @@ NiaSolver::getDeducedSharedEqualities() {
             }
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Var-var implied equalities (port of LIA's assertedVarEqualityReason).
+    //
+    // Two shared integer variables can be forced equal by NIA-asserted
+    // linear atoms even when neither domain pins to a constant: an explicit
+    // equality atom `c*x - c*y = k` with `k = 0`, or complementary
+    // inequalities `c*(x-y) >= k AND c*(x-y) <= k` collapsing to a single
+    // point. For each pair of shared vars (a, b), walk the active trail
+    // accumulating bounds on `d = na - nb` from atoms whose polynomial is
+    // exactly a 2-variable linear difference; if the accumulated interval
+    // collapses to {0}, emit the propagation with the two pinning literals.
+    //
+    // SOUND:
+    //   1. Exact-pins-only: only emit when the accumulated lo == up == 0
+    //      after iterating all 2-var difference atoms on the trail. Strict
+    //      bounds (Lt/Gt) are skipped (they don't pin an equality).
+    //   2. Complete explanation: reasons = the two pinning literals (loLit,
+    //      upLit) — those are the SAT literals whose retraction unblocks
+    //      the derived equality. SAT-CDCL will retract the propagation
+    //      automatically when either reason becomes unassigned.
+    //   3. Backtrack invalidation: state_.trail entries are dropped by the
+    //      base class's backtrackToLevel; the next getDeducedSharedEqualities
+    //      call rescans fresh.
+    //   4. Deduped against the fixed-value loop above (a pair already pinned
+    //      by both vars being singleton-domain is not re-emitted here).
+    //   5. PolynomialAtomPayload with an algebraic (non-rational) rhs is
+    //      skipped — over-conservative but never wrong.
+    if (sharedTermRegistry_) {
+        struct SV { SharedTermId stId; std::string name; };
+        std::vector<SV> svs;
+        for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+            std::string name = getVarNameForSharedTerm(stId);
+            if (name.empty()) continue;
+            svs.push_back({stId, std::move(name)});
+        }
+
+        if (svs.size() >= 2) {
+            auto pairKey = [](SharedTermId a, SharedTermId b) -> uint64_t {
+                SharedTermId lo = a < b ? a : b;
+                SharedTermId hi = a < b ? b : a;
+                return (static_cast<uint64_t>(lo) << 32)
+                     | static_cast<uint32_t>(hi);
+            };
+            std::unordered_set<uint64_t> emittedPair;
+            for (const auto& p : result) emittedPair.insert(pairKey(p.a, p.b));
+
+            for (size_t i = 0; i < svs.size(); ++i) {
+                for (size_t j = i + 1; j < svs.size(); ++j) {
+                    if (emittedPair.count(pairKey(svs[i].stId, svs[j].stId)))
+                        continue;
+                    const std::string& na = svs[i].name;
+                    const std::string& nb = svs[j].name;
+
+                    bool haveLo = false, haveUp = false;
+                    mpq_class lo = 0, up = 0;
+                    SatLit loLit{}, upLit{};
+
+                    for (const auto& e : state_.trail) {
+                        const auto* p = std::get_if<PolynomialAtomPayload>(
+                                            &e.atom.payload);
+                        if (!p) continue;
+                        if (!p->rhs.isRational()) continue;
+
+                        auto vars = kernel_->variables(p->poly);
+                        if (vars.size() != 2) continue;
+                        bool hasA = false, hasB = false;
+                        for (const auto& v : vars) {
+                            if (v == na) hasA = true;
+                            else if (v == nb) hasB = true;
+                        }
+                        if (!hasA || !hasB) continue;
+
+                        auto tOpt = kernel_->terms(p->poly);
+                        if (!tOpt) continue;
+                        mpz_class cA = 0, cB = 0, k = 0;
+                        bool ok = true;
+                        for (const auto& m : *tOpt) {
+                            if (m.powers.empty()) {
+                                k += m.coefficient;
+                            } else if (m.powers.size() == 1
+                                       && m.powers[0].second == 1) {
+                                std::string vn(
+                                    kernel_->varName(m.powers[0].first));
+                                if (vn == na)      cA += m.coefficient;
+                                else if (vn == nb) cB += m.coefficient;
+                                else { ok = false; break; }
+                            } else {
+                                ok = false; break;  // nonlinear monomial
+                            }
+                        }
+                        if (!ok) continue;
+                        if (cA == 0 || cA != -cB) continue;
+
+                        Relation rel = e.value ? p->rel
+                                               : negateRelation(p->rel);
+                        if (rel == Relation::Neq) continue;  // never pins
+                        const mpq_class& rhsQ = p->rhs.asRational();
+                        // poly = cA*(na - nb) + k ; rel rhsQ
+                        // => d = na - nb satisfies  cA*d  rel  (rhsQ - k)
+                        // => d rel'  (rhsQ - k)/cA  with rel' flipped if cA<0
+                        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+                        bool flip = (cA < 0);
+                        auto addLower = [&](const mpq_class& v, SatLit lit) {
+                            if (!haveLo || v > lo) {
+                                lo = v; loLit = lit; haveLo = true;
+                            }
+                        };
+                        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+                            if (!haveUp || v < up) {
+                                up = v; upLit = lit; haveUp = true;
+                            }
+                        };
+                        switch (rel) {
+                            case Relation::Eq:
+                                addLower(bnd, e.lit);
+                                addUpper(bnd, e.lit);
+                                break;
+                            case Relation::Leq:
+                                if (!flip) addUpper(bnd, e.lit);
+                                else       addLower(bnd, e.lit);
+                                break;
+                            case Relation::Geq:
+                                if (!flip) addLower(bnd, e.lit);
+                                else       addUpper(bnd, e.lit);
+                                break;
+                            case Relation::Lt:
+                            case Relation::Gt:
+                            default:
+                                break;  // strict — does not pin
+                        }
+                    }
+
+                    if (haveLo && haveUp && lo == 0 && up == 0) {
+                        std::vector<SatLit> reasons;
+                        reasons.push_back(loLit);
+                        if (!(upLit == loLit)) reasons.push_back(upLit);
+                        std::sort(reasons.begin(), reasons.end(),
+                                  [](SatLit a, SatLit b) {
+                            return a.var < b.var
+                                || (a.var == b.var && a.sign < b.sign);
+                        });
+                        reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                                  [](SatLit a, SatLit b) {
+                            return a.var == b.var && a.sign == b.sign;
+                        }), reasons.end());
+                        emittedPair.insert(
+                            pairKey(svs[i].stId, svs[j].stId));
+                        result.push_back(TheorySolver::SharedEqualityPropagation{
+                            svs[i].stId, svs[j].stId, std::move(reasons)});
+                    }
+                }
+            }
+        }
+    }
+
     return result;
 }
 
