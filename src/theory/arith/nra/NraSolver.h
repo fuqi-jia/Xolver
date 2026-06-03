@@ -150,6 +150,12 @@ private:
     // (invariant 1). Returns consistent() on first validated model,
     // nullopt otherwise. Full effort only.
     std::optional<TheoryCheckResult> stageIntegerProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // XOLVER_NRA_EQ_CASCADE (default OFF): equality-cascade SAT solver for
+    // mgc-class systems (assign high-degree generators → residual equalities go
+    // linear → derive the rest → validate exactly via the kernel sign). Returns
+    // consistent() on a validated model (stashed in satFastModel_), nullopt
+    // otherwise. Pure-NRA only (skips combination/N-O mode).
+    std::optional<TheoryCheckResult> stageCascade(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
     // repair heuristic. Returns consistent() iff LS finds a rational assignment
     // exact-validated against every active constraint (invariant 1 — Solver-level
