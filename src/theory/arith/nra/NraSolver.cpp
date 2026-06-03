@@ -112,6 +112,13 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.int-probe-early",
         stageWrap("int-probe-early", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
+    // XOLVER_NRA_EQ_CASCADE (default OFF): equality-cascade SAT solver for
+    // mgc-class systems — assign the high-degree generator vars, collapse the
+    // residual equalities to linear, derive the rest, validate exactly. Sibling
+    // of int-probe; runs before linearize so a found model short-circuits CDCAC.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.eq-cascade",
+        stageWrap("eq-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCascade(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -1315,6 +1322,40 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
         }
         st.flush();
     }
+    satFastModel_ = std::move(*modelOpt);
+    return TheoryCheckResult::consistent();
+}
+
+// XOLVER_NRA_EQ_CASCADE — equality-cascade SAT solver (mgc-class). Assign the
+// high-degree generator variables, which collapses every high-degree monomial
+// (vv3^16, …) to a number and turns each residual equality linear; derive the
+// remaining variables (gamma0, vv2, lambda1, mu, …) and validate the full point
+// exactly via the kernel sign over ALL active constraints (invariant 1). Pure
+// rational throughout — never libpoly root isolation — so it closes mgc_09/10
+// where CDCAC times out projecting the degree-16/18 atom. Pure-NRA only;
+// combination/N-O mode falls through (interface (dis)equalities live outside
+// presolveConstraints_). SAT-only: no model found ⇒ nullopt ⇒ CDCAC/Unknown.
+std::optional<TheoryCheckResult> NraSolver::stageCascade(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_EQ_CASCADE");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    (void)effort;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    std::vector<StructuralIntegerProbe::Constraint> cons;
+    cons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        cons.push_back({c.poly, c.rel});
+    }
+
+    auto modelOpt = StructuralIntegerProbe::trySolveCascade(cons, *kernel_);
+    if (!modelOpt) return std::nullopt;
     satFastModel_ = std::move(*modelOpt);
     return TheoryCheckResult::consistent();
 }

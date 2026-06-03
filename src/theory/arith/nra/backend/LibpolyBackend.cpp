@@ -7,6 +7,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/LibPolyKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
+#include "util/EnvParam.h"   // XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS firewall
 #include <algorithm>
 #include <functional>
 
@@ -63,6 +64,74 @@ const std::vector<mpz_class>& LibpolyBackend::getUni(UniPolyId id) const {
     return uniPool_[id];
 }
 
+#ifdef XOLVER_HAS_LIBPOLY
+namespace {
+// ---- libpoly heap-corruption firewall -------------------------------------
+// Root cause (gdb-verified 2026-06-03): when libpoly's isolate_real_roots / sgn
+// substitutes a large coordinate into a high-degree term, it builds multi-
+// megabit rational coefficients; GMP overflows an internal size field and
+// free()s a bogus (stack-region) pointer => glibc SIGABRT "double free or
+// corruption". This is NOT a SIGSEGV, so the sigsetjmp recovery harness below
+// cannot catch it. The crash lives in functions SHARED with CDCAC, so the only
+// sound remedy is PREVENTION: refuse to hand libpoly an input whose substituted
+// coefficients would exceed a generous magnitude ceiling, and bail as
+// crashOccurred / Sign::Unknown (callers treat that as inconclusive => Unknown,
+// never as "0 roots" / sign-invariant). Healthy CAD stays orders of magnitude
+// below the ceiling (NRA reg unchanged); only pathological blowups degrade to
+// Unknown instead of crashing. Ceiling tunable via the env::param registry.
+long fwZbits(const mpz_class& z) {
+    return z == 0 ? 0L : static_cast<long>(mpz_sizeinbase(z.get_mpz_t(), 2));
+}
+long fwMaxCoeffBits(const std::vector<mpz_class>& coeffs) {
+    long m = 0;
+    for (const auto& c : coeffs) m = std::max(m, fwZbits(c));
+    return m;
+}
+long fwCapBits() {
+    static const long cap = [] {
+        int v = env::paramInt("XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS", 262144);
+        return v > 0 ? static_cast<long>(v) : 262144L;  // <=0 => default (never silently disable)
+    }();
+    return cap;
+}
+bool fwTrips(long estBits, const char* where) {
+    if (estBits <= fwCapBits()) return false;
+    static const bool diag = std::getenv("XOLVER_NRA_LIBPOLY_FIREWALL_DIAG") != nullptr;
+    if (diag) {
+        std::cerr << "[LIBPOLY-FIREWALL] refuse " << where << " est=" << estBits
+                  << "b > cap=" << fwCapBits() << "b (heap-corruption guard)\n";
+    }
+    return true;
+}
+// Upper bound on the bit-magnitude of the coefficients libpoly will materialize
+// when it substitutes `sample` into `p`: sum over sampled vars of
+// degree_v(p) * magnitudeBits(value_v). Over-estimate => fail safe (fire early).
+long fwSubstitutedBits(const LibpolyBackend& be, const PolynomialKernel& kernel,
+                       PolyId p, const SamplePoint& sample) {
+    long total = 0;
+    for (size_t i = 0; i < sample.numVars(); ++i) {
+        const std::string vname(kernel.varName(sample.varOrder[i]));
+        auto d = kernel.degree(p, vname);
+        if (!d || *d <= 0) continue;
+        const RealAlg& val = sample.values[i];
+        long mbits = 0;
+        if (val.isRational()) {
+            mbits = std::max(fwZbits(val.rational.get_num()), fwZbits(val.rational.get_den()));
+        } else if (val.isAlgebraic()) {
+            mbits = std::max(mbits, std::max(fwZbits(val.root.lower.get_num()),
+                                             fwZbits(val.root.lower.get_den())));
+            mbits = std::max(mbits, std::max(fwZbits(val.root.upper.get_num()),
+                                             fwZbits(val.root.upper.get_den())));
+            if (val.root.definingPoly != NullUniPolyId)
+                mbits = std::max(mbits, fwMaxCoeffBits(be.getUni(val.root.definingPoly)));
+        }
+        total += static_cast<long>(*d) * mbits;
+    }
+    return total;
+}
+} // namespace
+#endif // XOLVER_HAS_LIBPOLY
+
 RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
 #ifndef XOLVER_HAS_LIBPOLY
     (void)p;
@@ -93,6 +162,17 @@ RootSet LibpolyBackend::isolateRealRoots(UniPolyId p) {
             result.roots.push_back(RealAlg::fromRational(-b / a));
             return result;
         }
+    }
+
+    // Heap-corruption firewall: a univariate polynomial with multi-Kbit integer
+    // coefficients explodes libpoly's exact-rational interval arithmetic
+    // (rational_interval_pow → multi-megabit GMP rationals → corrupt free; see
+    // firewall note above). Such inputs are doubly-exponential and infeasible
+    // regardless; bail as crashOccurred so callers treat it as inconclusive
+    // (→ Unknown), NEVER as "0 roots". Refusing here keeps libpoly's context
+    // pristine (no mid-computation state to corrupt).
+    if (fwTrips(fwMaxCoeffBits(coeffs), "isolateRealRoots(uni)")) {
+        RootSet r; r.crashOccurred = true; return r;
     }
 
     // Convert coefficients (high-to-low) to libpoly format (low-to-high)
@@ -201,6 +281,16 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     return RootSet{};
 #else
     if (!libKernel_) return RootSet{};
+
+    // Heap-corruption firewall: refuse before touching libpoly when substituting
+    // `prefix` into `p` would build multi-Kbit coefficients (degree-in-v ×
+    // coordinate-magnitude). Verified on mgc eq_big: libpoly's root isolation
+    // corrupts the heap on such inputs. crashOccurred ⇒ callers treat as
+    // inconclusive (→ Unknown). Refusing pre-call keeps libpoly's context clean.
+    if (fwTrips(fwSubstitutedBits(*this, *kernel_, p, prefix),
+                "isolateRealRootsAlgebraic")) {
+        RootSet r; r.crashOccurred = true; return r;
+    }
 
     const poly::Polynomial& poly = libKernel_->getPolynomial(p);
     poly::Assignment assignment(libKernel_->context());
@@ -959,6 +1049,11 @@ Sign LibpolyBackend::signUnivariateAtAlgebraic(UniPolyId g, const AlgebraicRoot&
 // safe from longjmp clobbering (-Wclobbered).
 Sign LibpolyBackend::signAtSampleGuarded(PolyId current, const SamplePoint& sample) {
     if (!libKernel_) return Sign::Unknown;
+    // Heap-corruption firewall (see note above): poly::sgn over a sample that
+    // substitutes a large coordinate into a high-degree term explodes the same
+    // exact-rational interval arithmetic. Refuse → Sign::Unknown (inconclusive).
+    if (fwTrips(fwSubstitutedBits(*this, *kernel_, current, sample), "signAtSample"))
+        return Sign::Unknown;
     volatile int s = 0;
     volatile bool ok = false;
     g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
@@ -1005,6 +1100,12 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
     const std::vector<mpz_class>& gCoeffs, const AlgebraicRoot& alpha) {
     if (!libKernel_) return Sign::Unknown;
     if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
+    // Heap-corruption firewall: multi-Kbit g / defining-poly coefficients explode
+    // libpoly's univariate isolation + sgn. Refuse → Sign::Unknown.
+    if (fwTrips(std::max(fwMaxCoeffBits(gCoeffs),
+                         fwMaxCoeffBits(getUni(alpha.definingPoly))),
+                "signUnivariateAtAlgebraic"))
+        return Sign::Unknown;
     volatile int resultSign = 0;
     volatile bool ok = false;
     g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
@@ -1347,6 +1448,9 @@ RootLocateResult LibpolyBackend::locateRootInPolynomial(const AlgebraicRoot& alp
         if (count == 1) {
             // Find which root of h overlaps with alpha's interval
             const auto& hc = getUni(h);
+            // Heap-corruption firewall: refuse multi-Kbit univariate isolation.
+            if (fwTrips(fwMaxCoeffBits(hc), "locateRootInPolynomial"))
+                return {RootLocateStatus::Unknown, -1};
             std::vector<poly::Integer> hLpCoeffs;
             for (auto it = hc.rbegin(); it != hc.rend(); ++it) {
                 hLpCoeffs.emplace_back(*it);
@@ -1472,6 +1576,8 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
     UniPolyId Nuni = specializeToUnivariate(N.toPolyId(*kernel_), SamplePoint{}, mainVar);
     if (Nuni == NullUniPolyId) return empty;
     RootSet candidates = isolateRealRoots(Nuni);
+    // Firewall bail ⇒ inconclusive: must NOT fall through to "0 roots certified".
+    if (candidates.crashOccurred) { supported = false; return empty; }
 
     // 6. Exact filter: keep β with p1(a, β) = 0, decided by rational interval
     //    refinement of a's and β's isolating intervals (fully rational; cannot
@@ -1588,6 +1694,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         UniPolyId Nu = specializeToUnivariate(nrF.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
         if (Nu == NullUniPolyId) return none;
         RootSet cands = isolateRealRoots(Nu);
+        if (cands.crashOccurred) return none;   // firewall bail ⇒ ok stays false ⇒ Unknown
         RootSet kept;
         for (const auto& beta : cands.roots) {
             mpq_class lo, hi;
@@ -1664,6 +1771,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     UniPolyId Nuni = specializeToUnivariate(nr.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
     if (Nuni == NullUniPolyId) return empty;
     RootSet candidates = isolateRealRoots(Nuni);
+    if (candidates.crashOccurred) return TD("isolate-firewall");   // ⇒ Unknown
 
     // 3. The Norm's real roots are a SOUND SUPERSET of p1's real boundaries at our
     //    embedding: every real root β of p1's specialization q(mainVar) satisfies

@@ -1,6 +1,7 @@
 #include "theory/arith/nra/nlsat/NlsatEngine.h"
 
 #include "expr/ir.h"
+#include "util/EnvParam.h"
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds
@@ -10,6 +11,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #include <algorithm>
+#include <cstdlib>   // std::getenv / std::atoi / std::atol (env-gated guards)
 #include <optional>
 #include <unordered_map>
 
@@ -85,6 +87,7 @@ namespace {
 struct VarScore {
     VarId v;
     int score;
+    int maxExp = 0;
 };
 
 int scoreVariable(PolynomialKernel& kernel,
@@ -117,6 +120,47 @@ int scoreVariable(PolynomialKernel& kernel,
     return 1000 + atomCount;                  // unconstrained — pick later
 }
 
+// Max exponent of variable v across every asserted polynomial atom.
+// Used as the variable-order tiebreaker: on the Sturm-MGC family every
+// var carries a positivity bound (so scoreVariable ties them all at 1),
+// but the high-degree GENERATOR vars (e.g. vv3 appears as vv3^16) should
+// be decided FIRST — pinning a generator to a small integer collapses its
+// high-degree monomials to constants, dropping the residual system to a
+// low degree that the root-isolation candidate path and the CdcacCore
+// fallback can finish cheaply. This is the opposite of a Collins/z3
+// "least-degree-main-variable" elimination order, and is what makes the
+// degree-16 mgc_09/10 instances tractable for the assignment loop.
+int maxExponentOfVar(PolynomialKernel& kernel,
+                     const std::vector<AssertedAtom>& atoms,
+                     VarId v) {
+    int best = 0;
+    for (const auto& a : atoms) {
+        auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+        if (!pp) continue;
+        auto termsOpt = kernel.terms(pp->poly);
+        if (!termsOpt) continue;
+        for (const auto& t : *termsOpt) {
+            for (const auto& [vid, exp] : t.powers) {
+                if (vid == v && exp > best) best = exp;
+            }
+        }
+    }
+    return best;
+}
+
+// Hard budget on root-isolation calls per pickValue. The DFS can visit tens
+// of thousands of nodes; each isolation mints transient polynomials in the
+// kernel pool (polyMinusRhs → kernel.sub) that are not reclaimed mid-search,
+// so unbounded isolation calls grow memory until GMP aborts (observed: 17k
+// calls → 3GB on mgc_10). Capping turns that hard crash into a graceful
+// give-up (the DFS then relies on base candidates only). Reset at the top of
+// each pickValue. thread_local so portfolio worker threads don't share it.
+static thread_local long g_nlsatIsoCalls = 0;
+static long nlsatIsoCallCap() {
+    static const long cap = env::paramLong("XOLVER_NRA_NLSAT_ISO_BUDGET", 1500);
+    return cap;
+}
+
 } // namespace
 
 VarId NlsatEngine::pickNextVar(const mcsat::MCSatTrail& trail) {
@@ -129,12 +173,17 @@ VarId NlsatEngine::pickNextVar(const mcsat::MCSatTrail& trail) {
         std::vector<VarScore> scored;
         scored.reserve(vars.size());
         for (VarId v : vars) {
-            scored.push_back({v, scoreVariable(*kernel_, asserted_, v)});
+            VarScore vs{v, scoreVariable(*kernel_, asserted_, v)};
+            vs.maxExp = maxExponentOfVar(*kernel_, asserted_, v);
+            scored.push_back(vs);
         }
         std::sort(scored.begin(), scored.end(),
                   [](const VarScore& a, const VarScore& b) {
                       if (a.score != b.score) return a.score < b.score;
-                      return a.v < b.v;  // tie-break by VarId for determinism
+                      // Generators first: higher max-exponent decided earlier
+                      // so its high-degree monomials collapse to constants.
+                      if (a.maxExp != b.maxExp) return a.maxExp > b.maxExp;
+                      return a.v < b.v;  // final tie-break for determinism
                   });
         varOrderCache_.clear();
         varOrderCache_.reserve(scored.size());
@@ -361,7 +410,9 @@ bool fullSampleSatisfiesAtoms(PolynomialKernel& kernel,
 // Bounded DFS to find a complete feasible assignment over the candidate
 // set. Returns true and populates `out` on success; false otherwise.
 // Cap node-visits to avoid combinatorial blowup on large problems.
-static constexpr int DFS_NODE_BUDGET = 50000;
+// Default 50000; tunable via env for autotuning.
+static const int DFS_NODE_BUDGET =
+    env::paramInt("XOLVER_NRA_NLSAT_DFS_BUDGET", 50000);
 
 namespace {
 
@@ -423,6 +474,7 @@ mcsat::ValueChoice NlsatEngine::pickValue(VarId var,
     //    subsequent pickValue call.
     if (!cachedAssignmentTried_) {
         cachedAssignmentTried_ = true;
+        g_nlsatIsoCalls = 0;  // reset the per-pickValue root-isolation budget
 
         // Build the trail's current sample.
         std::unordered_map<VarId, mpq_class> sample;
@@ -487,6 +539,29 @@ mcsat::ValueChoice NlsatEngine::pickValue(VarId var,
     // diagnosis of high-degree benchmarks where CdcacCore hangs.
     const char* noFallback = std::getenv("XOLVER_NRA_MCSAT_NO_CDCAC");
     bool fallbackEnabled = !(noFallback && *noFallback && *noFallback != '0');
+
+    // High-degree fallback guard. CdcacCore projection is doubly-exponential
+    // in the eliminated variable's degree; on degree-16+ atoms (mgc_09/10's
+    // eq_big) it allocates without bound and GMP-aborts before any deadline
+    // fires. Such instances are exactly the ones the future projection-based
+    // nlsat (not this brute-force DFS + CDCAC fallback) must handle. Skip the
+    // fallback above a degree cap → graceful GiveUp/Unknown rather than a
+    // process abort. Tunable via XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP (default
+    // 12). Scoped to the MCSAT engine; the production CDCAC path is untouched.
+    if (fallbackEnabled) {
+        static const int kFallbackDegCap =
+            env::paramInt("XOLVER_NRA_NLSAT_FALLBACK_DEG_CAP", 12);
+        int maxDeg = 0;
+        for (const auto& a : asserted_) {
+            auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+            if (!pp) continue;
+            for (const auto& n : kernel_->variables(pp->poly)) {
+                if (auto d = kernel_->degree(pp->poly, n)) maxDeg = std::max(maxDeg, *d);
+            }
+        }
+        if (maxDeg > kFallbackDegCap) fallbackEnabled = false;
+    }
+
     if (fallbackEnabled && algebra_ && kernel_ && !cachedAssignmentSucceeded_) {
         if (!cdcacFallback_) {
             cdcacFallback_ = std::make_unique<CdcacCore>(kernel_, algebra_);
@@ -506,8 +581,15 @@ mcsat::ValueChoice NlsatEngine::pickValue(VarId var,
             input.constraints.push_back(std::move(c));
         }
         if (inputOk && !input.constraints.empty()) {
-            (void)pickNextVar(trail);  // populate varOrderCache_
-            input.varOrder = varOrderCache_;
+            // Deliberately do NOT impose the DFS's generators-first
+            // (max-exponent-first) order on CdcacCore. CAD projection cost is
+            // doubly-exponential in the LAST-projected variable's degree, so
+            // projecting the highest-degree variable first is the worst case
+            // (it made nra_120 allocate 16GB and GMP-abort). The DFS wants
+            // generators first to collapse high powers; CDCAC wants ascending
+            // degree (Collins). Leave input.varOrder empty so CdcacCore uses
+            // its production-proven internal ordering.
+            input.varOrder.clear();
             auto cdResult = cdcacFallback_->solve(input);
             if (cdResult.status == CdcacStatus::Sat && cdResult.model) {
                 cachedAssignmentSucceeded_ = true;
@@ -533,6 +615,32 @@ mcsat::ValueChoice NlsatEngine::pickValue(VarId var,
 
 namespace {
 
+// Exact sign of a polynomial at a FULLY-rational sample, computed by direct
+// term-by-term mpq arithmetic (Σ coeff·∏ vᵉ, then sign of the sum). This
+// deliberately avoids libpoly's sgnVarId → coefficient_value_approx →
+// rational_interval_pow path, which SIGSEGVs deep in __gmpn_copyi on
+// high-degree atoms (mgc's eq_big carries vv3^16) EVEN at exact rational
+// points — a pre-existing crash on the MCSAT path. GMP's native bignum
+// evaluates 5^16 / 2^128 exactly with no interval refinement and no crash
+// surface. Returns nullopt iff a variable of `poly` is absent from `sample`.
+std::optional<int> exactSignAt(PolynomialKernel& kernel, PolyId poly,
+                               const std::unordered_map<VarId, mpq_class>& sample) {
+    auto termsOpt = kernel.terms(poly);
+    if (!termsOpt) return std::nullopt;
+    mpq_class total(0);
+    for (const auto& t : *termsOpt) {
+        if (t.coefficient == 0) continue;
+        mpq_class term(t.coefficient);  // mpz → mpq
+        for (const auto& [vid, exp] : t.powers) {
+            auto it = sample.find(vid);
+            if (it == sample.end()) return std::nullopt;
+            for (int e = 0; e < exp; ++e) term *= it->second;
+        }
+        total += term;
+    }
+    return sgn(total);
+}
+
 bool fullSampleSatisfiesAtoms(PolynomialKernel& kernel,
                               const std::vector<AssertedAtom>& atoms,
                               const std::unordered_map<VarId, mpq_class>& sample) {
@@ -541,16 +649,10 @@ bool fullSampleSatisfiesAtoms(PolynomialKernel& kernel,
         if (!pp) continue;
         auto rhsQ = pp->rhs.tryAsRational();
         if (!rhsQ) return false;
-        auto vars = kernel.variables(pp->poly);
-        bool covered = true;
-        for (const auto& n : vars) {
-            auto vid = kernel.findVar(n);
-            if (!vid || !sample.count(*vid)) { covered = false; break; }
-        }
-        if (!covered) continue;  // not yet evaluable — surviving
         PolyId effective = polyMinusRhs(kernel, pp->poly, *rhsQ);
-        int sgnInt = kernel.sgnVarId(effective, sample);
-        Sign s = signFromInt(sgnInt);
+        auto sgnOpt = exactSignAt(kernel, effective, sample);
+        if (!sgnOpt) continue;  // not yet fully evaluable — surviving
+        Sign s = signFromInt(*sgnOpt);
         if (!atomHoldsForSign(s, pp->rel, a.value)) return false;
     }
     return true;
@@ -658,6 +760,42 @@ std::vector<mpq_class> collectRootCandidates(
     VarId v) {
     std::vector<mpq_class> out;
     if (!algebra) return out;
+
+    // Root-isolation candidate harvesting is OPT-IN (default OFF). This is the
+    // ONLY libpoly call on the MCSAT DFS path, and on raw high-degree
+    // multivariate mgc atoms libpoly's root isolation CORRUPTS THE HEAP deep in
+    // rational_interval_pow. The backend's sigsetjmp recovery siglongjmps out
+    // of the SIGSEGV, but the heap is already poisoned → a later "double free
+    // or corruption" abort (masked under -O3/NDEBUG, which made the path appear
+    // to limp to `unknown`; surfaced immediately by a debug malloc). The
+    // degree/magnitude guards below REDUCE but cannot GUARANTEE elimination of
+    // the corrupting call, and siglongjmp-out-of-SIGSEGV is fundamentally
+    // unsound after heap corruption. So default to NOT harvesting roots: base
+    // candidates + exact mpq validation (exactSignAt) are entirely
+    // libpoly-free and provably crash-safe. The equality-cascade solver (the
+    // real mgc path) likewise uses exact substitution, never libpoly
+    // isolation. Re-enable for experiments via the flag.
+    static const bool kHarvestRoots =
+        env::paramInt("XOLVER_NRA_NLSAT_ROOT_CANDIDATES", 0) != 0;
+    if (!kHarvestRoots) return out;
+
+    // Bit-length cap for harvested rational candidates (see filter below).
+    static constexpr size_t kCandidateMaxBits = 256;
+    // Prefix-magnitude early-out: libpoly evaluates each atom's coefficients
+    // at the assigned prefix during root isolation; an oversized assigned
+    // coordinate makes those coefficients multi-megabit and
+    // rational_interval_pow OOMs/SIGSEGVs. If any current assignment is huge,
+    // skip root harvesting entirely this round (sound — only a candidate
+    // source is forgone). Scoped to the nlsat path; the shared CDCAC backend
+    // is untouched.
+    static constexpr size_t kPrefixMaxBits = 4096;
+    for (const auto& [vid, q] : sample) {
+        if (vid == v) continue;
+        if (mpz_sizeinbase(q.get_num_mpz_t(), 2) > kPrefixMaxBits ||
+            mpz_sizeinbase(q.get_den_mpz_t(), 2) > kPrefixMaxBits) {
+            return out;
+        }
+    }
     // Sample without v.
     SamplePoint prefix = sampleFromMap(sample, {v});
     for (const auto& a : atoms) {
@@ -675,15 +813,57 @@ std::vector<mpq_class> collectRootCandidates(
         }
         if (!onlyV || !containsV) continue;
 
+        // Degree guard (soundness-of-process, not of-verdict). libpoly's root
+        // isolation evaluates rational-interval powers; the hazard is the MAX
+        // EXPONENT OF ANY VARIABLE in the atom — a term like vv3^16 (mgc's
+        // eq_big) makes even a low-degree isolation evaluate coefficients
+        // carrying vv3^16, whose substituted GMP rationals reach multi-megabit
+        // magnitudes and SIGSEGV deep in __gmpn_copyi (heap-corrupting, NOT
+        // reliably caught by the backend's sigsetjmp harness). We skip such
+        // atoms: the positive-factor cascade only needs LINEAR isolations
+        // (gamma0, vv2 appear with degree 1), so dropping high-degree sources
+        // costs nothing on mgc and only forgoes completeness elsewhere (never
+        // soundness — a skipped root is merely a candidate we don't try).
+        // Scoped to the nlsat path; the shared CDCAC backend is untouched.
+        {
+            static const int kRootDegCap =
+                env::paramInt("XOLVER_NRA_NLSAT_ROOT_DEG_CAP", 12);
+            int maxExp = 0;
+            for (const auto& n : names) {
+                if (auto d = kernel.degree(pp->poly, n)) maxExp = std::max(maxExp, *d);
+            }
+            if (maxExp > kRootDegCap) continue;
+        }
+
         // Build (poly - rhs) so isolateRealRoots gives boundary values
         // of the relation directly.
+        // Isolation-call budget: stop minting transient polynomials once the
+        // per-pickValue cap is hit (prevents the kernel-pool OOM). A graceful
+        // ceiling, not a verdict — the DFS continues on base candidates.
+        if (g_nlsatIsoCalls >= nlsatIsoCallCap()) break;
+        ++g_nlsatIsoCalls;
+
         auto rhsQ = pp->rhs.tryAsRational();
         if (!rhsQ) continue;
         PolyId effective = polyMinusRhs(kernel, pp->poly, *rhsQ);
         RootSet rs = algebra->isolateRealRootsAlgebraic(effective, prefix, v);
         if (rs.crashOccurred) continue;
         for (const auto& r : rs.roots) {
-            if (r.isRational()) out.push_back(r.rational);
+            if (!r.isRational()) continue;
+            // Magnitude filter: reject candidates whose numerator/denominator
+            // bit-length is excessive. An oversized rational, once assigned and
+            // raised to a power inside another atom's evaluation, blows GMP up
+            // (OOM/abort). The genuine mgc model coords are modest (gamma0=513,
+            // mu with a 62-bit dyadic denominator) — well under the cap — so
+            // this only discards pathological search detritus, never the real
+            // model. Sound: dropping a candidate costs completeness, not
+            // soundness.
+            const mpq_class& q = r.rational;
+            if (mpz_sizeinbase(q.get_num_mpz_t(), 2) > kCandidateMaxBits ||
+                mpz_sizeinbase(q.get_den_mpz_t(), 2) > kCandidateMaxBits) {
+                continue;
+            }
+            out.push_back(q);
         }
     }
     return out;
@@ -757,8 +937,12 @@ bool NlsatEngine::validateModel(const mcsat::MCSatTrail& trail,
             return false;
         }
         PolyId effective = polyMinusRhs(*kernel_, pp->poly, *rhsQ);
-        int sgnInt = kernel_->sgnVarId(effective, *sample);
-        Sign s = signFromInt(sgnInt);
+        // Exact rational evaluation (see exactSignAt): the SAT-validation
+        // gate must never route a high-degree atom through libpoly's
+        // approximate sign path, which SIGSEGVs on mgc-class polynomials.
+        auto sgnOpt = exactSignAt(*kernel_, effective, *sample);
+        if (!sgnOpt) return false;  // covered above, but fail safe
+        Sign s = signFromInt(*sgnOpt);
         if (!atomHoldsForSign(s, pp->rel, a.value)) return false;
     }
     for (const auto& e : trail.entries()) {

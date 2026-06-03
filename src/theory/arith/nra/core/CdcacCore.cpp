@@ -841,6 +841,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
 
         RootSet roots = algebra_->isolateRealRoots(up);
+        // Firewall bail (oversize coeffs ⇒ heap-corruption guard): inconclusive,
+        // never "0 roots" (which would shrink the UNSAT cover unsoundly).
+        if (roots.crashOccurred) {
+            return CdcacResult::mkUnknown(CdcacUnknownReason::RootIsolationInvalid);
+        }
         if (!algebra_->validateRootIsolation(up, roots)) {
             return CdcacResult::mkUnknown(CdcacUnknownReason::RootIsolationInvalid);
         }
