@@ -322,12 +322,24 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 for (const auto& [v, e] : t.powers) varSet.insert(v);
         }
         if (poly_ok && !lsCons.empty() && !varSet.empty()) {
-            // pre-pass: slightly more wall-clock (50ms) than the old per-stage
-            // 10ms since we only fire once.
+            // One-shot pre-pass budget (#NRA-LS-E). Raised from the 50ms/50-round
+            // scaffold to 250ms/3000 rounds: the WalkSAT model search needs the
+            // larger round count to reach genuine SAT regions, and this runs
+            // BEFORE the (sometimes-spinning, occasionally libpoly-SIGSEGV-ing)
+            // CDCAC/Collins pipeline — so for SAT cases it short-circuits the
+            // expensive engine entirely (recovers the Economics-Mulligan SAT
+            // gaps; one of them, …0061e, otherwise crashes the pipeline). UNSAT
+            // cases pay near-zero: WalkSAT converges/plateaus and returns long
+            // before the budget (e.g. zankl gen-13 UNSAT: 165ms vs 163ms at the
+            // old scaffold). Still one-shot (lsAttempted_), still exact-validated
+            // (validateCandidate → invariant 1: SAT only on a kernel-checked
+            // model, never UNSAT). Tunable via the env::param registry; raise
+            // XOLVER_NRA_LS_BUDGET_MS (e.g. 10000) to also reach the larger
+            // zankl-matrix SAT cluster in a wall-clock-anytime profile.
             static const long budgetMs =
-                env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 50);
+                env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 250);
             static const int maxRounds =
-                env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 50);
+                env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 3000);
             std::vector<VarId> vars(varSet.begin(), varSet.end());
             static const bool eqRelax = [] {
                 const char* e = std::getenv("XOLVER_NRA_LS_EQ_RELAX");
