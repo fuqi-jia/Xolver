@@ -53,5 +53,22 @@ long remainingMs();
 // only how long the engine is willing to search.
 long scaledBudgetMs(long baseMs, int shareNum = 1, int shareDen = 4);
 
+// Count-shaped sibling of scaledBudgetMs for enum/search caps that aren't
+// natural ms (e.g. residue-enum size, cartesian-product cap). Returns `base`
+// UNCHANGED unless BOTH a deadline is set AND XOLVER_WALLCLOCK_SCALE is
+// enabled — so by default this is inert and every caller keeps its existing
+// cap. base <= 0 (an "unlimited" sentinel) is returned unchanged.
+//
+// When active: returns clamp(base * remainingMs / referenceMs, base,
+// base * maxMult). Intent: at `referenceMs` of remaining time, returns `base`;
+// at 10x reference, returns ~10x base; saturates at `maxMult`x. With defaults
+// (referenceMs=60_000, maxMult=32) a 1200s competition budget grows a cap by
+// up to 20x at solve start, capped at 32x.
+//
+// SOUND for count caps: only ever GROWS the cap, never shrinks. A bigger cap
+// means the same algorithm considers more candidates — never affects soundness,
+// only completeness/coverage.
+long scaledCount(long base, long referenceMs = 60000, long maxMult = 32);
+
 } // namespace wall
 } // namespace xolver

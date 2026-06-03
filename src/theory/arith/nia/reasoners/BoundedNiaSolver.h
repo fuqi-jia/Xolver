@@ -78,17 +78,16 @@ public:
 private:
     PolynomialKernel& kernel_;
 
-    static const mpz_class ENUMERATION_THRESHOLD;
-    // Tightness cap on what counts as "tightly bounded" for the partial
-    // enumerator. A variable with `hi - lo + 1 ≤ this` enters the bounded
-    // subset; larger ranges stay in the unbounded set. Picked small so the
-    // cartesian product of bounded values stays well under
-    // PARTIAL_BUDGET below.
-    static const mpz_class PARTIAL_VAR_RANGE_CAP;
-    // Cap on the cartesian product of bounded-subset values explored per
-    // call. Keeps the worst case at O(this * guess_count^k) which is
-    // bounded.
-    static const mpz_class PARTIAL_BUDGET;
+    // Caps that scale with remaining wall-clock when XOLVER_WALLCLOCK_SCALE is
+    // enabled (default-inert: returns the env::paramLong base value otherwise).
+    // Defaults exposed via env::paramLong so the autotuner sees them in
+    // XOLVER_DUMP_PARAMS:
+    //   XOLVER_NIA_BOUNDED_ENUM_THRESHOLD   (default 10000)
+    //   XOLVER_NIA_BOUNDED_PARTIAL_RANGE_CAP (default 16)
+    //   XOLVER_NIA_BOUNDED_PARTIAL_BUDGET    (default 4096)
+    static mpz_class enumerationThreshold();
+    static mpz_class partialVarRangeCap();
+    static mpz_class partialBudget();
 
     BoundedSolveResult enumerate(const std::vector<NormalizedNiaConstraint>& constraints,
                                   const DomainStore& domains,

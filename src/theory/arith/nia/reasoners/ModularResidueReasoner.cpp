@@ -11,6 +11,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include "util/EnvParam.h"
+#include "util/SolveClock.h"
+
 namespace xolver {
 
 namespace {
@@ -63,7 +66,21 @@ struct BoundPair { Bound lo, hi; };
 } // namespace
 
 ModularResidueReasoner::ModularResidueReasoner(PolynomialKernel& kernel)
-    : kernel_(kernel) {}
+    : kernel_(kernel),
+      modulusCap_(static_cast<uint64_t>(
+          env::paramLong("XOLVER_NIA_MODULAR_MODULUS_CAP", 1L << 18))),
+      enumBudget_(static_cast<uint64_t>(
+          env::paramLong("XOLVER_NIA_MODULAR_ENUM_BUDGET", 1L << 24))) {}
+
+mpz_class ModularResidueReasoner::currentModulusCap() const {
+    long scaled = wall::scaledCount(static_cast<long>(modulusCap_));
+    return mpz_class(static_cast<unsigned long>(scaled));
+}
+
+mpz_class ModularResidueReasoner::currentEnumBudget() const {
+    long scaled = wall::scaledCount(static_cast<long>(enumBudget_));
+    return mpz_class(static_cast<unsigned long>(scaled));
+}
 
 namespace {
 
@@ -367,9 +384,9 @@ NiaReasoningResult ModularResidueReasoner::run(
     // assertions); the grid cert is a second-path verification using
     // kernel.evalInteger over a fresh evaluation strategy.
     static const bool symbolicEnabled =
-        std::getenv("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO") != nullptr;
+        env::paramInt("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO", 0) != 0;
     static const bool symbDiag =
-        std::getenv("XOLVER_NIA_MODULAR_DIAG") != nullptr;
+        env::paramInt("XOLVER_NIA_MODULAR_DIAG", 0) != 0;
     // --- 4.6 Newton-chain derivation (Track C1 Phase 2.6) ---
     // Synthesize a check-eq from a Newton-step simpleDef + a base mod that
     // pins denom*B at residue 1 (mod s). Mathematics:
@@ -905,7 +922,7 @@ NiaReasoningResult ModularResidueReasoner::run(
     for (const auto& v : simpleVars)  if (closure.count(v)) needSimple.insert(v);
     for (const auto& v : moddefVars)  if (closure.count(v)) needModdef.insert(v);
 
-    static const bool DIAG = std::getenv("XOLVER_NIA_MODULAR_DIAG") != nullptr;
+    static const bool DIAG = env::paramInt("XOLVER_NIA_MODULAR_DIAG", 0) != 0;
     if (DIAG) {
         std::cerr << "[MODRES] groups=" << groups.size()
                   << " simpleDefs=" << simpleDefs.size()
@@ -931,7 +948,7 @@ NiaReasoningResult ModularResidueReasoner::run(
         mpz_gcd(gg.get_mpz_t(), base.get_mpz_t(), g.n.get_mpz_t());
         base = base / gg * g.n;
     }
-    mpz_class cap = mpz_class(static_cast<unsigned long>(modulusCap_));
+    mpz_class cap = currentModulusCap();
     std::vector<mpz_class> moduli;
     if (base == 1) {
         // No div/mod groups: brute small moduli for a direct residue
@@ -1048,12 +1065,13 @@ NiaReasoningResult ModularResidueReasoner::run(
     //       enum UNSAT). The only large-residue UNSATs we still emit come from the
     //       Hensel path, which carries its OWN machine-checkable polynomial-identity
     //       certificate (verified below), not this enumeration.
-    // certBudget MATCHES enumBudget_: the enum path only enumerates moduli with
-    // residue space <= enumBudget_, so the independent cert can always re-verify
-    // exactly what the enum proved (no enum-proven-but-cert-OverBudget gap).
+    // certBudget MATCHES the enum cap: the enum path only enumerates moduli
+    // with residue space <= currentEnumBudget(), so the independent cert can
+    // always re-verify exactly what the enum proved (no enum-proven-but-cert-
+    // OverBudget gap). Both reads come from the same scaled getter.
     std::vector<std::string> allVarsVec(allVars.begin(), allVars.end());
     std::sort(allVarsVec.begin(), allVarsVec.end());
-    const mpz_class certBudget(static_cast<unsigned long>(enumBudget_));
+    const mpz_class certBudget = currentEnumBudget();
     auto bruteCertify = [&](const mpz_class& m) -> int {
         mpz_class sz = 1;
         for (size_t i = 0; i < allVarsVec.size(); ++i) {
@@ -1092,13 +1110,14 @@ NiaReasoningResult ModularResidueReasoner::run(
     };
 
     // --- 7. Try each modulus ---
+    const mpz_class enumBudgetForLoop = currentEnumBudget();
     for (const mpz_class& m : moduli) {
         // enumeration size = m^|primary|
         mpz_class enumSize = 1;
         bool overBudget = false;
         for (size_t i = 0; i < primary.size(); ++i) {
             enumSize *= m;
-            if (enumSize > mpz_class(static_cast<unsigned long>(enumBudget_))) {
+            if (enumSize > enumBudgetForLoop) {
                 overBudget = true; break;
             }
         }
@@ -1209,7 +1228,8 @@ NiaReasoningResult ModularResidueReasoner::run(
         for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
         return nullptr;
     };
-    const mpz_class enumCap(static_cast<unsigned long>(enumBudget_));
+    const mpz_class enumCap = currentEnumBudget();
+    const mpz_class modCapForLift = currentModulusCap();
 
     for (const auto& G : groups) {
         auto pk = factorAsPrimePower(G.n);
@@ -1273,10 +1293,11 @@ NiaReasoningResult ModularResidueReasoner::run(
         if (k0 > 40) continue;              // hard k0 ceiling (prevents pow overflow regardless of p)
         // mBase = p^k0. For the p = 2 fast path this matches the old shift;
         // for p > 2 it can grow much faster, so we cap on the actual mBase
-        // value via modulusCap_ (already done below) rather than on k0 alone.
+        // value via modCapForLift (currentModulusCap with wall-clock scaling)
+        // rather than on k0 alone.
         mpz_class mBase;
         mpz_pow_ui(mBase.get_mpz_t(), P.get_mpz_t(), static_cast<unsigned long>(k0));
-        if (mBase > mpz_class(static_cast<unsigned long>(modulusCap_))) continue;
+        if (mBase > modCapForLift) continue;
 
         // dependency closure of (mult*baseVar - 1) -> restrict base primaries
         PolyId baseVarPoly = kernel_.mkVar(kernel_.getOrCreateVar(baseVar));

@@ -70,5 +70,21 @@ long scaledBudgetMs(long baseMs, int shareNum, int shareDen) {
     return share;
 }
 
+long scaledCount(long base, long referenceMs, long maxMult) {
+    if (base <= 0) return base;
+    if (!scaleEnabled() || !hasDeadline()) return base;
+    if (referenceMs <= 0 || maxMult <= 0) return base;
+    long rem = remainingMs();
+    if (rem <= 0) return base;
+    // scaled = base * rem / referenceMs, in long long to avoid mid-mul overflow
+    // on the kinds of caps we use (counts up to ~2^29 × budgets up to ~10^7 ms
+    // fit comfortably in long long on every supported platform).
+    long long scaled = (static_cast<long long>(base) * rem) / referenceMs;
+    long long capped = static_cast<long long>(base) * maxMult;
+    if (scaled < base) scaled = base;
+    if (scaled > capped) scaled = capped;
+    return static_cast<long>(scaled);
+}
+
 } // namespace wall
 } // namespace xolver

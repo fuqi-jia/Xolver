@@ -50,20 +50,30 @@ public:
 
     NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints);
 
-    // Largest modulus the reasoner will enumerate (default 1<<16). A constant
+    // Largest modulus the reasoner will enumerate (default 1<<18). A constant
     // modulus above this (e.g. 2^256) is skipped — that needs Hensel lifting.
+    // Overrides the env-derived default; tests and callers can pin it.
     void setModulusCap(uint64_t cap) { modulusCap_ = cap; }
     // Hard cap on the total number of residue assignments enumerated for a
-    // single modulus (default 1<<20). Above this, the modulus is skipped.
+    // single modulus (default 1<<24). Above this, the modulus is skipped.
     void setEnumBudget(uint64_t budget) { enumBudget_ = budget; }
 
 private:
     PolynomialKernel& kernel_;
-    // Competition retune (1200s): larger residue enumeration. Sound — UNSAT-only,
-    // and over-budget moduli are skipped (never wrong). Hensel doubling still
-    // handles 2^k beyond the cap, so these only widen the small-modulus enum.
-    uint64_t modulusCap_ = (1u << 18);
-    uint64_t enumBudget_ = (1u << 24);
+    // Base caps — initialized in ctor from env::paramLong, autotuner-visible:
+    //   XOLVER_NIA_MODULAR_MODULUS_CAP   (default 1<<18 = 262144)
+    //   XOLVER_NIA_MODULAR_ENUM_BUDGET   (default 1<<24 ≈ 16.7M)
+    // Sound — UNSAT-only, and over-budget moduli are skipped (never wrong).
+    // Hensel doubling still handles 2^k beyond the cap, so these only widen
+    // the small-modulus enum.
+    uint64_t modulusCap_;
+    uint64_t enumBudget_;
+
+    // Wall-clock-scaled views of modulusCap_/enumBudget_. With
+    // XOLVER_WALLCLOCK_SCALE off (default), return the base cap unchanged.
+    // With it on + an active deadline, grow proportionally to remaining time.
+    mpz_class currentModulusCap() const;
+    mpz_class currentEnumBudget() const;
 };
 
 } // namespace xolver

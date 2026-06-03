@@ -3,16 +3,30 @@
 #include <unordered_set>
 
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 
 namespace xolver {
 
 // Tunable budgets — defaults preserved; override via env for autotuning.
-const mpz_class BoundedNiaSolver::ENUMERATION_THRESHOLD =
-    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000));
-const mpz_class BoundedNiaSolver::PARTIAL_VAR_RANGE_CAP =
-    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_RANGE_CAP", 16));
-const mpz_class BoundedNiaSolver::PARTIAL_BUDGET =
-    mpz_class(env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_BUDGET", 4096));
+// Each accessor caches the env::paramLong base via function-local static (one
+// read per process), then wraps with wall::scaledCount so the cap grows with
+// remaining wall-clock when XOLVER_WALLCLOCK_SCALE is enabled. Without the
+// flag, scaledCount returns the base unchanged → existing default behavior.
+mpz_class BoundedNiaSolver::enumerationThreshold() {
+    static const long base =
+        env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
+    return mpz_class(wall::scaledCount(base));
+}
+mpz_class BoundedNiaSolver::partialVarRangeCap() {
+    static const long base =
+        env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_RANGE_CAP", 16);
+    return mpz_class(wall::scaledCount(base));
+}
+mpz_class BoundedNiaSolver::partialBudget() {
+    static const long base =
+        env::paramLong("XOLVER_NIA_BOUNDED_PARTIAL_BUDGET", 4096);
+    return mpz_class(wall::scaledCount(base));
+}
 
 BoundedNiaSolver::BoundedNiaSolver(PolynomialKernel& kernel) : kernel_(kernel) {}
 
@@ -122,7 +136,7 @@ BoundedSolveResult BoundedNiaSolver::solve(
     std::vector<std::string> vars(varSet.begin(), varSet.end());
 
     mpz_class totalSize = domains.totalSize(varSet);
-    if (totalSize > ENUMERATION_THRESHOLD) {
+    if (totalSize > enumerationThreshold()) {
         // Phase NIA-Core: interval B&B is a skeleton.
         // For now, return UnknownBudget for large domains.
         return {BoundedSolveStatus::UnknownBudget, std::nullopt, std::nullopt};
@@ -191,18 +205,20 @@ BoundedSolveResult BoundedNiaSolver::solvePartialWithHint(
     // Partition into bounded (small finite-range domain) vs unbounded.
     // A var is "bounded" for this purpose iff:
     //   - it has both lower and upper bounds, AND
-    //   - upper - lower + 1 <= PARTIAL_VAR_RANGE_CAP, AND
+    //   - upper - lower + 1 <= partialVarRangeCap(), AND
     //   - it isn't restricted to a non-empty finite set (those go through
     //     enumerate() — caller already tried).
     std::vector<std::string> bounded;
     std::vector<std::string> unbounded;
     std::vector<std::vector<mpz_class>> boundedValues;
     mpz_class boundedProduct = 1;
+    const mpz_class rangeCap = partialVarRangeCap();
+    const mpz_class budget = partialBudget();
     for (const auto& v : varSet) {
         const IntDomain* d = domains.getDomain(v);
         if (d && d->hasLower && d->hasUpper) {
             mpz_class range = d->upper.value - d->lower.value + 1;
-            if (range >= 1 && range <= PARTIAL_VAR_RANGE_CAP) {
+            if (range >= 1 && range <= rangeCap) {
                 std::vector<mpz_class> vals;
                 vals.reserve(range.get_ui());
                 for (mpz_class x = d->lower.value; x <= d->upper.value; ++x) {
@@ -218,7 +234,7 @@ BoundedSolveResult BoundedNiaSolver::solvePartialWithHint(
                             std::nullopt, std::nullopt};
                 }
                 boundedProduct *= vals.size();
-                if (boundedProduct > PARTIAL_BUDGET) {
+                if (boundedProduct > budget) {
                     return {BoundedSolveStatus::UnknownUnsupported,
                             std::nullopt, std::nullopt};
                 }
@@ -285,7 +301,7 @@ BoundedSolveResult BoundedNiaSolver::solvePartialWithHint(
     for (const auto& v : unbounded) {
         auto g = unboundedGuesses(v);
         totalCandidates *= g.size();
-        if (totalCandidates > PARTIAL_BUDGET) {
+        if (totalCandidates > budget) {
             return {BoundedSolveStatus::UnknownUnsupported,
                     std::nullopt, std::nullopt};
         }
