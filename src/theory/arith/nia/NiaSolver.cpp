@@ -1533,6 +1533,7 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
         }
     }
     if (!anyUnboundedAbove) return std::nullopt; // nia.bounded covers this.
+    (void)effort;
 
     // Cap on per-iteration enumeration size (autotunable knob, iter#5 hoist).
     // STRUCTURAL bound — no artificial k cap; the loop terminates when the
@@ -1540,10 +1541,53 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
     const long enumThreshold =
         env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
 
+    // Collect bool vars referenced in the ORIGINAL formula. The BoolSubterm
+    // Purifier introduces `boolpur_K` fresh bool vars to name complex
+    // subexpressions; AMV cannot evaluate them without a BoolAssignment, so
+    // every candidate goes Indeterminate. We enumerate ALL polarity combos
+    // for the bool vars alongside the int-value enumeration. Termination is
+    // structural via 2^|boolVars| ≤ enumThreshold; cases with too many bool
+    // vars fall through to other stages (no artificial bool-count cap).
+    std::set<std::string> boolVarSet;
+    {
+        std::vector<ExprId> wstack;
+        std::unordered_set<ExprId> wseen;
+        for (ExprId a : coreIr_->assertions()) wstack.push_back(a);
+        const SortId boolSort = coreIr_->boolSortId();
+        while (!wstack.empty()) {
+            ExprId e = wstack.back(); wstack.pop_back();
+            if (e == NullExpr || e >= coreIr_->size()) continue;
+            if (!wseen.insert(e).second) continue;
+            const auto& n = coreIr_->get(e);
+            if (n.kind == Kind::Variable && n.sort == boolSort) {
+                if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                    boolVarSet.insert(*nm);
+                }
+            }
+            for (ExprId c : n.children) wstack.push_back(c);
+        }
+    }
+    std::vector<std::string> boolVars(boolVarSet.begin(), boolVarSet.end());
+    std::sort(boolVars.begin(), boolVars.end());
+    const size_t nBoolVars = boolVars.size();
+    // STRUCTURAL skip: 2^nBoolVars must fit in long enumeration. With
+    // enumThreshold=10000 default, 2^13 = 8192 already eats most of it.
+    // We don't add an artificial cap, but skip the bool-enum entirely if
+    // 2^nBoolVars exceeds the threshold (sound — bool vars left Indeterminate
+    // means more candidates get rejected, not fewer; we miss SAT, we don't
+    // claim UNSAT).
+    long boolCombo = 1;
+    for (size_t i = 0; i < nBoolVars; ++i) {
+        if (boolCombo > enumThreshold) { boolCombo = -1; break; }
+        boolCombo *= 2;
+    }
+    if (boolCombo < 0) return std::nullopt;
+
     // AMV input scaffold reused across candidates (zero-alloc inner loop).
     ArithModelValidator::NumAssignment num;
     num.reserve(vars.size());
-    ArithModelValidator::BoolAssignment bools;  // empty — pure NIA has no bool vars
+    ArithModelValidator::BoolAssignment bools;
+    bools.reserve(nBoolVars);
 
     // Escalate width = 2^k - 1 on UNBOUNDED vars; keep bounded vars' ranges
     // intact. Compute totalSize first; if > threshold, stop escalating.
@@ -1565,13 +1609,21 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
             if (totalSize > enumThreshold) { overBudget = true; break; }
         }
         if (overBudget) break;
+        // Combined per-k cost: int product × 2^nBoolVars. Skip k if combined
+        // is over threshold (sound — skipping cases that exhaust budget is
+        // not a wrong-UNSAT, just an unrecovered SAT chance).
+        if (nBoolVars > 0) {
+            mpz_class combined = totalSize * boolCombo;
+            if (combined > enumThreshold) break;
+        }
 
-        // Cartesian-product enumeration. For each candidate, validate via
-        // ArithModelValidator against the ORIGINAL coreIr_ assertions —
-        // identical pattern to stageLocalSearchBoolExtend (the CDCL-branch
-        // independence layer). SOUND for SAT: a model that satisfies the
-        // ORIGINAL boolean+arith formula is a sound SAT witness regardless
-        // of the partial constraint subset in normalized_.
+        // Cartesian-product enumeration. For each int-candidate × bool-
+        // candidate, validate via ArithModelValidator against the ORIGINAL
+        // coreIr_ assertions — pattern mirrors stageLocalSearchBoolExtend
+        // but extended to ENUMERATE bool var polarities (boolpur_K Tseitin
+        // proxies introduced by the purifier). SOUND for SAT: a model that
+        // satisfies the ORIGINAL boolean+arith formula is a sound SAT
+        // witness regardless of the partial constraint subset in normalized_.
         const size_t N = vars.size();
         std::vector<mpz_class> cur(N);
         for (size_t i = 0; i < N; ++i) cur[i] = kRanges[i].first;
@@ -1581,18 +1633,29 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
             for (size_t i = 0; i < N; ++i) {
                 num.emplace(vars[i], mpq_class(cur[i]));
             }
-            ArithModelValidator amv(*coreIr_, num, bools);
-            if (amv.validate(coreIr_->assertions()) ==
-                ArithModelValidator::Verdict::Satisfied) {
-                // Materialize as NIA's currentModel_ — IntegerModel is a
-                // map<string, mpz_class>, same shape as `cur`.
-                IntegerModel model;
-                for (size_t i = 0; i < N; ++i) model[vars[i]] = cur[i];
-                currentModel_ = std::move(model);
-                return TheoryCheckResult::consistent();
+            // Iterate all 2^nBoolVars polarity combos. With nBoolVars=0 the
+            // loop body runs exactly once with empty BoolAssignment.
+            for (long bmask = 0; bmask < boolCombo; ++bmask) {
+                bools.clear();
+                for (size_t i = 0; i < nBoolVars; ++i) {
+                    bools.emplace(boolVars[i], ((bmask >> i) & 1) != 0);
+                }
+                ArithModelValidator amv(*coreIr_, num, bools);
+                if (amv.validate(coreIr_->assertions()) ==
+                    ArithModelValidator::Verdict::Satisfied) {
+                    // Materialize as NIA's currentModel_ — IntegerModel is
+                    // a map<string, mpz_class>, same shape as `cur`. Bool
+                    // proxies stay implicit in the model — the solver caller
+                    // (Solver::Impl) re-validates the full model via the
+                    // boundary validator with the SAT-layer's own bool
+                    // assignments, so the eventual SAT verdict is
+                    // double-checked.
+                    IntegerModel model;
+                    for (size_t i = 0; i < N; ++i) model[vars[i]] = cur[i];
+                    currentModel_ = std::move(model);
+                    return TheoryCheckResult::consistent();
+                }
             }
-            // Indeterminate is treated as not-Satisfied (sound: we never claim
-            // SAT without a Satisfied verdict). Continue scanning.
             // Increment cur in odometer order.
             size_t j = 0;
             while (j < N) {
