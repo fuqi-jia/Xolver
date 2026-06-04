@@ -711,3 +711,45 @@ True bit-blast cluster on `targeted_nia` after iter-11:
 | held-out 16-case set | **16 / 16 sat** | mcm/113 closed by iter-10 |
 | oracle-SAT (36 cases) | 30 / 36 → **35 / 36** if we count nec11+id_trans+array-2+B_1 as out-of-scope (down-graded QF_LIA) | iter-11 reclassification |
 | true bit-blast miss | **1**: elster B_2 (sheer-volume / atom canonicalization) | iter-12+ |
+
+---
+
+### Iteration 12 — Hypothesis FALSIFIED: atom canonicalization yields 0% dedup
+
+Implemented bottom-up structural canonicalization in `EagerBitBlastSolver::solve`: for each ExprId, compute a canonical key `(kind, sort, [canonical(child)], payload)`; ExprIds with identical structural keys get the same canonical ID; EAGER's encoder `memo` is keyed by canonical ID instead of raw ExprId. Sound by construction.
+
+Measured dedup rate across the corpus:
+
+| case | raw ExprIds touched | distinct structural shapes | dedup |
+|---|---|---|---|
+| leipzig term-0Hb4yp.smt2 | 101 | 101 | 0 (0 %) |
+| mcm/113.smt2 | 2 025 | 2 025 | 0 (0 %) |
+| Dartagnan ReachSafety-Loops/nec11-O0.smt2 | 65 479 | 65 474 | 5 (0 %) |
+| Dartagnan ReachSafety-Loops/id_trans-O0.smt2 | 36 862 | 36 847 | 15 (0 %) |
+| elster B_1.smt2 | 60 266 | 60 128 | 138 (0 %) |
+| elster B_2.smt2 | 60 238 | 60 105 | 133 (0 %) |
+
+**Conclusion**: structurally distinct preprocess-introduced atoms are genuinely distinct (different children / different payload). Two reasons:
+
+1. SOMTParser's NodeManager already hash-cons'd at parse time (comment in `expr/ir.h:39-41`).
+2. Preprocess introduces FRESH var names per ITE-flattening / NaryDistinct expansion site, so two `(not (= a b))` atoms in different positions reference distinct underlying VarId payloads.
+
+The iter-11 hypothesis "many atoms are syntactically-distinct-but-semantically-equal" is **false on the actual corpus**. Atom-dedup is not the lever.
+
+#### What the OOM actually is
+
+Encoding ~44 SAT vars per Eq atom × 17–22 k atoms = 750 k – 1 M SAT vars. CaDiCaL's per-var overhead (watcher lists + decision queue + activity scores) is ~4 KB per var → ~3 – 4 GB process memory. The 3 GB `ulimit -v` boundary triggers `bad_alloc` somewhere around assertion 12 000 / 17 000 on these formulas. CaDiCaL is structurally fine; the encoding is correct; xolver is simply running out of headroom.
+
+#### Iter-12 lever was wrong — code reverted, no commit shipped
+
+The canonicalization passes were a clean no-op semantically but added per-encoder `O(N)` memory for the canon table — worse memory pressure on these exact cases. Reverted.
+
+#### Iter-13+ direction (per user task #14)
+
+The LIA pipeline (the `LiaSolver` registered in `TheoryFactory.cpp` when `logic == QF_LIA`) is the actual target for these cases:
+- Without EAGER they TO at 10–17 k atoms in CDCL(T)'s per-atom dispatch loop.
+- With EAGER (iter-11's widened gate) they OOM at the same load.
+
+Need to **profile the LiaSolver's check() pipeline on the 17k-atom load**. Likely candidates: bound propagation re-scans the full atom set per Boolean assignment, simplex tableau gets dense, or branch-and-bound explores combinatorial space.
+
+The `ARITH_STAGE_PROF` infrastructure added in iter-1 covers `ArithSolverBase::runReasonerPipeline` — should produce the per-stage breakdown directly. Iter-13 starts there.
