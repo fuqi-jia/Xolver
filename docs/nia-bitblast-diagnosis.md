@@ -616,3 +616,56 @@ Cross-checked the targeted_nia/MANIFEST.tsv `oracle` column against each source 
 So `targeted_nia` is now structurally closed for the bit-blast lever — what remains is either (a) deeper CDCL(T) NIA for UNSAT, or (b) genuinely-hard cases where BLAN itself is wrong / crashes / times out. Either is a separate work item.
 
 The user's prior task (#11 in the task list) is up next: random-sample a wider corpus multiple times to validate iter-6 + iter-8 with broader coverage.
+
+---
+
+### ★ Iteration 10 — SHIPPED: PolyBitBlaster coeff×monomial cache (held-out 16/16)
+
+User-directed: "the cases z3/cvc5 also handle, also implement; I want to see 36/36" — so iter-10 pursued the 6 remaining oracle-SAT misses (mcm/113 + Dartagnan ×3 + elster ×2).
+
+#### mcm/113 — solved by an algorithmic fix (NOT a budget cap)
+
+The file uses `(define-fun power2 ((x Int)) Bool (or (= x 1024) … (= x 1)))` plus two large `(assert (or …))` blocks with 442 and 493 disjunct alternatives of the form `(= X16 (linear-combination S0..S3))` with varied small integer coefficients (1, 17, 31, 33, …, 959).
+
+Initial verdict: OOM-firewalled to Unknown at 3 GB ulimit. Confirmed it's a memory-pressure issue (NOT logic) by re-running at 8 GB ulimit → **sat**. So the case IS solvable; the encoder just allocates too much for 3 GB.
+
+Per-OR-alternative trace under `NIA_EAGER_BB_DIAG` (added in this iter):
+```
+[EAGER-BB-OR] alt=  0/442  satVars=     28
+[EAGER-BB-OR] alt=100/442  satVars= 27 331
+[EAGER-BB-OR] alt=200/442  satVars= 55 213
+[EAGER-BB-OR] alt=400/442  satVars=110 521
+[EAGER-BB-OR] alt=  0/493  satVars=122 650
+[EAGER-BB-OR] alt=400/493  satVars=214 166
+(unknown-reason out-of-memory (bad_alloc) — solver firewalled to Unknown)
+```
+
+~270 SAT vars per Eq-atom × ~1000 atoms ⇒ deep-in-CaDiCaL bad_alloc.
+
+#### Root cause
+
+Each `(* k S_i)` monomial calls `BitBlastEncoder::mulConst`, which emits a fresh shift-add Tseitin chain. With 4 vars (`S0..S3`) and ~1000 atoms reusing the same product shapes under different integer coefficients, the same mulConst result was re-encoded thousands of times. `PolyBitBlaster::productCache_` (BLAN's mkInnerVar discipline) only caches **var-only sub-products**; it never caches the coefficient-applied final monomial.
+
+#### Fix
+
+Add a second cache in `PolyBitBlaster` keyed on `(coefficient as decimal string, sorted (VarId, exponent) prefix)`. The new `coeffMonomialCache_` extends `productCache_` to the FINAL coefficient-applied monomial. Sound by construction: `mulConst` is a pure function of its inputs; both caches live exactly one `solve()` iteration (per-encoder).
+
+**No budget cap, no floor, no downgrade-to-Unknown — algorithmic fix only** per `[[feedback_no_budget_or_floor_band_aids]]`.
+
+#### Result
+
+| measure | iter-8 | **iter-10** |
+|---|---|---|
+| mcm/113 | OOM → Unknown @ 3 GB | **sat @ 5.6 s** (3 GB ulimit unchanged) |
+| leipzig term-0Hb4yp.smt2 | sat | sat (unchanged) |
+| held-out 16-case set | 15 / 16 | **16 / 16** |
+| doctest unit suite | 1 339 / 1 339 | **1 339 / 1 339** |
+| `tests/regression/nia` | 113 / 113 | **113 / 113** |
+
+#### What's still TO on the 5 other oracle-SAT cases
+
+Dartagnan ReachSafety-Loops {nec11, id_trans, array-2}-O0 (2 000 – 6 000 lines each) and elster {B_1, B_2} still time out at 60 s. The cache fixes the mcm/113-shape pattern (many small-coefficient products on few vars). Dartagnan / elster have a different shape: large numbers of distinct atoms and likely deep nested Bool structure. Probably the next algorithmic lever is different — possibly **per-assertion encoding-time short-circuit** when encoding hits a clearly-infeasible subexpression, or **shared Bool-atom Tseitin literals** for repeated identical sub-clauses across assertions. Iter-11+ work.
+
+#### Iteration 10 commit
+
+- `a41f057` — `PolyBitBlaster::coeffMonomialCache_` + per-OR / per-assertion progress trace under `NIA_EAGER_BB_DIAG`.
