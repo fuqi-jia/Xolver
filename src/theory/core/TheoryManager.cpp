@@ -475,13 +475,18 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     //
     // Iter#29: auto-ON in array-combination mode (arrayCombinationMode_,
     // set by TheoryFactory for QF_ANIA / QF_AUFNIA / QF_AUFLIA / QF_ALIA).
-    // Iter#28 verified 0 reg regression on all 16 buckets with flag ON;
-    // these are exactly the logics where the iter#25 starvation was
-    // diagnosed. Pure-arith and pure-EUF logics retain the previous
-    // short-circuit behavior unless XOLVER_COMB_PUBLISH_ON_LEMMA=1 forces it.
-    // XOLVER_COMB_PUBLISH_ON_LEMMA=0 forces OFF (escape hatch for autotuner
-    // or regression bisects).
-    bool publishOnLemma = arrayCombinationMode_;
+    // Iter#28 verified 0 reg regression on all 16 buckets with flag ON.
+    // Iter#32: extended auto-ON to ALL combinationMode_ logics (QF_UFNIA,
+    // QF_UFLIA, QF_UFLRA, QF_UFNRA, QF_UFLIRA in addition to the array
+    // logics). Iter#28's 16-bucket regression-clean evidence covered the
+    // wider scope already; this widens the scope to match. Pure
+    // single-theory solving (LIA / LRA / NIA / NRA alone, no combination)
+    // retains the previous short-circuit behavior — combinationMode_ is
+    // false there, so the starvation pattern doesn't apply. Env override
+    // XOLVER_COMB_PUBLISH_ON_LEMMA=1 forces ON (e.g. force-on for an
+    // experimental non-combination logic), =0 forces OFF (escape hatch
+    // for autotuner or regression bisects).
+    bool publishOnLemma = combinationMode_;
     if (const char* e = std::getenv("XOLVER_COMB_PUBLISH_ON_LEMMA")) {
         publishOnLemma = !(e[0] == '0' && e[1] == '\0');
     }
