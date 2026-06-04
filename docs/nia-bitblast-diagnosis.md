@@ -907,3 +907,41 @@ The percentage budget (iter-14) opened the door for CDCL(T) NIA to crack UNSAT c
 | MathProblems MS_02 / SQ_02 | 2 | additional rewrite + subst patterns | future |
 
 Each cluster is a separate iteration's worth of work.
+
+---
+
+### Iteration 18/19 — pinning the right percentage and remaining-UNSAT ceiling
+
+#### Finding 1: `pct=10` lost 3 AProVE SAT cases at iter-17 reverify
+
+At iter-17 the reverify used `XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT=10` (the value that cracks SC_02). On the AProVE oracle-SAT cluster, that pct STARVED EAGER:
+
+| case (oracle=SAT) | pct=10 | pct=33 |
+|---|---|---|
+| `aproveSMT1006593265001882878` | TO | **sat @ 74 ms** |
+| `aproveSMT1016338376657137265` | TO | **sat @ 70 ms** |
+| `aproveSMT1044364220480225355` | TO | **sat @ 71 ms** |
+
+So iter-17's headline 48/87 understates the right config: with pct=33 + the iter-17 flags, the corpus should hit 51/87. Default `pct=33` (iter-14) is correct; the iter-17 flag set is purely additive on top.
+
+#### Finding 2: 60 s wallclock does NOT help the 3 smallest remaining UNSAT
+
+Tested with all iter-17 flags + pct=33 + 60 s wallclock:
+
+| case | verdict |
+|---|---|
+| `sqrtmodinv-hoenicke/modSimpleTest` | TO @ 60 s |
+| `VeryMax/ITS/From_T2__loop3.t2__term_unfeasibility_37_0` | TO @ 60 s |
+| `VeryMax/ITS/From_T2__loop3.t2_fixed__term_unfeasibility_40_0` | TO @ 60 s |
+
+These cases need NEW algorithmic levers, not more budget. Confirmed (n=3) that the remaining 22 oracle-UNSAT cluster is algorithm-bound, not budget-bound.
+
+#### Configuration to ship at scale
+
+Defaults that should land in `XOLVER_NIA` opt-in stripe for QF_NIA:
+
+- `XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT=33` (iter-14 default — keep)
+- `XOLVER_PP_REWRITE=1` (iter-15 odd-power + add-cancel — opt-in)
+- `XOLVER_PP_PURE_DEFINED_VAR_SUBST=1` (iter-17 — opt-in)
+
+The percentage-budget arm (iter-14) is the single biggest single-iteration win available without writing new reasoners; everything beyond it requires algorithmic invention (one cluster per future iteration).
