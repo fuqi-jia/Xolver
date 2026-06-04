@@ -40,6 +40,7 @@ public:
     PolyId neg(PolyId a) override;
     PolyId mul(PolyId a, PolyId b) override;
     PolyId pow(PolyId a, uint32_t k) override;
+    PolyId mkFromMonomials(const std::vector<MonomialTerm>& terms) override;
 
     bool isZero(PolyId a) const override;
     bool isConstant(PolyId a) const override;

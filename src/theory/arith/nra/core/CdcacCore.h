@@ -161,6 +161,21 @@ private:
     // a power (the matrix-1-all crash). Present for every constraint whenever the
     // all-safe gate lets the search run.
     std::vector<std::optional<RationalPolynomial>> satRp_;
+    // Increment 3 (XOLVER_NRA_CAC_NLSAT, default-OFF): LAZY conflict-driven
+    // projection learning. When a variable's feasible set is empty (no sampled
+    // candidate survives the forward-check), project ONLY the conflict core
+    // (eliminating that var) via a Collins policy and add each result as a DERIVED
+    // feasibility cut that prunes the re-search — z3-nlsat's advantage over the
+    // eager buildClosure projection (which projects everything up front and
+    // explodes on the matrix cluster). Soundness-SAFE: SAT-first never emits Unsat;
+    // a wrong cut only over-prunes (misses a model → falls through), never a wrong
+    // verdict. Reset per solve. NOT a budget — the search pruning is algorithmic.
+    bool satNlsatEnabled_ = false;
+    struct SatCut { RationalPolynomial poly; Relation rel; };  // derived lemma: poly rel 0
+    std::vector<SatCut> satDerived_;
+    std::unique_ptr<ProjectionPolicy> satExplainPolicy_;
+    void projectConflictCore(int k, VarId var, const SamplePoint& prefix,
+                             const CdcacInput& input);
     // Magnitude bound (bits) on sampled cell representatives. SAT-first samples
     // the SIMPLEST rational in each feasible cell (smallest-denominator dyadic) and
     // discards any whose numerator/denominator exceeds this — an ADDITIVE search

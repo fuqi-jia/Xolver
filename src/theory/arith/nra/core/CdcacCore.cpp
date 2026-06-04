@@ -230,6 +230,12 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
         long b = std::atol(e);
         if (b >= 0) satFirstMs_ = b;   // 0 ⇒ no wall cap (node budget only)
     }
+    // nlsat-engine INCREMENT 3: lazy conflict-driven projection learning on top
+    // of SAT-first (default-OFF). Implies sat-first.
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_NLSAT")) {
+        satNlsatEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+        if (satNlsatEnabled_) satFirstEnabled_ = true;
+    }
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -448,6 +454,47 @@ bool CdcacCore::certifyLevelSignInvariance(int k, const SamplePoint& prefix,
     return exactDistinct == libpolyCount;
 }
 
+// EXTREME OOM-survival backstop for the eager projection closure. The matrix
+// closure's toPolyId OOM was ROOT-CAUSE-FIXED algorithmically (the kernel pool
+// leak in toPrimitiveInteger — see RationalPolynomial::toPrimitiveInteger /
+// PolynomialKernel::mkFromMonomials): matrix-1/2/3 now convert in tens of MB and
+// run to a normal timeout instead of SIGSEGV. So this is NOT a solvability cap
+// and is NOT meant to floor anything that the (now memory-safe) engine can do —
+// the thresholds are set FAR above every real case (matrix's biggest poly is
+// ~45k terms; this fires only past 2 MILLION terms / 50 Mbit coefficients, i.e.
+// a poly that cannot be materialized in any reasonable RAM even with the O(n)
+// build). It exists purely so a genuinely pathological projection kills the SOLVE
+// gracefully (Unknown) instead of the PROCESS (a SIGSEGV would lose a whole
+// competition batch). Env-tunable for experiments.
+static bool projectedPolyIntractable(const RationalPolynomial& rp) {
+    static const long kMaxTerms =
+        env::paramInt("XOLVER_NRA_PROJ_MAX_TERMS", 2000000) > 0
+            ? (long)env::paramInt("XOLVER_NRA_PROJ_MAX_TERMS", 2000000) : 2000000L;
+    static const long kMaxDeg =
+        env::paramInt("XOLVER_NRA_PROJ_MAX_DEG", 100000) > 0
+            ? (long)env::paramInt("XOLVER_NRA_PROJ_MAX_DEG", 100000) : 100000L;
+    // Summed coefficient bit-length (numerator AND denominator) — the matrix
+    // resultants have huge INTEGER coefficients (den==1 ⇒ a denominator-only guard
+    // misses them), so we bound num+den. 50 Mbit (~6 MB raw) is an extreme ceiling.
+    static const long kMaxCoeffBits =
+        env::paramInt("XOLVER_NRA_PROJ_MAX_COEFF_BITS", 50000000) > 0
+            ? (long)env::paramInt("XOLVER_NRA_PROJ_MAX_COEFF_BITS", 50000000) : 50000000L;
+    if ((long)rp.terms().size() > kMaxTerms) return true;
+    long coeffBits = 0, totalDeg = 0;
+    for (const auto& [key, coeff] : rp.terms()) {
+        long md = 0;
+        for (const auto& [v, e] : key) { (void)v; md += (long)e; }
+        if (md > totalDeg) totalDeg = md;
+        if (totalDeg > kMaxDeg) return true;
+        const mpz_class& num = coeff.get_num();
+        const mpz_class& den = coeff.get_den();
+        if (num != 0) coeffBits += (long)mpz_sizeinbase(num.get_mpz_t(), 2);
+        if (den > 1)  coeffBits += (long)mpz_sizeinbase(den.get_mpz_t(), 2);
+        if (coeffBits > kMaxCoeffBits) return true;   // unrepresentable after denom-clear
+    }
+    return false;
+}
+
 void CdcacCore::buildClosure(const CdcacInput& input) {
     if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
         std::cerr << "[LAZARD-CLOSURE-ENTRY] vars=" << input.varOrder.size()
@@ -507,6 +554,12 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         }
         for (int k = 0; k < n; ++k) {
             for (int id : lazardClosure_.levelPolys(k)) {
+                // Crash firewall: refuse to materialize an intractable projected
+                // poly (toPolyId would OOM/SIGSEGV). Incomplete ⇒ no UNSAT rests
+                // on it; SAT comes from the model search, not this closure.
+                if (projectedPolyIntractable(lazardClosure_.entries()[id].poly)) {
+                    unsatTrustworthy_ = false; closureComplete_ = false; continue;
+                }
                 PolyId pid = lazardClosure_.entries()[id].poly.toPolyId(*kernel_);
                 if (pid == NullPoly) { unsatTrustworthy_ = false; closureComplete_ = false; continue; }
                 levelPolyIds_[k].push_back(pid);
@@ -522,6 +575,12 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
 
     for (int k = 0; k < n; ++k) {
         for (int id : closure_.levelPolys(k)) {
+            // Crash firewall: an intractable projected poly (matrix closure) would
+            // OOM/SIGSEGV inside toPolyId. Skip it ⇒ closure incomplete ⇒ Unknown,
+            // never an unsound UNSAT. The real model comes from SAT-first.
+            if (projectedPolyIntractable(closure_.entries()[id].poly)) {
+                unsatTrustworthy_ = false; continue;
+            }
             PolyId pid = closure_.entries()[id].poly.toPolyId(*kernel_);
             if (pid == NullPoly) { unsatTrustworthy_ = false; continue; }
             levelPolyIds_[k].push_back(pid);
@@ -580,6 +639,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // through to the projection engine, byte-identical to before. Default-OFF.
     if (satFirstEnabled_ && !satFirstTried_ && !input.varOrder.empty()) {
         satFirstTried_ = true;
+        satDerived_.clear();   // increment 3: fresh learned-cut set per solve
         // Precompute per-constraint safety once: a poly whose denominator-cleared
         // integer coefficients would exceed the cap is skipped for delineation (the
         // libpoly heap-corruption class — same cap as the projection firewall). The
@@ -1502,6 +1562,7 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
     std::unordered_set<VarId> assigned;
     for (VarId v : prefix.varOrder) assigned.insert(v);
     assigned.insert(var);
+    bool anyFeasible = false;   // increment 3: did ANY candidate survive forward-check?
     for (auto& q : cands) {
         if (budget <= 0) break;
         --budget;
@@ -1528,12 +1589,159 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
             if (!allAssigned) continue;
             if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel)) { pruned = true; break; }
         }
+        // Increment 3: also reject against LEARNED cuts (lazy projection lemmas).
+        // A cut "p rel 0" with all its (lower) vars assigned prunes the same bad
+        // prefix region that already proved var-k-infeasible elsewhere — so the
+        // re-search never re-descends into it. Soundness-safe: SAT only on a
+        // validated leaf, so an over-eager cut can only miss a model (fall
+        // through), never flip a verdict.
+        if (!pruned && satNlsatEnabled_) {
+            for (const auto& cut : satDerived_) {
+                bool allAssigned = true;
+                for (VarId v : cut.poly.variables())
+                    if (!assigned.count(v)) { allAssigned = false; break; }
+                if (!allAssigned) continue;
+                if (!satRelHolds(exactSignAt(cut.poly, m), cut.rel)) { pruned = true; break; }
+            }
+        }
         if (pruned) { prefix.pop(); continue; }
+        anyFeasible = true;
         CdcacResult r = trySatSampleFirst(k + 1, prefix, input, budget);
         prefix.pop();
         if (r.status == CdcacStatus::Sat) return r;
     }
+    // Increment 3: if no sampled value of var k survived the forward-check, the
+    // feasible set for var k under this prefix is (empirically) empty — a level-k
+    // conflict. Explain it LAZILY by projecting ONLY the univariate-in-k core
+    // (eliminating var k) and recording each result as a feasibility cut over the
+    // prefix vars, so a sibling re-search of var k-1 skips this dead region. This
+    // is the z3-nlsat lever: project on demand at the conflict, never eagerly.
+    if (satNlsatEnabled_ && !anyFeasible && !cands.empty() && k > 0)
+        projectConflictCore(k, var, prefix, input);
     return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+}
+
+// Increment 3: lazy conflict-driven projection. var k's feasible set is empty
+// under `prefix`; gather the univariate-in-k constraints (the only polys that
+// can have pruned here — lower-only constraints were already satisfied by the
+// surviving prefix) as the conflict core, project them ELIMINATING var k via a
+// Collins policy, and turn each projected polynomial p(lower vars) into a cut.
+// p evaluated at the conflict prefix has a definite sign s; the bad region is
+// "p keeps sign s", so the cut excludes it: s>0 ⇒ (p<=0), s<0 ⇒ (p>=0). The
+// boundary p==0 is the cell wall where var-k's root structure changes, so the
+// re-search is steered off the dead cell toward a neighbouring one.
+void CdcacCore::projectConflictCore(int k, VarId var, const SamplePoint& prefix,
+                                    const CdcacInput& input) {
+    if (!satExplainPolicy_)
+        satExplainPolicy_ = std::make_unique<CollinsConservativePolicy>();
+
+    std::unordered_set<VarId> assigned;
+    for (VarId v : prefix.varOrder) assigned.insert(v);
+    assigned.insert(var);
+
+    // Projection-cost firewall. Collins projection is exponential in the number
+    // of distinct variables and in the per-poly degree in the eliminated var
+    // (resultant degree = product of input degrees). Projecting the FULL
+    // univariate-in-k set on a matrix-product core blows GMP up (uncatchable
+    // abort). So we bound the core to a low-dimensional, low-degree subset; if no
+    // safe subset exists we skip learning entirely and the SAT search proceeds
+    // EXACTLY as the committed baseline (which already finds matrix-1's model).
+    // This guards the OPTIONAL learning step — it never turns a model into
+    // unknown (NOT a solve budget).
+    static const int kMaxCoreVars =
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 2) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 2) : 2;
+    static const int kMaxCorePolys =
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 3) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 3) : 3;
+    static const int kMaxElimDeg =
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 3) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 3) : 3;
+
+    // Degree of `rp` in var `var` (max monomial exponent of var).
+    auto degInVar = [&](const RationalPolynomial& rp) {
+        long d = 0;
+        for (const auto& [key, coeff] : rp.terms()) {
+            (void)coeff;
+            for (const auto& [v, e] : key) if (v == var && (long)e > d) d = (long)e;
+        }
+        return d;
+    };
+
+    // Candidate univariate-in-k polys, tagged with elimination degree + var set.
+    struct Cand { const RationalPolynomial* rp; SatLit reason; long elimDeg; std::set<VarId> vars; };
+    std::vector<Cand> cands_;
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        if (ci >= satRp_.size() || !satRp_[ci]) continue;
+        bool univ = true, hasVar = false;
+        std::set<VarId> vs;
+        for (VarId v : satRp_[ci]->variables()) {
+            if (!assigned.count(v)) { univ = false; break; }
+            if (v == var) hasVar = true; else vs.insert(v);
+        }
+        if (!univ || !hasVar) continue;
+        if (projectedPolyIntractable(*satRp_[ci])) continue;  // never feed an explosive poly to project()
+        long ed = degInVar(*satRp_[ci]);
+        if (ed == 0 || ed > kMaxElimDeg) continue;   // too costly / not in var
+        cands_.push_back({&*satRp_[ci], input.constraints[ci].reason, ed, std::move(vs)});
+    }
+    if (cands_.size() < 2) return;
+
+    // Greedily build a minimal, low-dimensional core: cheapest elimination degree
+    // first, keeping the union of LOWER (eliminated-away) vars within kMaxCoreVars.
+    std::sort(cands_.begin(), cands_.end(),
+              [](const Cand& a, const Cand& b) { return a.elimDeg < b.elimDeg; });
+    std::vector<ReasonedPolynomial> core;
+    std::set<VarId> unionVars;
+    for (const auto& c : cands_) {
+        if ((int)core.size() >= kMaxCorePolys) break;
+        std::set<VarId> u = unionVars;
+        u.insert(c.vars.begin(), c.vars.end());
+        if ((int)u.size() > kMaxCoreVars) continue;   // would over-dimension the projection
+        unionVars.swap(u);
+        core.push_back({*c.rp, PolyRole::ConstraintPolynomial, {c.reason}});
+    }
+    if (core.size() < 2) return;   // need ≥2 polys for a genuine root-overlap conflict
+
+    ProjectionContext ctx;
+    ctx.level = k;
+    ctx.currentVar = var;
+    ctx.prefix = prefix;
+    ctx.kernel = kernel_;
+    ctx.algebra = algebra_;
+
+    ProjectionInput in;
+    in.polys = core;
+    in.eliminateVar = var;          // eliminate var k ⇒ polys over the prefix vars
+    in.baseCell = Cell();
+    in.baseCell.var = var;
+
+    PolicyProjectionResult pr;
+    try {
+        pr = satExplainPolicy_->project(in, ctx);
+    } catch (...) {
+        return;   // projection is best-effort; never let it break the SAT search
+    }
+
+    std::unordered_map<VarId, mpq_class> m;
+    for (size_t i = 0; i < prefix.varOrder.size(); ++i)
+        if (prefix.values[i].isRational())
+            m.emplace(prefix.varOrder[i], prefix.values[i].rational);
+
+    for (const auto& rp : pr.projectionPolys) {
+        if (rp.poly.contains(var)) continue;   // must be eliminated (over prefix vars only)
+        if (projectedPolyIntractable(rp.poly)) continue;  // don't store a huge cut (slow exactSignAt)
+        bool allAssigned = true;
+        for (VarId v : rp.poly.variables())
+            if (!m.count(v)) { allAssigned = false; break; }
+        if (!allAssigned) continue;
+        int s = exactSignAt(rp.poly, m);
+        Relation rel;
+        if (s > 0) rel = Relation::Leq;        // bad region is p>0 ⇒ keep p<=0
+        else if (s < 0) rel = Relation::Geq;   // bad region is p<0 ⇒ keep p>=0
+        else continue;                          // on the cell wall — no directional cut
+        satDerived_.push_back({rp.poly, rel});
+    }
 }
 
 Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const SamplePoint& /*sample*/, VarId /*var*/) {
