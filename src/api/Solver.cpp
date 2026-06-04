@@ -2350,6 +2350,27 @@ Result Solver::checkSat() {
         pImpl->lastUnknownReason_ = "out-of-memory (bad_alloc) — solver firewalled to Unknown";
         pImpl->lastModel_.reset();
         r = Result::Unknown;
+    } catch (const std::length_error& e) {
+        // libgmp / std::vector etc. throw length_error when a polynomial DAG
+        // attempts to construct a container past max_size — a different
+        // exception class than bad_alloc but the same crash-class symptom.
+        // Iter#19 extension of the iter#18 firewall: same Unknown-conversion
+        // contract.
+        pImpl->lastUnknownReason_ =
+            std::string("length_error (") + e.what() +
+            ") — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
+    } catch (const std::exception& e) {
+        // Catch-all for any other std::exception escaping the inner solve.
+        // Sound: returns Unknown for any case the solver could not complete
+        // cleanly. Preserves the solver process for downstream cases (e.g.
+        // run_regression --j-mode running many files per worker).
+        pImpl->lastUnknownReason_ =
+            std::string("exception (") + e.what() +
+            ") — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
     }
     wall::endSolve();
     return r;
