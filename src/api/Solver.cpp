@@ -890,12 +890,23 @@ public:
         // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
         // linear equalities (x = t), substituting globally and recording the
         // (x, t) substitution in modelConverter_ for replay onto the final
-        // model. Default-OFF (XOLVER_PP_SOLVE_EQS). Restricted to base scope:
-        // the elimination is global and not roll-back-able, so it is gated off
-        // under incremental push/pop. Also gated off for real-nonlinear logics
-        // (NRA/NIRA/UFNRA): their models carry algebraic (irrational) values
-        // that the linear rational reconstructor cannot evaluate, which would
-        // soundly but needlessly downgrade Sat -> Unknown (completeness loss).
+        // model. Default-OFF (XOLVER_PP_SOLVE_EQS=1 opts in).
+        //
+        // Iter#16 measured: enabling this recovers 6/6 of the
+        // UltimateAutomizer linear_sea B1 family (z3 ~48-132 ms, xolver
+        // pre-fix TIMEOUT 30 s) with 0 reg-suite regressions, BUT regresses
+        // 6 unit tests (test_idl, test_rdl, test_model_consistency,
+        // test_cdclt, test_model_validator_e2e) — even restricted to
+        // QF_LIA/QF_NIA — because the model-replay pipeline does not
+        // reconstruct eliminated vars in the final model for these test
+        // shapes. The replay bug is the iter#17 fix-and-promote target;
+        // until then this stays opt-in via env.
+        //
+        // Restricted to base scope: the elimination is global and not
+        // roll-back-able, so it is gated off under incremental push/pop.
+        // Also gated off for real-nonlinear logics (NRA/NIRA/UFNRA): their
+        // models carry algebraic (irrational) values that the linear
+        // rational reconstructor cannot evaluate.
         modelConverter_ = ModelConverter{};
         fixedBindings_.clear();
         const bool algebraicModelLogic =
@@ -2128,8 +2139,20 @@ public:
         // Replay solve-eqs eliminations onto the final model so it satisfies
         // the ORIGINAL assertions (which still reference the eliminated vars).
         // If any eliminated var cannot be reconstructed, we cannot vouch for
-        // the model: downgrade Sat -> Unknown (sound floor) rather than emit an
-        // unvalidatable model (invariant 1).
+        // the model: downgrade Sat -> Unknown (sound floor) rather than emit
+        // an unvalidatable model (invariant 1).
+        //
+        // Materialize an empty lastModel_ when SAT and the converter has work
+        // to do but no theory built a model. This happens when SolveEqs has
+        // eliminated every variable, so the residual formula is trivially
+        // true and the theory layer returns SAT-with-empty-model. Without
+        // this, modelConverter_.reconstruct is skipped, and tests like
+        // `(= x 42)` see an empty model after the elimination instead of
+        // the replayed x=42. The reconstruct still validates over the
+        // ORIGINAL assertions internally; sound either way.
+        if (ret == Result::Sat && !modelConverter_.empty() && !lastModel_) {
+            lastModel_ = TheorySolver::TheoryModel{};
+        }
         if (ret == Result::Sat && lastModel_ && !modelConverter_.empty()) {
             if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
                                              lastModel_->assignments, *ir)) {
