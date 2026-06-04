@@ -320,11 +320,112 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 // Numeric-constant equality.
                 auto va = tryRational(ir_, a), vb = tryRational(ir_, b);
                 if (va && vb) return mkBool(*va == *vb);
+                // Shared-Add-term cancellation: `(= (+ X1 X2 ...) (+ Y1 Y2 ...))`
+                // simplifies by removing the intersection of the two operand
+                // multisets. Sound: subtracting the same value from both sides
+                // preserves equality. Closes the "semi-magic square of cubes"
+                // chain (MathProblems SC_02 etc.) where, after SOLVE_EQS removes
+                // `t`, the asserted formula becomes
+                //   (= (+ x_00^3 x_01^3) (+ x_00^3 x_10^3))
+                // which collapses to `(= x_01^3 x_10^3)` and then, via the
+                // odd-power injection below, to `(= x_01 x_10)` -- contradicting
+                // (distinct x_01 x_10).
+                const CoreExpr& an = ir_.get(a);
+                const CoreExpr& bn = ir_.get(b);
+                if (an.kind == Kind::Add && bn.kind == Kind::Add &&
+                    an.children.size() >= 2 && bn.children.size() >= 2) {
+                    std::vector<ExprId> la, rb;
+                    la.reserve(an.children.size());
+                    rb.reserve(bn.children.size());
+                    for (size_t i = 0; i < an.children.size(); ++i) la.push_back(an.children[i]);
+                    for (size_t i = 0; i < bn.children.size(); ++i) rb.push_back(bn.children[i]);
+                    bool cancelled = false;
+                    for (auto it = la.begin(); it != la.end(); ) {
+                        auto match = std::find(rb.begin(), rb.end(), *it);
+                        if (match != rb.end()) {
+                            rb.erase(match);
+                            it = la.erase(it);
+                            cancelled = true;
+                        } else {
+                            ++it;
+                        }
+                    }
+                    if (cancelled) {
+                        auto rebuild = [&](std::vector<ExprId>& v, SortId sortArith) -> ExprId {
+                            if (v.empty()) {
+                                return mkIntOrReal(mpq_class(0), sortArith);
+                            }
+                            if (v.size() == 1) return v[0];
+                            return mk(Kind::Add, sortArith, v, Payload());
+                        };
+                        ExprId newA = rebuild(la, an.sort);
+                        ExprId newB = rebuild(rb, bn.sort);
+                        if (newA != NullExpr && newB != NullExpr && (newA != a || newB != b)) {
+                            return mk(Kind::Eq, sort, {newA, newB}, Payload());
+                        }
+                    }
+                }
                 // Boolean iff identities (only when provably bool).
                 if (isProvablyBool(a) && isProvablyBool(b)) {
                     bool ba, bb;
                     if (isBoolConst(a, ba)) return ba ? b : negate(b);
                     if (isBoolConst(b, bb)) return bb ? a : negate(a);
+                }
+                // Odd-power injection (sound over Z): if both sides are pow(_, k)
+                // with the SAME odd positive integer constant k, rewrite to
+                // (= base_a base_b). x^k is injective over Z for odd k, so
+                // x^k = y^k ↔ x = y. For even k the rule is unsound (x^2 = y^2
+                // doesn't imply x = y -- could differ in sign). Only fires on
+                // Int-sorted exponents read from a ConstInt payload; non-constant
+                // or even / negative exponents fall through unchanged.
+                //
+                // Closes the "semi-magic square of cubes" pattern (MathProblems
+                // SC_02 etc.) where the constraint chain collapses to
+                // x_10^3 = x_01^3 -> x_10 = x_01, contradicting (distinct ...).
+                auto isPowOdd = [&](ExprId eid, ExprId& base, mpz_class& expOut) -> bool {
+                    const CoreExpr& e = ir_.get(eid);
+                    // Explicit Pow(base, k).
+                    if (e.kind == Kind::Pow && e.children.size() == 2) {
+                        const CoreExpr& exp = ir_.get(e.children[1]);
+                        if (exp.kind != Kind::ConstInt) return false;
+                        if (auto* i = std::get_if<int64_t>(&exp.payload.value)) {
+                            if (*i <= 0 || (*i % 2) == 0) return false;
+                            expOut = mpz_class(*i);
+                        } else if (auto* s = std::get_if<std::string>(&exp.payload.value)) {
+                            try { expOut = mpz_class(*s); }
+                            catch (...) { return false; }
+                            if (expOut <= 0 || (expOut % 2) == 0) return false;
+                        } else {
+                            return false;
+                        }
+                        base = e.children[0];
+                        return true;
+                    }
+                    // Implicit repeated-var Mul: (* x x x ...) with N ≥ 3 odd
+                    // and ALL children syntactically equal to one ExprId.
+                    // SMT-LIB writes `x^3` as `(* x x x)`; the rule must catch
+                    // both forms. N must be odd.
+                    if (e.kind == Kind::Mul && e.children.size() >= 3) {
+                        ExprId first = e.children[0];
+                        for (size_t i = 1; i < e.children.size(); ++i)
+                            if (e.children[i] != first) return false;
+                        size_t n = e.children.size();
+                        if ((n & 1) == 0) return false;        // even -> not injective
+                        base = first;
+                        expOut = mpz_class(static_cast<unsigned long>(n));
+                        return true;
+                    }
+                    return false;
+                };
+                ExprId baseA = NullExpr, baseB = NullExpr;
+                mpz_class expA, expB;
+                if (isPowOdd(a, baseA, expA) && isPowOdd(b, baseB, expB) && expA == expB) {
+                    // Reflexive shortcut: a^k = a^k → true.
+                    if (baseA == baseB) return mkBool(true);
+                    // Build (= baseA baseB) as a fresh node; the fixpoint loop
+                    // in run() will further-simplify it (e.g. against a
+                    // (distinct baseA baseB) atom elsewhere).
+                    return mk(Kind::Eq, sort, {baseA, baseB}, Payload());
                 }
             }
             return mk(kind, sort, std::move(children), Payload());
