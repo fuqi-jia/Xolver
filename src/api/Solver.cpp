@@ -310,6 +310,8 @@ public:
     // model checked here is exactly the one that would be printed.
     bool modelPositivelyValidates() const {
         if (!ir || !lastModel_) return false;
+        const bool arrBridgeModel =
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0;
         ArithModelValidator::NumAssignment numAsg;
         ArithModelValidator::BoolAssignment boolAsg;
         ArithModelValidator::TokenAssignment tokAsg;
@@ -338,8 +340,24 @@ public:
         // NIA/LIA real models carry concrete rationals (never "@"), so the
         // default-on niaSatFloor is untouched.
         std::unordered_set<std::string> opaqueScalar;
-        for (const auto& [name, val] : lastModel_->assignments)
-            if (!val.empty() && val[0] == '@') opaqueScalar.insert(name);
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val.empty() || val[0] != '@') continue;
+            // A genuinely-constrained combination scalar (e.g. a `ret` pinned by
+            // `ret + 2^32 = (mod (sum of selects) 2^32)`) carries its REAL arith
+            // value in numericAssignments; only the UNCONSTRAINED-scalar backfill
+            // is spurious (minted 0, the alia_005 i=j collapse). With array-bridge
+            // model completion on, keep the non-zero real value so a select/mod
+            // equality over the scalar can validate; still drop the spurious
+            // 0-collapse. Gated → default path unchanged.
+            if (arrBridgeModel) {
+                auto rit = lastModel_->numericAssignments.find(name);
+                if (rit != lastModel_->numericAssignments.end()) {
+                    auto q = rit->second.tryAsRational();
+                    if (q && *q != 0) continue;  // real value → not opaque-excluded
+                }
+            }
+            opaqueScalar.insert(name);
+        }
         // Prefer the typed numeric channel (RealValue): exact rationals + the
         // combination shared-scalar's true arithmetic value. Skip opaque-token
         // scalars (their numeric value is the spurious collapse).
@@ -401,9 +419,7 @@ public:
         // independently re-checks every ORIGINAL assertion, so a globally
         // inconsistent value leaves the verdict Unknown — never a wrong sat.
         ArithModelValidator::SelectOverrideMap selBridge;
-        const bool arrBridgeModel =
-            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0;
-        if (arrBridgeModel) {
+        if (arrBridgeModel) {  // declared at function top
             // Evaluate bridge indices with the FULL numeric channel: a compound
             // index may itself be a bridged shared scalar (opaque-token tagged,
             // hence excluded from numAsg as an opaqueScalar); its concrete value
