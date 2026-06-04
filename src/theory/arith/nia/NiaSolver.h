@@ -67,8 +67,9 @@ public:
                    int level, SatLit assertedLit) override;
 
     void setRegistry(TheoryAtomRegistry* reg);
-    void setCoreIr(const CoreIr* ir);
-    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // setCoreIr override: stores via base + does NIA-specific Farkas-dump side
+    // effect. setSharedTermRegistry uses the base implementation.
+    void setCoreIr(const CoreIr* ir) override;
 
     bool supportsCombination() const override { return true; }
 
@@ -79,6 +80,16 @@ public:
 
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
+
+    // Look up the current NIA model value for a shared term so the combination
+    // layer's model-based arrangement (TheoryManager.cpp §4) can see same-value
+    // shared scalar pairs in array-combination mode (QF_ANIA / QF_AUFNIA).
+    // Returns the literal value for shared constants and the currentModel_ /
+    // lastValidatedFarkasModel_ entry for shared variables; nullopt otherwise.
+    // Gated by XOLVER_NIA_SHARED_ARITH_VALUE (default-ON) so the historical
+    // "NIA returns nullopt -> arrangement skipped" behaviour can be restored
+    // if the arrangement loop turns out to oscillate on QF_(AUF)NIA.
+    std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
 
     std::optional<TheoryModel> getModel() const override;
 
@@ -283,6 +294,24 @@ private:
     // ORIGINAL NIA constraints. Default-OFF (XOLVER_NIA_LBBB),
     // Full-effort only.
     std::optional<TheoryCheckResult> stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort);
+    // Escalating-bounded SAT-finder for the unbounded-≥0 NIA pattern (AProVE
+    // class, ~4,571 cases per master). When some variable has a finite lower
+    // bound but no upper bound, BoundedNiaSolver bails to UnknownUnsupported
+    // and downstream stages (bit-blast, modular, LS) may also miss the case.
+    // This stage augments domains_ in a SCRATCH copy by adding upper bounds
+    // `lower + 2^k - 1` for each unbounded-low var, then calls bounded_.solve
+    // on the augmented store, escalating k each iteration. SAT in any
+    // augmented box is also SAT in the original (smaller domain ⊆ original
+    // domain), and bounded_.solve validates every candidate via validator_
+    // against the original constraints — sound by invariant 1. The escalation
+    // terminates structurally when ENUMERATION_THRESHOLD bites
+    // (UnknownBudget) on the augmented box, never via an artificial k cap.
+    // Default-ON since iter#11 (2026-06-05) — promoted after 100-AProVE
+    // sample showed +1 recovery on baseline-stuck cases with 0 regressions
+    // (12 buckets, 670 reg cases all 0-unsound), and the iter#10 AMV
+    // ConstInt-string fix made every validator verdict precise. Opt out via
+    // XOLVER_NIA_BOUNDED_ESCALATE=0. Full-effort only.
+    std::optional<TheoryCheckResult> stageEscalatingBounded(TheoryLemmaStorage&, TheoryEffort);
     // HYB-2 (master 2026-06-02, post-Smart-LS). Coordinated LS-on-U +
     // BB-on-B for partition profiles where B dominates (|B| > |U|;
     // ITS-like, H5 finding). LS-tracked bounds give per-U-var
@@ -311,8 +340,8 @@ private:
     std::optional<TheoryCheckResult> stagePendingLemma(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageBranch(TheoryLemmaStorage&, TheoryEffort);
 
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    // coreIr_, sharedTermRegistry_, sharedTermToVarName_, getVarNameForSharedTerm
+    // now live in ArithSolverBase (hoisted 2026-06-04; was duplicated 4x).
     TheoryAtomRegistry* registry_ = nullptr;
     std::unique_ptr<NiaLinearizationAdapter> linAdapter_;
     std::deque<TheoryLemma> pendingLinLemmas_;

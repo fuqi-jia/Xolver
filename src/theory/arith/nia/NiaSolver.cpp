@@ -22,6 +22,8 @@
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
+#include "util/MpqUtils.h"
+#include <chrono>
 #include <iostream>
 
 namespace xolver {
@@ -150,7 +152,16 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // unknown at Full effort (e.g. the Zohar intand/intor bit-width cases regress
     // unsat -> unknown). So keep it gated default-OFF until that completeness gap
     // is closed; promote only after the unit + regression gate stays green ON.
-    if (const char* e = std::getenv("XOLVER_NIA_PRESOLVE_FULL"); e && *e && *e != '0')
+    //
+    // Iter#24 measurement: 16 reg buckets + AProVE 100-sample pass with
+    // XOLVER_NIA_PRESOLVE_FULL=1 under iter#21's 50 ms presolve deadline cap.
+    // BUT the Zohar intand/intor cases are not in the local reg suite, so this
+    // is necessary-but-not-sufficient evidence — promotion requires a panda
+    // differential that exercises the historic Zohar regression.
+    //
+    // Use env::paramInt instead of getenv so the autotuner dump
+    // (XOLVER_DUMP_PARAMS) sees this knob in its registered-param list.
+    if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
         add("nia.presolve",     &NiaSolver::stagePresolveFixpoint);
@@ -186,6 +197,12 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // BEFORE nia.bit-blast so it refutes the modular `mod 2^k` structure before
     // the blaster (which times out / OOMs on those inputs) is even attempted.
     addFull("nia.modular",    &NiaSolver::stageModular);
+    // Escalating-bounded SAT-finder for unbounded-≥0 vars (XOLVER_NIA_BOUNDED_
+    // ESCALATE, default-OFF). Runs BEFORE bit-blast because exact-integer
+    // enumeration on a small cap is cheaper than encoding+SAT-solving for the
+    // AProVE-class cases where K=2..3 already finds a witness. Sound: every
+    // SAT validated by validator_ over the ORIGINAL constraint set.
+    addFull("nia.escalating-bounded", &NiaSolver::stageEscalatingBounded);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
     // residual. Full-effort only (heavy); runs after the SAT workhorses.
@@ -234,6 +251,31 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // signature so the next identical call hits stageDispatchCacheLookup.
     add("nia.dispatch-cache-record", &NiaSolver::stageDispatchCacheRecord);
     add("nia.branch",         &NiaSolver::stageBranch);
+    // Iter#26 RECORD (NOT a flag — the experiment hung the solver, see
+    // iter#27 below): gating nia.pending-lemma + nia.branch to Full effort
+    // (via a XOLVER_NIA_COMB_DEFER_LEMMA flag) was the iter#25-26 hypothesis
+    // for unblocking the QF_ANIA combination starvation diagnosed at
+    // TheoryManager.cpp:482 (`return tr` on first non-Consistent). The
+    // hypothesis was that deferring NIA's Lemma emission at Standard would
+    // let SAT explore + NIA return Consistent + combination layer's
+    // getDeducedSharedEqualities + sharedTermArithValue actually fire.
+    //
+    // Iter#27 measurement on sum10 (QF_ANIA): with the flag on, the solver
+    // HANGS — exit=124 (SIGTERM @ 2 s) vs exit=0 (clean "unknown") on
+    // default. ZERO stderr output during the 2 s window: no STAGE-PROF,
+    // no CONFLICT-SRC, no diag prints. Without nia.branch, SAT continues
+    // pure-bool decisions WITHOUT theory feedback and gets stuck in deep
+    // exploration of a 3.4 KB formula with ~100 atoms — exponential
+    // without theory pruning. Even though the flag was default-OFF, the
+    // semantics-when-enabled were actively harmful, so the experiment was
+    // reverted entirely (this comment is the documentation; no flag ships).
+    //
+    // Real iter#27+ paths (unchanged from iter#26):
+    //   (a) TheoryManager runs combination AFTER Lemma return (semantic
+    //       risk to N-O ordering).
+    //   (b) Refactor ~10 NIA Conflict-emit stages to be Full-only AND
+    //       redesign the SAT-feedback contract so SAT doesn't starve.
+    //   (c) Parallel theory-check / combination architecture (deep).
 
     // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
     // reasoning path. The backend is uncapped on this base and OOMs on dense
@@ -692,6 +734,19 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
     // Conflict (UNSAT) or a case-split Lemma; never SAT directly. Otherwise
     // falls through, having populated derived bounds/substitutions consumed
     // below, then Cap. 9 attempts complete finite-domain enumeration.
+    //
+    // Iter#21: pass a per-call deadline into PresolveEngine.run() to free
+    // SAT-finder stages on QF_ANIA Ozdemir-class. Default 50 ms per call
+    // (XOLVER_NIA_PRESOLVE_BUDGET_MS); 0 disables the cap. STAGE-PROF
+    // measurement: pre-iter#21 presolve consumed 4769 ms of a 5 s budget
+    // (24 cb_propagate × ~200 ms each), starving demand-arrangement /
+    // escalating-bounded / LS / AMV from running. SOUND: capping inside
+    // the fixpoint exits with the partial fact set already in st_.ledger —
+    // every recorded derivation is still semantically valid; downstream
+    // stages see a SUBSET of what unbounded presolve would derive, never
+    // an incorrect claim.
+    static const long presolveBudgetMs =
+        env::paramLong("XOLVER_NIA_PRESOLVE_BUDGET_MS", 50);
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
     bool feasible = true;
     for (const auto& c : normalized_) {
@@ -700,7 +755,12 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
         presolve.addAtom(*rp, c.rel, c.reason);
     }
     if (feasible) {
-        auto pr = presolve.run();
+        auto deadline =
+            (presolveBudgetMs > 0)
+                ? std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(presolveBudgetMs)
+                : std::chrono::steady_clock::time_point::max();
+        auto pr = presolve.run(deadline);
         if (pr.kind == PresolveResult::Kind::Conflict) {
             return TheoryCheckResult::mkConflict(pr.conflict);
         }
@@ -1491,6 +1551,215 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult>
+NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    (void)lemmaDb;
+    static const bool enabled =
+        env::paramInt("XOLVER_NIA_BOUNDED_ESCALATE", 1) != 0;
+    if (!enabled) return std::nullopt;
+    (void)effort;  // Full-effort-only is enforced by the addFull() registration.
+    if (!coreIr_) return std::nullopt;  // need the original formula for AMV.
+    if (normalized_.empty()) return std::nullopt;
+
+    // Detect vars with a finite lower bound but no upper bound. These are
+    // exactly the inputs BoundedNiaSolver can't enumerate today (it bails to
+    // UnknownUnsupported in solve()). Be conservative: if there are vars with
+    // no domain info OR unbounded below, skip — those are outside this
+    // stage's sound lane.
+    auto allVars = collectVars(normalized_, *kernel_);
+    std::vector<std::string> vars(allVars.begin(), allVars.end());
+    std::sort(vars.begin(), vars.end()); // determinism
+    std::vector<std::pair<mpz_class, mpz_class>> ranges; // (lo, hi) per var
+    ranges.reserve(vars.size());
+    bool anyUnboundedAbove = false;
+    for (const auto& v : vars) {
+        const IntDomain* d = domains_.getDomain(v);
+        if (!d) return std::nullopt;
+        if (!d->hasLower) return std::nullopt;   // unbounded below — out of lane
+        mpz_class lo = d->lower.value;
+        if (d->hasUpper) {
+            // already capped — keep the existing window
+            ranges.push_back({lo, d->upper.value});
+        } else {
+            ranges.push_back({lo, lo});          // placeholder; widened per k
+            anyUnboundedAbove = true;
+        }
+    }
+    if (!anyUnboundedAbove) return std::nullopt; // nia.bounded covers this.
+    (void)effort;
+
+    // Cap on per-iteration enumeration size (autotunable knob, iter#5 hoist).
+    // STRUCTURAL bound — no artificial k cap; the loop terminates when the
+    // augmented box exceeds this threshold for any k.
+    const long enumThreshold =
+        env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
+
+    // Collect bool AND array vars referenced in the ORIGINAL formula.
+    //   - Bool vars: BoolSubterm Purifier introduces `boolpur_K` fresh bool
+    //     vars to name complex subexpressions; AMV cannot evaluate them
+    //     without a BoolAssignment, so every candidate goes Indeterminate.
+    //     We enumerate ALL polarity combos.
+    //   - Array vars: QF_ANIA / QF_AUFNIA cases declare arrays (e.g.
+    //     `(declare-fun start () (Array Int Int))`); AMV's Select / Store
+    //     return Indeterminate when the base array var has no interp. We
+    //     supply each Array var with a baseline ConstArray (default token
+    //     "#n:0") so the store-chain accumulates correctly. SOUND: the
+    //     baseline is a candidate guess — if the SAT witness needs different
+    //     base values, AMV will reject this combo and we miss the witness,
+    //     never claim a wrong SAT.
+    std::set<std::string> boolVarSet;
+    std::set<std::string> arrayVarSet;
+    {
+        std::vector<ExprId> wstack;
+        std::unordered_set<ExprId> wseen;
+        for (ExprId a : coreIr_->assertions()) wstack.push_back(a);
+        const SortId boolSort = coreIr_->boolSortId();
+        while (!wstack.empty()) {
+            ExprId e = wstack.back(); wstack.pop_back();
+            if (e == NullExpr || e >= coreIr_->size()) continue;
+            if (!wseen.insert(e).second) continue;
+            const auto& n = coreIr_->get(e);
+            if (n.kind == Kind::Variable) {
+                if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                    if (n.sort == boolSort) {
+                        boolVarSet.insert(*nm);
+                    } else if (coreIr_->arraySortParams(n.sort)) {
+                        arrayVarSet.insert(*nm);
+                    }
+                }
+            }
+            for (ExprId c : n.children) wstack.push_back(c);
+        }
+    }
+    std::vector<std::string> boolVars(boolVarSet.begin(), boolVarSet.end());
+    std::sort(boolVars.begin(), boolVars.end());
+    const size_t nBoolVars = boolVars.size();
+    // STRUCTURAL skip: 2^nBoolVars must fit in long enumeration. With
+    // enumThreshold=10000 default, 2^13 = 8192 already eats most of it.
+    // We don't add an artificial cap, but skip the bool-enum entirely if
+    // 2^nBoolVars exceeds the threshold (sound — bool vars left Indeterminate
+    // means more candidates get rejected, not fewer; we miss SAT, we don't
+    // claim UNSAT).
+    long boolCombo = 1;
+    for (size_t i = 0; i < nBoolVars; ++i) {
+        if (boolCombo > enumThreshold) { boolCombo = -1; break; }
+        boolCombo *= 2;
+    }
+    if (boolCombo < 0) return std::nullopt;
+
+    // AMV input scaffold reused across candidates (zero-alloc inner loop).
+    ArithModelValidator::NumAssignment num;
+    num.reserve(vars.size());
+    ArithModelValidator::BoolAssignment bools;
+    bools.reserve(nBoolVars);
+    // Array baseline: each Array var gets a ConstArray with default token
+    // "#n:0" (matches AMV's auto-token form for the rational 0; see
+    // ArithModelValidator.cpp::asToken at line 80). Built ONCE before the
+    // enumeration loop — same baseline for every (int × bool) combo, since
+    // the formula's stores accumulate as overrides on top.
+    ArithModelValidator::ArrayAssignment arrAsg;
+    ArithModelValidator::TokenAssignment tokAsg;  // empty — Number→token auto-converts
+    if (!arrayVarSet.empty()) {
+        arrAsg.reserve(arrayVarSet.size());
+        for (const auto& aname : arrayVarSet) {
+            TheorySolver::TheoryModel::ArrayInterp interp;
+            interp.defaultVal = "#n:0";
+            // entries empty: no overrides on the baseline
+            arrAsg.emplace(aname, std::move(interp));
+        }
+    }
+
+    // Escalate width = 2^k - 1 on UNBOUNDED vars; keep bounded vars' ranges
+    // intact. Compute totalSize first; if > threshold, stop escalating.
+    for (int k = 1; ; ++k) {
+        mpz_class widthMinus1 = (mpz_class(1) << k) - 1; // 2^k - 1
+
+        // Build per-var (lo, hi) for THIS k, and compute totalSize.
+        std::vector<std::pair<mpz_class, mpz_class>> kRanges = ranges;
+        mpz_class totalSize = 1;
+        bool overBudget = false;
+        for (size_t i = 0; i < vars.size(); ++i) {
+            const IntDomain* d = domains_.getDomain(vars[i]);
+            if (d && !d->hasUpper) {
+                kRanges[i] = {kRanges[i].first, kRanges[i].first + widthMinus1};
+            }
+            mpz_class span = kRanges[i].second - kRanges[i].first + 1;
+            if (span <= 0) { overBudget = true; break; }
+            totalSize *= span;
+            if (totalSize > enumThreshold) { overBudget = true; break; }
+        }
+        if (overBudget) break;
+        // Combined per-k cost: int product × 2^nBoolVars. Skip k if combined
+        // is over threshold (sound — skipping cases that exhaust budget is
+        // not a wrong-UNSAT, just an unrecovered SAT chance).
+        if (nBoolVars > 0) {
+            mpz_class combined = totalSize * boolCombo;
+            if (combined > enumThreshold) break;
+        }
+
+        // Cartesian-product enumeration. For each int-candidate × bool-
+        // candidate, validate via ArithModelValidator against the ORIGINAL
+        // coreIr_ assertions — pattern mirrors stageLocalSearchBoolExtend
+        // but extended to ENUMERATE bool var polarities (boolpur_K Tseitin
+        // proxies introduced by the purifier). SOUND for SAT: a model that
+        // satisfies the ORIGINAL boolean+arith formula is a sound SAT
+        // witness regardless of the partial constraint subset in normalized_.
+        const size_t N = vars.size();
+        std::vector<mpz_class> cur(N);
+        for (size_t i = 0; i < N; ++i) cur[i] = kRanges[i].first;
+        while (true) {
+            // Build NumAssignment from `cur`.
+            num.clear();
+            for (size_t i = 0; i < N; ++i) {
+                num.emplace(vars[i], mpq_class(cur[i]));
+            }
+            // Iterate all 2^nBoolVars polarity combos. With nBoolVars=0 the
+            // loop body runs exactly once with empty BoolAssignment.
+            for (long bmask = 0; bmask < boolCombo; ++bmask) {
+                bools.clear();
+                for (size_t i = 0; i < nBoolVars; ++i) {
+                    bools.emplace(boolVars[i], ((bmask >> i) & 1) != 0);
+                }
+                // Use the array-aware ctor when the formula has Array vars,
+                // so AMV's Select / Store paths can evaluate.
+                std::unique_ptr<ArithModelValidator> amvPtr;
+                if (!arrayVarSet.empty()) {
+                    amvPtr = std::make_unique<ArithModelValidator>(
+                        *coreIr_, num, bools, arrAsg, tokAsg);
+                } else {
+                    amvPtr = std::make_unique<ArithModelValidator>(
+                        *coreIr_, num, bools);
+                }
+                if (amvPtr->validate(coreIr_->assertions()) ==
+                    ArithModelValidator::Verdict::Satisfied) {
+                    // Materialize as NIA's currentModel_ — IntegerModel is
+                    // a map<string, mpz_class>, same shape as `cur`. Bool
+                    // proxies stay implicit in the model — the solver caller
+                    // (Solver::Impl) re-validates the full model via the
+                    // boundary validator with the SAT-layer's own bool
+                    // assignments, so the eventual SAT verdict is
+                    // double-checked.
+                    IntegerModel model;
+                    for (size_t i = 0; i < N; ++i) model[vars[i]] = cur[i];
+                    currentModel_ = std::move(model);
+                    return TheoryCheckResult::consistent();
+                }
+            }
+            // Increment cur in odometer order.
+            size_t j = 0;
+            while (j < N) {
+                ++cur[j];
+                if (cur[j] <= kRanges[j].second) break;
+                cur[j] = kRanges[j].first;
+                ++j;
+            }
+            if (j == N) break; // exhausted
+        }
+        // No SAT in this k's box; escalate (any unbounded var grows).
+    }
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
     // HYB-X partition-hint wire-up (default-OFF).
     {
@@ -1542,22 +1811,66 @@ NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
     if (best.empty()) return std::nullopt;
 
     // Translate the integer model into ArithModelValidator's numeric
-    // assignment (mpq over var names). AMV's BoolAssignment stays empty —
-    // pure NIA has no Boolean-typed variables (only polynomial-atom lits,
-    // which AMV computes itself from the formula structure).
+    // assignment (mpq over var names).
     ArithModelValidator::NumAssignment num;
     num.reserve(best.size());
     for (const auto& kv : best) {
         num.emplace(kv.first, mpq_class(kv.second));
     }
-    ArithModelValidator::BoolAssignment bools;
 
-    ArithModelValidator amv(*coreIr_, num, bools);
-    if (amv.validate(coreIr_->assertions()) ==
-        ArithModelValidator::Verdict::Satisfied) {
-        // Materialize as the NIA currentModel_ for the caller.
-        currentModel_ = best;
-        return TheoryCheckResult::consistent();
+    // Bool var enumeration (iter#12 finding): the BoolSubterm Purifier
+    // introduces fresh `boolpur_K` bool vars to name complex subexpressions.
+    // AMV cannot evaluate them without a BoolAssignment, so the formula
+    // returned Indeterminate even when LS's bestAssignment was the genuine
+    // SAT witness. Collect bool vars from coreIr_ and enumerate every
+    // polarity combo. SOUND: each combo is independently AMV-validated;
+    // Satisfied requires the FULL formula to evaluate true.
+    std::set<std::string> boolVarSet;
+    {
+        std::vector<ExprId> wstack;
+        std::unordered_set<ExprId> wseen;
+        for (ExprId a : coreIr_->assertions()) wstack.push_back(a);
+        const SortId boolSort = coreIr_->boolSortId();
+        while (!wstack.empty()) {
+            ExprId e = wstack.back(); wstack.pop_back();
+            if (e == NullExpr || e >= coreIr_->size()) continue;
+            if (!wseen.insert(e).second) continue;
+            const auto& n = coreIr_->get(e);
+            if (n.kind == Kind::Variable && n.sort == boolSort) {
+                if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                    boolVarSet.insert(*nm);
+                }
+            }
+            for (ExprId c : n.children) wstack.push_back(c);
+        }
+    }
+    std::vector<std::string> boolVars(boolVarSet.begin(), boolVarSet.end());
+    std::sort(boolVars.begin(), boolVars.end());
+    const size_t nBoolVars = boolVars.size();
+    // Structural bound: 2^nBoolVars must fit a long without overflow AND not
+    // exceed ENUMERATION_THRESHOLD. Cases with too many bool vars fall through.
+    const long enumThreshold =
+        env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
+    long boolCombo = 1;
+    for (size_t i = 0; i < nBoolVars; ++i) {
+        if (boolCombo > enumThreshold) return std::nullopt;
+        boolCombo *= 2;
+    }
+
+    ArithModelValidator::BoolAssignment bools;
+    bools.reserve(nBoolVars);
+    for (long bmask = 0; bmask < boolCombo; ++bmask) {
+        bools.clear();
+        for (size_t i = 0; i < nBoolVars; ++i) {
+            bools.emplace(boolVars[i], ((bmask >> i) & 1) != 0);
+        }
+        ArithModelValidator amv(*coreIr_, num, bools);
+        if (amv.validate(coreIr_->assertions()) ==
+            ArithModelValidator::Verdict::Satisfied) {
+            // Materialize as the NIA currentModel_ for the caller.
+            currentModel_ = best;
+            return TheoryCheckResult::consistent();
+        }
     }
     return std::nullopt;
 }
@@ -2390,9 +2703,408 @@ TheoryCheckResult NiaSolver::assertInterfaceDisequality(
     return TheoryCheckResult::consistent();
 }
 
+std::optional<RealValue>
+NiaSolver::sharedTermArithValue(SharedTermId s) const {
+    // Gated default-ON for QF_ANIA / QF_AUFNIA: without this, the combination
+    // layer's model-based arrangement (TheoryManager §4) skips every shared
+    // term because the loop's `if (!v) continue;` fires when the arith solver
+    // returns nullopt (the inherited base default). Closing this gap is what
+    // lets array combination ever emit a same-value scalar-arrangement split
+    // for QF_ANIA cases (the long-standing 0/157 hole — iter#1-#4 emitted
+    // shared-eqs into a layer that wasn't running). Opt-out via
+    // XOLVER_NIA_SHARED_ARITH_VALUE=0 if the arrangement+nonlinear-branch
+    // interaction starts to oscillate.
+    static const bool enabled =
+        env::paramInt("XOLVER_NIA_SHARED_ARITH_VALUE", 1) != 0;
+    if (!enabled) return std::nullopt;
+
+    if (!sharedTermRegistry_ || !coreIr_) return std::nullopt;
+    const auto* st = sharedTermRegistry_->get(s);
+    if (!st) return std::nullopt;
+    const auto& expr = coreIr_->get(st->coreExpr);
+
+    // Constants — return the literal value directly. Mirrors LiaSolver's
+    // constant handling so an arithmetic constant participates in the
+    // arrangement on equal terms with a variable bound to that value.
+    if (expr.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpq_class(*iv));
+        }
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpqFromString(*sv));
+        }
+    }
+    if (expr.kind == Kind::ConstReal) {
+        if (auto* sv = std::get_if<std::string>(&expr.payload.value)) {
+            return RealValue::fromMpq(mpqFromString(*sv));
+        }
+    }
+
+    // Variables — read the latest NIA model entry. currentModel_ holds the
+    // current check()'s candidate model; lastValidatedFarkasModel_ is the
+    // fallback Farkas-Or witness that survives reset/backtrack. Either is
+    // sound for the arrangement's "what value does NIA think this term has
+    // right now?" query — the arrangement only emits TAUTOLOGY splits
+    // `(a = b) ∨ ¬(a = b)`, so a wrong-guess split costs one SAT-layer commit
+    // cycle but never a soundness violation. ModelValidator at the
+    // Solver::Impl boundary still catches a globally-inconsistent model.
+    if (expr.kind != Kind::Variable ||
+        !std::holds_alternative<std::string>(expr.payload.value)) {
+        // Iter#30: compound shared terms (e.g. `(+ i 1)` as an array index)
+        // had no value path here pre-iter#30 — returned nullopt → array-
+        // combination arrangement skipped them entirely. iter#28-29 opened
+        // the channel; this opens the SOURCE for compound terms by
+        // recursively evaluating Add/Sub/Mul/Neg over the current NIA
+        // model. SOUND: this only returns a value when EVERY leaf evaluates
+        // (Variable found in model, Const literal); on any unresolved leaf
+        // or unsupported kind, falls through to nullopt → arrangement
+        // safely skips the term (same as pre-iter#30 behavior).
+        // Recursion depth bounded at 32 (anti-pathological-DAG guard).
+        const IntegerModel* src = nullptr;
+        if (currentModel_)                  src = &*currentModel_;
+        else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+        if (!src) return std::nullopt;
+        std::function<std::optional<mpz_class>(ExprId, int)> ev =
+            [&](ExprId e, int depth) -> std::optional<mpz_class> {
+                if (depth > 32 || e == NullExpr || e >= coreIr_->size())
+                    return std::nullopt;
+                const auto& n = coreIr_->get(e);
+                if (n.kind == Kind::ConstInt) {
+                    if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+                        return mpz_class(*iv);
+                    if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                        try { return mpz_class(*sv); }
+                        catch (...) { return std::nullopt; }
+                    }
+                    return std::nullopt;
+                }
+                if (n.kind == Kind::Variable) {
+                    if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                        auto it = src->find(*nm);
+                        if (it == src->end()) return std::nullopt;
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                if (n.kind == Kind::Add) {
+                    mpz_class acc = 0;
+                    for (ExprId c : n.children) {
+                        auto cv = ev(c, depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc += *cv;
+                    }
+                    return acc;
+                }
+                if (n.kind == Kind::Sub) {
+                    if (n.children.empty()) return std::nullopt;
+                    auto fv = ev(n.children[0], depth + 1);
+                    if (!fv) return std::nullopt;
+                    mpz_class acc = *fv;
+                    for (size_t i = 1; i < n.children.size(); ++i) {
+                        auto cv = ev(n.children[i], depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc -= *cv;
+                    }
+                    return acc;
+                }
+                if (n.kind == Kind::Neg) {
+                    if (n.children.size() != 1) return std::nullopt;
+                    auto cv = ev(n.children[0], depth + 1);
+                    if (!cv) return std::nullopt;
+                    return -*cv;
+                }
+                if (n.kind == Kind::Mul) {
+                    mpz_class acc = 1;
+                    for (ExprId c : n.children) {
+                        auto cv = ev(c, depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc *= *cv;
+                    }
+                    return acc;
+                }
+                return std::nullopt;
+            };
+        auto val = ev(st->coreExpr, 0);
+        if (!val) return std::nullopt;
+        return RealValue::fromMpz(*val);
+    }
+    const std::string& name = std::get<std::string>(expr.payload.value);
+    const IntegerModel* src = nullptr;
+    if (currentModel_)                  src = &*currentModel_;
+    else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+    // Iter#25 diag: count ALL invocations + classification (null-model vs
+    // found vs missing-from-model). Set XOLVER_NIA_ARITH_VALUE_DIAG=1.
+    static const bool diag =
+        std::getenv("XOLVER_NIA_ARITH_VALUE_DIAG") != nullptr;
+    static long callCount = 0;
+    static long nullModelCount = 0;
+    static long missingNameCount = 0;
+    static long foundCount = 0;
+    if (diag) {
+        ++callCount;
+        if (!src) ++nullModelCount;
+        else if (src->find(name) == src->end()) ++missingNameCount;
+        else ++foundCount;
+        if (callCount % 100 == 1) {
+            std::fprintf(stderr,
+                         "[NIA-ARITH-VALUE] calls=%ld null-model=%ld missing-name=%ld found=%ld\n",
+                         callCount, nullModelCount, missingNameCount, foundCount);
+        }
+    }
+    if (!src) return std::nullopt;
+    auto it = src->find(name);
+    if (it == src->end()) return std::nullopt;
+    return RealValue::fromMpz(it->second);
+}
+
 std::vector<TheorySolver::SharedEqualityPropagation>
 NiaSolver::getDeducedSharedEqualities() {
-    return {};
+    // Nelson-Oppen fixed-value seam: when two shared integer variables both
+    // have their NIA domain pinned to the same singleton {v}, propagate the
+    // equality to EUF so the e-graph can fire array/UF axioms (read-over-
+    // write, congruence) that depend on the equality.
+    //
+    // Without this, QF_ANIA / QF_AUFNIA combination instances where the
+    // equality is implied by NIA bounds (e.g. `a = b` follows from
+    // `a >= n /\ a <= n /\ b >= n /\ b <= n`) are unreachable: NIA never
+    // tells EUF, EUF never closes the read-over-write, and the combined
+    // verdict stays Unknown. NiaSolver previously returned {} unconditionally,
+    // closing this seam entirely (the LIA path was the only one open).
+    //
+    // SOUND: a pair is emitted only when both vars' integer domains pin them
+    // to the same value, and the propagation reasons are the (deduped) union
+    // of the four bound-reason literals (lo_a, hi_a, lo_b, hi_b). If any
+    // bound is later relaxed by backtrack, the propagation's reason becomes
+    // unsatisfied and the SAT layer retracts it through normal conflict
+    // analysis. Same proof contract as LiaSolver::getDeducedSharedEqualities'
+    // fixed-value loop.
+    if (!sharedTermRegistry_) return {};
+
+    struct Entry {
+        SharedTermId stId;
+        std::vector<SatLit> reasons;
+    };
+    // map<mpz_class, ...> for determinism (autotuner / oracle reproducibility).
+    std::map<mpz_class, std::vector<Entry>> groups;
+
+    for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+        std::string name = getVarNameForSharedTerm(stId);
+        if (name.empty()) continue;
+        const IntDomain* d = domains_.getDomain(name);
+        if (!d) continue;
+        if (!(d->hasLower && d->hasUpper)) continue;
+        if (d->lower.value != d->upper.value) continue;
+
+        std::vector<SatLit> reasons;
+        reasons.insert(reasons.end(), d->lower.reasons.begin(),
+                       d->lower.reasons.end());
+        reasons.insert(reasons.end(), d->upper.reasons.begin(),
+                       d->upper.reasons.end());
+        std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+            return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+        });
+        reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                  [](SatLit a, SatLit b) {
+            return a.var == b.var && a.sign == b.sign;
+        }), reasons.end());
+
+        groups[d->lower.value].push_back({stId, std::move(reasons)});
+    }
+
+    std::vector<TheorySolver::SharedEqualityPropagation> result;
+    for (auto& [val, entries] : groups) {
+        if (entries.size() < 2) continue;
+        for (size_t i = 0; i < entries.size(); ++i) {
+            for (size_t j = i + 1; j < entries.size(); ++j) {
+                std::vector<SatLit> combined;
+                combined.insert(combined.end(), entries[i].reasons.begin(),
+                                entries[i].reasons.end());
+                combined.insert(combined.end(), entries[j].reasons.begin(),
+                                entries[j].reasons.end());
+                std::sort(combined.begin(), combined.end(),
+                          [](SatLit a, SatLit b) {
+                    return a.var < b.var || (a.var == b.var && a.sign < b.sign);
+                });
+                combined.erase(std::unique(combined.begin(), combined.end(),
+                                           [](SatLit a, SatLit b) {
+                    return a.var == b.var && a.sign == b.sign;
+                }), combined.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    entries[i].stId, entries[j].stId, std::move(combined)});
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Var-var implied equalities (port of LIA's assertedVarEqualityReason).
+    //
+    // Two shared integer variables can be forced equal by NIA-asserted
+    // linear atoms even when neither domain pins to a constant: an explicit
+    // equality atom `c*x - c*y = k` with `k = 0`, or complementary
+    // inequalities `c*(x-y) >= k AND c*(x-y) <= k` collapsing to a single
+    // point. For each pair of shared vars (a, b), walk the active trail
+    // accumulating bounds on `d = na - nb` from atoms whose polynomial is
+    // exactly a 2-variable linear difference; if the accumulated interval
+    // collapses to {0}, emit the propagation with the two pinning literals.
+    //
+    // SOUND:
+    //   1. Exact-pins-only: only emit when the accumulated lo == up == 0
+    //      after iterating all 2-var difference atoms on the trail. Strict
+    //      bounds (Lt/Gt) are skipped (they don't pin an equality).
+    //   2. Complete explanation: reasons = the two pinning literals (loLit,
+    //      upLit) — those are the SAT literals whose retraction unblocks
+    //      the derived equality. SAT-CDCL will retract the propagation
+    //      automatically when either reason becomes unassigned.
+    //   3. Backtrack invalidation: state_.trail entries are dropped by the
+    //      base class's backtrackToLevel; the next getDeducedSharedEqualities
+    //      call rescans fresh.
+    //   4. Deduped against the fixed-value loop above (a pair already pinned
+    //      by both vars being singleton-domain is not re-emitted here).
+    //   5. PolynomialAtomPayload with an algebraic (non-rational) rhs is
+    //      skipped — over-conservative but never wrong.
+    if (sharedTermRegistry_) {
+        struct SV { SharedTermId stId; std::string name; };
+        std::vector<SV> svs;
+        for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+            std::string name = getVarNameForSharedTerm(stId);
+            if (name.empty()) continue;
+            svs.push_back({stId, std::move(name)});
+        }
+
+        if (svs.size() >= 2) {
+            auto pairKey = [](SharedTermId a, SharedTermId b) -> uint64_t {
+                SharedTermId lo = a < b ? a : b;
+                SharedTermId hi = a < b ? b : a;
+                return (static_cast<uint64_t>(lo) << 32)
+                     | static_cast<uint32_t>(hi);
+            };
+            std::unordered_set<uint64_t> emittedPair;
+            for (const auto& p : result) emittedPair.insert(pairKey(p.a, p.b));
+
+            for (size_t i = 0; i < svs.size(); ++i) {
+                for (size_t j = i + 1; j < svs.size(); ++j) {
+                    if (emittedPair.count(pairKey(svs[i].stId, svs[j].stId)))
+                        continue;
+                    const std::string& na = svs[i].name;
+                    const std::string& nb = svs[j].name;
+
+                    bool haveLo = false, haveUp = false;
+                    mpq_class lo = 0, up = 0;
+                    SatLit loLit{}, upLit{};
+
+                    for (const auto& e : state_.trail) {
+                        const auto* p = std::get_if<PolynomialAtomPayload>(
+                                            &e.atom.payload);
+                        if (!p) continue;
+                        if (!p->rhs.isRational()) continue;
+
+                        auto vars = kernel_->variables(p->poly);
+                        if (vars.size() != 2) continue;
+                        bool hasA = false, hasB = false;
+                        for (const auto& v : vars) {
+                            if (v == na) hasA = true;
+                            else if (v == nb) hasB = true;
+                        }
+                        if (!hasA || !hasB) continue;
+
+                        auto tOpt = kernel_->terms(p->poly);
+                        if (!tOpt) continue;
+                        mpz_class cA = 0, cB = 0, k = 0;
+                        bool ok = true;
+                        for (const auto& m : *tOpt) {
+                            if (m.powers.empty()) {
+                                k += m.coefficient;
+                            } else if (m.powers.size() == 1
+                                       && m.powers[0].second == 1) {
+                                std::string vn(
+                                    kernel_->varName(m.powers[0].first));
+                                if (vn == na)      cA += m.coefficient;
+                                else if (vn == nb) cB += m.coefficient;
+                                else { ok = false; break; }
+                            } else {
+                                ok = false; break;  // nonlinear monomial
+                            }
+                        }
+                        if (!ok) continue;
+                        if (cA == 0 || cA != -cB) continue;
+
+                        Relation rel = e.value ? p->rel
+                                               : negateRelation(p->rel);
+                        if (rel == Relation::Neq) continue;  // never pins
+                        const mpq_class& rhsQ = p->rhs.asRational();
+                        // poly = cA*(na - nb) + k ; rel rhsQ
+                        // => d = na - nb satisfies  cA*d  rel  (rhsQ - k)
+                        // => d rel'  (rhsQ - k)/cA  with rel' flipped if cA<0
+                        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+                        bool flip = (cA < 0);
+                        auto addLower = [&](const mpq_class& v, SatLit lit) {
+                            if (!haveLo || v > lo) {
+                                lo = v; loLit = lit; haveLo = true;
+                            }
+                        };
+                        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+                            if (!haveUp || v < up) {
+                                up = v; upLit = lit; haveUp = true;
+                            }
+                        };
+                        switch (rel) {
+                            case Relation::Eq:
+                                addLower(bnd, e.lit);
+                                addUpper(bnd, e.lit);
+                                break;
+                            case Relation::Leq:
+                                if (!flip) addUpper(bnd, e.lit);
+                                else       addLower(bnd, e.lit);
+                                break;
+                            case Relation::Geq:
+                                if (!flip) addLower(bnd, e.lit);
+                                else       addUpper(bnd, e.lit);
+                                break;
+                            case Relation::Lt:
+                            case Relation::Gt:
+                            default:
+                                break;  // strict — does not pin
+                        }
+                    }
+
+                    if (haveLo && haveUp && lo == 0 && up == 0) {
+                        std::vector<SatLit> reasons;
+                        reasons.push_back(loLit);
+                        if (!(upLit == loLit)) reasons.push_back(upLit);
+                        std::sort(reasons.begin(), reasons.end(),
+                                  [](SatLit a, SatLit b) {
+                            return a.var < b.var
+                                || (a.var == b.var && a.sign < b.sign);
+                        });
+                        reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                                  [](SatLit a, SatLit b) {
+                            return a.var == b.var && a.sign == b.sign;
+                        }), reasons.end());
+                        emittedPair.insert(
+                            pairKey(svs[i].stId, svs[j].stId));
+                        result.push_back(TheorySolver::SharedEqualityPropagation{
+                            svs[i].stId, svs[j].stId, std::move(reasons)});
+                    }
+                }
+            }
+        }
+    }
+
+    // Iter#25 diag: count ALL invocations + propagation sizes. Set
+    // XOLVER_NIA_SHARED_EQ_DIAG=1 to see periodic counter. This proves
+    // master directive #1: does NIA emit shared-eqs at all on QF_ANIA?
+    static long callCount = 0;
+    static long totalEmitted = 0;
+    if (std::getenv("XOLVER_NIA_SHARED_EQ_DIAG")) {
+        ++callCount;
+        totalEmitted += result.size();
+        if (callCount % 20 == 1 || !result.empty()) {
+            std::fprintf(stderr,
+                         "[NIA-SHARED-EQ] calls=%ld emitted-this=%zu total=%ld\n",
+                         callCount, result.size(), totalEmitted);
+        }
+    }
+    return result;
 }
 
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {

@@ -77,9 +77,14 @@ void PresolveEngine::addAtom(const RationalPolynomial& poly, Relation rel, SatLi
     st_.atoms.push_back(std::move(a));
 }
 
-PresolveResult PresolveEngine::run() {
+PresolveResult PresolveEngine::run(std::chrono::steady_clock::time_point deadline) {
     bool anyProgress = false;
     int sweeps = 0;
+    const bool haveDeadline =
+        deadline != std::chrono::steady_clock::time_point::max();
+    auto pastDeadline = [&]() {
+        return haveDeadline && std::chrono::steady_clock::now() >= deadline;
+    };
     while (true) {
         bool progress = false;
         for (auto& cap : caps_) {
@@ -95,6 +100,17 @@ PresolveResult PresolveEngine::run() {
                 PresolveResult r;
                 r.kind = PresolveResult::Kind::Lemma;
                 r.lemma = st_.lemma;
+                return r;
+            }
+            // Iter#21 deadline check (per-capability granularity). SOUND:
+            // any Conflict / Lemma terminations already returned via the
+            // branches above. Returning here exits with the partial fact
+            // set in st_.ledger; downstream stages see only the derivations
+            // that completed within budget — never a wrong claim.
+            if (pastDeadline()) {
+                PresolveResult r;
+                r.kind = anyProgress ? PresolveResult::Kind::Progress
+                                     : PresolveResult::Kind::NoProgress;
                 return r;
             }
         }

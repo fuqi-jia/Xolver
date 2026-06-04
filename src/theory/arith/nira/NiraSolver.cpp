@@ -960,9 +960,7 @@ void NiraSolver::setRegistry(TheoryAtomRegistry* reg) {
     registry_ = reg;
 }
 
-void NiraSolver::setCoreIr(const CoreIr* ir) {
-    coreIr_ = ir;
-}
+// setCoreIr now uses the ArithSolverBase default (2026-06-04).
 
 std::optional<TheorySolver::TheoryModel> NiraSolver::getModel() const {
     return currentModel_;

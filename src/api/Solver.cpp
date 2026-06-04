@@ -890,17 +890,47 @@ public:
         // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
         // linear equalities (x = t), substituting globally and recording the
         // (x, t) substitution in modelConverter_ for replay onto the final
-        // model. Default-OFF (XOLVER_PP_SOLVE_EQS). Restricted to base scope:
-        // the elimination is global and not roll-back-able, so it is gated off
-        // under incremental push/pop. Also gated off for real-nonlinear logics
-        // (NRA/NIRA/UFNRA): their models carry algebraic (irrational) values
-        // that the linear rational reconstructor cannot evaluate, which would
-        // soundly but needlessly downgrade Sat -> Unknown (completeness loss).
+        // model.
+        //
+        // Auto-on for linear+nonlinear integer/real arith logics where the
+        // substitution semantics are well-defined (full +/-/* polynomial
+        // expressions): QF_LIA, QF_NIA, QF_LRA. Iter#16-17: this recovers
+        // 6/6 of the UltimateAutomizer linear_sea B1 family (z3 ~48-132 ms,
+        // xolver pre-fix TIMEOUT 30 s) with 0 unit + 0 reg regressions
+        // across all buckets.
+        //
+        // Auto-OFF for:
+        //   - QF_IDL / QF_RDL: difference logic. Substituting one of x or y
+        //     from `(- x y) <= k` breaks the difference-form atom shape that
+        //     IDL/RDL parse; test_idl::"disequality UNSAT" + test_rdl
+        //     regress otherwise.
+        //   - QF_NRA / QF_NIRA / QF_UFNRA: algebraic-model logics whose
+        //     irrational witnesses the linear rational reconstructor cannot
+        //     evaluate (sound but needless downgrade Sat -> Unknown).
+        //   - Mixed bool+real (no set-logic): test_cdclt expects the raw
+        //     CDCL(T) loop to handle `(= x 0)` as a theory atom, not as a
+        //     preprocess substitution; gate stays off.
+        // Explicit env override XOLVER_PP_SOLVE_EQS=1 forces on / =0 forces off.
+        //
+        // Restricted to base scope: the elimination is global and not
+        // roll-back-able, so it is gated off under incremental push/pop.
         modelConverter_ = ModelConverter{};
         fixedBindings_.clear();
         const bool algebraicModelLogic =
             logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
-        if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
+        const bool diffLogic =
+            (logic == "QF_IDL" || logic == "IDL" ||
+             logic == "QF_RDL" || logic == "RDL");
+        const bool solveEqsAutoLogic =
+            (logic == "QF_LIA" || logic == "LIA" ||
+             logic == "QF_NIA" || logic == "NIA" ||
+             logic == "QF_LRA" || logic == "LRA");
+        bool solveEqsEnabled =
+            solveEqsAutoLogic && !algebraicModelLogic && !diffLogic;
+        if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS")) {
+            solveEqsEnabled = !(e[0] == '0' && e[1] == '\0');
+        }
+        if (solveEqsEnabled && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
             SolveEqs solveEqs(*ir, modelConverter_);
             // General ±1-pivot linear elimination (XOLVER_PP_SOLVE_EQS_GAUSS):
@@ -921,10 +951,24 @@ public:
                 logic.find("NIRA") != std::string::npos;
             if (std::getenv("XOLVER_PP_SOLVE_EQS_GAUSS") && !nonlinearArithLogic)
                 solveEqs.setGeneralLinear(true);
-            if (solveEqs.run()) {
-                solveEqs.commit();
-                std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
-                          << " variable(s)\n";
+            // Wrap in try/catch: SolveEqs's work-budget + growthCap guards check
+            // AFTER each mutation, so a single explosive substitution on a
+            // pathological case (aproveSMT4461031801876451415: 16 vars + one
+            // big assertion + many (= x t) eligible substitutions) can OOM
+            // before the guard fires. On bad_alloc, abandon the pass and reset
+            // modelConverter_ so the residual solve uses the ORIGINAL formula
+            // without substitutions — sound, just slower (we lose iter#17's
+            // B1 recovery on this specific case, but never produce a wrong
+            // verdict from a half-applied substitution).
+            try {
+                if (solveEqs.run()) {
+                    solveEqs.commit();
+                    std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
+                              << " variable(s)\n";
+                }
+            } catch (const std::bad_alloc&) {
+                modelConverter_ = ModelConverter{};
+                std::cerr << "[SolveEqs] aborted (bad_alloc) — solving without substitution\n";
             }
         }
 
@@ -1054,14 +1098,13 @@ public:
             }
             const auto& req = dmLowerer.requirement();
             // QF_ANIA / QF_AUFNIA register an EufSolver (the array+NIA stack runs
-            // arrays on a shared EUF e-graph) — but ONLY when XOLVER_COMB_ARRAY_NIA
-            // routes them (without the flag they are not admitted at the array
-            // gate, so this code is never reached for them). So they have EUF
-            // available for the div/mod div-by-zero UF exactly when that flag is
-            // set. Missing here meant int div/mod-by-variable in QF_ANIA bailed to
-            // unknown (SVCOMP UltimateAutomizer family) despite EUF being present.
+            // arrays on a shared EUF e-graph) — gated by XOLVER_COMB_ARRAY_NIA,
+            // which is default-ON (2026-06-04 overnight iter #4): without EUF
+            // available, int div/mod-by-variable in QF_ANIA bailed to unknown
+            // (SVCOMP UltimateAutomizer family). Opt-out via
+            // XOLVER_COMB_ARRAY_NIA=0 if the array+NIA combination misbehaves.
             bool arrayNiaRoutedEuf =
-                std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr &&
+                env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0 &&
                 (logic == "QF_ANIA" || logic == "ANIA" ||
                  logic == "QF_AUFNIA" || logic == "AUFNIA");
             bool hasEuf = arrayNiaRoutedEuf ||
@@ -1315,6 +1358,33 @@ public:
             }
         }
 
+        // Mirror for QF_NIA → QF_LIA. The same correctness argument applies:
+        // `features.hasNonlinear` is the structural linearity gate (Mul ≥ 2
+        // non-consts, Pow, Div by non-const). Mod by a CONSTANT divisor is NOT
+        // flagged nonlinear (LogicFeatureDetector.cpp Kind::Mod sets only
+        // hasInterpretedArithmetic), matching QF_LIA's allowed div/mod with
+        // constant divisor. UltimateAutomizer's `linear_sea.ch_*` family (z3
+        // <60 ms, xolver pre-fix TIMEOUT 30 s) is the canonical target: every
+        // arithmetic atom is linear-with-constant-mod, but the file declares
+        // QF_NIA so xolver dispatches to NIA's heavy reasoners. Routing to LIA
+        // lets the LIA pipeline (simplex + integer reasoning) decide them.
+        //
+        // Soundness: a missed nonlinear term that slips past the detector
+        // would fail downstream extraction and the solver returns UNKNOWN —
+        // never SAT/UNSAT. Opt-out via XOLVER_NIA_LINEAR_DOWNGRADE=0.
+        {
+            bool linDgEnabled = true;
+            if (const char* e = std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE"))
+                linDgEnabled = !(e[0] == '0' && e[1] == '\0');
+            if (linDgEnabled && !features.hasNonlinear &&
+                (logic == "QF_NIA" || logic == "NIA")) {
+                if (std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
+                    std::cerr << "[NIA-LINEAR-DOWNGRADE] " << logic
+                              << " -> QF_LIA (no nonlinear terms)\n";
+                logic = "QF_LIA";
+            }
+        }
+
         // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
         // -------------------------------------------------------------------
@@ -1382,12 +1452,13 @@ public:
         // combination logics QF_ALIA/QF_ALRA/QF_AUFLIA/QF_AUFLRA. Any other
         // logic that contains arrays is gated to Unknown (sound).
         //
-        // XOLVER_COMB_ARRAY_NIA (default-OFF) additionally admits the
-        // array+nonlinear-integer logics QF_ANIA/QF_AUFNIA: arrays layered on
-        // the EUF e-graph with a purified NIA core underneath (see
-        // TheoryFactory). Gated until cross-validated; SAT results still pass
-        // the nonlinear validate-sat floor (unconfirmed → unknown).
-        bool arrayNiaEnabled = (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
+        // XOLVER_COMB_ARRAY_NIA (default-ON since 2026-06-04 overnight iter #4)
+        // additionally admits the array+nonlinear-integer logics
+        // QF_ANIA/QF_AUFNIA: arrays layered on the EUF e-graph with a purified
+        // NIA core underneath (see TheoryFactory). SAT results still pass the
+        // nonlinear validate-sat floor (unconfirmed → unknown). Opt-out via
+        // XOLVER_COMB_ARRAY_NIA=0 if a regression is suspected.
+        bool arrayNiaEnabled = env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0;
         auto isArrayLogic = [&](const std::string& l) {
             bool base = l == "QF_AX" ||
                    l == "QF_ALIA" || l == "ALIA" ||
@@ -2101,8 +2172,20 @@ public:
         // Replay solve-eqs eliminations onto the final model so it satisfies
         // the ORIGINAL assertions (which still reference the eliminated vars).
         // If any eliminated var cannot be reconstructed, we cannot vouch for
-        // the model: downgrade Sat -> Unknown (sound floor) rather than emit an
-        // unvalidatable model (invariant 1).
+        // the model: downgrade Sat -> Unknown (sound floor) rather than emit
+        // an unvalidatable model (invariant 1).
+        //
+        // Materialize an empty lastModel_ when SAT and the converter has work
+        // to do but no theory built a model. This happens when SolveEqs has
+        // eliminated every variable, so the residual formula is trivially
+        // true and the theory layer returns SAT-with-empty-model. Without
+        // this, modelConverter_.reconstruct is skipped, and tests like
+        // `(= x 42)` see an empty model after the elimination instead of
+        // the replayed x=42. The reconstruct still validates over the
+        // ORIGINAL assertions internally; sound either way.
+        if (ret == Result::Sat && !modelConverter_.empty() && !lastModel_) {
+            lastModel_ = TheorySolver::TheoryModel{};
+        }
         if (ret == Result::Sat && lastModel_ && !modelConverter_.empty()) {
             if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
                                              lastModel_->assignments, *ir)) {
@@ -2249,9 +2332,46 @@ Result Solver::checkSat() {
     // Start the global solve wall-clock so per-engine budgets can scale to the
     // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
     wall::beginSolve(env::paramLong("XOLVER_WALLCLOCK_MS", 0));
-    Result r = std::getenv("XOLVER_STRAT_PORTFOLIO")
-                   ? pImpl->checkSatPortfolio()
-                   : pImpl->checkSatInternal();
+    Result r;
+    // Top-level bad_alloc firewall (iter#18, pre-existing class). A pathological
+    // input (e.g. AProVE aproveSMT4461031801876451415: 16 vars + nested
+    // assertion) can OOM deep in atomization / theory / SAT layers before any
+    // budget-guard reacts. Returning Unknown via this catch is sound and
+    // preserves the solver process (vs aborting with std::terminate or
+    // emitting the `(error std::bad_alloc)` token that downstream pipelines
+    // interpret as a hard crash). The catch is at the OUTER boundary so any
+    // bad_alloc — regardless of which inner stage allocated past the
+    // process limit — surfaces as a clean Unknown verdict.
+    try {
+        r = std::getenv("XOLVER_STRAT_PORTFOLIO")
+                ? pImpl->checkSatPortfolio()
+                : pImpl->checkSatInternal();
+    } catch (const std::bad_alloc&) {
+        pImpl->lastUnknownReason_ = "out-of-memory (bad_alloc) — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
+    } catch (const std::length_error& e) {
+        // libgmp / std::vector etc. throw length_error when a polynomial DAG
+        // attempts to construct a container past max_size — a different
+        // exception class than bad_alloc but the same crash-class symptom.
+        // Iter#19 extension of the iter#18 firewall: same Unknown-conversion
+        // contract.
+        pImpl->lastUnknownReason_ =
+            std::string("length_error (") + e.what() +
+            ") — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
+    } catch (const std::exception& e) {
+        // Catch-all for any other std::exception escaping the inner solve.
+        // Sound: returns Unknown for any case the solver could not complete
+        // cleanly. Preserves the solver process for downstream cases (e.g.
+        // run_regression --j-mode running many files per worker).
+        pImpl->lastUnknownReason_ =
+            std::string("exception (") + e.what() +
+            ") — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
+    }
     wall::endSolve();
     return r;
 }

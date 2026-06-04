@@ -28,8 +28,9 @@ public:
     // hooks. check() is the base default driving a single core reasoner.
     void assertLit(const TheoryAtomRecord& atom, bool value, int level, SatLit assertedLit) override;
 
-    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
-    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // setCoreIr / setSharedTermRegistry now live in ArithSolverBase (hoisted
+    // 2026-06-04). The CoreIr* / SharedTermRegistry* fields are protected on
+    // the base.
     void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
 
     // Nelson-Oppen combination hooks
@@ -125,8 +126,7 @@ private:
     // pair, not of the search state.
     std::unordered_set<uint64_t> diseqBranchAuthorized_;
 
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    // coreIr_, sharedTermRegistry_ hoisted to ArithSolverBase (2026-06-04).
 
     // Map from SharedTermId to variable name for simplex
     std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;

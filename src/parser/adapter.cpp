@@ -1,5 +1,6 @@
 #include "parser/adapter.h"
 #include "expr/rewriter.h"
+#include "util/EnvParam.h"
 #include <cassert>
 #include <cstdint>
 #include <cstdlib>
@@ -21,9 +22,10 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     // (Ultimate-Automizer SV-COMP) are let-heavy, and without elimination the
     // let nodes map to Kind::Unknown and corrupt the formula. The pass is
     // capture-free and idempotent on non-let nodes (z3-validated), so coupling
-    // it on is behavior-neutral for let-free input.
+    // it on is behavior-neutral for let-free input. Both knobs default-ON now
+    // (XOLVER_COMB_ARRAY_NIA promoted 2026-06-04 overnight iter #4).
     letElim_ = (std::getenv("XOLVER_PP_LET_ELIM") != nullptr) ||
-               (std::getenv("XOLVER_COMB_ARRAY_NIA") != nullptr);
+               (env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0);
 
     // Stage A: run SOMTParser rewriter before conversion.
     SOMTParser::Rewriter rewriter(parser_.getNodeManager());

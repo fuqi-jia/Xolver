@@ -1,6 +1,7 @@
 #include "theory/arith/nra/NraSolver.h"
 #include "util/EnvParam.h"
 #include "util/SolveClock.h"
+#include <chrono>
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/presolve/Presolve.h"
@@ -483,8 +484,18 @@ void NraSolver::onBacktrack(int level) {
 // Stage 1: theory-check presolve fixpoint (Caps. 1–5, 7, with Real domain).
 // May return a Conflict (UNSAT direction) via exact linear/sign reasoning,
 // or a Lemma; it never returns SAT directly. nullopt → continue to CDCAC.
+//
+// Iter#22: per-call wall-clock deadline (parallels NIA's iter#21 deadline
+// in stagePresolveFixpoint). Default 50 ms (XOLVER_NRA_PRESOLVE_BUDGET_MS;
+// 0 disables). SOUND: the fixpoint's early-exit returns Progress/NoProgress
+// based on the partial fact set already in st_.ledger — every recorded
+// derivation is still semantically valid; downstream stages (CDCAC, ICP)
+// see a SUBSET of what an unbounded run would derive, never an incorrect
+// claim. Conflict / Lemma terminations always return immediately.
 std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*lemmaDb*/,
                                                           TheoryEffort /*effort*/) {
+    static const long presolveBudgetMs =
+        env::paramLong("XOLVER_NRA_PRESOLVE_BUDGET_MS", 50);
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
     bool feasible = true;
     for (const auto& c : presolveConstraints_) {
@@ -494,7 +505,12 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
         presolve.addAtom(*rp, c.rel, c.reason);
     }
     if (feasible) {
-        auto pr = presolve.run();
+        auto deadline =
+            (presolveBudgetMs > 0)
+                ? std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(presolveBudgetMs)
+                : std::chrono::steady_clock::time_point::max();
+        auto pr = presolve.run(deadline);
         if (pr.kind == PresolveResult::Kind::Conflict)
             return TheoryCheckResult::mkConflict(pr.conflict);
         if (pr.kind == PresolveResult::Kind::Lemma)
@@ -1002,6 +1018,11 @@ std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& 
     if (liveCstrs.empty()) return std::nullopt;
 
     // --- Step 1: presolve fixpoint → affine substitutions. -------------------
+    // Same iter#22 deadline as stagePresolve above (this is the preelim path
+    // that also calls presolve as Step 1 before CDCAC; identical cost profile,
+    // identical 50 ms default cap, identical soundness story).
+    static const long preelimPresolveBudgetMs =
+        env::paramLong("XOLVER_NRA_PRESOLVE_BUDGET_MS", 50);
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/false);
     std::vector<std::optional<RationalPolynomial>> rps;  // cached RationalPolynomial per cstr
     rps.reserve(liveCstrs.size());
@@ -1011,7 +1032,12 @@ std::optional<TheoryCheckResult> NraSolver::stageNraPreElim(TheoryLemmaStorage& 
         presolve.addAtom(*rp, c.rel, c.reason);
         rps.push_back(rp);
     }
-    auto pr = presolve.run();
+    auto preelimDeadline =
+        (preelimPresolveBudgetMs > 0)
+            ? std::chrono::steady_clock::now() +
+                  std::chrono::milliseconds(preelimPresolveBudgetMs)
+            : std::chrono::steady_clock::time_point::max();
+    auto pr = presolve.run(preelimDeadline);
     // A presolve Conflict here is handled by stagePresolve already; if it fires
     // we still emit it (sound). A Lemma is a SAT-core split — defer to the normal
     // pipeline by NOT consuming it here (stagePresolve ran first anyway).

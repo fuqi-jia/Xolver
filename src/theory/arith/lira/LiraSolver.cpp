@@ -311,9 +311,7 @@ void LiraSolver::setRegistry(TheoryAtomRegistry* reg) {
     registry_ = reg;
 }
 
-void LiraSolver::setCoreIr(const CoreIr* ir) {
-    coreIr_ = ir;
-}
+// setCoreIr now uses the ArithSolverBase default (2026-06-04).
 
 std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
     TheoryModel model;

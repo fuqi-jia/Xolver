@@ -50,8 +50,8 @@ public:
         integerReasoner_.setEnableEqGcdNormalization(v);
     }
 
-    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
-    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // setCoreIr / setSharedTermRegistry now live in ArithSolverBase
+    // (hoisted 2026-06-04 with getVarNameForSharedTerm).
 
     bool supportsCombination() const override { return true; }
 
@@ -132,10 +132,8 @@ private:
     };
     std::optional<PendingConflict> pendingConflict_;
 
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
-
-    std::unordered_map<SharedTermId, std::string> sharedTermToVarName_;
+    // coreIr_, sharedTermRegistry_, sharedTermToVarName_ hoisted to
+    // ArithSolverBase (2026-06-04 with getVarNameForSharedTerm).
 
     // Buffered entailment lemmas; drained by takeEntailmentPropagations().
     std::vector<TheoryLemma> entailmentProps_;
@@ -226,7 +224,7 @@ private:
     static std::string mpqToSmtLib(const mpq_class& q);
     static std::string relationToSmtLib(Relation rel);
 
-    std::string getVarNameForSharedTerm(SharedTermId s);
+    // getVarNameForSharedTerm hoisted to ArithSolverBase (2026-06-04).
     int getOrCreateInterfaceEqAuxVar(SharedTermId a, SharedTermId b);
 
     // If the asserted linear (in)equality atoms entail that the two shared

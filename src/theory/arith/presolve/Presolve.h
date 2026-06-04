@@ -18,6 +18,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/core/DerivedFact.h"
 
+#include <chrono>
 #include <map>
 #include <memory>
 #include <vector>
@@ -117,8 +118,18 @@ public:
     // Add an active atom (poly rel 0) with its base SAT literal.
     void addAtom(const RationalPolynomial& poly, Relation rel, SatLit reason);
 
-    // Run the fixpoint.
-    PresolveResult run();
+    // Run the fixpoint. Optional `deadline`: if reached during the inner loop
+    // (checked after every capability call), the fixpoint aborts early and
+    // returns Progress / NoProgress based on whether any derivation fired.
+    // SOUND: every derivation already recorded in st_.ledger is semantically
+    // valid; aborting just means downstream stages see a SUBSET of the facts
+    // an unbudgeted run would derive — never an incorrect derivation.
+    // Conflict / Lemma terminations always return immediately regardless of
+    // the deadline.
+    // Default `time_point::max()` is "no deadline", matching the pre-iter#21
+    // unbudgeted behavior for callers that don't pass one.
+    PresolveResult run(std::chrono::steady_clock::time_point deadline =
+                           std::chrono::steady_clock::time_point::max());
 
     // Read-only access to derived facts for the integration layer
     // (inject bounds into DomainStore, reconstruct models, run Cap. 9).

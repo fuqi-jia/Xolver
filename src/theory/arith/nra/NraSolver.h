@@ -50,8 +50,8 @@ public:
     // pipeline on LS miss. XOLVER_NRA_LOCALSEARCH default-OFF.
     TheoryCheckResult check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) override;
 
-    void setCoreIr(const CoreIr* ir) { coreIr_ = ir; }
-    void setSharedTermRegistry(const SharedTermRegistry* reg) { sharedTermRegistry_ = reg; }
+    // setCoreIr / setSharedTermRegistry now live in ArithSolverBase
+    // (hoisted 2026-06-04 with getVarNameForSharedTerm).
     // XOLVER_NRA_LINEARIZE: registry needed to mint mirror/cut literals for the
     // LRA sibling. Mirrors NiaSolver::setRegistry; builds the linearization
     // adapter lazily.
@@ -199,8 +199,7 @@ private:
     struct ActiveRecord { SatLit lit; TheoryAtomRecord atom; bool value; };
     std::vector<ActiveRecord> activeRecords_;
 
-    const CoreIr* coreIr_ = nullptr;
-    const SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    // coreIr_, sharedTermRegistry_ hoisted to ArithSolverBase (2026-06-04).
 
     // XOLVER_NRA_LINEARIZE: registry + linearization adapter (mirror lemmas +
     // McCormick/square cut lemmas). Built lazily by setRegistry.

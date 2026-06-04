@@ -47,7 +47,15 @@ void TheoryManager::clearSolvers() {
 
 void TheoryManager::ensureCareGraph() {
     if (!careGraphEnvChecked_) {
-        careGraphEnabled_ = (std::getenv("XOLVER_COMB_CAREGRAPH") != nullptr);
+        // XOLVER_COMB_CAREGRAPH historical default-OFF (env-set toggles ON).
+        // Auto-enable under arrayCombinationMode_: QF_ANIA / QF_AUFNIA need the
+        // care-graph as the structural bound for the demand-driven arrangement
+        // (Phase 2 below). The graph build is cheap (one syntactic scan), the
+        // prune is sound (under-approximation per CareGraph.h header), and no
+        // existing case regresses (the value-based arrangement still uses the
+        // same caresPair filter it did before).
+        careGraphEnabled_ = (std::getenv("XOLVER_COMB_CAREGRAPH") != nullptr) ||
+                            arrayCombinationMode_;
         careGraphEnvChecked_ = true;
     }
     if (!careGraphEnabled_ || careGraph_.built()) return;
@@ -447,6 +455,43 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     pendingSharedEqEvents_.clear();
 
     // 2. Run each theory check
+    //
+    // Iter#28+29: XOLVER_COMB_PUBLISH_ON_LEMMA. When a solver returns Lemma
+    // (NOT Conflict / NOT Unknown), save the Lemma but continue to step 3
+    // (shared-eq publish + arrangement) before returning. Iter#25-27 pinned
+    // the QF_ANIA starvation here: NIA emits ~138 Lemmas per second at
+    // Standard effort, and the original short-circuit `return tr` on any
+    // non-Consistent skipped step 3 every time — the combination layer's
+    // getDeducedSharedEqualities + sharedTermArithValue queries never fired.
+    // Publishing on Lemma lets the SAT layer receive BOTH the Lemma
+    // (case-split) AND the deduced shared eqs (propagation) in the same
+    // cb_propagate round.
+    //
+    // SOUND: deduced shared eqs are derived from the current trail's bounds
+    // and never become weaker when the solver later branches; the Lemma is
+    // still returned so SAT honors the case-split. Conflict / Unknown still
+    // return immediately (Conflict is UNSAT-direction; Unknown must propagate
+    // upstream without spending more time).
+    //
+    // Iter#29: auto-ON in array-combination mode (arrayCombinationMode_,
+    // set by TheoryFactory for QF_ANIA / QF_AUFNIA / QF_AUFLIA / QF_ALIA).
+    // Iter#28 verified 0 reg regression on all 16 buckets with flag ON.
+    // Iter#32: extended auto-ON to ALL combinationMode_ logics (QF_UFNIA,
+    // QF_UFLIA, QF_UFLRA, QF_UFNRA, QF_UFLIRA in addition to the array
+    // logics). Iter#28's 16-bucket regression-clean evidence covered the
+    // wider scope already; this widens the scope to match. Pure
+    // single-theory solving (LIA / LRA / NIA / NRA alone, no combination)
+    // retains the previous short-circuit behavior — combinationMode_ is
+    // false there, so the starvation pattern doesn't apply. Env override
+    // XOLVER_COMB_PUBLISH_ON_LEMMA=1 forces ON (e.g. force-on for an
+    // experimental non-combination logic), =0 forces OFF (escape hatch
+    // for autotuner or regression bisects).
+    bool publishOnLemma = combinationMode_;
+    if (const char* e = std::getenv("XOLVER_COMB_PUBLISH_ON_LEMMA")) {
+        publishOnLemma = !(e[0] == '0' && e[1] == '\0');
+    }
+    TheoryCheckResult pendingLemma = TheoryCheckResult::consistent();
+    bool havePendingLemma = false;
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
@@ -469,6 +514,16 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
             }
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
+        }
+        if (publishOnLemma && tr.kind == TheoryCheckResult::Kind::Lemma) {
+            // Save the Lemma + continue to step 3 (publish shared-eqs) before
+            // returning. Subsequent solvers' checks are skipped — we don't
+            // want to ask them when the SAT layer is about to branch anyway.
+            NO_DBG << "[TM-CHECK-LEMMA-DEFER] solver=" << (int)solver->id()
+                   << " lemma=" << debug::fmtClause(tr.lemmaOpt->lits) << "\n";
+            pendingLemma = std::move(tr);
+            havePendingLemma = true;
+            break;
         }
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
             NO_DBG << "[TM-CHECK] solver=" << (int)solver->id()
@@ -692,6 +747,94 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // Phase 2 — DEMAND-DRIVEN ARRANGEMENT (XOLVER_COMB_DEMAND_ARRANGE,
+    // default-ON under arrayCombinationMode_, off otherwise).
+    //
+    // Background: the value-based arrangement above only fires for shared-
+    // scalar pairs where SOME arith solver already has a model value AND the
+    // two values coincide. For QF_ANIA / QF_AUFNIA this is a deadlock — NIA
+    // cannot pick concrete index values without first knowing which compound
+    // indices are equal (so the array reasoner can fire Row1 / Row2), but the
+    // arrangement above never asks NIA about a pair whose value NIA does not
+    // yet have. Result: 0 splits emitted, the array combination never closes.
+    //
+    // The principled Nelson-Oppen fix (matches cvc5 / Z3 combination):
+    // enumerate care-graph pairs DIRECTLY and emit ONE arrangement split per
+    // undecided + unmerged pair. The split lemma (a = b) ∨ ¬(a = b) is a
+    // tautology, so sound by construction; SAT must commit one polarity, and
+    // the per-pair dedup via emittedArrangementSplits_ bounds the total work
+    // at O(|cared|^2) over the entire solve — NOT per call — so termination
+    // is structural, not budget-based.
+    //
+    // Scope: arrayCombinationMode_ only. The non-array combination logics
+    // (QF_UFNIA/QF_UFNRA) reach the same arrangement through their LIA / LRA
+    // mirror's value-based splits and do not need (and should not pay for)
+    // this enumeration. Internal / constant shared terms are filtered out
+    // identically to the value-based loop (XOLVER_COMB_ARRANGE_INTERNAL
+    // override for diagnostics).
+    if (arrayCombinationMode_ && effort == TheoryEffort::Full &&
+        sharedTermRegistry_ && registry_ && careGraphEnabled_) {
+        static const bool demandEnabled = []() {
+            const char* e = std::getenv("XOLVER_COMB_DEMAND_ARRANGE");
+            // default ON under arrayCombinationMode_; explicit "=0" opts out.
+            return !e || !(e[0] == '0' && e[1] == '\0');
+        }();
+        if (demandEnabled) {
+            TheorySolver* eufSolverDD = nullptr;
+            auto eufItDD = solverByTheory_.find(TheoryId::EUF);
+            if (eufItDD != solverByTheory_.end()) eufSolverDD = eufItDD->second;
+
+            const bool arrangeInternalsDD =
+                std::getenv("XOLVER_COMB_ARRANGE_INTERNAL") != nullptr;
+
+            // Collect cared shared scalars. Bound: |cared| ≤ |all shared|.
+            // emittedArrangementSplits_ ensures EACH pair is split at most
+            // once over the whole solve, so the total split budget across
+            // calls is O(|cared|^2 / 2) — purely structural.
+            struct CaredScalar { SharedTermId id; SortId sort; };
+            std::vector<CaredScalar> cared;
+            cared.reserve(careGraph_.careCount());
+            for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
+                const auto* st = sharedTermRegistry_->get(stId);
+                if (!st) continue;
+                if (!arrangeInternalsDD && st->isInternal) continue;
+                if (sharedTermRegistry_->constValue(stId)) continue;
+                if (!careGraph_.cares(stId)) continue;
+                cared.push_back({stId, st->sort});
+            }
+            for (size_t i = 0; i < cared.size(); ++i) {
+                for (size_t j = i + 1; j < cared.size(); ++j) {
+                    const auto& A = cared[i];
+                    const auto& B = cared[j];
+                    if (A.sort != B.sort) continue;
+                    if (sharedEqMgr_.same(A.id, B.id)) continue;
+                    if (sharedEqMgr_.diseqKnown(A.id, B.id)) continue;
+                    if (eufSolverDD &&
+                        eufSolverDD->sharedTermsMerged(A.id, B.id)) continue;
+
+                    SharedTermId lo = A.id < B.id ? A.id : B.id;
+                    SharedTermId hi = A.id < B.id ? B.id : A.id;
+                    uint64_t key = (static_cast<uint64_t>(lo) << 32) |
+                                   static_cast<uint64_t>(hi);
+                    if (!emittedArrangementSplits_.insert(key).second) continue;
+
+                    for (auto* owner : solversOwning(A.id, B.id)) {
+                        owner->allowInterfaceDiseqModelBranch(A.id, B.id);
+                    }
+                    SatLit eqLit =
+                        registry_->getOrCreateSharedEqualityAtom(A.id, B.id);
+                    TheoryLemma lemma;
+                    lemma.lits.push_back(eqLit);
+                    lemma.lits.push_back(eqLit.negated());
+                    NO_DBG << "[NO-DEMAND] split "
+                           << stName(sharedTermRegistry_, A.id) << " = "
+                           << stName(sharedTermRegistry_, B.id) << "\n";
+                    return TheoryCheckResult::mkLemma(std::move(lemma));
+                }
+            }
+        }
+    }
+
     // Phase 1 (XOLVER_COMB_UFARG_ARRANGE, default ON): arrange unresolved UF-
     // argument congruences the scalar loop above cannot reach — the bridge-vars/
     // const args (internal or constant shared terms used as UF/select arguments)
@@ -740,6 +883,14 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // Iter#28: if we deferred a Lemma at step 2 (XOLVER_COMB_PUBLISH_ON_LEMMA),
+    // return it now — the shared-eq publish + arrangement above already ran
+    // against the current trail. SAT receives the case-split AND any
+    // propagated shared eqs in the same cb_propagate round.
+    if (havePendingLemma) {
+        NO_DBG << "[NO-RET-LEMMA-DEFERRED] returning saved Lemma after publish\n";
+        return pendingLemma;
+    }
     NO_DBG << "[NO-RET-9] Consistent\n";
     return TheoryCheckResult::consistent();
 }
