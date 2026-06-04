@@ -361,7 +361,11 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                         ExprId newA = rebuild(la, an.sort);
                         ExprId newB = rebuild(rb, bn.sort);
                         if (newA != NullExpr && newB != NullExpr && (newA != a || newB != b)) {
-                            return mk(Kind::Eq, sort, {newA, newB}, Payload());
+                            // Re-process the freshly-built Eq so the odd-power
+                            // injection below can fire on (= (* x x x) (* y y y))
+                            // shapes that emerge AFTER cancellation. Memoized.
+                            ExprId newEq = mk(Kind::Eq, sort, {newA, newB}, Payload());
+                            return rewriteRec(newEq);
                         }
                     }
                 }
@@ -422,10 +426,10 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 if (isPowOdd(a, baseA, expA) && isPowOdd(b, baseB, expB) && expA == expB) {
                     // Reflexive shortcut: a^k = a^k → true.
                     if (baseA == baseB) return mkBool(true);
-                    // Build (= baseA baseB) as a fresh node; the fixpoint loop
-                    // in run() will further-simplify it (e.g. against a
-                    // (distinct baseA baseB) atom elsewhere).
-                    return mk(Kind::Eq, sort, {baseA, baseB}, Payload());
+                    // Build (= baseA baseB) and recurse so any further rule
+                    // (e.g. numeric constant equality) can apply.
+                    ExprId newEq = mk(Kind::Eq, sort, {baseA, baseB}, Payload());
+                    return rewriteRec(newEq);
                 }
             }
             return mk(kind, sort, std::move(children), Payload());

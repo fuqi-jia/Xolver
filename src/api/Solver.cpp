@@ -986,6 +986,155 @@ public:
             }
         }
 
+        // ------------------------------------------------------------------
+        // PurelyDefinedVarSubstitution (XOLVER_PP_PURE_DEFINED_VAR_SUBST,
+        // default-OFF): if a Variable V appears ONLY as `(= LHS_i V)` atoms
+        // (i.e. its sole occurrences are as the RHS-witness of one or more
+        // top-level equalities), pick atom #0 as the canonical definition
+        // V := LHS_0, drop it, and rewrite each other atom `(= LHS_i V)`
+        // (i in [1..]) into `(= LHS_i LHS_0)`. The subsequent FormulaRewriter
+        // pass then cancels shared Add terms and applies odd-power injection
+        // -- closing the "semi-magic square of cubes" chain etc.
+        //
+        // Soundness: V is a pure "witness" var with no constraint other than
+        // its definition; substituting one definition into the others is
+        // equality-preserving. The eliminated V is reconstructed at model-
+        // emission time by evaluating LHS_0 (registerWitness on the
+        // ModelConverter so the user-printed model still has V if it was
+        // declared).
+        //
+        // Gating: same as solve-eqs (base scope, non-algebraic-model logics);
+        // env opt-in; gracefully no-op if any V has occurrences elsewhere.
+        if (std::getenv("XOLVER_PP_PURE_DEFINED_VAR_SUBST") &&
+            ir->currentScopeLevel() == 0 && !algebraicModelLogic) {
+            // Walk every assertion to count, per Variable, how many times it
+            // appears in subtree positions OTHER than as the immediate RHS of
+            // a top-level `=` atom. A Variable is "purely defined" iff its
+            // only occurrences are as such RHSes.
+            std::unordered_map<std::string, size_t> nonDefOcc;
+            std::unordered_map<std::string, std::vector<size_t>> defAtomIdx;
+            const auto& scoped = ir->getScopedAssertions();
+            // Count NON-definition occurrences: walk every node, skip the
+            // "RHS of a top-level Eq" position.
+            std::unordered_set<ExprId> visited;
+            std::function<void(ExprId)> countOcc = [&](ExprId eid) {
+                if (!visited.insert(eid).second) return;
+                const CoreExpr& e = ir->get(eid);
+                if (e.kind == Kind::Variable) {
+                    if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                        ++nonDefOcc[*s];
+                    }
+                    return;
+                }
+                for (ExprId c : e.children) countOcc(c);
+            };
+            // Note: top-level Eq atoms get walked WITHOUT the rhs-Variable
+            // counted; everything else fully walks.
+            for (size_t i = 0; i < scoped.size(); ++i) {
+                ExprId a = scoped[i].second;
+                const CoreExpr& ae = ir->get(a);
+                if (ae.kind == Kind::Eq && ae.children.size() == 2) {
+                    ExprId rhs = ae.children[1];
+                    const CoreExpr& rhsN = ir->get(rhs);
+                    if (rhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&rhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            // Walk LHS only; rhs Variable is the "definition slot".
+                            countOcc(ae.children[0]);
+                            continue;
+                        }
+                    }
+                    // LHS-as-Variable form (= V LHS) — also count.
+                    ExprId lhs = ae.children[0];
+                    const CoreExpr& lhsN = ir->get(lhs);
+                    if (lhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&lhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            countOcc(ae.children[1]);
+                            continue;
+                        }
+                    }
+                }
+                countOcc(a);
+            }
+            // Build a DAG substitution map V → LHS_0 for every purely-defined V.
+            std::unordered_map<ExprId, ExprId> subst;
+            std::vector<size_t> dropAtoms;
+            for (const auto& [name, idxs] : defAtomIdx) {
+                auto occIt = nonDefOcc.find(name);
+                if (occIt != nonDefOcc.end() && occIt->second > 0) continue;
+                if (idxs.size() < 2) continue;   // single def: leave (no extra work)
+                size_t firstAtomIdx = idxs[0];
+                ExprId firstAtom = scoped[firstAtomIdx].second;
+                const CoreExpr& fa = ir->get(firstAtom);
+                ExprId lhs = fa.children[0], rhs = fa.children[1];
+                const CoreExpr& lhsN = ir->get(lhs);
+                ExprId varEid = (lhsN.kind == Kind::Variable) ? lhs : rhs;
+                ExprId defLhsEid = (lhsN.kind == Kind::Variable) ? rhs : lhs;
+                subst[varEid] = defLhsEid;
+                dropAtoms.push_back(firstAtomIdx);
+            }
+            if (!subst.empty()) {
+                // DAG-substitute via memoization. Walk each remaining
+                // assertion bottom-up; if a child is in subst, replace.
+                std::unordered_map<ExprId, ExprId> memo;
+                std::function<ExprId(ExprId)> rewrite = [&](ExprId eid) -> ExprId {
+                    auto m = memo.find(eid);
+                    if (m != memo.end()) return m->second;
+                    auto it = subst.find(eid);
+                    if (it != subst.end()) {
+                        memo[eid] = it->second;
+                        return it->second;
+                    }
+                    const CoreExpr& e = ir->get(eid);
+                    if (e.children.empty()) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    SmallVector<ExprId, 4> newCh;
+                    bool changed = false;
+                    for (ExprId c : e.children) {
+                        ExprId nc = rewrite(c);
+                        if (nc != c) changed = true;
+                        newCh.push_back(nc);
+                    }
+                    if (!changed) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    CoreExpr fresh;
+                    fresh.kind = e.kind;
+                    fresh.sort = e.sort;
+                    fresh.children = std::move(newCh);
+                    fresh.payload = e.payload;
+                    ExprId ne = ir->add(std::move(fresh));
+                    memo[eid] = ne;
+                    return ne;
+                };
+                std::unordered_set<size_t> drop(dropAtoms.begin(), dropAtoms.end());
+                std::vector<std::pair<ScopeLevel, ExprId>> kept;
+                for (size_t i = 0; i < scoped.size(); ++i) {
+                    if (drop.count(i)) continue;
+                    kept.push_back({scoped[i].first, rewrite(scoped[i].second)});
+                }
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : kept) ir->addAssertion(eid, lv);
+                std::cerr << "[PureDefVarSubst] eliminated " << subst.size()
+                          << " variable(s); dropped " << dropAtoms.size()
+                          << " atom(s)\n";
+                // Re-run FormulaRewriter so add-cancel + odd-power-injection
+                // pick up the newly-introduced (= LHS_i LHS_0) atoms.
+                FormulaRewriter rerun(*ir, boolSortId_);
+                if (rerun.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                    return Result::Unsat;
+                }
+                rerun.commit();
+            }
+        }
+
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
