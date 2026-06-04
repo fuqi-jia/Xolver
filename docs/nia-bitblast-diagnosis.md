@@ -816,3 +816,53 @@ The historical mistake (a hardcoded 3 s small budget making bit-blast useless) i
 #### Iteration 14 commit
 
 - `0ca8d86` — `XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT` (default 33) + `tools/reverify_targeted_nia.sh` wallclock plumbing.
+
+---
+
+### Iteration 15 — FormulaRewriter rules (odd-power injection + Add-cancel)
+
+Per user direction "go on fix them", started attacking the 24 remaining oracle-UNSAT cases.
+
+Implemented two sound rewrite rules in `FormulaRewriter` (`8323471`, +101 LOC):
+
+1. **Odd-power injection**: `(= (pow a k) (pow b k))` for odd positive integer `k` → `(= a b)`. Also recognises the SMT-LIB `(* x x x ...)` form (Mul of N copies of same ExprId, N odd ≥ 3). Sound over Z: x^k is injective for odd k.
+
+2. **Shared-Add-term cancellation**: `(= (+ X1 X2 ...) (+ Y1 Y2 ...))` simplifies by removing the multiset-intersection of the two operand lists. Sound: subtracting the same value from both sides preserves equality.
+
+#### Verified
+
+- `cubeT.smt2` (mini test: `(= (* x x x) (* y y y)) ∧ distinct x y`): **TO → unsat** ★
+- Held-out 16-case set: 16 / 16 sat (no regression on the bit-blast cluster)
+- `tests/regression/nia`: 113 / 113 PASS
+- leipzig + mcm/113 unchanged
+
+#### Limitations — why SC_02 still doesn't crack
+
+SC_02 (semi-magic square of cubes) needs the chain:
+1. SOLVE_EQS substitutes `t = polynomial`.
+2. Add-cancel collapses `(= (+ x_00^3 x_01^3) (+ x_00^3 x_10^3))` to `(= x_01^3 x_10^3)`.
+3. Odd-power injection: `(= x_01 x_10)`.
+4. Conflict with `(distinct x_01 x_10)`.
+
+Step 1 is missing: xolver's SOLVE_EQS only handles LINEAR equalities (`SolveEqs.cpp:295` "linear elimination on this equality"). `t = (+ cube_i cube_j)` has nonlinear RHS → SOLVE_EQS rejects it.
+
+A future iteration needs a **PurelyDefinedVarSubstitution** pass: for any Variable `V` that appears ONLY as `(= LHS_i V)` atoms (i.e. is a pure "witness" var), pick one as definition and substitute V := LHS_0 into the remaining atoms. After substitution, the FormulaRewriter rules above collapse the chain.
+
+#### Documented for queue (iter-16+)
+
+The 22 remaining oracle-UNSAT cases each need a specific algorithmic lever (single-iteration commit gate cannot ship them all):
+
+| cluster | count | needed lever |
+|---|---|---|
+| MathProblems SC_* | 1 (SC_02) | PurelyDefinedVarSubstitution + iter-15 rewrites |
+| sqrtmodinv-hoenicke | 3 (modSimpleTest, sqrtStep1, sqrtStep1a) | mod-by-variable algebraic (Gauss-style divisibility) |
+| AProVE polynomial-inequality | ~5 | Positivstellensatz / case analysis on var=0 vs var>0 |
+| VeryMax termination | ~6 | Lyapunov / ranking-function search |
+| Dartagnan + elster LIA-downgrade | 4 | LIA pipeline depth (queued under task #15) |
+| LCTES + Lasso div/mod | ~3 | mod-by-variable (same as sqrtmodinv cluster) |
+
+Each cluster is a separate iteration (or full agent's work). The percentage-budget arm (iter-14) is the single biggest win available without writing new reasoners; everything beyond it requires algorithmic invention.
+
+#### Iteration 15 commit
+
+- `8323471` — FormulaRewriter odd-power injection + shared-Add-term cancellation.
