@@ -244,34 +244,38 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // cb_check_found_model), so the streak-3 Unknown bail terminates
     // SAT and lets Cap. 10 promote the validated model.
     add("nia.farkas-or", &NiaSolver::stageFarkasOr);
-    // Iter#26: defer Lemma-emitting stages (pending-lemma, branch) to Full
-    // effort when XOLVER_NIA_COMB_DEFER_LEMMA=1. Iter#25's diag pinned the
-    // QF_ANIA combination-layer starvation to NIA returning Lemma/Conflict
-    // at Standard effort (sum10: 138 Lemma + 38 Conflict at Standard in 5 s);
-    // TheoryManager's check loop returns immediately on any non-Consistent
-    // result, never reaching its combination step. Gating Lemma emitters to
-    // Full lets SAT explore more branches at Standard, NIA returns Consistent
-    // there, combination runs, arrangement queries fire. Default-OFF until
-    // a panda differential confirms 0-unsoundness (this changes when SAT
-    // decides to branch on NIA hints, which CAN regress UNSAT recovery on
-    // cases that need NIA's branching at Standard effort).
-    static const bool deferLemma =
-        env::paramInt("XOLVER_NIA_COMB_DEFER_LEMMA", 0) != 0;
-    if (deferLemma) {
-        addFull("nia.pending-lemma", &NiaSolver::stagePendingLemma);
-    } else {
-        add("nia.pending-lemma", &NiaSolver::stagePendingLemma);
-    }
+    add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
     // pipeline will fall through to consistent(). Memoize the active_
     // signature so the next identical call hits stageDispatchCacheLookup.
     add("nia.dispatch-cache-record", &NiaSolver::stageDispatchCacheRecord);
-    if (deferLemma) {
-        addFull("nia.branch", &NiaSolver::stageBranch);
-    } else {
-        add("nia.branch", &NiaSolver::stageBranch);
-    }
+    add("nia.branch",         &NiaSolver::stageBranch);
+    // Iter#26 RECORD (NOT a flag — the experiment hung the solver, see
+    // iter#27 below): gating nia.pending-lemma + nia.branch to Full effort
+    // (via a XOLVER_NIA_COMB_DEFER_LEMMA flag) was the iter#25-26 hypothesis
+    // for unblocking the QF_ANIA combination starvation diagnosed at
+    // TheoryManager.cpp:482 (`return tr` on first non-Consistent). The
+    // hypothesis was that deferring NIA's Lemma emission at Standard would
+    // let SAT explore + NIA return Consistent + combination layer's
+    // getDeducedSharedEqualities + sharedTermArithValue actually fire.
+    //
+    // Iter#27 measurement on sum10 (QF_ANIA): with the flag on, the solver
+    // HANGS — exit=124 (SIGTERM @ 2 s) vs exit=0 (clean "unknown") on
+    // default. ZERO stderr output during the 2 s window: no STAGE-PROF,
+    // no CONFLICT-SRC, no diag prints. Without nia.branch, SAT continues
+    // pure-bool decisions WITHOUT theory feedback and gets stuck in deep
+    // exploration of a 3.4 KB formula with ~100 atoms — exponential
+    // without theory pruning. Even though the flag was default-OFF, the
+    // semantics-when-enabled were actively harmful, so the experiment was
+    // reverted entirely (this comment is the documentation; no flag ships).
+    //
+    // Real iter#27+ paths (unchanged from iter#26):
+    //   (a) TheoryManager runs combination AFTER Lemma return (semantic
+    //       risk to N-O ordering).
+    //   (b) Refactor ~10 NIA Conflict-emit stages to be Full-only AND
+    //       redesign the SAT-feedback contract so SAT doesn't starve.
+    //   (c) Parallel theory-check / combination architecture (deep).
 
     // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
     // reasoning path. The backend is uncapped on this base and OOMs on dense
