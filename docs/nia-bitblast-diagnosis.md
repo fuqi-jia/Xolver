@@ -491,3 +491,64 @@ The lever existed but was OFF by default. Iter-1 through iter-5 were spent chara
 - **At-scale validation**: master should run a panda differential on the full QF_NIA corpus (25 452 cases) under EAGER default-ON vs baseline. Per the master's iter-2 reframing the target is the 10 476 BLAN-solvable cases xolver missed, of which 9 626 are the 20170427-VeryMax cluster. Closing half is +4-5 k.
 - **Remaining held-out misses**: 2 timeout (mcm/04, SAT14/86 — heavier formulas where the EAGER encode hits the gate-budget) and 1 unknown. Iter-7 candidates: raise `XOLVER_NIA_BITBLAST_GATE_BUDGET` per case, or extend the eager cascade with finer width steps.
 - **A2-NRA stash**: `A2 NRA in-flight CdcacCore — restore after iter3` still sits in main checkout stash list. Pop next time A2 touches that file.
+
+---
+
+### ★ Iteration 8 — SHIPPED: sort-based `isBoolTyped` closes the 2 held-out SAT14 misses
+
+Iter-7's verbose diag isolated the exact failing atom on `20170427-VeryMax/SAT14/86.smt2`:
+
+```
+[EAGER-BB] addPair reject status=3 rel=Eq
+  l=(Distinct[sort=Bool] (Mul (Variable 'lam0n1') (ConstReal -1)) (ConstReal 0))
+  r=(Variable 'GLOBAL_NT_1' sort=Bool)
+```
+
+So the source `(= GLOBAL_NT_1 (not (= global_invc1_0 0)))` parses to `Eq(Distinct(int_expr, 0), bool_var)` — a Boolean iff. EAGER's `isBoolTyped(Eq)` peeked at `children[0] = Distinct`, then `isBoolTyped(Distinct)` recursively peeked at *its* `children[0] = Mul` (Int) → false → outer Eq classified as arith atom → `addPair` called `PolynomialConverter` on a Distinct LHS → `status=UnsupportedNonPolynomial` → EAGER `ok=false` → fallthrough to CDCL(T) → timeout.
+
+**Fix (`5e8e7af`, src/theory/arith/bit_blast/EagerBitBlastSolver.cpp +49 −3):** the `CoreExpr` already carries the resolved sort. `isBoolTyped` now trusts it: `if (e.sort == ir.boolSortId()) return true;` short-circuits before any kind-specific logic. Distinct is also explicitly added to the always-Bool case as a belt-and-suspenders backup. The peek-children trick is preserved only for `Eq` (which is genuinely arith-atom-vs-bool-iff ambiguous on operand type) and `Ite`.
+
+#### Result on the 16-case held-out
+
+| profile | sat |
+|---|---|
+| baseline | 0 / 16 |
+| iter-6 (EAGER default-on) | 13 / 16 |
+| **iter-8 (+sort fix)** | **15 / 16** |
+
+The 2 new wins are exactly the previously-failing `SAT14/86` (121 ms) and `SAT14/88` (342 ms) — both contained the `Distinct` reified-not pattern. The last unsolved case is `mcm/113.smt2`, which uses the non-standard `power2` extension that EAGER correctly rejects.
+
+#### Soundness gates (no regression)
+
+| gate | result |
+|---|---|
+| doctest unit suite | **1 339 / 1 339** (0 failed, 3 skipped) |
+| `tests/regression/nia` | **113 / 113** |
+
+#### Why it took the verbose-tree diag
+
+The original `addPair reject` line just printed `status=3 l=95 r=72 rel=0` — the ExprIds were opaque. Adding a recursive tree dump (Kind name + ExprId + sort + literal value) under the existing `NIA_EAGER_BB_DIAG` env surfaced the exact mis-classified atom in seconds. The verbose dump is gated default-OFF (zero cost), kept committed so the next mis-classification surfaces immediately.
+
+#### Iteration 8 commits
+
+- `5e8e7af` — sort-based `isBoolTyped` + verbose `NIA_EAGER_BB_DIAG` tree dump + script-relative `XOL`/`MANIFEST` in `tools/heldout_validate.sh`.
+- `972da16` (iter-7) — script-relative paths in `tools/reverify_targeted_nia.sh`.
+
+#### Branch summary
+
+`origin/agent/nia-bb-3` is now 12 commits ahead of `agent/nia-2`:
+
+| | commit | purpose |
+|---|---|---|
+| iter-1 | `d7c9587` | `ARITH_STAGE_ENTER` infra |
+| iter-1 | `effb525` | doc + `tools/reverify_targeted_nia.sh` |
+| iter-2 | `f2c925b` | doc + BLAN sweep tools |
+| iter-2 | `4db7bca` | master-correction: VeryMax target |
+| iter-3 | `002f268` | K_STEP/UNSIGNED — negative result |
+| iter-4 | `6d0fca1` | `BB_ASSERT_DIAG` infra |
+| iter-4 | `a980207` | doc (encoding-bug claim) |
+| iter-5 | `7e0e4cc` | doc (encoding-bug FALSIFIED, real cause pinned) |
+| iter-6 | `ca6ace1` | **EAGER_BITBLAST default-ON for QF_NIA** |
+| iter-6 | `54fc5d7` | iter-6 doc |
+| iter-7 | `972da16` | reverify script-relative paths |
+| iter-8 | `5e8e7af` | **`isBoolTyped` sort-based + verbose diag** |
