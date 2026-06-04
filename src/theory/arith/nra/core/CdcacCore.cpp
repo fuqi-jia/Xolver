@@ -226,6 +226,10 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
         long b = std::atol(e);
         if (b > 0) satSampleMaxBits_ = b;
     }
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_MS")) {
+        long b = std::atol(e);
+        if (b >= 0) satFirstMs_ = b;   // 0 ⇒ no wall cap (node budget only)
+    }
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -629,6 +633,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
         if (allSafe) {
             SamplePoint prefix;
             long budget = satFirstBudget_;
+            satFirstT0_ = std::chrono::steady_clock::now();   // wall-clock cap reference
             CdcacResult sat = trySatSampleFirst(0, prefix, input, budget);
             if (sat.status == CdcacStatus::Sat)
                 return sat;
@@ -1436,6 +1441,19 @@ std::vector<mpq_class> CdcacCore::satSampleCandidates(int k, const SamplePoint& 
         if (mpqBitLen(q) <= satSampleMaxBits_) out.push_back(std::move(q));
     std::sort(out.begin(), out.end());
     out.erase(std::unique(out.begin(), out.end()), out.end());
+    // Step-B search bias: try the SIMPLEST candidates first — smallest |value|,
+    // ties by smaller denominator then value. Real SAT models cluster at small
+    // rationals (e.g. the matrix-* z3 models are {0,1,2,3,1/2,1/8}); plain
+    // ascending order wastes the DFS budget on large-negative samples first.
+    // Pure reordering of the exploration — SAT is still returned only on a
+    // leaf-exact-validated full point, so this is soundness-neutral (it can only
+    // change WHICH model / how fast one is found, never correctness).
+    std::stable_sort(out.begin(), out.end(), [](const mpq_class& a, const mpq_class& b) {
+        mpq_class aa = abs(a), bb = abs(b);
+        if (aa != bb) return aa < bb;
+        if (a.get_den() != b.get_den()) return a.get_den() < b.get_den();
+        return a < b;
+    });
     return out;
 }
 
@@ -1487,6 +1505,15 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
     for (auto& q : cands) {
         if (budget <= 0) break;
         --budget;
+        // Wall-clock cap: bail (exhaust budget → fall through to projection) once
+        // the search exceeds satFirstMs_. Checked every 1024 nodes to keep the
+        // clock-call cost negligible. Soundness-neutral (SAT only on a validated
+        // leaf; expiry just means "no model found here", never a wrong verdict).
+        if (satFirstMs_ > 0 && (budget & 1023) == 0) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - satFirstT0_).count();
+            if (ms > satFirstMs_) { budget = 0; break; }
+        }
         prefix.push(var, RealAlg::fromRational(q));
         // Forward-checking via the EXACT mpq sign (crash-free): prune the moment a
         // constraint's vars are all assigned and it is violated at this concrete

@@ -13,6 +13,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include <chrono>
 
 namespace xolver {
 
@@ -134,7 +135,20 @@ private:
     // sound by construction (SAT-only, checkFullSample-validated). One-shot per
     // CdcacCore lifetime (= per SMT-solve in non-incremental) via satFirstTried_.
     bool satFirstEnabled_ = false;
-    long satFirstBudget_ = 20000;   // search-node bound (not a solving cap)
+    // Node-search backstop (raised from 20000: matrix-class SAT models need ~300k
+    // nodes to reach — the old cap aborted the search 15x too early). The REAL
+    // bound is the wall-clock cap satFirstMs_ below; this just caps a pathological
+    // node count if the clock check is somehow never hit.
+    long satFirstBudget_ = 2000000;
+    // Wall-clock cap (ms) on the whole SAT-first search. Bounds the model-search
+    // so it can't starve the downstream complete engine on a no-model input
+    // (the OSF-latency lesson): on expiry the search bails → falls through to
+    // projection, byte-identical to never having run. Env XOLVER_NRA_CAC_SAT_FIRST_MS.
+    // 10s gives the matrix-class SAT cluster comfortable margin (recovers in ~7.6s)
+    // while the full nra/nira regression stays 151/151 + 30/30 0-unsound with the
+    // flag ON (cap can't starve projection on the curated cases).
+    long satFirstMs_ = 10000;
+    std::chrono::steady_clock::time_point satFirstT0_;  // search start (set in solve())
     bool satFirstTried_ = false;
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
     // precomputed once per sample-first search so high-degree/huge-coeff polys are
