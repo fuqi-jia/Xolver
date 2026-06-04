@@ -435,3 +435,59 @@ BLAN's approach: encode the OR directly into the bit-blast's CNF. One internal S
 #### Iteration 5 commits (none — this was a no-code diagnostic correction)
 
 No commit beyond what iter-4 shipped (`6d0fca1`, `a980207`). The iter-4 doc claim ("encoding bug") is now corrected inline above; the BB_ASSERT_DIAG infra remains useful.
+
+---
+
+### ★ Iteration 6 — SHIPPED: EAGER_BITBLAST default-ON for pure QF_NIA
+
+`EagerBitBlastSolver` was already implemented and wired at `Solver.cpp:1506` behind a default-OFF env. It encodes the ENTIRE source CoreIr formula (Boolean skeleton via Tseitin gates + every arith atom as `relZero` over a bit-vector polynomial) into ONE SAT instance. One internal CaDiCaL solve handles Boolean disjunct choice AND integer bit search simultaneously — exactly the BLAN-parity architecture iter-5 identified as needed.
+
+Iter-6 simply **removed the env gate** for pure QF_NIA / NIA (no real / UF / array / DT / mixed). Opt-out via `XOLVER_NIA_EAGER_BITBLAST=0` for diagnosis / A-B.
+
+#### Result
+
+| target | baseline | EAGER default-on |
+|---|---|---|
+| leipzig/term-0Hb4yp.smt2 | TO @ 5 s | **sat @ 152 ms** (~33×) |
+| 16-case held-out | 0 / 16 sat | **13 / 16 sat** |
+
+Per-bucket on the held-out:
+
+| sub-bucket | wins | times |
+|---|---|---|
+| Stroeder_15 CInteger SAT | 3 / 3 | 152–236 ms |
+| From_T2 ITS SAT | 2 / 3 | 116–1 417 ms |
+| 2019-ezsmt car SAT | 3 / 3 | 242–279 ms |
+| leipzig term SAT | 3 / 3 | 152–174 ms |
+| mcm SAT | 2 / 3 | 6.7 – 8.5 s |
+
+Remaining 3 in held-out: 2 timeout (mcm/04, SAT14/86), 1 unknown (likely encoder-overflow on a wider problem).
+
+#### Soundness gates (0-unsound, 0-regression)
+
+| gate | result |
+|---|---|
+| doctest unit suite | **1 339 / 1 339** PASS (0 failed, 3 skipped) |
+| `tests/regression/nia` | **113 / 113** PASS |
+| `tests/regression/ufnia` | 10 / 10 PASS |
+| `tests/regression/nira` | 30 / 30 PASS |
+
+Sound by construction:
+- `EagerBitBlastSolver` is invariant-1 + invariant-7 compliant — SAT models are exact-validated against the original signed-int constraints inside the solver before return.
+- It NEVER returns Unsat (a bit-blast UNSAT at a heuristic width proves nothing about the unbounded integer problem) — only `Status::{Sat, Unknown}`.
+- Any encoding mistake downgrades a candidate to Unknown, never to a wrong answer.
+- CDCL(T) main loop is untouched (invariant 5) — the eager arm runs BEFORE solver setup and falls through to CDCL(T) on Unknown.
+
+#### Iteration 6 commits
+
+- `ca6ace1` — `nia: promote EAGER_BITBLAST default-ON for pure QF_NIA (BLAN-parity)`. Single 33-line change in `src/api/Solver.cpp` flipping the env gate.
+
+#### Why this took 5 iterations of diagnosis
+
+The lever existed but was OFF by default. Iter-1 through iter-5 were spent characterising WHICH bit-blast path was the right one to enable. The wrong hypotheses (K-cascade granularity, sign-bit overhead, encoding bug) were all falsified before identifying that the lazy CDCL(T)-per-atom-assignment loop was the structural blocker and that the existing eager whole-formula path was the answer. **No new code was needed for the lever itself — only the diagnosis to know which switch to flip.**
+
+#### Open follow-up
+
+- **At-scale validation**: master should run a panda differential on the full QF_NIA corpus (25 452 cases) under EAGER default-ON vs baseline. Per the master's iter-2 reframing the target is the 10 476 BLAN-solvable cases xolver missed, of which 9 626 are the 20170427-VeryMax cluster. Closing half is +4-5 k.
+- **Remaining held-out misses**: 2 timeout (mcm/04, SAT14/86 — heavier formulas where the EAGER encode hits the gate-budget) and 1 unknown. Iter-7 candidates: raise `XOLVER_NIA_BITBLAST_GATE_BUDGET` per case, or extend the eager cascade with finer width steps.
+- **A2-NRA stash**: `A2 NRA in-flight CdcacCore — restore after iter3` still sits in main checkout stash list. Pop next time A2 touches that file.
