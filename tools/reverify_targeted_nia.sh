@@ -5,14 +5,18 @@
 set -u
 TIMEOUT=${1:-15}
 OUT=${2:-/tmp/targeted_nia_reverify.tsv}
-BIN=build/bin/xolver
-MANIFEST=targeted_nia/MANIFEST.tsv
+# Script-relative defaults so the harness works regardless of CWD.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="${XOLVER_BIN:-$REPO_ROOT/build/bin/xolver}"
+MANIFEST="${TARGETED_NIA_MANIFEST:-$REPO_ROOT/targeted_nia/MANIFEST.tsv}"
+CASE_ROOT="$(dirname "$MANIFEST")"
 
 printf 'key\toracle\twas\tnow\trc\twallclock_ms\n' > "$OUT"
 
 # Skip header line; iterate
 tail -n +2 "$MANIFEST" | awk -F'\t' '{print $5"\t"$6"\t"$7}' | while IFS=$'\t' read -r oracle was rel; do
-  path="targeted_nia/$rel"
+  path="$CASE_ROOT/$rel"
   [ -f "$path" ] || { printf '%s\tmissing\t%s\t%s\t-\t-\n' "$rel" "$oracle" "$was" >> "$OUT"; continue; }
   start=$(date +%s%3N)
   ( ulimit -v 3000000; timeout "${TIMEOUT}" "$BIN" solve "$path" < /dev/null ) > /tmp/_rv_out 2>/dev/null
