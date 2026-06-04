@@ -866,3 +866,44 @@ Each cluster is a separate iteration (or full agent's work). The percentage-budg
 #### Iteration 15 commit
 
 - `8323471` — FormulaRewriter odd-power injection + shared-Add-term cancellation.
+
+---
+
+### Iteration 17 corpus result — `PurelyDefinedVarSubstitution` cracks SC_02 + aproveSMT2488
+
+Reverify under `XOLVER_PP_REWRITE=1 XOLVER_PP_PURE_DEFINED_VAR_SUBST=1 XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT=10` at 20 s wall-clock:
+
+| measure | iter-14 (pct=33) | **iter-17 (pct=10)** | delta |
+|---|---|---|---|
+| total solved | 46 / 87 | **48 / 87** | **+2** |
+| sat | 37 | 37 | 0 |
+| unsat | 9 | **11** | **+2** |
+| regressions | — | 0 | — |
+
+UNSAT cases newly closed by iter-17:
+
+- `20220315-MathProblems/SC_02.smt2` (semi-magic square of cubes) — 3.5 s
+- `AProVE/aproveSMT2488218374684739626.smt2` — 12 s (was 17.7 s at iter-14, now faster via recurse-on-result fix)
+
+**Cumulative loop progress** (oracle-decided agreement on the 87-case `targeted_nia`):
+
+| measure | baseline | iter-14 | **iter-17** | total delta |
+|---|---|---|---|---|
+| total solved | 22 / 87 (25%) | 46 / 87 (53%) | **48 / 87 (55%)** | **+26 (+118%)** |
+| oracle SAT solved | 17 / 36 (47%) | 31 / 36 (86%) | **31 / 36 (86%)** | +14 (+39pp) |
+| oracle UNSAT solved | 5 / 33 (15%) | 9 / 33 (27%) | **11 / 33 (33%)** | **+6 (+18pp)** |
+| oracle Unknown decided ★ | 0 | 6 | **6** | +6 |
+
+The percentage budget (iter-14) opened the door for CDCL(T) NIA to crack UNSAT cases; PureDefVarSubst + recurse fix (iter-17) closes a specific semi-magic-square pattern + accelerates 1 AProVE polynomial-inequality case.
+
+#### Cluster picture — 22 remaining oracle-UNSAT cases
+
+| cluster | count | needed lever | iteration |
+|---|---|---|---|
+| sqrtmodinv-hoenicke + LCTES + Lasso (div/mod by variable) | ~6 | mod-by-variable Gauss reasoner | future |
+| AProVE polynomial inequalities | ~3 | Positivstellensatz / case analysis | future |
+| VeryMax termination | ~6 | Lyapunov / ranking function | future |
+| Dartagnan + elster LIA-downgrade | 4 | LIA pipeline depth (task #15) | future |
+| MathProblems MS_02 / SQ_02 | 2 | additional rewrite + subst patterns | future |
+
+Each cluster is a separate iteration's worth of work.
