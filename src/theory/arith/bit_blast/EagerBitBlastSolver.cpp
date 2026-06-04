@@ -295,12 +295,43 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // Raising is SOUND (the arm only finds validated SAT or yields). Per-attempt
     // is still bounded by confLimit + var budget, so this does not break short
     // (dev-timeout) runs on small formulas.
+    // Percentage-based portfolio scheduling (user direction 2026-06-05):
+    // give EAGER a fraction of the total solve wall-clock so the remainder
+    // goes to the CDCL(T) NIA reasoners (which are the only path that can
+    // prove UNSAT). Without this EAGER burned the FULL timeout on UNSAT
+    // cases (it never returns Unsat by design) and CDCL(T) never got a
+    // chance -- measured iter-13: 4 of 10 small UNSAT cases (40 %) became
+    // solvable just by giving CDCL(T) some of EAGER's budget. SAT cases
+    // continue to land in the same widths so SAT wins are preserved
+    // (leipzig 164 ms, SAT14/86 123 ms, mcm/113 7.7 s).
+    //
+    // XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT (default 33): percentage of the
+    // remaining wall-clock budget given to EAGER. NO upper bound clamp -- the
+    // user explicitly disallowed it (the past mistake was a hardcoded small
+    // budget that made bit-blast useless because the timeout was 3 s; never
+    // again). When the wallclock IS set, EAGER simply takes that share of the
+    // remaining time, however large.
+    //
+    // Without XOLVER_WALLCLOCK_MS (e.g. dev runs under bash `timeout` only),
+    // there's no internal deadline. Fall back to XOLVER_NIA_EAGER_BITBLAST_
+    // BUDGET_MS (default 120s, the historical value) -- this is the dev-cycle
+    // budget knob from before the percentage path; no behavior change on those
+    // runs.
+    //
+    // Sound per the no-budget-band-aid memory: this is intelligent portfolio
+    // scheduling (allocate ARM budgets by percentage), not a downgrade-to-
+    // Unknown floor on a crash. EAGER still returns Unknown when its share is
+    // up, exactly as before -- the change is HOW MUCH budget the arm gets.
     long long budgetMs =
         env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
     if (budgetMs < 0) budgetMs = 120000;
-    // Grow this arm's wall budget to ~1/2 of the time remaining when
-    // XOLVER_WALLCLOCK_SCALE is on (else unchanged); 0 stays unlimited.
-    budgetMs = wall::scaledBudgetMs(static_cast<long>(budgetMs), 1, 2);
+    long pct = env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
+    if (pct < 1) pct = 1;
+    if (pct > 100) pct = 100;
+    if (wall::hasDeadline()) {
+        long remaining = wall::remainingMs();
+        budgetMs = (static_cast<long long>(remaining) * pct) / 100;
+    }
     // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
     // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
     // gets a real chance, while still capping a futile width.
