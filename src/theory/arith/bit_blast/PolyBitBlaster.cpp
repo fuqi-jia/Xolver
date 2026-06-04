@@ -1,5 +1,7 @@
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 
 namespace xolver::bitblast {
 
@@ -63,6 +65,13 @@ BitVec PolyBitBlaster::encodePoly(PolyId p) {
 
 void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
     BitVec value = encodePoly(c.poly);
+    static const bool diag = std::getenv("BB_ASSERT_DIAG") != nullptr;
+    if (diag) {
+        std::cerr << "[BB-ASSERT] rel=" << (int)c.rel
+                  << " value_width=" << value.width()
+                  << " poly=" << kernel_.toString(c.poly) << "\n";
+        std::cerr.flush();
+    }
     enc_.assertLit(enc_.relZero(value, c.rel));
 }
 
