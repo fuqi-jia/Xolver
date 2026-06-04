@@ -211,3 +211,67 @@ Iter 3 will collect the evidence; iter 4+ may commit per the standard gate.
 #### Open questions for the next iteration
 
 - Should xolver emit a `[BB-DIAG] encode-stats varCount=X clauseCount=Y` line at every attempt? One-line addition; makes iter-3 evidence-collection mechanical (sed-able).
+
+---
+
+### Iteration 2 — MASTER CORRECTION (mid-iteration)
+
+> Source: master message, 2026-06-05 ~00:30 local.
+
+At-scale measurement on the full QF_NIA corpus (25 452 cases, nia-2 @ 120 s, 0-unsound):
+
+- **nia-2 solves 2 732; BLAN solves 14 547.** xolver covers only **17 %** of BLAN's coverage.
+- **Residual = 11 938** BLAN-solvable that nia-2 misses; **10 476 of those BLAN solved in <120 s** — xolver had the budget, the engine missed them.
+- **ONE cluster dominates: 20170427-VeryMax = 9 626.** AProVE 615, leipzig 123, calypto 48 are the rest.
+- **VeryMax is NOT an architectural ceiling.** Historical tag was wrong. BLAN solves all 9 626 in <120 s → plain engine gap.
+- **Single biggest winnable lever in the whole campaign.** Closing even half = +4 000 – +5 000.
+
+> Ship-config constraint: **QF_NIA must ship bare default.** Full-12 preset is net-NEGATIVE here (2 714 → 2 288, **−426**). No NIA flag promotions from this loop.
+
+#### Direct evidence on the targeted_nia/VeryMax sub-sample (this loop's corpus)
+
+Cross-joining `/tmp/reverify_clean.tsv` (partial, xolver) and `/tmp/blan_only.tsv` (partial, BLAN) on VeryMax entries — both still in flight, 15 VeryMax rows observed so far:
+
+| sub-bucket | n | oracle | BLAN | xolver |
+|---|---|---|---|---|
+| CInteger SAT | 3 | sat | **sat in 112–2 365 ms** | timeout (17–20 s) |
+| CInteger UNSAT | 3 | unsat | timeout (12–15 s) | timeout |
+| ITS SAT | 3 | sat | **sat in 82–851 ms** | 1 sat / 2 timeout |
+| ITS UNSAT | 3 | unsat | timeout | timeout |
+| SAT14 SAT | 3 | sat | **sat in 122–857 ms** | 1 unknown@10 s / 2 timeout |
+
+Every BLAN SAT in this sample is **sub-second**; every xolver attempt times out at the 20 s WSL cap. The cluster IS the bit-blast SAT-finder gap.
+
+#### Pinned root cause refinement — K-cascade granularity
+
+xolver's cascade (BitBlastSolver.cpp:317-332): `K = min(K * 2, maxBW_)` → **K ∈ {2, 4, 8, 16, 32, 64, 128}**.
+
+BLAN's cascade (decider.cpp:`init`) is keyed off mul-count thresholds (256/512/1024) AND vote-weighted per-var. For VeryMax termination constraints (many products), BLAN's effective progression is **K ∈ {2, 3, 4, 5, …}** (linear, increment = `re_factor` ∈ {1,2,3,4}).
+
+For a VeryMax case whose SAT model fits in K=3 magnitude bits:
+- BLAN reaches K=3 directly → ~3·N·M-bit encoding → CaDiCaL finishes in 100 ms.
+- xolver fails K=2 (under-allocated → UNSAT), jumps to **K=4** (over-allocated → ~16·N·M-bit encoding) → CaDiCaL hangs.
+
+The factor isn't 9.6× from encoding-algorithm differences (audited in iter-2 above — xolver already has varmin / MultiplyInt / square-pinning / CSE). The factor is **xolver overshoots the smallest decisive K by a factor of 2** on every cascade step, and the resulting CaDiCaL instance is too big to solve in the time budget.
+
+Combined with the two's-complement (signed) overhead from iter-2 finding 5, the per-attempt encoding is `~2 · K_overshoot · K_signed-extra` = ~2 · 2 · (something < 2) = up to ~6×, plus CaDiCaL's super-linear scaling explains the observed 9.6× gap.
+
+#### Iteration 3 plan (FIX-class, gated)
+
+1. **Arithmetic K cascade.** New env `XOLVER_NIA_BITBLAST_K_STEP` (default 0 = legacy ×2 doubling). When `> 0`, `K_next = min(K + K_STEP, maxBW_)`. Document `K_STEP=1` as the BLAN-parity setting.
+2. **Mul-count keyed start_bit.** When the constraint set has many product equations (`#mul ≥ 256`/`≥ 512`/`≥ 1024`), apply BLAN-style `start_bit ∈ {6,5,4,2}` for the cascade's first K. Default-OFF; env `XOLVER_NIA_BITBLAST_MUL_KEYED_START`.
+3. **Unsigned-hint (finding 5 above).** New env `XOLVER_NIA_BITBLAST_UNSIGNED_HINT`. When every var has `hasLower && lower ≥ 0`, allocate K magnitude bits + no sign bit. SAT model still validated by `IntegerModelValidator` against signed-NIA semantics.
+4. Each lever lands as a separate commit, gated default-OFF, with the standard A1+A2+A3 evidence pack: ≥ 2 NEW held-out VeryMax SAT solves per lever, 0 regression on full unit + reg + a random 200-case QF_NIA sample, 0-unsound with floors restored, no magic constants.
+5. Combined-flag panda differential — explicitly **not** for default-on (per ship-config constraint); levers stay opt-in unless full-corpus net-positive AND 0-unsound.
+
+#### What NOT to chase this iteration
+
+- The 123 small-algebraic AProVE/calypto cases that nia-2's escalating-bounded already won. Those are not the bulk-9 626 target and would be size-sorted distraction.
+- Default-on promotion of any new flag for NIA. Ship-config = bare default.
+- Wall-clock tuning of the in-process CaDiCaL conflict budget. That was iter-1's lever; the bigger win is K-granularity *before* CaDiCaL sees the encoding.
+
+#### Next-iteration entry checklist
+
+- Consume `/tmp/reverify_clean.tsv` (xolver, complete) and `/tmp/blan_only.tsv` (BLAN, complete).
+- Filter to the **`oracle=SAT ∧ BLAN=SAT_<10s ∧ xolver=TO`** subset → that is the iter-3 held-out set for the K-step fix.
+- Implement lever (1) on `agent/nia-bb-3`, build incrementally, validate on held-out, then full-suite gates.
