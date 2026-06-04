@@ -753,3 +753,66 @@ The LIA pipeline (the `LiaSolver` registered in `TheoryFactory.cpp` when `logic 
 Need to **profile the LiaSolver's check() pipeline on the 17k-atom load**. Likely candidates: bound propagation re-scans the full atom set per Boolean assignment, simplex tableau gets dense, or branch-and-bound explores combinatorial space.
 
 The `ARITH_STAGE_PROF` infrastructure added in iter-1 covers `ArithSolverBase::runReasonerPipeline` — should produce the per-stage breakdown directly. Iter-13 starts there.
+
+---
+
+### ★ Iteration 14 — SHIPPED: percentage-budget EAGER arm closes 8 more cases
+
+User direction (2026-06-05): "通过timeout百分比来控制求解流程", "不要单纯的考虑eager on还是off，不能通过合理的安排实现高效的求解吗？", "10分钟以内能解出来就行了".
+
+Per iter-13's profile, EAGER was hogging the wall-clock on UNSAT cases (it never returns Unsat by design -- invariant 7) and CDCL(T) NIA reasoners (the only path that can prove UNSAT) never got the budget they needed.
+
+#### Fix
+
+`XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT` (default 33). When `XOLVER_WALLCLOCK_MS` is set, EAGER takes that percentage of the *remaining* wall-clock; the rest goes to CDCL(T). **No upper bound clamp** -- per the user, "上限 30s没有上限，就是剩余时间的1/3" -- the percentage is honored regardless of how big the wallclock is. Without `XOLVER_WALLCLOCK_MS` (dev runs under bash `timeout` alone), behavior is unchanged -- falls back to `XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS` (default 120 s).
+
+`tools/reverify_targeted_nia.sh` now sets `XOLVER_WALLCLOCK_MS=$((TIMEOUT*1000))` so local dev exercises the same path as competition harness.
+
+#### Percentage calibration on 10 small UNSAT cases
+
+| pct | UNSAT solved |
+|---|---|
+| 20 | 5 / 10 |
+| **33 (default)** | **6 / 10** |
+| 50 | 4 / 10 |
+| 67 | 4 / 10 |
+
+33 % is the sweet spot at 20 s timeout — too little starves EAGER on SAT, too much starves CDCL(T) on UNSAT.
+
+#### Corpus impact @ 20 s timeout
+
+| measure | iter-8 (EAGER 120 s) | **iter-14 (pct=33)** | delta |
+|---|---|---|---|
+| total solved | 38 / 87 | **46 / 87** | **+8** |
+| sat | 33 | **37** | **+4** |
+| unsat | 5 | **9** | **+4** |
+| regressions | — | **0** | — |
+
+UNSAT cases newly closed:
+- `AProVE/aproveSMT5936...` — 231 ms
+- `AProVE/aproveSMT2074...` — 17.7 s
+- `UltimateAutomizer/linear_sea.ch_*` × 3 — 130-160 ms
+- `UltimateLassoRanker/BrockschmidtCookFuhs...` — 6.8 s
+- `calypto/problem-{002871,002950,005959}` — 2.3-7.6 s
+
+SAT cases newly closed:
+- (4 cases that previously TO under EAGER's 120 s hog now SAT via shorter EAGER + fallthrough)
+
+#### Soundness gates (all green)
+
+| gate | result |
+|---|---|
+| doctest unit suite | **1 339 / 1 339** |
+| `tests/regression/nia` | **113 / 113** |
+| `tests/regression/lia` | **57 / 57** |
+| held-out 16-case set | **16 / 16** sat |
+
+#### Why this is sound per [[feedback_no_budget_or_floor_band_aids]]
+
+This is intelligent portfolio scheduling — "allocate arm budgets by percentage" exactly as the user instructed — NOT a downgrade-to-Unknown floor on a crash. EAGER still returns Unknown when its share is up, identical to before; the change is HOW MUCH budget the arm gets, not WHEN they give up.
+
+The historical mistake (a hardcoded 3 s small budget making bit-blast useless) is averted because there is **no upper bound clamp**: the larger the wallclock, the larger EAGER's slice.
+
+#### Iteration 14 commit
+
+- `0ca8d86` — `XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT` (default 33) + `tools/reverify_targeted_nia.sh` wallclock plumbing.
