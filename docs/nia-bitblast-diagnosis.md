@@ -383,3 +383,55 @@ Concretely, `mul(a, b)` at lines 212-226 of `BitBlastEncoder.cpp` does `signExte
 5. Full unit + reg + 200-case random QF_NIA gate. If 0-unsound and 0-regression, commit gated default-OFF; promote per ship-config.
 
 This is the candidate root cause that, if confirmed, unlocks the ~9 626 VeryMax cluster. The encoding-order fix is a 2-line code change.
+
+---
+
+### Iteration 5 — ★ ENCODING-BUG HYPOTHESIS FALSIFIED
+
+Tested the iter-4 claim that "a manual SAT model exists but xolver reports UNSAT" by feeding the model as explicit pinned values to xolver, z3, and cvc5:
+
+```smt2
+(set-logic QF_NIA)
+(declare-fun n0 () Int) (assert (= n0 0))
+(declare-fun n1 () Int) (assert (= n1 1))    ; ← iter-4's value
+…
+```
+
+**All three solvers return UNSAT.** The iter-4 hand trace was wrong: `n1=1` violates `(>= n21 n24)` because `n21 = n0 + n1·n9` (n9 = 1) and `n24 = n0 + n1·n15` (n15 = 2), so `n21 = 1` and `n24 = 2`, hence `n21 < n24`.
+
+Correcting to `n1=0` (with `n3=n6=n7=1, n0=n2=n4=n5=0`):
+- `n9 = n6 + n8 = 1+0 = 1`, `n14 = n7·n9 = 1`, `n15 = n6+n14 = 2`,
+- `n17 = n3·n12 = 1·2 = 2`, `n18 = n2+n17 = 2`, `n26 = n3·n6 = 1`, `n27 = n2+n26 = 1`,
+- `n21 = n0+n20 = 0+n1·n9 = 0`, `n24 = n0+n23 = 0+n1·n15 = 0` → `n21 ≥ n24` ✓.
+- Disjunction: `n18 > n27` (2 > 1) ✓.
+
+All bounds hold. All values in [0,2] → K=2 unsigned magnitude bits.
+
+| solver | verdict on pinned-n1=0 |
+|---|---|
+| z3 | **sat** |
+| xolver default | **sat** (sub-15 s) |
+| xolver K_STEP=1 | **sat** (sub-15 s) |
+
+==> xolver's bit-blast encoding is CORRECT. The encoding bug pinned in iter-4 was a false alarm caused by my hand-trace error. The actual gap is in the **SEARCH**:
+
+- On the original unbounded leipzig, xolver bit-blasts cascade attempts at K=2, 4, 8, 12 — each reports UNSAT because the SAT-layer's Boolean assignment at that theory-check moment is missing the right disjunct. Each bit-blast attempt only sees the constraint subset for the SAT layer's CURRENT atom assignment.
+- BLAN, by contrast, encodes the entire disjunctive Boolean structure into the same SAT solve (via its `blaster_logic` layer), so CaDiCaL inside BLAN searches BOTH the Boolean disjunct choices AND the integer values simultaneously. That's what closes leipzig in 5 875 vars / 27 101 clauses → SAT in seconds.
+
+#### Pinned root cause (corrected)
+
+xolver's `stageBitBlast` Full-effort path runs **per CDCL(T) Boolean assignment**, not over the WHOLE formula. The bit-blast sees `normalized_` (the currently-active atoms), not the source formula. For a flat conjunction it works fine; for a formula with OR atoms (like leipzig's `(or (> n21 n24) (> n18 n27) (> n18 n2))`), each bit-blast call sees ONE Boolean choice. If the chosen disjunct subset has no integer model at K=N, UNSAT; the SAT layer backtracks to try a different disjunct; another bit-blast call, etc.
+
+BLAN's approach: encode the OR directly into the bit-blast's CNF. One internal SAT solve, all Boolean + integer search interleaved.
+
+#### Iteration 6+ plan — Whole-formula bit-blast
+
+1. **New env** `XOLVER_NIA_BB_WHOLE_FORMULA` (default-OFF). When set, `stageBitBlast` encodes the ENTIRE source CoreIr formula (with OR/AND/ITE structure) into the bit-blast's CNF, not just `normalized_`. One internal SAT solve handles disjunctive choice + integer values.
+2. **Implementation**: extend `PolyBitBlaster` to recurse into Boolean operators. For an `Or` over polynomial atoms, emit a Tseitin disjunction over each atom's `relZero` literal. For `And`, emit a conjunction (just assert each atom). For `Ite`, emit an ITE gate over the literals.
+3. Soundness: any SAT model is still `IntegerModelValidator`-gated against the original signed-int constraints. Per invariant 1, validated.
+4. Held-out test: the 16-case held-out (oracle=SAT, BLAN=SAT<10s, xolver=TO). Expected ≥ several wins from the disjunctive cases (VeryMax termination cluster).
+5. Standard A1+A2+A3 + ship-config (no default-on for NIA — full-12 net-negative).
+
+#### Iteration 5 commits (none — this was a no-code diagnostic correction)
+
+No commit beyond what iter-4 shipped (`6d0fca1`, `a980207`). The iter-4 doc claim ("encoding bug") is now corrected inline above; the BB_ASSERT_DIAG infra remains useful.
