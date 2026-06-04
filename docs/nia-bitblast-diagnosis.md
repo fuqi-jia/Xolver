@@ -945,3 +945,36 @@ Defaults that should land in `XOLVER_NIA` opt-in stripe for QF_NIA:
 - `XOLVER_PP_PURE_DEFINED_VAR_SUBST=1` (iter-17 — opt-in)
 
 The percentage-budget arm (iter-14) is the single biggest single-iteration win available without writing new reasoners; everything beyond it requires algorithmic invention (one cluster per future iteration).
+
+---
+
+### Iteration 19 — measured: `pct=10` beats `pct=33` on this corpus
+
+Re-tested the 3 UNSAT cases that vanished at iter-18 (pct=33, 30 s wallclock):
+
+| case | vanilla pct=33 | **vanilla pct=10** | speedup |
+|---|---|---|---|
+| `calypto/problem-002950` | unsat @ 7.5 s | **unsat @ 2.6 s** | 2.9× |
+| `calypto/problem-005959` | **TO @ 19.5 s** | **unsat @ 6.5 s** | -> +1 win |
+| `UltimateLassoRanker/Brockschmidt...` | unsat @ 4.8 s | **unsat @ 2.4 s** | 2.0× |
+
+Both cases that were borderline at pct=33 become comfortable at pct=10. `005959` even shifts from TO → unsat — at pct=33 EAGER hogs 6.6 s of 20 s, leaving CDCL(T) with 13.3 s which isn't enough; at pct=10 EAGER gets 2 s, CDCL(T) gets 18 s and solves in 6.5 s.
+
+Corpus ranking at 20 s wallclock:
+
+| config | total solved | sat | unsat |
+|---|---|---|---|
+| baseline (no EAGER) | 22 | 17 | 5 |
+| iter-14 vanilla pct=33 | 46 | 37 | 9 |
+| **iter-17 + pct=10** | **48** | 37 | **11** |
+| iter-18 + pct=33, 30 s | 44 | 37 | 7 (regressed!) |
+
+**`pct=10` is the empirically best default for `targeted_nia`**, but the user explicitly endorsed `pct=33` ("就是剩余时间的1/3") so the default-OFF env stays at 33. Recording the finding for the at-scale 25 452-case panda differential — if it confirms pct=10 wins corpus-wide, the master can change the default with that evidence.
+
+#### Why pct=10 is faster on UNSAT
+
+EAGER never proves UNSAT (invariant 7 — SAT-finder only). On UNSAT cases its entire allocation is wasted: it cascades through K=4, 8, 16, ... finding no model at each width before reporting Unknown. CDCL(T) NIA reasoners are the only path that can prove UNSAT and they need the wall-clock budget. At pct=10 EAGER bails fast (2 s for a 20 s wallclock) and CDCL(T) gets 18 s to engage its full pipeline (algebraic, GCD, modular, bounded enum, etc.). At pct=33 EAGER takes 6.6 s, CDCL(T) gets 13.4 s — borderline for the calypto / Brockschmidt cluster.
+
+#### Why pct=33 is borderline on hard SAT
+
+For hard SAT cases (e.g. leipzig, mcm), EAGER finds the model just by cascading through widths until SAT. Time required is dominated by the deciding K's SAT solve. pct=10 (2 s) is enough for K ≤ 16 but borderline for K ≥ 32. pct=33 (6.6 s) reliably covers K ≤ 48. The held-out 16-case set (all oracle-SAT, all bit-blast-friendly) hits 16/16 at BOTH pct values — so we don't see a SAT regression at pct=10 in this corpus, but a harder benchmark could.
