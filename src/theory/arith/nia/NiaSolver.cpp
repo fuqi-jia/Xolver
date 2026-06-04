@@ -244,13 +244,34 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // cb_check_found_model), so the streak-3 Unknown bail terminates
     // SAT and lets Cap. 10 promote the validated model.
     add("nia.farkas-or", &NiaSolver::stageFarkasOr);
-    add("nia.pending-lemma",  &NiaSolver::stagePendingLemma);
+    // Iter#26: defer Lemma-emitting stages (pending-lemma, branch) to Full
+    // effort when XOLVER_NIA_COMB_DEFER_LEMMA=1. Iter#25's diag pinned the
+    // QF_ANIA combination-layer starvation to NIA returning Lemma/Conflict
+    // at Standard effort (sum10: 138 Lemma + 38 Conflict at Standard in 5 s);
+    // TheoryManager's check loop returns immediately on any non-Consistent
+    // result, never reaching its combination step. Gating Lemma emitters to
+    // Full lets SAT explore more branches at Standard, NIA returns Consistent
+    // there, combination runs, arrangement queries fire. Default-OFF until
+    // a panda differential confirms 0-unsoundness (this changes when SAT
+    // decides to branch on NIA hints, which CAN regress UNSAT recovery on
+    // cases that need NIA's branching at Standard effort).
+    static const bool deferLemma =
+        env::paramInt("XOLVER_NIA_COMB_DEFER_LEMMA", 0) != 0;
+    if (deferLemma) {
+        addFull("nia.pending-lemma", &NiaSolver::stagePendingLemma);
+    } else {
+        add("nia.pending-lemma", &NiaSolver::stagePendingLemma);
+    }
     // Phase D — dispatch-cache record at the TAIL (right before branch).
     // Reaching here means every earlier stage returned nullopt, so the
     // pipeline will fall through to consistent(). Memoize the active_
     // signature so the next identical call hits stageDispatchCacheLookup.
     add("nia.dispatch-cache-record", &NiaSolver::stageDispatchCacheRecord);
-    add("nia.branch",         &NiaSolver::stageBranch);
+    if (deferLemma) {
+        addFull("nia.branch", &NiaSolver::stageBranch);
+    } else {
+        add("nia.branch", &NiaSolver::stageBranch);
+    }
 
     // Wiring-level switch (A7): disable the bit-blast stage to expose the pure
     // reasoning path. The backend is uncapped on this base and OOMs on dense
