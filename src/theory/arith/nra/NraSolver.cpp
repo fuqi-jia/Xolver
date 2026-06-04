@@ -52,7 +52,14 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
                 -> std::optional<TheoryCheckResult> {
             static const bool timing = std::getenv("XOLVER_NRA_STAGE_TIMING") != nullptr;
             static const bool trace = std::getenv("XOLVER_NRA_STAGE_TRACE") != nullptr;
-            if (!timing && !trace) return fn(db, e);
+            // File trace (XOLVER_NRA_STAGE_TRACE_FILE=path): the CLI runs the solve
+            // on a worker thread whose stderr is suppressed AND the destructor
+            // summary never surfaces on a timeout — so neither STAGE_TIMING nor
+            // STAGE_TRACE is observable for the slow/TO cases that matter. A
+            // per-call file append (flushed) survives both suppression and SIGKILL,
+            // making upstream-stage profiling of TO'd QF_NRA cases possible.
+            static const char* traceFile = std::getenv("XOLVER_NRA_STAGE_TRACE_FILE");
+            if (!timing && !trace && !traceFile) return fn(db, e);
             auto t0 = std::chrono::steady_clock::now();
             auto result = fn(db, e);
             auto t1 = std::chrono::steady_clock::now();
@@ -64,6 +71,15 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
                 std::fprintf(stderr, "[STAGE_TRACE] %s effort=%s %ld us total=%.1f ms\n",
                              name, effortName, (long)us, stageTimingUs_[name] / 1000.0);
                 std::fflush(stderr);
+            }
+            if (traceFile) {
+                std::FILE* f = std::fopen(traceFile, "a");
+                if (f) {
+                    std::fprintf(f, "%-14s %ld us  cumulative=%.1f ms  calls=%llu\n",
+                                 name, (long)us, stageTimingUs_[name] / 1000.0,
+                                 (unsigned long long)stageTimingCalls_[name]);
+                    std::fclose(f);   // close-per-call → survives a later SIGKILL
+                }
             }
             return result;
         };
