@@ -85,8 +85,17 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
             prof.lastDump = now;
         }
     }
+    // ARITH_STAGE_ENTER (default-OFF): print every stage-entry to stderr,
+    // flushed, so a single-stage hang is pinpoint-visible under timeout-kill.
+    // Diagnostic only; identical behavior when env unset.
+    static const bool stageEnter = std::getenv("ARITH_STAGE_ENTER") != nullptr;
     for (auto& r : reasoners_) {
         if (!r->runsAt(effort)) continue;
+        if (stageEnter) {
+            std::cerr << "[STAGE-ENTER] " << r->name() << " effort="
+                      << (effort == TheoryEffort::Full ? "F" : "S") << "\n";
+            std::cerr.flush();
+        }
 #ifndef NDEBUG
         size_t trailBefore = state_.trail.size();
 #endif

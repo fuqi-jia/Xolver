@@ -53,7 +53,14 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
                 -> std::optional<TheoryCheckResult> {
             static const bool timing = std::getenv("XOLVER_NRA_STAGE_TIMING") != nullptr;
             static const bool trace = std::getenv("XOLVER_NRA_STAGE_TRACE") != nullptr;
-            if (!timing && !trace) return fn(db, e);
+            // File trace (XOLVER_NRA_STAGE_TRACE_FILE=path): the CLI runs the solve
+            // on a worker thread whose stderr is suppressed AND the destructor
+            // summary never surfaces on a timeout — so neither STAGE_TIMING nor
+            // STAGE_TRACE is observable for the slow/TO cases that matter. A
+            // per-call file append (flushed) survives both suppression and SIGKILL,
+            // making upstream-stage profiling of TO'd QF_NRA cases possible.
+            static const char* traceFile = std::getenv("XOLVER_NRA_STAGE_TRACE_FILE");
+            if (!timing && !trace && !traceFile) return fn(db, e);
             auto t0 = std::chrono::steady_clock::now();
             auto result = fn(db, e);
             auto t1 = std::chrono::steady_clock::now();
@@ -65,6 +72,15 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
                 std::fprintf(stderr, "[STAGE_TRACE] %s effort=%s %ld us total=%.1f ms\n",
                              name, effortName, (long)us, stageTimingUs_[name] / 1000.0);
                 std::fflush(stderr);
+            }
+            if (traceFile) {
+                std::FILE* f = std::fopen(traceFile, "a");
+                if (f) {
+                    std::fprintf(f, "%-14s %ld us  cumulative=%.1f ms  calls=%llu\n",
+                                 name, (long)us, stageTimingUs_[name] / 1000.0,
+                                 (unsigned long long)stageTimingCalls_[name]);
+                    std::fclose(f);   // close-per-call → survives a later SIGKILL
+                }
             }
             return result;
         };
@@ -113,10 +129,11 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.int-probe-early",
         stageWrap("int-probe-early", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageIntegerProbe(db, e); })));
-    // XOLVER_NRA_EQ_CASCADE (default OFF): equality-cascade SAT solver for
-    // mgc-class systems — assign the high-degree generator vars, collapse the
-    // residual equalities to linear, derive the rest, validate exactly. Sibling
-    // of int-probe; runs before linearize so a found model short-circuits CDCAC.
+    // XOLVER_NRA_EQ_CASCADE (default ON; XOLVER_NRA_EQ_CASCADE=0 disables):
+    // equality-cascade SAT solver for mgc-class systems — assign the high-degree
+    // generator vars, collapse the residual equalities to linear, derive the
+    // rest, validate exactly. Sibling of int-probe; runs before linearize so a
+    // found model short-circuits CDCAC.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.eq-cascade",
         stageWrap("eq-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCascade(db, e); })));
@@ -323,20 +340,44 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 for (const auto& [v, e] : t.powers) varSet.insert(v);
         }
         if (poly_ok && !lsCons.empty() && !varSet.empty()) {
-            // pre-pass: slightly more wall-clock (50ms) than the old per-stage
-            // 10ms since we only fire once.
+            // One-shot pre-pass budget (#NRA-LS-E). Raised from the 50ms/50-round
+            // scaffold to 250ms/3000 rounds: the WalkSAT model search needs the
+            // larger round count to reach genuine SAT regions, and this runs
+            // BEFORE the (sometimes-spinning, occasionally libpoly-SIGSEGV-ing)
+            // CDCAC/Collins pipeline — so for SAT cases it short-circuits the
+            // expensive engine entirely (recovers the Economics-Mulligan SAT
+            // gaps; one of them, …0061e, otherwise crashes the pipeline). UNSAT
+            // cases pay near-zero: WalkSAT converges/plateaus and returns long
+            // before the budget (e.g. zankl gen-13 UNSAT: 165ms vs 163ms at the
+            // old scaffold). Still one-shot (lsAttempted_), still exact-validated
+            // (validateCandidate → invariant 1: SAT only on a kernel-checked
+            // model, never UNSAT). Tunable via the env::param registry; raise
+            // XOLVER_NRA_LS_BUDGET_MS (e.g. 10000) to also reach the larger
+            // zankl-matrix SAT cluster in a wall-clock-anytime profile.
             static const long budgetMs =
-                env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 50);
+                env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 250);
             static const int maxRounds =
-                env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 50);
+                env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 3000);
             std::vector<VarId> vars(varSet.begin(), varSet.end());
             static const bool eqRelax = [] {
                 const char* e = std::getenv("XOLVER_NRA_LS_EQ_RELAX");
                 return e && *e && *e != '0';
             }();
             NraLocalSearch ls(*kernel_);
-            ls.setBudgetMs(budgetMs);
-            ls.setMaxRounds(maxRounds);
+            // Wall-clock-anytime scaling (#NRA-LS-E iter 3). INERT by default:
+            // wall::scaled* return the base unchanged unless XOLVER_WALLCLOCK_SCALE
+            // is on AND a deadline (XOLVER_WALLCLOCK_MS) is set — so the default
+            // gate is byte-identical. In a competition profile (per-instance
+            // ~1200s) the budget grows to ~12s and the round cap to ~60k, which
+            // recovers the larger zankl-matrix / Geogebra SAT clusters that need
+            // a longer WalkSAT run (matrix-1-all-30 found at ~5s). SAT-only +
+            // exact-validated ⇒ growing the search budget never affects a verdict,
+            // only how long it looks (mirrors the CAC-deadline scaling at the
+            // CacEngine config below; shareDen=100 keeps the up-front slice small
+            // so an UNSAT case — WalkSAT has no plateau-exit — front-loads ~12s of
+            // a 1200s instance budget, not a 1/4 slice).
+            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 100));
+            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds)));
             ls.setEqRelax(eqRelax);
             const auto t0 = std::chrono::steady_clock::now();
             auto candOpt = ls.tryFindModel(lsCons, vars);
@@ -1364,8 +1405,13 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
 std::optional<TheoryCheckResult> NraSolver::stageCascade(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
     static const bool enabled = [] {
+        // Promoted default-ON (#NRA-LS-E iter 2): pure-rational + exact-validated
+        // over ALL active constraints (invariant 1) ⇒ sound by construction, and
+        // it never invokes libpoly root isolation, so it dodges the nlsat-path
+        // heap-corruption class entirely. Recovers mgc_09/mgc_10 (CDCAC times out
+        // projecting their degree-16/18 atoms). Disable with XOLVER_NRA_EQ_CASCADE=0.
         const char* e = std::getenv("XOLVER_NRA_EQ_CASCADE");
-        return e && *e && *e != '0';
+        return !(e && *e == '0');
     }();
     if (!enabled) return std::nullopt;
     (void)effort;

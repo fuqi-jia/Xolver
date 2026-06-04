@@ -32,12 +32,23 @@ bool EagerBitBlastSolver::relationHolds(const mpz_class& v, Relation rel) {
 
 bool EagerBitBlastSolver::isBoolTyped(ExprId eid, const CoreIr& ir) const {
     const CoreExpr& e = ir.get(eid);
+    // The CoreExpr already carries the resolved sort -- trust it when known.
+    // Lt/Leq/Gt/Geq/Distinct ALWAYS return Bool by SMT-LIB semantics regardless
+    // of operand types, so the historic "peek children[0]" trick mis-classified
+    // `Eq(Distinct(int,int), bool_var)` as an arith atom and routed Distinct
+    // through PolynomialConverter (-> UnsupportedNonPolynomial). The sort-based
+    // check resolves this for every Bool-returning expression in one place.
+    if (e.sort == ir.boolSortId()) return true;
     switch (e.kind) {
         case Kind::ConstBool: case Kind::Not: case Kind::And: case Kind::Or:
         case Kind::Implies:   case Kind::Xor:
         case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq:
+        case Kind::Distinct:
             return true;
-        case Kind::Eq: case Kind::Distinct:
+        case Kind::Eq:
+            // Eq returns Bool but its "is-arith-atom" status depends on whether
+            // its first child is bool-typed -- only an Eq over Bool children is
+            // a boolean iff; Eq over ints is an arith atom.
             return !e.children.empty() && isBoolTyped(e.children[0], ir);
         case Kind::Ite:
             return e.children.size() == 3 && isBoolTyped(e.children[1], ir);
@@ -123,9 +134,44 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                 cs.parts.push_back({NullPoly, Relation::Neq});  // marker: always-false (0!=0)
                 break;
             default:
-                if (std::getenv("NIA_EAGER_BB_DIAG"))
+                if (std::getenv("NIA_EAGER_BB_DIAG")) {
+                    auto kindStr = [](Kind k) -> const char* {
+                        switch (k) {
+                          case Kind::ConstInt: return "ConstInt"; case Kind::ConstReal: return "ConstReal";
+                          case Kind::ConstBool: return "ConstBool"; case Kind::Variable: return "Variable";
+                          case Kind::Add: return "Add"; case Kind::Sub: return "Sub"; case Kind::Mul: return "Mul";
+                          case Kind::Div: return "Div"; case Kind::Mod: return "Mod"; case Kind::Pow: return "Pow";
+                          case Kind::Neg: return "Neg"; case Kind::Abs: return "Abs";
+                          case Kind::ToInt: return "ToInt"; case Kind::ToReal: return "ToReal";
+                          case Kind::Eq: return "Eq"; case Kind::Distinct: return "Distinct";
+                          case Kind::Lt: return "Lt"; case Kind::Leq: return "Leq";
+                          case Kind::Gt: return "Gt"; case Kind::Geq: return "Geq";
+                          case Kind::Not: return "Not"; case Kind::And: return "And"; case Kind::Or: return "Or";
+                          case Kind::Implies: return "Implies"; case Kind::Xor: return "Xor"; case Kind::Ite: return "Ite";
+                          default: return "?";
+                        }
+                    };
+                    std::function<void(ExprId, int)> dump = [&](ExprId e, int depth) {
+                        if (depth > 6) { std::cerr << "..."; return; }
+                        const CoreExpr& n = ir.get(e);
+                        std::cerr << "(" << kindStr(n.kind) << "[" << e << "/sort" << n.sort;
+                        if (n.kind == Kind::Variable) {
+                            if (auto* s = std::get_if<std::string>(&n.payload.value))
+                                std::cerr << "/'" << *s << "'";
+                        } else if (n.kind == Kind::ConstInt || n.kind == Kind::ConstReal) {
+                            if (auto* i = std::get_if<int64_t>(&n.payload.value)) std::cerr << "/" << *i;
+                            else if (auto* s = std::get_if<std::string>(&n.payload.value)) std::cerr << "/" << *s;
+                        }
+                        std::cerr << "]";
+                        for (ExprId c : n.children) { std::cerr << " "; dump(c, depth + 1); }
+                        std::cerr << ")";
+                    };
+                    std::cerr << "[EAGER-BB] boolSortId=" << ir.boolSortId() << " intSortId=" << ir.intSortId() << "\n";
                     std::cerr << "[EAGER-BB] addPair reject status=" << (int)cc.status
-                              << " l=" << l << " r=" << r << " rel=" << (int)rel << "\n";
+                              << " rel=" << (int)rel << " l="; dump(l, 0);
+                    std::cerr << " r="; dump(r, 0);
+                    std::cerr << "\n";
+                }
                 ok = false;  // non-polynomial / failure -> eager bit-blast not applicable
                 break;
         }

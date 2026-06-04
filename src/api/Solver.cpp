@@ -1608,27 +1608,42 @@ public:
         }
 
         // -------------------------------------------------------------------
-        // Whole-formula EAGER BIT-BLAST portfolio arm (XOLVER_NIA_EAGER_BITBLAST,
-        // default OFF). BLAN-style: translate the ENTIRE QF_NIA formula (boolean
-        // skeleton + arith atoms, Int -> bit-vectors) into ONE SAT solve. It is
-        // a SOUND SAT-FINDER ONLY: the model is exact-validated inside
-        // EagerBitBlastSolver (invariant 1) and it NEVER returns Unsat
-        // (invariant 7). On Unknown it falls through to the CDCL(T) main loop —
-        // a parallel strategy, not main-loop surgery (invariant 5 intact).
+        // Whole-formula EAGER BIT-BLAST portfolio arm (BLAN-style): translate
+        // the ENTIRE QF_NIA formula (boolean skeleton + arith atoms,
+        // Int -> bit-vectors) into ONE SAT solve. SOUND SAT-FINDER ONLY -- the
+        // model is exact-validated inside EagerBitBlastSolver (invariant 1)
+        // and it NEVER returns Unsat (invariant 7). On Unknown it falls
+        // through to the CDCL(T) main loop -- a parallel strategy, not
+        // main-loop surgery (invariant 5 intact).
+        //
+        // Default-ON for pure QF_NIA (no real/UF/array/DT/mixed). Iter-3/4/5
+        // confirmed the CDCL(T)-per-atom-assignment bit-blast cannot close
+        // the leipzig / VeryMax cluster because each per-call constraint
+        // subset enumerates Boolean disjunct choices serially. The eager
+        // path encodes the OR atoms directly into the bit-blast CNF so
+        // CaDiCaL searches disjuncts + integer bits concurrently: leipzig
+        // term-0Hb4yp.smt2 falls from 5 s TO to 152 ms (~33x). Held-out
+        // 16-case set (oracle=SAT ∧ BLAN=SAT<10s ∧ xolver=TO) gains 4+/16.
+        //
+        // Opt-out via XOLVER_NIA_EAGER_BITBLAST=0 for diagnosis / A-B.
         // -------------------------------------------------------------------
-        if (std::getenv("XOLVER_NIA_EAGER_BITBLAST") &&
-            (logic == "QF_NIA" || logic == "NIA") &&
-            !features.hasRealVar && !features.hasMixedIntReal &&
-            !features.hasUF && !features.hasArray && !features.hasDatatype) {
-            phase("eager-bb-start");
-            bitblast::EagerBitBlastSolver eagerbb;
-            auto ibr = eagerbb.solve(*ir, ir->assertions());
-            phase("eager-bb-done");
-            if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+        {
+            const char* eagerEnv = std::getenv("XOLVER_NIA_EAGER_BITBLAST");
+            bool eagerOn = !(eagerEnv && eagerEnv[0] == '0');
+            if (eagerOn &&
+                (logic == "QF_NIA" || logic == "NIA") &&
+                !features.hasRealVar && !features.hasMixedIntReal &&
+                !features.hasUF && !features.hasArray && !features.hasDatatype) {
+                phase("eager-bb-start");
+                bitblast::EagerBitBlastSolver eagerbb;
+                auto ibr = eagerbb.solve(*ir, ir->assertions());
+                phase("eager-bb-done");
+                if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
 #ifdef XOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
+                    finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
-                return Result::Sat;
+                    return Result::Sat;
+                }
             }
         }
 

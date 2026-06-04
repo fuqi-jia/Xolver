@@ -1,6 +1,7 @@
 #include "theory/arith/nra/projection/LazardProjectionOperator.h"
 #include "theory/arith/nra/projection/Squarefree.h"
 #include "theory/arith/nra/projection/SubresultantChain.h"
+#include "util/EnvParam.h"   // XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS firewall (projection input)
 
 #include <cstdlib>
 #include <string>
@@ -36,6 +37,42 @@ LazardOpResult lazardProjectStep(const std::vector<RationalPolynomial>& E, VarId
                                  const LazardProjectionConfig& cfg,
                                  PolynomialKernel* kernel) {
     LazardOpResult r;
+
+    // Heap-corruption / OOM firewall (crash fix). The Lazard projection of a
+    // high-degree mod-2^k system (QF_UFNRA sqrtmodinv-hoenicke modInvFull et al.)
+    // accumulates polynomial coefficients across projection levels until libpoly's
+    // resultant / gcd / coefficient_add either corrupts the heap (glibc SIGABRT)
+    // or OOMs (~3.46 GB → SIGSEGV in coefficient_construct_copy) — NEITHER is
+    // catchable by the sigsetjmp harness, so the only safe guard is to refuse the
+    // runaway BEFORE any libpoly op touches it. Reject a level whose INPUT already
+    // carries a coefficient past the same XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS cap the
+    // root-isolation firewall uses (the toPrimitiveInteger build guards the
+    // within-level case). complete=false → LazardProjectionClosure marks the
+    // closure incomplete → CDCAC returns Unknown — a clean caught unknown, never
+    // a wrong verdict and never the 44s/3.46 GB blowup.
+    {
+        // Separate, LOWER cap than the root-isolation firewall: the projection
+        // accumulates coefficients MULTIPLICATIVELY across levels and corrupts
+        // libpoly's heap well below the 262144-bit isolation cap (modInvFull
+        // corrupts in the 16K..256K-bit band). 65536 bits caps the per-level
+        // input without touching isolateRealRoots; tune via env if it regresses a
+        // legit deep projection (the nra reg gate is the arbiter).
+        static const long capBits = [] {
+            int v = env::paramInt("XOLVER_NRA_LAZARD_MAX_COEFF_BITS", 65536);
+            return v > 0 ? static_cast<long>(v) : 65536L;
+        }();
+        for (const auto& p : E) {
+            for (const auto& [key, coeff] : p.terms()) {
+                (void)key;
+                if (static_cast<long>(mpz_sizeinbase(coeff.get_num().get_mpz_t(), 2)) > capBits ||
+                    static_cast<long>(mpz_sizeinbase(coeff.get_den().get_mpz_t(), 2)) > capBits) {
+                    r.complete = false;
+                    r.reason = LazardIncompleteReason::ProjectionBudgetExceeded;
+                    return r;
+                }
+            }
+        }
+    }
 
     auto emit = [&](RationalPolynomial poly, LazardProjectionOpKind op,
                     const RationalPolynomial* p1, const RationalPolynomial* p2) {

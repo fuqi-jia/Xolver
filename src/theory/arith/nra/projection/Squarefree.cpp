@@ -2,11 +2,54 @@
 #include "theory/arith/nra/preprocess/GcdEngine.h"
 #include "theory/arith/nra/projection/LocalProjection.h"  // resultant()
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS projection firewall
 #include <vector>
 
 namespace xolver {
 
 namespace {
+
+// Projection coefficient firewall (crash fix). The Lazard projection of a
+// high-degree mod-2^k system (QF_UFNRA sqrtmodinv-hoenicke modInvFull et al.)
+// grows the gcd operands until libpoly's gcd / coefficient_add OOMs (~3.46 GB →
+// SIGSEGV in coefficient_construct_copy) or corrupts the heap (glibc SIGABRT) —
+// NEITHER catchable by the sigsetjmp harness, and BELOW the 262144-bit
+// root-isolation cap. Refuse a gcd whose operand carries a coefficient past
+// XOLVER_NRA_LAZARD_MAX_COEFF_BITS (default 65536) BEFORE the libpoly conversion.
+// Scoped to the projection's exact-gcd path so the broadly-used toPrimitiveInteger
+// keeps its high cap (the polynomial-stress suite needs >65536-bit conversions).
+// complete=false → squarefree/projection incomplete → CDCAC Unknown: a clean
+// caught unknown, never a wrong verdict and never the 44s/3.46 GB blowup.
+bool projectionCoeffExceedsCap(const RationalPolynomial& p) {
+    static const long capBits = [] {
+        int v = env::paramInt("XOLVER_NRA_LAZARD_MAX_COEFF_BITS", 65536);
+        return v > 0 ? static_cast<long>(v) : 65536L;
+    }();
+    // Measure the DENOMINATOR-CLEARED integer coefficients that toPrimitiveInteger
+    // actually hands to libpoly (num * LCM/den) — NOT the raw rationals. modInvFull
+    // has moderate num/den but coprime denominators, so the LCM blows the cleared
+    // coeffs past the cap even though no single rational does. Replicates
+    // toPrimitiveInteger Step 1-2 (the GCD reduction in Step 4 only shrinks, so
+    // this is a sound — never under — estimate).
+    mpz_class D = 1;
+    for (const auto& [key, coeff] : p.terms()) {
+        (void)key;
+        const mpz_class den = coeff.get_den();
+        if (den > 1) {
+            mpz_class t;
+            mpz_lcm(t.get_mpz_t(), D.get_mpz_t(), den.get_mpz_t());
+            D = t;
+        }
+    }
+    for (const auto& [key, coeff] : p.terms()) {
+        (void)key;
+        const mpz_class cleared = coeff.get_num() * (D / coeff.get_den());
+        if (cleared != 0 &&
+            static_cast<long>(mpz_sizeinbase(cleared.get_mpz_t(), 2)) > capBits)
+            return true;
+    }
+    return false;
+}
 
 // --- Fast UNIVARIATE squarefree part over Q (avoids the O(n!) cofactor
 // `resultant`/determinant path, which blows up on degree >= ~6). Used whenever
@@ -92,6 +135,12 @@ SquarefreeResult gcdTwoExact(const RationalPolynomial& a, const RationalPolynomi
     if (b.isZero()) return {a, true};
     if (a.isConstant() || b.isConstant())
         return {RationalPolynomial::fromConstant(mpq_class(1)), true};
+
+    // Projection coefficient firewall: refuse runaway mod-2^k operands BEFORE the
+    // libpoly conversion/gcd (see projectionCoeffExceedsCap). complete=false →
+    // closure incomplete → CDCAC Unknown.
+    if (projectionCoeffExceedsCap(a) || projectionCoeffExceedsCap(b))
+        return {RationalPolynomial::fromConstant(mpq_class(1)), false};
 
     // RP -> integer-primitive PolyId (clears denominators; positive scale,
     // benign — same conversion as the proven PSC path).

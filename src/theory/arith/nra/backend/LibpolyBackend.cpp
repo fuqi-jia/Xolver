@@ -1406,6 +1406,22 @@ int LibpolyBackend::countRealRootsInInterval(UniPolyId h, const mpq_class& lo, c
     if (!libKernel_) return -1;
 
     const auto& hc = getUni(h);
+    // Heap-corruption firewall (crash fix): poly::count_real_roots runs an exact
+    // Sturm sequence + sign-at-rational, whose internal rational_interval_pow /
+    // gmpq_mul materializes multi-megabit GMP rationals on multi-Kbit inputs and
+    // corrupts the heap → SIGSEGV deep in __gmpn_gcd_1 (reproduced on the 16-var
+    // Economics-Mulligan-0061e CDCAC mergeRoots→compareRealAlg path). Refuse such
+    // inputs BEFORE touching libpoly — both the polynomial coefficients AND the
+    // interval endpoints (count_real_roots powers the endpoints). Same guard and
+    // cap as isolateRealRoots / locateRootInPolynomial. -1 is the existing
+    // "inconclusive/unsupported" sentinel callers already handle (refineRootInterval,
+    // locateRootInPolynomial) → CDCAC falls back, never a wrong root comparison.
+    const long endpointBits = std::max(
+        std::max(fwZbits(lo.get_num()), fwZbits(lo.get_den())),
+        std::max(fwZbits(hi.get_num()), fwZbits(hi.get_den())));
+    if (fwTrips(std::max(fwMaxCoeffBits(hc), endpointBits), "countRealRootsInInterval"))
+        return -1;
+
     std::vector<poly::Integer> hLpCoeffs;
     for (auto it = hc.rbegin(); it != hc.rend(); ++it) {
         hLpCoeffs.emplace_back(*it);
@@ -1413,7 +1429,26 @@ int LibpolyBackend::countRealRootsInInterval(UniPolyId h, const mpq_class& lo, c
     poly::UPolynomial hUp(hLpCoeffs);
 
     poly::RationalInterval ri{poly::Rational(lo), poly::Rational(hi)};
-    return static_cast<int>(poly::count_real_roots(hUp, ri));
+    // Crash firewall (SIGSEGV backstop): even under the bit-cap, count_real_roots'
+    // Sturm sign-at can fault deep in GMP (__gmpn_gcd_1) on inputs the cap doesn't
+    // reject — reproduced on the 16-var Economics-Mulligan-0061e CDCAC
+    // mergeRoots→compareRealAlg path. Use the same sigsetjmp harness as
+    // isolateRealRoots so a fault becomes -1 (the existing inconclusive sentinel)
+    // instead of killing the process. SIGSEGV = bad read (heap intact) so longjmp
+    // recovery is safe; this path is NOT nested inside the isolation firewall, so
+    // the single global jmp-buf is not clobbered.
+    int rc = -1;
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    const int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
+        rc = static_cast<int>(poly::count_real_roots(hUp, ri));
+    }
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    return jumped == 0 ? rc : -1;
 #endif
 }
 

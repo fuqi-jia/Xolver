@@ -9,8 +9,11 @@
 #include "theory/arith/nra/projection/ProjectionClosure.h"
 #include "theory/arith/nra/projection/LazardProjectionClosure.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 #include <vector>
 #include <memory>
+#include <optional>
+#include <chrono>
 
 namespace xolver {
 
@@ -35,6 +38,20 @@ private:
     CdcacResult solveUnivariate(const CdcacInput& input);
     CdcacResult solveLevel(int k, SamplePoint& prefix, const CdcacInput& input);
     CdcacResult checkFullSample(const SamplePoint& sample, const CdcacInput& input);
+
+    // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
+    // search, run ONCE before the eager buildClosure. Delineates each var's cells
+    // LAZILY from the raw constraints (specializeToUnivariate + isolateRealRoots —
+    // single-cell, no closure), samples one RATIONAL per cell, forward-checks each
+    // partial assignment, and recurses; the leaf is checkFullSample (exact signAt
+    // validation). Returns Sat ONLY on a kernel-validated full sample → sound by
+    // construction; NEVER returns Unsat. A coefficient-bit cap guards every libpoly
+    // call so high-degree/huge-coeff inputs are skipped, not crashed. Budget-bounded;
+    // Unknown on exhaustion → falls through to the projection engine unchanged.
+    CdcacResult trySatSampleFirst(int k, SamplePoint& prefix,
+                                  const CdcacInput& input, long& budget);
+    std::vector<mpq_class> satSampleCandidates(int k, const SamplePoint& prefix,
+                                               const CdcacInput& input);
 
     Cell buildLeafConflictCell(const CdcacConstraint& c, const SamplePoint& sample, VarId var);
 
@@ -113,6 +130,44 @@ private:
     //   XOLVER_NRA_PROJECTION=collins => pure Collins.
     // Promoted default-ON (broad differential 0-unsound).
     bool hybridEnabled_ = true;
+
+    // nlsat-engine STEP A gate + state. Default-OFF until the broad gate lands;
+    // sound by construction (SAT-only, checkFullSample-validated). One-shot per
+    // CdcacCore lifetime (= per SMT-solve in non-incremental) via satFirstTried_.
+    bool satFirstEnabled_ = false;
+    // Node-search backstop (raised from 20000: matrix-class SAT models need ~300k
+    // nodes to reach — the old cap aborted the search 15x too early). The REAL
+    // bound is the wall-clock cap satFirstMs_ below; this just caps a pathological
+    // node count if the clock check is somehow never hit.
+    long satFirstBudget_ = 2000000;
+    // Wall-clock cap (ms) on the whole SAT-first search. Bounds the model-search
+    // so it can't starve the downstream complete engine on a no-model input
+    // (the OSF-latency lesson): on expiry the search bails → falls through to
+    // projection, byte-identical to never having run. Env XOLVER_NRA_CAC_SAT_FIRST_MS.
+    // 10s gives the matrix-class SAT cluster comfortable margin (recovers in ~7.6s)
+    // while the full nra/nira regression stays 151/151 + 30/30 0-unsound with the
+    // flag ON (cap can't starve projection on the curated cases).
+    long satFirstMs_ = 10000;
+    std::chrono::steady_clock::time_point satFirstT0_;  // search start (set in solve())
+    bool satFirstTried_ = false;
+    // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
+    // precomputed once per sample-first search so high-degree/huge-coeff polys are
+    // skipped (not crashed). Indexed parallel to input.constraints.
+    std::vector<bool> satSafe_;
+    // Cached EXACT rational polynomial per constraint (parallel to satSafe_),
+    // built once in the satSafe_ pass. The leaf/forward-check evaluate signs via
+    // pure-mpq Horner over these (exactSign) — NEVER libpoly coefficient_sgn,
+    // whose rational_interval_pow OOM-SIGSEGVs raising a large rational sample to
+    // a power (the matrix-1-all crash). Present for every constraint whenever the
+    // all-safe gate lets the search run.
+    std::vector<std::optional<RationalPolynomial>> satRp_;
+    // Magnitude bound (bits) on sampled cell representatives. SAT-first samples
+    // the SIMPLEST rational in each feasible cell (smallest-denominator dyadic) and
+    // discards any whose numerator/denominator exceeds this — an ADDITIVE search
+    // restriction (real models have small coords; the complete projection engine
+    // still runs on fall-through), which also keeps every downstream
+    // specialization/evaluation bounded. Tunable via XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS.
+    long satSampleMaxBits_ = 64;
 
     // Proof-carrying projection state (rebuilt per solve()).
     ProjectionClosure closure_;
