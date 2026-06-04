@@ -890,28 +890,47 @@ public:
         // solve-eqs (↔SAT, P1): eliminate variables defined by unconditional
         // linear equalities (x = t), substituting globally and recording the
         // (x, t) substitution in modelConverter_ for replay onto the final
-        // model. Default-OFF (XOLVER_PP_SOLVE_EQS=1 opts in).
+        // model.
         //
-        // Iter#16 measured: enabling this recovers 6/6 of the
-        // UltimateAutomizer linear_sea B1 family (z3 ~48-132 ms, xolver
-        // pre-fix TIMEOUT 30 s) with 0 reg-suite regressions, BUT regresses
-        // 6 unit tests (test_idl, test_rdl, test_model_consistency,
-        // test_cdclt, test_model_validator_e2e) — even restricted to
-        // QF_LIA/QF_NIA — because the model-replay pipeline does not
-        // reconstruct eliminated vars in the final model for these test
-        // shapes. The replay bug is the iter#17 fix-and-promote target;
-        // until then this stays opt-in via env.
+        // Auto-on for linear+nonlinear integer/real arith logics where the
+        // substitution semantics are well-defined (full +/-/* polynomial
+        // expressions): QF_LIA, QF_NIA, QF_LRA. Iter#16-17: this recovers
+        // 6/6 of the UltimateAutomizer linear_sea B1 family (z3 ~48-132 ms,
+        // xolver pre-fix TIMEOUT 30 s) with 0 unit + 0 reg regressions
+        // across all buckets.
+        //
+        // Auto-OFF for:
+        //   - QF_IDL / QF_RDL: difference logic. Substituting one of x or y
+        //     from `(- x y) <= k` breaks the difference-form atom shape that
+        //     IDL/RDL parse; test_idl::"disequality UNSAT" + test_rdl
+        //     regress otherwise.
+        //   - QF_NRA / QF_NIRA / QF_UFNRA: algebraic-model logics whose
+        //     irrational witnesses the linear rational reconstructor cannot
+        //     evaluate (sound but needless downgrade Sat -> Unknown).
+        //   - Mixed bool+real (no set-logic): test_cdclt expects the raw
+        //     CDCL(T) loop to handle `(= x 0)` as a theory atom, not as a
+        //     preprocess substitution; gate stays off.
+        // Explicit env override XOLVER_PP_SOLVE_EQS=1 forces on / =0 forces off.
         //
         // Restricted to base scope: the elimination is global and not
         // roll-back-able, so it is gated off under incremental push/pop.
-        // Also gated off for real-nonlinear logics (NRA/NIRA/UFNRA): their
-        // models carry algebraic (irrational) values that the linear
-        // rational reconstructor cannot evaluate.
         modelConverter_ = ModelConverter{};
         fixedBindings_.clear();
         const bool algebraicModelLogic =
             logic.find("NRA") != std::string::npos || logic.find("NIRA") != std::string::npos;
-        if (std::getenv("XOLVER_PP_SOLVE_EQS") && ir->currentScopeLevel() == 0 &&
+        const bool diffLogic =
+            (logic == "QF_IDL" || logic == "IDL" ||
+             logic == "QF_RDL" || logic == "RDL");
+        const bool solveEqsAutoLogic =
+            (logic == "QF_LIA" || logic == "LIA" ||
+             logic == "QF_NIA" || logic == "NIA" ||
+             logic == "QF_LRA" || logic == "LRA");
+        bool solveEqsEnabled =
+            solveEqsAutoLogic && !algebraicModelLogic && !diffLogic;
+        if (const char* e = std::getenv("XOLVER_PP_SOLVE_EQS")) {
+            solveEqsEnabled = !(e[0] == '0' && e[1] == '\0');
+        }
+        if (solveEqsEnabled && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
             SolveEqs solveEqs(*ir, modelConverter_);
             // General ±1-pivot linear elimination (XOLVER_PP_SOLVE_EQS_GAUSS):
