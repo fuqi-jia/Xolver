@@ -552,11 +552,29 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
         if (!frame.processed) {
             frame.processed = true;
 
-            // Do not substitute under UF applications: the arithmetic value of
-            // `x` flowing into `(f x)` would mint a new UFApply ExprId distinct
-            // from any `(f c)` literal, hiding the congruence EUF derives from
-            // the active `x = c` (cf. uflia_003 / uflia_017). Leaf here.
-            if (node.kind == Kind::UFApply) { substMemo_[e] = e; stack.pop_back(); continue; }
+            // UF applications: substitute under the app ONLY when it has a
+            // COMPOUND argument (an arithmetic expression like `(+ a c)`). There,
+            // propagating `c=0` and folding `(+ a 0) -> a` (constantFoldRec runs
+            // after this pass) resolves the argument to its canonical form so EUF
+            // congruence fires — closing the `g(a+c) != g(a), c=0` false-SAT class
+            // (and its UFLIA/UFLRA/AUFLIA siblings). For an app whose every
+            // argument is a BARE VARIABLE / CONSTANT we keep it verbatim:
+            // substituting `(f x) -> (f c)` would mint a UFApply ExprId distinct
+            // from a `(f c)` literal and hide the congruence EUF derives from the
+            // active `x = c` (cf. uflia_003 / uflia_017).
+            if (node.kind == Kind::UFApply) {
+                bool anyCompoundArg = false;
+                for (ExprId ch : node.children) {
+                    if (ch == NullExpr) continue;
+                    Kind ck = ir_.get(ch).kind;
+                    if (ck != Kind::Variable && ck != Kind::ConstInt &&
+                        ck != Kind::ConstReal && ck != Kind::ConstBool) {
+                        anyCompoundArg = true; break;
+                    }
+                }
+                if (!anyCompoundArg) { substMemo_[e] = e; stack.pop_back(); continue; }
+                // else: fall through to the generic recursion (substitute args).
+            }
 
             if (node.kind == Kind::Variable) {
                 ExprId res = e;
