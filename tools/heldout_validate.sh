@@ -8,7 +8,11 @@ ENVS=${2-}
 TIMEOUT=${3:-15}
 OUT=${4:-/tmp/heldout_${LABEL}.tsv}
 LIST=${HELDOUT_LIST:-/tmp/heldout_paths.txt}
-XOL=/mnt/d/D_Study/BUAA/projects/NLColver/build/bin/xolver
+# Script-relative XOL so the harness works regardless of CWD or which
+# checkout it lives in. XOLVER_BIN env override for ad-hoc usage.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+XOL="${XOLVER_BIN:-$REPO_ROOT/build/bin/xolver}"
 
 printf 'profile\tkey\toracle_sat\tverdict\trc\twallclock_ms\n' > "$OUT"
 while read -r path; do
