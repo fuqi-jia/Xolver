@@ -2750,7 +2750,83 @@ NiaSolver::sharedTermArithValue(SharedTermId s) const {
     // Solver::Impl boundary still catches a globally-inconsistent model.
     if (expr.kind != Kind::Variable ||
         !std::holds_alternative<std::string>(expr.payload.value)) {
-        return std::nullopt;
+        // Iter#30: compound shared terms (e.g. `(+ i 1)` as an array index)
+        // had no value path here pre-iter#30 — returned nullopt → array-
+        // combination arrangement skipped them entirely. iter#28-29 opened
+        // the channel; this opens the SOURCE for compound terms by
+        // recursively evaluating Add/Sub/Mul/Neg over the current NIA
+        // model. SOUND: this only returns a value when EVERY leaf evaluates
+        // (Variable found in model, Const literal); on any unresolved leaf
+        // or unsupported kind, falls through to nullopt → arrangement
+        // safely skips the term (same as pre-iter#30 behavior).
+        // Recursion depth bounded at 32 (anti-pathological-DAG guard).
+        const IntegerModel* src = nullptr;
+        if (currentModel_)                  src = &*currentModel_;
+        else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+        if (!src) return std::nullopt;
+        std::function<std::optional<mpz_class>(ExprId, int)> ev =
+            [&](ExprId e, int depth) -> std::optional<mpz_class> {
+                if (depth > 32 || e == NullExpr || e >= coreIr_->size())
+                    return std::nullopt;
+                const auto& n = coreIr_->get(e);
+                if (n.kind == Kind::ConstInt) {
+                    if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+                        return mpz_class(*iv);
+                    if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                        try { return mpz_class(*sv); }
+                        catch (...) { return std::nullopt; }
+                    }
+                    return std::nullopt;
+                }
+                if (n.kind == Kind::Variable) {
+                    if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                        auto it = src->find(*nm);
+                        if (it == src->end()) return std::nullopt;
+                        return it->second;
+                    }
+                    return std::nullopt;
+                }
+                if (n.kind == Kind::Add) {
+                    mpz_class acc = 0;
+                    for (ExprId c : n.children) {
+                        auto cv = ev(c, depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc += *cv;
+                    }
+                    return acc;
+                }
+                if (n.kind == Kind::Sub) {
+                    if (n.children.empty()) return std::nullopt;
+                    auto fv = ev(n.children[0], depth + 1);
+                    if (!fv) return std::nullopt;
+                    mpz_class acc = *fv;
+                    for (size_t i = 1; i < n.children.size(); ++i) {
+                        auto cv = ev(n.children[i], depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc -= *cv;
+                    }
+                    return acc;
+                }
+                if (n.kind == Kind::Neg) {
+                    if (n.children.size() != 1) return std::nullopt;
+                    auto cv = ev(n.children[0], depth + 1);
+                    if (!cv) return std::nullopt;
+                    return -*cv;
+                }
+                if (n.kind == Kind::Mul) {
+                    mpz_class acc = 1;
+                    for (ExprId c : n.children) {
+                        auto cv = ev(c, depth + 1);
+                        if (!cv) return std::nullopt;
+                        acc *= *cv;
+                    }
+                    return acc;
+                }
+                return std::nullopt;
+            };
+        auto val = ev(st->coreExpr, 0);
+        if (!val) return std::nullopt;
+        return RealValue::fromMpz(*val);
     }
     const std::string& name = std::get<std::string>(expr.payload.value);
     const IntegerModel* src = nullptr;
