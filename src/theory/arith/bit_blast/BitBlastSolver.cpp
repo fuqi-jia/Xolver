@@ -175,6 +175,17 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
 
     Attempt a;
     auto sat = createSatSolver();
+    // Disable CaDiCaL congruence closure (gate extraction) on the bit-blast's
+    // dedicated solver. extract_gates -> init_closure -> init_noccs allocates an
+    // occurrence table sized by the (huge) Tseitin encoding and OOMed at ~3.3 GB
+    // on a QF_UFDTNIA case (DT+NIA combination -> very large encoding) — a real
+    // bug, since the gates it tries to re-discover are ALREADY explicit in our
+    // structured bit-blast CNF, so the pass is redundant work, not insight.
+    // Disabling it only changes SAT-solver speed, never the verdict (bit-blast is
+    // candidate-only, re-validated by IntegerModelValidator), and it removes the
+    // OOM/crash on large DT+NIA encodings. Opt-out: XOLVER_NIA_BB_CONGRUENCE=1.
+    if (!std::getenv("XOLVER_NIA_BB_CONGRUENCE"))
+        sat->configure("congruence", 0);
     if (noPreprocess_) {
         // Disable CaDiCaL's expensive Bounded Variable Elimination (which calls
         // extract_gates -> find_equivalences). Profile of QF_UFNIA floored cases
