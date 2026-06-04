@@ -701,15 +701,18 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
     // falls through, having populated derived bounds/substitutions consumed
     // below, then Cap. 9 attempts complete finite-domain enumeration.
     //
-    // Iter#20 diagnostic finding (documented for iter#21+): on QF_ANIA Ozdemir
-    // class, this stage consumes 4.8 s of a 5 s budget (24 cb_propagate calls
-    // × ~200 ms each), starving every downstream SAT-finder stage. A simple
-    // per-call wall-clock cap at the loop boundary is INEFFECTIVE because
-    // presolve.run() itself runs to completion (the cost is INSIDE run(),
-    // not in the constraint-add loop). A real fix needs either (a) passing
-    // budget down into PresolveEngine.run() so its inner fixpoint can check
-    // periodically, or (b) caching presolve state across cb_propagate calls
-    // keyed on the active normalized_ set. Both are refactor-scope.
+    // Iter#21: pass a per-call deadline into PresolveEngine.run() to free
+    // SAT-finder stages on QF_ANIA Ozdemir-class. Default 50 ms per call
+    // (XOLVER_NIA_PRESOLVE_BUDGET_MS); 0 disables the cap. STAGE-PROF
+    // measurement: pre-iter#21 presolve consumed 4769 ms of a 5 s budget
+    // (24 cb_propagate × ~200 ms each), starving demand-arrangement /
+    // escalating-bounded / LS / AMV from running. SOUND: capping inside
+    // the fixpoint exits with the partial fact set already in st_.ledger —
+    // every recorded derivation is still semantically valid; downstream
+    // stages see a SUBSET of what unbounded presolve would derive, never
+    // an incorrect claim.
+    static const long presolveBudgetMs =
+        env::paramLong("XOLVER_NIA_PRESOLVE_BUDGET_MS", 50);
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
     bool feasible = true;
     for (const auto& c : normalized_) {
@@ -718,7 +721,12 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
         presolve.addAtom(*rp, c.rel, c.reason);
     }
     if (feasible) {
-        auto pr = presolve.run();
+        auto deadline =
+            (presolveBudgetMs > 0)
+                ? std::chrono::steady_clock::now() +
+                      std::chrono::milliseconds(presolveBudgetMs)
+                : std::chrono::steady_clock::time_point::max();
+        auto pr = presolve.run(deadline);
         if (pr.kind == PresolveResult::Kind::Conflict) {
             return TheoryCheckResult::mkConflict(pr.conflict);
         }
