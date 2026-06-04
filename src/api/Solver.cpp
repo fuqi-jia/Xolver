@@ -1517,6 +1517,17 @@ public:
         {
             const char* eagerEnv = std::getenv("XOLVER_NIA_EAGER_BITBLAST");
             bool eagerOn = !(eagerEnv && eagerEnv[0] == '0');
+            if (std::getenv("NIA_EAGER_BB_GATE_DIAG")) {
+                std::cerr << "[EAGER-GATE] eagerOn=" << eagerOn
+                          << " logic=" << logic
+                          << " hasRealVar=" << features.hasRealVar
+                          << " hasMixedIntReal=" << features.hasMixedIntReal
+                          << " hasUF=" << features.hasUF
+                          << " hasArray=" << features.hasArray
+                          << " hasDatatype=" << features.hasDatatype
+                          << " hasNonlinear=" << features.hasNonlinear
+                          << "\n";
+            }
             if (eagerOn &&
                 (logic == "QF_NIA" || logic == "NIA") &&
                 !features.hasRealVar && !features.hasMixedIntReal &&
