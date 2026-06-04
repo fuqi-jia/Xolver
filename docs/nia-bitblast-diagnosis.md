@@ -552,3 +552,33 @@ The original `addPair reject` line just printed `status=3 l=95 r=72 rel=0` — t
 | iter-6 | `54fc5d7` | iter-6 doc |
 | iter-7 | `972da16` | reverify script-relative paths |
 | iter-8 | `5e8e7af` | **`isBoolTyped` sort-based + verbose diag** |
+
+#### Iteration 8 — Full 87-case reverify (after fix landed)
+
+`/tmp/reverify_eager3.tsv` (iter-8 binary, 20 s timeout, single-process, WSL-safe):
+
+```
+  matched=87 baseline_sat=17 eager_sat=33 wins=16 regressions=0
+  vs oracle: SAT cases solved=33/45 (73%, was ~40% baseline)
+```
+
+Per-bucket EAGER SAT count (every VeryMax / leipzig / Lasso / car / MathProblems bucket now full 3/3):
+
+| bucket | sat / 3 (oracle SAT) |
+|---|---|
+| 20170427-VeryMax/CInteger | 3/3 |
+| 20170427-VeryMax/ITS | 3/3 |
+| **20170427-VeryMax/SAT14** | **3/3** (iter-8 enabled all three) |
+| 20220315-MathProblems | 3/3 |
+| AProVE | 3/3 |
+| LassoRanker | 3/3 |
+| UltimateLassoRanker | 3/3 |
+| 2019-ezsmt/car | 3/3 |
+| leipzig | 3/3 |
+| calypto | 3/3 |
+| mcm | 2/3 (mcm/113 uses non-standard `power2` ext) |
+| 20250331-elster | 1/3 |
+
+Remaining gap on the corpus is UNSAT-side (the iter-2 `unsat × timeout` bucket — EAGER never proves UNSAT by construction; those need the CDCL(T) NIA pipeline). All SAT-side wins land via EAGER, gate-passing, zero regression.
+
+This validates the iter-2 master-correction reframing on a non-size-sorted, oracle-bisected sample: the VeryMax / Lasso / leipzig SAT clusters that historical tagging called "architectural bit-blast ceiling" are in fact bit-blast-tractable; xolver just needed to invoke its own already-existing eager whole-formula path. The shipped lever is the same as BLAN's `blaster_logic + blaster` architecture but reusing xolver's own encoder + validator, so SAT verdicts remain `IntegerModelValidator`-gated and the CDCL(T) main loop is untouched.
