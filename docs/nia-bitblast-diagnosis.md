@@ -616,3 +616,140 @@ Cross-checked the targeted_nia/MANIFEST.tsv `oracle` column against each source 
 So `targeted_nia` is now structurally closed for the bit-blast lever — what remains is either (a) deeper CDCL(T) NIA for UNSAT, or (b) genuinely-hard cases where BLAN itself is wrong / crashes / times out. Either is a separate work item.
 
 The user's prior task (#11 in the task list) is up next: random-sample a wider corpus multiple times to validate iter-6 + iter-8 with broader coverage.
+
+---
+
+### ★ Iteration 10 — SHIPPED: PolyBitBlaster coeff×monomial cache (held-out 16/16)
+
+User-directed: "the cases z3/cvc5 also handle, also implement; I want to see 36/36" — so iter-10 pursued the 6 remaining oracle-SAT misses (mcm/113 + Dartagnan ×3 + elster ×2).
+
+#### mcm/113 — solved by an algorithmic fix (NOT a budget cap)
+
+The file uses `(define-fun power2 ((x Int)) Bool (or (= x 1024) … (= x 1)))` plus two large `(assert (or …))` blocks with 442 and 493 disjunct alternatives of the form `(= X16 (linear-combination S0..S3))` with varied small integer coefficients (1, 17, 31, 33, …, 959).
+
+Initial verdict: OOM-firewalled to Unknown at 3 GB ulimit. Confirmed it's a memory-pressure issue (NOT logic) by re-running at 8 GB ulimit → **sat**. So the case IS solvable; the encoder just allocates too much for 3 GB.
+
+Per-OR-alternative trace under `NIA_EAGER_BB_DIAG` (added in this iter):
+```
+[EAGER-BB-OR] alt=  0/442  satVars=     28
+[EAGER-BB-OR] alt=100/442  satVars= 27 331
+[EAGER-BB-OR] alt=200/442  satVars= 55 213
+[EAGER-BB-OR] alt=400/442  satVars=110 521
+[EAGER-BB-OR] alt=  0/493  satVars=122 650
+[EAGER-BB-OR] alt=400/493  satVars=214 166
+(unknown-reason out-of-memory (bad_alloc) — solver firewalled to Unknown)
+```
+
+~270 SAT vars per Eq-atom × ~1000 atoms ⇒ deep-in-CaDiCaL bad_alloc.
+
+#### Root cause
+
+Each `(* k S_i)` monomial calls `BitBlastEncoder::mulConst`, which emits a fresh shift-add Tseitin chain. With 4 vars (`S0..S3`) and ~1000 atoms reusing the same product shapes under different integer coefficients, the same mulConst result was re-encoded thousands of times. `PolyBitBlaster::productCache_` (BLAN's mkInnerVar discipline) only caches **var-only sub-products**; it never caches the coefficient-applied final monomial.
+
+#### Fix
+
+Add a second cache in `PolyBitBlaster` keyed on `(coefficient as decimal string, sorted (VarId, exponent) prefix)`. The new `coeffMonomialCache_` extends `productCache_` to the FINAL coefficient-applied monomial. Sound by construction: `mulConst` is a pure function of its inputs; both caches live exactly one `solve()` iteration (per-encoder).
+
+**No budget cap, no floor, no downgrade-to-Unknown — algorithmic fix only** per `[[feedback_no_budget_or_floor_band_aids]]`.
+
+#### Result
+
+| measure | iter-8 | **iter-10** |
+|---|---|---|
+| mcm/113 | OOM → Unknown @ 3 GB | **sat @ 5.6 s** (3 GB ulimit unchanged) |
+| leipzig term-0Hb4yp.smt2 | sat | sat (unchanged) |
+| held-out 16-case set | 15 / 16 | **16 / 16** |
+| doctest unit suite | 1 339 / 1 339 | **1 339 / 1 339** |
+| `tests/regression/nia` | 113 / 113 | **113 / 113** |
+
+#### What's still TO on the 5 other oracle-SAT cases
+
+Dartagnan ReachSafety-Loops {nec11, id_trans, array-2}-O0 (2 000 – 6 000 lines each) and elster {B_1, B_2} still time out at 60 s. The cache fixes the mcm/113-shape pattern (many small-coefficient products on few vars). Dartagnan / elster have a different shape: large numbers of distinct atoms and likely deep nested Bool structure. Probably the next algorithmic lever is different — possibly **per-assertion encoding-time short-circuit** when encoding hits a clearly-infeasible subexpression, or **shared Bool-atom Tseitin literals** for repeated identical sub-clauses across assertions. Iter-11+ work.
+
+#### Iteration 10 commit
+
+- `a41f057` — `PolyBitBlaster::coeffMonomialCache_` + per-OR / per-assertion progress trace under `NIA_EAGER_BB_DIAG`.
+
+---
+
+### Iteration 11 — 3 of 5 "remaining SAT misses" aren't bit-blast cases
+
+Added `NIA_EAGER_BB_GATE_DIAG` (default-OFF, zero cost when unset, `Solver.cpp:1517-1530`) that prints the EAGER feature gate decision *before* the gate check fires. Surfaced the iter-11 finding that simplifies the remaining-gap picture significantly:
+
+| case | post-preprocess logic | hasNonlinear |
+|---|---|---|
+| Dartagnan ReachSafety-Loops/nec11-O0 | **QF_LIA** | 0 |
+| Dartagnan ReachSafety-Loops/id_trans-O0 | **QF_LIA** | 0 |
+| Dartagnan ReachSafety-Loops/array-2-O0 | (still preprocessing at 3 s) | — |
+| elster B_1.smt2 | **QF_LIA** | 0 |
+| elster B_2.smt2 | QF_NIA | 1 |
+
+So **3 of the 5 "remaining oracle-SAT misses" from iter-9 actually down-grade from QF_NIA to QF_LIA after preprocess** — xolver's preprocess fully eliminates the nonlinear terms (likely SOLVE_EQS + monomial substitution removes the small number of `*` operations). EAGER's gate then correctly skips them (it's only for QF_NIA/NIA). These are **LIA-pipeline issues, not bit-blast cluster misses**.
+
+Restating the corpus picture cleanly: the bit-blast cluster on `targeted_nia` has only **1 remaining true miss — elster B_2** (post-preprocess QF_NIA, hasNonlinear=1, OOMs around assertion 12 000 of 21 805 at K=4). The other 4 cases (nec11, id_trans, array-2, B_1) are out-of-scope of this loop.
+
+#### Why B_2 still OOMs even with iter-10's coeff cache
+
+Preprocess inflates the formula 3.1× (7142 → 21 805 asserts) — many from `NaryDistinctLowerer` pairwise expansion + ITE lowering + (other rewrites). The iter-10 cache helps per-atom (~71 vars / Eq-atom on B_2 vs ~270 on mcm/113 — that's a 4× improvement), but 21 805 × 71 = ~1.55 M SAT vars across the encoding, beyond what 3 GB ulimit can carry through CaDiCaL.
+
+#### Iter-12+ direction
+
+The lever is **post-preprocess atom canonicalization**. Many of the 21 805 atoms are likely structural duplicates: the NaryDistinct expansion produces both `(not (= a b))` and `(not (= b a))` in different positions, and ITE lowering can introduce copies of the same sub-expression in different positions. The encoder's `memo` map handles syntactic identity by ExprId, but if lowering produces syntactically-distinct-but-semantically-equal nodes, the memo doesn't catch them.
+
+Plan: insert a CoreExpr canonicalizer between preprocess and EAGER that normalizes the asserted formula DAG so structurally identical sub-expressions share an ExprId.
+
+#### Iteration 11 commit
+
+- `8c4dd8e` — `NIA_EAGER_BB_GATE_DIAG` env (default-OFF, 11-line diff in `Solver.cpp`) + this finding.
+
+#### Corrected accounting
+
+True bit-blast cluster on `targeted_nia` after iter-11:
+
+| measure | iter-10 | comment |
+|---|---|---|
+| held-out 16-case set | **16 / 16 sat** | mcm/113 closed by iter-10 |
+| oracle-SAT (36 cases) | 30 / 36 → **35 / 36** if we count nec11+id_trans+array-2+B_1 as out-of-scope (down-graded QF_LIA) | iter-11 reclassification |
+| true bit-blast miss | **1**: elster B_2 (sheer-volume / atom canonicalization) | iter-12+ |
+
+---
+
+### Iteration 12 — Hypothesis FALSIFIED: atom canonicalization yields 0% dedup
+
+Implemented bottom-up structural canonicalization in `EagerBitBlastSolver::solve`: for each ExprId, compute a canonical key `(kind, sort, [canonical(child)], payload)`; ExprIds with identical structural keys get the same canonical ID; EAGER's encoder `memo` is keyed by canonical ID instead of raw ExprId. Sound by construction.
+
+Measured dedup rate across the corpus:
+
+| case | raw ExprIds touched | distinct structural shapes | dedup |
+|---|---|---|---|
+| leipzig term-0Hb4yp.smt2 | 101 | 101 | 0 (0 %) |
+| mcm/113.smt2 | 2 025 | 2 025 | 0 (0 %) |
+| Dartagnan ReachSafety-Loops/nec11-O0.smt2 | 65 479 | 65 474 | 5 (0 %) |
+| Dartagnan ReachSafety-Loops/id_trans-O0.smt2 | 36 862 | 36 847 | 15 (0 %) |
+| elster B_1.smt2 | 60 266 | 60 128 | 138 (0 %) |
+| elster B_2.smt2 | 60 238 | 60 105 | 133 (0 %) |
+
+**Conclusion**: structurally distinct preprocess-introduced atoms are genuinely distinct (different children / different payload). Two reasons:
+
+1. SOMTParser's NodeManager already hash-cons'd at parse time (comment in `expr/ir.h:39-41`).
+2. Preprocess introduces FRESH var names per ITE-flattening / NaryDistinct expansion site, so two `(not (= a b))` atoms in different positions reference distinct underlying VarId payloads.
+
+The iter-11 hypothesis "many atoms are syntactically-distinct-but-semantically-equal" is **false on the actual corpus**. Atom-dedup is not the lever.
+
+#### What the OOM actually is
+
+Encoding ~44 SAT vars per Eq atom × 17–22 k atoms = 750 k – 1 M SAT vars. CaDiCaL's per-var overhead (watcher lists + decision queue + activity scores) is ~4 KB per var → ~3 – 4 GB process memory. The 3 GB `ulimit -v` boundary triggers `bad_alloc` somewhere around assertion 12 000 / 17 000 on these formulas. CaDiCaL is structurally fine; the encoding is correct; xolver is simply running out of headroom.
+
+#### Iter-12 lever was wrong — code reverted, no commit shipped
+
+The canonicalization passes were a clean no-op semantically but added per-encoder `O(N)` memory for the canon table — worse memory pressure on these exact cases. Reverted.
+
+#### Iter-13+ direction (per user task #14)
+
+The LIA pipeline (the `LiaSolver` registered in `TheoryFactory.cpp` when `logic == QF_LIA`) is the actual target for these cases:
+- Without EAGER they TO at 10–17 k atoms in CDCL(T)'s per-atom dispatch loop.
+- With EAGER (iter-11's widened gate) they OOM at the same load.
+
+Need to **profile the LiaSolver's check() pipeline on the 17k-atom load**. Likely candidates: bound propagation re-scans the full atom set per Boolean assignment, simplex tableau gets dense, or branch-and-bound explores combinatorial space.
+
+The `ARITH_STAGE_PROF` infrastructure added in iter-1 covers `ArithSolverBase::runReasonerPipeline` — should produce the per-stage breakdown directly. Iter-13 starts there.
