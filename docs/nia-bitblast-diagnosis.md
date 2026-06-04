@@ -156,6 +156,58 @@ Otherwise: keep diagnosing. A no-code iteration that pins a layer is a success.
 
 ## Per-category root-cause log (appended per iteration)
 
-### category: (TBD after reverify)
+### Iteration 2 — BLAN-vs-xolver encoding-size gap on leipzig
 
-(will be filled after iter 2 once `/tmp/reverify1.tsv` is consumed)
+Ran `/mnt/d/D_Study/BUAA/projects/BLAN/BLAN targeted_nia/QF_NIA/leipzig/term-0Hb4yp.smt2`:
+
+```
+[BLAN-DIAG] satVars=5875 clauses=27101
+sat
+```
+
+**Comparison on the canonical case:**
+
+| solver | result | SAT vars | clauses |
+|---|---|---|---|
+| BLAN | sat | **5 875** | 27 101 |
+| xolver K=16 (cascade) | timeout | **56 517** | — |
+
+xolver's encoding is **~9.6× larger** in SAT vars. CaDiCaL cost is super-linear in vars; the 10× gap explains the wall-clock gap.
+
+#### Encoding audit findings — xolver vs BLAN
+
+Compared `src/theory/arith/bit_blast/{BitBlastEncoder,PolyBitBlaster}.cpp` against `BLAN/solvers/blaster/blaster_operations.cpp::Multiply`:
+
+1. **xolver IS using BLAN's varmin layout** — `mul()` picks the wider operand as multiplicand and emits exactly `Y.width()` partial products. Comment at `BitBlastEncoder.cpp:202-206` explicitly calls this out. Verified at lines 212-226. *This lever is already pulled.*
+2. **xolver has BLAN's MultiplyInt** (const × var = shift-add over set bits of |c|) at `mulConst()`. Verified.
+3. **xolver has the BLAN square-pinning optimisation** (`x*x` sign bit = 0) at `mul()` lines 227-231. Verified.
+4. **xolver has BLAN's CSE on monomial prefixes** (`productCache_` in `PolyBitBlaster.cpp:30-36`). Verified.
+
+The algorithmic levers BLAN uses are *already in xolver*. The 9.6× gap is **not** from multiplier-algorithm differences. Candidates remaining:
+
+5. **Two's-complement vs unsigned representation. ★ Highest-leverage candidate.** xolver allocates every var as two's-complement: K bits = sign + (K-1) magnitude. For leipzig all 38 vars are `>=0`, sign is pinned to 0 by `encodeDomainBounds`, so K-1 magnitude bits are spent for ≤(K-1) bits of real value. *Multiplications cost (K)·(K) two's-complement partials instead of (K-1)·(K-1) unsigned partials* — and the *result width is 2K instead of 2(K-1)*. At K=16 that's 32-bit products and ~2× the partial-product gate count. BLAN's `bvar` carries `csize` distinct from `size`, so a non-negative var has `csize=K-1` and the multiplier honours it.
+6. **NIA normalizer doubling**: `NiaNormalizer` may split each `n_i = n_a · n_b` Eq atom into Geq + Leq (each independently encoded), doubling the bit-blast cost. Need to confirm by counting `normalized_.size()` (39 after preprocess per `[PHASE]`) vs raw equality atoms.
+7. **Sign-bit padding in `addFixed`**: xolver pads the addend at `addFixed(acc, addend, w)` to width `w` (the full mul output width). BLAN's `ShiftAdd(subsum, subans, answer, i)` accumulates a *narrower* `subans` (width `len+1-i`) at position `i`. Lower-leverage than (5).
+
+#### Decision for iteration 3
+
+Pursue **finding 5** (unsigned representation for non-negative vars) as the highest-leverage diagnostic, with a strict opt-in flag and validator gate:
+
+- New env `XOLVER_NIA_BITBLAST_UNSIGNED_HINT` (default-OFF).
+- In `BitBlastSolver::solve`: when every var in `domains` has `hasLower && lower.value >= 0`, switch to **unsigned representation** — each var gets K magnitude bits (no sign bit), and `mul`/`add` use unsigned widths. The cascade still grows K.
+- The SAT model is validated by `IntegerModelValidator` over the original (signed-int) NIA constraints → soundness preserved by construction.
+- Compare gate count + wall on leipzig with the flag ON to verify the gap collapses.
+
+Iter 3 will collect the evidence; iter 4+ may commit per the standard gate.
+
+#### Reverify status (in progress, will land before iter 3)
+
+- `bky8zj11x` writing `/tmp/reverify_clean.tsv` (rebuilt binary, 20 s timeout, no concurrent rebuild). At iter-2 snapshot: 32/88 lines, mix `28 timeout / 3 unknown / 1 sat` — confirms the corpus is heavily live.
+- BLAN-only sweep `b2eoy9gjo` writing `/tmp/blan_only.tsv` over corpus → per-case BLAN verdict + var/clause counts. Combined with reverify_clean, iteration 3 can compute the 3-way `{oracle, BLAN, xolver}` verdict matrix and isolate:
+  - **oracle=SAT ∧ BLAN=SAT ∧ xolver=TO**: the bit-blast gap — fix via finding 5.
+  - **oracle=SAT ∧ BLAN=TO ∧ xolver=TO** (per user instruction): use CAC / CDCAC / local-search, *not* bit-blast.
+  - **oracle=UNSAT ∧ xolver=TO** (per user instruction): UNSAT-recovery via modular / GCD / algebraic / presolve.
+
+#### Open questions for the next iteration
+
+- Should xolver emit a `[BB-DIAG] encode-stats varCount=X clauseCount=Y` line at every attempt? One-line addition; makes iter-3 evidence-collection mechanical (sed-able).
