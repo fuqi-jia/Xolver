@@ -171,11 +171,24 @@ private:
     // a wrong cut only over-prunes (misses a model → falls through), never a wrong
     // verdict. Reset per solve. NOT a budget — the search pruning is algorithmic.
     bool satNlsatEnabled_ = false;
-    struct SatCut { RationalPolynomial poly; Relation rel; };  // derived lemma: poly rel 0
-    std::vector<SatCut> satDerived_;
+    // A learned infeasible CELL over the lower (already-assigned) variables: the
+    // CONJUNCTION of sign conditions on the projection polynomials that, when ALL
+    // hold, proved the just-conflicted variable infeasible. Pruning the INTERSECTION
+    // (this exact sign-cell) — not each half-space independently — is what makes the
+    // generalization sound-for-completeness: it excludes only the region the
+    // projection certifies infeasible, never the SAT region. (Storing per-poly cuts
+    // and pruning on ANY-violation excluded the UNION of half-spaces ⇒ over-pruned
+    // the model — the iter-18 net-negative.)
+    struct SatSignCond { RationalPolynomial poly; int sign; };  // sgn(poly) == sign over lower vars
+    struct SatDeadCell { int level; std::vector<SatSignCond> conds; };  // conds ALL hold ⇒ var[level] infeasible
+    std::vector<SatDeadCell> satDerivedCells_;
     std::unique_ptr<ProjectionPolicy> satExplainPolicy_;
     void projectConflictCore(int k, VarId var, const SamplePoint& prefix,
                              const CdcacInput& input);
+    // True if the lower-var assignment `m` matches ALL sign conditions of some
+    // learned dead cell at this `level` ⇒ var[level] is infeasible here, so prune
+    // the whole subtree without sampling it. (Intersection match, not union.)
+    bool prefixInLearnedDeadCell(int level, const std::unordered_map<VarId, mpq_class>& m) const;
     // Magnitude bound (bits) on sampled cell representatives. SAT-first samples
     // the SIMPLEST rational in each feasible cell (smallest-denominator dyadic) and
     // discards any whose numerator/denominator exceeds this — an ADDITIVE search

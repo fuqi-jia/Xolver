@@ -639,7 +639,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // through to the projection engine, byte-identical to before. Default-OFF.
     if (satFirstEnabled_ && !satFirstTried_ && !input.varOrder.empty()) {
         satFirstTried_ = true;
-        satDerived_.clear();   // increment 3: fresh learned-cut set per solve
+        satDerivedCells_.clear();   // increment 3: fresh learned dead-cell set per solve
         // Precompute per-constraint safety once: a poly whose denominator-cleared
         // integer coefficients would exceed the cap is skipped for delineation (the
         // libpoly heap-corruption class — same cap as the projection firewall). The
@@ -1558,6 +1558,12 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
     }
     if (budget <= 0) return CdcacResult::mkUnknown(CdcacUnknownReason::None);
     VarId var = input.varOrder[k];
+    // Increment 3: if this lower-var prefix matches a learned dead cell for level
+    // k, var k is already known infeasible here — prune the whole subtree (sound
+    // for SAT: the projection cell certifies infeasibility; a too-coarse cell only
+    // misses a model, never a wrong verdict).
+    if (satNlsatEnabled_ && k > 0 && prefixInLearnedDeadCell(k, buildMap()))
+        return CdcacResult::mkUnknown(CdcacUnknownReason::None);
     std::vector<mpq_class> cands = satSampleCandidates(k, prefix, input);
     std::unordered_set<VarId> assigned;
     for (VarId v : prefix.varOrder) assigned.insert(v);
@@ -1589,21 +1595,8 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
             if (!allAssigned) continue;
             if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel)) { pruned = true; break; }
         }
-        // Increment 3: also reject against LEARNED cuts (lazy projection lemmas).
-        // A cut "p rel 0" with all its (lower) vars assigned prunes the same bad
-        // prefix region that already proved var-k-infeasible elsewhere — so the
-        // re-search never re-descends into it. Soundness-safe: SAT only on a
-        // validated leaf, so an over-eager cut can only miss a model (fall
-        // through), never flip a verdict.
-        if (!pruned && satNlsatEnabled_) {
-            for (const auto& cut : satDerived_) {
-                bool allAssigned = true;
-                for (VarId v : cut.poly.variables())
-                    if (!assigned.count(v)) { allAssigned = false; break; }
-                if (!allAssigned) continue;
-                if (!satRelHolds(exactSignAt(cut.poly, m), cut.rel)) { pruned = true; break; }
-            }
-        }
+        // (Learned dead cells are checked once per prefix at the TOP of the level,
+        // not per-candidate — they constrain the lower vars, not var k.)
         if (pruned) { prefix.pop(); continue; }
         anyFeasible = true;
         CdcacResult r = trySatSampleFirst(k + 1, prefix, input, budget);
@@ -1624,12 +1617,13 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
 // Increment 3: lazy conflict-driven projection. var k's feasible set is empty
 // under `prefix`; gather the univariate-in-k constraints (the only polys that
 // can have pruned here — lower-only constraints were already satisfied by the
-// surviving prefix) as the conflict core, project them ELIMINATING var k via a
-// Collins policy, and turn each projected polynomial p(lower vars) into a cut.
-// p evaluated at the conflict prefix has a definite sign s; the bad region is
-// "p keeps sign s", so the cut excludes it: s>0 ⇒ (p<=0), s<0 ⇒ (p>=0). The
-// boundary p==0 is the cell wall where var-k's root structure changes, so the
-// re-search is steered off the dead cell toward a neighbouring one.
+// surviving prefix) as the conflict core, project them ELIMINATING var k, and
+// record ONE dead CELL = the conjunction of the projected polys' current signs
+// at the prefix. That sign-cell is where var k's root structure (hence its empty
+// feasibility) is invariant, so any sibling prefix in the SAME cell is also
+// infeasible for var k and is pruned (prefixInLearnedDeadCell). Pruning the
+// intersection (all signs match), not each half-space's union, is what keeps it
+// from excluding the SAT region (the iter-18 over-prune bug).
 void CdcacCore::projectConflictCore(int k, VarId var, const SamplePoint& prefix,
                                     const CdcacInput& input) {
     if (!satExplainPolicy_)
@@ -1648,15 +1642,22 @@ void CdcacCore::projectConflictCore(int k, VarId var, const SamplePoint& prefix,
     // EXACTLY as the committed baseline (which already finds matrix-1's model).
     // This guards the OPTIONAL learning step — it never turns a model into
     // unknown (NOT a solve budget).
+    // Defaults widened (was 2/3/3) now that learned conflicts are CELLS (sign
+    // conjunctions), not union half-spaces: more polys in the core → more sign
+    // conditions → a MORE specific cell → prunes only the certified-infeasible
+    // region (tight defaults made coarse cells that over-pruned the SAT region —
+    // matrix-1 NLSAT was TO, now sat with these). Lazy projection is tractable at
+    // this width (iter-18: no explosion even at 12/30/16). Still bounded so a
+    // single conflict's projection stays cheap.
     static const int kMaxCoreVars =
-        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 2) > 0
-            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 2) : 2;
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 8) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_VARS", 8) : 8;
     static const int kMaxCorePolys =
-        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 3) > 0
-            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 3) : 3;
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 20) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_CORE_POLYS", 20) : 20;
     static const int kMaxElimDeg =
-        env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 3) > 0
-            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 3) : 3;
+        env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 10) > 0
+            ? env::paramInt("XOLVER_NRA_NLSAT_MAX_ELIM_DEG", 10) : 10;
 
     // Degree of `rp` in var `var` (max monomial exponent of var).
     auto degInVar = [&](const RationalPolynomial& rp) {
@@ -1728,20 +1729,49 @@ void CdcacCore::projectConflictCore(int k, VarId var, const SamplePoint& prefix,
         if (prefix.values[i].isRational())
             m.emplace(prefix.varOrder[i], prefix.values[i].rational);
 
+    // Build ONE dead cell = the CONJUNCTION of the projection polys' current signs
+    // at the conflict prefix. This is the McCallum/Lazard sign-invariant cell of the
+    // lower vars over which var k's root structure (hence its empty feasibility) is
+    // constant. Pruning the INTERSECTION of these sign conditions (all must match)
+    // excludes only the certified-infeasible cell — NOT each half-space's union,
+    // which over-pruned the SAT region (iter 18). A poly with sign 0 at the prefix
+    // sits on a cell wall; include it as a == 0 condition (the wall is part of the
+    // cell boundary). Soundness-for-SAT: a too-coarse cell only misses a model.
+    std::vector<SatSignCond> conds;
     for (const auto& rp : pr.projectionPolys) {
         if (rp.poly.contains(var)) continue;   // must be eliminated (over prefix vars only)
-        if (projectedPolyIntractable(rp.poly)) continue;  // don't store a huge cut (slow exactSignAt)
+        if (projectedPolyIntractable(rp.poly)) continue;  // skip a huge poly (slow exactSignAt)
         bool allAssigned = true;
         for (VarId v : rp.poly.variables())
             if (!m.count(v)) { allAssigned = false; break; }
         if (!allAssigned) continue;
-        int s = exactSignAt(rp.poly, m);
-        Relation rel;
-        if (s > 0) rel = Relation::Leq;        // bad region is p>0 ⇒ keep p<=0
-        else if (s < 0) rel = Relation::Geq;   // bad region is p<0 ⇒ keep p>=0
-        else continue;                          // on the cell wall — no directional cut
-        satDerived_.push_back({rp.poly, rel});
+        if (rp.poly.variables().empty()) continue;   // constant ⇒ no cell constraint
+        conds.push_back({rp.poly, exactSignAt(rp.poly, m)});
     }
+    // Need ≥1 non-trivial sign condition to define a cell; an empty conjunction
+    // would match EVERY prefix (prune everything) — refuse it.
+    if (!conds.empty())
+        satDerivedCells_.push_back({k, std::move(conds)});
+}
+
+// True iff the lower-var assignment `m` matches ALL sign conditions of some learned
+// dead cell tagged for this `level`. That certifies var[level] infeasible here, so
+// the caller prunes the subtree. Intersection (every cond) — never union.
+bool CdcacCore::prefixInLearnedDeadCell(int level,
+                                        const std::unordered_map<VarId, mpq_class>& m) const {
+    for (const auto& cell : satDerivedCells_) {
+        if (cell.level != level || cell.conds.empty()) continue;
+        bool allMatch = true;
+        for (const auto& c : cell.conds) {
+            // every var of the cell poly must be assigned in m (lower vars are)
+            bool ok = true;
+            for (VarId v : c.poly.variables())
+                if (!m.count(v)) { ok = false; break; }
+            if (!ok || exactSignAt(c.poly, m) != c.sign) { allMatch = false; break; }
+        }
+        if (allMatch) return true;   // prefix inside a certified-infeasible cell
+    }
+    return false;
 }
 
 Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const SamplePoint& /*sample*/, VarId /*var*/) {
