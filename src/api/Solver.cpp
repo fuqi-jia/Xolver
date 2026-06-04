@@ -1314,6 +1314,33 @@ public:
             }
         }
 
+        // Mirror for QF_NIA → QF_LIA. The same correctness argument applies:
+        // `features.hasNonlinear` is the structural linearity gate (Mul ≥ 2
+        // non-consts, Pow, Div by non-const). Mod by a CONSTANT divisor is NOT
+        // flagged nonlinear (LogicFeatureDetector.cpp Kind::Mod sets only
+        // hasInterpretedArithmetic), matching QF_LIA's allowed div/mod with
+        // constant divisor. UltimateAutomizer's `linear_sea.ch_*` family (z3
+        // <60 ms, xolver pre-fix TIMEOUT 30 s) is the canonical target: every
+        // arithmetic atom is linear-with-constant-mod, but the file declares
+        // QF_NIA so xolver dispatches to NIA's heavy reasoners. Routing to LIA
+        // lets the LIA pipeline (simplex + integer reasoning) decide them.
+        //
+        // Soundness: a missed nonlinear term that slips past the detector
+        // would fail downstream extraction and the solver returns UNKNOWN —
+        // never SAT/UNSAT. Opt-out via XOLVER_NIA_LINEAR_DOWNGRADE=0.
+        {
+            bool linDgEnabled = true;
+            if (const char* e = std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE"))
+                linDgEnabled = !(e[0] == '0' && e[1] == '\0');
+            if (linDgEnabled && !features.hasNonlinear &&
+                (logic == "QF_NIA" || logic == "NIA")) {
+                if (std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
+                    std::cerr << "[NIA-LINEAR-DOWNGRADE] " << logic
+                              << " -> QF_LIA (no nonlinear terms)\n";
+                logic = "QF_LIA";
+            }
+        }
+
         // -------------------------------------------------------------------
         // Mismatch guard: declared logic must cover detected features
         // -------------------------------------------------------------------
