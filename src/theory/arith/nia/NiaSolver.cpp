@@ -152,7 +152,16 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // unknown at Full effort (e.g. the Zohar intand/intor bit-width cases regress
     // unsat -> unknown). So keep it gated default-OFF until that completeness gap
     // is closed; promote only after the unit + regression gate stays green ON.
-    if (const char* e = std::getenv("XOLVER_NIA_PRESOLVE_FULL"); e && *e && *e != '0')
+    //
+    // Iter#24 measurement: 16 reg buckets + AProVE 100-sample pass with
+    // XOLVER_NIA_PRESOLVE_FULL=1 under iter#21's 50 ms presolve deadline cap.
+    // BUT the Zohar intand/intor cases are not in the local reg suite, so this
+    // is necessary-but-not-sufficient evidence — promotion requires a panda
+    // differential that exercises the historic Zohar regression.
+    //
+    // Use env::paramInt instead of getenv so the autotuner dump
+    // (XOLVER_DUMP_PARAMS) sees this knob in its registered-param list.
+    if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
         add("nia.presolve",     &NiaSolver::stagePresolveFixpoint);
