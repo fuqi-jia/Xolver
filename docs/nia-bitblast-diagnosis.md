@@ -669,3 +669,45 @@ Dartagnan ReachSafety-Loops {nec11, id_trans, array-2}-O0 (2 000 – 6 000 lines
 #### Iteration 10 commit
 
 - `a41f057` — `PolyBitBlaster::coeffMonomialCache_` + per-OR / per-assertion progress trace under `NIA_EAGER_BB_DIAG`.
+
+---
+
+### Iteration 11 — 3 of 5 "remaining SAT misses" aren't bit-blast cases
+
+Added `NIA_EAGER_BB_GATE_DIAG` (default-OFF, zero cost when unset, `Solver.cpp:1517-1530`) that prints the EAGER feature gate decision *before* the gate check fires. Surfaced the iter-11 finding that simplifies the remaining-gap picture significantly:
+
+| case | post-preprocess logic | hasNonlinear |
+|---|---|---|
+| Dartagnan ReachSafety-Loops/nec11-O0 | **QF_LIA** | 0 |
+| Dartagnan ReachSafety-Loops/id_trans-O0 | **QF_LIA** | 0 |
+| Dartagnan ReachSafety-Loops/array-2-O0 | (still preprocessing at 3 s) | — |
+| elster B_1.smt2 | **QF_LIA** | 0 |
+| elster B_2.smt2 | QF_NIA | 1 |
+
+So **3 of the 5 "remaining oracle-SAT misses" from iter-9 actually down-grade from QF_NIA to QF_LIA after preprocess** — xolver's preprocess fully eliminates the nonlinear terms (likely SOLVE_EQS + monomial substitution removes the small number of `*` operations). EAGER's gate then correctly skips them (it's only for QF_NIA/NIA). These are **LIA-pipeline issues, not bit-blast cluster misses**.
+
+Restating the corpus picture cleanly: the bit-blast cluster on `targeted_nia` has only **1 remaining true miss — elster B_2** (post-preprocess QF_NIA, hasNonlinear=1, OOMs around assertion 12 000 of 21 805 at K=4). The other 4 cases (nec11, id_trans, array-2, B_1) are out-of-scope of this loop.
+
+#### Why B_2 still OOMs even with iter-10's coeff cache
+
+Preprocess inflates the formula 3.1× (7142 → 21 805 asserts) — many from `NaryDistinctLowerer` pairwise expansion + ITE lowering + (other rewrites). The iter-10 cache helps per-atom (~71 vars / Eq-atom on B_2 vs ~270 on mcm/113 — that's a 4× improvement), but 21 805 × 71 = ~1.55 M SAT vars across the encoding, beyond what 3 GB ulimit can carry through CaDiCaL.
+
+#### Iter-12+ direction
+
+The lever is **post-preprocess atom canonicalization**. Many of the 21 805 atoms are likely structural duplicates: the NaryDistinct expansion produces both `(not (= a b))` and `(not (= b a))` in different positions, and ITE lowering can introduce copies of the same sub-expression in different positions. The encoder's `memo` map handles syntactic identity by ExprId, but if lowering produces syntactically-distinct-but-semantically-equal nodes, the memo doesn't catch them.
+
+Plan: insert a CoreExpr canonicalizer between preprocess and EAGER that normalizes the asserted formula DAG so structurally identical sub-expressions share an ExprId.
+
+#### Iteration 11 commit
+
+- `8c4dd8e` — `NIA_EAGER_BB_GATE_DIAG` env (default-OFF, 11-line diff in `Solver.cpp`) + this finding.
+
+#### Corrected accounting
+
+True bit-blast cluster on `targeted_nia` after iter-11:
+
+| measure | iter-10 | comment |
+|---|---|---|
+| held-out 16-case set | **16 / 16 sat** | mcm/113 closed by iter-10 |
+| oracle-SAT (36 cases) | 30 / 36 → **35 / 36** if we count nec11+id_trans+array-2+B_1 as out-of-scope (down-graded QF_LIA) | iter-11 reclassification |
+| true bit-blast miss | **1**: elster B_2 (sheer-volume / atom canonicalization) | iter-12+ |
