@@ -1473,9 +1473,22 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort) {
+    // DEFAULT-ON (2026-06-05): run the WHOLE-problem bit-blast early — while the
+    // variable box is still free — instead of leaving it to the FULL-effort
+    // nia.bit-blast which fires once the SAT search has PINNED the small bounded
+    // vars to a specific (often wrong) branch. On a box-INCOMPLETE pinned branch
+    // (unbounded beta/gamma, e.g. the GrandProduct prime-field grand product) the
+    // late per-branch path cannot prove the branch UNSAT, so it escalates width
+    // K=2→128 and allocates ~3.3 GB before the firewall — a real OOM bug, NOT a
+    // resource wall (z3 solves the same case instantly). Searching the whole free
+    // problem once keeps the encoding bounded (~0.6 GB) and lets the SAT solver
+    // explore all branches together. This is an ALGORITHMIC fix (search strategy),
+    // not a width/budget cap. The >=50 active-constraint gate below preserves the
+    // small-case behavior (BB_EARLY's per-call cost regressed tiny UNSAT cases
+    // before that gate). Opt-out: XOLVER_NIA_BB_EARLY=0.
     static const bool earlyEnabled = [] {
         const char* e = std::getenv("XOLVER_NIA_BB_EARLY");
-        return e && *e && *e != '0';
+        return !e || (*e && *e != '0');   // default ON; only "0" disables
     }();
     if (!earlyEnabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
