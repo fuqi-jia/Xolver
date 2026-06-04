@@ -275,3 +275,64 @@ Combined with the two's-complement (signed) overhead from iter-2 finding 5, the 
 - Consume `/tmp/reverify_clean.tsv` (xolver, complete) and `/tmp/blan_only.tsv` (BLAN, complete).
 - Filter to the **`oracle=SAT ∧ BLAN=SAT_<10s ∧ xolver=TO`** subset → that is the iter-3 held-out set for the K-step fix.
 - Implement lever (1) on `agent/nia-bb-3`, build incrementally, validate on held-out, then full-suite gates.
+
+---
+
+### Iteration 3 — K_STEP=1 and UNSIGNED_HINT levers (NEGATIVE result)
+
+Built **BitBlastSolver.cpp** with `XOLVER_NIA_BITBLAST_K_STEP` (default 0 = legacy ×2; >0 = linear K += step), `XOLVER_NIA_BITBLAST_K_START` (default 2), and `XOLVER_NIA_BITBLAST_UNSIGNED_HINT` (default-OFF; allocates K+1 bits for non-negative vars so K magnitude bits match BLAN's `csize=K`).
+
+#### Held-out validation (16 cases, oracle=SAT ∧ BLAN=SAT<10s ∧ xolver=TO)
+
+| profile | sat wins | timeouts |
+|---|---|---|
+| baseline (legacy ×2 cascade) | 0 | 16 |
+| K_STEP=1 | 0 | 16 |
+| K_STEP=1 ∧ K_START=6 (BLAN def for mul_cnt<256) | 0 | 16 |
+| K_STEP=1 ∧ UNSIGNED_HINT=1 | 0 | 16 (most partial; aborted ~11) |
+
+**All four xolver profiles return zero SAT wins on the held-out.** The K-cascade granularity + sign-bit overhead are NOT the bottleneck.
+
+#### Cascade-trace evidence on leipzig under each profile
+
+```
+K_STEP=1, K_START=2:
+  K= 2: 1 795 vars UNSAT     K= 7:  12 426 vars UNSAT
+  K= 3: 3 126 vars UNSAT     K= 8:  15 741 vars UNSAT
+  K= 4: 4 857 vars UNSAT     K= 9:  19 452 vars UNSAT
+  K= 5: 6 984 vars UNSAT     K=10:  23 559 vars UNSAT
+  K= 6: 9 507 vars UNSAT     K=11:  28 062 vars UNSAT
+                              K=12:  32 961 vars UNSAT   ← cut by TO
+
+K_STEP=1, UNSIGNED_HINT=1 (K+1 bits / non-neg var):
+  K= 2: 2 498 vars UNSAT     K= 7:  17 816 vars UNSAT
+  K= 3: 4 061 vars UNSAT     K= 8:  21 755 vars UNSAT
+  K= 4: 6 020 vars UNSAT     K= 9:  26 090 vars UNSAT
+  K= 5: 8 375 vars UNSAT     K=10:  30 821 vars UNSAT
+  K= 6: 11 126 vars UNSAT    K=11:  35 948 vars UNSAT   ← cut by TO
+```
+
+**Every K xolver tries returns UNSAT.** BLAN solves the same problem at 5 875 vars / 27 101 clauses → **SAT**. The verdict disagreement at comparable encoding sizes (BLAN 5 875 SAT vs xolver K=5 6 984 UNSAT or K=4 4 857 UNSAT) means the encoding **semantics** differ — not the size, not the cascade, not the sign-bit width.
+
+#### Pinned new root cause — BLAN preprocessor product-elimination
+
+Read `BLAN/midend/preprocessor.cpp::simplify`. BLAN runs **`proper->rewrite()` ("propagation rewriting") TWICE** (lines 123 and 170), with `thector->rewrite()` (Collector) between, then an "all eliminated → `auto_set_model()`" SAT branch at line 180-184.
+
+xolver dumped normalized leipzig as 38 constraints: 8 simple bounds (`n0…n7 >= 0`) and 30 product-equality definitions (`n8 = n4·n7`, `n14 = n7·n8 + n6·n7`, …). BLAN's propagation rewriter **substitutes** each `n_i = poly` definition across the rest of the formula. The leipzig formula has **chained product definitions** — every `n_i = …` defines `n_i` once and the var is only ever used in subsequent product equations. A naive substitution pass cascades through the chain and reduces the formula to a much smaller core (or, if every n_i is bound, eliminates everything → `auto_set_model`).
+
+xolver has SOLVE_EQS for LINEAR equality elimination (Solver.cpp:913) — it does NOT eliminate nonlinear product definitions like `n_i = n_a · n_b`. That's the BLAN advantage on the VeryMax termination cluster.
+
+#### Iteration 4 plan — Product-definition substitution preprocessor
+
+- New env `XOLVER_NIA_PRODUCT_SUBST` (default-OFF). A pre-pass over the formula that recognises `(= V (* a b))` / `(= V (+ … (* a b)))` shapes where V appears in no other `define`-style atom, and substitutes V's definition everywhere downstream. Soundness preserved trivially: the substitution is value-preserving.
+- Implementation site: `src/api/Solver.cpp` between SOLVE_EQS and ITE-lowering; OR inside `NiaNormalizer` once-per-problem.
+- Held-out wins gate: ≥ 2 NEW SAT solves on the 16-case held-out set under K_STEP=0 ∧ UNSIGNED_HINT=0 (i.e. show the lever wins ALONE before stacking).
+- Standard A1+A2+A3 + ship-config (no default-on for NIA).
+
+#### Iteration 3 commits (diag-only, no fix)
+
+- `BitBlastSolver.cpp` edits stay in the working tree on `agent/nia-bb-3` but are NOT committed yet (no held-out wins → fail gate). They will be revived if iter-4 + UNSIGNED_HINT combines for a net win, or reverted if iter-4 alone is sufficient. Tools (`tools/heldout_validate.sh`, `tools/heldout_delta.sh`) are committed (general-purpose harness, not lever-specific).
+
+#### Notes on A2-NRA interaction
+
+While iterating, the A2-NRA agent's in-flight `CdcacCore.cpp/.h` had a 4-arg-vs-5-arg signature mismatch that broke the build. Stashed it (`A2 NRA in-flight CdcacCore — restore after iter3`) and continued. **Iter-4 entry: pop the stash so A2 work is preserved.**
