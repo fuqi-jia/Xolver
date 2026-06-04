@@ -240,6 +240,8 @@ public:
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
+        validator.setNumericArrayElements(
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0);
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
         // verdict so a floored array sat can be root-caused (which assertion,
         // which interp). Never affects the verdict.
@@ -361,13 +363,108 @@ public:
                 }
             }
         }
+        // --- Array-read bridge model back-fill -----------------------------
+        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default ON.)
+        // The Purifier bridges each arithmetic array-read into a fresh shared
+        // scalar via the assertion `(= v (select A idx))` (routed to EUF). The
+        // arith theory assigns v a value, but EUF's array model does not
+        // back-fill A[idx] with it, so the validator re-evaluates `(select A
+        // idx)` to the array DEFAULT — a genuine sat whose witness flows through
+        // a div/mod-over-array-read (the QF_ANIA UltimateAutomizer select-sum-mod
+        // class) then fails to confirm and is floored to Unknown. UF apps do not
+        // hit this: their bridge value lives in partialFuncModel_/functionInterps.
+        // Complete the array interpretation from the bridges the solver already
+        // satisfied: for each `(= v (select A idx))` with A a NAMED array
+        // variable, set A[eval(idx)] = eval(v) in a local copy of the interps.
+        // SOUND: the equality holds in the model (theory reported consistent), so
+        // this only makes the array interp agree with a fact the model commits
+        // to; the validator still independently re-checks every ORIGINAL
+        // assertion, so a wrong model is never confirmed. Conflicting back-fills
+        // (same index, different value) are skipped (conservative). Nested reads
+        // `(select (select m b) i)` are left for the array operand resolves to a
+        // non-variable — a follow-up (covers the 15 non-nested QF_ANIA today).
+        // --- Array-read bridge model completion --------------------------
+        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default OFF — opt-in; promotion gated
+        //  on the +2 QF_ANIA vs alra_010-class differential.)
+        // The Purifier bridges each arithmetic array-read into a fresh shared
+        // scalar via the assertion `(= v (select A idx))` (routed to EUF). The
+        // arith theory assigns v a concrete value, but EUF's array-model export
+        // does NOT reflect it, so the validator re-evaluates `(select A idx)` to a
+        // stale default — a genuine sat whose witness flows through a
+        // div/mod-over-array-read (the QF_ANIA UltimateAutomizer select-sum-mod
+        // class) is then floored to Unknown. UF apps don't hit this: their value
+        // lives in functionInterps. Surface each bridged read's value to the
+        // validator KEYED BY THE SELECT NODE (ExprId): the value travels as a
+        // typed RealValue (no string token round-trip) and the validator returns
+        // it directly when it reaches that select term. SOUND: the bridge equality
+        // holds in the model (theory reported consistent), and the validator still
+        // independently re-checks every ORIGINAL assertion, so a globally
+        // inconsistent value leaves the verdict Unknown — never a wrong sat.
+        ArithModelValidator::SelectOverrideMap selBridge;
+        const bool arrBridgeModel =
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0;
+        if (arrBridgeModel) {
+            // Evaluate bridge indices with the FULL numeric channel: a compound
+            // index may itself be a bridged shared scalar (opaque-token tagged,
+            // hence excluded from numAsg as an opaqueScalar); its concrete value
+            // lives in numericAssignments. Re-admit those here so index eval
+            // matches what the validator computes for the ORIGINAL select's index.
+            ArithModelValidator::NumAssignment numAsgFull = numAsg;
+            for (const auto& [nm, rv2] : lastModel_->numericAssignments)
+                if (auto q = rv2.tryAsRational()) numAsgFull[nm] = *q;
+            ArithModelValidator idxEval(*ir, numAsgFull, boolAsg);
+            for (ExprId aid : ir->assertions()) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                ExprId selId = NullExpr, valId = NullExpr;
+                for (int s = 0; s < 2; ++s) {
+                    const CoreExpr& c = ir->get(a.children[s]);
+                    if (c.kind == Kind::Select &&
+                        (c.sort == ir->intSortId() || c.sort == ir->realSortId())) {
+                        selId = a.children[s];
+                        valId = a.children[1 - s];
+                        break;
+                    }
+                }
+                if (selId == NullExpr) continue;
+                const CoreExpr& sel = ir->get(selId);
+                if (sel.children.size() != 2) continue;
+                // Key on (array-operand node, index value): robust to purification
+                // rebuilding the bridge's select for a compound index, and to
+                // nested reads (the inner array operand keeps its ExprId).
+                auto idxV = idxEval.evalNumber(sel.children[1]);
+                if (!idxV) continue;
+                // The bridged value is the OTHER side of the equality — a fresh
+                // shared scalar variable. Read its TYPED value from the theory's
+                // numeric channel (the bridge var is also tagged with an EUF
+                // identity token, so it is excluded from numAsg as an opaqueScalar
+                // above; numericAssignments still carries its concrete value).
+                const CoreExpr& valNode = ir->get(valId);
+                if (valNode.kind != Kind::Variable) continue;
+                const std::string* vn =
+                    std::get_if<std::string>(&valNode.payload.value);
+                if (!vn) continue;
+                RealValue rv;
+                auto rit = lastModel_->numericAssignments.find(*vn);
+                if (rit != lastModel_->numericAssignments.end()) {
+                    rv = rit->second;
+                } else {
+                    auto nit = numAsg.find(*vn);
+                    if (nit == numAsg.end()) continue;
+                    rv = RealValue::fromMpq(nit->second);
+                }
+                selBridge.emplace(std::make_pair(sel.children[0], *idxV), rv);  // first wins
+            }
+        }
         const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
-        if (!lastModel_->arrayInterps.empty()) {
+        if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&filteredReal);
+            validator.setNumericArrayElements(arrBridgeModel);
+            if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
