@@ -455,6 +455,27 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     pendingSharedEqEvents_.clear();
 
     // 2. Run each theory check
+    //
+    // Iter#28: XOLVER_COMB_PUBLISH_ON_LEMMA (default-OFF). When ON and a
+    // solver returns Lemma (NOT Conflict / NOT Unknown), save the Lemma but
+    // continue to step 3 (shared-eq publish + arrangement) before returning.
+    // Iter#25-27 pinned the QF_ANIA starvation here: NIA emits ~138 Lemmas
+    // per second at Standard effort, and the original short-circuit
+    // `return tr` on any non-Consistent skipped step 3 every time — the
+    // combination layer's getDeducedSharedEqualities + sharedTermArithValue
+    // queries never fired. Publishing on Lemma lets the SAT layer receive
+    // BOTH the Lemma (case-split) AND the deduced shared eqs (propagation)
+    // in the same cb_propagate round.
+    //
+    // SOUND: deduced shared eqs are derived from the current trail's bounds
+    // and never become weaker when the solver later branches; the Lemma is
+    // still returned so SAT honors the case-split. Conflict / Unknown still
+    // return immediately (Conflict is UNSAT-direction; Unknown must propagate
+    // upstream without spending more time).
+    static const bool publishOnLemma =
+        std::getenv("XOLVER_COMB_PUBLISH_ON_LEMMA") != nullptr;
+    TheoryCheckResult pendingLemma = TheoryCheckResult::consistent();
+    bool havePendingLemma = false;
     for (auto& solver : solvers_) {
         auto tr = solver->check(lemmaDb, effort);
         recordCheckResult(tr);
@@ -477,6 +498,16 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 return TheoryCheckResult::unknown("euf: unverifiable interface conflict");
             }
             tr.conflictOpt = makeFalsifiedConflict(tr.conflictOpt->clause);
+        }
+        if (publishOnLemma && tr.kind == TheoryCheckResult::Kind::Lemma) {
+            // Save the Lemma + continue to step 3 (publish shared-eqs) before
+            // returning. Subsequent solvers' checks are skipped — we don't
+            // want to ask them when the SAT layer is about to branch anyway.
+            NO_DBG << "[TM-CHECK-LEMMA-DEFER] solver=" << (int)solver->id()
+                   << " lemma=" << debug::fmtClause(tr.lemmaOpt->lits) << "\n";
+            pendingLemma = std::move(tr);
+            havePendingLemma = true;
+            break;
         }
         if (tr.kind != TheoryCheckResult::Kind::Consistent) {
             NO_DBG << "[TM-CHECK] solver=" << (int)solver->id()
@@ -836,6 +867,14 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // Iter#28: if we deferred a Lemma at step 2 (XOLVER_COMB_PUBLISH_ON_LEMMA),
+    // return it now — the shared-eq publish + arrangement above already ran
+    // against the current trail. SAT receives the case-split AND any
+    // propagated shared eqs in the same cb_propagate round.
+    if (havePendingLemma) {
+        NO_DBG << "[NO-RET-LEMMA-DEFERRED] returning saved Lemma after publish\n";
+        return pendingLemma;
+    }
     NO_DBG << "[NO-RET-9] Consistent\n";
     return TheoryCheckResult::consistent();
 }
