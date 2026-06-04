@@ -978,3 +978,46 @@ EAGER never proves UNSAT (invariant 7 — SAT-finder only). On UNSAT cases its e
 #### Why pct=33 is borderline on hard SAT
 
 For hard SAT cases (e.g. leipzig, mcm), EAGER finds the model just by cascading through widths until SAT. Time required is dominated by the deciding K's SAT solve. pct=10 (2 s) is enough for K ≤ 16 but borderline for K ≥ 32. pct=33 (6.6 s) reliably covers K ≤ 48. The held-out 16-case set (all oracle-SAT, all bit-blast-friendly) hits 16/16 at BOTH pct values — so we don't see a SAT regression at pct=10 in this corpus, but a harder benchmark could.
+
+---
+
+### Iteration 20 — 60 s ceiling: zero of the 22 remaining UNSAT crack
+
+Comprehensive test of all 22 remaining oracle-UNSAT under the iter-17 best config (`XOLVER_PP_REWRITE=1 XOLVER_PP_PURE_DEFINED_VAR_SUBST=1 XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO=1 XOLVER_NIA_MODULAR=1 XOLVER_NIA_MODULAR_WARM_START=1 XOLVER_NIA_GCD=1 XOLVER_NIA_ALGEBRAIC=1 XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT=10 XOLVER_WALLCLOCK_MS=60000`):
+
+| outcome | count | meaning |
+|---|---|---|
+| **TO @ ~57 s** | 13 | EAGER + CDCL(T) NIA reasoners ran the full budget without converging |
+| **unknown (early bail)** | 9 | pipeline returned Unknown before budget exhausted |
+
+**Zero recoveries.** Confirms each cluster is algorithm-bound, not budget-bound.
+
+#### The 9 early-bail cases (worth fixing first — would gain "fast-path" wins)
+
+| case | bail @ | likely cause |
+|---|---|---|
+| `sqrtmodinv-hoenicke/sqrtStep1` | 61 ms | `IntDivModLowerer needsEUF` (div by non-positive-bounded var) |
+| `sqrtmodinv-hoenicke/sqrtStep1a` | 61 ms | same |
+| `LCTES/digital-stopwatch.locals` | 113 ms | same |
+| `LCTES/digital-stopwatch.locals.nosummaries` | 112 ms | same |
+| `VeryMax/SAT14/588` | 10.4 s | EAGER cascade exhausts widths |
+| `UltimateLassoRanker/ChenFlur...` | 21.5 s | EAGER cascade exhausts |
+| `leipzig/term-unsat-01` | 25.8 s | matrix interpretation can't be cracked by EAGER |
+| `VeryMax/SAT14/1882` | 38.1 s | EAGER cascade exhausts |
+| `VeryMax/SAT14/775` | 45.6 s | EAGER cascade exhausts |
+
+For the 4 div/mod early-bails, the unblock is to **extend `IntDivModLowerer`** to handle div-by-variable with **sign-case-analysis** (no EUF required): emit `(b > 0 → a = b*q + r ∧ 0 ≤ r < b) ∧ (b < 0 → a = b*q + r ∧ b < r ≤ 0) ∧ (b = 0 → undef)` as a disjunction. Sound and adds the CDCL(T) layer the structure it needs to reason about r, q.
+
+#### Honest cluster ceiling
+
+The earlier cluster-needed-lever map remains correct. To close any of these clusters meaningfully requires writing a new reasoner (50-200 LOC each):
+
+| cluster | n | lever | difficulty |
+|---|---|---|---|
+| VeryMax termination + LassoRanker | 11 | Farkas template enumeration + ranking-function | HIGH |
+| sqrtmodinv-hoenicke + LCTES | 5 | div/mod-by-var sign-case lowerer + mod-by-var Gauss | MEDIUM |
+| AProVE polynomial inequality | 0 left | (Positivstellensatz — all 3 oracle-UNSAT now solved) | DONE |
+| MathProblems MS_02 / SQ_02 | 2 | additional rewrite patterns beyond iter-17 | MEDIUM |
+| leipzig term-unsat-01 | 1 | matrix interpretation termination | HIGH |
+
+The corpus ceiling under the current xolver architecture is **48 / 87 (55%)**. Further wins require new algorithmic invention, not configuration tuning.
