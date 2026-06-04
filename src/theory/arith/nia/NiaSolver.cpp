@@ -1722,22 +1722,66 @@ NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
     if (best.empty()) return std::nullopt;
 
     // Translate the integer model into ArithModelValidator's numeric
-    // assignment (mpq over var names). AMV's BoolAssignment stays empty —
-    // pure NIA has no Boolean-typed variables (only polynomial-atom lits,
-    // which AMV computes itself from the formula structure).
+    // assignment (mpq over var names).
     ArithModelValidator::NumAssignment num;
     num.reserve(best.size());
     for (const auto& kv : best) {
         num.emplace(kv.first, mpq_class(kv.second));
     }
-    ArithModelValidator::BoolAssignment bools;
 
-    ArithModelValidator amv(*coreIr_, num, bools);
-    if (amv.validate(coreIr_->assertions()) ==
-        ArithModelValidator::Verdict::Satisfied) {
-        // Materialize as the NIA currentModel_ for the caller.
-        currentModel_ = best;
-        return TheoryCheckResult::consistent();
+    // Bool var enumeration (iter#12 finding): the BoolSubterm Purifier
+    // introduces fresh `boolpur_K` bool vars to name complex subexpressions.
+    // AMV cannot evaluate them without a BoolAssignment, so the formula
+    // returned Indeterminate even when LS's bestAssignment was the genuine
+    // SAT witness. Collect bool vars from coreIr_ and enumerate every
+    // polarity combo. SOUND: each combo is independently AMV-validated;
+    // Satisfied requires the FULL formula to evaluate true.
+    std::set<std::string> boolVarSet;
+    {
+        std::vector<ExprId> wstack;
+        std::unordered_set<ExprId> wseen;
+        for (ExprId a : coreIr_->assertions()) wstack.push_back(a);
+        const SortId boolSort = coreIr_->boolSortId();
+        while (!wstack.empty()) {
+            ExprId e = wstack.back(); wstack.pop_back();
+            if (e == NullExpr || e >= coreIr_->size()) continue;
+            if (!wseen.insert(e).second) continue;
+            const auto& n = coreIr_->get(e);
+            if (n.kind == Kind::Variable && n.sort == boolSort) {
+                if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
+                    boolVarSet.insert(*nm);
+                }
+            }
+            for (ExprId c : n.children) wstack.push_back(c);
+        }
+    }
+    std::vector<std::string> boolVars(boolVarSet.begin(), boolVarSet.end());
+    std::sort(boolVars.begin(), boolVars.end());
+    const size_t nBoolVars = boolVars.size();
+    // Structural bound: 2^nBoolVars must fit a long without overflow AND not
+    // exceed ENUMERATION_THRESHOLD. Cases with too many bool vars fall through.
+    const long enumThreshold =
+        env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
+    long boolCombo = 1;
+    for (size_t i = 0; i < nBoolVars; ++i) {
+        if (boolCombo > enumThreshold) return std::nullopt;
+        boolCombo *= 2;
+    }
+
+    ArithModelValidator::BoolAssignment bools;
+    bools.reserve(nBoolVars);
+    for (long bmask = 0; bmask < boolCombo; ++bmask) {
+        bools.clear();
+        for (size_t i = 0; i < nBoolVars; ++i) {
+            bools.emplace(boolVars[i], ((bmask >> i) & 1) != 0);
+        }
+        ArithModelValidator amv(*coreIr_, num, bools);
+        if (amv.validate(coreIr_->assertions()) ==
+            ArithModelValidator::Verdict::Satisfied) {
+            // Materialize as the NIA currentModel_ for the caller.
+            currentModel_ = best;
+            return TheoryCheckResult::consistent();
+        }
     }
     return std::nullopt;
 }
