@@ -23,6 +23,7 @@
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
 #include "util/MpqUtils.h"
+#include <chrono>
 #include <iostream>
 
 namespace xolver {
@@ -699,6 +700,16 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
     // Conflict (UNSAT) or a case-split Lemma; never SAT directly. Otherwise
     // falls through, having populated derived bounds/substitutions consumed
     // below, then Cap. 9 attempts complete finite-domain enumeration.
+    //
+    // Iter#20 diagnostic finding (documented for iter#21+): on QF_ANIA Ozdemir
+    // class, this stage consumes 4.8 s of a 5 s budget (24 cb_propagate calls
+    // × ~200 ms each), starving every downstream SAT-finder stage. A simple
+    // per-call wall-clock cap at the loop boundary is INEFFECTIVE because
+    // presolve.run() itself runs to completion (the cost is INSIDE run(),
+    // not in the constraint-add loop). A real fix needs either (a) passing
+    // budget down into PresolveEngine.run() so its inner fixpoint can check
+    // periodically, or (b) caching presolve state across cb_propagate calls
+    // keyed on the active normalized_ set. Both are refactor-scope.
     PresolveEngine presolve(kernel_.get(), /*integerDomain=*/true);
     bool feasible = true;
     for (const auto& c : normalized_) {
