@@ -1528,8 +1528,17 @@ public:
                           << " hasNonlinear=" << features.hasNonlinear
                           << "\n";
             }
-            if (eagerOn &&
-                (logic == "QF_NIA" || logic == "NIA") &&
+            // Extended gate (iter-11): also accept QF_LIA / LIA when the case
+            // came in as QF_NIA but preprocess fully eliminated the nonlinear
+            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER
+            // doesn't care whether the residual atoms are linear or not -- it
+            // bit-blasts the entire formula's boolean+integer structure into
+            // one CaDiCaL solve. For large LIA formulas where CDCL(T) thrashes
+            // on 10k+ atoms, EAGER's single SAT solve often outpaces it. Sound:
+            // EAGER's result is still IntegerModelValidator-gated, never Unsat.
+            bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
+                            logic == "QF_LIA" || logic == "LIA");
+            if (eagerOn && logicOk &&
                 !features.hasRealVar && !features.hasMixedIntReal &&
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
                 phase("eager-bb-start");
