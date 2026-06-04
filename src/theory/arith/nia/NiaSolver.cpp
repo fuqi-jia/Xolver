@@ -2731,6 +2731,25 @@ NiaSolver::sharedTermArithValue(SharedTermId s) const {
     const IntegerModel* src = nullptr;
     if (currentModel_)                  src = &*currentModel_;
     else if (lastValidatedFarkasModel_) src = &*lastValidatedFarkasModel_;
+    // Iter#25 diag: count ALL invocations + classification (null-model vs
+    // found vs missing-from-model). Set XOLVER_NIA_ARITH_VALUE_DIAG=1.
+    static const bool diag =
+        std::getenv("XOLVER_NIA_ARITH_VALUE_DIAG") != nullptr;
+    static long callCount = 0;
+    static long nullModelCount = 0;
+    static long missingNameCount = 0;
+    static long foundCount = 0;
+    if (diag) {
+        ++callCount;
+        if (!src) ++nullModelCount;
+        else if (src->find(name) == src->end()) ++missingNameCount;
+        else ++foundCount;
+        if (callCount % 100 == 1) {
+            std::fprintf(stderr,
+                         "[NIA-ARITH-VALUE] calls=%ld null-model=%ld missing-name=%ld found=%ld\n",
+                         callCount, nullModelCount, missingNameCount, foundCount);
+        }
+    }
     if (!src) return std::nullopt;
     auto it = src->find(name);
     if (it == src->end()) return std::nullopt;
@@ -2970,6 +2989,20 @@ NiaSolver::getDeducedSharedEqualities() {
         }
     }
 
+    // Iter#25 diag: count ALL invocations + propagation sizes. Set
+    // XOLVER_NIA_SHARED_EQ_DIAG=1 to see periodic counter. This proves
+    // master directive #1: does NIA emit shared-eqs at all on QF_ANIA?
+    static long callCount = 0;
+    static long totalEmitted = 0;
+    if (std::getenv("XOLVER_NIA_SHARED_EQ_DIAG")) {
+        ++callCount;
+        totalEmitted += result.size();
+        if (callCount % 20 == 1 || !result.empty()) {
+            std::fprintf(stderr,
+                         "[NIA-SHARED-EQ] calls=%ld emitted-this=%zu total=%ld\n",
+                         callCount, result.size(), totalEmitted);
+        }
+    }
     return result;
 }
 
