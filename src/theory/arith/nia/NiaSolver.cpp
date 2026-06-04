@@ -1541,14 +1541,21 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
     const long enumThreshold =
         env::paramLong("XOLVER_NIA_BOUNDED_ENUM_THRESHOLD", 10000);
 
-    // Collect bool vars referenced in the ORIGINAL formula. The BoolSubterm
-    // Purifier introduces `boolpur_K` fresh bool vars to name complex
-    // subexpressions; AMV cannot evaluate them without a BoolAssignment, so
-    // every candidate goes Indeterminate. We enumerate ALL polarity combos
-    // for the bool vars alongside the int-value enumeration. Termination is
-    // structural via 2^|boolVars| ≤ enumThreshold; cases with too many bool
-    // vars fall through to other stages (no artificial bool-count cap).
+    // Collect bool AND array vars referenced in the ORIGINAL formula.
+    //   - Bool vars: BoolSubterm Purifier introduces `boolpur_K` fresh bool
+    //     vars to name complex subexpressions; AMV cannot evaluate them
+    //     without a BoolAssignment, so every candidate goes Indeterminate.
+    //     We enumerate ALL polarity combos.
+    //   - Array vars: QF_ANIA / QF_AUFNIA cases declare arrays (e.g.
+    //     `(declare-fun start () (Array Int Int))`); AMV's Select / Store
+    //     return Indeterminate when the base array var has no interp. We
+    //     supply each Array var with a baseline ConstArray (default token
+    //     "#n:0") so the store-chain accumulates correctly. SOUND: the
+    //     baseline is a candidate guess — if the SAT witness needs different
+    //     base values, AMV will reject this combo and we miss the witness,
+    //     never claim a wrong SAT.
     std::set<std::string> boolVarSet;
+    std::set<std::string> arrayVarSet;
     {
         std::vector<ExprId> wstack;
         std::unordered_set<ExprId> wseen;
@@ -1559,9 +1566,13 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
             if (e == NullExpr || e >= coreIr_->size()) continue;
             if (!wseen.insert(e).second) continue;
             const auto& n = coreIr_->get(e);
-            if (n.kind == Kind::Variable && n.sort == boolSort) {
+            if (n.kind == Kind::Variable) {
                 if (auto* nm = std::get_if<std::string>(&n.payload.value)) {
-                    boolVarSet.insert(*nm);
+                    if (n.sort == boolSort) {
+                        boolVarSet.insert(*nm);
+                    } else if (coreIr_->arraySortParams(n.sort)) {
+                        arrayVarSet.insert(*nm);
+                    }
                 }
             }
             for (ExprId c : n.children) wstack.push_back(c);
@@ -1588,6 +1599,22 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
     num.reserve(vars.size());
     ArithModelValidator::BoolAssignment bools;
     bools.reserve(nBoolVars);
+    // Array baseline: each Array var gets a ConstArray with default token
+    // "#n:0" (matches AMV's auto-token form for the rational 0; see
+    // ArithModelValidator.cpp::asToken at line 80). Built ONCE before the
+    // enumeration loop — same baseline for every (int × bool) combo, since
+    // the formula's stores accumulate as overrides on top.
+    ArithModelValidator::ArrayAssignment arrAsg;
+    ArithModelValidator::TokenAssignment tokAsg;  // empty — Number→token auto-converts
+    if (!arrayVarSet.empty()) {
+        arrAsg.reserve(arrayVarSet.size());
+        for (const auto& aname : arrayVarSet) {
+            TheorySolver::TheoryModel::ArrayInterp interp;
+            interp.defaultVal = "#n:0";
+            // entries empty: no overrides on the baseline
+            arrAsg.emplace(aname, std::move(interp));
+        }
+    }
 
     // Escalate width = 2^k - 1 on UNBOUNDED vars; keep bounded vars' ranges
     // intact. Compute totalSize first; if > threshold, stop escalating.
@@ -1640,8 +1667,17 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
                 for (size_t i = 0; i < nBoolVars; ++i) {
                     bools.emplace(boolVars[i], ((bmask >> i) & 1) != 0);
                 }
-                ArithModelValidator amv(*coreIr_, num, bools);
-                if (amv.validate(coreIr_->assertions()) ==
+                // Use the array-aware ctor when the formula has Array vars,
+                // so AMV's Select / Store paths can evaluate.
+                std::unique_ptr<ArithModelValidator> amvPtr;
+                if (!arrayVarSet.empty()) {
+                    amvPtr = std::make_unique<ArithModelValidator>(
+                        *coreIr_, num, bools, arrAsg, tokAsg);
+                } else {
+                    amvPtr = std::make_unique<ArithModelValidator>(
+                        *coreIr_, num, bools);
+                }
+                if (amvPtr->validate(coreIr_->assertions()) ==
                     ArithModelValidator::Verdict::Satisfied) {
                     // Materialize as NIA's currentModel_ — IntegerModel is
                     // a map<string, mpz_class>, same shape as `cur`. Bool
