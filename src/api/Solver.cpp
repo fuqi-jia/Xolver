@@ -951,10 +951,24 @@ public:
                 logic.find("NIRA") != std::string::npos;
             if (std::getenv("XOLVER_PP_SOLVE_EQS_GAUSS") && !nonlinearArithLogic)
                 solveEqs.setGeneralLinear(true);
-            if (solveEqs.run()) {
-                solveEqs.commit();
-                std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
-                          << " variable(s)\n";
+            // Wrap in try/catch: SolveEqs's work-budget + growthCap guards check
+            // AFTER each mutation, so a single explosive substitution on a
+            // pathological case (aproveSMT4461031801876451415: 16 vars + one
+            // big assertion + many (= x t) eligible substitutions) can OOM
+            // before the guard fires. On bad_alloc, abandon the pass and reset
+            // modelConverter_ so the residual solve uses the ORIGINAL formula
+            // without substitutions — sound, just slower (we lose iter#17's
+            // B1 recovery on this specific case, but never produce a wrong
+            // verdict from a half-applied substitution).
+            try {
+                if (solveEqs.run()) {
+                    solveEqs.commit();
+                    std::cerr << "[SolveEqs] eliminated " << solveEqs.eliminatedCount()
+                              << " variable(s)\n";
+                }
+            } catch (const std::bad_alloc&) {
+                modelConverter_ = ModelConverter{};
+                std::cerr << "[SolveEqs] aborted (bad_alloc) — solving without substitution\n";
             }
         }
 
@@ -2318,9 +2332,25 @@ Result Solver::checkSat() {
     // Start the global solve wall-clock so per-engine budgets can scale to the
     // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
     wall::beginSolve(env::paramLong("XOLVER_WALLCLOCK_MS", 0));
-    Result r = std::getenv("XOLVER_STRAT_PORTFOLIO")
-                   ? pImpl->checkSatPortfolio()
-                   : pImpl->checkSatInternal();
+    Result r;
+    // Top-level bad_alloc firewall (iter#18, pre-existing class). A pathological
+    // input (e.g. AProVE aproveSMT4461031801876451415: 16 vars + nested
+    // assertion) can OOM deep in atomization / theory / SAT layers before any
+    // budget-guard reacts. Returning Unknown via this catch is sound and
+    // preserves the solver process (vs aborting with std::terminate or
+    // emitting the `(error std::bad_alloc)` token that downstream pipelines
+    // interpret as a hard crash). The catch is at the OUTER boundary so any
+    // bad_alloc — regardless of which inner stage allocated past the
+    // process limit — surfaces as a clean Unknown verdict.
+    try {
+        r = std::getenv("XOLVER_STRAT_PORTFOLIO")
+                ? pImpl->checkSatPortfolio()
+                : pImpl->checkSatInternal();
+    } catch (const std::bad_alloc&) {
+        pImpl->lastUnknownReason_ = "out-of-memory (bad_alloc) — solver firewalled to Unknown";
+        pImpl->lastModel_.reset();
+        r = Result::Unknown;
+    }
     wall::endSolve();
     return r;
 }
