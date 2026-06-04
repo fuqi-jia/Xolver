@@ -397,7 +397,14 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
                 }
                 case Kind::Or: {
                     r = enc.constFalse();
-                    for (ExprId c : e.children) r = enc.orGate(r, encode(c));
+                    size_t orIdx = 0;
+                    for (ExprId c : e.children) {
+                        if (diag && (orIdx % 100) == 0 && e.children.size() > 50)
+                            std::cerr << "[EAGER-BB-OR] alt=" << orIdx << "/" << e.children.size()
+                                      << " satVars=" << enc.varCount() << "\n";
+                        ++orIdx;
+                        r = enc.orGate(r, encode(c));
+                    }
                     break;
                 }
                 case Kind::Implies: {
@@ -454,7 +461,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
             return r;
         };
 
+        size_t aIdx = 0;
         for (ExprId a : assertions) {
+            if (diag && (aIdx % 100) == 0)
+                std::cerr << "[EAGER-BB-ENC] K=" << K << " assertion=" << aIdx
+                          << "/" << assertions.size()
+                          << " satVars=" << enc.varCount() << "\n";
+            ++aIdx;
             SatLit l = encode(a);
             if (!encodeOk) break;
             enc.assertLit(l);
