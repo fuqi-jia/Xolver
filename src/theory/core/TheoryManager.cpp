@@ -456,24 +456,35 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
 
     // 2. Run each theory check
     //
-    // Iter#28: XOLVER_COMB_PUBLISH_ON_LEMMA (default-OFF). When ON and a
-    // solver returns Lemma (NOT Conflict / NOT Unknown), save the Lemma but
-    // continue to step 3 (shared-eq publish + arrangement) before returning.
-    // Iter#25-27 pinned the QF_ANIA starvation here: NIA emits ~138 Lemmas
-    // per second at Standard effort, and the original short-circuit
-    // `return tr` on any non-Consistent skipped step 3 every time — the
-    // combination layer's getDeducedSharedEqualities + sharedTermArithValue
-    // queries never fired. Publishing on Lemma lets the SAT layer receive
-    // BOTH the Lemma (case-split) AND the deduced shared eqs (propagation)
-    // in the same cb_propagate round.
+    // Iter#28+29: XOLVER_COMB_PUBLISH_ON_LEMMA. When a solver returns Lemma
+    // (NOT Conflict / NOT Unknown), save the Lemma but continue to step 3
+    // (shared-eq publish + arrangement) before returning. Iter#25-27 pinned
+    // the QF_ANIA starvation here: NIA emits ~138 Lemmas per second at
+    // Standard effort, and the original short-circuit `return tr` on any
+    // non-Consistent skipped step 3 every time — the combination layer's
+    // getDeducedSharedEqualities + sharedTermArithValue queries never fired.
+    // Publishing on Lemma lets the SAT layer receive BOTH the Lemma
+    // (case-split) AND the deduced shared eqs (propagation) in the same
+    // cb_propagate round.
     //
     // SOUND: deduced shared eqs are derived from the current trail's bounds
     // and never become weaker when the solver later branches; the Lemma is
     // still returned so SAT honors the case-split. Conflict / Unknown still
     // return immediately (Conflict is UNSAT-direction; Unknown must propagate
     // upstream without spending more time).
-    static const bool publishOnLemma =
-        std::getenv("XOLVER_COMB_PUBLISH_ON_LEMMA") != nullptr;
+    //
+    // Iter#29: auto-ON in array-combination mode (arrayCombinationMode_,
+    // set by TheoryFactory for QF_ANIA / QF_AUFNIA / QF_AUFLIA / QF_ALIA).
+    // Iter#28 verified 0 reg regression on all 16 buckets with flag ON;
+    // these are exactly the logics where the iter#25 starvation was
+    // diagnosed. Pure-arith and pure-EUF logics retain the previous
+    // short-circuit behavior unless XOLVER_COMB_PUBLISH_ON_LEMMA=1 forces it.
+    // XOLVER_COMB_PUBLISH_ON_LEMMA=0 forces OFF (escape hatch for autotuner
+    // or regression bisects).
+    bool publishOnLemma = arrayCombinationMode_;
+    if (const char* e = std::getenv("XOLVER_COMB_PUBLISH_ON_LEMMA")) {
+        publishOnLemma = !(e[0] == '0' && e[1] == '\0');
+    }
     TheoryCheckResult pendingLemma = TheoryCheckResult::consistent();
     bool havePendingLemma = false;
     for (auto& solver : solvers_) {
