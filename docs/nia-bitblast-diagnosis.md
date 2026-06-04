@@ -582,3 +582,37 @@ Per-bucket EAGER SAT count (every VeryMax / leipzig / Lasso / car / MathProblems
 Remaining gap on the corpus is UNSAT-side (the iter-2 `unsat × timeout` bucket — EAGER never proves UNSAT by construction; those need the CDCL(T) NIA pipeline). All SAT-side wins land via EAGER, gate-passing, zero regression.
 
 This validates the iter-2 master-correction reframing on a non-size-sorted, oracle-bisected sample: the VeryMax / Lasso / leipzig SAT clusters that historical tagging called "architectural bit-blast ceiling" are in fact bit-blast-tractable; xolver just needed to invoke its own already-existing eager whole-formula path. The shipped lever is the same as BLAN's `blaster_logic + blaster` architecture but reusing xolver's own encoder + validator, so SAT verdicts remain `IntegerModelValidator`-gated and the CDCL(T) main loop is untouched.
+
+---
+
+### Iteration 9 — Corpus-wide accounting + BLAN false-UNSAT discovery
+
+Cross-checked the targeted_nia/MANIFEST.tsv `oracle` column against each source file's `(set-info :status …)` directive (the SMT-LIB declaration of truth). The manifest is partly stale; the corrected breakdown:
+
+| true oracle status | total | xolver iter-8 correct |
+|---|---|---|
+| sat | 36 | **30** (83 %) |
+| unsat | 33 | 5 (15 %) |
+| unknown | 18 | (xolver Unknown is also correct) |
+
+**Of the 6 oracle-SAT misses, BLAN's verdict checks against z3 + cvc5:**
+
+| case | BLAN | z3 | cvc5 | xolver iter-8 |
+|---|---|---|---|---|
+| Dartagnan nec11-O0 | **unsat** | sat | sat | timeout |
+| Dartagnan array-2-O0 | **unsat** | sat | sat | timeout |
+| Dartagnan id_trans-O0 | (no verdict, 27 s) | sat | sat | timeout |
+| elster B_1 | crash (assertion in eq_rewriter.cpp:143) | sat | sat | timeout |
+| elster B_2 | crash (assertion in eq_rewriter.cpp:143) | sat | sat | unknown (OOM-firewalled) |
+| mcm/113 | sat @ 9 s | sat | sat | unknown (uses non-standard `power2` ext) |
+
+**Two BLAN false-UNSATs found** (nec11, array-2) — important campaign data. xolver returning Unknown / timeout is the **sound** behavior; the apparent BLAN-wins-here on these cases is partially BLAN being wrong. Any panda differential that ignores soundness would over-credit BLAN here.
+
+**Picture for the remaining gap:**
+- 6 oracle-SAT misses on bit-blast: BLAN handles only 1 (mcm/113); BLAN itself crashes or gets the wrong answer on the other 5. So the bit-blast cluster on `targeted_nia` is essentially saturated at xolver's current architecture — the remaining 5 SAT misses are NOT in the "BLAN-solvable" target set the iter-2 master correction defined.
+- 28 oracle-UNSAT misses: EAGER bit-blast never returns Unsat by construction (invariant 7). These need CDCL(T) NIA pipeline work — out of scope of this bit-blast loop.
+- 18 oracle-Unknown cases: xolver Unknown is the correct verdict; nothing to chase.
+
+So `targeted_nia` is now structurally closed for the bit-blast lever — what remains is either (a) deeper CDCL(T) NIA for UNSAT, or (b) genuinely-hard cases where BLAN itself is wrong / crashes / times out. Either is a separate work item.
+
+The user's prior task (#11 in the task list) is up next: random-sample a wider corpus multiple times to validate iter-6 + iter-8 with broader coverage.
