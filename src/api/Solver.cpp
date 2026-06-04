@@ -1643,14 +1643,19 @@ public:
             }
             // Extended gate (iter-11): also accept QF_LIA / LIA when the case
             // came in as QF_NIA but preprocess fully eliminated the nonlinear
-            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER
-            // doesn't care whether the residual atoms are linear or not -- it
-            // bit-blasts the entire formula's boolean+integer structure into
-            // one CaDiCaL solve. For large LIA formulas where CDCL(T) thrashes
-            // on 10k+ atoms, EAGER's single SAT solve often outpaces it. Sound:
-            // EAGER's result is still IntegerModelValidator-gated, never Unsat.
+            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER's
+            // single CaDiCaL solve can outpace CDCL(T) on 10k+ atom LIA.
+            // OPT-IN (default-OFF, XOLVER_NIA_EAGER_LIA): the EAGER model export
+            // is currently WRONG on genuine QF_LIA whose vars are pinned by a
+            // top-level bound atom (e.g. `(= x 1)`) — those atoms are skipped in
+            // the encoding (width hint only), so the bit-blast leaves the var
+            // unconstrained and the published model reads 0, violating the
+            // assertion. The verdict stays sound (validator-gated), but get-model
+            // returns garbage, so until the export reconstructs pinned vars this
+            // path must not run by default. QF_NIA EAGER is unaffected (proven).
+            bool eagerLia = std::getenv("XOLVER_NIA_EAGER_LIA") != nullptr;
             bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
-                            logic == "QF_LIA" || logic == "LIA");
+                            (eagerLia && (logic == "QF_LIA" || logic == "LIA")));
             if (eagerOn && logicOk &&
                 !features.hasRealVar && !features.hasMixedIntReal &&
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
@@ -1659,6 +1664,19 @@ public:
                 auto ibr = eagerbb.solve(*ir, ir->assertions());
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+                    // Publish the model so get-model / get-value work after an
+                    // EAGER Sat. ibr.model is the validated name->integer
+                    // assignment; eliminated vars (e.g. a var UCP pinned to a
+                    // constant, absent from the bit-blast) are restored by
+                    // mergeFixedBindings(). Without this, getValue() returns
+                    // null and a caller that dereferences it crashes — this was
+                    // a latent gap (no get-model test on the QF_NIA EAGER path)
+                    // exposed once the gate accepted QF_LIA.
+                    TheorySolver::TheoryModel tm;
+                    for (const auto& kv : ibr.model)
+                        tm.assignments[kv.first] = kv.second.get_str();
+                    lastModel_ = std::move(tm);
+                    mergeFixedBindings();
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
