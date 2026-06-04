@@ -336,3 +336,50 @@ xolver has SOLVE_EQS for LINEAR equality elimination (Solver.cpp:913) — it doe
 #### Notes on A2-NRA interaction
 
 While iterating, the A2-NRA agent's in-flight `CdcacCore.cpp/.h` had a 4-arg-vs-5-arg signature mismatch that broke the build. Stashed it (`A2 NRA in-flight CdcacCore — restore after iter3`) and continued. **Iter-4 entry: pop the stash so A2 work is preserved.**
+
+---
+
+### Iteration 4 — ★ BIT-BLAST HAS AN ENCODING BUG (smoking gun)
+
+Migrated to proper worktree `/mnt/d/D_Study/BUAA/projects/zolver-niabb` (per team's `zolver-a1`/`zolver-a2`/… convention). `third_party/` symlinked, saves 1.9 GB.
+
+Added `BB_ASSERT_DIAG` env to `PolyBitBlaster::assertConstraint` (committed `6d0fca1`, default-OFF, zero cost when unset, mirrors `NIA_BITBLAST_DIAG`). Dumped every bit-blasted constraint on leipzig term-0Hb4yp.smt2 at `XOLVER_NIA_BITBLAST_MAX_BITWIDTH=4`: **164 BB-ASSERT calls, 41 unique** when `value_width` is collapsed.
+
+The 41: 20 product/sum equations (rel=Eq) defining n8..n47, 8 leaf bounds `n_i >= 0`, and 13 derived non-strict + strict pairs from the source disjunction `(or (> n21 n24) (> n18 n27) (> n18 n2))` after substitution (`n18=n2+n17`, `n27=n2+n26`, …).
+
+#### Manual model trace proves SAT exists for all 41
+
+```
+n0=0, n1=1, n2=0, n3=1, n4=0, n5=0, n6=1, n7=1
+=> n8=0, n10=0, n11=1, n13=1, n14=1, n16=0,
+   n17=2, n19=1, n20=1, n22=0, n23=2, n25=0,
+   n26=1, n28=1, n29=0, n31=0, n32=0, n34=0, n35=1, n37=1
+```
+
+Every Eq holds. Every Leq holds (including `n17 >= 1`, `n26 < n17`, `n23 > n20`). **All values are in [0,3] — fit even K=2 unsigned magnitude bits.**
+
+Yet xolver reports UNSAT at every K from 2 through 12 (var-count 1 795 → 32 961). **The encoded constraint set IS satisfiable; xolver's bit-blast says it isn't. ENCODING BUG.**
+
+#### Likely culprit
+
+`BitBlastSolver::attemptAtWidths` (`BitBlastSolver.cpp:201-209`) does:
+```cpp
+for (const auto& kv : plan.width) varBits[kv.first] = enc.mkVar(kv.second);
+PolyBitBlaster blaster(enc, kernel_, varBits);
+for (const auto& c : cs) blaster.assertConstraint(c);   // ← encodes arithmetic FIRST
+encodeDomainBounds(enc, varBits, domains);              // ← sign-pinning AFTER
+```
+
+When `PolyBitBlaster::assertConstraint` runs, the SAT solver knows nothing about leaf sign-bits being pinned to 0. The Tseitin encoding of `mul(a,b)` uses the sign-bit literal freely, and the CaDiCaL solver can pick negative interpretations of leaf bit-patterns. After `encodeDomainBounds` runs and adds `assertLit(sign().negated())`, CaDiCaL is constrained — but the multiplier gates were already wired with the un-pinned literal, and the gate semantics may have baked in a wrong sign-extension.
+
+Concretely, `mul(a, b)` at lines 212-226 of `BitBlastEncoder.cpp` does `signExtend(X, w)` where w = wa+wb. The sign-extension chooses bits based on `X.sign()` — at the time the gates are emitted, `X.sign()` is a free SAT literal. The accumulator `acc` of partial products receives mixed-sign carries. The `negFixed(addend, w)` at line 224 for the last partial **always subtracts** under two's-complement; but for non-negative inputs (with sign-bit destined for 0), no subtraction should happen.
+
+#### Iteration 5 plan
+
+1. Reorder `BitBlastSolver::attemptAtWidths` to call `encodeDomainBounds` BEFORE `assertConstraint` so sign-pinning units reach CaDiCaL prior to multiplier gates.
+2. Build + rerun leipzig at K=4. Expected: SAT (or at minimum, different cascade trace).
+3. If still UNSAT, write a 41-constraint standalone unit test that calls `BitBlastEncoder` + `PolyBitBlaster` directly and asks CaDiCaL. Repro the false-UNSAT in isolation; binary-search the constraint set to isolate the minimal failing one.
+4. Once patched, run the 16-case held-out. Expected: ≥ several SAT wins.
+5. Full unit + reg + 200-case random QF_NIA gate. If 0-unsound and 0-regression, commit gated default-OFF; promote per ship-config.
+
+This is the candidate root cause that, if confirmed, unlocks the ~9 626 VeryMax cluster. The encoding-order fix is a 2-line code change.
