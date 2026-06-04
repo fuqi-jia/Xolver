@@ -82,6 +82,7 @@ void LiaSolver::onPop(uint32_t n) {
 
 void LiaSolver::onReset() {
     theoryTrail_.clear();
+    trailIndexBySatVar_.clear();
     appliedCursor_ = 0;
     activeAtoms_.clear();
     disequalities_.clear();
@@ -106,26 +107,27 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    for (auto& e : theoryTrail_) {
-        if (e.atom.satVar == atom.satVar) {
-            if (e.isDiseq) {
-                auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
-                    [&e](const auto& d) { return d.lit == e.lit; });
-                disequalities_.erase(it, disequalities_.end());
-            } else {
-                auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
-                    [&e](const auto& a) { return a.lit == e.lit; });
-                activeAtoms_.erase(it, activeAtoms_.end());
-            }
-            e = {level, assertedLit, atom, value, auxVar, isDiseq};
-            if (isDiseq) {
-                disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
-            } else {
-                activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
-            }
-            return;
+    auto idxIt = trailIndexBySatVar_.find(atom.satVar);
+    if (idxIt != trailIndexBySatVar_.end()) {
+        auto& e = theoryTrail_[idxIt->second];
+        if (e.isDiseq) {
+            auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
+                [&e](const auto& d) { return d.lit == e.lit; });
+            disequalities_.erase(it, disequalities_.end());
+        } else {
+            auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
+                [&e](const auto& a) { return a.lit == e.lit; });
+            activeAtoms_.erase(it, activeAtoms_.end());
         }
+        e = {level, assertedLit, atom, value, auxVar, isDiseq};
+        if (isDiseq) {
+            disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
+        } else {
+            activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
+        }
+        return;
     }
+    trailIndexBySatVar_[atom.satVar] = theoryTrail_.size();
     theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
     if (isDiseq) {
         disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
@@ -147,6 +149,7 @@ void LiaSolver::onBacktrack(int level) {
         // Full reset for modelCheck rebuild or SAT restart to level 0.
         // All entries will be re-asserted by the caller.
         theoryTrail_.clear();
+        trailIndexBySatVar_.clear();
         disequalities_.clear();
         activeAtoms_.clear();
         integerVars_.clear();   // incremental grow-only set: cleared on full reset
@@ -164,6 +167,7 @@ void LiaSolver::onBacktrack(int level) {
                     [&e](const auto& a) { return a.lit == e.lit; });
                 activeAtoms_.erase(it, activeAtoms_.end());
             }
+            trailIndexBySatVar_.erase(e.atom.satVar);
             theoryTrail_.pop_back();
         }
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
