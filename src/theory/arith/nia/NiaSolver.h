@@ -306,7 +306,11 @@ private:
     // against the original constraints — sound by invariant 1. The escalation
     // terminates structurally when ENUMERATION_THRESHOLD bites
     // (UnknownBudget) on the augmented box, never via an artificial k cap.
-    // Default-OFF XOLVER_NIA_BOUNDED_ESCALATE, Full-effort only.
+    // Default-ON since iter#11 (2026-06-05) — promoted after 100-AProVE
+    // sample showed +1 recovery on baseline-stuck cases with 0 regressions
+    // (12 buckets, 670 reg cases all 0-unsound), and the iter#10 AMV
+    // ConstInt-string fix made every validator verdict precise. Opt out via
+    // XOLVER_NIA_BOUNDED_ESCALATE=0. Full-effort only.
     std::optional<TheoryCheckResult> stageEscalatingBounded(TheoryLemmaStorage&, TheoryEffort);
     // HYB-2 (master 2026-06-02, post-Smart-LS). Coordinated LS-on-U +
     // BB-on-B for partition profiles where B dominates (|B| > |U|;

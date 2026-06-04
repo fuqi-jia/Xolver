@@ -1502,7 +1502,7 @@ std::optional<TheoryCheckResult>
 NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     (void)lemmaDb;
     static const bool enabled =
-        env::paramInt("XOLVER_NIA_BOUNDED_ESCALATE", 0) != 0;
+        env::paramInt("XOLVER_NIA_BOUNDED_ESCALATE", 1) != 0;
     if (!enabled) return std::nullopt;
     (void)effort;  // Full-effort-only is enforced by the addFull() registration.
     if (!coreIr_) return std::nullopt;  // need the original formula for AMV.
