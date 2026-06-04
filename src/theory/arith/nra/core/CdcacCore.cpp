@@ -5,6 +5,7 @@
 #include "theory/arith/nra/projection/ProjectionPolicy.h"
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"
 #include "theory/arith/poly/RationalPolynomial.h"
+#include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS cap for the SAT-first libpoly guard
 #include <algorithm>
 #include <unordered_set>
 #include <iostream>
@@ -214,6 +215,17 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // XOLVER_NRA_LAZARD_CELL_CERT=0.
     if (const char* e = std::getenv("XOLVER_NRA_LAZARD_CELL_CERT"))
         lazardCellCertEnabled_ = !(e[0] == '0' || e[0] == 'f' || e[0] == 'F' || e[0] == 'n' || e[0] == 'N');
+    // nlsat-engine STEP A: SAT-only sample-first model search (default-OFF, gated).
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST"))
+        satFirstEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_BUDGET")) {
+        long b = std::atol(e);
+        if (b > 0) satFirstBudget_ = b;
+    }
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS")) {
+        long b = std::atol(e);
+        if (b > 0) satSampleMaxBits_ = b;
+    }
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -558,6 +570,71 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif
+    // nlsat-engine STEP A: SAT-only sample-first model search, ONE-SHOT per
+    // CdcacCore lifetime, BEFORE the eager buildClosure projection. Sound: Sat is
+    // returned only on a checkFullSample-validated full point; otherwise falls
+    // through to the projection engine, byte-identical to before. Default-OFF.
+    if (satFirstEnabled_ && !satFirstTried_ && !input.varOrder.empty()) {
+        satFirstTried_ = true;
+        // Precompute per-constraint safety once: a poly whose denominator-cleared
+        // integer coefficients would exceed the cap is skipped for delineation (the
+        // libpoly heap-corruption class — same cap as the projection firewall). The
+        // leaf checkFullSample still signAt-validates ALL constraints (signAt is
+        // internally crash-firewalled → Unknown), so skipping only affects which
+        // polys delineate cells, never soundness.
+        static const long capBits = [] {
+            int v = env::paramInt("XOLVER_NRA_LAZARD_MAX_COEFF_BITS", 65536);
+            return v > 0 ? static_cast<long>(v) : 65536L;
+        }();
+        satSafe_.assign(input.constraints.size(), false);
+        satRp_.assign(input.constraints.size(), std::nullopt);
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            const auto& c = input.constraints[ci];
+            auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
+            if (!rp) continue;   // no exact form (satSafe_[ci] stays false ⇒ skip search)
+            // Degree cap: libpoly root isolation / specialization on a high-degree
+            // multivariate (matrix-product polys) crashes regardless of coefficient
+            // size. Total degree = max over monomials of the sum of exponents.
+            static const long degCap =
+                env::paramInt("XOLVER_NRA_CAC_SAT_FIRST_MAX_DEG", 12) > 0
+                    ? env::paramInt("XOLVER_NRA_CAC_SAT_FIRST_MAX_DEG", 12) : 12;
+            long totalDeg = 0;
+            mpz_class D = 1;
+            for (const auto& [key, coeff] : rp->terms()) {
+                long md = 0; for (const auto& [v, e] : key) { (void)v; md += e; }
+                if (md > totalDeg) totalDeg = md;
+                const mpz_class den = coeff.get_den();
+                if (den > 1) { mpz_class t; mpz_lcm(t.get_mpz_t(), D.get_mpz_t(), den.get_mpz_t()); D = t; }
+            }
+            bool safe = totalDeg <= degCap;
+            if (safe) {
+                for (const auto& [key, coeff] : rp->terms()) {
+                    (void)key;
+                    const mpz_class cleared = coeff.get_num() * (D / coeff.get_den());
+                    if (cleared != 0 &&
+                        static_cast<long>(mpz_sizeinbase(cleared.get_mpz_t(), 2)) > capBits) { safe = false; break; }
+                }
+            }
+            satRp_[ci] = std::move(rp);   // cache exact poly for crash-free Horner sign eval
+            satSafe_[ci] = safe;
+        }
+        // SAT-first runs ONLY when EVERY constraint is safe to evaluate. The leaf
+        // must exact-check ALL constraints for soundness, but sign evaluation of a
+        // high-degree poly (kernel_->sgn / libpoly coefficient_sgn → rational_interval_pow)
+        // OOM-crashes — so a problem with ANY unsafe constraint cannot be soundly
+        // model-searched here; bail to the projection engine (matrix-1-all etc.).
+        bool allSafe = true;
+        for (size_t ci = 0; ci < satSafe_.size(); ++ci)
+            if (!satSafe_[ci]) { allSafe = false; break; }
+        if (allSafe) {
+            SamplePoint prefix;
+            long budget = satFirstBudget_;
+            CdcacResult sat = trySatSampleFirst(0, prefix, input, budget);
+            if (sat.status == CdcacStatus::Sat)
+                return sat;
+        }
+    }
+
     // --- Pure single-mode (A/B hatches): one pass with the configured mode. ---
     if (!hybridEnabled_) {
         return solvePass(input);
@@ -1249,6 +1326,187 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
         return result;
     }
     return CdcacResult::mkSat(sample);
+}
+
+// --- nlsat-engine STEP A: SAT-only sample-first model search --------------------
+// Rational cell-representative candidates for `var` at the current prefix. Lazy
+// single-cell delineation by the real roots of each SAFE constraint poly that is
+// univariate in `var` here (satSafe_ skips the libpoly-crash class; signAt at the
+// leaf still validates all). Algebraic roots contribute a rational inside their
+// isolating interval — checkFullSample exact-validates the full point, so an
+// approximate boundary only misses a model, never admits a false one.
+// Bit-length of a rational = max bit-size of |num| and den. Used to discard
+// astronomically large sample candidates (additive search restriction).
+static long mpqBitLen(const mpq_class& q) {
+    long a = (q.get_num() == 0) ? 0
+             : static_cast<long>(mpz_sizeinbase(q.get_num().get_mpz_t(), 2));
+    long b = static_cast<long>(mpz_sizeinbase(q.get_den().get_mpz_t(), 2));
+    return a > b ? a : b;
+}
+
+// Simplest rational strictly inside the open interval (lo, hi), lo < hi: an
+// integer closest to 0 if one fits, else the smallest-denominator dyadic k/2^j.
+// This is de Moura's NLSAT cell-sample rule — it keeps the chosen value SMALL,
+// unlike an interval midpoint whose numerator/denominator compound across the
+// recursion until libpoly's interval power blows up (the matrix-1-all SIGSEGV).
+static mpq_class simplestRationalIn(const mpq_class& lo, const mpq_class& hi) {
+    if (lo < 0 && hi > 0) return mpq_class(0);                 // 0 is simplest of all
+    // Smallest integer strictly > lo, largest integer strictly < hi.
+    mpz_class flo; mpz_fdiv_q(flo.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t());
+    mpz_class nlo = flo + 1;
+    mpz_class chi; mpz_cdiv_q(chi.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t());
+    mpz_class nhi = chi - 1;
+    if (nlo <= nhi)                                            // an integer fits
+        return mpq_class(lo >= 0 ? nlo : nhi);                // closest to 0
+    for (int j = 1; j <= 256; ++j) {                          // smallest-denominator dyadic
+        mpz_class den = mpz_class(1) << j;
+        mpq_class loS = lo * den;
+        mpz_class fk; mpz_fdiv_q(fk.get_mpz_t(), loS.get_num().get_mpz_t(), loS.get_den().get_mpz_t());
+        mpq_class cand(fk + 1, den); cand.canonicalize();
+        if (cand < hi) return cand;
+    }
+    mpq_class mid = (lo + hi) / 2;                            // unreachable fallback
+    return mid;
+}
+
+// EXACT sign (−1/0/+1) of `rp` at a rational assignment (missing var ⇒ 0), by
+// pure-mpq term-sum Σ coeff·Π baseᵉ. NEVER routes through libpoly
+// coefficient_sgn / rational_interval_pow (the OOM-SIGSEGV path) — this is the
+// real, principled sign by exact rational arithmetic, and with sampled values
+// bounded (simplestRationalIn + magnitude filter) the accumulator stays small.
+static int exactSignAt(const RationalPolynomial& rp,
+                       const std::unordered_map<VarId, mpq_class>& asg) {
+    mpq_class acc(0);
+    for (const auto& [key, coeff] : rp.terms()) {
+        mpq_class term = coeff;
+        for (const auto& [v, e] : key) {
+            auto it = asg.find(v);
+            mpq_class base = (it != asg.end()) ? it->second : mpq_class(0);
+            long ee = static_cast<long>(e);
+            for (long i = 0; i < ee && sgn(term) != 0; ++i) term *= base;
+        }
+        acc += term;
+    }
+    return sgn(acc);
+}
+
+std::vector<mpq_class> CdcacCore::satSampleCandidates(int k, const SamplePoint& prefix,
+                                                      const CdcacInput& input) {
+    VarId var = input.varOrder[k];
+    std::vector<mpq_class> roots;
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        if (ci < satSafe_.size() && !satSafe_[ci]) continue;   // skip libpoly-crash-class polys
+        const auto& c = input.constraints[ci];
+        if (kernel_->isConstant(c.poly)) continue;
+        UniPolyId up = algebra_->specializeToUnivariate(c.poly, prefix, var);
+        if (up == NullUniPolyId) continue;                     // free higher vars / no `var` here
+        RootSet rs = algebra_->isolateRealRoots(up);
+        if (rs.crashOccurred) continue;                        // firewall-declined → sampling handles it
+        for (const auto& r : rs.roots)
+            roots.push_back(r.isRational() ? r.rational
+                                           : (r.root.lower + r.root.upper) / 2);
+    }
+    std::sort(roots.begin(), roots.end());
+    roots.erase(std::unique(roots.begin(), roots.end()), roots.end());
+
+    std::vector<mpq_class> cands;
+    // Universal small-integer fallbacks: always within the magnitude bound, so a
+    // small-coordinate model is reachable even when every root is astronomically
+    // large (then the structured cell samples below are all filtered out).
+    for (long v : {0, 1, -1, 2, -2, 3, -3}) cands.push_back(mpq_class(v));
+    if (!roots.empty()) {
+        // Simple integer just below the first / above the last root.
+        mpz_class f; mpz_fdiv_q(f.get_mpz_t(), roots.front().get_num().get_mpz_t(),
+                                roots.front().get_den().get_mpz_t());
+        cands.push_back(mpq_class(f - 1));
+        mpz_class g; mpz_cdiv_q(g.get_mpz_t(), roots.back().get_num().get_mpz_t(),
+                                roots.back().get_den().get_mpz_t());
+        cands.push_back(mpq_class(g + 1));
+        for (size_t i = 0; i < roots.size(); ++i) {
+            cands.push_back(roots[i]);                          // the "= root" cell
+            if (i + 1 < roots.size() && roots[i] < roots[i + 1])
+                cands.push_back(simplestRationalIn(roots[i], roots[i + 1]));  // open-cell rep
+        }
+    }
+    // Magnitude filter: discard candidates beyond the bound (keeps every
+    // downstream specialization/evaluation bounded ⇒ crash-free). Additive only —
+    // the complete projection engine still runs on fall-through.
+    std::vector<mpq_class> out;
+    for (auto& q : cands)
+        if (mpqBitLen(q) <= satSampleMaxBits_) out.push_back(std::move(q));
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
+}
+
+// Maps an exact rational sign (−1/0/+1 from exactSignAt) against a relation.
+static inline bool satRelHolds(int s, Relation rel) {
+    switch (rel) {
+        case Relation::Eq:  return s == 0;
+        case Relation::Neq: return s != 0;
+        case Relation::Lt:  return s < 0;
+        case Relation::Leq: return s <= 0;
+        case Relation::Gt:  return s > 0;
+        case Relation::Geq: return s >= 0;
+    }
+    return false;
+}
+
+CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
+                                         const CdcacInput& input, long& budget) {
+    int n = static_cast<int>(input.varOrder.size());
+    // Exact rational assignment from the prefix, keyed by VarId (SAT-first only
+    // samples rationals). Fed to exactSignAt — pure mpq, never libpoly.
+    auto buildMap = [&]() {
+        std::unordered_map<VarId, mpq_class> m;
+        for (size_t i = 0; i < prefix.varOrder.size(); ++i)
+            if (prefix.values[i].isRational())
+                m.emplace(prefix.varOrder[i], prefix.values[i].rational);
+        return m;
+    };
+    if (k == n) {
+        // Leaf: exact-validate EVERY constraint at the rational point via the
+        // cached poly + exactSignAt (pure mpq, crash-free). All hold ⇒ sound model
+        // (invariant 1). Any failure — or a constraint without a cached exact poly,
+        // which cannot be confirmed crash-free — ⇒ keep searching (never UNSAT).
+        auto m = buildMap();
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            if (ci >= satRp_.size() || !satRp_[ci])
+                return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+            if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel))
+                return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+        }
+        return CdcacResult::mkSat(prefix);
+    }
+    if (budget <= 0) return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+    VarId var = input.varOrder[k];
+    std::vector<mpq_class> cands = satSampleCandidates(k, prefix, input);
+    std::unordered_set<VarId> assigned;
+    for (VarId v : prefix.varOrder) assigned.insert(v);
+    assigned.insert(var);
+    for (auto& q : cands) {
+        if (budget <= 0) break;
+        --budget;
+        prefix.push(var, RealAlg::fromRational(q));
+        // Forward-checking via the EXACT mpq sign (crash-free): prune the moment a
+        // constraint's vars are all assigned and it is violated at this concrete
+        // rational point. Sound — removes only already-inconsistent points.
+        auto m = buildMap();
+        bool pruned = false;
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            if (ci >= satRp_.size() || !satRp_[ci]) continue;
+            bool allAssigned = true;
+            for (VarId v : satRp_[ci]->variables())
+                if (!assigned.count(v)) { allAssigned = false; break; }
+            if (!allAssigned) continue;
+            if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel)) { pruned = true; break; }
+        }
+        if (pruned) { prefix.pop(); continue; }
+        CdcacResult r = trySatSampleFirst(k + 1, prefix, input, budget);
+        prefix.pop();
+        if (r.status == CdcacStatus::Sat) return r;
+    }
+    return CdcacResult::mkUnknown(CdcacUnknownReason::None);
 }
 
 Cell CdcacCore::buildLeafConflictCell(const CdcacConstraint& /*c*/, const SamplePoint& /*sample*/, VarId /*var*/) {
