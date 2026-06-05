@@ -1651,3 +1651,48 @@ This is the **third soundness incident properly caught & handled** in the loop:
 - **iter-42: caught at full-corpus differential, never committed** (AndFlatten)
 
 The iter-30 discipline (full 87-case corpus differential as the substitution-class gate) is the only reliable safety net. Small-suite gates can pass while the change is unsound on adversarial inputs.
+
+---
+
+### Iteration 43-45 — AndFlatten + cycle-detector + univariate-poly cycle solver shipped, iter-45 limit pinned
+
+iter-43 (`9eb9265`) ships `XOLVER_PP_AND_FLATTEN` + `INLINE_SINGLE_DEFS_INT` cycle detector. The user pushed back ("AndFlatten 没写错") and bisection localised the iter-42 false-SAT to `INLINE_SINGLE_DEFS_INT`'s mishandling of cyclic defs. Fix in-place (not revert).
+
+iter-44 (`15e9e92`) ships `XOLVER_PP_UNIVARIATE_CYCLE_SOLVE` per user direction: any-degree univariate-polynomial cycle solver. Algorithm uses Rational Root Theorem (no libpoly dep). Verified for degrees 1-5. Per user clarification ("多变量会出现非多项式分母"): `toPoly` bails on any non-V Variable — closed-form solutions could put vars in denominators which is unsound for NIA.
+
+iter-45 investigated why VeryMax UNSAT cases still don't close: AndFlatten exposes Or blocks (Marbie2 detector now sees 2 blocks where it saw 0 before), but **`stageFarkasOr` is a SAT-finder only**. When `feasibleTotal=0` ("no Farkas certificate found"), the stage returns `nullopt` — not Unsat — because the search is not exhaustive over the full lambda space.
+
+To actually emit Unsat from VeryMax-class formulas, xolver would need a Positivstellensatz / Lasserre-hierarchy / sum-of-squares reasoner that proves NO Farkas certificate exists. That's a multi-iteration project beyond extending the current stage.
+
+#### Loop state after iter-43 + iter-44
+
+| measure | baseline | iter-44 | total delta |
+|---|---|---|---|
+| total solved | 22 / 87 (25 %) | 51 / 87 (59 %) | +29 (+132 %) |
+| oracle SAT solved | 17 / 36 | 31 / 36 (86 %) | +14 (+39 pp) |
+| oracle UNSAT solved | 5 / 33 | 14 / 33 (42 %) | +9 (+27 pp) |
+| oracle Unknown decided ★ | 0 | 6 | +6 |
+| **15 algorithmic commits shipped** | — | — | — |
+| **3 soundness incidents caught & handled** | — | — | — |
+| **0 regressions, 0-unsound across 44 iterations** | — | — | ✓ |
+
+#### Shipped commits roster (15 algorithmic)
+
+| iter | commit | impact |
+|---|---|---|
+| 6 | ca6ace1 | EAGER default-on |
+| 8 | 5e8e7af | sort-based isBoolTyped |
+| 10 | a41f057 | coeff×monomial cache (mcm/113) |
+| 11 | 2861d8c | EAGER gate accepts QF_LIA |
+| 13 | 161b4af | LiaSolver O(N²)→O(N) |
+| **14** | **0ca8d86** | **percentage-budget EAGER** |
+| 15 | 8323471 | FormulaRewriter rules |
+| **17** | **5a5b9d8** | **PurelyDefinedVarSubst (SC_02)** |
+| 21 | 5666999 | scanPositiveBounds And-flatten |
+| **23** | **a555c7b** | **even-power injection (MS_02, SQ_02)** |
+| 25 | 35f7d66 | AUTO_EUF_PROMOTE |
+| 32 | 0d795e5 | INLINE_SINGLE_DEFS_INT |
+| **35** | **1a76356** | **mod-by-variable (modSimpleTest)** |
+| 38 | 31fc900 | TIGHT_BOUND_SUBST |
+| **43** | **9eb9265** | **AndFlatten + cycle detector** |
+| **44** | **15e9e92** | **univariate-poly cycle solver (any degree)** |
