@@ -1189,22 +1189,31 @@ public:
                     vSq.sort = intSort;
                     vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
                     ExprId vSqEid = ir->add(std::move(vSq));
-                    ExprId k15625 = mkConst(15625);
-                    CoreExpr mul15625X;
-                    mul15625X.kind = Kind::Mul;
-                    mul15625X.sort = intSort;
-                    mul15625X.children = SmallVector<ExprId,4>{k15625, mt.X};
-                    ExprId mul15625XEid = ir->add(std::move(mul15625X));
-                    ExprId k10000 = mkConst(10000);
-                    CoreExpr divE;
-                    divE.kind = Kind::Div;
-                    divE.sort = intSort;
-                    divE.children = SmallVector<ExprId,4>{mul15625XEid, k10000};
-                    ExprId divEid = ir->add(std::move(divE));
+                    // Lemma 2 in DIV-FREE polynomial form to avoid
+                    // IntDivModLowerer mismatch with the original
+                    // assertion's div. The proof shows 16*V² ≤ 25*X
+                    // (the exact form derived in the analysis doc),
+                    // which is equivalent to V² ≤ ⌊25*X/16⌋ over Z.
+                    // Note: original assertion uses div(*15625 X) 10000)
+                    // which equals ⌊1.5625*X⌋ = ⌊25*X/16⌋. The div-free
+                    // form sidesteps Lowerer's fresh quotient/remainder
+                    // variable per occurrence.
+                    ExprId k16 = mkConst(16);
+                    ExprId k25 = mkConst(25);
+                    CoreExpr mul16VV;
+                    mul16VV.kind = Kind::Mul;
+                    mul16VV.sort = intSort;
+                    mul16VV.children = SmallVector<ExprId,4>{k16, vSqEid};
+                    ExprId mul16VVEid = ir->add(std::move(mul16VV));
+                    CoreExpr mul25X;
+                    mul25X.kind = Kind::Mul;
+                    mul25X.sort = intSort;
+                    mul25X.children = SmallVector<ExprId,4>{k25, mt.X};
+                    ExprId mul25XEid = ir->add(std::move(mul25X));
                     CoreExpr leqAtom;
                     leqAtom.kind = Kind::Leq;
                     leqAtom.sort = boolSortId_;
-                    leqAtom.children = SmallVector<ExprId,4>{vSqEid, divEid};
+                    leqAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
                     ExprId lemma2 = ir->add(std::move(leqAtom));
                     newLemmas.push_back({0, lemma2});
                 }
