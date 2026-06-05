@@ -396,18 +396,11 @@ std::optional<RationalPolynomial> RationalPolynomial::fromPolyId(
     if (!termsOpt) return std::nullopt;
 
     RationalPolynomial rp;
-    rp.terms_.reserve(termsOpt->size());
     for (const auto& term : *termsOpt) {
-        mpq_class c(term.coefficient);
-        if (c == 0) continue;
-        // O(1) APPEND of the canonicalized key, NOT addTerm's terms_[key]+=coeff
-        // (an O(n) sorted insert). Building an N-monomial poly term-by-term via
-        // addTerm is O(N^2); the single normalize() below sorts+merges duplicates
-        // for the same canonical result in O(N log N). fromPolyId is the
-        // projection hot path (principalSubresultantCoefficients/lazardProjectStep
-        // rebuild polys here) — O(N^2) here stalled high-monomial inputs (kissing).
+        // kernel terms expose powers as std::vector; build a MonomialKey
+        // (SmallVector) from it for addTerm.
         MonomialKey key(term.powers.begin(), term.powers.end());
-        rp.terms_.append(canonicalizeMonomialKey(std::move(key)), std::move(c));
+        rp.addTerm(key, mpq_class(term.coefficient));
     }
     rp.normalize();
     return rp;
