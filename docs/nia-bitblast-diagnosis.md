@@ -1248,3 +1248,49 @@ Branch state restored to iter-27 + iter-29 revert. The 11 shipped algorithmic co
 Corpus: 50/87 (+128% over baseline 22), oracle-UNSAT 13/33 (39%), **0 regressions, 0-unsound** under the SHIPPED + non-reverted flags.
 
 Two soundness bugs caught + reverted across iter-28 (caught pre-commit) and iter-30 (caught post-commit at corpus reverify). Lesson: the **full 87-case oracle differential is the only reliable safety net** for substitution-based passes — small-suite gates can pass even when the pass is unsound on adversarial inputs.
+
+---
+
+### Iteration 31 — iter-29 bug post-mortem: BOOL var inline-mode is the suspect
+
+Looking at SAT14/775's structure: it's ONE big assertion (`(assert (and ...))`) with deeply chained Bool definitions:
+
+```
+(= disabled1_L false)                           -- Bool var def
+(= non_inc1_L (and ...))                        -- Bool var def
+(= bounded1_L (and ...))                        -- Bool var def
+(= dec1_L (and ...))                            -- Bool var def
+(= bnd_and_dec1_L (and bounded1_L dec1_L))      -- chained Bool def
+(= GLOBAL_NT_1 (not ...))                       -- Bool var def
+(= ALL_NON_INC_0 non_inc1_L)                    -- Bool aliasing
+(= DIS_OR_ALL_NON_INC_0 (or disabled1_L ALL_NON_INC_0))
+(= SOME_BND_AND_DEC_0 bnd_and_dec1_L)
+```
+
+These are all CONJUNCTS of one big `(and ...)`, not separate top-level Eq atoms. iter-29's diag log "[PureDefVarSubst] eliminated 5 variable(s); dropped 6 atom(s)" suggests:
+
+- 4 vars × 1 def each = 4 inline-mode drops
+- 1 var × 2+ defs = 1 witness-mode drop = 2 atoms total
+
+The 4 inline-mode vars are most likely Bool defs.
+
+#### Future re-attempt requirements
+
+To re-ship INLINE_SINGLE_DEFS safely, the implementation must:
+
+1. **Restrict to Int-typed vars only.** Skip Bool. The semantics of Bool substitution through nested Or/Implies/Iff is subtler than my recursive-resolution handles correctly.
+
+2. **Verify the defining atom is at TOP-LEVEL.** Reject if the `(= V LHS)` appears nested under Or/Implies (where it's a conditional def, not an unconditional constraint). My current code may be receiving already-flattened assertion lists where And-children look like top-level atoms but are still semantically conditional.
+
+3. **Gate on the full 87-case oracle differential before commit.** Small-suite gates (nia 113/113, lia 57/57, held-out 16/16) DID NOT catch this bug. The differential is the only reliable safety net for substitution-based passes.
+
+This is a worthwhile lever for future iterations — leipzig/term-unsat-01 still needs the chain-inlining lever — but the implementation must be more careful than iter-29.
+
+#### Loop state after iter-31
+
+Branch state: `1dcc233` (doc only this iteration). 11 algorithmic commits remain shipped. Corpus 50/87 (+128% baseline), 0 regressions, 0-unsound under shipped flags. The 30-iteration loop has produced:
+
+- 11 algorithmic wins shipped
+- 2 soundness bugs caught + reverted (iter-28 pre-commit, iter-30 post-commit)
+- 3 falsified hypotheses (iter-3, 4, 12)
+- 9 documentation iterations
