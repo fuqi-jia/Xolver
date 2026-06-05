@@ -95,6 +95,10 @@ private:
     //   poly::sgn(g specialized, single algebraic alpha) — the univariate case.
     Sign signUnivariateAtAlgebraicGuarded(const std::vector<mpz_class>& gCoeffs,
                                           const AlgebraicRoot& alpha);
+    // Exact algebraic-number comparison via libpoly's lp_value_cmp, used as a
+    // sound fallback when compareRealAlg's manual interval refinement exhausts
+    // its budget (returns Unknown). Crash-guarded; firewall-gated.
+    CompareResult compareRealAlgViaLibpolyGuarded(const RealAlg& a, const RealAlg& b);
 
     // Helper: convert UniPolyId coefficient vector back to PolyId in given variable
     PolyId univariateToPoly(const std::vector<mpz_class>& coeffs, VarId var);

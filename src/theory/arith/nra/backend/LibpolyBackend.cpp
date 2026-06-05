@@ -1173,6 +1173,73 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
     const std::vector<mpz_class>&, const AlgebraicRoot&) { return Sign::Unknown; }
 #endif
 
+// Exact algebraic comparison via libpoly's lp_value_cmp. Resolves the
+// AlgebraicComparisonInconclusive that compareRealAlg's manual interval-
+// refinement path leaves when its iteration budget is exhausted (overlapping
+// algebraic intervals that need many bisections, or a rational inside a tight
+// algebraic interval). libpoly compares two values (rational or algebraic)
+// EXACTLY, refining internally as needed. Crash-guarded (SIGSEGV/SIGFPE ->
+// Unknown) + coeff-bit firewall, mirroring signUnivariateAtAlgebraicGuarded.
+// SOUND: an exact order is always correct; any crash/firewall/build failure
+// yields Unknown (never a guessed order) — so this only ever turns a previous
+// Unknown into a certified Less/Equal/Greater, never changes a decided answer.
+CompareResult LibpolyBackend::compareRealAlgViaLibpolyGuarded(
+    const RealAlg& a, const RealAlg& b) {
+#ifndef XOLVER_HAS_LIBPOLY
+    (void)a; (void)b;
+    return CompareResult::Unknown;
+#else
+    if (!libKernel_) return CompareResult::Unknown;
+    auto bitsOf = [&](const RealAlg& x) -> size_t {
+        if (x.isAlgebraic() && x.root.definingPoly != NullUniPolyId)
+            return fwMaxCoeffBits(getUni(x.root.definingPoly));
+        return 0;
+    };
+    if (fwTrips(std::max(bitsOf(a), bitsOf(b)), "compareRealAlgViaLibpoly"))
+        return CompareResult::Unknown;
+
+    volatile int cmp = 0;
+    volatile bool ok = false;
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
+        try {
+            auto toValue = [&](const RealAlg& x,
+                               std::optional<poly::Value>& out) -> bool {
+                if (x.isRational()) {
+                    out.emplace(poly::Rational(x.rational));
+                    return true;
+                }
+                if (x.isAlgebraic() && x.root.definingPoly != NullUniPolyId) {
+                    auto algOpt = algebraicRootToPolyAlg(x.root, getUni(x.root.definingPoly));
+                    if (!algOpt) return false;
+                    out.emplace(*algOpt);
+                    return true;
+                }
+                return false;
+            };
+            std::optional<poly::Value> va, vb;
+            if (toValue(a, va) && toValue(b, vb)) {
+                // poly::Value comparison operators wrap lp_value_cmp (exact).
+                cmp = (*va == *vb) ? 0 : ((*va < *vb) ? -1 : 1);
+                ok = true;
+            }
+        } catch (...) {
+            ok = false;
+        }
+    }
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    if (!ok) return CompareResult::Unknown;
+    if (cmp < 0) return CompareResult::Less;
+    if (cmp > 0) return CompareResult::Greater;
+    return CompareResult::Equal;
+#endif
+}
+
 CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b) {
     // rational-rational
     if (a.isRational() && b.isRational()) {
@@ -1264,7 +1331,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             if (a.rational < mutableB.lower) return CompareResult::Less;
             if (a.rational > mutableB.upper) return CompareResult::Greater;
         }
-        return CompareResult::Unknown;
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
     // algebraic-rational inside interval
@@ -1289,7 +1356,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             if (b.rational < mutableA.lower) return CompareResult::Greater;
             if (b.rational > mutableA.upper) return CompareResult::Less;
         }
-        return CompareResult::Unknown;
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
     // algebraic-algebraic overlapping intervals
@@ -1342,10 +1409,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             bool okB = refineRootInterval(mutableB);
             if (!okA || !okB) break;
         }
-        return CompareResult::Unknown;   // STEP 4 — budget exhausted: do NOT guess
+        // STEP 4 — manual refinement budget exhausted: ask libpoly for the exact
+        // order (never a guess). Unknown only if libpoly also fails / firewalls.
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
-    return CompareResult::Unknown;
+    return compareRealAlgViaLibpolyGuarded(a, b);
 #endif
 }
 
