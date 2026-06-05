@@ -236,6 +236,16 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
         satNlsatEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
         if (satNlsatEnabled_) satFirstEnabled_ = true;
     }
+    // nlsat-engine INCREMENT 4: algebraic-model SAT-first (default-OFF). Implies
+    // sat-first. Lets the model search reach algebraic-coordinate models (Geogebra).
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG")) {
+        satFirstAlgEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+        if (satFirstAlgEnabled_) satFirstEnabled_ = true;
+    }
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG")) {
+        long b = std::atol(e);
+        if (b > 0) satFirstAlgDegCap_ = b;
+    }
 }
 
 void CdcacCore::setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy) {
@@ -690,11 +700,30 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
         bool allSafe = true;
         for (size_t ci = 0; ci < satSafe_.size(); ++ci)
             if (!satSafe_[ci]) { allSafe = false; break; }
+        // Increment 4: the algebraic path additionally requires EVERY constraint's
+        // total degree ≤ satFirstAlgDegCap_ — algebra_->signAt (libpoly algebraic
+        // sign) OOM-crashes on high degree, so the algebraic regime is restricted
+        // to low-degree systems (Geogebra-class). High-degree ⇒ fall back to the
+        // crash-free rational path.
+        bool algOk = satFirstAlgEnabled_;
+        if (algOk) {
+            for (size_t ci = 0; ci < satRp_.size() && algOk; ++ci) {
+                if (!satRp_[ci]) continue;
+                long md = 0;
+                for (const auto& [key, coeff] : satRp_[ci]->terms()) {
+                    (void)coeff; long d = 0;
+                    for (const auto& [v, e] : key) { (void)v; d += (long)e; }
+                    if (d > md) md = d;
+                }
+                if (md > satFirstAlgDegCap_) algOk = false;
+            }
+        }
         if (allSafe) {
             SamplePoint prefix;
             long budget = satFirstBudget_;
             satFirstT0_ = std::chrono::steady_clock::now();   // wall-clock cap reference
-            CdcacResult sat = trySatSampleFirst(0, prefix, input, budget);
+            CdcacResult sat = algOk ? trySatSampleFirstAlg(0, prefix, input, budget)
+                                    : trySatSampleFirst(0, prefix, input, budget);
             if (sat.status == CdcacStatus::Sat)
                 return sat;
         }
@@ -1528,6 +1557,91 @@ static inline bool satRelHolds(int s, Relation rel) {
         case Relation::Geq: return s >= 0;
     }
     return false;
+}
+
+// --- nlsat-engine INCREMENT 4: ALGEBRAIC-model SAT-first ------------------------
+// Candidate set for `var` = the full rational candidate set (proven logic, wrapped
+// as RealAlg) PLUS the ACTUAL algebraic roots (the irrational roots themselves, not
+// their rational midpoints). The algebraic roots are what let the search assign,
+// e.g., v=√2 to satisfy v^2=2 exactly — unreachable by any rational sample.
+std::vector<RealAlg> CdcacCore::satSampleCandidatesAlg(int k, const SamplePoint& prefix,
+                                                       const CdcacInput& input) {
+    std::vector<RealAlg> cands;
+    // ALGEBRAIC ROOTS FIRST: for a variable an equality constraint pins to an
+    // irrational (v^2=2 ⇒ v=±√2), the algebraic root is THE answer and no rational
+    // can satisfy it — so trying rationals first just burns the budget on dead-ends
+    // before reaching the root. Offering the algebraic roots up front lets the
+    // search lock the forced algebraic coordinate immediately (recovered Geogebra
+    // IsoRightTriangle cases this way).
+    VarId var = input.varOrder[k];
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        if (ci < satSafe_.size() && !satSafe_[ci]) continue;
+        if (kernel_->isConstant(input.constraints[ci].poly)) continue;
+        UniPolyId up = algebra_->specializeToUnivariate(input.constraints[ci].poly, prefix, var);
+        if (up == NullUniPolyId) continue;
+        RootSet rs = algebra_->isolateRealRoots(up);
+        if (rs.crashOccurred) continue;
+        for (const auto& r : rs.roots)
+            if (!r.isRational()) cands.push_back(r);   // the key addition: algebraic roots
+    }
+    // Then the full rational candidate set (proven logic, wrapped as RealAlg).
+    for (const auto& q : satSampleCandidates(k, prefix, input))
+        cands.push_back(RealAlg::fromRational(q));
+    return cands;
+}
+
+// Algebraic SAT-first recursion. Mirrors trySatSampleFirst but assigns RealAlg
+// (possibly algebraic) values and evaluates EVERY sign via algebra_->signAt (the
+// libpoly algebraic sign — gated to low-degree systems in solve() for crash-safety).
+// Soundness-SAFE: Sat ONLY on a full point where every constraint's signAt gives a
+// definite sign satisfying its relation; signAt==Unknown is inconclusive and never
+// concludes (forward-check: don't prune; leaf: don't claim a model). Never Unsat.
+CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
+                                            const CdcacInput& input, long& budget) {
+    int n = static_cast<int>(input.varOrder.size());
+    if (k == n) {
+        for (const auto& c : input.constraints) {
+            Sign s = algebra_->signAt(c.poly, prefix);
+            if (s == Sign::Unknown || !relationHolds(s, c.rel))
+                return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+        }
+        return CdcacResult::mkSat(prefix);   // full algebraic point, all constraints hold
+    }
+    if (budget <= 0) return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+    VarId var = input.varOrder[k];
+    std::vector<RealAlg> cands = satSampleCandidatesAlg(k, prefix, input);
+    std::unordered_set<VarId> assigned;
+    for (VarId v : prefix.varOrder) assigned.insert(v);
+    assigned.insert(var);
+    for (auto& cand : cands) {
+        if (budget <= 0) break;
+        --budget;
+        if (satFirstMs_ > 0 && (budget & 1023) == 0) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::steady_clock::now() - satFirstT0_).count();
+            if (ms > satFirstMs_) { budget = 0; break; }
+        }
+        prefix.push(var, cand);
+        // Forward-check: only constraints whose vars are ALL assigned get a definite
+        // signAt; a violated one prunes. (Explicit all-assigned guard avoids relying
+        // on signAt's partial-assignment behaviour and skips needless libpoly calls.)
+        bool pruned = false;
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            if (ci >= satRp_.size() || !satRp_[ci]) continue;
+            bool allAssigned = true;
+            for (VarId v : satRp_[ci]->variables())
+                if (!assigned.count(v)) { allAssigned = false; break; }
+            if (!allAssigned) continue;
+            Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
+            if (s == Sign::Unknown) continue;            // inconclusive — don't prune
+            if (!relationHolds(s, input.constraints[ci].rel)) { pruned = true; break; }
+        }
+        if (pruned) { prefix.pop(); continue; }
+        CdcacResult r = trySatSampleFirstAlg(k + 1, prefix, input, budget);
+        prefix.pop();
+        if (r.status == CdcacStatus::Sat) return r;
+    }
+    return CdcacResult::mkUnknown(CdcacUnknownReason::None);
 }
 
 CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,

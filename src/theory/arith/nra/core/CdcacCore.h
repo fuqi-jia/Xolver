@@ -150,6 +150,24 @@ private:
     long satFirstMs_ = 10000;
     std::chrono::steady_clock::time_point satFirstT0_;  // search start (set in solve())
     bool satFirstTried_ = false;
+    // Increment 4 (XOLVER_NRA_CAC_SAT_FIRST_ALG, default-OFF): ALGEBRAIC-model
+    // SAT-first. The rational-only path (above) samples rationals and leaf-validates
+    // via exactSignAt (pure-mpq, crash-free) — so it CANNOT find a model with an
+    // algebraic coordinate (e.g. Geogebra geometry: v9=√2). This path offers the
+    // actual ALGEBRAIC roots (RealAlg, not their rational midpoints) as candidates
+    // and evaluates the leaf + forward-check over the algebraic sample via
+    // algebra_->signAt (libpoly algebraic sign). Soundness-SAFE (Sat only on a full
+    // signAt-validated point; signAt==Unknown is treated as inconclusive and never
+    // concludes). Crash-capped: runs ONLY when every constraint's total degree is
+    // ≤ satFirstAlgDegCap_ (the libpoly algebraic-sign path OOM-crashes on high
+    // degree — the matrix class — so we restrict to the low-degree algebraic regime,
+    // Geogebra ~deg-3). Implies satFirstEnabled_.
+    bool satFirstAlgEnabled_ = false;
+    long satFirstAlgDegCap_ = 6;
+    CdcacResult trySatSampleFirstAlg(int k, SamplePoint& prefix,
+                                     const CdcacInput& input, long& budget);
+    std::vector<RealAlg> satSampleCandidatesAlg(int k, const SamplePoint& prefix,
+                                                const CdcacInput& input);
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
     // precomputed once per sample-first search so high-degree/huge-coeff polys are
     // skipped (not crashed). Indexed parallel to input.constraints.
