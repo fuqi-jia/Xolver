@@ -91,3 +91,39 @@ The contradiction emerges because newres = ⌊(oldres + ⌊x/oldres⌋)/2⌋ is 
 - Manual algebraic proof: complete for branch 1.
 - Branch 2 needs case analysis; deferred.
 - Implementation scaffolding: pending (multi-iter project).
+
+## Branch 2 algebraic proof (iter-57 update)
+
+Branch 2 asserts: `newres² > X + newres` AND `newres² > ⌊1.5625*X⌋`.
+
+**Claim**: the second clause is ALWAYS false. That is, `newres² ≤ ⌊1.5625*X⌋`, equivalently `16*newres² ≤ 25*X`.
+
+**Proof**: Let q = ⌊X/oldres⌋, X = q*oldres + r, 0 ≤ r < oldres, p = (oldres+q) mod 2, 2*newres = oldres + q - p.
+
+  16*newres² = 4*(oldres + q - p)²
+              = 4*(oldres² + q² + p² + 2*oldres*q - 2*p*oldres - 2*p*q)
+
+  16*newres² - 25*X
+    = 4*oldres² + 4*q² + 4*p² + 8*oldres*q - 8*p*(oldres+q) - 25*(q*oldres + r)
+    = 4*q² - 17*oldres*q + 4*oldres² + 4*p² - 8*p*(oldres+q) - 25*r
+
+Consider as a quadratic in q. The polynomial `4*q² - 17*oldres*q + 4*oldres²` factors as `4*(q - oldres/4)*(q - 4*oldres)`. Roots q = oldres/4 and q = 4*oldres. Since q ∈ [oldres, 4*oldres], the expression is `≤ 0` throughout the interval (peaks at q=4*oldres where it = 0; minimum at q=2*oldres where it = -9*oldres²).
+
+For p=0: extra terms reduce to `-25*r ≤ 0`. So whole expression `≤ 0`.
+For p=1: extra `4 - 8*(oldres+q) - 25*r ≤ 4 - 16 - 0 = -12 < 0`. So whole expression `≤ 0`.
+
+Hence `16*newres² ≤ 25*X` always. ∎
+
+## Combined UNSAT closure for sqrtStep1
+
+Emit TWO lemmas under hypothesis `(>= X 1) ∧ (>= U 1) ∧ (<= (* U U) X) ∧ (<= X (* 4 (* U U)))`:
+
+1. `(< X (* (+ V 1) (+ V 1)))`         — branch-1 contradiction
+2. `(<= (* V V) (div (* 15625 X) 10000))` — branch-2 second clause is true
+
+Then the original assertion `not (and (< X (V+1)²) (or (<= V² (+ X V)) (<= V² (div (* 15625 X) 10000))))` becomes false:
+- Lemma 1 ⇒ first conjunct holds
+- Lemma 2 ⇒ inner OR holds (via right disjunct)
+- So `and(true, true)` = true, `not(true)` = false → conflict → UNSAT.
+
+The prover thus emits 2 lemmas to close sqrtStep1.
