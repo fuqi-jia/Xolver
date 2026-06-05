@@ -1166,7 +1166,32 @@ public:
                         c.payload = Payload(v);
                         return ir->add(std::move(c));
                     };
+                    // Emit MULTIPLE equivalent forms of each lemma. The SAT
+                    // layer's atomization does syntactic (not semantic)
+                    // dedup, so for the lemma to discharge the original
+                    // assertion's atoms via direct SAT-level conflict, it
+                    // must hash-cons to the SAME ExprId as the assertion's
+                    // corresponding sub-expression. Emit FORM A (matches
+                    // original's syntactic shape) + FORM B (alternate
+                    // shape NIA reasoner can independently derive from).
                     ExprId one = mkConst(1);
+                    ExprId two = mkConst(2);
+                    // V² (shared by L1B, L2A, L2B):
+                    CoreExpr vSq;
+                    vSq.kind = Kind::Mul;
+                    vSq.sort = intSort;
+                    vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
+                    ExprId vSqEid = ir->add(std::move(vSq));
+                    // (* 2 V) shared by L1B:
+                    CoreExpr mul2V;
+                    mul2V.kind = Kind::Mul;
+                    mul2V.sort = intSort;
+                    mul2V.children = SmallVector<ExprId,4>{two, mt.V};
+                    ExprId mul2VEid = ir->add(std::move(mul2V));
+
+                    // ----- L1 FORM A: (< X (* (+ V 1) (+ V 1))) -----
+                    // Exact syntactic shape of the original assertion's
+                    // first conjunct (the one we want to discharge).
                     CoreExpr vPlus1;
                     vPlus1.kind = Kind::Add;
                     vPlus1.sort = intSort;
@@ -1181,23 +1206,44 @@ public:
                     ltAtom.kind = Kind::Lt;
                     ltAtom.sort = boolSortId_;
                     ltAtom.children = SmallVector<ExprId,4>{mt.X, mulVpEid};
-                    ExprId lemma1 = ir->add(std::move(ltAtom));
-                    newLemmas.push_back({0, lemma1});
-                    // Build lemma 2: (<= (* V V) (div (* 15625 X) 10000))
-                    CoreExpr vSq;
-                    vSq.kind = Kind::Mul;
-                    vSq.sort = intSort;
-                    vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
-                    ExprId vSqEid = ir->add(std::move(vSq));
-                    // Lemma 2 in DIV-FREE polynomial form to avoid
-                    // IntDivModLowerer mismatch with the original
-                    // assertion's div. The proof shows 16*V² ≤ 25*X
-                    // (the exact form derived in the analysis doc),
-                    // which is equivalent to V² ≤ ⌊25*X/16⌋ over Z.
-                    // Note: original assertion uses div(*15625 X) 10000)
-                    // which equals ⌊1.5625*X⌋ = ⌊25*X/16⌋. The div-free
-                    // form sidesteps Lowerer's fresh quotient/remainder
-                    // variable per occurrence.
+                    newLemmas.push_back({0, ir->add(std::move(ltAtom))});
+
+                    // ----- L1 FORM B: (<= X (+ (* V V) (* 2 V))) -----
+                    // Equivalent over Z: `X < (V+1)²` ⟺ `X ≤ V² + 2V`.
+                    // Pure polynomial form; NIA reasoner can deduce from this.
+                    CoreExpr addPoly;
+                    addPoly.kind = Kind::Add;
+                    addPoly.sort = intSort;
+                    addPoly.children = SmallVector<ExprId,4>{vSqEid, mul2VEid};
+                    ExprId addPolyEid = ir->add(std::move(addPoly));
+                    CoreExpr leqAtomB;
+                    leqAtomB.kind = Kind::Leq;
+                    leqAtomB.sort = boolSortId_;
+                    leqAtomB.children = SmallVector<ExprId,4>{mt.X, addPolyEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqAtomB))});
+
+                    // ----- L2 FORM A: (<= (* V V) (div (* 15625 X) 10000)) -----
+                    // Exact syntactic shape of original's inner OR right disjunct.
+                    ExprId k15625 = mkConst(15625);
+                    CoreExpr mul15625X;
+                    mul15625X.kind = Kind::Mul;
+                    mul15625X.sort = intSort;
+                    mul15625X.children = SmallVector<ExprId,4>{k15625, mt.X};
+                    ExprId mul15625XEid = ir->add(std::move(mul15625X));
+                    ExprId k10000 = mkConst(10000);
+                    CoreExpr divE;
+                    divE.kind = Kind::Div;
+                    divE.sort = intSort;
+                    divE.children = SmallVector<ExprId,4>{mul15625XEid, k10000};
+                    ExprId divEid = ir->add(std::move(divE));
+                    CoreExpr leqDivAtom;
+                    leqDivAtom.kind = Kind::Leq;
+                    leqDivAtom.sort = boolSortId_;
+                    leqDivAtom.children = SmallVector<ExprId,4>{vSqEid, divEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqDivAtom))});
+
+                    // ----- L2 FORM B: (<= (* 16 (* V V)) (* 25 X)) -----
+                    // Div-free polynomial form for the NIA reasoner.
                     ExprId k16 = mkConst(16);
                     ExprId k25 = mkConst(25);
                     CoreExpr mul16VV;
@@ -1210,12 +1256,11 @@ public:
                     mul25X.sort = intSort;
                     mul25X.children = SmallVector<ExprId,4>{k25, mt.X};
                     ExprId mul25XEid = ir->add(std::move(mul25X));
-                    CoreExpr leqAtom;
-                    leqAtom.kind = Kind::Leq;
-                    leqAtom.sort = boolSortId_;
-                    leqAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
-                    ExprId lemma2 = ir->add(std::move(leqAtom));
-                    newLemmas.push_back({0, lemma2});
+                    CoreExpr leqPolyAtom;
+                    leqPolyAtom.kind = Kind::Leq;
+                    leqPolyAtom.sort = boolSortId_;
+                    leqPolyAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqPolyAtom))});
                 }
                 if (!newLemmas.empty()) {
                     for (const auto& [lv, eid] : newLemmas) ir->addAssertion(eid, lv);
