@@ -44,6 +44,10 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (runStrategy10c()) return result_;
     if (runStrategy10a()) return result_;
 
+    if (std::getenv("XOLVER_DIAG_CMS"))
+        std::cerr << "[CMS] no-witness: tried=" << diagTried_
+                  << " fcReject=" << diagFcReject_ << " evalFalse=" << diagEvalFalse_
+                  << " evalIndet=" << diagEvalIndet_ << " accept=" << diagAccept_ << "\n";
     return result_;
 }
 
@@ -376,10 +380,21 @@ void CandidateModelSearch::buildPriorityList() {
                 std::set<mpq_class> cand;
                 for (const auto& pv : funcPinnedValues[var.funcName]) cand.insert(pv);
                 for (int s : {0, 1, -1, 2}) cand.insert(mpq_class(s));
+                std::vector<mpq_class> lst;
                 for (const auto& q : cand) {
                     if (var.sort == ir_.intSortId() && q.get_den() != 1) continue;
-                    perVar_[i].push_back(q);
+                    lst.push_back(q);
                 }
+                // MUST be height-sorted: runStrategy10a's height-ordered
+                // enumeration breaks on the first element whose height exceeds the
+                // remaining envelope (it assumes monotonic height). A value-sorted
+                // list (std::set) breaks prematurely and SKIPS high-height values
+                // (e.g. pow2(k)=8), which int_check's witness needs.
+                std::sort(lst.begin(), lst.end(),
+                          [](const mpq_class& a, const mpq_class& b) {
+                              return heightOf(a) < heightOf(b);
+                          });
+                perVar_[i] = std::move(lst);
                 continue;
             }
             // free app: fall through to full enumeration below.
@@ -540,12 +555,16 @@ bool CandidateModelSearch::tryAcceptCandidate(
     // become 2 without enumerating it (cvc5/z3 model construction).
     if (cfg_.allowUF) deriveAppValues(full);
 
+    ++diagTried_;
     // Reject candidates that would make a function multi-valued before we
     // bother evaluating the assertions.
-    if (cfg_.allowUF && !functionallyConsistent(full)) return false;
+    if (cfg_.allowUF && !functionallyConsistent(full)) { ++diagFcReject_; return false; }
 
     auto verdict = evaluateAssertions(full);
+    if (verdict == EvalVerdict::False) ++diagEvalFalse_;
+    else if (verdict == EvalVerdict::Indeterminate) ++diagEvalIndet_;
     if (verdict != EvalVerdict::True) return false;
+    ++diagAccept_;
 
     // Accept: record model. App slots go into the function table, not the
     // variable assignment.
@@ -655,7 +674,14 @@ bool CandidateModelSearch::runStrategy10a() {
                     return false;
                 }
                 for (size_t j = 0; j < listSize[pos]; ++j) {
-                    int64_t h = heightOf(perVar_[pos][j]);
+                    // A SINGLETON dim is a FIXED value (a pinned/derived UF-app
+                    // slot, e.g. pow2(3)=8), not part of the search — it must NOT
+                    // consume the height envelope. Otherwise the pinned base cases
+                    // (pow2(0..3) = 1,2,4,8 → ~19 fixed height) starve the budget
+                    // (30), excluding witnesses whose FREE vars need more height
+                    // (int_check: k=4,x0=5,t=6,pow2(k)=8 ≈ 29 free).
+                    int64_t h = (listSize[pos] == 1)
+                                    ? 0 : heightOf(perVar_[pos][j]);
                     if (h > remainingHeight) break;  // priority list grows in height
                     cursor[pos] = j;
                     if (recurse(pos + 1, remainingHeight - h)) return true;

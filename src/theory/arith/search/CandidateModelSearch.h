@@ -139,6 +139,10 @@ private:
     // arith assignment (pinned base cases + functional consistency) instead of
     // ENUMERATING it. Mutates `full`. Sound: re-validated by evaluateAssertions.
     void deriveAppValues(std::unordered_map<std::string, mpq_class>& full) const;
+    // Diagnostic rejection breakdown (XOLVER_DIAG_CMS): how candidates were
+    // disposed of, to tell "never generated" from "generated and rejected".
+    mutable size_t diagTried_ = 0, diagFcReject_ = 0, diagEvalFalse_ = 0,
+                   diagEvalIndet_ = 0, diagAccept_ = 0;
     void buildPriorityList();
     void detectActiveBounds();
     bool isLogicEnabled() const;
