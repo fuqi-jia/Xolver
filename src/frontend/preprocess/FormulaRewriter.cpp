@@ -131,6 +131,12 @@ void FormulaRewriter::scanNonNegativeVars() {
             varLowerBound_[v] = bound;
         }
     };
+    auto recordUpperBound = [&](const std::string& v, const mpz_class& bound) {
+        auto it = varUpperBound_.find(v);
+        if (it == varUpperBound_.end() || bound < it->second) {
+            varUpperBound_[v] = bound;
+        }
+    };
     auto constGe = [&](ExprId e, const mpq_class& bound) -> bool {
         const CoreExpr& n = ir_.get(e);
         if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
@@ -162,6 +168,14 @@ void FormulaRewriter::scanNonNegativeVars() {
                     recordLowerBound(*v, bound);
                 }
             }
+            // (>= c v) / (> c v): v <= c / v <= c - 1
+            if (auto v = varName(a.children[1])) {
+                mpz_class c;
+                if (tryConstInt(a.children[0], c)) {
+                    mpz_class bound = (a.kind == Kind::Geq) ? c : (c - 1);
+                    recordUpperBound(*v, bound);
+                }
+            }
         }
         if (a.kind == Kind::Leq || a.kind == Kind::Lt) {
             mpq_class need = (a.kind == Kind::Leq) ? mpq_class(0) : mpq_class(-1);
@@ -171,6 +185,14 @@ void FormulaRewriter::scanNonNegativeVars() {
                 if (tryConstInt(a.children[0], c)) {
                     mpz_class bound = (a.kind == Kind::Leq) ? c : (c + 1);
                     recordLowerBound(*v, bound);
+                }
+            }
+            // (<= v c) / (< v c): v <= c / v <= c - 1
+            if (auto v = varName(a.children[0])) {
+                mpz_class c;
+                if (tryConstInt(a.children[1], c)) {
+                    mpz_class bound = (a.kind == Kind::Leq) ? c : (c - 1);
+                    recordUpperBound(*v, bound);
                 }
             }
         }
@@ -184,6 +206,15 @@ void FormulaRewriter::scanNonNegativeVars() {
         mark(e);
     };
     for (const auto& [_, e] : ir_.getScopedAssertions()) walk(e);
+}
+
+bool FormulaRewriter::tryGetTightValue(const std::string& v, mpz_class& out) const {
+    auto lo = varLowerBound_.find(v);
+    auto hi = varUpperBound_.find(v);
+    if (lo == varLowerBound_.end() || hi == varUpperBound_.end()) return false;
+    if (lo->second != hi->second) return false;
+    out = lo->second;
+    return true;
 }
 
 bool FormulaRewriter::tryGetLowerBound(ExprId e, mpz_class& out) const {
@@ -238,7 +269,32 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
         if (!frame.processed) {
             frame.processed = true;
             const CoreExpr& node = ir_.get(e);
-            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            if (node.children.empty()) {
+                // Tight-bound substitution (XOLVER_PP_TIGHT_BOUND_SUBST):
+                // Variable with lower == upper bound -> ConstInt(value).
+                // Sound: the bound atoms in the formula constrain v to the
+                // single integer value c, so substituting v with c
+                // everywhere is logically equivalent. Closes the VeryMax
+                // Farkas lambda pattern `(<= 0 lam) ∧ (< lam 1)` -> lam = 0.
+                static const bool tightSubst =
+                    std::getenv("XOLVER_PP_TIGHT_BOUND_SUBST") != nullptr;
+                if (tightSubst && node.kind == Kind::Variable) {
+                    if (auto* s = std::get_if<std::string>(&node.payload.value)) {
+                        mpz_class val;
+                        if (tryGetTightValue(*s, val)) {
+                            ExprId folded = mkIntOrReal(mpq_class(val), node.sort);
+                            if (folded != NullExpr) {
+                                memo_[e] = folded;
+                                stack.pop_back();
+                                continue;
+                            }
+                        }
+                    }
+                }
+                memo_[e] = e;
+                stack.pop_back();
+                continue;
+            }
             for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
                 ExprId c = node.children[i];
                 if (c != NullExpr && memo_.find(c) == memo_.end()) stack.push_back({c, false});
