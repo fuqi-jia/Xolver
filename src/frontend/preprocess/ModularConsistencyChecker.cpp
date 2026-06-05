@@ -177,7 +177,7 @@ ExprId ModularConsistencyChecker::mkFalse() {
     e.kind    = Kind::ConstBool;
     e.sort    = boolSortId_;
     e.payload = Payload(false);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ModularConsistencyChecker::mkIntConst(const mpz_class& v) {
@@ -194,7 +194,7 @@ ExprId ModularConsistencyChecker::mkIntConst(const mpz_class& v) {
     } else {
         e.payload = Payload(v.get_str());
     }
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ModularConsistencyChecker::mkEq(ExprId a, ExprId b) {
@@ -203,7 +203,7 @@ ExprId ModularConsistencyChecker::mkEq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 void ModularConsistencyChecker::run() {

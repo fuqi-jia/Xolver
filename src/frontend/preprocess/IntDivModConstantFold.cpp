@@ -68,7 +68,7 @@ ExprId IntDivModConstantFold::foldRec(ExprId root) {
             fresh.sort = node.sort;
             fresh.children = std::move(newChildren);
             fresh.payload = node.payload;
-            rebuilt = ir_.add(std::move(fresh));
+            rebuilt = ir_.addShared(std::move(fresh));
         }
         // Try div/mod constant fold at the current node.
         ExprId folded = tryFoldDivMod(rebuilt);
@@ -136,7 +136,7 @@ ExprId IntDivModConstantFold::mkConstInt(int64_t v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 } // namespace xolver

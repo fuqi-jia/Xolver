@@ -99,7 +99,8 @@ ExprId Purifier::makeEq(ExprId lhs, ExprId rhs) {
     e.sort = boolSortId_;
     e.children.push_back(lhs);
     e.children.push_back(rhs);
-    return ir_.add(e);
+    // iter-67: addShared so identical bridge equalities collapse.
+    return ir_.addShared(e);
 }
 
 TheoryId Purifier::theoryOf(ExprId eid) const {
@@ -285,7 +286,7 @@ ExprId Purifier::purifyRec(ExprId root) {
             // never fire — silently dropping the very equality combination
             // exists to exchange.
             ExprId purifiedApply = changed
-                ? ir_.add(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), e.payload})
+                ? ir_.addShared(CoreExpr{Kind::UFApply, e.sort, SmallVector<ExprId, 4>(newArgs.begin(), newArgs.end()), e.payload})
                 : f.eid;
             ExprId fresh = makeFreshVar(e.sort);
             ExprId bridge = makeEq(fresh, purifiedApply);
@@ -332,7 +333,7 @@ ExprId Purifier::purifyRec(ExprId root) {
                 ne.kind = e.kind;
                 ne.sort = e.sort;
                 for (ExprId c : newChildren) ne.children.push_back(c);
-                rebuilt = ir_.add(ne);
+                rebuilt = ir_.addShared(ne);
             }
 
             // An array READ whose result is arithmetic (Int/Real) is, to the
@@ -384,7 +385,7 @@ ExprId Purifier::purifyRec(ExprId root) {
                 ne.sort = e.sort;
                 ne.payload = e.payload;   // preserve the selector name
                 for (ExprId c : selChildren) ne.children.push_back(c);
-                rebuilt = ir_.add(ne);
+                rebuilt = ir_.addShared(ne);
             }
             ExprId fresh = makeFreshVar(e.sort);
             ExprId bridge = makeEq(fresh, rebuilt);
@@ -411,7 +412,7 @@ ExprId Purifier::purifyRec(ExprId root) {
             ne.kind = e.kind;
             ne.sort = e.sort;
             for (ExprId c : newChildren) ne.children.push_back(c);
-            done[f.eid] = ir_.add(ne);
+            done[f.eid] = ir_.addShared(ne);
         }
         stack.pop_back();
     }
