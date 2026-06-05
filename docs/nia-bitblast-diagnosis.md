@@ -1757,3 +1757,37 @@ right scope handling for proxy-vs-direct branch detection. Queued.
 
 Loop terminal stands at 51/87. 17 commits shipped. 0 regressions /
 0-unsound across all 49 iterations.
+
+---
+
+### Iteration 50 — complete branch-lit conflict ships, but CDCL(T) still doesn't terminate
+
+iter-49 finding: Marbie2 had 4 branches but only 2 with Tseitin proxies; narrow conflict over 2 proxies missed the unproxied branches.
+
+iter-50 added `TheoryAtomRegistry::findSatVarByExprId(ExprId)` and extended the conflict construction to ALSO walk `FarkasOrBlock.branches[*].originalAnd` ExprIds, resolving them to SatVars. Conflict size now grows from 2 (proxy-only) to **4-7 (proxy + unproxied)** on Marbie2.
+
+Test at 120 s: verdict still empty, but the conflict IS being emitted (size 4-7, vs previously 2). SAT learns the clauses but still doesn't converge to Unsat.
+
+#### Why complete branch-lit conflict isn't enough
+
+A theory conflict says "this trail is bad" by emitting a clause that's currently false. SAT backtracks, learns the clause, tries an alternative trail. But:
+
+1. Other formula structure (non-Farkas atoms, outer assertions) gives SAT alternative trails that DON'T trigger our conflict.
+2. With outer assertions present (Marbie2 has 4), SAT can route around our Farkas-block conflict by varying outer-assertion lits.
+3. The theory says "no Farkas certificate exists for any trail" but the conflict only excludes ONE trail at a time.
+
+To truly emit UNSAT, we need either:
+1. **Empty clause** (direct UNSAT signal) — but the SAT backend filters empty clauses.
+2. **Decision-level-0 conflict** with TRUE-at-0 literals only — clean UNSAT signal, but our trail isn't at level 0.
+3. **Set-cover of all SAT models** via repeated emits — exponential.
+
+The right fix is a **structural** Unsat: when stageFarkasOr is convinced no certificate exists, signal via the pendingUnknown_ slot but with a strong "actually Unsat" enum value that propagates to the solver-level verdict. That's a multi-day API change in TheoryManager / CadicalTheoryPropagator.
+
+#### Status
+
+  iter-50 ships infrastructure (registry findSatVarByExprId + complete
+  branch-lit conflict construction), gated default-OFF. SAT smokes
+  preserved (leipzig sat, SAT14/85 sat). nia reg 113/113.
+
+  Loop terminal stands at 51/87. 18 commits shipped + infra. 0
+  regressions / 0-unsound across all 50 iterations.

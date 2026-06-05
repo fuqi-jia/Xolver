@@ -2191,19 +2191,26 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             TheoryConflict tc;
             if (registry_) {
                 std::unordered_set<SatVar> seen;
+                auto pushNeg = [&](SatVar sv) {
+                    if (!seen.insert(sv).second) return;
+                    for (const auto& a : active_) {
+                        if (a.reason.var == sv) {
+                            tc.clause.push_back(a.reason.negated());
+                            return;
+                        }
+                    }
+                };
                 for (const auto& blk : profile.blocks) {
+                    // (a) Tseitin-proxy branches (iter-49 path).
                     for (const auto& proxy : blk.branchProxies) {
                         if (proxy.empty()) continue;
-                        auto sv = registry_->findBoolVariableSatVar(proxy);
-                        if (!sv) continue;
-                        if (!seen.insert(*sv).second) continue;
-                        // Find current polarity on trail.
-                        for (const auto& a : active_) {
-                            if (a.reason.var == *sv) {
-                                tc.clause.push_back(a.reason.negated());
-                                break;
-                            }
-                        }
+                        if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushNeg(*sv);
+                    }
+                    // (b) Unproxied branches: resolve the originalAnd ExprId.
+                    for (const auto& br : blk.branches) {
+                        if (br.originalAnd == NullExpr) continue;
+                        if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
+                            pushNeg(*sv);
                     }
                 }
             }
@@ -2212,7 +2219,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                 tc.clause.reserve(active_.size());
                 for (const auto& a : active_) tc.clause.push_back(a.reason.negated());
             }
-            std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict\n";
+            std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict size=" << tc.clause.size() << "\n";
             return TheoryCheckResult::mkConflict(std::move(tc));
         }
         traceWrite("  → empty table; bail");
