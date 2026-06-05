@@ -1112,20 +1112,26 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
         prefix.push(var, sampleWithOrigin);
 
-        // FORWARD-PRUNE: a constraint that becomes fully determined at THIS level
-        // (it contains `var` and all its other variables are already assigned) is
-        // sign-invariant within this cell — its delineating polys are in the
-        // level's projection closure. So if it has a DEFINITE sign here that
-        // violates its relation, it is violated throughout the cell ⇒ no deeper
-        // assignment can satisfy it ⇒ the whole subtree is infeasible. Synthesize
-        // the leaf conflict directly instead of enumerating the exponential cell
-        // grid below (the meti-tarski / Geogebra timeout). Sound: identical verdict
-        // to the full descent (the constraint blocks every completion); when the
-        // closure is incomplete the synthesized cell's cert is incomplete and the
-        // UNSAT is downgraded to Unknown by the existing per-cell gate, so a missed
-        // root can only cost completeness, never emit a wrong UNSAT.
+        // FORWARD-PRUNE — kills the cell Cartesian-product explosion, but GATED to
+        // a fully RATIONAL prefix for soundness. A constraint fully determined at
+        // this level (all its vars assigned) has a fixed value independent of the
+        // deeper variables; if it is violated, no completion satisfies it, so the
+        // whole subtree is infeasible and we synthesize the leaf conflict instead
+        // of descending. Over a rational prefix signAt is EXACT and the delineation
+        // is complete, so this is identical to the full descent. Over an ALGEBRAIC
+        // prefix the prune is UNSOUND: signAt over an algebraic point can mis-sign,
+        // and (more importantly) skipping solveLevel skips the deeper algebraic-
+        // tower delineation where incompleteness is detected (unsatTrustworthy_=0),
+        // so a wrong UNSAT is emitted that the per-cell gate never downgrades
+        // (Geogebra IsoRightTriangle-Bottema1_17b, z3=sat). So over any algebraic
+        // prefix we DESCEND normally — incompleteness is then detected and the
+        // UNSAT downgraded to Unknown. (A sound algebraic-prefix prune needs the
+        // Task #10 completeness fix.)
         CdcacResult childRes;
-        {
+        bool prefixAllRational = true;
+        for (const auto& pv : prefix.values)
+            if (!pv.isRational()) { prefixAllRational = false; break; }
+        if (prefixAllRational) {
             std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
             std::vector<std::pair<size_t, Sign>> fwViolated;
             for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
@@ -1145,6 +1151,8 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 childRes = makeLeafConflictResult(fwViolated, input);
             else
                 childRes = solveLevel(k + 1, prefix, input);
+        } else {
+            childRes = solveLevel(k + 1, prefix, input);
         }
 
         prefix.pop();
