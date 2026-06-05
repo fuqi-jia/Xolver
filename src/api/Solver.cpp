@@ -1047,13 +1047,6 @@ public:
         if (std::getenv("XOLVER_PP_NEWTON_INT_SQRT") && ir->currentScopeLevel() == 0) {
             SortId intSort = ir->intSortId();
             const auto& scoped = ir->getScopedAssertions();
-            std::cerr << "[NewtonIntSqrt-diag] scoped.size=" << scoped.size() << "\n";
-            for (size_t i = 0; i < scoped.size() && i < 10; ++i) {
-                const CoreExpr& a = ir->get(scoped[i].second);
-                std::cerr << "[NewtonIntSqrt-diag]   [" << i << "] kind=" << static_cast<int>(a.kind)
-                          << " children=" << a.children.size() << std::endl;
-            }
-            std::cerr << "[NewtonIntSqrt-diag] starting match scan" << std::endl;
             auto isVar = [&](const CoreExpr& n) -> bool {
                 return n.kind == Kind::Variable;
             };
