@@ -2270,3 +2270,65 @@ both clusters once cleanly applied.
 
 45 commits + 15 doc/infra. 0 regressions / 0-unsound across 75 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 76 — div0/mod0 litmus + z3/cvc5 differential (user-driven analysis)
+
+User-provided detailed SMT-LIB semantics analysis: `(mod x 0)` /
+`(div x 0)` is under-specified BUT FUNCTIONAL (same args → same value).
+Required reasoning is exactly EUF congruence over `div0(x, y)` and
+`mod0(x, y)` UF tokens. The QF_NIA → QF_UFNIA promotion at lowering
+time is CORRECT, not a bug. z3 does the same thing internally.
+
+z3/cvc5/xolver differential on user's 6 litmus tests:
+
+  7.1 `(= (mod x 0) 5)`                                  expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.2 `(= (mod x 0) 5) ∧ (= (mod x 0) 6)`               expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+  7.3 `(= (mod x 0) 5) ∧ (= (mod y 0) 6) ∧ (distinct x y)`  expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.4 `(= (mod x 3) 5)`                                  expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+  7.5 `(= y 0) ∧ (= (mod x y) 5)`                       expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.6 `(> y 0) ∧ (= y 3) ∧ (= (mod x y) 5)`             expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+
+**xolver's div0/mod0 EUF semantics is 100% correct**.
+
+z3/cvc5/xolver on actual LCTES/leipzig cases (60s):
+  LCTES locals.smt2:        z3 unsat @ 409ms, cvc5 unsat @ 1098ms, xolver TO
+  LCTES locals.nosumm:      **z3 TO @ 56s, cvc5 TO @ 56s, xolver TO**
+  leipzig term-unsat-01:    z3 unsat @ 74ms, cvc5 unsat @ 2652ms, xolver TO
+
+Observations:
+  - LCTES F2 (.nosumm) defeats z3 AND cvc5 at 60s — objectively very hard.
+  - LCTES F1 closes in z3/cvc5 < 1.5s; xolver still TO at 85s after
+    iter-74 substVars cache (2× speedup). Gap is real but bounded.
+  - leipzig has 0 div/mod operations (pure NIA arithmetic). The TO is
+    NOT about EUF — it's a different bottleneck (NIA reasoning depth).
+    z3 cracks it in 74ms; xolver hits NIA-stage OOM.
+
+LCTES SYMBOLIC_DIVMOD_NONZERO=1 effect (already-existing flag):
+  Bypasses div0/mod0 UF tokens → no QF_UFNIA promotion → 28s+ → 148ms unknown.
+  Sound as long as it returns unknown (not unsat) when divisor isn't
+  proven non-zero. Useful diagnostic; can't be default-on without
+  also proving non-zero in the lowering pass.
+
+Per-cluster next-step pin:
+  CLUSTER 3 (LCTES F1):  reachable target (z3 ~ ½ second). Need EUF+NIA
+                          combination layer perf improvements.
+  CLUSTER 3 (LCTES F2):  objectively very hard; both z3 and cvc5 TO.
+                          Likely unattainable without algorithmic
+                          breakthrough.
+  CLUSTER 4 (Dartagnan): same shared EUF+NIA root cause as LCTES F1.
+  CLUSTER 5 (leipzig):   pure NIA, no div/mod. Bottleneck is in the
+                          NIA reasoner stage (~615KB single 7-var poly?
+                          Sturm-MBO pattern? — confirmed iter-69-era
+                          poly cherry-picks helped parse but not solve).
+
+46 commits + 17 doc/infra. 0 regressions / 0-unsound across 75 iterations.
++3 corpus unsat sustained. xolver's div/mod-by-zero handling validated
+against SMT-LIB semantics via litmus differential.
