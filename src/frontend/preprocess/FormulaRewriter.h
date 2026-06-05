@@ -110,8 +110,16 @@ private:
     // root over the non-negatives is unique). Without the bound, even k is
     // unsound (x^2 = y^2 allows x = -y).
     std::unordered_set<std::string> nonNegVars_;
+    // Tightest known integer lower bound for each Int var: varLowerBound_[v]
+    // = the largest L such that v >= L is provable from a top-level atom
+    // (recognised shapes: (>= v c), (> v (c-1)), and the mirror (<= c v),
+    // (< (c-1) v)). Absent if no integer lower bound provable. Used by the
+    // mod-by-variable simplification (a constant residue is final iff it is
+    // < V's lower bound -- otherwise the mod could fold to residue-V).
+    std::unordered_map<std::string, mpz_class> varLowerBound_;
     void scanNonNegativeVars();
     bool isProvablyNonNegative(ExprId e) const;
+    bool tryGetLowerBound(ExprId e, mpz_class& out) const;
 };
 
 } // namespace xolver
