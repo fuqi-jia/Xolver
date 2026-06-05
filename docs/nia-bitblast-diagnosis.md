@@ -1056,3 +1056,46 @@ The And-flatten fix (5666999) IS a real bug fix — `sqrtStep1` / `sqrtStep1a` n
 - (c) Deeper LIA pipeline depth — the queued task #15 (profile other linear scans in LiaSolver).
 
 Each is its own iteration. Iter-21's fix lays the groundwork.
+
+---
+
+### Iteration 23 corpus result — even-power injection closes MS_02 + SQ_02
+
+Reverify under iter-23's binary + all iter-17/21 flags + NONZERO + pct=10 @ 20 s:
+
+| measure | iter-21 | **iter-23** | delta |
+|---|---|---|---|
+| total solved | 48 / 87 | **50 / 87** | **+2** |
+| sat | 37 | 37 | 0 |
+| **unsat** | 11 | **13** | **+2** |
+
+Two NEW UNSAT closes (both MathProblems):
+
+- `MathProblems/MS_02` (magic square of squares, k=2) — **2.6 s**
+- `MathProblems/SQ_02` (semi-magic square of fourth power, k=4) — **3.2 s**
+
+Both cracked by extending iter-15's odd-power injection to handle EVEN k when both bases are provably non-negative. Sound: `x^k = y^k` with `x ≥ 0 ∧ y ≥ 0` implies `x = y` for any k ≥ 1. The positivity scanner mirrors `IntDivModLowerer.scanPositiveBounds` (same shape detection, same And-flatten discipline).
+
+#### Cumulative loop progress
+
+| measure | baseline | **iter-23** | total delta |
+|---|---|---|---|
+| total solved | 22 / 87 (25%) | **50 / 87 (57%)** | **+28 (+127%)** |
+| oracle SAT solved | 17 / 36 (47%) | **31 / 36 (86%)** | +14 (+39pp) |
+| oracle UNSAT solved | 5 / 33 (15%) | **13 / 33 (39%)** | **+8 (+24pp)** |
+| oracle Unknown decided ★ | 0 | **6** | +6 |
+
+#### Remaining 20 oracle-UNSAT cluster picture
+
+| cluster | n | needed lever |
+|---|---|---|
+| VeryMax termination + LassoRanker | 11 | Farkas template enumeration + ranking-function |
+| sqrtmodinv-hoenicke + LCTES | 5 | div/mod-by-var Gauss reasoner OR logic auto-promote to QF_UFNIA |
+| Dartagnan ReachSafety + ConcurrencySafety | 5 | preprocess explodes 5→6k+ asserts; needs streaming bit-blast or LIA depth |
+| leipzig term-unsat-01 | 1 | matrix interpretation termination |
+
+The MathProblems cluster (originally 2 unsolved after iter-17 closed SC_02) is now fully closed. The positivity-gated rule pattern (iter-23) is generalisable — same lever applies to other "depends on sign" rewrites in NIA.
+
+#### Iteration 23 commit
+
+- `a555c7b` — FormulaRewriter even-power injection (positivity-gated).
