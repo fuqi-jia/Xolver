@@ -2176,6 +2176,25 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
     if (table.rows.empty()) {
+        traceWrite("  exhaustive=" + std::string(table.exhaustive ? "true" : "false")
+                   + " outerAssertions=" + std::to_string(profile.outerAssertions.size()));
+        bool unsafeNoOuterCheck = std::getenv("XOLVER_NIA_FARKAS_OR_UNSAT_EMIT_UNSAFE") != nullptr;
+        if (table.exhaustive && (unsafeNoOuterCheck || profile.outerAssertions.empty()) &&
+            std::getenv("XOLVER_NIA_FARKAS_OR_UNSAT_EMIT")) {
+            traceWrite("  → exhaustive empty table + no outer assertions => UNSAT");
+            // Construct a conservative conflict from active_ trail (negate
+            // every asserted literal). This says "the current trail leads
+            // to no Farkas certificate"; CDCL(T) backtracks; the same
+            // verdict applies to every alternative trail under the same
+            // formula, so SAT layer eventually returns Unsat.
+            TheoryConflict tc;
+            tc.clause.reserve(active_.size());
+            for (const auto& a : active_) {
+                tc.clause.push_back(a.reason.negated());
+            }
+            std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict\n";
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
         traceWrite("  → empty table; bail");
         return std::nullopt;
     }
