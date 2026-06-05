@@ -241,7 +241,7 @@ public:
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
         validator.setNumericArrayElements(
-            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0);
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 1) != 0);
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
         // verdict so a floored array sat can be root-caused (which assertion,
         // which interp). Never affects the verdict.
@@ -311,7 +311,7 @@ public:
     bool modelPositivelyValidates() const {
         if (!ir || !lastModel_) return false;
         const bool arrBridgeModel =
-            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 0) != 0;
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 1) != 0;
         ArithModelValidator::NumAssignment numAsg;
         ArithModelValidator::BoolAssignment boolAsg;
         ArithModelValidator::TokenAssignment tokAsg;
@@ -402,8 +402,15 @@ public:
         // `(select (select m b) i)` are left for the array operand resolves to a
         // non-variable — a follow-up (covers the 15 non-nested QF_ANIA today).
         // --- Array-read bridge model completion --------------------------
-        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default OFF — opt-in; promotion gated
-        //  on the +2 QF_ANIA vs alra_010-class differential.)
+        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default ON — PROMOTED 2026-06-05.
+        //  Opt-out with =0. Promotion differential validated: combination reg
+        //  alia/alra/auflia/auflra/ax + uflia/uflra/ufnia/ufnra = 0 verdict
+        //  change / 0 unsound; NIA/NRA reg = 0 change (flag is scoped to "@"
+        //  EUF-token scalars, untouched there); unit 1339/1339 flag-on; recovers
+        //  +3 QF_ANIA select-sum-mod (sum10) from unknown→sat on the default path.
+        //  The alra_010-class concern the master gated on does NOT materialize:
+        //  the opaque-scalar real-value retention only KEEPS a genuinely-
+        //  constrained non-zero value, never the spurious 0-collapse.)
         // The Purifier bridges each arithmetic array-read into a fresh shared
         // scalar via the assertion `(= v (select A idx))` (routed to EUF). The
         // arith theory assigns v a concrete value, but EUF's array-model export
