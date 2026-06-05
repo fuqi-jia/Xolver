@@ -563,16 +563,17 @@ RationalPolynomial RationalPolynomial::pseudoRemainder(VarId v, const RationalPo
         }
     }
 
-    // Reconstruct remainder polynomial
+    // Reconstruct remainder polynomial. Append each canonicalized key O(1)
+    // (NOT addTerm's terms_[key]+=coeff O(n) sorted insert) and let the single
+    // normalize() below sort+merge once — same O(N^2)->O(N log N) class as the
+    // fromPolyId fix, on the pseudo-remainder / subresultant-chain path.
     RationalPolynomial result;
     for (size_t i = 0; i < rem.size(); ++i) {
         if (rem[i].isZero()) continue;
         for (const auto& [key, coeff] : rem[i].terms()) {
-            // SmallVector has no insert(); append {v, i} and let addTerm's
-            // canonicalizeMonomialKey re-sort/merge (i==0 -> exp 0 dropped).
             MonomialKey newKey = key;
             newKey.push_back({v, static_cast<int>(i)});
-            result.addTerm(newKey, coeff);
+            result.terms_.append(canonicalizeMonomialKey(std::move(newKey)), coeff);
         }
     }
     result.normalize();
