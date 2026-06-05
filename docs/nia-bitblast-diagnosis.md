@@ -1331,3 +1331,40 @@ After 32 iterations, the corpus stabilizes at:
 | 0 regressions, 0-unsound | ✓ |
 
 Each of the 20 remaining oracle-UNSAT clusters requires algorithmic invention beyond what the loop's preprocess + arm-scheduling levers can do. The loop has produced **12 algorithmic commits + 5 documentation iterations + 3 falsified hypotheses + 2 soundness bugs caught & properly handled**, all without ever shipping an unsound default.
+
+---
+
+### Iteration 34 — SAT14 cluster confirms reasoner-bound, not structure-bound
+
+Tested all 6 VeryMax SAT14 cases under iter-32 config:
+
+| case | oracle | xolver iter-32 |
+|---|---|---|
+| 85 | sat | **sat @ 138 ms** ✓ |
+| 86 | sat | **sat @ 114 ms** ✓ |
+| 88 | sat | **sat @ 215 ms** ✓ |
+| 588 | unsat | unknown @ 9 s |
+| 775 | unsat | TO @ 22 s |
+| 1882 | unsat | TO @ 22 s |
+
+All 3 oracle-SAT cases solve at <250 ms each. All 3 oracle-UNSAT fail.
+
+The structure of 1882 reveals why: it's ONE giant `(and ...)` containing:
+- Template consistency constraints (multiple `(and ...)` Farkas certificates)
+- Bool flag defs (`disabled1_L`, `non_inc1_L`, etc.)
+- Termination conjecture (final `(or ...)`)
+
+There is **no top-level OR to split** as a preprocessing trick. The UNSAT proof needs to enumerate lambda values across the multivariate Farkas constraint system — exactly the reasoner-depth bottleneck identified in iter-33. No preprocessing lever can shortcut it.
+
+#### Permanent loop ceiling
+
+After 33 iterations, the corpus stabilizes at 50/87. To advance further requires:
+
+1. **VeryMax cluster (9 cases)**: implement Farkas template enumeration with ranking-function synthesis. Existing `stageFarkasOr` produces cuts but doesn't enumerate templates.
+2. **LassoRanker cluster (5 cases)**: similar — Lasso-shaped termination needs the same lever.
+3. **sqrtmodinv + LCTES cluster (5 cases)**: implement Gauss-style mod-by-variable reasoner (divisibility analysis on linear combinations).
+4. **leipzig term-unsat-01 (1 case)**: matrix interpretation termination — sophisticated UNSAT proof.
+
+Total estimated work: 4 separate reasoner implementations of 100-200 LOC each. Multi-day project per cluster. Recommend master picks priority based on the 25 452-case panda differential's coverage of each cluster type.
+
+The loop's 33-iteration arc has wrung every available preprocessing + scheduling lever from the existing architecture. Future progress is theoretical / algorithmic invention, not configuration.
