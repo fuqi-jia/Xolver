@@ -1914,3 +1914,45 @@ not a code bug in iter-53.
 Decision: REVERT stands. The reasoner-depth bottleneck downstream is
 the real blocker for MinusBuiltIn class; without that, even a sound
 case-split transform can't help.
+
+---
+
+### Iteration 54 — AdditiveCancel rule (no disjunction) — REVERTED, same outcome as iter-53
+
+iter-54 implemented `XOLVER_PP_ADDITIVE_CANCEL`: detect cyclic def
+`(= V (+ V e_2 ... e_n))` where V appears only at top-level Add, then
+emit `(= (+ e_2 ... e_n) 0)` -- a CLEAN non-disjunctive transformation
+(no case-split blowup, unlike iter-53's `(or (= V 0) (= W 1))`).
+
+Rule fires correctly:
+  - Synthetic `(= v (+ v x y))` ^ x>=1 ^ y>=1 -> unsat
+  - MinusBuiltIn `(= honda_x2 (+ honda_x2 gev_x20 gev_x21 gev_x22))`
+    fires: 3 residual term(s) = 0
+
+But: MinusBuiltIn STILL doesn't close even with the rule firing. The
+cyclic def removal doesn't unlock the reasoner-depth issue. The actual
+bottleneck is downstream Farkas template enumeration.
+
+Full 87-case corpus diff (rule ON):
+  iter-51: 57/87 (37 sat + 20 unsat)
+  iter-54: 56/87 (37 sat + 19 unsat)  <- same -1 flaky (From_T2 loop3 40)
+
+#### Pinned: SAT14 cluster is conjunction-only
+
+While iter-54 was running, audited SAT14/588:
+  - 28 vars, no `(or ...)` atoms anywhere -- the Farkas system is a
+    pure conjunction of bilinear equations + bounded-global constraints.
+  - 2 bounded globals (`global_invc1_0`, `global_invc1_1`) in [-1,1]
+    -> 3^2 = ONLY 9 cases to exhaustively enumerate.
+  - FarkasOrDetector requires top-level Or atoms; SAT14 has none.
+
+For SAT14 cluster to UNSAT, the right attack is **bounded-global
+Cartesian-product enumeration as preprocess**:
+  for each (g1, g2) in [-1,0,1]^2:
+      substitute, derive linearised Farkas system, check ILP feasibility
+  if all 9 cases infeasible -> UNSAT
+
+That's a SEPARATE iteration target -- distinct from FarkasOrDetector
+(which needs Or atoms). Queued as task #31.
+
+19 commits shipped, 0 regressions / 0-unsound across 54 iterations.
