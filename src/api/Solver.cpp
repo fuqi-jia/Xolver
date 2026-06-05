@@ -9,6 +9,7 @@
 #include "frontend/preprocess/RealDivLowerer.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
+#include "frontend/preprocess/StoreTowerEqMultiset.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
@@ -1612,6 +1613,24 @@ public:
             IntDivModConstantFold preMod(*ir);
             preMod.run();
             preMod.commit();
+        }
+
+        // Reduce increment-store-tower array equality to an index-multiset
+        // equality (PLONK GrandProduct soundness benchmarks, QF_ANIA). Exact —
+        // `store-tower(B,[i..]) = store-tower(B,[j..]) <=> multiset{i..}={j..}`
+        // (the base cancels) — and it eliminates the arrays so the NIA solver can
+        // search the (otherwise array-blocked) model. Narrow structural match;
+        // no-op unless the increment-tower shape is present. DEFAULT-OFF: the
+        // rewrite is exact + 0-regression, but the post-reduction model-finding
+        // currently solves only 1/6 GrandProduct cases (same/3) — the other 5
+        // return unknown because the `beta` offset is unbounded (the matching
+        // equations implicitly bound it, but the NIA bounded search doesn't
+        // derive that). Promote to default-ON once that model-finding lands and
+        // >=2 cases close. Opt-in via XOLVER_PP_STORE_TOWER_MULTISET=1.
+        if (env::paramInt("XOLVER_PP_STORE_TOWER_MULTISET", 0) != 0) {
+            StoreTowerEqMultiset stm(*ir);
+            stm.run();
+            stm.commit();
         }
 
         // Lower ITEs before any theory processing or atomization.
