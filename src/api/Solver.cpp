@@ -802,12 +802,19 @@ public:
     CoreIr& ensureIr() {
         if (!ir) {
             ir = std::make_unique<CoreIr>();
-            // iter-60: enable hash-cons so equivalent sub-expressions
-            // emitted by separate passes share ExprIds. Critical for
-            // SAT-lit unification (Newton prover lemmas vs original
-            // assertion atoms). Gated by XOLVER_IR_HASHCONS=0 to revert.
+            // iter-60 added CoreIr hash-cons (was default-ON) so equivalent
+            // sub-expressions emitted by separate passes share ExprIds (Newton-
+            // prover SAT-lit unification). BUT default-ON is UNSOUND under
+            // incremental push/pop with ITE: it returns a WRONG verdict (false
+            // SAT — test_ite_lowerer_rollback) because hash-consed ExprIds are
+            // reused across incremental scopes while per-solve state (memo,
+            // lowering) is keyed by ExprId. The Newton wins (TwoSquares) do NOT
+            // need hash-cons (they solve with it OFF), so make it OPT-IN
+            // (XOLVER_IR_HASHCONS=1) rather than default-ON. Soundness over a
+            // marginal sharing optimization; re-enable by default only once the
+            // incremental memo-reset interaction is fixed.
             if (const char* e = std::getenv("XOLVER_IR_HASHCONS");
-                !(e && *e == '0')) {
+                e && *e && *e != '0') {
                 ir->setHashConsEnabled(true);
             }
         }
