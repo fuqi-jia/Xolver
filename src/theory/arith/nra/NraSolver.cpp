@@ -960,10 +960,22 @@ std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
         if (c.poly == NullPoly) continue;
         intervalCs.push_back({c.poly, c.rel, c.reason});
     }
-    // First try plain interval refutation.
+    // First try plain interval refutation (cheap, every call).
     auto conflictOpt = tryRefuteByPolynomialInterval(intervalCs, facts, *kernel_);
     // If no plain conflict, try iterative factoring + back-prop (closes MGC-class).
-    if (!conflictOpt) {
+    // This is the EXPENSIVE part (maxIter back-prop passes over ALL constraints) and
+    // re-running it on every Standard cb_propagate during a SAT search is the overhead
+    // that times out SAT cases (mgc_09/10: sat→TO; iter 24/25). THROTTLE its cadence:
+    // run on the first call (catch quick UNSAT) then only every K-th call. SOUND — a
+    // conflict is still found, at most K-1 checks later; SAT cases pay K× less factoring.
+    // Tunable XOLVER_NRA_OSF_FACTOR_CADENCE (default 1 = unchanged behaviour).
+    static const long factorCadence = []() {
+        long v = env::paramInt("XOLVER_NRA_OSF_FACTOR_CADENCE", 1);
+        return v > 0 ? v : 1;
+    }();
+    static thread_local long osfCalls = 0;
+    long n = ++osfCalls;
+    if (!conflictOpt && (n == 1 || (n % factorCadence) == 0)) {
         conflictOpt = tryRefuteByIterativeFactoring(intervalCs, facts, *kernel_, /*maxIter=*/6);
     }
     if (!conflictOpt) return std::nullopt;
