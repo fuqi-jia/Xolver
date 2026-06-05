@@ -2134,3 +2134,53 @@ reasoning approach — likely:
 
 Cluster 3 (LCTES) remains pending — needs deeper algorithmic work
 than 30-min cron rounds allow.
+
+---
+
+### Iter 73 — NIA presolve hot-path analysis (Dartagnan #23)
+
+ARITH_STAGE_PROF on Dartagnan scull-O0.smt2 reveals:
+
+  pipeline-calls=2:   nia.presolve 330ms / 1 call
+  pipeline-calls=10:  nia.presolve 1937ms / 9 calls  (~215ms/call)
+  pipeline-calls=19:  growing roughly linearly
+
+  Total nia.presolve work eventually consumes most of the 180s timeout.
+
+XOLVER_NIA_PRESOLVE_BUDGET_MS=50 (default) does NOT cap presolve at 50ms
+per call — the deadline check in PresolveEngine::run() is PER-CAPABILITY,
+not per-iteration. A single capability that takes 200ms in one sweep is
+not interrupted.
+
+Source dive on PresolveSupport.cpp::registerSubstitution:
+
+  Line 48-50: O(substMap) loop reducing the new substitution VALUE
+              by all existing substitutions.
+  Line 63-76: O(atoms) loop applying the new substitution to atoms.
+  Line 79-85: O(substMap) loop composing the new substitution INTO
+              every existing entry. EACH iteration calls
+              `entry.value.contains(v)` which is O(monomials ×
+              vars-per-monomial) — NOT O(1).
+
+For V variables eliminated over N atoms with average T terms per poly,
+total = O(V × (V + N) × T). On scull (~700 substituted vars, ~thousands
+of atoms, polynomial terms), this is the practical hot path.
+
+Cap to address: introduce a per-entry `std::unordered_set<VarId>`
+tracking which variables appear in entry.value, making contains() O(1).
+Deferred — requires careful invalidation on every substitution rewrite,
+risky without targeted benchmark coverage.
+
+Other candidate root cause: BoundChainComposer has TWO O(atoms) dedup
+scans per emit (lines 118-121 and 137-141). Already gated by
+XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS=2000 — scull with >2000 atoms SKIPS
+BoundChainComposer entirely, so it's not the scull hot path.
+
+Cherry-picks landed this iter:
+  390a28c poly: fromPolyId O(N²) → O(N log N) (from agent/nlsat-kernel)
+  90465d9 poly: pseudoRemainder O(N²) → O(N log N)
+
+Both shave per-call constant. NIA reg 113/113, NRA 151/151, LIA 57/57,
+unit (excl pre-existing test_api) green. test_api LIA getModel failure
+is PRE-EXISTING (line 146 assertion + timeout dump-core), not caused
+by these cherry-picks.
