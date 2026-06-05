@@ -622,28 +622,6 @@ void CdcacCore::resetPerSolveState() {
     unsatTrustworthy_ = true;
     coveringUncertifiable_ = false;
     closureComplete_ = false;
-    constraintVarsCache_.clear();   // forward-prune per-constraint var sets
-}
-
-// Lazily build + return the VarId set of constraint `ci` (cached per input).
-// Used by solveLevel's forward-prune to test "is this constraint fully
-// determined by the prefix?". A constraint whose RationalPolynomial cannot be
-// formed is tagged {NullVar} so the all-assigned test never passes (conservative
-// — it is then never forward-pruned, only caught at the leaf).
-const std::vector<VarId>& CdcacCore::constraintVars(size_t ci, const CdcacInput& input) {
-    if (constraintVarsCache_.size() != input.constraints.size()) {
-        constraintVarsCache_.assign(input.constraints.size(), {});
-        for (size_t i = 0; i < input.constraints.size(); ++i) {
-            auto rp = RationalPolynomial::fromPolyId(input.constraints[i].poly, *kernel_);
-            if (rp) {
-                const auto vs = rp->variables();   // std::set<VarId>
-                constraintVarsCache_[i].assign(vs.begin(), vs.end());
-            } else {
-                constraintVarsCache_[i] = {NullVar};
-            }
-        }
-    }
-    return constraintVarsCache_[ci];
 }
 
 CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
@@ -1111,42 +1089,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             sampleWithOrigin.root.origins.push_back(std::move(origin));
         }
         prefix.push(var, sampleWithOrigin);
-
-        // FORWARD-PRUNE: a constraint that becomes fully determined at THIS level
-        // (it contains `var` and all its other variables are already assigned) is
-        // sign-invariant within this cell — its delineating polys are in the
-        // level's projection closure. So if it has a DEFINITE sign here that
-        // violates its relation, it is violated throughout the cell ⇒ no deeper
-        // assignment can satisfy it ⇒ the whole subtree is infeasible. Synthesize
-        // the leaf conflict directly instead of enumerating the exponential cell
-        // grid below (the meti-tarski / Geogebra timeout). Sound: identical verdict
-        // to the full descent (the constraint blocks every completion); when the
-        // closure is incomplete the synthesized cell's cert is incomplete and the
-        // UNSAT is downgraded to Unknown by the existing per-cell gate, so a missed
-        // root can only cost completeness, never emit a wrong UNSAT.
-        CdcacResult childRes;
-        {
-            std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
-            std::vector<std::pair<size_t, Sign>> fwViolated;
-            for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-                const auto& cv = constraintVars(ci, input);
-                bool hasVar = false, allAssigned = true;
-                for (VarId v : cv) {
-                    if (v == var) hasVar = true;
-                    if (!assigned.count(v)) { allAssigned = false; break; }
-                }
-                if (!hasVar || !allAssigned) continue;   // not newly determined here
-                Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
-                if (s == Sign::Unknown) continue;        // inconclusive — cannot prune
-                if (!relationHolds(s, input.constraints[ci].rel))
-                    fwViolated.emplace_back(ci, s);
-            }
-            if (!fwViolated.empty())
-                childRes = makeLeafConflictResult(fwViolated, input);
-            else
-                childRes = solveLevel(k + 1, prefix, input);
-        }
-
+        CdcacResult childRes = solveLevel(k + 1, prefix, input);
         prefix.pop();
         if (childRes.status == CdcacStatus::Sat && childRes.model) {
             childRes.model->varOrder.insert(childRes.model->varOrder.begin(), var);
@@ -1374,9 +1317,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 }
 
 CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInput& input) {
-    std::vector<std::pair<size_t, Sign>> violated;
-    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-        const auto& c = input.constraints[ci];
+    std::vector<SatLit> conflictLits;
+    std::vector<AtomCondition> atomConditions;
+    std::vector<CertificateReasonLit> certReasons;
+
+    for (const auto& c : input.constraints) {
 #ifndef NDEBUG
         std::cerr << "[CDCAC-FULL] poly=" << kernel_->toString(c.poly)
                   << " rel=" << (int)c.rel
@@ -1390,45 +1335,26 @@ CdcacResult CdcacCore::checkFullSample(const SamplePoint& sample, const CdcacInp
             return CdcacResult::mkUnknown(CdcacUnknownReason::SignEvaluationInconclusive);
         }
         if (!relationHolds(sign, c.rel)) {
-            violated.emplace_back(ci, sign);
+            conflictLits.push_back(c.reason);
+
+            AtomCondition ac;
+            ac.atom = NullAtom;
+            ac.poly = c.poly;
+            ac.rel = c.rel;
+            ac.allowedSigns = signSetFromRelation(c.rel);
+            ac.invariantSigns = signToAtomSignSet(sign);
+            ac.isConstant = kernel_->isConstant(c.poly);
+            atomConditions.push_back(std::move(ac));
+
+            CertificateReasonLit crl;
+            crl.lit = c.reason;
+            crl.atom = NullAtom;
+            crl.polarity = true;
+            crl.normalized = {c.poly, c.rel};
+            certReasons.push_back(std::move(crl));
         }
     }
-    if (!violated.empty()) {
-        return makeLeafConflictResult(violated, input);
-    }
-    return CdcacResult::mkSat(sample);
-}
-
-// Build the leaf-style UNSAT result for a set of (constraint-index, definite-sign)
-// violations. Shared by checkFullSample (full-sample leaf) and solveLevel's
-// forward-prune. The cell is FullLine; its LazardCellCertificate is COMPLETE
-// because every listed sign was a definite signAt result (no Unknown).
-CdcacResult CdcacCore::makeLeafConflictResult(
-    const std::vector<std::pair<size_t, Sign>>& violated, const CdcacInput& input) {
-    std::vector<SatLit> conflictLits;
-    std::vector<AtomCondition> atomConditions;
-    std::vector<CertificateReasonLit> certReasons;
-    for (const auto& [ci, sign] : violated) {
-        const auto& c = input.constraints[ci];
-        conflictLits.push_back(c.reason);
-
-        AtomCondition ac;
-        ac.atom = NullAtom;
-        ac.poly = c.poly;
-        ac.rel = c.rel;
-        ac.allowedSigns = signSetFromRelation(c.rel);
-        ac.invariantSigns = signToAtomSignSet(sign);
-        ac.isConstant = kernel_->isConstant(c.poly);
-        atomConditions.push_back(std::move(ac));
-
-        CertificateReasonLit crl;
-        crl.lit = c.reason;
-        crl.atom = NullAtom;
-        crl.polarity = true;
-        crl.normalized = {c.poly, c.rel};
-        certReasons.push_back(std::move(crl));
-    }
-    {
+    if (!conflictLits.empty()) {
         VarId var = input.varOrder.empty() ? NullVar : input.varOrder[0];
         int level = static_cast<int>(input.varOrder.size());
 
@@ -1507,6 +1433,7 @@ CdcacResult CdcacCore::makeLeafConflictResult(
 
         return result;
     }
+    return CdcacResult::mkSat(sample);
 }
 
 // --- nlsat-engine STEP A: SAT-only sample-first model search --------------------
