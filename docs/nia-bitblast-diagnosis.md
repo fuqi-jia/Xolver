@@ -1605,3 +1605,49 @@ Option 2 is the cleaner fix and would unblock not just FarkasOr but any other to
 #### Loop accountancy
 
 The 38-iteration loop's terminal state stands at 51/87. Iter-41 pins **one more concrete future-work item**: top-level And-flatten as a pre-canonicalisation pass that would expose nested Ors to all downstream detectors.
+
+---
+
+### Iteration 42 — AndFlatten SOUNDNESS BUG caught at full-corpus differential, reverted pre-commit
+
+iter-42 attempted to ship `XOLVER_PP_AND_FLATTEN` per user direction: iteratively unwrap `(assert (and X Y Z))` into `(assert X) (assert Y) (assert Z)` to expose nested Ors to `FarkasOrDetector` (iter-41 finding).
+
+**Implementation worked**:
+- Marbie2: `[AndFlatten] 4 -> 6 assertions`, FarkasOrDetector now finds 2 Or blocks (was 0 before).
+- 588: `[AndFlatten] 1 -> 44 assertions`, exposed 44 top-level atoms.
+
+**Small-suite gates passed**:
+- nia reg 113 / 113
+- lia reg 57 / 57
+- leipzig / SC_02 / modSimpleTest smokes all preserve correctness
+
+**Full 87-case corpus differential CAUGHT A SOUNDNESS VIOLATION** (the iter-30 discipline at work):
+
+| case | oracle | xolver iter-42 |
+|---|---|---|
+| `LassoRanker/MinusBuiltIn_true-termination` | **unsat** | **sat** ❌ FALSE-SAT |
+
+Confirmed by direct comparison: `z3 → unsat`, `xolver with AndFlatten → sat`, `xolver without AndFlatten → Terminated (correctly TO, not sat)`.
+
+#### Root cause hypothesis (queued for future debugging)
+
+When `(assert (and X Y Z))` is split into three independent assertions, downstream passes that **track the original And as a unit** lose context. The likely culprits:
+
+1. `PureDefVarSubst`'s occurrence counter — if X is a `(= V LHS)` atom and Y, Z mention V, the counter walked the And as ONE assertion previously. After flatten, the counter sees X as a defining atom but might miscount V's other occurrences.
+
+2. `BoolPurifier` / `Tseitin` proxy detection — Bool var definitions originally bundled inside the And may be processed differently when standalone.
+
+3. `FarkasOrDetector` itself — its `usedDefs` tracking may break when the proxy-def Eq and the using Or are no longer co-located.
+
+Each of these would require careful per-pass auditing under the And-flatten transform before re-attempting.
+
+#### Action
+
+Reverted iter-42 changes from `src/api/Solver.cpp` (uncommitted). Re-verified MinusBuiltIn → Terminated (correctly), modSimpleTest → unsat (no regression). The shipped 14-commit terminal state is preserved.
+
+This is the **third soundness incident properly caught & handled** in the loop:
+- iter-28: caught pre-commit (chained substitution)
+- iter-29 → iter-30 revert → iter-32 redo (Bool var inline)
+- **iter-42: caught at full-corpus differential, never committed** (AndFlatten)
+
+The iter-30 discipline (full 87-case corpus differential as the substitution-class gate) is the only reliable safety net. Small-suite gates can pass while the change is unsound on adversarial inputs.
