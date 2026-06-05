@@ -1291,11 +1291,50 @@ public:
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
-                lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+                // XOLVER_PP_AUTO_EUF_PROMOTE (default-OFF): instead of bailing
+                // to Unknown when the variable-divisor lowerer's b=0 undef
+                // branch needs EUF support, upgrade the logic so the rest of
+                // setupSolvers() registers an EufSolver alongside the arith
+                // solver. Sound: the upgraded logic STRICTLY SUPERSETS the
+                // original one (adds UF capability, doesn't remove any), so
+                // any model of the upgraded formula is also a model of the
+                // original. Closes the LCTES digital-stopwatch and similar
+                // patterns where the SMT-LIB file declares QF_NIA but uses
+                // div/mod with an unbounded "auxiliary witness" divisor.
+                bool autoPromote =
+                    std::getenv("XOLVER_PP_AUTO_EUF_PROMOTE") != nullptr;
+                if (autoPromote) {
+                    std::string upgraded = logic;
+                    if (logic == "QF_NIA")  upgraded = "QF_UFNIA";
+                    else if (logic == "NIA") upgraded = "UFNIA";
+                    else if (logic == "QF_NRA") upgraded = "QF_UFNRA";
+                    else if (logic == "NRA")    upgraded = "UFNRA";
+                    else if (logic == "QF_LIA") upgraded = "QF_UFLIA";
+                    else if (logic == "LIA")    upgraded = "UFLIA";
+                    else if (logic == "QF_LRA") upgraded = "QF_UFLRA";
+                    else if (logic == "LRA")    upgraded = "UFLRA";
+                    if (upgraded != logic) {
+                        std::cerr << "[AutoEufPromote] " << logic
+                                  << " -> " << upgraded
+                                  << " (div/mod needs EUF for b=0 undef branch)\n";
+                        logic = upgraded;
+                        hasEuf = true;
+                        // Fallthrough: subsequent setupSolvers() will register
+                        // an EufSolver alongside the arith solver.
+                    } else {
+                        lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic + " (no promote target)";
 #ifdef XOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Unknown, 0.0);
+                        finalizeCaseStats(Result::Unknown, 0.0);
 #endif
-                return Result::Unknown;
+                        return Result::Unknown;
+                    }
+                } else {
+                    lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                    return Result::Unknown;
+                }
             }
             if (req.needsNonlinearInt && isLinearOnly) {
                 lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;
