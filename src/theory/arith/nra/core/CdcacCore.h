@@ -39,6 +39,21 @@ private:
     CdcacResult solveLevel(int k, SamplePoint& prefix, const CdcacInput& input);
     CdcacResult checkFullSample(const SamplePoint& sample, const CdcacInput& input);
 
+    // Build the leaf-style UNSAT result for a set of violated constraints (each
+    // paired with its DEFINITE sign at the current point). The cell is FullLine
+    // with a COMPLETE LazardCellCertificate (every listed sign was definite).
+    // Shared by checkFullSample (the full-sample leaf) and solveLevel's
+    // forward-prune (a constraint already determined+violated at an internal
+    // level). `violated` indexes input.constraints.
+    CdcacResult makeLeafConflictResult(const std::vector<std::pair<size_t, Sign>>& violated,
+                                       const CdcacInput& input);
+
+    // Per-constraint variable sets (VarId), built once per input for solveLevel's
+    // forward-prune "is this constraint fully determined by the prefix?" test.
+    // Rebuilt when the constraint count changes; cleared in resetPerSolveState.
+    std::vector<std::vector<VarId>> constraintVarsCache_;
+    const std::vector<VarId>& constraintVars(size_t ci, const CdcacInput& input);
+
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells
     // LAZILY from the raw constraints (specializeToUnivariate + isolateRealRoots —
