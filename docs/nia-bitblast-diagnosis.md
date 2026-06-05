@@ -2032,3 +2032,40 @@ assertion structure. Polynomial canonical form would fix this.
 
 27 algorithmic commits + 9 doc/infra. 0 regressions / 0-unsound
 across 65 iterations.
+
+---
+
+### Iter 68 — sqrtmodinv cluster CLOSED ★
+
+iter-68 full-corpus reverify on the iter-67 binary (`e461905`) shows:
+
+  Solved: 59 / 87  (vs iter-55b baseline 57 / 87)
+  Delta:  sat -0/+0   unsat -0/+2  (0-unsound)
+  NEW: 20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2   timeout -> unsat
+  NEW: 20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2  timeout -> unsat
+
+These are the cluster-2 (Newton-Raphson invariant) cases that
+have been the main target since iter-58. Newton's prover closed
+them in minimal flag set (~80ms) as far back as iter-60, but
+under the FULL preprocess stack PureDefVarSubst substituted
+V := div_expr and the Newton lemma's pre-substitution ExprIds no
+longer matched the post-substitution assertion atoms — atomizer
+gave them distinct SAT lits, CDCL couldn't propagate, both cases
+timed out.
+
+The fix wasn't in Newton at all. It was the addShared rollout
+across PureDefVarSubst (67a966a), Newton emit (4500960), and the
+recursive lowering paths (463543f, e461905). With hash-cons on
+the rebuild outputs, the substituted assertion's sub-expressions
+COLLAPSE to the same ExprIds as Newton's lemmas (both pass through
+ir->addShared with structurally-identical CoreExprs). Atomizer
+assigns one SAT lit per canonical atom. CDCL propagates from
+Newton's L1A/L1B into the assertion's first conjunct, contradicts
+the negation, derives UNSAT.
+
+This is exactly the "qualitative leap" the user predicted when
+they first asked for hash-cons. The leap is REAL but it required
+a sound implementation path (opt-in addShared, not unconditional
+add hash-cons) — see iter-62 calypto false-SAT post-mortem.
+
+Cluster 2 status: CLOSED ★
