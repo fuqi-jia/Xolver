@@ -88,7 +88,7 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
         ExprId e = frame.e;
         if (substMemo_.find(e) != substMemo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (node.kind == Kind::Variable) {
             bool match = false;
@@ -124,7 +124,7 @@ ExprId SolveEqs::substitute(ExprId root, const std::string& name, ExprId replace
             fresh.sort = node.sort;
             fresh.children = std::move(newChildren);
             fresh.payload = node.payload;
-            substMemo_[e] = ir_.add(std::move(fresh));
+            substMemo_[e] = ir_.addShared(std::move(fresh));
         }
     }
     return substMemo_.at(root);
@@ -334,7 +334,7 @@ bool SolveEqs::tryGeneralEliminate(size_t idx) {
         if (sort == realSortId_ && realSortId_ != NullSort) {
             CoreExpr e; e.kind = Kind::ConstReal; e.sort = sort;
             e.payload = Payload(v.get_str());
-            return ir_.add(std::move(e));
+            return ir_.addShared(std::move(e));
         }
         if (sort == intSortId_ && intSortId_ != NullSort) {
             if (v.get_den() != 1) return NullExpr;
@@ -342,7 +342,7 @@ bool SolveEqs::tryGeneralEliminate(size_t idx) {
             if (!num.fits_slong_p()) return NullExpr;
             CoreExpr e; e.kind = Kind::ConstInt; e.sort = sort;
             e.payload = Payload(static_cast<int64_t>(num.get_si()));
-            return ir_.add(std::move(e));
+            return ir_.addShared(std::move(e));
         }
         return NullExpr;
     };
@@ -385,14 +385,14 @@ bool SolveEqs::tryGeneralEliminate(size_t idx) {
             } else if (tc == -1) {
                 CoreExpr neg; neg.kind = Kind::Neg; neg.sort = sort;
                 neg.children.push_back(vexpr);
-                term = ir_.add(std::move(neg));
+                term = ir_.addShared(std::move(neg));
             } else {
                 ExprId kc = mkConst(tc, sort);
                 if (kc == NullExpr) { buildOk = false; break; }
                 CoreExpr mul; mul.kind = Kind::Mul; mul.sort = sort;
                 mul.children.push_back(kc);
                 mul.children.push_back(vexpr);
-                term = ir_.add(std::move(mul));
+                term = ir_.addShared(std::move(mul));
             }
             terms.push_back(term);
         }
@@ -414,7 +414,7 @@ bool SolveEqs::tryGeneralEliminate(size_t idx) {
             } else {
                 CoreExpr add; add.kind = Kind::Add; add.sort = sort;
                 add.children = terms;
-                replacement = ir_.add(std::move(add));
+                replacement = ir_.addShared(std::move(add));
             }
         }
 
