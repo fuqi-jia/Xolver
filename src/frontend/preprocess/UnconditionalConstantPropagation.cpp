@@ -471,24 +471,53 @@ void UnconditionalConstantPropagation::collectFromConjunct(ExprId conjunct) {
         return tryRecordBinding(*name, *valueOpt);
     };
 
-    // Iteratively flatten nested unconditional Ands (avoids deep recursion on
-    // redundantly-wrapped conjunctions). Reverse-push so children pop in source
-    // order, matching the former recursion.
-    std::vector<ExprId> work;
-    work.push_back(conjunct);
+    // POLARITY-AWARE unit extraction (NNF). A unconditionally-true assertion's
+    // boolean skeleton yields more unconditional facts than a top-level And:
+    //   ¬(a => b)            → a true,  b false        (a ∧ ¬b)
+    //   ¬(=> c0 … cn)        → c0…c_{n-1} true, cn false
+    //   ¬(a ∨ b)             → a false, b false        (De Morgan)
+    //   ¬¬x                  → x same polarity
+    // Variable=const bindings are recorded ONLY at POSITIVE polarity (a negative
+    // `(= v c)` is a disequality, not a binding). This closes the nested-fact
+    // pattern `¬(=> A (=> (= f5 1) C))` (TwoSquares z3.704124): f5=1 is buried in
+    // an implication, not a top-level conjunct, so the plain And-flatten missed
+    // it. SOUND: every extracted fact is entailed by the (true) assertion.
+    struct WI { ExprId e; bool pos; };
+    std::vector<WI> work;
+    work.push_back({conjunct, true});
     while (!work.empty()) {
         if (contradiction_) return;
-        ExprId e = work.back();
+        WI it = work.back();
         work.pop_back();
-        const auto& node = ir_.get(e);
-        if (node.kind == Kind::And) {
-            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
-                work.push_back(node.children[i]);
+        const auto& node = ir_.get(it.e);
+        if (node.kind == Kind::Not && node.children.size() == 1) {
+            work.push_back({node.children[0], !it.pos});
             continue;
         }
-        if (node.kind != Kind::Eq || node.children.size() != 2) continue;
-        if (tryRecord(node.children[0], node.children[1])) continue;
-        tryRecord(node.children[1], node.children[0]);
+        if (it.pos && node.kind == Kind::And) {
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
+                work.push_back({node.children[i], true});
+            continue;
+        }
+        if (!it.pos && node.kind == Kind::Or) {              // ¬(∨) → all false
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i)
+                work.push_back({node.children[i], false});
+            continue;
+        }
+        if (!it.pos && node.kind == Kind::Implies && node.children.size() >= 2) {
+            // ¬(c0 ⇒ … ⇒ cn) → c0…c_{n-1} true, cn false
+            work.push_back({node.children.back(), false});
+            for (int i = static_cast<int>(node.children.size()) - 2; i >= 0; --i)
+                work.push_back({node.children[i], true});
+            continue;
+        }
+        if (it.pos && node.kind == Kind::Eq && node.children.size() == 2) {
+            if (tryRecord(node.children[0], node.children[1])) continue;
+            tryRecord(node.children[1], node.children[0]);
+            continue;
+        }
+        // Anything else (Or at positive, And at negative, a UF/arith atom, …)
+        // is not an unconditional unit binding — skip.
     }
 }
 
