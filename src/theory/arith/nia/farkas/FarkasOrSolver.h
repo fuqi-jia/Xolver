@@ -66,6 +66,14 @@ struct SupportTable {
     std::vector<SupportRow> rows;
     // Size of the table (#feasible (block, branch, B) triples).
     std::size_t feasibleTotal = 0;
+    // iter-46: true iff the B-tuple enumeration covered the FULL cartesian
+    // product (no sparseMode, no row-count cap hit). When this is true and
+    // feasibleTotal == 0, every (block, branch, B-tuple) was tested and NO
+    // Farkas certificate was found anywhere -- a strong UNSAT signal for
+    // pure Farkas-Or formulas. Wiring the actual Unsat emit deferred to a
+    // future iteration (needs outerAssertions audit + conflict construction
+    // + full 87-case differential).
+    bool exhaustive = false;
 };
 
 // Final assignment produced by solveCsp.

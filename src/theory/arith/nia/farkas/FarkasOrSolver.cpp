@@ -143,6 +143,11 @@ SupportTable FarkasOrSolver::buildTable(
         if (pos == idx.size()) done = true;
     } while (!done);
 
+    // iter-46: mark whether the enumeration was truly exhaustive (no
+    // sparseMode, no row-count cap hit). When true and feasibleTotal == 0,
+    // every (block, branch, B-tuple) was tested and NO Farkas certificate
+    // exists -- a sound UNSAT signal for pure Farkas-Or formulas.
+    t.exhaustive = !sparseMode && t.rows.size() < 8000;
     return t;
 }
 

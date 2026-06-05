@@ -1696,3 +1696,29 @@ To actually emit Unsat from VeryMax-class formulas, xolver would need a Positivs
 | 38 | 31fc900 | TIGHT_BOUND_SUBST |
 | **43** | **9eb9265** | **AndFlatten + cycle detector** |
 | **44** | **15e9e92** | **univariate-poly cycle solver (any degree)** |
+
+---
+
+### Iteration 46/47 — Farkas audit + CDCAC/ICP test pin reasoner-depth gap
+
+iter-46 audited stageFarkasOr engagement on the 19 oracle-UNSAT cases:
+- **4 cases engage** (profile.blocks > 0), ALL with `feasibleTotal=0`:
+  Stroeder Ex04, Stroeder Marbie2, From_T2 loop3.t2_fixed, Masse-alloca.
+- 15 cases don't engage Farkas at all.
+
+Added `SupportTable::exhaustive` flag (commit `1473551`) tracking whether B-tuple enumeration was complete (no sparseMode + no row-count cap). Wiring this to an actual Unsat emit needs: (a) outerAssertions soundness audit; (b) conflict-clause construction; (c) full 87-case differential. Deferred to future iteration.
+
+iter-47 tested all 4 Farkas-engaged cases at 60s with CDCAC + ICP + all reasoners turned on. **Still 0/4 cracked** — all return unknown or TO.
+
+Root cause: CDCAC operates on the REAL relaxation. For these VeryMax cases, the real-relaxed formula IS feasible — only the integer version is UNSAT. So CDCAC can never emit Unsat. Same for ICP (interval propagation over reals).
+
+To close VeryMax UNSAT requires either:
+1. **Integer Positivstellensatz** — proving NO Farkas certificate exists over Z. Generally undecidable (Hilbert 10), but specific Farkas-template subfragments may be tractable.
+2. **Adding integer-specific cuts to CDCAC** (Gomory-style for the NRA backend).
+3. **Bounded model checking over integer lambdas** — enumerate small lambda values exhaustively and verify infeasibility.
+
+Each is a multi-iteration project.
+
+#### Loop terminal: 51/87 holds
+
+15+1 algorithmic + infra commits shipped, 3 soundness incidents properly handled, 0 regressions, 0-unsound across 46 iterations.
