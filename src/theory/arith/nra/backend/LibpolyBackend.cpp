@@ -1114,17 +1114,17 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
     int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
     if (jumped == 0) {
         try {
-            // Reconstruct the algebraic number from root definition
+            // Reconstruct the algebraic number DIRECTLY from its isolating dyadic
+            // interval (algebraicRootToPolyAlg) instead of re-isolating ALL roots of
+            // the defining poly via Sturm and indexing by rootIndex. `alpha` already
+            // carries the [lower,upper] interval that uniquely pins which root it is,
+            // so the full re-isolation was pure redundant work — and it ran once per
+            // sign evaluation (~10^4 times/solve on an algebraic-leaf covering search,
+            // each rebuilding the same degree-2 number), which read as a hang. This
+            // is the same cheap construction signAtSampleGuarded already uses.
             const auto& rc = getUni(alpha.definingPoly);
-            std::vector<poly::Integer> rootLpCoeffs;
-            rootLpCoeffs.reserve(rc.size());
-            for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
-                rootLpCoeffs.emplace_back(*it);
-            }
-            poly::UPolynomial rootUp(rootLpCoeffs);
-            std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
-            if (alpha.rootIndex >= 0 && alpha.rootIndex < static_cast<int>(roots.size())) {
-                // Build gPoly once
+            auto algOpt = algebraicRootToPolyAlg(alpha, rc);
+            if (algOpt) {
                 poly::Variable var = libKernel_->getVariable("x");
                 std::vector<poly::Integer> gLpCoeffs;
                 gLpCoeffs.reserve(gCoeffs.size());
@@ -1139,9 +1139,9 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
                 );
                 poly::Polynomial gPoly(lp_poly);
 
-                // Exact algebraic sign evaluation via libpoly
+                // Exact algebraic sign evaluation via libpoly.
                 poly::Assignment pa(libKernel_->context());
-                pa.set(var, poly::Value(roots[alpha.rootIndex]));
+                pa.set(var, poly::Value(*algOpt));
                 resultSign = poly::sgn(gPoly, pa);
                 ok = true;
             }
