@@ -168,6 +168,28 @@ private:
                                      const CdcacInput& input, long& budget);
     std::vector<RealAlg> satSampleCandidatesAlg(int k, const SamplePoint& prefix,
                                                 const CdcacInput& input);
+    // M1+M2 (XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD, default-OFF): forward infeasibility
+    // propagation for the rational SAT-first. After assigning var k, check whether
+    // any UNASSIGNED variable already has an EMPTY feasible set — i.e. its
+    // constraints that are now univariate-in-it (all their other vars assigned)
+    // admit no satisfying cell. If so the current prefix cannot be completed, so
+    // prune it NOW (an EARLY/shallow conflict) instead of descending to that
+    // variable's level and failing late. Soundness-SAFE for SAT: only prunes
+    // prefixes with a provably-infeasible future variable (cell-rep sampling covers
+    // every sign-invariant cell, so a feasible cell is never missed). The genuine
+    // MCSAT lever — see docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
+    bool satFirstLookaheadEnabled_ = false;
+    // M2 (true ICP): is the whole subtree under the current rational prefix `m`
+    // provably infeasible by box-consistency propagation? Builds an extended-interval
+    // box (±∞) for every UNASSIGNED var, then runs an HC4-revise fixpoint: (A) natural
+    // interval extension of each constraint poly over the box — if its range excludes
+    // every value consistent with the relation, the subtree is infeasible; (B) degree-1
+    // contraction (A·v+B rel 0) tightens each unassigned var's box. Sound by
+    // over-approximation: boxes always CONTAIN the feasible projection, so it can prove
+    // infeasibility but NEVER over-prune a real model (no algebraic-boundary risk).
+    // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
+    bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
+                              const CdcacInput& input);
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
     // precomputed once per sample-first search so high-degree/huge-coeff polys are
     // skipped (not crashed). Indexed parallel to input.constraints.

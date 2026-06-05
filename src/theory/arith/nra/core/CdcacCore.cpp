@@ -14,6 +14,11 @@
 
 namespace xolver {
 
+// M2 diagnostics (XOLVER_NRA_ICP_DIAG=1): count box-ICP calls vs prunes to tell
+// "firing but insufficient" (→ needs M3 learning) from "never bites" (→ structure).
+static thread_local long g_icpCalls = 0;
+static thread_local long g_icpPrunes = 0;
+
 // ------------------------------------------------------------------
 // Helpers (free functions in xolver namespace)
 // ------------------------------------------------------------------
@@ -245,6 +250,11 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG")) {
         long b = std::atol(e);
         if (b > 0) satFirstAlgDegCap_ = b;
+    }
+    // M1+M2: forward infeasibility lookahead for the rational SAT-first (default-OFF).
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD")) {
+        satFirstLookaheadEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
+        if (satFirstLookaheadEnabled_) satFirstEnabled_ = true;
     }
 }
 
@@ -724,6 +734,9 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
             satFirstT0_ = std::chrono::steady_clock::now();   // wall-clock cap reference
             CdcacResult sat = algOk ? trySatSampleFirstAlg(0, prefix, input, budget)
                                     : trySatSampleFirst(0, prefix, input, budget);
+            if (const char* d = std::getenv("XOLVER_NRA_ICP_DIAG"); d && d[0] == '1')
+                std::fprintf(stderr, "[ICP-DIAG] calls=%ld prunes=%ld status=%d\n",
+                             g_icpCalls, g_icpPrunes, static_cast<int>(sat.status));
             if (sat.status == CdcacStatus::Sat)
                 return sat;
         }
@@ -1644,6 +1657,194 @@ CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
     return CdcacResult::mkUnknown(CdcacUnknownReason::None);
 }
 
+// ── M2: box-consistency interval arithmetic (extended reals with ±∞) ──────────
+// A sound natural interval extension. Every op over-approximates the true range,
+// so a box built by these ops always CONTAINS the feasible projection — the basis
+// for proving infeasibility without ever over-pruning a real model.
+namespace {
+struct Iv {
+    bool loInf = false, hiInf = false;   // ±∞ flags; endpoints valid when !flag
+    mpq_class lo, hi;
+    static Iv all()  { Iv x; x.loInf = x.hiInf = true; return x; }
+    static Iv point(const mpq_class& q) { Iv x; x.lo = x.hi = q; return x; }
+    bool isAll() const { return loInf && hiInf; }
+    bool empty() const { return !loInf && !hiInf && lo > hi; }
+};
+// extended real: inf=-1 → −∞, 0 → finite val, +1 → +∞
+struct XR { int inf; mpq_class val; };
+static bool xless(const XR& a, const XR& b) {
+    if (a.inf != b.inf) return a.inf < b.inf;
+    if (a.inf != 0) return false;            // same ±∞
+    return a.val < b.val;
+}
+static XR xmul(const XR& a, const XR& b) {
+    bool az = (a.inf == 0 && sgn(a.val) == 0), bz = (b.inf == 0 && sgn(b.val) == 0);
+    if (az || bz) return {0, mpq_class(0)};   // 0 · anything (incl. ±∞) ≡ 0 for a range
+    if (a.inf == 0 && b.inf == 0) return {0, a.val * b.val};
+    int sa = a.inf != 0 ? a.inf : sgn(a.val);
+    int sb = b.inf != 0 ? b.inf : sgn(b.val);
+    return {sa * sb, mpq_class(0)};
+}
+static Iv ivAdd(const Iv& a, const Iv& b) {
+    Iv r;
+    r.loInf = a.loInf || b.loInf; if (!r.loInf) r.lo = a.lo + b.lo;
+    r.hiInf = a.hiInf || b.hiInf; if (!r.hiInf) r.hi = a.hi + b.hi;
+    return r;
+}
+static Iv ivNeg(const Iv& a) {
+    Iv r;
+    r.loInf = a.hiInf; if (!r.loInf) r.lo = -a.hi;
+    r.hiInf = a.loInf; if (!r.hiInf) r.hi = -a.lo;
+    return r;
+}
+static Iv ivMul(const Iv& a, const Iv& b) {
+    XR al = a.loInf ? XR{-1, {}} : XR{0, a.lo}, ah = a.hiInf ? XR{1, {}} : XR{0, a.hi};
+    XR bl = b.loInf ? XR{-1, {}} : XR{0, b.lo}, bh = b.hiInf ? XR{1, {}} : XR{0, b.hi};
+    XR c[4] = {xmul(al, bl), xmul(al, bh), xmul(ah, bl), xmul(ah, bh)};
+    XR mn = c[0], mx = c[0];
+    for (int i = 1; i < 4; ++i) { if (xless(c[i], mn)) mn = c[i]; if (xless(mx, c[i])) mx = c[i]; }
+    if (mn.inf > 0 || mx.inf < 0) return Iv::all();   // degenerate; stay sound
+    Iv r;
+    r.loInf = (mn.inf < 0); if (!r.loInf) r.lo = mn.val;
+    r.hiInf = (mx.inf > 0); if (!r.hiInf) r.hi = mx.val;
+    return r;
+}
+static Iv ivPow(const Iv& a, long e) {
+    if (e <= 0) return Iv::point(mpq_class(1));
+    Iv r = a;
+    for (long i = 1; i < e; ++i) r = ivMul(r, a);
+    if ((e % 2) == 0) {                  // even power ≥ 0 — sound tightening even if unbounded
+        if (r.loInf || r.lo < 0) { r.loInf = false; r.lo = 0; }
+    }
+    return r;
+}
+static Iv ivIntersect(const Iv& a, const Iv& b) {
+    Iv r;
+    if (a.loInf) { r.loInf = b.loInf; r.lo = b.lo; }
+    else if (b.loInf) { r.loInf = false; r.lo = a.lo; }
+    else { r.loInf = false; r.lo = (a.lo > b.lo ? a.lo : b.lo); }
+    if (a.hiInf) { r.hiInf = b.hiInf; r.hi = b.hi; }
+    else if (b.hiInf) { r.hiInf = false; r.hi = a.hi; }
+    else { r.hiInf = false; r.hi = (a.hi < b.hi ? a.hi : b.hi); }
+    return r;
+}
+// Reciprocal of an interval that does NOT contain 0 (caller guarantees).
+static Iv ivRecip(const Iv& a) {
+    // a is strictly positive or strictly negative (0 ∉ a).
+    Iv r;
+    // new lo = 1/hi, new hi = 1/lo (monotone-decreasing 1/x on each sign side)
+    if (a.hiInf) { r.loInf = false; r.lo = 0; }
+    else { r.loInf = false; r.lo = mpq_class(1) / a.hi; }
+    if (a.loInf) { r.hiInf = false; r.hi = 0; }
+    else { r.hiInf = false; r.hi = mpq_class(1) / a.lo; }
+    return r;
+}
+static bool ivExcludesZero(const Iv& a) {
+    return (!a.loInf && a.lo > 0) || (!a.hiInf && a.hi < 0);
+}
+// Can `poly REL 0` hold for SOME value in over-approx range r?
+static bool ivRelCanHold(const Iv& r, Relation rel) {
+    switch (rel) {
+        case Relation::Eq:  return (r.loInf || r.lo <= 0) && (r.hiInf || r.hi >= 0);
+        case Relation::Neq: return !(!r.loInf && !r.hiInf && r.lo == 0 && r.hi == 0);
+        case Relation::Lt:  return r.loInf || r.lo < 0;
+        case Relation::Leq: return r.loInf || r.lo <= 0;
+        case Relation::Gt:  return r.hiInf || r.hi > 0;
+        case Relation::Geq: return r.hiInf || r.hi >= 0;
+    }
+    return true;
+}
+}  // namespace
+
+// Natural interval extension of `rp` over (point vars = pts) × (interval vars = box).
+// A var absent from both is unbounded (all()). Over-approximates the true range.
+static Iv ivEval(const RationalPolynomial& rp,
+                 const std::unordered_map<VarId, mpq_class>& pts,
+                 const std::unordered_map<VarId, Iv>& box) {
+    Iv acc = Iv::point(mpq_class(0));
+    for (const auto& [key, coeff] : rp.terms()) {
+        Iv term = Iv::point(coeff);
+        for (const auto& [v, e] : key) {
+            auto pit = pts.find(v);
+            Iv vi;
+            if (pit != pts.end()) vi = Iv::point(pit->second);
+            else { auto bit = box.find(v); vi = (bit != box.end()) ? bit->second : Iv::all(); }
+            term = ivMul(term, ivPow(vi, static_cast<long>(e)));
+            if (term.isAll()) break;   // no further tightening possible for this term
+        }
+        acc = ivAdd(acc, term);
+    }
+    return acc;
+}
+
+// M2 (true ICP): prove the subtree under rational prefix `m` infeasible by box
+// consistency. Sound by over-approximation — see header. Returns true ⇒ no completion
+// of `m` can satisfy all constraints ⇒ safe to prune (never over-prunes a real model).
+bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
+                                     const CdcacInput& input) {
+    ++g_icpCalls;
+    // Box over the UNASSIGNED vars (those not yet pinned in m), each ⊇ feasible range.
+    std::unordered_map<VarId, Iv> box;
+    for (VarId v : input.varOrder)
+        if (!m.count(v)) box[v] = Iv::all();
+    if (box.empty()) return false;   // all vars assigned — the leaf check handles it
+    // Safe constraints with a cached exact poly that mention at least one boxed var.
+    std::vector<size_t> cons;
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        if (ci >= satRp_.size() || !satRp_[ci]) continue;
+        if (ci < satSafe_.size() && !satSafe_[ci]) continue;
+        cons.push_back(ci);
+    }
+    if (cons.empty()) return false;
+    const int kMaxRounds = 16;
+    for (int round = 0; round < kMaxRounds; ++round) {
+        bool changed = false;
+        // (A) Infeasibility: over-approx range of each constraint must admit the relation.
+        for (size_t ci : cons) {
+            Iv r = ivEval(*satRp_[ci], m, box);
+            if (!ivRelCanHold(r, input.constraints[ci].rel)) { ++g_icpPrunes; return true; }
+        }
+        // (B) Degree-1 contraction: A·v + B rel 0 ⇒ tighten box[v].
+        for (size_t ci : cons) {
+            const RationalPolynomial& rp = *satRp_[ci];
+            Relation rel = input.constraints[ci].rel;
+            for (auto& [v, ivCur] : box) {
+                if (rp.degree(v) != 1) continue;
+                std::vector<RationalPolynomial> co = rp.coefficients(v);  // [B, A]
+                if (co.size() < 2) continue;
+                Iv A = ivEval(co[1], m, box), B = ivEval(co[0], m, box);
+                if (!ivExcludesZero(A)) continue;   // sign of A undetermined ⇒ no clean bound
+                Iv tight;
+                if (rel == Relation::Eq) {
+                    tight = ivMul(ivNeg(B), ivRecip(A));        // v = −B/A
+                } else if (rel == Relation::Leq || rel == Relation::Lt ||
+                           rel == Relation::Geq || rel == Relation::Gt) {
+                    // A·v + B rel 0 ⇒ v rel' −B/A (sense flips when A<0).
+                    Iv vb = ivMul(ivNeg(B), ivRecip(A));        // the −B/A bound interval
+                    bool aPos = (!A.loInf && A.lo > 0);
+                    bool lower = (rel == Relation::Geq || rel == Relation::Gt);   // v ≥ … (A>0)
+                    if (!aPos) lower = !lower;                  // A<0 flips the inequality
+                    tight = Iv::all();
+                    if (lower) { tight.loInf = vb.loInf; tight.lo = vb.lo; }   // v ≥ bound
+                    else       { tight.hiInf = vb.hiInf; tight.hi = vb.hi; }   // v ≤ bound
+                } else {
+                    continue;   // Neq: no contraction
+                }
+                Iv nv = ivIntersect(ivCur, tight);
+                if (nv.empty()) { ++g_icpPrunes; return true; }   // no feasible v ⇒ infeasible
+                // Detect a strict tightening (cheap structural check).
+                if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
+                    (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
+                    ivCur = nv;
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) break;
+    }
+    return false;
+}
+
 CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
                                          const CdcacInput& input, long& budget) {
     int n = static_cast<int>(input.varOrder.size());
@@ -1711,6 +1912,13 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
         }
         // (Learned dead cells are checked once per prefix at the TOP of the level,
         // not per-candidate — they constrain the lower vars, not var k.)
+        // M2 forward infeasibility (true ICP): box-consistency propagation over the
+        // UNASSIGNED vars under this extended prefix. If the over-approx range of any
+        // constraint excludes its relation, or contraction empties a var's box, the
+        // prefix cannot be completed — prune NOW (early/shallow conflict) instead of
+        // descending and failing late. Sound: never over-prunes a real model.
+        if (!pruned && satFirstLookaheadEnabled_ && subtreeBoxInfeasible(m, input))
+            pruned = true;
         if (pruned) { prefix.pop(); continue; }
         anyFeasible = true;
         CdcacResult r = trySatSampleFirst(k + 1, prefix, input, budget);
