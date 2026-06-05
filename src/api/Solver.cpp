@@ -1058,12 +1058,26 @@ public:
                 countOcc(a);
             }
             // Build a DAG substitution map V → LHS_0 for every purely-defined V.
+            // Two modes:
+            //   (1) witness: V appears ONLY as `(= LHS_i V)` atoms with >=2
+            //       def atoms. Closes SC_02-style chains.
+            //   (2) inline (XOLVER_PP_INLINE_SINGLE_DEFS_INT, default-OFF):
+            //       V has exactly 1 def atom and is used elsewhere. INT vars
+            //       ONLY (per the iter-31 post-mortem -- iter-29 was unsound
+            //       on Bool vars in VeryMax/SAT14 chained Bool defs). Inlines
+            //       V := LHS_0 into other occurrences and drops the def.
+            //       Targets leipzig/term-unsat-01's int polynomial chain.
+            bool inlineSingleDefsInt =
+                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS_INT") != nullptr;
+            SortId intSort = ir->intSortId();
             std::unordered_map<ExprId, ExprId> subst;
             std::vector<size_t> dropAtoms;
             for (const auto& [name, idxs] : defAtomIdx) {
                 auto occIt = nonDefOcc.find(name);
-                if (occIt != nonDefOcc.end() && occIt->second > 0) continue;
-                if (idxs.size() < 2) continue;   // single def: leave (no extra work)
+                size_t nonDef = (occIt != nonDefOcc.end()) ? occIt->second : 0;
+                bool witnessMode = (nonDef == 0) && (idxs.size() >= 2);
+                bool inlineMode = inlineSingleDefsInt && (idxs.size() == 1) && (nonDef > 0);
+                if (!witnessMode && !inlineMode) continue;
                 size_t firstAtomIdx = idxs[0];
                 ExprId firstAtom = scoped[firstAtomIdx].second;
                 const CoreExpr& fa = ir->get(firstAtom);
@@ -1071,20 +1085,38 @@ public:
                 const CoreExpr& lhsN = ir->get(lhs);
                 ExprId varEid = (lhsN.kind == Kind::Variable) ? lhs : rhs;
                 ExprId defLhsEid = (lhsN.kind == Kind::Variable) ? rhs : lhs;
+                // INT-only gate for inline mode. The var must be Int-sorted;
+                // the replacement must also be Int-sorted (this matches the
+                // Eq's argument-sort discipline so we don't smuggle a Bool
+                // term into an Int substitution).
+                if (inlineMode) {
+                    const CoreExpr& varN = ir->get(varEid);
+                    const CoreExpr& replN = ir->get(defLhsEid);
+                    if (intSort == NullSort) continue;
+                    if (varN.sort != intSort || replN.sort != intSort) continue;
+                }
                 subst[varEid] = defLhsEid;
                 dropAtoms.push_back(firstAtomIdx);
             }
             if (!subst.empty()) {
                 // DAG-substitute via memoization. Walk each remaining
                 // assertion bottom-up; if a child is in subst, replace.
+                // Recursive: when subst[V] is found, the replacement is
+                // itself fed back through rewrite() so any further
+                // substitutable vars inside it get fully resolved. Cycle
+                // guard via `active` prevents infinite recursion.
                 std::unordered_map<ExprId, ExprId> memo;
+                std::unordered_set<ExprId> active;
                 std::function<ExprId(ExprId)> rewrite = [&](ExprId eid) -> ExprId {
                     auto m = memo.find(eid);
                     if (m != memo.end()) return m->second;
                     auto it = subst.find(eid);
-                    if (it != subst.end()) {
-                        memo[eid] = it->second;
-                        return it->second;
+                    if (it != subst.end() && active.find(eid) == active.end()) {
+                        active.insert(eid);
+                        ExprId resolved = rewrite(it->second);
+                        active.erase(eid);
+                        memo[eid] = resolved;
+                        return resolved;
                     }
                     const CoreExpr& e = ir->get(eid);
                     if (e.children.empty()) {
