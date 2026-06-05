@@ -735,8 +735,9 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
             CdcacResult sat = algOk ? trySatSampleFirstAlg(0, prefix, input, budget)
                                     : trySatSampleFirst(0, prefix, input, budget);
             if (const char* d = std::getenv("XOLVER_NRA_ICP_DIAG"); d && d[0] == '1')
-                std::fprintf(stderr, "[ICP-DIAG] calls=%ld prunes=%ld status=%d\n",
-                             g_icpCalls, g_icpPrunes, static_cast<int>(sat.status));
+                std::fprintf(stderr, "[ICP-DIAG] nvars=%zu calls=%ld prunes=%ld status=%d\n",
+                             input.varOrder.size(), g_icpCalls, g_icpPrunes,
+                             static_cast<int>(sat.status));
             if (sat.status == CdcacStatus::Sat)
                 return sat;
         }
@@ -1777,22 +1778,23 @@ static Iv ivEval(const RationalPolynomial& rp,
     return acc;
 }
 
-// M2 (true ICP): prove the subtree under rational prefix `m` infeasible by box
-// consistency. Sound by over-approximation — see header. Returns true ⇒ no completion
-// of `m` can satisfy all constraints ⇒ safe to prune (never over-prunes a real model).
-bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
-                                     const CdcacInput& input) {
-    ++g_icpCalls;
-    // Box over the UNASSIGNED vars (those not yet pinned in m), each ⊇ feasible range.
-    std::unordered_map<VarId, Iv> box;
+// Box-consistency HC4 fixpoint. Fills `box` (one Iv per UNASSIGNED var, each an
+// over-approximation that always CONTAINS the feasible projection) and returns true iff
+// the subtree under `m` is provably infeasible. Shared by M2 (infeasibility pruning)
+// and M1 (feasible-cell value selection). Sound by over-approximation throughout.
+static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& satRp,
+                         const std::vector<bool>& satSafe,
+                         const std::unordered_map<VarId, mpq_class>& m,
+                         const CdcacInput& input,
+                         std::unordered_map<VarId, Iv>& box) {
+    box.clear();
     for (VarId v : input.varOrder)
         if (!m.count(v)) box[v] = Iv::all();
     if (box.empty()) return false;   // all vars assigned — the leaf check handles it
-    // Safe constraints with a cached exact poly that mention at least one boxed var.
     std::vector<size_t> cons;
     for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-        if (ci >= satRp_.size() || !satRp_[ci]) continue;
-        if (ci < satSafe_.size() && !satSafe_[ci]) continue;
+        if (ci >= satRp.size() || !satRp[ci]) continue;
+        if (ci < satSafe.size() && !satSafe[ci]) continue;
         cons.push_back(ci);
     }
     if (cons.empty()) return false;
@@ -1801,12 +1803,12 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
         bool changed = false;
         // (A) Infeasibility: over-approx range of each constraint must admit the relation.
         for (size_t ci : cons) {
-            Iv r = ivEval(*satRp_[ci], m, box);
-            if (!ivRelCanHold(r, input.constraints[ci].rel)) { ++g_icpPrunes; return true; }
+            Iv r = ivEval(*satRp[ci], m, box);
+            if (!ivRelCanHold(r, input.constraints[ci].rel)) return true;
         }
         // (B) Degree-1 contraction: A·v + B rel 0 ⇒ tighten box[v].
         for (size_t ci : cons) {
-            const RationalPolynomial& rp = *satRp_[ci];
+            const RationalPolynomial& rp = *satRp[ci];
             Relation rel = input.constraints[ci].rel;
             for (auto& [v, ivCur] : box) {
                 if (rp.degree(v) != 1) continue;
@@ -1831,8 +1833,7 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
                     continue;   // Neq: no contraction
                 }
                 Iv nv = ivIntersect(ivCur, tight);
-                if (nv.empty()) { ++g_icpPrunes; return true; }   // no feasible v ⇒ infeasible
-                // Detect a strict tightening (cheap structural check).
+                if (nv.empty()) return true;       // no feasible v ⇒ infeasible
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
                     (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
                     ivCur = nv;
@@ -1843,6 +1844,59 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
         if (!changed) break;
     }
     return false;
+}
+
+// M2 (true ICP): prove the subtree under rational prefix `m` infeasible by box
+// consistency. Sound by over-approximation — see header. Returns true ⇒ no completion
+// of `m` can satisfy all constraints ⇒ safe to prune (never over-prunes a real model).
+bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
+                                     const CdcacInput& input) {
+    ++g_icpCalls;
+    std::unordered_map<VarId, Iv> box;
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box);
+    if (inf) ++g_icpPrunes;
+    return inf;
+}
+
+// M1 box HINT: re-rank/prune the root-cell candidate list using box[k]. The cells
+// themselves come from root isolation (satSampleCandidates), NOT from the box — the
+// box is a coarse interval over-approximation and is used here ONLY as a heuristic:
+// drop candidates it proves infeasible, add one interior sector sample, and rank.
+// It is never the source of feasible cells nor a completeness/UNSAT basis. Sound for
+// SAT: the leaf still exact-validates; this only changes WHICH values are tried first.
+static void refineCandidatesToBox(std::vector<mpq_class>& cands, const Iv& feas,
+                                  long maxBits) {
+    // box[k] is a HEURISTIC HINT only — NOT the source of feasible cells. The
+    // root-cell candidates (satSampleCandidates: specializeToUnivariate +
+    // isolateRealRoots → sections + sector midpoints) remain the value source. box[k]
+    // is used to (1) DROP candidates it proves infeasible (box ⊇ feasible projection,
+    // so outside-box values genuinely cannot extend to a model — sound prune the local
+    // forward-check can't see) and (2) ADD one interior sector sample. We deliberately
+    // do NOT add box ENDPOINTS as values (an open inequality bound is infeasible) and
+    // never treat box as a cell or a completeness basis.
+    auto inFeas = [&](const mpq_class& q) {
+        if (!feas.loInf && q < feas.lo) return false;
+        if (!feas.hiInf && q > feas.hi) return false;
+        return true;
+    };
+    std::vector<mpq_class> out;
+    for (const auto& q : cands) if (inFeas(q)) out.push_back(q);   // (1) drop box-infeasible
+    // (2) one strictly-interior rational of the finite box, as a sector sample.
+    if (!feas.loInf && !feas.hiInf && feas.lo < feas.hi) {
+        mpq_class mid = simplestRationalIn(feas.lo, feas.hi);
+        if (mid > feas.lo && mid < feas.hi && mpqBitLen(mid) <= maxBits) out.push_back(mid);
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    // Simplest-first: smallest |value|, ties by denominator then value (real models
+    // cluster at small simple rationals).
+    std::stable_sort(out.begin(), out.end(), [](const mpq_class& a, const mpq_class& b) {
+        mpq_class aa = abs(a), bb = abs(b);
+        if (aa != bb) return aa < bb;
+        if (a.get_den() != b.get_den()) return a.get_den() < b.get_den();
+        return a < b;
+    });
+    if (!out.empty()) cands.swap(out);   // keep the originals if the box emptied the list
 }
 
 CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
@@ -1880,6 +1934,22 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
     if (satNlsatEnabled_ && k > 0 && prefixInLearnedDeadCell(k, buildMap()))
         return CdcacResult::mkUnknown(CdcacUnknownReason::None);
     std::vector<mpq_class> cands = satSampleCandidates(k, prefix, input);
+    // M1 (feasible-cell value selection): if the box-consistency fixpoint can contract
+    // var k's feasible region under the current prefix, bias candidates into that cell —
+    // dropping values the box proves infeasible (e.g. 0 for a strictly-positive-forced
+    // var) and adding interior reps (fractions a fixed {0,±1,±2,±3} list never reaches).
+    // If the prefix is already box-infeasible, the whole level is dead — prune now.
+    if (satFirstLookaheadEnabled_) {
+        std::unordered_map<VarId, Iv> box;
+        if (propagateBox(satRp_, satSafe_, buildMap(), input, box)) {
+            ++g_icpCalls; ++g_icpPrunes;
+            return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+        }
+        ++g_icpCalls;
+        auto it = box.find(var);
+        if (it != box.end() && !it->second.isAll())
+            refineCandidatesToBox(cands, it->second, satSampleMaxBits_);
+    }
     std::unordered_set<VarId> assigned;
     for (VarId v : prefix.varOrder) assigned.insert(v);
     assigned.insert(var);
