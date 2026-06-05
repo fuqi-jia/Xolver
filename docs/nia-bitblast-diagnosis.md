@@ -1891,3 +1891,26 @@ case-splits cost preprocessing/SAT time that other cases need.
 
 Loop terminal stays at 57/87. 19 commits shipped. 0 regressions /
 0-unsound across all 53 iterations.
+
+#### Iter-53 post-mortem: no deep bug, just downstream insufficiency
+
+Investigation after revert: the synthetic test `(= v (* v w)) ^ v>=5 ^ w>=2`
+that appeared to "regress under iter-53" actually:
+  - Solves UNSAT in ~10 s with NO flags
+  - "Terminated" output was just `timeout 5` killing it mid-solve
+    (xolver had no `XOLVER_WALLCLOCK_MS` set so it ran 5 s and was killed)
+  - With `XOLVER_WALLCLOCK_MS=10000 timeout 12`, all flag sets return UNSAT
+
+The corpus regression on From_T2 loop3 40 is the SAME timing-flakiness
+iter-52 documented: iter-53 adds ~ms of preprocessing that pushes
+this specific case over the 20 s reverify cap.
+
+iter-53 transform IS sound and IS triggered correctly on cluster targets
+(MinusBuiltIn: `gev_x22 -> (or (= V 0) (= W 1))`). The cluster doesn't
+close because the downstream pipeline (NIA + Farkas + SAT case split)
+can't process the disjunction fast enough -- a reasoner-depth issue,
+not a code bug in iter-53.
+
+Decision: REVERT stands. The reasoner-depth bottleneck downstream is
+the real blocker for MinusBuiltIn class; without that, even a sound
+case-split transform can't help.
