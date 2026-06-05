@@ -1956,3 +1956,79 @@ That's a SEPARATE iteration target -- distinct from FarkasOrDetector
 (which needs Or atoms). Queued as task #31.
 
 19 commits shipped, 0 regressions / 0-unsound across 54 iterations.
+
+---
+
+### Iter 60–65 — Hash-cons saga (opt-in `addShared`)
+
+#### Iter 60 — diagnosis pin
+
+Direct stderr dump in NewtonIntSqrt showed my emitted lemma
+`(< X (* (+ V 1) (+ V 1)))` got eid=37 while the parser-built
+first conjunct of the original assertion was eid=19. **Same
+structure, different ExprIds → different SAT lits → CDCL can't
+propagate between equivalent atoms emitted by separate passes.**
+Newton lemmas could not discharge the assertion.
+
+#### Iter 60 first attempt — unconditional hash-cons (rolled back)
+
+Made `CoreIr::add()` unconditionally consult a `consMap_` keyed on
+`(kind, sort, children, payload)`. Sqrtmodinv cluster closed UNSAT
+in ~80 ms (minimal flag set). Full corpus reverify caught a **soundness violation**:
+calypto/002871, 002950, 005959 (all oracle-UNSAT) returned SAT.
+
+Root cause: SOMTParser's `NodeManager` + FrontendAdapter memo table
+already handles parse-time sharing. The parser path RELIES on
+`add()` returning unique IDs for distinct AST positions (ITE
+branches, let-bindings, atomization tseitin proxies). Forcing
+global dedup at `add()` time collapses semantically-distinct
+positions into one ExprId, silently breaking downstream solver
+invariants.
+
+#### Iter 62 — opt-in design
+
+Split `CoreIr` into two entry points:
+  - `add(e)`        — LEGACY: every call gets a fresh ExprId.
+                      Used by parser / FrontendAdapter / atomizer.
+  - `addShared(e)`  — NEW: hash-cons lookup. Identical
+                      `(kind, sort, children, payload)` tuples
+                      collapse. Used by preprocess passes that
+                      synthesize new sub-expressions and WANT
+                      them to fuse with parser-built atoms.
+
+#### Iter 62–65 — rollout
+
+Switched safe build-then-add passes to `addShared`:
+  - 67a966a  PureDefVarSubst rewrite path (substituted sub-trees)
+  - 4500960  BoundedEnum + Newton + univariate-cycle-solve emit
+  - d7bf781  FormulaRewriter::mk (cross-session fusion)
+  - 35b0539  ArrayReasoner select term hash-cons
+  - a71d723  DtReasoner selector / constructor synth
+  - 463543f  ArithCastNormalizer + IntDivModLowerer
+
+NOT switched: `CoreIteLowerer` uses "empty Or/Not then mutate"
+pattern — `addShared` would dedup empty nodes about to be
+mutated, corrupting them; iter-64 caught 4 false-SATs (nia_095,
+lia_031, 035, 042) from this attempt and reverted.
+
+#### Hash-cons limitations
+
+Hash-cons is SYNTACTIC. It cannot identify:
+  `(x+1)²` = `Mul[Add[x,1], Add[x,1]]`
+vs
+  `x² + 2x + 1` = `Add[Mul[x,x], Mul[2,x], 1]`
+as the same atom. They have different ASTs → different ConsKeys
+→ different ExprIds. True algebraic equivalence dedup requires a
+polynomial canonical-form pass — deferred to a separate agent /
+follow-up effort.
+
+#### Net status
+
+Under MINIMAL Newton flags, sqrtStep1/1a close UNSAT in ms.
+Under FULL preprocess stack (with PureDefVarSubst + INLINE + etc.),
+the assertion gets V → div_expr substituted, and Newton's
+pre-substitution lemmas no longer match the post-substitution
+assertion structure. Polynomial canonical form would fix this.
+
+27 algorithmic commits + 9 doc/infra. 0 regressions / 0-unsound
+across 65 iterations.
