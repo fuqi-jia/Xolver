@@ -2188,14 +2188,19 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             // "the current branch-choice combo is bad"; SAT backtracks
             // through ONLY proxy decisions (~10 vars), not the full
             // trail (~100s of vars). Falls back to full trail on miss.
+            // CRITICAL: TheoryConflict.clause stores RAW reason literals
+            // that are TRUE on the trail. TheoryManager negates them when
+            // submitting the clause as a falsified external conflict. So
+            // we push a.reason AS-IS (not .negated()) -- pushing .negated()
+            // double-negates and produces an unsound conflict.
             TheoryConflict tc;
             if (registry_) {
                 std::unordered_set<SatVar> seen;
-                auto pushNeg = [&](SatVar sv) {
+                auto pushReason = [&](SatVar sv) {
                     if (!seen.insert(sv).second) return;
                     for (const auto& a : active_) {
                         if (a.reason.var == sv) {
-                            tc.clause.push_back(a.reason.negated());
+                            tc.clause.push_back(a.reason);  // RAW reason
                             return;
                         }
                     }
@@ -2204,20 +2209,19 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
                     // (a) Tseitin-proxy branches (iter-49 path).
                     for (const auto& proxy : blk.branchProxies) {
                         if (proxy.empty()) continue;
-                        if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushNeg(*sv);
+                        if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushReason(*sv);
                     }
                     // (b) Unproxied branches: resolve the originalAnd ExprId.
                     for (const auto& br : blk.branches) {
                         if (br.originalAnd == NullExpr) continue;
                         if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
-                            pushNeg(*sv);
+                            pushReason(*sv);
                     }
                 }
             }
             if (tc.clause.empty()) {
-                // Fallback: full trail (iter-48 behaviour).
                 tc.clause.reserve(active_.size());
-                for (const auto& a : active_) tc.clause.push_back(a.reason.negated());
+                for (const auto& a : active_) tc.clause.push_back(a.reason);  // RAW
             }
             std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict size=" << tc.clause.size() << "\n";
             return TheoryCheckResult::mkConflict(std::move(tc));
