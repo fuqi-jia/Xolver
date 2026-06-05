@@ -844,6 +844,34 @@ public:
         // referencing the original formula for ModelValidator. A top-level
         // assertion that simplifies to the boolean constant false makes the
         // assertion conjunction unsatisfiable.
+        if (std::getenv("XOLVER_PP_AND_FLATTEN") && ir->currentScopeLevel() == 0) {
+            std::vector<std::pair<ScopeLevel, ExprId>> flat;
+            std::function<void(ScopeLevel, ExprId)> push = [&](ScopeLevel lvl, ExprId e) {
+                const CoreExpr& n = ir->get(e);
+                if (n.kind == Kind::And) {
+                    for (ExprId c : n.children) push(lvl, c);
+                } else {
+                    flat.push_back({lvl, e});
+                }
+            };
+            bool anyAnd = false;
+            size_t origSize = 0;
+            {
+                const auto& scoped = ir->getScopedAssertions();
+                origSize = scoped.size();
+                for (const auto& [lvl, e] : scoped) {
+                    if (ir->get(e).kind == Kind::And) anyAnd = true;
+                    push(lvl, e);
+                }
+            }
+            if (anyAnd && flat.size() > origSize) {
+                ir->clearAssertions();
+                for (const auto& [lvl, e] : flat) ir->addAssertion(e, lvl);
+                std::cerr << "[AndFlatten] " << origSize
+                          << " -> " << flat.size() << " assertions\n";
+            }
+        }
+
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
@@ -1094,6 +1122,43 @@ public:
                     const CoreExpr& replN = ir->get(defLhsEid);
                     if (intSort == NullSort) continue;
                     if (varN.sort != intSort || replN.sort != intSort) continue;
+                }
+                // CYCLE DETECTION (iter-43 soundness fix). If the defining
+                // LHS transitively references the defined var V, the
+                // substitution + drop pattern is UNSOUND: the cycle guard
+                // in the rewriter prevents infinite recursion but lets V
+                // remain in the inlined expression while the defining atom
+                // is dropped -- V becomes unconstrained -> false-SAT.
+                //
+                // Caught at iter-42 reverify (AndFlatten + INLINE_SINGLE_
+                // DEFS_INT): LassoRanker/MinusBuiltIn (oracle=unsat) returned
+                // sat because AndFlatten exposed (= V (... V ...)) atoms at
+                // top level that PureDefVarSubst then incorrectly inlined.
+                //
+                // Walk defLhsEid bottom-up; if any Variable child has the
+                // same name as varEid, skip this candidate.
+                {
+                    bool hasCycle = false;
+                    std::string varName_;
+                    if (auto* s = std::get_if<std::string>(&ir->get(varEid).payload.value)) {
+                        varName_ = *s;
+                    }
+                    if (!varName_.empty()) {
+                        std::unordered_set<ExprId> seen;
+                        std::function<void(ExprId)> scan = [&](ExprId eid) {
+                            if (hasCycle) return;
+                            if (!seen.insert(eid).second) return;
+                            const CoreExpr& en = ir->get(eid);
+                            if (en.kind == Kind::Variable) {
+                                if (auto* sn = std::get_if<std::string>(&en.payload.value)) {
+                                    if (*sn == varName_) { hasCycle = true; return; }
+                                }
+                            }
+                            for (ExprId c : en.children) scan(c);
+                        };
+                        scan(defLhsEid);
+                    }
+                    if (hasCycle) continue;
                 }
                 subst[varEid] = defLhsEid;
                 dropAtoms.push_back(firstAtomIdx);
