@@ -2184,3 +2184,24 @@ Both shave per-call constant. NIA reg 113/113, NRA 151/151, LIA 57/57,
 unit (excl pre-existing test_api) green. test_api LIA getModel failure
 is PRE-EXISTING (line 146 assertion + timeout dump-core), not caused
 by these cherry-picks.
+
+---
+
+### Iter 73 final — Reverify on `90465d9` confirms +1 NEW corpus close
+
+  Solved: 60 / 87  (vs iter-55b baseline 57 / 87)
+  Delta:  sat -0/+0   unsat -0/+3   net +3   0-unsound
+
+  NEW unsat closes vs baseline:
+    20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2     (cluster 2 known)
+    20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2    (cluster 2 known)
+    calypto/problem-002871.cvc.1.smt2 ★ NEW THIS ROUND
+
+calypto/002871 is the case that was FALSE-SAT under iter-61 unconditional
+hash-cons and caused the immediate iter-62 opt-in design. It's now
+CORRECTLY unsat — closed by the combination of:
+  - sign-consistency conflict stage (b596bf2)
+  - diff-logic conflict + div/mod dividend bounds (1d5a2c6)
+  - poly perf fixes 390a28c + 90465d9 (faster substitution path)
+
+Net corpus delta sustained at +3 unsat with 0-unsound across 73 iterations.
