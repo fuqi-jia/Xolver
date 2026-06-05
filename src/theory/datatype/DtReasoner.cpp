@@ -441,14 +441,14 @@ std::optional<std::vector<SatLit>> DtReasoner::instantiateLemma() {
                     selE.sort = sel.resultSort;
                     selE.children.push_back(uExpr);
                     selE.payload = Payload(sel.name);
-                    fields.push_back(ir.add(std::move(selE)));
+                    fields.push_back(ir.addShared(std::move(selE)));
                 }
                 CoreExpr ctorE;
                 ctorE.kind = Kind::Constructor;
                 ctorE.sort = S;
                 ctorE.children = fields;
                 ctorE.payload = Payload(ctor.name);
-                ExprId ctorExpr = ir.add(std::move(ctorE));
+                ExprId ctorExpr = ir.addShared(std::move(ctorE));
                 clause.push_back(registry_->getOrCreateEufEqualityAtom(uExpr, ctorExpr));
             }
             if (!clause.empty()) return clause;

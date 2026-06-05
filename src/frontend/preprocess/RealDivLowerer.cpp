@@ -12,7 +12,7 @@ ExprId RealDivLowerer::rebuildLike(ExprId original,
     e.sort = node.sort;
     e.payload = node.payload;
     for (ExprId c : newChildren) e.children.push_back(c);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId RealDivLowerer::mkConstRealZero() {
@@ -20,7 +20,7 @@ ExprId RealDivLowerer::mkConstRealZero() {
     e.kind = Kind::ConstReal;
     e.sort = ir_.realSortId();
     e.payload = Payload(std::string("0"));
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId RealDivLowerer::mkEq(ExprId a, ExprId b) {
@@ -29,7 +29,7 @@ ExprId RealDivLowerer::mkEq(ExprId a, ExprId b) {
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId RealDivLowerer::mkNot(ExprId a) {
@@ -37,7 +37,7 @@ ExprId RealDivLowerer::mkNot(ExprId a) {
     e.kind = Kind::Not;
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId RealDivLowerer::mkImplies(ExprId a, ExprId b) {
@@ -46,7 +46,7 @@ ExprId RealDivLowerer::mkImplies(ExprId a, ExprId b) {
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId RealDivLowerer::mkMul(ExprId a, ExprId b) {
@@ -55,7 +55,7 @@ ExprId RealDivLowerer::mkMul(ExprId a, ExprId b) {
     e.sort = ir_.realSortId();
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 bool RealDivLowerer::denomNeedsPurify(ExprId eid) const {
@@ -80,7 +80,7 @@ ExprId RealDivLowerer::purifyRec(ExprId root) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back

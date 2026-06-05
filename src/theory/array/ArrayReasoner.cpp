@@ -172,14 +172,17 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
     if (auto params = ir.arraySortParams(arrNode.sort)) {
         elemSort = params->second;
     }
-    // Build a Select CoreExpr (CoreIr is not hash-consed; rely on EUF term
-    // manager dedup to share structurally-equal selects).
+    // Build a Select CoreExpr. As of iter-62, CoreIr exposes addShared()
+    // which hash-cons-dedups identical (kind, sort, children, payload)
+    // tuples. Structurally-equal selects (same array + same index)
+    // collapse to the same ExprId BEFORE the EUF term manager interns
+    // them, sharing earlier in the pipeline.
     CoreExpr sel;
     sel.kind = Kind::Select;
     sel.sort = elemSort;
     sel.children.push_back(arrayExpr);
     sel.children.push_back(indexExpr);
-    ExprId selExpr = ir.add(std::move(sel));
+    ExprId selExpr = ir.addShared(std::move(sel));
 
     EufTermId t = tm_->intern(selExpr, ir);
     if (t != NullEufTerm) {

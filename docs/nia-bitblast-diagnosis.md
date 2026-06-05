@@ -1956,3 +1956,116 @@ That's a SEPARATE iteration target -- distinct from FarkasOrDetector
 (which needs Or atoms). Queued as task #31.
 
 19 commits shipped, 0 regressions / 0-unsound across 54 iterations.
+
+---
+
+### Iter 60–65 — Hash-cons saga (opt-in `addShared`)
+
+#### Iter 60 — diagnosis pin
+
+Direct stderr dump in NewtonIntSqrt showed my emitted lemma
+`(< X (* (+ V 1) (+ V 1)))` got eid=37 while the parser-built
+first conjunct of the original assertion was eid=19. **Same
+structure, different ExprIds → different SAT lits → CDCL can't
+propagate between equivalent atoms emitted by separate passes.**
+Newton lemmas could not discharge the assertion.
+
+#### Iter 60 first attempt — unconditional hash-cons (rolled back)
+
+Made `CoreIr::add()` unconditionally consult a `consMap_` keyed on
+`(kind, sort, children, payload)`. Sqrtmodinv cluster closed UNSAT
+in ~80 ms (minimal flag set). Full corpus reverify caught a **soundness violation**:
+calypto/002871, 002950, 005959 (all oracle-UNSAT) returned SAT.
+
+Root cause: SOMTParser's `NodeManager` + FrontendAdapter memo table
+already handles parse-time sharing. The parser path RELIES on
+`add()` returning unique IDs for distinct AST positions (ITE
+branches, let-bindings, atomization tseitin proxies). Forcing
+global dedup at `add()` time collapses semantically-distinct
+positions into one ExprId, silently breaking downstream solver
+invariants.
+
+#### Iter 62 — opt-in design
+
+Split `CoreIr` into two entry points:
+  - `add(e)`        — LEGACY: every call gets a fresh ExprId.
+                      Used by parser / FrontendAdapter / atomizer.
+  - `addShared(e)`  — NEW: hash-cons lookup. Identical
+                      `(kind, sort, children, payload)` tuples
+                      collapse. Used by preprocess passes that
+                      synthesize new sub-expressions and WANT
+                      them to fuse with parser-built atoms.
+
+#### Iter 62–65 — rollout
+
+Switched safe build-then-add passes to `addShared`:
+  - 67a966a  PureDefVarSubst rewrite path (substituted sub-trees)
+  - 4500960  BoundedEnum + Newton + univariate-cycle-solve emit
+  - d7bf781  FormulaRewriter::mk (cross-session fusion)
+  - 35b0539  ArrayReasoner select term hash-cons
+  - a71d723  DtReasoner selector / constructor synth
+  - 463543f  ArithCastNormalizer + IntDivModLowerer
+
+NOT switched: `CoreIteLowerer` uses "empty Or/Not then mutate"
+pattern — `addShared` would dedup empty nodes about to be
+mutated, corrupting them; iter-64 caught 4 false-SATs (nia_095,
+lia_031, 035, 042) from this attempt and reverted.
+
+#### Hash-cons limitations
+
+Hash-cons is SYNTACTIC. It cannot identify:
+  `(x+1)²` = `Mul[Add[x,1], Add[x,1]]`
+vs
+  `x² + 2x + 1` = `Add[Mul[x,x], Mul[2,x], 1]`
+as the same atom. They have different ASTs → different ConsKeys
+→ different ExprIds. True algebraic equivalence dedup requires a
+polynomial canonical-form pass — deferred to a separate agent /
+follow-up effort.
+
+#### Net status
+
+Under MINIMAL Newton flags, sqrtStep1/1a close UNSAT in ms.
+Under FULL preprocess stack (with PureDefVarSubst + INLINE + etc.),
+the assertion gets V → div_expr substituted, and Newton's
+pre-substitution lemmas no longer match the post-substitution
+assertion structure. Polynomial canonical form would fix this.
+
+27 algorithmic commits + 9 doc/infra. 0 regressions / 0-unsound
+across 65 iterations.
+
+---
+
+### Iter 68 — sqrtmodinv cluster CLOSED ★
+
+iter-68 full-corpus reverify on the iter-67 binary (`e461905`) shows:
+
+  Solved: 59 / 87  (vs iter-55b baseline 57 / 87)
+  Delta:  sat -0/+0   unsat -0/+2  (0-unsound)
+  NEW: 20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2   timeout -> unsat
+  NEW: 20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2  timeout -> unsat
+
+These are the cluster-2 (Newton-Raphson invariant) cases that
+have been the main target since iter-58. Newton's prover closed
+them in minimal flag set (~80ms) as far back as iter-60, but
+under the FULL preprocess stack PureDefVarSubst substituted
+V := div_expr and the Newton lemma's pre-substitution ExprIds no
+longer matched the post-substitution assertion atoms — atomizer
+gave them distinct SAT lits, CDCL couldn't propagate, both cases
+timed out.
+
+The fix wasn't in Newton at all. It was the addShared rollout
+across PureDefVarSubst (67a966a), Newton emit (4500960), and the
+recursive lowering paths (463543f, e461905). With hash-cons on
+the rebuild outputs, the substituted assertion's sub-expressions
+COLLAPSE to the same ExprIds as Newton's lemmas (both pass through
+ir->addShared with structurally-identical CoreExprs). Atomizer
+assigns one SAT lit per canonical atom. CDCL propagates from
+Newton's L1A/L1B into the assertion's first conjunct, contradicts
+the negation, derives UNSAT.
+
+This is exactly the "qualitative leap" the user predicted when
+they first asked for hash-cons. The leap is REAL but it required
+a sound implementation path (opt-in addShared, not unconditional
+add hash-cons) — see iter-62 calypto false-SAT post-mortem.
+
+Cluster 2 status: CLOSED ★

@@ -800,24 +800,11 @@ public:
     }
 
     CoreIr& ensureIr() {
-        if (!ir) {
-            ir = std::make_unique<CoreIr>();
-            // iter-60 added CoreIr hash-cons (was default-ON) so equivalent
-            // sub-expressions emitted by separate passes share ExprIds (Newton-
-            // prover SAT-lit unification). BUT default-ON is UNSOUND under
-            // incremental push/pop with ITE: it returns a WRONG verdict (false
-            // SAT — test_ite_lowerer_rollback) because hash-consed ExprIds are
-            // reused across incremental scopes while per-solve state (memo,
-            // lowering) is keyed by ExprId. The Newton wins (TwoSquares) do NOT
-            // need hash-cons (they solve with it OFF), so make it OPT-IN
-            // (XOLVER_IR_HASHCONS=1) rather than default-ON. Soundness over a
-            // marginal sharing optimization; re-enable by default only once the
-            // incremental memo-reset interaction is fixed.
-            if (const char* e = std::getenv("XOLVER_IR_HASHCONS");
-                e && *e && *e != '0') {
-                ir->setHashConsEnabled(true);
-            }
-        }
+        // Hash-cons is opt-in PER CALL-SITE via CoreIr::addShared() (nia-bb-3
+        // 31fdaa8): parser / atomizer / ITE-lowerer keep add() (fresh ExprId,
+        // so incremental push/pop stays sound), preprocess passes use addShared.
+        // No global hash-cons knob — supersedes my XOLVER_IR_HASHCONS stopgap.
+        if (!ir) ir = std::make_unique<CoreIr>();
         return *ir;
     }
 
@@ -1323,7 +1310,7 @@ public:
                     varN.kind = Kind::Variable;
                     varN.sort = intSort;
                     varN.payload = Payload(v);
-                    ExprId varEid = ir->add(std::move(varN));
+                    ExprId varEid = ir->addShared(std::move(varN));
                     SmallVector<ExprId, 4> orC;
                     for (mpz_class c = lo; c <= hi; ++c) {
                         if (!c.fits_slong_p()) { orC.clear(); break; }
@@ -1331,12 +1318,12 @@ public:
                         ce.kind = Kind::ConstInt;
                         ce.sort = intSort;
                         ce.payload = Payload(static_cast<int64_t>(c.get_si()));
-                        ExprId cEid = ir->add(std::move(ce));
+                        ExprId cEid = ir->addShared(std::move(ce));
                         CoreExpr eq;
                         eq.kind = Kind::Eq;
                         eq.sort = boolSortId_;
                         eq.children = SmallVector<ExprId,4>{varEid, cEid};
-                        orC.push_back(ir->add(std::move(eq)));
+                        orC.push_back(ir->addShared(std::move(eq)));
                     }
                     if (orC.empty()) continue;
                     ExprId enumE;
@@ -1346,7 +1333,7 @@ public:
                         orN.kind = Kind::Or;
                         orN.sort = boolSortId_;
                         for (ExprId c : orC) orN.children.push_back(c);
-                        enumE = ir->add(std::move(orN));
+                        enumE = ir->addShared(std::move(orN));
                     }
                     kept.push_back({scoped[0].first, enumE});
                 }
@@ -1492,7 +1479,7 @@ public:
                         c.kind = Kind::ConstInt;
                         c.sort = intSort;
                         c.payload = Payload(v);
-                        return ir->add(std::move(c));
+                        return ir->addShared(std::move(c));
                     };
                     // iter-60: CoreIr::add doesn't hash-cons — each new
                     // arith node gets a fresh ExprId. So we MUST locate
@@ -1554,13 +1541,13 @@ public:
                     vSq.kind = Kind::Mul;
                     vSq.sort = intSort;
                     vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
-                    ExprId vSqEid = ir->add(std::move(vSq));
+                    ExprId vSqEid = ir->addShared(std::move(vSq));
                     // (* 2 V) shared by L1B:
                     CoreExpr mul2V;
                     mul2V.kind = Kind::Mul;
                     mul2V.sort = intSort;
                     mul2V.children = SmallVector<ExprId,4>{two, mt.V};
-                    ExprId mul2VEid = ir->add(std::move(mul2V));
+                    ExprId mul2VEid = ir->addShared(std::move(mul2V));
 
                     // ----- L1 FORM A: (< X (* (+ V 1) (+ V 1))) -----
                     // Exact syntactic shape of the original assertion's
@@ -1569,17 +1556,17 @@ public:
                     vPlus1.kind = Kind::Add;
                     vPlus1.sort = intSort;
                     vPlus1.children = SmallVector<ExprId,4>{mt.V, one};
-                    ExprId vPlus1Eid = ir->add(std::move(vPlus1));
+                    ExprId vPlus1Eid = ir->addShared(std::move(vPlus1));
                     CoreExpr mulVp;
                     mulVp.kind = Kind::Mul;
                     mulVp.sort = intSort;
                     mulVp.children = SmallVector<ExprId,4>{vPlus1Eid, vPlus1Eid};
-                    ExprId mulVpEid = ir->add(std::move(mulVp));
+                    ExprId mulVpEid = ir->addShared(std::move(mulVp));
                     CoreExpr ltAtom;
                     ltAtom.kind = Kind::Lt;
                     ltAtom.sort = boolSortId_;
                     ltAtom.children = SmallVector<ExprId,4>{mt.X, mulVpEid};
-                    ExprId l1aEid = ir->add(std::move(ltAtom));
+                    ExprId l1aEid = ir->addShared(std::move(ltAtom));
                     newLemmas.push_back({0, l1aEid});
 
                     // ----- L1 FORM B: (<= X (+ (* V V) (* 2 V))) -----
@@ -1589,12 +1576,12 @@ public:
                     addPoly.kind = Kind::Add;
                     addPoly.sort = intSort;
                     addPoly.children = SmallVector<ExprId,4>{vSqEid, mul2VEid};
-                    ExprId addPolyEid = ir->add(std::move(addPoly));
+                    ExprId addPolyEid = ir->addShared(std::move(addPoly));
                     CoreExpr leqAtomB;
                     leqAtomB.kind = Kind::Leq;
                     leqAtomB.sort = boolSortId_;
                     leqAtomB.children = SmallVector<ExprId,4>{mt.X, addPolyEid};
-                    newLemmas.push_back({0, ir->add(std::move(leqAtomB))});
+                    newLemmas.push_back({0, ir->addShared(std::move(leqAtomB))});
 
                     // ----- L2 FORM A: (<= (* V V) (div (* 15625 X) 10000)) -----
                     // Exact syntactic shape of original's inner OR right disjunct.
@@ -1603,18 +1590,18 @@ public:
                     mul15625X.kind = Kind::Mul;
                     mul15625X.sort = intSort;
                     mul15625X.children = SmallVector<ExprId,4>{k15625, mt.X};
-                    ExprId mul15625XEid = ir->add(std::move(mul15625X));
+                    ExprId mul15625XEid = ir->addShared(std::move(mul15625X));
                     ExprId k10000 = mkConst(10000);
                     CoreExpr divE;
                     divE.kind = Kind::Div;
                     divE.sort = intSort;
                     divE.children = SmallVector<ExprId,4>{mul15625XEid, k10000};
-                    ExprId divEid = ir->add(std::move(divE));
+                    ExprId divEid = ir->addShared(std::move(divE));
                     CoreExpr leqDivAtom;
                     leqDivAtom.kind = Kind::Leq;
                     leqDivAtom.sort = boolSortId_;
                     leqDivAtom.children = SmallVector<ExprId,4>{vSqEid, divEid};
-                    newLemmas.push_back({0, ir->add(std::move(leqDivAtom))});
+                    newLemmas.push_back({0, ir->addShared(std::move(leqDivAtom))});
 
                     // ----- L2 FORM B: (<= (* 16 (* V V)) (* 25 X)) -----
                     // Div-free polynomial form for the NIA reasoner.
@@ -1624,17 +1611,17 @@ public:
                     mul16VV.kind = Kind::Mul;
                     mul16VV.sort = intSort;
                     mul16VV.children = SmallVector<ExprId,4>{k16, vSqEid};
-                    ExprId mul16VVEid = ir->add(std::move(mul16VV));
+                    ExprId mul16VVEid = ir->addShared(std::move(mul16VV));
                     CoreExpr mul25X;
                     mul25X.kind = Kind::Mul;
                     mul25X.sort = intSort;
                     mul25X.children = SmallVector<ExprId,4>{k25, mt.X};
-                    ExprId mul25XEid = ir->add(std::move(mul25X));
+                    ExprId mul25XEid = ir->addShared(std::move(mul25X));
                     CoreExpr leqPolyAtom;
                     leqPolyAtom.kind = Kind::Leq;
                     leqPolyAtom.sort = boolSortId_;
                     leqPolyAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
-                    newLemmas.push_back({0, ir->add(std::move(leqPolyAtom))});
+                    newLemmas.push_back({0, ir->addShared(std::move(leqPolyAtom))});
                 }
                 if (!newLemmas.empty()) {
                     for (const auto& [lv, eid] : newLemmas) ir->addAssertion(eid, lv);
@@ -2138,12 +2125,12 @@ public:
                                     ce.kind = Kind::ConstInt;
                                     ce.sort = ir->get(varEid).sort;
                                     ce.payload = Payload(static_cast<int64_t>(r.get_si()));
-                                    ExprId rEid = ir->add(std::move(ce));
+                                    ExprId rEid = ir->addShared(std::move(ce));
                                     CoreExpr eq;
                                     eq.kind = Kind::Eq;
                                     eq.sort = boolSortId_;
                                     eq.children = SmallVector<ExprId,4>{varEid, rEid};
-                                    orChildren.push_back(ir->add(std::move(eq)));
+                                    orChildren.push_back(ir->addShared(std::move(eq)));
                                 }
                                 if (!orChildren.empty()) {
                                     ExprId newAtom;
@@ -2154,7 +2141,7 @@ public:
                                         orNode.kind = Kind::Or;
                                         orNode.sort = boolSortId_;
                                         for (ExprId c : orChildren) orNode.children.push_back(c);
-                                        newAtom = ir->add(std::move(orNode));
+                                        newAtom = ir->addShared(std::move(orNode));
                                     }
                                     // Drop the cyclic def atom; replace with
                                     // disjunction injected into the kept list
@@ -2215,7 +2202,13 @@ public:
                     fresh.sort = e.sort;
                     fresh.children = std::move(newCh);
                     fresh.payload = e.payload;
-                    ExprId ne = ir->add(std::move(fresh));
+                    // iter-62: use addShared so substituted-and-rebuilt
+                    // sub-expressions dedup. Leipzig term-unsat-01
+                    // OOM'd here because PureDefVarSubst substituted 12
+                    // vars in chained polynomials; each substitution
+                    // duplicated identical sub-trees. With addShared
+                    // those collapse to single ExprIds.
+                    ExprId ne = ir->addShared(std::move(fresh));
                     memo[eid] = ne;
                     return ne;
                 };

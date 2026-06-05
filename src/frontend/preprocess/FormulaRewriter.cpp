@@ -334,7 +334,11 @@ ExprId FormulaRewriter::mk(Kind kind, SortId sort, std::vector<ExprId> children,
     e.sort = sort;
     e.children = SmallVector<ExprId, 4>(children.begin(), children.end());
     e.payload = std::move(payload);
-    ExprId id = ir_.add(std::move(e));
+    // iter-64: use ir_.addShared so rewritten nodes fuse across rewriter
+    // sessions and with other preprocess passes. The local cons_ map is
+    // session-only; without addShared, the same canonicalized atom built
+    // from different starting trees becomes distinct ExprIds globally.
+    ExprId id = ir_.addShared(std::move(e));
     cons_.emplace(std::move(key), id);
     return id;
 }
