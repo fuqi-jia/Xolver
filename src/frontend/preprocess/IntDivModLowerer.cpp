@@ -380,6 +380,19 @@ void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, Scop
     generatedAssertions_.push_back({level, mkOr(mkNot(bLtZero), mkLe(zero, def.r))});
     generatedAssertions_.push_back({level, mkOr(mkNot(bLtZero), mkLe(def.r, mkSub(mkNeg(def.b), one)))});
 
+    // Remainder bound: (b > 0 AND a >= 0) => r <= a. Sound — for b > 0, a >= 0
+    // the quotient q = floor(a/b) >= 0, so a = b*q + r >= r. Lets linear/
+    // difference reasoning refute `(a mod b) > a`-style goals that the
+    // 0 <= r < b bounds alone cannot (Zohar int_check bvurem class).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(bGtZero),
+                     mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.r, def.a)))});
+    // Quotient bound: (b > 0 AND a >= 0) => q <= a. Sound — q = floor(a/b) and
+    // b >= 1, so q <= a. Refutes `(a div b) > a`-style goals (int_check bvudiv).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(bGtZero),
+                     mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.q, def.a)))});
+
     updateRequirement(true, true);
 }
 
@@ -444,6 +457,14 @@ void IntDivModLowerer::emitVariableDivisorConstraintsPositiveDivisor(
     generatedAssertions_.push_back({level, mkLe(zero, def.r)});
     // r <= b - 1
     generatedAssertions_.push_back({level, mkLe(def.r, mkSub(def.b, one))});
+    // Remainder bound (b > 0 already proven here): a >= 0 => r <= a. Sound, and
+    // lets difference reasoning refute `(a mod b) > a`-style goals.
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.r, def.a))});
+    // Quotient bound (b > 0 proven): a >= 0 => q <= a. Sound (q = floor(a/b),
+    // b >= 1). Refutes `(a div b) > a`-style goals (int_check bvudiv).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.q, def.a))});
 
     // b*q is nonlinear (product of two non-constants).
     updateRequirement(true, false);

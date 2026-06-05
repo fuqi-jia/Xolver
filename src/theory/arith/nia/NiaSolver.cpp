@@ -1,4 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include <algorithm>
+#include "theory/arith/dl/DifferenceGraph.h"
+#include "theory/arith/dl/BellmanFord.h"
 #include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/Reasoner.h"
 #include <random>
@@ -173,6 +176,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
     add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
+    add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
@@ -978,6 +982,77 @@ std::optional<TheoryCheckResult> NiaSolver::stagePolyConflict(TheoryLemmaStorage
         }
     }
     return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageDifferenceConflict(TheoryLemmaStorage&, TheoryEffort) {
+    // Extract difference bounds `i - j <= c` from active `P rel 0` where
+    // P == 1*i - 1*j + k, build a DifferenceGraph, and reuse the project's
+    // BellmanFord engine to detect a negative cycle (a sound Farkas conflict).
+    auto extractDiff = [&](PolyId P, std::string& vi, std::string& vj, mpz_class& k) -> bool {
+        auto t = kernel_->terms(P);
+        if (!t) return false;
+        int nplus = 0, nminus = 0; k = 0;
+        for (const auto& m : *t) {
+            if (m.powers.empty()) { k += m.coefficient; continue; }
+            if (m.powers.size() != 1 || m.powers[0].second != 1) return false;
+            std::string v(kernel_->varName(m.powers[0].first));
+            if (m.coefficient == 1)       { if (nplus++)  return false; vi = v; }
+            else if (m.coefficient == -1) { if (nminus++) return false; vj = v; }
+            else return false;
+        }
+        return nplus == 1 && nminus == 1;
+    };
+    DifferenceGraph<mpz_class> graph;
+    // edge for `x - y <= c`: BellmanFord relaxes dist[to] <= dist[from] + w,
+    // i.e. to - from <= w, so from=y, to=x, w=c.
+    auto addBound = [&](const std::string& x, const std::string& y,
+                        const mpz_class& c, SatLit r) {
+        graph.addEdge(graph.getOrCreateNode(y), graph.getOrCreateNode(x), c, r);
+    };
+    bool any = false;
+    for (const auto& con : active_) {
+        std::string vi, vj; mpz_class k;
+        if (!extractDiff(con.poly, vi, vj, k) || vi == vj) continue;
+        // poly = vi - vj + k ; `poly rel 0`  ==>  vi - vj rel -k
+        switch (con.rel) {
+            case Relation::Leq: addBound(vi, vj, -k, con.reason); any = true; break;
+            case Relation::Lt:  addBound(vi, vj, -k - 1, con.reason); any = true; break;
+            case Relation::Geq: addBound(vj, vi, k, con.reason); any = true; break;
+            case Relation::Gt:  addBound(vj, vi, k - 1, con.reason); any = true; break;
+            case Relation::Eq:
+                addBound(vi, vj, -k, con.reason);
+                addBound(vj, vi, k, con.reason);
+                any = true; break;
+            case Relation::Neq: break;
+        }
+        if (graph.numNodes() > 96) return std::nullopt;  // keep BF cheap on big problems
+    }
+    // Fold Nelson-Oppen interface equalities (a == b, shared by EUF — e.g. the
+    // intmodtotal ite's `itevar = r`) as bidirectional difference edges so the
+    // difference chain can cross the theory boundary. (Interface diseqs are not
+    // difference BOUNDS; stagePolyConflict already handles them.)
+    for (const auto& ie : interfaceEqualities_) {
+        if (ie.diff == NullPoly) continue;
+        std::string vi, vj; mpz_class k;
+        if (!extractDiff(ie.diff, vi, vj, k) || vi == vj) continue;
+        addBound(vi, vj, -k, ie.reason);   // vi - vj <= -k
+        addBound(vj, vi, k, ie.reason);     // vi - vj >= -k
+        any = true;
+        if (graph.numNodes() > 96) return std::nullopt;
+    }
+    if (!any) return std::nullopt;
+    BellmanFord<mpz_class> bf;
+    auto res = bf.runFull(graph);
+    if (!res.negativeCycle) return std::nullopt;
+    std::vector<SatLit> reasons;
+    for (EdgeId eid : res.cycle) {
+        SatLit r = graph.edge(eid).reason;
+        if (std::none_of(reasons.begin(), reasons.end(),
+                         [&](SatLit x){ return x.var == r.var && x.sign == r.sign; }))
+            reasons.push_back(r);
+    }
+    if (reasons.empty()) return std::nullopt;
+    return TheoryCheckResult::mkConflict(TheoryConflict{reasons});
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStorage&, TheoryEffort) {
