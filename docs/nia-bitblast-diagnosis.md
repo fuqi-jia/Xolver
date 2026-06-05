@@ -1556,3 +1556,52 @@ Cluster 2 → pending. Needs new reasoner with interval arithmetic over div, not
 #### Loop accountancy
 - Iter-40 is a no-code "layer pin" — confirms the 5 partial cases are memory-bound (PolynomialKernel) and Cluster 2's algorithmic barrier is real.
 - The 14-shipped + non-reverted algorithmic commits remain final terminal state.
+
+---
+
+### Iteration 41 — Farkas OR detector pinned: doesn't dive into nested Ands
+
+Traced `stageFarkasOr` on VeryMax/SAT14/588. The trace file is empty: `FarkasOrDetector::detect()` returns `!profile.good()` → stage skipped.
+
+Reading `FarkasOrDetector.cpp:472`:
+
+```cpp
+for (ExprId aid : ir_.assertions()) {
+    const auto& a = ir_.get(aid);
+    if (a.kind == Kind::Or) { /* analyse */ }
+}
+```
+
+**The detector iterates TOP-LEVEL assertions only and looks for `Kind::Or` at that level.** SAT14/588 (and the rest of the VeryMax SAT14 cluster) has the structure:
+
+```
+(assert (and 
+    (>= global_invc1_0 (- 1))
+    (<= global_invc1_0 1)
+    (and (>= lam0n0 0) ...)
+    (or (and ...) (and ...) ...)    ← buried under the outer And
+    (= boolpur_K (and ...))
+    ...
+))
+```
+
+The outer `(assert (and ...))` is ONE top-level assertion. The detector sees `Kind::And` at that position and skips — it doesn't descend through the And to find the Or.
+
+This is the same class of fix as iter-21's `scanPositiveBounds` And-flatten: pre-flatten the top-level And so each conjunct gets its own scan call. For the FarkasOr detector, the fix would mean adding an And-flatten step before the per-assertion walk.
+
+#### Why this isn't a quick iter-41 fix
+
+`FarkasOrDetector` is paired with:
+- `FarkasOrSolver` (builds the Farkas constraint system per branch)
+- `FarkasOrBranchSolver` (per-branch solver)
+- `FarkasOrModelAssembler` (model emission)
+
+A naive And-flatten in the detector could change the recorded `originalOr` ExprId, breaking the model-assembly flow which references back to the original Or atom. Doing this safely needs to either:
+1. Track the parent And so `originalOr` stays well-defined.
+2. Or rewrite the formula upstream (in FormulaRewriter) to canonicalise `(assert (and X Y (or A B)))` into `(assert X) (assert Y) (assert (or A B))`.
+
+Option 2 is the cleaner fix and would unblock not just FarkasOr but any other top-level-Or-detecting pass. But the side-effect risk on every other lever is non-trivial — that's a multi-iteration project with its own full-corpus differential.
+
+#### Loop accountancy
+
+The 38-iteration loop's terminal state stands at 51/87. Iter-41 pins **one more concrete future-work item**: top-level And-flatten as a pre-canonicalisation pass that would expose nested Ors to all downstream detectors.
