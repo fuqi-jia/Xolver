@@ -1021,3 +1021,38 @@ The earlier cluster-needed-lever map remains correct. To close any of these clus
 | leipzig term-unsat-01 | 1 | matrix interpretation termination | HIGH |
 
 The corpus ceiling under the current xolver architecture is **48 / 87 (55%)**. Further wins require new algorithmic invention, not configuration tuning.
+
+---
+
+### Iteration 21/22 corpus result — fix unblocks fast-bail but not yet a corpus win
+
+Reverify under iter-21's binary + iter-17 flags + NONZERO + pct=10 @ 20 s:
+
+| measure | iter-17 | **iter-21** | delta |
+|---|---|---|---|
+| total solved | 48 / 87 | **48 / 87** | 0 |
+| sat | 37 | 37 | 0 |
+| unsat | 11 | 11 | 0 |
+
+The And-flatten fix (5666999) IS a real bug fix — `sqrtStep1` / `sqrtStep1a` now run to TO @ 60 s instead of fast-bailing in 61 ms — but the cases still don't cross to UNSAT in 20 s, so the corpus count is unchanged. It's a prerequisite-for-future-iterations fix, not a corpus mover this iteration.
+
+#### Updated layer pin for the 9 unknown cases under iter-21
+
+| case | bail @ | failure mode |
+|---|---|---|
+| `LCTES/digital-stopwatch.locals` × 2 | 111 ms | div-by-non-positive-var (no `(>= v 1)`-style bound anywhere — even after And-flatten) |
+| `Dartagnan/ReachSafety-Loops/ps2-ll_valuebound1-O0` | 15.0 s | **6149 asserts after preprocess** (flattening a huge `(and ...)`); EAGER OOMs (bad_alloc); CDCL(T) NIA also can't decide at 30 s |
+| `Dartagnan/ReachSafety-Loops/ps2-ll_valuebound2-O0` | 12.8 s | same |
+| `Dartagnan/ReachSafety-Loops/ps2-ll_valuebound5-O0` | 15.9 s | same |
+| `Dartagnan/ConcurrencySafety-Main/scull-O0` | 10.3 s | same |
+| `Dartagnan/ReachSafety-Loops/id_trans-O0` | 6.7 s | same |
+| `VeryMax/SAT14/588` | 7.7 s | EAGER cascade widths exhaust |
+| `leipzig/term-unsat-01` | 14.7 s | matrix interpretation termination |
+
+5 of the 9 unknowns are the **Dartagnan ReachSafety/ConcurrencySafety cluster** — large-formula LIA-downgrade cases where preprocess explodes the assertion count to 6 k+. iter-13's LiaSolver O(N²)→O(N) helped the LIA-path scaling but the NIA pipeline still hits limits. Would need either:
+
+- (a) Skip EAGER on formula-size threshold (sound, but a heuristic gate).
+- (b) Streaming bit-blast that doesn't materialise the whole CNF.
+- (c) Deeper LIA pipeline depth — the queued task #15 (profile other linear scans in LiaSolver).
+
+Each is its own iteration. Iter-21's fix lays the groundwork.
