@@ -103,12 +103,13 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
                 auto first = collectRec(e.children[0], ir);
                 if (!first) { result = std::nullopt; break; }
                 RationalPolynomial acc = std::move(*first);
+                bool ok = true;
                 for (size_t i = 1; i < e.children.size(); ++i) {
                     auto next = collectRec(e.children[i], ir);
-                    if (!next) { result = std::nullopt; break; }
-                    acc += *next;
+                    if (!next) { result = std::nullopt; ok = false; break; }
+                    acc.appendTerms(*next);   // batch; canonicalize once below
                 }
-                if (!result.has_value()) result = std::move(acc);
+                if (ok) { acc.normalize(); if (!result.has_value()) result = std::move(acc); }
             }
             break;
         }
@@ -135,9 +136,9 @@ std::optional<RationalPolynomial> PolynomialConverter::collectRec(
             for (size_t i = 1; i < e.children.size(); ++i) {
                 auto next = collectRec(e.children[i], ir);
                 if (!next) { ok = false; break; }
-                running = running - *next;
+                running.appendTerms(*next, /*negate=*/true);   // batch subtract
             }
-            if (ok) result = std::move(running);
+            if (ok) { running.normalize(); result = std::move(running); }
             break;
         }
         case Kind::Neg: {

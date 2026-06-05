@@ -124,6 +124,13 @@ public:
     RationalPolynomial& operator-=(const RationalPolynomial& other);
     RationalPolynomial& operator*=(const mpq_class& scalar);
 
+    // Append other's terms (negated if `negate`) WITHOUT canonicalizing. For
+    // building a large n-ary sum: append every addend, then call normalize()
+    // ONCE. Avoids the O(M^2 log M) of operator+= re-sorting after every term
+    // (huge Sturm-MBO/MGC polynomials parse term-by-term). Result is
+    // non-canonical until normalize() is called.
+    RationalPolynomial& appendTerms(const RationalPolynomial& other, bool negate = false);
+
     RationalPolynomial pow(uint32_t n) const;
 
     // -- Normalization --------------------------------------------------------
