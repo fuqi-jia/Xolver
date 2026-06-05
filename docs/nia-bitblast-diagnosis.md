@@ -1438,3 +1438,39 @@ After 36 iterations the corpus stabilises at 51 / 87 (+132 % vs baseline). Each 
 | leipzig term-unsat-01 | 1 | matrix interpretation |
 
 Total estimated work: 4–5 separate reasoner implementations, each multi-day. The loop has wrung every available preprocessing + arm-scheduling + targeted-rewrite lever from the existing xolver architecture.
+
+---
+
+### Iteration 38 — TightBoundSubst shipped, 51/87 maintained, infrastructure extended
+
+`XOLVER_PP_TIGHT_BOUND_SUBST` (default-OFF) added in commit `31fc900`. Implementation per user feedback: maintain bounds in scan phase, apply once in rewrite phase.
+
+Phase 1 — `scanNonNegativeVars()` walks TOP-LEVEL atoms once (after And-flatten), populating both `varLowerBound_` and the new `varUpperBound_`. Linear in #top-level-atoms.
+
+Phase 2 — `rewriteRec()` iterative post-order walk. At each Variable leaf, `tryGetTightValue()` checks bounds; if `lower == upper`, fold to ConstInt. Memoized via `memo_`, so each ExprId processed exactly once. Linear in #unique-nodes.
+
+#### Effect on VeryMax SAT14 cluster
+
+The Farkas-lambda pattern `(<= 0 lam) ∧ (< lam 1)` for Int lam → lam = 0 fires extensively:
+
+| case | iter-35 | **iter-38** |
+|---|---|---|
+| 775 | TO @ 22 s | **unknown @ 14.5 s** (engages further, bails) |
+| 1882 | TO @ 22 s | **unknown @ 15.7 s** (engages further, bails) |
+| 588 | unknown @ 9.4 s | **unknown @ 6.7 s** (faster bail, cleaner formula) |
+| Stroeder Marbie2 | TO | TO (Farkas reasoning still missing) |
+
+Pipeline engagement improves but the Farkas-template UNSAT proof still needs reasoner depth — the lambdas-pinned-to-0 substitution leaves the multivariate Farkas constraint system in place.
+
+#### Loop progress
+
+| measure | baseline | **iter-38** | total delta |
+|---|---|---|---|
+| total solved | 22 / 87 (25 %) | **51 / 87 (59 %)** | **+29 (+132 %)** |
+| oracle SAT solved | 17 / 36 (47 %) | **31 / 36 (86 %)** | +14 (+39 pp) |
+| oracle UNSAT solved | 5 / 33 (15 %) | **14 / 33 (42 %)** | **+9 (+27 pp)** |
+| oracle Unknown decided ★ | 0 | **6** | +6 (beats oracle) |
+
+Same "infrastructure-extending, no immediate corpus impact" pattern as iter-21 / 25 / 32: the rule is sound, gates all-green, future rules can build on the new `varUpperBound_` tracker.
+
+#### 14 algorithmic commits shipped, 0 regressions, 0-unsound across 38 iterations
