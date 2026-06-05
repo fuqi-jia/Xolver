@@ -85,7 +85,7 @@ bool UnconditionalConstantPropagation::run() {
 }
 
 ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
-    // Value copy, not a reference: substituteRec(child) below calls ir_.add()
+    // Value copy, not a reference: substituteRec(child) below calls ir_.addShared()
     // (and materializeConstant), which reallocates exprs_ and would dangle a
     // `const CoreExpr&` and its children iterators mid-loop (use-after-free).
     const auto node = ir_.get(assertion);
@@ -122,7 +122,7 @@ ExprId UnconditionalConstantPropagation::substituteAssertion(ExprId assertion) {
         fresh.sort = node.sort;
         for (ExprId c : newChildren) fresh.children.push_back(c);
         fresh.payload = node.payload;
-        return ir_.add(std::move(fresh));
+        return ir_.addShared(std::move(fresh));
     }
     if (isSourceOfBinding(assertion)) return assertion;
     ExprId substituted = substituteRec(assertion);
@@ -172,7 +172,7 @@ ExprId UnconditionalConstantPropagation::constantFoldRec(ExprId root) {
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
             fresh.payload = node.payload;
-            rebuilt = ir_.add(std::move(fresh));
+            rebuilt = ir_.addShared(std::move(fresh));
         }
         // Try arithmetic, relation, and boolean folds at this node.
         ExprId folded = tryFoldArithmetic(rebuilt);
@@ -235,7 +235,7 @@ ExprId UnconditionalConstantPropagation::tryFoldArithmetic(ExprId e) {
         fresh.kind = Kind::Mul;
         fresh.sort = node.sort;
         for (ExprId c : kept) fresh.children.push_back(c);
-        return ir_.add(std::move(fresh));
+        return ir_.addShared(std::move(fresh));
     }
 
     // Addition: zero-identity, term-by-term.
@@ -264,7 +264,7 @@ ExprId UnconditionalConstantPropagation::tryFoldArithmetic(ExprId e) {
         fresh.kind = Kind::Add;
         fresh.sort = node.sort;
         for (ExprId c : kept) fresh.children.push_back(c);
-        return ir_.add(std::move(fresh));
+        return ir_.addShared(std::move(fresh));
     }
 
     // Sub / Neg: require every operand to be a constant (no useful
@@ -382,7 +382,7 @@ ExprId UnconditionalConstantPropagation::tryFoldBoolean(ExprId e) {
         fresh.kind = Kind::And;
         fresh.sort = boolSortId_;
         for (ExprId c : kept) fresh.children.push_back(c);
-        return ir_.add(std::move(fresh));
+        return ir_.addShared(std::move(fresh));
     }
     if (node.kind == Kind::Or) {
         bool sawTrue = false;
@@ -404,7 +404,7 @@ ExprId UnconditionalConstantPropagation::tryFoldBoolean(ExprId e) {
         fresh.kind = Kind::Or;
         fresh.sort = boolSortId_;
         for (ExprId c : kept) fresh.children.push_back(c);
-        return ir_.add(std::move(fresh));
+        return ir_.addShared(std::move(fresh));
     }
     return e;
 }
@@ -424,7 +424,7 @@ ExprId UnconditionalConstantPropagation::mkBool(bool value) {
     fresh.kind = Kind::ConstBool;
     fresh.sort = boolSortId_;
     fresh.payload = Payload(value);
-    ExprId id = ir_.add(std::move(fresh));
+    ExprId id = ir_.addShared(std::move(fresh));
     boolConstCache_[key] = id;
     return id;
 }
@@ -546,7 +546,7 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
         ExprId e = frame.e;
         if (substMemo_.find(e) != substMemo_.end()) { stack.pop_back(); continue; }
 
-        // Value copy: materializeConstant()/ir_.add() below relocate exprs_.
+        // Value copy: materializeConstant()/ir_.addShared() below relocate exprs_.
         const auto node = ir_.get(e);
 
         if (!frame.processed) {
@@ -593,7 +593,7 @@ ExprId UnconditionalConstantPropagation::substituteRec(ExprId root) {
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
             fresh.payload = node.payload;
-            substMemo_[e] = ir_.add(std::move(fresh));
+            substMemo_[e] = ir_.addShared(std::move(fresh));
         }
     }
     return substMemo_.at(root);
@@ -618,7 +618,7 @@ ExprId UnconditionalConstantPropagation::materializeConstant(
         fresh.sort = sort;
         fresh.kind = Kind::ConstInt;
         fresh.payload = Payload(iv);
-        ExprId id = ir_.add(std::move(fresh));
+        ExprId id = ir_.addShared(std::move(fresh));
         constCache_[key] = id;
         return id;
     }
@@ -629,7 +629,7 @@ ExprId UnconditionalConstantPropagation::materializeConstant(
     fresh.sort = sort;
     fresh.kind = Kind::ConstReal;
     fresh.payload = Payload(value.get_str());
-    ExprId id = ir_.add(std::move(fresh));
+    ExprId id = ir_.addShared(std::move(fresh));
     constCache_[key] = id;
     return id;
 }

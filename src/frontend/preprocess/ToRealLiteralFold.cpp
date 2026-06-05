@@ -61,7 +61,7 @@ ExprId ToRealLiteralFold::foldRec(ExprId root) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (!frame.processed) {
             frame.processed = true;
@@ -90,7 +90,7 @@ ExprId ToRealLiteralFold::foldRec(ExprId root) {
             fresh.sort = node.sort;
             for (ExprId c : newChildren) fresh.children.push_back(c);
             fresh.payload = node.payload;
-            rebuilt = ir_.add(std::move(fresh));
+            rebuilt = ir_.addShared(std::move(fresh));
         }
 
         // After rebuilding children, try to fold this node itself.
@@ -141,7 +141,7 @@ ExprId ToRealLiteralFold::mkConstReal(const mpq_class& value) {
     fresh.kind = Kind::ConstReal;
     fresh.sort = realSortId_;
     fresh.payload = Payload(value.get_str());
-    return ir_.add(std::move(fresh));
+    return ir_.addShared(std::move(fresh));
 }
 
 } // namespace xolver
