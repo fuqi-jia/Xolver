@@ -2243,3 +2243,30 @@ not just NIA-layer perf.
 
 45 commits + 14 doc/infra. 0 regressions / 0-unsound across 74 iterations.
 +3 corpus unsat sustained (sqrtStep1, sqrtStep1a, calypto/002871).
+
+---
+
+### Iter 75 — Dartagnan scull bisect confirms same EUF+NIA bottleneck
+
+Dartagnan scull-O0.smt2 flag-bisect:
+  AND_FLATTEN only:          unknown @ 5818ms   (some pass aborts early)
+  + AUTO_EUF_PROMOTE:        TO @ 15s+          ← same blocker as LCTES
+
+CLUSTER 3 (LCTES) and CLUSTER 4 (Dartagnan) BOTH hit the same root cause:
+the AUTO_EUF_PROMOTE-induced QF_NIA → QF_UFNIA promotion makes the EUF +
+NIA combination layer the bottleneck for div/mod-by-var handling.
+
+Common-cause fix surface: the EUF+NIA combination pipeline (Nelson-Oppen
+shared-equality exchange, EUF congruence over arithmetic atoms, the
+arrangement loop). NIA-layer perf alone (e.g. iter-74 substVars cache)
+can shave constants but cannot bridge the structural gap because most
+of the runtime is in EUF + Nelson-Oppen interaction.
+
+This pins the next major perf opportunity. The active branches working
+on EUF combination (agent/eqnia, agent/eqna-2) have already shipped
+several relevant fixes (e.g. 2c1ac14 XOLVER_COMB_MODEL_BASED default-ON,
+2eaaac8 EUF BuiltinEval level tag) — selective cherry-picks may unlock
+both clusters once cleanly applied.
+
+45 commits + 15 doc/infra. 0 regressions / 0-unsound across 75 iterations.
++3 corpus unsat sustained.
