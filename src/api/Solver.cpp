@@ -927,6 +927,196 @@ public:
         return r;
     }
 
+    // Extract an integer value from a ConstInt / int-valued ConstReal node.
+    bool extractIntConst(ExprId e, int64_t& out) const {
+        const CoreExpr& n = ir->get(e);
+        if (n.kind == Kind::ConstInt) {
+            if (auto* p = std::get_if<int64_t>(&n.payload.value)) { out = *p; return true; }
+        } else if (n.kind == Kind::ConstReal) {
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                mpq_class q(*s);
+                if (q.get_den() == 1) { out = q.get_num().get_si(); return true; }
+            }
+        }
+        return false;
+    }
+
+    // Mark which integer Variables already carry an explicit constant lower /
+    // upper bound among the top-level (conjunctive) assertions, and record the
+    // largest bound magnitude seen. The escalating bounded SAT fast-path uses
+    // these to (a) bound only the *free side* of *free* vars and (b) DERIVE the
+    // seed bound from the problem instead of guessing 1,2,4,8.
+    void scanIntVarBounds(std::unordered_set<ExprId>& hasLower,
+                          std::unordered_set<ExprId>& hasUpper,
+                          int64_t& maxBoundMag) const {
+        maxBoundMag = 0;
+        if (!ir) return;
+        SortId intSort = ir->intSortId();
+        auto isIntVar = [&](ExprId e) {
+            const CoreExpr& n = ir->get(e);
+            return n.kind == Kind::Variable && n.sort == intSort;
+        };
+        auto isConst = [&](ExprId e) {
+            const CoreExpr& n = ir->get(e);
+            return n.kind == Kind::ConstInt || n.kind == Kind::ConstReal;
+        };
+        std::vector<ExprId> work = ir->assertions();
+        std::unordered_set<ExprId> seen;
+        while (!work.empty()) {
+            ExprId e = work.back();
+            work.pop_back();
+            if (!seen.insert(e).second) continue;
+            const CoreExpr& n = ir->get(e);
+            if (n.kind == Kind::And) {
+                for (ExprId c : n.children) work.push_back(c);
+                continue;
+            }
+            if ((n.kind == Kind::Leq || n.kind == Kind::Geq ||
+                 n.kind == Kind::Lt  || n.kind == Kind::Gt) &&
+                n.children.size() == 2) {
+                ExprId a = n.children[0], b = n.children[1];
+                ExprId var = NullExpr, cst = NullExpr;
+                bool varOnLeft = false;
+                if (isIntVar(a) && isConst(b)) { var = a; cst = b; varOnLeft = true; }
+                else if (isConst(a) && isIntVar(b)) { var = b; cst = a; varOnLeft = false; }
+                if (var != NullExpr) {
+                    bool isLe = (n.kind == Kind::Leq || n.kind == Kind::Lt);
+                    // var<=c => upper; var>=c => lower; c<=var => lower; c>=var => upper.
+                    bool upper = varOnLeft ? isLe : !isLe;
+                    if (upper) hasUpper.insert(var); else hasLower.insert(var);
+                    int64_t cv;
+                    if (extractIntConst(cst, cv)) {
+                        int64_t mag = cv < 0 ? -cv : cv;
+                        if (mag > maxBoundMag) maxBoundMag = mag;
+                    }
+                }
+            }
+        }
+    }
+
+    // DERIVE the escalating fast-path's seed bound K0 from the constraints
+    // (Cramer / small-model style) instead of guessing. A free integer var
+    // coupled linearly to bounded vars satisfies |v| <= M / C, where
+    //   M = max magnitude of the bounded vars' explicit bounds, and
+    //   C = smallest nonzero coefficient the free vars are multiplied by (the
+    //       resolution of the linear coupling, >= 1).
+    // Returns K0 >= 1, or 0 if there is no free integer var (fast-path moot).
+    long deriveBoundSeed() const {
+        if (!ir) return 0;
+        SortId intSort = ir->intSortId();
+        if (intSort == NullSort) return 0;
+        std::unordered_set<ExprId> hasLower, hasUpper;
+        int64_t maxBoundMag = 0;
+        scanIntVarBounds(hasLower, hasUpper, maxBoundMag);
+        std::unordered_set<ExprId> freeVars;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind == Kind::Variable && n.sort == intSort &&
+                (!hasLower.count(id) || !hasUpper.count(id)))
+                freeVars.insert(id);
+        }
+        if (freeVars.empty()) return 0;
+        long M = maxBoundMag > 0 ? static_cast<long>(maxBoundMag) : 1;
+        // C = min nonzero |coef| over Mul(freeVar, const) terms (>= 1).
+        long C = 0;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind != Kind::Mul || n.children.size() != 2) continue;
+            ExprId a = n.children[0], b = n.children[1];
+            ExprId cstc = NullExpr;
+            if (freeVars.count(a)) cstc = b;
+            else if (freeVars.count(b)) cstc = a;
+            if (cstc == NullExpr) continue;
+            int64_t cv;
+            if (extractIntConst(cstc, cv) && cv != 0) {
+                long mag = cv < 0 ? -cv : cv;
+                if (C == 0 || mag < C) C = mag;
+            }
+        }
+        if (C < 1) C = 1;
+        long K0 = (M + C - 1) / C;   // ceil(M / C)
+        return K0 < 1 ? 1 : K0;
+    }
+
+    // Add  (>= v (- K))  / (<= v K)  for the missing side of every integer
+    // Variable that lacks an explicit constant bound there. Returns true iff at
+    // least one bound was injected (false => no free integer var => fast-path
+    // cannot help). Sound: bounds are only ADDED constraints.
+    bool injectFreeIntVarBounds(int K) {
+        if (!ir) return false;
+        SortId intSort = ir->intSortId();
+        if (intSort == NullSort) return false;
+        std::unordered_set<ExprId> hasLower, hasUpper;
+        int64_t maxBoundMag = 0;
+        scanIntVarBounds(hasLower, hasUpper, maxBoundMag);
+        std::vector<ExprId> intVars;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind == Kind::Variable && n.sort == intSort) intVars.push_back(id);
+        }
+        SortId boolSort = getOrCreateBoolSort();
+        ExprId loId = NullExpr, hiId = NullExpr;
+        bool injected = false;
+        for (ExprId v : intVars) {
+            if (!hasLower.count(v)) {
+                if (loId == NullExpr) {
+                    CoreExpr loC; loC.kind = Kind::ConstInt; loC.sort = intSort;
+                    loC.payload.value = static_cast<int64_t>(-K);
+                    loId = ir->add(loC);
+                }
+                CoreExpr ge; ge.kind = Kind::Geq; ge.sort = boolSort;
+                ge.children.push_back(v); ge.children.push_back(loId);
+                ir->addAssertion(ir->add(ge));
+                injected = true;
+            }
+            if (!hasUpper.count(v)) {
+                if (hiId == NullExpr) {
+                    CoreExpr hiC; hiC.kind = Kind::ConstInt; hiC.sort = intSort;
+                    hiC.payload.value = static_cast<int64_t>(K);
+                    hiId = ir->add(hiC);
+                }
+                CoreExpr le; le.kind = Kind::Leq; le.sort = boolSort;
+                le.children.push_back(v); le.children.push_back(hiId);
+                ir->addAssertion(ir->add(le));
+                injected = true;
+            }
+        }
+        return injected;
+    }
+
+    // Sound escalating-bounded SAT fast-path (XOLVER_ESCALATING_BOUNDED_SAT=rounds).
+    // The seed bound K0 is DERIVED from the constraints (deriveBoundSeed), not
+    // guessed; for `rounds` rounds it solves  original ∪ {free-var bounds in
+    // [-K, K]}  with K = K0, 2·K0, 4·K0, ...  A model of the bounded problem
+    // satisfies the original (original ⊆ bounded), so a SAT verdict is a sound
+    // witness. UNSAT of a box says NOTHING about the original (a witness may lie
+    // outside) => escalate, never return UNSAT from the box. Closes formulas
+    // whose only obstacle is an unbounded integer var with a bounded-magnitude
+    // witness (e.g. GrandProduct β, |β| <= M/C). Needs a re-parseable source.
+    Result checkSatEscalatingBoundedSat(int rounds, int perKBudgetMs) {
+        const std::string path = sourcePath_;  // reset() clears it; capture first
+        if (path.empty()) return checkSatInternal();
+        // Derive the seed bound K0 from the constraints (one parse).
+        reset();
+        if (!parseFile(path)) return Result::Unknown;
+        long K0 = deriveBoundSeed();
+        if (K0 <= 0) return checkSatInternal();   // no free int var -> no-op
+        if (rounds < 1) rounds = 1;
+        long K = K0;
+        for (int r = 0; r < rounds; ++r, K *= 2) {
+            reset();
+            if (!parseFile(path)) return Result::Unknown;
+            injectFreeIntVarBounds(static_cast<int>(K));
+            if (runArmWithBudget(perKBudgetMs) == Result::Sat)
+                return Result::Sat;  // sound witness for the original problem
+            if (K > (1L << 30)) break;
+        }
+        // Box search exhausted -> one pristine normal solve (may be unsat/unknown).
+        reset();
+        if (!parseFile(path)) return Result::Unknown;
+        return checkSatInternal();
+    }
+
     Result checkSatInternal() {
         lastUnknownReason_.clear();
         if (!ir) {
@@ -3237,9 +3427,15 @@ Result Solver::checkSat() {
     // bad_alloc — regardless of which inner stage allocated past the
     // process limit — surfaces as a clean Unknown verdict.
     try {
-        r = std::getenv("XOLVER_STRAT_PORTFOLIO")
-                ? pImpl->checkSatPortfolio()
-                : pImpl->checkSatInternal();
+        int ebsRounds = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT", 0);
+        if (ebsRounds > 0 && !std::getenv("XOLVER_STRAT_PORTFOLIO")) {
+            int budget = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS", 15000);
+            r = pImpl->checkSatEscalatingBoundedSat(ebsRounds, budget);
+        } else {
+            r = std::getenv("XOLVER_STRAT_PORTFOLIO")
+                    ? pImpl->checkSatPortfolio()
+                    : pImpl->checkSatInternal();
+        }
     } catch (const std::bad_alloc&) {
         pImpl->lastUnknownReason_ = "out-of-memory (bad_alloc) — solver firewalled to Unknown";
         pImpl->lastModel_.reset();
