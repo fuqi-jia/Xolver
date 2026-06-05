@@ -1131,3 +1131,34 @@ These 10 cases share the property that the pipeline IS running but the verdict r
 #### Iteration 25 commit
 
 - `35f7d66` — XOLVER_PP_AUTO_EUF_PROMOTE (default-OFF) upgrades QF_NIA → QF_UFNIA when div/mod's needsEUF would otherwise bail.
+
+---
+
+### Iteration 27 — pct=1/5/10 + FARKAS_OR all fail on VeryMax UNSAT
+
+Tested 3 representative VeryMax CInteger / ITS UNSAT cases at 30 s wallclock under various configurations:
+
+| case | pct=1 | pct=5 | pct=10 | + FARKAS_OR |
+|---|---|---|---|---|
+| `Stroeder_Marbie2` | TO | TO | TO | unknown @ 16 s |
+| `Stroeder_Ex04` | TO | TO | TO | (not tested) |
+| `From_T2_loop3_37` | TO | TO | TO | TO |
+
+`XOLVER_NIA_FARKAS_OR` exists (`NiaSolver.cpp:246`, `stageFarkasOr`) and runs Full-effort cuts, but doesn't close the UNSAT proof on these cases in 30 s. Test confirms:
+
+1. **No configuration knob unlocks VeryMax UNSAT.** Each cluster's algorithmic gap is real.
+2. **VeryMax cluster (9 cases) needs Farkas template enumeration + ranking-function search** — beyond what existing flags provide. The `nia.farkas-or` stage emits cuts but doesn't enumerate ranking templates.
+3. Adding `Stroeder_Marbie2 -> unknown @ 16 s` under FARKAS_OR is interesting — it BAILED earlier, suggesting the stage detected something. Worth investigating in a future iteration whether it's a true partial result or a soundness floor.
+
+#### Cluster ceiling reaffirmed
+
+After 26 iterations, the 50/87 corpus picture is stable:
+
+| status | count | nature |
+|---|---|---|
+| solved | 50 | corpus moved from 22 (+128%) |
+| TO @ engaged | ~10 | "engage but TO" — pipeline runs, no convergence |
+| TO @ algo-gap | ~25 | VeryMax/LassoRanker/Dartagnan/leipzig clusters |
+| unknown | 2 | residual fast-bails (mostly Dartagnan ConcurrencySafety) |
+
+Further wins require new reasoner code (one cluster per future iteration), not configuration tuning.
