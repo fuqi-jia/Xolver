@@ -2069,3 +2069,41 @@ a sound implementation path (opt-in addShared, not unconditional
 add hash-cons) — see iter-62 calypto false-SAT post-mortem.
 
 Cluster 2 status: CLOSED ★
+
+---
+
+### Iter 69 — Final clean reverify on iter-68's stable binary (`5833a2a`)
+
+After commit 5833a2a (UfInArithPurifier addShared — the last preprocess
+pass), I launched a CLEAN reverify (no rebuild during it) on the
+full 87-case targeted_nia corpus with the full preprocess flag set:
+
+  Solved:       59 / 87   (vs iter-55b baseline 57 / 87)
+  Sat:          37
+  Unsat:        22  (was 20)
+  Timeout:      22
+  Unknown:      6
+  Other (crash): 0   <- no mid-flight rebuild skew this time
+
+  Delta vs baseline:  sat -0/+0   unsat -0/+2   (NET +2 solved)
+                      0 false-sat   0 false-unsat   0 sat regressions
+
+  NEW unsat closes:
+    20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2
+    20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2
+
+  ★ Cluster-2 (sqrtmodinv) confirmed CLOSED under full preprocess
+    stack via Newton + addShared synergy. Iter-60 implemented Newton;
+    iter-67 addShared rollout made Newton's pre-substitution lemma
+    ExprIds fuse with PureDefVarSubst's post-substitution rebuilds,
+    so the atomizer assigns one SAT lit, CDCL propagates, UNSAT
+    derived from CDCL contradiction.
+
+  The "qualitative leap" the user predicted from hash-cons is real —
+  the path to it is the OPT-IN addShared design (iter-62), not
+  unconditional global hash-cons (which produces calypto false-SATs
+  per iter-61 post-mortem and incremental-ITE false-SAT per the
+  parallel agent's experiment).
+
+35 algorithmic commits + 11 doc/infra. 0 regressions / 0-unsound
+across 69 iterations.
