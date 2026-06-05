@@ -679,17 +679,7 @@ public:
     }
 
     CoreIr& ensureIr() {
-        if (!ir) {
-            ir = std::make_unique<CoreIr>();
-            // iter-60: enable hash-cons so equivalent sub-expressions
-            // emitted by separate passes share ExprIds. Critical for
-            // SAT-lit unification (Newton prover lemmas vs original
-            // assertion atoms). Gated by XOLVER_IR_HASHCONS=0 to revert.
-            if (const char* e = std::getenv("XOLVER_IR_HASHCONS");
-                !(e && *e == '0')) {
-                ir->setHashConsEnabled(true);
-            }
-        }
+        if (!ir) ir = std::make_unique<CoreIr>();
         return *ir;
     }
 

@@ -69,32 +69,24 @@ class CoreIr {
 public:
     CoreIr() = default;
 
-    // Dense storage with optional hash-cons deduplication.
-    // When XOLVER_IR_HASHCONS is set OR enabled at construction, identical
+    // Hash-cons deduplication is UNCONDITIONAL. Identical
     // (kind, sort, children, payload) tuples collapse to the same ExprId.
-    // This is critical for theory-level SAT-lit unification: equivalent
-    // sub-expressions emitted by separate preprocess passes (e.g. lemma
-    // generators vs the parsed assertion) must share ExprIds so the
-    // atomizer assigns them a single SAT lit. Without it, algebraically
-    // equivalent atoms become distinct Boolean variables and CDCL cannot
-    // propagate between them.
+    // Critical for theory-level SAT-lit unification: equivalent
+    // sub-expressions emitted by separate passes (e.g. lemma generators
+    // vs the parsed assertion) must share ExprIds so the atomizer
+    // assigns them a single SAT lit. Without it, algebraically equivalent
+    // atoms become distinct Boolean variables and CDCL cannot propagate
+    // between them — see commit message of `nia newton: iter-60` for the
+    // diagnosis evidence (eid=37 vs eid=19 for the same `(< X (* (+ V 1) (+ V 1)))`).
     ExprId add(CoreExpr e) {
-        if (hashConsEnabled_) {
-            ConsKey key{e.kind, e.sort, e.children, e.payload.value};
-            auto it = consMap_.find(key);
-            if (it != consMap_.end()) return it->second;
-            ExprId id = static_cast<ExprId>(exprs_.size());
-            exprs_.push_back(std::move(e));
-            consMap_.emplace(std::move(key), id);
-            return id;
-        }
+        ConsKey key{e.kind, e.sort, e.children, e.payload.value};
+        auto it = consMap_.find(key);
+        if (it != consMap_.end()) return it->second;
         ExprId id = static_cast<ExprId>(exprs_.size());
         exprs_.push_back(std::move(e));
+        consMap_.emplace(std::move(key), id);
         return id;
     }
-
-    void setHashConsEnabled(bool on) { hashConsEnabled_ = on; }
-    bool hashConsEnabled() const { return hashConsEnabled_; }
 
     const CoreExpr& get(ExprId id) const { return exprs_[id]; }
     CoreExpr& get(ExprId id) { return exprs_[id]; }
@@ -232,7 +224,6 @@ private:
         }
     };
 
-    bool hashConsEnabled_ = false;
     std::unordered_map<ConsKey, ExprId, ConsKeyHash> consMap_;
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
