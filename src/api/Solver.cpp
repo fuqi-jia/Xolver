@@ -1109,6 +1109,21 @@ public:
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
+        // Symbolic-modular simplification of `(mod p M)` for non-constant M
+        // (the bit-width-independent Zohar `pow2(k)` modulus) must run BEFORE
+        // ITE lowering: it pushes a mod through the `intmodtotal` ite-wrapper
+        // (`(mod (ite C a b) M) -> (ite C (mod a M)(mod b M))`) and drops
+        // M-divisible monomials, which only works while the ites are still ites.
+        // Once CoreIteLowerer replaces them with fresh vars the structure is
+        // opaque to the rewrite. Sound, general; no-op unless a non-constant
+        // modulus is present. (The same pass runs again after lowering for
+        // constant div/mod folding.)
+        {
+            IntDivModConstantFold preMod(*ir);
+            preMod.run();
+            preMod.commit();
+        }
+
         // Lower ITEs before any theory processing or atomization.
         // CoreIteLowerer is a pure IR-to-IR pass: no SatLit, no theory atom
         // registration, no SAT clause insertion.
