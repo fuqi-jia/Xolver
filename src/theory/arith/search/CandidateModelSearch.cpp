@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <set>
 
 namespace xolver {
@@ -22,6 +23,17 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     collectFreeVariables();
     if (cfg_.allowUF) collectApplicationSlots();
     if (vars_.empty()) return result_;
+
+    if (cfg_.allowUF) pinForcedAppSlots();
+    if (std::getenv("XOLVER_DIAG_CMS")) {
+        size_t napp = 0;
+        for (const auto& v : vars_) if (v.isApp) ++napp;
+        size_t npin = 0;
+        for (const auto& v : vars_) if (v.pinnedValue) ++npin;
+        std::cerr << "[CMS] enabled=" << isLogicEnabled() << " vars=" << vars_.size()
+                  << " appSlots=" << napp << " pinned=" << npin
+                  << " arith=" << (vars_.size() - napp) << "\n";
+    }
 
     buildPriorityList();
     detectActiveBounds();
@@ -144,6 +156,87 @@ void CandidateModelSearch::collectApplicationSlots() {
     }
 }
 
+void CandidateModelSearch::pinForcedAppSlots() {
+    auto extractConst = [&](ExprId eid) -> std::optional<mpq_class> {
+        const auto& n = ir_.get(eid);
+        if (n.kind == Kind::ConstInt) {
+            if (auto* p = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*p);
+        } else if (n.kind == Kind::ConstReal) {
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) return mpq_class(*s);
+        }
+        return std::nullopt;
+    };
+    // Descend only through top-level And (asserted-true conjuncts); never Or/Not.
+    std::vector<ExprId> work = assertionRoots();
+    std::unordered_set<ExprId> seen;
+    while (!work.empty()) {
+        ExprId e = work.back();
+        work.pop_back();
+        if (e >= ir_.size() || !seen.insert(e).second) continue;
+        const auto& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) work.push_back(c);
+            continue;
+        }
+        if (n.kind == Kind::Eq && n.children.size() == 2) {
+            ExprId a = n.children[0], b = n.children[1];
+            ExprId app = NullExpr;
+            std::optional<mpq_class> cst;
+            if (ir_.get(a).kind == Kind::UFApply) { if (auto c = extractConst(b)) { app = a; cst = c; } }
+            if (app == NullExpr && ir_.get(b).kind == Kind::UFApply) { if (auto c = extractConst(a)) { app = b; cst = c; } }
+            if (app != NullExpr && cst) {
+                auto it = varIndexByName_.find("__ufapp#" + std::to_string(app));
+                if (it != varIndexByName_.end()) {
+                    auto& v = vars_[it->second];
+                    if (v.isApp && !(v.sort == ir_.intSortId() && cst->get_den() != 1))
+                        v.pinnedValue = *cst;
+                }
+            }
+        }
+    }
+}
+
+void CandidateModelSearch::deriveAppValues(
+    std::unordered_map<std::string, mpq_class>& full) const
+{
+    // Fixpoint: an app slot whose evaluated args match a KNOWN app of the same
+    // function (a pinned base case, or an already-derived app) takes that value.
+    // Unconstrained apps keep their current (default) value. cvc5/z3 model
+    // construction: derive, don't enumerate.
+    for (int iter = 0; iter < 8; ++iter) {
+        bool changed = false;
+        std::map<std::pair<std::string, std::vector<std::string>>, mpq_class> table;
+        auto argsOf = [&](const VarRecord& v, std::vector<std::string>& out) -> bool {
+            const auto& node = ir_.get(v.exprId);
+            for (ExprId c : node.children) {
+                TermResult cr = evalTermTop(c, full);
+                if (cr.kind != TermVerdict::Number) return false;
+                out.push_back(cr.numValue.get_str());
+            }
+            return true;
+        };
+        for (const auto& v : vars_) {
+            if (!v.isApp || !v.pinnedValue) continue;
+            std::vector<std::string> a;
+            if (argsOf(v, a)) table[{v.funcName, a}] = *v.pinnedValue;
+        }
+        for (const auto& v : vars_) {
+            if (!v.isApp || v.pinnedValue) continue;
+            std::vector<std::string> a;
+            if (!argsOf(v, a)) continue;
+            auto it = table.find({v.funcName, a});
+            if (it != table.end()) {
+                auto fit = full.find(v.name);
+                if (fit == full.end() || fit->second != it->second) {
+                    full[v.name] = it->second;
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) break;
+    }
+}
+
 bool CandidateModelSearch::functionallyConsistent(
     const std::unordered_map<std::string, mpq_class>& full) const
 {
@@ -248,8 +341,31 @@ void CandidateModelSearch::buildPriorityList() {
 
     perVar_.clear();
     perVar_.resize(vars_.size());
+    // A UF-app slot is DERIVABLE (its value follows by functional consistency
+    // from a pinned base case of the same function — e.g. pow2(k)@k=1 == pow2(1))
+    // exactly when its function has at least one pinned app. Such slots are NOT
+    // enumerated (singleton seed; deriveAppValues overrides them in
+    // tryAcceptCandidate) — that is what tames the UFNIA Cartesian blow-up. Apps
+    // of a function with NO pinned base case are FREE (e.g. intand, an arbitrary
+    // squaring fun) and MUST be enumerated like ordinary variables, or we lose
+    // the models the legacy enumeration found (ufnia_001 fun_sq).
+    std::unordered_set<std::string> pinnedFuncs;
+    for (const auto& v : vars_)
+        if (v.isApp && v.pinnedValue) pinnedFuncs.insert(v.funcName);
+
     for (size_t i = 0; i < vars_.size(); ++i) {
         const auto& var = vars_[i];
+        if (var.isApp) {
+            if (var.pinnedValue) {                      // pinned base case
+                perVar_[i].push_back(*var.pinnedValue);
+                continue;
+            }
+            if (pinnedFuncs.count(var.funcName)) {      // derivable → singleton
+                perVar_[i].push_back(mpq_class(0));      // deriveAppValues overrides
+                continue;
+            }
+            // free app: fall through to full enumeration below.
+        }
         // Per-variable list = shared priority filtered by sort. Int-sorted
         // variables only receive integer-valued candidates.
         for (const auto& q : priority_) {
@@ -401,6 +517,11 @@ bool CandidateModelSearch::tryAcceptCandidate(
             full[v.name] = def;
         }
     }
+    // Derive UF-app slot values from the arith assignment (functional
+    // consistency with pinned base cases) — this is what makes pow2(k)@k=1
+    // become 2 without enumerating it (cvc5/z3 model construction).
+    if (cfg_.allowUF) deriveAppValues(full);
+
     // Reject candidates that would make a function multi-valued before we
     // bother evaluating the assertions.
     if (cfg_.allowUF && !functionallyConsistent(full)) return false;

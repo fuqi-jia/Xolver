@@ -3159,8 +3159,48 @@ public:
             return Result::Unknown;
         }
 
+        // cvc5/z3-style model-construction PRE-PASS. For UFNIA, try to CONSTRUCT
+        // a validated model (UF apps DERIVED by functional consistency,
+        // CandidateModelSearch::deriveAppValues — pow2(k)@k=1 == pow2(1)) BEFORE
+        // the heavy SAT/theory solve, which on bit-width-independent UFNIA
+        // (pow2(k)) bit-blasts into an OOM the recovery never reaches. Sound: CMS
+        // re-validates every model against the original assertions (it never
+        // emits UNSAT, so a no-model run just falls through). Witnesses are tiny
+        // and found in ~0.1s; the 2s budget bounds the fall-through cost.
+        // Default-ON for QF_UFNIA only (where the OOM lives + CMS supports UF);
+        // opt-out XOLVER_CMS_UF_PREPASS=0, force-on elsewhere with =1.
+        bool cmsPrePassFound = false;
+        bool prepassEnabled = (logic == "QF_UFNIA" || logic == "UFNIA");
+        // The BWI axiom emitter (XOLVER_NIA_ZOHAR_PLUGIN) ADDS pow2 semantics
+        // (pow2(t)>=1, pow2(0)=1, ...) that the pre-pass cannot see — it runs
+        // over the pre-emission assertions. They are mutually-exclusive pow2
+        // strategies: when the emitter is active, defer to it (else the pre-pass
+        // would false-sat a formula the emitter proves unsat).
+        if (std::getenv("XOLVER_NIA_ZOHAR_PLUGIN")) prepassEnabled = false;
+        if (const char* e = std::getenv("XOLVER_CMS_UF_PREPASS"))
+            prepassEnabled = (*e && *e != '0');
+        if (prepassEnabled) {
+            CandidateModelSearch::Config cfg;
+            cfg.allowUF = true;
+            cfg.assertionRootsOverride = originalAssertions_;
+            cfg.wallClockBudget = std::chrono::milliseconds(
+                env::paramInt("XOLVER_CMS_UF_BUDGET_MS", 2000));
+            cfg.maxCandidatesPerStrategy =
+                static_cast<size_t>(env::paramInt("XOLVER_CMS_UF_CANDS", 2000000));
+            CandidateModelSearch cms(*ir, logic, cfg);
+            auto pre = cms.run();
+            if (std::getenv("XOLVER_DIAG_CMS"))
+                std::cerr << "[CMS-PREPASS] found=" << pre.found
+                          << " strategy=" << pre.strategy << "\n";
+            if (pre.found) {
+                lastModel_ = pre.model;
+                cmsPrePassFound = true;
+            }
+        }
+
         auto solveT0 = std::chrono::steady_clock::now();
-        auto result = sat->solve();
+        auto result = cmsPrePassFound ? SatSolver::SolveResult::Sat
+                                      : sat->solve();
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
 
@@ -3170,7 +3210,10 @@ public:
         // captured via the propagator's assignment view, but pure-boolean vars
         // are not theory-tracked. Used by the strict-validation gate.
         std::unordered_map<std::string, std::string> boolVarVals;
-        if (result == SatSolver::SolveResult::Sat) {
+        // Skip SAT-var readback when the CMS pre-pass produced the model: the
+        // SAT solver was never run (no satisfied state → CaDiCaL val() aborts),
+        // and the CMS model is already complete + validated.
+        if (result == SatSolver::SolveResult::Sat && !cmsPrePassFound) {
             // An atom whose expr is a Kind::Variable is a boolean variable in
             // formula position (numeric vars only appear inside theory atoms,
             // whose expr is the relation node). This holds across paths: the
@@ -3193,7 +3236,9 @@ public:
 
         Result ret = Result::Unknown;
         if (result == SatSolver::SolveResult::Sat) {
-            lastModel_ = theoryManager.getModel();
+            // Keep the CMS pre-pass model (already validated); only pull the
+            // theory model on the normal solve path.
+            if (!cmsPrePassFound) lastModel_ = theoryManager.getModel();
             ret = Result::Sat;
             // Merge the boolean-variable values captured from the live SAT
             // assignment into the model OUTPUT. Pure-boolean variables are not
