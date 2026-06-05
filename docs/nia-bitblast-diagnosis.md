@@ -1474,3 +1474,52 @@ Pipeline engagement improves but the Farkas-template UNSAT proof still needs rea
 Same "infrastructure-extending, no immediate corpus impact" pattern as iter-21 / 25 / 32: the rule is sound, gates all-green, future rules can build on the new `varUpperBound_` tracker.
 
 #### 14 algorithmic commits shipped, 0 regressions, 0-unsound across 38 iterations
+
+---
+
+### Iteration 39 — 60 s × ALL flags sweep: 0 / 19 cracked, ceiling firm at 51 / 87
+
+Final algorithmic ceiling test. All 19 remaining oracle-UNSAT cases at 60 s wallclock with EVERY shipped + opt-in flag combined:
+`XOLVER_PP_REWRITE + PURE_DEFINED_VAR_SUBST + INLINE_SINGLE_DEFS_INT + TIGHT_BOUND_SUBST + SYMBOLIC_DIVMOD_NONZERO + AUTO_EUF_PROMOTE + NIA_MODULAR + GCD + ALGEBRAIC + FARKAS_OR + pct=10`
+
+Result: **0 solved, 5 unknown (engaged-but-bail), 14 full TO**.
+
+#### Partial-result cases (5) — pipeline engages and hints at UNSAT
+
+| case | bail @ |
+|---|---|
+| `VeryMax/SAT14/588` | 8.9 s |
+| `UltimateLassoRanker/ChenFlur...` | 20.6 s |
+| `VeryMax/SAT14/775` | 22.0 s |
+| `leipzig/term-unsat-01` | 31.5 s |
+| `VeryMax/SAT14/1882` | 31.5 s |
+
+These cases: the pipeline detects unsatisfiability hints (cuts, partial conflicts) but cannot certify the UNSAT proof within budget. The reasoner depth is the bottleneck.
+
+#### Full TO cases (14) — pipeline keeps grinding without progress
+
+VeryMax + LassoRanker (Farkas template enumeration) + sqrtmodinv (div-by-var + interval propagation) + LCTES (mod-by-truly-unbounded-var + EUF model).
+
+#### Final loop terminal: 51 / 87 (+132 % vs baseline)
+
+After 38 shipped iterations + 1 sweep (iter-39), the loop has wrung every available preprocessing + arm-scheduling + targeted-rewrite + bound-tracking lever from the existing xolver architecture. Each remaining cluster genuinely requires new algorithmic invention (per-cluster 100-200 LOC of new reasoner code, multi-day each):
+
+| cluster | n | barrier |
+|---|---|---|
+| VeryMax + LassoRanker | 11 | Farkas template enumeration + ranking-function |
+| sqrtmodinv sqrtStep* | 2 | div-by-var Gauss + interval-bound propagation |
+| LCTES | 2 | mod/div by truly-unbounded var + EUF model |
+| Dartagnan large-formula | 3 | streaming bit-blast / LIA depth |
+| leipzig term-unsat-01 | 1 | matrix interpretation termination |
+
+#### Final 38-iteration achievement
+
+- 14 algorithmic commits shipped + non-reverted
+- 9 documentation iterations
+- 3 falsified hypotheses (iter-3, 4, 12)
+- 2 soundness bugs caught & properly handled (iter-28 pre-commit, iter-29 → iter-32 redo with INT-only restriction)
+- 0 regressions, 0-unsound across all 38 iterations
+- Corpus 22 / 87 → 51 / 87 (+132 %)
+- Oracle SAT 17 / 36 (47 %) → 31 / 36 (86 %), +39 pp
+- Oracle UNSAT 5 / 33 (15 %) → 14 / 33 (42 %), +27 pp
+- 6 cases where xolver beats oracle (oracle = Unknown)
