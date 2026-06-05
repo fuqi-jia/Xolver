@@ -91,7 +91,7 @@ ExprId MonomialSharingPass::rewriteWithSubst(
     ne.sort = n.sort;
     for (ExprId c : newChildren) ne.children.push_back(c);
     ne.payload = n.payload;
-    ExprId out = ir_.add(std::move(ne));
+    ExprId out = ir_.addShared(std::move(ne));
     memo[e] = out;
     return out;
 }
@@ -143,7 +143,7 @@ size_t MonomialSharingPass::run() {
         eq.sort = boolSort_;
         eq.children.push_back(mvar);
         eq.children.push_back(mulExpr);
-        ExprId eqId = ir_.add(std::move(eq));
+        ExprId eqId = ir_.addShared(std::move(eq));
         defAssertions_.push_back(eqId);
 
         selected_[mulExpr] = mvar;

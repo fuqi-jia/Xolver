@@ -41,7 +41,7 @@ ExprId NaryDistinctLowerer::lowerRec(ExprId root) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (!frame.processed) {
             frame.processed = true;
@@ -74,7 +74,7 @@ ExprId NaryDistinctLowerer::lowerRec(ExprId root) {
             ne.sort = node.sort;
             for (ExprId c : newChildren) ne.children.push_back(c);
             ne.payload = node.payload;
-            memo_[e] = ir_.add(std::move(ne));
+            memo_[e] = ir_.addShared(std::move(ne));
         }
     }
 
@@ -102,7 +102,7 @@ ExprId NaryDistinctLowerer::mkDistinct(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId NaryDistinctLowerer::mkAnd(ExprId a, ExprId b) {
@@ -111,7 +111,7 @@ ExprId NaryDistinctLowerer::mkAnd(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId NaryDistinctLowerer::mkTrue() {
@@ -119,7 +119,7 @@ ExprId NaryDistinctLowerer::mkTrue() {
     e.kind = Kind::ConstBool;
     e.sort = boolSortId_;
     e.payload = Payload(true);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 } // namespace xolver
