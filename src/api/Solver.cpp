@@ -1120,18 +1120,26 @@ public:
                 // guard, C > 4 yields lemma 2 as a FALSE FACT → could
                 // produce wrong verdict. Lemma 1's branch-1 proof also
                 // implicitly requires q ≤ 4*U (from X ≤ 4U²).
+                // Extract const C from `(* C (* U U))` OR `(* (* U U) C)`.
+                // The parser may canonicalize either way.
                 auto extractCfromUpper = [&](ExprId e, ExprId u, mpz_class& outC) -> bool {
                     const CoreExpr& m = ir->get(e);
                     if (m.kind != Kind::Mul || m.children.size() != 2) return false;
-                    const CoreExpr& c0 = ir->get(m.children[0]);
-                    if (c0.kind != Kind::ConstInt && c0.kind != Kind::ConstReal) return false;
-                    if (auto* iv = std::get_if<int64_t>(&c0.payload.value)) {
-                        outC = mpz_class(*iv);
-                    } else if (auto* sv = std::get_if<std::string>(&c0.payload.value)) {
-                        try { mpq_class q(*sv); if (q.get_den() != 1) return false; outC = q.get_num(); }
-                        catch (...) { return false; }
-                    } else return false;
-                    return isMulUU(m.children[1], u);
+                    // Try both orderings: (CONST, MulUU) or (MulUU, CONST).
+                    for (int order = 0; order < 2; ++order) {
+                        ExprId cChild = order ? m.children[1] : m.children[0];
+                        ExprId muuChild = order ? m.children[0] : m.children[1];
+                        const CoreExpr& c0 = ir->get(cChild);
+                        if (c0.kind != Kind::ConstInt && c0.kind != Kind::ConstReal) continue;
+                        if (auto* iv = std::get_if<int64_t>(&c0.payload.value)) {
+                            outC = mpz_class(*iv);
+                        } else if (auto* sv = std::get_if<std::string>(&c0.payload.value)) {
+                            try { mpq_class q(*sv); if (q.get_den() != 1) continue; outC = q.get_num(); }
+                            catch (...) { continue; }
+                        } else continue;
+                        if (isMulUU(muuChild, u)) return true;
+                    }
+                    return false;
                 };
                 std::vector<std::pair<ScopeLevel, ExprId>> newLemmas;
                 for (const auto& mt : matches) {
@@ -1144,7 +1152,8 @@ public:
                             hasLower = true;
                         }
                         mpz_class c;
-                        if (eqExpr(a.children[0], mt.X) && extractCfromUpper(a.children[1], mt.U, c)) {
+                        if (eqExpr(a.children[0], mt.X) &&
+                            extractCfromUpper(a.children[1], mt.U, c)) {
                             // CRITICAL: require 1 ≤ C ≤ 4 (proof's tight bound).
                             if (c >= 1 && c <= 4) {
                                 hasUpper = true;
@@ -1153,8 +1162,9 @@ public:
                         }
                     }
                     if (!hasLower || !hasUpper) continue;
-                    std::cerr << "[NewtonIntSqrt] match found C=" << upperC.get_str()
-                              << " (sound: 1 ≤ C ≤ 4)" << std::endl;
+                    std::cerr << "[NewtonIntSqrt] match V=" << mt.V << " U=" << mt.U
+                              << " X=" << mt.X << " C=" << upperC.get_str()
+                              << " (sound: 1 ≤ C ≤ 4)\n";
                     // Build lemma 1: (< X (* (+ V 1) (+ V 1)))
                     auto mkConst = [&](int64_t v) {
                         CoreExpr c;
