@@ -37,7 +37,7 @@ ExprId UfInArithPurifier::rebuildLike(ExprId original,
     for (ExprId c : newChildren) {
         e.children.push_back(c);
     }
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId UfInArithPurifier::mkEq(ExprId a, ExprId b) {
@@ -46,7 +46,7 @@ ExprId UfInArithPurifier::mkEq(ExprId a, ExprId b) {
     e.sort = ir_.boolSortId();
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
@@ -65,7 +65,7 @@ ExprId UfInArithPurifier::purifyRec(ExprId root, bool rootInArithContext) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back
