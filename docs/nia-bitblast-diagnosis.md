@@ -1200,3 +1200,51 @@ Queued as a separate iteration; this iteration's outcome is **soundness-protecte
 - No code change committed.
 - Documented the soundness pitfall for any future implementation of chained-substitution preprocess.
 - Confirms one more cluster (leipzig term-unsat-01) needs the recursive-substitution lever, joining the queue for future reasoner work.
+
+---
+
+### Iteration 30 — SECOND soundness bug caught in INLINE_SINGLE_DEFS, FULL REVERT
+
+iter-29's recursive-resolution INLINE_SINGLE_DEFS passed its small-corpus gates (nia 113/113, lia 57/57, held-out 16/16, unit 1339/1339) but **failed at the full 87-case `targeted_nia` reverify**: VeryMax/SAT14/775 and VeryMax/SAT14/1882 (both oracle-UNSAT per z3) returned `sat`.
+
+#### Verification
+
+z3 ground truth on both cases: **unsat**.
+
+xolver under iter-29 + all flags:
+```
+[SolveEqs] eliminated 2 variable(s)
+[PureDefVarSubst] eliminated 5 variable(s); dropped 6 atom(s)
+sat
+```
+
+Without `XOLVER_PP_INLINE_SINGLE_DEFS=1` (iter-25 baseline): **Terminated (timeout)** — no false-sat.
+
+So the bug is in INLINE_SINGLE_DEFS specifically, NOT in the iter-17 witness mode or in any other shipped lever.
+
+#### Action
+
+`git revert 238d9eb` (-> commit `3e3df91`). The witness mode of iter-17 is preserved unchanged. Confirmed after revert:
+- VeryMax/SAT14/775 with INLINE flag still set: Terminated (no longer returns sat — code path is gone)
+- SC_02: unsat (iter-17 witness mode still works)
+
+#### Root cause hypothesis (queued for future debugging)
+
+The 5-var elimination diag suggests INLINE_SINGLE_DEFS fired even though some of those vars may have been used inside non-Eq atoms (e.g. OR clauses with Bool vars). The `nonDefOcc` counter walks subtrees skipping the rhs-Variable of top-level Eqs — but for vars that appear ONLY inside `(or ... V ...)` or boolean operators, the counter may still hit 0 if the walker has a bug, OR my inline-mode condition `idxs.size() == 1 && nonDef > 0` triggers even when subsequent Eq atoms USE the var indirectly through the substitution chain.
+
+The recursive substitution + cycle guard ARE correct in isolation (verified on cubeT, SC_02, and leipzig sat smokes). The bug is upstream — in the SELECTION of which vars to mark for substitution.
+
+#### Loop status after iter-30
+
+Branch state restored to iter-27 + iter-29 revert. The 11 shipped algorithmic commits remain:
+- iter-6/8/10/11/13: EAGER + LiaSolver tuning
+- iter-14: percentage-budget EAGER (+8 corpus)
+- iter-15: FormulaRewriter rules (cubeT)
+- iter-17: PurelyDefinedVarSubst witness mode (SC_02)
+- iter-21: scanPositiveBounds And-flatten
+- iter-23: even-power injection (MS_02, SQ_02)
+- iter-25: AUTO_EUF_PROMOTE (LCTES engage)
+
+Corpus: 50/87 (+128% over baseline 22), oracle-UNSAT 13/33 (39%), **0 regressions, 0-unsound** under the SHIPPED + non-reverted flags.
+
+Two soundness bugs caught + reverted across iter-28 (caught pre-commit) and iter-30 (caught post-commit at corpus reverify). Lesson: the **full 87-case oracle differential is the only reliable safety net** for substitution-based passes — small-suite gates can pass even when the pass is unsound on adversarial inputs.
