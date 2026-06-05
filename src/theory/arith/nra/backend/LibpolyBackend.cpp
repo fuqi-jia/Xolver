@@ -416,7 +416,17 @@ Sign LibpolyBackend::signAt(PolyId p, const SamplePoint& sample) {
         return signAtOneAlgebraic(p, sample);
     }
 
-    // Layer 3: algebraic tower (multiple algebraic variables)
+    // Layer 3: algebraic tower (multiple algebraic variables). Try the
+    // libpoly-NATIVE multi-algebraic sign (poly::sgn over a full algebraic
+    // Assignment) first: it evaluates genuine towers that the hand-rolled
+    // pseudo-remainder reduction (signAtTower) gives up on as Unknown
+    // (non-constant scale factor / prem failure) — which is what blocked
+    // checkFullSample from confirming algebraic SAT models (Geogebra/kissing).
+    // signAtSampleGuarded is sigsetjmp-crash-guarded + coefficient-bit
+    // firewalled, so it can only return a DEFINITE sign or Unknown (never a
+    // crash). Fall back to the manual tower when the native path is inconclusive.
+    Sign nativeSign = signAtSampleGuarded(p, sample);
+    if (nativeSign != Sign::Unknown) return nativeSign;
     return signAtTower(p, sample);
 }
 
