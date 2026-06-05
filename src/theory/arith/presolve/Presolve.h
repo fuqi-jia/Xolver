@@ -44,7 +44,14 @@ struct PresolveState {
     std::vector<PresolveAtom> atoms;
 
     // Solved-form substitution map: eliminated var -> (value, fact index).
-    struct SubstEntry { RationalPolynomial value; size_t factIndex; };
+    // iter-74: cache `value.variables()` per entry to make the backward-composition
+    // loop in registerSubstitution use O(log V) per-entry lookup instead of
+    // O(terms × vars-per-term). Maintained at every entry write/rewrite site.
+    struct SubstEntry {
+        RationalPolynomial value;
+        size_t factIndex;
+        std::set<VarId> vars;
+    };
     std::map<VarId, SubstEntry> substMap;
 
     std::map<VarId, FixedVal> fixedValues;
