@@ -269,6 +269,15 @@ private:
     // comparison-tautology class (Zohar AndOrXor/int_check). Runs before the
     // domain/finite-domain stages.
     std::optional<TheoryCheckResult> stagePolyConflict(TheoryLemmaStorage&, TheoryEffort);
+    // Sound difference-logic negative-cycle conflict, generalizing poly-conflict
+    // from same-poly (2-var) to multi-variable difference chains. Active
+    // constraints of the form `(i - j + k) rel 0` become difference edges; reuses
+    // the project's BellmanFord/DifferenceGraph engine (theory/arith/dl) to detect
+    // a negative cycle, whose edge-reason literals form the Farkas conflict.
+    // Catches `r>t ∧ t>=s ∧ r<=s`-style 3+-variable conflicts that QF_NIA refutes
+    // but QF_UFNIA combination misses (single-variable domain reasoning). Capped
+    // at a small node count so the engine stays cheap on big problems.
+    std::optional<TheoryCheckResult> stageDifferenceConflict(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort);
