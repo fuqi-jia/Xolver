@@ -19,7 +19,10 @@ tail -n +2 "$MANIFEST" | awk -F'\t' '{print $5"\t"$6"\t"$7}' | while IFS=$'\t' r
   path="$CASE_ROOT/$rel"
   [ -f "$path" ] || { printf '%s\tmissing\t%s\t%s\t-\t-\n' "$rel" "$oracle" "$was" >> "$OUT"; continue; }
   start=$(date +%s%3N)
-  ( ulimit -v 3000000; timeout "${TIMEOUT}" "$BIN" solve "$path" < /dev/null ) > /tmp/_rv_out 2>/dev/null
+  # Pass XOLVER_WALLCLOCK_MS so xolver can split the budget among arms by
+  # percentage (EAGER vs CDCL(T) NIA). Without this xolver doesn't know its
+  # own deadline and EAGER's default (120s) would hog the bash-timeout slot.
+  ( ulimit -v 3000000; XOLVER_WALLCLOCK_MS=$((TIMEOUT * 1000)) timeout "${TIMEOUT}" "$BIN" solve "$path" < /dev/null ) > /tmp/_rv_out 2>/dev/null
   rc=$?
   out=$(head -1 /tmp/_rv_out)
   end=$(date +%s%3N)

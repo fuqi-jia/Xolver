@@ -3,6 +3,8 @@
 #include "expr/ir.h"
 #include <gmpxx.h>
 #include <unordered_map>
+#include <unordered_set>
+#include <string>
 #include <vector>
 #include <cstddef>
 
@@ -100,6 +102,32 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> rewritten_;
     bool changed_ = false;
     bool unsat_ = false;
+
+    // Variables proven >= 0 by a top-level atom in the current assertion set
+    // (populated by scanNonNegativeVars at the start of run()). Used by the
+    // power-injection rule to soundly extend even-k injection: x^k = y^k with
+    // x >= 0 ∧ y >= 0 implies x = y for any k >= 1 (the cube/square/quartic
+    // root over the non-negatives is unique). Without the bound, even k is
+    // unsound (x^2 = y^2 allows x = -y).
+    std::unordered_set<std::string> nonNegVars_;
+    // Tightest known integer lower bound for each Int var: varLowerBound_[v]
+    // = the largest L such that v >= L is provable from a top-level atom
+    // (recognised shapes: (>= v c), (> v (c-1)), and the mirror (<= c v),
+    // (< (c-1) v)). Absent if no integer lower bound provable. Used by the
+    // mod-by-variable simplification (a constant residue is final iff it is
+    // < V's lower bound -- otherwise the mod could fold to residue-V).
+    std::unordered_map<std::string, mpz_class> varLowerBound_;
+    // Symmetric upper-bound tracker. When lowerBound == upperBound for an Int
+    // Variable, the var is pinned to a single integer value and gets
+    // substituted with ConstInt(value) at every occurrence (XOLVER_PP_TIGHT_
+    // BOUND_SUBST=1). Closes the VeryMax Farkas lambda pattern `(<= 0 lam)`
+    // ∧ `(< lam 1)` -> Int lam = 0.
+    std::unordered_map<std::string, mpz_class> varUpperBound_;
+    void scanNonNegativeVars();
+    bool isProvablyNonNegative(ExprId e) const;
+    bool tryGetLowerBound(ExprId e, mpz_class& out) const;
+    // Returns true iff `v` has both lower and upper bounds equal to `out`.
+    bool tryGetTightValue(const std::string& v, mpz_class& out) const;
 };
 
 } // namespace xolver

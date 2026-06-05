@@ -964,6 +964,34 @@ public:
         // referencing the original formula for ModelValidator. A top-level
         // assertion that simplifies to the boolean constant false makes the
         // assertion conjunction unsatisfiable.
+        if (std::getenv("XOLVER_PP_AND_FLATTEN") && ir->currentScopeLevel() == 0) {
+            std::vector<std::pair<ScopeLevel, ExprId>> flat;
+            std::function<void(ScopeLevel, ExprId)> push = [&](ScopeLevel lvl, ExprId e) {
+                const CoreExpr& n = ir->get(e);
+                if (n.kind == Kind::And) {
+                    for (ExprId c : n.children) push(lvl, c);
+                } else {
+                    flat.push_back({lvl, e});
+                }
+            };
+            bool anyAnd = false;
+            size_t origSize = 0;
+            {
+                const auto& scoped = ir->getScopedAssertions();
+                origSize = scoped.size();
+                for (const auto& [lvl, e] : scoped) {
+                    if (ir->get(e).kind == Kind::And) anyAnd = true;
+                    push(lvl, e);
+                }
+            }
+            if (anyAnd && flat.size() > origSize) {
+                ir->clearAssertions();
+                for (const auto& [lvl, e] : flat) ir->addAssertion(e, lvl);
+                std::cerr << "[AndFlatten] " << origSize
+                          << " -> " << flat.size() << " assertions\n";
+            }
+        }
+
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
@@ -1103,6 +1131,468 @@ public:
                 unc.commit();
                 std::cerr << "[UnconstrainedElim] dropped " << unc.eliminatedCount()
                           << " atom(s)\n";
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // PurelyDefinedVarSubstitution (XOLVER_PP_PURE_DEFINED_VAR_SUBST,
+        // default-OFF): if a Variable V appears ONLY as `(= LHS_i V)` atoms
+        // (i.e. its sole occurrences are as the RHS-witness of one or more
+        // top-level equalities), pick atom #0 as the canonical definition
+        // V := LHS_0, drop it, and rewrite each other atom `(= LHS_i V)`
+        // (i in [1..]) into `(= LHS_i LHS_0)`. The subsequent FormulaRewriter
+        // pass then cancels shared Add terms and applies odd-power injection
+        // -- closing the "semi-magic square of cubes" chain etc.
+        //
+        // Soundness: V is a pure "witness" var with no constraint other than
+        // its definition; substituting one definition into the others is
+        // equality-preserving. The eliminated V is reconstructed at model-
+        // emission time by evaluating LHS_0 (registerWitness on the
+        // ModelConverter so the user-printed model still has V if it was
+        // declared).
+        //
+        // Gating: same as solve-eqs (base scope, non-algebraic-model logics);
+        // env opt-in; gracefully no-op if any V has occurrences elsewhere.
+        if (std::getenv("XOLVER_PP_PURE_DEFINED_VAR_SUBST") &&
+            ir->currentScopeLevel() == 0 && !algebraicModelLogic) {
+            // Walk every assertion to count, per Variable, how many times it
+            // appears in subtree positions OTHER than as the immediate RHS of
+            // a top-level `=` atom. A Variable is "purely defined" iff its
+            // only occurrences are as such RHSes.
+            std::unordered_map<std::string, size_t> nonDefOcc;
+            std::unordered_map<std::string, std::vector<size_t>> defAtomIdx;
+            const auto& scoped = ir->getScopedAssertions();
+            // Count NON-definition occurrences: walk every node, skip the
+            // "RHS of a top-level Eq" position.
+            std::unordered_set<ExprId> visited;
+            std::function<void(ExprId)> countOcc = [&](ExprId eid) {
+                if (!visited.insert(eid).second) return;
+                const CoreExpr& e = ir->get(eid);
+                if (e.kind == Kind::Variable) {
+                    if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                        ++nonDefOcc[*s];
+                    }
+                    return;
+                }
+                for (ExprId c : e.children) countOcc(c);
+            };
+            // Note: top-level Eq atoms get walked WITHOUT the rhs-Variable
+            // counted; everything else fully walks.
+            for (size_t i = 0; i < scoped.size(); ++i) {
+                ExprId a = scoped[i].second;
+                const CoreExpr& ae = ir->get(a);
+                if (ae.kind == Kind::Eq && ae.children.size() == 2) {
+                    ExprId rhs = ae.children[1];
+                    const CoreExpr& rhsN = ir->get(rhs);
+                    if (rhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&rhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            // Walk LHS only; rhs Variable is the "definition slot".
+                            countOcc(ae.children[0]);
+                            continue;
+                        }
+                    }
+                    // LHS-as-Variable form (= V LHS) — also count.
+                    ExprId lhs = ae.children[0];
+                    const CoreExpr& lhsN = ir->get(lhs);
+                    if (lhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&lhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            countOcc(ae.children[1]);
+                            continue;
+                        }
+                    }
+                }
+                countOcc(a);
+            }
+            // Build a DAG substitution map V → LHS_0 for every purely-defined V.
+            // Two modes:
+            //   (1) witness: V appears ONLY as `(= LHS_i V)` atoms with >=2
+            //       def atoms. Closes SC_02-style chains.
+            //   (2) inline (XOLVER_PP_INLINE_SINGLE_DEFS_INT, default-OFF):
+            //       V has exactly 1 def atom and is used elsewhere. INT vars
+            //       ONLY (per the iter-31 post-mortem -- iter-29 was unsound
+            //       on Bool vars in VeryMax/SAT14 chained Bool defs). Inlines
+            //       V := LHS_0 into other occurrences and drops the def.
+            //       Targets leipzig/term-unsat-01's int polynomial chain.
+            bool inlineSingleDefsInt =
+                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS_INT") != nullptr;
+            SortId intSort = ir->intSortId();
+            std::unordered_map<ExprId, ExprId> subst;
+            std::vector<size_t> dropAtoms;
+            // Extra assertions emitted by iter-44 univariate-cycle-solve
+            // (replacing a cyclic def `(= V g(V))` with the disjunction of
+            // its integer roots). Appended to the kept list after the
+            // substitution loop.
+            std::vector<std::pair<ScopeLevel, ExprId>> pendingExtras;
+            for (const auto& [name, idxs] : defAtomIdx) {
+                auto occIt = nonDefOcc.find(name);
+                size_t nonDef = (occIt != nonDefOcc.end()) ? occIt->second : 0;
+                bool witnessMode = (nonDef == 0) && (idxs.size() >= 2);
+                bool inlineMode = inlineSingleDefsInt && (idxs.size() == 1) && (nonDef > 0);
+                if (!witnessMode && !inlineMode) continue;
+                size_t firstAtomIdx = idxs[0];
+                ExprId firstAtom = scoped[firstAtomIdx].second;
+                const CoreExpr& fa = ir->get(firstAtom);
+                ExprId lhs = fa.children[0], rhs = fa.children[1];
+                const CoreExpr& lhsN = ir->get(lhs);
+                ExprId varEid = (lhsN.kind == Kind::Variable) ? lhs : rhs;
+                ExprId defLhsEid = (lhsN.kind == Kind::Variable) ? rhs : lhs;
+                // INT-only gate for inline mode. The var must be Int-sorted;
+                // the replacement must also be Int-sorted (this matches the
+                // Eq's argument-sort discipline so we don't smuggle a Bool
+                // term into an Int substitution).
+                if (inlineMode) {
+                    const CoreExpr& varN = ir->get(varEid);
+                    const CoreExpr& replN = ir->get(defLhsEid);
+                    if (intSort == NullSort) continue;
+                    if (varN.sort != intSort || replN.sort != intSort) continue;
+                }
+                // CYCLE DETECTION (iter-43 soundness fix). If the defining
+                // LHS transitively references the defined var V, the
+                // substitution + drop pattern is UNSOUND: the cycle guard
+                // in the rewriter prevents infinite recursion but lets V
+                // remain in the inlined expression while the defining atom
+                // is dropped -- V becomes unconstrained -> false-SAT.
+                //
+                // Caught at iter-42 reverify (AndFlatten + INLINE_SINGLE_
+                // DEFS_INT): LassoRanker/MinusBuiltIn (oracle=unsat) returned
+                // sat because AndFlatten exposed (= V (... V ...)) atoms at
+                // top level that PureDefVarSubst then incorrectly inlined.
+                //
+                // Walk defLhsEid bottom-up; if any Variable child has the
+                // same name as varEid, skip this candidate.
+                {
+                    bool hasCycle = false;
+                    std::string varName_;
+                    if (auto* s = std::get_if<std::string>(&ir->get(varEid).payload.value)) {
+                        varName_ = *s;
+                    }
+                    if (!varName_.empty()) {
+                        std::unordered_set<ExprId> seen;
+                        std::function<void(ExprId)> scan = [&](ExprId eid) {
+                            if (hasCycle) return;
+                            if (!seen.insert(eid).second) return;
+                            const CoreExpr& en = ir->get(eid);
+                            if (en.kind == Kind::Variable) {
+                                if (auto* sn = std::get_if<std::string>(&en.payload.value)) {
+                                    if (*sn == varName_) { hasCycle = true; return; }
+                                }
+                            }
+                            for (ExprId c : en.children) scan(c);
+                        };
+                        scan(defLhsEid);
+                    }
+                    // iter-44: when a cycle is detected, try to solve the
+                    // univariate-polynomial equation g(V) - V = 0 over the
+                    // integers. Algorithm:
+                    //   1. Extract coefficient vector [a_0, a_1, ..., a_n]
+                    //      for poly(V) = g(V) - V. Bail if any non-numeric
+                    //      term or any other variable appears anywhere.
+                    //   2. Rational Root Theorem: any integer root r
+                    //      divides a_0.
+                    //   3. Enumerate divisors of a_0 (incl. negatives);
+                    //      evaluate poly at each candidate; collect roots.
+                    //   4. If no integer roots -> emit `false` -> UNSAT.
+                    //   5. If roots = {r_1, ..., r_k}, drop the defining
+                    //      atom and emit (or (= V r_1) ... (= V r_k))
+                    //      as a new assertion.
+                    //
+                    // Gated by XOLVER_PP_UNIVARIATE_CYCLE_SOLVE (default-OFF).
+                    // Sound: poly(V) = 0 is exactly the integer roots of the
+                    // original (= V g(V)).
+                    if (hasCycle && std::getenv("XOLVER_PP_UNIVARIATE_CYCLE_SOLVE")) {
+                        std::string vn;
+                        if (auto* s = std::get_if<std::string>(&ir->get(varEid).payload.value)) {
+                            vn = *s;
+                        }
+                        // Recursive coefficient extraction. Returns the
+                        // polynomial in V as a coefficient vector. The
+                        // "current" expr e must evaluate to a poly in V
+                        // with integer coefficients; otherwise success=false.
+                        std::vector<mpz_class> coeffs(1, mpz_class(0));  // = 0
+                        bool ok = true;
+                        std::function<std::vector<mpz_class>(ExprId)> toPoly =
+                            [&](ExprId eid) -> std::vector<mpz_class> {
+                            if (!ok) return {};
+                            const CoreExpr& e = ir->get(eid);
+                            if (e.kind == Kind::ConstInt || e.kind == Kind::ConstReal) {
+                                if (auto* iv = std::get_if<int64_t>(&e.payload.value)) {
+                                    return {mpz_class(*iv)};
+                                }
+                                if (auto* sv = std::get_if<std::string>(&e.payload.value)) {
+                                    try {
+                                        mpq_class q(*sv);
+                                        if (q.get_den() != 1) { ok = false; return {}; }
+                                        return {q.get_num()};
+                                    } catch (...) { ok = false; return {}; }
+                                }
+                                ok = false; return {};
+                            }
+                            if (e.kind == Kind::Variable) {
+                                if (auto* sn = std::get_if<std::string>(&e.payload.value)) {
+                                    if (*sn == vn) {
+                                        // = V    -> 0 + 1*V
+                                        return {mpz_class(0), mpz_class(1)};
+                                    }
+                                }
+                                // Other variable: not univariate.
+                                ok = false; return {};
+                            }
+                            if (e.kind == Kind::Neg && e.children.size() == 1) {
+                                auto p = toPoly(e.children[0]);
+                                if (!ok) return {};
+                                for (auto& c : p) c = -c;
+                                return p;
+                            }
+                            if (e.kind == Kind::Add) {
+                                std::vector<mpz_class> sum(1, mpz_class(0));
+                                for (ExprId c : e.children) {
+                                    auto p = toPoly(c);
+                                    if (!ok) return {};
+                                    if (p.size() > sum.size()) sum.resize(p.size(), mpz_class(0));
+                                    for (size_t i = 0; i < p.size(); ++i) sum[i] += p[i];
+                                }
+                                return sum;
+                            }
+                            if (e.kind == Kind::Sub && e.children.size() >= 2) {
+                                auto p = toPoly(e.children[0]);
+                                if (!ok) return {};
+                                for (size_t k = 1; k < e.children.size(); ++k) {
+                                    auto q = toPoly(e.children[k]);
+                                    if (!ok) return {};
+                                    if (q.size() > p.size()) p.resize(q.size(), mpz_class(0));
+                                    for (size_t i = 0; i < q.size(); ++i) p[i] -= q[i];
+                                }
+                                return p;
+                            }
+                            if (e.kind == Kind::Mul) {
+                                std::vector<mpz_class> prod(1, mpz_class(1));
+                                for (ExprId c : e.children) {
+                                    auto p = toPoly(c);
+                                    if (!ok) return {};
+                                    std::vector<mpz_class> next(prod.size() + p.size() - 1, mpz_class(0));
+                                    for (size_t i = 0; i < prod.size(); ++i)
+                                        for (size_t j = 0; j < p.size(); ++j)
+                                            next[i + j] += prod[i] * p[j];
+                                    prod = std::move(next);
+                                }
+                                return prod;
+                            }
+                            ok = false; return {};
+                        };
+                        coeffs = toPoly(defLhsEid);
+                        if (ok && !vn.empty()) {
+                            // poly(V) = g(V) - V  ->  subtract V's coefficient.
+                            if (coeffs.size() < 2) coeffs.resize(2, mpz_class(0));
+                            coeffs[1] -= 1;
+                            // Trim leading zeros.
+                            while (coeffs.size() > 1 && coeffs.back() == 0) coeffs.pop_back();
+                            // Degenerate cases:
+                            //   constant non-zero  -> 0 = c, UNSAT.
+                            //   all zero          -> tautology, drop atom only.
+                            if (coeffs.size() == 1) {
+                                if (coeffs[0] == 0) {
+                                    // tautology
+                                    dropAtoms.push_back(firstAtomIdx);
+                                    continue;
+                                }
+                                // 0 = c with c != 0 -> formula is UNSAT.
+                                // Emit a top-level false in place of the def
+                                // atom. Use a fresh expression: (= 0 c).
+                                // Easier: set the def atom's slot to ConstBool(false).
+                                // We accomplish this by adding (= 1 0) as a
+                                // sentinel assertion and dropping the def.
+                                // Simpler still: record that we want UNSAT.
+                                lastUnknownReason_ = "PureDefVarSubst univariate-cycle: 0 = nonzero -> UNSAT";
+#ifdef XOLVER_ENABLE_CASESTATS
+                                finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                                std::cerr << "[UnivariateCycleSolve] 0=c contradiction -> UNSAT\n";
+                                return Result::Unsat;
+                            }
+                            // Rational Root Theorem: integer roots divide a_0.
+                            mpz_class a0_abs = coeffs[0];
+                            if (a0_abs < 0) a0_abs = -a0_abs;
+                            // Special case a_0 == 0: roots include 0, plus
+                            // roots of the polynomial divided by V.
+                            std::vector<mpz_class> roots;
+                            if (a0_abs == 0) {
+                                // r = 0 is a root.
+                                if (true) roots.push_back(mpz_class(0));
+                                // Divide by V: shift coefficients left.
+                                std::vector<mpz_class> reduced(coeffs.begin() + 1, coeffs.end());
+                                mpz_class a0r_abs = reduced.empty() ? 0 : reduced[0];
+                                if (a0r_abs < 0) a0r_abs = -a0r_abs;
+                                if (!reduced.empty() && a0r_abs > 0 && a0r_abs.fits_ulong_p()) {
+                                    unsigned long lim = a0r_abs.get_ui();
+                                    for (unsigned long d = 1; d <= lim; ++d) {
+                                        if (lim % d != 0) continue;
+                                        for (int sign : {1, -1}) {
+                                            mpz_class cand = sign * mpz_class(d);
+                                            mpz_class val = 0;
+                                            mpz_class pw = 1;
+                                            for (size_t k = 0; k < reduced.size(); ++k) {
+                                                val += reduced[k] * pw;
+                                                pw *= cand;
+                                            }
+                                            if (val == 0) {
+                                                bool dup = false;
+                                                for (const auto& r : roots) if (r == cand) { dup = true; break; }
+                                                if (!dup) roots.push_back(cand);
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (a0_abs.fits_ulong_p()) {
+                                unsigned long lim = a0_abs.get_ui();
+                                for (unsigned long d = 1; d <= lim; ++d) {
+                                    if (lim % d != 0) continue;
+                                    for (int sign : {1, -1}) {
+                                        mpz_class cand = sign * mpz_class(d);
+                                        mpz_class val = 0;
+                                        mpz_class pw = 1;
+                                        for (size_t k = 0; k < coeffs.size(); ++k) {
+                                            val += coeffs[k] * pw;
+                                            pw *= cand;
+                                        }
+                                        if (val == 0) {
+                                            bool dup = false;
+                                            for (const auto& r : roots) if (r == cand) { dup = true; break; }
+                                            if (!dup) roots.push_back(cand);
+                                        }
+                                    }
+                                }
+                            } else {
+                                // |a_0| too large to enumerate divisors safely; bail to skip.
+                            }
+                            if (!roots.empty() || a0_abs.fits_ulong_p()) {
+                                // We have an authoritative answer: emit
+                                // (or (= V r_1) ... (= V r_k)) -- or `false`
+                                // if no roots -> UNSAT.
+                                if (roots.empty()) {
+                                    lastUnknownReason_ = "PureDefVarSubst univariate-cycle: no integer roots -> UNSAT";
+#ifdef XOLVER_ENABLE_CASESTATS
+                                    finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                                    std::cerr << "[UnivariateCycleSolve] no integer roots -> UNSAT\n";
+                                    return Result::Unsat;
+                                }
+                                // Replace the defining atom by the disjunction.
+                                // Construct ConstInt nodes for each root and
+                                // an Eq + Or assertion.
+                                std::vector<ExprId> orChildren;
+                                for (const auto& r : roots) {
+                                    if (!r.fits_slong_p()) { orChildren.clear(); break; }
+                                    CoreExpr ce;
+                                    ce.kind = Kind::ConstInt;
+                                    ce.sort = ir->get(varEid).sort;
+                                    ce.payload = Payload(static_cast<int64_t>(r.get_si()));
+                                    ExprId rEid = ir->add(std::move(ce));
+                                    CoreExpr eq;
+                                    eq.kind = Kind::Eq;
+                                    eq.sort = boolSortId_;
+                                    eq.children = SmallVector<ExprId,4>{varEid, rEid};
+                                    orChildren.push_back(ir->add(std::move(eq)));
+                                }
+                                if (!orChildren.empty()) {
+                                    ExprId newAtom;
+                                    if (orChildren.size() == 1) {
+                                        newAtom = orChildren[0];
+                                    } else {
+                                        CoreExpr orNode;
+                                        orNode.kind = Kind::Or;
+                                        orNode.sort = boolSortId_;
+                                        for (ExprId c : orChildren) orNode.children.push_back(c);
+                                        newAtom = ir->add(std::move(orNode));
+                                    }
+                                    // Drop the cyclic def atom; replace with
+                                    // disjunction injected into the kept list
+                                    // after the substitution loop.
+                                    dropAtoms.push_back(firstAtomIdx);
+                                    pendingExtras.push_back({scoped[firstAtomIdx].first, newAtom});
+                                    std::cerr << "[UnivariateCycleSolve] " << vn
+                                              << " -> "
+                                              << roots.size() << " integer root(s)\n";
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    if (hasCycle) continue;
+                }
+                subst[varEid] = defLhsEid;
+                dropAtoms.push_back(firstAtomIdx);
+            }
+            if (!subst.empty()) {
+                // DAG-substitute via memoization. Walk each remaining
+                // assertion bottom-up; if a child is in subst, replace.
+                // Recursive: when subst[V] is found, the replacement is
+                // itself fed back through rewrite() so any further
+                // substitutable vars inside it get fully resolved. Cycle
+                // guard via `active` prevents infinite recursion.
+                std::unordered_map<ExprId, ExprId> memo;
+                std::unordered_set<ExprId> active;
+                std::function<ExprId(ExprId)> rewrite = [&](ExprId eid) -> ExprId {
+                    auto m = memo.find(eid);
+                    if (m != memo.end()) return m->second;
+                    auto it = subst.find(eid);
+                    if (it != subst.end() && active.find(eid) == active.end()) {
+                        active.insert(eid);
+                        ExprId resolved = rewrite(it->second);
+                        active.erase(eid);
+                        memo[eid] = resolved;
+                        return resolved;
+                    }
+                    const CoreExpr& e = ir->get(eid);
+                    if (e.children.empty()) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    SmallVector<ExprId, 4> newCh;
+                    bool changed = false;
+                    for (ExprId c : e.children) {
+                        ExprId nc = rewrite(c);
+                        if (nc != c) changed = true;
+                        newCh.push_back(nc);
+                    }
+                    if (!changed) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    CoreExpr fresh;
+                    fresh.kind = e.kind;
+                    fresh.sort = e.sort;
+                    fresh.children = std::move(newCh);
+                    fresh.payload = e.payload;
+                    ExprId ne = ir->add(std::move(fresh));
+                    memo[eid] = ne;
+                    return ne;
+                };
+                std::unordered_set<size_t> drop(dropAtoms.begin(), dropAtoms.end());
+                std::vector<std::pair<ScopeLevel, ExprId>> kept;
+                for (size_t i = 0; i < scoped.size(); ++i) {
+                    if (drop.count(i)) continue;
+                    kept.push_back({scoped[i].first, rewrite(scoped[i].second)});
+                }
+                // Append iter-44 univariate-cycle-solve replacement
+                // disjunctions (one per resolved cyclic def).
+                for (const auto& p : pendingExtras) kept.push_back(p);
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : kept) ir->addAssertion(eid, lv);
+                std::cerr << "[PureDefVarSubst] eliminated " << subst.size()
+                          << " variable(s); dropped " << dropAtoms.size()
+                          << " atom(s)\n";
+                // Re-run FormulaRewriter so add-cancel + odd-power-injection
+                // pick up the newly-introduced (= LHS_i LHS_0) atoms.
+                FormulaRewriter rerun(*ir, boolSortId_);
+                if (rerun.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                    return Result::Unsat;
+                }
+                rerun.commit();
             }
         }
 
@@ -1277,11 +1767,50 @@ public:
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
-                lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+                // XOLVER_PP_AUTO_EUF_PROMOTE (default-OFF): instead of bailing
+                // to Unknown when the variable-divisor lowerer's b=0 undef
+                // branch needs EUF support, upgrade the logic so the rest of
+                // setupSolvers() registers an EufSolver alongside the arith
+                // solver. Sound: the upgraded logic STRICTLY SUPERSETS the
+                // original one (adds UF capability, doesn't remove any), so
+                // any model of the upgraded formula is also a model of the
+                // original. Closes the LCTES digital-stopwatch and similar
+                // patterns where the SMT-LIB file declares QF_NIA but uses
+                // div/mod with an unbounded "auxiliary witness" divisor.
+                bool autoPromote =
+                    std::getenv("XOLVER_PP_AUTO_EUF_PROMOTE") != nullptr;
+                if (autoPromote) {
+                    std::string upgraded = logic;
+                    if (logic == "QF_NIA")  upgraded = "QF_UFNIA";
+                    else if (logic == "NIA") upgraded = "UFNIA";
+                    else if (logic == "QF_NRA") upgraded = "QF_UFNRA";
+                    else if (logic == "NRA")    upgraded = "UFNRA";
+                    else if (logic == "QF_LIA") upgraded = "QF_UFLIA";
+                    else if (logic == "LIA")    upgraded = "UFLIA";
+                    else if (logic == "QF_LRA") upgraded = "QF_UFLRA";
+                    else if (logic == "LRA")    upgraded = "UFLRA";
+                    if (upgraded != logic) {
+                        std::cerr << "[AutoEufPromote] " << logic
+                                  << " -> " << upgraded
+                                  << " (div/mod needs EUF for b=0 undef branch)\n";
+                        logic = upgraded;
+                        hasEuf = true;
+                        // Fallthrough: subsequent setupSolvers() will register
+                        // an EufSolver alongside the arith solver.
+                    } else {
+                        lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic + " (no promote target)";
 #ifdef XOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Unknown, 0.0);
+                        finalizeCaseStats(Result::Unknown, 0.0);
 #endif
-                return Result::Unknown;
+                        return Result::Unknown;
+                    }
+                } else {
+                    lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                    return Result::Unknown;
+                }
             }
             if (req.needsNonlinearInt && isLinearOnly) {
                 lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;

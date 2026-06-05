@@ -1,5 +1,6 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include <cassert>
+#include <functional>
 #include <iostream>
 
 namespace xolver {
@@ -522,9 +523,26 @@ void IntDivModLowerer::scanPositiveBounds(
             }
         }
     };
+    // Flatten top-level And nodes (and their nested Ands) so the positivity
+    // scan reaches conjuncts that were syntactically packed into one assertion.
+    // Sound: an And at top level is asserted-true iff every child is true, so
+    // each child is an independent atomic constraint that can mark a var
+    // positive. Closes the sqrtmodinv-hoenicke / LCTES pattern where the
+    // assertion shape is `(assert (and (>= x 1) (>= y 1)))` -- without this
+    // flatten, neither x nor y was recognised as positive and the lowerer
+    // bailed with `needsEUF` even though XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO=1
+    // was set.
+    std::function<void(ExprId)> walk = [&](ExprId e) {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) walk(c);
+            return;
+        }
+        markIfStrictPositive(e);
+    };
     for (const auto& [lvl, e] : asserts) {
         (void)lvl;
-        markIfStrictPositive(e);
+        walk(e);
     }
 }
 
