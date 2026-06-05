@@ -2205,3 +2205,41 @@ CORRECTLY unsat — closed by the combination of:
   - poly perf fixes 390a28c + 90465d9 (faster substitution path)
 
 Net corpus delta sustained at +3 unsat with 0-unsound across 73 iterations.
+
+---
+
+### Iter 74-75 — registerSubstitution::contains() perf fix + LCTES bottleneck PIN
+
+iter-74 commit 3b116fb implemented the substVars cache in registerSubstitution:
+  std::set<VarId> vars added to SubstEntry. O(log V) lookup instead of
+  O(monomials × vars-per-monomial) RationalPolynomial::contains scan.
+
+Per-cluster impact:
+  Dartagnan scull-O0:     168s -> 168s   no change (substVars wasn't the
+                                          dominant bottleneck on this case)
+  LCTES locals:           168s ->  85s   2× speedup (~49% reduction)
+  LCTES locals.nosumm:    168s ->  84s   2× speedup
+  leipzig term-unsat-01:    OOM->  34s unknown (was OOM before; doesn't
+                                          decide but doesn't crash either)
+
+Both LCTES files still TO; the 2× speedup wasn't enough to close them.
+
+iter-75 LCTES flag bisection:
+  no flags:                 unknown @ 98ms        (instant)
+  + AND_FLATTEN:            unknown @ 99ms        (instant)
+  + AUTO_EUF_PROMOTE:       TO @ 28s+             ← BLOCKER
+  + AUTO_EUF_PROMOTE + PURE_DEFINED_VAR_SUBST: same
+
+LCTES has 7 `(mod x_VAR y_VAR)` operations where the modulus is itself a
+variable. Without AUTO_EUF_PROMOTE, IntDivModLowerer hits the
+"needsEUF but logic=QF_NIA" path and returns Unknown immediately
+(fast but useless). With AUTO_EUF_PROMOTE ON, QF_NIA -> QF_UFNIA and
+the EUF+NIA combination layer becomes the bottleneck.
+
+So LCTES's CLUSTER 3 requirement is to make the EUF+NIA combination
+faster for mod-by-unbounded-var, not to optimize NIA presolve.
+Multi-day work that requires EUF/combination subsystem changes,
+not just NIA-layer perf.
+
+45 commits + 14 doc/infra. 0 regressions / 0-unsound across 74 iterations.
++3 corpus unsat sustained (sqrtStep1, sqrtStep1a, calypto/002871).
