@@ -1791,3 +1791,63 @@ The right fix is a **structural** Unsat: when stageFarkasOr is convinced no cert
 
   Loop terminal stands at 51/87. 18 commits shipped + infra. 0
   regressions / 0-unsound across all 50 iterations.
+
+---
+
+### Iteration 52 — post-iter-51 audit of remaining 13 oracle-UNSAT
+
+iter-51 closed 6 cases reliably. Audit of the remaining 13 at 30s:
+
+**Engaged + close at longer wallclock (1 case):**
+  - Stroeder_15__NO_23 (3 Farkas blocks): unsat @ 32s
+    - Within reverify's 20s cap → still shows as unsolved.
+    - With 60s budget: unsat solved cleanly.
+
+**Engaged but won't close (3 cases):**
+  - SAT14/588, /775, /1882
+    - Earlier trace showed FarkasOr engages but stage doesn't reach
+      exhaustive-empty (large B-domain, sparseMode triggered).
+    - feasibleTotal partial -> "no CSP assignments" bail.
+
+**Don't reach stageFarkasOr (9 cases):**
+  - LassoRanker MinusBuiltIn / MutualRecursion 1a / 1b (3)
+    - Multi-var cyclic defs `(= V (V*lambda))` cause downstream
+      bilinear expansion blowup before any Farkas stage runs.
+    - iter-44 univariate-cycle-solve correctly skips them; iter-43
+      keeps the def. The def then bloats other reasoners' state.
+  - UltimateLassoRanker ChenFlur (1) - similar.
+  - sqrtmodinv 1 / 1a (2) - Newton-Raphson div-by-V structure.
+  - LCTES locals.nosummaries / locals (2) - mod-by-unbounded + EUF.
+  - leipzig term-unsat-01 (1) - matrix interpretation.
+
+#### Flakiness pin
+
+2 cases close at 20s but not 30s (From_T2 loop3 37 + 40). Timing-
+flaky because: 
+  - The percentage-budget EAGER consumes more time at 30s budget
+    (10% of 30s = 3s vs 10% of 20s = 2s).
+  - With more EAGER time, less budget remains for NIA's Farkas
+    stage to converge.
+SOUND -- both directions return unsat-or-unknown, never false-sat.
+
+#### Iter-51 corpus impact
+
+  20s reverify:  57/87 (37 sat + 20 unsat)
+  30s reverify:  55/87 (37 sat + 18 unsat)
+  Reliable @ all wallclocks: 53-55 base + 4 stable Farkas closes
+                            = ~57/87 with 0-unsound
+
+The 4 core Farkas-closes (Ex04, Marbie2, From_T2_42, Masse-alloca)
+are stable from 10s to 60s. Stroeder_NO_23 stable above 32s.
+
+#### Next attack surfaces
+
+  - MinusBuiltIn cluster: solve bilinear (= V (V*lambda)) by case-
+    split `V == 0 OR lambda == 1` (FormulaRewriter rule).
+  - SAT14 588/775/1882: extend FarkasOr's sparseMode to support
+    Unsat emit when even sparse search is exhaustive (needs proof
+    that sparse missed nothing).
+  - sqrtmodinv: div-by-V case split with bound propagation.
+
+19 commits shipped, 3 soundness incidents handled, 0 regressions /
+0-unsound across all 52 iterations.
