@@ -1722,3 +1722,38 @@ Each is a multi-iteration project.
 #### Loop terminal: 51/87 holds
 
 15+1 algorithmic + infra commits shipped, 3 soundness incidents properly handled, 0 regressions, 0-unsound across 46 iterations.
+
+---
+
+### Iteration 48-49 — Farkas UNSAT-emit wired; conflict-clause minimisation needed
+
+iter-48 wired SupportTable::exhaustive to optional Unsat emit (commit
+`e099e18`):
+  - Gate: exhaustive && outerAssertions.empty() [+ unsafe-debug knob]
+  - Conflict = negation of all active_ trail literals
+  - On Marbie2 with UNSAFE bypass: emit fires 6× in 12 s
+  - CDCL(T) doesn't converge at 90 s -- broad conflict explodes SAT
+  - SAT smokes (leipzig/SAT14-85/86) preserved
+
+iter-49 narrowed conflict to ONLY Tseitin-proxy literals via
+registry_->findBoolVariableSatVar:
+  - Marbie2 has 2 blocks × 2 branches = 4 branches.
+  - Only 2 branches have proxies (boolpur_0, boolpur_1).
+  - Other 2 branches are direct And atoms without proxy vars.
+  - SAT flips the 2 proxies and routes around via unproxied branches.
+  - Verdict still empty at 30 s, emit still fires 6×.
+
+Conclusion: a SOUND narrow conflict must cover EVERY branch in EVERY
+block -- proxied and unproxied. For unproxied branches we need to
+look up the SatLit of the original (And ...) atom via the atom
+registry. That mapping isn't directly exposed by FarkasProfile;
+adding it requires:
+  (a) Extend profile to carry branch SatLits, or
+  (b) Walk the FarkasOrBlock.originalAnd ExprIds through the atom
+      registry to resolve their SatLits at emit time.
+
+(b) is a 1-day project: needs the atom registry's expr→lit API + the
+right scope handling for proxy-vs-direct branch detection. Queued.
+
+Loop terminal stands at 51/87. 17 commits shipped. 0 regressions /
+0-unsound across all 49 iterations.

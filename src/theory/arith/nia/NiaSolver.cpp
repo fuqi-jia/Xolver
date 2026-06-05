@@ -2182,15 +2182,35 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         if (table.exhaustive && (unsafeNoOuterCheck || profile.outerAssertions.empty()) &&
             std::getenv("XOLVER_NIA_FARKAS_OR_UNSAT_EMIT")) {
             traceWrite("  → exhaustive empty table + no outer assertions => UNSAT");
-            // Construct a conservative conflict from active_ trail (negate
-            // every asserted literal). This says "the current trail leads
-            // to no Farkas certificate"; CDCL(T) backtracks; the same
-            // verdict applies to every alternative trail under the same
-            // formula, so SAT layer eventually returns Unsat.
+            // iter-49: build a NARROW conflict from only Farkas-block
+            // proxy literals (boolpur_K). For each block: pick the
+            // currently-true branch proxy, add its negation. This says
+            // "the current branch-choice combo is bad"; SAT backtracks
+            // through ONLY proxy decisions (~10 vars), not the full
+            // trail (~100s of vars). Falls back to full trail on miss.
             TheoryConflict tc;
-            tc.clause.reserve(active_.size());
-            for (const auto& a : active_) {
-                tc.clause.push_back(a.reason.negated());
+            if (registry_) {
+                std::unordered_set<SatVar> seen;
+                for (const auto& blk : profile.blocks) {
+                    for (const auto& proxy : blk.branchProxies) {
+                        if (proxy.empty()) continue;
+                        auto sv = registry_->findBoolVariableSatVar(proxy);
+                        if (!sv) continue;
+                        if (!seen.insert(*sv).second) continue;
+                        // Find current polarity on trail.
+                        for (const auto& a : active_) {
+                            if (a.reason.var == *sv) {
+                                tc.clause.push_back(a.reason.negated());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (tc.clause.empty()) {
+                // Fallback: full trail (iter-48 behaviour).
+                tc.clause.reserve(active_.size());
+                for (const auto& a : active_) tc.clause.push_back(a.reason.negated());
             }
             std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict\n";
             return TheoryCheckResult::mkConflict(std::move(tc));
