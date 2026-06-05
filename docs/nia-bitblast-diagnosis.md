@@ -1099,3 +1099,35 @@ The MathProblems cluster (originally 2 unsolved after iter-17 closed SC_02) is n
 #### Iteration 23 commit
 
 - `a555c7b` — FormulaRewriter even-power injection (positivity-gated).
+
+---
+
+### Iteration 25 corpus result — AUTO_EUF_PROMOTE shifts failure mode, no new solves yet
+
+Reverify under iter-25 + all flags @ 20 s:
+
+| measure | iter-23 | **iter-25** | delta |
+|---|---|---|---|
+| total solved | 50 / 87 | **50 / 87** | 0 |
+| sat | 37 | 37 | 0 |
+| unsat | 13 | 13 | 0 |
+| unknown | 9 | **6** | -3 |
+| timeout | 28 | **31** | +3 |
+
+**Failure-mode shift**: 3 previously-fast-bailing cases (LCTES × 2 + 1 sqrtmodinv-class) now engage the EUF + NIA pipeline and run to TO instead of returning Unknown @ 111 ms. This is the same "fast-bail to slow-search unblock" pattern as iter-21's And-flatten — not yet a corpus mover but a prerequisite for the future reasoner work that needs the pipeline to actually be running.
+
+#### Summary of "engage but TO" cases
+
+After iter-21 (And-flatten) + iter-25 (AUTO_EUF_PROMOTE), the following clusters now engage the full pipeline but TO at 20 s:
+
+| cluster | n | engaged via | future lever |
+|---|---|---|---|
+| sqrtmodinv-hoenicke | 3 | iter-21 And-flatten | Gauss-style mod-by-var |
+| LCTES | 2 | iter-25 AUTO_EUF_PROMOTE | same (mod-by-var Gauss + UF cooperation) |
+| Dartagnan large-formula | 5 | (always engaged) | streaming bit-blast / LIA depth |
+
+These 10 cases share the property that the pipeline IS running but the verdict requires reasoner depth beyond current NIA stack. One future iteration of mod-by-var Gauss could plausibly unlock the sqrtmodinv + LCTES clusters (5 cases) at once.
+
+#### Iteration 25 commit
+
+- `35f7d66` — XOLVER_PP_AUTO_EUF_PROMOTE (default-OFF) upgrades QF_NIA → QF_UFNIA when div/mod's needsEUF would otherwise bail.
