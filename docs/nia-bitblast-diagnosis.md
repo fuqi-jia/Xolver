@@ -2107,3 +2107,30 @@ full 87-case targeted_nia corpus with the full preprocess flag set:
 
 35 algorithmic commits + 11 doc/infra. 0 regressions / 0-unsound
 across 69 iterations.
+
+---
+
+### Iter 71 — LCTES + cherry-picks (b596bf2 + 1d5a2c6)
+
+Cherry-picked two NIA/UFNIA stages from agent/eqna-2:
+  - `b596bf2`: per-polynomial sign-consistency conflict (closes QF_UFNIA
+    AndOrXor comparison tautologies)
+  - `1d5a2c6`: difference-logic conflict + div/mod dividend bounds
+    (closes int_check_bvugt_bvurem1, int_check_bvugt_bvudiv1)
+
+Gate: doctest unit, nia 113/113, lia 57/57, nra 151/151, 0-unsound.
+
+Effect on LCTES cluster (#22): NONE.
+  digital-stopwatch.locals.smt2          xolver TO @180s, z3 unsat @504ms
+  digital-stopwatch.locals.nosummaries   xolver TO @180s
+
+The 360× gap vs z3 indicates LCTES needs a fundamentally different
+reasoning approach — likely:
+  a. Mod-by-unbounded-var with chained bound propagation
+     (the 7 `(mod xVar yVar)` ops + 1138 vars + complex ITE structure).
+  b. z3 might be using its `purify_to_int` + `solve_eqs` + simplex
+     incremental conflict detection that finds the contradiction
+     before full polynomial work.
+
+Cluster 3 (LCTES) remains pending — needs deeper algorithmic work
+than 30-min cron rounds allow.
