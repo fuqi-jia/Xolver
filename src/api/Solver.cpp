@@ -1887,7 +1887,13 @@ public:
                     fresh.sort = e.sort;
                     fresh.children = std::move(newCh);
                     fresh.payload = e.payload;
-                    ExprId ne = ir->add(std::move(fresh));
+                    // iter-62: use addShared so substituted-and-rebuilt
+                    // sub-expressions dedup. Leipzig term-unsat-01
+                    // OOM'd here because PureDefVarSubst substituted 12
+                    // vars in chained polynomials; each substitution
+                    // duplicated identical sub-trees. With addShared
+                    // those collapse to single ExprIds.
+                    ExprId ne = ir->addShared(std::move(fresh));
                     memo[eid] = ne;
                     return ne;
                 };
