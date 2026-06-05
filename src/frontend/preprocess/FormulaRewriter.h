@@ -3,6 +3,8 @@
 #include "expr/ir.h"
 #include <gmpxx.h>
 #include <unordered_map>
+#include <unordered_set>
+#include <string>
 #include <vector>
 #include <cstddef>
 
@@ -100,6 +102,16 @@ private:
     std::vector<std::pair<ScopeLevel, ExprId>> rewritten_;
     bool changed_ = false;
     bool unsat_ = false;
+
+    // Variables proven >= 0 by a top-level atom in the current assertion set
+    // (populated by scanNonNegativeVars at the start of run()). Used by the
+    // power-injection rule to soundly extend even-k injection: x^k = y^k with
+    // x >= 0 ∧ y >= 0 implies x = y for any k >= 1 (the cube/square/quartic
+    // root over the non-negatives is unique). Without the bound, even k is
+    // unsound (x^2 = y^2 allows x = -y).
+    std::unordered_set<std::string> nonNegVars_;
+    void scanNonNegativeVars();
+    bool isProvablyNonNegative(ExprId e) const;
 };
 
 } // namespace xolver

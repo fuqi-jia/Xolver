@@ -2,6 +2,7 @@
 #include "util/MpqUtils.h"
 
 #include <algorithm>
+#include <functional>
 #include <optional>
 
 namespace xolver {
@@ -67,6 +68,7 @@ FormulaRewriter::Verdict FormulaRewriter::run() {
     rewritten_.clear();
     changed_ = false;
     unsat_ = false;
+    scanNonNegativeVars();
 
     for (const auto& [level, eid] : ir_.getScopedAssertions()) {
         ExprId r = rewriteRec(eid);
@@ -91,6 +93,67 @@ void FormulaRewriter::commit() {
 }
 
 ExprId FormulaRewriter::rewrite(ExprId e) { return rewriteRec(e); }
+
+// Top-level scan: a Variable v is marked non-negative if some top-level
+// asserted atom proves it. Recognises (>= v c) / (> v c) / (<= c v) / (< c v)
+// with the threshold relaxed to 0 (so `>= v 0`, `> v -1`, `>= v 1` etc. all
+// count). Flattens And nodes so conjuncts of a packed assertion are seen.
+// Sound: each top-level conjunct must hold, so the conjunct's bound is a
+// true global constraint.
+void FormulaRewriter::scanNonNegativeVars() {
+    nonNegVars_.clear();
+    auto constGe = [&](ExprId e, const mpq_class& bound) -> bool {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+            return mpq_class(*iv) >= bound;
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try { return mpq_class(*sv) >= bound; } catch (...) { return false; }
+        }
+        return false;
+    };
+    auto varName = [&](ExprId e) -> std::optional<std::string> {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::Variable) return std::nullopt;
+        if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
+        return std::nullopt;
+    };
+    auto mark = [&](ExprId atom) {
+        const CoreExpr& a = ir_.get(atom);
+        if (a.children.size() != 2) return;
+        if (a.kind == Kind::Geq || a.kind == Kind::Gt) {
+            mpq_class need = (a.kind == Kind::Geq) ? mpq_class(0) : mpq_class(-1);
+            if (auto v = varName(a.children[0]))
+                if (constGe(a.children[1], need)) nonNegVars_.insert(*v);
+        }
+        if (a.kind == Kind::Leq || a.kind == Kind::Lt) {
+            mpq_class need = (a.kind == Kind::Leq) ? mpq_class(0) : mpq_class(-1);
+            if (auto v = varName(a.children[1]))
+                if (constGe(a.children[0], need)) nonNegVars_.insert(*v);
+        }
+    };
+    std::function<void(ExprId)> walk = [&](ExprId e) {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) walk(c);
+            return;
+        }
+        mark(e);
+    };
+    for (const auto& [_, e] : ir_.getScopedAssertions()) walk(e);
+}
+
+bool FormulaRewriter::isProvablyNonNegative(ExprId e) const {
+    const CoreExpr& n = ir_.get(e);
+    if (n.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv >= 0;
+    }
+    if (n.kind == Kind::Variable) {
+        if (auto* s = std::get_if<std::string>(&n.payload.value))
+            return nonNegVars_.count(*s) > 0;
+    }
+    return false;
+}
 
 ExprId FormulaRewriter::rewriteRec(ExprId root) {
     if (root == NullExpr) return root;
@@ -386,48 +449,55 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 // Closes the "semi-magic square of cubes" pattern (MathProblems
                 // SC_02 etc.) where the constraint chain collapses to
                 // x_10^3 = x_01^3 -> x_10 = x_01, contradicting (distinct ...).
-                auto isPowOdd = [&](ExprId eid, ExprId& base, mpz_class& expOut) -> bool {
+                // Power-injection helper: extract (base, k) when `eid` is an
+                // explicit Pow(base, k) or an implicit repeated-var Mul like
+                // (* x x x ...) with N >= 2 children, all syntactically equal.
+                // Returns true and fills `base`, `expOut`. Note we accept any
+                // k >= 2; the caller decides whether the rule is sound for
+                // this k (odd k is always sound over Z; even k requires both
+                // bases to be provably non-negative).
+                auto isPowLike = [&](ExprId eid, ExprId& base, mpz_class& expOut) -> bool {
                     const CoreExpr& e = ir_.get(eid);
-                    // Explicit Pow(base, k).
                     if (e.kind == Kind::Pow && e.children.size() == 2) {
                         const CoreExpr& exp = ir_.get(e.children[1]);
                         if (exp.kind != Kind::ConstInt) return false;
                         if (auto* i = std::get_if<int64_t>(&exp.payload.value)) {
-                            if (*i <= 0 || (*i % 2) == 0) return false;
+                            if (*i < 2) return false;
                             expOut = mpz_class(*i);
                         } else if (auto* s = std::get_if<std::string>(&exp.payload.value)) {
                             try { expOut = mpz_class(*s); }
                             catch (...) { return false; }
-                            if (expOut <= 0 || (expOut % 2) == 0) return false;
+                            if (expOut < 2) return false;
                         } else {
                             return false;
                         }
                         base = e.children[0];
                         return true;
                     }
-                    // Implicit repeated-var Mul: (* x x x ...) with N ≥ 3 odd
-                    // and ALL children syntactically equal to one ExprId.
-                    // SMT-LIB writes `x^3` as `(* x x x)`; the rule must catch
-                    // both forms. N must be odd.
-                    if (e.kind == Kind::Mul && e.children.size() >= 3) {
+                    if (e.kind == Kind::Mul && e.children.size() >= 2) {
                         ExprId first = e.children[0];
                         for (size_t i = 1; i < e.children.size(); ++i)
                             if (e.children[i] != first) return false;
-                        size_t n = e.children.size();
-                        if ((n & 1) == 0) return false;        // even -> not injective
                         base = first;
-                        expOut = mpz_class(static_cast<unsigned long>(n));
+                        expOut = mpz_class(static_cast<unsigned long>(e.children.size()));
                         return true;
                     }
                     return false;
                 };
                 ExprId baseA = NullExpr, baseB = NullExpr;
                 mpz_class expA, expB;
-                if (isPowOdd(a, baseA, expA) && isPowOdd(b, baseB, expB) && expA == expB) {
-                    // Reflexive shortcut: a^k = a^k → true.
+                if (isPowLike(a, baseA, expA) && isPowLike(b, baseB, expB) && expA == expB) {
+                    bool kOdd = (expA % 2) != 0;
+                    // Odd k: sound over Z unconditionally.
+                    // Even k: sound only when both bases are non-negative
+                    // (x^k = y^k with x,y >= 0 implies x = y for any k >= 1).
+                    bool sound = kOdd ||
+                        (isProvablyNonNegative(baseA) && isProvablyNonNegative(baseB));
+                    if (!sound) {
+                        return mk(kind, sort, std::move(children), Payload());
+                    }
+                    // Reflexive shortcut.
                     if (baseA == baseB) return mkBool(true);
-                    // Build (= baseA baseB) and recurse so any further rule
-                    // (e.g. numeric constant equality) can apply.
                     ExprId newEq = mk(Kind::Eq, sort, {baseA, baseB}, Payload());
                     return rewriteRec(newEq);
                 }
