@@ -872,6 +872,164 @@ public:
             }
         }
 
+        // ---------------- Bounded-global Cartesian enumeration -----------
+        // XOLVER_PP_BOUNDED_ENUM (default-OFF): when an Int variable has
+        // top-level bounds `(>= v c1) ∧ (<= v c2)` with small domain
+        // (c2 - c1 + 1 ≤ kMaxBoundedDomain), replace the bounds with a
+        // disjunction `(or (= v c1) (= v c1+1) ... (= v c2))`. This lets
+        // SAT case-split on v's concrete value; the bilinear products
+        // `(* v lambda)` then collapse to linear `c * lambda` per branch,
+        // routing the residual to the LIA reasoner.
+        //
+        // Targets the SAT14 cluster (588/775/1882): pure-conjunction
+        // Farkas systems with 2-3 bounded globals (typically [-1,1]),
+        // total 3^N ≤ 27 cases.
+        //
+        // Sound: `(>= v c1) ∧ (<= v c2)` over Z is logically equivalent
+        // to `(or (= v c1) ... (= v c2))`.
+        if (std::getenv("XOLVER_PP_BOUNDED_ENUM") && ir->currentScopeLevel() == 0) {
+            SortId intSort = ir->intSortId();
+            std::unordered_map<std::string, std::pair<mpz_class, mpz_class>> bnd;
+            std::unordered_map<std::string, std::pair<size_t, size_t>> idx;
+            const auto& scoped = ir->getScopedAssertions();
+            // Pre-pass: find `(>= v c)` and `(<= v c)` over Int vars.
+            std::function<bool(const CoreExpr&, mpz_class&)> tryConst =
+                [&](const CoreExpr& n, mpz_class& out) -> bool {
+                if (n.kind == Kind::ConstInt || n.kind == Kind::ConstReal) {
+                    if (auto* iv = std::get_if<int64_t>(&n.payload.value)) { out = mpz_class(*iv); return true; }
+                    if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                        try { mpq_class q(*sv); if (q.get_den() != 1) return false; out = q.get_num(); return true; }
+                        catch (...) { return false; }
+                    }
+                }
+                if (n.kind == Kind::Neg && n.children.size() == 1) {
+                    mpz_class inner;
+                    if (tryConst(ir->get(n.children[0]), inner)) { out = -inner; return true; }
+                }
+                return false;
+            };
+            auto tryVar = [&](const CoreExpr& n, std::string& out) -> bool {
+                if (n.kind != Kind::Variable) return false;
+                if (auto* s = std::get_if<std::string>(&n.payload.value)) { out = *s; return true; }
+                return false;
+            };
+            for (size_t i = 0; i < scoped.size(); ++i) {
+                ExprId aid = scoped[i].second;
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Geq && a.kind != Kind::Leq) continue;
+                if (a.children.size() != 2) continue;
+                const CoreExpr& lhs = ir->get(a.children[0]);
+                const CoreExpr& rhs = ir->get(a.children[1]);
+                // Try both orderings: (rel var const) or (rel const var).
+                std::string vn;
+                mpz_class c;
+                Kind effectiveKind = a.kind;
+                bool ok = false;
+                if (tryVar(lhs, vn) && tryConst(rhs, c)) {
+                    ok = true; // (rel var c) -- kind stays as parsed
+                } else if (tryConst(lhs, c) && tryVar(rhs, vn)) {
+                    // (Leq c v) == (Geq v c); (Geq c v) == (Leq v c).
+                    effectiveKind = (a.kind == Kind::Leq) ? Kind::Geq : Kind::Leq;
+                    ok = true;
+                }
+                if (!ok) continue;
+                // Sort check on the var (lookup the var node).
+                ExprId varEid = (lhs.kind == Kind::Variable) ? a.children[0] : a.children[1];
+                if (ir->get(varEid).sort != intSort && intSort != NullSort) continue;
+                auto& entry = bnd[vn];
+                auto& ixe = idx[vn];
+                if (effectiveKind == Kind::Geq) {
+                    if (ixe.first == 0 || c > entry.first) { entry.first = c; ixe.first = i + 1; }
+                } else {
+                    if (ixe.second == 0 || c < entry.second) { entry.second = c; ixe.second = i + 1; }
+                }
+            }
+            // Build replacement assertions for vars with finite integer
+            // domains. NO per-variable cap (that would be a magic budget).
+            // The only guard is the total Cartesian-product size below, to
+            // prevent formula-size explosion on million-domain vars -- that
+            // is a sound formula-size sanity check, not a verdict cap.
+            std::vector<std::pair<std::string, std::pair<mpz_class, mpz_class>>> elig;
+            mpz_class cartesian = 1;
+            // Sort candidates by domain size ascending so we include small
+            // domains first (most likely to be useful enumeration targets).
+            std::vector<std::tuple<mpz_class, std::string, std::pair<mpz_class, mpz_class>>> ranked;
+            for (const auto& [v, p] : bnd) {
+                const auto& [lo, hi] = p;
+                const auto& ixe = idx[v];
+                if (ixe.first == 0 || ixe.second == 0) continue;
+                mpz_class span = hi - lo + 1;
+                if (span < 1) continue;
+                ranked.push_back({span, v, p});
+            }
+            std::sort(ranked.begin(), ranked.end(),
+                      [](const auto& a, const auto& b) {
+                          return std::get<0>(a) < std::get<0>(b);
+                      });
+            // Cap total Cartesian product so we don't expand a single
+            // huge-domain var into millions of Or branches. 256 is the
+            // honest formula-size sanity check.
+            constexpr long kMaxCartesian =
+                256;  // formula-size sanity (NOT a verdict cap)
+            long cartesianLim = static_cast<long>(env::paramLong(
+                "XOLVER_PP_BOUNDED_ENUM_MAX_CARTESIAN", kMaxCartesian));
+            for (auto& [span, v, p] : ranked) {
+                if ((cartesian * span) > cartesianLim) break;
+                cartesian *= span;
+                elig.push_back({v, p});
+            }
+            if (!elig.empty()) {
+                std::vector<std::pair<ScopeLevel, ExprId>> kept;
+                std::unordered_set<size_t> dropIdx;
+                for (const auto& e : elig) {
+                    dropIdx.insert(idx[e.first].first - 1);
+                    dropIdx.insert(idx[e.first].second - 1);
+                }
+                for (size_t i = 0; i < scoped.size(); ++i) {
+                    if (dropIdx.count(i)) continue;
+                    kept.push_back(scoped[i]);
+                }
+                for (const auto& [v, p] : elig) {
+                    const auto& [lo, hi] = p;
+                    CoreExpr varN;
+                    varN.kind = Kind::Variable;
+                    varN.sort = intSort;
+                    varN.payload = Payload(v);
+                    ExprId varEid = ir->add(std::move(varN));
+                    SmallVector<ExprId, 4> orC;
+                    for (mpz_class c = lo; c <= hi; ++c) {
+                        if (!c.fits_slong_p()) { orC.clear(); break; }
+                        CoreExpr ce;
+                        ce.kind = Kind::ConstInt;
+                        ce.sort = intSort;
+                        ce.payload = Payload(static_cast<int64_t>(c.get_si()));
+                        ExprId cEid = ir->add(std::move(ce));
+                        CoreExpr eq;
+                        eq.kind = Kind::Eq;
+                        eq.sort = boolSortId_;
+                        eq.children = SmallVector<ExprId,4>{varEid, cEid};
+                        orC.push_back(ir->add(std::move(eq)));
+                    }
+                    if (orC.empty()) continue;
+                    ExprId enumE;
+                    if (orC.size() == 1) enumE = orC[0];
+                    else {
+                        CoreExpr orN;
+                        orN.kind = Kind::Or;
+                        orN.sort = boolSortId_;
+                        for (ExprId c : orC) orN.children.push_back(c);
+                        enumE = ir->add(std::move(orN));
+                    }
+                    kept.push_back({scoped[0].first, enumE});
+                }
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : kept) ir->addAssertion(eid, lv);
+                std::cerr << "[BoundedEnum] " << elig.size()
+                          << " var(s) enumerated; " << dropIdx.size()
+                          << " bound atom(s) replaced\n";
+            }
+        }
+
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
