@@ -68,7 +68,7 @@ ExprId IntDivModLowerer::lowerRec(ExprId root, ScopeLevel level) {
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
         // Value copy: lowerRec()/rebuildLike()/lowerDiv()/lowerMod() call
-        // ir_.add(), which can reallocate exprs_ and invalidate references.
+        // ir_.addShared(), which can reallocate exprs_ and invalidate references.
         const auto node = ir_.get(e);
 
         if (!frame.processed) {
@@ -180,7 +180,7 @@ ExprId IntDivModLowerer::rebuildLike(ExprId original, const std::vector<ExprId>&
     ne.sort = node.sort;
     for (ExprId c : newChildren) ne.children.push_back(c);
     ne.payload = node.payload;
-    return ir_.add(std::move(ne));
+    return ir_.addShared(std::move(ne));
 }
 
 std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
@@ -581,7 +581,7 @@ ExprId IntDivModLowerer::mkIntConst(int64_t v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkIntConst(const mpz_class& v) {
@@ -596,7 +596,7 @@ ExprId IntDivModLowerer::mkIntConst(const mpz_class& v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v.get_str());
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkEq(ExprId a, ExprId b) {
@@ -605,7 +605,7 @@ ExprId IntDivModLowerer::mkEq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkLe(ExprId a, ExprId b) {
@@ -614,7 +614,7 @@ ExprId IntDivModLowerer::mkLe(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkLt(ExprId a, ExprId b) {
@@ -623,7 +623,7 @@ ExprId IntDivModLowerer::mkLt(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkAdd(ExprId a, ExprId b) {
@@ -632,7 +632,7 @@ ExprId IntDivModLowerer::mkAdd(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkSub(ExprId a, ExprId b) {
@@ -641,7 +641,7 @@ ExprId IntDivModLowerer::mkSub(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkMul(ExprId a, ExprId b) {
@@ -650,7 +650,7 @@ ExprId IntDivModLowerer::mkMul(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkNeg(ExprId a) {
@@ -658,7 +658,7 @@ ExprId IntDivModLowerer::mkNeg(ExprId a) {
     e.kind = Kind::Neg;
     e.sort = intSortId_;
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkOr(ExprId a, ExprId b) {
@@ -667,7 +667,7 @@ ExprId IntDivModLowerer::mkOr(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkNot(ExprId a) {
@@ -675,7 +675,7 @@ ExprId IntDivModLowerer::mkNot(ExprId a) {
     e.kind = Kind::Not;
     e.sort = boolSortId_;
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 // ---------------------------------------------------------------------------
@@ -690,7 +690,7 @@ ExprId IntDivModLowerer::getOrCreateUndefDivSymbol() {
     e.kind = Kind::Variable;
     e.sort = intSortId_;
     e.payload = Payload(std::string("__undef_div"));
-    undefDivSym_ = ir_.add(std::move(e));
+    undefDivSym_ = ir_.addShared(std::move(e));
     return undefDivSym_;
 }
 
@@ -700,7 +700,7 @@ ExprId IntDivModLowerer::getOrCreateUndefModSymbol() {
     e.kind = Kind::Variable;
     e.sort = intSortId_;
     e.payload = Payload(std::string("__undef_mod"));
-    undefModSym_ = ir_.add(std::move(e));
+    undefModSym_ = ir_.addShared(std::move(e));
     return undefModSym_;
 }
 
@@ -713,7 +713,7 @@ ExprId IntDivModLowerer::mkUndefDivApp(ExprId a, ExprId b) {
     e.children.push_back(a);
     e.children.push_back(b);
     e.payload = Payload(std::string("__undef_div"));
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkUndefModApp(ExprId a, ExprId b) {
@@ -725,7 +725,7 @@ ExprId IntDivModLowerer::mkUndefModApp(ExprId a, ExprId b) {
     e.children.push_back(a);
     e.children.push_back(b);
     e.payload = Payload(std::string("__undef_mod"));
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 } // namespace xolver
