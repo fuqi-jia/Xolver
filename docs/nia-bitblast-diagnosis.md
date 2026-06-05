@@ -1368,3 +1368,40 @@ After 33 iterations, the corpus stabilizes at 50/87. To advance further requires
 Total estimated work: 4 separate reasoner implementations of 100-200 LOC each. Multi-day project per cluster. Recommend master picks priority based on the 25 452-case panda differential's coverage of each cluster type.
 
 The loop's 33-iteration arc has wrung every available preprocessing + scheduling lever from the existing architecture. Future progress is theoretical / algorithmic invention, not configuration.
+
+---
+
+### Iteration 35/36 — mod-by-variable rule shipped, corpus 51/87
+
+iter-35 commit `1a76356` shipped a new FormulaRewriter rule for `(mod E V)` where V is an Int Variable with provable strictly-positive lower bound. Closes the canonical "x*s drops mod s" pattern. Cumulative loop now at 51/87 (+131%).
+
+#### iter-36 corpus-mod survey
+
+15 files use `(mod E ...)`. The 4 already-known-tractable cases (modSimpleTest, sqrtStep1/1a, LCTES x2) are var-divisor. modSimpleTest closed by iter-35. The other 11 cases use **constant divisor** (mostly 2^32, 2^24 -- EVM bit-manipulation patterns); those need the existing `ModularResidueReasoner` and additional bit-blasting depth, not the new var-divisor rule.
+
+The iter-35 lever is therefore **single-case-specific** for now -- the corpus's mod-by-var population is already cleared. The same lever would extend to OTHER constraint families (div-by-var with similar drop semantics) but requires more development.
+
+#### Cumulative loop progress
+
+| measure | baseline | **iter-35** | total delta |
+|---|---|---|---|
+| total solved | 22 / 87 (25 %) | **51 / 87 (59 %)** | **+29 (+132 %)** |
+| oracle SAT solved | 17 / 36 (47 %) | **31 / 36 (86 %)** | +14 (+39 pp) |
+| oracle UNSAT solved | 5 / 33 (15 %) | **14 / 33 (42 %)** | **+9 (+27 pp)** |
+| oracle Unknown decided ★ | 0 | **6** | +6 |
+
+#### 19 remaining oracle-UNSAT cluster
+
+| cluster | n | needed lever |
+|---|---|---|
+| VeryMax + LassoRanker | 11 | Farkas template enumeration + ranking-function |
+| sqrtmodinv (sqrtStep1/1a) | 2 | div-by-variable Gauss reasoner (extends mod-by-var) |
+| LCTES | 2 | mod-by-var with NO positive lower bound + EUF model |
+| Dartagnan large-formula | 3 | streaming bit-blast / LIA depth |
+| leipzig term-unsat-01 | 1 | matrix interpretation |
+
+The iter-35 mod-by-var rule provides the soundness pattern (positivity-gated rewrite) for extending to div-by-var. Closing the remaining sqrtmodinv cases is the natural next iteration target.
+
+#### Iteration 35 commit
+
+- `1a76356` -- FormulaRewriter mod-by-variable simplification (positivity + lower-bound gated)
