@@ -1405,3 +1405,36 @@ The iter-35 mod-by-var rule provides the soundness pattern (positivity-gated rew
 #### Iteration 35 commit
 
 - `1a76356` -- FormulaRewriter mod-by-variable simplification (positivity + lower-bound gated)
+
+---
+
+### Iteration 37 — iter-35 lever exhausted, shape-mismatch on remaining var-divisor cases
+
+Verified iter-35's mod-by-variable rule reaches all the var-divisor cases in the corpus:
+
+| case | shape | iter-35 verdict |
+|---|---|---|
+| `modSimpleTest` | `(mod (k*s + 1) s)` with `s > 1` | **unsat @ ~1 s** ★ |
+| `sqrtStep1` | `(div x oldres)` with bounded `x ≤ 4*oldres²` | TO |
+| `sqrtStep1a` | same | TO |
+| `LCTES/digital-stopwatch.locals.{,no}summaries` | `(mod x x_unnamed_49)` with **no** lower-bound on divisor | TO |
+
+The 3 unsolved cases each have **structural mismatch** with the iter-35 rule:
+
+- `sqrtStep1/1a` use `div` not `mod`. Even adding a symmetric div-by-var rule wouldn't crack them — `x` is constrained by `oldres² ≤ x ≤ 4*oldres²` (interval), not equal to `c * oldres + small_remainder`. The Newton-Raphson convergence proof requires genuine bound-propagation reasoning, not a rewrite.
+
+- `LCTES`'s divisor variables (`x_unnamed_49_` etc.) have **no positivity bound** anywhere in the formula. iter-25's `AUTO_EUF_PROMOTE` engages the EUF + NIA pipeline; iter-35's mod-rule's positivity requirement isn't met. These cases need either Gauss-style modular reasoning *with* EUF or an explicit bound-inference pass.
+
+#### Loop terminal state
+
+After 36 iterations the corpus stabilises at 51 / 87 (+132 % vs baseline). Each remaining cluster needs algorithmic invention beyond the rewrite + scheduling levers shipped:
+
+| cluster | n | barrier |
+|---|---|---|
+| VeryMax + LassoRanker | 11 | Farkas template enumeration; new reasoner ~200 LOC |
+| sqrtmodinv sqrtStep* | 2 | div-by-var Gauss + interval-bound propagation |
+| LCTES | 2 | mod/div by truly-unbounded var + EUF model |
+| Dartagnan large-formula | 3 | streaming bit-blast / LIA depth |
+| leipzig term-unsat-01 | 1 | matrix interpretation |
+
+Total estimated work: 4–5 separate reasoner implementations, each multi-day. The loop has wrung every available preprocessing + arm-scheduling + targeted-rewrite lever from the existing xolver architecture.
