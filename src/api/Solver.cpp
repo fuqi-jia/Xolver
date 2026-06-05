@@ -1058,12 +1058,39 @@ public:
                 countOcc(a);
             }
             // Build a DAG substitution map V → LHS_0 for every purely-defined V.
+            // Two modes (both sound; second is opt-in):
+            //   (1) witness mode: V appears ONLY as `(= LHS_i V)` atoms with
+            //       >= 2 def atoms. Pick atom 0 as def, drop it, substitute
+            //       V := LHS_0 in the other defining atoms (collapses the
+            //       SC_02 magic-square chain).
+            //   (2) inline mode (XOLVER_PP_INLINE_SINGLE_DEFS=1): V has
+            //       exactly one defining `(= LHS V)` atom and is used
+            //       elsewhere. Inline V := LHS into every other occurrence,
+            //       drop the defining atom. Sound only if chained substitutions
+            //       are resolved recursively (see soundness note below).
+            //
+            // SOUNDNESS NOTE on inline mode: the DAG-rewrite below applies
+            // `subst[V] = LHS_0` lookups RECURSIVELY -- after looking up
+            // subst[V] we re-enter rewrite() on the replacement so any
+            // substituted vars INSIDE LHS_0 are fully resolved before
+            // returning. Without this recursion, chained defs like
+            //   subst[n6] = (* n3 n2)
+            //   subst[n7] = (+ n2 n6)
+            // would leave dangling `n6` references after substituting n7,
+            // and the dropped def of n6 would leave it unconstrained ->
+            // false-SAT (verified in iter-28: leipzig/term-unsat-01 returned
+            // sat instead of unsat under the naive non-recursive version).
+            // The fix sits in the rewrite lambda below.
+            bool inlineSingleDefs =
+                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS") != nullptr;
             std::unordered_map<ExprId, ExprId> subst;
             std::vector<size_t> dropAtoms;
             for (const auto& [name, idxs] : defAtomIdx) {
                 auto occIt = nonDefOcc.find(name);
-                if (occIt != nonDefOcc.end() && occIt->second > 0) continue;
-                if (idxs.size() < 2) continue;   // single def: leave (no extra work)
+                size_t nonDef = (occIt != nonDefOcc.end()) ? occIt->second : 0;
+                bool witnessMode = (nonDef == 0) && (idxs.size() >= 2);
+                bool inlineMode = inlineSingleDefs && (idxs.size() == 1) && (nonDef > 0);
+                if (!witnessMode && !inlineMode) continue;
                 size_t firstAtomIdx = idxs[0];
                 ExprId firstAtom = scoped[firstAtomIdx].second;
                 const CoreExpr& fa = ir->get(firstAtom);
@@ -1078,13 +1105,26 @@ public:
                 // DAG-substitute via memoization. Walk each remaining
                 // assertion bottom-up; if a child is in subst, replace.
                 std::unordered_map<ExprId, ExprId> memo;
+                // active set guards against cyclic substitutions: if a def
+                // LHS transitively references its own LHS-var (cycle in the
+                // dependency graph), recursion would loop forever. Skip the
+                // substitution in that case (treat the cyclic var as if it
+                // had no substitution).
+                std::unordered_set<ExprId> active;
                 std::function<ExprId(ExprId)> rewrite = [&](ExprId eid) -> ExprId {
                     auto m = memo.find(eid);
                     if (m != memo.end()) return m->second;
                     auto it = subst.find(eid);
-                    if (it != subst.end()) {
-                        memo[eid] = it->second;
-                        return it->second;
+                    if (it != subst.end() && active.find(eid) == active.end()) {
+                        // CRITICAL for soundness: recursively rewrite the
+                        // replacement so any further substitutable vars inside
+                        // it get fully resolved. iter-28 caught the bug where
+                        // not recursing left dangling refs to dropped vars.
+                        active.insert(eid);
+                        ExprId resolved = rewrite(it->second);
+                        active.erase(eid);
+                        memo[eid] = resolved;
+                        return resolved;
                     }
                     const CoreExpr& e = ir->get(eid);
                     if (e.children.empty()) {
