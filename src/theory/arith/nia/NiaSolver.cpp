@@ -172,6 +172,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // tightening for hard cases" intent and avoids cost on easy SAT cases).
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
+    add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
@@ -892,6 +893,89 @@ std::optional<TheoryCheckResult> NiaSolver::stageTrivialConstants(TheoryLemmaSto
     }
     if (!hasNonConstant) {
         return TheoryCheckResult::consistent();
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stagePolyConflict(TheoryLemmaStorage&, TheoryEffort) {
+    // Group active constraints by polynomial. Each is `P rel 0`, i.e. a sign
+    // constraint on the value of P. Within one poly the constraints define an
+    // interval-around-0 for P's value; if 0 is excluded AND P is pinned to 0 the
+    // group is infeasible — a sound conflict (a single-poly Farkas certificate)
+    // that needs no domain bounds. This is exactly the QF_UFNIA comparison
+    // tautology: `-a+b` asserted both `<0` (a>b) and `>0` (a<b).
+    struct Acc {
+        bool hasUpper = false, upperStrict = false; SatLit upperReason{};
+        bool hasLower = false, lowerStrict = false; SatLit lowerReason{};
+        bool hasNeq = false; SatLit neqReason{};
+    };
+    // `P rel 0` ⟺ `-P flip(rel) 0`, so canonicalize each poly's sign (a form and
+    // its negation share one group) — needed because `(= a b)` yields `a-b` while
+    // `(>= a b)` yields `-a+b`. Sign-flip of the relation: Lt↔Gt, Leq↔Geq, Eq, Neq.
+    auto flipRel = [](Relation r) -> Relation {
+        switch (r) {
+            case Relation::Lt:  return Relation::Gt;
+            case Relation::Gt:  return Relation::Lt;
+            case Relation::Leq: return Relation::Geq;
+            case Relation::Geq: return Relation::Leq;
+            default:            return r;  // Eq, Neq unchanged
+        }
+    };
+    std::unordered_map<std::string, Acc> groups;
+    for (const auto& c : active_) {
+        auto it = polyCanonCache_.find(c.poly);
+        if (it == polyCanonCache_.end()) {
+            std::string sP = kernel_->toString(c.poly);
+            std::string sN = kernel_->toString(kernel_->neg(c.poly));
+            bool flip = sN < sP;
+            it = polyCanonCache_.emplace(c.poly,
+                     std::make_pair(flip ? sN : sP, flip)).first;
+        }
+        const std::string& key = it->second.first;
+        Relation rel = it->second.second ? flipRel(c.rel) : c.rel;
+        Acc& g = groups[key];
+        switch (rel) {
+            case Relation::Lt:  g.hasUpper = true; g.upperStrict = true; g.upperReason = c.reason; break;
+            case Relation::Leq: if (!g.hasUpper) { g.hasUpper = true; g.upperReason = c.reason; } break;
+            case Relation::Gt:  g.hasLower = true; g.lowerStrict = true; g.lowerReason = c.reason; break;
+            case Relation::Geq: if (!g.hasLower) { g.hasLower = true; g.lowerReason = c.reason; } break;
+            case Relation::Eq:
+                if (!g.hasUpper) { g.hasUpper = true; g.upperReason = c.reason; }
+                if (!g.hasLower) { g.hasLower = true; g.lowerReason = c.reason; }
+                break;
+            case Relation::Neq: g.hasNeq = true; g.neqReason = c.reason; break;
+        }
+    }
+    // Fold in Nelson-Oppen interface disequalities (a != b shared by EUF). Their
+    // diff poly a-b, canonicalized, joins the same group: if the comparison
+    // bounds pin a-b to 0 (a=b) while EUF asserts a!=b, that is a sound conflict
+    // the NIA-only sign reasoning would otherwise miss (the equality lives in
+    // EUF, not NIA). Empty unless XOLVER_NIA_IFACE_LIFECYCLE populates them.
+    for (const auto& ie : interfaceDisequalities_) {
+        if (ie.diff == NullPoly) continue;
+        auto it = polyCanonCache_.find(ie.diff);
+        if (it == polyCanonCache_.end()) {
+            std::string sP = kernel_->toString(ie.diff);
+            std::string sN = kernel_->toString(kernel_->neg(ie.diff));
+            bool flip = sN < sP;
+            it = polyCanonCache_.emplace(ie.diff,
+                     std::make_pair(flip ? sN : sP, flip)).first;
+        }
+        Acc& g = groups[it->second.first];
+        g.hasNeq = true; g.neqReason = ie.reason;  // Neq is sign-invariant
+    }
+    for (auto& [poly, g] : groups) {
+        // P bounded at 0 from both sides; a strict bound on either side makes the
+        // only candidate (P=0) infeasible. Reasons: the two crossing constraints.
+        if (g.hasUpper && g.hasLower && (g.upperStrict || g.lowerStrict)) {
+            return TheoryCheckResult::mkConflict(
+                TheoryConflict{{g.upperReason, g.lowerReason}});
+        }
+        // P pinned to 0 (P<=0 and P>=0) but asserted P!=0.
+        if (g.hasUpper && g.hasLower && !g.upperStrict && !g.lowerStrict && g.hasNeq) {
+            return TheoryCheckResult::mkConflict(
+                TheoryConflict{{g.upperReason, g.lowerReason, g.neqReason}});
+        }
     }
     return std::nullopt;
 }

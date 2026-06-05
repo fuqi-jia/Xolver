@@ -122,6 +122,10 @@ private:
     std::vector<ActiveNiaConstraint> active_;
     std::vector<NiaTrailEntry> trail_;
     ActiveLiteralSet activeSet_;
+    // Sign-canonical key per polynomial for stagePolyConflict (group P and -P
+    // together). A poly's canonical form is fixed, so this never invalidates;
+    // computed once per distinct PolyId to bound neg() calls (kernel pool).
+    std::unordered_map<PolyId, std::pair<std::string, bool>> polyCanonCache_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
 
@@ -255,6 +259,16 @@ private:
     // only — verdicts always validator-gated.
     std::optional<TheoryCheckResult> stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
+    // Sound per-polynomial sign-consistency conflict. Every active constraint is
+    // `P rel 0` — a constraint on the SIGN of P's value. Two constraints on the
+    // SAME poly with contradictory signs (P<0 and P>0, or P=0 and P!=0) are
+    // infeasible regardless of P's structure. The single-variable domain reasoner
+    // misses this for multi-variable forms (it tracks variable domains, not the
+    // value of a form like a-b), so in QF_UFNIA combination mode the loop branches
+    // into finite-domain enumeration and stalls to unknown. Closes the
+    // comparison-tautology class (Zohar AndOrXor/int_check). Runs before the
+    // domain/finite-domain stages.
+    std::optional<TheoryCheckResult> stagePolyConflict(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort);
