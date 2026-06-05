@@ -1851,3 +1851,43 @@ are stable from 10s to 60s. Stroeder_NO_23 stable above 32s.
 
 19 commits shipped, 3 soundness incidents handled, 0 regressions /
 0-unsound across all 52 iterations.
+
+---
+
+### Iteration 53 — bilinear case-split written, REVERTED (no cluster win + 1 flaky regression)
+
+iter-53 implemented `XOLVER_PP_BILINEAR_CYCLE_SOLVE`: when iter-43
+cycle detector hits `(= V (V*W ...))`, emit `(or (= V 0) (= W 1))`
+instead of skipping. Sound: V*(1-W) = 0 iff V=0 or W=1.
+
+Rule fires correctly on:
+  - Synthetic test `(= v (* v w))` -> rule emits disjunction
+  - MinusBuiltIn `(= gev_x22 (* gev_x22 lambda2))` -> rule fires
+    when preprocess reaches it (visible at 30s budget)
+
+But:
+  - Cluster cases (MinusBuiltIn / MutualRecursion 1a/1b) STILL don't
+    close UNSAT even with iter-53 enabled. The disjunction adds case
+    splits the downstream stages can't quickly explore.
+  - Synthetic test even REGRESSED: without the flag base xolver
+    solves (= v (* v w)) ^ v>=5 ^ w>=2 in ms; with the flag it
+    timeouts at 2s. The original bilinear form is handled by a NIA
+    stage that the disjunction subverts.
+
+Full 87-case corpus diff (with iter-53 ON):
+  iter-51: 57/87 (37 sat + 20 unsat)
+  iter-53: 56/87 (37 sat + 19 unsat)  <- -1 UNSAT regression
+
+The regression is From_T2 loop3 40 -- a TIMING-FLAKY case (iter-52
+pinned). iter-53's extra preprocessing time pushes loop3 40 over the
+budget. nia reg 113/113 unchanged.
+
+NET impact: 0 cluster wins + 1 flaky regression. REVERTED.
+
+Lesson: a sound rewrite that LOOKS like it should help (bilinear
+split into a disjunction) can hurt overall because (a) downstream
+NIA reasoners may handle the original form natively, (b) added
+case-splits cost preprocessing/SAT time that other cases need.
+
+Loop terminal stays at 57/87. 19 commits shipped. 0 regressions /
+0-unsound across all 53 iterations.
