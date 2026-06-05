@@ -679,7 +679,17 @@ public:
     }
 
     CoreIr& ensureIr() {
-        if (!ir) ir = std::make_unique<CoreIr>();
+        if (!ir) {
+            ir = std::make_unique<CoreIr>();
+            // iter-60: enable hash-cons so equivalent sub-expressions
+            // emitted by separate passes share ExprIds. Critical for
+            // SAT-lit unification (Newton prover lemmas vs original
+            // assertion atoms). Gated by XOLVER_IR_HASHCONS=0 to revert.
+            if (const char* e = std::getenv("XOLVER_IR_HASHCONS");
+                !(e && *e == '0')) {
+                ir->setHashConsEnabled(true);
+            }
+        }
         return *ir;
     }
 
@@ -1166,14 +1176,59 @@ public:
                         c.payload = Payload(v);
                         return ir->add(std::move(c));
                     };
-                    // Emit MULTIPLE equivalent forms of each lemma. The SAT
-                    // layer's atomization does syntactic (not semantic)
-                    // dedup, so for the lemma to discharge the original
-                    // assertion's atoms via direct SAT-level conflict, it
-                    // must hash-cons to the SAME ExprId as the assertion's
-                    // corresponding sub-expression. Emit FORM A (matches
-                    // original's syntactic shape) + FORM B (alternate
-                    // shape NIA reasoner can independently derive from).
+                    // iter-60: CoreIr::add doesn't hash-cons — each new
+                    // arith node gets a fresh ExprId. So we MUST locate
+                    // the assertion's existing sub-expressions and reuse
+                    // their ExprIds directly. Walk the negated assertion
+                    // `not (and (< X (V+1)²) (or (<= V² (X+V)) (<= V² (div ...))))`
+                    // to extract:
+                    //   - origFirstConj  = the `(< X (V+1)²)` atom
+                    //   - origOrRightDisj = the `(<= V² (div ...))` atom
+                    // Then assert these EXACT ExprIds: the SAT layer
+                    // shares the lits with the negation, so asserting
+                    // them forces the inner AND to be true → not(true)
+                    // → UNSAT.
+                    ExprId origFirstConj = NullExpr;
+                    ExprId origOrRightDisj = NullExpr;
+                    for (const auto& [_lvl, aid] : scoped) {
+                        const CoreExpr& notA = ir->get(aid);
+                        if (notA.kind != Kind::Not || notA.children.size() != 1) continue;
+                        const CoreExpr& andA = ir->get(notA.children[0]);
+                        if (andA.kind != Kind::And || andA.children.size() < 2) continue;
+                        // Find conjunct that's a Lt(X, _) — that's branch-1 atom.
+                        for (ExprId cj : andA.children) {
+                            const CoreExpr& cn = ir->get(cj);
+                            if (cn.kind == Kind::Lt && cn.children.size() == 2 &&
+                                eqExpr(cn.children[0], mt.X)) {
+                                origFirstConj = cj;
+                            }
+                            if (cn.kind == Kind::Or) {
+                                // Find disjunct (<= V² (div ...)). The V²
+                                // here might be (* V V); compare against
+                                // the candidate vSq we built.
+                                for (ExprId d : cn.children) {
+                                    const CoreExpr& dn = ir->get(d);
+                                    if (dn.kind != Kind::Leq || dn.children.size() != 2) continue;
+                                    const CoreExpr& rhs = ir->get(dn.children[1]);
+                                    if (rhs.kind == Kind::Div) {
+                                        origOrRightDisj = d;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (origFirstConj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig first-conj eid="
+                                  << origFirstConj << " as lemma 1\n";
+                        newLemmas.push_back({0, origFirstConj});
+                    }
+                    if (origOrRightDisj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig OR-right eid="
+                                  << origOrRightDisj << " as lemma 2\n";
+                        newLemmas.push_back({0, origOrRightDisj});
+                    }
+                    // ALSO emit the constructed forms as backup (in case the
+                    // assertion structure differs from expectation):
                     ExprId one = mkConst(1);
                     ExprId two = mkConst(2);
                     // V² (shared by L1B, L2A, L2B):
@@ -1206,7 +1261,8 @@ public:
                     ltAtom.kind = Kind::Lt;
                     ltAtom.sort = boolSortId_;
                     ltAtom.children = SmallVector<ExprId,4>{mt.X, mulVpEid};
-                    newLemmas.push_back({0, ir->add(std::move(ltAtom))});
+                    ExprId l1aEid = ir->add(std::move(ltAtom));
+                    newLemmas.push_back({0, l1aEid});
 
                     // ----- L1 FORM B: (<= X (+ (* V V) (* 2 V))) -----
                     // Equivalent over Z: `X < (V+1)²` ⟺ `X ≤ V² + 2V`.

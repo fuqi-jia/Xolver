@@ -69,12 +69,32 @@ class CoreIr {
 public:
     CoreIr() = default;
 
-    // Dense storage
+    // Dense storage with optional hash-cons deduplication.
+    // When XOLVER_IR_HASHCONS is set OR enabled at construction, identical
+    // (kind, sort, children, payload) tuples collapse to the same ExprId.
+    // This is critical for theory-level SAT-lit unification: equivalent
+    // sub-expressions emitted by separate preprocess passes (e.g. lemma
+    // generators vs the parsed assertion) must share ExprIds so the
+    // atomizer assigns them a single SAT lit. Without it, algebraically
+    // equivalent atoms become distinct Boolean variables and CDCL cannot
+    // propagate between them.
     ExprId add(CoreExpr e) {
+        if (hashConsEnabled_) {
+            ConsKey key{e.kind, e.sort, e.children, e.payload.value};
+            auto it = consMap_.find(key);
+            if (it != consMap_.end()) return it->second;
+            ExprId id = static_cast<ExprId>(exprs_.size());
+            exprs_.push_back(std::move(e));
+            consMap_.emplace(std::move(key), id);
+            return id;
+        }
         ExprId id = static_cast<ExprId>(exprs_.size());
         exprs_.push_back(std::move(e));
         return id;
     }
+
+    void setHashConsEnabled(bool on) { hashConsEnabled_ = on; }
+    bool hashConsEnabled() const { return hashConsEnabled_; }
 
     const CoreExpr& get(ExprId id) const { return exprs_[id]; }
     CoreExpr& get(ExprId id) { return exprs_[id]; }
@@ -185,6 +205,35 @@ private:
         if (freshVarNames_.count(name)) return true;
         return false;
     }
+    // Hash-cons key used by add().
+    struct ConsKey {
+        Kind kind;
+        SortId sort;
+        SmallVector<ExprId, 4> children;
+        Payload::Value payload;
+        bool operator==(const ConsKey& o) const {
+            return kind == o.kind && sort == o.sort &&
+                   children == o.children && payload == o.payload;
+        }
+    };
+    struct ConsKeyHash {
+        std::size_t operator()(const ConsKey& k) const {
+            std::size_t h = std::hash<uint16_t>{}(static_cast<uint16_t>(k.kind));
+            h ^= std::hash<uint32_t>{}(k.sort) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            for (ExprId c : k.children)
+                h ^= std::hash<uint32_t>{}(c) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            std::size_t ph = 0;
+            if (auto* b = std::get_if<bool>(&k.payload)) ph = std::hash<bool>{}(*b);
+            else if (auto* i = std::get_if<int64_t>(&k.payload)) ph = std::hash<int64_t>{}(*i);
+            else if (auto* s = std::get_if<std::string>(&k.payload)) ph = std::hash<std::string>{}(*s);
+            else if (auto* u = std::get_if<uint64_t>(&k.payload)) ph = std::hash<uint64_t>{}(*u);
+            h ^= ph + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+
+    bool hashConsEnabled_ = false;
+    std::unordered_map<ConsKey, ExprId, ConsKeyHash> consMap_;
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;
