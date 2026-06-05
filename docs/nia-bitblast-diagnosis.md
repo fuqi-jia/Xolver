@@ -1523,3 +1523,36 @@ After 38 shipped iterations + 1 sweep (iter-39), the loop has wrung every availa
 - Oracle SAT 17 / 36 (47 %) → 31 / 36 (86 %), +39 pp
 - Oracle UNSAT 5 / 33 (15 %) → 14 / 33 (42 %), +27 pp
 - 6 cases where xolver beats oracle (oracle = Unknown)
+
+---
+
+### Iteration 40 — cluster attack: VeryMax/SAT14/588 OOMs in NIA reasoner
+
+Looked at the 5 "partial-result" cases (engaged-but-bail). On VeryMax/SAT14/588:
+
+| stage trace (with all iter-38 flags) | result |
+|---|---|
+| preprocess-done | asserts=28 |
+| eager-bb-done | 2 s |
+| **firewall** | `out-of-memory (bad_alloc)` → Unknown |
+
+**The bottleneck is memory, not algorithm.** EAGER's bit-blast encoding of 28 atoms (with Farkas template polynomial cross-products) exhausts the 3 GB ulimit.
+
+Verified: with `XOLVER_NIA_NO_BITBLAST=1` AND `XOLVER_NIA_EAGER_BITBLAST=0`, NO OOM — but then 5 s wallclock isn't enough for CDCL(T) NIA reasoners alone to crack it (TO).
+
+So the partial-result cases are bounded by **PolynomialKernel memory expansion** when multiplying Farkas lambda × polynomial coefficients. To close them, we need either:
+- (a) Sparse polynomial representation that doesn't materialise the full monomial product.
+- (b) Lazy bit-blast that streams CNF clauses rather than building them in memory.
+- (c) Lambda case-splitting BEFORE polynomial expansion (decompose the Farkas-OR before NIA touches it).
+
+Each is multi-day infrastructure work — not unblockable by a single-iteration rewrite or scheduling tweak.
+
+#### Cluster 2 sqrtmodinv update (div-by-var)
+
+Looked at sqrtStep1's `(div x oldres)`. `x` is bounded by `oldres² ≤ x ≤ 4*oldres²` but NOT structured as `c*oldres + small_remainder`. So a symmetric div-by-var rule (analogous to iter-35 mod-by-var) WOULDN'T fire on this shape. The Newton-Raphson UNSAT proof requires genuine interval-bound reasoning through `div`, not a syntactic rewrite.
+
+Cluster 2 → pending. Needs new reasoner with interval arithmetic over div, not a simple rule.
+
+#### Loop accountancy
+- Iter-40 is a no-code "layer pin" — confirms the 5 partial cases are memory-bound (PolynomialKernel) and Cluster 2's algorithmic barrier is real.
+- The 14-shipped + non-reverted algorithmic commits remain final terminal state.
