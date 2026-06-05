@@ -1162,3 +1162,41 @@ After 26 iterations, the 50/87 corpus picture is stable:
 | unknown | 2 | residual fast-bails (mostly Dartagnan ConcurrencySafety) |
 
 Further wins require new reasoner code (one cluster per future iteration), not configuration tuning.
+
+---
+
+### Iteration 28 — attempted inline-single-defs, caught soundness bug before commit
+
+Attempted to extend PureDefVarSubst's "witness mode" (V appears only as `(= LHS_i V)` atoms with N≥2 def atoms) to a new "inline mode" (V has exactly 1 def atom and is used elsewhere, so V := LHS_0 gets substituted in-place). Target: leipzig/term-unsat-01 which has the chain pattern:
+
+```
+(assert (= n6 (* n3 n2)))
+(assert (= n7 (+ n2 n6)))
+... (>= n13 n16) ...
+```
+
+#### Soundness bug caught
+
+Under the naive implementation, leipzig/term-unsat-01 returned **sat @ 90 ms** (oracle says unsat). Root cause: when the substitution map contains chained entries `subst[n6] = (* n3 n2), subst[n7] = (+ n2 n6)`, the DAG-rewrite applies `subst[n7]` and returns `(+ n2 n6)` AS-IS without recursively substituting `n6` inside the replacement value. Combined with dropping the defining atoms, `n6` becomes unconstrained in the resulting formula — the validator assigns 0 by default, the formula evaluates to "sat", and we return a wrong verdict.
+
+Reverted the change in-place; commit was never made. SC_02 still solves correctly under iter-17's witness-mode-only PureDefVarSubst.
+
+#### Required fix for a future iteration
+
+The "inline mode" approach is sound IF the substitution map is **transitively resolved**: before applying, compute the topological order of var dependencies and replace each `subst[V]` with the fully-substituted version (no remaining references to other subst-keys). Alternatively, the DAG-rewrite function can recursively rewrite the replacement value before returning it.
+
+Skeleton:
+```cpp
+// 1. Build subst[V] = LHS_0 for candidates.
+// 2. Build dependency graph: V -> set of subst-keys appearing in LHS_0.
+// 3. Topo-sort; replace each subst[V] with rewrite(subst[V]) in dep order.
+// 4. Apply substitution to remaining assertions normally.
+```
+
+Queued as a separate iteration; this iteration's outcome is **soundness-protected revert + bug documented**.
+
+#### Iteration 28 outcome
+
+- No code change committed.
+- Documented the soundness pitfall for any future implementation of chained-substitution preprocess.
+- Confirms one more cluster (leipzig term-unsat-01) needs the recursive-substitution lever, joining the queue for future reasoner work.
