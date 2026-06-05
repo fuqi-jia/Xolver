@@ -350,8 +350,12 @@ void CandidateModelSearch::buildPriorityList() {
     // squaring fun) and MUST be enumerated like ordinary variables, or we lose
     // the models the legacy enumeration found (ufnia_001 fun_sq).
     std::unordered_set<std::string> pinnedFuncs;
+    std::unordered_map<std::string, std::vector<mpq_class>> funcPinnedValues;
     for (const auto& v : vars_)
-        if (v.isApp && v.pinnedValue) pinnedFuncs.insert(v.funcName);
+        if (v.isApp && v.pinnedValue) {
+            pinnedFuncs.insert(v.funcName);
+            funcPinnedValues[v.funcName].push_back(*v.pinnedValue);
+        }
 
     for (size_t i = 0; i < vars_.size(); ++i) {
         const auto& var = vars_[i];
@@ -360,8 +364,22 @@ void CandidateModelSearch::buildPriorityList() {
                 perVar_[i].push_back(*var.pinnedValue);
                 continue;
             }
-            if (pinnedFuncs.count(var.funcName)) {      // derivable → singleton
-                perVar_[i].push_back(mpq_class(0));      // deriveAppValues overrides
+            if (pinnedFuncs.count(var.funcName)) {
+                // Non-pinned app of a pinned function (e.g. pow2(k) with k not a
+                // pinned base-case arg). deriveAppValues OVERRIDES this when the
+                // args match a pinned app (pow2(k)@k=1 -> 2). When they do NOT
+                // (pow2(k)@k=4, a FREE value in pure QF_UFNIA where pow2 is
+                // uninterpreted), enumerate a SMALL set — the function's own
+                // pinned values (plausible) + small ints — so a feasible value
+                // (e.g. pow2(k) >= 1 for in_range; int_check_*) is reachable
+                // without the full Cartesian blow-up.
+                std::set<mpq_class> cand;
+                for (const auto& pv : funcPinnedValues[var.funcName]) cand.insert(pv);
+                for (int s : {0, 1, -1, 2}) cand.insert(mpq_class(s));
+                for (const auto& q : cand) {
+                    if (var.sort == ir_.intSortId() && q.get_den() != 1) continue;
+                    perVar_[i].push_back(q);
+                }
                 continue;
             }
             // free app: fall through to full enumeration below.
