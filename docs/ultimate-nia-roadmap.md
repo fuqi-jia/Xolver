@@ -141,3 +141,118 @@ returned without validator pass.
 - Don't use bit-blast budget as a substitute for div/mod reasoning
 - Don't return sat/unsat when modular search has no conclusive result
 - Don't let substitution expand into OOM
+
+---
+
+## REUSE AUDIT — what's already implemented (iter-76)
+
+Before writing new code, the implementer MUST reuse the existing infrastructure
+below. Most of the foundation is already shipped; only specific gaps remain.
+
+### Step 1 — Canonical Arithmetic Layer
+
+| Component | Path | Status |
+|-----------|------|--------|
+| Canonical polynomial kernel | `src/theory/arith/poly/PolynomialKernel.h` | ✓ shipped (libpoly + own) |
+| Expr → Polynomial converter | `src/theory/arith/poly/PolynomialConverter.h` | ✓ shipped |
+| RationalPolynomial canonical form | `src/theory/arith/poly/RationalPolynomial.h` | ✓ shipped (sorted terms, gcd-normalized coeffs) |
+| **Atom dedup by canonical poly** | `src/theory/core/TheoryAtomRegistry.h::polyLookup_` | ✓ **already PolyLookupKey {poly, rel, mpq_class rhs}** |
+
+The polyLookup_ map IS the `ArithAtomKey` the roadmap describes. Iter-76
+opt-in hash-cons gets equivalent ExprIds to flow into it. **Gap**: confirm
+every atom-creation path goes through `getOrCreatePolynomialAtom`, not
+through raw ExprId paths. **Task #32 (Atomizer poly-canonical)** owns this
+verification.
+
+### Step 2 — Shared numeric term layer
+
+| Component | Path | Status |
+|-----------|------|--------|
+| Purifier (UF/array/numeric purification) | `src/theory/combination/Purifier.cpp` | ✓ shipped |
+| SharedTermRegistry | `src/theory/combination/SharedTermRegistry.h` | ✓ shipped |
+| Bridge equality emission (`u = f(...)`) | Purifier `makeEq` | ✓ shipped |
+
+**Gap**: Verify div0(x,y) / mod0(x,y) UF tokens emitted by IntDivModLowerer
+also flow through the Purifier so EUF + arithmetic see them as shared
+ArithVars.
+
+### Step 3 — DivModPair lowering
+
+| Component | Path | Status |
+|-----------|------|--------|
+| IntDivModLowerer (single-branch, div0/mod0 via UFApply) | `src/frontend/preprocess/IntDivModLowerer.cpp` | ✓ partial |
+| AUTO_EUF_PROMOTE for div/mod | flagged | ✓ shipped |
+| XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO (diagnostic fast-unknown) | flagged | ✓ shipped |
+
+**Gap (substantial)**: 3-branch lowering (y=0 / y>0 / y<0) with explicit
+guard SatLits. Currently the lowerer takes the conservative one-branch
+path: introduce UF tokens `div0/mod0` and rely on EUF for everything.
+The roadmap wants per-sign guards so positive-divisor cases skip the UF
+machinery and propagate remainder bounds directly.
+
+### Step 4 — EUF+NIA combination
+
+| Component | Path | Status |
+|-----------|------|--------|
+| TheoryManager (combination loop) | `src/theory/core/TheoryManager.cpp` | ✓ shipped |
+| SharedEqualityManager | `src/theory/core/SharedEqualityManager.h` | ✓ shipped |
+| pendingSharedEqEvents_ (EUF → linear arith) | TheoryManager | ✓ shipped |
+| XOLVER_COMB_PUBLISH_ON_LEMMA / MODEL_BASED / UFARG_ARRANGE | promoted default-ON | ✓ shipped |
+
+**Gap**: NIA → EUF disequality path. Linear-arith → EUF already works.
+NIA needs to publish derived equalities/disequalities back to EUF in the
+same way the roadmap describes. Cross-theory propagation IS the
+multi-day work the bottleneck pin identifies.
+
+### Step 5 — NIA modular / finite-field refuter
+
+| Component | Path | Status |
+|-----------|------|--------|
+| ModularResidueReasoner (constant pow2 modulus) | `src/theory/arith/nia/reasoners/ModularResidueReasoner.cpp` | ✓ shipped, default-ON |
+| AlgebraicIntegerReasoner (≤2 vars, tiny moduli) | `src/theory/arith/nia/reasoners/AlgebraicIntegerReasoner.cpp` | ✓ shipped |
+| Gröbner-lite (commit `7afeda9` on agent/a7-nia-reasoning) | not on this branch | ⚠ cherry-pick blocked by conflicts |
+| Small-prime general schedule (2, 3, 5, 7, 16, 32) | — | ✗ NOT shipped |
+
+**Gap**: small-prime schedule generalizes ModularResidueReasoner.
+Gröbner-lite cherry-pick was attempted in iter-72 but conflicts with
+my `ModularResidueReasoner` + namespace renames. Manual port required.
+
+### Step 6 — NIA sparse equality elimination
+
+| Component | Path | Status |
+|-----------|------|--------|
+| IntLinearEqualityCoreHNF (Cap 5) | `src/theory/arith/presolve/IntLinearEqualityCoreHNF.cpp` | ✓ shipped |
+| AffineSubstitution (Cap 1) | `src/theory/arith/presolve/AffineSubstitution.cpp` | ✓ shipped |
+| PolynomialDefSubstitution (Cap 2) | `src/theory/arith/presolve/PolynomialDefSubstitution.cpp` | ✓ shipped |
+| SubstEntry::vars cache (iter-74) | `src/theory/arith/presolve/Presolve.h` | ✓ shipped |
+
+**Mostly DONE**. Remaining: term-count guard for substitution growth
+(iter-73 hot-path identified this as the registerSubstitution O(V²) — partly
+addressed by iter-74 cache).
+
+### Step 7 — Model validation
+
+| Component | Path | Status |
+|-----------|------|--------|
+| ArithModelValidator | `src/proof/ArithModelValidator.cpp` | ✓ shipped |
+| ModelValidator (SMT-level) | `src/proof/ModelValidator.cpp` | ✓ shipped |
+| div/mod reconstruction in validator | partial | ⚠ verify covers div0/mod0 UF interpretation |
+
+---
+
+## Net REUSE summary
+
+| Step | Status | Remaining work |
+|------|--------|----------------|
+| 1 | ★ ~90% reuse | verify every atom path uses polyLookup_ |
+| 2 | ★ ~80% reuse | ensure div0/mod0 flows through Purifier |
+| 3 | partial | 3-branch (y=0/y>0/y<0) is the major TODO |
+| 4 | ★ ~70% reuse | NIA → EUF disequality path |
+| 5 | partial | small-prime general + Gröbner-lite manual port |
+| 6 | ★ ~90% reuse | term-count guard |
+| 7 | ★ ~95% reuse | verify div0/mod0 UF interp in validator |
+
+**The architecture is mostly assembled.** The remaining work is targeted
+gap-filling, not greenfield. New code should compose with the existing
+PolynomialKernel / Purifier / SharedEqualityManager / Reasoner pipeline
+rather than introducing parallel infrastructure.
