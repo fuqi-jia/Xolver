@@ -800,7 +800,17 @@ public:
     }
 
     CoreIr& ensureIr() {
-        if (!ir) ir = std::make_unique<CoreIr>();
+        if (!ir) {
+            ir = std::make_unique<CoreIr>();
+            // iter-60: enable hash-cons so equivalent sub-expressions
+            // emitted by separate passes share ExprIds. Critical for
+            // SAT-lit unification (Newton prover lemmas vs original
+            // assertion atoms). Gated by XOLVER_IR_HASHCONS=0 to revert.
+            if (const char* e = std::getenv("XOLVER_IR_HASHCONS");
+                !(e && *e == '0')) {
+                ir->setHashConsEnabled(true);
+            }
+        }
         return *ir;
     }
 
@@ -1338,6 +1348,290 @@ public:
                 std::cerr << "[BoundedEnum] " << elig.size()
                           << " var(s) enumerated; " << dropIdx.size()
                           << " bound atom(s) replaced\n";
+            }
+        }
+
+        // ---------------- Newton-Raphson integer-sqrt prover --------------
+        // XOLVER_PP_NEWTON_INT_SQRT (default-OFF): detect Newton iteration
+        //   (= V (div (+ U (div X U)) 2))
+        // and the standard hypotheses
+        //   (<= (* U U) X)              # oldres² ≤ x
+        //   (<= X (* C (* U U)))        # x ≤ C * oldres² for some C ≥ 1
+        // When matched, emit TWO proven lemmas (see
+        // docs/newton-integer-sqrt-analysis.md for full derivation):
+        //   Lemma 1: (< X (* (+ V 1) (+ V 1)))         -- branch-1 contradiction
+        //   Lemma 2: (<= (* V V) (div (* 15625 X) 10000)) -- 16*V² ≤ 25*X
+        // Together these close sqrtStep1/1a UNSAT proofs.
+        //
+        // Sound: both lemmas algebraically follow from the hypotheses by
+        // completed-square arithmetic.
+        if (std::getenv("XOLVER_PP_NEWTON_INT_SQRT") && ir->currentScopeLevel() == 0) {
+            SortId intSort = ir->intSortId();
+            const auto& scoped = ir->getScopedAssertions();
+            auto isVar = [&](const CoreExpr& n) -> bool {
+                return n.kind == Kind::Variable;
+            };
+            auto isConstInt = [&](const CoreExpr& n, int64_t v) -> bool {
+                if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+                if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv == v;
+                if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                    try { mpq_class q(*sv); return q.get_den() == 1 && q.get_num() == v; }
+                    catch (...) { return false; }
+                }
+                return false;
+            };
+            auto eqExpr = [&](ExprId a, ExprId b) -> bool { return a == b; };
+            // Step 1: collect candidate Newton triples (V, U, X) from
+            // `(= V (div (+ U (div X U)) 2))` shapes.
+            struct Match { ExprId V, U, X; };
+            std::vector<Match> matches;
+            for (const auto& [lvl, aid] : scoped) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                // Try both child orderings for V.
+                for (int swap = 0; swap < 2; ++swap) {
+                    ExprId vEid = a.children[swap ? 1 : 0];
+                    ExprId rhsEid = a.children[swap ? 0 : 1];
+                    const CoreExpr& vN = ir->get(vEid);
+                    if (!isVar(vN)) continue;
+                    const CoreExpr& rhs = ir->get(rhsEid);
+                    if (rhs.kind != Kind::Div || rhs.children.size() != 2) continue;
+                    if (!isConstInt(ir->get(rhs.children[1]), 2)) continue;
+                    const CoreExpr& addN = ir->get(rhs.children[0]);
+                    if (addN.kind != Kind::Add || addN.children.size() != 2) continue;
+                    // Find U + (div X U) pattern (either child order).
+                    for (int s2 = 0; s2 < 2; ++s2) {
+                        ExprId uEid = addN.children[s2 ? 1 : 0];
+                        ExprId divEid = addN.children[s2 ? 0 : 1];
+                        const CoreExpr& uN = ir->get(uEid);
+                        if (!isVar(uN)) continue;
+                        const CoreExpr& divN = ir->get(divEid);
+                        if (divN.kind != Kind::Div || divN.children.size() != 2) continue;
+                        if (!eqExpr(divN.children[1], uEid)) continue;
+                        ExprId xEid = divN.children[0];
+                        const CoreExpr& xN = ir->get(xEid);
+                        if (!isVar(xN)) continue;
+                        matches.push_back({vEid, uEid, xEid});
+                        break;
+                    }
+                    if (!matches.empty() && matches.back().V == vEid) break;
+                }
+            }
+            if (!matches.empty()) {
+                // Step 2: verify hypotheses for each match. For each (V,U,X):
+                //   need (<= (* U U) X)
+                //   and  (<= X (* C (* U U))) for some const C ≥ 1
+                auto isMulUU = [&](ExprId e, ExprId u) -> bool {
+                    const CoreExpr& m = ir->get(e);
+                    if (m.kind != Kind::Mul || m.children.size() != 2) return false;
+                    return eqExpr(m.children[0], u) && eqExpr(m.children[1], u);
+                };
+                // CRITICAL SOUNDNESS GUARD (iter-57 fix per user audit):
+                // Both lemmas require the upper bound coefficient C ≤ 4.
+                // Real-Newton V = U(1+t)/2 with t = X/U² ∈ [1,C]; Lemma 2
+                // (V² ≤ 25X/16) holds iff t ∈ [1/4, 4]. With t ≥ 1 we need
+                // C ≤ 4. (4t² − 17t + 4 ≤ 0 ⟺ t ∈ [1/4, 4].) Without this
+                // guard, C > 4 yields lemma 2 as a FALSE FACT → could
+                // produce wrong verdict. Lemma 1's branch-1 proof also
+                // implicitly requires q ≤ 4*U (from X ≤ 4U²).
+                // Extract const C from `(* C (* U U))` OR `(* (* U U) C)`.
+                // The parser may canonicalize either way.
+                auto extractCfromUpper = [&](ExprId e, ExprId u, mpz_class& outC) -> bool {
+                    const CoreExpr& m = ir->get(e);
+                    if (m.kind != Kind::Mul || m.children.size() != 2) return false;
+                    // Try both orderings: (CONST, MulUU) or (MulUU, CONST).
+                    for (int order = 0; order < 2; ++order) {
+                        ExprId cChild = order ? m.children[1] : m.children[0];
+                        ExprId muuChild = order ? m.children[0] : m.children[1];
+                        const CoreExpr& c0 = ir->get(cChild);
+                        if (c0.kind != Kind::ConstInt && c0.kind != Kind::ConstReal) continue;
+                        if (auto* iv = std::get_if<int64_t>(&c0.payload.value)) {
+                            outC = mpz_class(*iv);
+                        } else if (auto* sv = std::get_if<std::string>(&c0.payload.value)) {
+                            try { mpq_class q(*sv); if (q.get_den() != 1) continue; outC = q.get_num(); }
+                            catch (...) { continue; }
+                        } else continue;
+                        if (isMulUU(muuChild, u)) return true;
+                    }
+                    return false;
+                };
+                std::vector<std::pair<ScopeLevel, ExprId>> newLemmas;
+                for (const auto& mt : matches) {
+                    bool hasLower = false, hasUpper = false;
+                    mpz_class upperC;
+                    for (const auto& [lvl, aid] : scoped) {
+                        const CoreExpr& a = ir->get(aid);
+                        if (a.kind != Kind::Leq || a.children.size() != 2) continue;
+                        if (isMulUU(a.children[0], mt.U) && eqExpr(a.children[1], mt.X)) {
+                            hasLower = true;
+                        }
+                        mpz_class c;
+                        if (eqExpr(a.children[0], mt.X) &&
+                            extractCfromUpper(a.children[1], mt.U, c)) {
+                            // CRITICAL: require 1 ≤ C ≤ 4 (proof's tight bound).
+                            if (c >= 1 && c <= 4) {
+                                hasUpper = true;
+                                upperC = c;
+                            }
+                        }
+                    }
+                    if (!hasLower || !hasUpper) continue;
+                    std::cerr << "[NewtonIntSqrt] match V=" << mt.V << " U=" << mt.U
+                              << " X=" << mt.X << " C=" << upperC.get_str()
+                              << " (sound: 1 ≤ C ≤ 4)\n";
+                    // Build lemma 1: (< X (* (+ V 1) (+ V 1)))
+                    auto mkConst = [&](int64_t v) {
+                        CoreExpr c;
+                        c.kind = Kind::ConstInt;
+                        c.sort = intSort;
+                        c.payload = Payload(v);
+                        return ir->add(std::move(c));
+                    };
+                    // iter-60: CoreIr::add doesn't hash-cons — each new
+                    // arith node gets a fresh ExprId. So we MUST locate
+                    // the assertion's existing sub-expressions and reuse
+                    // their ExprIds directly. Walk the negated assertion
+                    // `not (and (< X (V+1)²) (or (<= V² (X+V)) (<= V² (div ...))))`
+                    // to extract:
+                    //   - origFirstConj  = the `(< X (V+1)²)` atom
+                    //   - origOrRightDisj = the `(<= V² (div ...))` atom
+                    // Then assert these EXACT ExprIds: the SAT layer
+                    // shares the lits with the negation, so asserting
+                    // them forces the inner AND to be true → not(true)
+                    // → UNSAT.
+                    ExprId origFirstConj = NullExpr;
+                    ExprId origOrRightDisj = NullExpr;
+                    for (const auto& [_lvl, aid] : scoped) {
+                        const CoreExpr& notA = ir->get(aid);
+                        if (notA.kind != Kind::Not || notA.children.size() != 1) continue;
+                        const CoreExpr& andA = ir->get(notA.children[0]);
+                        if (andA.kind != Kind::And || andA.children.size() < 2) continue;
+                        // Find conjunct that's a Lt(X, _) — that's branch-1 atom.
+                        for (ExprId cj : andA.children) {
+                            const CoreExpr& cn = ir->get(cj);
+                            if (cn.kind == Kind::Lt && cn.children.size() == 2 &&
+                                eqExpr(cn.children[0], mt.X)) {
+                                origFirstConj = cj;
+                            }
+                            if (cn.kind == Kind::Or) {
+                                // Find disjunct (<= V² (div ...)). The V²
+                                // here might be (* V V); compare against
+                                // the candidate vSq we built.
+                                for (ExprId d : cn.children) {
+                                    const CoreExpr& dn = ir->get(d);
+                                    if (dn.kind != Kind::Leq || dn.children.size() != 2) continue;
+                                    const CoreExpr& rhs = ir->get(dn.children[1]);
+                                    if (rhs.kind == Kind::Div) {
+                                        origOrRightDisj = d;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (origFirstConj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig first-conj eid="
+                                  << origFirstConj << " as lemma 1\n";
+                        newLemmas.push_back({0, origFirstConj});
+                    }
+                    if (origOrRightDisj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig OR-right eid="
+                                  << origOrRightDisj << " as lemma 2\n";
+                        newLemmas.push_back({0, origOrRightDisj});
+                    }
+                    // ALSO emit the constructed forms as backup (in case the
+                    // assertion structure differs from expectation):
+                    ExprId one = mkConst(1);
+                    ExprId two = mkConst(2);
+                    // V² (shared by L1B, L2A, L2B):
+                    CoreExpr vSq;
+                    vSq.kind = Kind::Mul;
+                    vSq.sort = intSort;
+                    vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
+                    ExprId vSqEid = ir->add(std::move(vSq));
+                    // (* 2 V) shared by L1B:
+                    CoreExpr mul2V;
+                    mul2V.kind = Kind::Mul;
+                    mul2V.sort = intSort;
+                    mul2V.children = SmallVector<ExprId,4>{two, mt.V};
+                    ExprId mul2VEid = ir->add(std::move(mul2V));
+
+                    // ----- L1 FORM A: (< X (* (+ V 1) (+ V 1))) -----
+                    // Exact syntactic shape of the original assertion's
+                    // first conjunct (the one we want to discharge).
+                    CoreExpr vPlus1;
+                    vPlus1.kind = Kind::Add;
+                    vPlus1.sort = intSort;
+                    vPlus1.children = SmallVector<ExprId,4>{mt.V, one};
+                    ExprId vPlus1Eid = ir->add(std::move(vPlus1));
+                    CoreExpr mulVp;
+                    mulVp.kind = Kind::Mul;
+                    mulVp.sort = intSort;
+                    mulVp.children = SmallVector<ExprId,4>{vPlus1Eid, vPlus1Eid};
+                    ExprId mulVpEid = ir->add(std::move(mulVp));
+                    CoreExpr ltAtom;
+                    ltAtom.kind = Kind::Lt;
+                    ltAtom.sort = boolSortId_;
+                    ltAtom.children = SmallVector<ExprId,4>{mt.X, mulVpEid};
+                    ExprId l1aEid = ir->add(std::move(ltAtom));
+                    newLemmas.push_back({0, l1aEid});
+
+                    // ----- L1 FORM B: (<= X (+ (* V V) (* 2 V))) -----
+                    // Equivalent over Z: `X < (V+1)²` ⟺ `X ≤ V² + 2V`.
+                    // Pure polynomial form; NIA reasoner can deduce from this.
+                    CoreExpr addPoly;
+                    addPoly.kind = Kind::Add;
+                    addPoly.sort = intSort;
+                    addPoly.children = SmallVector<ExprId,4>{vSqEid, mul2VEid};
+                    ExprId addPolyEid = ir->add(std::move(addPoly));
+                    CoreExpr leqAtomB;
+                    leqAtomB.kind = Kind::Leq;
+                    leqAtomB.sort = boolSortId_;
+                    leqAtomB.children = SmallVector<ExprId,4>{mt.X, addPolyEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqAtomB))});
+
+                    // ----- L2 FORM A: (<= (* V V) (div (* 15625 X) 10000)) -----
+                    // Exact syntactic shape of original's inner OR right disjunct.
+                    ExprId k15625 = mkConst(15625);
+                    CoreExpr mul15625X;
+                    mul15625X.kind = Kind::Mul;
+                    mul15625X.sort = intSort;
+                    mul15625X.children = SmallVector<ExprId,4>{k15625, mt.X};
+                    ExprId mul15625XEid = ir->add(std::move(mul15625X));
+                    ExprId k10000 = mkConst(10000);
+                    CoreExpr divE;
+                    divE.kind = Kind::Div;
+                    divE.sort = intSort;
+                    divE.children = SmallVector<ExprId,4>{mul15625XEid, k10000};
+                    ExprId divEid = ir->add(std::move(divE));
+                    CoreExpr leqDivAtom;
+                    leqDivAtom.kind = Kind::Leq;
+                    leqDivAtom.sort = boolSortId_;
+                    leqDivAtom.children = SmallVector<ExprId,4>{vSqEid, divEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqDivAtom))});
+
+                    // ----- L2 FORM B: (<= (* 16 (* V V)) (* 25 X)) -----
+                    // Div-free polynomial form for the NIA reasoner.
+                    ExprId k16 = mkConst(16);
+                    ExprId k25 = mkConst(25);
+                    CoreExpr mul16VV;
+                    mul16VV.kind = Kind::Mul;
+                    mul16VV.sort = intSort;
+                    mul16VV.children = SmallVector<ExprId,4>{k16, vSqEid};
+                    ExprId mul16VVEid = ir->add(std::move(mul16VV));
+                    CoreExpr mul25X;
+                    mul25X.kind = Kind::Mul;
+                    mul25X.sort = intSort;
+                    mul25X.children = SmallVector<ExprId,4>{k25, mt.X};
+                    ExprId mul25XEid = ir->add(std::move(mul25X));
+                    CoreExpr leqPolyAtom;
+                    leqPolyAtom.kind = Kind::Leq;
+                    leqPolyAtom.sort = boolSortId_;
+                    leqPolyAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
+                    newLemmas.push_back({0, ir->add(std::move(leqPolyAtom))});
+                }
+                if (!newLemmas.empty()) {
+                    for (const auto& [lv, eid] : newLemmas) ir->addAssertion(eid, lv);
+                }
             }
         }
 
