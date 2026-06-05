@@ -54,6 +54,10 @@ public:
 
     bool findByExprId(ExprId expr, LinearFormKey& outLhs, Relation& outRel, mpq_class& outRhs) const;
 
+    // iter-50: lookup SAT var by ExprId regardless of payload kind.
+    // Returns nullopt if no registered atom matches.
+    std::optional<SatVar> findSatVarByExprId(ExprId expr) const;
+
     const TheoryAtomRecord* findBySatVar(SatVar v) const override;
     std::vector<SatVar> linearAtomVars() const override;
     const std::vector<TheoryAtomRecord>& records() const { return records_; }

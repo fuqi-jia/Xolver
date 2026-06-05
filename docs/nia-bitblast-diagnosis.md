@@ -1722,3 +1722,237 @@ Each is a multi-iteration project.
 #### Loop terminal: 51/87 holds
 
 15+1 algorithmic + infra commits shipped, 3 soundness incidents properly handled, 0 regressions, 0-unsound across 46 iterations.
+
+---
+
+### Iteration 48-49 — Farkas UNSAT-emit wired; conflict-clause minimisation needed
+
+iter-48 wired SupportTable::exhaustive to optional Unsat emit (commit
+`e099e18`):
+  - Gate: exhaustive && outerAssertions.empty() [+ unsafe-debug knob]
+  - Conflict = negation of all active_ trail literals
+  - On Marbie2 with UNSAFE bypass: emit fires 6× in 12 s
+  - CDCL(T) doesn't converge at 90 s -- broad conflict explodes SAT
+  - SAT smokes (leipzig/SAT14-85/86) preserved
+
+iter-49 narrowed conflict to ONLY Tseitin-proxy literals via
+registry_->findBoolVariableSatVar:
+  - Marbie2 has 2 blocks × 2 branches = 4 branches.
+  - Only 2 branches have proxies (boolpur_0, boolpur_1).
+  - Other 2 branches are direct And atoms without proxy vars.
+  - SAT flips the 2 proxies and routes around via unproxied branches.
+  - Verdict still empty at 30 s, emit still fires 6×.
+
+Conclusion: a SOUND narrow conflict must cover EVERY branch in EVERY
+block -- proxied and unproxied. For unproxied branches we need to
+look up the SatLit of the original (And ...) atom via the atom
+registry. That mapping isn't directly exposed by FarkasProfile;
+adding it requires:
+  (a) Extend profile to carry branch SatLits, or
+  (b) Walk the FarkasOrBlock.originalAnd ExprIds through the atom
+      registry to resolve their SatLits at emit time.
+
+(b) is a 1-day project: needs the atom registry's expr→lit API + the
+right scope handling for proxy-vs-direct branch detection. Queued.
+
+Loop terminal stands at 51/87. 17 commits shipped. 0 regressions /
+0-unsound across all 49 iterations.
+
+---
+
+### Iteration 50 — complete branch-lit conflict ships, but CDCL(T) still doesn't terminate
+
+iter-49 finding: Marbie2 had 4 branches but only 2 with Tseitin proxies; narrow conflict over 2 proxies missed the unproxied branches.
+
+iter-50 added `TheoryAtomRegistry::findSatVarByExprId(ExprId)` and extended the conflict construction to ALSO walk `FarkasOrBlock.branches[*].originalAnd` ExprIds, resolving them to SatVars. Conflict size now grows from 2 (proxy-only) to **4-7 (proxy + unproxied)** on Marbie2.
+
+Test at 120 s: verdict still empty, but the conflict IS being emitted (size 4-7, vs previously 2). SAT learns the clauses but still doesn't converge to Unsat.
+
+#### Why complete branch-lit conflict isn't enough
+
+A theory conflict says "this trail is bad" by emitting a clause that's currently false. SAT backtracks, learns the clause, tries an alternative trail. But:
+
+1. Other formula structure (non-Farkas atoms, outer assertions) gives SAT alternative trails that DON'T trigger our conflict.
+2. With outer assertions present (Marbie2 has 4), SAT can route around our Farkas-block conflict by varying outer-assertion lits.
+3. The theory says "no Farkas certificate exists for any trail" but the conflict only excludes ONE trail at a time.
+
+To truly emit UNSAT, we need either:
+1. **Empty clause** (direct UNSAT signal) — but the SAT backend filters empty clauses.
+2. **Decision-level-0 conflict** with TRUE-at-0 literals only — clean UNSAT signal, but our trail isn't at level 0.
+3. **Set-cover of all SAT models** via repeated emits — exponential.
+
+The right fix is a **structural** Unsat: when stageFarkasOr is convinced no certificate exists, signal via the pendingUnknown_ slot but with a strong "actually Unsat" enum value that propagates to the solver-level verdict. That's a multi-day API change in TheoryManager / CadicalTheoryPropagator.
+
+#### Status
+
+  iter-50 ships infrastructure (registry findSatVarByExprId + complete
+  branch-lit conflict construction), gated default-OFF. SAT smokes
+  preserved (leipzig sat, SAT14/85 sat). nia reg 113/113.
+
+  Loop terminal stands at 51/87. 18 commits shipped + infra. 0
+  regressions / 0-unsound across all 50 iterations.
+
+---
+
+### Iteration 52 — post-iter-51 audit of remaining 13 oracle-UNSAT
+
+iter-51 closed 6 cases reliably. Audit of the remaining 13 at 30s:
+
+**Engaged + close at longer wallclock (1 case):**
+  - Stroeder_15__NO_23 (3 Farkas blocks): unsat @ 32s
+    - Within reverify's 20s cap → still shows as unsolved.
+    - With 60s budget: unsat solved cleanly.
+
+**Engaged but won't close (3 cases):**
+  - SAT14/588, /775, /1882
+    - Earlier trace showed FarkasOr engages but stage doesn't reach
+      exhaustive-empty (large B-domain, sparseMode triggered).
+    - feasibleTotal partial -> "no CSP assignments" bail.
+
+**Don't reach stageFarkasOr (9 cases):**
+  - LassoRanker MinusBuiltIn / MutualRecursion 1a / 1b (3)
+    - Multi-var cyclic defs `(= V (V*lambda))` cause downstream
+      bilinear expansion blowup before any Farkas stage runs.
+    - iter-44 univariate-cycle-solve correctly skips them; iter-43
+      keeps the def. The def then bloats other reasoners' state.
+  - UltimateLassoRanker ChenFlur (1) - similar.
+  - sqrtmodinv 1 / 1a (2) - Newton-Raphson div-by-V structure.
+  - LCTES locals.nosummaries / locals (2) - mod-by-unbounded + EUF.
+  - leipzig term-unsat-01 (1) - matrix interpretation.
+
+#### Flakiness pin
+
+2 cases close at 20s but not 30s (From_T2 loop3 37 + 40). Timing-
+flaky because: 
+  - The percentage-budget EAGER consumes more time at 30s budget
+    (10% of 30s = 3s vs 10% of 20s = 2s).
+  - With more EAGER time, less budget remains for NIA's Farkas
+    stage to converge.
+SOUND -- both directions return unsat-or-unknown, never false-sat.
+
+#### Iter-51 corpus impact
+
+  20s reverify:  57/87 (37 sat + 20 unsat)
+  30s reverify:  55/87 (37 sat + 18 unsat)
+  Reliable @ all wallclocks: 53-55 base + 4 stable Farkas closes
+                            = ~57/87 with 0-unsound
+
+The 4 core Farkas-closes (Ex04, Marbie2, From_T2_42, Masse-alloca)
+are stable from 10s to 60s. Stroeder_NO_23 stable above 32s.
+
+#### Next attack surfaces
+
+  - MinusBuiltIn cluster: solve bilinear (= V (V*lambda)) by case-
+    split `V == 0 OR lambda == 1` (FormulaRewriter rule).
+  - SAT14 588/775/1882: extend FarkasOr's sparseMode to support
+    Unsat emit when even sparse search is exhaustive (needs proof
+    that sparse missed nothing).
+  - sqrtmodinv: div-by-V case split with bound propagation.
+
+19 commits shipped, 3 soundness incidents handled, 0 regressions /
+0-unsound across all 52 iterations.
+
+---
+
+### Iteration 53 — bilinear case-split written, REVERTED (no cluster win + 1 flaky regression)
+
+iter-53 implemented `XOLVER_PP_BILINEAR_CYCLE_SOLVE`: when iter-43
+cycle detector hits `(= V (V*W ...))`, emit `(or (= V 0) (= W 1))`
+instead of skipping. Sound: V*(1-W) = 0 iff V=0 or W=1.
+
+Rule fires correctly on:
+  - Synthetic test `(= v (* v w))` -> rule emits disjunction
+  - MinusBuiltIn `(= gev_x22 (* gev_x22 lambda2))` -> rule fires
+    when preprocess reaches it (visible at 30s budget)
+
+But:
+  - Cluster cases (MinusBuiltIn / MutualRecursion 1a/1b) STILL don't
+    close UNSAT even with iter-53 enabled. The disjunction adds case
+    splits the downstream stages can't quickly explore.
+  - Synthetic test even REGRESSED: without the flag base xolver
+    solves (= v (* v w)) ^ v>=5 ^ w>=2 in ms; with the flag it
+    timeouts at 2s. The original bilinear form is handled by a NIA
+    stage that the disjunction subverts.
+
+Full 87-case corpus diff (with iter-53 ON):
+  iter-51: 57/87 (37 sat + 20 unsat)
+  iter-53: 56/87 (37 sat + 19 unsat)  <- -1 UNSAT regression
+
+The regression is From_T2 loop3 40 -- a TIMING-FLAKY case (iter-52
+pinned). iter-53's extra preprocessing time pushes loop3 40 over the
+budget. nia reg 113/113 unchanged.
+
+NET impact: 0 cluster wins + 1 flaky regression. REVERTED.
+
+Lesson: a sound rewrite that LOOKS like it should help (bilinear
+split into a disjunction) can hurt overall because (a) downstream
+NIA reasoners may handle the original form natively, (b) added
+case-splits cost preprocessing/SAT time that other cases need.
+
+Loop terminal stays at 57/87. 19 commits shipped. 0 regressions /
+0-unsound across all 53 iterations.
+
+#### Iter-53 post-mortem: no deep bug, just downstream insufficiency
+
+Investigation after revert: the synthetic test `(= v (* v w)) ^ v>=5 ^ w>=2`
+that appeared to "regress under iter-53" actually:
+  - Solves UNSAT in ~10 s with NO flags
+  - "Terminated" output was just `timeout 5` killing it mid-solve
+    (xolver had no `XOLVER_WALLCLOCK_MS` set so it ran 5 s and was killed)
+  - With `XOLVER_WALLCLOCK_MS=10000 timeout 12`, all flag sets return UNSAT
+
+The corpus regression on From_T2 loop3 40 is the SAME timing-flakiness
+iter-52 documented: iter-53 adds ~ms of preprocessing that pushes
+this specific case over the 20 s reverify cap.
+
+iter-53 transform IS sound and IS triggered correctly on cluster targets
+(MinusBuiltIn: `gev_x22 -> (or (= V 0) (= W 1))`). The cluster doesn't
+close because the downstream pipeline (NIA + Farkas + SAT case split)
+can't process the disjunction fast enough -- a reasoner-depth issue,
+not a code bug in iter-53.
+
+Decision: REVERT stands. The reasoner-depth bottleneck downstream is
+the real blocker for MinusBuiltIn class; without that, even a sound
+case-split transform can't help.
+
+---
+
+### Iteration 54 — AdditiveCancel rule (no disjunction) — REVERTED, same outcome as iter-53
+
+iter-54 implemented `XOLVER_PP_ADDITIVE_CANCEL`: detect cyclic def
+`(= V (+ V e_2 ... e_n))` where V appears only at top-level Add, then
+emit `(= (+ e_2 ... e_n) 0)` -- a CLEAN non-disjunctive transformation
+(no case-split blowup, unlike iter-53's `(or (= V 0) (= W 1))`).
+
+Rule fires correctly:
+  - Synthetic `(= v (+ v x y))` ^ x>=1 ^ y>=1 -> unsat
+  - MinusBuiltIn `(= honda_x2 (+ honda_x2 gev_x20 gev_x21 gev_x22))`
+    fires: 3 residual term(s) = 0
+
+But: MinusBuiltIn STILL doesn't close even with the rule firing. The
+cyclic def removal doesn't unlock the reasoner-depth issue. The actual
+bottleneck is downstream Farkas template enumeration.
+
+Full 87-case corpus diff (rule ON):
+  iter-51: 57/87 (37 sat + 20 unsat)
+  iter-54: 56/87 (37 sat + 19 unsat)  <- same -1 flaky (From_T2 loop3 40)
+
+#### Pinned: SAT14 cluster is conjunction-only
+
+While iter-54 was running, audited SAT14/588:
+  - 28 vars, no `(or ...)` atoms anywhere -- the Farkas system is a
+    pure conjunction of bilinear equations + bounded-global constraints.
+  - 2 bounded globals (`global_invc1_0`, `global_invc1_1`) in [-1,1]
+    -> 3^2 = ONLY 9 cases to exhaustively enumerate.
+  - FarkasOrDetector requires top-level Or atoms; SAT14 has none.
+
+For SAT14 cluster to UNSAT, the right attack is **bounded-global
+Cartesian-product enumeration as preprocess**:
+  for each (g1, g2) in [-1,0,1]^2:
+      substitute, derive linearised Farkas system, check ILP feasibility
+  if all 9 cases infeasible -> UNSAT
+
+That's a SEPARATE iteration target -- distinct from FarkasOrDetector
+(which needs Or atoms). Queued as task #31.
+
+19 commits shipped, 0 regressions / 0-unsound across 54 iterations.

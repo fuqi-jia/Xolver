@@ -169,6 +169,19 @@ bool TheoryAtomRegistry::findByExprId(ExprId expr, LinearFormKey& outLhs,
     return false;
 }
 
+// iter-50: lookup the SAT var for an arbitrary theory atom by ExprId.
+// Used by NiaSolver::stageFarkasOr when constructing a narrow conflict
+// for the UNSAT-emit path: each Farkas branch's `originalAnd` ExprId
+// gets resolved to its SatVar so the conflict clause covers ALL
+// branches (proxied or unproxied), not just the Tseitin proxies.
+std::optional<SatVar>
+TheoryAtomRegistry::findSatVarByExprId(ExprId expr) const {
+    for (const auto& rec : records_) {
+        if (rec.exprId == expr) return rec.satVar;
+    }
+    return std::nullopt;
+}
+
 const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
     auto it = satVarToIdx_.find(v);
     if (it != satVarToIdx_.end()) {
