@@ -69,16 +69,35 @@ class CoreIr {
 public:
     CoreIr() = default;
 
-    // Hash-cons deduplication is UNCONDITIONAL. Identical
-    // (kind, sort, children, payload) tuples collapse to the same ExprId.
-    // Critical for theory-level SAT-lit unification: equivalent
-    // sub-expressions emitted by separate passes (e.g. lemma generators
-    // vs the parsed assertion) must share ExprIds so the atomizer
-    // assigns them a single SAT lit. Without it, algebraically equivalent
-    // atoms become distinct Boolean variables and CDCL cannot propagate
-    // between them — see commit message of `nia newton: iter-60` for the
-    // diagnosis evidence (eid=37 vs eid=19 for the same `(< X (* (+ V 1) (+ V 1)))`).
+    // add() is the LEGACY entry point: every call gets a fresh ExprId.
+    // SOMTParser's NodeManager + FrontendAdapter memo table already handles
+    // structural sharing at parse time, so callers that came up through the
+    // parser path rely on add() returning unique IDs for distinct AST
+    // positions (e.g. ITE branches, let-bindings, fresh tseitin proxies).
+    // Forcing hash-cons here caused false-SAT on calypto/* (see iter-61
+    // post-mortem). Use addShared() to OPT IN to dedup.
     ExprId add(CoreExpr e) {
+        ExprId id = static_cast<ExprId>(exprs_.size());
+        exprs_.push_back(std::move(e));
+        return id;
+    }
+
+    // addShared() is the explicit hash-cons entry point. Identical
+    // (kind, sort, children, payload) tuples collapse to the same ExprId.
+    //
+    // Use this from preprocess passes that emit new sub-expressions and
+    // WANT them to fuse with existing ones (e.g. the Newton-Raphson
+    // lemma generator: emitting `(< X (* (+ V 1) (+ V 1)))` MUST return
+    // the same ExprId as the corresponding sub-expression already parsed
+    // by SOMTParser, so the atomizer assigns them a single SAT lit and
+    // CDCL can propagate. See `nia newton: iter-60`.
+    //
+    // Do NOT call from the FrontendAdapter / parser path: dedup'ing at
+    // parse time can collapse distinct ITE branches / let bindings /
+    // fresh-var introductions whose SOMTParser nodes were intentionally
+    // separate. (Diagnosed via false-SAT on calypto/problem-002871
+    // reverify with global hash-cons; see iter-61 commit history.)
+    ExprId addShared(CoreExpr e) {
         ConsKey key{e.kind, e.sort, e.children, e.payload.value};
         auto it = consMap_.find(key);
         if (it != consMap_.end()) return it->second;
