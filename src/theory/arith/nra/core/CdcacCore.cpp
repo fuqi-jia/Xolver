@@ -1647,6 +1647,37 @@ std::vector<mpq_class> CdcacCore::satSampleCandidates(VarId var, const SamplePoi
         if (a.get_den() != b.get_den()) return a.get_den() < b.get_den();
         return a < b;
     });
+
+    // cvc5-style integer-aware sampling (XOLVER_NRA_CAC_INT): for an integer
+    // variable, the only valid samples are integers, so replace the rational cell
+    // reps with the floor+ceil of every candidate (the nearest integers of each
+    // cell) plus the small-int fallbacks. Sound: this only changes WHICH samples
+    // the SAT-first search tries — a missed real model just falls through to the
+    // complete projection engine (Unknown, never wrong); SAT is still leaf-exact
+    // validated. Lets the CAD find INTEGER models directly for QF_NIA.
+    static const bool intCac = [] {
+        const char* e = std::getenv("XOLVER_NRA_CAC_INT");
+        return e && *e && *e != '0';
+    }();
+    if (intCac && input.integerVars.count(var)) {
+        std::set<mpz_class> ints;
+        auto addZ = [&](const mpz_class& z) {
+            if (mpqBitLen(mpq_class(z)) <= satSampleMaxBits_) ints.insert(z);
+        };
+        for (long v : {0, 1, -1, 2, -2, 3, -3}) addZ(mpz_class(v));
+        for (const auto& q : out) {
+            mpz_class fl;
+            mpz_fdiv_q(fl.get_mpz_t(), q.get_num().get_mpz_t(), q.get_den().get_mpz_t());
+            addZ(fl);
+            addZ(fl + 1);
+        }
+        std::vector<mpq_class> iout;
+        iout.reserve(ints.size());
+        for (const auto& z : ints) iout.emplace_back(z);
+        std::stable_sort(iout.begin(), iout.end(),
+                         [](const mpq_class& a, const mpq_class& b) { return abs(a) < abs(b); });
+        return iout;
+    }
     return out;
 }
 

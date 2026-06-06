@@ -362,6 +362,7 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
         }
         if (inputOk && !input.constraints.empty()) {
             input.varOrder.clear();  // CdcacCore's internal (Collins) ordering
+            input.integerVars = collectVariables_();  // QF_NIA: every var is integer
             CdcacResult cd = cdcacFallback_->solve(input);
             if (cd.status == CdcacStatus::Unsat) {
                 std::vector<SatLit> reasons;
@@ -373,6 +374,25 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
                 std::vector<TheoryAtomRecord> blocking;
                 for (const auto& a : asserted_) blocking.push_back(a.atom);
                 return mcsat::ValueChoice::conflict(std::move(blocking));
+            }
+            // (b2) Integer model: with integer-aware CAD sampling the real model
+            // may already be ALL-INTEGER — consume it directly as the assignment
+            // (it is leaf-exact-validated by CdcacCore; validateModel re-checks).
+            if (cd.status == CdcacStatus::Sat && cd.model) {
+                const SamplePoint& m = *cd.model;
+                bool allInt = true;
+                for (size_t i = 0; i < m.values.size(); ++i) {
+                    const RealAlg& ra = m.values[i];
+                    if (!ra.isRational() || ra.rational.get_den() != 1) { allInt = false; break; }
+                }
+                if (allInt) {
+                    for (size_t i = 0; i < m.varOrder.size() && i < m.values.size(); ++i)
+                        cachedAssignment_[m.varOrder[i]] = RealValue::fromMpz(m.values[i].rational.get_num());
+                    cachedAssignmentSucceeded_ = true;
+                    auto cit = cachedAssignment_.find(var);
+                    if (cit != cachedAssignment_.end())
+                        return mcsat::ValueChoice::found(cit->second);
+                }
             }
             // (c) Integrality branching: the real relaxation is FEASIBLE but its
             // model may be non-integer. Emit the split  v ≤ ⌊α⌋ ∨ v ≥ ⌊α⌋+1  for
