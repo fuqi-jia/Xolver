@@ -455,6 +455,30 @@ public:
         return false;
     }
 
+    // True iff the ORIGINAL assertions syntactically contain a real `/`. The
+    // realDivPurifySatFloor (which re-validates every nonlinear-real sat via the
+    // RealValue ArithModelValidator) only guards the div-by-0 functional-consistency
+    // corner of real division — with no real `/`, that corner cannot exist, so the
+    // floor is pure overhead AND, for an algebraic (Q(sqrt c)) sat model, its
+    // >=2-algebraic RealValue evaluation of a high-degree polynomial can blow up (the
+    // Geogebra 17a/17b hang). Gating the floor on actual real division keeps the
+    // soundness guard where it is needed and lets the algebraic-sat cascade through.
+    // Memoized DAG walk.
+    bool hasRealDivisionInOriginal() const {
+        if (!ir) return false;
+        std::unordered_map<ExprId, bool> seen;
+        std::function<bool(ExprId)> walk = [&](ExprId e) -> bool {
+            if (e == NullExpr || e >= ir->size()) return false;
+            if (!seen.emplace(e, true).second) return false;
+            const CoreExpr& n = ir->get(e);
+            if (n.kind == Kind::Div && ir->sortKind(n.sort) == SortKind::Real) return true;
+            for (ExprId c : n.children) if (walk(c)) return true;
+            return false;
+        };
+        for (ExprId a : originalAssertions_) if (walk(a)) return true;
+        return false;
+    }
+
 #ifdef XOLVER_ENABLE_CASESTATS
     void parseUnknownReasonIntoStats() {
         // Derive structured unknown fields from the free-text reason.
@@ -2081,7 +2105,8 @@ public:
         // computes a/b for b!=0 (confirms genuine sats) and returns Indeterminate
         // for b==0 (downgrades the corner to unknown via CMS re-validation).
         // Invariant 1 + corner soundness.
-        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar;
+        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar &&
+                                     hasRealDivisionInOriginal();
         // Array-combination SAT floor (QF_ALIA/ALRA/AUFLIA/AUFLRA). In these
         // Nelson-Oppen logics the arrangement between the array/EUF e-graph and
         // the arith solver can declare a model "consistent" at the Full-effort
