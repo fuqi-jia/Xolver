@@ -753,3 +753,51 @@ TEST_CASE("NIA-Core: SAT case with relaxed modular var cap stays SAT (no false U
     // Critically: NEVER Unsat (would indicate false UNSAT from modular refuter).
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
 }
+
+TEST_CASE("NIA-Core: env-overridable moduli list preserves SAT on satisfiable system") {
+    // iter-87: XOLVER_NIA_MODULAR_MODULI override. A satisfiable case must
+    // stay SAT regardless of which moduli the user injects. The modular
+    // refuter is UNSAT-only; any moduli that misclassify SAT→UNSAT would
+    // be a soundness bug, not a tunability feature.
+    //
+    // x = 3, y = 5: x*y = 15, x+y = 8. Trivially SAT.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (= (* x y) 15))\n"
+        "(assert (= (+ x y) 8))\n"
+        "(check-sat)\n"
+    );
+    setenv("XOLVER_NIA_MODULAR_MODULI", "2,3,5,7,11,13", 1);
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    // Defensive: invalid moduli (e.g. m=1 which is not bounded by parser)
+    // would silently fall back to defaults — never produce wrong UNSAT.
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: malformed moduli env var falls back gracefully") {
+    // iter-87: XOLVER_NIA_MODULAR_MODULI parser must reject bogus values
+    // (out-of-range, non-numeric tail) gracefully — never crash, never
+    // misclassify. Tests defensive fallback to default moduli list.
+    //
+    // Same satisfiable case as above; just verify the parser handles junk.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (= (* x y) 15))\n"
+        "(assert (= (+ x y) 8))\n"
+        "(check-sat)\n"
+    );
+    setenv("XOLVER_NIA_MODULAR_MODULI", "abc,999999,not_a_number", 1);
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
