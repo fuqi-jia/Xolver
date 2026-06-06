@@ -620,6 +620,7 @@ bool CandidateModelSearch::runStrategy10d() {
     // formula symmetry).
     static constexpr int diagonalValues[] = {0, 1, -1, 2, -2};
     for (int c : diagonalValues) {
+        if (std::chrono::steady_clock::now() > deadline_) return false;
         std::unordered_map<std::string, mpq_class> partial;
         for (const auto& v : vars_) partial[v.name] = mpq_class(c);
         if (tryAcceptCandidate(partial, "10d-symmetric")) return true;
@@ -630,6 +631,7 @@ bool CandidateModelSearch::runStrategy10d() {
 bool CandidateModelSearch::runStrategy10c() {
     // Boundary points for variables with active integer bounds.
     for (const auto& v : vars_) {
+        if (std::chrono::steady_clock::now() > deadline_) return false;
         auto it = activeBounds_.find(v.name);
         if (it == activeBounds_.end()) continue;
         const auto& b = it->second;
