@@ -35,8 +35,11 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
                   << " arith=" << (vars_.size() - napp) << "\n";
     }
 
-    buildPriorityList();
+    // Bounds BEFORE the priority list: buildPriorityList collapses a variable
+    // forced to a single value (lower==upper, e.g. from (= v c)) to a singleton,
+    // so the enumeration is over genuinely-free vars only.
     detectActiveBounds();
+    buildPriorityList();
 
     // Run strategies in order. Each returns true if a validated witness
     // was found (early termination).
@@ -398,6 +401,18 @@ void CandidateModelSearch::buildPriorityList() {
                 continue;
             }
             // free app: fall through to full enumeration below.
+        } else {
+            // An arith var FORCED to a single value (lower==upper, e.g. from
+            // (= v c) or v<=c & v>=c) is not part of the search — enumerate it as
+            // a SINGLETON so the Cartesian product is over genuinely-free vars
+            // only. Sound: the constraint requires exactly that value.
+            auto bit = activeBounds_.find(var.name);
+            if (bit != activeBounds_.end() && bit->second.lower && bit->second.upper
+                && *bit->second.lower == *bit->second.upper
+                && !(var.sort == ir_.intSortId() && bit->second.lower->get_den() != 1)) {
+                perVar_[i].push_back(*bit->second.lower);
+                continue;
+            }
         }
         // Per-variable list = shared priority filtered by sort. Int-sorted
         // variables only receive integer-valued candidates.
