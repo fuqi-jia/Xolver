@@ -1,4 +1,5 @@
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
+#include <cstdlib>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -83,9 +84,31 @@ NiaReasoningResult GroebnerIdealReasoner::run(
     // timeout). The 1∈ideal contradiction is also vanishingly unlikely in such
     // large systems. Restrict to small systems where it is cheap and useful.
     {
+        // iter-82: size guard is env-overridable so users can opt in to
+        // relaxed bounds for specific case classes (e.g. leipzig term-unsat-01
+        // has 18 eq / 24 vars, which the default guard skips). The default
+        // values (6 eq, 8 vars) are the iter-78 measurement-driven settings
+        // that prevent the VeryMax 22-eq/54-var SAT-case TO. UNSAT-only
+        // soundness invariant unchanged.
+        static const size_t kMaxEq = [] {
+            const char* e = std::getenv("XOLVER_NIA_GROBNER_MAX_EQ");
+            if (e && *e) {
+                long v = std::strtol(e, nullptr, 10);
+                if (v > 0 && v <= 1000) return static_cast<size_t>(v);
+            }
+            return size_t(6);
+        }();
+        static const size_t kMaxVars = [] {
+            const char* e = std::getenv("XOLVER_NIA_GROBNER_MAX_VARS");
+            if (e && *e) {
+                long v = std::strtol(e, nullptr, 10);
+                if (v > 0 && v <= 100) return static_cast<size_t>(v);
+            }
+            return size_t(8);
+        }();
         std::set<std::string> vs;
         for (PolyId g : G) for (const auto& v : kernel_.variables(g)) vs.insert(v);
-        if (G.size() > 6 || vs.size() > 8) return noChange;
+        if (G.size() > kMaxEq || vs.size() > kMaxVars) return noChange;
     }
 
     auto monoOfTerm = [](const PolynomialKernel::MonomialTerm& t) -> Mono {
