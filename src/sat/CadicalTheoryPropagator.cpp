@@ -1,5 +1,6 @@
 #include "sat/CadicalTheoryPropagator.h"
 #include "sat/CadicalBackend.h"
+#include "util/SolveClock.h"
 #include <cassert>
 #include <iostream>
 #include <iomanip>
@@ -349,6 +350,22 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 int CadicalTheoryPropagator::cb_propagate() {
     ++stats_.propagateCallCount;
     if (abortWithUnknown_ || hasPendingClause_) return 0;
+
+    // Wall-clock budget guard. If the solve's deadline has passed, abort to
+    // Unknown cleanly rather than letting a divergent theory/combination loop
+    // spin past the budget (such a loop otherwise ignores SIGTERM, requiring a
+    // hard kill — e.g. the array+NIA GrandProduct combination divergence).
+    // Sound: Unknown is always a safe verdict. Default-INERT: remainingMs()
+    // returns NO_DEADLINE (-1) when no budget is set (XOLVER_WALLCLOCK_MS unset
+    // / <=0), so hasDeadline() is false and this guard never fires by default —
+    // verdicts and timing are unchanged unless the user opts into a budget.
+    if (wall::hasDeadline() && wall::remainingMs() == 0) {
+        writeReason(unknownReasonSink_,
+                    "wall-clock budget exceeded — aborted to Unknown");
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
 
     // Throttle: avoid calling theory check on every propagate step.
     // Standard-effort LP checks are expensive; only run them when the
