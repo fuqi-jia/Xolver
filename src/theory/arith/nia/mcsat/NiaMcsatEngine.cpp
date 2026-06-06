@@ -15,6 +15,8 @@
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/LinearFormKey.h"
 
 #include <algorithm>
 #include <optional>
@@ -30,11 +32,13 @@ void NiaMcsatEngine::reset() {
     asserted_.clear();
     varOrderCache_.clear();
     varOrderCacheValid_ = false;
+    integralitySplitBudget_ = 5000;   // per-solve; only reset() refills it
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
     realRelaxTried_ = false;
     pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
@@ -46,6 +50,7 @@ void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
     cachedAssignmentSucceeded_ = false;
     realRelaxTried_ = false;
     pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 void NiaMcsatEngine::onBacktrack(int targetLevel) {
@@ -58,6 +63,7 @@ void NiaMcsatEngine::onBacktrack(int targetLevel) {
     cachedAssignmentSucceeded_ = false;
     realRelaxTried_ = false;
     pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 std::unordered_set<VarId> NiaMcsatEngine::collectVariables_() const {
@@ -368,11 +374,50 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
                 for (const auto& a : asserted_) blocking.push_back(a.atom);
                 return mcsat::ValueChoice::conflict(std::move(blocking));
             }
+            // (c) Integrality branching: the real relaxation is FEASIBLE but its
+            // model may be non-integer. Emit the split  v ≤ ⌊α⌋ ∨ v ≥ ⌊α⌋+1  for
+            // the first non-integer coordinate — a tautology over the integers
+            // (sound to add) that forces the SAT side out of the (⌊α⌋,⌊α⌋+1) gap
+            // and re-solves the tightened problem. This is the B&B step that lets
+            // the integer-NLSAT loop refute real-SAT / integer-UNSAT systems the
+            // structural refuters miss (e.g. x·y=1 ∧ x+y=3). A per-solve budget
+            // bounds the splits so a wiring gap degrades to Unknown, never a hang.
+            if (cd.status == CdcacStatus::Sat && cd.model && registry_ &&
+                integralitySplitBudget_ > 0) {
+                const SamplePoint& m = *cd.model;
+                for (size_t i = 0; i < m.varOrder.size() && i < m.values.size(); ++i) {
+                    const RealAlg& ra = m.values[i];
+                    if (!ra.isRational()) continue;       // algebraic coord — future work
+                    const mpq_class& q = ra.rational;
+                    if (q.get_den() == 1) continue;       // already integer
+                    VarId v = m.varOrder[i];
+                    mpz_class fl;
+                    mpz_fdiv_q(fl.get_mpz_t(), q.get_num().get_mpz_t(),
+                               q.get_den().get_mpz_t());
+                    LinearFormKey lhs;
+                    lhs.terms.emplace_back(std::string(kernel_->varName(v)), mpq_class(1));
+                    SatLit le = registry_->getOrCreateLinearBoundAtom(
+                        lhs, Relation::Leq, mpq_class(fl), TheoryId::NIA);
+                    SatLit ge = registry_->getOrCreateLinearBoundAtom(
+                        lhs, Relation::Geq, mpq_class(fl + 1), TheoryId::NIA);
+                    TheoryLemma lemma;
+                    lemma.lits = {le, ge};
+                    pendingLemmas_.push_back(std::move(lemma));
+                    --integralitySplitBudget_;
+                    return mcsat::ValueChoice::giveUp("NiaMcsatEngine: integrality split");
+                }
+            }
         }
     }
 
     return mcsat::ValueChoice::giveUp(
         "NiaMcsatEngine: no integer candidate survived the asserted atoms");
+}
+
+std::vector<TheoryLemma> NiaMcsatEngine::takeLemmas() {
+    std::vector<TheoryLemma> out;
+    out.swap(pendingLemmas_);
+    return out;
 }
 
 std::vector<SatLit> NiaMcsatEngine::explainConflict(

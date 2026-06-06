@@ -111,6 +111,15 @@ public:
         return {};
     }
 
+    // -------- Branching / split lemmas ----------------------------------
+
+    // Theory split lemmas the engine produced during the last pickValue (e.g. an
+    // integrality split  x ≤ ⌊α⌋ ∨ x ≥ ⌈α⌉  when the real-relaxation model gives a
+    // non-integer α). Each is a TAUTOLOGY over the theory's domain, so adding it is
+    // always sound; it forces the SAT side to branch out of the infeasible region.
+    // Drained by the framework after a GiveUp. Default: none.
+    virtual std::vector<TheoryLemma> takeLemmas() { return {}; }
+
     // -------- Conflict explanation --------------------------------------
 
     // Produce an MCSAT explanation clause: a set of SAT literals such that
