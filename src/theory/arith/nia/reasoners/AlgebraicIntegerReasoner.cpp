@@ -1,4 +1,6 @@
 #include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"  // iter-89: completeDivisors
+#include <cstdlib>
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <numeric>
 
@@ -186,50 +188,103 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
         }
     }
 
-    if (allVars.size() > 6) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+    // iter-84: var-count cap + per-modulus enumeration budget are env-overridable.
+    // Sound — UNSAT-only invariant unchanged; relaxing the caps lets the
+    // refuter attempt larger systems (potentially closing oracle-UNSAT cases
+    // that exceed the iter-79 defaults). Users / autotuner can experiment
+    // without recompiling.
+    //   XOLVER_NIA_MODULAR_MAX_VARS         (default 15, cap 50)
+    //   XOLVER_NIA_MODULAR_MAX_ENUM         (default 50000, cap 1,000,000)
+    static const size_t kVarCap = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_VARS");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 50) return static_cast<size_t>(v);
+        }
+        return size_t(15);
+    }();
+    static const uint64_t kMaxEnumPerModulus = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_ENUM");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000000) return static_cast<uint64_t>(v);
+        }
+        return uint64_t(50000);
+    }();
+    if (allVars.size() > kVarCap) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 
     std::vector<std::string> vars(allVars.begin(), allVars.end());
-    const int moduli[] = {2, 3, 4, 5, 7, 8, 9, 11};
 
-    for (int m : moduli) {
+    // iter-87: moduli list is env-overridable for autotuner. Default set
+    // {2, 3, 4, 5, 7, 8, 9, 11} covers small primes + small 2^k/3^k composites
+    // — chosen for catching parity, mod-3 squares-only-{0,1}, and pow-2/3
+    // factor contradictions. XOLVER_NIA_MODULAR_MODULI parses a
+    // comma-separated list, e.g. "2,3,5,7,11,13" for wider prime coverage.
+    // Each modulus is gated by m^N ≤ kMaxEnumPerModulus per the loop below,
+    // so adding large moduli (e.g. 13) safely skips at N>4 without changing
+    // smaller-N behavior. Soundness invariant unchanged: UNSAT-only.
+    static const std::vector<int> moduliVec = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MODULI");
+        if (e && *e) {
+            std::vector<int> out;
+            const char* p = e;
+            while (*p) {
+                char* end = nullptr;
+                long v = std::strtol(p, &end, 10);
+                if (end == p) break;
+                if (v >= 2 && v <= 100) out.push_back(static_cast<int>(v));
+                p = end;
+                if (*p == ',') ++p;
+            }
+            if (!out.empty()) return out;
+        }
+        return std::vector<int>{2, 3, 4, 5, 7, 8, 9, 11};
+    }();
+
+    // iter-79: generalize from {1,2}-var hardcoded loops to N-var iterative
+    // digit-counter enumeration. Sound: same residue-search semantics, just
+    // wider variable count. Hard cap on total enumerations per (modulus, varCount)
+    // to keep the worst case bounded — 50000 tuples × #constraints per modulus
+    // (default; tunable via XOLVER_NIA_MODULAR_MAX_ENUM).
+    const size_t N = vars.size();
+
+    for (int m : moduliVec) {
+        // Tractability gate: skip this modulus if m^N exceeds the per-modulus cap.
+        uint64_t enumSize = 1;
+        bool overflow = false;
+        for (size_t i = 0; i < N; ++i) {
+            if (enumSize > kMaxEnumPerModulus / (uint64_t)m) { overflow = true; break; }
+            enumSize *= (uint64_t)m;
+        }
+        if (overflow) continue;
+
         bool anySatisfies = false;
+        std::vector<int> digits(N, 0);  // current residue tuple
 
-        if (vars.size() == 1) {
-            for (int r = 0; r < m; ++r) {
-                bool allSatisfied = true;
-                for (const auto& c : equalities) {
-                    IntegerModel model;
-                    model[vars[0]] = mpz_class(r);
-                    auto valOpt = kernel_.evalInteger(c.poly, model);
-                    if (!valOpt) { allSatisfied = false; break; }
-                    if (*valOpt % m != 0) { allSatisfied = false; break; }
-                }
-                if (allSatisfied) {
-                    anySatisfies = true;
-                    break;
-                }
+        while (true) {
+            // Build model for current digit tuple
+            IntegerModel model;
+            for (size_t i = 0; i < N; ++i) {
+                model[vars[i]] = mpz_class(digits[i]);
             }
-        } else if (vars.size() == 2) {
-            for (int r1 = 0; r1 < m; ++r1) {
-                for (int r2 = 0; r2 < m; ++r2) {
-                    bool allSatisfied = true;
-                    for (const auto& c : equalities) {
-                        IntegerModel model;
-                        model[vars[0]] = mpz_class(r1);
-                        model[vars[1]] = mpz_class(r2);
-                        auto valOpt = kernel_.evalInteger(c.poly, model);
-                        if (!valOpt) { allSatisfied = false; break; }
-                        if (*valOpt % m != 0) { allSatisfied = false; break; }
-                    }
-                    if (allSatisfied) {
-                        anySatisfies = true;
-                        break;
-                    }
-                }
-                if (anySatisfies) break;
+
+            // Check every equality satisfied at this residue assignment
+            bool allSatisfied = true;
+            for (const auto& c : equalities) {
+                auto valOpt = kernel_.evalInteger(c.poly, model);
+                if (!valOpt) { allSatisfied = false; break; }
+                if (*valOpt % m != 0) { allSatisfied = false; break; }
             }
-        } else {
-            continue;
+            if (allSatisfied) { anySatisfies = true; break; }
+
+            // Increment digit counter (LSB-first), m-base
+            size_t pos = 0;
+            while (pos < N) {
+                if (++digits[pos] < m) break;
+                digits[pos] = 0;
+                ++pos;
+            }
+            if (pos == N) break;  // overflowed → exhausted all tuples
         }
 
         if (!anySatisfies) {
@@ -243,6 +298,118 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
         }
     }
 
+    return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+}
+
+// iter-89: bilinear factor restriction. For an equality `coeff*x*y = -const`
+// (single bilinear monomial + constant term), restrict x's and y's domains
+// to ±divisors(|const/coeff|). Sound: x*y = c (integer) forces x ∈ divisors(c).
+// The set is a sound superset; BoundedNiaSolver checks x*y == c per pair.
+//
+// Default-OFF via XOLVER_NIA_BILINEAR_FACTOR (matches Step 5 opt-in pattern).
+// Divisor enumeration uses UnivariateIntegerReasoner::completeDivisors; only
+// fires when the divisor set is fully enumerated (complete=true). Skips when:
+//   - |const/coeff| > XOLVER_NIA_BILINEAR_FACTOR_MAX_C (default 10000)
+//   - divisor count > XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV (default 64)
+//   - division const/coeff is not exact (then it's not a valid integer
+//     factoring — falls through silently)
+NiaReasoningResult AlgebraicIntegerReasoner::checkBilinearFactor(
+    const std::vector<NormalizedNiaConstraint>& equalities,
+    DomainStore& domains) {
+
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+
+    static const mpz_class kMaxC = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_C");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000000) return mpz_class(v);
+        }
+        return mpz_class(10000);
+    }();
+    static const size_t kMaxDiv = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000) return static_cast<size_t>(v);
+        }
+        return size_t(64);
+    }();
+
+    bool updated = false;
+
+    for (const auto& c : equalities) {
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        if (termsOpt->size() != 2) continue;  // need exactly one monomial + constant term
+
+        const PolynomialKernel::MonomialTerm* bilinearTerm = nullptr;
+        const PolynomialKernel::MonomialTerm* constantTerm = nullptr;
+        for (const auto& t : *termsOpt) {
+            if (t.powers.empty()) constantTerm = &t;
+            else bilinearTerm = &t;
+        }
+        if (!bilinearTerm || !constantTerm) continue;
+
+        // iter-91: extended to multilinear — k variables each with exponent 1
+        // (k = 2 was the original iter-89 bilinear case). For k >= 3 the same
+        // divisor argument applies: if x_i * x_j * ... = c (integers), then
+        // each x_i divides c (since the remaining product is integer = c/x_i).
+        // Sound: domain restriction to ±divisors(|c|) per variable; the
+        // equality filters wrong tuples in BoundedNiaSolver. We cap k <= 4 to
+        // keep BoundedNiaSolver's enumeration tractable (the product of per-
+        // variable finite domains is divisors^k).
+        if (bilinearTerm->powers.size() < 2 || bilinearTerm->powers.size() > 4) continue;
+        {
+            bool allLinear = true;
+            for (const auto& [v, exp] : bilinearTerm->powers) {
+                (void)v;
+                if (exp != 1) { allLinear = false; break; }
+            }
+            if (!allLinear) continue;
+        }
+        if (bilinearTerm->coefficient == 0) continue;
+
+        // Equation: coeff * x * y + const_term = 0  →  x * y = -const_term / coeff
+        // Require exact integer division (else this is not a valid factoring).
+        mpz_class neg_const = -constantTerm->coefficient;
+        if (neg_const % bilinearTerm->coefficient != 0) continue;
+        mpz_class c_val = neg_const / bilinearTerm->coefficient;
+
+        // Tractability gates.
+        if (abs(c_val) > kMaxC) continue;
+
+        // c_val == 0 is handled by checkFactorDirectConflict (xy=0 with x≠0 ∧ y≠0).
+        if (c_val == 0) continue;
+
+        bool complete = true;
+        std::set<mpz_class> divs = UnivariateIntegerReasoner::completeDivisors(c_val, complete);
+        if (!complete) continue;  // unknown divisor set → can't sound-restrict
+
+        // Build ±divisor set. Soundness: x | c forces x ∈ {±d : d | |c|}.
+        std::set<mpz_class> signed_divs;
+        for (const auto& d : divs) {
+            signed_divs.insert(d);
+            signed_divs.insert(-d);
+        }
+        if (signed_divs.size() > kMaxDiv) continue;
+
+        // iter-91: restrict ALL k variables (was bilinear-only x,y in iter-89).
+        // Each var_i | c, so the same signed_divs set bounds every variable
+        // in the multilinear monomial. The reason is the single equality.
+        for (const auto& [varId, exp] : bilinearTerm->powers) {
+            (void)exp;
+            std::string vname = std::string(kernel_.varName(varId));
+            domains.restrictToFiniteSet(vname, signed_divs, c.reason);
+        }
+        updated = true;
+    }
+
+    if (updated) return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
@@ -277,6 +444,11 @@ NiaReasoningResult AlgebraicIntegerReasoner::run(
     // Factor direct conflict (e.g. xy=0 ∧ x≠0 ∧ y≠0 → UNSAT)
     r = checkFactorDirectConflict(constraints);
     if (r.kind == NiaReasoningKind::Conflict) return r;
+
+    // iter-89: bilinear factor restriction — x*y=c → x,y ∈ ±divisors(c).
+    // Default-OFF via XOLVER_NIA_BILINEAR_FACTOR; sound domain restriction.
+    r = checkBilinearFactor(equalities, domains);
+    if (r.kind == NiaReasoningKind::DomainUpdated) updated = true;
 
     if (updated) {
         return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};

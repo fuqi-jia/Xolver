@@ -217,21 +217,57 @@ SatLit Atomizer::encodeBoolDistinct(ExprId eid, const CoreIr& ir) {
 // that must be routed to the EUF solver (which owns the shared egraph and the
 // array reasoner); a pure-arith atom over shared index terms instead routes to
 // the arith theory / shared-equality mechanism.
-static bool containsArrayOrUf(ExprId root, const CoreIr& ir) {
-    std::vector<ExprId> stack{root};  // iterative DFS (deep-term overflow guard)
+// iter-100 perf: ExprId-level memoization. Without caching, DAG-shared
+// subtrees were re-walked on every Eq/Distinct routing decision. For
+// combination-logic formulas with massive DAG sharing (Dartagnan-class:
+// 5 root assertions, 17K+ distinct sub-expressions), the same sub-
+// expression could be DFS-walked many times across routing calls.
+// Two-color memo on ExprId:
+//   present-and-true  → known has-UF/array
+//   present-but-false → known clean (UF/array-free) subtree
+// Cache is per-atomizer-call by ExprId; ExprIds are hash-cons stable
+// for the duration of a single solve so the memo is referentially sound.
+static bool containsArrayOrUf(ExprId root, const CoreIr& ir,
+                              std::unordered_map<uint32_t, bool>& memo) {
+    auto memoIt = memo.find(root);
+    if (memoIt != memo.end()) return memoIt->second;
+
+    // Local visited set so the iterative DFS doesn't re-push already-seen
+    // children within THIS top-level call (cheap shared-subterm prune).
+    std::unordered_set<uint32_t> visited;
+    std::vector<ExprId> stack{root};
     while (!stack.empty()) {
-        const auto& e = ir.get(stack.back());
+        ExprId cur = stack.back();
         stack.pop_back();
+        if (!visited.insert(cur).second) continue;
+
+        // Inner cache hit? Propagate eagerly.
+        auto inner = memo.find(cur);
+        if (inner != memo.end()) {
+            if (inner->second) {
+                memo[root] = true;
+                return true;
+            }
+            continue;  // known clean — don't re-walk children
+        }
+
+        const auto& e = ir.get(cur);
         if (e.kind == Kind::UFApply || e.kind == Kind::Select ||
             e.kind == Kind::Store || e.kind == Kind::ConstArray ||
-            // Datatype operators are also EUF-owned (DtReasoner on the shared
-            // egraph), so an atom mentioning one routes to EUF in combination.
+            // Datatype operators are also EUF-owned (DtReasoner on the
+            // shared egraph), so an atom mentioning one routes to EUF.
             e.kind == Kind::Constructor || e.kind == Kind::Selector ||
             e.kind == Kind::Tester) {
+            memo[cur] = true;
+            memo[root] = true;
             return true;
         }
         for (ExprId child : e.children) stack.push_back(child);
     }
+
+    // All reachable subterms walked, no UF/array. Cache result for every
+    // visited ExprId so future calls short-circuit.
+    for (uint32_t v : visited) memo.emplace(v, false);
     return false;
 }
 
@@ -428,7 +464,7 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                     // over shared (index/bridge) terms route to the arith
                     // theory; equalities whose operands are both shared terms
                     // were already handled above via the shared-eq mechanism.
-                    bool hasArrayOrUf = containsArrayOrUf(eid, ir);
+                    bool hasArrayOrUf = containsArrayOrUf(eid, ir, containsArrayOrUfMemo_);
                     if (hasArrayOrUf) {
                         targetTheory = TheoryId::EUF;
                     } else {

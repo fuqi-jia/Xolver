@@ -408,13 +408,21 @@ ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b) {
         std::vector<SatLit> acc;
     };
 
+    // iter-103 perf: per-call hash-set dedup instead of O(|dst|×|src|) linear
+    // scan. Each dedupAppend call works on its own dst, so we cannot share a
+    // dedupKeys state across calls. Sound: the output `dst` contains exactly
+    // the same literal SET in the same insertion order; only the membership
+    // check is faster. Saves O(|dst|²) per call for the typical pattern
+    // where dst is built up incrementally.
     auto dedupAppend = [](std::vector<SatLit>& dst, const std::vector<SatLit>& src) {
+        std::unordered_set<uint64_t> seen;
+        seen.reserve(dst.size() + src.size());
+        for (SatLit r : dst) {
+            seen.insert((static_cast<uint64_t>(r.var) << 1) | (r.sign ? 1u : 0u));
+        }
         for (SatLit lit : src) {
-            bool found = false;
-            for (SatLit r : dst) {
-                if (r.var == lit.var && r.sign == lit.sign) { found = true; break; }
-            }
-            if (!found) dst.push_back(lit);
+            uint64_t k = (static_cast<uint64_t>(lit.var) << 1) | (lit.sign ? 1u : 0u);
+            if (seen.insert(k).second) dst.push_back(lit);
         }
     };
 

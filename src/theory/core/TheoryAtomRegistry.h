@@ -84,6 +84,10 @@ private:
 
     std::vector<TheoryAtomRecord> records_;
     std::unordered_map<SatVar, size_t> satVarToIdx_;
+    // iter-101 perf: mirror index by ExprId for O(1) lookup. Multiple records
+    // can share an ExprId (e.g. dynamic atom registration); store all indices.
+    // Populated alongside satVarToIdx_ at every records_.push_back site.
+    std::unordered_map<uint32_t, std::vector<size_t>> exprIdToIdxs_;
     std::unordered_set<SatVar> observedVars_;
 
     struct LinearLookupKey {

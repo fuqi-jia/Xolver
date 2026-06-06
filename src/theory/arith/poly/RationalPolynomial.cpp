@@ -223,6 +223,19 @@ RationalPolynomial& RationalPolynomial::operator-=(
     return *this;
 }
 
+RationalPolynomial& RationalPolynomial::appendTerms(
+    const RationalPolynomial& other, bool negate) {
+    // Append-only: NO canonicalize here. Caller batches appends then normalizes
+    // once. Building a sum of M monomials via operator+= re-sorts the growing
+    // accumulator every step (O(M^2 log M)); this makes it O(M) appends + one
+    // O(M log M) sort. terms_ is left non-canonical until normalize().
+    terms_.reserve(terms_.size() + other.terms_.size());
+    for (const auto& [key, coeff] : other.terms_) {
+        terms_.append(key, negate ? mpq_class(-coeff) : coeff);
+    }
+    return *this;
+}
+
 RationalPolynomial& RationalPolynomial::operator*=(const mpq_class& scalar) {
     if (scalar == 0) {
         terms_.clear();
@@ -383,11 +396,18 @@ std::optional<RationalPolynomial> RationalPolynomial::fromPolyId(
     if (!termsOpt) return std::nullopt;
 
     RationalPolynomial rp;
+    rp.terms_.reserve(termsOpt->size());
     for (const auto& term : *termsOpt) {
-        // kernel terms expose powers as std::vector; build a MonomialKey
-        // (SmallVector) from it for addTerm.
+        mpq_class c(term.coefficient);
+        if (c == 0) continue;
+        // O(1) APPEND of the canonicalized key, NOT addTerm's terms_[key]+=coeff
+        // (an O(n) sorted insert). Building an N-monomial poly term-by-term via
+        // addTerm is O(N^2); the single normalize() below sorts+merges duplicates
+        // for the same canonical result in O(N log N). fromPolyId is the
+        // projection hot path (principalSubresultantCoefficients/lazardProjectStep
+        // rebuild polys here) — O(N^2) here stalled high-monomial inputs (kissing).
         MonomialKey key(term.powers.begin(), term.powers.end());
-        rp.addTerm(key, mpq_class(term.coefficient));
+        rp.terms_.append(canonicalizeMonomialKey(std::move(key)), std::move(c));
     }
     rp.normalize();
     return rp;
@@ -554,16 +574,17 @@ RationalPolynomial RationalPolynomial::pseudoRemainder(VarId v, const RationalPo
         }
     }
 
-    // Reconstruct remainder polynomial
+    // Reconstruct remainder polynomial. Append each canonicalized key O(1)
+    // (NOT addTerm's terms_[key]+=coeff O(n) sorted insert) and let the single
+    // normalize() below sort+merge once — same O(N^2)->O(N log N) class as the
+    // fromPolyId fix, on the pseudo-remainder / subresultant-chain path.
     RationalPolynomial result;
     for (size_t i = 0; i < rem.size(); ++i) {
         if (rem[i].isZero()) continue;
         for (const auto& [key, coeff] : rem[i].terms()) {
-            // SmallVector has no insert(); append {v, i} and let addTerm's
-            // canonicalizeMonomialKey re-sort/merge (i==0 -> exp 0 dropped).
             MonomialKey newKey = key;
             newKey.push_back({v, static_cast<int>(i)});
-            result.addTerm(newKey, coeff);
+            result.terms_.append(canonicalizeMonomialKey(std::move(newKey)), coeff);
         }
     }
     result.normalize();
@@ -582,15 +603,22 @@ std::set<VarId> RationalPolynomial::variables() const {
 }
 
 int RationalPolynomial::highestVariableLevel(const std::vector<VarId>& varOrder) const {
+    // iter-106 perf: build VarId → index map ONCE, then O(1) lookup per var.
+    // Was O(|vars| × |varOrder|); now O(|varOrder| + |vars|). Called from NRA
+    // Lazard / projection closure per polynomial during CAD construction —
+    // multiplies with the polynomial count.
+    std::unordered_map<uint32_t, int> indexOf;
+    indexOf.reserve(varOrder.size());
+    for (size_t i = 0; i < varOrder.size(); ++i) {
+        // For unique-order varOrder (typical), "first match wins" via emplace
+        // matches the original loop's break-on-first semantics.
+        indexOf.emplace(varOrder[i], static_cast<int>(i));
+    }
     int highest = -1;
     auto vars = variables();
     for (VarId v : vars) {
-        for (size_t i = 0; i < varOrder.size(); ++i) {
-            if (varOrder[i] == v) {
-                highest = std::max(highest, static_cast<int>(i));
-                break;
-            }
-        }
+        auto it = indexOf.find(v);
+        if (it != indexOf.end() && it->second > highest) highest = it->second;
     }
     return highest;
 }

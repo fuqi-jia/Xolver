@@ -33,6 +33,9 @@ namespace xolver {
 void NiaSolver::setCoreIr(const CoreIr* ir) {
     coreIr_ = ir;
     bbArrayGate_ = -1;  // recompute array-presence for the new IR (bit-blast gate)
+    // Track A Phase 1.3: forward CoreIr to the ModEqConstReasoner so its
+    // Variable-name extraction has access to expression nodes.
+    modEqConst_.setCoreIr(ir);
     // Farkas-Or Phase 0: env-gated structural dump. Bypasses std::cerr
     // (which xolver-cli silently consumes); writes to the file named by
     // XOLVER_NIA_FARKAS_DUMP_FILE if set, else /tmp/farkas_dump.
@@ -82,7 +85,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       bitBlast_(*kernel_),
       productPositivity_(*kernel_),
       gcdDivisibility_(*kernel_),
-      modularResidue_(*kernel_) {
+      modularResidue_(*kernel_),
+      groebner_(*kernel_),
+      modEqConst_(*kernel_, /*ir=*/nullptr) {
+    // modEqConst_'s CoreIr* is set in setCoreIr(); until then run() returns
+    // NoChange (defensive — no fact processing happens before setCoreIr).
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -116,6 +123,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
     add("nia.dispatch-cache", &NiaSolver::stageDispatchCacheLookup);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    // Track A Phase 1.3 — native (mod x y) = c reasoner. Runs early so its
+    // bound narrowings feed downstream linear/domain stages. Default-OFF via
+    // XOLVER_NIA_NATIVE_MODEQCONST.
+    add("nia.mod-eq-const",   &NiaSolver::stageNativeModEqConst);
     // Phase 3b (XOLVER_NIA_BOUNDED_PARTIAL_EARLY, default-OFF). Run the
     // partial bounded enumerator EARLY, right after normalize, before
     // any of the heavy per-propagation stages. On QF_ANIA / QF_AUFNIA /
@@ -192,6 +203,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
+    add("nia.groebner",       &NiaSolver::stageGroebner);
     add("nia.icp",            &NiaSolver::stageIcp);
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
@@ -300,6 +312,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // L3 modular residue refutation (default-ON). Sound: only emits UNSAT,
     // and only when the system has no solution modulo a constant power-of-two
     // modulus (an integer solution would project to one) — invariant 7.
+
+    // Polynomial-ideal saturation (default-OFF). Sound: 1∈ideal ⇒ no ℂ-root ⇒
+    // no ℤ-root ⇒ UNSAT (Nullstellensatz direction); bounded Buchberger.
+    // iter-77 cherry-pick of 7afeda9 — Step 5 Gröbner-lite (env var renamed
+    // ZOLVER_* → XOLVER_* to match this branch's naming convention).
+    if (const char* e = std::getenv("XOLVER_NIA_GROBNER"); e && *e && *e != '0')
+        enableGroebner_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-ON).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
@@ -1316,6 +1335,62 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
         modularLastSignature_ = computeSignature();
         modularLastWasNoChange_ = true;
         modularSignatureValid_ = true;
+    }
+    return std::nullopt;
+}
+
+void NiaSolver::setModEqConstFacts(ModEqConstFactList facts) {
+    // Track A Phase 1.3 — Solver::Impl hands off facts captured from
+    // IntDivModLowerer here. Each fact's `reason` SatLit is still
+    // unset (atomization is done after preprocess); the stage method
+    // resolves it via TheoryAtomRegistry per call.
+    modEqConstFacts_ = std::move(facts);
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
+    TheoryLemmaStorage&, TheoryEffort) {
+    // Track A Phase 1.3 — bridge fact list to ModEqConstReasoner.
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (modEqConstFacts_.empty()) return std::nullopt;
+    if (!registry_) return std::nullopt;
+
+    // Build a per-call snapshot of facts with `reason` resolved via the
+    // TheoryAtomRegistry. Skip any fact whose atom is not currently asserted
+    // true on the SAT trail.
+    ModEqConstFactList active;
+    active.reserve(modEqConstFacts_.size());
+    for (const auto& src : modEqConstFacts_) {
+        auto satVarOpt = registry_->findSatVarByExprId(src.atomExpr);
+        if (!satVarOpt) continue;
+        SatVar var = *satVarOpt;
+        // Need positive polarity asserted (fact `(= (mod x y) c)` is true
+        // only when the SAT layer has set the atom to true). The active
+        // literal set tracks current-level asserted lits.
+        SatLit posLit{var, /*sign=*/false};
+        if (!activeSet_.contains(posLit)) continue;
+        ModEqConstFact f = src;
+        f.reason = posLit;
+        active.push_back(std::move(f));
+    }
+    if (active.empty()) return std::nullopt;
+
+    auto r = modEqConst_.run(active, domains_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    // DomainUpdated / NoChange both fall through to the next stage.
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageGroebner(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableGroebner_) return std::nullopt;
+    auto r = groebner_.run(normalized_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
     }
     return std::nullopt;
 }

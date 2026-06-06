@@ -85,49 +85,150 @@ void UnconstrainedElim::prepare() {
     }
 }
 
+bool UnconstrainedElim::varOccursIn(const std::string& name, ExprId root) const {
+    std::vector<ExprId> stack{root};
+    std::unordered_set<ExprId> seen;
+    while (!stack.empty()) {
+        ExprId e = stack.back();
+        stack.pop_back();
+        if (!seen.insert(e).second) continue;
+        const auto& node = ir_.get(e);
+        if (node.kind == Kind::Variable) {
+            if (auto* nm = std::get_if<std::string>(&node.payload.value)) {
+                if (*nm == name) return true;
+            }
+        }
+        for (ExprId c : node.children) stack.push_back(c);
+    }
+    return false;
+}
+
+bool UnconstrainedElim::findDropAction(ExprId e, bool target, DropAction& out) const {
+    const auto& node = ir_.get(e);
+
+    // Not: invert target and recurse.
+    if (node.kind == Kind::Not) {
+        if (node.children.size() != 1) return false;
+        return findDropAction(node.children[0], !target, out);
+    }
+
+    // Or: target=true is monotone (any disjunct can be the witness).
+    // target=false would require ALL disjuncts to be falsifiable with
+    // non-overlapping witnesses — skip (conservative).
+    if (node.kind == Kind::Or) {
+        if (!target) return false;
+        for (ExprId c : node.children) {
+            if (findDropAction(c, true, out)) return true;
+        }
+        return false;
+    }
+
+    // And: target=false is monotone (any conjunct false ⇒ and false).
+    // target=true requires all conjuncts true — skip.
+    if (node.kind == Kind::And) {
+        if (target) return false;
+        for (ExprId c : node.children) {
+            if (findDropAction(c, false, out)) return true;
+        }
+        return false;
+    }
+
+    // Atom-level: Eq, Distinct, Lt, Leq, Gt, Geq.
+    bool isEq = (node.kind == Kind::Eq);
+    bool isDistinct = (node.kind == Kind::Distinct);
+    bool isRel = (node.kind == Kind::Lt || node.kind == Kind::Leq ||
+                  node.kind == Kind::Gt || node.kind == Kind::Geq);
+    if (!isEq && !isDistinct && !isRel) return false;
+    if (node.children.size() != 2) return false;
+
+    ExprId lhs = node.children[0], rhs = node.children[1];
+    std::string varName;
+    ExprId bound = NullExpr;
+    bool xIsLeft = false;
+    if (auto n = asNumericVar(lhs)) { varName = *n; bound = rhs; xIsLeft = true; }
+    else if (auto n2 = asNumericVar(rhs)) { varName = *n2; bound = lhs; xIsLeft = false; }
+    else return false;
+
+    if (occ_.count(varName) == 0 || occ_.at(varName) != 1) return false;
+    if (unsafe_.count(varName)) return false;
+    // Defensive: ensure the var truly does not appear in `bound`. (Should be
+    // implied by occ==1 since the only occurrence is the var-side, but the
+    // count is structural — a shared DAG node could double-count us.)
+    if (varOccursIn(varName, bound)) return false;
+
+    SortId sort = ir_.get(xIsLeft ? lhs : rhs).sort;
+    out.varName = varName;
+    out.sort = sort;
+    out.bound = bound;
+
+    if (isEq) {
+        if (target) {
+            // (= v t) → set v := t
+            out.useElim = true;
+        } else {
+            // ¬(= v t) → set v ≠ t
+            out.useElim = false;
+            out.rel = ModelConverter::Rel::Ne;
+        }
+        return true;
+    }
+
+    if (isDistinct) {
+        if (target) {
+            // (distinct v t) → set v ≠ t
+            out.useElim = false;
+            out.rel = ModelConverter::Rel::Ne;
+        } else {
+            // ¬(distinct v t) → set v = t
+            out.useElim = true;
+        }
+        return true;
+    }
+
+    // Relational: require isLinearReconstructable so the witness math is exact.
+    if (!isLinearReconstructable(bound)) return false;
+    ModelConverter::Rel relPos;
+    switch (node.kind) {
+        case Kind::Lt:  relPos = xIsLeft ? ModelConverter::Rel::Lt : ModelConverter::Rel::Gt; break;
+        case Kind::Leq: relPos = xIsLeft ? ModelConverter::Rel::Le : ModelConverter::Rel::Ge; break;
+        case Kind::Gt:  relPos = xIsLeft ? ModelConverter::Rel::Gt : ModelConverter::Rel::Lt; break;
+        case Kind::Geq: relPos = xIsLeft ? ModelConverter::Rel::Ge : ModelConverter::Rel::Le; break;
+        default: return false;
+    }
+    ModelConverter::Rel relNeg;
+    switch (relPos) {
+        case ModelConverter::Rel::Lt: relNeg = ModelConverter::Rel::Ge; break;
+        case ModelConverter::Rel::Le: relNeg = ModelConverter::Rel::Gt; break;
+        case ModelConverter::Rel::Gt: relNeg = ModelConverter::Rel::Le; break;
+        case ModelConverter::Rel::Ge: relNeg = ModelConverter::Rel::Lt; break;
+        default: relNeg = ModelConverter::Rel::Ne; break;
+    }
+    out.useElim = false;
+    out.rel = target ? relPos : relNeg;
+    return true;
+}
+
+void UnconstrainedElim::applyAction(const DropAction& a) {
+    if (a.useElim) {
+        mc_.registerElimination(a.varName, a.sort, a.bound);
+    } else {
+        mc_.registerWitness(a.varName, a.sort, a.rel, a.bound);
+    }
+}
+
 bool UnconstrainedElim::run() {
     didRun_ = true;
     eliminated_ = 0;
     dropped_.clear();
     prepare();
 
+    // Within a single run(), once we use a var as a witness in one conjunct
+    // it cannot be re-used elsewhere — but the global occ_ map already
+    // ensures occ==1 so reuse is impossible by construction.
     for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
-        const auto& node = ir_.get(conjuncts_[idx].second);
-        ModelConverter::Rel relForX;
-        bool isRel = true;
-        switch (node.kind) {
-            case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq:
-            case Kind::Distinct: break;
-            default: isRel = false; break;
-        }
-        if (!isRel || node.children.size() != 2) continue;
-
-        ExprId lhs = node.children[0], rhs = node.children[1];
-        std::string varName;
-        ExprId bound = NullExpr;
-        bool xIsLeft = false;
-        if (auto n = asNumericVar(lhs)) { varName = *n; bound = rhs; xIsLeft = true; }
-        else if (auto n2 = asNumericVar(rhs)) { varName = *n2; bound = lhs; xIsLeft = false; }
-        else continue;
-
-        // x must occur exactly once (only here), not be a shared UF/array term,
-        // and the bound must be reconstructable.
-        if (occ_[varName] != 1) continue;
-        if (unsafe_.count(varName)) continue;
-        if (!isLinearReconstructable(bound)) continue;
-
-        // Relation as it applies to x (x ⋈ bound).
-        switch (node.kind) {
-            case Kind::Lt:  relForX = xIsLeft ? ModelConverter::Rel::Lt : ModelConverter::Rel::Gt; break;
-            case Kind::Leq: relForX = xIsLeft ? ModelConverter::Rel::Le : ModelConverter::Rel::Ge; break;
-            case Kind::Gt:  relForX = xIsLeft ? ModelConverter::Rel::Gt : ModelConverter::Rel::Lt; break;
-            case Kind::Geq: relForX = xIsLeft ? ModelConverter::Rel::Ge : ModelConverter::Rel::Le; break;
-            case Kind::Distinct: relForX = ModelConverter::Rel::Ne; break;
-            default: continue;
-        }
-
-        SortId sort = ir_.get(xIsLeft ? lhs : rhs).sort;
-        mc_.registerWitness(varName, sort, relForX, bound);
+        DropAction a;
+        if (!findDropAction(conjuncts_[idx].second, /*target=*/true, a)) continue;
+        applyAction(a);
         dropped_.push_back(idx);
         ++eliminated_;
     }

@@ -45,8 +45,15 @@ bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
                           const ReasonNode& reasons) {
     value.normalize();
     // Reduce by existing substitutions so `value` is over non-eliminated vars.
+    // iter-74: track `value.variables()` so the inner check is an O(log V) set
+    // lookup on a refreshed snapshot instead of O(value terms × vars-per-term)
+    // RationalPolynomial::contains scan.
+    std::set<VarId> valueVars = value.variables();
     for (const auto& [ev, entry] : st.substMap) {
-        if (value.contains(ev)) value = substituteVar(value, ev, entry.value);
+        if (valueVars.count(ev)) {
+            value = substituteVar(value, ev, entry.value);
+            valueVars = value.variables();
+        }
     }
     value.normalize();
 
@@ -56,7 +63,9 @@ bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
     f.reasons = reasons;
     size_t fidx = st.ledger.append(f);
 
-    st.substMap[v] = PresolveState::SubstEntry{value, fidx};
+    // Refresh valueVars after final normalize (canonicalize may collapse terms).
+    valueVars = value.variables();
+    st.substMap[v] = PresolveState::SubstEntry{value, fidx, valueVars};
     if (value.isConstant()) st.fixedValues[v] = FixedVal{value.constantValue(), reasons};
 
     // Apply to every live atom containing v.
@@ -76,11 +85,17 @@ bool registerSubstitution(PresolveState& st, VarId v, RationalPolynomial value,
     }
 
     // Compose backward: eliminate v from earlier substitution values.
+    // iter-74: O(log V) per-entry vars lookup instead of O(terms × vars-per-term)
+    // RationalPolynomial::contains scan. For scull-class formulas with ~700
+    // substituted vars × thousands of atoms, this drops per-call cost from
+    // ~200ms toward the deadline budget so the CDCL(T) loop can actually
+    // make progress.
     for (auto& [ev, entry] : st.substMap) {
         if (ev == v) continue;
-        if (entry.value.contains(v)) {
+        if (entry.vars.count(v)) {
             entry.value = substituteVar(entry.value, v, value);
             entry.value.normalize();
+            entry.vars = entry.value.variables();  // refresh after rewrite
         }
     }
     return true;

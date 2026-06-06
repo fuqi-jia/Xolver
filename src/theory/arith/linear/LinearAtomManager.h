@@ -100,6 +100,12 @@ private:
 
     // Variable name -> GeneralSimplex var index
     std::unordered_map<std::string, int> varToIndex_;
+    // iter-104 perf: reverse map for O(1) getVarName instead of O(N) linear
+    // scan of varToIndex_. Populated synchronously with varToIndex_ at every
+    // getOrCreateVar call. LIA/LRA hot loops call getVarName per simplex
+    // variable when materializing conflicts and dumping models — making the
+    // reverse lookup O(1) eliminates O(N²) total cost in those loops.
+    std::unordered_map<int, std::string> indexToVar_;
 
 
 };

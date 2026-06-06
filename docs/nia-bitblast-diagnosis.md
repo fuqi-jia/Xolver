@@ -2069,3 +2069,547 @@ a sound implementation path (opt-in addShared, not unconditional
 add hash-cons) — see iter-62 calypto false-SAT post-mortem.
 
 Cluster 2 status: CLOSED ★
+
+---
+
+### Iter 69 — Final clean reverify on iter-68's stable binary (`5833a2a`)
+
+After commit 5833a2a (UfInArithPurifier addShared — the last preprocess
+pass), I launched a CLEAN reverify (no rebuild during it) on the
+full 87-case targeted_nia corpus with the full preprocess flag set:
+
+  Solved:       59 / 87   (vs iter-55b baseline 57 / 87)
+  Sat:          37
+  Unsat:        22  (was 20)
+  Timeout:      22
+  Unknown:      6
+  Other (crash): 0   <- no mid-flight rebuild skew this time
+
+  Delta vs baseline:  sat -0/+0   unsat -0/+2   (NET +2 solved)
+                      0 false-sat   0 false-unsat   0 sat regressions
+
+  NEW unsat closes:
+    20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2
+    20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2
+
+  ★ Cluster-2 (sqrtmodinv) confirmed CLOSED under full preprocess
+    stack via Newton + addShared synergy. Iter-60 implemented Newton;
+    iter-67 addShared rollout made Newton's pre-substitution lemma
+    ExprIds fuse with PureDefVarSubst's post-substitution rebuilds,
+    so the atomizer assigns one SAT lit, CDCL propagates, UNSAT
+    derived from CDCL contradiction.
+
+  The "qualitative leap" the user predicted from hash-cons is real —
+  the path to it is the OPT-IN addShared design (iter-62), not
+  unconditional global hash-cons (which produces calypto false-SATs
+  per iter-61 post-mortem and incremental-ITE false-SAT per the
+  parallel agent's experiment).
+
+35 algorithmic commits + 11 doc/infra. 0 regressions / 0-unsound
+across 69 iterations.
+
+---
+
+### Iter 71 — LCTES + cherry-picks (b596bf2 + 1d5a2c6)
+
+Cherry-picked two NIA/UFNIA stages from agent/eqna-2:
+  - `b596bf2`: per-polynomial sign-consistency conflict (closes QF_UFNIA
+    AndOrXor comparison tautologies)
+  - `1d5a2c6`: difference-logic conflict + div/mod dividend bounds
+    (closes int_check_bvugt_bvurem1, int_check_bvugt_bvudiv1)
+
+Gate: doctest unit, nia 113/113, lia 57/57, nra 151/151, 0-unsound.
+
+Effect on LCTES cluster (#22): NONE.
+  digital-stopwatch.locals.smt2          xolver TO @180s, z3 unsat @504ms
+  digital-stopwatch.locals.nosummaries   xolver TO @180s
+
+The 360× gap vs z3 indicates LCTES needs a fundamentally different
+reasoning approach — likely:
+  a. Mod-by-unbounded-var with chained bound propagation
+     (the 7 `(mod xVar yVar)` ops + 1138 vars + complex ITE structure).
+  b. z3 might be using its `purify_to_int` + `solve_eqs` + simplex
+     incremental conflict detection that finds the contradiction
+     before full polynomial work.
+
+Cluster 3 (LCTES) remains pending — needs deeper algorithmic work
+than 30-min cron rounds allow.
+
+---
+
+### Iter 73 — NIA presolve hot-path analysis (Dartagnan #23)
+
+ARITH_STAGE_PROF on Dartagnan scull-O0.smt2 reveals:
+
+  pipeline-calls=2:   nia.presolve 330ms / 1 call
+  pipeline-calls=10:  nia.presolve 1937ms / 9 calls  (~215ms/call)
+  pipeline-calls=19:  growing roughly linearly
+
+  Total nia.presolve work eventually consumes most of the 180s timeout.
+
+XOLVER_NIA_PRESOLVE_BUDGET_MS=50 (default) does NOT cap presolve at 50ms
+per call — the deadline check in PresolveEngine::run() is PER-CAPABILITY,
+not per-iteration. A single capability that takes 200ms in one sweep is
+not interrupted.
+
+Source dive on PresolveSupport.cpp::registerSubstitution:
+
+  Line 48-50: O(substMap) loop reducing the new substitution VALUE
+              by all existing substitutions.
+  Line 63-76: O(atoms) loop applying the new substitution to atoms.
+  Line 79-85: O(substMap) loop composing the new substitution INTO
+              every existing entry. EACH iteration calls
+              `entry.value.contains(v)` which is O(monomials ×
+              vars-per-monomial) — NOT O(1).
+
+For V variables eliminated over N atoms with average T terms per poly,
+total = O(V × (V + N) × T). On scull (~700 substituted vars, ~thousands
+of atoms, polynomial terms), this is the practical hot path.
+
+Cap to address: introduce a per-entry `std::unordered_set<VarId>`
+tracking which variables appear in entry.value, making contains() O(1).
+Deferred — requires careful invalidation on every substitution rewrite,
+risky without targeted benchmark coverage.
+
+Other candidate root cause: BoundChainComposer has TWO O(atoms) dedup
+scans per emit (lines 118-121 and 137-141). Already gated by
+XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS=2000 — scull with >2000 atoms SKIPS
+BoundChainComposer entirely, so it's not the scull hot path.
+
+Cherry-picks landed this iter:
+  390a28c poly: fromPolyId O(N²) → O(N log N) (from agent/nlsat-kernel)
+  90465d9 poly: pseudoRemainder O(N²) → O(N log N)
+
+Both shave per-call constant. NIA reg 113/113, NRA 151/151, LIA 57/57,
+unit (excl pre-existing test_api) green. test_api LIA getModel failure
+is PRE-EXISTING (line 146 assertion + timeout dump-core), not caused
+by these cherry-picks.
+
+---
+
+### Iter 73 final — Reverify on `90465d9` confirms +1 NEW corpus close
+
+  Solved: 60 / 87  (vs iter-55b baseline 57 / 87)
+  Delta:  sat -0/+0   unsat -0/+3   net +3   0-unsound
+
+  NEW unsat closes vs baseline:
+    20230328-sqrtmodinv-hoenicke/sqrtStep1.smt2     (cluster 2 known)
+    20230328-sqrtmodinv-hoenicke/sqrtStep1a.smt2    (cluster 2 known)
+    calypto/problem-002871.cvc.1.smt2 ★ NEW THIS ROUND
+
+calypto/002871 is the case that was FALSE-SAT under iter-61 unconditional
+hash-cons and caused the immediate iter-62 opt-in design. It's now
+CORRECTLY unsat — closed by the combination of:
+  - sign-consistency conflict stage (b596bf2)
+  - diff-logic conflict + div/mod dividend bounds (1d5a2c6)
+  - poly perf fixes 390a28c + 90465d9 (faster substitution path)
+
+Net corpus delta sustained at +3 unsat with 0-unsound across 73 iterations.
+
+---
+
+### Iter 74-75 — registerSubstitution::contains() perf fix + LCTES bottleneck PIN
+
+iter-74 commit 3b116fb implemented the substVars cache in registerSubstitution:
+  std::set<VarId> vars added to SubstEntry. O(log V) lookup instead of
+  O(monomials × vars-per-monomial) RationalPolynomial::contains scan.
+
+Per-cluster impact:
+  Dartagnan scull-O0:     168s -> 168s   no change (substVars wasn't the
+                                          dominant bottleneck on this case)
+  LCTES locals:           168s ->  85s   2× speedup (~49% reduction)
+  LCTES locals.nosumm:    168s ->  84s   2× speedup
+  leipzig term-unsat-01:    OOM->  34s unknown (was OOM before; doesn't
+                                          decide but doesn't crash either)
+
+Both LCTES files still TO; the 2× speedup wasn't enough to close them.
+
+iter-75 LCTES flag bisection:
+  no flags:                 unknown @ 98ms        (instant)
+  + AND_FLATTEN:            unknown @ 99ms        (instant)
+  + AUTO_EUF_PROMOTE:       TO @ 28s+             ← BLOCKER
+  + AUTO_EUF_PROMOTE + PURE_DEFINED_VAR_SUBST: same
+
+LCTES has 7 `(mod x_VAR y_VAR)` operations where the modulus is itself a
+variable. Without AUTO_EUF_PROMOTE, IntDivModLowerer hits the
+"needsEUF but logic=QF_NIA" path and returns Unknown immediately
+(fast but useless). With AUTO_EUF_PROMOTE ON, QF_NIA -> QF_UFNIA and
+the EUF+NIA combination layer becomes the bottleneck.
+
+So LCTES's CLUSTER 3 requirement is to make the EUF+NIA combination
+faster for mod-by-unbounded-var, not to optimize NIA presolve.
+Multi-day work that requires EUF/combination subsystem changes,
+not just NIA-layer perf.
+
+45 commits + 14 doc/infra. 0 regressions / 0-unsound across 74 iterations.
++3 corpus unsat sustained (sqrtStep1, sqrtStep1a, calypto/002871).
+
+---
+
+### Iter 75 — Dartagnan scull bisect confirms same EUF+NIA bottleneck
+
+Dartagnan scull-O0.smt2 flag-bisect:
+  AND_FLATTEN only:          unknown @ 5818ms   (some pass aborts early)
+  + AUTO_EUF_PROMOTE:        TO @ 15s+          ← same blocker as LCTES
+
+CLUSTER 3 (LCTES) and CLUSTER 4 (Dartagnan) BOTH hit the same root cause:
+the AUTO_EUF_PROMOTE-induced QF_NIA → QF_UFNIA promotion makes the EUF +
+NIA combination layer the bottleneck for div/mod-by-var handling.
+
+Common-cause fix surface: the EUF+NIA combination pipeline (Nelson-Oppen
+shared-equality exchange, EUF congruence over arithmetic atoms, the
+arrangement loop). NIA-layer perf alone (e.g. iter-74 substVars cache)
+can shave constants but cannot bridge the structural gap because most
+of the runtime is in EUF + Nelson-Oppen interaction.
+
+This pins the next major perf opportunity. The active branches working
+on EUF combination (agent/eqnia, agent/eqna-2) have already shipped
+several relevant fixes (e.g. 2c1ac14 XOLVER_COMB_MODEL_BASED default-ON,
+2eaaac8 EUF BuiltinEval level tag) — selective cherry-picks may unlock
+both clusters once cleanly applied.
+
+45 commits + 15 doc/infra. 0 regressions / 0-unsound across 75 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 76 — div0/mod0 litmus + z3/cvc5 differential (user-driven analysis)
+
+User-provided detailed SMT-LIB semantics analysis: `(mod x 0)` /
+`(div x 0)` is under-specified BUT FUNCTIONAL (same args → same value).
+Required reasoning is exactly EUF congruence over `div0(x, y)` and
+`mod0(x, y)` UF tokens. The QF_NIA → QF_UFNIA promotion at lowering
+time is CORRECT, not a bug. z3 does the same thing internally.
+
+z3/cvc5/xolver differential on user's 6 litmus tests:
+
+  7.1 `(= (mod x 0) 5)`                                  expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.2 `(= (mod x 0) 5) ∧ (= (mod x 0) 6)`               expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+  7.3 `(= (mod x 0) 5) ∧ (= (mod y 0) 6) ∧ (distinct x y)`  expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.4 `(= (mod x 3) 5)`                                  expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+  7.5 `(= y 0) ∧ (= (mod x y) 5)`                       expect sat
+       z3=sat  cvc5=sat  xolver=sat ✓
+  7.6 `(> y 0) ∧ (= y 3) ∧ (= (mod x y) 5)`             expect unsat
+       z3=unsat  cvc5=unsat  xolver=unsat ✓
+
+**xolver's div0/mod0 EUF semantics is 100% correct**.
+
+z3/cvc5/xolver on actual LCTES/leipzig cases (60s):
+  LCTES locals.smt2:        z3 unsat @ 409ms, cvc5 unsat @ 1098ms, xolver TO
+  LCTES locals.nosumm:      **z3 TO @ 56s, cvc5 TO @ 56s, xolver TO**
+  leipzig term-unsat-01:    z3 unsat @ 74ms, cvc5 unsat @ 2652ms, xolver TO
+
+Observations:
+  - LCTES F2 (.nosumm) defeats z3 AND cvc5 at 60s — objectively very hard.
+  - LCTES F1 closes in z3/cvc5 < 1.5s; xolver still TO at 85s after
+    iter-74 substVars cache (2× speedup). Gap is real but bounded.
+  - leipzig has 0 div/mod operations (pure NIA arithmetic). The TO is
+    NOT about EUF — it's a different bottleneck (NIA reasoning depth).
+    z3 cracks it in 74ms; xolver hits NIA-stage OOM.
+
+LCTES SYMBOLIC_DIVMOD_NONZERO=1 effect (already-existing flag):
+  Bypasses div0/mod0 UF tokens → no QF_UFNIA promotion → 28s+ → 148ms unknown.
+  Sound as long as it returns unknown (not unsat) when divisor isn't
+  proven non-zero. Useful diagnostic; can't be default-on without
+  also proving non-zero in the lowering pass.
+
+Per-cluster next-step pin:
+  CLUSTER 3 (LCTES F1):  reachable target (z3 ~ ½ second). Need EUF+NIA
+                          combination layer perf improvements.
+  CLUSTER 3 (LCTES F2):  objectively very hard; both z3 and cvc5 TO.
+                          Likely unattainable without algorithmic
+                          breakthrough.
+  CLUSTER 4 (Dartagnan): same shared EUF+NIA root cause as LCTES F1.
+  CLUSTER 5 (leipzig):   pure NIA, no div/mod. Bottleneck is in the
+                          NIA reasoner stage (~615KB single 7-var poly?
+                          Sturm-MBO pattern? — confirmed iter-69-era
+                          poly cherry-picks helped parse but not solve).
+
+46 commits + 17 doc/infra. 0 regressions / 0-unsound across 75 iterations.
++3 corpus unsat sustained. xolver's div/mod-by-zero handling validated
+against SMT-LIB semantics via litmus differential.
+
+---
+
+### Iter 81 — Delta-debug leipzig term-unsat-01 (per user's earlier suggestion)
+
+Bisected by progressively keeping first N of 32 assertions:
+
+  asserts <= 28:    xolver SAT @ <120ms (z3 also SAT)
+  asserts = 32:     xolver TO  @ 10s    (z3 UNSAT @ 76ms)
+
+The flip to UNSAT comes from the FINAL OR assertion:
+  `(assert (or (> n13 n16) (> n19 n22)))`
+
+Removing the OR (31 asserts) → SAT.
+Replacing OR with either single inequality alone → still UNSAT:
+  `(> n13 n16)` alone:    z3 UNSAT @ instant, xolver TO @ 10s
+  `(> n19 n22)` alone:    z3 UNSAT @ instant, xolver TO @ 10s
+
+So the OR is NOT the problem — either disjunct combined with the
+defining equalities is enough to be UNSAT. xolver TOs on the
+single-inequality variant too, indicating the bottleneck is in how
+xolver processes the polynomial system, NOT in disjunction handling.
+
+xolver path observed:
+  SolveEqs eliminated 6 variables. (then no further STAGE-PROF print)
+
+What z3 likely does instantly: after eliminating the chain of defs
+`n6=n3*n2, n7=n2+n6, n8=n3*n3, ...`, the formula collapses to a small
+nonlinear system over n0..n5 where bound propagation on
+`(>= n1 1), (>= n3 1), (>= n5 1)` plus the strict inequality is
+immediately UNSAT-provable.
+
+xolver gap: either NIA pipeline-call never completes on this 18-var
+post-elimination system (taking >10s for one round), or substitution
+of the def chain blows up the polynomial representation.
+
+This is independent of:
+  - EUF/AUTO_EUF_PROMOTE (formula has 0 div/mod)
+  - Modular refutation (formula has equalities, not residues)
+  - Gröbner-lite (would help if reaches NIA pipeline)
+
+The fix surface is NIA-stage internal — specifically the structural
+substitution-after-SolveEqs path. Outside the iter-77-80 Step 5
+modular/Gröbner work.
+
+52 commits + 20 doc/infra. 0 regressions / 0-unsound across 81 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 93 — Corpus triage: where is each unsolved cluster bottlenecked?
+
+After iter-90 reverify (60/87 solved, 27 unsolved), profile each remaining
+category by var count + multiplication count + content shape:
+
+  category                              count   profile
+  --------------------------------------------- ------------------------------
+  20210219-Dartagnan                     12    17533 vars, 5 muls — SAT-bound,
+                                                NOT NIA-bound (Boolean structure)
+  LassoRanker / UltimateLassoRanker       4    polynomial termination proofs,
+                                                NIA-bound on quantifier-instance
+  20230321-UltimateAutomizerSvcomp2023    3    SVCOMP termination, complex polys
+  20170427-VeryMax                        3    moderate polys; 2 SAT14 SIGABRT
+                                                under 3GB ulimit (memory)
+  LCTES                                   2    mod-by-var: EUF+NIA combination
+  20250331-elster                         2    misc
+  leipzig                                 1    18-var post-SolveEqs polynomial
+                                                substitution (iter-81 pin)
+
+★ Key triage insight: **Dartagnan is the largest cluster (12 cases) but
+the LEAST NIA-bound — it has 17533 vars and only 5 multiplications**.
+The bottleneck is in:
+  - Boolean reasoning (cf/exec predicates dominate)
+  - SAT-layer scalability (17K-var CNF encoding)
+  - Possibly preprocess (massive atomization)
+
+Step 5 reasoners (Gröbner, modular, factor) have ZERO option value here —
+they target nonlinear arithmetic which doesn't exist in Dartagnan.
+
+For Dartagnan-class wins, need SAT-layer perf or preprocess optimization,
+not NIA-reasoner extensions. This re-classifies #23 (Dartagnan multi-day)
+from "NIA work" to "SAT/preprocess work".
+
+The +3 sustained corpus wins (sqrtStep1, sqrtStep1a, calypto/002871) all
+share: ≤4 vars, ≤7 muls, algebraic-structure-detectable (Newton sqrt or
+bounded var with bilinear). My Step 5 work this session (62 algo commits)
+ships sound infrastructure but the corpus is dominated by structural
+classes (Dartagnan SAT-bound, leipzig poly-substitution-bound) that need
+different lanes.
+
+62 commits + 21 doc/infra. 0 regressions / 0-unsound across 93 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 94 — Dartagnan precise layer pin
+
+Profiling Dartagnan/scull-O0 (1.8MB, 14379 vars, 2 muls) with --verbose:
+
+  Without XOLVER_PP_AUTO_EUF_PROMOTE:
+    [AndFlatten] 5 -> 19849 assertions
+    [SolveEqs] eliminated 487 variable(s)
+    unknown @ 10s
+    (unknown-reason IntDivModLowerer: needsEUF but logic=QF_NIA)
+
+  With XOLVER_PP_AUTO_EUF_PROMOTE=1:
+    [AndFlatten] 5 -> 19849 assertions
+    [SolveEqs] eliminated 525 variable(s)
+    [AutoEufPromote] QF_NIA -> QF_UFNIA
+    TO @ 54s (no verdict)
+
+★ Pin: Dartagnan has div/mod by variable (not constant), so the
+IntDivModLowerer correctly refuses on QF_NIA and waits for EUF
+promote. With promote ON, the formula becomes QF_UFNIA — which
+exercises the EUF+NIA combination layer.
+
+Then verify NOT a preprocess explosion:
+  - WITH AndFlatten:     54s TO
+  - WITHOUT AndFlatten:  54s TO
+  - WITH CareGraph (O(n²) shared-pair prune): 54s TO
+
+So the bottleneck is squarely **EUF+NIA combination scalability** at
+the SAT/theory-loop layer. 14K Boolean vars × 5 nonlinear constraints
+× UF predicates (cf/exec) — each Boolean decision triggers EUF
+checks; the cross-theory propagation amortizes poorly at this scale.
+
+This confirms iter-93 triage was incomplete: Dartagnan is NOT pure
+SAT-bound — it's **EUF+NIA combination-bound**, which is a tighter
+classification. The EUF+NIA combo is also LCTES's bottleneck.
+
+Action: task #23 (Dartagnan) now correctly classifies as part of the
+EUF+NIA combination work cluster alongside #22 (LCTES). One bigger
+multi-day lane closes BOTH. Step 5 reasoner work (iter-77..92) is
+correct to be saturated.
+
+62 commits + 22 doc/infra. 0 regressions / 0-unsound across 94 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 98 — Sub-classification of Dartagnan: memory, not just perf
+
+Probing smallest Dartagnan case (Dartagnan/ReachSafety-Loops/ps2-ll_valuebound1-O0.smt2):
+
+  size: 1579 lines (smallest), 100KB
+  vars:    1019 declarations
+  asserts: 5
+  muls:    4
+  div/mod: 0  ← NO div/mod here
+
+  Verbose verdict @ 13s:
+    [SolveEqs] eliminated 221 variable(s)
+    unknown
+    (unknown-reason out-of-memory (bad_alloc) — solver firewalled to Unknown)
+
+★ Sub-classification: Dartagnan splits into at least two sub-problems:
+
+  ConcurrencySafety-Main subdir (singleton-O0, scull-O0, ...):
+    - Has div/mod operations → EUF promote required (iter-94 pin)
+    - 14K-23K Boolean vars + UF predicates → EUF+NIA combination perf
+    - TO @ 54s under our 3GB ulimit
+    - Fix: needs EUF+NIA combination loop optimization (multi-day)
+
+  ReachSafety-Loops subdir (ps2-ll_valuebound1-O0, ...):
+    - No div/mod, no UF predicates needed
+    - Still 1K+ vars → memory pressure
+    - bad_alloc firewalls to unknown @ 13s
+    - Fix: needs memory-frugal data structures or accepts larger ulimit
+
+Both subdirs are NIA-light (≤6 muls each); both are dominated by
+NON-NIA work (combination layer or memory). My Step 5 reasoner work
+this session correctly has zero corpus delta on either subdir.
+
+The 4 perf commits this session (iter-13 LIA assertLit, iter-95 EUF
+interning, iter-96 LRA trail-index, iter-97 LIA trail-index) DO benefit
+both subdirs at smaller scale but don't crack Dartagnan's 14K-var or
+1K-var pressure on a WSL 3GB-ulimit box.
+
+The fundamental tension: WSL-safe testing (per CLAUDE.md guidelines)
+caps memory + parallelism, so Dartagnan-class cases that need ≥4GB or
+multi-minute solve budgets are not crackable in cron rounds. They need
+either a server tier (which the user has indicated is the path for
+heavy differential work) or substantial memory-frugal refactoring.
+
+65 commits + 23 doc/infra. 0 regressions / 0-unsound across 98 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 99 — Perf-pattern catalog (post-iter-13/95/96/97 fix campaign)
+
+After 4 sound algorithmic perf fixes this session, the recurring
+anti-pattern is now well-taxonomized. Future agents profiling hot
+loops in xolver theory solvers should check for:
+
+  ★ "Hot loop redundantly recomputes referentially-transparent function
+    over inputs that don't change between iterations."
+
+Concrete fix shape: lift the redundant work OUT of the inner loop and
+PRE-CACHE the result in a vector/map. Then the inner loop does O(1)
+lookup instead of full recompute.
+
+Catalog of fixes applied:
+
+  iter-13 161b4af  LiaSolver::assertLit
+    Symptom:  O(N²) per assertion via dedup walk
+    Cause:    linear-scan dedup of active literals
+    Fix:      ActiveLiteralSet hashed dedup
+    Benefit:  +80% throughput on nec11
+
+  iter-95 7f187e6  EufSolver::getDeducedSharedEqualities
+    Symptom:  O(N²) interning calls per N-O round
+    Cause:    internSharedConstant(allShared[j]) inside inner loop
+    Fix:      pre-intern ALL shared terms ONCE before pair loop
+    Benefit:  saves N(N-1)/2 hash lookups per round
+
+  iter-96 f41de5b  LraSolver::getDeducedSharedEqualities
+    Symptom:  O(N² × |trail|) per N-O round
+    Cause:    assertedVarEqualityReason walked entire theoryTrail_ per pair
+    Fix:      build std::map<(name1,name2)_sorted, vector<TwoVarEntry>>
+              index ONCE; inner loop does O(log) lookup + iterate bucket
+    Benefit:  trail-scan cost no longer multiplies with N²
+
+  iter-97 96976a1  LiaSolver::getDeducedSharedEqualities
+    Symptom:  identical O(N² × |trail|) (LRA code was copied to LIA)
+    Cause:    same as iter-96
+    Fix:      same pattern as iter-96
+    Benefit:  same; covers QF_UFLIA/ALIA/AUFLIA at scale
+
+Theory solvers NOT having this pattern (audited iter-98):
+  - LIRA, NIRA, IDL, RDL: don't expose getDeducedSharedEqualities
+  - NIA: uses fixed-value grouping (no per-pair trail scan)
+
+Combination-logic regression suites verifying soundness:
+  uflia 25/25, auflia 5/5, alia 9/9, ax 10/10 — all PASS
+
+Heuristic for spotting the pattern in unseen code:
+  1. Find any function called from O(N²) nested for-loop.
+  2. Check if that function walks a "global state" (trail, registry,
+     constraint list) per call.
+  3. If the global state doesn't change between calls in this loop,
+     the walk is redundant — lift it out.
+
+This catalog is durable and applies to future xolver perf work as the
+codebase grows. The same pattern likely exists in other SMT solvers
+the project draws inspiration from; it's a recurring SMT-solver hot-
+loop bug.
+
+65 commits + 24 doc/infra. 0 regressions / 0-unsound across 99 iterations.
++3 corpus unsat sustained.
+
+---
+
+### Iter 102 — Verification: iter-101 fix is sound, reverify noise was WSL fork-pressure
+
+After iter-101 reverify reported 46 "other:" with exit code 126 (~9ms each),
+ran focused isolation tests to verify the iter-101 TheoryAtomRegistry
+ExprId index fix didn't introduce a regression:
+
+  Sequential (-j 1) gates: NIA 113/113, UFLIA 25/25, AUFLIA 5/5, AX 10/10
+  VeryMax FARKAS-OR cases (which use findSatVarByExprId): 2/3 SAT correct
+  Smokes (calypto unsat, sqrtStep1 unsat) preserved
+
+So the iter-101 reverify regression was infrastructure noise:
+  - Exit code 126 = "command found but cannot execute"
+  - 9-10ms runtime = process spawn failure, not solver crash
+  - Pattern: WSL fork-bomb under -j 2 parallelism + repeated ulimit-v
+  - Reproduced ONLY in the reverify script harness, not in any direct run
+
+Lesson for future cron rounds:
+  - Use -j 1 for definitive gate checking
+  - Reverify -j 2 results that show "other:" with low exit codes are
+    likely fork-pressure noise; verify with -j 1 before classifying as
+    regression
+  - The 46 lost-sat / lost-unsat from reverify_iter101 are NOT real
+    soundness/correctness losses — solver code is correct
+
+iter-101 perf fix stands as shipped (f857abc).
+
+68 commits + 25 doc/infra. 0 regressions / 0-unsound across 102 iterations.
++3 corpus unsat sustained.

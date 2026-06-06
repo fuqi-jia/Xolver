@@ -17,6 +17,7 @@ bool IntDivModLowerer::run() {
     memo_.clear();
     loweredAssertions_.clear();
     positiveVars_.clear();
+    modEqConstFacts_.clear();  // Track A Phase 1.1
 
     auto scoped = ir_.getScopedAssertions();
     // Track C1 Phase 2: pre-scan strict-positive lower bounds so the
@@ -30,7 +31,19 @@ bool IntDivModLowerer::run() {
 
     for (const auto& [level, a] : scoped) {
         memo_.clear();
+        // Track A Phase 1.1: intercept `(= (mod x y) c)` shape BEFORE lowerRec
+        // would eagerly emit the `q*y` nonlinear system. When intercepted, the
+        // fact is registered and the assertion is replaced by `true` (so the
+        // SAT-layer abstraction is preserved but no nonlinear obligation is
+        // forced on NIA). Default-OFF; behavior bit-for-bit identical when off.
+        // Track A Phase 1.1/1.3: REGISTER the fact (for the ModEqConstReasoner
+        // to consume) AFTER lowerRec produces the lowered assertion ExprId.
+        // The lowered ExprId is what the atomizer + TheoryAtomRegistry see.
+        // Phase 1.1 still ran lowerRec unconditionally so the q*y semantics
+        // are emitted — keeping Phase 1.3 strictly behavior-preserving until
+        // Phase 1.5 introduces the skip path.
         ExprId lowered = lowerRec(a, level);
+        tryInterceptModEqConst(a, lowered, level);
         if (requirement_.unsupported) {
             return false;
         }
@@ -403,6 +416,63 @@ void IntDivModLowerer::emitUndefZeroConstraints(const DivModDef& def, ScopeLevel
     generatedAssertions_.push_back({level, qUndef});
     generatedAssertions_.push_back({level, rUndef});
     updateRequirement(false, true);
+}
+
+void IntDivModLowerer::tryInterceptModEqConst(ExprId originalAssertion,
+                                              ExprId loweredAssertion,
+                                              ScopeLevel /*level*/) {
+    // Track A Phase 1.1 — match `(= (mod x y) c)` where:
+    //   - x is integer-sorted (any shape; can be a variable or an expression),
+    //   - y is integer-sorted variable expression (NOT a constant — constants
+    //     route through the existing constant-divisor congruence path),
+    //   - c is an integer constant.
+    // We capture and register a ModEqConstFact ONLY when the flag is set.
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return;
+
+    const auto& a = ir_.get(originalAssertion);
+    if (a.kind != Kind::Eq) return;
+    if (a.children.size() != 2) return;
+
+    auto isModExpr = [&](ExprId eid) -> bool {
+        const auto& e = ir_.get(eid);
+        return e.kind == Kind::Mod && e.sort == intSortId_ && e.children.size() == 2;
+    };
+    auto asIntConst = [&](ExprId eid) -> std::optional<mpz_class> {
+        return evalIntConstTerm(eid);
+    };
+
+    ExprId modExpr = NullExpr;
+    std::optional<mpz_class> constOpt;
+    if (isModExpr(a.children[0])) {
+        modExpr = a.children[0];
+        constOpt = asIntConst(a.children[1]);
+    } else if (isModExpr(a.children[1])) {
+        modExpr = a.children[1];
+        constOpt = asIntConst(a.children[0]);
+    }
+    if (modExpr == NullExpr || !constOpt) return;
+
+    const auto& m = ir_.get(modExpr);
+    ExprId xExpr = m.children[0];
+    ExprId yExpr = m.children[1];
+
+    // y must not be a constant for the native path — constant divisor is
+    // already handled cheaply by the existing emitConstDivisorConstraints +
+    // ModularResidueReasoner combo.
+    auto yConst = evalIntConstTerm(yExpr);
+    if (yConst) return;
+
+    ModEqConstFact fact;
+    fact.xExpr = xExpr;
+    fact.yExpr = yExpr;
+    fact.c = *constOpt;
+    fact.atomExpr = loweredAssertion;  // post-lowering form is what the SAT layer sees
+    // fact.reason is filled later by NiaSolver when the atom is asserted.
+    modEqConstFacts_.push_back(std::move(fact));
 }
 
 void IntDivModLowerer::updateRequirement(bool needsNonlinear, bool needsEUF) {

@@ -114,6 +114,10 @@ private:
     TheoryId defaultTheory_ = TheoryId::LRA;
     TheoryId combinationArithTheory_ = TheoryId::LRA;
     SharedTermRegistry* sharedTermRegistry_ = nullptr;
+    // iter-100: ExprId-keyed cache for containsArrayOrUf so DAG-shared
+    // subtrees aren't re-walked on every Eq/Distinct routing decision.
+    // Key: ExprId.id, value: true (has UF/array) / false (clean subtree).
+    std::unordered_map<uint32_t, bool> containsArrayOrUfMemo_;
 
     SortId boolSortId_ = NullSort;
     SyntheticExprIdAllocator synthExprAlloc_;

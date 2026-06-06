@@ -16,6 +16,9 @@
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
+#include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/nia/reasoners/ModEqConstReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -70,6 +73,11 @@ public:
     // setCoreIr override: stores via base + does NIA-specific Farkas-dump side
     // effect. setSharedTermRegistry uses the base implementation.
     void setCoreIr(const CoreIr* ir) override;
+
+    // Track A Phase 1.3: receive ModEqConstFacts captured by IntDivModLowerer.
+    // Called by Solver::Impl after preprocessing and theory-solver setup. The
+    // facts are consumed by stageNativeModEqConst on each NIA check call.
+    void setModEqConstFacts(ModEqConstFactList facts);
 
     bool supportsCombination() const override { return true; }
 
@@ -145,6 +153,12 @@ private:
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
+    GroebnerIdealReasoner groebner_;
+    // Track A Phase 1.3 — native (mod x y) = c reasoner. Receives the fact
+    // list from IntDivModLowerer (via setModEqConstFacts) and runs rules 1-3
+    // at each Standard-effort check.
+    ModEqConstFactList modEqConstFacts_;
+    ModEqConstReasoner modEqConst_;
     bool enableBitBlast_ = true;
     // Lazy cache: -1 unknown, 0 no array terms, 1 has array terms (Store/Select).
     // Set on first stageBitBlastEarly; reset by setCoreIr. Gates bit-blast off on
@@ -162,6 +176,7 @@ private:
     // search) still find. SIZE_MAX = no cached unknown.
     mutable size_t bbEarlyUnkSize_ = static_cast<size_t>(-1);
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    bool enableGroebner_ = false; // XOLVER_NIA_GROBNER: ideal saturation (1∈ideal ⇒ UNSAT) — default-OFF (iter-77 cherry-pick from 7afeda9)
     // L4.1 — modular reasoner warm-start memoization. When the active
     // normalized_ stream's signature matches modularLastSignature_ AND
     // the last run was NoChange, stageModular skips re-running the
@@ -191,6 +206,7 @@ private:
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
     bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
+    // (iter-77 cherry-pick of 7afeda9 added groebner_ field + enableGroebner_ above)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
@@ -301,6 +317,10 @@ private:
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageGroebner(TheoryLemmaStorage&, TheoryEffort);
+    // Track A Phase 1.3 — native ModEqConst rules 1-3. Only fires when the
+    // XOLVER_NIA_NATIVE_MODEQCONST flag is set AND the fact list is non-empty.
+    std::optional<TheoryCheckResult> stageNativeModEqConst(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);

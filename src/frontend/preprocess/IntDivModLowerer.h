@@ -1,6 +1,7 @@
 #pragma once
 
 #include "expr/ir.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>
@@ -57,6 +58,11 @@ public:
     const ArithmeticRequirement& requirement() const { return requirement_; }
     const std::vector<DivModOrigin>& origins() const { return origins_; }
 
+    // Track A Phase 1.1: assertions matched as `(= (mod x y) c)` and
+    // intercepted before lowering. The native ModEqConstReasoner consumes
+    // these directly. Empty when XOLVER_NIA_NATIVE_MODEQCONST is OFF.
+    const ModEqConstFactList& modEqConstFacts() const { return modEqConstFacts_; }
+
 private:
     ExprId lowerRec(ExprId e, ScopeLevel level);
     ExprId lowerDiv(ExprId a, ExprId b, ScopeLevel level);
@@ -91,6 +97,15 @@ private:
     bool divisorIsProvenStrictlyPositive(ExprId b) const;
 
     void updateRequirement(bool needsNonlinear, bool needsEUF);
+
+    // Track A Phase 1.1/1.3: pattern-match `(= (mod x y) c)` shape (or
+    // symmetric) on the ORIGINAL pre-lowering assertion; if matched AND
+    // XOLVER_NIA_NATIVE_MODEQCONST is set, register a ModEqConstFact using
+    // the LOWERED assertion ExprId as the atom (since atomization sees the
+    // post-lowering form and only that ExprId is in TheoryAtomRegistry).
+    void tryInterceptModEqConst(ExprId originalAssertion,
+                                ExprId loweredAssertion,
+                                ScopeLevel level);
 
     // Check if term contains nonlinear subterms (Mul of two non-constants, Pow, etc.)
     bool containsNonlinear(ExprId e) const;
@@ -159,6 +174,9 @@ private:
     ExprId undefDivSym_ = NullExpr;
     ExprId undefModSym_ = NullExpr;
     std::vector<std::pair<ScopeLevel, ExprId>> loweredAssertions_;
+
+    // Track A Phase 1.1 — native ModEqConst fact storage.
+    ModEqConstFactList modEqConstFacts_;
 };
 
 } // namespace xolver

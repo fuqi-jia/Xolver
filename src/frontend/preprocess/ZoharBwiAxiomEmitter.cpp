@@ -65,21 +65,21 @@ ExprId ZoharBwiAxiomEmitter::mkConstInt(int64_t v) {
     CoreExpr e;
     e.kind = Kind::ConstInt; e.sort = intSortId_;
     e.payload = Payload(v);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkGeq(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Geq, boolSortId_, {a, b}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Geq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkLeq(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Leq, boolSortId_, {a, b}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Leq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkEq(ExprId a, ExprId b) {
@@ -88,14 +88,14 @@ ExprId ZoharBwiAxiomEmitter::mkEq(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Eq, boolSortId_, {b, a}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Eq; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkImplies(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Implies, boolSortId_, {a, b}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Implies; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkAnd(ExprId a, ExprId b) {
@@ -104,7 +104,7 @@ ExprId ZoharBwiAxiomEmitter::mkAnd(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::And, boolSortId_, {b, a}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::And; e.sort = boolSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkAdd(ExprId a, ExprId b) {
@@ -112,7 +112,7 @@ ExprId ZoharBwiAxiomEmitter::mkAdd(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Add, intSortId_, {b, a}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Add; e.sort = intSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkMul(ExprId a, ExprId b) {
@@ -120,7 +120,7 @@ ExprId ZoharBwiAxiomEmitter::mkMul(ExprId a, ExprId b) {
     if (auto id = findExisting(ir_, Kind::Mul, intSortId_, {b, a}); id != NullExpr) return id;
     CoreExpr e; e.kind = Kind::Mul; e.sort = intSortId_;
     e.children.push_back(a); e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg) {
@@ -133,7 +133,7 @@ ExprId ZoharBwiAxiomEmitter::mkPow2(ExprId arg) {
     CoreExpr e; e.kind = Kind::UFApply; e.sort = intSortId_;
     e.payload = Payload(std::string("pow2"));
     e.children.push_back(arg);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 void ZoharBwiAxiomEmitter::visit(ExprId root,
