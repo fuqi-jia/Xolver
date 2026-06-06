@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace xolver {
@@ -149,8 +150,15 @@ int signHintFromBound(PolyId p, Relation rel, PolynomialKernel& kernel, VarId& b
 
 }  // namespace
 
-bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+// One attempt of the cascade with a fixed instantiation `seed` of free parameters
+// (empty = no instantiation). Factored out so trySquareCascade can retry over a few
+// candidate rationals for a single free geometric parameter (e.g. the base length in
+// an IsoTriangle construction): once that parameter is rational, the remaining
+// `v^2 = f(param)` equalities collapse to univariate squares the cascade already
+// handles. Every attempt re-VALIDATES the whole model, so a seeded sat is still sound.
+static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
                       PolynomialKernel& kernel,
+                      const std::unordered_map<VarId, mpq_class>& seed,
                       std::vector<std::pair<VarId, RealValue>>* modelOut) {
     // --- collect equalities / inequalities / sign hints --------------------------
     std::vector<PolyId> eqs;
@@ -162,7 +170,7 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         if (h != 0 && !signHint.count(bv)) signHint[bv] = h;
     }
 
-    std::unordered_map<VarId, mpq_class> rationalVal;
+    std::unordered_map<VarId, mpq_class> rationalVal = seed;   // free-parameter instantiation
     std::unordered_map<VarId, VarId> aliasOf;              // algebraic var -> generator
     std::unordered_map<VarId, RationalPolynomial> derivedVal;  // derived var -> EXACT value (in gen)
     VarId genVar = NullVar; mpq_class genC; int genSign = +1;
@@ -411,6 +419,46 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         }
     }
     return true;
+}
+
+bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+                      PolynomialKernel& kernel,
+                      std::vector<std::pair<VarId, RealValue>>* modelOut) {
+    // First, the un-seeded cascade (pure triangular square systems).
+    if (attemptSquareCascade(cons, kernel, {}, modelOut)) return true;
+
+    // FREE-PARAMETER instantiation. Many geometric sat instances fix every variable
+    // to a square root of a LINEAR expression in one free parameter p (e.g. an
+    // IsoTriangle base length): v17^2 = v14^2 + 9/16, v18^2 = 4 v14^2, ... — none of
+    // these is univariate until p is fixed, so the un-seeded cascade finds no seed.
+    // Try p := a few small rationals (sign-respecting); once p is rational every such
+    // equality is a univariate square the cascade solves, and the full model is
+    // re-validated (sound: only a genuinely satisfying instantiation returns true).
+    static const mpq_class kCands[] = {
+        mpq_class(1), mpq_class(1, 2), mpq_class(2), mpq_class(1, 4), mpq_class(3, 2),
+        mpq_class(3), mpq_class(1, 3), mpq_class(3, 4), mpq_class(5, 4), mpq_class(2, 3),
+    };
+    // Candidate free parameters: variables that occur in some equality's coefficients
+    // (a square's "constant" side). Cap the search so a hard instance stays cheap.
+    std::vector<VarId> params;
+    {
+        std::unordered_set<std::string> seenName;
+        for (const auto& [p, rel] : cons) {
+            if (rel != Relation::Eq) continue;
+            for (const auto& vn : kernel.variables(p)) {
+                if (seenName.insert(vn).second) params.push_back(kernel.getOrCreateVar(vn));
+                if (params.size() >= 10) break;
+            }
+            if (params.size() >= 10) break;
+        }
+    }
+    for (VarId f : params) {
+        for (const mpq_class& c : kCands) {
+            std::unordered_map<VarId, mpq_class> seed{{f, c}};
+            if (attemptSquareCascade(cons, kernel, seed, modelOut)) return true;
+        }
+    }
+    return false;
 }
 
 SquareRoot solveSquareRoot(const SquareEquality& sq, int signHint) {
