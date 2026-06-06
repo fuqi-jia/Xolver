@@ -86,9 +86,16 @@ private:
     };
 
     // Find a single drop-action that makes `e` evaluate to `desiredTruth`.
-    // Recurses through Not / Or (truth-preserving) and And (falsifiable).
-    // Returns false if no such action is possible from this subtree.
+    // ITERATIVE (heap-allocated worklist) — walks Not / Or / And / Implies
+    // structurally without recursion, so a 60k-deep `(or A (or A ...))`
+    // doesn't blow the call stack. Returns false if no atom-level witness
+    // satisfies the chained truth requirement.
     bool findDropAction(ExprId e, bool desiredTruth, DropAction& out) const;
+
+    // Atom-level (non-Boolean-op): try to find a drop-action for a single
+    // atom `(Rel v t)` / `(Eq v t)` / `(Eq (f v) t)` where v occurs once.
+    // Returns false if `e` isn't an atom or no witness exists.
+    bool tryAtomDrop(ExprId e, bool target, DropAction& out) const;
 
     // Apply a DropAction to the ModelConverter (registerElimination /
     // registerWitness depending on .useElim).

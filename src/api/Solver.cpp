@@ -2540,6 +2540,33 @@ public:
                 auto ibr = eagerbb.solve(*ir, ir->assertions());
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+                    // Transfer the validated integer model from EagerBitBlast
+                    // to lastModel_, then run the ModelConverter to restore
+                    // ANY variable that SolveEqs/UnconstrainedElim eliminated
+                    // before the eager-bb solve. Pre-existing bug: previous
+                    // eager-bb early-return path skipped reconstruct() so an
+                    // eliminated x in `(assert (= x 1))(assert (distinct x y))`
+                    // showed up as x=0 in the model. The kernel-validated
+                    // `ibr.model` IS the sound value for vars eager-bb saw;
+                    // reconstruct adds the missing eliminated vars on top.
+                    lastModel_ = TheorySolver::TheoryModel{};
+                    for (const auto& [name, value] : ibr.model) {
+                        lastModel_->assignments.emplace(name, value.get_str());
+                        lastModel_->numericAssignments.emplace(
+                            name, RealValue::fromMpz(value));
+                    }
+                    if (!modelConverter_.empty()) {
+                        if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                                          lastModel_->assignments, *ir)) {
+                            lastUnknownReason_ =
+                                "eager-bb + solve-eqs: eliminated variable not reconstructable";
+                            lastModel_.reset();
+#ifdef XOLVER_ENABLE_CASESTATS
+                            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                            return Result::Unknown;
+                        }
+                    }
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
@@ -3273,6 +3300,36 @@ void Solver::pop(uint32_t n) {
 
 void Solver::setLogic(std::string_view logic) {
     pImpl->logic = std::string(logic);
+    // Pre-register the standard sorts so the IR sees a non-NullSort
+    // boolSortId/intSortId/realSortId before any user assertion or
+    // checkSat() call. Without this, an API-mode user that never calls
+    // boolSort()/intSort() explicitly leaves the IR's sort table empty,
+    // which downstream (BoolSubtermPurifier, Atomizer, model dump) treat
+    // as "Boolean variables not classifiable" — producing empty models
+    // and broken get-model behavior. CLI gets these sorts populated as
+    // a side effect of SOMTParser; the API never had that bridge.
+    // Sound because allocating a sort id is idempotent (getOrCreateXxx
+    // returns the cached id on repeat calls).
+    pImpl->getOrCreateBoolSort();
+    if (logic.find("LIA") != std::string_view::npos ||
+        logic.find("NIA") != std::string_view::npos ||
+        logic.find("LIRA") != std::string_view::npos ||
+        logic.find("NIRA") != std::string_view::npos ||
+        logic.find("IDL") != std::string_view::npos ||
+        logic.find("DTLIA") != std::string_view::npos ||
+        logic.find("DTNIA") != std::string_view::npos ||
+        logic.find("ALIA") != std::string_view::npos ||
+        logic.find("ANIA") != std::string_view::npos) {
+        pImpl->getOrCreateIntSort();
+    }
+    if (logic.find("LRA") != std::string_view::npos ||
+        logic.find("NRA") != std::string_view::npos ||
+        logic.find("LIRA") != std::string_view::npos ||
+        logic.find("NIRA") != std::string_view::npos ||
+        logic.find("RDL") != std::string_view::npos ||
+        logic.find("ALRA") != std::string_view::npos) {
+        pImpl->getOrCreateRealSort();
+    }
 }
 
 void Solver::setOption(std::string_view key, OptionValue value) {
@@ -3435,7 +3492,14 @@ Model Solver::getModel() const {
 
     const auto& theoryModel = *pImpl->lastModel_;
 
-    // Map variable names to ExprIds from CoreIr
+    // Map variable names to ExprIds from CoreIr. Prefer the string
+    // `assignments` channel; fall back to the typed `numericAssignments`
+    // channel (RealValue) when the string channel is empty. The numeric
+    // channel is the path the LIA solver uses by default when no string
+    // serialization is requested. Without this fallback, an API-mode
+    // caller (Solver::getModel() invoked programmatically, no CLI
+    // `get-model` command) sees an empty Model even on a successful
+    // checkSat → Sat. Pre-existing bug uncovered by test_api LIA test.
     if (pImpl->ir) {
         for (ExprId id = 0; id < static_cast<ExprId>(pImpl->ir->size()); ++id) {
             const auto& expr = pImpl->ir->get(id);
@@ -3445,6 +3509,14 @@ Model Solver::getModel() const {
             auto it = theoryModel.assignments.find(name);
             if (it != theoryModel.assignments.end()) {
                 model.setValue(id, it->second);
+                continue;
+            }
+            // Fallback: typed numeric channel.
+            auto nit = theoryModel.numericAssignments.find(name);
+            if (nit != theoryModel.numericAssignments.end()) {
+                if (auto q = nit->second.tryAsRational()) {
+                    model.setValue(id, q->get_str());
+                }
             }
         }
     }

@@ -154,11 +154,8 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     auto* nm = std::get_if<std::string>(&node.payload.value);
                     if (!nm) return std::nullopt;
                     auto it = env.find(*nm);
-                    // Missing var defaults to 0 (matches dumpModel's
-                    // unconstrained-default convention; sound for our purposes
-                    // because the variable's value is unconstrained — any
-                    // choice satisfies the post-elim formula).
-                    val[e] = (it == env.end()) ? mpq_class(0) : it->second;
+                    if (it == env.end()) return std::nullopt;  // unknown var
+                    val[e] = it->second;
                     stack.pop_back();
                     continue;
                 }
@@ -169,6 +166,23 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     val[e] = *c;
                     stack.pop_back();
                     continue;
+                }
+                case Kind::Ite: {
+                    // LAZY: don't pre-evaluate both branches. Evaluate the
+                    // cond first (via evalBool, which lives on its own
+                    // boolEnv namespace), then push ONLY the chosen branch.
+                    // The other branch's variables may be missing from env —
+                    // ignoring it lets reconstruct succeed when the cond
+                    // unambiguously selects the populated branch. Sound:
+                    // SMT-LIB Int Ite evaluates only the taken branch; the
+                    // untaken branch's value doesn't affect the Ite value.
+                    if (node.children.size() != 3) return std::nullopt;
+                    if (!boolEnv) return std::nullopt;
+                    auto condVal = evalBool(node.children[0], ir, *boolEnv, env);
+                    if (!condVal) return std::nullopt;
+                    ExprId chosen = *condVal ? node.children[1] : node.children[2];
+                    if (!val.count(chosen)) stack.push_back({chosen, false});
+                    continue;  // post-visit will look up val.at(chosen)
                 }
                 default: break;
             }
@@ -220,14 +234,15 @@ std::optional<mpq_class> ModelConverter::evalRational(
                 break;
             }
             case Kind::Ite: {
-                // Eval cond via evalBool (requires boolEnv); pick branch.
-                // Both numeric branches have already been pre-visited and
-                // their values cached in val[].
+                // Post-visit: lazy variant only pushed the CHOSEN branch in
+                // pre-visit. Re-derive which branch was taken via evalBool
+                // (cheap; cond is typically a constant or single Bool var).
                 if (node.children.size() != 3) return std::nullopt;
                 if (!boolEnv) return std::nullopt;
                 auto condVal = evalBool(node.children[0], ir, *boolEnv, env);
                 if (!condVal) return std::nullopt;
-                val[e] = *condVal ? val.at(node.children[1]) : val.at(node.children[2]);
+                ExprId chosen = *condVal ? node.children[1] : node.children[2];
+                val[e] = val.at(chosen);
                 break;
             }
             case Kind::Mod: {

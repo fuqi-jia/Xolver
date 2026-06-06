@@ -239,43 +239,61 @@ bool UnconstrainedElim::varOccursIn(const std::string& name, ExprId root) const 
 }
 
 bool UnconstrainedElim::findDropAction(ExprId e, bool target, DropAction& out) const {
+    // Iterative DFS over Boolean structure. Each worklist entry is an
+    // (ExprId, target) pair meaning "find a witness that makes this expr
+    // evaluate to `target`". When we hit an atom-level node we delegate
+    // to tryAtomDrop; first success exits the loop. Heap-allocated to
+    // survive arbitrary structural depth (e.g. 60k-deep `(or A (or A ...))`).
+    std::vector<std::pair<ExprId, bool>> worklist;
+    worklist.reserve(16);
+    worklist.emplace_back(e, target);
+
+    while (!worklist.empty()) {
+        auto [cur, curTarget] = worklist.back();
+        worklist.pop_back();
+        const auto& node = ir_.get(cur);
+
+        if (node.kind == Kind::Not) {
+            if (node.children.size() != 1) continue;
+            worklist.emplace_back(node.children[0], !curTarget);
+            continue;
+        }
+        if (node.kind == Kind::Or) {
+            // target=true monotone: any disjunct true suffices.
+            if (!curTarget) continue;
+            // Push in REVERSE so the leftmost is processed first (matches
+            // the previous recursive left-to-right search order).
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                worklist.emplace_back(node.children[i], true);
+            }
+            continue;
+        }
+        if (node.kind == Kind::And) {
+            // target=false monotone: any conjunct false suffices.
+            if (curTarget) continue;
+            for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
+                worklist.emplace_back(node.children[i], false);
+            }
+            continue;
+        }
+        if (node.kind == Kind::Implies) {
+            // (=> A B) target=true ≡ (or (not A) B). Push B first so A
+            // (the equivalent "not A" check at target=false) is checked
+            // first under the LIFO stack.
+            if (node.children.size() != 2 || !curTarget) continue;
+            worklist.emplace_back(node.children[1], true);
+            worklist.emplace_back(node.children[0], false);
+            continue;
+        }
+
+        // Atom-level: delegate.
+        if (tryAtomDrop(cur, curTarget, out)) return true;
+    }
+    return false;
+}
+
+bool UnconstrainedElim::tryAtomDrop(ExprId e, bool target, DropAction& out) const {
     const auto& node = ir_.get(e);
-
-    // Not: invert target and recurse.
-    if (node.kind == Kind::Not) {
-        if (node.children.size() != 1) return false;
-        return findDropAction(node.children[0], !target, out);
-    }
-
-    // Or: target=true is monotone (any disjunct can be the witness).
-    // target=false would require ALL disjuncts to be falsifiable with
-    // non-overlapping witnesses — skip (conservative).
-    if (node.kind == Kind::Or) {
-        if (!target) return false;
-        for (ExprId c : node.children) {
-            if (findDropAction(c, true, out)) return true;
-        }
-        return false;
-    }
-
-    // And: target=false is monotone (any conjunct false ⇒ and false).
-    // target=true requires all conjuncts true — skip.
-    if (node.kind == Kind::And) {
-        if (target) return false;
-        for (ExprId c : node.children) {
-            if (findDropAction(c, false, out)) return true;
-        }
-        return false;
-    }
-
-    // Implies: (=> A B) ≡ (or (not A) B). target=true monotone over both.
-    if (node.kind == Kind::Implies) {
-        if (node.children.size() != 2) return false;
-        if (!target) return false;
-        if (findDropAction(node.children[0], false, out)) return true;
-        if (findDropAction(node.children[1], true, out)) return true;
-        return false;
-    }
 
     // Atom-level: Eq, Distinct, Lt, Leq, Gt, Geq.
     bool isEq = (node.kind == Kind::Eq);
@@ -296,6 +314,13 @@ bool UnconstrainedElim::findDropAction(ExprId e, bool target, DropAction& out) c
     } else if (auto n2 = asNumericVar(rhs)) {
         varName = *n2; bound = lhs; xIsLeft = false;
     } else if (isEq) {
+        // Sort-safety check: if v is Int and the other side has Real sort
+        // (e.g. division `(/ 1 2)`), the equality is intrinsically constrained
+        // and may have NO integer solution. Dropping would unsoundly turn
+        // unsat into sat. Require identical sort.
+        SortId lhsSort = ir_.get(lhs).sort;
+        SortId rhsSort = ir_.get(rhs).sort;
+        if (lhsSort != rhsSort) return false;
         // Phase 2 — TERM-level unc for EQUALITY only. Other relations need
         // monotone analysis (e.g. (< (+ v 5) t)  ⇒ v < t - 5) which we keep
         // simple here. For Eq the inverse term IS the new witness, no
