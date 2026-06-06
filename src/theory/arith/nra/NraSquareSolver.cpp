@@ -174,23 +174,48 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     std::unordered_map<VarId, mpq_class> rationalVal = seed;   // free-parameter instantiation
     std::unordered_map<VarId, VarId> aliasOf;              // algebraic var -> generator
     std::unordered_map<VarId, RationalPolynomial> derivedVal;  // derived var -> EXACT value (in gen)
-    VarId genVar = NullVar; mpq_class genC; int genSign = +1;
+    // Generator LIST: each entry is an INDEPENDENT square root sqrt(c_i) with
+    // genVar_i = sign_i*sqrt(c_i), spanning its own block of the algebraic model.
+    // Different geometric sub-constructions can live in different quadratic fields
+    // (e.g. Q(sqrt 3) for one block and Q(sqrt 5) for another) with no sqrt(c_i c_j)
+    // cross-term linking them: a constraint touching a SINGLE generator reduces over
+    // it; one mixing two generators is rejected by validation (sound).
+    struct GenInfo { VarId var; mpq_class c; int sign; };
+    std::vector<GenInfo> gens;
+    auto genIndexOf = [&](VarId v) -> int {
+        for (size_t i = 0; i < gens.size(); ++i) if (gens[i].var == v) return static_cast<int>(i);
+        return -1;
+    };
+    // Which generator does this polynomial live over? Returns the single generator
+    // index if it uses exactly one (and no non-generator variable), -1 if none
+    // (constant/rational), or -2 if it uses a non-generator variable OR two+ distinct
+    // generators (a residual unknown or a genuine cross-term field — the caller bails).
+    auto solePolyGen = [&](const RationalPolynomial& q) -> int {
+        int found = -1;
+        for (VarId v : q.variables()) {
+            int gi = genIndexOf(v);
+            if (gi < 0) return -2;                  // a non-generator variable survives
+            if (found < 0) found = gi;
+            else if (found != gi) return -2;        // two distinct generators (cross-term)
+        }
+        return found;
+    };
 
     auto degIn = [&](PolyId p, VarId v) -> int {
         auto d = kernel.degree(p, kernel.varName(v));
         return d ? *d : 0;
     };
-    // Reduce a polynomial univariate in genVar modulo genVar^2 = c to aGen*genVar + b.
+    // Reduce a polynomial univariate in g.var modulo g.var^2 = g.c to aGen*g.var + b.
     // Pure term-wise (no libpoly pseudo-remainder — that crash class is exactly what
     // the cascade must dodge). Terms mentioning any other variable are skipped.
-    auto reduceUni = [&](const RationalPolynomial& rp) -> std::pair<mpq_class, mpq_class> {
+    auto reduceUni = [&](const RationalPolynomial& rp, const GenInfo& g) -> std::pair<mpq_class, mpq_class> {
         mpq_class aGen = 0, b = 0;
         for (const auto& [key, coeff] : rp.terms()) {
             int deg = 0; bool other = false;
-            for (const auto& [v, e] : key) { if (v != genVar) other = true; else deg += e; }
+            for (const auto& [v, e] : key) { if (v != g.var) other = true; else deg += e; }
             if (other) continue;
             mpq_class cp = 1;
-            for (int j = 0; j < deg / 2; ++j) cp *= genC;
+            for (int j = 0; j < deg / 2; ++j) cp *= g.c;
             if (deg % 2 == 0) b += coeff * cp; else aGen += coeff * cp;
         }
         return {aGen, b};
@@ -279,25 +304,26 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
                 mpq_class root;
                 if (rationalSqrt(c, root)) {
                     rationalVal[x] = mpq_class(s) * root;
-                } else if (genVar == NullVar) {
-                    genVar = x; genC = c; genSign = s;
-                } else if (c == genC && s == genSign) {
-                    aliasOf[x] = genVar;
                 } else {
-                    // RATIONAL-MULTIPLE generator: if c = r^2 * genC then sqrt(c) =
-                    // r*sqrt(genC) lives in the SAME field Q(sqrt genC), so x = s*sqrt(c)
-                    // = (s*r*genSign) * gen  (gen = genSign*sqrt(genC)). Record x as a
-                    // rational multiple of the generator (via derivedVal), NOT a new
-                    // generator — collapses e.g. sqrt(2) and sqrt(1/2) onto one generator.
-                    mpq_class ratio = c / genC; ratio.canonicalize();
-                    mpq_class r;
-                    if (rationalSqrt(ratio, r)) {
-                        const mpq_class scale = mpq_class(s) * r * mpq_class(genSign);
-                        RationalPolynomial mv; mv.addVar(genVar, 1, scale); mv.normalize();
-                        derivedVal[x] = std::move(mv);
-                    } else {
-                        return false;                  // genuinely 2nd distinct generator
+                    // Place sqrt(c) into the generator LIST. Against each existing
+                    // generator g_i = sign_i*sqrt(c_i): an exact (c, sign) match aliases
+                    // x onto it; a rational-multiple (c = r^2 * c_i) records x as the
+                    // rational multiple x = (s*r*sign_i)*g_i in the SAME field (collapses
+                    // sqrt(2) and sqrt(1/2)). If x matches NO existing generator it starts
+                    // a NEW, independent generator (its own block) — no longer a bail, so
+                    // block-separable systems spanning Q(sqrt c_1), Q(sqrt c_2), ... solve.
+                    bool placed = false;
+                    for (const auto& g : gens) {
+                        if (c == g.c && s == g.sign) { aliasOf[x] = g.var; placed = true; break; }
+                        mpq_class ratio = c / g.c; ratio.canonicalize();
+                        mpq_class r;
+                        if (rationalSqrt(ratio, r)) {
+                            const mpq_class scale = mpq_class(s) * r * mpq_class(g.sign);
+                            RationalPolynomial mv; mv.addVar(g.var, 1, scale); mv.normalize();
+                            derivedVal[x] = std::move(mv); placed = true; break;
+                        }
                     }
+                    if (!placed) gens.push_back({x, c, s});   // new independent generator
                 }
                 done[j] = 1; progress = true;
             }
@@ -305,10 +331,6 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         }
     }
 
-    auto onlyGen = [&](const RationalPolynomial& q) {
-        for (VarId v : q.variables()) if (v != genVar) return false;
-        return true;
-    };
     // --- derive remaining variables from linear-in-them equalities ---------------
     // Iterate to a fixpoint so CHAINS resolve (e.g. w2 = v12+v13 then m = 1/w2):
     // each newly-derived variable is substituted into the rest on the next pass.
@@ -321,36 +343,41 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         if (!rp0) continue;
         RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases + derived
 
-        // (A) EXACTLY ONE non-generator variable, linear, coefficients over the
-        // generator: derive its EXACT value in Q(sqrt genC) by rationalizing -C/A.
+        // (A) EXACTLY ONE non-generator variable, linear, coefficients over a SINGLE
+        // generator: derive its EXACT value in Q(sqrt c_i) by rationalizing -C/A.
         do {
             VarId d = NullVar; bool multi = false;
             for (VarId v : rps.variables()) {
-                if (v == genVar) continue;
+                if (genIndexOf(v) >= 0) continue;            // a generator, not the unknown
                 if (d != NullVar) { multi = true; break; }   // more than one unassigned
                 d = v;
             }
             if (multi || d == NullVar) break;
             std::vector<RationalPolynomial> co = rps.coefficients(d);   // [C, A] low->high
             if (co.size() != 2) break;                                 // must be linear in d
-            if (!onlyGen(co[1]) || !onlyGen(co[0])) break;
-            // d = -C / A. Reduce A, C mod genVar^2 = genC to A = aA*g + bA, C = cA*g + cB,
+            const int gA = solePolyGen(co[1]);                         // generator of A
+            const int gC = solePolyGen(co[0]);                         // generator of C
+            if (gA == -2 || gC == -2) break;                           // non-gen var or cross-term
+            if (gA >= 0 && gC >= 0 && gA != gC) break;                 // A, C in different fields
+            const int gi = (gA >= 0) ? gA : gC;                        // common generator (or -1)
+            // d = -C / A. Reduce A, C mod g.var^2 = g.c to A = aA*g + bA, C = cA*g + cB,
             // then RATIONALIZE by the conjugate of A:  -C/A = -C*conj(A) / (A*conj(A)),
-            // where A*conj(A) = bA^2 - aA^2*genC is RATIONAL, and -C*conj(A) reduces (mod
-            // g^2=genC) to P0 + P1*g. So d = (P0 + P1*g)/denom is a POLYNOMIAL in g — even
+            // where A*conj(A) = bA^2 - aA^2*g.c is RATIONAL, and -C*conj(A) reduces (mod
+            // g^2=g.c) to P0 + P1*g. So d = (P0 + P1*g)/denom is a POLYNOMIAL in g — even
             // when A itself still depends on the generator (the sqrt cancels). This is
             // what lets the cascade derive m for the whole Geogebra cluster, not just the
             // case where A happens to collapse to a constant.
             RationalPolynomial mv;
-            if (genVar != NullVar) {
-                auto rA = reduceUni(co[1]);
-                auto rC = reduceUni(co[0]);
+            if (gi >= 0) {
+                const GenInfo& g = gens[gi];
+                auto rA = reduceUni(co[1], g);
+                auto rC = reduceUni(co[0], g);
                 const mpq_class aA = rA.first, bA = rA.second, cA = rC.first, cB = rC.second;
-                const mpq_class denom = bA * bA - aA * aA * genC;       // A * conj(A)
+                const mpq_class denom = bA * bA - aA * aA * g.c;       // A * conj(A)
                 if (sgn(denom) == 0) break;                            // A vanishes at root
-                const mpq_class P0 = cA * aA * genC - cB * bA;          // -C*conj(A), const
-                const mpq_class P1 = cB * aA - cA * bA;                 // -C*conj(A), g coeff
-                if (sgn(P1) != 0) mv.addVar(genVar, 1, P1 / denom);
+                const mpq_class P0 = cA * aA * g.c - cB * bA;          // -C*conj(A), const
+                const mpq_class P1 = cB * aA - cA * bA;                // -C*conj(A), g coeff
+                if (sgn(P1) != 0) mv.addVar(g.var, 1, P1 / denom);
                 mv.addConstant(P0 / denom);
             } else {
                 if (!co[1].isConstant() || !co[0].isConstant()) break;
@@ -364,18 +391,98 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         } while (false);
         if (done[j]) continue;
 
+        // (A2) GENERAL QUADRATIC in a single non-generator variable d:
+        //   a*d^2 + b*d + c = 0   with a, b, c each REDUCIBLE to a rational over the (at
+        // most one) generator that coefficient uses. Solve by the quadratic formula
+        // d = (-b +/- sqrt(D))/(2a), D = b^2 - 4ac. A perfect-square D gives a rational
+        // root; otherwise sqrt(D) becomes an algebraic generator — collapsed onto an
+        // existing one if D = r^2*c_i, else a FRESH independent generator (an auxiliary
+        // sqrt that is not itself a problem variable). This closes the law-of-cosines /
+        // circle-intersection patterns the PURE-square solver (no d^1 term) misses.
+        do {
+            VarId d = NullVar; bool multi = false;
+            for (VarId v : rps.variables()) {
+                if (genIndexOf(v) >= 0) continue;
+                if (d != NullVar) { multi = true; break; }
+                d = v;
+            }
+            if (multi || d == NullVar) break;
+            std::vector<RationalPolynomial> co = rps.coefficients(d);   // [c, b, a] low->high
+            if (co.size() != 3) break;                                 // must be quadratic in d
+            // Each coefficient must reduce to a RATIONAL over the single generator it
+            // uses; an irrational (a*g) coefficient would nest radicals — not handled.
+            auto reduceToRational = [&](const RationalPolynomial& q, mpq_class& outv) -> bool {
+                const int gi = solePolyGen(q);
+                if (gi == -2) return false;                            // non-gen var or cross-term
+                if (gi == -1) { if (!q.isConstant()) return false; outv = q.constantValue(); return true; }
+                auto r = reduceUni(q, gens[gi]);
+                if (sgn(r.first) != 0) return false;                   // irrational a*g part
+                outv = r.second; return true;
+            };
+            mpq_class a, b, c;
+            if (!reduceToRational(co[2], a) || !reduceToRational(co[1], b) || !reduceToRational(co[0], c)) break;
+            if (sgn(a) == 0) break;                                    // not actually quadratic
+            const mpq_class D = b * b - 4 * a * c;                     // discriminant
+            if (sgn(D) < 0) break;                                     // no real root in this branch
+            const mpq_class twoA = 2 * a;
+            const int want = signHint.count(d) ? signHint[d] : 0;
+            mpq_class rootD;
+            if (rationalSqrt(D, rootD)) {                              // two RATIONAL roots
+                const mpq_class rPlus = (-b + rootD) / twoA, rMinus = (-b - rootD) / twoA;
+                mpq_class chosen = rPlus;
+                if (want > 0) chosen = (sgn(rPlus) >= 0) ? rPlus : rMinus;
+                else if (want < 0) chosen = (sgn(rPlus) <= 0) ? rPlus : rMinus;
+                RationalPolynomial mv; mv.addConstant(chosen); mv.normalize();
+                derivedVal[d] = std::move(mv);
+                done[j] = 1; dprogress = true;
+                break;
+            }
+            // sqrt(D) irrational: place it. sqrt(D) = gFactor * gvar where gvar is the
+            // (possibly collapsed) generator: for gvar = gsign*sqrt(c_i) and D = r^2*c_i,
+            // sqrt(D) = r*sqrt(c_i) = r*gsign*gvar, so gFactor = r*gsign (r=1 on exact).
+            VarId gvar = NullVar; mpq_class gFactor;
+            for (const auto& g : gens) {
+                if (D == g.c) { gvar = g.var; gFactor = mpq_class(g.sign); break; }
+                mpq_class ratio = D / g.c; ratio.canonicalize();
+                mpq_class r;
+                if (rationalSqrt(ratio, r)) { gvar = g.var; gFactor = r * mpq_class(g.sign); break; }
+            }
+            if (gvar == NullVar) {                                     // fresh generator +sqrt(D)
+                gvar = kernel.getOrCreateVar("__sqd_q" + std::to_string(j));
+                gens.push_back({gvar, D, +1});
+                gFactor = mpq_class(1);
+            }
+            const mpq_class cnst = -b / twoA, gcoefPlus = gFactor / twoA;
+            auto buildRoot = [&](int pm) {
+                RationalPolynomial mv; mv.addConstant(cnst);
+                mv.addVar(gvar, 1, mpq_class(pm) * gcoefPlus); mv.normalize();
+                return mv;
+            };
+            RationalPolynomial mvPlus = buildRoot(+1), mvMinus = buildRoot(-1), chosen = mvPlus;
+            if (want != 0) {                                           // pick the sign-respecting root
+                const int gi = genIndexOf(gvar);
+                auto sP = signOfPolyAtGenerator(mvPlus, gens[gi].var, gens[gi].c, gens[gi].sign);
+                auto sM = signOfPolyAtGenerator(mvMinus, gens[gi].var, gens[gi].c, gens[gi].sign);
+                if (sP && *sP == want) chosen = mvPlus;
+                else if (sM && *sM == want) chosen = mvMinus;
+            }
+            derivedVal[d] = std::move(chosen);
+            done[j] = 1; dprogress = true;
+        } while (false);
+        if (done[j]) continue;
+
         // (B) COUPLED LINEAR ELIMINATION. The equation may still have two+ unresolved
         // variables, but be linear in ONE of them with a CONSTANT (rational) leading
         // coefficient. Solve that variable as a polynomial in the OTHERS; a later
         // fixpoint pass resolves those in turn, triangularizing a coupled linear
         // subsystem (e.g. two midpoint/centroid equations sharing two coordinates that
         // neither single-var rationalization nor a free-parameter seed can split).
-        // SOUNDNESS: the final per-constraint validation reduces over the single
-        // generator and BAILS (signOfPolyAtGenerator -> nullopt -> return false) if any
-        // non-generator variable survives, so an under-determined elimination is never
-        // accepted as SAT — the pivot choice only needs to be CONSISTENT, not unique.
+        // SOUNDNESS: the final per-constraint validation reduces over a single
+        // generator and BAILS (-> nullopt -> return false) if any non-generator
+        // variable survives, so an under-determined elimination is never accepted as
+        // SAT — the pivot choice only needs to be CONSISTENT, not unique.
         for (VarId v : rps.variables()) {
-            if (v == genVar) continue;
+            if (genIndexOf(v) >= 0) continue;
             std::vector<RationalPolynomial> co = rps.coefficients(v);
             if (co.size() != 2) continue;          // not linear in v
             if (!co[1].isConstant()) continue;     // need a rational constant coefficient
@@ -406,7 +513,7 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         for (const auto& kv : rationalVal) assigned.insert(kv.first);
         for (const auto& kv : aliasOf)     assigned.insert(kv.first);
         for (const auto& kv : derivedVal)  assigned.insert(kv.first);
-        if (genVar != NullVar) assigned.insert(genVar);
+        for (const auto& g : gens)         assigned.insert(g.var);
         for (const auto& [p, rel] : cons)
             for (const auto& vn : kernel.variables(p)) {
                 VarId v = kernel.getOrCreateVar(vn);
@@ -414,14 +521,19 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
             }
     }
 
-    // --- VALIDATE every original constraint over the single generator ------------
+    // --- VALIDATE every original constraint over its (single) generator ----------
+    // A constraint that reduces to a value over exactly ONE generator is decided
+    // exactly; one that still mentions a non-generator variable OR mixes two
+    // generators (a sqrt(c_i)*sqrt(c_j) cross-term) is inconclusive -> bail (sound).
     auto signOfReduced = [&](PolyId p) -> std::optional<int> {
         auto rp = RationalPolynomial::fromPolyId(p, kernel);
         if (!rp) return std::nullopt;
         RationalPolynomial r = applySubstRp(*rp);   // rationals + aliases + derived (exact)
         if (r.isConstant()) return sgn(r.constantValue());
-        if (genVar == NullVar) return std::nullopt;
-        return signOfPolyAtGenerator(r, genVar, genC, genSign);
+        const int gi = solePolyGen(r);
+        if (gi < 0) return std::nullopt;            // residual var or cross-term field
+        const GenInfo& g = gens[gi];
+        return signOfPolyAtGenerator(r, g.var, g.c, g.sign);
     };
     for (const auto& [p, rel] : cons) {
         auto s = signOfReduced(p);
@@ -449,47 +561,60 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         modelOut->clear();
         for (const auto& [v, val] : rationalVal)
             modelOut->emplace_back(v, RealValue::fromMpq(val));
-        // TIGHT rational bracket for sqrt(genC): for a non-square genC, genC != 1, so
-        //   genC < 1  =>  genC < sqrt(genC) < 1
-        //   genC > 1  =>  1   < sqrt(genC) < genC
-        // A tight isolating interval keeps the downstream algebraic-number refinement
-        // cheap (a loose [0, genC+1] forces many bisections of a big-coefficient poly).
-        const mpq_class sqLo = (genC < 1) ? genC : mpq_class(1);
-        const mpq_class sqHi = (genC < 1) ? mpq_class(1) : genC;
-        auto genRealValue = [&]() {
-            const mpz_class num = genC.get_num(), den = genC.get_den();
+        // Per-generator algebraic value g_i = sign_i*sqrt(c_i) with a TIGHT isolating
+        // bracket: for non-square c, c != 1, so c<1 => c < sqrt(c) < 1 and c>1 =>
+        // 1 < sqrt(c) < c. A tight interval keeps the downstream refinement cheap.
+        auto genRealValue = [&](const GenInfo& g) {
+            const mpq_class sqLo = (g.c < 1) ? g.c : mpq_class(1);
+            const mpq_class sqHi = (g.c < 1) ? mpq_class(1) : g.c;
+            const mpz_class num = g.c.get_num(), den = g.c.get_den();
             AlgebraicNumber an;
-            an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num, root genSign*sqrt(genC)
-            if (genSign > 0) { an.lower = sqLo; an.upper = sqHi; }
+            an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num, root sign*sqrt(c)
+            if (g.sign > 0) { an.lower = sqLo; an.upper = sqHi; }
             else { an.lower = -sqHi; an.upper = -sqLo; }
             return RealValue::fromAlgebraic(std::move(an));
         };
-        if (genVar != NullVar) {
-            modelOut->emplace_back(genVar, genRealValue());
-            for (const auto& [v, g] : aliasOf) modelOut->emplace_back(v, genRealValue());  // = generator
+        // Emit only the PROBLEM-variable generators: an auxiliary sqrt(D) minted by the
+        // quadratic branch ("__sqd_*") is not a real variable, and the derived values
+        // that use it carry self-contained AlgebraicNumbers (built below), so it must
+        // not leak into the model the Solver's validator consumes.
+        for (const auto& g : gens)
+            if (kernel.varName(g.var).rfind("__sqd_", 0) != 0)
+                modelOut->emplace_back(g.var, genRealValue(g));
+        for (const auto& [v, gv] : aliasOf) {
+            const int gi = genIndexOf(gv);
+            if (gi >= 0) modelOut->emplace_back(v, genRealValue(gens[gi]));
         }
-        // Derived d = ap*gen + bp  (a number in Q(sqrt genC)). With gen = genSign*sqrt(genC),
-        // d = Aeff*sqrt(genC) + bp where Aeff = ap*genSign.
+        // Derived d = ap*g + bp in Q(sqrt c_i) for the SINGLE generator g_i it uses.
+        // With g = sign_i*sqrt(c_i), d = Aeff*sqrt(c_i) + bp where Aeff = ap*sign_i.
         for (const auto& [d, mv] : derivedVal) {
-            auto rd = reduceUni(mv);
+            const int gi = solePolyGen(mv);
+            if (gi < 0) {
+                if (mv.isConstant()) { modelOut->emplace_back(d, RealValue::fromMpq(mv.constantValue())); continue; }
+                return false;            // spans 2+ generators (cross-term): give up (sound)
+            }
+            const GenInfo& g = gens[gi];
+            auto rd = reduceUni(mv, g);
             const mpq_class ap = rd.first, bp = rd.second;
             if (sgn(ap) == 0) { modelOut->emplace_back(d, RealValue::fromMpq(bp)); continue; }
-            const mpq_class Aeff = (genSign < 0) ? -ap : ap;   // coefficient of sqrt(genC)
-            // minimal poly: x^2 - 2 bp x + (bp^2 - Aeff^2 genC).
-            mpq_class c0 = bp * bp - Aeff * Aeff * genC, c1 = mpq_class(-2) * bp, c2 = 1;
+            const mpq_class sqLo = (g.c < 1) ? g.c : mpq_class(1);
+            const mpq_class sqHi = (g.c < 1) ? mpq_class(1) : g.c;
+            const mpq_class Aeff = (g.sign < 0) ? -ap : ap;   // coefficient of sqrt(c_i)
+            // minimal poly: x^2 - 2 bp x + (bp^2 - Aeff^2 c_i).
+            mpq_class c0 = bp * bp - Aeff * Aeff * g.c, c1 = mpq_class(-2) * bp, c2 = 1;
             mpz_class L = c0.get_den();
             mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c1.get_den().get_mpz_t());
             mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c2.get_den().get_mpz_t());
             mpz_class a0 = mpq_class(c0 * L).get_num(), a1 = mpq_class(c1 * L).get_num(),
                       a2 = mpq_class(c2 * L).get_num();
-            mpz_class g = a0;                              // GCD-reduce to keep coefficients small
-            mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), a1.get_mpz_t());
-            mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), a2.get_mpz_t());
-            if (sgn(g) != 0 && g != 1) { a0 /= g; a1 /= g; a2 /= g; }
+            mpz_class gg = a0;                             // GCD-reduce to keep coefficients small
+            mpz_gcd(gg.get_mpz_t(), gg.get_mpz_t(), a1.get_mpz_t());
+            mpz_gcd(gg.get_mpz_t(), gg.get_mpz_t(), a2.get_mpz_t());
+            if (sgn(gg) != 0 && gg != 1) { a0 /= gg; a1 /= gg; a2 /= gg; }
             AlgebraicNumber an;
             an.coefficients = {a0, a1, a2};
             // d in [bp + Aeff*sqLo, bp + Aeff*sqHi] (ordered by sign of Aeff). Excludes the
-            // conjugate root bp - Aeff*sqrt(genC) since sqLo > 0.
+            // conjugate root bp - Aeff*sqrt(c_i) since sqLo > 0.
             if (sgn(Aeff) > 0) { an.lower = bp + Aeff * sqLo; an.upper = bp + Aeff * sqHi; }
             else { an.lower = bp + Aeff * sqHi; an.upper = bp + Aeff * sqLo; }
             modelOut->emplace_back(d, RealValue::fromAlgebraic(std::move(an)));

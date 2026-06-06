@@ -315,3 +315,77 @@ TEST_CASE("trySquareCascade: coupled linear subsystem (Gaussian elimination over
     };
     CHECK_FALSE(trySquareCascade(bad, k, nullptr));
 }
+
+TEST_CASE("trySquareCascade: general quadratic with a LINEAR term (rational roots, sign-selected)") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId x = k.getOrCreateVar("x");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // x^2 - x - 6 = 0  has roots x = 3 and x = -2 (NOT a pure square: it has an x^1
+    // term, so the square-solver skips it — only the general-quadratic branch handles
+    // it). The bound x > 0 must select the +3 root, not -2.
+    PolyId q = k.add(k.sub(k.sub(k.pow(V(x), 2), V(x)), C(6)), C(0));   // x^2 - x - 6
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {q, Relation::Eq}, {V(x), Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));
+    REQUIRE(model.size() == 1u);
+    // root selected is the positive one, x = 3 (rational).
+    CHECK(model[0].first == x);
+    CHECK(model[0].second.isRational());
+    CHECK(model[0].second.asRational() == mpq_class(3));
+
+    // The SAME quadratic with x < 0 must select the -2 root instead.
+    auto kp2 = createPolynomialKernel();
+    PolynomialKernel& k2 = *kp2;
+    VarId x2 = k2.getOrCreateVar("x");
+    PolyId q2 = k2.sub(k2.sub(k2.pow(k2.mkVar(x2), 2), k2.mkVar(x2)), k2.mkConst(mpq_class(6)));
+    std::vector<std::pair<PolyId, Relation>> cons2 = {
+        {q2, Relation::Eq}, {k2.mkVar(x2), Relation::Lt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model2;
+    CHECK(trySquareCascade(cons2, k2, &model2));
+    REQUIRE(model2.size() == 1u);
+    CHECK(model2[0].second.asRational() == mpq_class(-2));
+}
+
+TEST_CASE("trySquareCascade: general quadratic with IRRATIONAL discriminant mints a generator") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId x = k.getOrCreateVar("x");
+    VarId y = k.getOrCreateVar("y");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // Two INDEPENDENT quadratics in different quadratic fields (no cross-term):
+    //   x^2 - 4x + 1 = 0  -> x = 2 +/- sqrt(3)   (discriminant 12, generator sqrt(12))
+    //   y^2 - 6y + 1 = 0  -> y = 3 +/- sqrt(8)   (discriminant 32, generator sqrt(32))
+    // Each discriminant is irrational, so the cascade mints a FRESH auxiliary generator
+    // for each — block-separable, validated over a single generator per constraint.
+    PolyId qx = k.add(k.sub(k.pow(V(x), 2), k.mul(C(4), V(x))), C(1));
+    PolyId qy = k.add(k.sub(k.pow(V(y), 2), k.mul(C(6), V(y))), C(1));
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {qx, Relation::Eq}, {qy, Relation::Eq}, {V(x), Relation::Gt}, {V(y), Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));
+    // Only the TWO problem variables appear in the model; auxiliary sqrt generators are
+    // filtered out (they are not real variables, and x/y carry self-contained values).
+    REQUIRE(model.size() == 2u);
+    for (const auto& [v, val] : model) {
+        CHECK((v == x || v == y));
+        CHECK(val.isAlgebraic());            // each is a genuine quadratic irrational
+    }
+
+    // A genuinely UNSAT instance must NOT be fabricated as sat: both roots of
+    // x^2 - 4x + 1 = 0 are positive (2 +/- sqrt(3) ~ 0.27 and 3.73), so x < 0 is
+    // unsatisfiable and the cascade must return false (soundness: no false sat).
+    PolyId xNeg = V(x);                      // x < 0
+    std::vector<std::pair<PolyId, Relation>> bad = {
+        {qx, Relation::Eq}, {xNeg, Relation::Lt},
+    };
+    CHECK_FALSE(trySquareCascade(bad, k, nullptr));
+}
