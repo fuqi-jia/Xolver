@@ -65,7 +65,7 @@ private:
     // Unknown on exhaustion → falls through to the projection engine unchanged.
     CdcacResult trySatSampleFirst(int k, SamplePoint& prefix,
                                   const CdcacInput& input, long& budget);
-    std::vector<mpq_class> satSampleCandidates(int k, const SamplePoint& prefix,
+    std::vector<mpq_class> satSampleCandidates(VarId var, const SamplePoint& prefix,
                                                const CdcacInput& input);
 
     Cell buildLeafConflictCell(const CdcacConstraint& c, const SamplePoint& sample, VarId var);
@@ -149,6 +149,9 @@ private:
     // nlsat-engine STEP A gate + state. Default-OFF until the broad gate lands;
     // sound by construction (SAT-only, checkFullSample-validated). One-shot per
     // CdcacCore lifetime (= per SMT-solve in non-incremental) via satFirstTried_.
+    // The RATIONAL sample-first (trySatSampleFirst) stays OPT-IN (it samples rationals
+    // and can wander up to the wall budget on a non-triangular input). The ALGEBRAIC
+    // triangular path below is the one promoted to default-on.
     bool satFirstEnabled_ = false;
     // Node-search backstop (raised from 20000: matrix-class SAT models need ~300k
     // nodes to reach — the old cap aborted the search 15x too early). The REAL
@@ -177,12 +180,23 @@ private:
     // ≤ satFirstAlgDegCap_ (the libpoly algebraic-sign path OOM-crashes on high
     // degree — the matrix class — so we restrict to the low-degree algebraic regime,
     // Geogebra ~deg-3). Implies satFirstEnabled_.
-    bool satFirstAlgEnabled_ = false;
-    long satFirstAlgDegCap_ = 6;
+    // DEFAULT-ON (kill switch XOLVER_NRA_CAC_SAT_FIRST_ALG=0). Triangular: a dynamic
+    // most-constrained-variable pick locks each variable to a forced equality root
+    // (over the rational OR the algebraic point via resultant-Norm / Lazard tower), so
+    // the search descends a multi-level algebraic tower in n steps. Sound (Sat only on a
+    // signAt-validated full point) and self-terminating on the triangular structure; a
+    // tower-depth cap (XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP) only skips deep towers that
+    // are out of reach anyway, never a solvable case.
+    bool satFirstAlgEnabled_ = true;
+    long satFirstAlgDegCap_ = 12;
     CdcacResult trySatSampleFirstAlg(int k, SamplePoint& prefix,
                                      const CdcacInput& input, long& budget);
-    std::vector<RealAlg> satSampleCandidatesAlg(int k, const SamplePoint& prefix,
+    std::vector<RealAlg> satSampleCandidatesAlg(VarId var, const SamplePoint& prefix,
                                                 const CdcacInput& input);
+    // Dynamic most-constrained-variable pick for the algebraic SAT-first: prefer an
+    // unassigned variable that an EQUALITY constraint already determines (becomes
+    // univariate given the prefix), so the search descends the triangular structure.
+    VarId pickSatFirstVar(const SamplePoint& prefix, const CdcacInput& input);
     // M1+M2 (XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD, default-OFF): forward infeasibility
     // propagation for the rational SAT-first. After assigning var k, check whether
     // any UNASSIGNED variable already has an EMPTY feasible set — i.e. its

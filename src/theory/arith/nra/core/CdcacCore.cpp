@@ -250,10 +250,8 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     }
     // nlsat-engine INCREMENT 4: algebraic-model SAT-first (default-OFF). Implies
     // sat-first. Lets the model search reach algebraic-coordinate models (Geogebra).
-    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG")) {
+    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG"))
         satFirstAlgEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
-        if (satFirstAlgEnabled_) satFirstEnabled_ = true;
-    }
     if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG")) {
         long b = std::atol(e);
         if (b > 0) satFirstAlgDegCap_ = b;
@@ -718,7 +716,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // CdcacCore lifetime, BEFORE the eager buildClosure projection. Sound: Sat is
     // returned only on a checkFullSample-validated full point; otherwise falls
     // through to the projection engine, byte-identical to before. Default-OFF.
-    if (satFirstEnabled_ && !satFirstTried_ && !input.varOrder.empty()) {
+    if ((satFirstEnabled_ || satFirstAlgEnabled_) && !satFirstTried_ && !input.varOrder.empty()) {
         satFirstTried_ = true;
         satDerivedCells_.clear();   // increment 3: fresh learned dead-cell set per solve
         // Precompute per-constraint safety once: a poly whose denominator-cleared
@@ -789,7 +787,10 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
                 if (md > satFirstAlgDegCap_) algOk = false;
             }
         }
-        if (allSafe) {
+        // Run the algebraic triangular path when degrees allow it (default-on); the
+        // rational wandering path runs ONLY when explicitly opted in. When neither
+        // applies, skip SAT-first entirely (no overhead — straight to projection).
+        if (allSafe && (algOk || satFirstEnabled_)) {
             SamplePoint prefix;
             long budget = satFirstBudget_;
             satFirstT0_ = std::chrono::steady_clock::now();   // wall-clock cap reference
@@ -1649,9 +1650,8 @@ static int exactSignAt(const RationalPolynomial& rp,
     return sgn(acc);
 }
 
-std::vector<mpq_class> CdcacCore::satSampleCandidates(int k, const SamplePoint& prefix,
+std::vector<mpq_class> CdcacCore::satSampleCandidates(VarId var, const SamplePoint& prefix,
                                                       const CdcacInput& input) {
-    VarId var = input.varOrder[k];
     std::vector<mpq_class> roots;
     for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
         if (ci < satSafe_.size() && !satSafe_[ci]) continue;   // skip libpoly-crash-class polys
@@ -1729,30 +1729,103 @@ static inline bool satRelHolds(int s, Relation rel) {
 // as RealAlg) PLUS the ACTUAL algebraic roots (the irrational roots themselves, not
 // their rational midpoints). The algebraic roots are what let the search assign,
 // e.g., v=√2 to satisfy v^2=2 exactly — unreachable by any rational sample.
-std::vector<RealAlg> CdcacCore::satSampleCandidatesAlg(int k, const SamplePoint& prefix,
+std::vector<RealAlg> CdcacCore::satSampleCandidatesAlg(VarId var, const SamplePoint& prefix,
                                                        const CdcacInput& input) {
-    std::vector<RealAlg> cands;
-    // ALGEBRAIC ROOTS FIRST: for a variable an equality constraint pins to an
-    // irrational (v^2=2 ⇒ v=±√2), the algebraic root is THE answer and no rational
-    // can satisfy it — so trying rationals first just burns the budget on dead-ends
-    // before reaching the root. Offering the algebraic roots up front lets the
-    // search lock the forced algebraic coordinate immediately (recovered Geogebra
-    // IsoRightTriangle cases this way).
-    VarId var = input.varOrder[k];
+    // Precompute the assigned set so we only attempt the (expensive) algebraic-prefix
+    // root isolation on a constraint that is ACTUALLY univariate in `var` given the
+    // prefix — i.e. every other variable of the constraint is already assigned. Without
+    // this guard every node ran ~|constraints| resultant-Norm / Lazard-tower calls
+    // (most unsupported after heavy work), which alone exhausted the budget on the towers.
+    std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
+    // TOWER-DEPTH CAP: the multi-algebraic Lazard-tower root isolation (resultant Norm
+    // over the field tower) cost explodes with the number of algebraic prefix
+    // coordinates — a single deep-tower call can run past the wall budget (the search
+    // can't interrupt mid-call). Beyond the cap we skip the tower path, which bounds the
+    // per-node cost; the deep degree-8-12 RegPolygon towers are out of reach anyway, and
+    // the shallow ones (≤cap algebraic coords) that DO solve are preserved.
+    long algPrefixCount = 0;
+    for (const auto& v : prefix.values) if (!v.isRational()) ++algPrefixCount;
+    static const long kTowerCap = [] {
+        int v = env::paramInt("XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP", 4);
+        return v > 0 ? static_cast<long>(v) : 4L;
+    }();
+    auto univariateInVar = [&](PolyId poly) -> bool {
+        bool varPresent = false;
+        for (const auto& vn : kernel_->variables(poly)) {
+            VarId v = kernel_->getOrCreateVar(vn);
+            if (v == var) { varPresent = true; continue; }
+            if (!assigned.count(v)) return false;   // another unassigned var remains
+        }
+        return varPresent;
+    };
+    // Roots of `poly` in `var` at the (possibly algebraic) point. Rational specialization
+    // first; on an algebraic prefix fall back to resultant-Norm / Lazard-tower isolation.
+    auto rootsInVar = [&](PolyId poly, std::vector<RealAlg>& out) {
+        UniPolyId up = algebra_->specializeToUnivariate(poly, prefix, var);
+        if (up != NullUniPolyId) {
+            RootSet rs = algebra_->isolateRealRoots(up);
+            if (!rs.crashOccurred) for (const auto& r : rs.roots) out.push_back(r);
+            return;
+        }
+        if (!univariateInVar(poly)) return;
+        if (algPrefixCount > kTowerCap) return;        // deep tower: skip (cost-bounded)
+        bool supNorm = false, supTower = false;
+        RootSet rs = algebra_->isolateRealRootsViaNorm(poly, prefix, var, supNorm);
+        if (!supNorm) rs = algebra_->isolateRealRootsViaTower(poly, prefix, var, supTower);
+        if ((supNorm || supTower) && !rs.crashOccurred)
+            for (const auto& r : rs.roots) out.push_back(r);
+    };
+    // DETERMINED variable: if an EQUALITY constraint is univariate in `var` given the
+    // prefix, `var` is PINNED to one of that equality's roots — no other value can hold
+    // it. Offer ONLY those forced roots (1–2 of them), turning each triangular level
+    // into a 1–2-way branch instead of an 8–11-way one over rational fallbacks that the
+    // equality immediately falsifies. This is what makes the SAT-first descend a deep
+    // RegPolygon tower within budget (the per-node signAt over the tower is expensive).
+    std::vector<RealAlg> eqRoots;
     for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
         if (ci < satSafe_.size() && !satSafe_[ci]) continue;
-        if (kernel_->isConstant(input.constraints[ci].poly)) continue;
-        UniPolyId up = algebra_->specializeToUnivariate(input.constraints[ci].poly, prefix, var);
-        if (up == NullUniPolyId) continue;
-        RootSet rs = algebra_->isolateRealRoots(up);
-        if (rs.crashOccurred) continue;
-        for (const auto& r : rs.roots)
-            if (!r.isRational()) cands.push_back(r);   // the key addition: algebraic roots
+        if (input.constraints[ci].rel != Relation::Eq) continue;
+        const PolyId poly = input.constraints[ci].poly;
+        if (kernel_->isConstant(poly)) continue;
+        rootsInVar(poly, eqRoots);
     }
-    // Then the full rational candidate set (proven logic, wrapped as RealAlg).
-    for (const auto& q : satSampleCandidates(k, prefix, input))
-        cands.push_back(RealAlg::fromRational(q));
-    return cands;
+    // `var` is equality-determined (pickSatFirstVar guarantees it), so ONLY this
+    // equality's roots can hold it — return exactly those. Empty (e.g. the tower-depth
+    // cap declined a deep isolation) means this branch can't be advanced: the caller
+    // backtracks, never wandering over rational samples of an under-determined variable.
+    return eqRoots;
+}
+
+// Most-constrained-variable pick: prefer an unassigned variable that some EQUALITY
+// constraint determines (every OTHER variable of that equality is already assigned, so
+// it specializes to a univariate equation whose roots FORCE this variable). Falling
+// back to the next unassigned variable in input.varOrder. Turning the static order
+// into this triangular order is what lets the algebraic SAT-first descend a multi-level
+// tower (RegPolygon) one forced root at a time instead of guessing under-determined
+// variables.
+VarId CdcacCore::pickSatFirstVar(const SamplePoint& prefix, const CdcacInput& input) {
+    std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
+    // Return the variable an EQUALITY already pins (exactly one unassigned var in it, so
+    // it specializes to a univariate equation whose roots force this variable). If NO
+    // such variable exists, return NullVar so the algebraic SAT-first BAILS immediately
+    // instead of wandering over rational samples of an under-determined coordinate — that
+    // fast-bail is what keeps the default-on path at ~0 overhead on non-triangular inputs
+    // (meti-tarski / hycomp inequality systems): it only ever does real work on the
+    // triangular algebraic-SAT structure it can actually solve.
+    for (const auto& c : input.constraints) {
+        if (c.rel != Relation::Eq) continue;
+        if (kernel_->isConstant(c.poly)) continue;
+        VarId only = NullVar; bool multi = false; bool hasVar = false;
+        for (const auto& vn : kernel_->variables(c.poly)) {
+            VarId v = kernel_->getOrCreateVar(vn);
+            hasVar = true;
+            if (assigned.count(v)) continue;
+            if (only != NullVar) { multi = true; break; }
+            only = v;
+        }
+        if (!multi && hasVar && only != NullVar) return only;   // determined by this equality
+    }
+    return NullVar;   // no equality-determined variable: bail (fall through to projection)
 }
 
 // Algebraic SAT-first recursion. Mirrors trySatSampleFirst but assigns RealAlg
@@ -1773,8 +1846,9 @@ CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
         return CdcacResult::mkSat(prefix);   // full algebraic point, all constraints hold
     }
     if (budget <= 0) return CdcacResult::mkUnknown(CdcacUnknownReason::None);
-    VarId var = input.varOrder[k];
-    std::vector<RealAlg> cands = satSampleCandidatesAlg(k, prefix, input);
+    VarId var = pickSatFirstVar(prefix, input);          // dynamic most-constrained pick
+    if (var == NullVar) return CdcacResult::mkUnknown(CdcacUnknownReason::None);
+    std::vector<RealAlg> cands = satSampleCandidatesAlg(var, prefix, input);
     std::unordered_set<VarId> assigned;
     for (VarId v : prefix.varOrder) assigned.insert(v);
     assigned.insert(var);
@@ -2146,7 +2220,7 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
     // misses a model, never a wrong verdict).
     if (satNlsatEnabled_ && k > 0 && prefixInLearnedDeadCell(k, buildMap()))
         return CdcacResult::mkUnknown(CdcacUnknownReason::None);
-    std::vector<mpq_class> cands = satSampleCandidates(k, prefix, input);
+    std::vector<mpq_class> cands = satSampleCandidates(var, prefix, input);
     // M1 (feasible-cell value selection): if the box-consistency fixpoint can contract
     // var k's feasible region under the current prefix, bias candidates into that cell —
     // dropping values the box proves infeasible (e.g. 0 for a strictly-positive-forced
