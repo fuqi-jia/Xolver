@@ -213,6 +213,14 @@ private:
     // strict sign over the box is a strict sign over the feasible region too).
     std::optional<std::pair<size_t, Sign>> intervalFpViolation(
         const SamplePoint& prefix, const CdcacInput& input);
+    // Box-ICP SECTOR prune: prove the WHOLE cell [lo,hi] of the current var `var`
+    // (all-rational prefix) infeasible by box consistency with `var` PINNED to that
+    // interval. Returns a strict-signed conflicting constraint, or nullopt. Sound
+    // (box ⊇ feasible projection over the cell) — the descent into that cell can be
+    // skipped and the cell taken as a conflict.
+    std::optional<std::pair<size_t, Sign>> boxSectorViolation(
+        const SamplePoint& prefix, VarId var, const mpq_class& lo, const mpq_class& hi,
+        const CdcacInput& input);
     // True once satRp_/satSafe_ are populated for the current solve's constraints.
     bool satRpBuilt_ = false;
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),

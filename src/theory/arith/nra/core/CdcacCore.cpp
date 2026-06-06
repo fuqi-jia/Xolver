@@ -1241,7 +1241,20 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (sectorLo < sectorHi) {
                     mpq_class sampleQ = pickRationalSample(sectorLo, sectorHi);
                     RealAlg sample = RealAlg::fromRational(sampleQ);
-                    CdcacResult res = testAndRecurse(sample);
+                    // BOX-ICP SECTOR PRUNE: if box consistency proves a SUPERSET of
+                    // this sector cell — [prevRoot.lower, root.upper] ⊇ (prevRoot,root)
+                    // — infeasible, the cell is a sound conflict; synthesize it without
+                    // descending the exponential grid below. Rational prefix only.
+                    CdcacResult res;
+                    bool prefRat = true;
+                    for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
+                    std::optional<std::pair<size_t, Sign>> sv;
+                    if (prefRat) {
+                        mpq_class boxLo = prevRoot->isRational() ? prevRoot->rational : prevRoot->root.lower;
+                        sv = boxSectorViolation(prefix, var, boxLo, rootUpper, input);
+                    }
+                    if (sv) res = makeLeafConflictResult({*sv}, input);
+                    else    res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
                     auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
@@ -1894,10 +1907,17 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                          const std::unordered_map<VarId, mpq_class>& m,
                          const CdcacInput& input,
                          std::unordered_map<VarId, Iv>& box,
-                         std::optional<std::pair<size_t, Sign>>* aConf = nullptr) {
+                         std::optional<std::pair<size_t, Sign>>* aConf = nullptr,
+                         const std::unordered_map<VarId, Iv>* seed = nullptr) {
     box.clear();
-    for (VarId v : input.varOrder)
-        if (!m.count(v)) box[v] = Iv::all();
+    for (VarId v : input.varOrder) {
+        if (m.count(v)) continue;
+        // An unassigned var defaults to (−∞,∞); `seed` lets the caller pin one to a
+        // known cell interval (sector) — proving THAT box infeasible proves the whole
+        // cell infeasible (sound: box ⊇ feasible projection over the cell).
+        box[v] = Iv::all();
+        if (seed) { auto it = seed->find(v); if (it != seed->end()) box[v] = it->second; }
+    }
     if (box.empty()) return false;   // all vars assigned — the leaf check handles it
     std::vector<size_t> cons;
     for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
@@ -1995,6 +2015,26 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf);
     if (!inf || !aConf) return std::nullopt;
     // Confirm the surfaced sign genuinely violates the relation.
+    if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
+        return std::nullopt;
+    return aConf;
+}
+
+std::optional<std::pair<size_t, Sign>> CdcacCore::boxSectorViolation(
+    const SamplePoint& prefix, VarId var, const mpq_class& lo, const mpq_class& hi,
+    const CdcacInput& input) {
+    std::unordered_map<VarId, mpq_class> m;
+    for (size_t i = 0; i < prefix.values.size(); ++i) {
+        if (!prefix.values[i].isRational()) return std::nullopt;   // defensive
+        m[prefix.varOrder[i]] = prefix.values[i].rational;
+    }
+    // Pin the current variable to its cell interval [lo,hi]; deeper vars stay R.
+    Iv cellIv; cellIv.lo = lo; cellIv.hi = hi;       // finite both ends (a sector gap)
+    std::unordered_map<VarId, Iv> seed{ {var, cellIv} };
+    std::unordered_map<VarId, Iv> box;
+    std::optional<std::pair<size_t, Sign>> aConf;
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf, &seed);
+    if (!inf || !aConf) return std::nullopt;
     if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
         return std::nullopt;
     return aConf;
