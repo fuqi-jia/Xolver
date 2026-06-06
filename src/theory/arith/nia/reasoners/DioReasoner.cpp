@@ -20,6 +20,94 @@ mpz_class normMod(const mpz_class& r, const mpz_class& m) {
 
 DioReasoner::DioReasoner(PolynomialKernel& kernel) : kernel_(kernel) {}
 
+std::optional<std::vector<SatLit>> DioReasoner::tightenConflict(
+    const std::vector<DioLinForm>& eqs,
+    const std::vector<DioLinForm>& neqs,
+    const std::map<std::string, DioVarBound>& bounds) {
+    if (neqs.empty()) return std::nullopt;
+
+    // Lattice equalities, each with the literal(s) justifying it. Two sources:
+    //  (1) the explicit equality atoms (single reason);
+    //  (2) bound-PINNED variables (lo == hi) → the equality `v = lo`, justified
+    //      by both bound literals. This is how a mod-zero expressed as the
+    //      inequality pair `r ≤ 0 ∧ r ≥ 0` (rather than `r = 0`) still feeds the
+    //      divisibility `x = M·q + r` into the lattice as `x ≡ 0 (mod M)`.
+    struct IEq { std::vector<std::pair<std::string, mpz_class>> coeffs; mpz_class cst;
+                 std::vector<SatLit> reasons; };
+    std::vector<IEq> ieqs;
+    for (const auto& e : eqs) ieqs.push_back({e.coeffs, e.cst, {e.reason}});
+    for (const auto& [v, bb] : bounds) {
+        if (!(bb.hasLo && bb.hasHi && bb.lo == bb.hi)) continue;
+        std::vector<SatLit> rs = bb.loReasons;
+        rs.insert(rs.end(), bb.hiReasons.begin(), bb.hiReasons.end());
+        ieqs.push_back({{{v, mpz_class(1)}}, -bb.lo, std::move(rs)});  // v - lo = 0
+    }
+    if (ieqs.empty()) return std::nullopt;
+
+    // Column space = every variable appearing in a (lattice) equality or a diseq.
+    std::map<std::string, int> colIdx;
+    std::vector<std::string> cols;
+    auto intern = [&](const std::string& v) {
+        auto it = colIdx.find(v);
+        if (it != colIdx.end()) return it->second;
+        int id = static_cast<int>(cols.size());
+        colIdx[v] = id;
+        cols.push_back(v);
+        return id;
+    };
+    for (const auto& e : ieqs) for (const auto& [v, a] : e.coeffs) { (void)a; intern(v); }
+    for (const auto& d : neqs) for (const auto& [v, a] : d.coeffs) { (void)a; intern(v); }
+    const int n = static_cast<int>(cols.size());
+    const int m = static_cast<int>(ieqs.size());
+    if (n == 0) return std::nullopt;
+
+    // SNF is super-linear in rows×cols — skip pathological systems so this never
+    // becomes a time sink on large QF_(A)NIA inputs.
+    constexpr size_t CAP = 256;
+    if (ieqs.size() > CAP || cols.size() > CAP) return std::nullopt;
+
+    // A·x = b  (Σ a·x = -cst).  Coefficients are already integer.
+    IntMatrix A(m, std::vector<mpz_class>(n, mpz_class(0)));
+    std::vector<mpz_class> b(m, mpz_class(0));
+    for (int i = 0; i < m; ++i) {
+        for (const auto& [v, a] : ieqs[i].coeffs) A[i][colIdx.at(v)] += a;
+        b[i] = -ieqs[i].cst;
+    }
+
+    std::vector<std::optional<mpz_class>> lo(n), hi(n);
+    for (int j = 0; j < n; ++j) {
+        auto it = bounds.find(cols[j]);
+        if (it == bounds.end()) continue;
+        if (it->second.hasLo) lo[j] = it->second.lo;
+        if (it->second.hasHi) hi[j] = it->second.hi;
+    }
+
+    for (const auto& d : neqs) {
+        std::vector<mpz_class> formW(n, mpz_class(0));
+        for (const auto& [v, a] : d.coeffs) formW[colIdx.at(v)] += a;
+        if (!latticeForcesFormZero(A, b, lo, hi, formW, d.cst)) continue;
+
+        // Sound conflict: the lattice equalities (incl. the pinned-bound ones,
+        // with their bound literals), this disequality, and the bound literals of
+        // the form's variables (the hull) are jointly inconsistent. Including
+        // ALL lattice reasons is an over-approximation, hence sound.
+        std::vector<SatLit> rs;
+        std::set<std::pair<uint32_t, bool>> seen;
+        auto add = [&](const SatLit& l) { if (seen.insert({l.var, l.sign}).second) rs.push_back(l); };
+        for (const auto& e : ieqs) for (const auto& l : e.reasons) add(l);
+        add(d.reason);
+        for (int j = 0; j < n; ++j) {
+            if (formW[j] == 0) continue;
+            auto it = bounds.find(cols[j]);
+            if (it == bounds.end()) continue;
+            for (const auto& l : it->second.loReasons) add(l);
+            for (const auto& l : it->second.hiReasons) add(l);
+        }
+        return rs;
+    }
+    return std::nullopt;
+}
+
 bool DioReasoner::latticeForcesFormZero(
     const IntMatrix& A,
     const std::vector<mpz_class>& b,

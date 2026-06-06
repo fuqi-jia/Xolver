@@ -5,7 +5,9 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/presolve/IntegerLinearAlgebra.h"
 #include <gmpxx.h>
+#include <map>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace xolver {
@@ -20,6 +22,29 @@ struct DioCongruence {
     VarId var;
     mpz_class residue;   // 0 <= residue < modulus
     mpz_class modulus;   // > 0
+    SatLit reason;
+};
+
+/**
+ * A variable's integer bounds with the literals that justify them — fed to the
+ * lattice-tightening path (tightenConflict) so the bound hull's contribution to
+ * a conflict is soundly explained.
+ */
+struct DioVarBound {
+    bool hasLo = false, hasHi = false;
+    mpz_class lo, hi;
+    std::vector<SatLit> loReasons, hiReasons;
+};
+
+/**
+ * A normalized integer linear form  Σ coeff·var + cst  (relation against 0 given
+ * by the list it lives in), with the literal that justifies the source atom.
+ * String-keyed so both LIA (LinearFormKey) and NIA can build it from their own
+ * representation and share the one tightening implementation.
+ */
+struct DioLinForm {
+    std::vector<std::pair<std::string, mpz_class>> coeffs;
+    mpz_class cst;
     SatLit reason;
 };
 
@@ -50,6 +75,20 @@ public:
 
     NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints,
                            const std::vector<DioCongruence>& congruences);
+
+    /**
+     * Lattice-tightening refutation (arith-dio-tighten) over already-normalized
+     * integer data. Builds the equalities into A·x = b, then for each disequality
+     * `form ≠ 0` tests whether the equality lattice + the per-variable bounds
+     * force `form` to 0 (latticeForcesFormZero). Returns, for the first such
+     * disequality, the conflict literals = the equalities' reasons + that
+     * disequality's reason + the bound literals of the form's variables; or
+     * nullopt if nothing is forced. Pure and string-keyed so LIA and NIA share it.
+     */
+    static std::optional<std::vector<SatLit>> tightenConflict(
+        const std::vector<DioLinForm>& eqs,
+        const std::vector<DioLinForm>& neqs,
+        const std::map<std::string, DioVarBound>& bounds);
 
     /**
      * Pure lattice-step + bound-tightening core (z3's arith-dio-tighten).
