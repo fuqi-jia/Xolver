@@ -402,16 +402,35 @@ void CandidateModelSearch::buildPriorityList() {
             }
             // free app: fall through to full enumeration below.
         } else {
-            // An arith var FORCED to a single value (lower==upper, e.g. from
-            // (= v c) or v<=c & v>=c) is not part of the search — enumerate it as
-            // a SINGLETON so the Cartesian product is over genuinely-free vars
-            // only. Sound: the constraint requires exactly that value.
+            // An arith var with forced bounds [lo,hi] is RESTRICTED to that range:
+            // enumerating the full priority list (~21 values) over many bounded
+            // vars is a Cartesian explosion (e.g. 4^6 vs 21^6 for six vars in
+            // [0,3]). Sound AND complete — the bounds are top-level forced
+            // (detectActiveBounds), so no satisfying value is excluded. Subsumes
+            // the earlier lower==upper singleton case.
             auto bit = activeBounds_.find(var.name);
-            if (bit != activeBounds_.end() && bit->second.lower && bit->second.upper
-                && *bit->second.lower == *bit->second.upper
-                && !(var.sort == ir_.intSortId() && bit->second.lower->get_den() != 1)) {
-                perVar_[i].push_back(*bit->second.lower);
-                continue;
+            if (bit != activeBounds_.end() && bit->second.lower && bit->second.upper) {
+                const mpq_class lo = *bit->second.lower;
+                const mpq_class hi = *bit->second.upper;
+                bool intVar = (var.sort == ir_.intSortId());
+                if (intVar && lo.get_den() == 1 && hi.get_den() == 1 &&
+                    lo <= hi && (hi - lo) <= mpq_class(4096)) {
+                    // Small finite int range (incl. singleton lo==hi): enumerate
+                    // {lo..hi}, height-sorted (runStrategy10a's envelope assumes
+                    // monotonic height). Complete: every integer in range tried.
+                    std::vector<mpq_class> rng;
+                    for (mpq_class v = lo; v <= hi; v += 1) rng.push_back(v);
+                    std::sort(rng.begin(), rng.end(),
+                              [](const mpq_class& a, const mpq_class& b) {
+                                  return heightOf(a) < heightOf(b);
+                              });
+                    perVar_[i] = std::move(rng);
+                    continue;
+                }
+                if (lo == hi && !intVar) {  // real var pinned to a single value
+                    perVar_[i].push_back(lo);
+                    continue;
+                }
             }
         }
         // Per-variable list = shared priority filtered by sort. Int-sorted
