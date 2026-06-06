@@ -276,12 +276,17 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         for (VarId v : q.variables()) if (v != genVar) return false;
         return true;
     };
-    // --- derive a remaining variable from a linear-in-it equality ----------------
+    // --- derive remaining variables from linear-in-them equalities ---------------
+    // Iterate to a fixpoint so CHAINS resolve (e.g. w2 = v12+v13 then m = 1/w2):
+    // each newly-derived variable is substituted into the rest on the next pass.
+    bool dprogress = true;
+    while (dprogress) {
+    dprogress = false;
     for (size_t j = 0; j < eqs.size(); ++j) {
         if (done[j]) continue;
         auto rp0 = RationalPolynomial::fromPolyId(eqs[j], kernel);
         if (!rp0) continue;
-        RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases
+        RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases + derived
         // pick the unassigned variable that is NOT the generator
         VarId d = NullVar;
         for (VarId v : rps.variables()) {
@@ -320,6 +325,8 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         mv.normalize();
         derivedVal[d] = std::move(mv);
         done[j] = 1;
+        dprogress = true;
+    }
     }
 
     // --- VALIDATE every original constraint over the single generator ------------
