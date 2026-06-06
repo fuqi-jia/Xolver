@@ -693,6 +693,9 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
 
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
     satRpBuilt_ = false;   // rebuild the interval-FP cache for this solve's constraints
+    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+        std::cerr << "[CDCAC-SOLVE] entry vars=" << input.varOrder.size()
+                  << " cons=" << input.constraints.size() << std::endl;
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif

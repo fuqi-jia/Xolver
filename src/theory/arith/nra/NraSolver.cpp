@@ -1553,6 +1553,9 @@ std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
 // the Collins-vs-CAC differential; promotion to default is decided by that diff.
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
+    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+        std::cerr << "[STAGE-CAC] entry effort=" << static_cast<int>(effort)
+                  << " enableCac=" << enableCac_ << std::endl;
     if (!enableCac_) return std::nullopt;
     // EFFORT SCHEDULE (validated by the Collins-vs-CAC A/B + endorsed design):
     //   Standard effort → cheap engines (Collins as cheap CAD, linearized checks);
@@ -2067,6 +2070,8 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
 // Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
+    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+        std::cerr << "[STAGE-CDCAC] reached (engine_ will run core_->solve)" << std::endl;
     // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
     // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
     // unknown when CAC cannot decide, rather than a default/false verdict.

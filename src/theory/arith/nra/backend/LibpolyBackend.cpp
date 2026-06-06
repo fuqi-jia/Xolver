@@ -523,6 +523,11 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
     if (algIndices.empty()) return signAtRational(p, sample);
     if (algIndices.size() == 1) return signAtOneAlgebraic(p, sample);
 
+    static const bool kTowerDiag = std::getenv("XOLVER_NRA_TOWER_DIAG") != nullptr;
+    auto dbg = [&](const char* w) {
+        if (kTowerDiag) std::cerr << "[TOWER] Unknown(" << w << ") algCount=" << algIndices.size() << std::endl;
+    };
+
     // Patch 7 invariant: sample.prefix(k) = variables at levels [0, k).
     // Tower reduction processes from highest level to lowest.
     // When reducing modulo level i's defining polynomial, the prefix contains
@@ -538,7 +543,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
 
         const AlgebraicRoot& alpha = val.root;
         // Patch 10: missing definingPoly → Unknown (hard rule)
-        if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
+        if (alpha.definingPoly == NullUniPolyId) { dbg("noDefPoly"); return Sign::Unknown; }
 
         // Convert the univariate defining polynomial back to a PolyId
         VarId var = sample.varOrder[idx];
@@ -549,7 +554,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
 #ifndef NDEBUG
             std::cerr << "[CDCAC]       signAtTower: prem failed" << std::endl;
 #endif
-            return Sign::Unknown;
+            dbg("prem"); return Sign::Unknown;
         }
         current = pr.remainder;
         if (pr.exponent > 0 && pr.scaleFactor != NullPoly) {
@@ -557,7 +562,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                 mpq_class c = kernel_->toConstant(pr.scaleFactor);
                 if (c == 0) {
                     // Leading coefficient nullified at sample: degeneracy
-                    return Sign::Unknown;
+                    dbg("degen"); return Sign::Unknown;
                 }
                 Sign s = (c > 0) ? Sign::Pos : Sign::Neg;
                 if (pr.exponent % 2 != 0) {
@@ -569,7 +574,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                 // In normal operation, definingPoly has constant coefficients,
                 // so scaleFactor should always be constant.
                 // If not, return Unknown conservatively.
-                return Sign::Unknown;
+                dbg("nonConstScale"); return Sign::Unknown;
             }
         }
     }
@@ -595,7 +600,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         }
     } else {
         // Cannot inspect terms: conservatively return Unknown
-        return Sign::Unknown;
+        dbg("noTerms"); return Sign::Unknown;
     }
 
     if (hasRemainingAlg) {
@@ -611,14 +616,14 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         // frame) so this caller's live locals (scaleSign/current) cannot be
         // clobbered by longjmp. A recovered crash ⇒ Sign::Unknown.
         Sign s = signAtSampleGuarded(current, sample);
-        if (s == Sign::Unknown) return Sign::Unknown;
+        if (s == Sign::Unknown) { dbg("guardedRemAlg"); return Sign::Unknown; }
         return multiplySigns(scaleSign, s);
 #endif
     }
 
     // After tower reduction, evaluate at the (now rational-only) sample point.
     Sign s = signAtRational(current, sample);
-    if (s == Sign::Unknown) return Sign::Unknown;
+    if (s == Sign::Unknown) { dbg("rationalAfterReduce"); return Sign::Unknown; }
     return multiplySigns(scaleSign, s);
 }
 
