@@ -48,6 +48,29 @@ private:
     std::optional<std::string> asNumericVar(ExprId e) const;
     bool isLinearReconstructable(ExprId e) const;
 
+    // Test whether a Variable named `name` occurs anywhere in `root`'s subtree.
+    // Memoized per call via the caller-supplied set.
+    bool varOccursIn(const std::string& name, ExprId root) const;
+
+    // Drop-action descriptor: a single witness recipe to satisfy or violate
+    // an atom by choosing an unconstrained Variable's value.
+    struct DropAction {
+        std::string varName;
+        SortId sort;
+        bool useElim = false;                       // true → registerElimination, false → registerWitness
+        ModelConverter::Rel rel = ModelConverter::Rel::Ge;
+        ExprId bound = NullExpr;
+    };
+
+    // Find a single drop-action that makes `e` evaluate to `desiredTruth`.
+    // Recurses through Not / Or (truth-preserving) and And (falsifiable).
+    // Returns false if no such action is possible from this subtree.
+    bool findDropAction(ExprId e, bool desiredTruth, DropAction& out) const;
+
+    // Apply a DropAction to the ModelConverter (registerElimination /
+    // registerWitness depending on .useElim).
+    void applyAction(const DropAction& a);
+
     CoreIr& ir_;
     ModelConverter& mc_;
     SortId boolSortId_;
