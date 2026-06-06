@@ -177,8 +177,18 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
         }
     };
 
-    std::function<void(ExprId)> walk = [&](ExprId eid) {
+    // Eager bit-blast recurses through boolean structure (walk/encode/ev). It is
+    // a CANDIDATE backend for bounded ARITHMETIC, not deep boolean trees — those
+    // are handled natively by CDCL(T)+CaDiCaL. Bail past a safe recursion depth
+    // so a pathologically deep formula (e.g. a 60k-deep Or chain) routes to the
+    // sound fallback engine instead of overflowing the stack in encode().
+    // This is an ENGINE-ROUTING threshold, NOT a search budget: the fallback
+    // solves the formula completely. walk() runs before encode()/ev(), and
+    // ok=false here makes solve() return false (unsupported) -> fallback.
+    constexpr int kMaxBoolNestDepth = 2000;
+    std::function<void(ExprId, int)> walk = [&](ExprId eid, int depth) {
         if (!ok || !visited.insert(eid).second) return;
+        if (depth > kMaxBoolNestDepth) { ok = false; return; }
         const CoreExpr& e = ir.get(eid);
         switch (e.kind) {
             case Kind::ConstBool:
@@ -195,7 +205,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                 return;
             case Kind::Not: case Kind::And: case Kind::Or:
             case Kind::Implies: case Kind::Xor: case Kind::Ite:
-                for (ExprId c : e.children) walk(c);
+                for (ExprId c : e.children) walk(c, depth + 1);
                 return;
             case Kind::Eq: case Kind::Distinct:
                 if (isArithAtom(eid, ir)) {
@@ -211,7 +221,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                     }
                     atomCs_[eid] = std::move(cs);
                 } else {
-                    for (ExprId c : e.children) walk(c);  // boolean iff / distinct
+                    for (ExprId c : e.children) walk(c, depth + 1);  // boolean iff / distinct
                 }
                 return;
             case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
@@ -229,7 +239,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
         }
     };
 
-    for (ExprId a : assertions) walk(a);
+    for (ExprId a : assertions) walk(a, 0);
     if (!ok) return false;
     intVars_.assign(intVarSet.begin(), intVarSet.end());
 
