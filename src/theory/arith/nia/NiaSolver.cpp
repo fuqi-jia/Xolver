@@ -2541,8 +2541,22 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             }
         }
         ArithModelValidator amv(*coreIr_, num, bools);
-        return amv.validate(coreIr_->assertions()) ==
-               ArithModelValidator::Verdict::Satisfied;
+        auto verdict = amv.validate(coreIr_->assertions());
+        // Per-assertion failure diag: walk each assertion individually,
+        // report which fail. Gated on XOLVER_NIA_FARKAS_FAILDIAG so the
+        // default path is identical.
+        if (verdict != ArithModelValidator::Verdict::Satisfied &&
+            std::getenv("XOLVER_NIA_FARKAS_FAILDIAG")) {
+            for (std::size_t ai = 0; ai < coreIr_->assertions().size(); ++ai) {
+                ExprId aid = coreIr_->assertions()[ai];
+                auto v = amv.validate({aid});
+                if (v != ArithModelValidator::Verdict::Satisfied) {
+                    std::fprintf(stderr, "    [FAILDIAG] assertion[%zu] (id=%u) verdict=%d\n",
+                                 ai, aid, static_cast<int>(v));
+                }
+            }
+        }
+        return verdict == ArithModelValidator::Verdict::Satisfied;
     };
 
     int candIdx = 0;
