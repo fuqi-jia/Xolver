@@ -63,14 +63,6 @@ public:
     // these directly. Empty when XOLVER_NIA_NATIVE_MODEQCONST is OFF.
     const ModEqConstFactList& modEqConstFacts() const { return modEqConstFacts_; }
 
-    // Track A Phase 1.5: aggressive mode marks the (a, b) pair of every
-    // captured fact so emitVariableDivisorConstraints / emitConstDivisorConstraints
-    // skip the eager q*y system for those defs. The native reasoner + the
-    // validator-side gate (Solver::modelSatisfiesModEqConstFacts) provide
-    // soundness. Without the aggressive flag this set is always empty and
-    // every def goes through the legacy emit path unchanged.
-    bool isNativeOwnedDef(ExprId a, ExprId b) const;
-
 private:
     ExprId lowerRec(ExprId e, ScopeLevel level);
     ExprId lowerDiv(ExprId a, ExprId b, ScopeLevel level);
@@ -185,26 +177,6 @@ private:
 
     // Track A Phase 1.1 — native ModEqConst fact storage.
     ModEqConstFactList modEqConstFacts_;
-
-    // Track A Phase 1.5 — set of (a, b) pairs whose (mod a b) is owned by
-    // the native ModEqConstReasoner under aggressive mode. Populated by a
-    // pre-pass over assertions before lowerRec runs, so lowerMod can decide
-    // whether to skip the eager q*y emit.
-    struct PairKey {
-        ExprId a;
-        ExprId b;
-        bool operator==(const PairKey& o) const noexcept {
-            return a == o.a && b == o.b;
-        }
-    };
-    struct PairKeyHash {
-        size_t operator()(const PairKey& k) const noexcept {
-            size_t h = std::hash<ExprId>{}(k.a);
-            h ^= std::hash<ExprId>{}(k.b) + 0x9e3779b97f4a7c15ULL + (h<<6) + (h>>2);
-            return h;
-        }
-    };
-    std::unordered_set<PairKey, PairKeyHash> nativeOwnedModDefs_;
 };
 
 } // namespace xolver

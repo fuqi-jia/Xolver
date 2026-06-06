@@ -17,48 +17,9 @@ bool IntDivModLowerer::run() {
     memo_.clear();
     loweredAssertions_.clear();
     positiveVars_.clear();
-    modEqConstFacts_.clear();        // Track A Phase 1.1
-    nativeOwnedModDefs_.clear();     // Track A Phase 1.5
+    modEqConstFacts_.clear();  // Track A Phase 1.1
 
     auto scoped = ir_.getScopedAssertions();
-
-    // Track A Phase 1.5 — pre-pass: identify every (mod a b) whose enclosing
-    // assertion is `(= (mod a b) c)`. If aggressive mode is on, those (a, b)
-    // pairs are added to nativeOwnedModDefs_ so lowerMod skips the q*y emit.
-    // The fact list itself is still populated post-lowering (atomExpr binds
-    // to the LOWERED form, see tryInterceptModEqConst).
-    static const bool aggressive = [] {
-        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST_AGGRESSIVE");
-        return e && *e && *e != '0';
-    }();
-    static const bool baseEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
-        return e && *e && *e != '0';
-    }();
-    if (baseEnabled && aggressive) {
-        for (const auto& [level, a] : scoped) {
-            (void)level;
-            const auto& aNode = ir_.get(a);
-            if (aNode.kind != Kind::Eq) continue;
-            if (aNode.children.size() != 2) continue;
-            for (int side = 0; side < 2; ++side) {
-                ExprId mc = aNode.children[side];
-                ExprId cc = aNode.children[1 - side];
-                const auto& mNode = ir_.get(mc);
-                if (mNode.kind != Kind::Mod || mNode.sort != intSortId_) continue;
-                if (mNode.children.size() != 2) continue;
-                auto constOpt = evalIntConstTerm(cc);
-                if (!constOpt) continue;
-                ExprId xExpr = mNode.children[0];
-                ExprId yExpr = mNode.children[1];
-                // Skip constant divisor — the constant-divisor emit path is
-                // cheap (no `b=0` undef branch) and ModularResidueReasoner
-                // does the residue work already.
-                if (evalIntConstTerm(yExpr)) continue;
-                nativeOwnedModDefs_.insert({xExpr, yExpr});
-            }
-        }
-    }
     // Track C1 Phase 2: pre-scan strict-positive lower bounds so the
     // symbolic-divisor branch can avoid the EUF-requiring `b = 0` undef
     // case when the divisor is provably non-zero. Sound: only removes the
@@ -203,19 +164,8 @@ ExprId IntDivModLowerer::lowerMod(ExprId a, ExprId b, ScopeLevel level) {
         }
     } else {
         // variable divisor
-        // Track A Phase 1.5: if this (a, b) was identified by the pre-pass
-        // as a native-owned ModEqConst fact AND the aggressive flag is on,
-        // SKIP the eager q*y / `b=0` undef emit entirely. The fact is
-        // routed to ModEqConstReasoner which will derive Conflicts when
-        // possible; soundness is restored at the validator gate
-        // (Solver::Impl::modelSatisfiesModEqConstFacts).
-        if (isNativeOwnedDef(a, b)) {
-            def.arithmeticConstraintsEmitted = true;
-            def.zeroBranchEmitted = true;
-            // r is a fresh integer variable; the lowered assertion
-            // `(= r c)` will be emitted by the parent equality after
-            // lowerRec returns def.r. No needsEUF requirement raised.
-        } else if (!def.arithmeticConstraintsEmitted && !def.zeroBranchEmitted) {
+        // Variable divisor
+        if (!def.arithmeticConstraintsEmitted && !def.zeroBranchEmitted) {
             emitVariableDivisorConstraints(def, level);
             def.arithmeticConstraintsEmitted = true;
             def.zeroBranchEmitted = true;
@@ -523,11 +473,6 @@ void IntDivModLowerer::tryInterceptModEqConst(ExprId originalAssertion,
     fact.atomExpr = loweredAssertion;  // post-lowering form is what the SAT layer sees
     // fact.reason is filled later by NiaSolver when the atom is asserted.
     modEqConstFacts_.push_back(std::move(fact));
-}
-
-bool IntDivModLowerer::isNativeOwnedDef(ExprId a, ExprId b) const {
-    if (nativeOwnedModDefs_.empty()) return false;
-    return nativeOwnedModDefs_.count({a, b}) > 0;
 }
 
 void IntDivModLowerer::updateRequirement(bool needsNonlinear, bool needsEUF) {

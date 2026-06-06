@@ -133,73 +133,6 @@ public:
     std::string lastUnknownComponent_;
     std::string lastUnknownDetail_;
 
-    // Track A Phase 1.5 — soundness gate for aggressive native ModEqConst.
-    // Called at every Sat-emitting return site: when the aggressive flag is
-    // on the lowerer skips q*y emit, so a Sat verdict from any path is
-    // unsound unless every captured fact's `(x mod y) = c` evaluates true
-    // under the current lastModel_. Returns true iff downgrade is required.
-    // Sets lastUnknownReason_ and clears lastModel_ when returning true.
-    bool modEqConstAggressiveDowngrade() {
-        static const bool aggressive = [] {
-            const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST_AGGRESSIVE");
-            return e && *e && *e != '0';
-        }();
-        if (!aggressive) return false;
-        if (modEqConstFacts_.empty()) return false;
-        if (!ir) return false;
-        if (!lastModel_) {
-            // No model bound yet ⇒ cannot validate ⇒ unsafe to call Sat.
-            lastUnknownReason_ = "ModEqConst aggressive: no model to validate";
-            return true;
-        }
-        auto getVarName = [&](ExprId eid) -> std::string {
-            if (eid == NullExpr) return {};
-            const auto& e = ir->get(eid);
-            if (e.kind != Kind::Variable) return {};
-            if (auto* s = std::get_if<std::string>(&e.payload.value)) return *s;
-            return {};
-        };
-        auto lookupInt = [&](const std::string& nm, mpz_class& outVal) -> bool {
-            if (nm.empty()) return false;
-            auto it = lastModel_->assignments.find(nm);
-            if (it == lastModel_->assignments.end()) return false;
-            try {
-                mpq_class q(it->second);
-                if (q.get_den() != 1) return false;
-                outVal = q.get_num();
-                return true;
-            } catch (...) { return false; }
-        };
-        for (const auto& fact : modEqConstFacts_) {
-            std::string xn = getVarName(fact.xExpr);
-            std::string yn = getVarName(fact.yExpr);
-            if (xn.empty() || yn.empty()) continue;
-            mpz_class xv, yv;
-            if (!lookupInt(xn, xv) || !lookupInt(yn, yv)) {
-                lastUnknownReason_ =
-                    "ModEqConst aggressive: model missing x or y binding";
-                lastModel_.reset();
-                return true;
-            }
-            if (yv == 0) {
-                lastUnknownReason_ =
-                    "ModEqConst aggressive: model has y=0 (mod undefined)";
-                lastModel_.reset();
-                return true;
-            }
-            mpz_class absY = (yv > 0 ? yv : -yv);
-            mpz_class rem;
-            mpz_fdiv_r(rem.get_mpz_t(), xv.get_mpz_t(), absY.get_mpz_t());
-            if (rem != fact.c) {
-                lastUnknownReason_ =
-                    "ModEqConst aggressive: model fails (x mod y)=c";
-                lastModel_.reset();
-                return true;
-            }
-        }
-        return false;
-    }
-
     // True iff the SMT-LIB input set :produce-models / issued (get-model).
     bool modelRequestedImpl() const {
         if (!parser) return false;
@@ -2598,12 +2531,6 @@ public:
                 auto ibr = eagerbb.solve(*ir, ir->assertions());
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
-                    if (modEqConstAggressiveDowngrade()) {
-#ifdef XOLVER_ENABLE_CASESTATS
-                        finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
-#endif
-                        return Result::Unknown;
-                    }
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
@@ -2975,79 +2902,6 @@ public:
                     if (modelViolatesOriginal()) lastModel_ = std::move(saved);
                 }
             }
-            // Track A Phase 1.5: when aggressive mode skipped the q*y emit
-            // for ModEqConstFacts, the SAT layer may report a model that
-            // satisfies `(= r c)` but violates the ORIGINAL `(mod x y) = c`
-            // assertion. modelViolatesOriginal() already evaluates the
-            // original form (Kind::Mod is supported in ArithModelValidator);
-            // here we treat a definite violation under aggressive mode as
-            // grounds to downgrade Sat → Unknown rather than accept an
-            // unsound positive verdict. Soundness floor for Phase 1.5.
-            if (!modEqConstFacts_.empty()) {
-                static const bool aggressive = [] {
-                    const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST_AGGRESSIVE");
-                    return e && *e && *e != '0';
-                }();
-                // Phase 1.5 soundness floor: aggressive mode skips q*y, so
-                // x and y may be FREE under the SAT abstraction. Even if
-                // get-model wasn't called, we must validate against the
-                // original assertions because skipping the emit leaks a
-                // sat verdict otherwise. Use the Indeterminate-tolerant
-                // form: any Indeterminate (e.g. y=0 → mod undefined) is
-                // ALSO an unsound positive verdict and must be downgraded.
-                if (aggressive && ir && lastModel_) {
-                    // Direct soundness check: for each ModEqConstFact, look up
-                    // x and y values in the model and re-evaluate the fact.
-                    // If y = 0 (mod undefined) or (x mod |y|) != c, downgrade.
-                    auto getVarName = [&](ExprId eid) -> std::string {
-                        if (eid == NullExpr) return {};
-                        const auto& e = ir->get(eid);
-                        if (e.kind != Kind::Variable) return {};
-                        if (auto* s = std::get_if<std::string>(&e.payload.value)) return *s;
-                        return {};
-                    };
-                    auto lookupInt = [&](const std::string& nm,
-                                          mpz_class& outVal) -> bool {
-                        if (nm.empty()) return false;
-                        auto it = lastModel_->assignments.find(nm);
-                        if (it == lastModel_->assignments.end()) return false;
-                        try {
-                            mpq_class q(it->second);
-                            if (q.get_den() != 1) return false;
-                            outVal = q.get_num();
-                            return true;
-                        } catch (...) { return false; }
-                    };
-                    bool mustDowngrade = false;
-                    for (const auto& fact : modEqConstFacts_) {
-                        std::string xn = getVarName(fact.xExpr);
-                        std::string yn = getVarName(fact.yExpr);
-                        if (xn.empty() || yn.empty()) continue;  // Phase 1.5 restricted to Variable
-                        mpz_class xv, yv;
-                        if (!lookupInt(xn, xv) || !lookupInt(yn, yv)) {
-                            // Model didn't bind one of the vars → underspec.
-                            mustDowngrade = true;
-                            break;
-                        }
-                        if (yv == 0) {
-                            // mod by 0 → undefined; aggressive path forbids.
-                            mustDowngrade = true;
-                            break;
-                        }
-                        mpz_class absY = (yv > 0 ? yv : -yv);
-                        mpz_class rem;
-                        mpz_fdiv_r(rem.get_mpz_t(), xv.get_mpz_t(), absY.get_mpz_t());
-                        if (rem != fact.c) {
-                            mustDowngrade = true;
-                            break;
-                        }
-                    }
-                    if (mustDowngrade) {
-                        lastUnknownReason_ = "ModEqConst aggressive: model fails (mod x y)=c validation";
-                        ret = Result::Unknown;
-                    }
-                }
-            }
         } else if (result == SatSolver::SolveResult::Unsat) {
             ret = Result::Unsat;
         } else {
@@ -3370,12 +3224,6 @@ public:
                 lastModel_.reset();
                 ret = Result::Unknown;
             }
-        }
-
-        // Track A Phase 1.5 — final exit gate (the helper is also called at
-        // earlier return-Sat sites; this one covers the main ret path).
-        if (ret == Result::Sat && modEqConstAggressiveDowngrade()) {
-            ret = Result::Unknown;
         }
 
 #ifdef XOLVER_ENABLE_CASESTATS
