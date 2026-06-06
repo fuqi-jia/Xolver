@@ -87,7 +87,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       gcdDivisibility_(*kernel_),
       modularResidue_(*kernel_),
       groebner_(*kernel_),
-      modEqConst_(*kernel_, /*ir=*/nullptr) {
+      modEqConst_(*kernel_, /*ir=*/nullptr),
+      dio_(*kernel_) {
     // modEqConst_'s CoreIr* is set in setCoreIr(); until then run() returns
     // NoChange (defensive — no fact processing happens before setCoreIr).
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
@@ -221,6 +222,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // AProVE-class cases where K=2..3 already finds a witness. Sound: every
     // SAT validated by validator_ over the ORIGINAL constraint set.
     addFull("nia.escalating-bounded", &NiaSolver::stageEscalatingBounded);
+    // Symbolic modular Diophantine refutation. BEFORE bit-blast so it can
+    // refute mod-2^k-structured UNSAT (which the blaster TOs/OOMs on) via exact
+    // symbolic congruence reasoning rather than residue enumeration.
+    addFull("nia.dio",        &NiaSolver::stageDio);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
     // residual. Full-effort only (heavy); runs after the SAT workhorses.
@@ -1383,6 +1388,47 @@ std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
         return TheoryCheckResult::mkConflict(*r.conflict);
     }
     // DomainUpdated / NoChange both fall through to the next stage.
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_DIO");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (modEqConstFacts_.empty() || !registry_ || !coreIr_) return std::nullopt;
+
+    // Build DioCongruences from currently-asserted (mod x m) = c facts:
+    //   (mod x m) = c   =>   x ≡ c (mod m)   for a CONSTANT divisor m > 1.
+    // (Variable-divisor facts have no constant modulus and are skipped.)
+    std::vector<DioCongruence> congs;
+    for (const auto& src : modEqConstFacts_) {
+        auto satVarOpt = registry_->findSatVarByExprId(src.atomExpr);
+        if (!satVarOpt) continue;
+        SatLit posLit{*satVarOpt, /*sign=*/false};
+        if (!activeSet_.contains(posLit)) continue;
+
+        const auto& xe = coreIr_->get(src.xExpr);
+        if (xe.kind != Kind::Variable) continue;
+        const auto* nm = std::get_if<std::string>(&xe.payload.value);
+        if (!nm) continue;
+
+        const auto& ye = coreIr_->get(src.yExpr);
+        if (ye.kind != Kind::ConstInt) continue;  // need a constant modulus
+        mpz_class m;
+        if (const auto* i = std::get_if<int64_t>(&ye.payload.value)) m = *i;
+        else if (const auto* s = std::get_if<std::string>(&ye.payload.value)) m = mpz_class(*s);
+        else continue;
+        if (m <= 1) continue;
+
+        congs.push_back({kernel_->getOrCreateVar(*nm), src.c, m, posLit});
+    }
+    if (congs.empty()) return std::nullopt;
+
+    auto r = dio_.run(normalized_, congs);
+    if (r.kind == NiaReasoningKind::Conflict)
+        return TheoryCheckResult::mkConflict(*r.conflict);
     return std::nullopt;
 }
 

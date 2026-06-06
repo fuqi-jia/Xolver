@@ -19,6 +19,7 @@
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/reasoners/ModEqConstReasoner.h"
+#include "theory/arith/nia/reasoners/DioReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -159,6 +160,9 @@ private:
     // at each Standard-effort check.
     ModEqConstFactList modEqConstFacts_;
     ModEqConstReasoner modEqConst_;
+    // Symbolic modular Diophantine refutation (nia.dio); congruences built from
+    // modEqConstFacts_ ((mod x m)=c => x≡c mod m).
+    DioReasoner dio_;
     bool enableBitBlast_ = true;
     // Lazy cache: -1 unknown, 0 no array terms, 1 has array terms (Store/Select).
     // Set on first stageBitBlastEarly; reset by setCoreIr. Gates bit-blast off on
@@ -321,6 +325,9 @@ private:
     // Track A Phase 1.3 — native ModEqConst rules 1-3. Only fires when the
     // XOLVER_NIA_NATIVE_MODEQCONST flag is set AND the fact list is non-empty.
     std::optional<TheoryCheckResult> stageNativeModEqConst(TheoryLemmaStorage&, TheoryEffort);
+    // Symbolic modular Diophantine refutation (XOLVER_NIA_DIO). Builds DioCongruences
+    // from active (mod x m)=c facts and runs DioReasoner over normalized_.
+    std::optional<TheoryCheckResult> stageDio(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);
