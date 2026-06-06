@@ -8,6 +8,12 @@
 #include "theory/arith/nra/core/CdcacConstraint.h"
 #include "theory/arith/nra/core/CdcacResult.h"
 #include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"   // NormalizedNiaConstraint
+#include "theory/arith/nia/core/DomainStore.h"
+#include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
+#include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
+#include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #include <algorithm>
@@ -287,6 +293,49 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
     // path — a later increment). Soundness: real-empty ⇒ integer-empty.
     if (kernel_ && !realRelaxTried_ && !asserted_.empty()) {
         realRelaxTried_ = true;
+
+        // (a) Reuse the standalone sound NIA refuters (the structural UNSAT proofs
+        // the default pipeline uses): sum-of-squares / square / gcd / modular.
+        // A Conflict from any is a sound integer UNSAT — closes the univariate
+        // gaps (x²=-1, sum-of-squares, gcd, mod-square) that bare real-relaxation
+        // (below) cannot certify. Run-once, cheap.
+        {
+            std::vector<NormalizedNiaConstraint> ncons;
+            for (const auto& a : asserted_) {
+                const auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+                if (!pp) continue;
+                auto rhsQ = pp->rhs.tryAsRational();
+                if (!rhsQ) continue;
+                NormalizedNiaConstraint nc;
+                nc.poly = polyMinusRhs(*kernel_, pp->poly, *rhsQ);
+                nc.rel = a.value ? pp->rel : negateRelation(pp->rel);
+                nc.reason = a.assertedLit;
+                ncons.push_back(nc);
+            }
+            if (!ncons.empty()) {
+                DomainStore dom;
+                auto take = [&](const NiaReasoningResult& r) -> bool {
+                    if (r.kind == NiaReasoningKind::Conflict && r.conflict) {
+                        pendingExplainClause_ = r.conflict->clause;
+                        return true;
+                    }
+                    return false;
+                };
+                SumOfSquaresBoundReasoner sos(*kernel_);
+                SquareBoundReasoner sq(*kernel_);
+                GcdDivisibilityReasoner gcd(*kernel_);
+                ModularResidueReasoner mod(*kernel_);
+                bool hit = take(sos.run(ncons, dom)) || take(sq.run(ncons, dom)) ||
+                           take(gcd.run(ncons)) || take(mod.run(ncons));
+                if (hit) {
+                    std::vector<TheoryAtomRecord> blocking;
+                    for (const auto& a : asserted_) blocking.push_back(a.atom);
+                    return mcsat::ValueChoice::conflict(std::move(blocking));
+                }
+            }
+        }
+
+        // (b) Real-relaxation UNSAT via CDCAC (multivariate cases).
         if (!algebra_) algebra_ = std::make_unique<LibpolyBackend>(kernel_);
         if (!cdcacFallback_)
             cdcacFallback_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
