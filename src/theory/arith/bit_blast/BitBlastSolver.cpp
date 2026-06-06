@@ -1,5 +1,6 @@
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "sat/SatSolver.h"
@@ -327,6 +328,13 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         }
         unsigned K = 2;
         while (true) {
+            // Wall-clock budget guard: the ×2 width escalation over a large
+            // array+NIA encoding (e.g. ddlm2013 / in-de42) can run unbounded in
+            // a single stageBitBlast call the CaDiCaL-callback guards cannot
+            // interrupt. Abort to Unknown when the deadline has passed. Default-
+            // inert (no XOLVER_WALLCLOCK_MS => no deadline); sum10's small
+            // encoding converges in the early small widths well before any budget.
+            if (wall::hasDeadline() && wall::remainingMs() == 0) return out;
             BitWidthPlan plan;
             for (const auto& kv : full.width)
                 plan.width[kv.first] = bounded.count(kv.first) ? kv.second
@@ -347,6 +355,8 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     // Default path: estimator-sized widths + ×grow, with complete-box UnsatComplete.
     BitWidthPlan plan = full;
     for (unsigned iter = 0; iter < maxIters_; ++iter) {
+        // Wall-clock budget guard (see the box-incomplete loop above).
+        if (wall::hasDeadline() && wall::remainingMs() == 0) return out;
         Attempt a = attemptAtWidths(plan, cs, domains, validator);
         if (a.kind == Attempt::Overflow) return out;   // incomplete encoding; widths only grow
         if (a.kind == Attempt::Sat) {
