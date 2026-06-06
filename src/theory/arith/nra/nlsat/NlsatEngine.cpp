@@ -739,9 +739,12 @@ std::vector<mpq_class> baseCandidatesForSign(int signHint) {
 // backend can specialize multivariate constraints to univariate in v.
 SamplePoint sampleFromMap(const std::unordered_map<VarId, mpq_class>& m,
                           const std::vector<VarId>& exclude) {
+    // iter-111 perf: hash-set exclude lookup. Was O(|m| × |exclude|) with
+    // std::find per map entry; now O(|m| + |exclude|) total via O(1) count().
+    std::unordered_set<VarId> excludeSet(exclude.begin(), exclude.end());
     SamplePoint sp;
     for (const auto& [v, q] : m) {
-        if (std::find(exclude.begin(), exclude.end(), v) != exclude.end()) continue;
+        if (excludeSet.count(v)) continue;
         sp.push(v, RealAlg::fromRational(q));
     }
     return sp;
