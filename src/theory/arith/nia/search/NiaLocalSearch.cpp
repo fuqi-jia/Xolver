@@ -229,11 +229,15 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
         return ms >= budgetMs_;
     };
 
-    // Collect variables in deterministic order
+    // Collect variables in deterministic order.
+    // iter-108 perf: parallel hash-set for O(1) dedup instead of O(|vars|)
+    // std::find per insertion. Total cost falls from O(C × K × accumulated)
+    // to O(C × K) where C = constraints, K = avg vars-per-constraint.
     std::vector<std::string> vars;
+    std::unordered_set<std::string> varsSeen;
     for (const auto& c : constraints) {
         for (const auto& v : kernel_.variables(c.poly)) {
-            if (std::find(vars.begin(), vars.end(), v) == vars.end()) {
+            if (varsSeen.insert(v).second) {
                 vars.push_back(v);
             }
         }
