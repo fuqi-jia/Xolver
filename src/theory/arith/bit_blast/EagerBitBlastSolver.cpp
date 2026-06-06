@@ -571,7 +571,22 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         bool valid = true;
         for (ExprId a : assertions) if (!ev(a)) { valid = false; break; }
         if (diag) std::cerr << "[EAGER-BB] width=" << K << " candidate valid=" << valid << "\n";
-        if (valid) { out.status = Status::Sat; out.model = std::move(model); return out; }
+        if (valid) {
+            out.status = Status::Sat;
+            out.model = std::move(model);
+            // Export Bool model keyed by variable name. Without this, the
+            // caller's ModelConverter::evalBool sees missing Bool vars and
+            // defaults them to false — wrong Ite-branch selection during
+            // reconstruct (test_model_consistency.cpp:104).
+            for (const auto& kv : boolVars) {
+                const CoreExpr& bex = ir.get(kv.first);
+                if (bex.kind != Kind::Variable) continue;
+                auto* nm = std::get_if<std::string>(&bex.payload.value);
+                if (!nm) continue;
+                out.boolModel[*nm] = boolModel[kv.first];
+            }
+            return out;
+        }
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown

@@ -8,6 +8,10 @@ void ModelConverter::registerElimination(std::string name, SortId sort, ExprId d
     steps_.push_back({StepKind::Elim, std::move(name), sort, definingExpr, Rel::Ge});
 }
 
+void ModelConverter::registerUncElimination(std::string name, SortId sort, ExprId definingExpr) {
+    steps_.push_back({StepKind::UncElim, std::move(name), sort, definingExpr, Rel::Ge});
+}
+
 void ModelConverter::registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr) {
     steps_.push_back({StepKind::Witness, std::move(name), sort, boundExpr, rel});
 }
@@ -125,7 +129,8 @@ std::optional<bool> ModelConverter::evalBool(
 std::optional<mpq_class> ModelConverter::evalRational(
     ExprId root, const CoreIr& ir,
     const std::unordered_map<std::string, mpq_class>& env,
-    const std::unordered_map<std::string, bool>* boolEnv) {
+    const std::unordered_map<std::string, bool>* boolEnv,
+    bool permissiveMissingVar) {
     std::unordered_map<ExprId, mpq_class> val;
 
     auto parseConst = [](const Payload& p) -> std::optional<mpq_class> {
@@ -154,8 +159,16 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     auto* nm = std::get_if<std::string>(&node.payload.value);
                     if (!nm) return std::nullopt;
                     auto it = env.find(*nm);
-                    if (it == env.end()) return std::nullopt;  // unknown var
-                    val[e] = it->second;
+                    if (it == env.end()) {
+                        if (!permissiveMissingVar) return std::nullopt;
+                        // Permissive (UncElim / Witness): treat missing var
+                        // as 0 — sound because by construction the variable
+                        // was also dropped as unconstrained, so any value
+                        // satisfies the post-elim formula.
+                        val[e] = mpq_class(0);
+                    } else {
+                        val[e] = it->second;
+                    }
                     stack.pop_back();
                     continue;
                 }
@@ -307,11 +320,17 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
             continue;
         }
 
-        auto vb = evalRational(it->expr, ir, env, &boolEnv);   // Elim: defining term; Witness: bound
+        // Elim: strict (any missing free var = solver bug).
+        // UncElim / Witness: permissive (free vars in the bound that were
+        // themselves dropped as unconstrained default to 0 — sound, any
+        // value satisfies the post-elim formula).
+        bool permissive = (it->kind == StepKind::UncElim ||
+                           it->kind == StepKind::Witness);
+        auto vb = evalRational(it->expr, ir, env, &boolEnv, permissive);
         if (!vb) { allOk = false; continue; }
 
         mpq_class value;
-        if (it->kind == StepKind::Elim) {
+        if (it->kind == StepKind::Elim || it->kind == StepKind::UncElim) {
             value = *vb;                              // x == defining term
         } else {
             // Witness: pick any value satisfying  x ⋈ bound.  vt±1 satisfies the

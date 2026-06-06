@@ -2555,6 +2555,12 @@ public:
                         lastModel_->numericAssignments.emplace(
                             name, RealValue::fromMpz(value));
                     }
+                    // Bool model (now exported by EagerBitBlast). Without this,
+                    // ModelConverter::evalBool defaulted missing Bool vars to
+                    // false, producing wrong Ite-branch selection in reconstruct.
+                    for (const auto& [name, bval] : ibr.boolModel) {
+                        lastModel_->assignments.emplace(name, bval ? "true" : "false");
+                    }
                     if (!modelConverter_.empty()) {
                         if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
                                                           lastModel_->assignments, *ir)) {

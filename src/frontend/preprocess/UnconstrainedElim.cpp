@@ -404,7 +404,12 @@ bool UnconstrainedElim::tryAtomDrop(ExprId e, bool target, DropAction& out) cons
 
 void UnconstrainedElim::applyAction(const DropAction& a) {
     if (a.useElim) {
-        mc_.registerElimination(a.varName, a.sort, a.bound);
+        // UncElim (permissive) — distinguishes from SolveEqs's strict Elim
+        // so reconstruct can default free vars in the bound to 0 when those
+        // vars were themselves dropped as unconstrained (see lra_024 chain
+        // x1<x2<x3<x4 — every var is unc, defining terms reference each
+        // other, and strict eval cycles back to nullopt).
+        mc_.registerUncElimination(a.varName, a.sort, a.bound);
     } else {
         mc_.registerWitness(a.varName, a.sort, a.rel, a.bound);
     }

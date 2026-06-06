@@ -33,8 +33,13 @@ class EagerBitBlastSolver {
 public:
     enum class Status { Sat, Unknown };
     struct Result {
+        // (boolModel) populated alongside model on Sat so callers (Solver::Impl)
+        // can hand a complete typed channel to ModelConverter::reconstruct.
+        // Without this, evalBool's missing-var default to false caused wrong
+        // Ite-branch selection during reconstruction (test_model_consistency).
         Status status = Status::Unknown;
-        std::unordered_map<std::string, mpz_class> model;  // validated int model
+        std::unordered_map<std::string, mpz_class> model;     // validated int model
+        std::unordered_map<std::string, bool> boolModel;      // Bool variables
     };
 
     EagerBitBlastSolver();
