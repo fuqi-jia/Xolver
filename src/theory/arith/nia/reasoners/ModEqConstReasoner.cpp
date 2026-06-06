@@ -89,7 +89,7 @@ NiaReasoningResult ModEqConstReasoner::checkFact(const ModEqConstFact& fact,
             domains.addLowerBound(yName, need, rs);
             return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
         }
-        return noChange;
+        // No conflict, no narrowing — fall through to rules 4/7 below.
     }
 
     // Rule 3: y < 0 provable → require y <= -c-1.
@@ -111,7 +111,78 @@ NiaReasoningResult ModEqConstReasoner::checkFact(const ModEqConstFact& fact,
             domains.addUpperBound(yName, need, rs);
             return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
         }
+        // No conflict, no narrowing — fall through.
+    }
+
+    // Rule 7: constant divisor specialization (Phase 1.4). If y's domain is
+    // pinned to a single non-zero value k, the SMT-LIB Int mod remainder
+    // lies in [0,|k|). If c is outside that interval, the fact is refuted.
+    if (d->hasLower && d->hasUpper && d->lower.value == d->upper.value &&
+        d->lower.value != 0) {
+        mpz_class k = d->lower.value;
+        mpz_class absK = (k > 0 ? k : -k);
+        if (fact.c < 0 || fact.c >= absK) {
+            TheoryConflict tc;
+            tc.clause.push_back(factLit);
+            for (auto l : d->lower.reasons) tc.clause.push_back(l);
+            for (auto l : d->upper.reasons) tc.clause.push_back(l);
+            return {NiaReasoningKind::Conflict, tc, std::nullopt};
+        }
         return noChange;
+    }
+
+    // Rule 4: large-divisor collapse (Phase 1.4). If min|y| > max|x-c| from
+    // bounds and y excludes 0, then y*q = x-c with q integer forces q=0,
+    // hence x = c. Restricted to Variable x.
+    if (d->hasLower && d->hasUpper) {
+        std::string xName = varNameOf(fact.xExpr);
+        if (xName.empty()) return noChange;
+        const IntDomain* dx = domains.getDomain(xName);
+        if (!dx || !dx->hasLower || !dx->hasUpper) return noChange;
+
+        bool yExcludesZero =
+            (d->lower.value > 0) || (d->upper.value < 0);
+        if (!yExcludesZero) return noChange;
+
+        mpz_class minAbsY =
+            (d->lower.value > 0) ? d->lower.value : -d->upper.value;
+        mpz_class diffLo = dx->lower.value - fact.c;
+        mpz_class diffUp = dx->upper.value - fact.c;
+        mpz_class maxAbsDiff = (diffLo >= 0 ? diffLo : -diffLo);
+        {
+            mpz_class b = (diffUp >= 0 ? diffUp : -diffUp);
+            if (b > maxAbsDiff) maxAbsDiff = b;
+        }
+        if (minAbsY <= maxAbsDiff) return noChange;
+
+        // minAbsY > maxAbsDiff → x must equal c.
+        if (fact.c < dx->lower.value || fact.c > dx->upper.value) {
+            TheoryConflict tc;
+            tc.clause.push_back(factLit);
+            for (auto l : d->lower.reasons) tc.clause.push_back(l);
+            for (auto l : d->upper.reasons) tc.clause.push_back(l);
+            for (auto l : dx->lower.reasons) tc.clause.push_back(l);
+            for (auto l : dx->upper.reasons) tc.clause.push_back(l);
+            return {NiaReasoningKind::Conflict, tc, std::nullopt};
+        }
+        std::vector<SatLit> rs;
+        rs.push_back(factLit);
+        for (auto l : d->lower.reasons) rs.push_back(l);
+        for (auto l : d->upper.reasons) rs.push_back(l);
+        for (auto l : dx->lower.reasons) rs.push_back(l);
+        for (auto l : dx->upper.reasons) rs.push_back(l);
+        bool changed = false;
+        if (!dx->hasLower || dx->lower.value < fact.c) {
+            domains.addLowerBound(xName, fact.c, rs);
+            changed = true;
+        }
+        if (!dx->hasUpper || dx->upper.value > fact.c) {
+            domains.addUpperBound(xName, fact.c, rs);
+            changed = true;
+        }
+        if (changed) {
+            return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
+        }
     }
 
     return noChange;

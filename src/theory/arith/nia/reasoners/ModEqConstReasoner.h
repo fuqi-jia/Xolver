@@ -25,6 +25,13 @@ namespace xolver {
 //           Conflict; if domain.lower < c+1 narrow it.
 //   Rule 3: y <= -1 (provable) → require y <= -c-1. If domain.lower > -c-1
 //           Conflict; if domain.upper > -c-1 narrow it.
+//   Rule 4: large-divisor collapse — if |y| > |x-c| derivable from bounds,
+//           then x = c (since y*q = x-c with q integer forces q=0). Narrow
+//           x's domain to the single value {c} when both x and y are
+//           Variables and the interval comparison succeeds.
+//   Rule 7: constant divisor specialization — if y has lower == upper == k
+//           with k != 0, require 0 <= c < |k|. If violated → Conflict (the
+//           SMT-LIB Int mod remainder is in [0,|k|) on any non-zero divisor).
 //
 // Restricted to facts whose y-expr is Kind::Variable (the LCTES shape).
 // More complex y-expressions are skipped (fall back to legacy q*y path).
