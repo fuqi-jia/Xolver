@@ -3,7 +3,9 @@
 #include "theory/arith/nia/NiaTypes.h"
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/presolve/IntegerLinearAlgebra.h"
 #include <gmpxx.h>
+#include <optional>
 #include <vector>
 
 namespace xolver {
@@ -48,6 +50,32 @@ public:
 
     NiaReasoningResult run(const std::vector<NormalizedNiaConstraint>& constraints,
                            const std::vector<DioCongruence>& congruences);
+
+    /**
+     * Pure lattice-step + bound-tightening core (z3's arith-dio-tighten).
+     *
+     * Given an integer equality system A·x = b over columns [0,n), optional
+     * per-column bounds lo[j]/hi[j] (nullopt = unbounded), and a linear form
+     * `Σ formW[j]·x_j + formC`, return true iff EVERY integer solution of
+     * (A x = b ∧ lo ≤ x ≤ hi) has form(x) = 0 — equivalently, asserting the
+     * disequality `form ≠ 0` on top is UNSAT. (Vacuously true, hence sound,
+     * when the equalities+bounds are themselves infeasible.)
+     *
+     * Mechanism: from U·A·V = D (Smith Normal Form) recover a particular
+     * solution x0 and the kernel columns V[:,free]; the form's achievable
+     * values are a SUBSET of (A0 + g·ℤ) ∩ [Lmin,Lmax], with A0 = form(x0),
+     * g = gcd over free cols f of Σ_k formW[k]·V[k][f], and [Lmin,Lmax] the
+     * per-variable bound hull. The subset relation makes a positive verdict
+     * sound despite the hull over-approximation. Returns false (never a false
+     * conflict) whenever a form variable is unbounded or the system is empty.
+     */
+    static bool latticeForcesFormZero(
+        const IntMatrix& A,
+        const std::vector<mpz_class>& b,
+        const std::vector<std::optional<mpz_class>>& lo,
+        const std::vector<std::optional<mpz_class>>& hi,
+        const std::vector<mpz_class>& formW,
+        const mpz_class& formC);
 
 private:
     PolynomialKernel& kernel_;

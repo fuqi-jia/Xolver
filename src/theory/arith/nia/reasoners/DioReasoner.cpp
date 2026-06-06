@@ -1,5 +1,6 @@
 #include "theory/arith/nia/reasoners/DioReasoner.h"
 
+#include <algorithm>
 #include <gmpxx.h>
 #include <map>
 #include <optional>
@@ -18,6 +19,93 @@ mpz_class normMod(const mpz_class& r, const mpz_class& m) {
 }  // namespace
 
 DioReasoner::DioReasoner(PolynomialKernel& kernel) : kernel_(kernel) {}
+
+bool DioReasoner::latticeForcesFormZero(
+    const IntMatrix& A,
+    const std::vector<mpz_class>& b,
+    const std::vector<std::optional<mpz_class>>& lo,
+    const std::vector<std::optional<mpz_class>>& hi,
+    const std::vector<mpz_class>& formW,
+    const mpz_class& formC) {
+    const int m = static_cast<int>(A.size());
+    const int n = (m > 0) ? static_cast<int>(A[0].size()) : static_cast<int>(formW.size());
+    if (n == 0 || m == 0) return false;  // no equality lattice → cannot force
+    if (static_cast<int>(formW.size()) != n || static_cast<int>(lo.size()) != n ||
+        static_cast<int>(hi.size()) != n || static_cast<int>(b.size()) != m)
+        return false;  // defensive dimension check — never a false conflict
+
+    // Every form variable (nonzero weight) must be bounded both sides; otherwise
+    // the hull is unbounded and no tightening is possible.
+    for (int j = 0; j < n; ++j) {
+        if (formW[j] == 0) continue;
+        if (!lo[j] || !hi[j]) return false;
+    }
+
+    SmithNormalForm snf = smithNormalForm(A);          // U·A·V = D
+    std::vector<mpz_class> bp = matVec(snf.U, b);       // b' = U·b
+    const int diagN = std::min(snf.m, snf.n);
+
+    // Existence: if A·x = b has NO integer solution, the equalities ALONE are
+    // UNSAT — out of this core's scope (presolve HNF owns the pure-equality
+    // conflict). Return false so we never mis-attribute it to the disequality.
+    for (int i = 0; i < snf.m; ++i) {
+        mpz_class d = (i < diagN) ? snf.D[i][i] : mpz_class(0);
+        bool bad = (d != 0) ? (bp[i] % d != 0) : (bp[i] != 0);
+        if (bad) return false;
+    }
+
+    // Particular solution y, free columns, x0 = V·y.
+    std::vector<mpz_class> y(n, mpz_class(0));
+    std::vector<bool> isFree(n, true);
+    for (int i = 0; i < diagN; ++i)
+        if (snf.D[i][i] != 0) { y[i] = bp[i] / snf.D[i][i]; isFree[i] = false; }
+    std::vector<mpz_class> x0 = matVec(snf.V, y);
+    std::vector<int> freeCols;
+    for (int j = 0; j < n; ++j) if (isFree[j]) freeCols.push_back(j);
+
+    // A0 = form(x0); g = gcd over free cols f of (Σ_k formW[k]·V[k][f]).
+    // The form's achievable values lie in A0 + g·ℤ (sound: the free parameters
+    // s_f contribute Σ_f (Σ_k formW[k]·V[k][f])·s_f ∈ g·ℤ).
+    mpz_class A0 = formC;
+    for (int k = 0; k < n; ++k) A0 += formW[k] * x0[k];
+    mpz_class g = 0;
+    for (int f : freeCols) {
+        mpz_class cf = 0;
+        for (int k = 0; k < n; ++k) cf += formW[k] * snf.V[k][f];
+        mpz_class tmp;
+        mpz_gcd(tmp.get_mpz_t(), g.get_mpz_t(), cf.get_mpz_t());
+        g = tmp;
+    }
+    g = abs(g);
+
+    // Bound hull [Lmin, Lmax] of the form (all form vars are bounded, checked).
+    mpz_class Lmin = formC, Lmax = formC;
+    for (int k = 0; k < n; ++k) {
+        if (formW[k] == 0) continue;
+        const mpz_class& l = *lo[k];
+        const mpz_class& h = *hi[k];
+        if (formW[k] > 0) { Lmin += formW[k] * l; Lmax += formW[k] * h; }
+        else              { Lmin += formW[k] * h; Lmax += formW[k] * l; }
+    }
+    if (Lmin > Lmax) return false;  // defensive (only if some lo > hi)
+
+    if (g == 0) {
+        // The form is constant A0 on the entire solution lattice. It is forced
+        // to 0 iff A0 == 0 and 0 is in the hull (else the system is infeasible —
+        // still UNSAT under form≠0, but we keep the crisp "forced 0" contract).
+        return (A0 == 0 && Lmin <= 0 && 0 <= Lmax);
+    }
+
+    // Form lattice points: v ≡ A0 (mod g). Smallest such v ≥ Lmin.
+    mpz_class r = ((A0 % g) + g) % g;                       // canonical residue
+    mpz_class off = (((r - (Lmin % g)) % g) + g) % g;
+    mpz_class v0 = Lmin + off;                              // leftmost point ≥ Lmin
+    if (v0 > Lmax) return true;                             // hull ∩ lattice = ∅ → UNSAT
+    // achievable(form) ⊆ {v0, v0+g, …} ∩ [Lmin, Lmax]. Asserting form≠0 is UNSAT
+    // iff every such point is 0 — i.e. v0 == 0 and the next point overshoots.
+    if (v0 == 0) return (v0 + g > Lmax);
+    return false;                                           // a nonzero point ≤ Lmax exists
+}
 
 NiaReasoningResult DioReasoner::run(
     const std::vector<NormalizedNiaConstraint>& constraints,
