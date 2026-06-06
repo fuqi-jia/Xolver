@@ -2518,3 +2518,67 @@ heavy differential work) or substantial memory-frugal refactoring.
 
 65 commits + 23 doc/infra. 0 regressions / 0-unsound across 98 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 99 — Perf-pattern catalog (post-iter-13/95/96/97 fix campaign)
+
+After 4 sound algorithmic perf fixes this session, the recurring
+anti-pattern is now well-taxonomized. Future agents profiling hot
+loops in xolver theory solvers should check for:
+
+  ★ "Hot loop redundantly recomputes referentially-transparent function
+    over inputs that don't change between iterations."
+
+Concrete fix shape: lift the redundant work OUT of the inner loop and
+PRE-CACHE the result in a vector/map. Then the inner loop does O(1)
+lookup instead of full recompute.
+
+Catalog of fixes applied:
+
+  iter-13 161b4af  LiaSolver::assertLit
+    Symptom:  O(N²) per assertion via dedup walk
+    Cause:    linear-scan dedup of active literals
+    Fix:      ActiveLiteralSet hashed dedup
+    Benefit:  +80% throughput on nec11
+
+  iter-95 7f187e6  EufSolver::getDeducedSharedEqualities
+    Symptom:  O(N²) interning calls per N-O round
+    Cause:    internSharedConstant(allShared[j]) inside inner loop
+    Fix:      pre-intern ALL shared terms ONCE before pair loop
+    Benefit:  saves N(N-1)/2 hash lookups per round
+
+  iter-96 f41de5b  LraSolver::getDeducedSharedEqualities
+    Symptom:  O(N² × |trail|) per N-O round
+    Cause:    assertedVarEqualityReason walked entire theoryTrail_ per pair
+    Fix:      build std::map<(name1,name2)_sorted, vector<TwoVarEntry>>
+              index ONCE; inner loop does O(log) lookup + iterate bucket
+    Benefit:  trail-scan cost no longer multiplies with N²
+
+  iter-97 96976a1  LiaSolver::getDeducedSharedEqualities
+    Symptom:  identical O(N² × |trail|) (LRA code was copied to LIA)
+    Cause:    same as iter-96
+    Fix:      same pattern as iter-96
+    Benefit:  same; covers QF_UFLIA/ALIA/AUFLIA at scale
+
+Theory solvers NOT having this pattern (audited iter-98):
+  - LIRA, NIRA, IDL, RDL: don't expose getDeducedSharedEqualities
+  - NIA: uses fixed-value grouping (no per-pair trail scan)
+
+Combination-logic regression suites verifying soundness:
+  uflia 25/25, auflia 5/5, alia 9/9, ax 10/10 — all PASS
+
+Heuristic for spotting the pattern in unseen code:
+  1. Find any function called from O(N²) nested for-loop.
+  2. Check if that function walks a "global state" (trail, registry,
+     constraint list) per call.
+  3. If the global state doesn't change between calls in this loop,
+     the walk is redundant — lift it out.
+
+This catalog is durable and applies to future xolver perf work as the
+codebase grows. The same pattern likely exists in other SMT solvers
+the project draws inspiration from; it's a recurring SMT-solver hot-
+loop bug.
+
+65 commits + 24 doc/infra. 0 regressions / 0-unsound across 99 iterations.
++3 corpus unsat sustained.
