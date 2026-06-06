@@ -205,6 +205,16 @@ private:
     // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
     bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
                               const CdcacInput& input);
+    // Interval forward-prune: a constraint whose natural-interval-extension range
+    // over (rational prefix + unassigned = R) is strictly single-signed and that
+    // sign violates its relation is violated by EVERY completion -> the subtree is
+    // infeasible. Returns that {constraint index, invariant sign} for a full-line
+    // conflict, or nullopt. Sound (ivEval over-approximates the true range, so a
+    // strict sign over the box is a strict sign over the feasible region too).
+    std::optional<std::pair<size_t, Sign>> intervalFpViolation(
+        const SamplePoint& prefix, const CdcacInput& input);
+    // True once satRp_/satSafe_ are populated for the current solve's constraints.
+    bool satRpBuilt_ = false;
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
     // precomputed once per sample-first search so high-degree/huge-coeff polys are
     // skipped (not crashed). Indexed parallel to input.constraints.

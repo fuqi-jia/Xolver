@@ -647,6 +647,26 @@ const std::vector<VarId>& CdcacCore::constraintVars(size_t ci, const CdcacInput&
 }
 
 CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
+    // Build the exact-RationalPolynomial cache used by the interval forward-prune
+    // (intervalFpViolation). Once per solve (reused across hybrid Collins/Lazard
+    // passes); the overlay's precompute, if it ran, is harmlessly overwritten.
+    if (!satRpBuilt_) {
+        satRp_.assign(input.constraints.size(), std::nullopt);
+        satSafe_.assign(input.constraints.size(), false);
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            auto rp = RationalPolynomial::fromPolyId(input.constraints[ci].poly, *kernel_);
+            if (!rp) continue;
+            long td = 0;
+            for (const auto& [key, coeff] : rp->terms()) {
+                (void)coeff; long md = 0;
+                for (const auto& [v, e] : key) { (void)v; md += e; }
+                if (md > td) td = md;
+            }
+            satSafe_[ci] = (td <= 20);   // skip very-high-degree (wide intervals, slow ivEval)
+            satRp_[ci] = std::move(rp);
+        }
+        satRpBuilt_ = true;
+    }
     buildClosure(input);
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
@@ -672,6 +692,7 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
 }
 
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
+    satRpBuilt_ = false;   // rebuild the interval-FP cache for this solve's constraints
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif
@@ -1147,8 +1168,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (!relationHolds(s, input.constraints[ci].rel))
                     fwViolated.emplace_back(ci, s);
             }
+            std::optional<std::pair<size_t, Sign>> ivViol;
+            if (fwViolated.empty())
+                ivViol = intervalFpViolation(prefix, input);   // partially-determined
             if (!fwViolated.empty())
                 childRes = makeLeafConflictResult(fwViolated, input);
+            else if (ivViol)
+                childRes = makeLeafConflictResult({*ivViol}, input);
             else
                 childRes = solveLevel(k + 1, prefix, input);
         } else {
@@ -1937,6 +1963,37 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
     bool inf = propagateBox(satRp_, satSafe_, m, input, box);
     if (inf) ++g_icpPrunes;
     return inf;
+}
+
+std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
+    const SamplePoint& prefix, const CdcacInput& input) {
+    // Caller guarantees an all-rational prefix. Build the point map + unbounded
+    // intervals for the unassigned variables.
+    std::unordered_map<VarId, mpq_class> m;
+    for (size_t i = 0; i < prefix.values.size(); ++i) {
+        if (!prefix.values[i].isRational()) return std::nullopt;   // defensive
+        m[prefix.varOrder[i]] = prefix.values[i].rational;
+    }
+    std::unordered_map<VarId, Iv> box;
+    for (VarId v : input.varOrder) if (!m.count(v)) box[v] = Iv::all();
+    if (box.empty()) return std::nullopt;   // leaf — checkFullSample handles it
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        if (ci >= satRp_.size() || !satRp_[ci]) continue;
+        if (ci < satSafe_.size() && !satSafe_[ci]) continue;
+        Iv r = ivEval(*satRp_[ci], m, box);
+        // Only a STRICT single sign over the whole box yields a clean invariant-sign
+        // conflict cell. r ⊂ (0,∞) ⇒ Pos; r ⊂ (−∞,0) ⇒ Neg. If that sign violates the
+        // relation, the constraint is violated by EVERY completion ⇒ prune (sound:
+        // the box ⊇ the feasible projection, so a strict sign there holds for all
+        // real completions too).
+        Sign s;
+        if (!r.loInf && r.lo > 0) s = Sign::Pos;
+        else if (!r.hiInf && r.hi < 0) s = Sign::Neg;
+        else continue;
+        if (relationHolds(s, input.constraints[ci].rel)) continue;   // not violated
+        return std::make_pair(ci, s);
+    }
+    return std::nullopt;
 }
 
 // M1 box HINT: re-rank/prune the root-cell candidate list using box[k]. The cells
