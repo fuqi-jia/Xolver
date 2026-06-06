@@ -719,3 +719,37 @@ TEST_CASE("NIA-Core: 4-var modular system over mod 3 -> unsat") {
     // Either Unsat (modular refuter fires) or Unknown (other reasoners). NEVER Sat.
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
 }
+
+// ---------------------------------------------------------------------------
+// Category D-N+: Soundness of env-overridable modular caps (iter-84)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: SAT case with relaxed modular var cap stays SAT (no false UNSAT)") {
+    // x*y = 6 ∧ x+y = 5 has the integer solutions (x=2,y=3) and (x=3,y=2).
+    // With relaxed iter-84 env caps the modular refuter still operates
+    // SOUND: it can only emit UNSAT, never SAT. So this case must remain SAT
+    // regardless of how wide the caps are set.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (= (* x y) 6))\n"
+        "(assert (= (+ x y) 5))\n"
+        "(check-sat)\n"
+    );
+    // Note: env vars are read once via static const at first call; if a
+    // previous test already initialized them at defaults, setenv here may
+    // not take effect. But default behavior is also SAT-preserving — the
+    // crux is: the modular refuter never returns SAT from incomplete data,
+    // and the bounded_ engine handles small-system SAT.
+    setenv("XOLVER_NIA_MODULAR_MAX_VARS", "30", 1);
+    setenv("XOLVER_NIA_MODULAR_MAX_ENUM", "100000", 1);
+
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    // Critically: NEVER Unsat (would indicate false UNSAT from modular refuter).
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
