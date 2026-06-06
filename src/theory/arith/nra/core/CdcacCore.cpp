@@ -1290,7 +1290,20 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
             // Section at this root
             {
-                CdcacResult res = testAndRecurse(root);
+                // BOX-ICP SECTION PRUNE: a section is the single point var = root.
+                // For a RATIONAL root (exact) with a rational prefix, pin var to the
+                // degenerate interval [root,root] and box-check: if infeasible the
+                // section's subtree is infeasible, so skip its descent (the point cell
+                // is sound but contributes nothing to coverage — sectors cover).
+                CdcacResult res;
+                std::optional<std::pair<size_t, Sign>> sv;
+                if (root.isRational()) {
+                    bool prefRat = true;
+                    for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
+                    if (prefRat) sv = boxSectorViolation(prefix, var, root.rational, root.rational, input);
+                }
+                if (sv) res = makeLeafConflictResult({*sv}, input);
+                else    res = testAndRecurse(root);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
                 auto bcr = buildConflictCell(k, root, res, input, allRoots, levelBoundaryComplete);
