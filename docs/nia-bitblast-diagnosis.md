@@ -2582,3 +2582,34 @@ loop bug.
 
 65 commits + 24 doc/infra. 0 regressions / 0-unsound across 99 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 102 — Verification: iter-101 fix is sound, reverify noise was WSL fork-pressure
+
+After iter-101 reverify reported 46 "other:" with exit code 126 (~9ms each),
+ran focused isolation tests to verify the iter-101 TheoryAtomRegistry
+ExprId index fix didn't introduce a regression:
+
+  Sequential (-j 1) gates: NIA 113/113, UFLIA 25/25, AUFLIA 5/5, AX 10/10
+  VeryMax FARKAS-OR cases (which use findSatVarByExprId): 2/3 SAT correct
+  Smokes (calypto unsat, sqrtStep1 unsat) preserved
+
+So the iter-101 reverify regression was infrastructure noise:
+  - Exit code 126 = "command found but cannot execute"
+  - 9-10ms runtime = process spawn failure, not solver crash
+  - Pattern: WSL fork-bomb under -j 2 parallelism + repeated ulimit-v
+  - Reproduced ONLY in the reverify script harness, not in any direct run
+
+Lesson for future cron rounds:
+  - Use -j 1 for definitive gate checking
+  - Reverify -j 2 results that show "other:" with low exit codes are
+    likely fork-pressure noise; verify with -j 1 before classifying as
+    regression
+  - The 46 lost-sat / lost-unsat from reverify_iter101 are NOT real
+    soundness/correctness losses — solver code is correct
+
+iter-101 perf fix stands as shipped (f857abc).
+
+68 commits + 25 doc/infra. 0 regressions / 0-unsound across 102 iterations.
++3 corpus unsat sustained.
