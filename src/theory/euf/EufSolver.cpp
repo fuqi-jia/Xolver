@@ -1766,11 +1766,31 @@ EufSolver::getDeducedSharedEqualities() {
     if (!sharedTermRegistry_) return result;
 
     const auto& allShared = sharedTermRegistry_->allSharedTerms();
-    for (size_t i = 0; i < allShared.size(); ++i) {
-        EufTermId ti = internSharedConstant(allShared[i]);
+    const size_t N = allShared.size();
+
+    // iter-95 perf fix: pre-intern all shared terms ONCE before the O(N²)
+    // pair loop. The previous implementation re-interned allShared[j] for
+    // every pair (i,j), turning interning into an O(N²) cost. For Dartagnan
+    // (14K Boolean vars, ~100s shared terms after promotion) and similar
+    // combined-logic cases, this saves up to N×(N−1)/2 interning calls per
+    // getDeducedSharedEqualities invocation. Interning is hash+lookup, not
+    // free — and getDeducedSharedEqualities is hit on every Nelson-Oppen
+    // exchange round, so the cost compounds.
+    //
+    // Soundness invariant unchanged: interning is referentially transparent
+    // (same SharedTermId → same EufTermId), so caching the result for the
+    // duration of one call cannot change behavior. Egraph state observed in
+    // .same() / .explainEquality() is identical to the unbatched path.
+    std::vector<EufTermId> interned(N);
+    for (size_t k = 0; k < N; ++k) {
+        interned[k] = internSharedConstant(allShared[k]);
+    }
+
+    for (size_t i = 0; i < N; ++i) {
+        EufTermId ti = interned[i];
         if (ti == NullEufTerm) continue;
-        for (size_t j = i + 1; j < allShared.size(); ++j) {
-            EufTermId tj = internSharedConstant(allShared[j]);
+        for (size_t j = i + 1; j < N; ++j) {
+            EufTermId tj = interned[j];
             if (tj == NullEufTerm) continue;
             // Care-graph prune (XOLVER_COMB_CAREGRAPH): skip pairs no theory
             // cares about. Done AFTER interning (so egraph state is identical
