@@ -186,50 +186,55 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
         }
     }
 
-    if (allVars.size() > 6) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+    if (allVars.size() > 15) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 
     std::vector<std::string> vars(allVars.begin(), allVars.end());
     const int moduli[] = {2, 3, 4, 5, 7, 8, 9, 11};
 
-    for (int m : moduli) {
-        bool anySatisfies = false;
+    // iter-79: generalize from {1,2}-var hardcoded loops to N-var iterative
+    // digit-counter enumeration. Sound: same residue-search semantics, just
+    // wider variable count. Hard cap on total enumerations per (modulus, varCount)
+    // to keep the worst case bounded — 50000 tuples × #constraints per modulus.
+    constexpr uint64_t kMaxEnumPerModulus = 50000;
+    const size_t N = vars.size();
 
-        if (vars.size() == 1) {
-            for (int r = 0; r < m; ++r) {
-                bool allSatisfied = true;
-                for (const auto& c : equalities) {
-                    IntegerModel model;
-                    model[vars[0]] = mpz_class(r);
-                    auto valOpt = kernel_.evalInteger(c.poly, model);
-                    if (!valOpt) { allSatisfied = false; break; }
-                    if (*valOpt % m != 0) { allSatisfied = false; break; }
-                }
-                if (allSatisfied) {
-                    anySatisfies = true;
-                    break;
-                }
+    for (int m : moduli) {
+        // Tractability gate: skip this modulus if m^N exceeds the per-modulus cap.
+        uint64_t enumSize = 1;
+        bool overflow = false;
+        for (size_t i = 0; i < N; ++i) {
+            if (enumSize > kMaxEnumPerModulus / (uint64_t)m) { overflow = true; break; }
+            enumSize *= (uint64_t)m;
+        }
+        if (overflow) continue;
+
+        bool anySatisfies = false;
+        std::vector<int> digits(N, 0);  // current residue tuple
+
+        while (true) {
+            // Build model for current digit tuple
+            IntegerModel model;
+            for (size_t i = 0; i < N; ++i) {
+                model[vars[i]] = mpz_class(digits[i]);
             }
-        } else if (vars.size() == 2) {
-            for (int r1 = 0; r1 < m; ++r1) {
-                for (int r2 = 0; r2 < m; ++r2) {
-                    bool allSatisfied = true;
-                    for (const auto& c : equalities) {
-                        IntegerModel model;
-                        model[vars[0]] = mpz_class(r1);
-                        model[vars[1]] = mpz_class(r2);
-                        auto valOpt = kernel_.evalInteger(c.poly, model);
-                        if (!valOpt) { allSatisfied = false; break; }
-                        if (*valOpt % m != 0) { allSatisfied = false; break; }
-                    }
-                    if (allSatisfied) {
-                        anySatisfies = true;
-                        break;
-                    }
-                }
-                if (anySatisfies) break;
+
+            // Check every equality satisfied at this residue assignment
+            bool allSatisfied = true;
+            for (const auto& c : equalities) {
+                auto valOpt = kernel_.evalInteger(c.poly, model);
+                if (!valOpt) { allSatisfied = false; break; }
+                if (*valOpt % m != 0) { allSatisfied = false; break; }
             }
-        } else {
-            continue;
+            if (allSatisfied) { anySatisfies = true; break; }
+
+            // Increment digit counter (LSB-first), m-base
+            size_t pos = 0;
+            while (pos < N) {
+                if (++digits[pos] < m) break;
+                digits[pos] = 0;
+                ++pos;
+            }
+            if (pos == N) break;  // overflowed → exhausted all tuples
         }
 
         if (!anySatisfies) {
