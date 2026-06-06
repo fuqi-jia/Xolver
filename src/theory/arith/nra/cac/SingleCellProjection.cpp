@@ -338,7 +338,26 @@ CellResult intervalFromCharacterization(
                 if (!pr.contains(var)) continue;   // no var-boundary at this prefix
             }
             bool supported = false;
-            rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
+            // FAST PATH (cacheable algebraic numbers): if the boundary poly provably
+            // keeps full degree in `var` at the prefix — its leading coefficient (in
+            // `var`) is DEFINITE-NONZERO there — it does NOT nullify, so libpoly's
+            // NATIVE isolation is complete + sound AND ~750x faster than the hand-
+            // rolled resultant-Norm here (it reuses the persistent assignment's refined
+            // algebraic numbers instead of recomputing a tower Norm per cell). A
+            // possibly-nullifying poly (leading coeff zero/undecided) or a native crash
+            // falls back to the nullification-aware Norm/Tower path (fail-closed).
+            {
+                RationalPolynomial lc = rp.leadingCoefficient(var);
+                auto lcN = lc.toPrimitiveInteger(*kernel);
+                if (lcN.ok()) {
+                    const Sign ls = algebra->signAt(lcN.poly, prefix);
+                    if (ls == Sign::Pos || ls == Sign::Neg) {   // non-nullifying ⇒ native is complete
+                        RootSet ra = algebra->isolateRealRootsAlgebraic(pid, prefix, var);
+                        if (!ra.crashOccurred) { rs = std::move(ra); supported = true; }
+                    }
+                }
+            }
+            if (!supported) rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
             if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);
             if (!supported) return bail("algebraic-isolation-unsupported");
         } else {
