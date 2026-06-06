@@ -213,7 +213,32 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     if (allVars.size() > kVarCap) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 
     std::vector<std::string> vars(allVars.begin(), allVars.end());
-    const int moduli[] = {2, 3, 4, 5, 7, 8, 9, 11};
+
+    // iter-87: moduli list is env-overridable for autotuner. Default set
+    // {2, 3, 4, 5, 7, 8, 9, 11} covers small primes + small 2^k/3^k composites
+    // — chosen for catching parity, mod-3 squares-only-{0,1}, and pow-2/3
+    // factor contradictions. XOLVER_NIA_MODULAR_MODULI parses a
+    // comma-separated list, e.g. "2,3,5,7,11,13" for wider prime coverage.
+    // Each modulus is gated by m^N ≤ kMaxEnumPerModulus per the loop below,
+    // so adding large moduli (e.g. 13) safely skips at N>4 without changing
+    // smaller-N behavior. Soundness invariant unchanged: UNSAT-only.
+    static const std::vector<int> moduliVec = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MODULI");
+        if (e && *e) {
+            std::vector<int> out;
+            const char* p = e;
+            while (*p) {
+                char* end = nullptr;
+                long v = std::strtol(p, &end, 10);
+                if (end == p) break;
+                if (v >= 2 && v <= 100) out.push_back(static_cast<int>(v));
+                p = end;
+                if (*p == ',') ++p;
+            }
+            if (!out.empty()) return out;
+        }
+        return std::vector<int>{2, 3, 4, 5, 7, 8, 9, 11};
+    }();
 
     // iter-79: generalize from {1,2}-var hardcoded loops to N-var iterative
     // digit-counter enumeration. Sound: same residue-search semantics, just
@@ -222,7 +247,7 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     // (default; tunable via XOLVER_NIA_MODULAR_MAX_ENUM).
     const size_t N = vars.size();
 
-    for (int m : moduli) {
+    for (int m : moduliVec) {
         // Tractability gate: skip this modulus if m^N exceeds the per-modulus cap.
         uint64_t enumSize = 1;
         bool overflow = false;
