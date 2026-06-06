@@ -198,7 +198,9 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             if (degIn(p, v) > 0) p = substituteVarWithVar(p, v, g, kernel);
         return p;
     };
-    // Horner substitution of a derived variable in RationalPolynomial space (exact).
+    // Horner substitution of a variable by a RationalPolynomial value (exact, and
+    // ORDERING-INDEPENDENT — unlike the kernel's pseudo-remainder, which silently
+    // mis-substitutes depending on libpoly's variable order).
     auto substRpDerived = [&](RationalPolynomial rp, VarId var, const RationalPolynomial& val) {
         std::vector<RationalPolynomial> co = rp.coefficients(var);
         if (co.size() <= 1) return rp;
@@ -207,6 +209,18 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             result = result * val + co[i];
         result.normalize();
         return result;
+    };
+    // Apply ALL known substitutions (rationals, aliases, derived) in exact
+    // RationalPolynomial space.
+    auto applySubstRp = [&](RationalPolynomial rp) -> RationalPolynomial {
+        for (const auto& [v, val] : rationalVal) rp = rp.substituteRational(v, val);
+        for (const auto& [v, g] : aliasOf) {
+            RationalPolynomial gv; gv.addVar(g, 1, mpq_class(1)); gv.normalize();
+            rp = substRpDerived(rp, v, gv);
+        }
+        for (const auto& [v, mv] : derivedVal) rp = substRpDerived(rp, v, mv);
+        rp.normalize();
+        return rp;
     };
 
 
@@ -258,31 +272,26 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         }
     }
 
+    auto onlyGen = [&](const RationalPolynomial& q) {
+        for (VarId v : q.variables()) if (v != genVar) return false;
+        return true;
+    };
     // --- derive a remaining variable from a linear-in-it equality ----------------
     for (size_t j = 0; j < eqs.size(); ++j) {
         if (done[j]) continue;
-        PolyId p = applySubst(eqs[j]);
-        const auto vars = kernel.variables(p);
+        auto rp0 = RationalPolynomial::fromPolyId(eqs[j], kernel);
+        if (!rp0) continue;
+        RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases
         // pick the unassigned variable that is NOT the generator
-        VarId d = NullVar; std::string dn;
-        for (const auto& vn : vars) {
-            VarId v = kernel.getOrCreateVar(vn);
+        VarId d = NullVar;
+        for (VarId v : rps.variables()) {
             if (v == genVar) continue;
             if (d != NullVar) { d = NullVar; break; }   // more than one unassigned -> give up
-            d = v; dn = vn;
+            d = v;
         }
         if (d == NullVar) continue;
-        auto deg = kernel.degree(p, dn);
-        if (!deg || *deg != 1) continue;                // must be linear in d
-        auto rp = RationalPolynomial::fromPolyId(p, kernel);
-        if (!rp) continue;
-        std::vector<RationalPolynomial> co = rp->coefficients(d);   // [C, A] low->high
-        if (co.size() != 2) continue;
-        // A and C must be univariate in the generator (or constant).
-        auto onlyGen = [&](const RationalPolynomial& q) {
-            for (VarId v : q.variables()) if (v != genVar) return false;
-            return true;
-        };
+        std::vector<RationalPolynomial> co = rps.coefficients(d);   // [C, A] low->high
+        if (co.size() != 2) continue;                              // must be linear in d
         if (!onlyGen(co[1]) || !onlyGen(co[0])) continue;
         // Reduce A modulo genVar^2 = genC; it must collapse to a constant.
         mpq_class A, cA, cB;
@@ -293,10 +302,9 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             auto rC = reduceUni(co[0]);
             cA = rC.first; cB = rC.second;
         } else {
-            if (!co[1].isConstant()) continue;
+            if (!co[1].isConstant() || !co[0].isConstant()) continue;
             A = co[1].constantValue();
-            cA = 0; cB = co[0].isConstant() ? co[0].constantValue() : mpq_class(0);
-            if (!co[0].isConstant()) continue;
+            cA = 0; cB = co[0].constantValue();
         }
         if (sgn(A) == 0) continue;
         // d = -C / A = (-cA/A)*genVar + (-cB/A).
@@ -310,19 +318,16 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
 
     // --- VALIDATE every original constraint over the single generator ------------
     auto signOfReduced = [&](PolyId p) -> std::optional<int> {
-        PolyId ps = applySubst(p);                 // rationals + aliases (exact)
-        if (kernel.isConstant(ps)) return sgn(kernel.toConstant(ps));
-        auto rp = RationalPolynomial::fromPolyId(ps, kernel);
+        auto rp = RationalPolynomial::fromPolyId(p, kernel);
         if (!rp) return std::nullopt;
-        RationalPolynomial r = *rp;
-        for (const auto& [d, mv] : derivedVal) r = substRpDerived(r, d, mv);   // exact rationals
+        RationalPolynomial r = applySubstRp(*rp);   // rationals + aliases + derived (exact)
         if (r.isConstant()) return sgn(r.constantValue());
         if (genVar == NullVar) return std::nullopt;
         return signOfPolyAtGenerator(r, genVar, genC, genSign);
     };
     for (const auto& [p, rel] : cons) {
         auto s = signOfReduced(p);
-        if (!s) return false;                          // inconclusive => bail (sound)
+        if (!s) return false;                       // inconclusive => bail (sound)
         bool ok = false;
         switch (rel) {
             case Relation::Eq:  ok = (*s == 0); break;
@@ -335,20 +340,47 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         if (!ok) return false;                         // model violates a constraint
     }
 
-    // --- build the model (best-effort; the verdict already holds) -----------------
+    // Defer the SIMPLE single-algebraic case (no collapsed alias, no derived var) to
+    // the existing CDCAC path, which already solves it and formats getModel correctly.
+    // The cascade's unique value is the COLLAPSE (equal roots) + DERIVATION that the
+    // ≥2-algebraic Lazard tower bails on (the Geogebra cluster).
+    if (aliasOf.empty() && derivedVal.empty()) return false;
+
+    // --- build the complete model (every var) so the Solver's validator accepts it --
     if (modelOut) {
         modelOut->clear();
         for (const auto& [v, val] : rationalVal)
             modelOut->emplace_back(v, RealValue::fromMpq(val));
-        if (genVar != NullVar) {
+        auto genRealValue = [&]() {
             const mpz_class num = genC.get_num(), den = genC.get_den();
             AlgebraicNumber an;
-            an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num
+            an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num, root genSign*sqrt(genC)
             if (genSign > 0) { an.lower = 0; an.upper = genC + 1; }
             else { an.lower = -(genC + 1); an.upper = 0; }
-            modelOut->emplace_back(genVar, RealValue::fromAlgebraic(std::move(an)));
+            return RealValue::fromAlgebraic(std::move(an));
+        };
+        if (genVar != NullVar) {
+            modelOut->emplace_back(genVar, genRealValue());
+            for (const auto& [v, g] : aliasOf) modelOut->emplace_back(v, genRealValue());  // = generator
         }
-        // derived vars: omit (the verdict is already validated; getModel defaults them).
+        // Derived d = ap*gen + bp  (a number in Q(sqrt genC)).
+        for (const auto& [d, mv] : derivedVal) {
+            auto rd = reduceUni(mv);
+            const mpq_class ap = rd.first, bp = rd.second;
+            if (sgn(ap) == 0) { modelOut->emplace_back(d, RealValue::fromMpq(bp)); continue; }
+            const mpq_class Aeff = (genSign < 0) ? -ap : ap;   // coefficient of sqrt(genC)
+            // minimal poly: x^2 - 2 bp x + (bp^2 - Aeff^2 genC).
+            mpq_class c0 = bp * bp - Aeff * Aeff * genC, c1 = mpq_class(-2) * bp, c2 = 1;
+            mpz_class L = c0.get_den();
+            mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c1.get_den().get_mpz_t());
+            mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c2.get_den().get_mpz_t());
+            AlgebraicNumber an;
+            an.coefficients = {mpq_class(c0 * L).get_num(), mpq_class(c1 * L).get_num(),
+                               mpq_class(c2 * L).get_num()};
+            if (sgn(Aeff) > 0) { an.lower = bp; an.upper = bp + Aeff * (genC + 1); }
+            else { an.lower = bp + Aeff * (genC + 1); an.upper = bp; }
+            modelOut->emplace_back(d, RealValue::fromAlgebraic(std::move(an)));
+        }
     }
     return true;
 }

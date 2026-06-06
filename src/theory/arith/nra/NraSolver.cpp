@@ -11,6 +11,7 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/StructuralIntegerProbe.h"          // XOLVER_NRA_INT_PROBE
+#include "theory/arith/nra/NraSquareSolver.h"                   // algebraic square-cascade
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
@@ -137,6 +138,9 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.eq-cascade",
         stageWrap("eq-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCascade(db, e); })));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.square-cascade",
+        stageWrap("square-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSquareCascade(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -1441,6 +1445,34 @@ std::optional<TheoryCheckResult> NraSolver::stageCascade(
     auto modelOpt = StructuralIntegerProbe::trySolveCascade(cons, *kernel_);
     if (!modelOpt) return std::nullopt;
     satFastModel_ = std::move(*modelOpt);
+    return TheoryCheckResult::consistent();
+}
+
+// Algebraic square-cascade (default ON; XOLVER_NRA_SQUARE_CASCADE=0 disables). Builds
+// and EXACT-validates a Q(sqrt c) model for square-defined systems the rational
+// eq-cascade can't (v^2 = non-square => algebraic root). Sound by construction:
+// trySquareCascade returns true only after checking every original constraint's exact
+// sign at the constructed model (invariant 1); on any inconclusive/failing check it
+// returns false and we fall through to CAC/Collins unchanged.
+std::optional<TheoryCheckResult> NraSolver::stageSquareCascade(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_SQUARE_CASCADE");
+        return !(e && *e == '0');
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    std::vector<std::pair<PolyId, Relation>> cons;
+    cons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        cons.emplace_back(c.poly, c.rel);
+    }
+    std::vector<std::pair<VarId, RealValue>> model;
+    if (!trySquareCascade(cons, *kernel_, &model)) return std::nullopt;
+    satCacAlgModel_ = std::move(model);
     return TheoryCheckResult::consistent();
 }
 
