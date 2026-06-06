@@ -137,6 +137,13 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
 int CadicalTheoryPropagator::cb_decide() {
     ++decideCalls_;
 
+    // Wall-clock budget guard (see cb_propagate). Default-inert when no budget.
+    if (!abortWithUnknown_ && wall::hasDeadline() && wall::remainingMs() == 0) {
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
+
     if (const char* pe = std::getenv("XOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
         static long long every = []() {
             const char* e = std::getenv("XOLVER_DECIDE_PROBE");
@@ -208,6 +215,15 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
     if (abortWithUnknown_) {
+        terminateSolve();
+        return false;
+    }
+
+    // Wall-clock budget guard (see cb_propagate). Default-inert when no budget.
+    if (wall::hasDeadline() && wall::remainingMs() == 0) {
+        writeReason(unknownReasonSink_,
+                    "wall-clock budget exceeded — aborted to Unknown");
+        abortWithUnknown_ = true;
         terminateSolve();
         return false;
     }
