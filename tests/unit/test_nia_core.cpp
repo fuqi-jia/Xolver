@@ -801,3 +801,41 @@ TEST_CASE("NIA-Core: malformed moduli env var falls back gracefully") {
     Result r = solver.checkSat();
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
+
+// ---------------------------------------------------------------------------
+// Category D-BF: iter-89 bilinear factor restriction (XOLVER_NIA_BILINEAR_FACTOR)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: x*y=7 (prime) via bilinear factor → SAT") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (= (* x y) 7))\n"
+        "(check-sat)\n"
+    );
+    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: bilinear factor x*y=-6 (negative) → SAT") {
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(assert (= (* x y) (- 6)))\n"
+        "(check-sat)\n"
+    );
+    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
