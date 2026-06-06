@@ -44,6 +44,17 @@ private:
     // that OOMs on high-degree QF_NIA. The cache holds BitVecs over the current
     // encoder's SAT instance, so it lives for one solve() iteration (one encoder).
     std::map<std::vector<std::pair<VarId, int>>, BitVec> productCache_;
+
+    // Coefficient-times-product cache (full monomial including the integer
+    // coefficient). Necessary on QF_NIA where many atoms reuse `c * prod` for
+    // varying c (e.g. mcm/113's 442+493 disjunct alternatives, each `(* k S_i)`
+    // for different small integers k). Without this each mulConst(k, prod) emits
+    // a fresh shift-add chain → ~270 SAT vars per Eq atom × ~1000 atoms ~> 3 GB
+    // virtual; with it identical (coeff, prefix) monomials share the same BitVec.
+    // Sound: mulConst is a pure function of its inputs.
+    // Key: (coefficient as decimal string, sorted (VarId, exponent) prefix).
+    std::map<std::pair<std::string, std::vector<std::pair<VarId, int>>>, BitVec>
+        coeffMonomialCache_;
 };
 
 } // namespace xolver::bitblast

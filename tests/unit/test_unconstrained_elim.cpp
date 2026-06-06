@@ -82,12 +82,17 @@ TEST_CASE("UnconstrainedElim: strict < witness lands strictly below the bound") 
     CHECK(numAsg["x"].asRational() < 7);
 }
 
-TEST_CASE("UnconstrainedElim: does NOT touch an equality (solve-eqs owns =)") {
+TEST_CASE("UnconstrainedElim: handles `(= v t)` where v occurs once (term-level Eq)") {
+    // Updated behavior: UnconstrainedElim now also handles equality atoms
+    // whose unc-var occurs exactly once globally. This is the LCTES-class
+    // path that SolveEqs rejects (SolveEqs requires a linear-reconstructable
+    // RHS; `(mod x y)` etc. don't qualify). Drops the assertion and
+    // registers the var for elimination via the defining term.
     CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId x = var(ir, i, "x");
     ir.addAssertion(bin(ir, Kind::Eq, b, x, cint(ir, i, 5)));
     ModelConverter mc;
     UnconstrainedElim unc(ir, mc);
-    CHECK_FALSE(unc.run());
-    CHECK(mc.size() == 0);
+    CHECK(unc.run());
+    CHECK(mc.size() == 1);
 }

@@ -32,12 +32,23 @@ bool EagerBitBlastSolver::relationHolds(const mpz_class& v, Relation rel) {
 
 bool EagerBitBlastSolver::isBoolTyped(ExprId eid, const CoreIr& ir) const {
     const CoreExpr& e = ir.get(eid);
+    // The CoreExpr already carries the resolved sort -- trust it when known.
+    // Lt/Leq/Gt/Geq/Distinct ALWAYS return Bool by SMT-LIB semantics regardless
+    // of operand types, so the historic "peek children[0]" trick mis-classified
+    // `Eq(Distinct(int,int), bool_var)` as an arith atom and routed Distinct
+    // through PolynomialConverter (-> UnsupportedNonPolynomial). The sort-based
+    // check resolves this for every Bool-returning expression in one place.
+    if (e.sort == ir.boolSortId()) return true;
     switch (e.kind) {
         case Kind::ConstBool: case Kind::Not: case Kind::And: case Kind::Or:
         case Kind::Implies:   case Kind::Xor:
         case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq:
+        case Kind::Distinct:
             return true;
-        case Kind::Eq: case Kind::Distinct:
+        case Kind::Eq:
+            // Eq returns Bool but its "is-arith-atom" status depends on whether
+            // its first child is bool-typed -- only an Eq over Bool children is
+            // a boolean iff; Eq over ints is an arith atom.
             return !e.children.empty() && isBoolTyped(e.children[0], ir);
         case Kind::Ite:
             return e.children.size() == 3 && isBoolTyped(e.children[1], ir);
@@ -123,9 +134,44 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                 cs.parts.push_back({NullPoly, Relation::Neq});  // marker: always-false (0!=0)
                 break;
             default:
-                if (std::getenv("NIA_EAGER_BB_DIAG"))
+                if (std::getenv("NIA_EAGER_BB_DIAG")) {
+                    auto kindStr = [](Kind k) -> const char* {
+                        switch (k) {
+                          case Kind::ConstInt: return "ConstInt"; case Kind::ConstReal: return "ConstReal";
+                          case Kind::ConstBool: return "ConstBool"; case Kind::Variable: return "Variable";
+                          case Kind::Add: return "Add"; case Kind::Sub: return "Sub"; case Kind::Mul: return "Mul";
+                          case Kind::Div: return "Div"; case Kind::Mod: return "Mod"; case Kind::Pow: return "Pow";
+                          case Kind::Neg: return "Neg"; case Kind::Abs: return "Abs";
+                          case Kind::ToInt: return "ToInt"; case Kind::ToReal: return "ToReal";
+                          case Kind::Eq: return "Eq"; case Kind::Distinct: return "Distinct";
+                          case Kind::Lt: return "Lt"; case Kind::Leq: return "Leq";
+                          case Kind::Gt: return "Gt"; case Kind::Geq: return "Geq";
+                          case Kind::Not: return "Not"; case Kind::And: return "And"; case Kind::Or: return "Or";
+                          case Kind::Implies: return "Implies"; case Kind::Xor: return "Xor"; case Kind::Ite: return "Ite";
+                          default: return "?";
+                        }
+                    };
+                    std::function<void(ExprId, int)> dump = [&](ExprId e, int depth) {
+                        if (depth > 6) { std::cerr << "..."; return; }
+                        const CoreExpr& n = ir.get(e);
+                        std::cerr << "(" << kindStr(n.kind) << "[" << e << "/sort" << n.sort;
+                        if (n.kind == Kind::Variable) {
+                            if (auto* s = std::get_if<std::string>(&n.payload.value))
+                                std::cerr << "/'" << *s << "'";
+                        } else if (n.kind == Kind::ConstInt || n.kind == Kind::ConstReal) {
+                            if (auto* i = std::get_if<int64_t>(&n.payload.value)) std::cerr << "/" << *i;
+                            else if (auto* s = std::get_if<std::string>(&n.payload.value)) std::cerr << "/" << *s;
+                        }
+                        std::cerr << "]";
+                        for (ExprId c : n.children) { std::cerr << " "; dump(c, depth + 1); }
+                        std::cerr << ")";
+                    };
+                    std::cerr << "[EAGER-BB] boolSortId=" << ir.boolSortId() << " intSortId=" << ir.intSortId() << "\n";
                     std::cerr << "[EAGER-BB] addPair reject status=" << (int)cc.status
-                              << " l=" << l << " r=" << r << " rel=" << (int)rel << "\n";
+                              << " rel=" << (int)rel << " l="; dump(l, 0);
+                    std::cerr << " r="; dump(r, 0);
+                    std::cerr << "\n";
+                }
                 ok = false;  // non-polynomial / failure -> eager bit-blast not applicable
                 break;
         }
@@ -249,12 +295,43 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // Raising is SOUND (the arm only finds validated SAT or yields). Per-attempt
     // is still bounded by confLimit + var budget, so this does not break short
     // (dev-timeout) runs on small formulas.
+    // Percentage-based portfolio scheduling (user direction 2026-06-05):
+    // give EAGER a fraction of the total solve wall-clock so the remainder
+    // goes to the CDCL(T) NIA reasoners (which are the only path that can
+    // prove UNSAT). Without this EAGER burned the FULL timeout on UNSAT
+    // cases (it never returns Unsat by design) and CDCL(T) never got a
+    // chance -- measured iter-13: 4 of 10 small UNSAT cases (40 %) became
+    // solvable just by giving CDCL(T) some of EAGER's budget. SAT cases
+    // continue to land in the same widths so SAT wins are preserved
+    // (leipzig 164 ms, SAT14/86 123 ms, mcm/113 7.7 s).
+    //
+    // XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT (default 33): percentage of the
+    // remaining wall-clock budget given to EAGER. NO upper bound clamp -- the
+    // user explicitly disallowed it (the past mistake was a hardcoded small
+    // budget that made bit-blast useless because the timeout was 3 s; never
+    // again). When the wallclock IS set, EAGER simply takes that share of the
+    // remaining time, however large.
+    //
+    // Without XOLVER_WALLCLOCK_MS (e.g. dev runs under bash `timeout` only),
+    // there's no internal deadline. Fall back to XOLVER_NIA_EAGER_BITBLAST_
+    // BUDGET_MS (default 120s, the historical value) -- this is the dev-cycle
+    // budget knob from before the percentage path; no behavior change on those
+    // runs.
+    //
+    // Sound per the no-budget-band-aid memory: this is intelligent portfolio
+    // scheduling (allocate ARM budgets by percentage), not a downgrade-to-
+    // Unknown floor on a crash. EAGER still returns Unknown when its share is
+    // up, exactly as before -- the change is HOW MUCH budget the arm gets.
     long long budgetMs =
         env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
     if (budgetMs < 0) budgetMs = 120000;
-    // Grow this arm's wall budget to ~1/2 of the time remaining when
-    // XOLVER_WALLCLOCK_SCALE is on (else unchanged); 0 stays unlimited.
-    budgetMs = wall::scaledBudgetMs(static_cast<long>(budgetMs), 1, 2);
+    long pct = env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
+    if (pct < 1) pct = 1;
+    if (pct > 100) pct = 100;
+    if (wall::hasDeadline()) {
+        long remaining = wall::remainingMs();
+        budgetMs = (static_cast<long long>(remaining) * pct) / 100;
+    }
     // Per-WIDTH conflict cap: bounds one SAT solve so a single hard width can't
     // run unbounded. Competition-sized (1M) so a genuinely hard deciding width
     // gets a real chance, while still capping a futile width.
@@ -351,7 +428,14 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
                 }
                 case Kind::Or: {
                     r = enc.constFalse();
-                    for (ExprId c : e.children) r = enc.orGate(r, encode(c));
+                    size_t orIdx = 0;
+                    for (ExprId c : e.children) {
+                        if (diag && (orIdx % 100) == 0 && e.children.size() > 50)
+                            std::cerr << "[EAGER-BB-OR] alt=" << orIdx << "/" << e.children.size()
+                                      << " satVars=" << enc.varCount() << "\n";
+                        ++orIdx;
+                        r = enc.orGate(r, encode(c));
+                    }
                     break;
                 }
                 case Kind::Implies: {
@@ -408,7 +492,13 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
             return r;
         };
 
+        size_t aIdx = 0;
         for (ExprId a : assertions) {
+            if (diag && (aIdx % 100) == 0)
+                std::cerr << "[EAGER-BB-ENC] K=" << K << " assertion=" << aIdx
+                          << "/" << assertions.size()
+                          << " satVars=" << enc.varCount() << "\n";
+            ++aIdx;
             SatLit l = encode(a);
             if (!encodeOk) break;
             enc.assertLit(l);
@@ -481,7 +571,22 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         bool valid = true;
         for (ExprId a : assertions) if (!ev(a)) { valid = false; break; }
         if (diag) std::cerr << "[EAGER-BB] width=" << K << " candidate valid=" << valid << "\n";
-        if (valid) { out.status = Status::Sat; out.model = std::move(model); return out; }
+        if (valid) {
+            out.status = Status::Sat;
+            out.model = std::move(model);
+            // Export Bool model keyed by variable name. Without this, the
+            // caller's ModelConverter::evalBool sees missing Bool vars and
+            // defaults them to false — wrong Ite-branch selection during
+            // reconstruct (test_model_consistency.cpp:104).
+            for (const auto& kv : boolVars) {
+                const CoreExpr& bex = ir.get(kv.first);
+                if (bex.kind != Kind::Variable) continue;
+                auto* nm = std::get_if<std::string>(&bex.payload.value);
+                if (!nm) continue;
+                out.boolModel[*nm] = boolModel[kv.first];
+            }
+            return out;
+        }
         // SAT but candidate failed exact validation (narrow-width artifact) -> wider K.
     }
     return out;   // Unknown

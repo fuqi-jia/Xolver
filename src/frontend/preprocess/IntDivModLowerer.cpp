@@ -1,5 +1,6 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include <cassert>
+#include <functional>
 #include <iostream>
 
 namespace xolver {
@@ -16,6 +17,7 @@ bool IntDivModLowerer::run() {
     memo_.clear();
     loweredAssertions_.clear();
     positiveVars_.clear();
+    modEqConstFacts_.clear();  // Track A Phase 1.1
 
     auto scoped = ir_.getScopedAssertions();
     // Track C1 Phase 2: pre-scan strict-positive lower bounds so the
@@ -29,7 +31,19 @@ bool IntDivModLowerer::run() {
 
     for (const auto& [level, a] : scoped) {
         memo_.clear();
+        // Track A Phase 1.1: intercept `(= (mod x y) c)` shape BEFORE lowerRec
+        // would eagerly emit the `q*y` nonlinear system. When intercepted, the
+        // fact is registered and the assertion is replaced by `true` (so the
+        // SAT-layer abstraction is preserved but no nonlinear obligation is
+        // forced on NIA). Default-OFF; behavior bit-for-bit identical when off.
+        // Track A Phase 1.1/1.3: REGISTER the fact (for the ModEqConstReasoner
+        // to consume) AFTER lowerRec produces the lowered assertion ExprId.
+        // The lowered ExprId is what the atomizer + TheoryAtomRegistry see.
+        // Phase 1.1 still ran lowerRec unconditionally so the q*y semantics
+        // are emitted — keeping Phase 1.3 strictly behavior-preserving until
+        // Phase 1.5 introduces the skip path.
         ExprId lowered = lowerRec(a, level);
+        tryInterceptModEqConst(a, lowered, level);
         if (requirement_.unsupported) {
             return false;
         }
@@ -67,7 +81,7 @@ ExprId IntDivModLowerer::lowerRec(ExprId root, ScopeLevel level) {
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
         // Value copy: lowerRec()/rebuildLike()/lowerDiv()/lowerMod() call
-        // ir_.add(), which can reallocate exprs_ and invalidate references.
+        // ir_.addShared(), which can reallocate exprs_ and invalidate references.
         const auto node = ir_.get(e);
 
         if (!frame.processed) {
@@ -179,7 +193,7 @@ ExprId IntDivModLowerer::rebuildLike(ExprId original, const std::vector<ExprId>&
     ne.sort = node.sort;
     for (ExprId c : newChildren) ne.children.push_back(c);
     ne.payload = node.payload;
-    return ir_.add(std::move(ne));
+    return ir_.addShared(std::move(ne));
 }
 
 std::optional<mpz_class> IntDivModLowerer::evalIntConstTerm(ExprId root) const {
@@ -380,6 +394,19 @@ void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, Scop
     generatedAssertions_.push_back({level, mkOr(mkNot(bLtZero), mkLe(zero, def.r))});
     generatedAssertions_.push_back({level, mkOr(mkNot(bLtZero), mkLe(def.r, mkSub(mkNeg(def.b), one)))});
 
+    // Remainder bound: (b > 0 AND a >= 0) => r <= a. Sound — for b > 0, a >= 0
+    // the quotient q = floor(a/b) >= 0, so a = b*q + r >= r. Lets linear/
+    // difference reasoning refute `(a mod b) > a`-style goals that the
+    // 0 <= r < b bounds alone cannot (Zohar int_check bvurem class).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(bGtZero),
+                     mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.r, def.a)))});
+    // Quotient bound: (b > 0 AND a >= 0) => q <= a. Sound — q = floor(a/b) and
+    // b >= 1, so q <= a. Refutes `(a div b) > a`-style goals (int_check bvudiv).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(bGtZero),
+                     mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.q, def.a)))});
+
     updateRequirement(true, true);
 }
 
@@ -389,6 +416,63 @@ void IntDivModLowerer::emitUndefZeroConstraints(const DivModDef& def, ScopeLevel
     generatedAssertions_.push_back({level, qUndef});
     generatedAssertions_.push_back({level, rUndef});
     updateRequirement(false, true);
+}
+
+void IntDivModLowerer::tryInterceptModEqConst(ExprId originalAssertion,
+                                              ExprId loweredAssertion,
+                                              ScopeLevel /*level*/) {
+    // Track A Phase 1.1 — match `(= (mod x y) c)` where:
+    //   - x is integer-sorted (any shape; can be a variable or an expression),
+    //   - y is integer-sorted variable expression (NOT a constant — constants
+    //     route through the existing constant-divisor congruence path),
+    //   - c is an integer constant.
+    // We capture and register a ModEqConstFact ONLY when the flag is set.
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return;
+
+    const auto& a = ir_.get(originalAssertion);
+    if (a.kind != Kind::Eq) return;
+    if (a.children.size() != 2) return;
+
+    auto isModExpr = [&](ExprId eid) -> bool {
+        const auto& e = ir_.get(eid);
+        return e.kind == Kind::Mod && e.sort == intSortId_ && e.children.size() == 2;
+    };
+    auto asIntConst = [&](ExprId eid) -> std::optional<mpz_class> {
+        return evalIntConstTerm(eid);
+    };
+
+    ExprId modExpr = NullExpr;
+    std::optional<mpz_class> constOpt;
+    if (isModExpr(a.children[0])) {
+        modExpr = a.children[0];
+        constOpt = asIntConst(a.children[1]);
+    } else if (isModExpr(a.children[1])) {
+        modExpr = a.children[1];
+        constOpt = asIntConst(a.children[0]);
+    }
+    if (modExpr == NullExpr || !constOpt) return;
+
+    const auto& m = ir_.get(modExpr);
+    ExprId xExpr = m.children[0];
+    ExprId yExpr = m.children[1];
+
+    // y must not be a constant for the native path — constant divisor is
+    // already handled cheaply by the existing emitConstDivisorConstraints +
+    // ModularResidueReasoner combo.
+    auto yConst = evalIntConstTerm(yExpr);
+    if (yConst) return;
+
+    ModEqConstFact fact;
+    fact.xExpr = xExpr;
+    fact.yExpr = yExpr;
+    fact.c = *constOpt;
+    fact.atomExpr = loweredAssertion;  // post-lowering form is what the SAT layer sees
+    // fact.reason is filled later by NiaSolver when the atom is asserted.
+    modEqConstFacts_.push_back(std::move(fact));
 }
 
 void IntDivModLowerer::updateRequirement(bool needsNonlinear, bool needsEUF) {
@@ -444,6 +528,14 @@ void IntDivModLowerer::emitVariableDivisorConstraintsPositiveDivisor(
     generatedAssertions_.push_back({level, mkLe(zero, def.r)});
     // r <= b - 1
     generatedAssertions_.push_back({level, mkLe(def.r, mkSub(def.b, one))});
+    // Remainder bound (b > 0 already proven here): a >= 0 => r <= a. Sound, and
+    // lets difference reasoning refute `(a mod b) > a`-style goals.
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.r, def.a))});
+    // Quotient bound (b > 0 proven): a >= 0 => q <= a. Sound (q = floor(a/b),
+    // b >= 1). Refutes `(a div b) > a`-style goals (int_check bvudiv).
+    generatedAssertions_.push_back(
+        {level, mkOr(mkNot(mkLe(zero, def.a)), mkLe(def.q, def.a))});
 
     // b*q is nonlinear (product of two non-constants).
     updateRequirement(true, false);
@@ -501,9 +593,26 @@ void IntDivModLowerer::scanPositiveBounds(
             }
         }
     };
+    // Flatten top-level And nodes (and their nested Ands) so the positivity
+    // scan reaches conjuncts that were syntactically packed into one assertion.
+    // Sound: an And at top level is asserted-true iff every child is true, so
+    // each child is an independent atomic constraint that can mark a var
+    // positive. Closes the sqrtmodinv-hoenicke / LCTES pattern where the
+    // assertion shape is `(assert (and (>= x 1) (>= y 1)))` -- without this
+    // flatten, neither x nor y was recognised as positive and the lowerer
+    // bailed with `needsEUF` even though XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO=1
+    // was set.
+    std::function<void(ExprId)> walk = [&](ExprId e) {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) walk(c);
+            return;
+        }
+        markIfStrictPositive(e);
+    };
     for (const auto& [lvl, e] : asserts) {
         (void)lvl;
-        markIfStrictPositive(e);
+        walk(e);
     }
 }
 
@@ -563,7 +672,7 @@ ExprId IntDivModLowerer::mkIntConst(int64_t v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkIntConst(const mpz_class& v) {
@@ -578,7 +687,7 @@ ExprId IntDivModLowerer::mkIntConst(const mpz_class& v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v.get_str());
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkEq(ExprId a, ExprId b) {
@@ -587,7 +696,7 @@ ExprId IntDivModLowerer::mkEq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkLe(ExprId a, ExprId b) {
@@ -596,7 +705,7 @@ ExprId IntDivModLowerer::mkLe(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkLt(ExprId a, ExprId b) {
@@ -605,7 +714,7 @@ ExprId IntDivModLowerer::mkLt(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkAdd(ExprId a, ExprId b) {
@@ -614,7 +723,7 @@ ExprId IntDivModLowerer::mkAdd(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkSub(ExprId a, ExprId b) {
@@ -623,7 +732,7 @@ ExprId IntDivModLowerer::mkSub(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkMul(ExprId a, ExprId b) {
@@ -632,7 +741,7 @@ ExprId IntDivModLowerer::mkMul(ExprId a, ExprId b) {
     e.sort = intSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkNeg(ExprId a) {
@@ -640,7 +749,7 @@ ExprId IntDivModLowerer::mkNeg(ExprId a) {
     e.kind = Kind::Neg;
     e.sort = intSortId_;
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkOr(ExprId a, ExprId b) {
@@ -649,7 +758,7 @@ ExprId IntDivModLowerer::mkOr(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkNot(ExprId a) {
@@ -657,7 +766,7 @@ ExprId IntDivModLowerer::mkNot(ExprId a) {
     e.kind = Kind::Not;
     e.sort = boolSortId_;
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 // ---------------------------------------------------------------------------
@@ -672,7 +781,7 @@ ExprId IntDivModLowerer::getOrCreateUndefDivSymbol() {
     e.kind = Kind::Variable;
     e.sort = intSortId_;
     e.payload = Payload(std::string("__undef_div"));
-    undefDivSym_ = ir_.add(std::move(e));
+    undefDivSym_ = ir_.addShared(std::move(e));
     return undefDivSym_;
 }
 
@@ -682,7 +791,7 @@ ExprId IntDivModLowerer::getOrCreateUndefModSymbol() {
     e.kind = Kind::Variable;
     e.sort = intSortId_;
     e.payload = Payload(std::string("__undef_mod"));
-    undefModSym_ = ir_.add(std::move(e));
+    undefModSym_ = ir_.addShared(std::move(e));
     return undefModSym_;
 }
 
@@ -695,7 +804,7 @@ ExprId IntDivModLowerer::mkUndefDivApp(ExprId a, ExprId b) {
     e.children.push_back(a);
     e.children.push_back(b);
     e.payload = Payload(std::string("__undef_div"));
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId IntDivModLowerer::mkUndefModApp(ExprId a, ExprId b) {
@@ -707,7 +816,7 @@ ExprId IntDivModLowerer::mkUndefModApp(ExprId a, ExprId b) {
     e.children.push_back(a);
     e.children.push_back(b);
     e.payload = Payload(std::string("__undef_mod"));
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 } // namespace xolver

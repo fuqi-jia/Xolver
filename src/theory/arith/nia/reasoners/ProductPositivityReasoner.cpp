@@ -91,6 +91,19 @@ bool fixVar(DomainStore& domains, const std::string& var, const mpz_class& val,
 // substitution it no longer appears -- so `extra` cannot grow unboundedly.)
 void substituteFixedVars(PolynomialKernel& kernel, std::vector<WorkC>& work,
                          const DomainStore& domains, bool& change) {
+    // iter-110 perf: pre-compute each work constraint's variable SET once,
+    // refreshed after substitution. Was calling kernel.variables(wc.poly)
+    // + std::find per (fixed-var × work-constraint) pair → O(D × W × |vars|).
+    // Now O(W × avg-|vars|) variable-collection up front; inner check O(1).
+    // After a successful substitution the constraint's poly changed, so
+    // refresh that single entry — `change` itself implies "iterate again"
+    // so per-iteration the cache stays consistent with the polys.
+    std::vector<std::unordered_set<std::string>> wcVarSet(work.size());
+    for (size_t i = 0; i < work.size(); ++i) {
+        auto vs = kernel.variables(work[i].poly);
+        wcVarSet[i] = std::unordered_set<std::string>(vs.begin(), vs.end());
+    }
+
     for (const auto& kv : domains.getAllDomains()) {
         const std::string& name = kv.first;
         const IntDomain& dom = kv.second;
@@ -100,14 +113,18 @@ void substituteFixedVars(PolynomialKernel& kernel, std::vector<WorkC>& work,
         mpq_class val(dom.lower.value);
         std::vector<SatLit> rs = dom.lower.reasons;
         rs.insert(rs.end(), dom.upper.reasons.begin(), dom.upper.reasons.end());
-        for (auto& wc : work) {
-            auto vars = kernel.variables(wc.poly);
-            if (std::find(vars.begin(), vars.end(), name) == vars.end()) continue;
+        for (size_t i = 0; i < work.size(); ++i) {
+            auto& wc = work[i];
+            if (!wcVarSet[i].count(name)) continue;
             auto np = kernel.substituteRational(wc.poly, *vOpt, val);
             if (np && *np != wc.poly) {
                 wc.poly = *np;
                 wc.extra.insert(wc.extra.end(), rs.begin(), rs.end());
                 change = true;
+                // Refresh cache for this constraint; the substituted name is
+                // gone and other vars may have collapsed.
+                auto vs = kernel.variables(wc.poly);
+                wcVarSet[i] = std::unordered_set<std::string>(vs.begin(), vs.end());
             }
         }
     }

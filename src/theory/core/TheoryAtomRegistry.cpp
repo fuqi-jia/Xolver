@@ -23,6 +23,7 @@ void TheoryAtomRegistry::registerParsedTheoryAtom(
     size_t idx = records_.size();
     records_.push_back({satVar, theory, false, exprId, payload});
     satVarToIdx_[satVar] = idx;
+    if (exprId != NullExpr) exprIdToIdxs_[exprId].push_back(idx);  // iter-101 perf
     observeIfNeeded(satVar);
 
     // Populate the (poly,rel,rhs) / (linear,rel,rhs) lookup maps so a
@@ -116,6 +117,7 @@ SatLit TheoryAtomRegistry::getOrCreateLinearBoundAtom(
     records_.push_back({lit.var, theory, true, expr,
                         LinearAtomPayload{lhs, rel, RealValue::fromMpq(rhs)}});
     satVarToIdx_[lit.var] = idx;
+    if (expr != NullExpr) exprIdToIdxs_[expr].push_back(idx);  // iter-101 perf
     linearLookup_[key] = idx;
     observeIfNeeded(lit.var);
 
@@ -145,6 +147,7 @@ SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
     records_.push_back({lit.var, theory, true, expr,
                         PolynomialAtomPayload{poly, rel, RealValue::fromMpq(rhs)}});
     satVarToIdx_[lit.var] = idx;
+    if (expr != NullExpr) exprIdToIdxs_[expr].push_back(idx);  // iter-101 perf
     polyLookup_[key] = idx;
     observeIfNeeded(lit.var);
 
@@ -153,20 +156,35 @@ SatLit TheoryAtomRegistry::getOrCreatePolynomialAtom(
 
 bool TheoryAtomRegistry::findByExprId(ExprId expr, LinearFormKey& outLhs,
                                        Relation& outRel, mpq_class& outRhs) const {
-    for (const auto& rec : records_) {
-        if (rec.exprId == expr) {
-            if (std::holds_alternative<LinearAtomPayload>(rec.payload)) {
-                const auto& p = std::get<LinearAtomPayload>(rec.payload);
-                auto rhsQ = p.rhs.tryAsRational();
-                if (!rhsQ) return false;  // algebraic RHS: caller wants mpq
-                outLhs = p.lhs;
-                outRel = p.rel;
-                outRhs = *rhsQ;
-                return true;
-            }
+    // iter-101 perf: O(1) index lookup instead of O(N) linear scan.
+    auto it = exprIdToIdxs_.find(expr);
+    if (it == exprIdToIdxs_.end()) return false;
+    for (size_t idx : it->second) {
+        const auto& rec = records_[idx];
+        if (std::holds_alternative<LinearAtomPayload>(rec.payload)) {
+            const auto& p = std::get<LinearAtomPayload>(rec.payload);
+            auto rhsQ = p.rhs.tryAsRational();
+            if (!rhsQ) return false;  // algebraic RHS: caller wants mpq
+            outLhs = p.lhs;
+            outRel = p.rel;
+            outRhs = *rhsQ;
+            return true;
         }
     }
     return false;
+}
+
+// iter-50: lookup the SAT var for an arbitrary theory atom by ExprId.
+// Used by NiaSolver::stageFarkasOr when constructing a narrow conflict
+// for the UNSAT-emit path: each Farkas branch's `originalAnd` ExprId
+// gets resolved to its SatVar so the conflict clause covers ALL
+// branches (proxied or unproxied), not just the Tseitin proxies.
+std::optional<SatVar>
+TheoryAtomRegistry::findSatVarByExprId(ExprId expr) const {
+    // iter-101 perf: O(1) index lookup instead of O(N) linear scan.
+    auto it = exprIdToIdxs_.find(expr);
+    if (it == exprIdToIdxs_.end() || it->second.empty()) return std::nullopt;
+    return records_[it->second.front()].satVar;
 }
 
 const TheoryAtomRecord* TheoryAtomRegistry::findBySatVar(SatVar v) const {
@@ -208,6 +226,7 @@ SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedT
     records_.push_back({lit.var, TheoryId::Combination, true, expr,
                         SharedEqualityPayload{a, b}});
     satVarToIdx_[lit.var] = idx;
+    if (expr != NullExpr) exprIdToIdxs_[expr].push_back(idx);  // iter-101 perf
     sharedEqLookup_[key] = idx;
     observeIfNeeded(lit.var);
 

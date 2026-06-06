@@ -1,4 +1,7 @@
 #include "theory/arith/nia/NiaSolver.h"
+#include <algorithm>
+#include "theory/arith/dl/DifferenceGraph.h"
+#include "theory/arith/dl/BellmanFord.h"
 #include "theory/arith/nia/preprocess/VariablePartition.h"
 #include "theory/arith/Reasoner.h"
 #include <random>
@@ -29,6 +32,9 @@
 namespace xolver {
 void NiaSolver::setCoreIr(const CoreIr* ir) {
     coreIr_ = ir;
+    // Track A Phase 1.3: forward CoreIr to the ModEqConstReasoner so its
+    // Variable-name extraction has access to expression nodes.
+    modEqConst_.setCoreIr(ir);
     // Farkas-Or Phase 0: env-gated structural dump. Bypasses std::cerr
     // (which xolver-cli silently consumes); writes to the file named by
     // XOLVER_NIA_FARKAS_DUMP_FILE if set, else /tmp/farkas_dump.
@@ -78,7 +84,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       bitBlast_(*kernel_),
       productPositivity_(*kernel_),
       gcdDivisibility_(*kernel_),
-      modularResidue_(*kernel_) {
+      modularResidue_(*kernel_),
+      groebner_(*kernel_),
+      modEqConst_(*kernel_, /*ir=*/nullptr) {
+    // modEqConst_'s CoreIr* is set in setCoreIr(); until then run() returns
+    // NoChange (defensive — no fact processing happens before setCoreIr).
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
     // the original linear check() exactly: normalize first, then the
     // presolve fixpoint, then the legacy NIA-Core engines in sequence,
@@ -112,6 +122,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
     add("nia.dispatch-cache", &NiaSolver::stageDispatchCacheLookup);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    // Track A Phase 1.3 — native (mod x y) = c reasoner. Runs early so its
+    // bound narrowings feed downstream linear/domain stages. Default-OFF via
+    // XOLVER_NIA_NATIVE_MODEQCONST.
+    add("nia.mod-eq-const",   &NiaSolver::stageNativeModEqConst);
     // Phase 3b (XOLVER_NIA_BOUNDED_PARTIAL_EARLY, default-OFF). Run the
     // partial bounded enumerator EARLY, right after normalize, before
     // any of the heavy per-propagation stages. On QF_ANIA / QF_AUFNIA /
@@ -172,6 +186,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // tightening for hard cases" intent and avoids cost on easy SAT cases).
     addFull("nia.nla-cuts",   &NiaSolver::stageNlaCuts);
     add("nia.trivial-const",  &NiaSolver::stageTrivialConstants);
+    add("nia.poly-conflict",  &NiaSolver::stagePolyConflict);
+    add("nia.diff-conflict",  &NiaSolver::stageDifferenceConflict);
     add("nia.domain",         &NiaSolver::stageDomainInference);
     add("nia.square-bound",   &NiaSolver::stageSquareBound);
     add("nia.sos-bound",      &NiaSolver::stageSumOfSquares);
@@ -186,6 +202,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     add("nia.algebraic",      &NiaSolver::stageAlgebraic);
     add("nia.product-pos",    &NiaSolver::stageProductPositivity);
     add("nia.gcd",            &NiaSolver::stageGcdDivisibility);
+    add("nia.groebner",       &NiaSolver::stageGroebner);
     add("nia.icp",            &NiaSolver::stageIcp);
     add("nia.interval",       &NiaSolver::stageInterval);
     add("nia.linearize",      &NiaSolver::stageLinearization);
@@ -294,6 +311,13 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // L3 modular residue refutation (default-ON). Sound: only emits UNSAT,
     // and only when the system has no solution modulo a constant power-of-two
     // modulus (an integer solution would project to one) — invariant 7.
+
+    // Polynomial-ideal saturation (default-OFF). Sound: 1∈ideal ⇒ no ℂ-root ⇒
+    // no ℤ-root ⇒ UNSAT (Nullstellensatz direction); bounded Buchberger.
+    // iter-77 cherry-pick of 7afeda9 — Step 5 Gröbner-lite (env var renamed
+    // ZOLVER_* → XOLVER_* to match this branch's naming convention).
+    if (const char* e = std::getenv("XOLVER_NIA_GROBNER"); e && *e && *e != '0')
+        enableGroebner_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-ON).
     // Sound: only narrows domains via valid bound propagation; UNSAT reported
@@ -896,6 +920,160 @@ std::optional<TheoryCheckResult> NiaSolver::stageTrivialConstants(TheoryLemmaSto
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult> NiaSolver::stagePolyConflict(TheoryLemmaStorage&, TheoryEffort) {
+    // Group active constraints by polynomial. Each is `P rel 0`, i.e. a sign
+    // constraint on the value of P. Within one poly the constraints define an
+    // interval-around-0 for P's value; if 0 is excluded AND P is pinned to 0 the
+    // group is infeasible — a sound conflict (a single-poly Farkas certificate)
+    // that needs no domain bounds. This is exactly the QF_UFNIA comparison
+    // tautology: `-a+b` asserted both `<0` (a>b) and `>0` (a<b).
+    struct Acc {
+        bool hasUpper = false, upperStrict = false; SatLit upperReason{};
+        bool hasLower = false, lowerStrict = false; SatLit lowerReason{};
+        bool hasNeq = false; SatLit neqReason{};
+    };
+    // `P rel 0` ⟺ `-P flip(rel) 0`, so canonicalize each poly's sign (a form and
+    // its negation share one group) — needed because `(= a b)` yields `a-b` while
+    // `(>= a b)` yields `-a+b`. Sign-flip of the relation: Lt↔Gt, Leq↔Geq, Eq, Neq.
+    auto flipRel = [](Relation r) -> Relation {
+        switch (r) {
+            case Relation::Lt:  return Relation::Gt;
+            case Relation::Gt:  return Relation::Lt;
+            case Relation::Leq: return Relation::Geq;
+            case Relation::Geq: return Relation::Leq;
+            default:            return r;  // Eq, Neq unchanged
+        }
+    };
+    std::unordered_map<std::string, Acc> groups;
+    for (const auto& c : active_) {
+        auto it = polyCanonCache_.find(c.poly);
+        if (it == polyCanonCache_.end()) {
+            std::string sP = kernel_->toString(c.poly);
+            std::string sN = kernel_->toString(kernel_->neg(c.poly));
+            bool flip = sN < sP;
+            it = polyCanonCache_.emplace(c.poly,
+                     std::make_pair(flip ? sN : sP, flip)).first;
+        }
+        const std::string& key = it->second.first;
+        Relation rel = it->second.second ? flipRel(c.rel) : c.rel;
+        Acc& g = groups[key];
+        switch (rel) {
+            case Relation::Lt:  g.hasUpper = true; g.upperStrict = true; g.upperReason = c.reason; break;
+            case Relation::Leq: if (!g.hasUpper) { g.hasUpper = true; g.upperReason = c.reason; } break;
+            case Relation::Gt:  g.hasLower = true; g.lowerStrict = true; g.lowerReason = c.reason; break;
+            case Relation::Geq: if (!g.hasLower) { g.hasLower = true; g.lowerReason = c.reason; } break;
+            case Relation::Eq:
+                if (!g.hasUpper) { g.hasUpper = true; g.upperReason = c.reason; }
+                if (!g.hasLower) { g.hasLower = true; g.lowerReason = c.reason; }
+                break;
+            case Relation::Neq: g.hasNeq = true; g.neqReason = c.reason; break;
+        }
+    }
+    // Fold in Nelson-Oppen interface disequalities (a != b shared by EUF). Their
+    // diff poly a-b, canonicalized, joins the same group: if the comparison
+    // bounds pin a-b to 0 (a=b) while EUF asserts a!=b, that is a sound conflict
+    // the NIA-only sign reasoning would otherwise miss (the equality lives in
+    // EUF, not NIA). Empty unless XOLVER_NIA_IFACE_LIFECYCLE populates them.
+    for (const auto& ie : interfaceDisequalities_) {
+        if (ie.diff == NullPoly) continue;
+        auto it = polyCanonCache_.find(ie.diff);
+        if (it == polyCanonCache_.end()) {
+            std::string sP = kernel_->toString(ie.diff);
+            std::string sN = kernel_->toString(kernel_->neg(ie.diff));
+            bool flip = sN < sP;
+            it = polyCanonCache_.emplace(ie.diff,
+                     std::make_pair(flip ? sN : sP, flip)).first;
+        }
+        Acc& g = groups[it->second.first];
+        g.hasNeq = true; g.neqReason = ie.reason;  // Neq is sign-invariant
+    }
+    for (auto& [poly, g] : groups) {
+        // P bounded at 0 from both sides; a strict bound on either side makes the
+        // only candidate (P=0) infeasible. Reasons: the two crossing constraints.
+        if (g.hasUpper && g.hasLower && (g.upperStrict || g.lowerStrict)) {
+            return TheoryCheckResult::mkConflict(
+                TheoryConflict{{g.upperReason, g.lowerReason}});
+        }
+        // P pinned to 0 (P<=0 and P>=0) but asserted P!=0.
+        if (g.hasUpper && g.hasLower && !g.upperStrict && !g.lowerStrict && g.hasNeq) {
+            return TheoryCheckResult::mkConflict(
+                TheoryConflict{{g.upperReason, g.lowerReason, g.neqReason}});
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageDifferenceConflict(TheoryLemmaStorage&, TheoryEffort) {
+    // Extract difference bounds `i - j <= c` from active `P rel 0` where
+    // P == 1*i - 1*j + k, build a DifferenceGraph, and reuse the project's
+    // BellmanFord engine to detect a negative cycle (a sound Farkas conflict).
+    auto extractDiff = [&](PolyId P, std::string& vi, std::string& vj, mpz_class& k) -> bool {
+        auto t = kernel_->terms(P);
+        if (!t) return false;
+        int nplus = 0, nminus = 0; k = 0;
+        for (const auto& m : *t) {
+            if (m.powers.empty()) { k += m.coefficient; continue; }
+            if (m.powers.size() != 1 || m.powers[0].second != 1) return false;
+            std::string v(kernel_->varName(m.powers[0].first));
+            if (m.coefficient == 1)       { if (nplus++)  return false; vi = v; }
+            else if (m.coefficient == -1) { if (nminus++) return false; vj = v; }
+            else return false;
+        }
+        return nplus == 1 && nminus == 1;
+    };
+    DifferenceGraph<mpz_class> graph;
+    // edge for `x - y <= c`: BellmanFord relaxes dist[to] <= dist[from] + w,
+    // i.e. to - from <= w, so from=y, to=x, w=c.
+    auto addBound = [&](const std::string& x, const std::string& y,
+                        const mpz_class& c, SatLit r) {
+        graph.addEdge(graph.getOrCreateNode(y), graph.getOrCreateNode(x), c, r);
+    };
+    bool any = false;
+    for (const auto& con : active_) {
+        std::string vi, vj; mpz_class k;
+        if (!extractDiff(con.poly, vi, vj, k) || vi == vj) continue;
+        // poly = vi - vj + k ; `poly rel 0`  ==>  vi - vj rel -k
+        switch (con.rel) {
+            case Relation::Leq: addBound(vi, vj, -k, con.reason); any = true; break;
+            case Relation::Lt:  addBound(vi, vj, -k - 1, con.reason); any = true; break;
+            case Relation::Geq: addBound(vj, vi, k, con.reason); any = true; break;
+            case Relation::Gt:  addBound(vj, vi, k - 1, con.reason); any = true; break;
+            case Relation::Eq:
+                addBound(vi, vj, -k, con.reason);
+                addBound(vj, vi, k, con.reason);
+                any = true; break;
+            case Relation::Neq: break;
+        }
+        if (graph.numNodes() > 96) return std::nullopt;  // keep BF cheap on big problems
+    }
+    // Fold Nelson-Oppen interface equalities (a == b, shared by EUF — e.g. the
+    // intmodtotal ite's `itevar = r`) as bidirectional difference edges so the
+    // difference chain can cross the theory boundary. (Interface diseqs are not
+    // difference BOUNDS; stagePolyConflict already handles them.)
+    for (const auto& ie : interfaceEqualities_) {
+        if (ie.diff == NullPoly) continue;
+        std::string vi, vj; mpz_class k;
+        if (!extractDiff(ie.diff, vi, vj, k) || vi == vj) continue;
+        addBound(vi, vj, -k, ie.reason);   // vi - vj <= -k
+        addBound(vj, vi, k, ie.reason);     // vi - vj >= -k
+        any = true;
+        if (graph.numNodes() > 96) return std::nullopt;
+    }
+    if (!any) return std::nullopt;
+    BellmanFord<mpz_class> bf;
+    auto res = bf.runFull(graph);
+    if (!res.negativeCycle) return std::nullopt;
+    std::vector<SatLit> reasons;
+    for (EdgeId eid : res.cycle) {
+        SatLit r = graph.edge(eid).reason;
+        if (std::none_of(reasons.begin(), reasons.end(),
+                         [&](SatLit x){ return x.var == r.var && x.sign == r.sign; }))
+            reasons.push_back(r);
+    }
+    if (reasons.empty()) return std::nullopt;
+    return TheoryCheckResult::mkConflict(TheoryConflict{reasons});
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStorage&, TheoryEffort) {
     // 3. Reset domains
     domains_.reset();
@@ -1155,6 +1333,62 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
         modularLastSignature_ = computeSignature();
         modularLastWasNoChange_ = true;
         modularSignatureValid_ = true;
+    }
+    return std::nullopt;
+}
+
+void NiaSolver::setModEqConstFacts(ModEqConstFactList facts) {
+    // Track A Phase 1.3 — Solver::Impl hands off facts captured from
+    // IntDivModLowerer here. Each fact's `reason` SatLit is still
+    // unset (atomization is done after preprocess); the stage method
+    // resolves it via TheoryAtomRegistry per call.
+    modEqConstFacts_ = std::move(facts);
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
+    TheoryLemmaStorage&, TheoryEffort) {
+    // Track A Phase 1.3 — bridge fact list to ModEqConstReasoner.
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+    if (modEqConstFacts_.empty()) return std::nullopt;
+    if (!registry_) return std::nullopt;
+
+    // Build a per-call snapshot of facts with `reason` resolved via the
+    // TheoryAtomRegistry. Skip any fact whose atom is not currently asserted
+    // true on the SAT trail.
+    ModEqConstFactList active;
+    active.reserve(modEqConstFacts_.size());
+    for (const auto& src : modEqConstFacts_) {
+        auto satVarOpt = registry_->findSatVarByExprId(src.atomExpr);
+        if (!satVarOpt) continue;
+        SatVar var = *satVarOpt;
+        // Need positive polarity asserted (fact `(= (mod x y) c)` is true
+        // only when the SAT layer has set the atom to true). The active
+        // literal set tracks current-level asserted lits.
+        SatLit posLit{var, /*sign=*/false};
+        if (!activeSet_.contains(posLit)) continue;
+        ModEqConstFact f = src;
+        f.reason = posLit;
+        active.push_back(std::move(f));
+    }
+    if (active.empty()) return std::nullopt;
+
+    auto r = modEqConst_.run(active, domains_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    }
+    // DomainUpdated / NoChange both fall through to the next stage.
+    return std::nullopt;
+}
+
+std::optional<TheoryCheckResult> NiaSolver::stageGroebner(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableGroebner_) return std::nullopt;
+    auto r = groebner_.run(normalized_);
+    if (r.kind == NiaReasoningKind::Conflict) {
+        return TheoryCheckResult::mkConflict(*r.conflict);
     }
     return std::nullopt;
 }
@@ -2176,6 +2410,56 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         }
     }
     if (table.rows.empty()) {
+        traceWrite("  exhaustive=" + std::string(table.exhaustive ? "true" : "false")
+                   + " outerAssertions=" + std::to_string(profile.outerAssertions.size()));
+        bool unsafeNoOuterCheck = std::getenv("XOLVER_NIA_FARKAS_OR_UNSAT_EMIT_UNSAFE") != nullptr;
+        if (table.exhaustive && (unsafeNoOuterCheck || profile.outerAssertions.empty()) &&
+            std::getenv("XOLVER_NIA_FARKAS_OR_UNSAT_EMIT")) {
+            traceWrite("  → exhaustive empty table + no outer assertions => UNSAT");
+            // iter-49: build a NARROW conflict from only Farkas-block
+            // proxy literals (boolpur_K). For each block: pick the
+            // currently-true branch proxy, add its negation. This says
+            // "the current branch-choice combo is bad"; SAT backtracks
+            // through ONLY proxy decisions (~10 vars), not the full
+            // trail (~100s of vars). Falls back to full trail on miss.
+            // CRITICAL: TheoryConflict.clause stores RAW reason literals
+            // that are TRUE on the trail. TheoryManager negates them when
+            // submitting the clause as a falsified external conflict. So
+            // we push a.reason AS-IS (not .negated()) -- pushing .negated()
+            // double-negates and produces an unsound conflict.
+            TheoryConflict tc;
+            if (registry_) {
+                std::unordered_set<SatVar> seen;
+                auto pushReason = [&](SatVar sv) {
+                    if (!seen.insert(sv).second) return;
+                    for (const auto& a : active_) {
+                        if (a.reason.var == sv) {
+                            tc.clause.push_back(a.reason);  // RAW reason
+                            return;
+                        }
+                    }
+                };
+                for (const auto& blk : profile.blocks) {
+                    // (a) Tseitin-proxy branches (iter-49 path).
+                    for (const auto& proxy : blk.branchProxies) {
+                        if (proxy.empty()) continue;
+                        if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushReason(*sv);
+                    }
+                    // (b) Unproxied branches: resolve the originalAnd ExprId.
+                    for (const auto& br : blk.branches) {
+                        if (br.originalAnd == NullExpr) continue;
+                        if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
+                            pushReason(*sv);
+                    }
+                }
+            }
+            if (tc.clause.empty()) {
+                tc.clause.reserve(active_.size());
+                for (const auto& a : active_) tc.clause.push_back(a.reason);  // RAW
+            }
+            std::cerr << "[FarkasOrUnsatEmit] exhaustive empty table; emit conflict size=" << tc.clause.size() << "\n";
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
         traceWrite("  → empty table; bail");
         return std::nullopt;
     }

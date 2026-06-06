@@ -769,11 +769,19 @@ ProjectionResult LibpolyBackend::projectionPolys(
         }
     }
 
+    // iter-109 perf: precompute "polynomial contains elimName" ONCE per
+    // polynomial before the O(N²) pairwise resultant loop. Was calling
+    // std::find on vars_i and vars_j per (i,j) pair — total O(N² × |vars|)
+    // linear-scan cost. Now O(N × |vars|) once + O(N²) plain pair iteration.
+    std::vector<bool> hasElim(polys.size(), false);
+    for (size_t k = 0; k < polys.size(); ++k) {
+        auto vars_k = kernel_->variables(polys[k]);
+        hasElim[k] = std::find(vars_k.begin(), vars_k.end(), elimName) != vars_k.end();
+    }
+
     // Pairwise resultants
     for (size_t i = 0; i < polys.size(); ++i) {
-        auto vars_i = kernel_->variables(polys[i]);
-        bool has_i = std::find(vars_i.begin(), vars_i.end(), elimName) != vars_i.end();
-        if (!has_i) continue;
+        if (!hasElim[i]) continue;
 
         const poly::Polynomial& pi = libKernel_->getPolynomial(polys[i]);
         if (poly::main_variable(pi) != elimPolyVar) {
@@ -781,9 +789,7 @@ ProjectionResult LibpolyBackend::projectionPolys(
         }
 
         for (size_t j = i + 1; j < polys.size(); ++j) {
-            auto vars_j = kernel_->variables(polys[j]);
-            bool has_j = std::find(vars_j.begin(), vars_j.end(), elimName) != vars_j.end();
-            if (!has_j) continue;
+            if (!hasElim[j]) continue;
 
             const poly::Polynomial& pj = libKernel_->getPolynomial(polys[j]);
             if (poly::main_variable(pj) != elimPolyVar) {
@@ -1114,17 +1120,17 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
     int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
     if (jumped == 0) {
         try {
-            // Reconstruct the algebraic number from root definition
+            // Reconstruct the algebraic number DIRECTLY from its isolating dyadic
+            // interval (algebraicRootToPolyAlg) instead of re-isolating ALL roots of
+            // the defining poly via Sturm and indexing by rootIndex. `alpha` already
+            // carries the [lower,upper] interval that uniquely pins which root it is,
+            // so the full re-isolation was pure redundant work — and it ran once per
+            // sign evaluation (~10^4 times/solve on an algebraic-leaf covering search,
+            // each rebuilding the same degree-2 number), which read as a hang. This
+            // is the same cheap construction signAtSampleGuarded already uses.
             const auto& rc = getUni(alpha.definingPoly);
-            std::vector<poly::Integer> rootLpCoeffs;
-            rootLpCoeffs.reserve(rc.size());
-            for (auto it = rc.rbegin(); it != rc.rend(); ++it) {
-                rootLpCoeffs.emplace_back(*it);
-            }
-            poly::UPolynomial rootUp(rootLpCoeffs);
-            std::vector<poly::AlgebraicNumber> roots = poly::isolate_real_roots(rootUp);
-            if (alpha.rootIndex >= 0 && alpha.rootIndex < static_cast<int>(roots.size())) {
-                // Build gPoly once
+            auto algOpt = algebraicRootToPolyAlg(alpha, rc);
+            if (algOpt) {
                 poly::Variable var = libKernel_->getVariable("x");
                 std::vector<poly::Integer> gLpCoeffs;
                 gLpCoeffs.reserve(gCoeffs.size());
@@ -1139,9 +1145,9 @@ Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
                 );
                 poly::Polynomial gPoly(lp_poly);
 
-                // Exact algebraic sign evaluation via libpoly
+                // Exact algebraic sign evaluation via libpoly.
                 poly::Assignment pa(libKernel_->context());
-                pa.set(var, poly::Value(roots[alpha.rootIndex]));
+                pa.set(var, poly::Value(*algOpt));
                 resultSign = poly::sgn(gPoly, pa);
                 ok = true;
             }

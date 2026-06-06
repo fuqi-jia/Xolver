@@ -2,6 +2,9 @@
 #include "util/MpqUtils.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <functional>
+#include <iostream>
 #include <optional>
 
 namespace xolver {
@@ -67,6 +70,7 @@ FormulaRewriter::Verdict FormulaRewriter::run() {
     rewritten_.clear();
     changed_ = false;
     unsat_ = false;
+    scanNonNegativeVars();
 
     for (const auto& [level, eid] : ir_.getScopedAssertions()) {
         ExprId r = rewriteRec(eid);
@@ -92,6 +96,159 @@ void FormulaRewriter::commit() {
 
 ExprId FormulaRewriter::rewrite(ExprId e) { return rewriteRec(e); }
 
+// Top-level scan: a Variable v is marked non-negative if some top-level
+// asserted atom proves it. Recognises (>= v c) / (> v c) / (<= c v) / (< c v)
+// with the threshold relaxed to 0 (so `>= v 0`, `> v -1`, `>= v 1` etc. all
+// count). Flattens And nodes so conjuncts of a packed assertion are seen.
+// Sound: each top-level conjunct must hold, so the conjunct's bound is a
+// true global constraint.
+void FormulaRewriter::scanNonNegativeVars() {
+    nonNegVars_.clear();
+    varLowerBound_.clear();
+    auto tryConstInt = [&](ExprId e, mpz_class& out) -> bool {
+        const CoreExpr& n = ir_.get(e);
+        // Accept both ConstInt and ConstReal-with-integer-value: the parser
+        // can store small literals like `1` as ConstReal even when the
+        // containing expression is Int-typed.
+        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
+            out = mpz_class(*iv);
+            return true;
+        }
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try {
+                mpq_class q(*sv);
+                if (q.get_den() != 1) return false;
+                out = q.get_num();
+                return true;
+            } catch (...) { return false; }
+        }
+        return false;
+    };
+    auto recordLowerBound = [&](const std::string& v, const mpz_class& bound) {
+        auto it = varLowerBound_.find(v);
+        if (it == varLowerBound_.end() || bound > it->second) {
+            varLowerBound_[v] = bound;
+        }
+    };
+    auto recordUpperBound = [&](const std::string& v, const mpz_class& bound) {
+        auto it = varUpperBound_.find(v);
+        if (it == varUpperBound_.end() || bound < it->second) {
+            varUpperBound_[v] = bound;
+        }
+    };
+    auto constGe = [&](ExprId e, const mpq_class& bound) -> bool {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value))
+            return mpq_class(*iv) >= bound;
+        if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+            try { return mpq_class(*sv) >= bound; } catch (...) { return false; }
+        }
+        return false;
+    };
+    auto varName = [&](ExprId e) -> std::optional<std::string> {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind != Kind::Variable) return std::nullopt;
+        if (auto* s = std::get_if<std::string>(&n.payload.value)) return *s;
+        return std::nullopt;
+    };
+    auto mark = [&](ExprId atom) {
+        const CoreExpr& a = ir_.get(atom);
+        if (a.children.size() != 2) return;
+        // (>= v c) -> v >= c; (> v c) -> v >= c+1 for integer v
+        // (<= c v) -> v >= c; (< c v) -> v >= c+1 for integer v
+        if (a.kind == Kind::Geq || a.kind == Kind::Gt) {
+            mpq_class need = (a.kind == Kind::Geq) ? mpq_class(0) : mpq_class(-1);
+            if (auto v = varName(a.children[0])) {
+                if (constGe(a.children[1], need)) nonNegVars_.insert(*v);
+                mpz_class c;
+                if (tryConstInt(a.children[1], c)) {
+                    mpz_class bound = (a.kind == Kind::Geq) ? c : (c + 1);
+                    recordLowerBound(*v, bound);
+                }
+            }
+            // (>= c v) / (> c v): v <= c / v <= c - 1
+            if (auto v = varName(a.children[1])) {
+                mpz_class c;
+                if (tryConstInt(a.children[0], c)) {
+                    mpz_class bound = (a.kind == Kind::Geq) ? c : (c - 1);
+                    recordUpperBound(*v, bound);
+                }
+            }
+        }
+        if (a.kind == Kind::Leq || a.kind == Kind::Lt) {
+            mpq_class need = (a.kind == Kind::Leq) ? mpq_class(0) : mpq_class(-1);
+            if (auto v = varName(a.children[1])) {
+                if (constGe(a.children[0], need)) nonNegVars_.insert(*v);
+                mpz_class c;
+                if (tryConstInt(a.children[0], c)) {
+                    mpz_class bound = (a.kind == Kind::Leq) ? c : (c + 1);
+                    recordLowerBound(*v, bound);
+                }
+            }
+            // (<= v c) / (< v c): v <= c / v <= c - 1
+            if (auto v = varName(a.children[0])) {
+                mpz_class c;
+                if (tryConstInt(a.children[1], c)) {
+                    mpz_class bound = (a.kind == Kind::Leq) ? c : (c - 1);
+                    recordUpperBound(*v, bound);
+                }
+            }
+        }
+    };
+    std::function<void(ExprId)> walk = [&](ExprId e) {
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) walk(c);
+            return;
+        }
+        mark(e);
+    };
+    for (const auto& [_, e] : ir_.getScopedAssertions()) walk(e);
+}
+
+bool FormulaRewriter::tryGetTightValue(const std::string& v, mpz_class& out) const {
+    auto lo = varLowerBound_.find(v);
+    auto hi = varUpperBound_.find(v);
+    if (lo == varLowerBound_.end() || hi == varUpperBound_.end()) return false;
+    if (lo->second != hi->second) return false;
+    out = lo->second;
+    return true;
+}
+
+bool FormulaRewriter::tryGetLowerBound(ExprId e, mpz_class& out) const {
+    const CoreExpr& n = ir_.get(e);
+    if (n.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) {
+            out = mpz_class(*iv);
+            return true;
+        }
+    }
+    if (n.kind == Kind::Variable) {
+        if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+            auto it = varLowerBound_.find(*s);
+            if (it != varLowerBound_.end()) {
+                out = it->second;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool FormulaRewriter::isProvablyNonNegative(ExprId e) const {
+    const CoreExpr& n = ir_.get(e);
+    if (n.kind == Kind::ConstInt) {
+        if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv >= 0;
+    }
+    if (n.kind == Kind::Variable) {
+        if (auto* s = std::get_if<std::string>(&n.payload.value))
+            return nonNegVars_.count(*s) > 0;
+    }
+    return false;
+}
+
 ExprId FormulaRewriter::rewriteRec(ExprId root) {
     if (root == NullExpr) return root;
     if (auto it = memo_.find(root); it != memo_.end()) return it->second;
@@ -112,7 +269,32 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
         if (!frame.processed) {
             frame.processed = true;
             const CoreExpr& node = ir_.get(e);
-            if (node.children.empty()) { memo_[e] = e; stack.pop_back(); continue; }
+            if (node.children.empty()) {
+                // Tight-bound substitution (XOLVER_PP_TIGHT_BOUND_SUBST):
+                // Variable with lower == upper bound -> ConstInt(value).
+                // Sound: the bound atoms in the formula constrain v to the
+                // single integer value c, so substituting v with c
+                // everywhere is logically equivalent. Closes the VeryMax
+                // Farkas lambda pattern `(<= 0 lam) ∧ (< lam 1)` -> lam = 0.
+                static const bool tightSubst =
+                    std::getenv("XOLVER_PP_TIGHT_BOUND_SUBST") != nullptr;
+                if (tightSubst && node.kind == Kind::Variable) {
+                    if (auto* s = std::get_if<std::string>(&node.payload.value)) {
+                        mpz_class val;
+                        if (tryGetTightValue(*s, val)) {
+                            ExprId folded = mkIntOrReal(mpq_class(val), node.sort);
+                            if (folded != NullExpr) {
+                                memo_[e] = folded;
+                                stack.pop_back();
+                                continue;
+                            }
+                        }
+                    }
+                }
+                memo_[e] = e;
+                stack.pop_back();
+                continue;
+            }
             for (int i = static_cast<int>(node.children.size()) - 1; i >= 0; --i) {
                 ExprId c = node.children[i];
                 if (c != NullExpr && memo_.find(c) == memo_.end()) stack.push_back({c, false});
@@ -152,7 +334,11 @@ ExprId FormulaRewriter::mk(Kind kind, SortId sort, std::vector<ExprId> children,
     e.sort = sort;
     e.children = SmallVector<ExprId, 4>(children.begin(), children.end());
     e.payload = std::move(payload);
-    ExprId id = ir_.add(std::move(e));
+    // iter-64: use ir_.addShared so rewritten nodes fuse across rewriter
+    // sessions and with other preprocess passes. The local cons_ map is
+    // session-only; without addShared, the same canonicalized atom built
+    // from different starting trees becomes distinct ExprIds globally.
+    ExprId id = ir_.addShared(std::move(e));
     cons_.emplace(std::move(key), id);
     return id;
 }
@@ -320,11 +506,123 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 // Numeric-constant equality.
                 auto va = tryRational(ir_, a), vb = tryRational(ir_, b);
                 if (va && vb) return mkBool(*va == *vb);
+                // Shared-Add-term cancellation: `(= (+ X1 X2 ...) (+ Y1 Y2 ...))`
+                // simplifies by removing the intersection of the two operand
+                // multisets. Sound: subtracting the same value from both sides
+                // preserves equality. Closes the "semi-magic square of cubes"
+                // chain (MathProblems SC_02 etc.) where, after SOLVE_EQS removes
+                // `t`, the asserted formula becomes
+                //   (= (+ x_00^3 x_01^3) (+ x_00^3 x_10^3))
+                // which collapses to `(= x_01^3 x_10^3)` and then, via the
+                // odd-power injection below, to `(= x_01 x_10)` -- contradicting
+                // (distinct x_01 x_10).
+                const CoreExpr& an = ir_.get(a);
+                const CoreExpr& bn = ir_.get(b);
+                if (an.kind == Kind::Add && bn.kind == Kind::Add &&
+                    an.children.size() >= 2 && bn.children.size() >= 2) {
+                    std::vector<ExprId> la, rb;
+                    la.reserve(an.children.size());
+                    rb.reserve(bn.children.size());
+                    for (size_t i = 0; i < an.children.size(); ++i) la.push_back(an.children[i]);
+                    for (size_t i = 0; i < bn.children.size(); ++i) rb.push_back(bn.children[i]);
+                    bool cancelled = false;
+                    for (auto it = la.begin(); it != la.end(); ) {
+                        auto match = std::find(rb.begin(), rb.end(), *it);
+                        if (match != rb.end()) {
+                            rb.erase(match);
+                            it = la.erase(it);
+                            cancelled = true;
+                        } else {
+                            ++it;
+                        }
+                    }
+                    if (cancelled) {
+                        auto rebuild = [&](std::vector<ExprId>& v, SortId sortArith) -> ExprId {
+                            if (v.empty()) {
+                                return mkIntOrReal(mpq_class(0), sortArith);
+                            }
+                            if (v.size() == 1) return v[0];
+                            return mk(Kind::Add, sortArith, v, Payload());
+                        };
+                        ExprId newA = rebuild(la, an.sort);
+                        ExprId newB = rebuild(rb, bn.sort);
+                        if (newA != NullExpr && newB != NullExpr && (newA != a || newB != b)) {
+                            // Re-process the freshly-built Eq so the odd-power
+                            // injection below can fire on (= (* x x x) (* y y y))
+                            // shapes that emerge AFTER cancellation. Memoized.
+                            ExprId newEq = mk(Kind::Eq, sort, {newA, newB}, Payload());
+                            return rewriteRec(newEq);
+                        }
+                    }
+                }
                 // Boolean iff identities (only when provably bool).
                 if (isProvablyBool(a) && isProvablyBool(b)) {
                     bool ba, bb;
                     if (isBoolConst(a, ba)) return ba ? b : negate(b);
                     if (isBoolConst(b, bb)) return bb ? a : negate(a);
+                }
+                // Odd-power injection (sound over Z): if both sides are pow(_, k)
+                // with the SAME odd positive integer constant k, rewrite to
+                // (= base_a base_b). x^k is injective over Z for odd k, so
+                // x^k = y^k ↔ x = y. For even k the rule is unsound (x^2 = y^2
+                // doesn't imply x = y -- could differ in sign). Only fires on
+                // Int-sorted exponents read from a ConstInt payload; non-constant
+                // or even / negative exponents fall through unchanged.
+                //
+                // Closes the "semi-magic square of cubes" pattern (MathProblems
+                // SC_02 etc.) where the constraint chain collapses to
+                // x_10^3 = x_01^3 -> x_10 = x_01, contradicting (distinct ...).
+                // Power-injection helper: extract (base, k) when `eid` is an
+                // explicit Pow(base, k) or an implicit repeated-var Mul like
+                // (* x x x ...) with N >= 2 children, all syntactically equal.
+                // Returns true and fills `base`, `expOut`. Note we accept any
+                // k >= 2; the caller decides whether the rule is sound for
+                // this k (odd k is always sound over Z; even k requires both
+                // bases to be provably non-negative).
+                auto isPowLike = [&](ExprId eid, ExprId& base, mpz_class& expOut) -> bool {
+                    const CoreExpr& e = ir_.get(eid);
+                    if (e.kind == Kind::Pow && e.children.size() == 2) {
+                        const CoreExpr& exp = ir_.get(e.children[1]);
+                        if (exp.kind != Kind::ConstInt) return false;
+                        if (auto* i = std::get_if<int64_t>(&exp.payload.value)) {
+                            if (*i < 2) return false;
+                            expOut = mpz_class(*i);
+                        } else if (auto* s = std::get_if<std::string>(&exp.payload.value)) {
+                            try { expOut = mpz_class(*s); }
+                            catch (...) { return false; }
+                            if (expOut < 2) return false;
+                        } else {
+                            return false;
+                        }
+                        base = e.children[0];
+                        return true;
+                    }
+                    if (e.kind == Kind::Mul && e.children.size() >= 2) {
+                        ExprId first = e.children[0];
+                        for (size_t i = 1; i < e.children.size(); ++i)
+                            if (e.children[i] != first) return false;
+                        base = first;
+                        expOut = mpz_class(static_cast<unsigned long>(e.children.size()));
+                        return true;
+                    }
+                    return false;
+                };
+                ExprId baseA = NullExpr, baseB = NullExpr;
+                mpz_class expA, expB;
+                if (isPowLike(a, baseA, expA) && isPowLike(b, baseB, expB) && expA == expB) {
+                    bool kOdd = (expA % 2) != 0;
+                    // Odd k: sound over Z unconditionally.
+                    // Even k: sound only when both bases are non-negative
+                    // (x^k = y^k with x,y >= 0 implies x = y for any k >= 1).
+                    bool sound = kOdd ||
+                        (isProvablyNonNegative(baseA) && isProvablyNonNegative(baseB));
+                    if (!sound) {
+                        return mk(kind, sort, std::move(children), Payload());
+                    }
+                    // Reflexive shortcut.
+                    if (baseA == baseB) return mkBool(true);
+                    ExprId newEq = mk(Kind::Eq, sort, {baseA, baseB}, Payload());
+                    return rewriteRec(newEq);
                 }
             }
             return mk(kind, sort, std::move(children), Payload());
@@ -498,6 +796,78 @@ ExprId FormulaRewriter::simplifyNode(Kind kind, SortId sort,
                 return mk(kind, sort, std::move(terms), Payload());
             }
             return mk(kind, sort, std::move(children), Payload());
+        }
+
+        // ---------------- Mod (mod-by-variable simplification) ----------
+        // `(mod E V)` with V a strictly-positive Int Variable. Decompose E
+        // as a sum (flattening top-level Adds). For each summand, drop it
+        // if it is syntactically a multiple of V -- i.e. a Mul whose children
+        // include V. After dropping, sum the remaining integer constants
+        // into `c`. If c is in [0, V's lower bound), then (mod E V) = c.
+        //
+        // Sound: x * V is a multiple of V for ANY x, so its contribution to
+        // E mod V is zero. The remaining constant c reduces to c mod V; when
+        // 0 <= c < V_lb <= V, c mod V = c exactly. Closes the modSimpleTest
+        // pattern `(mod (+ (* k s) 1) s)` with `s > 1` -> simplifies to 1,
+        // making the asserted disequality `(not (= 1 (mod ...)))` contradict.
+        case Kind::Mod: {
+            if (children.size() != 2) break;
+            ExprId E = children[0];
+            ExprId V = children[1];
+            const CoreExpr& vN = ir_.get(V);
+            if (vN.kind != Kind::Variable) break;
+            std::string vname;
+            if (auto* s = std::get_if<std::string>(&vN.payload.value)) vname = *s;
+            else break;
+            auto lbIt = varLowerBound_.find(vname);
+            if (lbIt == varLowerBound_.end() || lbIt->second <= 0) break;
+            const mpz_class& Vlb = lbIt->second;
+            // Decompose E into a list of summands by flattening top-level Add.
+            std::function<void(ExprId, std::vector<ExprId>&)> flattenAdd =
+                [&](ExprId e, std::vector<ExprId>& out) {
+                    const CoreExpr& en = ir_.get(e);
+                    if (en.kind == Kind::Add) {
+                        for (ExprId c : en.children) flattenAdd(c, out);
+                    } else {
+                        out.push_back(e);
+                    }
+                };
+            std::vector<ExprId> summands;
+            flattenAdd(E, summands);
+            // For each summand, check if V is one of its Mul factors.
+            auto isMultipleOfV = [&](ExprId s) -> bool {
+                const CoreExpr& sn = ir_.get(s);
+                if (sn.kind == Kind::Mul) {
+                    for (ExprId c : sn.children) if (c == V) return true;
+                }
+                return false;
+            };
+            mpz_class constSum(0);
+            bool allHandled = true;
+            for (ExprId s : summands) {
+                if (isMultipleOfV(s)) continue;       // drops
+                // Otherwise must be an Int constant to be summable.
+                const CoreExpr& sn = ir_.get(s);
+                if (sn.kind == Kind::ConstInt) {
+                    if (auto* iv = std::get_if<int64_t>(&sn.payload.value)) {
+                        constSum += mpz_class(*iv);
+                        continue;
+                    }
+                    if (auto* sv = std::get_if<std::string>(&sn.payload.value)) {
+                        try { constSum += mpz_class(*sv); continue; }
+                        catch (...) { allHandled = false; break; }
+                    }
+                }
+                allHandled = false;
+                break;
+            }
+            if (!allHandled) break;
+            if (constSum >= 0 && constSum < Vlb) {
+                ExprId folded = mkIntOrReal(mpq_class(constSum), sort);
+                if (folded != NullExpr) return folded;
+            }
+            // Otherwise leave the (mod E V) intact (default below).
+            break;
         }
 
         default:

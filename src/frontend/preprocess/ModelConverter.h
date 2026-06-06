@@ -39,11 +39,21 @@ public:
     enum class Rel { Ge, Gt, Le, Lt, Ne };
 
     // solve-eqs: `name` was eliminated and EQUALS the value of `definingExpr`.
+    // STRICT semantics: every free variable in `definingExpr` must have a
+    // value in the final model. Missing dep ⇒ reconstruct() returns false.
     void registerElimination(std::string name, SortId sort, ExprId definingExpr);
+
+    // unconstrained-elim Eq: similar to registerElimination but PERMISSIVE.
+    // Used by UnconstrainedElim's `(= v t)` path. Free variables in `t` that
+    // are themselves unconstrained (also dropped, never theory-assigned)
+    // default to 0 during reconstruction — they are by construction free,
+    // so any default is sound. Distinguishing from solve-eqs's strict
+    // semantics preserves SolveEqs's bug-detection invariant.
+    void registerUncElimination(std::string name, SortId sort, ExprId definingExpr);
 
     // unconstrained-elim: `name` occurred only in a dropped atom `x ⋈ bound`
     // (rel) and is otherwise free. Reconstruct it to a WITNESS satisfying the
-    // atom, given bound's value under the model.
+    // atom, given bound's value under the model. PERMISSIVE (same as UncElim).
     void registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr);
 
     // term-subst (bool): boolean variable `name` was eliminated and EQUALS the
@@ -63,7 +73,7 @@ public:
                      const CoreIr& ir) const;
 
 private:
-    enum class StepKind { Elim, Witness, BoolElim };
+    enum class StepKind { Elim, UncElim, Witness, BoolElim };
     struct Step {
         StepKind kind;
         std::string name;
@@ -73,12 +83,19 @@ private:
     };
     std::vector<Step> steps_;
 
-    // Iterative post-order evaluation of a linear arithmetic term over the
-    // rational environment `env` (name -> value). nullopt if a leaf variable is
-    // missing or a node is not linear-arithmetic-evaluable.
+    // Iterative post-order evaluation of an arithmetic term over the rational
+    // environment `env` (name -> value). nullopt if a leaf variable is missing
+    // or a node is not arithmetic-evaluable. `boolEnv` is consulted only for
+    // Kind::Ite condition evaluation (callers that pass nullptr lose Ite
+    // support but keep the linear core). Missing numeric vars default to 0,
+    // matching dumpModel's unconstrained-variable convention so that an
+    // eliminated term whose defining expression mentions a model-free var
+    // (e.g. `(= z (ite c x y))` where `y` is unconstrained) still reconstructs.
     static std::optional<mpq_class> evalRational(
         ExprId root, const CoreIr& ir,
-        const std::unordered_map<std::string, mpq_class>& env);
+        const std::unordered_map<std::string, mpq_class>& env,
+        const std::unordered_map<std::string, bool>* boolEnv = nullptr,
+        bool permissiveMissingVar = false);
 
     // Iterative evaluation of a boolean expression over `boolEnv` (bool vars)
     // and `env` (rationals, for arithmetic relations). Missing bool vars default

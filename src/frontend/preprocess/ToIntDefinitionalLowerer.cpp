@@ -58,7 +58,7 @@ ExprId ToIntDefinitionalLowerer::rewriteRec(ExprId root, ScopeLevel level) {
             continue;
         }
 
-        // Snapshot by value: getOrLowerToInt()/mk*() below call ir_.add(),
+        // Snapshot by value: getOrLowerToInt()/mk*() below call ir_.addShared(),
         // which may relocate CoreExpr storage and invalidate references.
         const CoreExpr node = ir_.get(e);
 
@@ -130,7 +130,7 @@ ExprId ToIntDefinitionalLowerer::rewriteRec(ExprId root, ScopeLevel level) {
             fresh.sort = node.sort;
             fresh.children = std::move(newChildren);
             fresh.payload = node.payload;
-            rewriteMemo_[e] = ir_.add(std::move(fresh));
+            rewriteMemo_[e] = ir_.addShared(std::move(fresh));
         }
     }
 
@@ -186,7 +186,7 @@ ExprId ToIntDefinitionalLowerer::mkConstInt(int64_t v) {
     e.kind = Kind::ConstInt;
     e.sort = intSortId_;
     e.payload = Payload(v);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkConstReal(const std::string& s) {
@@ -194,7 +194,7 @@ ExprId ToIntDefinitionalLowerer::mkConstReal(const std::string& s) {
     e.kind = Kind::ConstReal;
     e.sort = realSortId_;
     e.payload = Payload(s);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkToReal(ExprId child) {
@@ -202,7 +202,7 @@ ExprId ToIntDefinitionalLowerer::mkToReal(ExprId child) {
     e.kind = Kind::ToReal;
     e.sort = realSortId_;
     e.children.push_back(child);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkLeq(ExprId a, ExprId b) {
@@ -211,7 +211,7 @@ ExprId ToIntDefinitionalLowerer::mkLeq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkLt(ExprId a, ExprId b) {
@@ -220,7 +220,7 @@ ExprId ToIntDefinitionalLowerer::mkLt(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkEq(ExprId a, ExprId b) {
@@ -229,7 +229,7 @@ ExprId ToIntDefinitionalLowerer::mkEq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId ToIntDefinitionalLowerer::mkAdd(ExprId a, ExprId b) {
@@ -238,7 +238,7 @@ ExprId ToIntDefinitionalLowerer::mkAdd(ExprId a, ExprId b) {
     e.sort = realSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 // ---------------------------------------------------------------------------

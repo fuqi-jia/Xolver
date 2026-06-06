@@ -40,7 +40,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             // First visit: mark as processed, then push children
             frame.processed = true;
 
-            // Value copy (not a reference): ir_.add() below reallocates exprs_,
+            // Value copy (not a reference): ir_.addShared() below reallocates exprs_,
             // which would dangle a reference held across it (use-after-realloc).
             const auto node = ir_.get(e);
 
@@ -75,7 +75,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                         ne.kind = Kind::ConstReal;
                         ne.sort = node.sort;
                         ne.payload = Payload(mpq_class(*v).get_str());
-                        memo_[e] = ir_.add(std::move(ne));
+                        memo_[e] = ir_.addShared(std::move(ne));
                         folded = true;
                     }
                 }
@@ -91,7 +91,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                             ne.kind = Kind::ConstInt;
                             ne.sort = node.sort;
                             ne.payload = Payload(static_cast<int64_t>(z.get_si()));
-                            memo_[e] = ir_.add(std::move(ne));
+                            memo_[e] = ir_.addShared(std::move(ne));
                             folded = true;
                         }
                     }
@@ -118,7 +118,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
             }
         } else {
             // Second visit: all children are memoized, build result
-            // Value copy (not a reference): ir_.add() below reallocates exprs_,
+            // Value copy (not a reference): ir_.addShared() below reallocates exprs_,
             // which would dangle a reference held across it (use-after-realloc).
             const auto node = ir_.get(e);
             ExprId result = e;
@@ -166,7 +166,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     ExprId rc = (it != memo_.end()) ? it->second : c;
 
                     // Coerce integer constant to real when in a Real context.
-                    // Value copy: ir_.add() in this loop reallocates exprs_,
+                    // Value copy: ir_.addShared() in this loop reallocates exprs_,
                     // dangling a reference (use-after-realloc -> SIGSEGV).
                     const auto childNode = ir_.get(c);
                     if (realContext && childNode.kind == Kind::ConstInt) {
@@ -175,7 +175,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                             ne.kind = Kind::ConstReal;
                             ne.sort = ir_.realSortId();
                             ne.payload = Payload(mpq_class(*v).get_str());
-                            rc = ir_.add(std::move(ne));
+                            rc = ir_.addShared(std::move(ne));
                             changed = true;
                         }
                     } else if (realContext && childNode.kind == Kind::ConstReal &&
@@ -186,7 +186,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                             ne.kind = Kind::ConstReal;
                             ne.sort = ir_.realSortId();
                             ne.payload = Payload(*s);
-                            rc = ir_.add(std::move(ne));
+                            rc = ir_.addShared(std::move(ne));
                             changed = true;
                         }
                     }
@@ -200,7 +200,7 @@ ExprId ArithCastNormalizer::rewriteRec(ExprId root) {
                     ne.sort = node.sort;
                     ne.children = std::move(newChildren);
                     ne.payload = node.payload;
-                    result = ir_.add(std::move(ne));
+                    result = ir_.addShared(std::move(ne));
                 }
             }
 

@@ -69,10 +69,41 @@ class CoreIr {
 public:
     CoreIr() = default;
 
-    // Dense storage
+    // add() is the LEGACY entry point: every call gets a fresh ExprId.
+    // SOMTParser's NodeManager + FrontendAdapter memo table already handles
+    // structural sharing at parse time, so callers that came up through the
+    // parser path rely on add() returning unique IDs for distinct AST
+    // positions (e.g. ITE branches, let-bindings, fresh tseitin proxies).
+    // Forcing hash-cons here caused false-SAT on calypto/* (see iter-61
+    // post-mortem). Use addShared() to OPT IN to dedup.
     ExprId add(CoreExpr e) {
         ExprId id = static_cast<ExprId>(exprs_.size());
         exprs_.push_back(std::move(e));
+        return id;
+    }
+
+    // addShared() is the explicit hash-cons entry point. Identical
+    // (kind, sort, children, payload) tuples collapse to the same ExprId.
+    //
+    // Use this from preprocess passes that emit new sub-expressions and
+    // WANT them to fuse with existing ones (e.g. the Newton-Raphson
+    // lemma generator: emitting `(< X (* (+ V 1) (+ V 1)))` MUST return
+    // the same ExprId as the corresponding sub-expression already parsed
+    // by SOMTParser, so the atomizer assigns them a single SAT lit and
+    // CDCL can propagate. See `nia newton: iter-60`.
+    //
+    // Do NOT call from the FrontendAdapter / parser path: dedup'ing at
+    // parse time can collapse distinct ITE branches / let bindings /
+    // fresh-var introductions whose SOMTParser nodes were intentionally
+    // separate. (Diagnosed via false-SAT on calypto/problem-002871
+    // reverify with global hash-cons; see iter-61 commit history.)
+    ExprId addShared(CoreExpr e) {
+        ConsKey key{e.kind, e.sort, e.children, e.payload.value};
+        auto it = consMap_.find(key);
+        if (it != consMap_.end()) return it->second;
+        ExprId id = static_cast<ExprId>(exprs_.size());
+        exprs_.push_back(std::move(e));
+        consMap_.emplace(std::move(key), id);
         return id;
     }
 
@@ -185,6 +216,34 @@ private:
         if (freshVarNames_.count(name)) return true;
         return false;
     }
+    // Hash-cons key used by add().
+    struct ConsKey {
+        Kind kind;
+        SortId sort;
+        SmallVector<ExprId, 4> children;
+        Payload::Value payload;
+        bool operator==(const ConsKey& o) const {
+            return kind == o.kind && sort == o.sort &&
+                   children == o.children && payload == o.payload;
+        }
+    };
+    struct ConsKeyHash {
+        std::size_t operator()(const ConsKey& k) const {
+            std::size_t h = std::hash<uint16_t>{}(static_cast<uint16_t>(k.kind));
+            h ^= std::hash<uint32_t>{}(k.sort) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            for (ExprId c : k.children)
+                h ^= std::hash<uint32_t>{}(c) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            std::size_t ph = 0;
+            if (auto* b = std::get_if<bool>(&k.payload)) ph = std::hash<bool>{}(*b);
+            else if (auto* i = std::get_if<int64_t>(&k.payload)) ph = std::hash<int64_t>{}(*i);
+            else if (auto* s = std::get_if<std::string>(&k.payload)) ph = std::hash<std::string>{}(*s);
+            else if (auto* u = std::get_if<uint64_t>(&k.payload)) ph = std::hash<uint64_t>{}(*u);
+            h ^= ph + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            return h;
+        }
+    };
+
+    std::unordered_map<ConsKey, ExprId, ConsKeyHash> consMap_;
     std::vector<CoreExpr> exprs_;
     std::vector<std::pair<ScopeLevel, ExprId>> scopedAssertions_;
     ScopeLevel currentScope_ = 0;

@@ -35,7 +35,9 @@ ExprId CoreIteLowerer::rebuildLike(ExprId original,
     ne.sort = node.sort;
     for (ExprId c : newChildren) ne.children.push_back(c);
     ne.payload = node.payload;
-    return ir_.add(std::move(ne));
+    // iter-67: rebuildLike is the SAFE build-then-add path; the dangerous
+    // empty-then-mutate Or/Not patterns at lines 66-100 still use add().
+    return ir_.addShared(std::move(ne));
 }
 
 ExprId CoreIteLowerer::lowerBoolIte(ExprId iteExpr) {

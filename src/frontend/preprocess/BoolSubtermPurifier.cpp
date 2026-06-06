@@ -40,7 +40,7 @@ ExprId BoolSubtermPurifier::rebuildLike(ExprId original,
     for (ExprId c : newChildren) {
         e.children.push_back(c);
     }
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkEq(ExprId a, ExprId b) {
@@ -49,7 +49,7 @@ ExprId BoolSubtermPurifier::mkEq(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkAnd(ExprId a, ExprId b) {
@@ -58,7 +58,7 @@ ExprId BoolSubtermPurifier::mkAnd(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkOr(ExprId a, ExprId b) {
@@ -67,7 +67,7 @@ ExprId BoolSubtermPurifier::mkOr(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkImplies(ExprId a, ExprId b) {
@@ -76,7 +76,7 @@ ExprId BoolSubtermPurifier::mkImplies(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkNot(ExprId a) {
@@ -84,7 +84,7 @@ ExprId BoolSubtermPurifier::mkNot(ExprId a) {
     e.kind = Kind::Not;
     e.sort = boolSortId_;
     e.children.push_back(a);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 ExprId BoolSubtermPurifier::mkDistinct(ExprId a, ExprId b) {
@@ -93,7 +93,7 @@ ExprId BoolSubtermPurifier::mkDistinct(ExprId a, ExprId b) {
     e.sort = boolSortId_;
     e.children.push_back(a);
     e.children.push_back(b);
-    return ir_.add(std::move(e));
+    return ir_.addShared(std::move(e));
 }
 
 // True iff child position @p i of a node of kind @p k is an "atomic bool
@@ -130,7 +130,7 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
         ExprId e = frame.e;
         if (memo_.find(e) != memo_.end()) { stack.pop_back(); continue; }
 
-        const auto node = ir_.get(e);  // value copy: ir_.add() may relocate exprs_
+        const auto node = ir_.get(e);  // value copy: ir_.addShared() may relocate exprs_
 
         if (!frame.processed) {
             frame.processed = true;  // do NOT touch `frame` after a push_back
@@ -167,7 +167,7 @@ ExprId BoolSubtermPurifier::purifyRec(ExprId root, bool rootInArgPosition) {
         // If this expression sits in an argument position and is a bool
         // composite, replace it with a fresh variable + equivalence constraint.
         if (inArgPosition && isBoolComposite(rebuilt)) {
-            // Capture fields BEFORE makeFreshVariable()/mk*() call ir_.add()
+            // Capture fields BEFORE makeFreshVariable()/mk*() call ir_.addShared()
             // (which may relocate exprs_ and dangle any reference).
             const Kind rebuiltKind = ir_.get(rebuilt).kind;
             ExprId notChild = NullExpr;

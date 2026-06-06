@@ -229,11 +229,15 @@ std::optional<IntegerModel> NiaLocalSearch::tryFindModel(
         return ms >= budgetMs_;
     };
 
-    // Collect variables in deterministic order
+    // Collect variables in deterministic order.
+    // iter-108 perf: parallel hash-set for O(1) dedup instead of O(|vars|)
+    // std::find per insertion. Total cost falls from O(C × K × accumulated)
+    // to O(C × K) where C = constraints, K = avg vars-per-constraint.
     std::vector<std::string> vars;
+    std::unordered_set<std::string> varsSeen;
     for (const auto& c : constraints) {
         for (const auto& v : kernel_.variables(c.poly)) {
-            if (std::find(vars.begin(), vars.end(), v) == vars.end()) {
+            if (varsSeen.insert(v).second) {
                 vars.push_back(v);
             }
         }
@@ -1810,6 +1814,10 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     // cost. A joint move respects the bilinear interaction
                     // in both dimensions and is much more likely to
                     // globally improve.
+                    // iter-107 perf: hoist cvars → set once, O(1) membership
+                    // check in inner loop. Was O(|cvars|) per (pair, dir) check
+                    // inside the bilPairs × 2 dir nested loop.
+                    std::unordered_set<std::string> cvarsSet(cvars.begin(), cvars.end());
                     for (const auto& pair : bilPairs) {
                         std::vector<mpz_class> rootsFirst, rootsSecond;
                         for (int dir = 0; dir < 2; ++dir) {
@@ -1817,9 +1825,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             // Both pair members must be in cvars (they
                             // are by construction — they appeared in
                             // C.poly's terms — but guard anyway).
-                            bool inCvars = false;
-                            for (const auto& cv : cvars) if (cv == solveVar) { inCvars = true; break; }
-                            if (!inCvars) continue;
+                            if (!cvarsSet.count(solveVar)) continue;
                             // Group residual polynomial by exponent of
                             // solveVar after substituting current values
                             // for every other variable. Resulting map:

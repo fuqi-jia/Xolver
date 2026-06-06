@@ -16,6 +16,9 @@
 #include "theory/arith/nia/reasoners/ProductPositivityReasoner.h"
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
+#include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/nia/reasoners/ModEqConstReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -71,6 +74,11 @@ public:
     // effect. setSharedTermRegistry uses the base implementation.
     void setCoreIr(const CoreIr* ir) override;
 
+    // Track A Phase 1.3: receive ModEqConstFacts captured by IntDivModLowerer.
+    // Called by Solver::Impl after preprocessing and theory-solver setup. The
+    // facts are consumed by stageNativeModEqConst on each NIA check call.
+    void setModEqConstFacts(ModEqConstFactList facts);
+
     bool supportsCombination() const override { return true; }
 
     TheoryCheckResult assertInterfaceEquality(
@@ -122,6 +130,10 @@ private:
     std::vector<ActiveNiaConstraint> active_;
     std::vector<NiaTrailEntry> trail_;
     ActiveLiteralSet activeSet_;
+    // Sign-canonical key per polynomial for stagePolyConflict (group P and -P
+    // together). A poly's canonical form is fixed, so this never invalidates;
+    // computed once per distinct PolyId to bound neg() calls (kernel pool).
+    std::unordered_map<PolyId, std::pair<std::string, bool>> polyCanonCache_;
     std::optional<PendingConflict> pendingConflict_;
     std::optional<PendingUnknown> pendingUnknown_;
 
@@ -141,8 +153,15 @@ private:
     ProductPositivityReasoner productPositivity_;
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
+    GroebnerIdealReasoner groebner_;
+    // Track A Phase 1.3 — native (mod x y) = c reasoner. Receives the fact
+    // list from IntDivModLowerer (via setModEqConstFacts) and runs rules 1-3
+    // at each Standard-effort check.
+    ModEqConstFactList modEqConstFacts_;
+    ModEqConstReasoner modEqConst_;
     bool enableBitBlast_ = true;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
+    bool enableGroebner_ = false; // XOLVER_NIA_GROBNER: ideal saturation (1∈ideal ⇒ UNSAT) — default-OFF (iter-77 cherry-pick from 7afeda9)
     // L4.1 — modular reasoner warm-start memoization. When the active
     // normalized_ stream's signature matches modularLastSignature_ AND
     // the last run was NoChange, stageModular skips re-running the
@@ -172,6 +191,7 @@ private:
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
     bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
+    // (iter-77 cherry-pick of 7afeda9 added groebner_ field + enableGroebner_ above)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
     // only when libpoly is available; forward-declared to keep heavy NRA/libpoly
@@ -255,6 +275,25 @@ private:
     // only — verdicts always validator-gated.
     std::optional<TheoryCheckResult> stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageTrivialConstants(TheoryLemmaStorage&, TheoryEffort);
+    // Sound per-polynomial sign-consistency conflict. Every active constraint is
+    // `P rel 0` — a constraint on the SIGN of P's value. Two constraints on the
+    // SAME poly with contradictory signs (P<0 and P>0, or P=0 and P!=0) are
+    // infeasible regardless of P's structure. The single-variable domain reasoner
+    // misses this for multi-variable forms (it tracks variable domains, not the
+    // value of a form like a-b), so in QF_UFNIA combination mode the loop branches
+    // into finite-domain enumeration and stalls to unknown. Closes the
+    // comparison-tautology class (Zohar AndOrXor/int_check). Runs before the
+    // domain/finite-domain stages.
+    std::optional<TheoryCheckResult> stagePolyConflict(TheoryLemmaStorage&, TheoryEffort);
+    // Sound difference-logic negative-cycle conflict, generalizing poly-conflict
+    // from same-poly (2-var) to multi-variable difference chains. Active
+    // constraints of the form `(i - j + k) rel 0` become difference edges; reuses
+    // the project's BellmanFord/DifferenceGraph engine (theory/arith/dl) to detect
+    // a negative cycle, whose edge-reason literals form the Farkas conflict.
+    // Catches `r>t ∧ t>=s ∧ r<=s`-style 3+-variable conflicts that QF_NIA refutes
+    // but QF_UFNIA combination misses (single-variable domain reasoning). Capped
+    // at a small node count so the engine stays cheap on big problems.
+    std::optional<TheoryCheckResult> stageDifferenceConflict(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageDomainInference(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSquareBound(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageSumOfSquares(TheoryLemmaStorage&, TheoryEffort);
@@ -263,6 +302,10 @@ private:
     std::optional<TheoryCheckResult> stageProductPositivity(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
+    std::optional<TheoryCheckResult> stageGroebner(TheoryLemmaStorage&, TheoryEffort);
+    // Track A Phase 1.3 — native ModEqConst rules 1-3. Only fires when the
+    // XOLVER_NIA_NATIVE_MODEQCONST flag is set AND the fact list is non-empty.
+    std::optional<TheoryCheckResult> stageNativeModEqConst(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);

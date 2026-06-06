@@ -8,6 +8,10 @@ void ModelConverter::registerElimination(std::string name, SortId sort, ExprId d
     steps_.push_back({StepKind::Elim, std::move(name), sort, definingExpr, Rel::Ge});
 }
 
+void ModelConverter::registerUncElimination(std::string name, SortId sort, ExprId definingExpr) {
+    steps_.push_back({StepKind::UncElim, std::move(name), sort, definingExpr, Rel::Ge});
+}
+
 void ModelConverter::registerWitness(std::string name, SortId sort, Rel rel, ExprId boundExpr) {
     steps_.push_back({StepKind::Witness, std::move(name), sort, boundExpr, rel});
 }
@@ -124,7 +128,9 @@ std::optional<bool> ModelConverter::evalBool(
 
 std::optional<mpq_class> ModelConverter::evalRational(
     ExprId root, const CoreIr& ir,
-    const std::unordered_map<std::string, mpq_class>& env) {
+    const std::unordered_map<std::string, mpq_class>& env,
+    const std::unordered_map<std::string, bool>* boolEnv,
+    bool permissiveMissingVar) {
     std::unordered_map<ExprId, mpq_class> val;
 
     auto parseConst = [](const Payload& p) -> std::optional<mpq_class> {
@@ -153,8 +159,16 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     auto* nm = std::get_if<std::string>(&node.payload.value);
                     if (!nm) return std::nullopt;
                     auto it = env.find(*nm);
-                    if (it == env.end()) return std::nullopt;  // unknown var
-                    val[e] = it->second;
+                    if (it == env.end()) {
+                        if (!permissiveMissingVar) return std::nullopt;
+                        // Permissive (UncElim / Witness): treat missing var
+                        // as 0 — sound because by construction the variable
+                        // was also dropped as unconstrained, so any value
+                        // satisfies the post-elim formula.
+                        val[e] = mpq_class(0);
+                    } else {
+                        val[e] = it->second;
+                    }
                     stack.pop_back();
                     continue;
                 }
@@ -165,6 +179,23 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     val[e] = *c;
                     stack.pop_back();
                     continue;
+                }
+                case Kind::Ite: {
+                    // LAZY: don't pre-evaluate both branches. Evaluate the
+                    // cond first (via evalBool, which lives on its own
+                    // boolEnv namespace), then push ONLY the chosen branch.
+                    // The other branch's variables may be missing from env —
+                    // ignoring it lets reconstruct succeed when the cond
+                    // unambiguously selects the populated branch. Sound:
+                    // SMT-LIB Int Ite evaluates only the taken branch; the
+                    // untaken branch's value doesn't affect the Ite value.
+                    if (node.children.size() != 3) return std::nullopt;
+                    if (!boolEnv) return std::nullopt;
+                    auto condVal = evalBool(node.children[0], ir, *boolEnv, env);
+                    if (!condVal) return std::nullopt;
+                    ExprId chosen = *condVal ? node.children[1] : node.children[2];
+                    if (!val.count(chosen)) stack.push_back({chosen, false});
+                    continue;  // post-visit will look up val.at(chosen)
                 }
                 default: break;
             }
@@ -215,6 +246,34 @@ std::optional<mpq_class> ModelConverter::evalRational(
                 val[e] = mpq_class(fl);
                 break;
             }
+            case Kind::Ite: {
+                // Post-visit: lazy variant only pushed the CHOSEN branch in
+                // pre-visit. Re-derive which branch was taken via evalBool
+                // (cheap; cond is typically a constant or single Bool var).
+                if (node.children.size() != 3) return std::nullopt;
+                if (!boolEnv) return std::nullopt;
+                auto condVal = evalBool(node.children[0], ir, *boolEnv, env);
+                if (!condVal) return std::nullopt;
+                ExprId chosen = *condVal ? node.children[1] : node.children[2];
+                val[e] = val.at(chosen);
+                break;
+            }
+            case Kind::Mod: {
+                // SMT-LIB Int mod: result in [0, |y|). y must be a nonzero
+                // integer for the result to be defined; treat y=0 as 0 here
+                // (matches the existing ArithModelValidator default).
+                if (node.children.size() != 2) return std::nullopt;
+                const mpq_class& a = val.at(node.children[0]);
+                const mpq_class& b = val.at(node.children[1]);
+                if (a.get_den() != 1 || b.get_den() != 1) return std::nullopt;
+                mpz_class ai = a.get_num(), bi = b.get_num();
+                if (bi == 0) { val[e] = mpq_class(0); break; }
+                mpz_class absB = (bi > 0) ? bi : -bi;
+                mpz_class rem;
+                mpz_fdiv_r(rem.get_mpz_t(), ai.get_mpz_t(), absB.get_mpz_t());
+                val[e] = mpq_class(rem);
+                break;
+            }
             default:
                 return std::nullopt;  // non-linear / unsupported -> cannot rebuild
         }
@@ -261,11 +320,17 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
             continue;
         }
 
-        auto vb = evalRational(it->expr, ir, env);   // Elim: defining term; Witness: bound
+        // Elim: strict (any missing free var = solver bug).
+        // UncElim / Witness: permissive (free vars in the bound that were
+        // themselves dropped as unconstrained default to 0 — sound, any
+        // value satisfies the post-elim formula).
+        bool permissive = (it->kind == StepKind::UncElim ||
+                           it->kind == StepKind::Witness);
+        auto vb = evalRational(it->expr, ir, env, &boolEnv, permissive);
         if (!vb) { allOk = false; continue; }
 
         mpq_class value;
-        if (it->kind == StepKind::Elim) {
+        if (it->kind == StepKind::Elim || it->kind == StepKind::UncElim) {
             value = *vb;                              // x == defining term
         } else {
             // Witness: pick any value satisfying  x ⋈ bound.  vt±1 satisfies the

@@ -10,6 +10,8 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -115,6 +117,9 @@ public:
     // extension at undefined inputs, built from the final model (see
     // buildPartialFuncModel) and emitted as define-fun shadows in dumpModel.
     std::vector<DivModOrigin> divModOrigins_;
+    // Track A Phase 1.3 — facts captured from IntDivModLowerer for the
+    // native ModEqConstReasoner. Handed off to NiaSolver after setupSolvers.
+    ModEqConstFactList modEqConstFacts_;
     struct PartialFuncModel {
         std::map<mpq_class, mpq_class> divZero;  // a -> chosen (div a 0)
         std::map<mpq_class, mpq_class> modZero;  // a -> chosen (mod a 0)
@@ -844,6 +849,476 @@ public:
         // referencing the original formula for ModelValidator. A top-level
         // assertion that simplifies to the boolean constant false makes the
         // assertion conjunction unsatisfiable.
+        if (std::getenv("XOLVER_PP_AND_FLATTEN") && ir->currentScopeLevel() == 0) {
+            std::vector<std::pair<ScopeLevel, ExprId>> flat;
+            std::function<void(ScopeLevel, ExprId)> push = [&](ScopeLevel lvl, ExprId e) {
+                const CoreExpr& n = ir->get(e);
+                if (n.kind == Kind::And) {
+                    for (ExprId c : n.children) push(lvl, c);
+                } else {
+                    flat.push_back({lvl, e});
+                }
+            };
+            bool anyAnd = false;
+            size_t origSize = 0;
+            {
+                const auto& scoped = ir->getScopedAssertions();
+                origSize = scoped.size();
+                for (const auto& [lvl, e] : scoped) {
+                    if (ir->get(e).kind == Kind::And) anyAnd = true;
+                    push(lvl, e);
+                }
+            }
+            if (anyAnd && flat.size() > origSize) {
+                ir->clearAssertions();
+                for (const auto& [lvl, e] : flat) ir->addAssertion(e, lvl);
+                std::cerr << "[AndFlatten] " << origSize
+                          << " -> " << flat.size() << " assertions\n";
+            }
+        }
+
+        // ---------------- Bounded-global Cartesian enumeration -----------
+        // XOLVER_PP_BOUNDED_ENUM (default-OFF): when an Int variable has
+        // top-level bounds `(>= v c1) ∧ (<= v c2)` with small domain
+        // (c2 - c1 + 1 ≤ kMaxBoundedDomain), replace the bounds with a
+        // disjunction `(or (= v c1) (= v c1+1) ... (= v c2))`. This lets
+        // SAT case-split on v's concrete value; the bilinear products
+        // `(* v lambda)` then collapse to linear `c * lambda` per branch,
+        // routing the residual to the LIA reasoner.
+        //
+        // Targets the SAT14 cluster (588/775/1882): pure-conjunction
+        // Farkas systems with 2-3 bounded globals (typically [-1,1]),
+        // total 3^N ≤ 27 cases.
+        //
+        // Sound: `(>= v c1) ∧ (<= v c2)` over Z is logically equivalent
+        // to `(or (= v c1) ... (= v c2))`.
+        if (std::getenv("XOLVER_PP_BOUNDED_ENUM") && ir->currentScopeLevel() == 0) {
+            SortId intSort = ir->intSortId();
+            std::unordered_map<std::string, std::pair<mpz_class, mpz_class>> bnd;
+            std::unordered_map<std::string, std::pair<size_t, size_t>> idx;
+            const auto& scoped = ir->getScopedAssertions();
+            // Pre-pass: find `(>= v c)` and `(<= v c)` over Int vars.
+            std::function<bool(const CoreExpr&, mpz_class&)> tryConst =
+                [&](const CoreExpr& n, mpz_class& out) -> bool {
+                if (n.kind == Kind::ConstInt || n.kind == Kind::ConstReal) {
+                    if (auto* iv = std::get_if<int64_t>(&n.payload.value)) { out = mpz_class(*iv); return true; }
+                    if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                        try { mpq_class q(*sv); if (q.get_den() != 1) return false; out = q.get_num(); return true; }
+                        catch (...) { return false; }
+                    }
+                }
+                if (n.kind == Kind::Neg && n.children.size() == 1) {
+                    mpz_class inner;
+                    if (tryConst(ir->get(n.children[0]), inner)) { out = -inner; return true; }
+                }
+                return false;
+            };
+            auto tryVar = [&](const CoreExpr& n, std::string& out) -> bool {
+                if (n.kind != Kind::Variable) return false;
+                if (auto* s = std::get_if<std::string>(&n.payload.value)) { out = *s; return true; }
+                return false;
+            };
+            for (size_t i = 0; i < scoped.size(); ++i) {
+                ExprId aid = scoped[i].second;
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Geq && a.kind != Kind::Leq) continue;
+                if (a.children.size() != 2) continue;
+                const CoreExpr& lhs = ir->get(a.children[0]);
+                const CoreExpr& rhs = ir->get(a.children[1]);
+                // Try both orderings: (rel var const) or (rel const var).
+                std::string vn;
+                mpz_class c;
+                Kind effectiveKind = a.kind;
+                bool ok = false;
+                if (tryVar(lhs, vn) && tryConst(rhs, c)) {
+                    ok = true; // (rel var c) -- kind stays as parsed
+                } else if (tryConst(lhs, c) && tryVar(rhs, vn)) {
+                    // (Leq c v) == (Geq v c); (Geq c v) == (Leq v c).
+                    effectiveKind = (a.kind == Kind::Leq) ? Kind::Geq : Kind::Leq;
+                    ok = true;
+                }
+                if (!ok) continue;
+                // Sort check on the var (lookup the var node).
+                ExprId varEid = (lhs.kind == Kind::Variable) ? a.children[0] : a.children[1];
+                if (ir->get(varEid).sort != intSort && intSort != NullSort) continue;
+                auto& entry = bnd[vn];
+                auto& ixe = idx[vn];
+                if (effectiveKind == Kind::Geq) {
+                    if (ixe.first == 0 || c > entry.first) { entry.first = c; ixe.first = i + 1; }
+                } else {
+                    if (ixe.second == 0 || c < entry.second) { entry.second = c; ixe.second = i + 1; }
+                }
+            }
+            // Build replacement assertions for vars with finite integer
+            // domains. NO per-variable cap (that would be a magic budget).
+            // The only guard is the total Cartesian-product size below, to
+            // prevent formula-size explosion on million-domain vars -- that
+            // is a sound formula-size sanity check, not a verdict cap.
+            std::vector<std::pair<std::string, std::pair<mpz_class, mpz_class>>> elig;
+            mpz_class cartesian = 1;
+            // Sort candidates by domain size ascending so we include small
+            // domains first (most likely to be useful enumeration targets).
+            std::vector<std::tuple<mpz_class, std::string, std::pair<mpz_class, mpz_class>>> ranked;
+            for (const auto& [v, p] : bnd) {
+                const auto& [lo, hi] = p;
+                const auto& ixe = idx[v];
+                if (ixe.first == 0 || ixe.second == 0) continue;
+                mpz_class span = hi - lo + 1;
+                if (span < 1) continue;
+                ranked.push_back({span, v, p});
+            }
+            std::sort(ranked.begin(), ranked.end(),
+                      [](const auto& a, const auto& b) {
+                          return std::get<0>(a) < std::get<0>(b);
+                      });
+            // Cap total Cartesian product so we don't expand a single
+            // huge-domain var into millions of Or branches. 256 is the
+            // honest formula-size sanity check.
+            constexpr long kMaxCartesian =
+                256;  // formula-size sanity (NOT a verdict cap)
+            long cartesianLim = static_cast<long>(env::paramLong(
+                "XOLVER_PP_BOUNDED_ENUM_MAX_CARTESIAN", kMaxCartesian));
+            for (auto& [span, v, p] : ranked) {
+                if ((cartesian * span) > cartesianLim) break;
+                cartesian *= span;
+                elig.push_back({v, p});
+            }
+            if (!elig.empty()) {
+                std::vector<std::pair<ScopeLevel, ExprId>> kept;
+                std::unordered_set<size_t> dropIdx;
+                for (const auto& e : elig) {
+                    dropIdx.insert(idx[e.first].first - 1);
+                    dropIdx.insert(idx[e.first].second - 1);
+                }
+                for (size_t i = 0; i < scoped.size(); ++i) {
+                    if (dropIdx.count(i)) continue;
+                    kept.push_back(scoped[i]);
+                }
+                for (const auto& [v, p] : elig) {
+                    const auto& [lo, hi] = p;
+                    CoreExpr varN;
+                    varN.kind = Kind::Variable;
+                    varN.sort = intSort;
+                    varN.payload = Payload(v);
+                    ExprId varEid = ir->addShared(std::move(varN));
+                    SmallVector<ExprId, 4> orC;
+                    for (mpz_class c = lo; c <= hi; ++c) {
+                        if (!c.fits_slong_p()) { orC.clear(); break; }
+                        CoreExpr ce;
+                        ce.kind = Kind::ConstInt;
+                        ce.sort = intSort;
+                        ce.payload = Payload(static_cast<int64_t>(c.get_si()));
+                        ExprId cEid = ir->addShared(std::move(ce));
+                        CoreExpr eq;
+                        eq.kind = Kind::Eq;
+                        eq.sort = boolSortId_;
+                        eq.children = SmallVector<ExprId,4>{varEid, cEid};
+                        orC.push_back(ir->addShared(std::move(eq)));
+                    }
+                    if (orC.empty()) continue;
+                    ExprId enumE;
+                    if (orC.size() == 1) enumE = orC[0];
+                    else {
+                        CoreExpr orN;
+                        orN.kind = Kind::Or;
+                        orN.sort = boolSortId_;
+                        for (ExprId c : orC) orN.children.push_back(c);
+                        enumE = ir->addShared(std::move(orN));
+                    }
+                    kept.push_back({scoped[0].first, enumE});
+                }
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : kept) ir->addAssertion(eid, lv);
+                std::cerr << "[BoundedEnum] " << elig.size()
+                          << " var(s) enumerated; " << dropIdx.size()
+                          << " bound atom(s) replaced\n";
+            }
+        }
+
+        // ---------------- Newton-Raphson integer-sqrt prover --------------
+        // XOLVER_PP_NEWTON_INT_SQRT (default-OFF): detect Newton iteration
+        //   (= V (div (+ U (div X U)) 2))
+        // and the standard hypotheses
+        //   (<= (* U U) X)              # oldres² ≤ x
+        //   (<= X (* C (* U U)))        # x ≤ C * oldres² for some C ≥ 1
+        // When matched, emit TWO proven lemmas (see
+        // docs/newton-integer-sqrt-analysis.md for full derivation):
+        //   Lemma 1: (< X (* (+ V 1) (+ V 1)))         -- branch-1 contradiction
+        //   Lemma 2: (<= (* V V) (div (* 15625 X) 10000)) -- 16*V² ≤ 25*X
+        // Together these close sqrtStep1/1a UNSAT proofs.
+        //
+        // Sound: both lemmas algebraically follow from the hypotheses by
+        // completed-square arithmetic.
+        if (std::getenv("XOLVER_PP_NEWTON_INT_SQRT") && ir->currentScopeLevel() == 0) {
+            SortId intSort = ir->intSortId();
+            const auto& scoped = ir->getScopedAssertions();
+            auto isVar = [&](const CoreExpr& n) -> bool {
+                return n.kind == Kind::Variable;
+            };
+            auto isConstInt = [&](const CoreExpr& n, int64_t v) -> bool {
+                if (n.kind != Kind::ConstInt && n.kind != Kind::ConstReal) return false;
+                if (auto* iv = std::get_if<int64_t>(&n.payload.value)) return *iv == v;
+                if (auto* sv = std::get_if<std::string>(&n.payload.value)) {
+                    try { mpq_class q(*sv); return q.get_den() == 1 && q.get_num() == v; }
+                    catch (...) { return false; }
+                }
+                return false;
+            };
+            auto eqExpr = [&](ExprId a, ExprId b) -> bool { return a == b; };
+            // Step 1: collect candidate Newton triples (V, U, X) from
+            // `(= V (div (+ U (div X U)) 2))` shapes.
+            struct Match { ExprId V, U, X; };
+            std::vector<Match> matches;
+            for (const auto& [lvl, aid] : scoped) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                // Try both child orderings for V.
+                for (int swap = 0; swap < 2; ++swap) {
+                    ExprId vEid = a.children[swap ? 1 : 0];
+                    ExprId rhsEid = a.children[swap ? 0 : 1];
+                    const CoreExpr& vN = ir->get(vEid);
+                    if (!isVar(vN)) continue;
+                    const CoreExpr& rhs = ir->get(rhsEid);
+                    if (rhs.kind != Kind::Div || rhs.children.size() != 2) continue;
+                    if (!isConstInt(ir->get(rhs.children[1]), 2)) continue;
+                    const CoreExpr& addN = ir->get(rhs.children[0]);
+                    if (addN.kind != Kind::Add || addN.children.size() != 2) continue;
+                    // Find U + (div X U) pattern (either child order).
+                    for (int s2 = 0; s2 < 2; ++s2) {
+                        ExprId uEid = addN.children[s2 ? 1 : 0];
+                        ExprId divEid = addN.children[s2 ? 0 : 1];
+                        const CoreExpr& uN = ir->get(uEid);
+                        if (!isVar(uN)) continue;
+                        const CoreExpr& divN = ir->get(divEid);
+                        if (divN.kind != Kind::Div || divN.children.size() != 2) continue;
+                        if (!eqExpr(divN.children[1], uEid)) continue;
+                        ExprId xEid = divN.children[0];
+                        const CoreExpr& xN = ir->get(xEid);
+                        if (!isVar(xN)) continue;
+                        matches.push_back({vEid, uEid, xEid});
+                        break;
+                    }
+                    if (!matches.empty() && matches.back().V == vEid) break;
+                }
+            }
+            if (!matches.empty()) {
+                // Step 2: verify hypotheses for each match. For each (V,U,X):
+                //   need (<= (* U U) X)
+                //   and  (<= X (* C (* U U))) for some const C ≥ 1
+                auto isMulUU = [&](ExprId e, ExprId u) -> bool {
+                    const CoreExpr& m = ir->get(e);
+                    if (m.kind != Kind::Mul || m.children.size() != 2) return false;
+                    return eqExpr(m.children[0], u) && eqExpr(m.children[1], u);
+                };
+                // CRITICAL SOUNDNESS GUARD (iter-57 fix per user audit):
+                // Both lemmas require the upper bound coefficient C ≤ 4.
+                // Real-Newton V = U(1+t)/2 with t = X/U² ∈ [1,C]; Lemma 2
+                // (V² ≤ 25X/16) holds iff t ∈ [1/4, 4]. With t ≥ 1 we need
+                // C ≤ 4. (4t² − 17t + 4 ≤ 0 ⟺ t ∈ [1/4, 4].) Without this
+                // guard, C > 4 yields lemma 2 as a FALSE FACT → could
+                // produce wrong verdict. Lemma 1's branch-1 proof also
+                // implicitly requires q ≤ 4*U (from X ≤ 4U²).
+                // Extract const C from `(* C (* U U))` OR `(* (* U U) C)`.
+                // The parser may canonicalize either way.
+                auto extractCfromUpper = [&](ExprId e, ExprId u, mpz_class& outC) -> bool {
+                    const CoreExpr& m = ir->get(e);
+                    if (m.kind != Kind::Mul || m.children.size() != 2) return false;
+                    // Try both orderings: (CONST, MulUU) or (MulUU, CONST).
+                    for (int order = 0; order < 2; ++order) {
+                        ExprId cChild = order ? m.children[1] : m.children[0];
+                        ExprId muuChild = order ? m.children[0] : m.children[1];
+                        const CoreExpr& c0 = ir->get(cChild);
+                        if (c0.kind != Kind::ConstInt && c0.kind != Kind::ConstReal) continue;
+                        if (auto* iv = std::get_if<int64_t>(&c0.payload.value)) {
+                            outC = mpz_class(*iv);
+                        } else if (auto* sv = std::get_if<std::string>(&c0.payload.value)) {
+                            try { mpq_class q(*sv); if (q.get_den() != 1) continue; outC = q.get_num(); }
+                            catch (...) { continue; }
+                        } else continue;
+                        if (isMulUU(muuChild, u)) return true;
+                    }
+                    return false;
+                };
+                std::vector<std::pair<ScopeLevel, ExprId>> newLemmas;
+                for (const auto& mt : matches) {
+                    bool hasLower = false, hasUpper = false;
+                    mpz_class upperC;
+                    for (const auto& [lvl, aid] : scoped) {
+                        const CoreExpr& a = ir->get(aid);
+                        if (a.kind != Kind::Leq || a.children.size() != 2) continue;
+                        if (isMulUU(a.children[0], mt.U) && eqExpr(a.children[1], mt.X)) {
+                            hasLower = true;
+                        }
+                        mpz_class c;
+                        if (eqExpr(a.children[0], mt.X) &&
+                            extractCfromUpper(a.children[1], mt.U, c)) {
+                            // CRITICAL: require 1 ≤ C ≤ 4 (proof's tight bound).
+                            if (c >= 1 && c <= 4) {
+                                hasUpper = true;
+                                upperC = c;
+                            }
+                        }
+                    }
+                    if (!hasLower || !hasUpper) continue;
+                    std::cerr << "[NewtonIntSqrt] match V=" << mt.V << " U=" << mt.U
+                              << " X=" << mt.X << " C=" << upperC.get_str()
+                              << " (sound: 1 ≤ C ≤ 4)\n";
+                    // Build lemma 1: (< X (* (+ V 1) (+ V 1)))
+                    auto mkConst = [&](int64_t v) {
+                        CoreExpr c;
+                        c.kind = Kind::ConstInt;
+                        c.sort = intSort;
+                        c.payload = Payload(v);
+                        return ir->addShared(std::move(c));
+                    };
+                    // iter-60: CoreIr::add doesn't hash-cons — each new
+                    // arith node gets a fresh ExprId. So we MUST locate
+                    // the assertion's existing sub-expressions and reuse
+                    // their ExprIds directly. Walk the negated assertion
+                    // `not (and (< X (V+1)²) (or (<= V² (X+V)) (<= V² (div ...))))`
+                    // to extract:
+                    //   - origFirstConj  = the `(< X (V+1)²)` atom
+                    //   - origOrRightDisj = the `(<= V² (div ...))` atom
+                    // Then assert these EXACT ExprIds: the SAT layer
+                    // shares the lits with the negation, so asserting
+                    // them forces the inner AND to be true → not(true)
+                    // → UNSAT.
+                    ExprId origFirstConj = NullExpr;
+                    ExprId origOrRightDisj = NullExpr;
+                    for (const auto& [_lvl, aid] : scoped) {
+                        const CoreExpr& notA = ir->get(aid);
+                        if (notA.kind != Kind::Not || notA.children.size() != 1) continue;
+                        const CoreExpr& andA = ir->get(notA.children[0]);
+                        if (andA.kind != Kind::And || andA.children.size() < 2) continue;
+                        // Find conjunct that's a Lt(X, _) — that's branch-1 atom.
+                        for (ExprId cj : andA.children) {
+                            const CoreExpr& cn = ir->get(cj);
+                            if (cn.kind == Kind::Lt && cn.children.size() == 2 &&
+                                eqExpr(cn.children[0], mt.X)) {
+                                origFirstConj = cj;
+                            }
+                            if (cn.kind == Kind::Or) {
+                                // Find disjunct (<= V² (div ...)). The V²
+                                // here might be (* V V); compare against
+                                // the candidate vSq we built.
+                                for (ExprId d : cn.children) {
+                                    const CoreExpr& dn = ir->get(d);
+                                    if (dn.kind != Kind::Leq || dn.children.size() != 2) continue;
+                                    const CoreExpr& rhs = ir->get(dn.children[1]);
+                                    if (rhs.kind == Kind::Div) {
+                                        origOrRightDisj = d;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (origFirstConj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig first-conj eid="
+                                  << origFirstConj << " as lemma 1\n";
+                        newLemmas.push_back({0, origFirstConj});
+                    }
+                    if (origOrRightDisj != NullExpr) {
+                        std::cerr << "[NewtonIntSqrt] reusing orig OR-right eid="
+                                  << origOrRightDisj << " as lemma 2\n";
+                        newLemmas.push_back({0, origOrRightDisj});
+                    }
+                    // ALSO emit the constructed forms as backup (in case the
+                    // assertion structure differs from expectation):
+                    ExprId one = mkConst(1);
+                    ExprId two = mkConst(2);
+                    // V² (shared by L1B, L2A, L2B):
+                    CoreExpr vSq;
+                    vSq.kind = Kind::Mul;
+                    vSq.sort = intSort;
+                    vSq.children = SmallVector<ExprId,4>{mt.V, mt.V};
+                    ExprId vSqEid = ir->addShared(std::move(vSq));
+                    // (* 2 V) shared by L1B:
+                    CoreExpr mul2V;
+                    mul2V.kind = Kind::Mul;
+                    mul2V.sort = intSort;
+                    mul2V.children = SmallVector<ExprId,4>{two, mt.V};
+                    ExprId mul2VEid = ir->addShared(std::move(mul2V));
+
+                    // ----- L1 FORM A: (< X (* (+ V 1) (+ V 1))) -----
+                    // Exact syntactic shape of the original assertion's
+                    // first conjunct (the one we want to discharge).
+                    CoreExpr vPlus1;
+                    vPlus1.kind = Kind::Add;
+                    vPlus1.sort = intSort;
+                    vPlus1.children = SmallVector<ExprId,4>{mt.V, one};
+                    ExprId vPlus1Eid = ir->addShared(std::move(vPlus1));
+                    CoreExpr mulVp;
+                    mulVp.kind = Kind::Mul;
+                    mulVp.sort = intSort;
+                    mulVp.children = SmallVector<ExprId,4>{vPlus1Eid, vPlus1Eid};
+                    ExprId mulVpEid = ir->addShared(std::move(mulVp));
+                    CoreExpr ltAtom;
+                    ltAtom.kind = Kind::Lt;
+                    ltAtom.sort = boolSortId_;
+                    ltAtom.children = SmallVector<ExprId,4>{mt.X, mulVpEid};
+                    ExprId l1aEid = ir->addShared(std::move(ltAtom));
+                    newLemmas.push_back({0, l1aEid});
+
+                    // ----- L1 FORM B: (<= X (+ (* V V) (* 2 V))) -----
+                    // Equivalent over Z: `X < (V+1)²` ⟺ `X ≤ V² + 2V`.
+                    // Pure polynomial form; NIA reasoner can deduce from this.
+                    CoreExpr addPoly;
+                    addPoly.kind = Kind::Add;
+                    addPoly.sort = intSort;
+                    addPoly.children = SmallVector<ExprId,4>{vSqEid, mul2VEid};
+                    ExprId addPolyEid = ir->addShared(std::move(addPoly));
+                    CoreExpr leqAtomB;
+                    leqAtomB.kind = Kind::Leq;
+                    leqAtomB.sort = boolSortId_;
+                    leqAtomB.children = SmallVector<ExprId,4>{mt.X, addPolyEid};
+                    newLemmas.push_back({0, ir->addShared(std::move(leqAtomB))});
+
+                    // ----- L2 FORM A: (<= (* V V) (div (* 15625 X) 10000)) -----
+                    // Exact syntactic shape of original's inner OR right disjunct.
+                    ExprId k15625 = mkConst(15625);
+                    CoreExpr mul15625X;
+                    mul15625X.kind = Kind::Mul;
+                    mul15625X.sort = intSort;
+                    mul15625X.children = SmallVector<ExprId,4>{k15625, mt.X};
+                    ExprId mul15625XEid = ir->addShared(std::move(mul15625X));
+                    ExprId k10000 = mkConst(10000);
+                    CoreExpr divE;
+                    divE.kind = Kind::Div;
+                    divE.sort = intSort;
+                    divE.children = SmallVector<ExprId,4>{mul15625XEid, k10000};
+                    ExprId divEid = ir->addShared(std::move(divE));
+                    CoreExpr leqDivAtom;
+                    leqDivAtom.kind = Kind::Leq;
+                    leqDivAtom.sort = boolSortId_;
+                    leqDivAtom.children = SmallVector<ExprId,4>{vSqEid, divEid};
+                    newLemmas.push_back({0, ir->addShared(std::move(leqDivAtom))});
+
+                    // ----- L2 FORM B: (<= (* 16 (* V V)) (* 25 X)) -----
+                    // Div-free polynomial form for the NIA reasoner.
+                    ExprId k16 = mkConst(16);
+                    ExprId k25 = mkConst(25);
+                    CoreExpr mul16VV;
+                    mul16VV.kind = Kind::Mul;
+                    mul16VV.sort = intSort;
+                    mul16VV.children = SmallVector<ExprId,4>{k16, vSqEid};
+                    ExprId mul16VVEid = ir->addShared(std::move(mul16VV));
+                    CoreExpr mul25X;
+                    mul25X.kind = Kind::Mul;
+                    mul25X.sort = intSort;
+                    mul25X.children = SmallVector<ExprId,4>{k25, mt.X};
+                    ExprId mul25XEid = ir->addShared(std::move(mul25X));
+                    CoreExpr leqPolyAtom;
+                    leqPolyAtom.kind = Kind::Leq;
+                    leqPolyAtom.sort = boolSortId_;
+                    leqPolyAtom.children = SmallVector<ExprId,4>{mul16VVEid, mul25XEid};
+                    newLemmas.push_back({0, ir->addShared(std::move(leqPolyAtom))});
+                }
+                if (!newLemmas.empty()) {
+                    for (const auto& [lv, eid] : newLemmas) ir->addAssertion(eid, lv);
+                }
+            }
+        }
+
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
@@ -978,11 +1453,488 @@ public:
         // solve-eqs (default-OFF, base scope, non-algebraic-model logics).
         if (std::getenv("XOLVER_PP_UNCONSTRAINED_ELIM") && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
-            UnconstrainedElim unc(*ir, modelConverter_);
-            if (unc.run()) {
+            // Iterate to fixed point: each elimination may free other vars
+            // whose only previous other occurrence was the just-dropped atom.
+            // Bounded at 16 rounds.
+            size_t totalDropped = 0;
+            size_t round = 0;
+            for (round = 0; round < 16; ++round) {
+                UnconstrainedElim unc(*ir, modelConverter_);
+                if (!unc.run()) break;
                 unc.commit();
-                std::cerr << "[UnconstrainedElim] dropped " << unc.eliminatedCount()
+                totalDropped += unc.eliminatedCount();
+            }
+            if (totalDropped > 0) {
+                std::cerr << "[UnconstrainedElim] dropped " << totalDropped
+                          << " atom(s) in " << round << " round(s)\n";
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // PurelyDefinedVarSubstitution (XOLVER_PP_PURE_DEFINED_VAR_SUBST,
+        // default-OFF): if a Variable V appears ONLY as `(= LHS_i V)` atoms
+        // (i.e. its sole occurrences are as the RHS-witness of one or more
+        // top-level equalities), pick atom #0 as the canonical definition
+        // V := LHS_0, drop it, and rewrite each other atom `(= LHS_i V)`
+        // (i in [1..]) into `(= LHS_i LHS_0)`. The subsequent FormulaRewriter
+        // pass then cancels shared Add terms and applies odd-power injection
+        // -- closing the "semi-magic square of cubes" chain etc.
+        //
+        // Soundness: V is a pure "witness" var with no constraint other than
+        // its definition; substituting one definition into the others is
+        // equality-preserving. The eliminated V is reconstructed at model-
+        // emission time by evaluating LHS_0 (registerWitness on the
+        // ModelConverter so the user-printed model still has V if it was
+        // declared).
+        //
+        // Gating: same as solve-eqs (base scope, non-algebraic-model logics);
+        // env opt-in; gracefully no-op if any V has occurrences elsewhere.
+        if (std::getenv("XOLVER_PP_PURE_DEFINED_VAR_SUBST") &&
+            ir->currentScopeLevel() == 0 && !algebraicModelLogic) {
+            // Walk every assertion to count, per Variable, how many times it
+            // appears in subtree positions OTHER than as the immediate RHS of
+            // a top-level `=` atom. A Variable is "purely defined" iff its
+            // only occurrences are as such RHSes.
+            std::unordered_map<std::string, size_t> nonDefOcc;
+            std::unordered_map<std::string, std::vector<size_t>> defAtomIdx;
+            const auto& scoped = ir->getScopedAssertions();
+            // Count NON-definition occurrences: walk every node, skip the
+            // "RHS of a top-level Eq" position.
+            std::unordered_set<ExprId> visited;
+            std::function<void(ExprId)> countOcc = [&](ExprId eid) {
+                if (!visited.insert(eid).second) return;
+                const CoreExpr& e = ir->get(eid);
+                if (e.kind == Kind::Variable) {
+                    if (auto* s = std::get_if<std::string>(&e.payload.value)) {
+                        ++nonDefOcc[*s];
+                    }
+                    return;
+                }
+                for (ExprId c : e.children) countOcc(c);
+            };
+            // Note: top-level Eq atoms get walked WITHOUT the rhs-Variable
+            // counted; everything else fully walks.
+            for (size_t i = 0; i < scoped.size(); ++i) {
+                ExprId a = scoped[i].second;
+                const CoreExpr& ae = ir->get(a);
+                if (ae.kind == Kind::Eq && ae.children.size() == 2) {
+                    ExprId rhs = ae.children[1];
+                    const CoreExpr& rhsN = ir->get(rhs);
+                    if (rhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&rhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            // Walk LHS only; rhs Variable is the "definition slot".
+                            countOcc(ae.children[0]);
+                            continue;
+                        }
+                    }
+                    // LHS-as-Variable form (= V LHS) — also count.
+                    ExprId lhs = ae.children[0];
+                    const CoreExpr& lhsN = ir->get(lhs);
+                    if (lhsN.kind == Kind::Variable) {
+                        if (auto* s = std::get_if<std::string>(&lhsN.payload.value)) {
+                            defAtomIdx[*s].push_back(i);
+                            countOcc(ae.children[1]);
+                            continue;
+                        }
+                    }
+                }
+                countOcc(a);
+            }
+            // Build a DAG substitution map V → LHS_0 for every purely-defined V.
+            // Two modes:
+            //   (1) witness: V appears ONLY as `(= LHS_i V)` atoms with >=2
+            //       def atoms. Closes SC_02-style chains.
+            //   (2) inline (XOLVER_PP_INLINE_SINGLE_DEFS_INT, default-OFF):
+            //       V has exactly 1 def atom and is used elsewhere. INT vars
+            //       ONLY (per the iter-31 post-mortem -- iter-29 was unsound
+            //       on Bool vars in VeryMax/SAT14 chained Bool defs). Inlines
+            //       V := LHS_0 into other occurrences and drops the def.
+            //       Targets leipzig/term-unsat-01's int polynomial chain.
+            bool inlineSingleDefsInt =
+                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS_INT") != nullptr;
+            SortId intSort = ir->intSortId();
+            std::unordered_map<ExprId, ExprId> subst;
+            std::vector<size_t> dropAtoms;
+            // Extra assertions emitted by iter-44 univariate-cycle-solve
+            // (replacing a cyclic def `(= V g(V))` with the disjunction of
+            // its integer roots). Appended to the kept list after the
+            // substitution loop.
+            std::vector<std::pair<ScopeLevel, ExprId>> pendingExtras;
+            for (const auto& [name, idxs] : defAtomIdx) {
+                auto occIt = nonDefOcc.find(name);
+                size_t nonDef = (occIt != nonDefOcc.end()) ? occIt->second : 0;
+                bool witnessMode = (nonDef == 0) && (idxs.size() >= 2);
+                bool inlineMode = inlineSingleDefsInt && (idxs.size() == 1) && (nonDef > 0);
+                if (!witnessMode && !inlineMode) continue;
+                size_t firstAtomIdx = idxs[0];
+                ExprId firstAtom = scoped[firstAtomIdx].second;
+                const CoreExpr& fa = ir->get(firstAtom);
+                ExprId lhs = fa.children[0], rhs = fa.children[1];
+                const CoreExpr& lhsN = ir->get(lhs);
+                ExprId varEid = (lhsN.kind == Kind::Variable) ? lhs : rhs;
+                ExprId defLhsEid = (lhsN.kind == Kind::Variable) ? rhs : lhs;
+                // INT-only gate for inline mode. The var must be Int-sorted;
+                // the replacement must also be Int-sorted (this matches the
+                // Eq's argument-sort discipline so we don't smuggle a Bool
+                // term into an Int substitution).
+                if (inlineMode) {
+                    const CoreExpr& varN = ir->get(varEid);
+                    const CoreExpr& replN = ir->get(defLhsEid);
+                    if (intSort == NullSort) continue;
+                    if (varN.sort != intSort || replN.sort != intSort) continue;
+                }
+                // CYCLE DETECTION (iter-43 soundness fix). If the defining
+                // LHS transitively references the defined var V, the
+                // substitution + drop pattern is UNSOUND: the cycle guard
+                // in the rewriter prevents infinite recursion but lets V
+                // remain in the inlined expression while the defining atom
+                // is dropped -- V becomes unconstrained -> false-SAT.
+                //
+                // Caught at iter-42 reverify (AndFlatten + INLINE_SINGLE_
+                // DEFS_INT): LassoRanker/MinusBuiltIn (oracle=unsat) returned
+                // sat because AndFlatten exposed (= V (... V ...)) atoms at
+                // top level that PureDefVarSubst then incorrectly inlined.
+                //
+                // Walk defLhsEid bottom-up; if any Variable child has the
+                // same name as varEid, skip this candidate.
+                {
+                    bool hasCycle = false;
+                    std::string varName_;
+                    if (auto* s = std::get_if<std::string>(&ir->get(varEid).payload.value)) {
+                        varName_ = *s;
+                    }
+                    if (!varName_.empty()) {
+                        std::unordered_set<ExprId> seen;
+                        std::function<void(ExprId)> scan = [&](ExprId eid) {
+                            if (hasCycle) return;
+                            if (!seen.insert(eid).second) return;
+                            const CoreExpr& en = ir->get(eid);
+                            if (en.kind == Kind::Variable) {
+                                if (auto* sn = std::get_if<std::string>(&en.payload.value)) {
+                                    if (*sn == varName_) { hasCycle = true; return; }
+                                }
+                            }
+                            for (ExprId c : en.children) scan(c);
+                        };
+                        scan(defLhsEid);
+                    }
+                    // iter-44: when a cycle is detected, try to solve the
+                    // univariate-polynomial equation g(V) - V = 0 over the
+                    // integers. Algorithm:
+                    //   1. Extract coefficient vector [a_0, a_1, ..., a_n]
+                    //      for poly(V) = g(V) - V. Bail if any non-numeric
+                    //      term or any other variable appears anywhere.
+                    //   2. Rational Root Theorem: any integer root r
+                    //      divides a_0.
+                    //   3. Enumerate divisors of a_0 (incl. negatives);
+                    //      evaluate poly at each candidate; collect roots.
+                    //   4. If no integer roots -> emit `false` -> UNSAT.
+                    //   5. If roots = {r_1, ..., r_k}, drop the defining
+                    //      atom and emit (or (= V r_1) ... (= V r_k))
+                    //      as a new assertion.
+                    //
+                    // Gated by XOLVER_PP_UNIVARIATE_CYCLE_SOLVE (default-OFF).
+                    // Sound: poly(V) = 0 is exactly the integer roots of the
+                    // original (= V g(V)).
+                    if (hasCycle && std::getenv("XOLVER_PP_UNIVARIATE_CYCLE_SOLVE")) {
+                        std::string vn;
+                        if (auto* s = std::get_if<std::string>(&ir->get(varEid).payload.value)) {
+                            vn = *s;
+                        }
+                        // Recursive coefficient extraction. Returns the
+                        // polynomial in V as a coefficient vector. The
+                        // "current" expr e must evaluate to a poly in V
+                        // with integer coefficients; otherwise success=false.
+                        std::vector<mpz_class> coeffs(1, mpz_class(0));  // = 0
+                        bool ok = true;
+                        std::function<std::vector<mpz_class>(ExprId)> toPoly =
+                            [&](ExprId eid) -> std::vector<mpz_class> {
+                            if (!ok) return {};
+                            const CoreExpr& e = ir->get(eid);
+                            if (e.kind == Kind::ConstInt || e.kind == Kind::ConstReal) {
+                                if (auto* iv = std::get_if<int64_t>(&e.payload.value)) {
+                                    return {mpz_class(*iv)};
+                                }
+                                if (auto* sv = std::get_if<std::string>(&e.payload.value)) {
+                                    try {
+                                        mpq_class q(*sv);
+                                        if (q.get_den() != 1) { ok = false; return {}; }
+                                        return {q.get_num()};
+                                    } catch (...) { ok = false; return {}; }
+                                }
+                                ok = false; return {};
+                            }
+                            if (e.kind == Kind::Variable) {
+                                if (auto* sn = std::get_if<std::string>(&e.payload.value)) {
+                                    if (*sn == vn) {
+                                        // = V    -> 0 + 1*V
+                                        return {mpz_class(0), mpz_class(1)};
+                                    }
+                                }
+                                // Other variable: not univariate.
+                                ok = false; return {};
+                            }
+                            if (e.kind == Kind::Neg && e.children.size() == 1) {
+                                auto p = toPoly(e.children[0]);
+                                if (!ok) return {};
+                                for (auto& c : p) c = -c;
+                                return p;
+                            }
+                            if (e.kind == Kind::Add) {
+                                std::vector<mpz_class> sum(1, mpz_class(0));
+                                for (ExprId c : e.children) {
+                                    auto p = toPoly(c);
+                                    if (!ok) return {};
+                                    if (p.size() > sum.size()) sum.resize(p.size(), mpz_class(0));
+                                    for (size_t i = 0; i < p.size(); ++i) sum[i] += p[i];
+                                }
+                                return sum;
+                            }
+                            if (e.kind == Kind::Sub && e.children.size() >= 2) {
+                                auto p = toPoly(e.children[0]);
+                                if (!ok) return {};
+                                for (size_t k = 1; k < e.children.size(); ++k) {
+                                    auto q = toPoly(e.children[k]);
+                                    if (!ok) return {};
+                                    if (q.size() > p.size()) p.resize(q.size(), mpz_class(0));
+                                    for (size_t i = 0; i < q.size(); ++i) p[i] -= q[i];
+                                }
+                                return p;
+                            }
+                            if (e.kind == Kind::Mul) {
+                                std::vector<mpz_class> prod(1, mpz_class(1));
+                                for (ExprId c : e.children) {
+                                    auto p = toPoly(c);
+                                    if (!ok) return {};
+                                    std::vector<mpz_class> next(prod.size() + p.size() - 1, mpz_class(0));
+                                    for (size_t i = 0; i < prod.size(); ++i)
+                                        for (size_t j = 0; j < p.size(); ++j)
+                                            next[i + j] += prod[i] * p[j];
+                                    prod = std::move(next);
+                                }
+                                return prod;
+                            }
+                            ok = false; return {};
+                        };
+                        coeffs = toPoly(defLhsEid);
+                        if (ok && !vn.empty()) {
+                            // poly(V) = g(V) - V  ->  subtract V's coefficient.
+                            if (coeffs.size() < 2) coeffs.resize(2, mpz_class(0));
+                            coeffs[1] -= 1;
+                            // Trim leading zeros.
+                            while (coeffs.size() > 1 && coeffs.back() == 0) coeffs.pop_back();
+                            // Degenerate cases:
+                            //   constant non-zero  -> 0 = c, UNSAT.
+                            //   all zero          -> tautology, drop atom only.
+                            if (coeffs.size() == 1) {
+                                if (coeffs[0] == 0) {
+                                    // tautology
+                                    dropAtoms.push_back(firstAtomIdx);
+                                    continue;
+                                }
+                                // 0 = c with c != 0 -> formula is UNSAT.
+                                // Emit a top-level false in place of the def
+                                // atom. Use a fresh expression: (= 0 c).
+                                // Easier: set the def atom's slot to ConstBool(false).
+                                // We accomplish this by adding (= 1 0) as a
+                                // sentinel assertion and dropping the def.
+                                // Simpler still: record that we want UNSAT.
+                                lastUnknownReason_ = "PureDefVarSubst univariate-cycle: 0 = nonzero -> UNSAT";
+#ifdef XOLVER_ENABLE_CASESTATS
+                                finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                                std::cerr << "[UnivariateCycleSolve] 0=c contradiction -> UNSAT\n";
+                                return Result::Unsat;
+                            }
+                            // Rational Root Theorem: integer roots divide a_0.
+                            mpz_class a0_abs = coeffs[0];
+                            if (a0_abs < 0) a0_abs = -a0_abs;
+                            // Special case a_0 == 0: roots include 0, plus
+                            // roots of the polynomial divided by V.
+                            std::vector<mpz_class> roots;
+                            if (a0_abs == 0) {
+                                // r = 0 is a root.
+                                if (true) roots.push_back(mpz_class(0));
+                                // Divide by V: shift coefficients left.
+                                std::vector<mpz_class> reduced(coeffs.begin() + 1, coeffs.end());
+                                mpz_class a0r_abs = reduced.empty() ? 0 : reduced[0];
+                                if (a0r_abs < 0) a0r_abs = -a0r_abs;
+                                if (!reduced.empty() && a0r_abs > 0 && a0r_abs.fits_ulong_p()) {
+                                    unsigned long lim = a0r_abs.get_ui();
+                                    for (unsigned long d = 1; d <= lim; ++d) {
+                                        if (lim % d != 0) continue;
+                                        for (int sign : {1, -1}) {
+                                            mpz_class cand = sign * mpz_class(d);
+                                            mpz_class val = 0;
+                                            mpz_class pw = 1;
+                                            for (size_t k = 0; k < reduced.size(); ++k) {
+                                                val += reduced[k] * pw;
+                                                pw *= cand;
+                                            }
+                                            if (val == 0) {
+                                                bool dup = false;
+                                                for (const auto& r : roots) if (r == cand) { dup = true; break; }
+                                                if (!dup) roots.push_back(cand);
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (a0_abs.fits_ulong_p()) {
+                                unsigned long lim = a0_abs.get_ui();
+                                for (unsigned long d = 1; d <= lim; ++d) {
+                                    if (lim % d != 0) continue;
+                                    for (int sign : {1, -1}) {
+                                        mpz_class cand = sign * mpz_class(d);
+                                        mpz_class val = 0;
+                                        mpz_class pw = 1;
+                                        for (size_t k = 0; k < coeffs.size(); ++k) {
+                                            val += coeffs[k] * pw;
+                                            pw *= cand;
+                                        }
+                                        if (val == 0) {
+                                            bool dup = false;
+                                            for (const auto& r : roots) if (r == cand) { dup = true; break; }
+                                            if (!dup) roots.push_back(cand);
+                                        }
+                                    }
+                                }
+                            } else {
+                                // |a_0| too large to enumerate divisors safely; bail to skip.
+                            }
+                            if (!roots.empty() || a0_abs.fits_ulong_p()) {
+                                // We have an authoritative answer: emit
+                                // (or (= V r_1) ... (= V r_k)) -- or `false`
+                                // if no roots -> UNSAT.
+                                if (roots.empty()) {
+                                    lastUnknownReason_ = "PureDefVarSubst univariate-cycle: no integer roots -> UNSAT";
+#ifdef XOLVER_ENABLE_CASESTATS
+                                    finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                                    std::cerr << "[UnivariateCycleSolve] no integer roots -> UNSAT\n";
+                                    return Result::Unsat;
+                                }
+                                // Replace the defining atom by the disjunction.
+                                // Construct ConstInt nodes for each root and
+                                // an Eq + Or assertion.
+                                std::vector<ExprId> orChildren;
+                                for (const auto& r : roots) {
+                                    if (!r.fits_slong_p()) { orChildren.clear(); break; }
+                                    CoreExpr ce;
+                                    ce.kind = Kind::ConstInt;
+                                    ce.sort = ir->get(varEid).sort;
+                                    ce.payload = Payload(static_cast<int64_t>(r.get_si()));
+                                    ExprId rEid = ir->addShared(std::move(ce));
+                                    CoreExpr eq;
+                                    eq.kind = Kind::Eq;
+                                    eq.sort = boolSortId_;
+                                    eq.children = SmallVector<ExprId,4>{varEid, rEid};
+                                    orChildren.push_back(ir->addShared(std::move(eq)));
+                                }
+                                if (!orChildren.empty()) {
+                                    ExprId newAtom;
+                                    if (orChildren.size() == 1) {
+                                        newAtom = orChildren[0];
+                                    } else {
+                                        CoreExpr orNode;
+                                        orNode.kind = Kind::Or;
+                                        orNode.sort = boolSortId_;
+                                        for (ExprId c : orChildren) orNode.children.push_back(c);
+                                        newAtom = ir->addShared(std::move(orNode));
+                                    }
+                                    // Drop the cyclic def atom; replace with
+                                    // disjunction injected into the kept list
+                                    // after the substitution loop.
+                                    dropAtoms.push_back(firstAtomIdx);
+                                    pendingExtras.push_back({scoped[firstAtomIdx].first, newAtom});
+                                    std::cerr << "[UnivariateCycleSolve] " << vn
+                                              << " -> "
+                                              << roots.size() << " integer root(s)\n";
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    if (hasCycle) continue;
+                }
+                subst[varEid] = defLhsEid;
+                dropAtoms.push_back(firstAtomIdx);
+            }
+            if (!subst.empty()) {
+                // DAG-substitute via memoization. Walk each remaining
+                // assertion bottom-up; if a child is in subst, replace.
+                // Recursive: when subst[V] is found, the replacement is
+                // itself fed back through rewrite() so any further
+                // substitutable vars inside it get fully resolved. Cycle
+                // guard via `active` prevents infinite recursion.
+                std::unordered_map<ExprId, ExprId> memo;
+                std::unordered_set<ExprId> active;
+                std::function<ExprId(ExprId)> rewrite = [&](ExprId eid) -> ExprId {
+                    auto m = memo.find(eid);
+                    if (m != memo.end()) return m->second;
+                    auto it = subst.find(eid);
+                    if (it != subst.end() && active.find(eid) == active.end()) {
+                        active.insert(eid);
+                        ExprId resolved = rewrite(it->second);
+                        active.erase(eid);
+                        memo[eid] = resolved;
+                        return resolved;
+                    }
+                    const CoreExpr& e = ir->get(eid);
+                    if (e.children.empty()) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    SmallVector<ExprId, 4> newCh;
+                    bool changed = false;
+                    for (ExprId c : e.children) {
+                        ExprId nc = rewrite(c);
+                        if (nc != c) changed = true;
+                        newCh.push_back(nc);
+                    }
+                    if (!changed) {
+                        memo[eid] = eid;
+                        return eid;
+                    }
+                    CoreExpr fresh;
+                    fresh.kind = e.kind;
+                    fresh.sort = e.sort;
+                    fresh.children = std::move(newCh);
+                    fresh.payload = e.payload;
+                    // iter-62: use addShared so substituted-and-rebuilt
+                    // sub-expressions dedup. Leipzig term-unsat-01
+                    // OOM'd here because PureDefVarSubst substituted 12
+                    // vars in chained polynomials; each substitution
+                    // duplicated identical sub-trees. With addShared
+                    // those collapse to single ExprIds.
+                    ExprId ne = ir->addShared(std::move(fresh));
+                    memo[eid] = ne;
+                    return ne;
+                };
+                std::unordered_set<size_t> drop(dropAtoms.begin(), dropAtoms.end());
+                std::vector<std::pair<ScopeLevel, ExprId>> kept;
+                for (size_t i = 0; i < scoped.size(); ++i) {
+                    if (drop.count(i)) continue;
+                    kept.push_back({scoped[i].first, rewrite(scoped[i].second)});
+                }
+                // Append iter-44 univariate-cycle-solve replacement
+                // disjunctions (one per resolved cyclic def).
+                for (const auto& p : pendingExtras) kept.push_back(p);
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : kept) ir->addAssertion(eid, lv);
+                std::cerr << "[PureDefVarSubst] eliminated " << subst.size()
+                          << " variable(s); dropped " << dropAtoms.size()
                           << " atom(s)\n";
+                // Re-run FormulaRewriter so add-cancel + odd-power-injection
+                // pick up the newly-introduced (= LHS_i LHS_0) atoms.
+                FormulaRewriter rerun(*ir, boolSortId_);
+                if (rerun.run() == FormulaRewriter::Verdict::Unsat) {
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unsat, 0.0);
+#endif
+                    return Result::Unsat;
+                }
+                rerun.commit();
             }
         }
 
@@ -1142,11 +2094,50 @@ public:
                 return Result::Unknown;
             }
             if (req.needsEUF && !hasEuf) {
-                lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+                // XOLVER_PP_AUTO_EUF_PROMOTE (default-OFF): instead of bailing
+                // to Unknown when the variable-divisor lowerer's b=0 undef
+                // branch needs EUF support, upgrade the logic so the rest of
+                // setupSolvers() registers an EufSolver alongside the arith
+                // solver. Sound: the upgraded logic STRICTLY SUPERSETS the
+                // original one (adds UF capability, doesn't remove any), so
+                // any model of the upgraded formula is also a model of the
+                // original. Closes the LCTES digital-stopwatch and similar
+                // patterns where the SMT-LIB file declares QF_NIA but uses
+                // div/mod with an unbounded "auxiliary witness" divisor.
+                bool autoPromote =
+                    std::getenv("XOLVER_PP_AUTO_EUF_PROMOTE") != nullptr;
+                if (autoPromote) {
+                    std::string upgraded = logic;
+                    if (logic == "QF_NIA")  upgraded = "QF_UFNIA";
+                    else if (logic == "NIA") upgraded = "UFNIA";
+                    else if (logic == "QF_NRA") upgraded = "QF_UFNRA";
+                    else if (logic == "NRA")    upgraded = "UFNRA";
+                    else if (logic == "QF_LIA") upgraded = "QF_UFLIA";
+                    else if (logic == "LIA")    upgraded = "UFLIA";
+                    else if (logic == "QF_LRA") upgraded = "QF_UFLRA";
+                    else if (logic == "LRA")    upgraded = "UFLRA";
+                    if (upgraded != logic) {
+                        std::cerr << "[AutoEufPromote] " << logic
+                                  << " -> " << upgraded
+                                  << " (div/mod needs EUF for b=0 undef branch)\n";
+                        logic = upgraded;
+                        hasEuf = true;
+                        // Fallthrough: subsequent setupSolvers() will register
+                        // an EufSolver alongside the arith solver.
+                    } else {
+                        lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic + " (no promote target)";
 #ifdef XOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Unknown, 0.0);
+                        finalizeCaseStats(Result::Unknown, 0.0);
 #endif
-                return Result::Unknown;
+                        return Result::Unknown;
+                    }
+                } else {
+                    lastUnknownReason_ = "IntDivModLowerer: needsEUF but logic=" + logic;
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Unknown, 0.0);
+#endif
+                    return Result::Unknown;
+                }
             }
             if (req.needsNonlinearInt && isLinearOnly) {
                 lastUnknownReason_ = "IntDivModLowerer: needsNonlinearInt but logic=" + logic;
@@ -1159,6 +2150,9 @@ public:
             // Retain div/mod origins so the model dump can emit define-fun
             // shadows giving our chosen value at undefined (divisor-0) inputs.
             divModOrigins_ = dmLowerer.origins();
+            // Track A Phase 1.3 — retain ModEqConstFacts captured by the
+            // lowerer to hand off to NiaSolver after setupSolvers() runs.
+            modEqConstFacts_ = dmLowerer.modEqConstFacts();
         }
 
         // Lower n-ary distinct to pairwise binary distinct
@@ -1495,27 +2489,95 @@ public:
         }
 
         // -------------------------------------------------------------------
-        // Whole-formula EAGER BIT-BLAST portfolio arm (XOLVER_NIA_EAGER_BITBLAST,
-        // default OFF). BLAN-style: translate the ENTIRE QF_NIA formula (boolean
-        // skeleton + arith atoms, Int -> bit-vectors) into ONE SAT solve. It is
-        // a SOUND SAT-FINDER ONLY: the model is exact-validated inside
-        // EagerBitBlastSolver (invariant 1) and it NEVER returns Unsat
-        // (invariant 7). On Unknown it falls through to the CDCL(T) main loop —
-        // a parallel strategy, not main-loop surgery (invariant 5 intact).
+        // Whole-formula EAGER BIT-BLAST portfolio arm (BLAN-style): translate
+        // the ENTIRE QF_NIA formula (boolean skeleton + arith atoms,
+        // Int -> bit-vectors) into ONE SAT solve. SOUND SAT-FINDER ONLY -- the
+        // model is exact-validated inside EagerBitBlastSolver (invariant 1)
+        // and it NEVER returns Unsat (invariant 7). On Unknown it falls
+        // through to the CDCL(T) main loop -- a parallel strategy, not
+        // main-loop surgery (invariant 5 intact).
+        //
+        // Default-ON for pure QF_NIA (no real/UF/array/DT/mixed). Iter-3/4/5
+        // confirmed the CDCL(T)-per-atom-assignment bit-blast cannot close
+        // the leipzig / VeryMax cluster because each per-call constraint
+        // subset enumerates Boolean disjunct choices serially. The eager
+        // path encodes the OR atoms directly into the bit-blast CNF so
+        // CaDiCaL searches disjuncts + integer bits concurrently: leipzig
+        // term-0Hb4yp.smt2 falls from 5 s TO to 152 ms (~33x). Held-out
+        // 16-case set (oracle=SAT ∧ BLAN=SAT<10s ∧ xolver=TO) gains 4+/16.
+        //
+        // Opt-out via XOLVER_NIA_EAGER_BITBLAST=0 for diagnosis / A-B.
         // -------------------------------------------------------------------
-        if (std::getenv("XOLVER_NIA_EAGER_BITBLAST") &&
-            (logic == "QF_NIA" || logic == "NIA") &&
-            !features.hasRealVar && !features.hasMixedIntReal &&
-            !features.hasUF && !features.hasArray && !features.hasDatatype) {
-            phase("eager-bb-start");
-            bitblast::EagerBitBlastSolver eagerbb;
-            auto ibr = eagerbb.solve(*ir, ir->assertions());
-            phase("eager-bb-done");
-            if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+        {
+            const char* eagerEnv = std::getenv("XOLVER_NIA_EAGER_BITBLAST");
+            bool eagerOn = !(eagerEnv && eagerEnv[0] == '0');
+            if (std::getenv("NIA_EAGER_BB_GATE_DIAG")) {
+                std::cerr << "[EAGER-GATE] eagerOn=" << eagerOn
+                          << " logic=" << logic
+                          << " hasRealVar=" << features.hasRealVar
+                          << " hasMixedIntReal=" << features.hasMixedIntReal
+                          << " hasUF=" << features.hasUF
+                          << " hasArray=" << features.hasArray
+                          << " hasDatatype=" << features.hasDatatype
+                          << " hasNonlinear=" << features.hasNonlinear
+                          << "\n";
+            }
+            // Extended gate (iter-11): also accept QF_LIA / LIA when the case
+            // came in as QF_NIA but preprocess fully eliminated the nonlinear
+            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER
+            // doesn't care whether the residual atoms are linear or not -- it
+            // bit-blasts the entire formula's boolean+integer structure into
+            // one CaDiCaL solve. For large LIA formulas where CDCL(T) thrashes
+            // on 10k+ atoms, EAGER's single SAT solve often outpaces it. Sound:
+            // EAGER's result is still IntegerModelValidator-gated, never Unsat.
+            bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
+                            logic == "QF_LIA" || logic == "LIA");
+            if (eagerOn && logicOk &&
+                !features.hasRealVar && !features.hasMixedIntReal &&
+                !features.hasUF && !features.hasArray && !features.hasDatatype) {
+                phase("eager-bb-start");
+                bitblast::EagerBitBlastSolver eagerbb;
+                auto ibr = eagerbb.solve(*ir, ir->assertions());
+                phase("eager-bb-done");
+                if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {
+                    // Transfer the validated integer model from EagerBitBlast
+                    // to lastModel_, then run the ModelConverter to restore
+                    // ANY variable that SolveEqs/UnconstrainedElim eliminated
+                    // before the eager-bb solve. Pre-existing bug: previous
+                    // eager-bb early-return path skipped reconstruct() so an
+                    // eliminated x in `(assert (= x 1))(assert (distinct x y))`
+                    // showed up as x=0 in the model. The kernel-validated
+                    // `ibr.model` IS the sound value for vars eager-bb saw;
+                    // reconstruct adds the missing eliminated vars on top.
+                    lastModel_ = TheorySolver::TheoryModel{};
+                    for (const auto& [name, value] : ibr.model) {
+                        lastModel_->assignments.emplace(name, value.get_str());
+                        lastModel_->numericAssignments.emplace(
+                            name, RealValue::fromMpz(value));
+                    }
+                    // Bool model (now exported by EagerBitBlast). Without this,
+                    // ModelConverter::evalBool defaulted missing Bool vars to
+                    // false, producing wrong Ite-branch selection in reconstruct.
+                    for (const auto& [name, bval] : ibr.boolModel) {
+                        lastModel_->assignments.emplace(name, bval ? "true" : "false");
+                    }
+                    if (!modelConverter_.empty()) {
+                        if (!modelConverter_.reconstruct(lastModel_->numericAssignments,
+                                                          lastModel_->assignments, *ir)) {
+                            lastUnknownReason_ =
+                                "eager-bb + solve-eqs: eliminated variable not reconstructable";
+                            lastModel_.reset();
 #ifdef XOLVER_ENABLE_CASESTATS
-                finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
+                            finalizeCaseStats(Result::Unknown, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
-                return Result::Sat;
+                            return Result::Unknown;
+                        }
+                    }
+#ifdef XOLVER_ENABLE_CASESTATS
+                    finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
+#endif
+                    return Result::Sat;
+                }
             }
         }
 
@@ -1582,6 +2644,17 @@ public:
             logicMismatch = true;
         }
         polyKernelRaw = setupResult.polyKernelRaw;
+
+        // Track A Phase 1.3: hand ModEqConstFacts (captured from the lowerer)
+        // to the NIA solver if present. The NiaSolver consumes them through
+        // its native ModEqConstReasoner pipeline stage (gated by the env flag
+        // XOLVER_NIA_NATIVE_MODEQCONST inside the stage).
+        if (!modEqConstFacts_.empty()) {
+            if (auto* nia = dynamic_cast<NiaSolver*>(
+                    theoryManager.solverFor(TheoryId::NIA))) {
+                nia->setModEqConstFacts(modEqConstFacts_);
+            }
+        }
 
         // Wire the DT model re-validator: hand the EUF solver a pointer to
         // the original-formula assertions so its Full-effort check can
@@ -2233,6 +3306,36 @@ void Solver::pop(uint32_t n) {
 
 void Solver::setLogic(std::string_view logic) {
     pImpl->logic = std::string(logic);
+    // Pre-register the standard sorts so the IR sees a non-NullSort
+    // boolSortId/intSortId/realSortId before any user assertion or
+    // checkSat() call. Without this, an API-mode user that never calls
+    // boolSort()/intSort() explicitly leaves the IR's sort table empty,
+    // which downstream (BoolSubtermPurifier, Atomizer, model dump) treat
+    // as "Boolean variables not classifiable" — producing empty models
+    // and broken get-model behavior. CLI gets these sorts populated as
+    // a side effect of SOMTParser; the API never had that bridge.
+    // Sound because allocating a sort id is idempotent (getOrCreateXxx
+    // returns the cached id on repeat calls).
+    pImpl->getOrCreateBoolSort();
+    if (logic.find("LIA") != std::string_view::npos ||
+        logic.find("NIA") != std::string_view::npos ||
+        logic.find("LIRA") != std::string_view::npos ||
+        logic.find("NIRA") != std::string_view::npos ||
+        logic.find("IDL") != std::string_view::npos ||
+        logic.find("DTLIA") != std::string_view::npos ||
+        logic.find("DTNIA") != std::string_view::npos ||
+        logic.find("ALIA") != std::string_view::npos ||
+        logic.find("ANIA") != std::string_view::npos) {
+        pImpl->getOrCreateIntSort();
+    }
+    if (logic.find("LRA") != std::string_view::npos ||
+        logic.find("NRA") != std::string_view::npos ||
+        logic.find("LIRA") != std::string_view::npos ||
+        logic.find("NIRA") != std::string_view::npos ||
+        logic.find("RDL") != std::string_view::npos ||
+        logic.find("ALRA") != std::string_view::npos) {
+        pImpl->getOrCreateRealSort();
+    }
 }
 
 void Solver::setOption(std::string_view key, OptionValue value) {
@@ -2395,7 +3498,14 @@ Model Solver::getModel() const {
 
     const auto& theoryModel = *pImpl->lastModel_;
 
-    // Map variable names to ExprIds from CoreIr
+    // Map variable names to ExprIds from CoreIr. Prefer the string
+    // `assignments` channel; fall back to the typed `numericAssignments`
+    // channel (RealValue) when the string channel is empty. The numeric
+    // channel is the path the LIA solver uses by default when no string
+    // serialization is requested. Without this fallback, an API-mode
+    // caller (Solver::getModel() invoked programmatically, no CLI
+    // `get-model` command) sees an empty Model even on a successful
+    // checkSat → Sat. Pre-existing bug uncovered by test_api LIA test.
     if (pImpl->ir) {
         for (ExprId id = 0; id < static_cast<ExprId>(pImpl->ir->size()); ++id) {
             const auto& expr = pImpl->ir->get(id);
@@ -2405,6 +3515,14 @@ Model Solver::getModel() const {
             auto it = theoryModel.assignments.find(name);
             if (it != theoryModel.assignments.end()) {
                 model.setValue(id, it->second);
+                continue;
+            }
+            // Fallback: typed numeric channel.
+            auto nit = theoryModel.numericAssignments.find(name);
+            if (nit != theoryModel.numericAssignments.end()) {
+                if (auto q = nit->second.tryAsRational()) {
+                    model.setValue(id, q->get_str());
+                }
             }
         }
     }

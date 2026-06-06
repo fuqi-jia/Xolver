@@ -54,6 +54,10 @@ public:
 
     bool findByExprId(ExprId expr, LinearFormKey& outLhs, Relation& outRel, mpq_class& outRhs) const;
 
+    // iter-50: lookup SAT var by ExprId regardless of payload kind.
+    // Returns nullopt if no registered atom matches.
+    std::optional<SatVar> findSatVarByExprId(ExprId expr) const;
+
     const TheoryAtomRecord* findBySatVar(SatVar v) const override;
     std::vector<SatVar> linearAtomVars() const override;
     const std::vector<TheoryAtomRecord>& records() const { return records_; }
@@ -80,6 +84,10 @@ private:
 
     std::vector<TheoryAtomRecord> records_;
     std::unordered_map<SatVar, size_t> satVarToIdx_;
+    // iter-101 perf: mirror index by ExprId for O(1) lookup. Multiple records
+    // can share an ExprId (e.g. dynamic atom registration); store all indices.
+    // Populated alongside satVarToIdx_ at every records_.push_back site.
+    std::unordered_map<uint32_t, std::vector<size_t>> exprIdToIdxs_;
     std::unordered_set<SatVar> observedVars_;
 
     struct LinearLookupKey {

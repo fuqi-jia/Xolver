@@ -82,6 +82,7 @@ void LiaSolver::onPop(uint32_t n) {
 
 void LiaSolver::onReset() {
     theoryTrail_.clear();
+    trailIndexBySatVar_.clear();
     appliedCursor_ = 0;
     activeAtoms_.clear();
     disequalities_.clear();
@@ -106,26 +107,27 @@ void LiaSolver::assertLit(const TheoryAtomRecord& atom, bool value, int level, S
     Relation effectiveRel = value ? payload.rel : negateRelation(payload.rel);
     bool isDiseq = (effectiveRel == Relation::Neq);
 
-    for (auto& e : theoryTrail_) {
-        if (e.atom.satVar == atom.satVar) {
-            if (e.isDiseq) {
-                auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
-                    [&e](const auto& d) { return d.lit == e.lit; });
-                disequalities_.erase(it, disequalities_.end());
-            } else {
-                auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
-                    [&e](const auto& a) { return a.lit == e.lit; });
-                activeAtoms_.erase(it, activeAtoms_.end());
-            }
-            e = {level, assertedLit, atom, value, auxVar, isDiseq};
-            if (isDiseq) {
-                disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
-            } else {
-                activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
-            }
-            return;
+    auto idxIt = trailIndexBySatVar_.find(atom.satVar);
+    if (idxIt != trailIndexBySatVar_.end()) {
+        auto& e = theoryTrail_[idxIt->second];
+        if (e.isDiseq) {
+            auto it = std::remove_if(disequalities_.begin(), disequalities_.end(),
+                [&e](const auto& d) { return d.lit == e.lit; });
+            disequalities_.erase(it, disequalities_.end());
+        } else {
+            auto it = std::remove_if(activeAtoms_.begin(), activeAtoms_.end(),
+                [&e](const auto& a) { return a.lit == e.lit; });
+            activeAtoms_.erase(it, activeAtoms_.end());
         }
+        e = {level, assertedLit, atom, value, auxVar, isDiseq};
+        if (isDiseq) {
+            disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
+        } else {
+            activeAtoms_.push_back({atom.exprId, auxVar, payload.rel, value, payload.lhs, rhs, assertedLit});
+        }
+        return;
     }
+    trailIndexBySatVar_[atom.satVar] = theoryTrail_.size();
     theoryTrail_.push_back({level, assertedLit, atom, value, auxVar, isDiseq});
     if (isDiseq) {
         disequalities_.push_back({auxVar, payload.lhs, rhs, assertedLit});
@@ -147,6 +149,7 @@ void LiaSolver::onBacktrack(int level) {
         // Full reset for modelCheck rebuild or SAT restart to level 0.
         // All entries will be re-asserted by the caller.
         theoryTrail_.clear();
+        trailIndexBySatVar_.clear();
         disequalities_.clear();
         activeAtoms_.clear();
         integerVars_.clear();   // incremental grow-only set: cleared on full reset
@@ -164,6 +167,7 @@ void LiaSolver::onBacktrack(int level) {
                     [&e](const auto& a) { return a.lit == e.lit; });
                 activeAtoms_.erase(it, activeAtoms_.end());
             }
+            trailIndexBySatVar_.erase(e.atom.satVar);
             theoryTrail_.pop_back();
         }
         auto ieIt = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
@@ -1324,10 +1328,87 @@ LiaSolver::getDeducedSharedEqualities() {
         }
         const int n = static_cast<int>(sharedVars.size());
         std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+
+        // iter-97 perf: assertedVarEqualityReason previously walked the ENTIRE
+        // theoryTrail_ for every pair (i,j), giving O(N² × |trail|) total cost.
+        // Pre-index the trail's 2-var linear non-diseq entries by sorted (n1,n2)
+        // name pair ONCE; the inner loop then does O(log) map lookup + iterate
+        // only the relevant entries. Soundness invariant unchanged: the per-pair
+        // lo/up aggregation is byte-for-byte identical to the original
+        // assertedVarEqualityReason; only the trail-scan ordering is changed.
+        //
+        // Mirrors iter-96 f41de5b LRA fix — same anti-pattern in LIA.
+        struct TwoVarEntry {
+            std::string n0, n1;
+            mpq_class c0;
+            Relation rel;
+            mpq_class rhs;
+            SatLit lit;
+        };
+        std::map<std::pair<std::string, std::string>, std::vector<TwoVarEntry>> twoVarIndex;
+        for (const auto& e : theoryTrail_) {
+            if (e.isDiseq) continue;
+            if (!std::holds_alternative<LinearAtomPayload>(e.atom.payload)) continue;
+            const auto& payload = std::get<LinearAtomPayload>(e.atom.payload);
+            if (payload.lhs.terms.size() != 2) continue;
+            const auto& t0 = payload.lhs.terms[0];
+            const auto& t1 = payload.lhs.terms[1];
+            if (t0.second == 0 || t0.second != -t1.second) continue;
+            Relation rel = e.value ? payload.rel : negateRelation(payload.rel);
+            std::string a = t0.first, b = t1.first;
+            if (a > b) {
+                std::swap(a, b);
+                twoVarIndex[{a, b}].push_back({a, b, t1.second, rel, payload.rhs.asRational(), e.lit});
+            } else {
+                twoVarIndex[{a, b}].push_back({a, b, t0.second, rel, payload.rhs.asRational(), e.lit});
+            }
+        }
+
+        // Cache shared term names once (was O(N) lookups inside O(N²) loop).
+        std::vector<std::string> sharedNames(n);
         for (int i = 0; i < n; ++i) {
+            sharedNames[i] = getVarNameForSharedTerm(sharedVars[i]);
+        }
+
+        for (int i = 0; i < n; ++i) {
+            const std::string& na = sharedNames[i];
+            if (na.empty()) continue;
             for (int j = i + 1; j < n; ++j) {
-                auto reasons = assertedVarEqualityReason(sharedVars[i], sharedVars[j]);
-                if (reasons.empty()) continue;
+                const std::string& nb = sharedNames[j];
+                if (nb.empty() || na == nb) continue;
+                std::string ka = na, kb = nb;
+                if (ka > kb) std::swap(ka, kb);
+                auto it = twoVarIndex.find({ka, kb});
+                if (it == twoVarIndex.end()) continue;
+
+                bool haveLo = false, haveUp = false;
+                mpq_class lo = 0, up = 0;
+                SatLit loLit{}, upLit{};
+                auto addLower = [&](const mpq_class& v, SatLit lit) {
+                    if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+                };
+                auto addUpper = [&](const mpq_class& v, SatLit lit) {
+                    if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+                };
+                for (const auto& te : it->second) {
+                    mpq_class c0;
+                    if (te.n0 == na && te.n1 == nb) c0 = te.c0;
+                    else if (te.n0 == nb && te.n1 == na) c0 = -te.c0;
+                    else continue;
+                    mpq_class bnd = te.rhs / c0;
+                    bool flip = (c0 < 0);
+                    switch (te.rel) {
+                        case Relation::Eq: addLower(bnd, te.lit); addUpper(bnd, te.lit); break;
+                        case Relation::Leq: if (!flip) addUpper(bnd, te.lit); else addLower(bnd, te.lit); break;
+                        case Relation::Geq: if (!flip) addLower(bnd, te.lit); else addUpper(bnd, te.lit); break;
+                        default: break;  // strict bounds don't pin a difference-equality
+                    }
+                }
+                if (!(haveLo && haveUp && lo == 0 && up == 0)) continue;
+                std::vector<SatLit> reasons;
+                reasons.push_back(loLit);
+                if (!(upLit == loLit)) reasons.push_back(upLit);
+
                 adj[i].push_back({j, reasons});
                 adj[j].push_back({i, reasons});
                 result.push_back(TheorySolver::SharedEqualityPropagation{

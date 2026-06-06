@@ -120,6 +120,15 @@ private:
         bool isDiseq;
     };
     std::vector<LiaTrailEntry> theoryTrail_;
+    // satVar -> theoryTrail_ index for O(1) lookup in assertLit's update path.
+    // assertLit's hot path used to linear-scan theoryTrail_ to find an existing
+    // entry for the same satVar (e->update vs append). On large QF_LIA loads
+    // (Dartagnan ReachSafety-Loops, elster B_1: 17-22 k atoms after preprocess)
+    // that scan is O(N) per assertLit call -- O(N^2) per SAT decision -- and was
+    // the dominant cost on these cases (60s wall, only 5s in lia.core; ~90%
+    // outside theory check). Keep this map in lockstep with theoryTrail_:
+    // assertLit, onBacktrack, reset, and the level-trim path must all update it.
+    std::unordered_map<uint32_t, size_t> trailIndexBySatVar_;
     size_t appliedCursor_ = 0;
     // XOLVER_LIA_INCREMENTAL (default OFF): replay only new trail entries into
     // the simplex instead of re-asserting the whole trail every check. See the

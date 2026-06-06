@@ -1,5 +1,7 @@
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include <algorithm>
+#include <cstdlib>
+#include <iostream>
 
 namespace xolver::bitblast {
 
@@ -39,7 +41,17 @@ BitVec PolyBitBlaster::encodeMonomial(const PolynomialKernel::MonomialTerm& m) {
     }
     // Skip the mul-by-one to avoid unnecessary width growth.
     if (m.coefficient == 1) return prod;
-    return enc_.mulConst(m.coefficient, prod);
+    // Coefficient-times-product cache. Repeated `(* k S_i)` across atoms
+    // (e.g. mcm/113's 442+493 disjunct alternatives) share the same mulConst
+    // shift-add chain. Key on (coefficient string, sorted prefix). Sound:
+    // mulConst is a pure function of its inputs and the encoder's current
+    // wiring. Lives for ONE solve() iteration like productCache_.
+    auto cmKey = std::make_pair(m.coefficient.get_str(), sorted);
+    auto cmIt = coeffMonomialCache_.find(cmKey);
+    if (cmIt != coeffMonomialCache_.end()) return cmIt->second;
+    BitVec coeffProd = enc_.mulConst(m.coefficient, prod);
+    coeffMonomialCache_.emplace(std::move(cmKey), coeffProd);
+    return coeffProd;
 }
 
 BitVec PolyBitBlaster::encodePoly(PolyId p) {
@@ -63,6 +75,13 @@ BitVec PolyBitBlaster::encodePoly(PolyId p) {
 
 void PolyBitBlaster::assertConstraint(const NormalizedNiaConstraint& c) {
     BitVec value = encodePoly(c.poly);
+    static const bool diag = std::getenv("BB_ASSERT_DIAG") != nullptr;
+    if (diag) {
+        std::cerr << "[BB-ASSERT] rel=" << (int)c.rel
+                  << " value_width=" << value.width()
+                  << " poly=" << kernel_.toString(c.poly) << "\n";
+        std::cerr.flush();
+    }
     enc_.assertLit(enc_.relZero(value, c.rel));
 }
 
