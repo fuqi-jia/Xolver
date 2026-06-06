@@ -65,3 +65,40 @@ TEST_CASE("Dio-mod: missing congruence -> NoChange (sound)") {
                      {{vx, mpz_class(0), mpz_class(TWO32), mkReason(2)}});
     CHECK(res.kind == NiaReasoningKind::NoChange);
 }
+
+// --- Increment #9a: PROPAGATE a congruence through an equality chain ---
+
+// a-b=0, b-c=0, c-3=0  with only  a ≡ 0 (mod 4) given.
+// Propagation: a≡0 & a-b=0 => b≡0; b-c=0 => c≡0; then c-3=0 => -3 ≢ 0 (mod 4) => UNSAT.
+// (The reasoner must DERIVE b,c's congruences, not just use the handed-in one.)
+TEST_CASE("Dio-mod: propagate a≡0 through a=b=c chain, c=3 -> Conflict") {
+    auto kernel = createPolynomialKernel();
+    DioReasoner r(*kernel);
+    VarId va = kernel->getOrCreateVar("a"), vb = kernel->getOrCreateVar("b"),
+          vc = kernel->getOrCreateVar("c");
+    PolyId ab = kernel->sub(kernel->mkVar(va), kernel->mkVar(vb));            // a-b
+    PolyId bc = kernel->sub(kernel->mkVar(vb), kernel->mkVar(vc));            // b-c
+    PolyId c3 = kernel->sub(kernel->mkVar(vc), pcst(*kernel, 3));             // c-3
+    auto res = r.run({{ab, Relation::Eq, mkReason(1)},
+                      {bc, Relation::Eq, mkReason(2)},
+                      {c3, Relation::Eq, mkReason(3)}},
+                     {{va, mpz_class(0), mpz_class(4), mkReason(4)}});
+    CHECK(res.kind == NiaReasoningKind::Conflict);
+    REQUIRE(res.conflict.has_value());
+}
+
+// Soundness: same chain but c = 4 (≡ 0 mod 4) is consistent -> NoChange.
+TEST_CASE("Dio-mod: propagate a≡0 through chain, c=4 -> NoChange (sound)") {
+    auto kernel = createPolynomialKernel();
+    DioReasoner r(*kernel);
+    VarId va = kernel->getOrCreateVar("a"), vb = kernel->getOrCreateVar("b"),
+          vc = kernel->getOrCreateVar("c");
+    PolyId ab = kernel->sub(kernel->mkVar(va), kernel->mkVar(vb));
+    PolyId bc = kernel->sub(kernel->mkVar(vb), kernel->mkVar(vc));
+    PolyId c4 = kernel->sub(kernel->mkVar(vc), pcst(*kernel, 4));
+    auto res = r.run({{ab, Relation::Eq, mkReason(1)},
+                      {bc, Relation::Eq, mkReason(2)},
+                      {c4, Relation::Eq, mkReason(3)}},
+                     {{va, mpz_class(0), mpz_class(4), mkReason(4)}});
+    CHECK(res.kind == NiaReasoningKind::NoChange);
+}
