@@ -364,19 +364,27 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         modelOut->clear();
         for (const auto& [v, val] : rationalVal)
             modelOut->emplace_back(v, RealValue::fromMpq(val));
+        // TIGHT rational bracket for sqrt(genC): for a non-square genC, genC != 1, so
+        //   genC < 1  =>  genC < sqrt(genC) < 1
+        //   genC > 1  =>  1   < sqrt(genC) < genC
+        // A tight isolating interval keeps the downstream algebraic-number refinement
+        // cheap (a loose [0, genC+1] forces many bisections of a big-coefficient poly).
+        const mpq_class sqLo = (genC < 1) ? genC : mpq_class(1);
+        const mpq_class sqHi = (genC < 1) ? mpq_class(1) : genC;
         auto genRealValue = [&]() {
             const mpz_class num = genC.get_num(), den = genC.get_den();
             AlgebraicNumber an;
             an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num, root genSign*sqrt(genC)
-            if (genSign > 0) { an.lower = 0; an.upper = genC + 1; }
-            else { an.lower = -(genC + 1); an.upper = 0; }
+            if (genSign > 0) { an.lower = sqLo; an.upper = sqHi; }
+            else { an.lower = -sqHi; an.upper = -sqLo; }
             return RealValue::fromAlgebraic(std::move(an));
         };
         if (genVar != NullVar) {
             modelOut->emplace_back(genVar, genRealValue());
             for (const auto& [v, g] : aliasOf) modelOut->emplace_back(v, genRealValue());  // = generator
         }
-        // Derived d = ap*gen + bp  (a number in Q(sqrt genC)).
+        // Derived d = ap*gen + bp  (a number in Q(sqrt genC)). With gen = genSign*sqrt(genC),
+        // d = Aeff*sqrt(genC) + bp where Aeff = ap*genSign.
         for (const auto& [d, mv] : derivedVal) {
             auto rd = reduceUni(mv);
             const mpq_class ap = rd.first, bp = rd.second;
@@ -387,11 +395,18 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             mpz_class L = c0.get_den();
             mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c1.get_den().get_mpz_t());
             mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), c2.get_den().get_mpz_t());
+            mpz_class a0 = mpq_class(c0 * L).get_num(), a1 = mpq_class(c1 * L).get_num(),
+                      a2 = mpq_class(c2 * L).get_num();
+            mpz_class g = a0;                              // GCD-reduce to keep coefficients small
+            mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), a1.get_mpz_t());
+            mpz_gcd(g.get_mpz_t(), g.get_mpz_t(), a2.get_mpz_t());
+            if (sgn(g) != 0 && g != 1) { a0 /= g; a1 /= g; a2 /= g; }
             AlgebraicNumber an;
-            an.coefficients = {mpq_class(c0 * L).get_num(), mpq_class(c1 * L).get_num(),
-                               mpq_class(c2 * L).get_num()};
-            if (sgn(Aeff) > 0) { an.lower = bp; an.upper = bp + Aeff * (genC + 1); }
-            else { an.lower = bp + Aeff * (genC + 1); an.upper = bp; }
+            an.coefficients = {a0, a1, a2};
+            // d in [bp + Aeff*sqLo, bp + Aeff*sqHi] (ordered by sign of Aeff). Excludes the
+            // conjugate root bp - Aeff*sqrt(genC) since sqLo > 0.
+            if (sgn(Aeff) > 0) { an.lower = bp + Aeff * sqLo; an.upper = bp + Aeff * sqHi; }
+            else { an.lower = bp + Aeff * sqHi; an.upper = bp + Aeff * sqLo; }
             modelOut->emplace_back(d, RealValue::fromAlgebraic(std::move(an)));
         }
     }
