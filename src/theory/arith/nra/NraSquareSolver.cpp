@@ -293,24 +293,30 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         std::vector<RationalPolynomial> co = rps.coefficients(d);   // [C, A] low->high
         if (co.size() != 2) continue;                              // must be linear in d
         if (!onlyGen(co[1]) || !onlyGen(co[0])) continue;
-        // Reduce A modulo genVar^2 = genC; it must collapse to a constant.
-        mpq_class A, cA, cB;
+        // d = -C / A. Reduce A, C mod genVar^2 = genC to A = aA*g + bA, C = cA*g + cB,
+        // then RATIONALIZE by the conjugate of A:  -C/A = -C*conj(A) / (A*conj(A)),
+        // where A*conj(A) = bA^2 - aA^2*genC is RATIONAL, and -C*conj(A) reduces (mod
+        // g^2=genC) to P0 + P1*g. So d = (P0 + P1*g)/denom is a POLYNOMIAL in g — even
+        // when A itself still depends on the generator (the sqrt cancels). This is what
+        // lets the cascade derive m for the whole Geogebra cluster, not just the case
+        // where A happens to collapse to a constant.
+        RationalPolynomial mv;
         if (genVar != NullVar) {
             auto rA = reduceUni(co[1]);
-            if (sgn(rA.first) != 0) continue;           // A still depends on the generator
-            A = rA.second;
             auto rC = reduceUni(co[0]);
-            cA = rC.first; cB = rC.second;
+            const mpq_class aA = rA.first, bA = rA.second, cA = rC.first, cB = rC.second;
+            const mpq_class denom = bA * bA - aA * aA * genC;       // A * conj(A)
+            if (sgn(denom) == 0) continue;                         // A vanishes at the root
+            const mpq_class P0 = cA * aA * genC - cB * bA;          // -C*conj(A), const part
+            const mpq_class P1 = cB * aA - cA * bA;                 // -C*conj(A), g coeff
+            if (sgn(P1) != 0) mv.addVar(genVar, 1, P1 / denom);
+            mv.addConstant(P0 / denom);
         } else {
             if (!co[1].isConstant() || !co[0].isConstant()) continue;
-            A = co[1].constantValue();
-            cA = 0; cB = co[0].constantValue();
+            const mpq_class A = co[1].constantValue();
+            if (sgn(A) == 0) continue;
+            mv.addConstant(-co[0].constantValue() / A);
         }
-        if (sgn(A) == 0) continue;
-        // d = -C / A = (-cA/A)*genVar + (-cB/A).
-        RationalPolynomial mv;
-        if (genVar != NullVar && sgn(cA) != 0) mv.addVar(genVar, 1, -cA / A);
-        mv.addConstant(-cB / A);
         mv.normalize();
         derivedVal[d] = std::move(mv);
         done[j] = 1;
