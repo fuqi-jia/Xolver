@@ -17,6 +17,8 @@
 #include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
 #include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/nia/reasoners/ModEqConstReasoner.h"
 #include "theory/arith/nia/search/NiaLocalSearch.h"
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -71,6 +73,11 @@ public:
     // setCoreIr override: stores via base + does NIA-specific Farkas-dump side
     // effect. setSharedTermRegistry uses the base implementation.
     void setCoreIr(const CoreIr* ir) override;
+
+    // Track A Phase 1.3: receive ModEqConstFacts captured by IntDivModLowerer.
+    // Called by Solver::Impl after preprocessing and theory-solver setup. The
+    // facts are consumed by stageNativeModEqConst on each NIA check call.
+    void setModEqConstFacts(ModEqConstFactList facts);
 
     bool supportsCombination() const override { return true; }
 
@@ -147,6 +154,11 @@ private:
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
     GroebnerIdealReasoner groebner_;
+    // Track A Phase 1.3 — native (mod x y) = c reasoner. Receives the fact
+    // list from IntDivModLowerer (via setModEqConstFacts) and runs rules 1-3
+    // at each Standard-effort check.
+    ModEqConstFactList modEqConstFacts_;
+    ModEqConstReasoner modEqConst_;
     bool enableBitBlast_ = true;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
     bool enableGroebner_ = false; // XOLVER_NIA_GROBNER: ideal saturation (1∈ideal ⇒ UNSAT) — default-OFF (iter-77 cherry-pick from 7afeda9)
@@ -291,6 +303,9 @@ private:
     std::optional<TheoryCheckResult> stageGcdDivisibility(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageModular(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageGroebner(TheoryLemmaStorage&, TheoryEffort);
+    // Track A Phase 1.3 — native ModEqConst rules 1-3. Only fires when the
+    // XOLVER_NIA_NATIVE_MODEQCONST flag is set AND the fact list is non-empty.
+    std::optional<TheoryCheckResult> stageNativeModEqConst(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageIcp(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageCdcac(TheoryLemmaStorage&, TheoryEffort);
     std::optional<TheoryCheckResult> stageInterval(TheoryLemmaStorage&, TheoryEffort);

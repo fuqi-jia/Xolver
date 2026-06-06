@@ -38,7 +38,11 @@ namespace xolver {
 //   - No rule introduces y*q or any new nonlinear term.
 class ModEqConstReasoner {
 public:
-    ModEqConstReasoner(PolynomialKernel& kernel, const CoreIr& ir);
+    // ir may be nullptr at construction time; setCoreIr-style callers can
+    // wire it later via setCoreIr(). When ir is null, run() returns NoChange.
+    ModEqConstReasoner(PolynomialKernel& kernel, const CoreIr* ir);
+
+    void setCoreIr(const CoreIr* ir) { ir_ = ir; }
 
     // Process every fact in `facts` against `domains`. Returns the first
     // Conflict found, or DomainUpdated if any narrowing occurred, or
@@ -49,7 +53,7 @@ public:
 
 private:
     PolynomialKernel& kernel_;
-    const CoreIr& ir_;
+    const CoreIr* ir_;
 
     // Extract a variable name from an ExprId if it is a Kind::Variable;
     // returns empty string otherwise (caller skips the fact).

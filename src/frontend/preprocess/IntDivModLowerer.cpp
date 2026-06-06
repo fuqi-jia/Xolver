@@ -36,15 +36,14 @@ bool IntDivModLowerer::run() {
         // fact is registered and the assertion is replaced by `true` (so the
         // SAT-layer abstraction is preserved but no nonlinear obligation is
         // forced on NIA). Default-OFF; behavior bit-for-bit identical when off.
-        // Track A Phase 1.1: REGISTER the fact (for the reasoner stage in
-        // Phase 1.2+ to consume), but STILL run lowerRec so the assertion's
-        // existing q*y semantics are emitted unchanged. This keeps Phase 1.1
-        // strictly behavior-preserving (no soundness/completeness change with
-        // or without the flag). Phase 1.2 will introduce the reasoner stage
-        // that can derive Conflict/DomainUpdated from the registered facts.
-        // Phase 1.5 may then SKIP the q*y emit once the reasoner saturates.
-        tryInterceptModEqConst(a, level);
+        // Track A Phase 1.1/1.3: REGISTER the fact (for the ModEqConstReasoner
+        // to consume) AFTER lowerRec produces the lowered assertion ExprId.
+        // The lowered ExprId is what the atomizer + TheoryAtomRegistry see.
+        // Phase 1.1 still ran lowerRec unconditionally so the q*y semantics
+        // are emitted — keeping Phase 1.3 strictly behavior-preserving until
+        // Phase 1.5 introduces the skip path.
         ExprId lowered = lowerRec(a, level);
+        tryInterceptModEqConst(a, lowered, level);
         if (requirement_.unsupported) {
             return false;
         }
@@ -419,7 +418,9 @@ void IntDivModLowerer::emitUndefZeroConstraints(const DivModDef& def, ScopeLevel
     updateRequirement(false, true);
 }
 
-bool IntDivModLowerer::tryInterceptModEqConst(ExprId assertion, ScopeLevel /*level*/) {
+void IntDivModLowerer::tryInterceptModEqConst(ExprId originalAssertion,
+                                              ExprId loweredAssertion,
+                                              ScopeLevel /*level*/) {
     // Track A Phase 1.1 — match `(= (mod x y) c)` where:
     //   - x is integer-sorted (any shape; can be a variable or an expression),
     //   - y is integer-sorted variable expression (NOT a constant — constants
@@ -430,11 +431,11 @@ bool IntDivModLowerer::tryInterceptModEqConst(ExprId assertion, ScopeLevel /*lev
         const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
         return e && *e && *e != '0';
     }();
-    if (!enabled) return false;
+    if (!enabled) return;
 
-    const auto& a = ir_.get(assertion);
-    if (a.kind != Kind::Eq) return false;
-    if (a.children.size() != 2) return false;
+    const auto& a = ir_.get(originalAssertion);
+    if (a.kind != Kind::Eq) return;
+    if (a.children.size() != 2) return;
 
     auto isModExpr = [&](ExprId eid) -> bool {
         const auto& e = ir_.get(eid);
@@ -453,7 +454,7 @@ bool IntDivModLowerer::tryInterceptModEqConst(ExprId assertion, ScopeLevel /*lev
         modExpr = a.children[1];
         constOpt = asIntConst(a.children[0]);
     }
-    if (modExpr == NullExpr || !constOpt) return false;
+    if (modExpr == NullExpr || !constOpt) return;
 
     const auto& m = ir_.get(modExpr);
     ExprId xExpr = m.children[0];
@@ -463,16 +464,15 @@ bool IntDivModLowerer::tryInterceptModEqConst(ExprId assertion, ScopeLevel /*lev
     // already handled cheaply by the existing emitConstDivisorConstraints +
     // ModularResidueReasoner combo.
     auto yConst = evalIntConstTerm(yExpr);
-    if (yConst) return false;
+    if (yConst) return;
 
     ModEqConstFact fact;
     fact.xExpr = xExpr;
     fact.yExpr = yExpr;
     fact.c = *constOpt;
-    fact.atomExpr = assertion;
+    fact.atomExpr = loweredAssertion;  // post-lowering form is what the SAT layer sees
     // fact.reason is filled later by NiaSolver when the atom is asserted.
     modEqConstFacts_.push_back(std::move(fact));
-    return true;
 }
 
 void IntDivModLowerer::updateRequirement(bool needsNonlinear, bool needsEUF) {

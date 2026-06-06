@@ -4,12 +4,12 @@
 
 namespace xolver {
 
-ModEqConstReasoner::ModEqConstReasoner(PolynomialKernel& kernel, const CoreIr& ir)
+ModEqConstReasoner::ModEqConstReasoner(PolynomialKernel& kernel, const CoreIr* ir)
     : kernel_(kernel), ir_(ir) {}
 
 std::string ModEqConstReasoner::varNameOf(ExprId eid) const {
-    if (eid == NullExpr) return {};
-    const auto& e = ir_.get(eid);
+    if (!ir_ || eid == NullExpr) return {};
+    const auto& e = ir_->get(eid);
     if (e.kind != Kind::Variable) return {};
     if (auto* s = std::get_if<std::string>(&e.payload.value)) return *s;
     return {};
@@ -17,7 +17,7 @@ std::string ModEqConstReasoner::varNameOf(ExprId eid) const {
 
 NiaReasoningResult ModEqConstReasoner::run(const ModEqConstFactList& facts,
                                             DomainStore& domains) {
-    if (facts.empty()) {
+    if (!ir_ || facts.empty()) {
         return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
     }
 

@@ -98,12 +98,14 @@ private:
 
     void updateRequirement(bool needsNonlinear, bool needsEUF);
 
-    // Track A Phase 1.1: pattern-match `(= (mod x y) c)` shape (or symmetric).
-    // If matched AND XOLVER_NIA_NATIVE_MODEQCONST is set, register a
-    // ModEqConstFact (capturing x, y, c, atomExpr) and return true so the
-    // caller suppresses the eager `q*y` lowering. Returns false on no match
-    // or when the flag is off — caller falls through to standard lowerRec.
-    bool tryInterceptModEqConst(ExprId assertion, ScopeLevel level);
+    // Track A Phase 1.1/1.3: pattern-match `(= (mod x y) c)` shape (or
+    // symmetric) on the ORIGINAL pre-lowering assertion; if matched AND
+    // XOLVER_NIA_NATIVE_MODEQCONST is set, register a ModEqConstFact using
+    // the LOWERED assertion ExprId as the atom (since atomization sees the
+    // post-lowering form and only that ExprId is in TheoryAtomRegistry).
+    void tryInterceptModEqConst(ExprId originalAssertion,
+                                ExprId loweredAssertion,
+                                ScopeLevel level);
 
     // Check if term contains nonlinear subterms (Mul of two non-constants, Pow, etc.)
     bool containsNonlinear(ExprId e) const;

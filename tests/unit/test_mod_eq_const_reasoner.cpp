@@ -49,7 +49,7 @@ SatLit makeLit(int var, bool sign = false) {
 
 TEST_CASE("ModEqConstReasoner: Rule 2 narrows lower bound (y>=1 → y>=c+1)") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -74,7 +74,7 @@ TEST_CASE("ModEqConstReasoner: Rule 2 narrows lower bound (y>=1 → y>=c+1)") {
 
 TEST_CASE("ModEqConstReasoner: Rule 2 conflict when upper < c+1") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -102,7 +102,7 @@ TEST_CASE("ModEqConstReasoner: Rule 2 conflict when upper < c+1") {
 
 TEST_CASE("ModEqConstReasoner: Rule 3 narrows upper bound (y<=-1 → y<=-c-1)") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -127,7 +127,7 @@ TEST_CASE("ModEqConstReasoner: Rule 3 narrows upper bound (y<=-1 → y<=-c-1)") 
 
 TEST_CASE("ModEqConstReasoner: Rule 3 conflict when lower > -c-1") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -148,7 +148,7 @@ TEST_CASE("ModEqConstReasoner: Rule 3 conflict when lower > -c-1") {
 
 TEST_CASE("ModEqConstReasoner: Rule 1 conflict when c<0 and y non-zero") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -168,7 +168,7 @@ TEST_CASE("ModEqConstReasoner: Rule 1 conflict when c<0 and y non-zero") {
 
 TEST_CASE("ModEqConstReasoner: NoChange when y sign unknown") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     ModEqConstFact fact;
     fact.xExpr = fx.xExpr;
@@ -187,7 +187,7 @@ TEST_CASE("ModEqConstReasoner: NoChange when y sign unknown") {
 
 TEST_CASE("ModEqConstReasoner: NoChange when y is not a Variable") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
 
     // Build an Add expression for y: y = (+ a 1). Not a Variable → skipped.
     CoreExpr oneE;
@@ -219,7 +219,7 @@ TEST_CASE("ModEqConstReasoner: NoChange when y is not a Variable") {
 
 TEST_CASE("ModEqConstReasoner: empty fact list is NoChange") {
     Fixture fx;
-    ModEqConstReasoner r(*fx.kernel, fx.ir);
+    ModEqConstReasoner r(*fx.kernel, &fx.ir);
     ModEqConstFactList facts;
     DomainStore domains;
     auto result = r.run(facts, domains);

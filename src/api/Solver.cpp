@@ -10,6 +10,8 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -115,6 +117,9 @@ public:
     // extension at undefined inputs, built from the final model (see
     // buildPartialFuncModel) and emitted as define-fun shadows in dumpModel.
     std::vector<DivModOrigin> divModOrigins_;
+    // Track A Phase 1.3 — facts captured from IntDivModLowerer for the
+    // native ModEqConstReasoner. Handed off to NiaSolver after setupSolvers.
+    ModEqConstFactList modEqConstFacts_;
     struct PartialFuncModel {
         std::map<mpq_class, mpq_class> divZero;  // a -> chosen (div a 0)
         std::map<mpq_class, mpq_class> modZero;  // a -> chosen (mod a 0)
@@ -2136,6 +2141,9 @@ public:
             // Retain div/mod origins so the model dump can emit define-fun
             // shadows giving our chosen value at undefined (divisor-0) inputs.
             divModOrigins_ = dmLowerer.origins();
+            // Track A Phase 1.3 — retain ModEqConstFacts captured by the
+            // lowerer to hand off to NiaSolver after setupSolvers() runs.
+            modEqConstFacts_ = dmLowerer.modEqConstFacts();
         }
 
         // Lower n-ary distinct to pairwise binary distinct
@@ -2594,6 +2602,17 @@ public:
             logicMismatch = true;
         }
         polyKernelRaw = setupResult.polyKernelRaw;
+
+        // Track A Phase 1.3: hand ModEqConstFacts (captured from the lowerer)
+        // to the NIA solver if present. The NiaSolver consumes them through
+        // its native ModEqConstReasoner pipeline stage (gated by the env flag
+        // XOLVER_NIA_NATIVE_MODEQCONST inside the stage).
+        if (!modEqConstFacts_.empty()) {
+            if (auto* nia = dynamic_cast<NiaSolver*>(
+                    theoryManager.solverFor(TheoryId::NIA))) {
+                nia->setModEqConstFacts(modEqConstFacts_);
+            }
+        }
 
         // Wire the DT model re-validator: hand the EUF solver a pointer to
         // the original-formula assertions so its Full-effort check can
