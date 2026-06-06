@@ -1758,8 +1758,7 @@ std::vector<RealAlg> CdcacCore::satSampleCandidatesAlg(VarId var, const SamplePo
         }
         return varPresent;
     };
-    // Roots of `poly` in `var` at the (possibly algebraic) point. Rational specialization
-    // first; on an algebraic prefix fall back to resultant-Norm / Lazard-tower isolation.
+    // Roots of `poly` in `var` at the (possibly algebraic) point.
     auto rootsInVar = [&](PolyId poly, std::vector<RealAlg>& out) {
         UniPolyId up = algebra_->specializeToUnivariate(poly, prefix, var);
         if (up != NullUniPolyId) {
@@ -1768,12 +1767,21 @@ std::vector<RealAlg> CdcacCore::satSampleCandidatesAlg(VarId var, const SamplePo
             return;
         }
         if (!univariateInVar(poly)) return;
-        if (algPrefixCount > kTowerCap) return;        // deep tower: skip (cost-bounded)
-        bool supNorm = false, supTower = false;
-        RootSet rs = algebra_->isolateRealRootsViaNorm(poly, prefix, var, supNorm);
-        if (!supNorm) rs = algebra_->isolateRealRootsViaTower(poly, prefix, var, supTower);
-        if ((supNorm || supTower) && !rs.crashOccurred)
-            for (const auto& r : rs.roots) out.push_back(r);
+        // (1) Resultant-Norm / Lazard-tower for SHALLOW towers (within the cap).
+        if (algPrefixCount <= kTowerCap) {
+            bool supNorm = false, supTower = false;
+            RootSet rs = algebra_->isolateRealRootsViaNorm(poly, prefix, var, supNorm);
+            if (!supNorm) rs = algebra_->isolateRealRootsViaTower(poly, prefix, var, supTower);
+            if ((supNorm || supTower) && !rs.crashOccurred && !rs.roots.empty()) {
+                for (const auto& r : rs.roots) out.push_back(r);
+                return;
+            }
+        }
+        // (2) DEEP tower: libpoly's native incremental isolation over the PERSISTENT
+        // assignment (cost scales with the step degree, not the cumulative tower; the
+        // assignment cache keeps lower coords' interval refinements across the descent).
+        RootSet rs = algebra_->isolateRealRootsAlgebraic(poly, prefix, var);
+        if (!rs.crashOccurred) for (const auto& r : rs.roots) out.push_back(r);
     };
     // DETERMINED variable: if an EQUALITY constraint is univariate in `var` given the
     // prefix, `var` is PINNED to one of that equality's roots — no other value can hold

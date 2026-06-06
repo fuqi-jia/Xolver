@@ -2,10 +2,13 @@
 
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 
+#include <memory>
+
 namespace xolver {
 
 class PolynomialKernel;
 class LibPolyKernel;
+struct SatAsgCache;   // persistent algebraic-prefix assignment cache (defined in .cpp)
 
 /**
  * AlgebraBackend implementation backed by libpoly.
@@ -20,6 +23,7 @@ class LibPolyKernel;
 class LibpolyBackend final : public AlgebraBackend {
 public:
     explicit LibpolyBackend(PolynomialKernel* kernel);
+    ~LibpolyBackend();   // out-of-line: SatAsgCache is incomplete here
 
     RootSet isolateRealRoots(UniPolyId p) override;
     Sign signAt(PolyId p, const SamplePoint& sample) override;
@@ -69,6 +73,22 @@ public:
 private:
     PolynomialKernel* kernel_;
     LibPolyKernel* libKernel_ = nullptr;  // null if kernel is not LibPolyKernel
+
+    // Persistent algebraic-prefix assignment (z3-style): the triangular SAT-first
+    // descends/backtracks one coordinate at a time, so we keep ONE libpoly Assignment
+    // alive and only set/unset the changed top coordinate — letting libpoly's
+    // per-coordinate isolating-interval refinements survive across nodes. Returns the
+    // cache synced to `prefix`, or nullptr if a value could not be built.
+    std::unique_ptr<SatAsgCache> satAsg_;
+    SatAsgCache* syncSatAssignment(const SamplePoint& prefix);
+
+    // z3-style INTERVAL-ARITHMETIC sign fast path: evaluate p over the algebraic
+    // coordinates' isolating intervals; if the result interval excludes 0 the sign is
+    // decided with NO exact algebraic computation. Refines (bisects) the intervals a
+    // bounded number of times when 0 is contained; returns Sign::Unknown if still
+    // inconclusive (caller then does the exact evaluation). Sound: an interval that
+    // excludes 0 proves the sign.
+    Sign signAtIntervalArith(PolyId p, const SamplePoint& sample);
 
     // UniPolyId pool: stores coefficient vectors (high-to-low degree, integer coeffs)
     std::vector<std::vector<mpz_class>> uniPool_;
