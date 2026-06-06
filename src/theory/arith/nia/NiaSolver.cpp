@@ -32,6 +32,7 @@
 namespace xolver {
 void NiaSolver::setCoreIr(const CoreIr* ir) {
     coreIr_ = ir;
+    bbArrayGate_ = -1;  // recompute array-presence for the new IR (bit-blast gate)
     // Farkas-Or Phase 0: env-gated structural dump. Bypasses std::cerr
     // (which xolver-cli silently consumes); writes to the file named by
     // XOLVER_NIA_FARKAS_DUMP_FILE if set, else /tmp/farkas_dump.
@@ -1652,6 +1653,24 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
     if (!earlyEnabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
     if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    // Array-combination gate: when the problem contains array terms (Store/Select),
+    // the array-read results are EUF-managed shared terms abstracted into the NIA
+    // constraints as opaque vars. Bit-blasting those constraints is wasteful (it
+    // was the ~1s/call hot stage on the array-combination GrandProduct, confirmed
+    // via ARITH_STAGE_PROF) and can mislead (the bit-blast model ignores the EUF
+    // array axioms). The combination + other reasoner stages own these. Opt-out
+    // XOLVER_NIA_BB_ARRAY=1. (Verified: sum10 etc. still solve without bit-blast.)
+    if (bbArrayGate_ < 0) {
+        bbArrayGate_ = 0;
+        if (coreIr_ && !std::getenv("XOLVER_NIA_BB_ARRAY")) {
+            ExprId n = static_cast<ExprId>(coreIr_->size());
+            for (ExprId e = 0; e < n; ++e) {
+                Kind k = coreIr_->get(e).kind;
+                if (k == Kind::Store || k == Kind::Select) { bbArrayGate_ = 1; break; }
+            }
+        }
+    }
+    if (bbArrayGate_ == 1) return std::nullopt;
     // H3 size-gate: BB_EARLY's per-call encoding+SAT cost is heavy
     // (~5-6s on SAT14-class with 600+ active polynomial constraints).
     // On small NIA cases (~1-10 active constraints) the upstream

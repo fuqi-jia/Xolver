@@ -146,6 +146,11 @@ private:
     GcdDivisibilityReasoner gcdDivisibility_;
     ModularResidueReasoner modularResidue_;
     bool enableBitBlast_ = true;
+    // Lazy cache: -1 unknown, 0 no array terms, 1 has array terms (Store/Select).
+    // Set on first stageBitBlastEarly; reset by setCoreIr. Gates bit-blast off on
+    // array-combination problems (array-read results are EUF-managed shared terms;
+    // bit-blasting the NIA constraints over them is wasteful + can mislead).
+    mutable int bbArrayGate_ = -1;
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
     // L4.1 — modular reasoner warm-start memoization. When the active
     // normalized_ stream's signature matches modularLastSignature_ AND
