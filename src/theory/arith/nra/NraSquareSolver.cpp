@@ -471,6 +471,84 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         } while (false);
         if (done[j]) continue;
 
+        // (A3) DENESTING square: a*d^2 + c = 0 (no linear term, a rational) where c is
+        // IRRATIONAL over a single generator g, i.e. d^2 = V = p + q*sqrt(g.c) lives in
+        // Q(sqrt g.c). Solve sqrt(V) WITHIN the same field: V = (r + t*sqrt(g.c))^2 has a
+        // rational solution iff p^2 - q^2*g.c is a rational square and the resulting
+        // r^2, t^2 are rational squares (classic radical denesting). This keeps d in the
+        // EXISTING generator — no new field — and is what carries e.g. Odom-GoldenRatio's
+        // v19^2 = (3 - sqrt5)/8  ->  v19 = (sqrt5 - 1)/4, which the pure-square solver
+        // (rational radicand only) and the general-quadratic branch (rational coeffs
+        // only) both reject.
+        do {
+            VarId d = NullVar; bool multi = false;
+            for (VarId v : rps.variables()) {
+                if (genIndexOf(v) >= 0) continue;
+                if (d != NullVar) { multi = true; break; }
+                d = v;
+            }
+            if (multi || d == NullVar) break;
+            std::vector<RationalPolynomial> co = rps.coefficients(d);   // [c, b, a] low->high
+            if (co.size() != 3) break;
+            auto toRat = [&](const RationalPolynomial& q, mpq_class& outv) -> bool {
+                const int gi = solePolyGen(q);
+                if (gi == -2) return false;
+                if (gi == -1) { if (!q.isConstant()) return false; outv = q.constantValue(); return true; }
+                auto rr = reduceUni(q, gens[gi]);
+                if (sgn(rr.first) != 0) return false;
+                outv = rr.second; return true;
+            };
+            mpq_class a, b;
+            if (!toRat(co[2], a) || sgn(a) == 0) break;       // leading must be rational, nonzero
+            if (!toRat(co[1], b) || sgn(b) != 0) break;       // PURE square (no linear term)
+            const int gi = solePolyGen(co[0]);                // constant must be over ONE generator
+            if (gi < 0) break;                                // rational (A2) or cross-term -> skip
+            const GenInfo& g = gens[gi];
+            auto rc = reduceUni(co[0], g);                    // co[0] = rc.first*genVar + rc.second
+            // d^2 = V = -co[0]/a. With genVar = g.sign*sqrt(g.c):
+            //   V = (-rc.second/a) + (-rc.first*g.sign/a)*sqrt(g.c) = p + qv*sqrt(g.c).
+            const mpq_class p = -rc.second / a;
+            const mpq_class qv = (-rc.first * mpq_class(g.sign)) / a;
+            if (sgn(qv) == 0) break;                          // V rational -> pure-square path
+            // Denest sqrt(V) = r + t*sqrt(g.c): r^2 + t^2*g.c = p, 2rt = qv. Then r^2, t^2*g.c
+            // are the roots of z^2 - p z + (qv^2 g.c)/4 = 0, real iff Delta = p^2 - qv^2 g.c >= 0.
+            const mpq_class Delta = p * p - qv * qv * g.c;
+            if (sgn(Delta) < 0) break;
+            mpq_class w;
+            if (!rationalSqrt(Delta, w)) break;               // Delta not a rational square
+            const mpq_class z1 = (p + w) / 2, z2 = (p - w) / 2;
+            mpq_class r, t; bool denested = false;
+            for (int sw = 0; sw < 2 && !denested; ++sw) {
+                const mpq_class r2 = sw ? z2 : z1;            // candidate r^2
+                const mpq_class t2c = sw ? z1 : z2;          // candidate t^2 * g.c
+                if (sgn(r2) < 0 || sgn(t2c) < 0) continue;
+                mpq_class t2 = t2c / g.c, r0, t0;
+                if (rationalSqrt(r2, r0) && rationalSqrt(t2, t0)) {
+                    r = r0; t = (sgn(qv) < 0) ? -t0 : t0;     // 2 r0 t0 = |qv|; match qv's sign
+                    if (2 * r * t == qv) denested = true;
+                }
+            }
+            if (!denested) break;
+            // sqrt(V) = r + t*sqrt(g.c) = r + t*g.sign*genVar.
+            const mpq_class gvCoef = t * mpq_class(g.sign);
+            auto build = [&](int pm) {
+                RationalPolynomial mv; mv.addConstant(mpq_class(pm) * r);
+                mv.addVar(g.var, 1, mpq_class(pm) * gvCoef); mv.normalize();
+                return mv;
+            };
+            RationalPolynomial mvP = build(+1), mvM = build(-1), chosen = mvP;
+            const int want = signHint.count(d) ? signHint[d] : 0;
+            if (want != 0) {
+                auto sP = signOfPolyAtGenerator(mvP, g.var, g.c, g.sign);
+                auto sM = signOfPolyAtGenerator(mvM, g.var, g.c, g.sign);
+                if (sP && *sP == want) chosen = mvP;
+                else if (sM && *sM == want) chosen = mvM;
+            }
+            derivedVal[d] = std::move(chosen);
+            done[j] = 1; dprogress = true;
+        } while (false);
+        if (done[j]) continue;
+
         // (B) COUPLED LINEAR ELIMINATION. The equation may still have two+ unresolved
         // variables, but be linear in ONE of them with a CONSTANT (rational) leading
         // coefficient. Solve that variable as a polynomial in the OTHERS; a later
@@ -530,10 +608,34 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         if (!rp) return std::nullopt;
         RationalPolynomial r = applySubstRp(*rp);   // rationals + aliases + derived (exact)
         if (r.isConstant()) return sgn(r.constantValue());
-        const int gi = solePolyGen(r);
-        if (gi < 0) return std::nullopt;            // residual var or cross-term field
-        const GenInfo& g = gens[gi];
-        return signOfPolyAtGenerator(r, g.var, g.c, g.sign);
+        // Reduce EVERY monomial modulo all gen_i^2 = c_i. An even power of a generator
+        // (e.g. v8^2 -> 3/4) collapses to a RATIONAL contribution, so a constraint that
+        // merely squares one generator while using another is still block-separable —
+        // it is NOT a cross-term. After reduction the value is b + sum_i a_i*gen_i; only
+        // a monomial with ODD powers of TWO DISTINCT generators (a real sqrt(c_i)*sqrt(c_j)
+        // term) or a surviving non-generator variable is undecidable here -> bail.
+        mpq_class b = 0;
+        std::map<int, mpq_class> aGen;                 // gen index -> coeff of that generator
+        for (const auto& [key, coeff] : r.terms()) {
+            mpq_class m = coeff;
+            int oddGen = -1; bool twoOdd = false, nonGen = false;
+            for (const auto& [v, e] : key) {
+                const int gi = genIndexOf(v);
+                if (gi < 0) { nonGen = true; break; }
+                for (int k = 0; k < e / 2; ++k) m *= gens[gi].c;   // gen^even -> c^(e/2)
+                if (e % 2 == 1) { if (oddGen < 0) oddGen = gi; else twoOdd = true; }
+            }
+            if (nonGen || twoOdd) return std::nullopt;  // residual var or genuine cross-term
+            if (oddGen < 0) b += m; else aGen[oddGen] += m;
+        }
+        std::vector<std::pair<int, mpq_class>> nz;
+        for (const auto& [gi, a] : aGen) if (sgn(a) != 0) nz.push_back({gi, a});
+        if (nz.empty()) return sgn(b);
+        if (nz.size() == 1) {                          // b + a*gen  (gen = sign*sqrt(c))
+            const GenInfo& g = gens[nz[0].first];
+            return signOfRootExpr(nz[0].second * mpq_class(g.sign), b, g.c);
+        }
+        return std::nullopt;   // sum of 2+ independent surds: sign undecided in this kernel
     };
     for (const auto& [p, rel] : cons) {
         auto s = signOfReduced(p);

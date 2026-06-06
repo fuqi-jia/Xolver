@@ -389,3 +389,35 @@ TEST_CASE("trySquareCascade: general quadratic with IRRATIONAL discriminant mint
     };
     CHECK_FALSE(trySquareCascade(bad, k, nullptr));
 }
+
+TEST_CASE("trySquareCascade: DENESTING a nested radical sqrt(p + q*sqrt c) within Q(sqrt c)") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId g = k.getOrCreateVar("g");
+    VarId x = k.getOrCreateVar("x");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // g = sqrt(5)  (generator);  8 x^2 - 3 + g = 0  =>  x^2 = (3 - sqrt5)/8.
+    // The radicand is IRRATIONAL (lives in Q(sqrt5)), so neither the pure-square solver
+    // (rational radicand) nor the general-quadratic branch (rational coefficients) can
+    // resolve x. DENESTING finds x = (sqrt5 - 1)/4 IN THE SAME FIELD: (sqrt5-1)^2/16 =
+    // (6-2 sqrt5)/16 = (3 - sqrt5)/8. The x>0 bound selects +(sqrt5-1)/4 over its neg.
+    PolyId gdef = k.sub(k.pow(V(g), 2), C(5));               // g^2 - 5 = 0
+    PolyId xeq = k.add(k.sub(k.mul(C(8), k.pow(V(x), 2)), C(3)), V(g));   // 8x^2 - 3 + g
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {gdef, Relation::Eq}, {xeq, Relation::Eq}, {V(g), Relation::Gt}, {V(x), Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));               // denests + validates
+    REQUIRE(model.size() == 2u);                            // g and x (g is a problem var)
+    for (const auto& [v, val] : model) CHECK(val.isAlgebraic());
+
+    // The SAME nested radical with x > 1 is UNSATISFIABLE (x = (sqrt5-1)/4 ~ 0.309, and
+    // the other root is negative), so the cascade must not fabricate sat.
+    PolyId xm1 = k.sub(V(x), C(1));                         // x - 1 > 0  =>  x > 1
+    std::vector<std::pair<PolyId, Relation>> bad = {
+        {gdef, Relation::Eq}, {xeq, Relation::Eq}, {V(g), Relation::Gt}, {xm1, Relation::Gt},
+    };
+    CHECK_FALSE(trySquareCascade(bad, k, nullptr));
+}
