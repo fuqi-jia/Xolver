@@ -879,9 +879,18 @@ NiaReasoningResult ModularResidueReasoner::run(
     // model — fix them out instead of enumerating them. This is what lets the
     // reasoner fire on cases with many irrelevant free vars (e.g. ps4: free
     // {c,k,y} but the mod-4 refutation is purely in y -> enumerate y, not 64).
+    // iter-105 perf: pre-build name → SimpleDef* index. The findDef0 closure
+    // is called inside a closure-expansion while loop; with N simpleDefs and
+    // closure work-list size W, the original linear scan gave O(W × N). For
+    // deep modular reasoning (multi-modulus closure) this is the dominant
+    // cost. Sound: same mapping just faster, simpleDefs is built once before
+    // this loop and is not mutated within findDef0.
+    std::unordered_map<std::string, const SimpleDef*> simpleDefByVar;
+    simpleDefByVar.reserve(simpleDefs.size());
+    for (const auto& sd : simpleDefs) simpleDefByVar.emplace(sd.vVar, &sd);
     auto findDef0 = [&](const std::string& v) -> const SimpleDef* {
-        for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
-        return nullptr;
+        auto it = simpleDefByVar.find(v);
+        return it != simpleDefByVar.end() ? it->second : nullptr;
     };
     std::unordered_set<std::string> closure;
     {
@@ -1224,9 +1233,14 @@ NiaReasoningResult ModularResidueReasoner::run(
     // same chain over base modulus p^k0. The existing modInv*/EVM 2^k cases
     // hit the p = 2 branch unchanged; non-pow2 prime-power moduli (e.g.
     // `mod 3^K`, `mod 5^K`) now also lift.
+    // iter-105 perf: pre-build name → SimpleDef* index (same pattern as
+    // findDef0 above). Called in residue-expansion and Hensel lift loops.
+    std::unordered_map<std::string, const SimpleDef*> simpleDefByVar_lift;
+    simpleDefByVar_lift.reserve(simpleDefs.size());
+    for (const auto& sd : simpleDefs) simpleDefByVar_lift.emplace(sd.vVar, &sd);
     auto findDef = [&](const std::string& v) -> const SimpleDef* {
-        for (const auto& sd : simpleDefs) if (sd.vVar == v) return &sd;
-        return nullptr;
+        auto it = simpleDefByVar_lift.find(v);
+        return it != simpleDefByVar_lift.end() ? it->second : nullptr;
     };
     const mpz_class enumCap = currentEnumBudget();
     const mpz_class modCapForLift = currentModulusCap();
