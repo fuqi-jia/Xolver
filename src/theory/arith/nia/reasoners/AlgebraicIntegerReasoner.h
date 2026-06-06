@@ -41,6 +41,18 @@ private:
     // Modular reasoning: x^2 = 2 → mod-4 UNSAT
     NiaReasoningResult checkModular(const std::vector<NormalizedNiaConstraint>& equalities);
 
+    // iter-89: bilinear factor restriction (user request — exact factoring
+    // complementary to modular). For an equality of the shape
+    //   coeff * x * y = -constant  (single bilinear monomial term + constant term)
+    // restrict both x's and y's integer domains to ±divisors(|constant/coeff|),
+    // unlocking BoundedNiaSolver enumeration. Sound: x*y=c forces x to divide c,
+    // so the restriction is a sound superset; the equality itself filters the
+    // wrong (x,y) pairs in BoundedNiaSolver. Default-OFF via
+    // XOLVER_NIA_BILINEAR_FACTOR.
+    NiaReasoningResult checkBilinearFactor(
+        const std::vector<NormalizedNiaConstraint>& equalities,
+        DomainStore& domains);
+
     // Check if polynomial is syntactically a sum of squares
     bool isSumOfSquares(PolyId poly, std::vector<PolyId>& squares) const;
 

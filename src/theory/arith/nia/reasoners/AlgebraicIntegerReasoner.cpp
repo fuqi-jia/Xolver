@@ -1,4 +1,5 @@
 #include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"  // iter-89: completeDivisors
 #include <cstdlib>
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <numeric>
@@ -300,6 +301,102 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 }
 
+// iter-89: bilinear factor restriction. For an equality `coeff*x*y = -const`
+// (single bilinear monomial + constant term), restrict x's and y's domains
+// to ±divisors(|const/coeff|). Sound: x*y = c (integer) forces x ∈ divisors(c).
+// The set is a sound superset; BoundedNiaSolver checks x*y == c per pair.
+//
+// Default-OFF via XOLVER_NIA_BILINEAR_FACTOR (matches Step 5 opt-in pattern).
+// Divisor enumeration uses UnivariateIntegerReasoner::completeDivisors; only
+// fires when the divisor set is fully enumerated (complete=true). Skips when:
+//   - |const/coeff| > XOLVER_NIA_BILINEAR_FACTOR_MAX_C (default 10000)
+//   - divisor count > XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV (default 64)
+//   - division const/coeff is not exact (then it's not a valid integer
+//     factoring — falls through silently)
+NiaReasoningResult AlgebraicIntegerReasoner::checkBilinearFactor(
+    const std::vector<NormalizedNiaConstraint>& equalities,
+    DomainStore& domains) {
+
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+
+    static const mpz_class kMaxC = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_C");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000000) return mpz_class(v);
+        }
+        return mpz_class(10000);
+    }();
+    static const size_t kMaxDiv = [] {
+        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000) return static_cast<size_t>(v);
+        }
+        return size_t(64);
+    }();
+
+    bool updated = false;
+
+    for (const auto& c : equalities) {
+        auto termsOpt = kernel_.terms(c.poly);
+        if (!termsOpt) continue;
+        if (termsOpt->size() != 2) continue;  // need exactly one monomial + constant term
+
+        const PolynomialKernel::MonomialTerm* bilinearTerm = nullptr;
+        const PolynomialKernel::MonomialTerm* constantTerm = nullptr;
+        for (const auto& t : *termsOpt) {
+            if (t.powers.empty()) constantTerm = &t;
+            else bilinearTerm = &t;
+        }
+        if (!bilinearTerm || !constantTerm) continue;
+
+        // Bilinear: exactly two variables, each with exponent 1.
+        if (bilinearTerm->powers.size() != 2) continue;
+        if (bilinearTerm->powers[0].second != 1 || bilinearTerm->powers[1].second != 1) continue;
+        if (bilinearTerm->coefficient == 0) continue;
+
+        // Equation: coeff * x * y + const_term = 0  →  x * y = -const_term / coeff
+        // Require exact integer division (else this is not a valid factoring).
+        mpz_class neg_const = -constantTerm->coefficient;
+        if (neg_const % bilinearTerm->coefficient != 0) continue;
+        mpz_class c_val = neg_const / bilinearTerm->coefficient;
+
+        // Tractability gates.
+        if (abs(c_val) > kMaxC) continue;
+
+        // c_val == 0 is handled by checkFactorDirectConflict (xy=0 with x≠0 ∧ y≠0).
+        if (c_val == 0) continue;
+
+        bool complete = true;
+        std::set<mpz_class> divs = UnivariateIntegerReasoner::completeDivisors(c_val, complete);
+        if (!complete) continue;  // unknown divisor set → can't sound-restrict
+
+        // Build ±divisor set. Soundness: x | c forces x ∈ {±d : d | |c|}.
+        std::set<mpz_class> signed_divs;
+        for (const auto& d : divs) {
+            signed_divs.insert(d);
+            signed_divs.insert(-d);
+        }
+        if (signed_divs.size() > kMaxDiv) continue;
+
+        // Restrict both x and y domains. Reason is the bilinear equality itself
+        // (a single SatLit chain → not a multi-step deduction).
+        std::string xname = std::string(kernel_.varName(bilinearTerm->powers[0].first));
+        std::string yname = std::string(kernel_.varName(bilinearTerm->powers[1].first));
+        domains.restrictToFiniteSet(xname, signed_divs, c.reason);
+        domains.restrictToFiniteSet(yname, signed_divs, c.reason);
+        updated = true;
+    }
+
+    if (updated) return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
+    return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+}
+
 NiaReasoningResult AlgebraicIntegerReasoner::run(
     const std::vector<NormalizedNiaConstraint>& constraints,
     DomainStore& domains,
@@ -331,6 +428,11 @@ NiaReasoningResult AlgebraicIntegerReasoner::run(
     // Factor direct conflict (e.g. xy=0 ∧ x≠0 ∧ y≠0 → UNSAT)
     r = checkFactorDirectConflict(constraints);
     if (r.kind == NiaReasoningKind::Conflict) return r;
+
+    // iter-89: bilinear factor restriction — x*y=c → x,y ∈ ±divisors(c).
+    // Default-OFF via XOLVER_NIA_BILINEAR_FACTOR; sound domain restriction.
+    r = checkBilinearFactor(equalities, domains);
+    if (r.kind == NiaReasoningKind::DomainUpdated) updated = true;
 
     if (updated) {
         return {NiaReasoningKind::DomainUpdated, std::nullopt, std::nullopt};
