@@ -372,6 +372,7 @@ void NiaSolver::onReset() {
     // Base clears state_.trail + its pending slot; NIA clears its own
     // polynomial stack, active literal set, level-tagged pendings, and
     // combination state.
+    bbEarlyUnkSize_ = static_cast<size_t>(-1);  // bit-blast-early dedup cache
     active_.clear();
     trail_.clear();
     normalized_.clear();  // incremental normalize cache is keyed to active_
@@ -1696,6 +1697,14 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
                 earlyCount, active_.size(), normalized_.size());
         }
     }
+    // Dedup re-blasts of the same free problem (see bbEarlyUnkSize_). If the last
+    // blast at this active-constraint size returned UNKNOWN, the free problem is
+    // unchanged and a re-blast just burns seconds (00314 80x/11s; a UFDTNIA
+    // 4x/14.6s) — skip it. Opt-out XOLVER_NIA_BB_EARLY_NODEDUP=1.
+    static const bool bbEarlyDedup =
+        std::getenv("XOLVER_NIA_BB_EARLY_NODEDUP") == nullptr;
+    if (bbEarlyDedup && bbEarlyUnkSize_ == normalized_.size())
+        return std::nullopt;
     // The bit-blast solver respects its own gate/iteration env caps
     // (XOLVER_NIA_BITBLAST_MAX_ITERS / MAX_BITWIDTH / GATE_BUDGET /
     // CONFLICTS). For early-stage operation users typically pair this
@@ -1709,6 +1718,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
         case bitblast::BitBlastResult::Status::UnsatComplete:
             return TheoryCheckResult::mkConflict(*res.conflict);
         case bitblast::BitBlastResult::Status::Unknown:
+            if (bbEarlyDedup) bbEarlyUnkSize_ = normalized_.size();
             return std::nullopt;
     }
     return std::nullopt;

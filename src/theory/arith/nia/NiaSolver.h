@@ -151,6 +151,16 @@ private:
     // array-combination problems (array-read results are EUF-managed shared terms;
     // bit-blasting the NIA constraints over them is wasteful + can mislead).
     mutable int bbArrayGate_ = -1;
+    // bit-blast-early dedup: bit-blast-early re-blasts the WHOLE free problem on
+    // every Standard-effort cb_propagate. The free problem is fixed across calls
+    // with the same active-constraint set, so an UNKNOWN result repeats — yet on
+    // large encodings each blast costs seconds (00314 80x/11s, a UFDTNIA 4x/14.6s)
+    // and dominates the budget. Record the normalized_.size() at which the last
+    // blast returned UNKNOWN and skip re-blasting at that same size. Sound:
+    // bit-blast-early is a Standard-effort, candidate-only heuristic; skipping it
+    // only forgoes an early SAT that the Full-effort nia.bit-blast (and SAT
+    // search) still find. SIZE_MAX = no cached unknown.
+    mutable size_t bbEarlyUnkSize_ = static_cast<size_t>(-1);
     bool enableModular_ = true;   // constant-pow2-modulus residue refutation (L3) (promoted default-ON)
     // L4.1 — modular reasoner warm-start memoization. When the active
     // normalized_ stream's signature matches modularLastSignature_ AND
