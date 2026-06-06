@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include <doctest/doctest.h>
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
 #include "theory/arith/poly/PolynomialKernel.h"
@@ -60,4 +61,23 @@ TEST_CASE("Groebner: x^2-2=0 -> NoChange (real roots exist)") {
     PolyId xx2 = kernel->sub(kernel->mul(var(*kernel, "x"), var(*kernel, "x")), cst(*kernel, 2));
     auto res = r.run({{xx2, Relation::Eq, mkReason(1)}});
     CHECK(res.kind == NiaReasoningKind::NoChange);
+}
+
+// iter-86: soundness boundary test for iter-82 env-overridable size guard.
+// Relaxing XOLVER_NIA_GROBNER_MAX_EQ / _MAX_VARS must not produce wrong
+// verdict on a SATISFIABLE system. The reasoner is allowed to return
+// Conflict (1 in ideal) OR NoChange, never anything else.
+TEST_CASE("Groebner: relaxed env caps preserve NoChange on satisfiable system") {
+    // x*y = 6 ∧ x + y = 5 → ℂ-roots (2,3) and (3,2). 1 NOT in ideal.
+    setenv("XOLVER_NIA_GROBNER_MAX_EQ", "50", 1);
+    setenv("XOLVER_NIA_GROBNER_MAX_VARS", "30", 1);
+    auto kernel = createPolynomialKernel();
+    GroebnerIdealReasoner r(*kernel);
+    PolyId xy6  = kernel->sub(kernel->mul(var(*kernel, "x"), var(*kernel, "y")), cst(*kernel, 6));
+    PolyId xpy5 = kernel->sub(kernel->add(var(*kernel, "x"), var(*kernel, "y")), cst(*kernel, 5));
+    auto res = r.run({{xy6, Relation::Eq, mkReason(1)},
+                      {xpy5, Relation::Eq, mkReason(2)}});
+    CHECK(res.kind == NiaReasoningKind::NoChange);
+    // Defensive: NEVER Conflict on a system with complex roots.
+    CHECK(res.kind != NiaReasoningKind::Conflict);
 }
