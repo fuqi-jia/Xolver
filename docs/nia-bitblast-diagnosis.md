@@ -2424,3 +2424,48 @@ different lanes.
 
 62 commits + 21 doc/infra. 0 regressions / 0-unsound across 93 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 94 — Dartagnan precise layer pin
+
+Profiling Dartagnan/scull-O0 (1.8MB, 14379 vars, 2 muls) with --verbose:
+
+  Without XOLVER_PP_AUTO_EUF_PROMOTE:
+    [AndFlatten] 5 -> 19849 assertions
+    [SolveEqs] eliminated 487 variable(s)
+    unknown @ 10s
+    (unknown-reason IntDivModLowerer: needsEUF but logic=QF_NIA)
+
+  With XOLVER_PP_AUTO_EUF_PROMOTE=1:
+    [AndFlatten] 5 -> 19849 assertions
+    [SolveEqs] eliminated 525 variable(s)
+    [AutoEufPromote] QF_NIA -> QF_UFNIA
+    TO @ 54s (no verdict)
+
+★ Pin: Dartagnan has div/mod by variable (not constant), so the
+IntDivModLowerer correctly refuses on QF_NIA and waits for EUF
+promote. With promote ON, the formula becomes QF_UFNIA — which
+exercises the EUF+NIA combination layer.
+
+Then verify NOT a preprocess explosion:
+  - WITH AndFlatten:     54s TO
+  - WITHOUT AndFlatten:  54s TO
+  - WITH CareGraph (O(n²) shared-pair prune): 54s TO
+
+So the bottleneck is squarely **EUF+NIA combination scalability** at
+the SAT/theory-loop layer. 14K Boolean vars × 5 nonlinear constraints
+× UF predicates (cf/exec) — each Boolean decision triggers EUF
+checks; the cross-theory propagation amortizes poorly at this scale.
+
+This confirms iter-93 triage was incomplete: Dartagnan is NOT pure
+SAT-bound — it's **EUF+NIA combination-bound**, which is a tighter
+classification. The EUF+NIA combo is also LCTES's bottleneck.
+
+Action: task #23 (Dartagnan) now correctly classifies as part of the
+EUF+NIA combination work cluster alongside #22 (LCTES). One bigger
+multi-day lane closes BOTH. Step 5 reasoner work (iter-77..92) is
+correct to be saturated.
+
+62 commits + 22 doc/infra. 0 regressions / 0-unsound across 94 iterations.
++3 corpus unsat sustained.
