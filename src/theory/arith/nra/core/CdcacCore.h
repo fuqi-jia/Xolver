@@ -39,6 +39,21 @@ private:
     CdcacResult solveLevel(int k, SamplePoint& prefix, const CdcacInput& input);
     CdcacResult checkFullSample(const SamplePoint& sample, const CdcacInput& input);
 
+    // Build the leaf-style UNSAT result for a set of violated constraints (each
+    // paired with its DEFINITE sign at the current point). The cell is FullLine
+    // with a COMPLETE LazardCellCertificate (every listed sign was definite).
+    // Shared by checkFullSample (the full-sample leaf) and solveLevel's
+    // forward-prune (a constraint already determined+violated at an internal
+    // level). `violated` indexes input.constraints.
+    CdcacResult makeLeafConflictResult(const std::vector<std::pair<size_t, Sign>>& violated,
+                                       const CdcacInput& input);
+
+    // Per-constraint variable sets (VarId), built once per input for solveLevel's
+    // forward-prune "is this constraint fully determined by the prefix?" test.
+    // Rebuilt when the constraint count changes; cleared in resetPerSolveState.
+    std::vector<std::vector<VarId>> constraintVarsCache_;
+    const std::vector<VarId>& constraintVars(size_t ci, const CdcacInput& input);
+
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells
     // LAZILY from the raw constraints (specializeToUnivariate + isolateRealRoots —
@@ -50,7 +65,7 @@ private:
     // Unknown on exhaustion → falls through to the projection engine unchanged.
     CdcacResult trySatSampleFirst(int k, SamplePoint& prefix,
                                   const CdcacInput& input, long& budget);
-    std::vector<mpq_class> satSampleCandidates(int k, const SamplePoint& prefix,
+    std::vector<mpq_class> satSampleCandidates(VarId var, const SamplePoint& prefix,
                                                const CdcacInput& input);
 
     Cell buildLeafConflictCell(const CdcacConstraint& c, const SamplePoint& sample, VarId var);
@@ -134,6 +149,9 @@ private:
     // nlsat-engine STEP A gate + state. Default-OFF until the broad gate lands;
     // sound by construction (SAT-only, checkFullSample-validated). One-shot per
     // CdcacCore lifetime (= per SMT-solve in non-incremental) via satFirstTried_.
+    // The RATIONAL sample-first (trySatSampleFirst) stays OPT-IN (it samples rationals
+    // and can wander up to the wall budget on a non-triangular input). The ALGEBRAIC
+    // triangular path below is the one promoted to default-on.
     bool satFirstEnabled_ = false;
     // Node-search backstop (raised from 20000: matrix-class SAT models need ~300k
     // nodes to reach — the old cap aborted the search 15x too early). The REAL
@@ -150,6 +168,75 @@ private:
     long satFirstMs_ = 10000;
     std::chrono::steady_clock::time_point satFirstT0_;  // search start (set in solve())
     bool satFirstTried_ = false;
+    // Increment 4 (XOLVER_NRA_CAC_SAT_FIRST_ALG, default-OFF): ALGEBRAIC-model
+    // SAT-first. The rational-only path (above) samples rationals and leaf-validates
+    // via exactSignAt (pure-mpq, crash-free) — so it CANNOT find a model with an
+    // algebraic coordinate (e.g. Geogebra geometry: v9=√2). This path offers the
+    // actual ALGEBRAIC roots (RealAlg, not their rational midpoints) as candidates
+    // and evaluates the leaf + forward-check over the algebraic sample via
+    // algebra_->signAt (libpoly algebraic sign). Soundness-SAFE (Sat only on a full
+    // signAt-validated point; signAt==Unknown is treated as inconclusive and never
+    // concludes). Crash-capped: runs ONLY when every constraint's total degree is
+    // ≤ satFirstAlgDegCap_ (the libpoly algebraic-sign path OOM-crashes on high
+    // degree — the matrix class — so we restrict to the low-degree algebraic regime,
+    // Geogebra ~deg-3). Implies satFirstEnabled_.
+    // DEFAULT-ON (kill switch XOLVER_NRA_CAC_SAT_FIRST_ALG=0). Triangular: a dynamic
+    // most-constrained-variable pick locks each variable to a forced equality root
+    // (over the rational OR the algebraic point via resultant-Norm / Lazard tower), so
+    // the search descends a multi-level algebraic tower in n steps. Sound (Sat only on a
+    // signAt-validated full point) and self-terminating on the triangular structure; a
+    // tower-depth cap (XOLVER_NRA_CAC_SAT_FIRST_TOWER_CAP) only skips deep towers that
+    // are out of reach anyway, never a solvable case.
+    bool satFirstAlgEnabled_ = true;
+    long satFirstAlgDegCap_ = 12;
+    CdcacResult trySatSampleFirstAlg(int k, SamplePoint& prefix,
+                                     const CdcacInput& input, long& budget);
+    std::vector<RealAlg> satSampleCandidatesAlg(VarId var, const SamplePoint& prefix,
+                                                const CdcacInput& input);
+    // Dynamic most-constrained-variable pick for the algebraic SAT-first: prefer an
+    // unassigned variable that an EQUALITY constraint already determines (becomes
+    // univariate given the prefix), so the search descends the triangular structure.
+    VarId pickSatFirstVar(const SamplePoint& prefix, const CdcacInput& input);
+    // M1+M2 (XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD, default-OFF): forward infeasibility
+    // propagation for the rational SAT-first. After assigning var k, check whether
+    // any UNASSIGNED variable already has an EMPTY feasible set — i.e. its
+    // constraints that are now univariate-in-it (all their other vars assigned)
+    // admit no satisfying cell. If so the current prefix cannot be completed, so
+    // prune it NOW (an EARLY/shallow conflict) instead of descending to that
+    // variable's level and failing late. Soundness-SAFE for SAT: only prunes
+    // prefixes with a provably-infeasible future variable (cell-rep sampling covers
+    // every sign-invariant cell, so a feasible cell is never missed). The genuine
+    // MCSAT lever — see docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
+    bool satFirstLookaheadEnabled_ = false;
+    // M2 (true ICP): is the whole subtree under the current rational prefix `m`
+    // provably infeasible by box-consistency propagation? Builds an extended-interval
+    // box (±∞) for every UNASSIGNED var, then runs an HC4-revise fixpoint: (A) natural
+    // interval extension of each constraint poly over the box — if its range excludes
+    // every value consistent with the relation, the subtree is infeasible; (B) degree-1
+    // contraction (A·v+B rel 0) tightens each unassigned var's box. Sound by
+    // over-approximation: boxes always CONTAIN the feasible projection, so it can prove
+    // infeasibility but NEVER over-prune a real model (no algebraic-boundary risk).
+    // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
+    bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
+                              const CdcacInput& input);
+    // Interval forward-prune: a constraint whose natural-interval-extension range
+    // over (rational prefix + unassigned = R) is strictly single-signed and that
+    // sign violates its relation is violated by EVERY completion -> the subtree is
+    // infeasible. Returns that {constraint index, invariant sign} for a full-line
+    // conflict, or nullopt. Sound (ivEval over-approximates the true range, so a
+    // strict sign over the box is a strict sign over the feasible region too).
+    std::optional<std::pair<size_t, Sign>> intervalFpViolation(
+        const SamplePoint& prefix, const CdcacInput& input);
+    // Box-ICP SECTOR prune: prove the WHOLE cell [lo,hi] of the current var `var`
+    // (all-rational prefix) infeasible by box consistency with `var` PINNED to that
+    // interval. Returns a strict-signed conflicting constraint, or nullopt. Sound
+    // (box ⊇ feasible projection over the cell) — the descent into that cell can be
+    // skipped and the cell taken as a conflict.
+    std::optional<std::pair<size_t, Sign>> boxSectorViolation(
+        const SamplePoint& prefix, VarId var, const mpq_class& lo, const mpq_class& hi,
+        const CdcacInput& input);
+    // True once satRp_/satSafe_ are populated for the current solve's constraints.
+    bool satRpBuilt_ = false;
     // Per-constraint "safe to delineate via libpoly" flags (coeff-bit cap),
     // precomputed once per sample-first search so high-degree/huge-coeff polys are
     // skipped (not crashed). Indexed parallel to input.constraints.
@@ -161,6 +248,34 @@ private:
     // a power (the matrix-1-all crash). Present for every constraint whenever the
     // all-safe gate lets the search run.
     std::vector<std::optional<RationalPolynomial>> satRp_;
+    // Increment 3 (XOLVER_NRA_CAC_NLSAT, default-OFF): LAZY conflict-driven
+    // projection learning. When a variable's feasible set is empty (no sampled
+    // candidate survives the forward-check), project ONLY the conflict core
+    // (eliminating that var) via a Collins policy and add each result as a DERIVED
+    // feasibility cut that prunes the re-search — z3-nlsat's advantage over the
+    // eager buildClosure projection (which projects everything up front and
+    // explodes on the matrix cluster). Soundness-SAFE: SAT-first never emits Unsat;
+    // a wrong cut only over-prunes (misses a model → falls through), never a wrong
+    // verdict. Reset per solve. NOT a budget — the search pruning is algorithmic.
+    bool satNlsatEnabled_ = false;
+    // A learned infeasible CELL over the lower (already-assigned) variables: the
+    // CONJUNCTION of sign conditions on the projection polynomials that, when ALL
+    // hold, proved the just-conflicted variable infeasible. Pruning the INTERSECTION
+    // (this exact sign-cell) — not each half-space independently — is what makes the
+    // generalization sound-for-completeness: it excludes only the region the
+    // projection certifies infeasible, never the SAT region. (Storing per-poly cuts
+    // and pruning on ANY-violation excluded the UNION of half-spaces ⇒ over-pruned
+    // the model — the iter-18 net-negative.)
+    struct SatSignCond { RationalPolynomial poly; int sign; };  // sgn(poly) == sign over lower vars
+    struct SatDeadCell { int level; std::vector<SatSignCond> conds; };  // conds ALL hold ⇒ var[level] infeasible
+    std::vector<SatDeadCell> satDerivedCells_;
+    std::unique_ptr<ProjectionPolicy> satExplainPolicy_;
+    void projectConflictCore(int k, VarId var, const SamplePoint& prefix,
+                             const CdcacInput& input);
+    // True if the lower-var assignment `m` matches ALL sign conditions of some
+    // learned dead cell at this `level` ⇒ var[level] is infeasible here, so prune
+    // the whole subtree without sampling it. (Intersection match, not union.)
+    bool prefixInLearnedDeadCell(int level, const std::unordered_map<VarId, mpq_class>& m) const;
     // Magnitude bound (bits) on sampled cell representatives. SAT-first samples
     // the SIMPLEST rational in each feasible cell (smallest-denominator dyadic) and
     // discards any whose numerator/denominator exceeds this — an ADDITIVE search
@@ -204,30 +319,6 @@ private:
     // the closure-completeness folding in buildClosure(). Fail-safe false.
     bool closureComplete_ = false;
 
-    // Opt-in soundness FLOOR (XOLVER_NRA_UNSAT_CERT, intended default-ON once the
-    // precise verifier lands). INTERIM CONSERVATIVE form: the CDCAC covering can
-    // silently drop a satisfiable region (meti-tarski sqrt false-UNSAT) via a
-    // subtle close-root / bilinear-section defect not yet pinned to a cheap
-    // positive check, so every CDCAC covering-UNSAT is downgraded to Unknown
-    // rather than risk a wrong UNSAT (sound-now at a measured completeness cost).
-    // The recursive per-cell sign-invariance + tiling verifier will replace this
-    // with a precise certify-or-downgrade. Read once in the constructor.
-    bool unsatCertEnabled_ = false;
-
-    // PRECISE verifier state (reset per solve). Set true when a level's covering
-    // cannot be positively certified sound — currently: the libpoly-isolated
-    // boundary set `allRoots` is INCOMPLETE vs an independent exact Sturm-over-ℚ
-    // count of the level's closure polynomials (a missed/merged root ⇒ a cell is
-    // not sign-invariant ⇒ a satisfiable region can be dropped), or the prefix is
-    // algebraic (not yet certifiable by the ℚ-Sturm oracle). A certified covering
-    // (no uncertifiable level) keeps emitting UNSAT; otherwise → Unknown.
-    bool coveringUncertifiable_ = false;
-
-    // Independent exact-Sturm sign-invariance check for level k's covering: true
-    // iff `allRoots` captured every real root of the level's closure polys
-    // (rational prefix only; algebraic prefix ⇒ false = cannot certify).
-    bool certifyLevelSignInvariance(int k, const SamplePoint& prefix,
-                                    const CdcacInput& input, const RootSet& allRoots);
 };
 
 } // namespace xolver

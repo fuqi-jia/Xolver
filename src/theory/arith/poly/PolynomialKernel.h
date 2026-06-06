@@ -283,6 +283,30 @@ public:
         return std::nullopt;
     }
 
+    // Inverse of terms(): build a polynomial from integer-coefficient monomials.
+    // CRITICAL for memory: a backend must build the result in O(#terms) memory
+    // WITHOUT retaining per-monomial/per-merge intermediates. The base default
+    // folds via mk*/mul/pow/add — correct, but on a hash-consing/pooling backend
+    // every intermediate is interned forever, so a 45k-term projected poly leaks
+    // ~10^5 throwaway polynomials (the matrix-closure 6 GB OOM). LibPolyKernel
+    // overrides this with a single native RAII build (one pool entry).
+    virtual PolyId mkFromMonomials(const std::vector<MonomialTerm>& terms) {
+        PolyId acc = mkZero();
+        for (const auto& t : terms) {
+            if (t.coefficient == 0) continue;
+            PolyId m = mkConst(mpq_class(t.coefficient));
+            if (m == NullPoly) return NullPoly;
+            for (const auto& [v, e] : t.powers) {
+                PolyId vp = mkVar(v);
+                m = (e == 1) ? mul(m, vp) : mul(m, pow(vp, static_cast<uint32_t>(e)));
+                if (m == NullPoly) return NullPoly;
+            }
+            acc = add(acc, m);
+            if (acc == NullPoly) return NullPoly;
+        }
+        return acc;
+    }
+
     // ------------------------------------------------------------------
     // Debugging
     // ------------------------------------------------------------------

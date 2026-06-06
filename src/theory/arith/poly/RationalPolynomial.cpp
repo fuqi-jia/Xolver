@@ -348,36 +348,25 @@ RationalPolynomial::toPrimitiveInteger(PolynomialKernel& kernel) const {
     // Step 4: Divide by GCD -> primitive coefficients
     for (auto& it : items) it.coeff /= g;
 
-    // Step 5: Build PolyId via divide-and-conquer to avoid O(N^2)
-    // linear accumulation.  Each term is built independently, then
-    // merged pairwise so intermediate polynomials are balanced.
-
-    auto build = [&](auto&& self, size_t l, size_t r) -> PolyId {
-        if (l == r) {
-            const auto& it = items[l];
-            PolyId termPoly = kernel.mkConst(mpq_class(it.coeff, 1));
-            if (termPoly == NullPoly) return NullPoly;
-            for (const auto& [varId, exp] : it.key) {
-                PolyId varPoly = kernel.mkVar(varId);
-                if (exp == 1) {
-                    termPoly = kernel.mul(termPoly, varPoly);
-                } else {
-                    termPoly = kernel.mul(termPoly,
-                        kernel.pow(varPoly, static_cast<uint32_t>(exp)));
-                }
-                if (termPoly == NullPoly) return NullPoly;
-            }
-            return termPoly;
-        }
-        size_t m = l + (r - l) / 2;
-        PolyId left  = self(self, l, m);
-        if (left == NullPoly) return NullPoly;
-        PolyId right = self(self, m + 1, r);
-        if (right == NullPoly) return NullPoly;
-        return kernel.add(left, right);
-    };
-
-    PolyId result = build(build, 0, items.size() - 1);
+    // Step 5: Build the integer-coefficient PolyId in ONE pool allocation via the
+    // kernel's batch builder. The previous in-place divide-and-conquer routed each
+    // monomial (mkConst/mkVar/mul/pow) and each pairwise merge (add) through the
+    // kernel, and a pooling/hash-consing backend (LibPolyKernel) interns every one
+    // of those ~O(N) intermediates FOREVER — a 45k-term matrix-closure poly thus
+    // leaked ~10^5 libpoly trees and OOM'd at 6 GB. mkFromMonomials performs the
+    // same balanced sum over LOCAL (RAII) polynomials, so only the final result is
+    // pooled and peak memory is O(N).
+    std::vector<PolynomialKernel::MonomialTerm> mts;
+    mts.reserve(items.size());
+    for (auto& it : items) {
+        PolynomialKernel::MonomialTerm mt;
+        mt.coefficient = std::move(it.coeff);
+        mt.powers.reserve(it.key.size());
+        for (const auto& [varId, exp] : it.key)
+            mt.powers.emplace_back(varId, static_cast<int>(exp));
+        mts.push_back(std::move(mt));
+    }
+    PolyId result = kernel.mkFromMonomials(mts);
     if (result == NullPoly) return {};
 
     mpq_class scale(g, D);

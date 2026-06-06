@@ -338,7 +338,26 @@ CellResult intervalFromCharacterization(
                 if (!pr.contains(var)) continue;   // no var-boundary at this prefix
             }
             bool supported = false;
-            rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
+            // FAST PATH (cacheable algebraic numbers): if the boundary poly provably
+            // keeps full degree in `var` at the prefix — its leading coefficient (in
+            // `var`) is DEFINITE-NONZERO there — it does NOT nullify, so libpoly's
+            // NATIVE isolation is complete + sound AND ~750x faster than the hand-
+            // rolled resultant-Norm here (it reuses the persistent assignment's refined
+            // algebraic numbers instead of recomputing a tower Norm per cell). A
+            // possibly-nullifying poly (leading coeff zero/undecided) or a native crash
+            // falls back to the nullification-aware Norm/Tower path (fail-closed).
+            {
+                RationalPolynomial lc = rp.leadingCoefficient(var);
+                auto lcN = lc.toPrimitiveInteger(*kernel);
+                if (lcN.ok()) {
+                    const Sign ls = algebra->signAt(lcN.poly, prefix);
+                    if (ls == Sign::Pos || ls == Sign::Neg) {   // non-nullifying ⇒ native is complete
+                        RootSet ra = algebra->isolateRealRootsAlgebraic(pid, prefix, var);
+                        if (!ra.crashOccurred) { rs = std::move(ra); supported = true; }
+                    }
+                }
+            }
+            if (!supported) rs = algebra->isolateRealRootsViaNorm(pid, prefix, var, supported);
             if (!supported) rs = algebra->isolateRealRootsViaTower(pid, prefix, var, supported);
             if (!supported) return bail("algebraic-isolation-unsupported");
         } else {
@@ -479,22 +498,72 @@ LeafCellResult characterizeLeafAtom(
     }
 
     // (b) BOUNDARY PATH — does the atom NULLIFY in `var` on this fiber?
-    const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
-    if (vr == VanishResult::Unknown) return out;     // fail-closed ⇒ caller Unknown
-    if (vr == VanishResult::Vanishes) {
-        // poly ≡ 0 in `var` on the fiber ⇒ UNIFORM truth, decided by (0 rel 0).
-        // NO var-boundary (the valuation residual is a LIFTING boundary, never a
-        // leaf atom's truth, so it is NOT injected here). UniformFalse ⇒ the whole
-        // fiber is infeasible; the caller excludes the entire axis. (signAt at the
-        // sample agrees: sSample == Zero ⇒ holdsAtSample == relationHolds(Zero,rel).)
-        out.truth = relationHolds(Sign::Zero, rel) ? LeafTruth::UniformTrue
-                                                   : LeafTruth::UniformFalse;
-        out.interval = CacInterval::all();
-        out.supported = true;
-        return out;
+    bool prefixAlg = false;
+    for (const auto& pv : prefix.values) if (pv.isAlgebraic()) { prefixAlg = true; break; }
+    if (!prefixAlg) {
+        // RATIONAL prefix: vanishesAtPrefix is exact + decisive.
+        const VanishResult vr = algebra->vanishesAtPrefix(pid, prefix, var);
+        if (vr == VanishResult::Unknown) return out;     // fail-closed ⇒ caller Unknown
+        if (vr == VanishResult::Vanishes) {
+            // poly ≡ 0 in `var` on the fiber ⇒ UNIFORM truth, decided by (0 rel 0).
+            // NO var-boundary (the valuation residual is a LIFTING boundary, never a
+            // leaf atom's truth, so it is NOT injected here). UniformFalse ⇒ the whole
+            // fiber is infeasible; the caller excludes the entire axis. (signAt at the
+            // sample agrees: sSample == Zero ⇒ holdsAtSample == relationHolds(Zero,rel).)
+            out.truth = relationHolds(Sign::Zero, rel) ? LeafTruth::UniformTrue
+                                                       : LeafTruth::UniformFalse;
+            out.interval = CacInterval::all();
+            out.supported = true;
+            return out;
+        }
+        // NotVanishes ⇒ fall through to the NonUniform isolation below.
+    } else {
+        // ALGEBRAIC prefix: vanishesAtPrefix returns Unknown for ANY algebraic prefix
+        // by design (LibpolyBackend), so consulting it here BAILED before the
+        // algebraic-capable isolation was ever reached — the same "unreachable-tower-
+        // path ordering bug" already fixed in intervalFromCharacterization (the leaf
+        // path still had it: hong dies at the first algebraic coordinate, var=3).
+        // Decide nullification SOUNDLY from the leading coefficient's sign at the
+        // prefix instead:
+        //   - poly structurally var-free ⇒ uniform truth (holdsAtSample).
+        //   - leading coeff (in `var`) DEFINITE-NONZERO at the prefix ⇒ poly|prefix
+        //     keeps full degree ⇒ a nonzero univariate ⇒ does NOT nullify ⇒
+        //     NonUniform: fall through to the exact isolation below (itself
+        //     fail-closed on any inconclusive backend step ⇒ never a wrong cell).
+        //   - leading coeff Zero/Unknown ⇒ degree may drop / nullify; cannot cheaply
+        //     decide ⇒ fail-closed (return unsupported).
+        // Scan the var-coefficients HIGH→LOW (each a poly in the lower vars):
+        //   first DEFINITE-NONZERO coeff at degree ≥1 ⇒ poly keeps a genuine var-
+        //     dependence ⇒ NonUniform (its roots delineate) ⇒ isolate below;
+        //   ALL degree-≥1 coeffs definite-ZERO ⇒ poly|prefix is CONSTANT in var ⇒
+        //     uniform truth, decided by signAt at the sample (holdsAtSample) — this
+        //     is hong's `x0·x1·x2 > 1` at x1=0: lead coeff x0·x1 vanishes but the
+        //     constant term −1 ≠ 0, so it is constant (−1), UniformFalse;
+        //   any coeff UNKNOWN before a nonzero is found ⇒ fail-closed (unsupported).
+        const std::vector<RationalPolynomial> vcoeffs = poly.coefficients(var);  // index = degree
+        bool nonUniform = false;
+        for (int d = static_cast<int>(vcoeffs.size()) - 1; d >= 1 && !nonUniform; --d) {
+            RationalPolynomial c = vcoeffs[d];
+            c.normalize();
+            if (c.isZero()) continue;
+            auto cN = c.toPrimitiveInteger(*kernel);
+            if (!cN.ok()) return out;                       // fail-closed
+            const Sign cs = algebra->signAt(cN.poly, prefix);
+            if (cs == Sign::Pos || cs == Sign::Neg) { nonUniform = true; break; }  // degree-d term survives
+            if (cs == Sign::Unknown) return out;            // fail-closed
+            // Zero ⇒ this term vanishes at the prefix; keep scanning lower degrees.
+        }
+        if (!nonUniform) {
+            // Constant in var at the prefix ⇒ uniform truth at the sample.
+            out.truth = out.holdsAtSample ? LeafTruth::UniformTrue : LeafTruth::UniformFalse;
+            out.interval = CacInterval::all();
+            out.supported = true;
+            return out;
+        }
+        // A genuine var-dependence survives ⇒ NonUniform isolation below.
     }
 
-    // NotVanishes: poly|prefix is a nonzero univariate. Its real roots delineate
+    // NotVanishes (or algebraic non-nullifying): poly|prefix is a nonzero univariate. Its real roots delineate
     // the maximal sign-invariant cell around the sample (exact isolation). If it
     // has NO var-boundary (constant-nonzero in var on the fiber ⇒ cell == ℝ), the
     // atom is still uniform; otherwise its sign changes across roots ⇒ NonUniform.

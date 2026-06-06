@@ -233,6 +233,39 @@ PolyId LibPolyKernel::pow(PolyId a, uint32_t k) {
     return r;
 }
 
+// Build a polynomial from integer-coefficient monomials in ONE pool allocation.
+// The naive base fold routes every monomial and every pairwise merge through
+// alloc() → pool_, which is never reclaimed (and the binOp cache only dedups
+// repeats), so a 45k-term matrix-closure poly leaks ~10^5 libpoly trees → 6 GB
+// OOM. Here we do the SAME balanced divide-and-conquer (O(n log n) work) but over
+// LOCAL poly::Polynomial values (RAII): each leaf/merge is freed as the recursion
+// unwinds, peak memory is O(final poly), and exactly ONE poly enters the pool.
+PolyId LibPolyKernel::mkFromMonomials(const std::vector<MonomialTerm>& terms) {
+    const auto* pctx = ctx_.get_polynomial_context();
+    if (terms.empty()) return alloc(poly::Polynomial(pctx, poly::Integer(0)));
+
+    // Precompute each monomial as a local polynomial (RAII; nothing pooled).
+    auto buildMonomial = [&](const MonomialTerm& t) -> poly::Polynomial {
+        poly::Polynomial m(pctx, poly::Integer(t.coefficient));
+        for (const auto& [v, e] : t.powers) {
+            if (e <= 0) continue;
+            poly::Polynomial vp(pctx, resolvePolyVar(v));
+            m = (e == 1) ? (m * vp) : (m * poly::pow(vp, static_cast<unsigned>(e)));
+        }
+        return m;
+    };
+
+    // Balanced sum over [l, r]; intermediates are freed as the tree unwinds.
+    std::function<poly::Polynomial(size_t, size_t)> build =
+        [&](size_t l, size_t r) -> poly::Polynomial {
+            if (l == r) return buildMonomial(terms[l]);
+            size_t mid = l + (r - l) / 2;
+            return build(l, mid) + build(mid + 1, r);
+        };
+
+    return alloc(build(0, terms.size() - 1));
+}
+
 bool LibPolyKernel::isZero(PolyId a) const {
     return poly::is_zero(get(a));
 }

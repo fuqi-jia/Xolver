@@ -156,6 +156,10 @@ private:
     // consistent() on a validated model (stashed in satFastModel_), nullopt
     // otherwise. Pure-NRA only (skips combination/N-O mode).
     std::optional<TheoryCheckResult> stageCascade(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // Algebraic square-cascade: constructs + exact-validates a Q(sqrt c) model for
+    // square-defined systems (e.g. Geogebra IsoRightTriangle) that the rational
+    // eq-cascade and the Lazard delineation both miss. Emits satCacAlgModel_.
+    std::optional<TheoryCheckResult> stageSquareCascade(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
     // repair heuristic. Returns consistent() iff LS finds a rational assignment
     // exact-validated against every active constraint (invariant 1 — Solver-level
