@@ -3159,39 +3159,34 @@ public:
             return Result::Unknown;
         }
 
-        // cvc5/z3-style model-construction PRE-PASS. For UFNIA, try to CONSTRUCT
-        // a validated model (UF apps DERIVED by functional consistency,
-        // CandidateModelSearch::deriveAppValues — pow2(k)@k=1 == pow2(1)) BEFORE
-        // the heavy SAT/theory solve, which on bit-width-independent UFNIA
-        // (pow2(k)) bit-blasts into an OOM the recovery never reaches. Sound: CMS
-        // re-validates every model against the original assertions (it never
-        // emits UNSAT, so a no-model run just falls through). Witnesses are tiny
-        // and found in ~0.1s; the 2s budget bounds the fall-through cost.
-        // Default-ON for QF_UFNIA only (where the OOM lives + CMS supports UF);
-        // opt-out XOLVER_CMS_UF_PREPASS=0, force-on elsewhere with =1.
+        // Bounded brute-force model-construction pre-pass for UFNIA. CMS
+        // enumerates low-height candidate assignments and DERIVES UF-app values
+        // by functional consistency (pow2(k)@k=1 == pow2(1)); it re-validates
+        // every model against the original assertions and never emits UNSAT, so a
+        // no-model run just falls through to the main solve. Bit-width-independent
+        // UFNIA (pow2(k)) otherwise bit-blasts into an OOM the post-solve recovery
+        // never reaches, so this must run BEFORE the solve. Brute force => HARD-
+        // bounded, but NOT tuned to this dev machine: the competition server is
+        // slower, so a value sized to dev-machine timing would lose wins there.
+        // The machine-INDEPENDENT bound is the candidate cap (2M assignments —
+        // same work on any CPU); the wall-clock is a generous 3s safety backstop
+        // (~0.25% of the 20-min competition budget) for pathological per-candidate
+        // cost, not the binding limit for the recovered witnesses. Default-ON for
+        // QF_UFNIA only.
         bool cmsPrePassFound = false;
         bool prepassEnabled = (logic == "QF_UFNIA" || logic == "UFNIA");
-        // The BWI axiom emitter (XOLVER_NIA_ZOHAR_PLUGIN) ADDS pow2 semantics
-        // (pow2(t)>=1, pow2(0)=1, ...) that the pre-pass cannot see — it runs
-        // over the pre-emission assertions. They are mutually-exclusive pow2
-        // strategies: when the emitter is active, defer to it (else the pre-pass
-        // would false-sat a formula the emitter proves unsat).
+        // The BWI axiom emitter (XOLVER_NIA_ZOHAR_PLUGIN) ADDS pow2 semantics the
+        // pre-pass cannot see (it runs over pre-emission assertions); defer to it
+        // when active (else the pre-pass could false-sat a formula it proves unsat).
         if (std::getenv("XOLVER_NIA_ZOHAR_PLUGIN")) prepassEnabled = false;
-        if (const char* e = std::getenv("XOLVER_CMS_UF_PREPASS"))
-            prepassEnabled = (*e && *e != '0');
         if (prepassEnabled) {
             CandidateModelSearch::Config cfg;
             cfg.allowUF = true;
             cfg.assertionRootsOverride = originalAssertions_;
-            cfg.wallClockBudget = std::chrono::milliseconds(
-                env::paramInt("XOLVER_CMS_UF_BUDGET_MS", 2000));
-            cfg.maxCandidatesPerStrategy =
-                static_cast<size_t>(env::paramInt("XOLVER_CMS_UF_CANDS", 2000000));
+            cfg.wallClockBudget = std::chrono::milliseconds(3000);
+            cfg.maxCandidatesPerStrategy = 2000000;
             CandidateModelSearch cms(*ir, logic, cfg);
             auto pre = cms.run();
-            if (std::getenv("XOLVER_DIAG_CMS"))
-                std::cerr << "[CMS-PREPASS] found=" << pre.found
-                          << " strategy=" << pre.strategy << "\n";
             if (pre.found) {
                 lastModel_ = pre.model;
                 cmsPrePassFound = true;
@@ -3210,9 +3205,9 @@ public:
         // captured via the propagator's assignment view, but pure-boolean vars
         // are not theory-tracked. Used by the strict-validation gate.
         std::unordered_map<std::string, std::string> boolVarVals;
-        // Skip SAT-var readback when the CMS pre-pass produced the model: the
-        // SAT solver was never run (no satisfied state → CaDiCaL val() aborts),
-        // and the CMS model is already complete + validated.
+        // Skip SAT-var readback when the CMS pre-pass produced the model: the SAT
+        // solver was never run (CaDiCaL val() would abort), and the CMS model is
+        // already complete + validated.
         if (result == SatSolver::SolveResult::Sat && !cmsPrePassFound) {
             // An atom whose expr is a Kind::Variable is a boolean variable in
             // formula position (numeric vars only appear inside theory atoms,
