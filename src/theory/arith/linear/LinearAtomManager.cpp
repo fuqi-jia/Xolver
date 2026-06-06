@@ -14,13 +14,15 @@ int LinearAtomManager::getOrCreateVar(GeneralSimplex& gs, const std::string& nam
     if (it != varToIndex_.end()) return it->second;
     int idx = gs.addVar(name);
     varToIndex_[name] = idx;
+    indexToVar_[idx] = name;  // iter-104 perf: reverse mirror
     return idx;
 }
 
 std::string LinearAtomManager::getVarName(int idx) const {
-    for (const auto& [name, id] : varToIndex_) {
-        if (id == idx) return name;
-    }
+    // iter-104 perf: O(1) reverse lookup. Was O(N) linear scan, called from
+    // LIA/LRA hot loops per simplex variable.
+    auto it = indexToVar_.find(idx);
+    if (it != indexToVar_.end()) return it->second;
     return "";
 }
 
