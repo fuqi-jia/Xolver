@@ -355,9 +355,23 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkBilinearFactor(
         }
         if (!bilinearTerm || !constantTerm) continue;
 
-        // Bilinear: exactly two variables, each with exponent 1.
-        if (bilinearTerm->powers.size() != 2) continue;
-        if (bilinearTerm->powers[0].second != 1 || bilinearTerm->powers[1].second != 1) continue;
+        // iter-91: extended to multilinear — k variables each with exponent 1
+        // (k = 2 was the original iter-89 bilinear case). For k >= 3 the same
+        // divisor argument applies: if x_i * x_j * ... = c (integers), then
+        // each x_i divides c (since the remaining product is integer = c/x_i).
+        // Sound: domain restriction to ±divisors(|c|) per variable; the
+        // equality filters wrong tuples in BoundedNiaSolver. We cap k <= 4 to
+        // keep BoundedNiaSolver's enumeration tractable (the product of per-
+        // variable finite domains is divisors^k).
+        if (bilinearTerm->powers.size() < 2 || bilinearTerm->powers.size() > 4) continue;
+        {
+            bool allLinear = true;
+            for (const auto& [v, exp] : bilinearTerm->powers) {
+                (void)v;
+                if (exp != 1) { allLinear = false; break; }
+            }
+            if (!allLinear) continue;
+        }
         if (bilinearTerm->coefficient == 0) continue;
 
         // Equation: coeff * x * y + const_term = 0  →  x * y = -const_term / coeff
@@ -384,12 +398,14 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkBilinearFactor(
         }
         if (signed_divs.size() > kMaxDiv) continue;
 
-        // Restrict both x and y domains. Reason is the bilinear equality itself
-        // (a single SatLit chain → not a multi-step deduction).
-        std::string xname = std::string(kernel_.varName(bilinearTerm->powers[0].first));
-        std::string yname = std::string(kernel_.varName(bilinearTerm->powers[1].first));
-        domains.restrictToFiniteSet(xname, signed_divs, c.reason);
-        domains.restrictToFiniteSet(yname, signed_divs, c.reason);
+        // iter-91: restrict ALL k variables (was bilinear-only x,y in iter-89).
+        // Each var_i | c, so the same signed_divs set bounds every variable
+        // in the multilinear monomial. The reason is the single equality.
+        for (const auto& [varId, exp] : bilinearTerm->powers) {
+            (void)exp;
+            std::string vname = std::string(kernel_.varName(varId));
+            domains.restrictToFiniteSet(vname, signed_divs, c.reason);
+        }
         updated = true;
     }
 
