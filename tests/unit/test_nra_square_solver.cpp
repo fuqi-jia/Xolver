@@ -151,3 +151,63 @@ TEST_CASE("collapseAlgebraicRoots: infeasible when a squared value is negative")
     CollapsedRoots c = collapseAlgebraicRoots(roots);
     CHECK_FALSE(c.feasible);
 }
+
+TEST_CASE("signOfRootExpr: sign of a*sqrt(c) + b (exact)") {
+    const mpq_class two(2);
+    CHECK(signOfRootExpr(mpq_class(1), mpq_class(1), two) == 1);    // sqrt2 + 1 > 0
+    CHECK(signOfRootExpr(mpq_class(1), mpq_class(-2), two) == -1);  // sqrt2 - 2 < 0
+    CHECK(signOfRootExpr(mpq_class(1), mpq_class(-1), two) == 1);   // sqrt2 - 1 > 0
+    CHECK(signOfRootExpr(mpq_class(-1), mpq_class(1), two) == -1);  // -sqrt2 + 1 < 0
+    CHECK(signOfRootExpr(mpq_class(2), mpq_class(-3), two) == -1);  // 2sqrt2 - 3 < 0
+    CHECK(signOfRootExpr(mpq_class(2), mpq_class(-2), two) == 1);   // 2sqrt2 - 2 > 0
+    CHECK(signOfRootExpr(mpq_class(0), mpq_class(-3), two) == -1);  // pure -3
+    CHECK(signOfRootExpr(mpq_class(5), mpq_class(0), two) == 1);    // 5 sqrt2 > 0
+    CHECK(signOfRootExpr(mpq_class(0), mpq_class(0), two) == 0);    // exactly 0
+    // The exact boundary: a^2 c == b^2  => a*sqrt(c)+b is 0 only if signs oppose.
+    CHECK(signOfRootExpr(mpq_class(1), mpq_class(-1), mpq_class(1)) == 0);  // sqrt1 - 1 = 0
+}
+
+TEST_CASE("signOfPolyAtGenerator: validate over a single generator x = +sqrt(1/2)") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId g = k.getOrCreateVar("g");
+    const mpq_class c(1, 2);   // g^2 = 1/2, g = +sqrt(1/2)
+
+    auto sgnOf = [&](const RationalPolynomial& rp) {
+        return signOfPolyAtGenerator(rp, g, c, +1);
+    };
+
+    // g^2 - 1/2  == 0   (the defining relation reduces to 0)
+    RationalPolynomial p1; p1.addVar(g, 2, mpq_class(1)); p1.addConstant(mpq_class(-1, 2)); p1.normalize();
+    REQUIRE(sgnOf(p1)); CHECK(*sgnOf(p1) == 0);
+
+    // (4/5) g + 2/5  > 0   (the derived m = (4/5)sqrt(1/2)+2/5 ~ 0.966)
+    RationalPolynomial p2; p2.addVar(g, 1, mpq_class(4, 5)); p2.addConstant(mpq_class(2, 5)); p2.normalize();
+    REQUIRE(sgnOf(p2)); CHECK(*sgnOf(p2) == 1);
+
+    // g  > 0
+    RationalPolynomial p3; p3.addVar(g, 1, mpq_class(1)); p3.normalize();
+    REQUIRE(sgnOf(p3)); CHECK(*sgnOf(p3) == 1);
+
+    // g - 1 < 0   (sqrt(1/2) ~ 0.707 < 1)
+    RationalPolynomial p4; p4.addVar(g, 1, mpq_class(1)); p4.addConstant(mpq_class(-1)); p4.normalize();
+    REQUIRE(sgnOf(p4)); CHECK(*sgnOf(p4) == -1);
+
+    // 2g - 1 > 0   (2*0.707 - 1 ~ 0.41)
+    RationalPolynomial p5; p5.addVar(g, 1, mpq_class(2)); p5.addConstant(mpq_class(-1)); p5.normalize();
+    REQUIRE(sgnOf(p5)); CHECK(*sgnOf(p5) == 1);
+
+    // higher degree: g^3 reduces to (1/2) g  > 0
+    RationalPolynomial p6; p6.addVar(g, 3, mpq_class(1)); p6.normalize();
+    REQUIRE(sgnOf(p6)); CHECK(*sgnOf(p6) == 1);
+
+    // negative generator g = -sqrt(1/2): g > 0 is FALSE (sign -1)
+    RationalPolynomial p7; p7.addVar(g, 1, mpq_class(1)); p7.normalize();
+    auto s7 = signOfPolyAtGenerator(p7, g, c, -1);
+    REQUIRE(s7); CHECK(*s7 == -1);
+
+    // a poly mentioning another variable => nullopt (caller must substitute first)
+    VarId h = k.getOrCreateVar("h");
+    RationalPolynomial p8; p8.addVar(g, 1, mpq_class(1)); p8.addVar(h, 1, mpq_class(1)); p8.normalize();
+    CHECK_FALSE(signOfPolyAtGenerator(p8, g, c, +1));
+}

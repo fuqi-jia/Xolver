@@ -1,6 +1,7 @@
 #include "theory/arith/nra/NraSquareSolver.h"
 
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/poly/RationalPolynomial.h"
 
 #include <map>
 #include <utility>
@@ -75,6 +76,40 @@ CollapsedRoots collapseAlgebraicRoots(const std::vector<SquareRoot>& roots) {
         }
     }
     return out;
+}
+
+int signOfRootExpr(const mpq_class& a, const mpq_class& b, const mpq_class& c) {
+    const int sa = sgn(a);
+    const int sb = sgn(b);
+    if (sa == 0) return sb;          // pure constant b
+    if (sb == 0) return sa;          // pure a*sqrt(c), sqrt(c) > 0
+    if (sa > 0 && sb > 0) return 1;
+    if (sa < 0 && sb < 0) return -1;
+    // Mixed signs: a*sqrt(c) + b. Sign = sign(a) * sign(a^2*c - b^2).
+    //   a>0,b<0:  >0 iff a*sqrt(c) > |b| iff a^2*c > b^2  => sign(disc)
+    //   a<0,b>0:  >0 iff b > |a|*sqrt(c) iff b^2 > a^2*c  => -sign(disc) = sign(a)*sign(disc)
+    const mpq_class disc = a * a * c - b * b;
+    return sa * sgn(disc);
+}
+
+std::optional<int> signOfPolyAtGenerator(const RationalPolynomial& rp, VarId genVar,
+                                         const mpq_class& c, int genSign) {
+    mpq_class aGen = 0;   // coefficient of genVar after reduction mod genVar^2 = c
+    mpq_class b = 0;      // constant part
+    for (const auto& [key, coeff] : rp.terms()) {
+        int deg = 0;
+        for (const auto& [v, e] : key) {
+            if (v != genVar) return std::nullopt;   // not univariate in the generator
+            deg += e;
+        }
+        mpq_class cp = 1;                            // c^(deg/2)
+        for (int j = 0; j < deg / 2; ++j) cp *= c;
+        if (deg % 2 == 0) b += coeff * cp;
+        else aGen += coeff * cp;                     // genVar^deg -> cp * genVar
+    }
+    // genVar = genSign * sqrt(c), so the sqrt(c) coefficient is aGen * genSign.
+    const mpq_class a = (genSign < 0) ? -aGen : aGen;
+    return signOfRootExpr(a, b, c);
 }
 
 SquareRoot solveSquareRoot(const SquareEquality& sq, int signHint) {

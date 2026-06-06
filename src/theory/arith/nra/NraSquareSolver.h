@@ -9,6 +9,7 @@
 namespace xolver {
 
 class PolynomialKernel;
+class RationalPolynomial;
 
 // Foundation for the NRA algebraic SQUARE-CASCADE (Task #2: algebraic SAT model
 // construction). The dominant residual QF_NRA gap is square-defined algebraic SAT
@@ -70,5 +71,19 @@ struct CollapsedRoots {
 // Group resolved roots: equal algebraic numbers (same squaredValue + sign) share a
 // generator. Pure (no kernel).
 CollapsedRoots collapseAlgebraicRoots(const std::vector<SquareRoot>& roots);
+
+// Sign of a*sqrt(c) + b for c > 0, as -1 / 0 / +1. Pure exact rational arithmetic
+// (compares a^2*c vs b^2 in the mixed-sign case). This is the 1-algebraic sign
+// evaluation that lets the cascade validate Q(sqrt c) models WITHOUT the
+// ≥2-algebraic Lazard tower.
+int signOfRootExpr(const mpq_class& a, const mpq_class& b, const mpq_class& c);
+
+// Sign of a polynomial (univariate in the single generator `genVar`, whose value is
+// genSign*sqrt(c), c > 0) at that generator, as -1/0/+1. Reduces modulo
+// genVar^2 = c to a*genVar + b, then signOfRootExpr with the generator's sign
+// folded in. Returns nullopt iff rp mentions any variable other than genVar (the
+// caller must have substituted all rational vars and collapsed aliases first).
+std::optional<int> signOfPolyAtGenerator(const RationalPolynomial& rp, VarId genVar,
+                                         const mpq_class& c, int genSign);
 
 }  // namespace xolver
