@@ -93,11 +93,12 @@ bool UnconstrainedElim::run() {
 
     for (size_t idx = 0; idx < conjuncts_.size(); ++idx) {
         const auto& node = ir_.get(conjuncts_[idx].second);
-        ModelConverter::Rel relForX;
         bool isRel = true;
+        bool isEq = false;
         switch (node.kind) {
             case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq:
             case Kind::Distinct: break;
+            case Kind::Eq: isEq = true; break;  // NEW: handled with elim semantics
             default: isRel = false; break;
         }
         if (!isRel || node.children.size() != 2) continue;
@@ -110,13 +111,31 @@ bool UnconstrainedElim::run() {
         else if (auto n2 = asNumericVar(rhs)) { varName = *n2; bound = lhs; xIsLeft = false; }
         else continue;
 
-        // x must occur exactly once (only here), not be a shared UF/array term,
-        // and the bound must be reconstructable.
+        // x must occur exactly once (only here) and not be a shared UF/array term.
         if (occ_[varName] != 1) continue;
         if (unsafe_.count(varName)) continue;
+
+        SortId sort = ir_.get(xIsLeft ? lhs : rhs).sort;
+
+        if (isEq) {
+            // (= x t) where x's only global occurrence is here. Soundness:
+            // x is otherwise free, so dropping the equality is equisat (extend
+            // any model of the rest by setting x := eval(t, model)). No need
+            // for isLinearReconstructable since the witness IS t directly
+            // — ModelConverter::registerElimination tells the converter to
+            // evaluate `bound` under the final model and assign that value
+            // to x in the displayed model.
+            mc_.registerElimination(varName, sort, bound);
+            dropped_.push_back(idx);
+            ++eliminated_;
+            continue;
+        }
+
+        // Relational case (existing): need isLinearReconstructable so the
+        // witness (b, b, b+1, b-1, b+1) can be computed exactly under model.
         if (!isLinearReconstructable(bound)) continue;
 
-        // Relation as it applies to x (x ⋈ bound).
+        ModelConverter::Rel relForX;
         switch (node.kind) {
             case Kind::Lt:  relForX = xIsLeft ? ModelConverter::Rel::Lt : ModelConverter::Rel::Gt; break;
             case Kind::Leq: relForX = xIsLeft ? ModelConverter::Rel::Le : ModelConverter::Rel::Ge; break;
@@ -126,7 +145,6 @@ bool UnconstrainedElim::run() {
             default: continue;
         }
 
-        SortId sort = ir_.get(xIsLeft ? lhs : rhs).sort;
         mc_.registerWitness(varName, sort, relForX, bound);
         dropped_.push_back(idx);
         ++eliminated_;

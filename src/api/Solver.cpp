@@ -1453,11 +1453,20 @@ public:
         // solve-eqs (default-OFF, base scope, non-algebraic-model logics).
         if (std::getenv("XOLVER_PP_UNCONSTRAINED_ELIM") && ir->currentScopeLevel() == 0 &&
             !algebraicModelLogic) {
-            UnconstrainedElim unc(*ir, modelConverter_);
-            if (unc.run()) {
+            // Iterate to fixed point: each elimination may free other vars
+            // whose only previous other occurrence was the just-dropped atom.
+            // Bounded at 16 rounds.
+            size_t totalDropped = 0;
+            size_t round = 0;
+            for (round = 0; round < 16; ++round) {
+                UnconstrainedElim unc(*ir, modelConverter_);
+                if (!unc.run()) break;
                 unc.commit();
-                std::cerr << "[UnconstrainedElim] dropped " << unc.eliminatedCount()
-                          << " atom(s)\n";
+                totalDropped += unc.eliminatedCount();
+            }
+            if (totalDropped > 0) {
+                std::cerr << "[UnconstrainedElim] dropped " << totalDropped
+                          << " atom(s) in " << round << " round(s)\n";
             }
         }
 
