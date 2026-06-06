@@ -823,6 +823,31 @@ TEST_CASE("NIA-Core: x*y=7 (prime) via bilinear factor → SAT") {
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
 }
 
+TEST_CASE("NIA-Core: trilinear factor x*y*z=6 → SAT (iter-91 multilinear)") {
+    // iter-91 extended bilinear to multilinear k=2..4. For x*y*z=6,
+    // each variable | 6, so each ∈ ±{1,2,3,6}. Valid triples exist:
+    // (1,2,3), (1,3,2), (2,3,1), (6,1,1), (-1,-2,3), etc.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(declare-const z Int)\n"
+        "(assert (= (* x y z) 6))\n"
+        "(assert (>= x 1))\n"
+        "(assert (>= y 1))\n"
+        "(assert (>= z 1))\n"
+        "(check-sat)\n"
+    );
+    setenv("XOLVER_NIA_BILINEAR_FACTOR", "1", 1);
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    // Defensive: never wrong UNSAT — multilinear soundness invariant.
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
+
 TEST_CASE("NIA-Core: bilinear factor x*y=-6 (negative) → SAT") {
     std::string path = writeTempSmt2(
         "(set-logic QF_NIA)\n"
