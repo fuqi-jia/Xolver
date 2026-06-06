@@ -85,6 +85,141 @@ void UnconstrainedElim::prepare() {
     }
 }
 
+ExprId UnconstrainedElim::mkSub(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::Sub;
+    e.sort = ir_.get(a).sort;
+    e.children = {a, b};
+    return ir_.addShared(std::move(e));
+}
+
+ExprId UnconstrainedElim::mkNeg(ExprId a) {
+    CoreExpr e;
+    e.kind = Kind::Neg;
+    e.sort = ir_.get(a).sort;
+    e.children = {a};
+    return ir_.addShared(std::move(e));
+}
+
+std::optional<std::pair<std::string, ExprId>>
+UnconstrainedElim::asValueUncTerm(ExprId e, ExprId target) {
+    const auto& node = ir_.get(e);
+
+    // Restrict to Int sort for now (LCTES target). Real would need extra
+    // care for Mul-by-constant (rational division).
+    if (node.sort != intSortId_) return std::nullopt;
+
+    auto asConstInt = [&](ExprId x, mpz_class& out) -> bool {
+        const auto& cn = ir_.get(x);
+        if (cn.kind != Kind::ConstInt) return false;
+        if (auto* iv = std::get_if<int64_t>(&cn.payload.value)) { out = *iv; return true; }
+        if (auto* sv = std::get_if<std::string>(&cn.payload.value)) {
+            try { out = mpz_class(*sv); return true; } catch (...) { return false; }
+        }
+        return false;
+    };
+
+    // Base case: Variable with occ==1.
+    if (node.kind == Kind::Variable) {
+        auto nm = asNumericVar(e);
+        if (!nm) return std::nullopt;
+        if (occ_.count(*nm) == 0 || occ_.at(*nm) != 1) return std::nullopt;
+        if (unsafe_.count(*nm)) return std::nullopt;
+        return std::make_pair(*nm, target);
+    }
+
+    // (- v) (unary negation): v := -target.
+    if (node.kind == Kind::Neg && node.children.size() == 1) {
+        const auto& cn = ir_.get(node.children[0]);
+        if (cn.kind == Kind::Variable) {
+            auto nm = asNumericVar(node.children[0]);
+            if (!nm) return std::nullopt;
+            if (occ_.count(*nm) == 0 || occ_.at(*nm) != 1) return std::nullopt;
+            if (unsafe_.count(*nm)) return std::nullopt;
+            return std::make_pair(*nm, mkNeg(target));
+        }
+        return std::nullopt;
+    }
+
+    // (+ a b ...): exactly one child is an unc-Variable (occ==1),
+    // the others sum together; v := target - (others).
+    if (node.kind == Kind::Add && node.children.size() >= 2) {
+        int uncIdx = -1;
+        std::string uncName;
+        for (size_t i = 0; i < node.children.size(); ++i) {
+            const auto& cn = ir_.get(node.children[i]);
+            if (cn.kind != Kind::Variable) continue;
+            auto nm = asNumericVar(node.children[i]);
+            if (!nm) continue;
+            if (occ_.count(*nm) == 0 || occ_.at(*nm) != 1) continue;
+            if (unsafe_.count(*nm)) continue;
+            // Sort must match parent's sort.
+            if (ir_.get(node.children[i]).sort != intSortId_) continue;
+            if (uncIdx != -1) return std::nullopt;  // 2+ unc vars → ambiguous
+            uncIdx = static_cast<int>(i);
+            uncName = *nm;
+        }
+        if (uncIdx == -1) return std::nullopt;
+        // newTarget = target - sum(others)
+        ExprId newTarget = target;
+        for (size_t i = 0; i < node.children.size(); ++i) {
+            if (static_cast<int>(i) == uncIdx) continue;
+            newTarget = mkSub(newTarget, node.children[i]);
+        }
+        return std::make_pair(uncName, newTarget);
+    }
+
+    // (- a b): binary subtract. Two shapes:
+    //   (- v X) → v := target + X
+    //   (- X v) → v := X - target
+    if (node.kind == Kind::Sub && node.children.size() == 2) {
+        ExprId a = node.children[0], b = node.children[1];
+        const auto& an = ir_.get(a);
+        const auto& bn = ir_.get(b);
+        if (an.kind == Kind::Variable) {
+            auto nm = asNumericVar(a);
+            if (nm && occ_.count(*nm) && occ_.at(*nm) == 1 &&
+                !unsafe_.count(*nm) && ir_.get(a).sort == intSortId_) {
+                CoreExpr addExpr;
+                addExpr.kind = Kind::Add;
+                addExpr.sort = intSortId_;
+                addExpr.children = {target, b};
+                ExprId newTarget = ir_.addShared(std::move(addExpr));
+                return std::make_pair(*nm, newTarget);
+            }
+        }
+        if (bn.kind == Kind::Variable) {
+            auto nm = asNumericVar(b);
+            if (nm && occ_.count(*nm) && occ_.at(*nm) == 1 &&
+                !unsafe_.count(*nm) && ir_.get(b).sort == intSortId_) {
+                return std::make_pair(*nm, mkSub(a, target));
+            }
+        }
+        return std::nullopt;
+    }
+
+    // (* k v) or (* v k): coefficient ±1 only (Int bijectivity).
+    if (node.kind == Kind::Mul && node.children.size() == 2) {
+        ExprId a = node.children[0], b = node.children[1];
+        mpz_class kVal;
+        ExprId varE = NullExpr;
+        if (asConstInt(a, kVal)) varE = b;
+        else if (asConstInt(b, kVal)) varE = a;
+        else return std::nullopt;
+        if (kVal != 1 && kVal != -1) return std::nullopt;
+        const auto& vn = ir_.get(varE);
+        if (vn.kind != Kind::Variable) return std::nullopt;
+        auto nm = asNumericVar(varE);
+        if (!nm) return std::nullopt;
+        if (occ_.count(*nm) == 0 || occ_.at(*nm) != 1) return std::nullopt;
+        if (unsafe_.count(*nm)) return std::nullopt;
+        ExprId newTarget = (kVal == 1) ? target : mkNeg(target);
+        return std::make_pair(*nm, newTarget);
+    }
+
+    return std::nullopt;
+}
+
 bool UnconstrainedElim::varOccursIn(const std::string& name, ExprId root) const {
     std::vector<ExprId> stack{root};
     std::unordered_set<ExprId> seen;
@@ -133,6 +268,15 @@ bool UnconstrainedElim::findDropAction(ExprId e, bool target, DropAction& out) c
         return false;
     }
 
+    // Implies: (=> A B) ≡ (or (not A) B). target=true monotone over both.
+    if (node.kind == Kind::Implies) {
+        if (node.children.size() != 2) return false;
+        if (!target) return false;
+        if (findDropAction(node.children[0], false, out)) return true;
+        if (findDropAction(node.children[1], true, out)) return true;
+        return false;
+    }
+
     // Atom-level: Eq, Distinct, Lt, Leq, Gt, Geq.
     bool isEq = (node.kind == Kind::Eq);
     bool isDistinct = (node.kind == Kind::Distinct);
@@ -145,18 +289,43 @@ bool UnconstrainedElim::findDropAction(ExprId e, bool target, DropAction& out) c
     std::string varName;
     ExprId bound = NullExpr;
     bool xIsLeft = false;
-    if (auto n = asNumericVar(lhs)) { varName = *n; bound = rhs; xIsLeft = true; }
-    else if (auto n2 = asNumericVar(rhs)) { varName = *n2; bound = lhs; xIsLeft = false; }
-    else return false;
+
+    // Phase: try direct Variable (existing behavior, ALL relations).
+    if (auto n = asNumericVar(lhs)) {
+        varName = *n; bound = rhs; xIsLeft = true;
+    } else if (auto n2 = asNumericVar(rhs)) {
+        varName = *n2; bound = lhs; xIsLeft = false;
+    } else if (isEq) {
+        // Phase 2 — TERM-level unc for EQUALITY only. Other relations need
+        // monotone analysis (e.g. (< (+ v 5) t)  ⇒ v < t - 5) which we keep
+        // simple here. For Eq the inverse term IS the new witness, no
+        // monotonicity concern.
+        auto lhsTerm = const_cast<UnconstrainedElim*>(this)->asValueUncTerm(lhs, rhs);
+        if (lhsTerm) { varName = lhsTerm->first; bound = lhsTerm->second; xIsLeft = true; }
+        else {
+            auto rhsTerm = const_cast<UnconstrainedElim*>(this)->asValueUncTerm(rhs, lhs);
+            if (rhsTerm) { varName = rhsTerm->first; bound = rhsTerm->second; xIsLeft = false; }
+            else return false;
+        }
+    } else {
+        return false;
+    }
 
     if (occ_.count(varName) == 0 || occ_.at(varName) != 1) return false;
     if (unsafe_.count(varName)) return false;
     // Defensive: ensure the var truly does not appear in `bound`. (Should be
     // implied by occ==1 since the only occurrence is the var-side, but the
-    // count is structural — a shared DAG node could double-count us.)
+    // count is structural — a shared DAG node could double-count us. For
+    // term-level Eq, `bound` is a freshly-constructed inverse — it does not
+    // textually contain varName since the unc-term construction only mixes
+    // the *other* children of the parent into the new bound.)
     if (varOccursIn(varName, bound)) return false;
 
-    SortId sort = ir_.get(xIsLeft ? lhs : rhs).sort;
+    // Sort: for term-level unc, derive from the var's own sort (not from
+    // lhs/rhs which may now be a synthesized expression).
+    SortId sort = intSortId_;  // term-level path forces Int sort above
+    if (auto n = asNumericVar(lhs)) sort = ir_.get(lhs).sort;
+    else if (auto n2 = asNumericVar(rhs)) sort = ir_.get(rhs).sort;
     out.varName = varName;
     out.sort = sort;
     out.bound = bound;
