@@ -523,10 +523,18 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
     if (algIndices.empty()) return signAtRational(p, sample);
     if (algIndices.size() == 1) return signAtOneAlgebraic(p, sample);
 
-    static const bool kTowerDiag = std::getenv("XOLVER_NRA_TOWER_DIAG") != nullptr;
+    // File-based: the CLI solves on a worker thread whose stderr is suppressed, so
+    // std::cerr diagnostics vanish — only file writes survive. XOLVER_NRA_TOWER_DIAG
+    // is the output path.
+    static const char* kTowerDiagFile = std::getenv("XOLVER_NRA_TOWER_DIAG");
     auto dbg = [&](const char* w) {
-        if (kTowerDiag) std::cerr << "[TOWER] Unknown(" << w << ") algCount=" << algIndices.size() << std::endl;
+        if (!kTowerDiagFile || !*kTowerDiagFile) return;
+        if (std::FILE* f = std::fopen(kTowerDiagFile, "a")) {
+            std::fprintf(f, "[TOWER] %s algCount=%zu\n", w, algIndices.size());
+            std::fclose(f);
+        }
     };
+    dbg("entry");
 
     // Patch 7 invariant: sample.prefix(k) = variables at levels [0, k).
     // Tower reduction processes from highest level to lowest.
@@ -1747,12 +1755,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     supported = false;
     RootSet empty;
-    static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
-    if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
-    auto TD = [&](const char* why) -> RootSet {
-        if (kDiagEntry) std::cerr << "[LAZVAL] tower bail=" << why << std::endl;
-        return empty;
+    // File-based (worker-thread stderr suppressed): XOLVER_NRA_TOWER_DIAG = path.
+    static const char* kTwrFile = std::getenv("XOLVER_NRA_TOWER_DIAG");
+    auto twrLog = [&](const char* tag) {
+        if (!kTwrFile || !*kTwrFile) return;
+        if (std::FILE* fp = std::fopen(kTwrFile, "a")) { std::fprintf(fp, "[VIATOWER] %s\n", tag); std::fclose(fp); }
     };
+    twrLog("entry");
+    auto TD = [&](const char* why) -> RootSet { twrLog(why); return empty; };
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
     //    coordinates are substituted into p). Each algebraic coordinate becomes
@@ -1791,7 +1801,16 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     if (algCount < 1) return TD("algCount<1");             // no tower => not our case
 
     p1.normalize();
-    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return TD("p1-zero-const-or-no-mainVar");
+    // Three sub-cases, all currently conservative (bail → unknown, never false-UNSAT):
+    //  - p1-zero: genuine NULLIFICATION (poly vanishes identically on the algebraic
+    //    prefix) — the Geogebra IsoRightTriangle cluster (Bottema1_14b etc.) hits
+    //    THIS. Needs the Lazard VALUATION LIFT to delineate soundly; the covering
+    //    cannot trust a Collins 0-roots answer here.
+    //  - p1-constant / no-mainVar: 0 roots in mainVar for the fixed-prefix cell, but
+    //    a measure-zero leading-coefficient nullification cannot be distinguished
+    //    cheaply, so kept conservative pending the same valuation work.
+    if (p1.isZero()) return TD("p1-zero");
+    if (p1.isConstant() || !p1.contains(mainVar)) return TD("p1-const-or-no-mainVar");
     {
         std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
         for (VarId v : p1.variables())

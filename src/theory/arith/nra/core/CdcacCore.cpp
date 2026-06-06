@@ -14,6 +14,13 @@
 
 namespace xolver {
 
+// TEMP diag: which projection-incompleteness site drops unsatTrustworthy_ (file-based;
+// worker-thread stderr is suppressed). XOLVER_NRA_TOWER_DIAG = output path.
+static inline void logIncSite(int n) {
+    if (const char* df = std::getenv("XOLVER_NRA_TOWER_DIAG")) if (*df)
+        if (std::FILE* fp = std::fopen(df, "a")) { std::fprintf(fp, "[INCSITE] %d\n", n); std::fclose(fp); }
+}
+
 // M2 diagnostics (XOLVER_NRA_ICP_DIAG=1): count box-ICP calls vs prunes to tell
 // "firing but insufficient" (→ needs M3 learning) from "never bites" (→ structure).
 static thread_local long g_icpCalls = 0;
@@ -534,7 +541,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     for (const auto& c : input.constraints) {
         if (kernel_->isConstant(c.poly)) continue;   // constants pre-handled by caller
         auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
-        if (!rp) { unsatTrustworthy_ = false; closureComplete_ = false; continue; }
+        if (!rp) { unsatTrustworthy_ = false; logIncSite(1); closureComplete_ = false; continue; }
         rps.push_back(std::move(*rp));
     }
 
@@ -569,7 +576,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
                       << " entries=" << lazardClosure_.entries().size() << std::endl;
         }
         if (lreason != LazardIncompleteReason::None) {
-            unsatTrustworthy_ = false;   // incomplete Lazard projection ⇒ no UNSAT
+            unsatTrustworthy_ = false; logIncSite(2);   // incomplete Lazard projection ⇒ no UNSAT
             closureComplete_ = false;    // per-cell gate: closure not complete
         }
         for (int k = 0; k < n; ++k) {
@@ -578,10 +585,10 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
                 // poly (toPolyId would OOM/SIGSEGV). Incomplete ⇒ no UNSAT rests
                 // on it; SAT comes from the model search, not this closure.
                 if (projectedPolyIntractable(lazardClosure_.entries()[id].poly)) {
-                    unsatTrustworthy_ = false; closureComplete_ = false; continue;
+                    unsatTrustworthy_ = false; logIncSite(3); closureComplete_ = false; continue;
                 }
                 PolyId pid = lazardClosure_.entries()[id].poly.toPolyId(*kernel_);
-                if (pid == NullPoly) { unsatTrustworthy_ = false; closureComplete_ = false; continue; }
+                if (pid == NullPoly) { unsatTrustworthy_ = false; logIncSite(4); closureComplete_ = false; continue; }
                 levelPolyIds_[k].push_back(pid);
             }
         }
@@ -590,7 +597,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
 
     auto reason = closure_.build(rps, input.varOrder, ProjectionClosure::Config(), kernel_);
     if (reason != ProjectionIncompleteReason::None) {
-        unsatTrustworthy_ = false;   // incomplete projection ⇒ no UNSAT may rest on it
+        unsatTrustworthy_ = false; logIncSite(5);   // incomplete projection ⇒ no UNSAT may rest on it
     }
 
     for (int k = 0; k < n; ++k) {
@@ -599,10 +606,10 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
             // OOM/SIGSEGV inside toPolyId. Skip it ⇒ closure incomplete ⇒ Unknown,
             // never an unsound UNSAT. The real model comes from SAT-first.
             if (projectedPolyIntractable(closure_.entries()[id].poly)) {
-                unsatTrustworthy_ = false; continue;
+                unsatTrustworthy_ = false; logIncSite(6); continue;
             }
             PolyId pid = closure_.entries()[id].poly.toPolyId(*kernel_);
-            if (pid == NullPoly) { unsatTrustworthy_ = false; continue; }
+            if (pid == NullPoly) { unsatTrustworthy_ = false; logIncSite(7); continue; }
             levelPolyIds_[k].push_back(pid);
         }
     }
@@ -685,6 +692,14 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     // and is the foundation of the future precise floor. Only CdcacCore
     // covering-UNSAT is gated; presolve/linear UNSAT never reaches CDCAC.
     (void)coveringUncertifiable_;
+    if (const char* df = std::getenv("XOLVER_NRA_TOWER_DIAG")) if (*df)
+        if (std::FILE* f = std::fopen(df, "a")) {
+            std::fprintf(f, "[SOLVEPASS] status=%d reason=%d vars=%zu cons=%zu uncert=%d\n",
+                         (int)result.status, (int)result.unknownReason,
+                         input.varOrder.size(), input.constraints.size(),
+                         (int)coveringUncertifiable_);
+            std::fclose(f);
+        }
     if (unsatCertEnabled_ && result.status == CdcacStatus::Unsat) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
@@ -1014,7 +1029,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     continue;
                 }
             }
-            unsatTrustworthy_ = false;
+            unsatTrustworthy_ = false; logIncSite(8);
             // Per-cell gate: a boundary poly whose specialization could not be
             // recovered ⇒ this level's delineation is incomplete ⇒ no per-cell
             // UNSAT trust for ANY cell of this level.
@@ -1056,7 +1071,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     }
                 }
                 if (!recovered) {
-                    unsatTrustworthy_ = false;  // boundary not recovered ⇒ no UNSAT
+                    unsatTrustworthy_ = false; logIncSite(9);  // boundary not recovered ⇒ no UNSAT
                     // Per-cell gate: a vanished poly's boundary that the [H3]
                     // valuation could not positively recover ⇒ delineation
                     // incomplete ⇒ no per-cell UNSAT trust for this level.
@@ -1066,7 +1081,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             continue;
         }
         if (vanish == VanishResult::Unknown) {
-            unsatTrustworthy_ = false;
+            unsatTrustworthy_ = false; logIncSite(10);
             levelBoundaryComplete = false;  // undecided vanish ⇒ incomplete
             continue;
         }
