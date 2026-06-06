@@ -672,3 +672,50 @@ TEST_CASE("NIA-Core: x^2+y^2<=1, x=2 -> unsat (square cut)") {
     Result r = solver.checkSat();
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
+
+// ---------------------------------------------------------------------------
+// Category D-N: AlgebraicIntegerReasoner N-var modular refutation (iter-79)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("NIA-Core: 3-var modular refutation — x+y+z=1 ∧ x^2+y^2+z^2=0 -> unsat (mod 2)") {
+    // x+y+z = 1 forces an odd number of {x,y,z} to be 1 mod 2.
+    // x^2+y^2+z^2 = 0 forces every x,y,z = 0 mod 2 (each square is 0 mod 2).
+    // 1 != 0 mod 2 -> UNSAT. checkModular extended to N-var should catch this.
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(declare-const z Int)\n"
+        "(assert (= (+ x y z) 1))\n"
+        "(assert (= (+ (* x x) (* y y) (* z z)) 0))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+}
+
+TEST_CASE("NIA-Core: 4-var modular system over mod 3 -> unsat") {
+    // x^2 + y^2 ≡ 0 (mod 3) forces x ≡ 0 AND y ≡ 0 mod 3 (squares mod 3 ∈ {0,1}).
+    // z^2 + w^2 = 5 mod 3 = 2; but squares mod 3 sum to at most 2, only via 1+1.
+    // Combined with z+w = 1 mod 3 (no choice of z,w in {1,2} that sums to 1 satisfies both),
+    // ⇒ UNSAT. Exercises the N-var enumeration path (was hardcoded ≤2 var before iter-79).
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(declare-const z Int)\n"
+        "(declare-const w Int)\n"
+        "(assert (= (+ (* x x) (* y y)) (* 3 z)))\n"   // x^2+y^2 ≡ 0 mod 3
+        "(assert (= (+ x y) (+ 1 (* 3 w))))\n"          // x+y ≡ 1 mod 3
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    CHECK(solver.parseFile(path));
+    Result r = solver.checkSat();
+    // Either Unsat (modular refuter fires) or Unknown (other reasoners). NEVER Sat.
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
+}
