@@ -248,3 +248,34 @@ TEST_CASE("trySquareCascade: decides the Geogebra Bottema1_14b structure SAT (Q(
     std::vector<std::pair<VarId, RealValue>> model;
     CHECK(trySquareCascade(cons, k, &model));   // the cascade constructs + validates a model
 }
+
+TEST_CASE("trySquareCascade: rational-multiple generators collapse (sqrt2 and sqrt(1/2))") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId a = k.getOrCreateVar("a");
+    VarId b = k.getOrCreateVar("b");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // a^2 = 1/2  (generator sqrt(1/2));  b^2 = 2  (= 4 * 1/2, so b = 2 sqrt(1/2) = 2a);
+    // the link b - 2a = 0 must validate over the SINGLE collapsed generator.
+    PolyId ea = k.add(k.mul(C(2), k.pow(V(a), 2)), C(-1));   // 2 a^2 - 1
+    PolyId eb = k.add(k.pow(V(b), 2), C(-2));                // b^2 - 2
+    PolyId link = k.sub(V(b), k.mul(C(2), V(a)));            // b - 2 a
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {ea, Relation::Eq}, {eb, Relation::Eq}, {link, Relation::Eq},
+        {V(a), Relation::Gt}, {V(b), Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));
+
+    // A genuinely DISTINCT second generator (sqrt(3) vs sqrt(1/2)) must NOT collapse:
+    // 1/2 and 3 differ by a non-square ratio, so the cascade cannot place both in one
+    // field and returns false (no false sat).
+    VarId d = k.getOrCreateVar("d");
+    PolyId ed = k.add(k.pow(V(d), 2), C(-3));               // d^2 - 3
+    std::vector<std::pair<PolyId, Relation>> cons2 = {
+        {ea, Relation::Eq}, {ed, Relation::Eq}, {V(a), Relation::Gt}, {V(d), Relation::Gt},
+    };
+    CHECK_FALSE(trySquareCascade(cons2, k, nullptr));
+}

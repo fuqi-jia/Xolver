@@ -273,7 +273,20 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
                 } else if (c == genC && s == genSign) {
                     aliasOf[x] = genVar;
                 } else {
-                    return false;                      // 2nd distinct generator: out of scope
+                    // RATIONAL-MULTIPLE generator: if c = r^2 * genC then sqrt(c) =
+                    // r*sqrt(genC) lives in the SAME field Q(sqrt genC), so x = s*sqrt(c)
+                    // = (s*r*genSign) * gen  (gen = genSign*sqrt(genC)). Record x as a
+                    // rational multiple of the generator (via derivedVal), NOT a new
+                    // generator — collapses e.g. sqrt(2) and sqrt(1/2) onto one generator.
+                    mpq_class ratio = c / genC; ratio.canonicalize();
+                    mpq_class r;
+                    if (rationalSqrt(ratio, r)) {
+                        const mpq_class scale = mpq_class(s) * r * mpq_class(genSign);
+                        RationalPolynomial mv; mv.addVar(genVar, 1, scale); mv.normalize();
+                        derivedVal[x] = std::move(mv);
+                    } else {
+                        return false;                  // genuinely 2nd distinct generator
+                    }
                 }
                 done[j] = 1; progress = true;
             }
@@ -455,6 +468,10 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
     static const mpq_class kCands[] = {
         mpq_class(1), mpq_class(1, 2), mpq_class(2), mpq_class(1, 4), mpq_class(3, 2),
         mpq_class(3), mpq_class(1, 3), mpq_class(3, 4), mpq_class(5, 4), mpq_class(2, 3),
+        // NEGATIVE candidates: a free parameter is often a coordinate, not a length,
+        // and can be negative (e.g. an IsoTriangle apex below the base, Bottema4_2a).
+        mpq_class(-1), mpq_class(-1, 2), mpq_class(-2), mpq_class(-1, 4), mpq_class(-3, 2),
+        mpq_class(-3),
     };
     // Candidate free parameters: variables that occur in some equality. Cap the search
     // so a hard instance stays cheap.
