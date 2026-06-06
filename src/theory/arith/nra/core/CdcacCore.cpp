@@ -1152,26 +1152,31 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
         prefix.push(var, sampleWithOrigin);
 
-        // FORWARD-PRUNE — kills the cell Cartesian-product explosion, but GATED to
-        // a fully RATIONAL prefix for soundness. A constraint fully determined at
-        // this level (all its vars assigned) has a fixed value independent of the
-        // deeper variables; if it is violated, no completion satisfies it, so the
-        // whole subtree is infeasible and we synthesize the leaf conflict instead
-        // of descending. Over a rational prefix signAt is EXACT and the delineation
-        // is complete, so this is identical to the full descent. Over an ALGEBRAIC
-        // prefix the prune is UNSOUND: signAt over an algebraic point can mis-sign,
-        // and (more importantly) skipping solveLevel skips the deeper algebraic-
-        // tower delineation where incompleteness is detected (unsatTrustworthy_=0),
-        // so a wrong UNSAT is emitted that the per-cell gate never downgrades
-        // (Geogebra IsoRightTriangle-Bottema1_17b, z3=sat). So over any algebraic
-        // prefix we DESCEND normally — incompleteness is then detected and the
-        // UNSAT downgraded to Unknown. (A sound algebraic-prefix prune needs the
-        // Task #10 completeness fix.)
+        // FORWARD-PRUNE — kills the cell Cartesian-product explosion. A constraint
+        // fully determined at this level (all its vars assigned) has a fixed value
+        // INDEPENDENT of the deeper variables; if it is definitely violated, no
+        // completion satisfies it, so the whole subtree is infeasible and we
+        // synthesize the leaf conflict instead of descending.
+        //
+        // SOUND ON ANY PREFIX (rational OR algebraic) — Task #10 completeness fix.
+        // signAt is sound: it returns the true sign (interval arithmetic that strictly
+        // excludes 0, else exact libpoly sgn) or Unknown, and we PRUNE ONLY on a
+        // definite sign (Unknown is skipped). A fully-determined constraint does not
+        // depend on the deeper delineation, so a definite violation rules out the whole
+        // subtree regardless of that delineation's completeness; and if THIS level's
+        // boundary is incomplete (levelBoundaryComplete=false ⇒ unsatTrustworthy_=false
+        // + per-cell cert incomplete) the gate downgrades any resulting UNSAT to
+        // Unknown. The earlier rational-only restriction guarded against a then-unsound
+        // signAt over algebraic points (Geogebra IsoRightTriangle-Bottema1_17b, z3=sat);
+        // the exact interval-first signAt fixed that root cause, so the restriction is
+        // removed. No SAT is lost (the prune fires only on a genuinely infeasible
+        // subtree) and no UNSAT is lost (an incomplete level taints prune and descent
+        // identically).
         CdcacResult childRes;
         bool prefixAllRational = true;
         for (const auto& pv : prefix.values)
             if (!pv.isRational()) { prefixAllRational = false; break; }
-        if (prefixAllRational) {
+        {
             std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
             std::vector<std::pair<size_t, Sign>> fwViolated;
             for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
@@ -1187,8 +1192,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (!relationHolds(s, input.constraints[ci].rel))
                     fwViolated.emplace_back(ci, s);
             }
+            // intervalFpViolation (box-consistency over a rational point map) is defined
+            // only for a fully rational prefix — it self-guards (returns nullopt on any
+            // algebraic coordinate), so it never contributes a prune over an algebraic
+            // prefix; gating the call keeps the algebraic path doing only the exact
+            // fully-determined check above.
             std::optional<std::pair<size_t, Sign>> ivViol;
-            if (fwViolated.empty())
+            if (fwViolated.empty() && prefixAllRational)
                 ivViol = intervalFpViolation(prefix, input);   // partially-determined
             if (!fwViolated.empty())
                 childRes = makeLeafConflictResult(fwViolated, input);
@@ -1196,8 +1206,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 childRes = makeLeafConflictResult({*ivViol}, input);
             else
                 childRes = solveLevel(k + 1, prefix, input);
-        } else {
-            childRes = solveLevel(k + 1, prefix, input);
         }
 
         prefix.pop();
