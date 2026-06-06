@@ -73,12 +73,18 @@ private:
     };
     std::vector<Step> steps_;
 
-    // Iterative post-order evaluation of a linear arithmetic term over the
-    // rational environment `env` (name -> value). nullopt if a leaf variable is
-    // missing or a node is not linear-arithmetic-evaluable.
+    // Iterative post-order evaluation of an arithmetic term over the rational
+    // environment `env` (name -> value). nullopt if a leaf variable is missing
+    // or a node is not arithmetic-evaluable. `boolEnv` is consulted only for
+    // Kind::Ite condition evaluation (callers that pass nullptr lose Ite
+    // support but keep the linear core). Missing numeric vars default to 0,
+    // matching dumpModel's unconstrained-variable convention so that an
+    // eliminated term whose defining expression mentions a model-free var
+    // (e.g. `(= z (ite c x y))` where `y` is unconstrained) still reconstructs.
     static std::optional<mpq_class> evalRational(
         ExprId root, const CoreIr& ir,
-        const std::unordered_map<std::string, mpq_class>& env);
+        const std::unordered_map<std::string, mpq_class>& env,
+        const std::unordered_map<std::string, bool>* boolEnv = nullptr);
 
     // Iterative evaluation of a boolean expression over `boolEnv` (bool vars)
     // and `env` (rationals, for arithmetic relations). Missing bool vars default
