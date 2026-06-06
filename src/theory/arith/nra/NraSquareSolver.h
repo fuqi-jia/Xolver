@@ -1,6 +1,7 @@
 #pragma once
 
 #include "expr/types.h"   // VarId, PolyId, Relation
+#include "util/RealValue.h"
 #include <gmpxx.h>
 #include <optional>
 #include <unordered_map>
@@ -85,5 +86,27 @@ int signOfRootExpr(const mpq_class& a, const mpq_class& b, const mpq_class& c);
 // caller must have substituted all rational vars and collapsed aliases first).
 std::optional<int> signOfPolyAtGenerator(const RationalPolynomial& rp, VarId genVar,
                                          const mpq_class& c, int genSign);
+
+// Substitute variable `var` with the polynomial `valuePoly` in p (exact, via
+// pseudo-remainder by the monic divisor var - valuePoly). Used to substitute a
+// DERIVED variable (e.g. m = (4/5)g + 2/5) by its expression in the generator.
+PolyId substituteVarWithPoly(PolyId p, VarId var, PolyId valuePoly, PolynomialKernel& kernel);
+
+// END-TO-END algebraic square-cascade decision. Given a conjunction `cons` of
+// {poly, rel} constraints, attempt to construct + VALIDATE a satisfying model that
+// lives in Q(sqrt c) for a single algebraic generator:
+//   - solve perfect-square / linear equalities to rational values;
+//   - solve non-perfect square equalities to one algebraic generator (collapsing
+//     equal roots), honoring strict single-variable sign bounds;
+//   - derive a remaining variable from an equality LINEAR in it with a constant
+//     (in the generator) leading coefficient;
+//   - VALIDATE every original constraint by reducing it over the single generator
+//     and checking its exact sign (signOfPolyAtGenerator).
+// Returns true iff a model is constructed AND every constraint validates (SOUND:
+// nullopt/false on any inconclusive or failing check — never a false SAT). When
+// true and `modelOut` is non-null, fills it with the var -> RealValue assignment.
+bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+                      PolynomialKernel& kernel,
+                      std::vector<std::pair<VarId, RealValue>>* modelOut);
 
 }  // namespace xolver

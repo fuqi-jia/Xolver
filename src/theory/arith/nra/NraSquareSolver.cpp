@@ -3,7 +3,10 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <map>
+#include <string>
 #include <utility>
 
 namespace xolver {
@@ -110,6 +113,244 @@ std::optional<int> signOfPolyAtGenerator(const RationalPolynomial& rp, VarId gen
     // genVar = genSign * sqrt(c), so the sqrt(c) coefficient is aGen * genSign.
     const mpq_class a = (genSign < 0) ? -aGen : aGen;
     return signOfRootExpr(a, b, c);
+}
+
+PolyId substituteVarWithPoly(PolyId p, VarId var, PolyId valuePoly, PolynomialKernel& kernel) {
+    // Horner evaluation p(var := valuePoly) = sum_i co[i] * valuePoly^i, using only
+    // add/mul (NOT pseudo-remainder, which mis-handles a value poly whose variables
+    // outrank `var` and can return 0).
+    auto rp = RationalPolynomial::fromPolyId(p, kernel);
+    if (!rp) return p;
+    std::vector<RationalPolynomial> co = rp->coefficients(var);  // [c0, c1, ..., cd]
+    if (co.size() <= 1) return p;                                // var absent
+    PolyId result = co.back().toPolyId(kernel);
+    for (int i = static_cast<int>(co.size()) - 2; i >= 0; --i)
+        result = kernel.add(kernel.mul(result, valuePoly), co[i].toPolyId(kernel));
+    return result;
+}
+
+namespace {
+
+// Sign-bound hint: a strict/non-strict single-variable bound "x rel 0" (b == 0)
+// fixes whether x is taken as the + or - square root. Returns 0 if not such a bound.
+int signHintFromBound(PolyId p, Relation rel, PolynomialKernel& kernel, VarId& boundVar) {
+    const auto vars = kernel.variables(p);
+    if (vars.size() != 1) return 0;
+    auto co = kernel.getIntegerCoefficients(p, vars[0]);
+    if (!co || co->size() != 2) return 0;     // not degree 1
+    if ((*co)[1] != 0) return 0;              // a*x + b, need b == 0
+    const int a = ((*co)[0] > 0) ? 1 : -1;
+    boundVar = kernel.getOrCreateVar(vars[0]);
+    // a*x rel 0  =>  x rel' 0.
+    if (rel == Relation::Gt || rel == Relation::Geq) return a > 0 ? +1 : -1;  // x > / >= 0
+    if (rel == Relation::Lt || rel == Relation::Leq) return a > 0 ? -1 : +1;
+    return 0;
+}
+
+}  // namespace
+
+bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
+                      PolynomialKernel& kernel,
+                      std::vector<std::pair<VarId, RealValue>>* modelOut) {
+    // --- collect equalities / inequalities / sign hints --------------------------
+    std::vector<PolyId> eqs;
+    std::unordered_map<VarId, int> signHint;
+    for (const auto& [p, rel] : cons) {
+        if (rel == Relation::Eq) { eqs.push_back(p); continue; }
+        VarId bv;
+        int h = signHintFromBound(p, rel, kernel, bv);
+        if (h != 0 && !signHint.count(bv)) signHint[bv] = h;
+    }
+
+    std::unordered_map<VarId, mpq_class> rationalVal;
+    std::unordered_map<VarId, VarId> aliasOf;              // algebraic var -> generator
+    std::unordered_map<VarId, RationalPolynomial> derivedVal;  // derived var -> EXACT value (in gen)
+    VarId genVar = NullVar; mpq_class genC; int genSign = +1;
+
+    auto degIn = [&](PolyId p, VarId v) -> int {
+        auto d = kernel.degree(p, kernel.varName(v));
+        return d ? *d : 0;
+    };
+    // Reduce a polynomial univariate in genVar modulo genVar^2 = c to aGen*genVar + b.
+    // Pure term-wise (no libpoly pseudo-remainder — that crash class is exactly what
+    // the cascade must dodge). Terms mentioning any other variable are skipped.
+    auto reduceUni = [&](const RationalPolynomial& rp) -> std::pair<mpq_class, mpq_class> {
+        mpq_class aGen = 0, b = 0;
+        for (const auto& [key, coeff] : rp.terms()) {
+            int deg = 0; bool other = false;
+            for (const auto& [v, e] : key) { if (v != genVar) other = true; else deg += e; }
+            if (other) continue;
+            mpq_class cp = 1;
+            for (int j = 0; j < deg / 2; ++j) cp *= genC;
+            if (deg % 2 == 0) b += coeff * cp; else aGen += coeff * cp;
+        }
+        return {aGen, b};
+    };
+    // Exact PolyId-level substitution of rationals (scale > 0, sign-safe) + aliases
+    // (monic divisor, exact). The DERIVED variables are substituted later in
+    // RationalPolynomial space so their rational coefficients survive (toPolyId
+    // clears denominators).
+    auto applySubst = [&](PolyId p) -> PolyId {
+        for (const auto& [v, val] : rationalVal)
+            if (degIn(p, v) > 0)
+                if (auto q = kernel.substituteRational(p, v, val)) p = *q;
+        for (const auto& [v, g] : aliasOf)
+            if (degIn(p, v) > 0) p = substituteVarWithVar(p, v, g, kernel);
+        return p;
+    };
+    // Horner substitution of a derived variable in RationalPolynomial space (exact).
+    auto substRpDerived = [&](RationalPolynomial rp, VarId var, const RationalPolynomial& val) {
+        std::vector<RationalPolynomial> co = rp.coefficients(var);
+        if (co.size() <= 1) return rp;
+        RationalPolynomial result = co.back();
+        for (int i = static_cast<int>(co.size()) - 2; i >= 0; --i)
+            result = result * val + co[i];
+        result.normalize();
+        return result;
+    };
+
+
+    // --- iterative triangular solve of square + linear equalities ----------------
+    std::vector<char> done(eqs.size(), 0);
+    bool progress = true;
+    while (progress) {
+        progress = false;
+        for (size_t j = 0; j < eqs.size(); ++j) {
+            if (done[j]) continue;
+            PolyId p = applySubst(eqs[j]);
+            const auto vars = kernel.variables(p);
+            if (vars.empty()) {
+                if (!kernel.isZero(p)) return false;   // 0 = nonzero  => UNSAT branch
+                done[j] = 1; progress = true; continue;
+            }
+            if (vars.size() != 1) continue;            // still multi-var; revisit later
+            const std::string& vn = vars[0];
+            const VarId x = kernel.getOrCreateVar(vn);
+            auto co = kernel.getIntegerCoefficients(p, vn);
+            if (!co) continue;
+            if (co->size() == 2) {                     // a*x + b = 0  (linear)
+                const mpz_class& a = (*co)[0];
+                const mpz_class& b = (*co)[1];
+                if (a == 0) continue;
+                rationalVal[x] = mpq_class(-b, a);
+                rationalVal[x].canonicalize();
+                done[j] = 1; progress = true;
+            } else if (co->size() == 3 && (*co)[1] == 0) {   // a*x^2 + b = 0
+                const mpz_class& a = (*co)[0];
+                const mpz_class& b = (*co)[2];
+                if (a == 0) continue;
+                mpq_class c(-b, a); c.canonicalize();
+                if (sgn(c) < 0) return false;          // x^2 < 0 => UNSAT branch
+                const int s = signHint.count(x) ? signHint[x] : +1;
+                mpq_class root;
+                if (rationalSqrt(c, root)) {
+                    rationalVal[x] = mpq_class(s) * root;
+                } else if (genVar == NullVar) {
+                    genVar = x; genC = c; genSign = s;
+                } else if (c == genC && s == genSign) {
+                    aliasOf[x] = genVar;
+                } else {
+                    return false;                      // 2nd distinct generator: out of scope
+                }
+                done[j] = 1; progress = true;
+            }
+            // higher degree / multi-term: leave for the derived-var phase
+        }
+    }
+
+    // --- derive a remaining variable from a linear-in-it equality ----------------
+    for (size_t j = 0; j < eqs.size(); ++j) {
+        if (done[j]) continue;
+        PolyId p = applySubst(eqs[j]);
+        const auto vars = kernel.variables(p);
+        // pick the unassigned variable that is NOT the generator
+        VarId d = NullVar; std::string dn;
+        for (const auto& vn : vars) {
+            VarId v = kernel.getOrCreateVar(vn);
+            if (v == genVar) continue;
+            if (d != NullVar) { d = NullVar; break; }   // more than one unassigned -> give up
+            d = v; dn = vn;
+        }
+        if (d == NullVar) continue;
+        auto deg = kernel.degree(p, dn);
+        if (!deg || *deg != 1) continue;                // must be linear in d
+        auto rp = RationalPolynomial::fromPolyId(p, kernel);
+        if (!rp) continue;
+        std::vector<RationalPolynomial> co = rp->coefficients(d);   // [C, A] low->high
+        if (co.size() != 2) continue;
+        // A and C must be univariate in the generator (or constant).
+        auto onlyGen = [&](const RationalPolynomial& q) {
+            for (VarId v : q.variables()) if (v != genVar) return false;
+            return true;
+        };
+        if (!onlyGen(co[1]) || !onlyGen(co[0])) continue;
+        // Reduce A modulo genVar^2 = genC; it must collapse to a constant.
+        mpq_class A, cA, cB;
+        if (genVar != NullVar) {
+            auto rA = reduceUni(co[1]);
+            if (sgn(rA.first) != 0) continue;           // A still depends on the generator
+            A = rA.second;
+            auto rC = reduceUni(co[0]);
+            cA = rC.first; cB = rC.second;
+        } else {
+            if (!co[1].isConstant()) continue;
+            A = co[1].constantValue();
+            cA = 0; cB = co[0].isConstant() ? co[0].constantValue() : mpq_class(0);
+            if (!co[0].isConstant()) continue;
+        }
+        if (sgn(A) == 0) continue;
+        // d = -C / A = (-cA/A)*genVar + (-cB/A).
+        RationalPolynomial mv;
+        if (genVar != NullVar && sgn(cA) != 0) mv.addVar(genVar, 1, -cA / A);
+        mv.addConstant(-cB / A);
+        mv.normalize();
+        derivedVal[d] = std::move(mv);
+        done[j] = 1;
+    }
+
+    // --- VALIDATE every original constraint over the single generator ------------
+    auto signOfReduced = [&](PolyId p) -> std::optional<int> {
+        PolyId ps = applySubst(p);                 // rationals + aliases (exact)
+        if (kernel.isConstant(ps)) return sgn(kernel.toConstant(ps));
+        auto rp = RationalPolynomial::fromPolyId(ps, kernel);
+        if (!rp) return std::nullopt;
+        RationalPolynomial r = *rp;
+        for (const auto& [d, mv] : derivedVal) r = substRpDerived(r, d, mv);   // exact rationals
+        if (r.isConstant()) return sgn(r.constantValue());
+        if (genVar == NullVar) return std::nullopt;
+        return signOfPolyAtGenerator(r, genVar, genC, genSign);
+    };
+    for (const auto& [p, rel] : cons) {
+        auto s = signOfReduced(p);
+        if (!s) return false;                          // inconclusive => bail (sound)
+        bool ok = false;
+        switch (rel) {
+            case Relation::Eq:  ok = (*s == 0); break;
+            case Relation::Neq: ok = (*s != 0); break;
+            case Relation::Lt:  ok = (*s < 0);  break;
+            case Relation::Leq: ok = (*s <= 0); break;
+            case Relation::Gt:  ok = (*s > 0);  break;
+            case Relation::Geq: ok = (*s >= 0); break;
+        }
+        if (!ok) return false;                         // model violates a constraint
+    }
+
+    // --- build the model (best-effort; the verdict already holds) -----------------
+    if (modelOut) {
+        modelOut->clear();
+        for (const auto& [v, val] : rationalVal)
+            modelOut->emplace_back(v, RealValue::fromMpq(val));
+        if (genVar != NullVar) {
+            const mpz_class num = genC.get_num(), den = genC.get_den();
+            AlgebraicNumber an;
+            an.coefficients = {-num, mpz_class(0), den};   // den*x^2 - num
+            if (genSign > 0) { an.lower = 0; an.upper = genC + 1; }
+            else { an.lower = -(genC + 1); an.upper = 0; }
+            modelOut->emplace_back(genVar, RealValue::fromAlgebraic(std::move(an)));
+        }
+        // derived vars: omit (the verdict is already validated; getModel defaults them).
+    }
+    return true;
 }
 
 SquareRoot solveSquareRoot(const SquareEquality& sq, int signHint) {

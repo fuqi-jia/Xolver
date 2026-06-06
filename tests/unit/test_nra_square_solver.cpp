@@ -211,3 +211,40 @@ TEST_CASE("signOfPolyAtGenerator: validate over a single generator x = +sqrt(1/2
     RationalPolynomial p8; p8.addVar(g, 1, mpq_class(1)); p8.addVar(h, 1, mpq_class(1)); p8.normalize();
     CHECK_FALSE(signOfPolyAtGenerator(p8, g, c, +1));
 }
+
+TEST_CASE("trySquareCascade: decides the Geogebra Bottema1_14b structure SAT (Q(sqrt2))") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId m = k.getOrCreateVar("m");
+    VarId v10 = k.getOrCreateVar("v10");
+    VarId v11 = k.getOrCreateVar("v11");
+    VarId v12 = k.getOrCreateVar("v12");
+    VarId v13 = k.getOrCreateVar("v13");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // squares:  -4 v10^2 + 1 = 0 ;  4 v10^2 - 4 v11^2 + 1 = 0 ;  same for v12 ;  -v13 + 1 = 0
+    PolyId e10 = k.add(k.mul(C(-4), k.pow(V(v10), 2)), C(1));
+    PolyId e11 = k.add(k.sub(k.mul(C(4), k.pow(V(v10), 2)), k.mul(C(4), k.pow(V(v11), 2))), C(1));
+    PolyId e12 = k.add(k.sub(k.mul(C(4), k.pow(V(v10), 2)), k.mul(C(4), k.pow(V(v12), 2))), C(1));
+    PolyId e13 = k.add(k.neg(V(v13)), C(1));
+
+    // big eq:  v11^3 v12^2 + v11^2 v12^3 + v11^2 v12^2
+    //        - m v11^3 v12^3 - m v11^3 v12 - m v11 v12^3  =  0   (linear in m)
+    PolyId t1 = k.mul(k.mul(V(m), k.pow(V(v11), 3)), k.pow(V(v12), 3));
+    PolyId t2 = k.mul(k.mul(V(m), k.pow(V(v11), 3)), V(v12));
+    PolyId t3 = k.mul(k.mul(V(m), V(v11)), k.pow(V(v12), 3));
+    PolyId t4 = k.mul(k.pow(V(v11), 3), k.pow(V(v12), 2));
+    PolyId t5 = k.mul(k.pow(V(v11), 2), k.pow(V(v12), 3));
+    PolyId t6 = k.mul(k.pow(V(v11), 2), k.pow(V(v12), 2));
+    PolyId big = k.sub(k.sub(k.sub(k.add(k.add(t4, t5), t6), t1), t2), t3);
+
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {V(m), Relation::Gt}, {V(v12), Relation::Gt}, {V(v11), Relation::Gt}, {V(v13), Relation::Gt},
+        {e10, Relation::Eq}, {e11, Relation::Eq}, {e12, Relation::Eq}, {e13, Relation::Eq},
+        {big, Relation::Eq},
+    };
+
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));   // the cascade constructs + validates a model
+}
