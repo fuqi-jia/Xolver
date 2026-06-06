@@ -26,6 +26,10 @@
 #include <vector>
 
 namespace xolver {
+
+class CdcacCore;        // real-relaxation refutation (nra/core)
+class LibpolyBackend;   // libpoly algebra backend (nra/backend)
+
 namespace nia_mcsat {
 
 struct AssertedAtom {
@@ -74,6 +78,16 @@ private:
     std::unordered_map<VarId, RealValue> cachedAssignment_;
     bool cachedAssignmentTried_ = false;
     bool cachedAssignmentSucceeded_ = false;
+
+    // Integer reinforcement (§15.5 real-relaxation UNSAT): when no integer model
+    // is found, run CDCAC on the REAL relaxation of the asserted atoms; a real
+    // empty-covering proof (CdcacStatus::Unsat, already projection-certified)
+    // implies integer UNSAT (ℤⁿ⊆ℝⁿ). Lazily constructed; conflict clause is
+    // stashed in pendingExplainClause_ for explainConflict.
+    std::unique_ptr<LibpolyBackend> algebra_;
+    std::unique_ptr<CdcacCore> cdcacFallback_;
+    std::vector<SatLit> pendingExplainClause_;
+    bool realRelaxTried_ = false;
 };
 
 } // namespace nia_mcsat

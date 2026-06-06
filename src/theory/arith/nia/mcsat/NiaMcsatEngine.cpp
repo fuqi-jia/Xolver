@@ -4,6 +4,10 @@
 #include "util/EnvParam.h"
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds (shared)
+#include "theory/arith/nra/core/CdcacCore.h"      // real-relaxation refutation
+#include "theory/arith/nra/core/CdcacConstraint.h"
+#include "theory/arith/nra/core/CdcacResult.h"
+#include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 
 #include <algorithm>
@@ -23,6 +27,8 @@ void NiaMcsatEngine::reset() {
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
 }
 
 void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
@@ -32,6 +38,8 @@ void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
 }
 
 void NiaMcsatEngine::onBacktrack(int targetLevel) {
@@ -42,6 +50,8 @@ void NiaMcsatEngine::onBacktrack(int targetLevel) {
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
 }
 
 std::unordered_set<VarId> NiaMcsatEngine::collectVariables_() const {
@@ -268,6 +278,50 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
             }
         }
     }
+    // Integer reinforcement (§15.5): the integer DFS found no model. Before
+    // giving up, check whether the REAL relaxation of the asserted atoms is
+    // already infeasible — a real empty covering (CdcacStatus::Unsat, which
+    // CdcacCore only reports when projection-certified) implies the integer
+    // problem is UNSAT (ℤⁿ ⊆ ℝⁿ). Run once per engine state. SAT/Unknown here
+    // fall through to giveUp (integer-only contradictions need the integrality
+    // path — a later increment). Soundness: real-empty ⇒ integer-empty.
+    if (kernel_ && !realRelaxTried_ && !asserted_.empty()) {
+        realRelaxTried_ = true;
+        if (!algebra_) algebra_ = std::make_unique<LibpolyBackend>(kernel_);
+        if (!cdcacFallback_)
+            cdcacFallback_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
+
+        CdcacInput input;
+        bool inputOk = true;
+        for (const auto& a : asserted_) {
+            const auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+            if (!pp) continue;
+            auto rhsQ = pp->rhs.tryAsRational();
+            if (!rhsQ) { inputOk = false; break; }
+            CdcacConstraint c;
+            c.poly = polyMinusRhs(*kernel_, pp->poly, *rhsQ);
+            c.rel = a.value ? pp->rel : negateRelation(pp->rel);
+            c.reason = a.assertedLit;
+            c.level = a.level;
+            input.constraints.push_back(std::move(c));
+        }
+        if (inputOk && !input.constraints.empty()) {
+            input.varOrder.clear();  // CdcacCore's internal (Collins) ordering
+            CdcacResult cd = cdcacFallback_->solve(input);
+            if (cd.status == CdcacStatus::Unsat) {
+                std::vector<SatLit> reasons;
+                if (cd.unsat) reasons = cd.unsat->reasons;
+                if (reasons.empty()) {                 // sound superset fallback
+                    for (const auto& a : asserted_) reasons.push_back(a.assertedLit);
+                }
+                pendingExplainClause_ = std::move(reasons);
+                std::vector<TheoryAtomRecord> blocking;
+                for (const auto& a : asserted_) blocking.push_back(a.atom);
+                return mcsat::ValueChoice::conflict(std::move(blocking));
+            }
+        }
+    }
+
     return mcsat::ValueChoice::giveUp(
         "NiaMcsatEngine: no integer candidate survived the asserted atoms");
 }
@@ -277,8 +331,9 @@ std::vector<SatLit> NiaMcsatEngine::explainConflict(
     const std::vector<TheoryAtomRecord>& blockingAtoms) {
     (void)trail;
     (void)blockingAtoms;
-    // Empty → framework downgrades to Unknown (sound floor; §15.6).
-    return {};
+    // The clause was built in pickValue (real-relaxation UNSAT). Empty if none
+    // was constructed → framework downgrades to Unknown (sound floor; §15.6).
+    return pendingExplainClause_;
 }
 
 bool NiaMcsatEngine::validateModel(const mcsat::MCSatTrail& trail,
