@@ -2379,3 +2379,48 @@ modular/Gröbner work.
 
 52 commits + 20 doc/infra. 0 regressions / 0-unsound across 81 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 93 — Corpus triage: where is each unsolved cluster bottlenecked?
+
+After iter-90 reverify (60/87 solved, 27 unsolved), profile each remaining
+category by var count + multiplication count + content shape:
+
+  category                              count   profile
+  --------------------------------------------- ------------------------------
+  20210219-Dartagnan                     12    17533 vars, 5 muls — SAT-bound,
+                                                NOT NIA-bound (Boolean structure)
+  LassoRanker / UltimateLassoRanker       4    polynomial termination proofs,
+                                                NIA-bound on quantifier-instance
+  20230321-UltimateAutomizerSvcomp2023    3    SVCOMP termination, complex polys
+  20170427-VeryMax                        3    moderate polys; 2 SAT14 SIGABRT
+                                                under 3GB ulimit (memory)
+  LCTES                                   2    mod-by-var: EUF+NIA combination
+  20250331-elster                         2    misc
+  leipzig                                 1    18-var post-SolveEqs polynomial
+                                                substitution (iter-81 pin)
+
+★ Key triage insight: **Dartagnan is the largest cluster (12 cases) but
+the LEAST NIA-bound — it has 17533 vars and only 5 multiplications**.
+The bottleneck is in:
+  - Boolean reasoning (cf/exec predicates dominate)
+  - SAT-layer scalability (17K-var CNF encoding)
+  - Possibly preprocess (massive atomization)
+
+Step 5 reasoners (Gröbner, modular, factor) have ZERO option value here —
+they target nonlinear arithmetic which doesn't exist in Dartagnan.
+
+For Dartagnan-class wins, need SAT-layer perf or preprocess optimization,
+not NIA-reasoner extensions. This re-classifies #23 (Dartagnan multi-day)
+from "NIA work" to "SAT/preprocess work".
+
+The +3 sustained corpus wins (sqrtStep1, sqrtStep1a, calypto/002871) all
+share: ≤4 vars, ≤7 muls, algebraic-structure-detectable (Newton sqrt or
+bounded var with bilinear). My Step 5 work this session (62 algo commits)
+ships sound infrastructure but the corpus is dominated by structural
+classes (Dartagnan SAT-bound, leipzig poly-substitution-bound) that need
+different lanes.
+
+62 commits + 21 doc/infra. 0 regressions / 0-unsound across 93 iterations.
++3 corpus unsat sustained.
