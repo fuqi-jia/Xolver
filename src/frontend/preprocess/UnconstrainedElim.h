@@ -49,8 +49,31 @@ private:
     bool isLinearReconstructable(ExprId e) const;
 
     // Test whether a Variable named `name` occurs anywhere in `root`'s subtree.
-    // Memoized per call via the caller-supplied set.
     bool varOccursIn(const std::string& name, ExprId root) const;
+
+    // Term-level unconstrained propagation (cvc5/z3 §3 / option C):
+    // If `e` is an unconstrained value-term (i.e. it can take any value of
+    // its sort by choice of a single occ==1 variable inside), return the
+    // var name + a NEW ExprId expressing the value that variable should
+    // take so that the term equals `target`. Returns nullopt otherwise.
+    //
+    // Handles one syntactic level on top of a Variable child:
+    //   Variable v (occ==1)            → (v, target)
+    //   (+ v X)  / (+ X v)             → (v, target - X)
+    //   (- v X)                        → (v, target + X)
+    //   (- X v)                        → (v, X - target)
+    //   (- v)  (unary)                 → (v, -target)
+    //   (* k v) / (* v k)  k=±1        → (v, k*target)
+    //
+    // Sort is restricted to Int (the LCTES target). Real follows the same
+    // shape but we conservatively skip for now to avoid Mul-by-constant
+    // rational-division complications.
+    std::optional<std::pair<std::string, ExprId>>
+        asValueUncTerm(ExprId e, ExprId target);
+
+    // Builders for inverse-term construction (mkSub/mkNeg in the IR).
+    ExprId mkSub(ExprId a, ExprId b);
+    ExprId mkNeg(ExprId a);
 
     // Drop-action descriptor: a single witness recipe to satisfy or violate
     // an atom by choosing an unconstrained Variable's value.

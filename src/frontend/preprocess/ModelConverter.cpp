@@ -124,7 +124,8 @@ std::optional<bool> ModelConverter::evalBool(
 
 std::optional<mpq_class> ModelConverter::evalRational(
     ExprId root, const CoreIr& ir,
-    const std::unordered_map<std::string, mpq_class>& env) {
+    const std::unordered_map<std::string, mpq_class>& env,
+    const std::unordered_map<std::string, bool>* boolEnv) {
     std::unordered_map<ExprId, mpq_class> val;
 
     auto parseConst = [](const Payload& p) -> std::optional<mpq_class> {
@@ -153,8 +154,11 @@ std::optional<mpq_class> ModelConverter::evalRational(
                     auto* nm = std::get_if<std::string>(&node.payload.value);
                     if (!nm) return std::nullopt;
                     auto it = env.find(*nm);
-                    if (it == env.end()) return std::nullopt;  // unknown var
-                    val[e] = it->second;
+                    // Missing var defaults to 0 (matches dumpModel's
+                    // unconstrained-default convention; sound for our purposes
+                    // because the variable's value is unconstrained — any
+                    // choice satisfies the post-elim formula).
+                    val[e] = (it == env.end()) ? mpq_class(0) : it->second;
                     stack.pop_back();
                     continue;
                 }
@@ -215,6 +219,33 @@ std::optional<mpq_class> ModelConverter::evalRational(
                 val[e] = mpq_class(fl);
                 break;
             }
+            case Kind::Ite: {
+                // Eval cond via evalBool (requires boolEnv); pick branch.
+                // Both numeric branches have already been pre-visited and
+                // their values cached in val[].
+                if (node.children.size() != 3) return std::nullopt;
+                if (!boolEnv) return std::nullopt;
+                auto condVal = evalBool(node.children[0], ir, *boolEnv, env);
+                if (!condVal) return std::nullopt;
+                val[e] = *condVal ? val.at(node.children[1]) : val.at(node.children[2]);
+                break;
+            }
+            case Kind::Mod: {
+                // SMT-LIB Int mod: result in [0, |y|). y must be a nonzero
+                // integer for the result to be defined; treat y=0 as 0 here
+                // (matches the existing ArithModelValidator default).
+                if (node.children.size() != 2) return std::nullopt;
+                const mpq_class& a = val.at(node.children[0]);
+                const mpq_class& b = val.at(node.children[1]);
+                if (a.get_den() != 1 || b.get_den() != 1) return std::nullopt;
+                mpz_class ai = a.get_num(), bi = b.get_num();
+                if (bi == 0) { val[e] = mpq_class(0); break; }
+                mpz_class absB = (bi > 0) ? bi : -bi;
+                mpz_class rem;
+                mpz_fdiv_r(rem.get_mpz_t(), ai.get_mpz_t(), absB.get_mpz_t());
+                val[e] = mpq_class(rem);
+                break;
+            }
             default:
                 return std::nullopt;  // non-linear / unsupported -> cannot rebuild
         }
@@ -261,7 +292,7 @@ bool ModelConverter::reconstruct(std::unordered_map<std::string, RealValue>& num
             continue;
         }
 
-        auto vb = evalRational(it->expr, ir, env);   // Elim: defining term; Witness: bound
+        auto vb = evalRational(it->expr, ir, env, &boolEnv);   // Elim: defining term; Witness: bound
         if (!vb) { allOk = false; continue; }
 
         mpq_class value;
