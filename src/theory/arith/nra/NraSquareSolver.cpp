@@ -222,13 +222,24 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     // Apply ALL known substitutions (rationals, aliases, derived) in exact
     // RationalPolynomial space.
     auto applySubstRp = [&](RationalPolynomial rp) -> RationalPolynomial {
-        for (const auto& [v, val] : rationalVal) rp = rp.substituteRational(v, val);
-        for (const auto& [v, g] : aliasOf) {
-            RationalPolynomial gv; gv.addVar(g, 1, mpq_class(1)); gv.normalize();
-            rp = substRpDerived(rp, v, gv);
+        // FIXPOINT: a derived value may itself reference a variable resolved only on a
+        // later pass (linear elimination stores v in terms of OTHER unresolved vars),
+        // so repeat the substitutions until no assigned variable remains. Capped at 64
+        // iterations so a cyclic/mutual definition terminates (leaving a residual var,
+        // which the per-constraint validation then bails on — sound).
+        for (int iter = 0; iter < 64; ++iter) {
+            for (const auto& [v, val] : rationalVal) rp = rp.substituteRational(v, val);
+            for (const auto& [v, g] : aliasOf) {
+                RationalPolynomial gv; gv.addVar(g, 1, mpq_class(1)); gv.normalize();
+                rp = substRpDerived(rp, v, gv);
+            }
+            for (const auto& [v, mv] : derivedVal) rp = substRpDerived(rp, v, mv);
+            rp.normalize();
+            bool more = false;
+            for (VarId v : rp.variables())
+                if (rationalVal.count(v) || aliasOf.count(v) || derivedVal.count(v)) { more = true; break; }
+            if (!more) break;
         }
-        for (const auto& [v, mv] : derivedVal) rp = substRpDerived(rp, v, mv);
-        rp.normalize();
         return rp;
     };
 
@@ -309,47 +320,83 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
         auto rp0 = RationalPolynomial::fromPolyId(eqs[j], kernel);
         if (!rp0) continue;
         RationalPolynomial rps = applySubstRp(*rp0);   // exact rationals + aliases + derived
-        // pick the unassigned variable that is NOT the generator
-        VarId d = NullVar;
+
+        // (A) EXACTLY ONE non-generator variable, linear, coefficients over the
+        // generator: derive its EXACT value in Q(sqrt genC) by rationalizing -C/A.
+        do {
+            VarId d = NullVar; bool multi = false;
+            for (VarId v : rps.variables()) {
+                if (v == genVar) continue;
+                if (d != NullVar) { multi = true; break; }   // more than one unassigned
+                d = v;
+            }
+            if (multi || d == NullVar) break;
+            std::vector<RationalPolynomial> co = rps.coefficients(d);   // [C, A] low->high
+            if (co.size() != 2) break;                                 // must be linear in d
+            if (!onlyGen(co[1]) || !onlyGen(co[0])) break;
+            // d = -C / A. Reduce A, C mod genVar^2 = genC to A = aA*g + bA, C = cA*g + cB,
+            // then RATIONALIZE by the conjugate of A:  -C/A = -C*conj(A) / (A*conj(A)),
+            // where A*conj(A) = bA^2 - aA^2*genC is RATIONAL, and -C*conj(A) reduces (mod
+            // g^2=genC) to P0 + P1*g. So d = (P0 + P1*g)/denom is a POLYNOMIAL in g — even
+            // when A itself still depends on the generator (the sqrt cancels). This is
+            // what lets the cascade derive m for the whole Geogebra cluster, not just the
+            // case where A happens to collapse to a constant.
+            RationalPolynomial mv;
+            if (genVar != NullVar) {
+                auto rA = reduceUni(co[1]);
+                auto rC = reduceUni(co[0]);
+                const mpq_class aA = rA.first, bA = rA.second, cA = rC.first, cB = rC.second;
+                const mpq_class denom = bA * bA - aA * aA * genC;       // A * conj(A)
+                if (sgn(denom) == 0) break;                            // A vanishes at root
+                const mpq_class P0 = cA * aA * genC - cB * bA;          // -C*conj(A), const
+                const mpq_class P1 = cB * aA - cA * bA;                 // -C*conj(A), g coeff
+                if (sgn(P1) != 0) mv.addVar(genVar, 1, P1 / denom);
+                mv.addConstant(P0 / denom);
+            } else {
+                if (!co[1].isConstant() || !co[0].isConstant()) break;
+                const mpq_class A = co[1].constantValue();
+                if (sgn(A) == 0) break;
+                mv.addConstant(-co[0].constantValue() / A);
+            }
+            mv.normalize();
+            derivedVal[d] = std::move(mv);
+            done[j] = 1; dprogress = true;
+        } while (false);
+        if (done[j]) continue;
+
+        // (B) COUPLED LINEAR ELIMINATION. The equation may still have two+ unresolved
+        // variables, but be linear in ONE of them with a CONSTANT (rational) leading
+        // coefficient. Solve that variable as a polynomial in the OTHERS; a later
+        // fixpoint pass resolves those in turn, triangularizing a coupled linear
+        // subsystem (e.g. two midpoint/centroid equations sharing two coordinates that
+        // neither single-var rationalization nor a free-parameter seed can split).
+        // SOUNDNESS: the final per-constraint validation reduces over the single
+        // generator and BAILS (signOfPolyAtGenerator -> nullopt -> return false) if any
+        // non-generator variable survives, so an under-determined elimination is never
+        // accepted as SAT — the pivot choice only needs to be CONSISTENT, not unique.
         for (VarId v : rps.variables()) {
             if (v == genVar) continue;
-            if (d != NullVar) { d = NullVar; break; }   // more than one unassigned -> give up
-            d = v;
-        }
-        if (d == NullVar) continue;
-        std::vector<RationalPolynomial> co = rps.coefficients(d);   // [C, A] low->high
-        if (co.size() != 2) continue;                              // must be linear in d
-        if (!onlyGen(co[1]) || !onlyGen(co[0])) continue;
-        // d = -C / A. Reduce A, C mod genVar^2 = genC to A = aA*g + bA, C = cA*g + cB,
-        // then RATIONALIZE by the conjugate of A:  -C/A = -C*conj(A) / (A*conj(A)),
-        // where A*conj(A) = bA^2 - aA^2*genC is RATIONAL, and -C*conj(A) reduces (mod
-        // g^2=genC) to P0 + P1*g. So d = (P0 + P1*g)/denom is a POLYNOMIAL in g — even
-        // when A itself still depends on the generator (the sqrt cancels). This is what
-        // lets the cascade derive m for the whole Geogebra cluster, not just the case
-        // where A happens to collapse to a constant.
-        RationalPolynomial mv;
-        if (genVar != NullVar) {
-            auto rA = reduceUni(co[1]);
-            auto rC = reduceUni(co[0]);
-            const mpq_class aA = rA.first, bA = rA.second, cA = rC.first, cB = rC.second;
-            const mpq_class denom = bA * bA - aA * aA * genC;       // A * conj(A)
-            if (sgn(denom) == 0) continue;                         // A vanishes at the root
-            const mpq_class P0 = cA * aA * genC - cB * bA;          // -C*conj(A), const part
-            const mpq_class P1 = cB * aA - cA * bA;                 // -C*conj(A), g coeff
-            if (sgn(P1) != 0) mv.addVar(genVar, 1, P1 / denom);
-            mv.addConstant(P0 / denom);
-        } else {
-            if (!co[1].isConstant() || !co[0].isConstant()) continue;
+            std::vector<RationalPolynomial> co = rps.coefficients(v);
+            if (co.size() != 2) continue;          // not linear in v
+            if (!co[1].isConstant()) continue;     // need a rational constant coefficient
             const mpq_class A = co[1].constantValue();
             if (sgn(A) == 0) continue;
-            mv.addConstant(-co[0].constantValue() / A);
+            RationalPolynomial mv = co[0];
+            mv *= (mpq_class(-1) / A);              // v = -C / A  (C still in other vars)
+            mv.normalize();
+            derivedVal[v] = std::move(mv);
+            done[j] = 1; dprogress = true;
+            break;
         }
-        mv.normalize();
-        derivedVal[d] = std::move(mv);
-        done[j] = 1;
-        dprogress = true;
     }
     }
+
+    // Flatten every derived value to the generator/rationals: coupled linear
+    // elimination may have stored a variable in terms of OTHERS that were resolved only
+    // on a later pass. applySubstRp is a fixpoint, so one application per entry fully
+    // resolves each chain (a residual var here means a cyclic/under-determined system,
+    // which the validation below rejects).
+    for (auto& kv : derivedVal) kv.second = applySubstRp(kv.second);
 
     // Report the still-unresolved variables (in some constraint but assigned no value)
     // so the caller can guide a multi-parameter instantiation.

@@ -279,3 +279,39 @@ TEST_CASE("trySquareCascade: rational-multiple generators collapse (sqrt2 and sq
     };
     CHECK_FALSE(trySquareCascade(cons2, k, nullptr));
 }
+
+TEST_CASE("trySquareCascade: coupled linear subsystem (Gaussian elimination over a generator)") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId a = k.getOrCreateVar("a");
+    VarId x = k.getOrCreateVar("x");
+    VarId y = k.getOrCreateVar("y");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // generator a = sqrt(1/2):  2 a^2 - 1 = 0.
+    PolyId ea = k.add(k.mul(C(2), k.pow(V(a), 2)), C(-1));
+    // Two equations that COUPLE x and y — neither is single-variable, so the
+    // single-var rationalizing derive cannot fire; only Gaussian elimination splits
+    // them:  e1: x + y - 3a = 0 ;  e2: x - y - a = 0.  Solution x = 2a, y = a (both in
+    // Q(sqrt 1/2)). This also exercises FLATTENING: e1 derives x = 3a - y BEFORE y is
+    // known, so the stored value must be flattened to 2a once y = a is derived from e2.
+    PolyId e1 = k.sub(k.add(V(x), V(y)), k.mul(C(3), V(a)));
+    PolyId e2 = k.sub(k.sub(V(x), V(y)), V(a));
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {ea, Relation::Eq}, {e1, Relation::Eq}, {e2, Relation::Eq},
+        {V(a), Relation::Gt}, {V(x), Relation::Gt}, {V(y), Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));      // constructs + validates the full model
+    CHECK(model.size() == 3u);                     // a, x, y all assigned
+
+    // An INCONSISTENT third equation over the same coupled vars must be REJECTED: the
+    // cascade derives x, y from e1/e2 then validates e3 over the generator and fails.
+    PolyId e3 = k.sub(k.sub(V(x), V(y)), k.mul(C(5), V(a)));   // x - y - 5a = 0 (contradicts e2)
+    std::vector<std::pair<PolyId, Relation>> bad = {
+        {ea, Relation::Eq}, {e1, Relation::Eq}, {e2, Relation::Eq}, {e3, Relation::Eq},
+        {V(a), Relation::Gt}, {V(x), Relation::Gt}, {V(y), Relation::Gt},
+    };
+    CHECK_FALSE(trySquareCascade(bad, k, nullptr));
+}
