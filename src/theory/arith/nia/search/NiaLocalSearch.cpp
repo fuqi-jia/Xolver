@@ -1810,6 +1810,10 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                     // cost. A joint move respects the bilinear interaction
                     // in both dimensions and is much more likely to
                     // globally improve.
+                    // iter-107 perf: hoist cvars → set once, O(1) membership
+                    // check in inner loop. Was O(|cvars|) per (pair, dir) check
+                    // inside the bilPairs × 2 dir nested loop.
+                    std::unordered_set<std::string> cvarsSet(cvars.begin(), cvars.end());
                     for (const auto& pair : bilPairs) {
                         std::vector<mpz_class> rootsFirst, rootsSecond;
                         for (int dir = 0; dir < 2; ++dir) {
@@ -1817,9 +1821,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                             // Both pair members must be in cvars (they
                             // are by construction — they appeared in
                             // C.poly's terms — but guard anyway).
-                            bool inCvars = false;
-                            for (const auto& cv : cvars) if (cv == solveVar) { inCvars = true; break; }
-                            if (!inCvars) continue;
+                            if (!cvarsSet.count(solveVar)) continue;
                             // Group residual polynomial by exponent of
                             // solveVar after substituting current values
                             // for every other variable. Resulting map:
