@@ -338,22 +338,36 @@ CellResult intervalFromCharacterization(
                 if (!pr.contains(var)) continue;   // no var-boundary at this prefix
             }
             bool supported = false;
-            // FAST PATH (cacheable algebraic numbers): if the boundary poly provably
-            // keeps full degree in `var` at the prefix — its leading coefficient (in
-            // `var`) is DEFINITE-NONZERO there — it does NOT nullify, so libpoly's
-            // NATIVE isolation is complete + sound AND ~750x faster than the hand-
-            // rolled resultant-Norm here (it reuses the persistent assignment's refined
-            // algebraic numbers instead of recomputing a tower Norm per cell). A
-            // possibly-nullifying poly (leading coeff zero/undecided) or a native crash
-            // falls back to the nullification-aware Norm/Tower path (fail-closed).
+            // FAST PATH (cacheable algebraic numbers): libpoly's NATIVE isolation does
+            // EXACT substitution of the prefix, so it is complete for the full-degree
+            // AND the degree-drop case (a leading coeff that vanishes at the prefix just
+            // yields a lower-degree univariate it isolates normally) — and ~750x faster
+            // than the hand-rolled resultant-Norm here (it reuses the persistent
+            // assignment's refined algebraic numbers instead of recomputing a tower Norm
+            // per cell). Try it first:
+            //   - NON-EMPTY result ⇒ complete + sound (every real root of p|prefix).
+            //   - EMPTY result ⇒ either genuinely no real roots (sound whole-axis) OR
+            //     FULL nullification (p ≡ 0 in var at the prefix ⇒ the lifting residual
+            //     is needed, which native isolate does not compute). Disambiguate by the
+            //     var-coefficient signs: a DEFINITE-NONZERO coeff proves NOT-fully-null
+            //     ⇒ accept the empty set (whole-axis); otherwise fall back to the
+            //     residual-aware Norm/Tower path (fail-closed).
             {
-                RationalPolynomial lc = rp.leadingCoefficient(var);
-                auto lcN = lc.toPrimitiveInteger(*kernel);
-                if (lcN.ok()) {
-                    const Sign ls = algebra->signAt(lcN.poly, prefix);
-                    if (ls == Sign::Pos || ls == Sign::Neg) {   // non-nullifying ⇒ native is complete
-                        RootSet ra = algebra->isolateRealRootsAlgebraic(pid, prefix, var);
-                        if (!ra.crashOccurred) { rs = std::move(ra); supported = true; }
+                RootSet ra = algebra->isolateRealRootsAlgebraic(pid, prefix, var);
+                if (!ra.crashOccurred) {
+                    if (!ra.roots.empty()) {
+                        rs = std::move(ra); supported = true;
+                    } else {
+                        bool notNull = false;
+                        for (const auto& c : rp.coefficients(var)) {
+                            RationalPolynomial cc = c; cc.normalize();
+                            if (cc.isZero()) continue;
+                            auto cN = cc.toPrimitiveInteger(*kernel);
+                            if (!cN.ok()) continue;
+                            const Sign cs = algebra->signAt(cN.poly, prefix);
+                            if (cs == Sign::Pos || cs == Sign::Neg) { notNull = true; break; }
+                        }
+                        if (notNull) { rs = std::move(ra); supported = true; }  // no real roots ⇒ whole-axis
                     }
                 }
             }
