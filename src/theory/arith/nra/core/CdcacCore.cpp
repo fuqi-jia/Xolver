@@ -1893,7 +1893,8 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                          const std::vector<bool>& satSafe,
                          const std::unordered_map<VarId, mpq_class>& m,
                          const CdcacInput& input,
-                         std::unordered_map<VarId, Iv>& box) {
+                         std::unordered_map<VarId, Iv>& box,
+                         std::optional<std::pair<size_t, Sign>>* aConf = nullptr) {
     box.clear();
     for (VarId v : input.varOrder)
         if (!m.count(v)) box[v] = Iv::all();
@@ -1911,7 +1912,16 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
         // (A) Infeasibility: over-approx range of each constraint must admit the relation.
         for (size_t ci : cons) {
             Iv r = ivEval(*satRp[ci], m, box);
-            if (!ivRelCanHold(r, input.constraints[ci].rel)) return true;
+            if (!ivRelCanHold(r, input.constraints[ci].rel)) {
+                // Surface a STRICT single-signed conflict (r ⊂ (0,∞) or (−∞,0)) for a
+                // clean full-line invariant-sign conflict cell. Over the CONTRACTED box
+                // far more constraints are strictly signed than over the raw R^n.
+                if (aConf) {
+                    if (!r.loInf && r.lo > 0) *aConf = std::make_pair(ci, Sign::Pos);
+                    else if (!r.hiInf && r.hi < 0) *aConf = std::make_pair(ci, Sign::Neg);
+                }
+                return true;
+            }
         }
         // (B) Degree-1 contraction: A·v + B rel 0 ⇒ tighten box[v].
         for (size_t ci : cons) {
@@ -1967,33 +1977,27 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
 
 std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     const SamplePoint& prefix, const CdcacInput& input) {
-    // Caller guarantees an all-rational prefix. Build the point map + unbounded
-    // intervals for the unassigned variables.
+    // Caller guarantees an all-rational prefix. Build the point map.
     std::unordered_map<VarId, mpq_class> m;
     for (size_t i = 0; i < prefix.values.size(); ++i) {
         if (!prefix.values[i].isRational()) return std::nullopt;   // defensive
         m[prefix.varOrder[i]] = prefix.values[i].rational;
     }
+    // Run the full box-consistency fixpoint: it CONTRACTS the unassigned vars'
+    // intervals (degree-1 HC4), under which far more constraints become strictly
+    // single-signed than over the raw R^n — so this fires much more than the prior
+    // unbounded single-constraint check. propagateBox surfaces a strict-signed
+    // conflicting constraint when the infeasibility is of the (A) range type; an
+    // (B)-type empty-box infeasibility has no single invariant sign and is skipped
+    // (sound — just no prune). Sound throughout (box ⊇ feasible projection).
     std::unordered_map<VarId, Iv> box;
-    for (VarId v : input.varOrder) if (!m.count(v)) box[v] = Iv::all();
-    if (box.empty()) return std::nullopt;   // leaf — checkFullSample handles it
-    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-        if (ci >= satRp_.size() || !satRp_[ci]) continue;
-        if (ci < satSafe_.size() && !satSafe_[ci]) continue;
-        Iv r = ivEval(*satRp_[ci], m, box);
-        // Only a STRICT single sign over the whole box yields a clean invariant-sign
-        // conflict cell. r ⊂ (0,∞) ⇒ Pos; r ⊂ (−∞,0) ⇒ Neg. If that sign violates the
-        // relation, the constraint is violated by EVERY completion ⇒ prune (sound:
-        // the box ⊇ the feasible projection, so a strict sign there holds for all
-        // real completions too).
-        Sign s;
-        if (!r.loInf && r.lo > 0) s = Sign::Pos;
-        else if (!r.hiInf && r.hi < 0) s = Sign::Neg;
-        else continue;
-        if (relationHolds(s, input.constraints[ci].rel)) continue;   // not violated
-        return std::make_pair(ci, s);
-    }
-    return std::nullopt;
+    std::optional<std::pair<size_t, Sign>> aConf;
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf);
+    if (!inf || !aConf) return std::nullopt;
+    // Confirm the surfaced sign genuinely violates the relation.
+    if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
+        return std::nullopt;
+    return aConf;
 }
 
 // M1 box HINT: re-rank/prune the root-cell candidate list using box[k]. The cells
