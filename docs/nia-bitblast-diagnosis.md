@@ -2332,3 +2332,50 @@ Per-cluster next-step pin:
 46 commits + 17 doc/infra. 0 regressions / 0-unsound across 75 iterations.
 +3 corpus unsat sustained. xolver's div/mod-by-zero handling validated
 against SMT-LIB semantics via litmus differential.
+
+---
+
+### Iter 81 — Delta-debug leipzig term-unsat-01 (per user's earlier suggestion)
+
+Bisected by progressively keeping first N of 32 assertions:
+
+  asserts <= 28:    xolver SAT @ <120ms (z3 also SAT)
+  asserts = 32:     xolver TO  @ 10s    (z3 UNSAT @ 76ms)
+
+The flip to UNSAT comes from the FINAL OR assertion:
+  `(assert (or (> n13 n16) (> n19 n22)))`
+
+Removing the OR (31 asserts) → SAT.
+Replacing OR with either single inequality alone → still UNSAT:
+  `(> n13 n16)` alone:    z3 UNSAT @ instant, xolver TO @ 10s
+  `(> n19 n22)` alone:    z3 UNSAT @ instant, xolver TO @ 10s
+
+So the OR is NOT the problem — either disjunct combined with the
+defining equalities is enough to be UNSAT. xolver TOs on the
+single-inequality variant too, indicating the bottleneck is in how
+xolver processes the polynomial system, NOT in disjunction handling.
+
+xolver path observed:
+  SolveEqs eliminated 6 variables. (then no further STAGE-PROF print)
+
+What z3 likely does instantly: after eliminating the chain of defs
+`n6=n3*n2, n7=n2+n6, n8=n3*n3, ...`, the formula collapses to a small
+nonlinear system over n0..n5 where bound propagation on
+`(>= n1 1), (>= n3 1), (>= n5 1)` plus the strict inequality is
+immediately UNSAT-provable.
+
+xolver gap: either NIA pipeline-call never completes on this 18-var
+post-elimination system (taking >10s for one round), or substitution
+of the def chain blows up the polynomial representation.
+
+This is independent of:
+  - EUF/AUTO_EUF_PROMOTE (formula has 0 div/mod)
+  - Modular refutation (formula has equalities, not residues)
+  - Gröbner-lite (would help if reaches NIA pipeline)
+
+The fix surface is NIA-stage internal — specifically the structural
+substitution-after-SolveEqs path. Outside the iter-77-80 Step 5
+modular/Gröbner work.
+
+52 commits + 20 doc/infra. 0 regressions / 0-unsound across 81 iterations.
++3 corpus unsat sustained.
