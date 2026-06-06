@@ -1,4 +1,5 @@
 #include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include <cstdlib>
 #include "theory/arith/nia/search/IntegerModelValidator.h"
 #include <numeric>
 
@@ -186,7 +187,30 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
         }
     }
 
-    if (allVars.size() > 15) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+    // iter-84: var-count cap + per-modulus enumeration budget are env-overridable.
+    // Sound — UNSAT-only invariant unchanged; relaxing the caps lets the
+    // refuter attempt larger systems (potentially closing oracle-UNSAT cases
+    // that exceed the iter-79 defaults). Users / autotuner can experiment
+    // without recompiling.
+    //   XOLVER_NIA_MODULAR_MAX_VARS         (default 15, cap 50)
+    //   XOLVER_NIA_MODULAR_MAX_ENUM         (default 50000, cap 1,000,000)
+    static const size_t kVarCap = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_VARS");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 50) return static_cast<size_t>(v);
+        }
+        return size_t(15);
+    }();
+    static const uint64_t kMaxEnumPerModulus = [] {
+        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_ENUM");
+        if (e && *e) {
+            long v = std::strtol(e, nullptr, 10);
+            if (v > 0 && v <= 1000000) return static_cast<uint64_t>(v);
+        }
+        return uint64_t(50000);
+    }();
+    if (allVars.size() > kVarCap) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 
     std::vector<std::string> vars(allVars.begin(), allVars.end());
     const int moduli[] = {2, 3, 4, 5, 7, 8, 9, 11};
@@ -194,8 +218,8 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     // iter-79: generalize from {1,2}-var hardcoded loops to N-var iterative
     // digit-counter enumeration. Sound: same residue-search semantics, just
     // wider variable count. Hard cap on total enumerations per (modulus, varCount)
-    // to keep the worst case bounded — 50000 tuples × #constraints per modulus.
-    constexpr uint64_t kMaxEnumPerModulus = 50000;
+    // to keep the worst case bounded — 50000 tuples × #constraints per modulus
+    // (default; tunable via XOLVER_NIA_MODULAR_MAX_ENUM).
     const size_t N = vars.size();
 
     for (int m : moduli) {
