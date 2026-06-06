@@ -2469,3 +2469,52 @@ correct to be saturated.
 
 62 commits + 22 doc/infra. 0 regressions / 0-unsound across 94 iterations.
 +3 corpus unsat sustained.
+
+---
+
+### Iter 98 — Sub-classification of Dartagnan: memory, not just perf
+
+Probing smallest Dartagnan case (Dartagnan/ReachSafety-Loops/ps2-ll_valuebound1-O0.smt2):
+
+  size: 1579 lines (smallest), 100KB
+  vars:    1019 declarations
+  asserts: 5
+  muls:    4
+  div/mod: 0  ← NO div/mod here
+
+  Verbose verdict @ 13s:
+    [SolveEqs] eliminated 221 variable(s)
+    unknown
+    (unknown-reason out-of-memory (bad_alloc) — solver firewalled to Unknown)
+
+★ Sub-classification: Dartagnan splits into at least two sub-problems:
+
+  ConcurrencySafety-Main subdir (singleton-O0, scull-O0, ...):
+    - Has div/mod operations → EUF promote required (iter-94 pin)
+    - 14K-23K Boolean vars + UF predicates → EUF+NIA combination perf
+    - TO @ 54s under our 3GB ulimit
+    - Fix: needs EUF+NIA combination loop optimization (multi-day)
+
+  ReachSafety-Loops subdir (ps2-ll_valuebound1-O0, ...):
+    - No div/mod, no UF predicates needed
+    - Still 1K+ vars → memory pressure
+    - bad_alloc firewalls to unknown @ 13s
+    - Fix: needs memory-frugal data structures or accepts larger ulimit
+
+Both subdirs are NIA-light (≤6 muls each); both are dominated by
+NON-NIA work (combination layer or memory). My Step 5 reasoner work
+this session correctly has zero corpus delta on either subdir.
+
+The 4 perf commits this session (iter-13 LIA assertLit, iter-95 EUF
+interning, iter-96 LRA trail-index, iter-97 LIA trail-index) DO benefit
+both subdirs at smaller scale but don't crack Dartagnan's 14K-var or
+1K-var pressure on a WSL 3GB-ulimit box.
+
+The fundamental tension: WSL-safe testing (per CLAUDE.md guidelines)
+caps memory + parallelism, so Dartagnan-class cases that need ≥4GB or
+multi-minute solve budgets are not crackable in cron rounds. They need
+either a server tier (which the user has indicated is the path for
+heavy differential work) or substantial memory-frugal refactoring.
+
+65 commits + 23 doc/infra. 0 regressions / 0-unsound across 98 iterations.
++3 corpus unsat sustained.
