@@ -159,7 +159,8 @@ int signHintFromBound(PolyId p, Relation rel, PolynomialKernel& kernel, VarId& b
 static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
                       PolynomialKernel& kernel,
                       const std::unordered_map<VarId, mpq_class>& seed,
-                      std::vector<std::pair<VarId, RealValue>>* modelOut) {
+                      std::vector<std::pair<VarId, RealValue>>* modelOut,
+                      std::unordered_set<VarId>* unresolvedOut = nullptr) {
     // --- collect equalities / inequalities / sign hints --------------------------
     std::vector<PolyId> eqs;
     std::unordered_map<VarId, int> signHint;
@@ -337,6 +338,22 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     }
     }
 
+    // Report the still-unresolved variables (in some constraint but assigned no value)
+    // so the caller can guide a multi-parameter instantiation.
+    if (unresolvedOut) {
+        unresolvedOut->clear();
+        std::unordered_set<VarId> assigned;
+        for (const auto& kv : rationalVal) assigned.insert(kv.first);
+        for (const auto& kv : aliasOf)     assigned.insert(kv.first);
+        for (const auto& kv : derivedVal)  assigned.insert(kv.first);
+        if (genVar != NullVar) assigned.insert(genVar);
+        for (const auto& [p, rel] : cons)
+            for (const auto& vn : kernel.variables(p)) {
+                VarId v = kernel.getOrCreateVar(vn);
+                if (!assigned.count(v)) unresolvedOut->insert(v);
+            }
+    }
+
     // --- VALIDATE every original constraint over the single generator ------------
     auto signOfReduced = [&](PolyId p) -> std::optional<int> {
         auto rp = RationalPolynomial::fromPolyId(p, kernel);
@@ -425,7 +442,8 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
                       PolynomialKernel& kernel,
                       std::vector<std::pair<VarId, RealValue>>* modelOut) {
     // First, the un-seeded cascade (pure triangular square systems).
-    if (attemptSquareCascade(cons, kernel, {}, modelOut)) return true;
+    std::unordered_set<VarId> u0;
+    if (attemptSquareCascade(cons, kernel, {}, modelOut, &u0)) return true;
 
     // FREE-PARAMETER instantiation. Many geometric sat instances fix every variable
     // to a square root of a LINEAR expression in one free parameter p (e.g. an
@@ -438,8 +456,8 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
         mpq_class(1), mpq_class(1, 2), mpq_class(2), mpq_class(1, 4), mpq_class(3, 2),
         mpq_class(3), mpq_class(1, 3), mpq_class(3, 4), mpq_class(5, 4), mpq_class(2, 3),
     };
-    // Candidate free parameters: variables that occur in some equality's coefficients
-    // (a square's "constant" side). Cap the search so a hard instance stays cheap.
+    // Candidate free parameters: variables that occur in some equality. Cap the search
+    // so a hard instance stays cheap.
     std::vector<VarId> params;
     {
         std::unordered_set<std::string> seenName;
@@ -452,10 +470,26 @@ bool trySquareCascade(const std::vector<std::pair<PolyId, Relation>>& cons,
             if (params.size() >= 10) break;
         }
     }
-    for (VarId f : params) {
-        for (const mpq_class& c : kCands) {
-            std::unordered_map<VarId, mpq_class> seed{{f, c}};
-            if (attemptSquareCascade(cons, kernel, seed, modelOut)) return true;
+    int budget = 4000;   // total attempt cap (each attempt is ~microseconds)
+    for (VarId f1 : params) {
+        for (const mpq_class& c1 : kCands) {
+            if (--budget < 0) return false;
+            std::unordered_map<VarId, mpq_class> seed1{{f1, c1}};
+            std::unordered_set<VarId> u1;
+            if (attemptSquareCascade(cons, kernel, seed1, modelOut, &u1)) return true;
+            // Second free parameter (e.g. a coupled construction like RegHexagon: once
+            // the base v9 is fixed, v10^2 = 4 v9 - 7 is a square but v11/v13 stay coupled).
+            // Only nest when seeding f1 ALSO unlocked solving some other variable
+            // (|u1| + 1 < |u0|), so non-square instances never pay for the inner loop.
+            if (u0.size() < 2 || u1.size() + 1 >= u0.size()) continue;
+            for (VarId f2 : params) {
+                if (f2 == f1 || !u1.count(f2)) continue;
+                for (const mpq_class& c2 : kCands) {
+                    if (--budget < 0) return false;
+                    std::unordered_map<VarId, mpq_class> seed2{{f1, c1}, {f2, c2}};
+                    if (attemptSquareCascade(cons, kernel, seed2, modelOut)) return true;
+                }
+            }
         }
     }
     return false;
