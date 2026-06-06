@@ -602,7 +602,7 @@ std::optional<TheoryConflict> LiaSolver::checkDioTighten() const {
         return !out.coeffs.empty();
     };
 
-    std::vector<DioLinForm> eqs, neqs;
+    std::vector<DioLinForm> cons;
     std::map<std::string, DioVarBound> bounds;
 
     auto addSingleVarBound = [&](const std::string& v, const mpq_class& coeffQ,
@@ -646,23 +646,29 @@ std::optional<TheoryConflict> LiaSolver::checkDioTighten() const {
                 case Relation::Gt:  rel = Relation::Leq; break;
             }
         }
-        if (rel == Relation::Eq) {
-            DioLinForm f; f.reason = a.lit;
-            if (toIntForm(a.lhs, a.rhs, f)) eqs.push_back(std::move(f));
-        } else if (rel == Relation::Neq) {
-            DioLinForm f; f.reason = a.lit;
-            if (toIntForm(a.lhs, a.rhs, f)) neqs.push_back(std::move(f));
+        // Push the constraint as Eq / Neq / Leq / Geq (strict → integer
+        // non-strict on the cleared-denominator form). tightenConflict folds the
+        // Leq/Geq complementary pairs into lattice equalities.
+        DioLinForm f; f.reason = a.lit;
+        if (toIntForm(a.lhs, a.rhs, f)) {
+            switch (rel) {
+                case Relation::Eq:  f.rel = Relation::Eq;  cons.push_back(std::move(f)); break;
+                case Relation::Neq: f.rel = Relation::Neq; cons.push_back(std::move(f)); break;
+                case Relation::Leq: f.rel = Relation::Leq; cons.push_back(std::move(f)); break;
+                case Relation::Geq: f.rel = Relation::Geq; cons.push_back(std::move(f)); break;
+                case Relation::Lt:  f.rel = Relation::Leq; f.cst += 1; cons.push_back(std::move(f)); break;  // f<0 ⟺ f+1≤0
+                case Relation::Gt:  f.rel = Relation::Geq; f.cst -= 1; cons.push_back(std::move(f)); break;  // f>0 ⟺ f-1≥0
+            }
         }
         if (a.lhs.terms.size() == 1)
             addSingleVarBound(a.lhs.terms[0].first, a.lhs.terms[0].second, a.rhs, rel, a.lit);
     }
     for (const auto& d : disequalities_) {                              // separately-tracked ≠
-        DioLinForm f; f.reason = d.lit;
-        if (toIntForm(d.lhs, d.rhs, f)) neqs.push_back(std::move(f));
+        DioLinForm f; f.reason = d.lit; f.rel = Relation::Neq;
+        if (toIntForm(d.lhs, d.rhs, f)) cons.push_back(std::move(f));
     }
 
-    if (eqs.empty() || neqs.empty()) return std::nullopt;
-    auto conflictOpt = DioReasoner::tightenConflict(eqs, neqs, bounds);
+    auto conflictOpt = DioReasoner::tightenConflict(cons, bounds);
     if (!conflictOpt) return std::nullopt;
     return TheoryConflict{*conflictOpt};
 }

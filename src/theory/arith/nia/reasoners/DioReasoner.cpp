@@ -21,26 +21,57 @@ mpz_class normMod(const mpz_class& r, const mpz_class& m) {
 DioReasoner::DioReasoner(PolynomialKernel& kernel) : kernel_(kernel) {}
 
 std::optional<std::vector<SatLit>> DioReasoner::tightenConflict(
-    const std::vector<DioLinForm>& eqs,
-    const std::vector<DioLinForm>& neqs,
+    const std::vector<DioLinForm>& constraints,
     const std::map<std::string, DioVarBound>& bounds) {
-    if (neqs.empty()) return std::nullopt;
-
-    // Lattice equalities, each with the literal(s) justifying it. Two sources:
+    // Lattice equalities, each with the literal(s) justifying it. Three sources:
     //  (1) the explicit equality atoms (single reason);
     //  (2) bound-PINNED variables (lo == hi) → the equality `v = lo`, justified
-    //      by both bound literals. This is how a mod-zero expressed as the
-    //      inequality pair `r ≤ 0 ∧ r ≥ 0` (rather than `r = 0`) still feeds the
-    //      divisibility `x = M·q + r` into the lattice as `x ≡ 0 (mod M)`.
+    //      by both bound literals — how a mod-zero expressed as `r ≤ 0 ∧ r ≥ 0`
+    //      (rather than `r = 0`) still feeds the divisibility `x = M·q + r`;
+    //  (3) folded complementary inequality pairs (`f ≤ c` ∧ `f ≥ c` ⟹ `f = c`),
+    //      justified by both inequality literals — how the SVCOMP overflow-wrap
+    //      chain (all inequalities, no equality atoms) enters the lattice.
     struct IEq { std::vector<std::pair<std::string, mpz_class>> coeffs; mpz_class cst;
                  std::vector<SatLit> reasons; };
     std::vector<IEq> ieqs;
-    for (const auto& e : eqs) ieqs.push_back({e.coeffs, e.cst, {e.reason}});
+    std::vector<DioLinForm> neqs;
+
+    // (1) explicit equalities; collect disequalities; gather the inequalities
+    //     keyed by sign-normalized form for complementary-pair folding (3).
+    struct UL { bool hasU=false, hasL=false; mpz_class u, l; SatLit ur, lr; };
+    std::map<std::vector<std::pair<std::string, mpz_class>>, UL> ineqGroups;
+    for (const auto& c : constraints) {
+        if (c.rel == Relation::Eq) { ieqs.push_back({c.coeffs, c.cst, {c.reason}}); continue; }
+        if (c.rel == Relation::Neq) { neqs.push_back(c); continue; }
+        // Leq / Geq (callers pre-convert strict Lt/Gt to integer non-strict).
+        if (c.rel != Relation::Leq && c.rel != Relation::Geq) continue;
+        if (c.coeffs.empty()) continue;
+        Relation rel = c.rel;
+        // Sign-normalize so the leading (first) coefficient is positive; flip the
+        // relation if we negate. `key` is the canonical form Σkey·v; the bound is
+        // on key: Leq ⟹ key ≤ -cst', Geq ⟹ key ≥ -cst'.
+        bool neg = c.coeffs.front().second < 0;
+        std::vector<std::pair<std::string, mpz_class>> key;
+        for (const auto& [v, a] : c.coeffs) key.emplace_back(v, neg ? -a : a);
+        mpz_class kc = neg ? -c.cst : c.cst;
+        if (neg) rel = (rel == Relation::Leq) ? Relation::Geq : Relation::Leq;
+        UL& g = ineqGroups[key];
+        if (rel == Relation::Leq) { if (!g.hasU || -kc < g.u) { g.hasU = true; g.u = -kc; g.ur = c.reason; } }
+        else                      { if (!g.hasL || -kc > g.l) { g.hasL = true; g.l = -kc; g.lr = c.reason; } }
+    }
+    if (neqs.empty()) return std::nullopt;
+
+    // (2) bound-pinned vars → equalities.
     for (const auto& [v, bb] : bounds) {
         if (!(bb.hasLo && bb.hasHi && bb.lo == bb.hi)) continue;
         std::vector<SatLit> rs = bb.loReasons;
         rs.insert(rs.end(), bb.hiReasons.begin(), bb.hiReasons.end());
         ieqs.push_back({{{v, mpz_class(1)}}, -bb.lo, std::move(rs)});  // v - lo = 0
+    }
+    // (3) complementary inequality pairs with equal tight bound → equality.
+    for (const auto& [key, g] : ineqGroups) {
+        if (!(g.hasU && g.hasL && g.u == g.l)) continue;
+        ieqs.push_back({key, -g.u, {g.ur, g.lr}});  // key - u = 0
     }
     if (ieqs.empty()) return std::nullopt;
 

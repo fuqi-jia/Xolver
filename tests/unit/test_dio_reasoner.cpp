@@ -161,12 +161,19 @@ TEST_CASE("Dio-lattice: form forced to nonzero -> no conflict (sound)") {
     CHECK_FALSE(DioReasoner::latticeForcesFormZero(A, b, lo, hi, formW, mpz_class(0)));
 }
 
-// --- Increment #9c: the shared string-keyed tightenConflict glue ---
+// --- Increment #9c/#10: the shared string-keyed tightenConflict glue ---
 
 using DZB = DioVarBound;
-static DioLinForm form(std::vector<std::pair<std::string, long>> ts, long c, SatVar reasonVar) {
-    DioLinForm f; f.cst = c; f.reason = SatLit::positive(reasonVar);
+static DioLinForm con(std::vector<std::pair<std::string, long>> ts, long c,
+                      Relation rel, SatVar reasonVar) {
+    DioLinForm f; f.cst = c; f.rel = rel; f.reason = SatLit::positive(reasonVar);
     for (auto& [v, a] : ts) f.coeffs.emplace_back(v, mpz_class(a));
+    return f;
+}
+static DioLinForm conM(std::vector<std::pair<std::string, mpz_class>> ts, mpz_class c,
+                       Relation rel, SatVar reasonVar) {
+    DioLinForm f; f.cst = c; f.rel = rel; f.reason = SatLit::positive(reasonVar);
+    f.coeffs = std::move(ts);
     return f;
 }
 
@@ -174,43 +181,67 @@ static DioLinForm form(std::vector<std::pair<std::string, long>> ts, long c, Sat
 // bounds 0≤r_z≤M-1, 0≤r_n≤M/2-1, diseq r_z - 2·r_n ≠ 0 -> conflict.
 TEST_CASE("Dio-tighten: in-de42 distilled (eq + bounds + diseq) -> conflict") {
     mpz_class M(TWO32);
-    std::vector<DioLinForm> eqs = {[&]{
-        DioLinForm f; f.cst = 0; f.reason = SatLit::positive(1);
-        f.coeffs = {{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}};
-        return f; }()};
-    std::vector<DioLinForm> neqs = {form({{"r_z", 1}, {"r_n", -2}}, 0, 2)};
+    std::vector<DioLinForm> cons = {
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Eq, 1),
+        con({{"r_z", 1}, {"r_n", -2}}, 0, Relation::Neq, 2)};
     std::map<std::string, DZB> bnds;
     bnds["r_z"] = DZB{true, true, mpz_class(0), M - 1, {SatLit::positive(3)}, {SatLit::positive(4)}};
     bnds["r_n"] = DZB{true, true, mpz_class(0), M / 2 - 1, {SatLit::positive(5)}, {SatLit::positive(6)}};
-    auto c = DioReasoner::tightenConflict(eqs, neqs, bnds);
+    auto c = DioReasoner::tightenConflict(cons, bnds);
     REQUIRE(c.has_value());
     CHECK_FALSE(c->empty());
+}
+
+// #10: the chain reaches the lattice ONLY via folded complementary inequality
+// pairs. Same contradiction, but the eq is given as r_z-2r_n-M·t ≤ 0 AND ≥ 0.
+TEST_CASE("Dio-tighten: complementary inequality pair folds to eq -> conflict") {
+    mpz_class M(TWO32);
+    std::vector<DioLinForm> cons = {
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Leq, 1),
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Geq, 7),
+        con({{"r_z", 1}, {"r_n", -2}}, 0, Relation::Neq, 2)};
+    std::map<std::string, DZB> bnds;
+    bnds["r_z"] = DZB{true, true, mpz_class(0), M - 1, {SatLit::positive(3)}, {SatLit::positive(4)}};
+    bnds["r_n"] = DZB{true, true, mpz_class(0), M / 2 - 1, {SatLit::positive(5)}, {SatLit::positive(6)}};
+    auto c = DioReasoner::tightenConflict(cons, bnds);
+    REQUIRE(c.has_value());
+    CHECK_FALSE(c->empty());
+}
+
+// Soundness: a NON-complementary inequality pair (≤ and ≥ with a gap) must NOT
+// fold to an equality, so no chain, no conflict.
+TEST_CASE("Dio-tighten: non-complementary inequalities do NOT fold -> nullopt (sound)") {
+    mpz_class M(TWO32);
+    std::vector<DioLinForm> cons = {
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Leq, 1),
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(-10), Relation::Geq, 7),
+        con({{"r_z", 1}, {"r_n", -2}}, 0, Relation::Neq, 2)};
+    std::map<std::string, DZB> bnds;
+    bnds["r_z"] = DZB{true, true, mpz_class(0), M - 1, {SatLit::positive(3)}, {SatLit::positive(4)}};
+    bnds["r_n"] = DZB{true, true, mpz_class(0), M / 2 - 1, {SatLit::positive(5)}, {SatLit::positive(6)}};
+    CHECK_FALSE(DioReasoner::tightenConflict(cons, bnds).has_value());
 }
 
 // Soundness: no disequality -> nothing forced -> nullopt.
 TEST_CASE("Dio-tighten: no disequality -> nullopt (sound)") {
     mpz_class M(TWO32);
-    std::vector<DioLinForm> eqs = {[&]{
-        DioLinForm f; f.cst = 0; f.reason = SatLit::positive(1);
-        f.coeffs = {{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}};
-        return f; }()};
+    std::vector<DioLinForm> cons = {
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Eq, 1)};
     std::map<std::string, DZB> bnds;
     bnds["r_z"] = DZB{true, true, mpz_class(0), M - 1, {SatLit::positive(3)}, {SatLit::positive(4)}};
     bnds["r_n"] = DZB{true, true, mpz_class(0), M / 2 - 1, {SatLit::positive(5)}, {SatLit::positive(6)}};
-    CHECK_FALSE(DioReasoner::tightenConflict(eqs, {}, bnds).has_value());
+    CHECK_FALSE(DioReasoner::tightenConflict(cons, bnds).has_value());
 }
 
 // Soundness: same eq+diseq but r_z unbounded -> no hull -> nullopt.
 TEST_CASE("Dio-tighten: unbounded form var -> nullopt (sound)") {
     mpz_class M(TWO32);
-    std::vector<DioLinForm> eqs = {[&]{
-        DioLinForm f; f.cst = 0; f.reason = SatLit::positive(1);
-        f.coeffs = {{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}};
-        return f; }()};
-    std::vector<DioLinForm> neqs = {form({{"r_z", 1}, {"r_n", -2}}, 0, 2)};
+    std::vector<DioLinForm> cons = {
+        conM({{"r_z", mpz_class(1)}, {"r_n", mpz_class(-2)}, {"t", -M}}, mpz_class(0), Relation::Eq, 1),
+        con({{"r_z", 1}, {"r_n", -2}}, 0, Relation::Neq, 2)};
     std::map<std::string, DZB> bnds;
     bnds["r_n"] = DZB{true, true, mpz_class(0), M / 2 - 1, {SatLit::positive(5)}, {SatLit::positive(6)}};
-    CHECK_FALSE(DioReasoner::tightenConflict(eqs, neqs, bnds).has_value());
+    CHECK_FALSE(DioReasoner::tightenConflict(cons, bnds).has_value());
 }
 
 // Bound-infeasible: equalities + bounds admit NO solution (form lattice ∩ hull

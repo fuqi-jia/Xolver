@@ -1398,20 +1398,22 @@ std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, Theory
     }();
     if (!enabled) return std::nullopt;
 
-    // (A) Lattice-step + bound tightening (arith-dio-tighten). Reads the live
-    // equalities/disequalities (normalized_) and per-variable bounds (domains_,
-    // populated by the earlier linear-domain stage), shares the implementation
-    // with LiaSolver via DioReasoner::tightenConflict. Refutes the QF_(A)NIA
-    // integer-Diophantine cluster directly when NIA gets the check (when the LIA
-    // sibling does not monopolize the loop, LIA carries the same lever).
+    // (A) Lattice-step + bound tightening (arith-dio-tighten). Marshals the live
+    // equalities / disequalities / inequalities (normalized_) and the per-variable
+    // bounds (domains_, populated by the earlier linear-domain stage) into the
+    // shared DioReasoner::tightenConflict — which folds complementary inequality
+    // pairs + pinned bounds into the lattice. Refutes the QF_(A)NIA
+    // integer-Diophantine cluster (in-de42 etc.) when NIA gets the check.
     {
-        std::vector<DioLinForm> eqs, neqs;
+        std::vector<DioLinForm> cons;
         for (const auto& c : normalized_) {
-            if (c.rel != Relation::Eq && c.rel != Relation::Neq) continue;
+            if (c.rel != Relation::Eq && c.rel != Relation::Neq &&
+                c.rel != Relation::Leq && c.rel != Relation::Geq) continue;
             auto termsOpt = kernel_->terms(c.poly);
             if (!termsOpt) continue;
             DioLinForm f;
             f.cst = 0;
+            f.rel = c.rel;
             f.reason = c.reason;
             bool linear = true;
             for (const auto& t : *termsOpt) {
@@ -1420,19 +1422,17 @@ std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, Theory
                 f.coeffs.emplace_back(std::string(kernel_->varName(t.powers[0].first)), t.coefficient);
             }
             if (!linear || f.coeffs.empty()) continue;
-            (c.rel == Relation::Eq ? eqs : neqs).push_back(std::move(f));
+            cons.push_back(std::move(f));
         }
-        if (!eqs.empty() && !neqs.empty()) {
-            std::map<std::string, DioVarBound> bnds;
-            for (const auto& [name, dom] : domains_.getAllDomains()) {
-                DioVarBound bb;
-                if (dom.hasLower) { bb.hasLo = true; bb.lo = dom.lower.value; bb.loReasons = dom.lower.reasons; }
-                if (dom.hasUpper) { bb.hasHi = true; bb.hi = dom.upper.value; bb.hiReasons = dom.upper.reasons; }
-                bnds.emplace(name, std::move(bb));
-            }
-            auto conflictOpt = DioReasoner::tightenConflict(eqs, neqs, bnds);
-            if (conflictOpt) return TheoryCheckResult::mkConflict(TheoryConflict{*conflictOpt});
+        std::map<std::string, DioVarBound> bnds;
+        for (const auto& [name, dom] : domains_.getAllDomains()) {
+            DioVarBound bb;
+            if (dom.hasLower) { bb.hasLo = true; bb.lo = dom.lower.value; bb.loReasons = dom.lower.reasons; }
+            if (dom.hasUpper) { bb.hasHi = true; bb.hi = dom.upper.value; bb.hiReasons = dom.upper.reasons; }
+            bnds.emplace(name, std::move(bb));
         }
+        auto conflictOpt = DioReasoner::tightenConflict(cons, bnds);
+        if (conflictOpt) return TheoryCheckResult::mkConflict(TheoryConflict{*conflictOpt});
     }
 
     // (B) Symbolic modular-congruence path (variable-divisor `(mod x y)=c` facts).

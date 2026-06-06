@@ -37,14 +37,16 @@ struct DioVarBound {
 };
 
 /**
- * A normalized integer linear form  Σ coeff·var + cst  (relation against 0 given
- * by the list it lives in), with the literal that justifies the source atom.
- * String-keyed so both LIA (LinearFormKey) and NIA can build it from their own
- * representation and share the one tightening implementation.
+ * A normalized integer linear constraint  (Σ coeff·var + cst)  `rel`  0, with the
+ * literal that justifies the source atom. String-keyed so both LIA
+ * (LinearFormKey) and NIA can build it from their own representation and share
+ * the one tightening implementation. `rel` is one of Eq / Neq / Leq / Geq
+ * (callers convert strict Lt/Gt to the integer non-strict form).
  */
 struct DioLinForm {
     std::vector<std::pair<std::string, mpz_class>> coeffs;
     mpz_class cst;
+    Relation rel = Relation::Eq;
     SatLit reason;
 };
 
@@ -77,17 +79,20 @@ public:
                            const std::vector<DioCongruence>& congruences);
 
     /**
-     * Lattice-tightening refutation (arith-dio-tighten) over already-normalized
-     * integer data. Builds the equalities into A·x = b, then for each disequality
-     * `form ≠ 0` tests whether the equality lattice + the per-variable bounds
-     * force `form` to 0 (latticeForcesFormZero). Returns, for the first such
-     * disequality, the conflict literals = the equalities' reasons + that
-     * disequality's reason + the bound literals of the form's variables; or
-     * nullopt if nothing is forced. Pure and string-keyed so LIA and NIA share it.
+     * Lattice-tightening refutation (arith-dio-tighten) over the live constraint
+     * set. The lattice equalities A·x = b are built from THREE sources:
+     *   - explicit equality constraints (Relation::Eq);
+     *   - bound-PINNED variables (lo == hi) → `v = lo`;
+     *   - folded complementary inequality pairs (`f ≤ c` ∧ `f ≥ c` ⟹ `f = c`),
+     *     each justified by BOTH inequality literals.
+     * Then, for each disequality `form ≠ 0` (Relation::Neq), it tests whether the
+     * lattice + the per-variable bounds force `form` to 0 (latticeForcesFormZero),
+     * returning the conflict literals (all contributing equality/bound/diseq
+     * reasons) for the first one that is forced, else nullopt. Pure and
+     * string-keyed so LIA and NIA share the one implementation.
      */
     static std::optional<std::vector<SatLit>> tightenConflict(
-        const std::vector<DioLinForm>& eqs,
-        const std::vector<DioLinForm>& neqs,
+        const std::vector<DioLinForm>& constraints,
         const std::map<std::string, DioVarBound>& bounds);
 
     /**
