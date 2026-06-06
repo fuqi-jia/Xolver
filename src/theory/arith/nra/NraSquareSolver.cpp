@@ -3,9 +3,12 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -603,39 +606,74 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
     // A constraint that reduces to a value over exactly ONE generator is decided
     // exactly; one that still mentions a non-generator variable OR mixes two
     // generators (a sqrt(c_i)*sqrt(c_j) cross-term) is inconclusive -> bail (sound).
+    // === Sign in the MULTIQUADRATIC field Q(sqrt c_1, ..., sqrt c_k) ===============
+    // A value is a multilinear form over the generators: a map from a SORTED set of
+    // distinct generator indices (the squarefree monomial prod_{i in S} gen_i, since
+    // gen_i^2 = c_i is rational) to a rational coefficient. signField() recurses by
+    // splitting off one generator g: value = P + Q*gen_g; with gen_g = sign_g*sqrt(c_g)
+    // and s = Q*sign_g, sign(P + s*sqrt(c_g)) reduces on mixed signs to sign(s^2 c_g -
+    // P^2), a value in the SMALLER field. This decides the compositum cross-terms
+    // sqrt(c_i)*sqrt(c_j) that a single-surd kernel cannot (e.g. m in Q(sqrt½,sqrt5)).
+    using FieldVal = std::map<std::vector<int>, mpq_class>;
+    auto toFieldVal = [&](const RationalPolynomial& r, FieldVal& out) -> bool {
+        out.clear();
+        for (const auto& [key, coeff] : r.terms()) {
+            mpq_class m = coeff; std::vector<int> odd;
+            for (const auto& [v, e] : key) {
+                const int gi = genIndexOf(v);
+                if (gi < 0) return false;                       // non-generator variable
+                for (int k = 0; k < e / 2; ++k) m *= gens[gi].c;
+                if (e % 2 == 1) odd.push_back(gi);
+            }
+            std::sort(odd.begin(), odd.end());
+            out[odd] += m;
+        }
+        return true;
+    };
+    auto mulFieldVal = [&](const FieldVal& a, const FieldVal& b) -> FieldVal {
+        FieldVal out;
+        for (const auto& [ka, ca] : a) for (const auto& [kb, cb] : b) {
+            mpq_class coeff = ca * cb;
+            std::map<int, int> cnt;
+            for (int x : ka) cnt[x]++;
+            for (int x : kb) cnt[x]++;
+            std::vector<int> merged;
+            for (const auto& [gi, n] : cnt) {
+                if (n == 2) coeff *= gens[gi].c;      // gen_i^2 -> c_i (rational), cancels
+                else merged.push_back(gi);            // survives the product
+            }
+            out[merged] += coeff;                     // cnt's keys are already sorted
+        }
+        return out;
+    };
+    std::function<int(const FieldVal&)> signField = [&](const FieldVal& V) -> int {
+        int g = -1;
+        for (const auto& [k, c] : V) { if (sgn(c) == 0) continue; for (int gi : k) g = std::max(g, gi); }
+        if (g < 0) { auto it = V.find(std::vector<int>{}); return (it == V.end()) ? 0 : sgn(it->second); }
+        FieldVal P, Q;
+        for (const auto& [k, c] : V) {
+            if (sgn(c) == 0) continue;
+            if (std::find(k.begin(), k.end(), g) == k.end()) P[k] += c;
+            else { std::vector<int> k2; for (int gi : k) if (gi != g) k2.push_back(gi); Q[k2] += c; }
+        }
+        FieldVal s = Q; if (gens[g].sign < 0) for (auto& kv : s) kv.second = -kv.second;
+        const int sgnP = signField(P), sgnS = signField(s);
+        if (sgnS == 0) return sgnP;
+        if (sgnP == 0) return sgnS;
+        if (sgnS == sgnP) return sgnP;
+        FieldVal cg; cg[std::vector<int>{}] = gens[g].c;        // sign = sgnS * sign(s^2 c_g - P^2)
+        FieldVal disc = mulFieldVal(mulFieldVal(s, s), cg);
+        for (const auto& [k, c] : mulFieldVal(P, P)) disc[k] -= c;
+        return sgnS * signField(disc);
+    };
     auto signOfReduced = [&](PolyId p) -> std::optional<int> {
         auto rp = RationalPolynomial::fromPolyId(p, kernel);
         if (!rp) return std::nullopt;
         RationalPolynomial r = applySubstRp(*rp);   // rationals + aliases + derived (exact)
         if (r.isConstant()) return sgn(r.constantValue());
-        // Reduce EVERY monomial modulo all gen_i^2 = c_i. An even power of a generator
-        // (e.g. v8^2 -> 3/4) collapses to a RATIONAL contribution, so a constraint that
-        // merely squares one generator while using another is still block-separable —
-        // it is NOT a cross-term. After reduction the value is b + sum_i a_i*gen_i; only
-        // a monomial with ODD powers of TWO DISTINCT generators (a real sqrt(c_i)*sqrt(c_j)
-        // term) or a surviving non-generator variable is undecidable here -> bail.
-        mpq_class b = 0;
-        std::map<int, mpq_class> aGen;                 // gen index -> coeff of that generator
-        for (const auto& [key, coeff] : r.terms()) {
-            mpq_class m = coeff;
-            int oddGen = -1; bool twoOdd = false, nonGen = false;
-            for (const auto& [v, e] : key) {
-                const int gi = genIndexOf(v);
-                if (gi < 0) { nonGen = true; break; }
-                for (int k = 0; k < e / 2; ++k) m *= gens[gi].c;   // gen^even -> c^(e/2)
-                if (e % 2 == 1) { if (oddGen < 0) oddGen = gi; else twoOdd = true; }
-            }
-            if (nonGen || twoOdd) return std::nullopt;  // residual var or genuine cross-term
-            if (oddGen < 0) b += m; else aGen[oddGen] += m;
-        }
-        std::vector<std::pair<int, mpq_class>> nz;
-        for (const auto& [gi, a] : aGen) if (sgn(a) != 0) nz.push_back({gi, a});
-        if (nz.empty()) return sgn(b);
-        if (nz.size() == 1) {                          // b + a*gen  (gen = sign*sqrt(c))
-            const GenInfo& g = gens[nz[0].first];
-            return signOfRootExpr(nz[0].second * mpq_class(g.sign), b, g.c);
-        }
-        return std::nullopt;   // sum of 2+ independent surds: sign undecided in this kernel
+        FieldVal V;
+        if (!toFieldVal(r, V)) return std::nullopt;   // residual non-generator variable
+        return signField(V);
     };
     for (const auto& [p, rel] : cons) {
         auto s = signOfReduced(p);
@@ -687,13 +725,73 @@ static bool attemptSquareCascade(const std::vector<std::pair<PolyId, Relation>>&
             const int gi = genIndexOf(gv);
             if (gi >= 0) modelOut->emplace_back(v, genRealValue(gens[gi]));
         }
+        // Build a degree-4 algebraic number for a value in Q(sqrt c1, sqrt c2) (exactly
+        // TWO generators): w = A + B sqrt c1 + C sqrt c2 + D sqrt(c1 c2). Its minimal
+        // polynomial is the product over the four sign-conjugates and has RATIONAL
+        // coefficients (the sqrt c1 cancels on expanding the conjugate pairing). The
+        // isolating interval is refined by bisecting the sqrt brackets until it separates
+        // w from its three conjugates. This emits the compositum-valued model variables
+        // (e.g. m in Q(sqrt½,sqrt5)) whose signs the recursive signField just validated.
+        auto buildCompositum = [&](const RationalPolynomial& mvv) -> std::optional<AlgebraicNumber> {
+            FieldVal V;
+            if (!toFieldVal(mvv, V)) return std::nullopt;
+            std::set<int> used;
+            for (const auto& [k, c] : V) { if (sgn(c) == 0) continue; for (int gi : k) used.insert(gi); }
+            if (used.size() != 2) return std::nullopt;            // only the 2-generator case
+            const int i = *used.begin(), j = *std::next(used.begin());
+            const GenInfo& g1 = gens[i]; const GenInfo& g2 = gens[j];
+            auto co = [&](std::vector<int> key) -> mpq_class {
+                std::sort(key.begin(), key.end()); auto it = V.find(key); return it == V.end() ? mpq_class(0) : it->second; };
+            const mpq_class A = co({});
+            const mpq_class B = co({i}) * mpq_class(g1.sign);            // coeff of sqrt c1
+            const mpq_class C = co({j}) * mpq_class(g2.sign);            // coeff of sqrt c2
+            const mpq_class Dd = co({i, j}) * mpq_class(g1.sign) * mpq_class(g2.sign);  // coeff sqrt(c1c2)
+            const mpq_class c1 = g1.c, c2 = g2.c;
+            const mpq_class q3 = mpq_class(-4) * A;
+            const mpq_class q2 = mpq_class(6)*A*A - 2*B*B*c1 - 2*C*C*c2 - 2*Dd*Dd*c1*c2;
+            const mpq_class q1 = mpq_class(-4)*A*(A*A - B*B*c1) + 4*c2*(A*(C*C + Dd*Dd*c1) - 2*B*C*Dd*c1);
+            const mpq_class q0 = (A*A - B*B*c1)*(A*A - B*B*c1)
+                               - 2*c2*((A*A + B*B*c1)*(C*C + Dd*Dd*c1) - 4*A*B*C*Dd*c1)
+                               + c2*c2*(C*C - Dd*Dd*c1)*(C*C - Dd*Dd*c1);
+            mpz_class L = q0.get_den();
+            for (const mpq_class& q : {q1, q2, q3}) mpz_lcm(L.get_mpz_t(), L.get_mpz_t(), q.get_den().get_mpz_t());
+            std::vector<mpz_class> co4 = { mpq_class(q0*L).get_num(), mpq_class(q1*L).get_num(),
+                                           mpq_class(q2*L).get_num(), mpq_class(q3*L).get_num(), L };
+            mpz_class gg = co4[0];
+            for (size_t t = 1; t < co4.size(); ++t) mpz_gcd(gg.get_mpz_t(), gg.get_mpz_t(), co4[t].get_mpz_t());
+            if (sgn(gg) != 0 && gg != 1) for (auto& cc : co4) cc /= gg;
+            mpq_class l1=(c1<1)?c1:mpq_class(1), h1=(c1<1)?mpq_class(1):c1;
+            mpq_class l2=(c2<1)?c2:mpq_class(1), h2=(c2<1)?mpq_class(1):c2;
+            auto bound = [&](int e1, int e2, bool wantLo) -> mpq_class {
+                const mpq_class kB = e1>0?B:-B, kC = e2>0?C:-C, kD = (e1*e2>0)?Dd:-Dd;
+                auto term = [&](const mpq_class& k, const mpq_class& lo, const mpq_class& hi) -> mpq_class {
+                    if (sgn(k) == 0) return mpq_class(0);
+                    return ((sgn(k) > 0) == wantLo) ? mpq_class(k*lo) : mpq_class(k*hi); };
+                return A + term(kB,l1,h1) + term(kC,l2,h2) + term(kD,l1*l2,h1*h2);
+            };
+            for (int iter = 0; iter < 100; ++iter) {
+                const mpq_class wlo = bound(1,1,true), whi = bound(1,1,false);
+                bool sep = (wlo < whi);
+                for (auto pr : std::vector<std::pair<int,int>>{{1,-1},{-1,1},{-1,-1}}) {
+                    const mpq_class clo = bound(pr.first,pr.second,true), chi = bound(pr.first,pr.second,false);
+                    if (!(whi < clo || chi < wlo)) { sep = false; break; }      // overlaps a conjugate
+                }
+                if (sep) { AlgebraicNumber an; an.coefficients = co4; an.lower = wlo; an.upper = whi; return an; }
+                mpq_class m1=(l1+h1)/2; if (m1*m1 < c1) l1=m1; else h1=m1;
+                mpq_class m2=(l2+h2)/2; if (m2*m2 < c2) l2=m2; else h2=m2;
+            }
+            return std::nullopt;
+        };
         // Derived d = ap*g + bp in Q(sqrt c_i) for the SINGLE generator g_i it uses.
         // With g = sign_i*sqrt(c_i), d = Aeff*sqrt(c_i) + bp where Aeff = ap*sign_i.
         for (const auto& [d, mv] : derivedVal) {
             const int gi = solePolyGen(mv);
             if (gi < 0) {
                 if (mv.isConstant()) { modelOut->emplace_back(d, RealValue::fromMpq(mv.constantValue())); continue; }
-                return false;            // spans 2+ generators (cross-term): give up (sound)
+                auto an = buildCompositum(mv);          // 2-generator compositum value
+                if (!an) return false;                  // >2 generators or non-isolable: give up (sound)
+                modelOut->emplace_back(d, RealValue::fromAlgebraic(std::move(*an)));
+                continue;
             }
             const GenInfo& g = gens[gi];
             auto rd = reduceUni(mv, g);

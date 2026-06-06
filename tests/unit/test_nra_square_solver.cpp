@@ -421,3 +421,53 @@ TEST_CASE("trySquareCascade: DENESTING a nested radical sqrt(p + q*sqrt c) withi
     };
     CHECK_FALSE(trySquareCascade(bad, k, nullptr));
 }
+
+TEST_CASE("trySquareCascade: COMPOSITUM Q(sqrt2, sqrt3) — recursive sign + degree-4 model") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId a = k.getOrCreateVar("a");
+    VarId b = k.getOrCreateVar("b");
+    VarId m = k.getOrCreateVar("m");
+    auto V = [&](VarId v) { return k.mkVar(v); };
+    auto C = [&](int n) { return k.mkConst(mpq_class(n)); };
+
+    // a = sqrt2, b = sqrt3 (two INDEPENDENT generators), m = a + b lives in the
+    // compositum Q(sqrt2, sqrt3). The constraint m^2 - 5 > 0 reduces to 2 a b = 2 sqrt6
+    // > 0 — a genuine sqrt(c1)*sqrt(c2) cross-term whose sign only the recursive
+    // multiquadratic signField can decide. The model emits m as a degree-4 algebraic
+    // number (minimal polynomial x^4 - 10 x^2 + 1, the minpoly of sqrt2 + sqrt3).
+    PolyId ad = k.sub(k.pow(V(a), 2), C(2));               // a^2 - 2
+    PolyId bd = k.sub(k.pow(V(b), 2), C(3));               // b^2 - 3
+    PolyId meq = k.sub(k.sub(V(m), V(a)), V(b));           // m - a - b
+    PolyId cross = k.sub(k.pow(V(m), 2), C(5));            // m^2 - 5  (= 2 sqrt6 > 0)
+    std::vector<std::pair<PolyId, Relation>> cons = {
+        {ad, Relation::Eq}, {bd, Relation::Eq}, {meq, Relation::Eq},
+        {V(a), Relation::Gt}, {V(b), Relation::Gt}, {V(m), Relation::Gt}, {cross, Relation::Gt},
+    };
+    std::vector<std::pair<VarId, RealValue>> model;
+    CHECK(trySquareCascade(cons, k, &model));              // recursive sign validates the cross-term
+    bool sawM = false;
+    for (const auto& [v, val] : model) {
+        if (v == m) {
+            sawM = true;
+            REQUIRE(val.isAlgebraic());                    // m = sqrt2 + sqrt3 is degree 4
+            const auto& an = val.asAlgebraic();
+            // minimal polynomial (content-reduced, positive leading): x^4 - 10 x^2 + 1.
+            REQUIRE(an.coefficients.size() == 5u);
+            CHECK(an.coefficients[0] == mpz_class(1));
+            CHECK(an.coefficients[1] == mpz_class(0));
+            CHECK(an.coefficients[2] == mpz_class(-10));
+            CHECK(an.coefficients[3] == mpz_class(0));
+            CHECK(an.coefficients[4] == mpz_class(1));
+        }
+    }
+    CHECK(sawM);
+
+    // The opposite cross-term constraint m^2 - 5 < 0 is UNSAT (2 sqrt6 > 0): the
+    // recursive sign must reject it (no false sat from a mis-signed cross-term).
+    std::vector<std::pair<PolyId, Relation>> bad = {
+        {ad, Relation::Eq}, {bd, Relation::Eq}, {meq, Relation::Eq},
+        {V(a), Relation::Gt}, {V(b), Relation::Gt}, {cross, Relation::Lt},
+    };
+    CHECK_FALSE(trySquareCascade(bad, k, nullptr));
+}
