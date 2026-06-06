@@ -603,15 +603,22 @@ std::set<VarId> RationalPolynomial::variables() const {
 }
 
 int RationalPolynomial::highestVariableLevel(const std::vector<VarId>& varOrder) const {
+    // iter-106 perf: build VarId → index map ONCE, then O(1) lookup per var.
+    // Was O(|vars| × |varOrder|); now O(|varOrder| + |vars|). Called from NRA
+    // Lazard / projection closure per polynomial during CAD construction —
+    // multiplies with the polynomial count.
+    std::unordered_map<uint32_t, int> indexOf;
+    indexOf.reserve(varOrder.size());
+    for (size_t i = 0; i < varOrder.size(); ++i) {
+        // For unique-order varOrder (typical), "first match wins" via emplace
+        // matches the original loop's break-on-first semantics.
+        indexOf.emplace(varOrder[i], static_cast<int>(i));
+    }
     int highest = -1;
     auto vars = variables();
     for (VarId v : vars) {
-        for (size_t i = 0; i < varOrder.size(); ++i) {
-            if (varOrder[i] == v) {
-                highest = std::max(highest, static_cast<int>(i));
-                break;
-            }
-        }
+        auto it = indexOf.find(v);
+        if (it != indexOf.end() && it->second > highest) highest = it->second;
     }
     return highest;
 }
