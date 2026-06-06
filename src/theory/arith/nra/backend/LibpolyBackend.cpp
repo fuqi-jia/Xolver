@@ -769,11 +769,19 @@ ProjectionResult LibpolyBackend::projectionPolys(
         }
     }
 
+    // iter-109 perf: precompute "polynomial contains elimName" ONCE per
+    // polynomial before the O(N²) pairwise resultant loop. Was calling
+    // std::find on vars_i and vars_j per (i,j) pair — total O(N² × |vars|)
+    // linear-scan cost. Now O(N × |vars|) once + O(N²) plain pair iteration.
+    std::vector<bool> hasElim(polys.size(), false);
+    for (size_t k = 0; k < polys.size(); ++k) {
+        auto vars_k = kernel_->variables(polys[k]);
+        hasElim[k] = std::find(vars_k.begin(), vars_k.end(), elimName) != vars_k.end();
+    }
+
     // Pairwise resultants
     for (size_t i = 0; i < polys.size(); ++i) {
-        auto vars_i = kernel_->variables(polys[i]);
-        bool has_i = std::find(vars_i.begin(), vars_i.end(), elimName) != vars_i.end();
-        if (!has_i) continue;
+        if (!hasElim[i]) continue;
 
         const poly::Polynomial& pi = libKernel_->getPolynomial(polys[i]);
         if (poly::main_variable(pi) != elimPolyVar) {
@@ -781,9 +789,7 @@ ProjectionResult LibpolyBackend::projectionPolys(
         }
 
         for (size_t j = i + 1; j < polys.size(); ++j) {
-            auto vars_j = kernel_->variables(polys[j]);
-            bool has_j = std::find(vars_j.begin(), vars_j.end(), elimName) != vars_j.end();
-            if (!has_j) continue;
+            if (!hasElim[j]) continue;
 
             const poly::Polynomial& pj = libKernel_->getPolynomial(polys[j]);
             if (poly::main_variable(pj) != elimPolyVar) {
