@@ -3,6 +3,7 @@
 #include "expr/types.h"   // VarId, PolyId, Relation
 #include <gmpxx.h>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 namespace xolver {
@@ -46,5 +47,28 @@ SquareRoot solveSquareRoot(const SquareEquality& sq, int signHint);
 // True iff `c` (>= 0) is a perfect square of a rational; if so, sets `root` to its
 // non-negative square root. c must be in lowest terms is NOT required.
 bool rationalSqrt(const mpq_class& c, mpq_class& root);
+
+// Substitute variable `from` with variable `to` in p — EXACT, via pseudo-remainder
+// by the monic linear divisor (from - to). Used to collapse two equal algebraic
+// roots (same defining poly + sign, e.g. v11 = v12 = +sqrt(1/2)) onto a SINGLE
+// generator, so every constraint reduces to one algebraic variable and validation
+// stays 1-algebraic (signAtOneAlgebraic) instead of needing the ≥2-algebraic tower.
+PolyId substituteVarWithVar(PolyId p, VarId from, VarId to, PolynomialKernel& kernel);
+
+// Result of collapsing resolved square-roots: rational vars get exact values;
+// algebraic vars that are the SAME number (equal squaredValue AND sign) collapse
+// to one representative generator, with `aliasOf` mapping each onto its rep.
+struct CollapsedRoots {
+    bool feasible = true;                              // false if any c < 0
+    std::unordered_map<VarId, mpq_class> rationalVars; // var -> exact rational value
+    std::unordered_map<VarId, VarId> aliasOf;          // algebraic var -> generator rep
+    std::vector<VarId> generators;                     // distinct generator reps
+    std::unordered_map<VarId, mpq_class> genSquared;   // rep -> c (rep^2 = c)
+    std::unordered_map<VarId, int> genSign;            // rep -> +/-1
+};
+
+// Group resolved roots: equal algebraic numbers (same squaredValue + sign) share a
+// generator. Pure (no kernel).
+CollapsedRoots collapseAlgebraicRoots(const std::vector<SquareRoot>& roots);
 
 }  // namespace xolver

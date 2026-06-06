@@ -2,6 +2,9 @@
 
 #include "theory/arith/poly/PolynomialKernel.h"
 
+#include <map>
+#include <utility>
+
 namespace xolver {
 
 bool rationalSqrt(const mpq_class& c, mpq_class& root) {
@@ -39,6 +42,37 @@ std::vector<SquareEquality> detectSquareEqualities(
         sq.squaredValue = c;
         sq.constraintIndex = i;
         out.push_back(std::move(sq));
+    }
+    return out;
+}
+
+PolyId substituteVarWithVar(PolyId p, VarId from, VarId to, PolynomialKernel& kernel) {
+    if (from == to) return p;
+    const PolyId divisor = kernel.sub(kernel.mkVar(from), kernel.mkVar(to));  // from - to
+    auto pr = kernel.pseudoRemainderWithScale(p, divisor, from);
+    // (from - to) is monic in `from`, so the pseudo-remainder is exact substitution
+    // (scaleFactor 1, exponent 0). Fall back to p if the kernel could not reduce.
+    return pr.ok() ? pr.remainder : p;
+}
+
+CollapsedRoots collapseAlgebraicRoots(const std::vector<SquareRoot>& roots) {
+    CollapsedRoots out;
+    // Key an algebraic generator by its (c, sign): equal => the SAME real number.
+    std::map<std::pair<mpq_class, int>, VarId> repByKey;
+    for (const auto& r : roots) {
+        if (!r.feasible) { out.feasible = false; continue; }
+        if (r.isRational) { out.rationalVars[r.var] = r.rationalValue; continue; }
+        const std::pair<mpq_class, int> key{r.squaredValue, r.sign};
+        auto it = repByKey.find(key);
+        if (it == repByKey.end()) {
+            repByKey.emplace(key, r.var);
+            out.generators.push_back(r.var);
+            out.genSquared[r.var] = r.squaredValue;
+            out.genSign[r.var] = r.sign;
+            out.aliasOf[r.var] = r.var;            // representative aliases to itself
+        } else {
+            out.aliasOf[r.var] = it->second;       // collapse onto the representative
+        }
     }
     return out;
 }

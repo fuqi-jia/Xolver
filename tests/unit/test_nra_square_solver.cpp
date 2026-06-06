@@ -94,3 +94,60 @@ TEST_CASE("solveSquareRoot: negative squared value is infeasible") {
     SquareRoot r = solveSquareRoot(sq, +1);
     CHECK_FALSE(r.feasible);   // x^2 = -3/4 has no real root
 }
+
+TEST_CASE("substituteVarWithVar: collapses v11*v12 to v11^2") {
+    auto kp = createPolynomialKernel();
+    PolynomialKernel& k = *kp;
+    VarId v11 = k.getOrCreateVar("v11");
+    VarId v12 = k.getOrCreateVar("v12");
+
+    // p = v11 * v12  -> substitute v12 := v11 -> v11^2
+    PolyId p = k.mul(k.mkVar(v11), k.mkVar(v12));
+    PolyId p2 = substituteVarWithVar(p, v12, v11, k);
+    auto vars = k.variables(p2);
+    REQUIRE(vars.size() == 1);
+    CHECK(vars[0] == "v11");
+    REQUIRE(k.degree(p2, "v11"));
+    CHECK(*k.degree(p2, "v11") == 2);
+    CHECK(k.isZero(k.sub(p2, k.mul(k.mkVar(v11), k.mkVar(v11)))));   // p2 == v11^2
+
+    // A more 14b-like reduction: v11^3*v12 + v11 - 1 with v12:=v11 -> v11^4 + v11 - 1
+    PolyId q = k.add(k.sub(k.mul(k.pow(k.mkVar(v11), 3), k.mkVar(v12)), k.mkConst(1)),
+                     k.mkVar(v11));
+    PolyId q2 = substituteVarWithVar(q, v12, v11, k);
+    auto qexpect = k.add(k.sub(k.pow(k.mkVar(v11), 4), k.mkConst(1)), k.mkVar(v11));
+    CHECK(k.isZero(k.sub(q2, qexpect)));
+
+    // No-op when from == to.
+    CHECK(substituteVarWithVar(p, v11, v11, k) == p);
+}
+
+TEST_CASE("collapseAlgebraicRoots: equal (c,sign) share a generator") {
+    std::vector<SquareRoot> roots;
+    // v11: algebraic sqrt(1/2), +
+    roots.push_back({VarId{10}, true, false, mpq_class(0), mpq_class(1, 2), +1});
+    // v12: algebraic sqrt(1/2), +  -> SAME number as v11
+    roots.push_back({VarId{11}, true, false, mpq_class(0), mpq_class(1, 2), +1});
+    // v10: rational 1/2 (from x^2 = 1/4)
+    roots.push_back({VarId{12}, true, true, mpq_class(1, 2), mpq_class(1, 4), +1});
+    // w: algebraic sqrt(1/2), -  -> DIFFERENT (negative root)
+    roots.push_back({VarId{13}, true, false, mpq_class(0), mpq_class(1, 2), -1});
+
+    CollapsedRoots c = collapseAlgebraicRoots(roots);
+    CHECK(c.feasible);
+    REQUIRE(c.rationalVars.count(VarId{12}));
+    CHECK(c.rationalVars.at(VarId{12}) == mpq_class(1, 2));
+    CHECK(c.generators.size() == 2);                 // {1/2,+} and {1/2,-}
+    CHECK(c.aliasOf.at(VarId{10}) == VarId{10});     // representative -> self
+    CHECK(c.aliasOf.at(VarId{11}) == VarId{10});     // v12 collapses onto v11
+    CHECK(c.aliasOf.at(VarId{13}) == VarId{13});     // negative-root generator distinct
+    CHECK(c.genSquared.at(VarId{10}) == mpq_class(1, 2));
+    CHECK(c.genSign.at(VarId{13}) == -1);
+}
+
+TEST_CASE("collapseAlgebraicRoots: infeasible when a squared value is negative") {
+    std::vector<SquareRoot> roots;
+    roots.push_back({VarId{1}, false, false, mpq_class(0), mpq_class(-1, 4), +1});
+    CollapsedRoots c = collapseAlgebraicRoots(roots);
+    CHECK_FALSE(c.feasible);
+}
