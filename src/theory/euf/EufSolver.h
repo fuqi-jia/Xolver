@@ -103,6 +103,7 @@ public:
     // Array-index shared terms (for scoped deduced-equality propagation). Empty
     // unless array mode is on. Delegates to the ArrayReasoner.
     std::vector<SharedTermId> arrayIndexSharedTerms() const override;
+    std::vector<SharedTermId> arrayValueSharedTerms() const override;
 
     bool satComplete(std::string* reason = nullptr) const override;
 

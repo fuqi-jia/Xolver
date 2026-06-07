@@ -223,6 +223,29 @@ void ArrayReasoner::collectIndexSharedTerms(std::unordered_set<SharedTermId>& ou
     for (EufTermId s : storeTerms_)  addIdx(s);
 }
 
+void ArrayReasoner::collectValueSharedTerms(std::unordered_set<SharedTermId>& out) const {
+    if (!sharedTermRegistry_ || !tm_) return;
+    // The element/value side of array reasoning: the stored value (arg[2] of a
+    // store) and the read result (a select term itself). Their deduced equalities
+    // (e.g. select(store(a,i,v),j) ≡ another read, tying two stored values) must
+    // reach arith — but a value-pair deduced equality first surfaces at STANDARD
+    // effort where cb_propagate drops the lemma yet deducedEqCache_ records it,
+    // permanently blocking Full-effort propagation. TheoryManager unions this set
+    // with the index set to DEFER array value/index pairs to Full (alra_010:
+    // store elements e0/e1/e0+3/e1+3 are exactly these arg[2] terms).
+    auto addShared = [&](ExprId e) {
+        if (e == NullExpr) return;
+        if (auto s = sharedTermRegistry_->findByExprId(e)) out.insert(*s);
+    };
+    for (EufTermId s : storeTerms_) {
+        const auto& n = tm_->node(s);
+        if (n.args.size() >= 3) addShared(originExpr(n.args[2]));  // stored value
+    }
+    for (EufTermId s : selectTerms_) {
+        addShared(originExpr(s));   // the read result itself (if arith-shared)
+    }
+}
+
 void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     aniaprof::Scope _prof(aniaprof::ARR_COMPLETE);
     if (!selectCompletionEnabled_) return;

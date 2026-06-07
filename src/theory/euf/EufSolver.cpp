@@ -833,6 +833,12 @@ std::vector<SharedTermId> EufSolver::arrayIndexSharedTerms() const {
     return std::vector<SharedTermId>(set.begin(), set.end());
 }
 
+std::vector<SharedTermId> EufSolver::arrayValueSharedTerms() const {
+    std::unordered_set<SharedTermId> set;
+    if (arrayMode_) arrayReasoner_.collectValueSharedTerms(set);
+    return std::vector<SharedTermId>(set.begin(), set.end());
+}
+
 std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
     std::vector<ArrayReasoner::ArrayDiseq> out;
     if (!arrayMode_ || !coreIr_) return out;
