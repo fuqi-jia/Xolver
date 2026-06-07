@@ -7,6 +7,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS cap for the SAT-first libpoly guard
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 #include <iostream>
 #include <cstdlib>
@@ -650,6 +651,31 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 #ifndef NDEBUG
     std::cerr << "[CDCAC] solve: varOrder.size=" << input.varOrder.size() << std::endl;
 #endif
+    // STEP 2 — box-consistency GLOBAL refutation (conflict generalization at the root):
+    // before any covering, run the HC4 box fixpoint (now incl. degree-2 square
+    // contraction) over the empty assignment. An infeasible over-approximation box ⇒
+    // the whole problem is UNSAT — a SHORT refutation that short-circuits the covering-
+    // tree blowup (the hong family: Σx²<1 ⇒ |x_i|<1 ⇒ |Πx|<1, contra Πx>1). Sound: box
+    // ⊇ feasible set, so an empty box proves no real solution exists. The conflict
+    // clause is the negation of the jointly-infeasible constraints (loose but valid).
+    // ≥2 vars only: a univariate problem is solved trivially (and with a V3 covering
+    // certificate) by the covering itself, so the box short-circuit would only strip
+    // that certificate; the box's value is the MULTI-variable bound contradiction (the
+    // covering tree explodes there, e.g. hong) where it short-circuits the blowup.
+    if (input.varOrder.size() >= 2 && topLevelBoxInfeasible(input)) {
+        std::vector<SatLit> reasons;
+        reasons.reserve(input.constraints.size());
+        for (const auto& c : input.constraints) reasons.push_back(c.reason);
+        // Carry the conflict literals in a one-cell covering too: consumers re-derive
+        // the conflict clause via ReasonManager::minimize(covering), which reads
+        // cells[].reasons — an EMPTY covering there would yield an empty (false) clause
+        // and the UNSAT gets downgraded to Unknown. So put the reasons in BOTH places.
+        Covering cover;
+        Cell cell;                       // full-line cell carrying the global conflict
+        cell.reasons = reasons;
+        cover.cells.push_back(std::move(cell));
+        return CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+    }
     // nlsat-engine STEP A: SAT-only sample-first model search, ONE-SHOT per
     // CdcacCore lifetime, BEFORE the eager buildClosure projection. Sound: Sat is
     // returned only on a checkFullSample-validated full point; otherwise falls
@@ -1981,6 +2007,31 @@ static Iv ivEval(const RationalPolynomial& rp,
     return acc;
 }
 
+// BOUNDED-BIT rational upper bound r ≥ √U for U ≥ 0. EXACT when U is a perfect
+// rational square (the common sum-of-squares case, √1=1 ⇒ tight |x|≤1). Otherwise a
+// double-derived rational on a fixed 2^-24 grid, bumped until r²≥U — bounded
+// numerator/denominator so it never blows up. (An EXACT rational Newton would double
+// the bit-size every step → multi-GB OOM; that was the bug.) Sound: r ≥ √U ⇒ [−r,r]
+// ⊇ the true v-range, so the box stays an over-approximation.
+static mpq_class ratSqrtUpper(const mpq_class& U) {
+    if (U <= 0) return mpq_class(0);
+    mpz_class p = U.get_num(), q = U.get_den();
+    if (mpz_perfect_square_p(p.get_mpz_t()) && mpz_perfect_square_p(q.get_mpz_t())) {
+        mpz_class sp, sq;
+        mpz_sqrt(sp.get_mpz_t(), p.get_mpz_t());
+        mpz_sqrt(sq.get_mpz_t(), q.get_mpz_t());
+        mpq_class r(sp, sq); r.canonicalize(); return r;            // exact √U
+    }
+    const double d = std::sqrt(U.get_d());
+    if (!std::isfinite(d) || d <= 0) return U + 1;                  // sound coarse bound (√U ≤ U+1)
+    const long G = 1L << 24;
+    mpq_class r(static_cast<long>(std::ceil(d * static_cast<double>(G))) + 1, G);  // ≈ √U from above
+    r.canonicalize();
+    for (int k = 0; k < 64 && r * r < U; ++k) r += mpq_class(1, G); // bump up (bounded, few steps)
+    if (r * r < U) return U + 1;                                    // last-resort sound bound
+    return r;
+}
+
 // Box-consistency HC4 fixpoint. Fills `box` (one Iv per UNASSIGNED var, each an
 // over-approximation that always CONTAINS the feasible projection) and returns true iff
 // the subtree under `m` is provably infeasible. Shared by M2 (infeasibility pruning)
@@ -2061,6 +2112,54 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                 }
             }
         }
+        // (B2) Degree-2 contraction: c2·v² + c1·v + c0 rel 0 ⇒ complete the square
+        // (c2(v+s)² + D, with s = c1/(2c2), D = c0 − c1²/(4c2)) ⇒ bound (v+s)² ⇒ bound v.
+        // Generalises the sum-of-squares lever (c1=0, the hong family Σx²<1 ⇒ |x_i|<1
+        // ⇒ |Πx|<1, contra Πx>1) to the FULL single-var quadratic (c1≠0, e.g. x²−2x+2<0
+        // ⇒ (x−1)²<−1 ⇒ infeasible). Sound: every step uses the sound interval ops, so
+        // [−r−s.hi, r−s.lo] ⊇ the true v-range — the box stays an over-approximation.
+        for (size_t ci : cons) {
+            const RationalPolynomial& rp = *satRp[ci];
+            Relation rel = input.constraints[ci].rel;
+            for (auto& [v, ivCur] : box) {
+                if (rp.degree(v) != 2) continue;
+                std::vector<RationalPolynomial> co = rp.coefficients(v);  // [c0, c1, c2]
+                if (co.size() < 3) continue;
+                Iv c2 = ivEval(co[2], m, box), c1 = ivEval(co[1], m, box), c0 = ivEval(co[0], m, box);
+                if (!ivExcludesZero(c2)) continue;                       // need sign(c2) definite
+                const bool c2pos = (!c2.loInf && c2.lo > 0);
+                // s = c1/(2c2) (vertex shift); D = c0 − c1²/(4c2) (completed-square value).
+                const Iv s = ivMul(c1, ivRecip(ivMul(Iv::point(mpq_class(2)), c2)));
+                if (s.loInf || s.hiInf) continue;                        // unbounded shift ⇒ no finite box
+                const Iv D = ivAdd(c0, ivNeg(ivMul(ivMul(c1, c1),
+                                            ivRecip(ivMul(Iv::point(mpq_class(4)), c2)))));
+                // UPPER bound on (v+s)² (⇒ a finite box for v):
+                //   c2>0, rel < / ≤ 0  : (v+s)² ≤ −D/c2
+                //   c2<0, rel > / ≥ 0  : (v+s)² ≤ −D/c2
+                //   rel = 0            : (v+s)² = −D/c2
+                Iv u2; bool haveUpper = false;
+                if (rel == Relation::Lt || rel == Relation::Leq) {
+                    if (c2pos) { u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true; }
+                } else if (rel == Relation::Gt || rel == Relation::Geq) {
+                    if (!c2pos) { u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true; }
+                } else if (rel == Relation::Eq) {
+                    u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true;
+                }
+                if (!haveUpper || u2.hiInf) continue;                    // no finite (v+s)² upper bound
+                const mpq_class U = u2.hi;
+                if (U < 0) return true;                                  // (v+s)² ≤ U<0 ⇒ infeasible
+                const mpq_class r = ratSqrtUpper(U);
+                // v+s ∈ [−r,r] ⇒ v ∈ [−r−s.hi, r−s.lo] (sound outer bound over s's interval).
+                Iv tight; tight.loInf = false; tight.lo = -r - s.hi; tight.hiInf = false; tight.hi = r - s.lo;
+                Iv nv = ivIntersect(ivCur, tight);
+                if (nv.empty()) return true;
+                if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
+                    (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
+                    ivCur = nv;
+                    changed = true;
+                }
+            }
+        }
         if (!changed) break;
     }
     return false;
@@ -2076,6 +2175,29 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
     bool inf = propagateBox(satRp_, satSafe_, m, input, box);
     if (inf) ++g_icpPrunes;
     return inf;
+}
+
+bool CdcacCore::topLevelBoxInfeasible(const CdcacInput& input) {
+    // Independent RationalPolynomial cache (do NOT disturb satRp_/satSafe_, which the
+    // SAT-first owns with its own degree caps): build it, then run the HC4 box fixpoint
+    // over the EMPTY assignment. An infeasible box ⇒ globally UNSAT (sound: box ⊇ feasible).
+    std::vector<std::optional<RationalPolynomial>> rps(input.constraints.size());
+    std::vector<bool> safe(input.constraints.size(), false);
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        auto rp = RationalPolynomial::fromPolyId(input.constraints[ci].poly, *kernel_);
+        if (!rp) continue;
+        long td = 0;
+        for (const auto& [key, coeff] : rp->terms()) {
+            (void)coeff; long md = 0;
+            for (const auto& [v, e] : key) { (void)v; md += e; }
+            if (md > td) td = md;
+        }
+        safe[ci] = (td <= 20);   // skip very-high-degree (wide intervals, slow ivEval)
+        rps[ci] = std::move(rp);
+    }
+    std::unordered_map<VarId, mpq_class> emptyM;
+    std::unordered_map<VarId, Iv> box;
+    return propagateBox(rps, safe, emptyM, input, box);
 }
 
 std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(

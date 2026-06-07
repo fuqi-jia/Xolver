@@ -29,6 +29,12 @@ public:
 
     CdcacResult solve(const CdcacInput& input);
 
+    // Step 2.1 box-consistency GLOBAL refutation: true ⇒ the constraints are
+    // real-infeasible over all of ℝⁿ ⇒ UNSAT (sound by interval over-approximation).
+    // Public so the engine can run it as a CHEAP early stage before the covering
+    // (the hong family is decided here in ~ms instead of a 10s+ covering blowup).
+    bool topLevelBoxInfeasible(const CdcacInput& input);
+
     /**
      * V4: Set the projection policy. If not set, defaults to CollinsConservative.
      */
