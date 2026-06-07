@@ -179,9 +179,14 @@ private:
     // — interval width 10⁻⁷, midpoint denom 2·10⁷ — the regular
     // pushNear offsets are too coarse and the regular MAX_DEN cap rejects
     // the midpoint). This bypass is targeted at exactly that pattern.
+    // boundDir (optional out): per single-sided-bounded var, +1 if it can be
+    // increased while staying feasible (lower bound only) or -1 if it can be
+    // decreased (upper bound only). Lets the caller diversify restart magnitudes
+    // feasibly. Vars absent from the map are two-sided or unbounded.
     std::vector<std::pair<VarId, mpq_class>>
     bracketMidpointCandidates(const std::vector<Constraint>& cs,
-                              const std::vector<VarId>& vars) const;
+                              const std::vector<VarId>& vars,
+                              std::unordered_map<VarId, int>* boundDir = nullptr) const;
 
     // Phase NRA-LS-B (XOLVER_NRA_LS_EQ_RELAX, default OFF): after a relaxed
     // satisfier (|p| ≤ ε for every equality atom), exact-restore by finding

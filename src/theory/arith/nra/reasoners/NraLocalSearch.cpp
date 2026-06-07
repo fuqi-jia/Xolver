@@ -297,7 +297,8 @@ NraLocalSearch::exactRestoreEqualities(
 std::vector<std::pair<VarId, mpq_class>>
 NraLocalSearch::bracketMidpointCandidates(
         const std::vector<Constraint>& cs,
-        const std::vector<VarId>& vars) const {
+        const std::vector<VarId>& vars,
+        std::unordered_map<VarId, int>* boundDir) const {
     // For each var, collect lower bounds (root with > / ≥ orientation) and
     // upper bounds (with < / ≤ orientation) coming from LINEAR atoms in
     // that var. For each (lower, upper) pair, push the midpoint AND a
@@ -376,12 +377,14 @@ NraLocalSearch::bracketMidpointCandidates(
             if (sgn(lo) < 0) seed = mpq_class(0);                  // 0 > lo, simplest
             else { mpz_class f; mpz_fdiv_q(f.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t()); seed = mpq_class(f + 1); }
             out.emplace_back(v, seed);
+            if (boundDir) (*boundDir)[v] = +1;                     // can increase, stays > lo
         } else if (lowers.empty() && !uppers.empty()) {
             const mpq_class hi = *std::min_element(uppers.begin(), uppers.end());
             mpq_class seed;
             if (sgn(hi) > 0) seed = mpq_class(0);                  // 0 < hi, simplest
             else { mpz_class c; mpz_cdiv_q(c.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t()); seed = mpq_class(c - 1); }
             out.emplace_back(v, seed);
+            if (boundDir) (*boundDir)[v] = -1;                     // can decrease, stays < hi
         }
     }
     return out;
@@ -750,7 +753,8 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     // bounds on the same var, e.g. meti-tarski's pi) and try each as a seed.
     // These are special: denom cap bypassed, fixed-count probe BEFORE the
     // walking loop. If any individual probe satisfies all atoms, return it.
-    auto bracketMids = bracketMidpointCandidates(constraints, vars);
+    std::unordered_map<VarId, int> boundDir;   // +1 lower-only, -1 upper-only (for restart diversity)
+    auto bracketMids = bracketMidpointCandidates(constraints, vars, &boundDir);
     for (const auto& [v, q] : bracketMids) {
         const mpq_class saved = asg.count(v) ? asg[v] : mpq_class{0};
         asg[v] = q;
@@ -771,6 +775,7 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 
+    int restartCount = 0;   // drives multi-start restart-magnitude diversity (below)
     for (int round = 0; round < maxRounds_; ++round) {
         if (budgetExpired()) break;
         const bool improved = walkOneRound(constraints, weights, vars, asg, score);
@@ -795,16 +800,24 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 }
             }
             if (!anyViolated) return asg;
-            // Restart from the BOUND-FEASIBLE seed (seenFirst), not all-zeros: a
-            // bounded var reset to 0 re-enters bound-violation (h>0 ⇒ 0 is infeasible),
-            // so a zero-restart wastes the restart re-walking out of the infeasible
-            // box on every local minimum. Restarting at the simplest feasible point
-            // (bumped weights then steer a fresh walk from inside the box) is what lets
-            // the escape actually explore the feasible region. Unbounded vars (absent
-            // from seenFirst) reset to 0 as before.
+            // Restart from a BOUND-FEASIBLE point (not all-zeros: a bounded var reset to
+            // 0 re-enters bound-violation, h>0 ⇒ 0 infeasible, wasting the escape re-
+            // walking out of the infeasible box). Base = the simplest feasible seed
+            // (seenFirst); MULTI-START diversity: cycle the magnitude of single-sided-
+            // bounded vars across restarts (extra ∈ {0,1,2,4}) IN THE FEASIBLE DIRECTION
+            // (lower-only ⇒ larger, upper-only ⇒ smaller). A larger-magnitude restart
+            // then lets the walk reach mixed-magnitude witnesses (e.g. a coordinate that
+            // must be 5 while others stay small) instead of only the all-simplest point.
+            // Stays feasible by construction (offsetting a one-sided bound away from it).
+            ++restartCount;
+            const mpq_class extra(restartCount % 4 == 3 ? 4 : restartCount % 4);  // 0,1,2,4
             for (auto& kv : asg) {
                 auto sit = seenFirst.find(kv.first);
-                kv.second = (sit != seenFirst.end()) ? sit->second : mpq_class{0};
+                mpq_class base = (sit != seenFirst.end()) ? sit->second : mpq_class{0};
+                auto dit = boundDir.find(kv.first);
+                if (dit != boundDir.end() && sgn(extra) != 0)
+                    base += (dit->second > 0 ? extra : -extra);   // feasible-direction offset
+                kv.second = base;
             }
             score = totalScore(constraints, weights, asg);
         }
