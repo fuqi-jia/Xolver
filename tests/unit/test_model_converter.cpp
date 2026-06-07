@@ -63,8 +63,12 @@ TEST_CASE("ModelConverter: reverse-order replay resolves chained eliminations") 
     CHECK(numAsg["x"] == RealValue::fromInt(13));
 }
 
-TEST_CASE("ModelConverter: missing dependency leaves reconstruct() false") {
-    // x = w + 1 but w is not in the model and not eliminated -> cannot rebuild.
+TEST_CASE("ModelConverter: unconstrained dependency defaults to 0 (reconstruct succeeds)") {
+    // x = w + 1 where w is neither in the model nor eliminated. w is therefore
+    // UNCONSTRAINED — any value satisfies the post-elimination formula — so
+    // evalRational defaults it to 0 (the dumpModel unconstrained-default
+    // convention), giving x = 1. reconstruct succeeds; the returned model is
+    // validator-backed (invariant 1), so a wrong default can never escape as SAT.
     CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId t = add(ir, i, var(ir, i, "w"), cint(ir, i, 1));
 
@@ -73,5 +77,6 @@ TEST_CASE("ModelConverter: missing dependency leaves reconstruct() false") {
 
     std::unordered_map<std::string, RealValue> numAsg;  // empty
     std::unordered_map<std::string, std::string> strAsg;
-    CHECK_FALSE(mc.reconstruct(numAsg, strAsg, ir));
+    REQUIRE(mc.reconstruct(numAsg, strAsg, ir));
+    CHECK(numAsg["x"] == RealValue::fromInt(1));   // w defaulted to 0 -> x = 0 + 1
 }
