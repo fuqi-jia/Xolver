@@ -1,5 +1,6 @@
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"   // wall::scaledCount — anytime per-round var budget
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <algorithm>
 #include <chrono>
@@ -605,8 +606,16 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
     // budget on low-impact variables. Score vars by their occurrence in
     // CURRENTLY-FALSE constraints (heaviest correction candidate) and
     // only walk the top kTopVars; the others stay fixed this round.
-    static const size_t kTopVars = static_cast<size_t>(
+    static const size_t kTopVarsBase = static_cast<size_t>(
         env::paramLong("XOLVER_NRA_LS_TOP_VARS", 8));
+    // ANYTIME-scale the per-round variable budget: at the competition wall-clock the walk
+    // can afford to coordinate MANY MORE variables per round, which is exactly what cracks
+    // the deepest coupled residual (matrix-17/10: TO at 8 vars/round, SAT at ~24 — a 22-dim
+    // bilinear witness needs all coordinates moving together, not 8 at a time). INERT at
+    // the WSL default (wall::scaledCount returns the base 8 unless XOLVER_WALLCLOCK_SCALE +
+    // _MS are set) → regression path byte-identical; this only widens the competition walk.
+    const size_t kTopVars = static_cast<size_t>(
+        wall::scaledCount(static_cast<long>(kTopVarsBase), 60000, 32));
     std::vector<VarId> walkVars;
     if (vars.size() <= kTopVars) {
         walkVars = vars;
