@@ -1930,11 +1930,14 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::branchAndBound(int nodeCap, 
                bvVal.get_den().get_mpz_t());
     mpz_class cl = fl + 1;   // bvVal is fractional ⇒ ceil = floor + 1
 
-    // PIN attempts first: fix bv to floor, then ceil (both bounds equal). A free
-    // fractional var (e.g. a mod quotient the free array reads absorb) has an
-    // open half-space toward ±∞, so a half-space split lets the LP roam and the
-    // search walks; pinning collapses it to an integer immediately. Pins are a
-    // heuristic, so the open half-spaces below preserve completeness.
+    // Round to NEAREST integer — the side the LP value actually sits on. The mod
+    // quotients here carry tiny near-integer fractions (e.g. -1/2^32), so a
+    // floor-first order dives into the wrong half (floor(-1/2^32) = -1) and the
+    // two coupled quotients ping-pong. Nearest-first collapses each to its LP
+    // value in one node.
+    mpz_class nr = roundNearest(bvVal);
+    mpz_class other = (nr == fl) ? cl : fl;
+
     auto tryBound = [&](bool lower, bool upper, const mpz_class& val) -> std::optional<TheoryModel> {
         gs_.push();
         bool ok = true;
@@ -1945,11 +1948,17 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::branchAndBound(int nodeCap, 
         gs_.pop();
         return m;
     };
-    if (auto m = tryBound(true, true, fl)) return m;   // pin = floor
-    if (auto m = tryBound(true, true, cl)) return m;   // pin = ceil
-    // Completeness fallback: open half-spaces bv <= floor, bv >= ceil.
-    if (auto m = tryBound(false, true, fl)) return m;  // bv <= floor
-    if (auto m = tryBound(true, false, cl)) return m;  // bv >= ceil
+    // PIN nearest, then the other neighbour (fixes free/near-integer vars in one
+    // node). Then the open half-spaces preserve completeness — toward nearest first.
+    if (auto m = tryBound(true, true, nr)) return m;          // pin = nearest
+    if (auto m = tryBound(true, true, other)) return m;       // pin = other neighbour
+    if (nr == cl) {  // nearest is the ceil side
+        if (auto m = tryBound(true, false, cl)) return m;     // bv >= ceil
+        if (auto m = tryBound(false, true, fl)) return m;     // bv <= floor
+    } else {
+        if (auto m = tryBound(false, true, fl)) return m;     // bv <= floor
+        if (auto m = tryBound(true, false, cl)) return m;     // bv >= ceil
+    }
 
     return std::nullopt;
 }
