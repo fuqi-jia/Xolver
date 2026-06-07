@@ -206,7 +206,8 @@ bool FarkasOrDetector::isLinearInLambdaInequality(
     return monomialsLinearInLambda(poly, lambdas);
 }
 
-FarkasBranch FarkasOrDetector::classifyAnd(ExprId andId) const {
+FarkasBranch FarkasOrDetector::classifyAnd(
+    ExprId andId, const std::function<ExprId(ExprId)>& resolve) const {
     FarkasBranch br;
     br.originalAnd = andId;
     const auto& e = ir_.get(andId);
@@ -218,15 +219,24 @@ FarkasBranch FarkasOrDetector::classifyAnd(ExprId andId) const {
 
     // Flatten nested Ands: Stroeder VeryMax encodes some Or-branches as
     // `(and (and a b) (and c d) ...)`. Walk all nested And children and
-    // collect atoms into a single flat list.
+    // collect atoms into a single flat list. Each node is first proxy-
+    // resolved (to a fixpoint) so a boolpur-purified conjunct `proxy_i`
+    // standing for a real Farkas atom is classified by that atom, not
+    // dropped as an unclassified Variable.
     std::vector<ExprId> flat;
     std::function<void(ExprId)> collect;
     collect = [&](ExprId aid) {
-        const auto& ne = ir_.get(aid);
+        ExprId rid = aid;
+        for (int guard = 0; guard < 16; ++guard) {
+            ExprId next = resolve(rid);
+            if (next == rid) break;
+            rid = next;
+        }
+        const auto& ne = ir_.get(rid);
         if (ne.kind == Kind::And) {
             for (ExprId c : ne.children) collect(c);
         } else {
-            flat.push_back(aid);
+            flat.push_back(rid);
         }
     };
     collect(andId);
@@ -280,8 +290,9 @@ FarkasOrDetector::tryClassifyOr(ExprId orId) const {
     return block;
 }
 
-bool FarkasOrDetector::extractBoundsFromAnd(ExprId andId,
-                                            FarkasProfile& p) const {
+bool FarkasOrDetector::extractBoundsFromAnd(
+    ExprId andId, FarkasProfile& p,
+    const std::function<ExprId(ExprId)>& resolve) const {
     const auto& e = ir_.get(andId);
     if (e.kind != Kind::And) return false;
     bool any = false;
@@ -298,7 +309,13 @@ bool FarkasOrDetector::extractBoundsFromAnd(ExprId andId,
         if (!ph || hi < *ph) ph = hi;
     };
 
-    for (ExprId c : e.children) {
+    for (ExprId c0 : e.children) {
+        // Resolve boolpur/Tseitin proxies to a fixpoint: a bound atom
+        // `(<= -2 v)` is often purified to a proxy Variable; without this the
+        // And's bound conjuncts read as opaque Variables and no bound is found
+        // (Stroeder loop3 → bounded globals = 0).
+        ExprId c = c0;
+        for (int g = 0; g < 16; ++g) { ExprId n = resolve(c); if (n == c) break; c = n; }
         const auto& ce = ir_.get(c);
         if (ce.children.size() != 2) continue;
         auto lhsName = asVarName(ce.children[0]);
@@ -491,7 +508,7 @@ FarkasProfile FarkasOrDetector::detect() const {
                         }
                     }
                 }
-                block.branches.push_back(classifyAnd(resolved));
+                block.branches.push_back(classifyAnd(resolved, resolve));
                 block.branchProxies.push_back(std::move(proxyName));
             }
             if (block.allBranchesFarkas()) {
@@ -557,7 +574,7 @@ FarkasProfile FarkasOrDetector::detect() const {
             }
         }
         if (a.kind == Kind::And) {
-            extractBoundsFromAnd(aid, p);
+            extractBoundsFromAnd(aid, p, resolve);
         }
         // Skip Tseitin equivalences whose proxies we consumed (avoid
         // double-counting in the residual).

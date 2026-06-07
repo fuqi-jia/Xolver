@@ -2594,6 +2594,12 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             traceWrite(line);
         }
     }
+    // Bounded-B real-relaxation refutation runs INDEPENDENTLY of the support
+    // table (it enumerates the bounded-B domain itself), so try it before the
+    // empty-table / CSP paths — for cases like Stroeder loop3 the table is empty
+    // (no single-ray Farkas certificate) yet the bounded-B per-leaf refutation
+    // can still prove integer UNSAT. Default-OFF; soundness self-checked inside.
+    if (auto refute = tryBoundedBRefutation(profile)) return refute;
     if (table.rows.empty()) {
         traceWrite("  exhaustive=" + std::string(table.exhaustive ? "true" : "false")
                    + " outerAssertions=" + std::to_string(profile.outerAssertions.size()));
@@ -2914,10 +2920,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         ++candIdx;
     }
     traceWrite("  → no candidate validated");
-    // SAT search exhausted. Try the sound bounded-B real-relaxation refutation
-    // (default-OFF): exhaust the finite integer B-domain × Or-branch combos and
-    // prove each leaf real-infeasible via CdcacCore ⇒ integer UNSAT.
-    if (auto refute = tryBoundedBRefutation(profile)) return refute;
+    // (bounded-B refutation already attempted before the CSP path above.)
     return std::nullopt;
 }
 
