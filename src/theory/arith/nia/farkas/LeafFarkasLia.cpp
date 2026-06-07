@@ -32,6 +32,9 @@ LF negate(const LF& a) {
     return r;
 }
 
+// A parsed leaf constraint:  A(λ) + Σ_ct ct·S_ct(λ)  `rel`  0.
+struct PC { LF A; std::map<VarId, LF> ct; Relation rel; };
+
 // Parse `poly` (= 0 form) into  A(λ) + Σ_ct ct·S_ct(λ).  Returns false on any
 // monomial that is not constant, c·λ, c·ct, or c·ct·λ (i.e. degree > 1 in λ,
 // ct·ct, or λ·λ — not the Farkas leaf shape).
@@ -65,9 +68,66 @@ bool parse(PolynomialKernel& kernel, PolyId poly,
 // the disjunctions natively, so no DNF enumeration. Returns true iff PROVEN
 // integer-infeasible (a leaf UNSAT). Sound: a coefficient that does not fit a
 // machine integer aborts the claim (false), never a wrong UNSAT.
+// CEGAR Gate 2 (diag-only for now): under the validated λ model, substitute λ
+// into the ORIGINAL constraints so each becomes linear in the cost vars CT, and
+// check ∃CT feasibility with a nested QF_LIA solve. CT-UNSAT ⇒ the λ model is
+// spurious (the abstraction was too weak there); CT-SAT ⇒ the leaf is genuinely
+// feasible at this λ. Returns 'u' (unsat), 's' (sat), '?' (unknown/none).
+char ctFeasibility(PolynomialKernel& kernel, const std::vector<PC>& pcs,
+                   const std::unordered_map<VarId, mpq_class>& Mlam) {
+    Solver s;
+    s.setLogic("QF_LIA");
+    Sort I = s.intSort();
+    std::unordered_map<VarId, Term> ctT;
+    bool ok = true, any = false;
+    auto kc = [](Kind kk) { return static_cast<uint32_t>(kk); };
+    auto evalLF = [&](const LF& lf) -> mpq_class {
+        mpq_class acc = lf.k;
+        for (const auto& [v, c] : lf.c) {
+            auto it = Mlam.find(v);
+            if (it == Mlam.end()) { ok = false; return 0; }
+            acc += c * it->second;
+        }
+        return acc;
+    };
+    auto intT = [&](const mpq_class& c) -> Term {
+        if (c.get_den() != 1 || !c.get_num().fits_slong_p()) { ok = false; return s.mkInt(0); }
+        return s.mkInt(static_cast<int64_t>(c.get_num().get_si()));
+    };
+    auto ctVar = [&](VarId v) -> Term {
+        auto it = ctT.find(v);
+        if (it != ctT.end()) return it->second;
+        Term t = s.mkVar(I, std::string(kernel.varName(v)));
+        ctT.emplace(v, t);
+        return t;
+    };
+    auto relK = [](Relation r) -> Kind {
+        switch (r) { case Relation::Gt: return Kind::Gt; case Relation::Geq: return Kind::Geq;
+            case Relation::Lt: return Kind::Lt; case Relation::Leq: return Kind::Leq; default: return Kind::Eq; }
+    };
+    for (const auto& pc : pcs) {
+        if (pc.ct.empty()) continue;   // λ-only: held by the validated abstraction
+        any = true;
+        std::vector<Term> sum;
+        mpq_class a = evalLF(pc.A);                 // A(λ) → constant
+        for (const auto& [v, S] : pc.ct) {
+            mpq_class s_v = evalLF(S);              // S_ct(λ) → constant coeff of ct
+            sum.push_back(s.mkOp(kc(Kind::Mul), {intT(s_v), ctVar(v)}));
+        }
+        sum.push_back(intT(a));
+        Term lhs = sum.size() == 1 ? sum[0] : s.mkOp(kc(Kind::Add), sum);
+        s.assertFormula(s.mkOp(kc(relK(pc.rel)), {lhs, s.mkInt(0)}));
+    }
+    if (!ok) return '?';
+    if (!any) return 's';     // no CT constraints ⇒ trivially feasible
+    Result r = s.checkSat();
+    return r == Result::Sat ? 's' : (r == Result::Unsat ? 'u' : '?');
+}
+
 bool disjLiaUnsat(PolynomialKernel& kernel,
                   const std::vector<std::pair<LF, Relation>>& base,
-                  const std::vector<std::vector<std::pair<LF, Relation>>>& disj) {
+                  const std::vector<std::vector<std::pair<LF, Relation>>>& disj,
+                  const std::vector<PC>& pcs) {
     // Reuse one nested Solver across the many bounded-B leaves: reset() clears
     // assertions/symbols without re-paying the per-instance (CaDiCaL) setup.
     static thread_local Solver s;
@@ -151,6 +211,14 @@ bool disjLiaUnsat(PolynomialKernel& kernel,
         }
         ctDiag(extractOk ? (absOk ? "gate1-model-OK" : "gate1-model-FAIL-abs")
                          : "gate1-extract-FAIL");
+        // ── CEGAR Gate 2: exact ∃CT feasibility under the validated λ model.
+        // For an UNSAT (pentagon) leaf we EXPECT CT-UNSAT (the abstraction model
+        // is spurious); a CT-SAT means the leaf is genuinely feasible at this λ.
+        if (extractOk && absOk) {
+            char cf = ctFeasibility(kernel, pcs, Mlam);
+            ctDiag(cf == 'u' ? "gate2-CT-UNSAT(spurious)"
+                 : cf == 's' ? "gate2-CT-SAT(feasible)" : "gate2-CT-unknown");
+        }
     }
     return false;   // abstraction SAT ⇒ not proven UNSAT (unchanged)
 }
@@ -209,7 +277,6 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
                            PolynomialKernel& kernel) {
     if (cons.empty()) return false;
 
-    struct PC { LF A; std::map<VarId, LF> ct; Relation rel; };
     std::vector<PC> pcs;
     pcs.reserve(cons.size());
     for (const auto& c : cons) {
@@ -286,7 +353,7 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
 
     // Discharge the conjunction-of-disjunctions with the existing CDCL(LIA)
     // pipeline — no DNF enumeration, no combo blow-up.
-    return disjLiaUnsat(kernel, base, disj);
+    return disjLiaUnsat(kernel, base, disj, pcs);
 }
 
 } // namespace xolver
