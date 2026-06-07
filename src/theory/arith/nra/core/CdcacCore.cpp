@@ -6,6 +6,7 @@
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS cap for the SAT-first libpoly guard
+#include <chrono>
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
@@ -746,8 +747,36 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     return result;
 }
 
+// Covering profiler (XOLVER_NRA_TOWER_DIAG-gated, per-thread): counts the covering
+// tree size so the deep-tower TO can be attributed to tree explosion vs per-op cost.
+// "measure don't guess" — the ViaTower timer showed the tower itself is cheap.
+namespace {
+thread_local long gSolveLevelCalls = 0;   // recursion nodes (internal)
+thread_local long gCellsTested     = 0;   // testAndRecurse invocations (cells lifted)
+thread_local long gFullSamples     = 0;   // leaf full-sample checks
+thread_local double gBoundaryMs    = 0;   // time in per-level boundary collection (specialize+isolate)
+inline double covNowMs() {
+    return std::chrono::duration<double, std::milli>(
+               std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+}
+
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
     satRpBuilt_ = false;   // rebuild the interval-FP cache for this solve's constraints
+    gSolveLevelCalls = gCellsTested = gFullSamples = 0; gBoundaryMs = 0;   // reset per solve
+    struct CovDump {
+        const CdcacInput& in;
+        ~CovDump() {
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (!f || !*f) return;
+            if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[COVERING] vars=%zu cons=%zu solveLevel=%ld cells=%ld fullSamples=%ld boundaryMs=%.0f\n",
+                             in.varOrder.size(), in.constraints.size(),
+                             gSolveLevelCalls, gCellsTested, gFullSamples, gBoundaryMs);
+                std::fclose(fp);
+            }
+        }
+    } covDump{input};
     if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[CDCAC-SOLVE] entry vars=" << input.varOrder.size()
                   << " cons=" << input.constraints.size() << std::endl;
@@ -926,9 +955,35 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 }
 
 CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& input) {
+    ++gSolveLevelCalls;
+    {   // time-based tick (every ~2s) survives a TO-kill regardless of tree size
+        static thread_local double gLastTickMs = 0;
+        double nowt = covNowMs();
+        if (nowt - gLastTickMs > 2000.0) {
+            gLastTickMs = nowt;
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[COVERING-tick] solveLevel=%ld cells=%ld fullSamples=%ld boundaryMs=%.0f\n",
+                             gSolveLevelCalls, gCellsTested, gFullSamples, gBoundaryMs);
+                std::fclose(fp);
+            }
+        }
+    }
     int n = static_cast<int>(input.varOrder.size());
     if (k == n) {
-        return checkFullSample(prefix, input);
+        ++gFullSamples;
+        double tF0 = covNowMs();
+        CdcacResult fr = checkFullSample(prefix, input);
+        double dF = covNowMs() - tF0;
+        if (dF > 500.0) {
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[SLOW-FULLSAMPLE] cons=%zu ms=%.0f totalLeaves=%ld\n",
+                             input.constraints.size(), dF, gFullSamples);
+                std::fclose(fp);
+            }
+        }
+        return fr;
     }
 
     // V4: ensure a projection policy is available. Default is CollinsConservative;
@@ -1068,6 +1123,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         std::cerr << "[LAZVAL] solveLevel k=" << k << " algPrefixCoords=" << algPrefixCount
                   << " levelPolys=" << levelPolyIds_[k].size() << std::endl;
 
+    double tB0 = covNowMs();
     for (PolyId p : levelPolyIds_[k]) {
         if (kernel_->isConstant(p)) continue;
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
@@ -1171,6 +1227,16 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         rootSets.push_back(std::move(roots));
         rootSetPolyIds.push_back(p);
     }
+    double dB = covNowMs() - tB0;
+    gBoundaryMs += dB;
+    if (dB > 1000.0) {   // a single level's boundary collection took > 1s — the real hotspot
+        const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+        if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+            std::fprintf(fp, "[SLOW-BOUNDARY] k=%d levelPolys=%zu alg=%d ms=%.0f\n",
+                         k, levelPolyIds_[k].size(), algPrefixCount, dB);
+            std::fclose(fp);
+        }
+    }
 
     // Always route through the covering (incl. the empty-roots full-line cell);
     // its UNSAT conclusion is gated by unsatTrustworthy_. (Replaces the old
@@ -1202,6 +1268,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     // 3. Helper: test a sample and recurse to deeper levels
     auto testAndRecurse = [&](const RealAlg& sample) -> CdcacResult {
+        ++gCellsTested;
         RealAlg sampleWithOrigin = sample;
         if (sampleWithOrigin.isAlgebraic()) {
             // V2-6: populate RootOrigin for algebraic samples
