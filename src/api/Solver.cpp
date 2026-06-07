@@ -2925,11 +2925,16 @@ public:
                     farkas::FarkasOrDetector fdet(*ir);
                     auto fprof = fdet.detect();
                     if (fprof.good() && !fprof.boundedGlobals.empty()) {
-                        // pct of wall-clock (competition: 5% of 1200s ≈ 60s — ample
-                        // for fast SAT, leaves ~95% for the refutation); absMs is the
-                        // dev-only fallback when no wall-clock deadline is set.
+                        // Do NOT starve eager-bb on Farkas SAT: keep its FULL normal
+                        // wall-clock share (pct = the general 33% default). eager-bb's
+                        // consecutive-UNSAT cap bails it early on the UNSAT shapes
+                        // (loop3 ~40s) and the refutation is fast, so a full share
+                        // still leaves ample time for the UNSAT path while preserving
+                        // every bit-blast SAT win. absMs is the dev-only fallback used
+                        // when no wall-clock deadline is set (bash `timeout`), where
+                        // the cap fires later than the small dev timeout.
                         eagerbb.setFarkasBudget(
-                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_PCT", 5),
+                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_PCT", 33),
                             env::paramLong("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
                     }
                 }
