@@ -1,0 +1,11 @@
+; f injective-looking contradiction via equal args from array congruence.
+(set-logic QF_AUFNIA)
+(set-info :status unsat)
+(declare-fun a () (Array Int Int))
+(declare-fun f (Int) Int)
+(declare-fun i () Int)
+(declare-fun j () Int)
+(assert (= (select a i) (select a j)))
+(assert (= (f (select a i)) 1))
+(assert (= (f (select a j)) 2))
+(check-sat)

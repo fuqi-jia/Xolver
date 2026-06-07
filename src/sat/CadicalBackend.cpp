@@ -2,13 +2,22 @@
 #include <cstdio>
 #include <cstdlib>
 #include "sat/CadicalTheoryPropagator.h"
+#include "util/SolveClock.h"
 
 namespace xolver {
+
+bool CadicalBackend::WallClockTerminator::terminate() {
+    return wall::hasDeadline() && wall::remainingMs() == 0;
+}
 
 CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) {
     // Note: we do NOT set factor=0 here.  The state-aware newVar() below
     // handles the SOLVING-state issue; disabling BVA globally hurts SAT
     // search performance and caused NRA regression failures.
+    // Connect the wall-clock terminator (default-inert; see header). Makes every
+    // CadicalBackend solve — including the bit-blast's dedicated, conflict-
+    // unlimited solver — honor XOLVER_WALLCLOCK_MS during solve().
+    solver_->connect_terminator(&wallTerm_);
 }
 CadicalBackend::~CadicalBackend() = default;
 

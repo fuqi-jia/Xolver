@@ -117,6 +117,12 @@ TheoryCheckResult McsatSolver::check(TheoryLemmaStorage& /*lemmaDb*/,
         if (pendingGiveUp_) {
             std::string why = std::move(*pendingGiveUp_);
             pendingGiveUp_.reset();
+            // A GiveUp may carry a theory split lemma (e.g. an integrality split):
+            // emit it so the SAT side branches, then re-enters check(). Returning
+            // a lemma (not Unknown) is what drives the integer-NLSAT loop forward.
+            auto lemmas = engine_->takeLemmas();
+            if (!lemmas.empty())
+                return TheoryCheckResult::mkLemma(std::move(lemmas.front()));
             return TheoryCheckResult::unknown(std::move(why));
         }
         if (!tryDecideOnce_()) {

@@ -123,9 +123,26 @@ private:
         // the variable assignment, on accept.
         bool isApp = false;
         std::string funcName;
+        // Value forced by a top-level equality (= f(consts) c) — the base-case
+        // axioms (pow2(0)=1 ...). Pinned slots seed the DERIVATION of symbolic
+        // apps (pow2(k) with k=1 matches pow2(1) by functional consistency).
+        // This is the cvc5/z3 model-construction idea (assignFunctionDefault /
+        // func_interp): a UF app whose evaluated args match a known app takes
+        // that value; otherwise it keeps a default. See deriveAppValues.
+        std::optional<mpq_class> pinnedValue;
     };
 
     void collectFreeVariables();
+    // Pin UF-app slots whose value a top-level equality forces to a constant.
+    void pinForcedAppSlots();
+    // cvc5/z3-style model construction: DERIVE each UF-app slot's value from the
+    // arith assignment (pinned base cases + functional consistency) instead of
+    // ENUMERATING it. Mutates `full`. Sound: re-validated by evaluateAssertions.
+    void deriveAppValues(std::unordered_map<std::string, mpq_class>& full) const;
+    // Diagnostic rejection breakdown (XOLVER_DIAG_CMS): how candidates were
+    // disposed of, to tell "never generated" from "generated and rejected".
+    mutable size_t diagTried_ = 0, diagFcReject_ = 0, diagEvalFalse_ = 0,
+                   diagEvalIndet_ = 0, diagAccept_ = 0;
     void buildPriorityList();
     void detectActiveBounds();
     bool isLogicEnabled() const;

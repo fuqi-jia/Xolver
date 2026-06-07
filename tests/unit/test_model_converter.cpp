@@ -65,6 +65,8 @@ TEST_CASE("ModelConverter: reverse-order replay resolves chained eliminations") 
 
 TEST_CASE("ModelConverter: missing dependency leaves reconstruct() false") {
     // x = w + 1 but w is not in the model and not eliminated -> cannot rebuild.
+    // STRICT Elim path (SolveEqs): a missing free var is a solver bug, so
+    // reconstruct() must fail loudly rather than invent a value (a39f26c).
     CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId t = add(ir, i, var(ir, i, "w"), cint(ir, i, 1));
 

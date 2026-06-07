@@ -107,6 +107,12 @@ public:
     // pending Row1/Row2 without flooding the SAT core with every deduced equality).
     void collectIndexSharedTerms(std::unordered_set<SharedTermId>& out) const;
 
+    // Collect the SharedTermIds of array VALUE/element terms (stored value arg[2]
+    // of every store + each arith-shared read result). Used by TheoryManager to
+    // defer value-pair deduced equalities to Full effort — the same Standard-effort
+    // cache-poisoning fix already applied to index pairs (alra_010 value side).
+    void collectValueSharedTerms(std::unordered_set<SharedTermId>& out) const;
+
     // Accessors for model construction.
     const std::vector<EufTermId>& selectTerms() const { return selectTerms_; }
     const std::vector<EufTermId>& storeTerms() const { return storeTerms_; }

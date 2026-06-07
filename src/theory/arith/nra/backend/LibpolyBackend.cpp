@@ -54,6 +54,34 @@ LibpolyBackend::LibpolyBackend(PolynomialKernel* kernel)
 #endif
 }
 
+// Persistent algebraic-prefix assignment cache: ONE libpoly Assignment plus the
+// (var, value) sequence it represents, so an incremental prefix change only sets/unsets
+// the changed top coordinate(s) and the lower coordinates' interval refinements survive.
+#ifdef XOLVER_HAS_LIBPOLY
+struct SatAsgCache {
+    std::vector<VarId>   vars;
+    std::vector<RealAlg> vals;
+    poly::Assignment     assign;
+    explicit SatAsgCache(const poly::Context& ctx) : assign(ctx) {}
+};
+#else
+struct SatAsgCache {};
+#endif
+
+LibpolyBackend::~LibpolyBackend() = default;
+
+namespace {
+// Identity of an algebraic-prefix coordinate value (for longest-common-prefix detection):
+// same kind, and same rational OR same defining polynomial + same ORIGINAL isolating
+// interval (the stored [lower,upper] that pins which root it is).
+bool sameRealAlg(const RealAlg& a, const RealAlg& b) {
+    if (a.kind != b.kind) return false;
+    if (a.isRational()) return a.rational == b.rational;
+    return a.root.definingPoly == b.root.definingPoly &&
+           a.root.lower == b.root.lower && a.root.upper == b.root.upper;
+}
+} // namespace
+
 UniPolyId LibpolyBackend::allocUni(std::vector<mpz_class> coeffs) {
     UniPolyId id = static_cast<UniPolyId>(uniPool_.size());
     uniPool_.push_back(std::move(coeffs));
@@ -274,6 +302,44 @@ static std::optional<poly::AlgebraicNumber> algebraicRootToPolyAlg(
 }
 #endif
 
+SatAsgCache* LibpolyBackend::syncSatAssignment(const SamplePoint& prefix) {
+#ifndef XOLVER_HAS_LIBPOLY
+    (void)prefix;
+    return nullptr;
+#else
+    if (!libKernel_) return nullptr;
+    if (!satAsg_) satAsg_ = std::make_unique<SatAsgCache>(libKernel_->context());
+    SatAsgCache& c = *satAsg_;
+    const size_t np = prefix.numVars();
+    size_t common = 0;          // longest common prefix by (var, original-value identity)
+    while (common < c.vars.size() && common < np &&
+           c.vars[common] == prefix.varOrder[common] &&
+           sameRealAlg(c.vals[common], prefix.values[common]))
+        ++common;
+    for (size_t i = c.vars.size(); i > common; --i)   // unset coords above common (top-down)
+        c.assign.unset(libKernel_->getVariable(std::string(kernel_->varName(c.vars[i - 1]))));
+    c.vars.resize(common);
+    c.vals.resize(common);
+    for (size_t i = common; i < np; ++i) {            // set the new coords
+        const VarId vid = prefix.varOrder[i];
+        const RealAlg& val = prefix.values[i];
+        poly::Variable v = libKernel_->getVariable(std::string(kernel_->varName(vid)));
+        if (val.isRational()) {
+            c.assign.set(v, poly::Value(poly::Rational(val.rational)));
+        } else if (val.isAlgebraic()) {
+            auto algOpt = algebraicRootToPolyAlg(val.root, getUni(val.root.definingPoly));
+            if (!algOpt) return nullptr;              // cache left consistent at prefix[0..i-1]
+            c.assign.set(v, poly::Value(*algOpt));
+        } else {
+            return nullptr;
+        }
+        c.vars.push_back(vid);
+        c.vals.push_back(val);
+    }
+    return &c;
+#endif
+}
+
 RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     PolyId p, const SamplePoint& prefix, VarId mainVar) {
 #ifndef XOLVER_HAS_LIBPOLY
@@ -293,23 +359,11 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     }
 
     const poly::Polynomial& poly = libKernel_->getPolynomial(p);
-    poly::Assignment assignment(libKernel_->context());
-
-    for (size_t i = 0; i < prefix.numVars(); ++i) {
-        poly::Variable var = libKernel_->getVariable(std::string(kernel_->varName(prefix.varOrder[i])));
-        const auto& val = prefix.values[i];
-        if (val.isRational()) {
-            assignment.set(var, poly::Value(poly::Rational(val.rational)));
-        } else if (val.isAlgebraic()) {
-            const auto& ar = val.root;
-            const auto& coeffs = getUni(ar.definingPoly);
-            auto algOpt = algebraicRootToPolyAlg(ar, coeffs);
-            if (!algOpt) return RootSet{};
-            assignment.set(var, poly::Value(*algOpt));
-        } else {
-            return RootSet{};
-        }
-    }
+    // Persistent assignment (z3-style): only the changed top coordinate is rebuilt; the
+    // lower coordinates keep libpoly's accumulated interval refinements across nodes.
+    SatAsgCache* cache = syncSatAssignment(prefix);
+    if (!cache) return RootSet{};
+    poly::Assignment& assignment = cache->assign;
 
     std::vector<poly::Value> roots;
     // Install crash recovery around libpoly root isolation.
@@ -324,6 +378,7 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
     std::signal(SIGSEGV, g_oldSegvHandler);
     std::signal(SIGFPE,  g_oldFpeHandler);
     if (jumped != 0) {
+        satAsg_.reset();   // a libpoly crash may have corrupted the persistent assignment
         RootSet result;
         result.crashOccurred = true;
         return result;
@@ -388,6 +443,75 @@ RootSet LibpolyBackend::isolateRealRootsAlgebraic(
 #endif
 }
 
+// z3 eval_sign_at fast path: evaluate p over the coordinates' isolating intervals using
+// interval arithmetic. An interval that strictly excludes 0 PROVES the sign (sound over-
+// approximation) with NO exact algebraic computation — bypassing libpoly's tower sgn,
+// which is the deep-tower cost. When the interval straddles 0 (value at/near a root), the
+// algebraic coordinates' intervals are bisection-refined a bounded number of times; if it
+// still straddles 0 the result is Unknown and the caller does the exact evaluation
+// (equalities that are exactly 0 fall through this way).
+Sign LibpolyBackend::signAtIntervalArith(PolyId p, const SamplePoint& sample) {
+    auto rpOpt = RationalPolynomial::fromPolyId(p, *kernel_);
+    if (!rpOpt) return Sign::Unknown;
+    const RationalPolynomial& rp = *rpOpt;
+
+    struct Iv { mpq_class lo, hi; };
+    auto ivMul = [](const Iv& a, const Iv& b) -> Iv {
+        mpq_class c[4] = { a.lo * b.lo, a.lo * b.hi, a.hi * b.lo, a.hi * b.hi };
+        mpq_class mn = c[0], mx = c[0];
+        for (int i = 1; i < 4; ++i) { if (c[i] < mn) mn = c[i]; if (c[i] > mx) mx = c[i]; }
+        return {mn, mx};
+    };
+
+    // Per-coordinate intervals; keep refinable copies of the algebraic coordinates.
+    std::vector<AlgebraicRoot> algCopies;
+    std::map<VarId, Iv> box;
+    std::vector<std::pair<VarId, int>> algSlot;   // (var, index into algCopies)
+    for (size_t i = 0; i < sample.numVars(); ++i) {
+        const VarId v = sample.varOrder[i];
+        const RealAlg& val = sample.values[i];
+        if (val.isRational()) {
+            box[v] = {val.rational, val.rational};
+        } else if (val.isAlgebraic()) {
+            algCopies.push_back(val.root);
+            algSlot.emplace_back(v, static_cast<int>(algCopies.size()) - 1);
+            box[v] = {val.root.lower, val.root.upper};
+        } else {
+            return Sign::Unknown;
+        }
+    }
+
+    auto evalSign = [&]() -> Sign {
+        Iv acc{mpq_class(0), mpq_class(0)};
+        for (const auto& [key, coeff] : rp.terms()) {
+            Iv term{coeff, coeff};
+            for (const auto& [v, e] : key) {
+                auto it = box.find(v);
+                if (it == box.end()) return Sign::Unknown;   // unassigned coordinate
+                for (int k = 0; k < e; ++k) term = ivMul(term, it->second);
+            }
+            acc.lo += term.lo;
+            acc.hi += term.hi;
+        }
+        if (sgn(acc.lo) > 0) return Sign::Pos;
+        if (sgn(acc.hi) < 0) return Sign::Neg;
+        return Sign::Unknown;   // straddles 0
+    };
+
+    Sign s = evalSign();
+    if (s != Sign::Unknown) return s;
+    if (algCopies.empty()) return Sign::Unknown;     // all-rational & straddles ⇒ exactly 0 (let exact decide)
+    for (int iter = 0; iter < 40; ++iter) {
+        bool refined = false;
+        for (auto& ar : algCopies) if (refineRootInterval(ar)) refined = true;
+        if (!refined) break;
+        for (const auto& [v, slot] : algSlot) box[v] = {algCopies[slot].lower, algCopies[slot].upper};
+        s = evalSign();
+        if (s != Sign::Unknown) return s;
+    }
+    return Sign::Unknown;
+}
+
 Sign LibpolyBackend::signAt(PolyId p, const SamplePoint& sample) {
     // Layer 0: empty sample
     if (sample.varOrder.empty()) {
@@ -411,12 +535,33 @@ Sign LibpolyBackend::signAt(PolyId p, const SamplePoint& sample) {
         return signAtRational(p, sample);
     }
 
+    // INTERVAL-ARITHMETIC FAST PATH (z3 eval_sign_at): for ANY algebraic coordinate, try
+    // to decide the sign from the coordinates' isolating intervals alone — no exact
+    // algebraic computation, no libpoly tower sgn. Decides every nonzero value (after a
+    // few interval refinements); only an exactly-zero value falls through to the exact
+    // layers below. This is the dominant speedup on deep towers, where the search prunes
+    // far more (nonzero) candidates than it confirms (zero) equalities.
+    {
+        Sign ivSign = signAtIntervalArith(p, sample);
+        if (ivSign != Sign::Unknown) return ivSign;
+    }
+
     // Layer 2: exactly one algebraic variable
     if (algCount == 1) {
         return signAtOneAlgebraic(p, sample);
     }
 
-    // Layer 3: algebraic tower (multiple algebraic variables)
+    // Layer 3: algebraic tower (multiple algebraic variables). Try the
+    // libpoly-NATIVE multi-algebraic sign (poly::sgn over a full algebraic
+    // Assignment) first: it evaluates genuine towers that the hand-rolled
+    // pseudo-remainder reduction (signAtTower) gives up on as Unknown
+    // (non-constant scale factor / prem failure) — which is what blocked
+    // checkFullSample from confirming algebraic SAT models (Geogebra/kissing).
+    // signAtSampleGuarded is sigsetjmp-crash-guarded + coefficient-bit
+    // firewalled, so it can only return a DEFINITE sign or Unknown (never a
+    // crash). Fall back to the manual tower when the native path is inconclusive.
+    Sign nativeSign = signAtSampleGuarded(p, sample);
+    if (nativeSign != Sign::Unknown) return nativeSign;
     return signAtTower(p, sample);
 }
 
@@ -513,6 +658,19 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
     if (algIndices.empty()) return signAtRational(p, sample);
     if (algIndices.size() == 1) return signAtOneAlgebraic(p, sample);
 
+    // File-based: the CLI solves on a worker thread whose stderr is suppressed, so
+    // std::cerr diagnostics vanish — only file writes survive. XOLVER_NRA_TOWER_DIAG
+    // is the output path.
+    static const char* kTowerDiagFile = std::getenv("XOLVER_NRA_TOWER_DIAG");
+    auto dbg = [&](const char* w) {
+        if (!kTowerDiagFile || !*kTowerDiagFile) return;
+        if (std::FILE* f = std::fopen(kTowerDiagFile, "a")) {
+            std::fprintf(f, "[TOWER] %s algCount=%zu\n", w, algIndices.size());
+            std::fclose(f);
+        }
+    };
+    dbg("entry");
+
     // Patch 7 invariant: sample.prefix(k) = variables at levels [0, k).
     // Tower reduction processes from highest level to lowest.
     // When reducing modulo level i's defining polynomial, the prefix contains
@@ -528,7 +686,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
 
         const AlgebraicRoot& alpha = val.root;
         // Patch 10: missing definingPoly → Unknown (hard rule)
-        if (alpha.definingPoly == NullUniPolyId) return Sign::Unknown;
+        if (alpha.definingPoly == NullUniPolyId) { dbg("noDefPoly"); return Sign::Unknown; }
 
         // Convert the univariate defining polynomial back to a PolyId
         VarId var = sample.varOrder[idx];
@@ -539,7 +697,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
 #ifndef NDEBUG
             std::cerr << "[CDCAC]       signAtTower: prem failed" << std::endl;
 #endif
-            return Sign::Unknown;
+            dbg("prem"); return Sign::Unknown;
         }
         current = pr.remainder;
         if (pr.exponent > 0 && pr.scaleFactor != NullPoly) {
@@ -547,7 +705,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                 mpq_class c = kernel_->toConstant(pr.scaleFactor);
                 if (c == 0) {
                     // Leading coefficient nullified at sample: degeneracy
-                    return Sign::Unknown;
+                    dbg("degen"); return Sign::Unknown;
                 }
                 Sign s = (c > 0) ? Sign::Pos : Sign::Neg;
                 if (pr.exponent % 2 != 0) {
@@ -559,7 +717,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
                 // In normal operation, definingPoly has constant coefficients,
                 // so scaleFactor should always be constant.
                 // If not, return Unknown conservatively.
-                return Sign::Unknown;
+                dbg("nonConstScale"); return Sign::Unknown;
             }
         }
     }
@@ -585,7 +743,7 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         }
     } else {
         // Cannot inspect terms: conservatively return Unknown
-        return Sign::Unknown;
+        dbg("noTerms"); return Sign::Unknown;
     }
 
     if (hasRemainingAlg) {
@@ -601,14 +759,14 @@ Sign LibpolyBackend::signAtTower(PolyId p, const SamplePoint& sample) {
         // frame) so this caller's live locals (scaleSign/current) cannot be
         // clobbered by longjmp. A recovered crash ⇒ Sign::Unknown.
         Sign s = signAtSampleGuarded(current, sample);
-        if (s == Sign::Unknown) return Sign::Unknown;
+        if (s == Sign::Unknown) { dbg("guardedRemAlg"); return Sign::Unknown; }
         return multiplySigns(scaleSign, s);
 #endif
     }
 
     // After tower reduction, evaluate at the (now rational-only) sample point.
     Sign s = signAtRational(current, sample);
-    if (s == Sign::Unknown) return Sign::Unknown;
+    if (s == Sign::Unknown) { dbg("rationalAfterReduce"); return Sign::Unknown; }
     return multiplySigns(scaleSign, s);
 }
 
@@ -1068,23 +1226,13 @@ Sign LibpolyBackend::signAtSampleGuarded(PolyId current, const SamplePoint& samp
     int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
     if (jumped == 0) {
         try {
-            poly::Assignment pa(libKernel_->context());
-            bool buildOk = true;
-            for (size_t i = 0; i < sample.numVars(); ++i) {
-                poly::Variable pv = libKernel_->getVariable(std::string(kernel_->varName(sample.varOrder[i])));
-                const auto& val = sample.values[i];
-                if (val.isRational()) {
-                    pa.set(pv, poly::Value(poly::Rational(val.rational)));
-                } else if (val.isAlgebraic()) {
-                    const auto& ar = val.root;
-                    const auto& coeffs = getUni(ar.definingPoly);
-                    auto algOpt = algebraicRootToPolyAlg(ar, coeffs);
-                    if (!algOpt) { buildOk = false; break; }
-                    pa.set(pv, poly::Value(*algOpt));
-                }
-            }
-            if (buildOk) {
-                s = poly::sgn(libKernel_->getPolynomial(current), pa);
+            // Persistent assignment (shared with isolateRealRootsAlgebraic): during the
+            // triangular descent, sign-at-sample and root-isolation alternate on prefixes
+            // differing by one coordinate, so the cache stays warm and lower coordinates'
+            // interval refinements persist.
+            SatAsgCache* cache = syncSatAssignment(sample);
+            if (cache) {
+                s = poly::sgn(libKernel_->getPolynomial(current), cache->assign);
                 ok = true;
             }
         } catch (...) {
@@ -1094,6 +1242,7 @@ Sign LibpolyBackend::signAtSampleGuarded(PolyId current, const SamplePoint& samp
     g_libpolyCrashRecoveryActive = 0;
     std::signal(SIGSEGV, g_oldSegvHandler);
     std::signal(SIGFPE,  g_oldFpeHandler);
+    if (jumped != 0) satAsg_.reset();   // a crash may have corrupted the persistent assignment
     if (!ok) return Sign::Unknown;
     if (s < 0) return Sign::Neg;
     if (s > 0) return Sign::Pos;
@@ -1168,6 +1317,73 @@ Sign LibpolyBackend::signAtSampleGuarded(PolyId, const SamplePoint&) { return Si
 Sign LibpolyBackend::signUnivariateAtAlgebraicGuarded(
     const std::vector<mpz_class>&, const AlgebraicRoot&) { return Sign::Unknown; }
 #endif
+
+// Exact algebraic comparison via libpoly's lp_value_cmp. Resolves the
+// AlgebraicComparisonInconclusive that compareRealAlg's manual interval-
+// refinement path leaves when its iteration budget is exhausted (overlapping
+// algebraic intervals that need many bisections, or a rational inside a tight
+// algebraic interval). libpoly compares two values (rational or algebraic)
+// EXACTLY, refining internally as needed. Crash-guarded (SIGSEGV/SIGFPE ->
+// Unknown) + coeff-bit firewall, mirroring signUnivariateAtAlgebraicGuarded.
+// SOUND: an exact order is always correct; any crash/firewall/build failure
+// yields Unknown (never a guessed order) — so this only ever turns a previous
+// Unknown into a certified Less/Equal/Greater, never changes a decided answer.
+CompareResult LibpolyBackend::compareRealAlgViaLibpolyGuarded(
+    const RealAlg& a, const RealAlg& b) {
+#ifndef XOLVER_HAS_LIBPOLY
+    (void)a; (void)b;
+    return CompareResult::Unknown;
+#else
+    if (!libKernel_) return CompareResult::Unknown;
+    auto bitsOf = [&](const RealAlg& x) -> size_t {
+        if (x.isAlgebraic() && x.root.definingPoly != NullUniPolyId)
+            return fwMaxCoeffBits(getUni(x.root.definingPoly));
+        return 0;
+    };
+    if (fwTrips(std::max(bitsOf(a), bitsOf(b)), "compareRealAlgViaLibpoly"))
+        return CompareResult::Unknown;
+
+    volatile int cmp = 0;
+    volatile bool ok = false;
+    g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
+    g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
+    g_libpolyCrashRecoveryActive = 1;
+    int jumped = sigsetjmp(g_libpolyJmpBuf, 1);
+    if (jumped == 0) {
+        try {
+            auto toValue = [&](const RealAlg& x,
+                               std::optional<poly::Value>& out) -> bool {
+                if (x.isRational()) {
+                    out.emplace(poly::Rational(x.rational));
+                    return true;
+                }
+                if (x.isAlgebraic() && x.root.definingPoly != NullUniPolyId) {
+                    auto algOpt = algebraicRootToPolyAlg(x.root, getUni(x.root.definingPoly));
+                    if (!algOpt) return false;
+                    out.emplace(*algOpt);
+                    return true;
+                }
+                return false;
+            };
+            std::optional<poly::Value> va, vb;
+            if (toValue(a, va) && toValue(b, vb)) {
+                // poly::Value comparison operators wrap lp_value_cmp (exact).
+                cmp = (*va == *vb) ? 0 : ((*va < *vb) ? -1 : 1);
+                ok = true;
+            }
+        } catch (...) {
+            ok = false;
+        }
+    }
+    g_libpolyCrashRecoveryActive = 0;
+    std::signal(SIGSEGV, g_oldSegvHandler);
+    std::signal(SIGFPE,  g_oldFpeHandler);
+    if (!ok) return CompareResult::Unknown;
+    if (cmp < 0) return CompareResult::Less;
+    if (cmp > 0) return CompareResult::Greater;
+    return CompareResult::Equal;
+#endif
+}
 
 CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b) {
     // rational-rational
@@ -1260,7 +1476,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             if (a.rational < mutableB.lower) return CompareResult::Less;
             if (a.rational > mutableB.upper) return CompareResult::Greater;
         }
-        return CompareResult::Unknown;
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
     // algebraic-rational inside interval
@@ -1285,7 +1501,7 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             if (b.rational < mutableA.lower) return CompareResult::Greater;
             if (b.rational > mutableA.upper) return CompareResult::Less;
         }
-        return CompareResult::Unknown;
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
     // algebraic-algebraic overlapping intervals
@@ -1338,10 +1554,12 @@ CompareResult LibpolyBackend::compareRealAlg(const RealAlg& a, const RealAlg& b)
             bool okB = refineRootInterval(mutableB);
             if (!okA || !okB) break;
         }
-        return CompareResult::Unknown;   // STEP 4 — budget exhausted: do NOT guess
+        // STEP 4 — manual refinement budget exhausted: ask libpoly for the exact
+        // order (never a guess). Unknown only if libpoly also fails / firewalls.
+        return compareRealAlgViaLibpolyGuarded(a, b);
     }
 
-    return CompareResult::Unknown;
+    return compareRealAlgViaLibpolyGuarded(a, b);
 #endif
 }
 
@@ -1669,12 +1887,14 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     supported = false;
     RootSet empty;
-    static const bool kDiagEntry = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
-    if (kDiagEntry) std::cerr << "[LAZVAL] isolateRealRootsViaTower entry" << std::endl;
-    auto TD = [&](const char* why) -> RootSet {
-        if (kDiagEntry) std::cerr << "[LAZVAL] tower bail=" << why << std::endl;
-        return empty;
+    // File-based (worker-thread stderr suppressed): XOLVER_NRA_TOWER_DIAG = path.
+    static const char* kTwrFile = std::getenv("XOLVER_NRA_TOWER_DIAG");
+    auto twrLog = [&](const char* tag) {
+        if (!kTwrFile || !*kTwrFile) return;
+        if (std::FILE* fp = std::fopen(kTwrFile, "a")) { std::fprintf(fp, "[VIATOWER] %s\n", tag); std::fclose(fp); }
     };
+    twrLog("entry");
+    auto TD = [&](const char* why) -> RootSet { twrLog(why); return empty; };
 
     // 1. Build the field tower from the ALGEBRAIC prefix coordinates (rational
     //    coordinates are substituted into p). Each algebraic coordinate becomes
@@ -1713,7 +1933,16 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     if (algCount < 1) return TD("algCount<1");             // no tower => not our case
 
     p1.normalize();
-    if (p1.isZero() || p1.isConstant() || !p1.contains(mainVar)) return TD("p1-zero-const-or-no-mainVar");
+    // Three sub-cases, all currently conservative (bail → unknown, never false-UNSAT):
+    //  - p1-zero: genuine NULLIFICATION (poly vanishes identically on the algebraic
+    //    prefix) — the Geogebra IsoRightTriangle cluster (Bottema1_14b etc.) hits
+    //    THIS. Needs the Lazard VALUATION LIFT to delineate soundly; the covering
+    //    cannot trust a Collins 0-roots answer here.
+    //  - p1-constant / no-mainVar: 0 roots in mainVar for the fixed-prefix cell, but
+    //    a measure-zero leading-coefficient nullification cannot be distinguished
+    //    cheaply, so kept conservative pending the same valuation work.
+    if (p1.isZero()) return TD("p1-zero");
+    if (p1.isConstant() || !p1.contains(mainVar)) return TD("p1-const-or-no-mainVar");
     {
         std::set<VarId> ext(ctx.extensionVars.begin(), ctx.extensionVars.end());
         for (VarId v : p1.variables())

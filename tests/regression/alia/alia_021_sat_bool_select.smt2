@@ -1,0 +1,8 @@
+(set-logic QF_ALIA)
+(set-info :status sat)
+(declare-fun arr () (Array Int Bool))
+(declare-fun i () Int)
+(declare-fun j () Int)
+(assert (select arr i))
+(assert (not (select arr j)))
+(check-sat)

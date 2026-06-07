@@ -1,0 +1,10 @@
+; Equal args force equal images; demanding different product is unsat.
+(set-logic QF_UFNIA)
+(set-info :status unsat)
+(declare-fun f (Int) Int)
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (= x y))
+(assert (= (* (f x) (f x)) 9))
+(assert (= (* (f y) (f y)) 16))
+(check-sat)

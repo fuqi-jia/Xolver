@@ -555,6 +555,13 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     for (auto& s : solvers_) {
         auto v = s->arrayIndexSharedTerms();
         arrayIdxSet.insert(v.begin(), v.end());
+        // Value/element side too: a value-pair deduced equality (e.g. two stored
+        // values tied equal by a read-over-write chain) hits the same Standard-
+        // effort cache-poisoning that the index deferral fixes, so it must also
+        // be deferred to Full. Scoped to array value/element terms (not all
+        // shared scalars) to avoid the UFLIA/UFNIA flood. (alra_010 value side.)
+        auto vv = s->arrayValueSharedTerms();
+        arrayIdxSet.insert(vv.begin(), vv.end());
     }
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
@@ -684,18 +691,31 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             const auto* st = sharedTermRegistry_->get(stId);
             if (!st) continue;
             if (!arrangeInternals && st->isInternal) continue;   // scope to user terms only by default
-            // Skip numeric-constant shared terms: a constant-vs-variable
-            // arrangement is not needed (the variable's value already coincides
-            // with the constant in this model, but they are NOT required equal),
-            // and splitting on it destabilizes array axiom instantiation. Only
-            // genuine variable-variable arrangements need a split.
-            if (sharedTermRegistry_->constValue(stId)) continue;
             std::optional<RealValue> v;
-            for (auto& solver : solvers_) {
-                if (solver->id() == TheoryId::EUF) continue;
-                if (!solver->supportsCombination()) continue;
-                v = solver->sharedTermArithValue(stId);
-                if (v) break;
+            // Numeric-constant shared terms: by default a constant-vs-variable
+            // arrangement is skipped — splitting on it can destabilize array
+            // axiom instantiation, and the variable's value coinciding with the
+            // constant in this model does NOT make them required-equal. EXCEPTION:
+            // under the demand-driven care graph (array-combination logics) a
+            // constant that is an array INDEX must be arranged against a
+            // same-valued index variable, or the Row1/Row2 read value stays
+            // undetermined and the model is jointly inconsistent (alra_010: read
+            // index i0 numerically equals the constant store index 1.0 but EUF
+            // never merges them, so select(store(...,1.0,..),i0) is unconstrained).
+            // The caresPair filter in the pairing loop admits only the index
+            // pairs that matter; without the care graph we keep the conservative
+            // skip. A bare constant has no simplex value, so take it from
+            // constValue() directly.
+            if (auto cv = sharedTermRegistry_->constValue(stId)) {
+                if (!careGraphEnabled_) continue;
+                v = RealValue::fromMpq(*cv);
+            } else {
+                for (auto& solver : solvers_) {
+                    if (solver->id() == TheoryId::EUF) continue;
+                    if (!solver->supportsCombination()) continue;
+                    v = solver->sharedTermArithValue(stId);
+                    if (v) break;
+                }
             }
             if (!v) continue;
             valued.push_back({stId, st->sort, std::move(*v)});

@@ -6,6 +6,7 @@
 #include <gmpxx.h>
 #include <cstdint>
 #include <utility>
+#include <unordered_map>
 
 namespace xolver::bitblast {
 
@@ -63,6 +64,25 @@ private:
     uint64_t maxVars_ = 0;     // 0 = unlimited
     uint64_t varCount_ = 0;
     bool over_ = false;
+
+    // Structural hashing (AIG-style gate sharing): a Tseitin gate output is a
+    // pure function of its (type, sorted operands), so identical sub-circuits —
+    // rampant in bit-blasting (sign-extension partials in mul, repeated adder
+    // bits) — collapse to ONE shared variable instead of a fresh var each call.
+    // Exact (semantics-preserving), and a major SAT-var/clause reduction that
+    // turns a ~10x-bloated multiplication encoding back to BLAN-tight. Per-
+    // encoder (the encoder is constructed fresh per attempt), so cached literals
+    // never leak across SAT instances. Key packs type(2) | loEnc(31) | hiEnc(31)
+    // where enc = (var<<1)|sign; bit-blast vars are budget-bounded (<<2^30) so
+    // the pack is collision-free. Opt-out: XOLVER_NIA_BB_NO_GATE_CACHE.
+    uint64_t gateKey(unsigned type, SatLit a, SatLit b) const {
+        uint64_t ae = (uint64_t(a.var) << 1) | (a.sign ? 1u : 0u);
+        uint64_t be = (uint64_t(b.var) << 1) | (b.sign ? 1u : 0u);
+        uint64_t lo = ae < be ? ae : be, hi = ae < be ? be : ae;
+        return (uint64_t(type) << 62) | (lo << 31) | hi;
+    }
+    std::unordered_map<uint64_t, SatLit> gateCache_;
+    bool gateCacheOn_ = true;
 
     static unsigned bitsForValue(const mpz_class& v);
     BitVec signExtend(const BitVec& a, unsigned width);

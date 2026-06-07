@@ -113,6 +113,12 @@ public:
     // floods the SAT core (broad regressions). Default empty.
     virtual std::vector<SharedTermId> arrayIndexSharedTerms() const { return {}; }
 
+    // Array VALUE/element shared terms (stored values arg[2] + arith read results).
+    // The combination layer unions these with arrayIndexSharedTerms() to also
+    // defer value-pair deduced equalities to Full effort (same Standard-effort
+    // cache-poisoning fix as for index pairs). Default empty.
+    virtual std::vector<SharedTermId> arrayValueSharedTerms() const { return {}; }
+
     // Nelson-Oppen arrangement support: the current arith-model value of a
     // shared scalar term, if this solver owns it and has a concrete value.
     // Used by model-based arrangement splitting to detect when two shared

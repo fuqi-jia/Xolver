@@ -1,0 +1,10 @@
+; UF bool predicate congruence in combination (was opaque before the fix).
+(set-logic QF_UFLIA)
+(set-info :status unsat)
+(declare-fun p (Int) Bool)
+(declare-fun a () Int)
+(declare-fun b () Int)
+(assert (p a))
+(assert (not (p b)))
+(assert (= a b))
+(check-sat)

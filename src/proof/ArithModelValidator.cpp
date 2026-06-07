@@ -469,8 +469,22 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             return t;
         }
         case Kind::Select: {
-            // select(a,i): apply a's interpretation at index-token(i).
             if (n.children.size() != 2) return r;
+            // A purifier-bridged array read carries its arith value typed, keyed
+            // by (array-operand node, index value) — consult it first (combination
+            // model check). Returns the RealValue directly, so `(mod (select a i)
+            // M)` over a bridged read validates instead of seeing a stale array
+            // default. Robust to nested reads and compound indices. No string.
+            if (selOverride_) {
+                TR iv = eval(n.children[1]);
+                if (iv.kind == Kind2::Number) {
+                    if (auto q = iv.n.tryAsRational()) {
+                        auto so = selOverride_->find({n.children[0], *q});
+                        if (so != selOverride_->end()) return num(so->second);
+                    }
+                }
+            }
+            // select(a,i): apply a's interpretation at index-token(i).
             TR ar = eval(n.children[0]);
             if (ar.kind != Kind2::Array) return r;
             TR ir2 = eval(n.children[1]);
@@ -478,11 +492,44 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             if (!it) return r;
             auto ov = ar.arr.overrides.find(*it);
             std::string elem = (ov != ar.arr.overrides.end()) ? ov->second : ar.arr.deflt;
-            // Result is an opaque element token.
+            // If the element is a concrete numeric/bool token (an array of Int/
+            // Real/Bool elements, e.g. QF_ANIA/ALIA), surface it as a TYPED value
+            // so enclosing arithmetic (mod/div/+/comparisons) can consume it.
+            // Without this, `(mod (select a i) M)` over an Int-element array is
+            // Indeterminate (the Add/Mod/Div cases reject non-Number operands),
+            // which floored genuine QF_ANIA sats to Unknown. Opaque "@…" element
+            // tokens (uninterpreted-element arrays, QF_AX) stay Tokens unchanged.
+            // Gated (numElems_): enabling it lets the validator DEFINITELY evaluate
+            // nested store/select reads, which can newly expose a theory-produced
+            // model as Violated (a self-store class that previously escaped as sat
+            // while the read was Indeterminate) — so it stays opt-in.
+            if (numElems_) {
+                if (elem.rfind("#n:", 0) == 0) {
+                    try {
+                        TR t; t.kind = Kind2::Number;
+                        t.n = RealValue::fromMpq(mpq_class(elem.substr(3)));
+                        return t;
+                    } catch (...) { /* fall through to opaque token */ }
+                }
+                if (elem.rfind("#b:", 0) == 0) {
+                    TR t; t.kind = Kind2::Bool; t.b = (elem.substr(3) == "1");
+                    return t;
+                }
+            }
+            // Otherwise an opaque element token (uninterpreted element sort).
             TR t; t.kind = Kind2::Token; t.tok = elem;
             return t;
         }
         case Kind::UFApply: {
+            // Purifier-bridged application value (combination): `(= u (f p))`
+            // surfaces u's theory value keyed by this UFApply's ExprId. Consult it
+            // first — it is the model's actual value for this application and works
+            // even when an argument is a datatype value (funcInterps key on numeric
+            // args only, so `(f p)` with a DT arg would otherwise be Indeterminate).
+            if (selectorOverride_) {
+                auto bit = selectorOverride_->find(eid);
+                if (bit != selectorOverride_->end()) return num(bit->second);
+            }
             // Evaluate an uninterpreted-function application by table lookup
             // against a supplied interpretation. Without an interpretation the
             // application is Indeterminate (the default below). The interp's
@@ -515,6 +562,19 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             try { return num(RealValue::fromMpq(mpq_class(*valStr))); } catch (...) {}
             // Non-numeric (uninterpreted-sort) result: an opaque equality token.
             TR t; t.kind = Kind2::Token; t.tok = *valStr; return t;
+        }
+        case Kind::Selector: {
+            // Arith-valued datatype selector `(fst p)`: the DT/EUF model does not
+            // export field values, but the Purifier bridged this read into a
+            // shared scalar whose theory value is surfaced here keyed by the
+            // (hash-consed) selector ExprId. Consult it so DT+arith combination
+            // models validate (e.g. `(* (fst p) (fst p)) = 16`). No override →
+            // Indeterminate (the default), never a wrong value.
+            if (selectorOverride_) {
+                auto it = selectorOverride_->find(eid);
+                if (it != selectorOverride_->end()) return num(it->second);
+            }
+            return r;
         }
         default:
             return r;  // quantifiers, BV/FP, … → indeterminate

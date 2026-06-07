@@ -78,6 +78,41 @@ public:
     // being Indeterminate. Optional; pointer must outlive this validator.
     void setRealAssignments(const RealAssignment* ra) { real_ = ra; }
 
+    // Provide TYPED values for array-read terms, keyed by
+    // (array-operand ExprId, index value). Used by the combination model check
+    // to surface the arith value the theory assigned to a purifier-bridged array
+    // read `(= v (select A i))` — which EUF's array-model export does not carry —
+    // so a `(mod (select A i) M)` witness validates instead of reading a stale
+    // array default. Keying on the ARRAY-OPERAND node (not the whole select)
+    // plus the evaluated index is robust to purification rebuilding the select
+    // when its index is compound, and to NESTED reads `(select (select m b) i)`
+    // (the inner `(select m b)` operand keeps its ExprId). The value travels as a
+    // RealValue (no string token), consulted before the array-interpretation
+    // path. Optional; pointer must outlive this validator.
+    using SelectOverrideMap = std::map<std::pair<ExprId, mpq_class>, RealValue>;
+    void setSelectOverride(const SelectOverrideMap* so) { selOverride_ = so; }
+
+    // Datatype-SELECTOR value override (DT+arith combination model check). The
+    // Purifier bridges an arith-valued datatype selector `(fst p)` into a fresh
+    // shared scalar via `(= v (fst p))` (routed to EUF); the arith theory assigns
+    // v a value but the DT model export does not reflect it, so the validator
+    // cannot evaluate `(fst p)` and floors a genuine sat to Unknown. This maps the
+    // (hash-consed) selector ExprId directly to its typed value. Optional; pointer
+    // must outlive this validator. Sound: the bridge equality holds in the model,
+    // and every ORIGINAL assertion is still independently re-checked.
+    using SelectorOverrideMap = std::unordered_map<ExprId, RealValue>;
+    void setSelectorOverride(const SelectorOverrideMap* so) { selectorOverride_ = so; }
+
+    // When ON, a `(select a i)` over an Int/Real-element array surfaces a concrete
+    // numeric/bool element as a TYPED value (so enclosing arithmetic mod/div/+ can
+    // consume it) instead of an opaque element token. Gated because it also makes
+    // the validator able to DEFINITELY evaluate nested store/select reads, which
+    // can expose that a theory-produced array model is wrong (e.g. a self-store
+    // case whose model never validated but escaped as sat while the read was
+    // Indeterminate). Off by default → default verdict path unchanged. Set ON by
+    // the array-read bridge model-completion path (XOLVER_COMB_ARRAY_BRIDGE_MODEL).
+    void setNumericArrayElements(bool b) { numElems_ = b; }
+
     // Validate the given assertion roots (original-formula ExprIds).
     Verdict validate(const std::vector<ExprId>& assertions) const;
 
@@ -133,6 +168,9 @@ private:
     const TokenAssignment* tok_ = nullptr;
     const FuncInterpMap* funcInterps_ = nullptr;
     const RealAssignment* real_ = nullptr;
+    const SelectOverrideMap* selOverride_ = nullptr;
+    const SelectorOverrideMap* selectorOverride_ = nullptr;
+    bool numElems_ = false;
 
     // eval memo (XOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime
     // (the model is fixed), keyed by original-formula ExprId.

@@ -32,6 +32,10 @@ public:
     void backtrack(int level);
     TheoryCheckResult check();
     TheoryCheckResult check(CdcacEffort effort, void* trail);
+    // Step 2.1: cheap GLOBAL box-consistency refutation over the active constraints.
+    // True ⇒ real-infeasible over all of ℝⁿ ⇒ UNSAT; fills reasonsOut with a sound
+    // (superset) conflict. Meant to run as an EARLY pipeline stage, before the covering.
+    bool globalBoxRefute(std::vector<SatLit>& reasonsOut);
     void reset();
 
     // V5: push/pop for Solver::push/pop API

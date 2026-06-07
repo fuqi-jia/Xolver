@@ -1,5 +1,6 @@
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include <algorithm>
+#include <cstdlib>
 
 namespace xolver::bitblast {
 
@@ -8,6 +9,7 @@ BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
     sat_.addClause({SatLit::positive(t)});   // clamp t = true
     true_  = SatLit::positive(t);
     false_ = SatLit::negative(t);
+    gateCacheOn_ = (std::getenv("XOLVER_NIA_BB_NO_GATE_CACHE") == nullptr);
 }
 
 // One fresh SAT variable, capped by maxVars_. Once the budget is exhausted we
@@ -63,10 +65,17 @@ SatLit BitBlastEncoder::andGate(SatLit a, SatLit b) {
     if (b == true_)  return a;
     if (a == b)      return a;
     if (a == b.negated()) return false_;
+    uint64_t key = 0;
+    if (gateCacheOn_) {
+        key = gateKey(0, a, b);
+        auto it = gateCache_.find(key);
+        if (it != gateCache_.end()) return it->second;
+    }
     SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c});
     sat_.addClause({a, c.negated()});
     sat_.addClause({b, c.negated()});
+    if (gateCacheOn_ && !over_) gateCache_[key] = c;
     return c;
 }
 
@@ -77,10 +86,17 @@ SatLit BitBlastEncoder::orGate(SatLit a, SatLit b) {
     if (b == false_) return a;
     if (a == b)      return a;
     if (a == b.negated()) return true_;
+    uint64_t key = 0;
+    if (gateCacheOn_) {
+        key = gateKey(1, a, b);
+        auto it = gateCache_.find(key);
+        if (it != gateCache_.end()) return it->second;
+    }
     SatLit c = freshVar();
     sat_.addClause({a, b, c.negated()});
     sat_.addClause({a.negated(), c});
     sat_.addClause({b.negated(), c});
+    if (gateCacheOn_ && !over_) gateCache_[key] = c;
     return c;
 }
 
@@ -92,11 +108,18 @@ SatLit BitBlastEncoder::xorGate(SatLit a, SatLit b) {
     if (b == true_)  return a.negated();
     if (a == b)      return false_;
     if (a == b.negated()) return true_;
+    uint64_t key = 0;
+    if (gateCacheOn_) {
+        key = gateKey(2, a, b);
+        auto it = gateCache_.find(key);
+        if (it != gateCache_.end()) return it->second;
+    }
     SatLit c = freshVar();
     sat_.addClause({a.negated(), b.negated(), c.negated()});
     sat_.addClause({a, b, c.negated()});
     sat_.addClause({a, b.negated(), c});
     sat_.addClause({a.negated(), b, c});
+    if (gateCacheOn_ && !over_) gateCache_[key] = c;
     return c;
 }
 

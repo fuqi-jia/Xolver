@@ -1,0 +1,10 @@
+; UF congruence over reals: equal args -> equal images.
+(set-logic QF_UFNRA)
+(set-info :status unsat)
+(declare-fun f (Real) Real)
+(declare-fun x () Real)
+(declare-fun y () Real)
+(assert (= x y))
+(assert (= (* (f x) (f x)) 4.0))
+(assert (not (= (f x) (f y))))
+(check-sat)

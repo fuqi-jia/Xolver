@@ -8,6 +8,7 @@
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include "theory/arith/lia/GomoryCut.h"
+#include "theory/arith/nia/reasoners/DioReasoner.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
@@ -55,6 +56,8 @@ LiaSolver::LiaSolver() {
     incrementalEnabled_ = (incEnv && *incEnv && *incEnv != '0');
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    const char* dioEnv = std::getenv("XOLVER_LIA_DIO");
+    dioTightenEnabled_ = (dioEnv && *dioEnv && *dioEnv != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -517,6 +520,17 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
+    // Integer-Diophantine tightening (arith-dio-tighten) — refute unbounded
+    // Diophantine systems BEFORE branch-and-bound thrashes on the unbounded
+    // mod-lowering quotient vars. Full effort only (the assignment is complete,
+    // so the disequalities that drive the refutation are decided).
+    if (dioTightenEnabled_ && effort == TheoryEffort::Full && !disequalities_.empty()) {
+        if (auto dc = checkDioTighten()) {
+            if (normalizeTheoryClause(dc->clause))
+                return TheoryCheckResult::mkConflict(std::move(*dc));
+        }
+    }
+
     auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb, effort);
 
 #ifdef XOLVER_LIA_PROFILE
@@ -566,6 +580,97 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 
     return TheoryCheckResult::unknown();
+}
+
+std::optional<TheoryConflict> LiaSolver::checkDioTighten() const {
+    auto lcm2 = [](const mpz_class& a, const mpz_class& b) -> mpz_class {
+        if (a == 0 || b == 0) return (a == 0) ? abs(b) : abs(a);
+        mpz_class g; mpz_gcd(g.get_mpz_t(), a.get_mpz_t(), b.get_mpz_t());
+        return abs(a / g * b);
+    };
+    // Convert `lhs (==) rhs` into the integer form Σc·v + cst (cst = -rhs·d).
+    auto toIntForm = [&](const LinearFormKey& lhs, const mpq_class& rhs, DioLinForm& out) -> bool {
+        mpz_class d = 1;
+        for (const auto& [v, c] : lhs.terms) { (void)v; d = lcm2(d, c.get_den()); }
+        d = lcm2(d, rhs.get_den());
+        for (const auto& [v, c] : lhs.terms) {
+            mpq_class s = c * d;  // now integral
+            out.coeffs.emplace_back(v, s.get_num());
+        }
+        mpq_class r = rhs * d;
+        out.cst = -r.get_num();
+        return !out.coeffs.empty();
+    };
+
+    std::vector<DioLinForm> cons;
+    std::map<std::string, DioVarBound> bounds;
+
+    auto addSingleVarBound = [&](const std::string& v, const mpq_class& coeffQ,
+                                 const mpq_class& rhsQ, Relation rel, SatLit lit) {
+        mpz_class d = lcm2(coeffQ.get_den(), rhsQ.get_den());
+        mpq_class aq = coeffQ * d, rq = rhsQ * d;  // materialize (now integral)
+        mpz_class a = aq.get_num();
+        mpz_class r = rq.get_num();
+        if (a == 0) return;
+        if (rel == Relation::Lt) { rel = Relation::Leq; r -= 1; }      // integer strict→non-strict
+        else if (rel == Relation::Gt) { rel = Relation::Geq; r += 1; }
+        if (a < 0) {                                                    // normalize a>0
+            a = -a; r = -r;
+            if (rel == Relation::Leq) rel = Relation::Geq;
+            else if (rel == Relation::Geq) rel = Relation::Leq;
+        }
+        DioVarBound& bb = bounds[v];
+        auto setHi = [&](const mpz_class& ub) {
+            if (!bb.hasHi || ub < bb.hi) { bb.hasHi = true; bb.hi = ub; bb.hiReasons = {lit}; } };
+        auto setLo = [&](const mpz_class& lb) {
+            if (!bb.hasLo || lb > bb.lo) { bb.hasLo = true; bb.lo = lb; bb.loReasons = {lit}; } };
+        if (rel == Relation::Leq) {
+            mpz_class ub; mpz_fdiv_q(ub.get_mpz_t(), r.get_mpz_t(), a.get_mpz_t()); setHi(ub);
+        } else if (rel == Relation::Geq) {
+            mpz_class lb; mpz_cdiv_q(lb.get_mpz_t(), r.get_mpz_t(), a.get_mpz_t()); setLo(lb);
+        } else if (rel == Relation::Eq) {
+            if (r % a == 0) { mpz_class val = r / a; setLo(val); setHi(val); }
+        }
+        // Neq single-var is an exclusion, not an interval — ignored by the hull.
+    };
+
+    for (const auto& a : activeAtoms_) {
+        Relation rel = a.rel;
+        if (!a.value) {                                                // negated atom
+            switch (rel) {
+                case Relation::Eq:  rel = Relation::Neq; break;
+                case Relation::Neq: rel = Relation::Eq;  break;
+                case Relation::Leq: rel = Relation::Gt;  break;
+                case Relation::Geq: rel = Relation::Lt;  break;
+                case Relation::Lt:  rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Leq; break;
+            }
+        }
+        // Push the constraint as Eq / Neq / Leq / Geq (strict → integer
+        // non-strict on the cleared-denominator form). tightenConflict folds the
+        // Leq/Geq complementary pairs into lattice equalities.
+        DioLinForm f; f.reason = a.lit;
+        if (toIntForm(a.lhs, a.rhs, f)) {
+            switch (rel) {
+                case Relation::Eq:  f.rel = Relation::Eq;  cons.push_back(std::move(f)); break;
+                case Relation::Neq: f.rel = Relation::Neq; cons.push_back(std::move(f)); break;
+                case Relation::Leq: f.rel = Relation::Leq; cons.push_back(std::move(f)); break;
+                case Relation::Geq: f.rel = Relation::Geq; cons.push_back(std::move(f)); break;
+                case Relation::Lt:  f.rel = Relation::Leq; f.cst += 1; cons.push_back(std::move(f)); break;  // f<0 ⟺ f+1≤0
+                case Relation::Gt:  f.rel = Relation::Geq; f.cst -= 1; cons.push_back(std::move(f)); break;  // f>0 ⟺ f-1≥0
+            }
+        }
+        if (a.lhs.terms.size() == 1)
+            addSingleVarBound(a.lhs.terms[0].first, a.lhs.terms[0].second, a.rhs, rel, a.lit);
+    }
+    for (const auto& d : disequalities_) {                              // separately-tracked ≠
+        DioLinForm f; f.reason = d.lit; f.rel = Relation::Neq;
+        if (toIntForm(d.lhs, d.rhs, f)) cons.push_back(std::move(f));
+    }
+
+    auto conflictOpt = DioReasoner::tightenConflict(cons, bounds);
+    if (!conflictOpt) return std::nullopt;
+    return TheoryConflict{*conflictOpt};
 }
 
 TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {
@@ -1713,13 +1818,29 @@ std::optional<RealValue> LiaSolver::sharedTermArithValue(SharedTermId s) const {
 }
 
 std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
+    return buildModel(/*includeInternal=*/false);
+}
+
+// NiaSolver's embedded linear-decide needs the COMPLETE assignment — including
+// the internal/aux variables (e.g. NIA's `__nlc_div_q_*` / `__nlc_mod_r_*`
+// mod/div-lowering vars) that getModel() hides — so it can re-validate the model
+// against NIA's normalized constraints (those constraints reference the aux
+// vars; dropping them and defaulting to 0 breaks the equality linkage).
+std::optional<TheorySolver::TheoryModel> LiaSolver::getModelWithInternal() const {
+    return buildModel(/*includeInternal=*/true);
+}
+
+std::optional<TheorySolver::TheoryModel> LiaSolver::buildModel(bool includeInternal) const {
+    auto isInternal = [](const std::string& name) {
+        return name.size() >= 2 && name[0] == '_' && name[1] == '_';
+    };
     // If a rounding repair produced the SAT verdict, the simplex β holds the
     // fractional relaxation, not the integer model — return the repaired point.
     if (repairModel_) {
         TheoryModel model;
         for (const auto& [name, val] : *repairModel_) {
             if (name.empty()) continue;
-            if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
+            if (!includeInternal && isInternal(name)) continue;
             model.assignments[name] = val.get_num().get_str();
             model.numericAssignments.insert({name, RealValue::fromMpq(val)});
         }
@@ -1729,8 +1850,8 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
     TheoryModel model;
     for (int i = 0; i < gs_.numVars(); ++i) {
         std::string name = manager_.getVarName(i);
-        if (name.empty()) continue;           // skip auxiliary vars
-        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue; // internal
+        if (name.empty()) continue;           // skip unnamed auxiliary vars
+        if (!includeInternal && isInternal(name)) continue; // internal
         DeltaRational val = gs_.value(i);
         // For integer variables, value should be integral after check().
         // If delta component is non-zero, take the rational part (delta is infinitesimal).
@@ -1743,6 +1864,111 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::getModel() const {
     }
     if (model.assignments.empty()) return std::nullopt;
     return model;
+}
+
+std::optional<TheorySolver::TheoryModel> LiaSolver::findIntegerModel(
+    int nodeCap, std::optional<TheoryConflict>* outConflict) {
+    // One Full check applies bounds + LP + integrality repair. A Consistent
+    // verdict is an immediate integer model; a branch Lemma leaves gs_ at a
+    // fractional LP solution we drive to a leaf ourselves.
+    TheoryLemmaDatabase scratch;
+    TheoryCheckResult r = check(scratch, TheoryEffort::Full);
+    if (r.kind == TheoryCheckResult::Kind::Consistent)
+        return getModelWithInternal();
+    if (r.kind == TheoryCheckResult::Kind::Conflict) {
+        // Root LP infeasible (Farkas) ⇒ the asserted atoms are jointly
+        // infeasible. Surface it as a sound conflict over the caller's real
+        // reason literals.
+        if (outConflict && r.conflictOpt) *outConflict = std::move(r.conflictOpt);
+        return std::nullopt;
+    }
+    if (r.kind != TheoryCheckResult::Kind::Lemma)
+        return std::nullopt;             // Unknown
+    int nodes = 0;
+    return branchAndBound(nodeCap, nodes);
+}
+
+std::optional<TheorySolver::TheoryModel> LiaSolver::branchAndBound(int nodeCap, int& nodes) {
+    if (++nodes > nodeCap) return std::nullopt;   // give up → Unknown (sound)
+    if (gs_.check() == GeneralSimplex::Result::Unsat) return std::nullopt;
+
+    // Integrality repair shortcut at this node (tighter LP than the root).
+    repairModel_.reset();
+    if (tryIntegralityRepair()) {
+        auto m = getModelWithInternal();
+        repairModel_.reset();
+        if (m) return m;
+    }
+
+    // Most-fractional integer variable. Branch ONLY on NAMED integer vars
+    // (original + NIA's "__nlc_*" lowering vars). The unnamed LHS-form slack
+    // columns (e.g. the simplex var for "Σbridge") are integer-valued too, but
+    // they are DETERMINED by the named vars — branching them walks a huge range
+    // (they are unbounded sums) without progress. Once every named integer var
+    // is integral, the slacks are automatically integral.
+    int bv = -1;
+    mpq_class bestFrac(0);
+    mpq_class bvVal;
+    for (int v : integerVars_) {
+        if (manager_.getVarName(v).empty()) continue;     // unnamed slack/aux
+        DeltaRational dv = gs_.value(v);
+        if (dv.b == 0 && dv.a.get_den() == 1) continue;   // already integral
+        mpq_class frac;
+        if (dv.b != 0) {
+            frac = mpq_class(1, 2);
+        } else {
+            mpz_class fl;
+            mpz_fdiv_q(fl.get_mpz_t(), dv.a.get_num().get_mpz_t(),
+                       dv.a.get_den().get_mpz_t());
+            frac = dv.a - mpq_class(fl);
+            if (frac < 0) frac = -frac;
+        }
+        if (frac > bestFrac) { bestFrac = frac; bv = v; bvVal = dv.a; }
+    }
+    if (bv == -1) {
+        // Every integer var is integral. The point may still violate a
+        // disequality; the embedded-decide caller re-validates against NIA's
+        // normalized constraints (which include the Neq atoms), so returning it
+        // here is sound — a diseq-violating point is rejected upstream.
+        return getModelWithInternal();
+    }
+
+    mpz_class fl;
+    mpz_fdiv_q(fl.get_mpz_t(), bvVal.get_num().get_mpz_t(),
+               bvVal.get_den().get_mpz_t());
+    mpz_class cl = fl + 1;   // bvVal is fractional ⇒ ceil = floor + 1
+
+    // Round to NEAREST integer — the side the LP value actually sits on. The mod
+    // quotients here carry tiny near-integer fractions (e.g. -1/2^32), so a
+    // floor-first order dives into the wrong half (floor(-1/2^32) = -1) and the
+    // two coupled quotients ping-pong. Nearest-first collapses each to its LP
+    // value in one node.
+    mpz_class nr = roundNearest(bvVal);
+    mpz_class other = (nr == fl) ? cl : fl;
+
+    auto tryBound = [&](bool lower, bool upper, const mpz_class& val) -> std::optional<TheoryModel> {
+        gs_.push();
+        bool ok = true;
+        if (lower) ok = gs_.assertLower(bv, BoundInfo(BoundValue(DeltaRational(mpq_class(val))))) && ok;
+        if (upper) ok = ok && gs_.assertUpper(bv, BoundInfo(BoundValue(DeltaRational(mpq_class(val)))));
+        std::optional<TheoryModel> m;
+        if (ok) m = branchAndBound(nodeCap, nodes);
+        gs_.pop();
+        return m;
+    };
+    // PIN nearest, then the other neighbour (fixes free/near-integer vars in one
+    // node). Then the open half-spaces preserve completeness — toward nearest first.
+    if (auto m = tryBound(true, true, nr)) return m;          // pin = nearest
+    if (auto m = tryBound(true, true, other)) return m;       // pin = other neighbour
+    if (nr == cl) {  // nearest is the ceil side
+        if (auto m = tryBound(true, false, cl)) return m;     // bv >= ceil
+        if (auto m = tryBound(false, true, fl)) return m;     // bv <= floor
+    } else {
+        if (auto m = tryBound(false, true, fl)) return m;     // bv <= floor
+        if (auto m = tryBound(true, false, cl)) return m;     // bv >= ceil
+    }
+
+    return std::nullopt;
 }
 
 // ============================================================================

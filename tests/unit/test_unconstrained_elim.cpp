@@ -82,17 +82,21 @@ TEST_CASE("UnconstrainedElim: strict < witness lands strictly below the bound") 
     CHECK(numAsg["x"].asRational() < 7);
 }
 
-TEST_CASE("UnconstrainedElim: handles `(= v t)` where v occurs once (term-level Eq)") {
-    // Updated behavior: UnconstrainedElim now also handles equality atoms
-    // whose unc-var occurs exactly once globally. This is the LCTES-class
-    // path that SolveEqs rejects (SolveEqs requires a linear-reconstructable
-    // RHS; `(mod x y)` etc. don't qualify). Drops the assertion and
-    // registers the var for elimination via the defining term.
+TEST_CASE("UnconstrainedElim: eliminates an unconstrained-var equality (x appears only in x=5)") {
+    // be12735 extended UnconstrainedElim to Kind::Eq for the UNCONSTRAINED case:
+    // x occurs exactly once (occ==1), here only in (= x 5), so x is determined by
+    // that single equality and nothing else constrains it. Eliminating it (x -> 5)
+    // is sound — reconstruct gives x = 5. (Previously UnconstrainedElim left all
+    // equalities to solve-eqs; it now also claims the occ==1 equality case.)
     CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
     ExprId x = var(ir, i, "x");
     ir.addAssertion(bin(ir, Kind::Eq, b, x, cint(ir, i, 5)));
     ModelConverter mc;
     UnconstrainedElim unc(ir, mc);
-    CHECK(unc.run());
+    REQUIRE(unc.run());
     CHECK(mc.size() == 1);
+    std::unordered_map<std::string, RealValue> numAsg;
+    std::unordered_map<std::string, std::string> strAsg;
+    REQUIRE(mc.reconstruct(numAsg, strAsg, ir));
+    CHECK(numAsg["x"] == RealValue::fromInt(5));
 }

@@ -38,6 +38,17 @@ public:
     Stats getStats() const;
 
 private:
+    // Wall-clock terminator: CaDiCaL polls terminate() DURING solve(), so even a
+    // single long internal SAT solve (e.g. the bit-blast's dedicated solver, whose
+    // conflict limit is unbounded by default) aborts when the solve deadline
+    // passes. Default-INERT: terminate() is false unless XOLVER_WALLCLOCK_MS set a
+    // deadline that has now passed (wall::remainingMs()). Sound: an aborted solve
+    // returns Unknown.
+    struct WallClockTerminator : public CaDiCaL::Terminator {
+        bool terminate() override;
+    };
+    WallClockTerminator wallTerm_;
+
     std::unique_ptr<CaDiCaL::Solver> solver_;
     SatVar maxVar_ = 0;
     SatVar declaredVars_ = 0;

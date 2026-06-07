@@ -1,0 +1,10 @@
+; Two args equal -> f images equal; product then determined.
+(set-logic QF_UFNIA)
+(set-info :status sat)
+(declare-fun f (Int) Int)
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (= x y))
+(assert (= (f x) 5))
+(assert (= (* (f x) (f y)) 25))
+(check-sat)

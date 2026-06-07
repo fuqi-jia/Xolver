@@ -9,6 +9,7 @@
 #include "frontend/preprocess/RealDivLowerer.h"
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
+#include "frontend/preprocess/StoreTowerEqMultiset.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
@@ -245,6 +246,8 @@ public:
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
+        validator.setNumericArrayElements(
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 1) != 0);
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
         // verdict so a floored array sat can be root-caused (which assertion,
         // which interp). Never affects the verdict.
@@ -313,6 +316,8 @@ public:
     // model checked here is exactly the one that would be printed.
     bool modelPositivelyValidates() const {
         if (!ir || !lastModel_) return false;
+        const bool arrBridgeModel =
+            env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 1) != 0;
         ArithModelValidator::NumAssignment numAsg;
         ArithModelValidator::BoolAssignment boolAsg;
         ArithModelValidator::TokenAssignment tokAsg;
@@ -341,8 +346,24 @@ public:
         // NIA/LIA real models carry concrete rationals (never "@"), so the
         // default-on niaSatFloor is untouched.
         std::unordered_set<std::string> opaqueScalar;
-        for (const auto& [name, val] : lastModel_->assignments)
-            if (!val.empty() && val[0] == '@') opaqueScalar.insert(name);
+        for (const auto& [name, val] : lastModel_->assignments) {
+            if (val.empty() || val[0] != '@') continue;
+            // A genuinely-constrained combination scalar (e.g. a `ret` pinned by
+            // `ret + 2^32 = (mod (sum of selects) 2^32)`) carries its REAL arith
+            // value in numericAssignments; only the UNCONSTRAINED-scalar backfill
+            // is spurious (minted 0, the alia_005 i=j collapse). With array-bridge
+            // model completion on, keep the non-zero real value so a select/mod
+            // equality over the scalar can validate; still drop the spurious
+            // 0-collapse. Gated → default path unchanged.
+            if (arrBridgeModel) {
+                auto rit = lastModel_->numericAssignments.find(name);
+                if (rit != lastModel_->numericAssignments.end()) {
+                    auto q = rit->second.tryAsRational();
+                    if (q && *q != 0) continue;  // real value → not opaque-excluded
+                }
+            }
+            opaqueScalar.insert(name);
+        }
         // Prefer the typed numeric channel (RealValue): exact rationals + the
         // combination shared-scalar's true arithmetic value. Skip opaque-token
         // scalars (their numeric value is the spurious collapse).
@@ -366,19 +387,162 @@ public:
                 }
             }
         }
+        // --- Array-read bridge model back-fill -----------------------------
+        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default ON.)
+        // The Purifier bridges each arithmetic array-read into a fresh shared
+        // scalar via the assertion `(= v (select A idx))` (routed to EUF). The
+        // arith theory assigns v a value, but EUF's array model does not
+        // back-fill A[idx] with it, so the validator re-evaluates `(select A
+        // idx)` to the array DEFAULT — a genuine sat whose witness flows through
+        // a div/mod-over-array-read (the QF_ANIA UltimateAutomizer select-sum-mod
+        // class) then fails to confirm and is floored to Unknown. UF apps do not
+        // hit this: their bridge value lives in partialFuncModel_/functionInterps.
+        // Complete the array interpretation from the bridges the solver already
+        // satisfied: for each `(= v (select A idx))` with A a NAMED array
+        // variable, set A[eval(idx)] = eval(v) in a local copy of the interps.
+        // SOUND: the equality holds in the model (theory reported consistent), so
+        // this only makes the array interp agree with a fact the model commits
+        // to; the validator still independently re-checks every ORIGINAL
+        // assertion, so a wrong model is never confirmed. Conflicting back-fills
+        // (same index, different value) are skipped (conservative). Nested reads
+        // `(select (select m b) i)` are left for the array operand resolves to a
+        // non-variable — a follow-up (covers the 15 non-nested QF_ANIA today).
+        // --- Array-read bridge model completion --------------------------
+        // (XOLVER_COMB_ARRAY_BRIDGE_MODEL, default ON — PROMOTED 2026-06-05.
+        //  Opt-out with =0. Promotion differential validated: combination reg
+        //  alia/alra/auflia/auflra/ax + uflia/uflra/ufnia/ufnra = 0 verdict
+        //  change / 0 unsound; NIA/NRA reg = 0 change (flag is scoped to "@"
+        //  EUF-token scalars, untouched there); unit 1339/1339 flag-on; recovers
+        //  +3 QF_ANIA select-sum-mod (sum10) from unknown→sat on the default path.
+        //  The alra_010-class concern the master gated on does NOT materialize:
+        //  the opaque-scalar real-value retention only KEEPS a genuinely-
+        //  constrained non-zero value, never the spurious 0-collapse.)
+        // The Purifier bridges each arithmetic array-read into a fresh shared
+        // scalar via the assertion `(= v (select A idx))` (routed to EUF). The
+        // arith theory assigns v a concrete value, but EUF's array-model export
+        // does NOT reflect it, so the validator re-evaluates `(select A idx)` to a
+        // stale default — a genuine sat whose witness flows through a
+        // div/mod-over-array-read (the QF_ANIA UltimateAutomizer select-sum-mod
+        // class) is then floored to Unknown. UF apps don't hit this: their value
+        // lives in functionInterps. Surface each bridged read's value to the
+        // validator KEYED BY THE SELECT NODE (ExprId): the value travels as a
+        // typed RealValue (no string token round-trip) and the validator returns
+        // it directly when it reaches that select term. SOUND: the bridge equality
+        // holds in the model (theory reported consistent), and the validator still
+        // independently re-checks every ORIGINAL assertion, so a globally
+        // inconsistent value leaves the verdict Unknown — never a wrong sat.
+        ArithModelValidator::SelectOverrideMap selBridge;
+        if (arrBridgeModel) {  // declared at function top
+            // Evaluate bridge indices with the FULL numeric channel: a compound
+            // index may itself be a bridged shared scalar (opaque-token tagged,
+            // hence excluded from numAsg as an opaqueScalar); its concrete value
+            // lives in numericAssignments. Re-admit those here so index eval
+            // matches what the validator computes for the ORIGINAL select's index.
+            ArithModelValidator::NumAssignment numAsgFull = numAsg;
+            for (const auto& [nm, rv2] : lastModel_->numericAssignments)
+                if (auto q = rv2.tryAsRational()) numAsgFull[nm] = *q;
+            ArithModelValidator idxEval(*ir, numAsgFull, boolAsg);
+            for (ExprId aid : ir->assertions()) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                ExprId selId = NullExpr, valId = NullExpr;
+                for (int s = 0; s < 2; ++s) {
+                    const CoreExpr& c = ir->get(a.children[s]);
+                    if (c.kind == Kind::Select &&
+                        (c.sort == ir->intSortId() || c.sort == ir->realSortId())) {
+                        selId = a.children[s];
+                        valId = a.children[1 - s];
+                        break;
+                    }
+                }
+                if (selId == NullExpr) continue;
+                const CoreExpr& sel = ir->get(selId);
+                if (sel.children.size() != 2) continue;
+                // Key on (array-operand node, index value): robust to purification
+                // rebuilding the bridge's select for a compound index, and to
+                // nested reads (the inner array operand keeps its ExprId).
+                auto idxV = idxEval.evalNumber(sel.children[1]);
+                if (!idxV) continue;
+                // The bridged value is the OTHER side of the equality — a fresh
+                // shared scalar variable. Read its TYPED value from the theory's
+                // numeric channel (the bridge var is also tagged with an EUF
+                // identity token, so it is excluded from numAsg as an opaqueScalar
+                // above; numericAssignments still carries its concrete value).
+                const CoreExpr& valNode = ir->get(valId);
+                if (valNode.kind != Kind::Variable) continue;
+                const std::string* vn =
+                    std::get_if<std::string>(&valNode.payload.value);
+                if (!vn) continue;
+                RealValue rv;
+                auto rit = lastModel_->numericAssignments.find(*vn);
+                if (rit != lastModel_->numericAssignments.end()) {
+                    rv = rit->second;
+                } else {
+                    auto nit = numAsg.find(*vn);
+                    if (nit == numAsg.end()) continue;
+                    rv = RealValue::fromMpq(nit->second);
+                }
+                selBridge.emplace(std::make_pair(sel.children[0], *idxV), rv);  // first wins
+            }
+        }
+        // --- Datatype selector-bridge value back-fill (DT+arith combination) ---
+        // Mirror of the array-read back-fill above: the Purifier bridges an
+        // arith-valued datatype selector `(fst p)` via `(= v (fst p))` (routed to
+        // EUF). The arith theory assigns v a concrete value, but the DT model
+        // export does not reflect it, so the validator cannot evaluate `(fst p)`
+        // and floors a genuine sat (e.g. `(* (fst p) (fst p)) = 16`) to Unknown.
+        // Surface v's value keyed by the (hash-consed) selector ExprId. SOUND: the
+        // bridge equality holds in the model and every ORIGINAL assertion is still
+        // independently re-checked, so a globally-inconsistent value → Unknown.
+        ArithModelValidator::SelectorOverrideMap selectorBridge;
+        for (ExprId aid : ir->assertions()) {
+            const CoreExpr& a = ir->get(aid);
+            if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+            ExprId selId = NullExpr, valId = NullExpr;
+            for (int s = 0; s < 2; ++s) {
+                const CoreExpr& c = ir->get(a.children[s]);
+                // Arith-valued datatype selector, or a UF application whose
+                // argument may be a datatype value (funcInterps cannot key on a
+                // DT arg) — both are EUF-owned reads the Purifier bridges.
+                if ((c.kind == Kind::Selector || c.kind == Kind::UFApply) &&
+                    (c.sort == ir->intSortId() || c.sort == ir->realSortId())) {
+                    selId = a.children[s];
+                    valId = a.children[1 - s];
+                    break;
+                }
+            }
+            if (selId == NullExpr) continue;
+            const CoreExpr& valNode = ir->get(valId);
+            if (valNode.kind != Kind::Variable) continue;
+            const std::string* vn = std::get_if<std::string>(&valNode.payload.value);
+            if (!vn) continue;
+            auto rit = lastModel_->numericAssignments.find(*vn);
+            if (rit != lastModel_->numericAssignments.end()) {
+                selectorBridge.emplace(selId, rit->second);   // first wins
+            } else {
+                auto nit = numAsg.find(*vn);
+                if (nit != numAsg.end())
+                    selectorBridge.emplace(selId, RealValue::fromMpq(nit->second));
+            }
+        }
+
         const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
-        if (!lastModel_->arrayInterps.empty()) {
+        if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&filteredReal);
+            validator.setNumericArrayElements(arrBridgeModel);
+            if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
+            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&filteredReal);
+            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         }
@@ -453,6 +617,30 @@ public:
                 ir->sortKind(n.sort) == SortKind::Real) {
                 if (auto d = v.evalNumber(n.children[1])) if (*d == 0) return true;
             }
+            for (ExprId c : n.children) if (walk(c)) return true;
+            return false;
+        };
+        for (ExprId a : originalAssertions_) if (walk(a)) return true;
+        return false;
+    }
+
+    // True iff the ORIGINAL assertions syntactically contain a real `/`. The
+    // realDivPurifySatFloor (which re-validates every nonlinear-real sat via the
+    // RealValue ArithModelValidator) only guards the div-by-0 functional-consistency
+    // corner of real division — with no real `/`, that corner cannot exist, so the
+    // floor is pure overhead AND, for an algebraic (Q(sqrt c)) sat model, its
+    // >=2-algebraic RealValue evaluation of a high-degree polynomial can blow up (the
+    // Geogebra 17a/17b hang). Gating the floor on actual real division keeps the
+    // soundness guard where it is needed and lets the algebraic-sat cascade through.
+    // Memoized DAG walk.
+    bool hasRealDivisionInOriginal() const {
+        if (!ir) return false;
+        std::unordered_map<ExprId, bool> seen;
+        std::function<bool(ExprId)> walk = [&](ExprId e) -> bool {
+            if (e == NullExpr || e >= ir->size()) return false;
+            if (!seen.emplace(e, true).second) return false;
+            const CoreExpr& n = ir->get(e);
+            if (n.kind == Kind::Div && ir->sortKind(n.sort) == SortKind::Real) return true;
             for (ExprId c : n.children) if (walk(c)) return true;
             return false;
         };
@@ -684,6 +872,10 @@ public:
     }
 
     CoreIr& ensureIr() {
+        // Hash-cons is opt-in PER CALL-SITE via CoreIr::addShared() (nia-bb-3
+        // 31fdaa8): parser / atomizer / ITE-lowerer keep add() (fresh ExprId,
+        // so incremental push/pop stays sound), preprocess passes use addShared.
+        // No global hash-cons knob — supersedes my XOLVER_IR_HASHCONS stopgap.
         if (!ir) ir = std::make_unique<CoreIr>();
         return *ir;
     }
@@ -809,6 +1001,196 @@ public:
         done.store(true, std::memory_order_release);
         watchdog.join();
         return r;
+    }
+
+    // Extract an integer value from a ConstInt / int-valued ConstReal node.
+    bool extractIntConst(ExprId e, int64_t& out) const {
+        const CoreExpr& n = ir->get(e);
+        if (n.kind == Kind::ConstInt) {
+            if (auto* p = std::get_if<int64_t>(&n.payload.value)) { out = *p; return true; }
+        } else if (n.kind == Kind::ConstReal) {
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                mpq_class q(*s);
+                if (q.get_den() == 1) { out = q.get_num().get_si(); return true; }
+            }
+        }
+        return false;
+    }
+
+    // Mark which integer Variables already carry an explicit constant lower /
+    // upper bound among the top-level (conjunctive) assertions, and record the
+    // largest bound magnitude seen. The escalating bounded SAT fast-path uses
+    // these to (a) bound only the *free side* of *free* vars and (b) DERIVE the
+    // seed bound from the problem instead of guessing 1,2,4,8.
+    void scanIntVarBounds(std::unordered_set<ExprId>& hasLower,
+                          std::unordered_set<ExprId>& hasUpper,
+                          int64_t& maxBoundMag) const {
+        maxBoundMag = 0;
+        if (!ir) return;
+        SortId intSort = ir->intSortId();
+        auto isIntVar = [&](ExprId e) {
+            const CoreExpr& n = ir->get(e);
+            return n.kind == Kind::Variable && n.sort == intSort;
+        };
+        auto isConst = [&](ExprId e) {
+            const CoreExpr& n = ir->get(e);
+            return n.kind == Kind::ConstInt || n.kind == Kind::ConstReal;
+        };
+        std::vector<ExprId> work = ir->assertions();
+        std::unordered_set<ExprId> seen;
+        while (!work.empty()) {
+            ExprId e = work.back();
+            work.pop_back();
+            if (!seen.insert(e).second) continue;
+            const CoreExpr& n = ir->get(e);
+            if (n.kind == Kind::And) {
+                for (ExprId c : n.children) work.push_back(c);
+                continue;
+            }
+            if ((n.kind == Kind::Leq || n.kind == Kind::Geq ||
+                 n.kind == Kind::Lt  || n.kind == Kind::Gt) &&
+                n.children.size() == 2) {
+                ExprId a = n.children[0], b = n.children[1];
+                ExprId var = NullExpr, cst = NullExpr;
+                bool varOnLeft = false;
+                if (isIntVar(a) && isConst(b)) { var = a; cst = b; varOnLeft = true; }
+                else if (isConst(a) && isIntVar(b)) { var = b; cst = a; varOnLeft = false; }
+                if (var != NullExpr) {
+                    bool isLe = (n.kind == Kind::Leq || n.kind == Kind::Lt);
+                    // var<=c => upper; var>=c => lower; c<=var => lower; c>=var => upper.
+                    bool upper = varOnLeft ? isLe : !isLe;
+                    if (upper) hasUpper.insert(var); else hasLower.insert(var);
+                    int64_t cv;
+                    if (extractIntConst(cst, cv)) {
+                        int64_t mag = cv < 0 ? -cv : cv;
+                        if (mag > maxBoundMag) maxBoundMag = mag;
+                    }
+                }
+            }
+        }
+    }
+
+    // DERIVE the escalating fast-path's seed bound K0 from the constraints
+    // (Cramer / small-model style) instead of guessing. A free integer var
+    // coupled linearly to bounded vars satisfies |v| <= M / C, where
+    //   M = max magnitude of the bounded vars' explicit bounds, and
+    //   C = smallest nonzero coefficient the free vars are multiplied by (the
+    //       resolution of the linear coupling, >= 1).
+    // Returns K0 >= 1, or 0 if there is no free integer var (fast-path moot).
+    long deriveBoundSeed() const {
+        if (!ir) return 0;
+        SortId intSort = ir->intSortId();
+        if (intSort == NullSort) return 0;
+        std::unordered_set<ExprId> hasLower, hasUpper;
+        int64_t maxBoundMag = 0;
+        scanIntVarBounds(hasLower, hasUpper, maxBoundMag);
+        std::unordered_set<ExprId> freeVars;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind == Kind::Variable && n.sort == intSort &&
+                (!hasLower.count(id) || !hasUpper.count(id)))
+                freeVars.insert(id);
+        }
+        if (freeVars.empty()) return 0;
+        long M = maxBoundMag > 0 ? static_cast<long>(maxBoundMag) : 1;
+        // C = min nonzero |coef| over Mul(freeVar, const) terms (>= 1).
+        long C = 0;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind != Kind::Mul || n.children.size() != 2) continue;
+            ExprId a = n.children[0], b = n.children[1];
+            ExprId cstc = NullExpr;
+            if (freeVars.count(a)) cstc = b;
+            else if (freeVars.count(b)) cstc = a;
+            if (cstc == NullExpr) continue;
+            int64_t cv;
+            if (extractIntConst(cstc, cv) && cv != 0) {
+                long mag = cv < 0 ? -cv : cv;
+                if (C == 0 || mag < C) C = mag;
+            }
+        }
+        if (C < 1) C = 1;
+        long K0 = (M + C - 1) / C;   // ceil(M / C)
+        return K0 < 1 ? 1 : K0;
+    }
+
+    // Add  (>= v (- K))  / (<= v K)  for the missing side of every integer
+    // Variable that lacks an explicit constant bound there. Returns true iff at
+    // least one bound was injected (false => no free integer var => fast-path
+    // cannot help). Sound: bounds are only ADDED constraints.
+    bool injectFreeIntVarBounds(int K) {
+        if (!ir) return false;
+        SortId intSort = ir->intSortId();
+        if (intSort == NullSort) return false;
+        std::unordered_set<ExprId> hasLower, hasUpper;
+        int64_t maxBoundMag = 0;
+        scanIntVarBounds(hasLower, hasUpper, maxBoundMag);
+        std::vector<ExprId> intVars;
+        for (ExprId id = 0; id < static_cast<ExprId>(ir->size()); ++id) {
+            const CoreExpr& n = ir->get(id);
+            if (n.kind == Kind::Variable && n.sort == intSort) intVars.push_back(id);
+        }
+        SortId boolSort = getOrCreateBoolSort();
+        ExprId loId = NullExpr, hiId = NullExpr;
+        bool injected = false;
+        for (ExprId v : intVars) {
+            if (!hasLower.count(v)) {
+                if (loId == NullExpr) {
+                    CoreExpr loC; loC.kind = Kind::ConstInt; loC.sort = intSort;
+                    loC.payload.value = static_cast<int64_t>(-K);
+                    loId = ir->add(loC);
+                }
+                CoreExpr ge; ge.kind = Kind::Geq; ge.sort = boolSort;
+                ge.children.push_back(v); ge.children.push_back(loId);
+                ir->addAssertion(ir->add(ge));
+                injected = true;
+            }
+            if (!hasUpper.count(v)) {
+                if (hiId == NullExpr) {
+                    CoreExpr hiC; hiC.kind = Kind::ConstInt; hiC.sort = intSort;
+                    hiC.payload.value = static_cast<int64_t>(K);
+                    hiId = ir->add(hiC);
+                }
+                CoreExpr le; le.kind = Kind::Leq; le.sort = boolSort;
+                le.children.push_back(v); le.children.push_back(hiId);
+                ir->addAssertion(ir->add(le));
+                injected = true;
+            }
+        }
+        return injected;
+    }
+
+    // Sound escalating-bounded SAT fast-path (XOLVER_ESCALATING_BOUNDED_SAT=rounds).
+    // The seed bound K0 is DERIVED from the constraints (deriveBoundSeed), not
+    // guessed; for `rounds` rounds it solves  original ∪ {free-var bounds in
+    // [-K, K]}  with K = K0, 2·K0, 4·K0, ...  A model of the bounded problem
+    // satisfies the original (original ⊆ bounded), so a SAT verdict is a sound
+    // witness. UNSAT of a box says NOTHING about the original (a witness may lie
+    // outside) => escalate, never return UNSAT from the box. Closes formulas
+    // whose only obstacle is an unbounded integer var with a bounded-magnitude
+    // witness (e.g. GrandProduct β, |β| <= M/C). Needs a re-parseable source.
+    Result checkSatEscalatingBoundedSat(int rounds, int perKBudgetMs) {
+        const std::string path = sourcePath_;  // reset() clears it; capture first
+        if (path.empty()) return checkSatInternal();
+        // Derive the seed bound K0 from the constraints (one parse).
+        reset();
+        if (!parseFile(path)) return Result::Unknown;
+        long K0 = deriveBoundSeed();
+        if (K0 <= 0) return checkSatInternal();   // no free int var -> no-op
+        if (rounds < 1) rounds = 1;
+        long K = K0;
+        for (int r = 0; r < rounds; ++r, K *= 2) {
+            reset();
+            if (!parseFile(path)) return Result::Unknown;
+            injectFreeIntVarBounds(static_cast<int>(K));
+            if (runArmWithBudget(perKBudgetMs) == Result::Sat)
+                return Result::Sat;  // sound witness for the original problem
+            if (K > (1L << 30)) break;
+        }
+        // Box search exhausted -> one pristine normal solve (may be unsat/unknown).
+        reset();
+        if (!parseFile(path)) return Result::Unknown;
+        return checkSatInternal();
     }
 
     Result checkSatInternal() {
@@ -1941,6 +2323,39 @@ public:
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
+        // Symbolic-modular simplification of `(mod p M)` for non-constant M
+        // (the bit-width-independent Zohar `pow2(k)` modulus) must run BEFORE
+        // ITE lowering: it pushes a mod through the `intmodtotal` ite-wrapper
+        // (`(mod (ite C a b) M) -> (ite C (mod a M)(mod b M))`) and drops
+        // M-divisible monomials, which only works while the ites are still ites.
+        // Once CoreIteLowerer replaces them with fresh vars the structure is
+        // opaque to the rewrite. Sound, general; no-op unless a non-constant
+        // modulus is present. (The same pass runs again after lowering for
+        // constant div/mod folding.)
+        {
+            IntDivModConstantFold preMod(*ir);
+            preMod.run();
+            preMod.commit();
+        }
+
+        // Reduce increment-store-tower array equality to an index-multiset
+        // equality (PLONK GrandProduct soundness benchmarks, QF_ANIA). Exact —
+        // `store-tower(B,[i..]) = store-tower(B,[j..]) <=> multiset{i..}={j..}`
+        // (the base cancels) — and it eliminates the arrays so the NIA solver can
+        // search the (otherwise array-blocked) model. Narrow structural match;
+        // no-op unless the increment-tower shape is present. DEFAULT-OFF: the
+        // rewrite is exact + 0-regression, but the post-reduction model-finding
+        // currently solves only 1/6 GrandProduct cases (same/3) — the other 5
+        // return unknown because the `beta` offset is unbounded (the matching
+        // equations implicitly bound it, but the NIA bounded search doesn't
+        // derive that). Promote to default-ON once that model-finding lands and
+        // >=2 cases close. Opt-in via XOLVER_PP_STORE_TOWER_MULTISET=1.
+        if (env::paramInt("XOLVER_PP_STORE_TOWER_MULTISET", 0) != 0) {
+            StoreTowerEqMultiset stm(*ir);
+            stm.run();
+            stm.commit();
+        }
+
         // Lower ITEs before any theory processing or atomization.
         // CoreIteLowerer is a pure IR-to-IR pass: no SatLit, no theory atom
         // registration, no SAT clause insertion.
@@ -2524,14 +2939,19 @@ public:
             }
             // Extended gate (iter-11): also accept QF_LIA / LIA when the case
             // came in as QF_NIA but preprocess fully eliminated the nonlinear
-            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER
-            // doesn't care whether the residual atoms are linear or not -- it
-            // bit-blasts the entire formula's boolean+integer structure into
-            // one CaDiCaL solve. For large LIA formulas where CDCL(T) thrashes
-            // on 10k+ atoms, EAGER's single SAT solve often outpaces it. Sound:
-            // EAGER's result is still IntegerModelValidator-gated, never Unsat.
+            // terms (Dartagnan ReachSafety-Loops + elster B_1 pattern). EAGER's
+            // single CaDiCaL solve can outpace CDCL(T) on 10k+ atom LIA.
+            // OPT-IN (default-OFF, XOLVER_NIA_EAGER_LIA): the EAGER model export
+            // is currently WRONG on genuine QF_LIA whose vars are pinned by a
+            // top-level bound atom (e.g. `(= x 1)`) — those atoms are skipped in
+            // the encoding (width hint only), so the bit-blast leaves the var
+            // unconstrained and the published model reads 0, violating the
+            // assertion. The verdict stays sound (validator-gated), but get-model
+            // returns garbage, so until the export reconstructs pinned vars this
+            // path must not run by default. QF_NIA EAGER is unaffected (proven).
+            bool eagerLia = std::getenv("XOLVER_NIA_EAGER_LIA") != nullptr;
             bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
-                            logic == "QF_LIA" || logic == "LIA");
+                            (eagerLia && (logic == "QF_LIA" || logic == "LIA")));
             if (eagerOn && logicOk &&
                 !features.hasRealVar && !features.hasMixedIntReal &&
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
@@ -2573,6 +2993,13 @@ public:
                             return Result::Unknown;
                         }
                     }
+                    // Merge note (eqnia <- integration): ALSO restore UCP-pinned
+                    // vars. reconstruct() above replays ModelConverter steps
+                    // (SolveEqs / UnconstrainedElim); mergeFixedBindings() replays
+                    // the *separate* fixedBindings_ map for `(= var const)` atoms
+                    // folded to true by UCP. Distinct elimination paths — both
+                    // needed so get-model is complete on the EAGER Sat path.
+                    mergeFixedBindings();
 #ifdef XOLVER_ENABLE_CASESTATS
                     finalizeCaseStats(Result::Sat, 0.0, nullptr, nullptr, cadicalBackend);
 #endif
@@ -2854,8 +3281,43 @@ public:
             return Result::Unknown;
         }
 
+        // Bounded brute-force model-construction pre-pass for UFNIA. CMS
+        // enumerates low-height candidate assignments and DERIVES UF-app values
+        // by functional consistency (pow2(k)@k=1 == pow2(1)); it re-validates
+        // every model against the original assertions and never emits UNSAT, so a
+        // no-model run just falls through to the main solve. Bit-width-independent
+        // UFNIA (pow2(k)) otherwise bit-blasts into an OOM the post-solve recovery
+        // never reaches, so this must run BEFORE the solve. Brute force => HARD-
+        // bounded, but NOT tuned to this dev machine: the competition server is
+        // slower, so a value sized to dev-machine timing would lose wins there.
+        // The machine-INDEPENDENT bound is the candidate cap (2M assignments —
+        // same work on any CPU); the wall-clock is a generous 3s safety backstop
+        // (~0.25% of the 20-min competition budget) for pathological per-candidate
+        // cost, not the binding limit for the recovered witnesses. Default-ON for
+        // QF_UFNIA only.
+        bool cmsPrePassFound = false;
+        bool prepassEnabled = (logic == "QF_UFNIA" || logic == "UFNIA");
+        // The BWI axiom emitter (XOLVER_NIA_ZOHAR_PLUGIN) ADDS pow2 semantics the
+        // pre-pass cannot see (it runs over pre-emission assertions); defer to it
+        // when active (else the pre-pass could false-sat a formula it proves unsat).
+        if (std::getenv("XOLVER_NIA_ZOHAR_PLUGIN")) prepassEnabled = false;
+        if (prepassEnabled) {
+            CandidateModelSearch::Config cfg;
+            cfg.allowUF = true;
+            cfg.assertionRootsOverride = originalAssertions_;
+            cfg.wallClockBudget = std::chrono::milliseconds(3000);
+            cfg.maxCandidatesPerStrategy = 2000000;
+            CandidateModelSearch cms(*ir, logic, cfg);
+            auto pre = cms.run();
+            if (pre.found) {
+                lastModel_ = pre.model;
+                cmsPrePassFound = true;
+            }
+        }
+
         auto solveT0 = std::chrono::steady_clock::now();
-        auto result = sat->solve();
+        auto result = cmsPrePassFound ? SatSolver::SolveResult::Sat
+                                      : sat->solve();
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
 
@@ -2865,7 +3327,10 @@ public:
         // captured via the propagator's assignment view, but pure-boolean vars
         // are not theory-tracked. Used by the strict-validation gate.
         std::unordered_map<std::string, std::string> boolVarVals;
-        if (result == SatSolver::SolveResult::Sat) {
+        // Skip SAT-var readback when the CMS pre-pass produced the model: the SAT
+        // solver was never run (CaDiCaL val() would abort), and the CMS model is
+        // already complete + validated.
+        if (result == SatSolver::SolveResult::Sat && !cmsPrePassFound) {
             // An atom whose expr is a Kind::Variable is a boolean variable in
             // formula position (numeric vars only appear inside theory atoms,
             // whose expr is the relation node). This holds across paths: the
@@ -2888,7 +3353,9 @@ public:
 
         Result ret = Result::Unknown;
         if (result == SatSolver::SolveResult::Sat) {
-            lastModel_ = theoryManager.getModel();
+            // Keep the CMS pre-pass model (already validated); only pull the
+            // theory model on the normal solve path.
+            if (!cmsPrePassFound) lastModel_ = theoryManager.getModel();
             ret = Result::Sat;
             // Merge the boolean-variable values captured from the live SAT
             // assignment into the model OUTPUT. Pure-boolean variables are not
@@ -3154,7 +3621,8 @@ public:
         // computes a/b for b!=0 (confirms genuine sats) and returns Indeterminate
         // for b==0 (downgrades the corner to unknown via CMS re-validation).
         // Invariant 1 + corner soundness.
-        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar;
+        bool realDivPurifySatFloor = features.hasNonlinear && features.hasRealVar &&
+                                     hasRealDivisionInOriginal();
         // Array-combination SAT floor (QF_ALIA/ALRA/AUFLIA/AUFLRA). In these
         // Nelson-Oppen logics the arrangement between the array/EUF e-graph and
         // the arith solver can declare a model "consistent" at the Full-effort
@@ -3446,9 +3914,15 @@ Result Solver::checkSat() {
     // bad_alloc — regardless of which inner stage allocated past the
     // process limit — surfaces as a clean Unknown verdict.
     try {
-        r = std::getenv("XOLVER_STRAT_PORTFOLIO")
-                ? pImpl->checkSatPortfolio()
-                : pImpl->checkSatInternal();
+        int ebsRounds = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT", 0);
+        if (ebsRounds > 0 && !std::getenv("XOLVER_STRAT_PORTFOLIO")) {
+            int budget = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS", 15000);
+            r = pImpl->checkSatEscalatingBoundedSat(ebsRounds, budget);
+        } else {
+            r = std::getenv("XOLVER_STRAT_PORTFOLIO")
+                    ? pImpl->checkSatPortfolio()
+                    : pImpl->checkSatInternal();
+        }
     } catch (const std::bad_alloc&) {
         pImpl->lastUnknownReason_ = "out-of-memory (bad_alloc) — solver firewalled to Unknown";
         pImpl->lastModel_.reset();

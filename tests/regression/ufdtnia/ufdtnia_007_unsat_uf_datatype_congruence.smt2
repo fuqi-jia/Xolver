@@ -1,0 +1,11 @@
+; Equal datatype values -> equal UF images.
+(set-logic QF_UFDTNIA)
+(set-info :status unsat)
+(declare-datatypes ((Pair 0)) (((mk (fst Int) (snd Int)))))
+(declare-fun p () Pair)
+(declare-fun q () Pair)
+(declare-fun f (Pair) Int)
+(assert (= p q))
+(assert (= (f p) 1))
+(assert (= (f q) 2))
+(check-sat)

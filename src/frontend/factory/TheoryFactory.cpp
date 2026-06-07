@@ -104,6 +104,7 @@ SolverSetupResult setupSolvers(
             auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();
             engine->setKernel(polyKernel.get());
             engine->setCoreIr(ir);
+            engine->setRegistry(&registry);  // mints integrality-split bound atoms
             auto mcsat = std::make_unique<McsatSolver>();
             mcsat->setEngine(std::move(engine), TheoryId::NIA);
             mcsat->setKernel(std::move(polyKernel));

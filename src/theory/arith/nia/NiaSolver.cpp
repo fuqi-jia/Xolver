@@ -17,6 +17,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -32,6 +33,7 @@
 namespace xolver {
 void NiaSolver::setCoreIr(const CoreIr* ir) {
     coreIr_ = ir;
+    bbArrayGate_ = -1;  // recompute array-presence for the new IR (bit-blast gate)
     // Track A Phase 1.3: forward CoreIr to the ModEqConstReasoner so its
     // Variable-name extraction has access to expression nodes.
     modEqConst_.setCoreIr(ir);
@@ -86,7 +88,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
       gcdDivisibility_(*kernel_),
       modularResidue_(*kernel_),
       groebner_(*kernel_),
-      modEqConst_(*kernel_, /*ir=*/nullptr) {
+      modEqConst_(*kernel_, /*ir=*/nullptr),
+      dio_(*kernel_) {
     // modEqConst_'s CoreIr* is set in setCoreIr(); until then run() returns
     // NoChange (defensive — no fact processing happens before setCoreIr).
     // Phase 2 reasoner pipeline. Order is load-bearing — it reproduces
@@ -175,6 +178,20 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     //
     // Use env::paramInt instead of getenv so the autotuner dump
     // (XOLVER_DUMP_PARAMS) sees this knob in its registered-param list.
+    // nia.linear-decide (DEFAULT-OFF; XOLVER_NIA_LINEAR_DECIDE=1 enables). Runs
+    // FIRST among the Full-effort stages — after normalize built active_, before
+    // the heavy/escalating stages (presolve … bit-blast … local-search). When
+    // active_ is entirely linear it hands the COMPLETE normalized constraint set
+    // to an embedded complete-LIA decision (simplex + integrality repair +
+    // branch-and-bound) and returns a validated SAT model; on UNSAT/Unknown it
+    // falls through so the existing (sound) stages decide. SAT-only ⇒ no
+    // wrong-UNSAT (invariant 7). Default-OFF: it currently cracks small/
+    // repair-tractable linear-combination SAT cases but NOT the large-coefficient
+    // mod cluster (sum10-class), where the LP is degenerate and B&B walks; until
+    // it nets positive on a differential, the B&B overhead before bit-blast
+    // fallthrough is a regression risk, so it stays opt-in.
+    linearDecideEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_DECIDE", 0) != 0;
+    addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -220,6 +237,10 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // AProVE-class cases where K=2..3 already finds a witness. Sound: every
     // SAT validated by validator_ over the ORIGINAL constraint set.
     addFull("nia.escalating-bounded", &NiaSolver::stageEscalatingBounded);
+    // Symbolic modular Diophantine refutation. BEFORE bit-blast so it can
+    // refute mod-2^k-structured UNSAT (which the blaster TOs/OOMs on) via exact
+    // symbolic congruence reasoning rather than residue enumeration.
+    addFull("nia.dio",        &NiaSolver::stageDio);
     addFull("nia.bit-blast",  &NiaSolver::stageBitBlast);
     // Integer-aware CDCAC: the complete UNSAT lever for the hard nonlinear
     // residual. Full-effort only (heavy); runs after the SAT workhorses.
@@ -390,6 +411,7 @@ void NiaSolver::onReset() {
     // Base clears state_.trail + its pending slot; NIA clears its own
     // polynomial stack, active literal set, level-tagged pendings, and
     // combination state.
+    bbEarlyUnkSize_ = static_cast<size_t>(-1);  // bit-blast-early dedup cache
     active_.clear();
     trail_.clear();
     normalized_.clear();  // incremental normalize cache is keyed to active_
@@ -607,6 +629,64 @@ std::optional<TheoryCheckResult> NiaSolver::stagePureLinearShortcut(
     }
     // All active atoms are linear; LIA owns this.
     return TheoryCheckResult::consistent();
+}
+
+// nia.linear-decide — complete LINEAR decision for an all-linear active set,
+// producing a SAT model. NIA owns the linear atoms in every NIA logic (the
+// Purifier tags arith atoms NIA even in combination, so the registered LIA
+// sibling never receives them — verified: XOLVER_NIA_LINEAR_SHORTCUT defers to
+// LIA and yields `unknown`, not `sat`). NIA's non-bit-blast stages can refute
+// small linear systems but have no complete multi-variable feasibility+model
+// procedure; bit-blast is the only model-finder and it escalates bit-width
+// (growing CNF) and times out in array combination. This stage embeds a full
+// LiaSolver (simplex + integer branch-and-bound + integrality repair), replays
+// the active trail into it, and — ONLY on a validated SAT integer model —
+// returns Consistent with that model. UNSAT/Unknown fall through to the existing
+// (sound) stages: we never emit UNSAT here, so there is zero wrong-UNSAT risk
+// (invariant 7). The harvested model is re-checked by IntegerModelValidator
+// against NIA's own normalized constraints (invariant 1, defense in depth).
+std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
+    TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!linearDecideEnabled_) return std::nullopt;
+    // Model construction needs a complete assignment ⇒ Full effort only
+    // (registered via addFull, but assert intent).
+    if (effort != TheoryEffort::Full) return std::nullopt;
+    if (active_.empty()) return std::nullopt;   // stagePending handles empty
+    if (!registry_) return std::nullopt;
+
+    // All active atoms must be LINEAR (total degree ≤ 1).
+    for (const auto& a : active_) {
+        auto terms = kernel_->terms(a.poly);
+        if (!terms) return std::nullopt;        // can't decompose → defer
+        for (const auto& term : *terms) {
+            int total = 0;
+            for (const auto& [vid, exp] : term.powers) {
+                (void)vid;
+                total += exp;
+                if (total > 1) return std::nullopt;   // nonlinear → defer
+            }
+        }
+    }
+
+    if (std::getenv("XOLVER_NIA_LINDECIDE_DIAG"))
+        std::fprintf(stderr, "[LINDECIDE] stage fired: active=%zu normalized=%zu trail=%zu\n",
+                     active_.size(), normalized_.size(), state_.trail.size());
+
+    // Delegate to the embedded complete-LIA decision (own TU). It returns either
+    // a validated integer model (SAT), or — when the asserted linear atoms are
+    // jointly infeasible at the LP root — a Farkas conflict over the REAL
+    // asserted SAT literals, which we return so the SAT search is pruned. The
+    // conflict is a genuine infeasibility of the current trail (sound; never a
+    // global UNSAT claim beyond what the linear atoms entail).
+    if (!linDecider_) linDecider_ = std::make_unique<NiaLinearDecider>();
+    std::optional<TheoryConflict> conflict;
+    auto im = linDecider_->decide(registry_, *kernel_, normalized_, validator_, &conflict);
+    if (im) {
+        currentModel_ = std::move(*im);
+        return TheoryCheckResult::consistent();
+    }
+    if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;
 }
 
 // Phase D — FNV-1a hash of the active_ signature: count + sequence of
@@ -1384,6 +1464,86 @@ std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
     return std::nullopt;
 }
 
+std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, TheoryEffort) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NIA_DIO");
+        return e && *e && *e != '0';
+    }();
+    if (!enabled) return std::nullopt;
+
+    // (A) Lattice-step + bound tightening (arith-dio-tighten). Marshals the live
+    // equalities / disequalities / inequalities (normalized_) and the per-variable
+    // bounds (domains_, populated by the earlier linear-domain stage) into the
+    // shared DioReasoner::tightenConflict — which folds complementary inequality
+    // pairs + pinned bounds into the lattice. Refutes the QF_(A)NIA
+    // integer-Diophantine cluster (in-de42 etc.) when NIA gets the check.
+    {
+        std::vector<DioLinForm> cons;
+        for (const auto& c : normalized_) {
+            if (c.rel != Relation::Eq && c.rel != Relation::Neq &&
+                c.rel != Relation::Leq && c.rel != Relation::Geq) continue;
+            auto termsOpt = kernel_->terms(c.poly);
+            if (!termsOpt) continue;
+            DioLinForm f;
+            f.cst = 0;
+            f.rel = c.rel;
+            f.reason = c.reason;
+            bool linear = true;
+            for (const auto& t : *termsOpt) {
+                if (t.powers.empty()) { f.cst += t.coefficient; continue; }
+                if (t.powers.size() != 1 || t.powers[0].second != 1) { linear = false; break; }
+                f.coeffs.emplace_back(std::string(kernel_->varName(t.powers[0].first)), t.coefficient);
+            }
+            if (!linear || f.coeffs.empty()) continue;
+            cons.push_back(std::move(f));
+        }
+        std::map<std::string, DioVarBound> bnds;
+        for (const auto& [name, dom] : domains_.getAllDomains()) {
+            DioVarBound bb;
+            if (dom.hasLower) { bb.hasLo = true; bb.lo = dom.lower.value; bb.loReasons = dom.lower.reasons; }
+            if (dom.hasUpper) { bb.hasHi = true; bb.hi = dom.upper.value; bb.hiReasons = dom.upper.reasons; }
+            bnds.emplace(name, std::move(bb));
+        }
+        auto conflictOpt = DioReasoner::tightenConflict(cons, bnds);
+        if (conflictOpt) return TheoryCheckResult::mkConflict(TheoryConflict{*conflictOpt});
+    }
+
+    // (B) Symbolic modular-congruence path (variable-divisor `(mod x y)=c` facts).
+    if (modEqConstFacts_.empty() || !registry_ || !coreIr_) return std::nullopt;
+
+    // Build DioCongruences from currently-asserted (mod x m) = c facts:
+    //   (mod x m) = c   =>   x ≡ c (mod m)   for a CONSTANT divisor m > 1.
+    // (Variable-divisor facts have no constant modulus and are skipped.)
+    std::vector<DioCongruence> congs;
+    for (const auto& src : modEqConstFacts_) {
+        auto satVarOpt = registry_->findSatVarByExprId(src.atomExpr);
+        if (!satVarOpt) continue;
+        SatLit posLit{*satVarOpt, /*sign=*/false};
+        if (!activeSet_.contains(posLit)) continue;
+
+        const auto& xe = coreIr_->get(src.xExpr);
+        if (xe.kind != Kind::Variable) continue;
+        const auto* nm = std::get_if<std::string>(&xe.payload.value);
+        if (!nm) continue;
+
+        const auto& ye = coreIr_->get(src.yExpr);
+        if (ye.kind != Kind::ConstInt) continue;  // need a constant modulus
+        mpz_class m;
+        if (const auto* i = std::get_if<int64_t>(&ye.payload.value)) m = *i;
+        else if (const auto* s = std::get_if<std::string>(&ye.payload.value)) m = mpz_class(*s);
+        else continue;
+        if (m <= 1) continue;
+
+        congs.push_back({kernel_->getOrCreateVar(*nm), src.c, m, posLit});
+    }
+    if (congs.empty()) return std::nullopt;
+
+    auto r = dio_.run(normalized_, congs);
+    if (r.kind == NiaReasoningKind::Conflict)
+        return TheoryCheckResult::mkConflict(*r.conflict);
+    return std::nullopt;
+}
+
 std::optional<TheoryCheckResult> NiaSolver::stageGroebner(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableGroebner_) return std::nullopt;
     auto r = groebner_.run(normalized_);
@@ -1707,13 +1867,44 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorage&, TheoryEffort) {
+    // DEFAULT-ON (2026-06-05): run the WHOLE-problem bit-blast early — while the
+    // variable box is still free — instead of leaving it to the FULL-effort
+    // nia.bit-blast which fires once the SAT search has PINNED the small bounded
+    // vars to a specific (often wrong) branch. On a box-INCOMPLETE pinned branch
+    // (unbounded beta/gamma, e.g. the GrandProduct prime-field grand product) the
+    // late per-branch path cannot prove the branch UNSAT, so it escalates width
+    // K=2→128 and allocates ~3.3 GB before the firewall — a real OOM bug, NOT a
+    // resource wall (z3 solves the same case instantly). Searching the whole free
+    // problem once keeps the encoding bounded (~0.6 GB) and lets the SAT solver
+    // explore all branches together. This is an ALGORITHMIC fix (search strategy),
+    // not a width/budget cap. The >=50 active-constraint gate below preserves the
+    // small-case behavior (BB_EARLY's per-call cost regressed tiny UNSAT cases
+    // before that gate). Opt-out: XOLVER_NIA_BB_EARLY=0.
     static const bool earlyEnabled = [] {
         const char* e = std::getenv("XOLVER_NIA_BB_EARLY");
-        return e && *e && *e != '0';
+        return !e || (*e && *e != '0');   // default ON; only "0" disables
     }();
     if (!earlyEnabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
     if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;
+    // Array-combination gate: when the problem contains array terms (Store/Select),
+    // the array-read results are EUF-managed shared terms abstracted into the NIA
+    // constraints as opaque vars. Bit-blasting those constraints is wasteful (it
+    // was the ~1s/call hot stage on the array-combination GrandProduct, confirmed
+    // via ARITH_STAGE_PROF) and can mislead (the bit-blast model ignores the EUF
+    // array axioms). The combination + other reasoner stages own these. Opt-out
+    // XOLVER_NIA_BB_ARRAY=1. (Verified: sum10 etc. still solve without bit-blast.)
+    if (bbArrayGate_ < 0) {
+        bbArrayGate_ = 0;
+        if (coreIr_ && !std::getenv("XOLVER_NIA_BB_ARRAY")) {
+            ExprId n = static_cast<ExprId>(coreIr_->size());
+            for (ExprId e = 0; e < n; ++e) {
+                Kind k = coreIr_->get(e).kind;
+                if (k == Kind::Store || k == Kind::Select) { bbArrayGate_ = 1; break; }
+            }
+        }
+    }
+    if (bbArrayGate_ == 1) return std::nullopt;
     // H3 size-gate: BB_EARLY's per-call encoding+SAT cost is heavy
     // (~5-6s on SAT14-class with 600+ active polynomial constraints).
     // On small NIA cases (~1-10 active constraints) the upstream
@@ -1739,6 +1930,14 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
                 earlyCount, active_.size(), normalized_.size());
         }
     }
+    // Dedup re-blasts of the same free problem (see bbEarlyUnkSize_). If the last
+    // blast at this active-constraint size returned UNKNOWN, the free problem is
+    // unchanged and a re-blast just burns seconds (00314 80x/11s; a UFDTNIA
+    // 4x/14.6s) — skip it. Opt-out XOLVER_NIA_BB_EARLY_NODEDUP=1.
+    static const bool bbEarlyDedup =
+        std::getenv("XOLVER_NIA_BB_EARLY_NODEDUP") == nullptr;
+    if (bbEarlyDedup && bbEarlyUnkSize_ == normalized_.size())
+        return std::nullopt;
     // The bit-blast solver respects its own gate/iteration env caps
     // (XOLVER_NIA_BITBLAST_MAX_ITERS / MAX_BITWIDTH / GATE_BUDGET /
     // CONFLICTS). For early-stage operation users typically pair this
@@ -1752,6 +1951,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
         case bitblast::BitBlastResult::Status::UnsatComplete:
             return TheoryCheckResult::mkConflict(*res.conflict);
         case bitblast::BitBlastResult::Status::Unknown:
+            if (bbEarlyDedup) bbEarlyUnkSize_ = normalized_.size();
             return std::nullopt;
     }
     return std::nullopt;

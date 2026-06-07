@@ -165,6 +165,16 @@ bool ArrayReasoner::discoverArrayTerms() {
 EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
                                       std::deque<PendingMerge>& outQueue) {
     if (arrayExpr == NullExpr || indexExpr == NullExpr) return NullEufTerm;
+    // Centralized saturation cap: ALL synthesized selects (Row1/Row2/extensional/
+    // completion) flow through internSelect, so capping here bounds the entire
+    // array-axiom saturation uniformly. Previously only completeStoreSelects
+    // counted against completeBudget_, leaving Row1/Row2/ext UNCAPPED — on a deep
+    // store-tower equality (e.g. GrandProduct) those saturation passes can fail to
+    // reach fixpoint and diverge. With completeBudget_==0 (default) this is a
+    // no-op (unlimited, no behaviour change); a finite XOLVER_AX_COMPLETE_BUDGET
+    // forces termination (the resulting model is re-validated, invariant 1).
+    if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_)
+        return NullEufTerm;
     CoreIr& ir = const_cast<CoreIr&>(*ir_);
     const auto& arrNode = ir.get(arrayExpr);
     // Element sort of the array.
@@ -194,6 +204,7 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
         // in Const/Row2 reasoning on this very check().
         if (symIsSelect(t) && selectSet_.insert(t).second) {
             selectTerms_.push_back(t);
+            ++completeInternsDone_;  // count every synthesized select (cap above)
         }
     }
     return t;
@@ -210,6 +221,48 @@ void ArrayReasoner::collectIndexSharedTerms(std::unordered_set<SharedTermId>& ou
     };
     for (EufTermId s : selectTerms_) addIdx(s);
     for (EufTermId s : storeTerms_)  addIdx(s);
+}
+
+void ArrayReasoner::collectValueSharedTerms(std::unordered_set<SharedTermId>& out) const {
+    if (!sharedTermRegistry_ || !tm_) return;
+    // The element/value side of array reasoning: the stored value (arg[2] of a
+    // store) and the read result (a select term itself). Their deduced equalities
+    // (e.g. select(store(a,i,v),j) ≡ another read, tying two stored values) must
+    // reach arith — but a value-pair deduced equality first surfaces at STANDARD
+    // effort where cb_propagate drops the lemma yet deducedEqCache_ records it,
+    // permanently blocking Full-effort propagation. TheoryManager unions this set
+    // with the index set to DEFER array value/index pairs to Full (alra_010:
+    // store elements e0/e1/e0+3/e1+3 are exactly these arg[2] terms).
+    auto addShared = [&](ExprId e) {
+        if (e == NullExpr) return;
+        if (auto s = sharedTermRegistry_->findByExprId(e)) out.insert(*s);
+    };
+    auto addTermShared = [&](EufTermId t) { addShared(originExpr(t)); };
+    for (EufTermId s : storeTerms_) {
+        const auto& n = tm_->node(s);
+        if (n.args.size() >= 3) addTermShared(n.args[2]);  // stored value
+    }
+    // The READ RESULT of a select is, in combination, a fresh Purifier BRIDGE var
+    // (`bridge = select(...)`) merged with the select term in the e-graph — NOT the
+    // select expr itself. So collect the shared terms in the select's e-graph CLASS
+    // (the bridge lands there via the unconditional definitional merge). Without
+    // this the select-result bridge (e.g. alra_010's select(C,i0) value) is absent
+    // from the deferral scope, gets cache-poisoned at Standard, and never reaches
+    // LRA at Full. Bounded walk (cap) to keep large-corpus cost in check.
+    if (egraph_) {
+        const size_t kCap = 64;
+        for (EufTermId s : selectTerms_) {
+            addTermShared(s);                       // direct (pure-QF_AX case)
+            EClassId rep = egraph_->rep(s);
+            size_t walked = 0;
+            for (EufTermId m : egraph_->classMembers(rep)) {
+                if (++walked > kCap) break;
+                addTermShared(m);                   // the bridge merged with the read
+            }
+        }
+    } else {
+        for (EufTermId s : selectTerms_) addTermShared(s);
+    }
 }
 
 void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
@@ -285,8 +338,7 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
             if (!selectCompleteDone_.insert(key).second) continue;
             ExprId idxExpr = originExpr(idx);
             if (idxExpr == NullExpr) continue;
-            internSelect(arrExpr, idxExpr, outQueue);
-            ++completeInternsDone_;
+            internSelect(arrExpr, idxExpr, outQueue);  // counts via internSelect
         }
     };
     // NEW arrays x ALL indices (covers new x new + new x old)

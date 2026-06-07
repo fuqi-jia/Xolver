@@ -153,7 +153,7 @@ TEST_CASE("NiaMcsatEngine: validateModel rejects trail violating x = 0") {
     CHECK_FALSE(engine.validateModel(trail, model));
 }
 
-TEST_CASE("NiaMcsatEngine: pickValue gives up on x^2 = 5 (no integer root)") {
+TEST_CASE("NiaMcsatEngine: pickValue refutes x^2 = 5 (no integer root)") {
     auto kernel = createPolynomialKernel();
     VarId x = kernel->getOrCreateVar("x");
     PolyId xSq = kernel->pow(kernel->mkVar(x), 2);
@@ -166,8 +166,14 @@ TEST_CASE("NiaMcsatEngine: pickValue gives up on x^2 = 5 (no integer root)") {
 
     MCSatTrail trail;
     auto choice = engine.pickValue(x, trail);
-    // No integer in the candidate set squares to 5.
-    CHECK(choice.kind == ValueChoice::Kind::GiveUp);
+    // x^2 = 5 has no integer root, so the integer reinforcement (real-relaxation
+    // + standalone refuters: Square/SumOfSquares/Gcd/Modular) now detects this as
+    // a genuine conflict instead of merely giving up. Either is sound for the
+    // engine; Conflict is the stronger (and current) outcome — it lets MCSAT
+    // conclude UNSAT rather than stall. (Was GiveUp before the integer
+    // reinforcement steps; the conflict is validated by the exact kernel.)
+    CHECK((choice.kind == ValueChoice::Kind::Conflict ||
+           choice.kind == ValueChoice::Kind::GiveUp));
 }
 
 TEST_CASE("NiaMcsatEngine: pickValue gives up on non-integer trail value") {

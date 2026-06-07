@@ -1,0 +1,10 @@
+; Enum-like datatype with a tester + nonlinear side constraint.
+(set-logic QF_UFDTNIA)
+(set-info :status sat)
+(declare-datatypes ((Color 0)) (((red) (green) (blue))))
+(declare-fun c () Color)
+(declare-fun x () Int)
+(assert ((_ is red) c))
+(assert (= (* x x) 25))
+(assert (> x 0))
+(check-sat)

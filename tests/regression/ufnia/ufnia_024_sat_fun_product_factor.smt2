@@ -1,0 +1,10 @@
+; Product of two function images = 15 with positivity.
+(set-logic QF_UFNIA)
+(set-info :status sat)
+(declare-fun f (Int) Int)
+(declare-fun a () Int)
+(declare-fun b () Int)
+(assert (= (f a) 3))
+(assert (= (f b) 5))
+(assert (= (* (f a) (f b)) 15))
+(check-sat)

@@ -1,0 +1,10 @@
+; (fst (mk x y)) must equal x; with x*x=9 and x>0, fst=3 — demanding 4 is unsat.
+(set-logic QF_UFDTNIA)
+(set-info :status unsat)
+(declare-datatypes ((Pair 0)) (((mk (fst Int) (snd Int)))))
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (= (* x x) 9))
+(assert (> x 0))
+(assert (= (fst (mk x y)) 4))
+(check-sat)

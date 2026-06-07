@@ -1,0 +1,11 @@
+; Distinct images force distinct args (contrapositive of congruence).
+(set-logic QF_UFNIA)
+(set-info :status unsat)
+(declare-fun f (Int) Int)
+(declare-fun x () Int)
+(declare-fun y () Int)
+(assert (= (f x) 1))
+(assert (= (f y) 2))
+(assert (= x y))
+(assert (= (* x x) 4))
+(check-sat)
