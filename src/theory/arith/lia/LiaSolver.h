@@ -40,6 +40,12 @@ public:
         integerReasoner_.setSafeMode(v);
     }
     void setUltraSafeMode(bool v) { ultraSafeMode_ = v; }
+    // Per-instance override of the LRA→LIA integrality repair (otherwise read
+    // once from XOLVER_LIA_REPAIR at construction). Used by NiaSolver's embedded
+    // linear-decide instance, which runs a ONE-SHOT check (no SAT-driven branch
+    // loop) and needs repair to resolve a fractional relaxation to an integer
+    // model in a single call.
+    void setRepairEnabled(bool v) { repairEnabled_ = v; }
     void setEnableSingleVarTightening(bool v) {
         integerReasoner_.setEnableSingleVarTightening(v);
     }
@@ -81,6 +87,20 @@ public:
     void allowInterfaceDiseqModelBranch(SharedTermId a, SharedTermId b) override;
 
     std::optional<TheoryModel> getModel() const override;
+    // Like getModel() but also reports internal/aux variables (names starting
+    // with "__"). Used by NiaSolver's embedded linear-decide to obtain the
+    // COMPLETE assignment for exact re-validation against NIA's normalized
+    // constraints (which reference NIA's mod/div-lowering aux vars).
+    std::optional<TheoryModel> getModelWithInternal() const;
+
+    // Standalone complete integer solve for NiaSolver's embedded linear-decide.
+    // Precondition: the caller has asserted all constraints via assertLit. Runs
+    // one Full check (LP + integrality repair); if that leaves a fractional
+    // branch, drives branch-and-bound over gs_ directly (no SAT loop) up to
+    // nodeCap nodes. Returns the COMPLETE integer model (incl. internal vars)
+    // on SAT, or nullopt (UNSAT-on-input / Unknown / node cap). Never emits a
+    // verdict — model only; the caller re-validates it.
+    std::optional<TheoryModel> findIntegerModel(int nodeCap = 4000);
 
 protected:
     void onPush() override;
@@ -92,6 +112,12 @@ private:
     // Single core reasoner stage (Phase 2): incremental replay + interface
     // equalities + simplex + integrality + branch. Always yields a verdict.
     std::optional<TheoryCheckResult> stageCore(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+
+    // Shared model builder; includeInternal keeps "__"-prefixed aux vars.
+    std::optional<TheoryModel> buildModel(bool includeInternal) const;
+
+    // Recursive branch-and-bound over gs_ integer vars for findIntegerModel().
+    std::optional<TheoryModel> branchAndBound(int nodeCap, int& nodes);
 
     GeneralSimplex gs_;
     LinearAtomManager manager_;

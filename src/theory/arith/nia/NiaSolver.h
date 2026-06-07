@@ -38,6 +38,7 @@ namespace xolver {
 class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
 class AlgebraBackend;
+class NiaLinearDecider; // embedded complete-LIA decision (nia.linear-decide; own TU)
 
 /**
  * NIA (Nonlinear Integer Arithmetic) theory solver.
@@ -218,6 +219,15 @@ private:
     std::unique_ptr<AlgebraBackend> cdcacAlgebra_;
     std::unique_ptr<CdcacCore> cdcacCore_;
 
+    // Embedded complete-LIA decision for the nia.linear-decide stage. In its own
+    // TU (forward-declared) to keep LiaSolver/GeneralSimplex out of this header
+    // and out of NiaSolver.cpp (ODR clash on xolver::BoundInfo with the
+    // linearizer). Lazily holds a LiaSolver sharing NIA's TheoryAtomRegistry.
+    // Destroyed by the out-of-line ~NiaSolver().
+    // XOLVER_NIA_LINEAR_DECIDE=0 disables the stage (ablation / panda A-B).
+    std::unique_ptr<NiaLinearDecider> linDecider_;
+    bool linearDecideEnabled_ = true;
+
     // Set of "proxy_name:truth" tokens we've already pinned via
     // registry->pinLiteral. Prevents the Farkas-Or stage's repeated
     // verdict-SAT path from re-issuing the same unit clauses on each
@@ -257,6 +267,12 @@ private:
     // equivalent to "no nonlinear obligation"; LIA's verdict is then the
     // final NIA verdict.
     std::optional<TheoryCheckResult> stagePureLinearShortcut(TheoryLemmaStorage&, TheoryEffort);
+    // nia.linear-decide: when active_ is entirely linear, replay the trail into
+    // an embedded complete-LIA decision procedure and, ONLY on a validated SAT
+    // integer model, return Consistent + model. UNSAT/Unknown fall through (no
+    // wrong-UNSAT). Closes the linear QF_ANIA SVCOMP SAT cluster that NIA's
+    // non-bit-blast stages leave Unknown and bit-blast escalates/TOs on.
+    std::optional<TheoryCheckResult> stageLinearDecide(TheoryLemmaStorage&, TheoryEffort);
     // Phase D — dispatch cache front stage. Compares current active_
     // signature against dispatchCacheSignature_; returns consistent()
     // on hit, nullopt on miss. Default-OFF flag XOLVER_NIA_DISPATCH_CACHE.

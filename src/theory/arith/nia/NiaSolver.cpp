@@ -17,6 +17,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -177,6 +178,20 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     //
     // Use env::paramInt instead of getenv so the autotuner dump
     // (XOLVER_DUMP_PARAMS) sees this knob in its registered-param list.
+    // nia.linear-decide (DEFAULT-OFF; XOLVER_NIA_LINEAR_DECIDE=1 enables). Runs
+    // FIRST among the Full-effort stages — after normalize built active_, before
+    // the heavy/escalating stages (presolve … bit-blast … local-search). When
+    // active_ is entirely linear it hands the COMPLETE normalized constraint set
+    // to an embedded complete-LIA decision (simplex + integrality repair +
+    // branch-and-bound) and returns a validated SAT model; on UNSAT/Unknown it
+    // falls through so the existing (sound) stages decide. SAT-only ⇒ no
+    // wrong-UNSAT (invariant 7). Default-OFF: it currently cracks small/
+    // repair-tractable linear-combination SAT cases but NOT the large-coefficient
+    // mod cluster (sum10-class), where the LP is degenerate and B&B walks; until
+    // it nets positive on a differential, the B&B overhead before bit-blast
+    // fallthrough is a regression risk, so it stays opt-in.
+    linearDecideEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_DECIDE", 0) != 0;
+    addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -613,6 +628,57 @@ std::optional<TheoryCheckResult> NiaSolver::stagePureLinearShortcut(
         }
     }
     // All active atoms are linear; LIA owns this.
+    return TheoryCheckResult::consistent();
+}
+
+// nia.linear-decide — complete LINEAR decision for an all-linear active set,
+// producing a SAT model. NIA owns the linear atoms in every NIA logic (the
+// Purifier tags arith atoms NIA even in combination, so the registered LIA
+// sibling never receives them — verified: XOLVER_NIA_LINEAR_SHORTCUT defers to
+// LIA and yields `unknown`, not `sat`). NIA's non-bit-blast stages can refute
+// small linear systems but have no complete multi-variable feasibility+model
+// procedure; bit-blast is the only model-finder and it escalates bit-width
+// (growing CNF) and times out in array combination. This stage embeds a full
+// LiaSolver (simplex + integer branch-and-bound + integrality repair), replays
+// the active trail into it, and — ONLY on a validated SAT integer model —
+// returns Consistent with that model. UNSAT/Unknown fall through to the existing
+// (sound) stages: we never emit UNSAT here, so there is zero wrong-UNSAT risk
+// (invariant 7). The harvested model is re-checked by IntegerModelValidator
+// against NIA's own normalized constraints (invariant 1, defense in depth).
+std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
+    TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!linearDecideEnabled_) return std::nullopt;
+    // Model construction needs a complete assignment ⇒ Full effort only
+    // (registered via addFull, but assert intent).
+    if (effort != TheoryEffort::Full) return std::nullopt;
+    if (active_.empty()) return std::nullopt;   // stagePending handles empty
+    if (!registry_) return std::nullopt;
+
+    // All active atoms must be LINEAR (total degree ≤ 1).
+    for (const auto& a : active_) {
+        auto terms = kernel_->terms(a.poly);
+        if (!terms) return std::nullopt;        // can't decompose → defer
+        for (const auto& term : *terms) {
+            int total = 0;
+            for (const auto& [vid, exp] : term.powers) {
+                (void)vid;
+                total += exp;
+                if (total > 1) return std::nullopt;   // nonlinear → defer
+            }
+        }
+    }
+
+    if (std::getenv("XOLVER_NIA_LINDECIDE_DIAG"))
+        std::fprintf(stderr, "[LINDECIDE] stage fired: active=%zu normalized=%zu trail=%zu\n",
+                     active_.size(), normalized_.size(), state_.trail.size());
+
+    // Delegate to the embedded complete-LIA decision (own TU). SAT-only: it
+    // returns a validated integer model or nullopt; we never emit UNSAT here.
+    if (!linDecider_) linDecider_ = std::make_unique<NiaLinearDecider>();
+    auto im = linDecider_->decide(registry_, *kernel_, normalized_, validator_);
+    if (!im) return std::nullopt;
+
+    currentModel_ = std::move(*im);
     return TheoryCheckResult::consistent();
 }
 
