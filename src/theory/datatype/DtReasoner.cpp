@@ -179,6 +179,48 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
         }
     }
 
+    // --- Tester-vs-tester clash ----------------------------------------------
+    // Two DISTINCT-constructor testers both asserted TRUE on the same term are
+    // contradictory regardless of whether a concrete constructor is known: a
+    // datatype value satisfies exactly one constructor tester. The
+    // tester-consistency pass above only fires when u's constructor is already
+    // determined; this catches the FREE case, e.g. is_red(c) ∧ is_green(c) with
+    // c otherwise unconstrained. Needed for combination logics (QF_UFDTNIA),
+    // where the Full-effort exhaustiveness split that would force a constructor
+    // does not run, so without this the clash escapes as a false-SAT.
+    if (trueTerm_ != NullEufTerm) {
+        std::unordered_map<EClassId, std::pair<EufTermId, std::string>> trueTesterByClass;
+        trueTesterByClass.reserve(testerTerms_.size() * 2 + 1);
+        for (EufTermId tt : testerTerms_) {
+            const auto& tn = tm_->node(tt);
+            if (tn.args.empty()) continue;
+            if (!egraph_->same(tt, trueTerm_)) continue;   // only testers asserted TRUE
+            std::string tnm = opName(tt);
+            if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
+            EClassId uc = egraph_->rep(tn.args[0]);
+            auto it = trueTesterByClass.find(uc);
+            if (it == trueTesterByClass.end()) {
+                trueTesterByClass.emplace(uc, std::make_pair(tt, tnm));
+                continue;
+            }
+            if (it->second.second == tnm) continue;        // same target ctor — fine
+            // Two distinct constructors both tested TRUE on one class -> clash.
+            EufTermId other = it->second.first;
+            std::vector<SatLit> reasons;
+            auto e1 = egraph_->explainEquality(tt, trueTerm_);
+            if (e1.ok) reasons.insert(reasons.end(), e1.reasons.begin(), e1.reasons.end());
+            auto e2 = egraph_->explainEquality(other, trueTerm_);
+            if (e2.ok) reasons.insert(reasons.end(), e2.reasons.begin(), e2.reasons.end());
+            EufTermId u1 = tn.args[0];
+            EufTermId u2 = tm_->node(other).args[0];
+            if (u1 != u2) {
+                auto eu = egraph_->explainEquality(u1, u2);
+                if (eu.ok) reasons.insert(reasons.end(), eu.reasons.begin(), eu.reasons.end());
+            }
+            if (!reasons.empty()) return reasons;
+        }
+    }
+
     // --- Acyclicity (recursive datatypes only) --------------------------------
     bool anyRecursive = false;
     for (EufTermId t : ctorTerms_) {

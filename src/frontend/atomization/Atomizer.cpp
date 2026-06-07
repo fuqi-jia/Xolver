@@ -280,11 +280,20 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     const CoreExpr& e = ir.get(eid);
     SatLit result{0, true};
 
-    // Bool-valued terms in formula position under QF_UF:
-    // p(a), q (Bool var), etc. → (= term true)
-    if (defaultTheory_ == TheoryId::EUF &&
-        e.sort == boolSortId_ &&
-        isFormulaPositionTerm(e.kind)) {
+    // Bool-valued terms in formula position:
+    //   - under QF_UF (defaultTheory_ == EUF): p(a), q (Bool var), etc.
+    //   - in COMBINATION (defaultTheory_ is the arith theory): an EUF-OWNED bool
+    //     predicate — a UF application or a datatype tester — must STILL route to
+    //     EUF so its congruence / DT-tester semantics are seen. These kinds have
+    //     no meaning in arithmetic, so an EUF solver is always registered when
+    //     they occur. Without this, e.g. `((_ is red) c)` in QF_UFDTNIA was a
+    //     plain opaque bool var → the tester clash escaped as a false-SAT.
+    //     (A bare Bool variable is NOT EUF-owned: it stays a plain SAT var unless
+    //     defaultTheory_ == EUF, preserving combination behaviour.)
+    bool eufOwnedBoolPred = (e.kind == Kind::UFApply || e.kind == Kind::Tester);
+    if (e.sort == boolSortId_ &&
+        isFormulaPositionTerm(e.kind) &&
+        (defaultTheory_ == TheoryId::EUF || eufOwnedBoolPred)) {
         result = eufExtractor_.getOrCreateAtom(
             EufAtomPayload{eid, TrueSentinelExpr, Relation::Eq, EufAtomKind::BoolTermAsFormula}, eid,
             memo_,
