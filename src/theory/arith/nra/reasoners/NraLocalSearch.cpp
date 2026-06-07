@@ -800,8 +800,57 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     std::unordered_map<VarId, int> escapeTabuVar;
     int escapeCount = 0;
     static const int kTabuTenure = 5;
+    // MULTI-START (global-then-local): the seed-greedy gets the FIRST half of the budget
+    // (its clean early shot preserves the seed-start wins, e.g. kTopVars matrix-17); if it
+    // hasn't found a model by the half-way mark we anneal ONCE from the clean seed (SA-first
+    // global exploration) and let the greedy refine from that basin for the second half —
+    // this opens the deeply-coupled basins seed-greedy cannot reach (matrix-20/23/25). The
+    // two phases are budget-disjoint, so neither preempts the other (an unconditional
+    // SA-first prefix instead REGRESSED matrix-17 by stealing its clean start). Competition-
+    // only: kSAFirst=0 when the wall-clock scaling is inert (WSL/regression) → that path is
+    // byte-identical. Sound: candidates are exact-validated (invariant 1); SA only steers.
+    const std::unordered_map<VarId, mpq_class> seedSnapshot = asg;
+    const long kSAFirstScaled = wall::scaledCount(1000, 15000, 256);
+    const long kSAFirst = (kSAFirstScaled > 1000) ? kSAFirstScaled : 0;
+    bool saFirstDone = false;
     for (int round = 0; round < maxRounds_; ++round) {
         if (budgetExpired()) break;
+        if (kSAFirst > 0 && !saFirstDone && budgetMs_ > 0) {
+            const long el = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            if (el >= budgetMs_ / 2 && !score.isSat()) {
+                saFirstDone = true;
+                asg = seedSnapshot;                          // anneal from the clean seed
+                auto loss = [&](const std::unordered_map<VarId, mpq_class>& a) -> double {
+                    double s = 0.0; for (const auto& c : constraints) s += atomViolation(c, a).get_d(); return s;
+                };
+                double curLoss = loss(asg);
+                double T = (curLoss > 1e-6) ? curLoss : 1.0;
+                const double cool = std::pow(1e-3, 1.0 / static_cast<double>(kSAFirst));
+                for (long step = 0; step < kSAFirst && !budgetExpired(); ++step) {
+                    const VarId rv = vars[nextRand() % vars.size()];
+                    const mpq_class saved = asg.count(rv) ? asg[rv] : mpq_class{0};
+                    mpq_class q;
+                    switch (nextRand() % 5) {
+                        case 0:  q = saved + 1; break;
+                        case 1:  q = saved - 1; break;
+                        case 2:  q = saved + mpq_class{1, 2}; break;
+                        case 3:  q = saved - mpq_class{1, 2}; break;
+                        default: q = (saved != 0) ? saved * 2 : mpq_class{1}; break;
+                    }
+                    if (mpz_class(q.get_den()) > 1000000) { continue; }
+                    asg[rv] = q;
+                    const double nl = loss(asg);
+                    const double dE = nl - curLoss;
+                    const double u = static_cast<double>(nextRand() >> 11) * (1.0 / 9007199254740992.0);
+                    if (dE <= 0.0 || u < std::exp(-dE / T)) { curLoss = nl; } else { asg[rv] = saved; }
+                    T *= cool;
+                }
+                score = totalScore(constraints, weights, asg);
+                if (score.isSat()) return asg;
+                restartCount = 0; escapeTabuVar.clear(); escapeCount = 0;   // fresh refine phase
+            }
+        }
         const bool improved = walkOneRound(constraints, weights, vars, asg, score);
         if (score.isSat()) {
             if (eqRelax_) {
