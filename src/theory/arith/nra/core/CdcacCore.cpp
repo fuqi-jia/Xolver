@@ -2081,38 +2081,45 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                 }
             }
         }
-        // (B2) Degree-2 PURE-SQUARE contraction: c2·v² + c0 rel 0 with NO v^1 term ⇒
-        // bound v² ⇒ bound v via √. Catches sum-of-squares bounds (Σx²<1 ⇒ |x|<1) that
-        // the degree-1 contraction misses — the lever that lets box-consistency refute
-        // the hong family (Σx²<1 ∧ Πx>1: |x_i|<1 ⇒ |Πx|<1, contradiction). Sound:
-        // [−r,r] ⊇ the true v-range (r ≥ √U), so the box stays an over-approximation.
+        // (B2) Degree-2 contraction: c2·v² + c1·v + c0 rel 0 ⇒ complete the square
+        // (c2(v+s)² + D, with s = c1/(2c2), D = c0 − c1²/(4c2)) ⇒ bound (v+s)² ⇒ bound v.
+        // Generalises the sum-of-squares lever (c1=0, the hong family Σx²<1 ⇒ |x_i|<1
+        // ⇒ |Πx|<1, contra Πx>1) to the FULL single-var quadratic (c1≠0, e.g. x²−2x+2<0
+        // ⇒ (x−1)²<−1 ⇒ infeasible). Sound: every step uses the sound interval ops, so
+        // [−r−s.hi, r−s.lo] ⊇ the true v-range — the box stays an over-approximation.
         for (size_t ci : cons) {
             const RationalPolynomial& rp = *satRp[ci];
             Relation rel = input.constraints[ci].rel;
             for (auto& [v, ivCur] : box) {
                 if (rp.degree(v) != 2) continue;
                 std::vector<RationalPolynomial> co = rp.coefficients(v);  // [c0, c1, c2]
-                if (co.size() < 3 || !co[1].isZero()) continue;          // pure square only
-                Iv c2 = ivEval(co[2], m, box), c0 = ivEval(co[0], m, box);
+                if (co.size() < 3) continue;
+                Iv c2 = ivEval(co[2], m, box), c1 = ivEval(co[1], m, box), c0 = ivEval(co[0], m, box);
                 if (!ivExcludesZero(c2)) continue;                       // need sign(c2) definite
                 const bool c2pos = (!c2.loInf && c2.lo > 0);
-                // Extract an UPPER bound on v² (⇒ a finite [−r,r] box for v):
-                //   c2>0, rel < / ≤ 0  : v² ≤ −c0/c2
-                //   c2<0, rel > / ≥ 0  : v² ≤ −c0/c2
-                //   rel = 0            : v² = −c0/c2
+                // s = c1/(2c2) (vertex shift); D = c0 − c1²/(4c2) (completed-square value).
+                const Iv s = ivMul(c1, ivRecip(ivMul(Iv::point(mpq_class(2)), c2)));
+                if (s.loInf || s.hiInf) continue;                        // unbounded shift ⇒ no finite box
+                const Iv D = ivAdd(c0, ivNeg(ivMul(ivMul(c1, c1),
+                                            ivRecip(ivMul(Iv::point(mpq_class(4)), c2)))));
+                // UPPER bound on (v+s)² (⇒ a finite box for v):
+                //   c2>0, rel < / ≤ 0  : (v+s)² ≤ −D/c2
+                //   c2<0, rel > / ≥ 0  : (v+s)² ≤ −D/c2
+                //   rel = 0            : (v+s)² = −D/c2
                 Iv u2; bool haveUpper = false;
                 if (rel == Relation::Lt || rel == Relation::Leq) {
-                    if (c2pos) { u2 = ivMul(ivNeg(c0), ivRecip(c2)); haveUpper = true; }
+                    if (c2pos) { u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true; }
                 } else if (rel == Relation::Gt || rel == Relation::Geq) {
-                    if (!c2pos) { u2 = ivMul(ivNeg(c0), ivRecip(c2)); haveUpper = true; }
+                    if (!c2pos) { u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true; }
                 } else if (rel == Relation::Eq) {
-                    u2 = ivMul(ivNeg(c0), ivRecip(c2)); haveUpper = true;
+                    u2 = ivMul(ivNeg(D), ivRecip(c2)); haveUpper = true;
                 }
-                if (!haveUpper || u2.hiInf) continue;                    // no finite v² upper bound
+                if (!haveUpper || u2.hiInf) continue;                    // no finite (v+s)² upper bound
                 const mpq_class U = u2.hi;
-                if (U < 0) return true;                                  // v² ≤ U<0 ⇒ infeasible
+                if (U < 0) return true;                                  // (v+s)² ≤ U<0 ⇒ infeasible
                 const mpq_class r = ratSqrtUpper(U);
-                Iv tight; tight.loInf = false; tight.lo = -r; tight.hiInf = false; tight.hi = r;
+                // v+s ∈ [−r,r] ⇒ v ∈ [−r−s.hi, r−s.lo] (sound outer bound over s's interval).
+                Iv tight; tight.loInf = false; tight.lo = -r - s.hi; tight.hiInf = false; tight.hi = r - s.lo;
                 Iv nv = ivIntersect(ivCur, tight);
                 if (nv.empty()) return true;
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
