@@ -237,12 +237,31 @@ void ArrayReasoner::collectValueSharedTerms(std::unordered_set<SharedTermId>& ou
         if (e == NullExpr) return;
         if (auto s = sharedTermRegistry_->findByExprId(e)) out.insert(*s);
     };
+    auto addTermShared = [&](EufTermId t) { addShared(originExpr(t)); };
     for (EufTermId s : storeTerms_) {
         const auto& n = tm_->node(s);
-        if (n.args.size() >= 3) addShared(originExpr(n.args[2]));  // stored value
+        if (n.args.size() >= 3) addTermShared(n.args[2]);  // stored value
     }
-    for (EufTermId s : selectTerms_) {
-        addShared(originExpr(s));   // the read result itself (if arith-shared)
+    // The READ RESULT of a select is, in combination, a fresh Purifier BRIDGE var
+    // (`bridge = select(...)`) merged with the select term in the e-graph — NOT the
+    // select expr itself. So collect the shared terms in the select's e-graph CLASS
+    // (the bridge lands there via the unconditional definitional merge). Without
+    // this the select-result bridge (e.g. alra_010's select(C,i0) value) is absent
+    // from the deferral scope, gets cache-poisoned at Standard, and never reaches
+    // LRA at Full. Bounded walk (cap) to keep large-corpus cost in check.
+    if (egraph_) {
+        const size_t kCap = 64;
+        for (EufTermId s : selectTerms_) {
+            addTermShared(s);                       // direct (pure-QF_AX case)
+            EClassId rep = egraph_->rep(s);
+            size_t walked = 0;
+            for (EufTermId m : egraph_->classMembers(rep)) {
+                if (++walked > kCap) break;
+                addTermShared(m);                   // the bridge merged with the read
+            }
+        }
+    } else {
+        for (EufTermId s : selectTerms_) addTermShared(s);
     }
 }
 
