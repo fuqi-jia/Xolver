@@ -1852,9 +1852,15 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         // an EMPTY core (could-not-attribute) falls back to all reasons (sound).
         // This is ALSO the mechanism the combination conflict will reuse to carry
         // the interface-(dis)eq lits that participated (see CAC.md / task P5).
+        // PROMOTED default-ON (Feature B / lemma learning): the tight learned clause
+        // (¬unsatCore) is sound because unsatCore over-attributes (conservative superset
+        // of the minimal core), so the sub-conjunction the covering refuted is itself
+        // UNSAT. A tighter clause = less SAT-core churn across the whole search — this is
+        // the sound cross-search "lemma reuse", delegated to the SAT clause DB. Set
+        // XOLVER_NRA_CAC_MIN_CONFLICT=0 to fall back to the whole asserted set.
         static const bool minConflict = [] {
             const char* e = std::getenv("XOLVER_NRA_CAC_MIN_CONFLICT");
-            return e && *e && *e != '0';
+            return !e || (e[0] != '0' && e[0] != 'f' && e[0] != 'F' && e[0] != 'n' && e[0] != 'N');
         }();
         if (minConflict && !res.unsatCore.empty()) {
             std::vector<SatLit> minimized;
