@@ -1,4 +1,5 @@
 #include "theory/arith/ArithSolverBase.h"
+#include <cstdio>
 #include "theory/arith/Reasoner.h"
 #include "expr/ir.h"
 #include "theory/combination/SharedTermRegistry.h"
@@ -69,11 +70,16 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
         long pipelineCalls = 0;
         std::chrono::steady_clock::time_point lastDump = std::chrono::steady_clock::now();
         void dump() {
-            std::cerr << "[STAGE-PROF] pipeline-calls=" << pipelineCalls << "\n";
+            // Write via raw fd 2 (fprintf), NOT std::cerr: the public API
+            // redirects the worker thread's std::cerr streambuf, which silently
+            // swallows iostream output, but leaves fd 2 alone (same reason
+            // AniaProfile uses fprintf). std::cerr here printed nothing under
+            // `xolver solve`.
+            std::fprintf(stderr, "[STAGE-PROF] pipeline-calls=%ld\n", pipelineCalls);
             for (const auto& [nm, mc] : acc)
-                std::cerr << "  " << nm << "  ms=" << (long)mc.first
-                          << " calls=" << mc.second << "\n";
-            std::cerr.flush();  // survive SIGKILL on a piped-to-file stderr
+                std::fprintf(stderr, "  %s  ms=%ld calls=%ld\n",
+                             nm.c_str(), (long)mc.first, mc.second);
+            std::fflush(stderr);  // survive SIGKILL on a piped-to-file stderr
         }
     };
     static ProfState prof;
