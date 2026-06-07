@@ -8,6 +8,7 @@
 #include "expr/ir.h"
 #include "util/MpqUtils.h"
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -355,6 +356,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
     aniaprof::Scope _prof(aniaprof::ARR_EAGER);
     if (!active()) return;
     discoverArrayTerms();
+    size_t row1Merges = 0, row2Merges = 0, row2Eligible = 0;
     // Push read indices through store towers BEFORE the Row1/Const pass so the
     // selects they create get their Row1 eager-merge in this same saturation.
     completeStoreSelects(outQueue);
@@ -379,6 +381,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
             mr.kind = MergeReasonKind::ArrayRow1;
             mr.lit = SatLit();
             outQueue.push_back({selSI, vTerm, mr});
+            ++row1Merges;
         }
     }
 
@@ -431,6 +434,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
                 EufTermId aTerm = stn.args[0];   // underlying array
                 EufTermId iTerm = stn.args[1];   // write index
                 if (egraph_->same(iTerm, jTerm)) continue;
+                ++row2Eligible;
                 if (!provablyDistinctConstIndices(iTerm, jTerm)) continue;
 
                 ExprId jExpr = originExpr(jTerm);
@@ -449,9 +453,20 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
                     mr.kind = MergeReasonKind::ArrayRow2;
                     mr.lit = SatLit();
                     outQueue.push_back({selStore, selAJ, mr});
+                    ++row2Merges;
                 }
             }
         }
+    }
+
+    static const bool axDiag = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    if (axDiag) {
+        std::fprintf(stderr,
+            "[AX-eager] stores=%zu selects=%zu completed=%zu row1+=%zu row2Eligible=%zu row2const+=%zu\n",
+            storeTerms_.size(), selectTerms_.size(),
+            static_cast<size_t>(completeInternsDone_),
+            row1Merges, row2Eligible, row2Merges);
+        std::fflush(stderr);
     }
 }
 
