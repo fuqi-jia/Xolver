@@ -1280,32 +1280,95 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 prefix.pop();
                 return found;
             };
-            // Cover an infinite sector at integer sample s.
-            //   0 = covered (cell appended); 2 = unknown; 3 = no this-level
-            //   violation (caller must testAndRecurse and decide).
-            auto coverInfinite = [&](const mpq_class& s) -> int {
-                auto viol = thisLevelViol(s);
-                if (!viol) return 3;
-                CdcacResult res = makeLeafConflictResult({*viol}, input);
-                auto bcr = buildConflictCell(k, RealAlg::fromRational(s), res, input,
-                                             allRoots, levelBoundaryComplete);
-                if (bcr.status == BuildCellStatus::Unknown) return 2;
-                certifiedCells.push_back(std::move(*bcr.conflictCell));
-                return 0;
+            // Is `res` a Sat with an all-integer model? (then it is a genuine
+            // integer model, accept it directly.)
+            auto allIntModel = [](const CdcacResult& res) -> bool {
+                if (res.status != CdcacStatus::Sat || !res.model) return false;
+                for (const auto& v : res.model->values)
+                    if (!v.isRational() || v.rational.get_den() != 1) return false;
+                return true;
             };
 
-            // LEFT infinite sector (-inf, bps.front())
-            {
-                mpq_class s = mpq_class(floorQ(bps.front()) - 1);
-                int r = coverInfinite(s);
-                if (r == 2) return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
-                if (r == 3) {
-                    CdcacResult res = testAndRecurse(RealAlg::fromRational(s));
-                    if (res.status == CdcacStatus::Sat) return res;
-                    if (res.status == CdcacStatus::Unknown) return res;
-                    return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+            // ADDITIVE per-sector cover. REAL-FIRST: probe the sector with a real
+            // sample; a real-infeasible sector (UNSAT, not integrality-tainted)
+            // gets the ordinary WIDE conflict cell — identical to the real path,
+            // so real-UNSAT completeness (the varOrder-fix +7) is preserved and
+            // fast. Only a real-FEASIBLE sector (or an integrality-tainted UNSAT
+            // that cannot be generalized) falls to the integer-aware treatment:
+            // integrality cells for integer-free gaps + per-integer point tests.
+            // Returns 0 = covered; 1 = return *out (Sat/Unknown).
+            auto coverFinite = [&](const mpq_class& lo, const mpq_class& hi,
+                                   CdcacResult& out) -> int {
+                mpq_class mid = pickRationalSample(lo, hi);
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(mid));
+                if (res.status == CdcacStatus::Unknown) { out = std::move(res); return 1; }
+                if (allIntModel(res)) { out = std::move(res); return 1; }
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(mid), res,
+                                                 input, allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
                 }
-            }
+                // real-feasible (or integrality-tainted) → integer-aware per integer
+                mpz_class first = floorQ(lo) + 1;   // least integer strictly > lo
+                mpz_class last = ceilQ(hi) - 1;     // greatest integer strictly < hi
+                mpq_class cursor = lo;
+                for (mpz_class m = first; m <= last; ++m) {
+                    addIntegrality(false, cursor, false, mpq_class(m));
+                    CdcacResult rm = testAndRecurse(RealAlg::fromRational(mpq_class(m)));
+                    if (rm.status == CdcacStatus::Sat) { out = std::move(rm); return 1; }
+                    if (rm.status == CdcacStatus::Unknown) { out = std::move(rm); return 1; }
+                    addPoint(m, rm);
+                    cursor = mpq_class(m);
+                }
+                addIntegrality(false, cursor, false, hi);
+                return 0;
+            };
+            // Infinite sector at sample s. A this-level constant-sign violation OR
+            // a real-sound deeper UNSAT covers the whole tail (real wide cell). A
+            // real-feasible tail (non-integer model) or an integrality-tainted
+            // deeper UNSAT cannot cover ∞-many integers → Unknown.
+            auto coverInfinite = [&](const mpq_class& s, CdcacResult& out) -> int {
+                auto viol = thisLevelViol(s);
+                if (viol) {
+                    CdcacResult res = makeLeafConflictResult({*viol}, input);
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(s), res, input,
+                                                 allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
+                }
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(s));
+                if (res.status == CdcacStatus::Unknown) { out = std::move(res); return 1; }
+                if (allIntModel(res)) { out = std::move(res); return 1; }
+                if (res.status == CdcacStatus::Sat) {       // real-feasible tail
+                    out = CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                    return 1;
+                }
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(s), res, input,
+                                                 allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
+                }
+                out = CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                return 1;
+            };
+
+            CdcacResult out;
+            // LEFT infinite sector (-inf, bps.front())
+            if (coverInfinite(mpq_class(floorQ(bps.front()) - 1), out) == 1) return out;
             // sections + finite sectors
             for (size_t i = 0; i < bps.size(); ++i) {
                 if (isInt(bps[i])) {
@@ -1323,33 +1386,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     levelIntegrality = true;
                 }
                 if (i + 1 < bps.size()) {        // finite sector (bps[i], bps[i+1])
-                    mpq_class lo = bps[i], hi = bps[i + 1];
-                    mpz_class first = floorQ(lo) + 1;  // least integer strictly > lo
-                    mpz_class last = ceilQ(hi) - 1;    // greatest integer strictly < hi
-                    mpq_class cursor = lo;
-                    for (mpz_class m = first; m <= last; ++m) {
-                        addIntegrality(false, cursor, false, mpq_class(m));
-                        CdcacResult res = testAndRecurse(RealAlg::fromRational(mpq_class(m)));
-                        if (res.status == CdcacStatus::Sat) return res;
-                        if (res.status == CdcacStatus::Unknown) return res;
-                        addPoint(m, res);
-                        cursor = mpq_class(m);
-                    }
-                    addIntegrality(false, cursor, false, hi);
+                    if (coverFinite(bps[i], bps[i + 1], out) == 1) return out;
                 }
             }
             // RIGHT infinite sector (bps.back(), +inf)
-            {
-                mpq_class s = mpq_class(ceilQ(bps.back()) + 1);
-                int r = coverInfinite(s);
-                if (r == 2) return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
-                if (r == 3) {
-                    CdcacResult res = testAndRecurse(RealAlg::fromRational(s));
-                    if (res.status == CdcacStatus::Sat) return res;
-                    if (res.status == CdcacStatus::Unknown) return res;
-                    return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
-                }
-            }
+            if (coverInfinite(mpq_class(ceilQ(bps.back()) + 1), out) == 1) return out;
         }
     }
 
