@@ -166,8 +166,11 @@ TEST_CASE("NiaMcsatEngine: pickValue gives up on x^2 = 5 (no integer root)") {
 
     MCSatTrail trail;
     auto choice = engine.pickValue(x, trail);
-    // No integer in the candidate set squares to 5.
-    CHECK(choice.kind == ValueChoice::Kind::GiveUp);
+    // No integer squares to 5. The integer-reinforcement path (square /
+    // modular refuters, added with the relaxation-UNSAT step) now SOUNDLY
+    // refutes this rather than merely giving up — pickValue returns a
+    // Conflict (kind 1), which is strictly stronger than the old GiveUp.
+    CHECK(choice.kind == ValueChoice::Kind::Conflict);
 }
 
 TEST_CASE("NiaMcsatEngine: pickValue gives up on non-integer trail value") {
