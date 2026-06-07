@@ -1369,21 +1369,44 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             CdcacResult out;
             // LEFT infinite sector (-inf, bps.front())
             if (coverInfinite(mpq_class(floorQ(bps.front()) - 1), out) == 1) return out;
+            // a section is a single point var=r. REAL-FIRST (same rationale as
+            // the sectors): a real conflict at r yields a real section cell that
+            // does NOT taint the level, so an all-real-UNSAT level stays
+            // untainted and a parent can still wide-generalize it. Only a real-
+            // feasible / integrality-tainted root falls to a point/integrality
+            // cell (which does taint, legitimately).
+            auto addIntegralitySection = [&](const mpq_class& r) {
+                CertifiedCell cc;
+                cc.cell.var = var;
+                cc.cell.kind = CellKind::Section;
+                cc.cell.lower = Bound::rational(r, /*open=*/false);
+                cc.cell.upper = Bound::rational(r, /*open=*/false);
+                certifiedCells.push_back(std::move(cc));
+                levelIntegrality = true;
+            };
             // sections + finite sectors
             for (size_t i = 0; i < bps.size(); ++i) {
-                if (isInt(bps[i])) {
-                    CdcacResult res = testAndRecurse(RealAlg::fromRational(bps[i]));
-                    if (res.status == CdcacStatus::Sat) return res;
-                    if (res.status == CdcacStatus::Unknown) return res;
-                    addPoint(floorQ(bps[i]), res);
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(bps[i]));
+                if (res.status == CdcacStatus::Unknown) return res;
+                if (allIntModel(res)) return res;            // genuine integer model at r
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    // real conflict at r → real section cell (does NOT taint level)
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(bps[i]), res,
+                                                 input, allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown)
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                } else if (res.status == CdcacStatus::Unsat) {
+                    // integrality-tainted UNSAT at r (deeper used integrality).
+                    if (isInt(bps[i])) addPoint(floorQ(bps[i]), res);  // point cell at the integer
+                    else addIntegralitySection(bps[i]);                // non-integer root: no integer here
                 } else {
-                    CertifiedCell cc;            // integrality section point (no integer)
-                    cc.cell.var = var;
-                    cc.cell.kind = CellKind::Section;
-                    cc.cell.lower = Bound::rational(bps[i], /*open=*/false);
-                    cc.cell.upper = Bound::rational(bps[i], /*open=*/false);
-                    certifiedCells.push_back(std::move(cc));
-                    levelIntegrality = true;
+                    // res.status == Sat but NOT all-integer (deeper real model).
+                    if (isInt(bps[i]))
+                        // integer point real-feasible but no confirmed integer
+                        // model below — cannot soundly cover OR claim SAT → Unknown.
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                    addIntegralitySection(bps[i]);   // non-integer root: no integer to cover
                 }
                 if (i + 1 < bps.size()) {        // finite sector (bps[i], bps[i+1])
                     if (coverFinite(bps[i], bps[i + 1], out) == 1) return out;
