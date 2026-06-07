@@ -607,6 +607,7 @@ void CdcacCore::resetPerSolveState() {
     unsatTrustworthy_ = true;
     closureComplete_ = false;
     constraintVarsCache_.clear();   // forward-prune per-constraint var sets
+    constraintsByLevel_.clear();    // forward-prune per-level constraint index
 }
 
 // Lazily build + return the VarId set of constraint `ci` (cached per input).
@@ -628,6 +629,36 @@ const std::vector<VarId>& CdcacCore::constraintVars(size_t ci, const CdcacInput&
         }
     }
     return constraintVarsCache_[ci];
+}
+
+// Lazily build + return the constraints whose DEEPEST var (by input.varOrder
+// position) is at level `k` — exactly the set that becomes fully determined when
+// level k's variable is assigned. Lets the forward-prune iterate O(determined-at-k)
+// constraints per cell instead of re-scanning all of them. A constraint with a var
+// outside varOrder (incl. the {NullVar} "poly-unformable" tag) is excluded → never
+// forward-pruned, identical to the old hasVar/allAssigned test failing for it.
+const std::vector<size_t>& CdcacCore::constraintsAtLevel(size_t k, const CdcacInput& input) {
+    if (constraintsByLevel_.empty()) {
+        const size_t n = input.varOrder.size();
+        constraintsByLevel_.assign(n, {});
+        std::unordered_map<VarId, int> pos;
+        pos.reserve(n * 2);
+        for (size_t i = 0; i < n; ++i) pos[input.varOrder[i]] = static_cast<int>(i);
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            const auto& cv = constraintVars(ci, input);
+            int deepest = -1;
+            bool ok = !cv.empty();
+            for (VarId v : cv) {
+                auto it = pos.find(v);
+                if (it == pos.end()) { ok = false; break; }   // var not in order (or NullVar) → never prune
+                if (it->second > deepest) deepest = it->second;
+            }
+            if (ok && deepest >= 0 && deepest < static_cast<int>(n))
+                constraintsByLevel_[static_cast<size_t>(deepest)].push_back(ci);
+        }
+    }
+    static const std::vector<size_t> kEmpty;
+    return (k < constraintsByLevel_.size()) ? constraintsByLevel_[k] : kEmpty;
 }
 
 CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
@@ -1157,16 +1188,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // identically).
         CdcacResult childRes;
         {
-            std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
             std::vector<std::pair<size_t, Sign>> fwViolated;
-            for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-                const auto& cv = constraintVars(ci, input);
-                bool hasVar = false, allAssigned = true;
-                for (VarId v : cv) {
-                    if (v == var) hasVar = true;
-                    if (!assigned.count(v)) { allAssigned = false; break; }
-                }
-                if (!hasVar || !allAssigned) continue;   // not newly determined here
+            // Iterate ONLY the constraints newly determined at this level (deepest var ==
+            // varOrder[k]); constraintsAtLevel precomputes this so we no longer rebuild an
+            // `assigned` set + rescan every constraint on each cell. Equivalent: ci in this
+            // set ⟺ the old (hasVar==(deepest var is var) && allAssigned) test passed.
+            for (size_t ci : constraintsAtLevel(static_cast<size_t>(k), input)) {
                 Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
                 if (s == Sign::Unknown) continue;        // inconclusive — cannot prune
                 if (!relationHolds(s, input.constraints[ci].rel))

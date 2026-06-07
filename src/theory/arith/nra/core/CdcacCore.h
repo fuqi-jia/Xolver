@@ -60,6 +60,15 @@ private:
     std::vector<std::vector<VarId>> constraintVarsCache_;
     const std::vector<VarId>& constraintVars(size_t ci, const CdcacInput& input);
 
+    // Forward-prune index: constraintsByLevel_[k] = the constraints whose DEEPEST
+    // variable (by input.varOrder position) is at level k — i.e. exactly the
+    // constraints that become fully determined when level k's var is assigned. The
+    // forward-prune iterates only these per cell instead of re-scanning every
+    // constraint (and rebuilding an `assigned` set) on each testAndRecurse. Built
+    // lazily per solve; cleared in resetPerSolveState alongside constraintVarsCache_.
+    std::vector<std::vector<size_t>> constraintsByLevel_;
+    const std::vector<size_t>& constraintsAtLevel(size_t k, const CdcacInput& input);
+
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells
     // LAZILY from the raw constraints (specializeToUnivariate + isolateRealRoots —
