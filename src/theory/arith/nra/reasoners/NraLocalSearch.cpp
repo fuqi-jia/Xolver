@@ -800,6 +800,37 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 }
             }
             if (!anyViolated) return asg;
+            // CELL-JUMP escape (LS-NRA critical move): at a local minimum, with
+            // probability kNoisePct, FORCE-satisfy a random VIOLATED constraint by jumping
+            // one of its variables onto a value inside that constraint's feasible cell
+            // (computed from its roots via univariateBoundaryCandidates) — ACCEPTING the
+            // move even when the total score worsens. Greedy single-var move-selection
+            // rejects such a jump (fixing one bilinear constraint breaks coupled others),
+            // which is exactly the local minimum; forcing the jump crosses the barrier and
+            // keeps walking. Sound: still only an internal sample, exact-validated at the
+            // SAT check; the jump only changes where the search goes, never a verdict.
+            static const long kNoisePct = env::paramLong("XOLVER_NRA_LS_NOISE_PCT", 35);
+            if (kNoisePct > 0 && (nextRand() % 100) < kNoisePct) {
+                std::vector<size_t> viol;
+                for (size_t i = 0; i < constraints.size(); ++i)
+                    if (atomViolation(constraints[i], asg) > 0) viol.push_back(i);
+                if (!viol.empty()) {
+                    const Constraint& cc = constraints[viol[nextRand() % viol.size()]];
+                    const std::vector<VarId>& ccvars = atomVars(cc.poly);
+                    if (!ccvars.empty()) {
+                        const VarId jv = ccvars[nextRand() % ccvars.size()];
+                        const mpq_class saved = asg.count(jv) ? asg[jv] : mpq_class{0};
+                        bool jumped = false;
+                        for (const auto& q : univariateBoundaryCandidates(cc, jv, asg)) {
+                            if (mpz_class(q.get_den()) > 1000000) continue;
+                            asg[jv] = q;
+                            if (atomViolation(cc, asg) == 0) { jumped = true; break; }  // cell-jump lands feasible for cc
+                        }
+                        if (jumped) { score = totalScore(constraints, weights, asg); continue; }  // keep walking
+                        asg[jv] = saved;   // no feasible cell found → fall through to restart
+                    }
+                }
+            }
             // Restart from a BOUND-FEASIBLE point (not all-zeros: a bounded var reset to
             // 0 re-enters bound-violation, h>0 ⇒ 0 infeasible, wasting the escape re-
             // walking out of the infeasible box). Base = the simplest feasible seed

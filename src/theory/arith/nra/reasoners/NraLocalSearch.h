@@ -72,6 +72,14 @@ private:
     mpq_class epsilon_{1, 1024};
     const mpq_class kZero_{0};   // sentinel for missing var lookups
 
+    // Deterministic PRNG for WalkSAT noise moves (escape local minima). Seeded to a
+    // fixed constant so runs are reproducible (no Math.random nondeterminism).
+    mutable uint64_t lsRng_ = 0x9E3779B97F4A7C15ULL;
+    uint64_t nextRand() const {   // xorshift64*
+        uint64_t x = lsRng_; x ^= x >> 12; x ^= x << 25; x ^= x >> 27;
+        lsRng_ = x; return x * 0x2545F4914F6CDD1DULL;
+    }
+
     // Phase NRA-LS-C — incremental boundary score cache. evalAt and scaleAt
     // are called per (constraint × candidate × round); without caching, each
     // call rebuilds the same RP from PolyId or re-extracts the kernel terms
