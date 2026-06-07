@@ -1057,6 +1057,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
+    std::vector<PolyId> rootSetPolyIds;   // Feature A (A3): the level poly each rootSet came from
     bool hasAlgebraicPrefix = false;
     int algPrefixCount = 0;
     for (const auto& v : prefix.values) {
@@ -1093,7 +1094,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
                 }
                 if (supported) {
-                    if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                    if (roots.numRoots() > 0) { rootSets.push_back(std::move(roots)); rootSetPolyIds.push_back(p); }
                     continue;
                 }
             }
@@ -1135,7 +1136,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                                   << supported << " roots=" << roots.numRoots() << std::endl;
                     if (supported) {
                         recovered = true;
-                        if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                        if (roots.numRoots() > 0) { rootSets.push_back(std::move(roots)); rootSetPolyIds.push_back(p); }
                     }
                 }
                 if (!recovered) {
@@ -1168,6 +1169,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
         uniPolys.push_back(up);
         rootSets.push_back(std::move(roots));
+        rootSetPolyIds.push_back(p);
     }
 
     // Always route through the covering (incl. the empty-roots full-line cell);
