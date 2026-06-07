@@ -102,9 +102,17 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
     }
 
     // A CT may be eliminated only if it occurs in exactly ONE constraint.
-    std::unordered_map<VarId, int> ctOcc;
+    std::unordered_map<VarId, int> ctOcc;     // # constraints a CT appears in
+    std::unordered_map<VarId, bool> ctLamDep;  // S λ-dependent in ANY occurrence
     for (const auto& pc : pcs)
-        for (const auto& [v, S] : pc.ct) { (void)S; ctOcc[v]++; }
+        for (const auto& [v, S] : pc.ct) { ctOcc[v]++; if (!S.c.empty()) ctLamDep[v] = true; }
+    if (std::getenv("XOLVER_NIA_CT_DIAG")) {
+        for (const auto& [v, n] : ctOcc) {
+            std::string msg = "CT " + std::string(kernel.varName(v)) + " occ=" + std::to_string(n)
+                            + (ctLamDep.count(v) ? " S=lam-dep" : " S=const");
+            ctDiag(msg.c_str());
+        }
+    }
 
     std::vector<std::pair<LF, Relation>> base;            // pure-λ constraints
     std::vector<std::vector<std::pair<LF, Relation>>> disj;  // per eliminated ineq
