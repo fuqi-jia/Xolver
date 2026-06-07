@@ -2977,19 +2977,17 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         bvars.push_back({kernel_->getOrCreateVar(name), bound.first, bound.second});
     }
 
-    // ---- 2. Branch-combo count cap.
-    long comboCount = 1;
-    for (const auto& blk : profile.blocks) {
+    // ---- 2. Validity only: every block must offer at least one branch.
+    // The old hard `comboCount > 256` ceiling is GONE — it was an artificial
+    // floor that bailed (→ unknown) on every Farkas-Or UNSAT with > 8 binary
+    // blocks (Hanoi 12 blocks = 4096 combos, etc.), which a uniform VeryMax
+    // sweep showed to be the single largest miss class. The flat odometer it
+    // guarded is replaced below by a DFS with sound prefix-UNSAT pruning, so
+    // the branch-combo product no longer needs a ceiling: genuinely-UNSAT
+    // termination problems collapse at a shallow prefix.
+    for (const auto& blk : profile.blocks)
         if (blk.branches.empty()) return std::nullopt;
-        comboCount *= static_cast<long>(blk.branches.size());
-        if (comboCount > 256) {
-            traceWrite("  [bounded-refute] combos " + std::to_string(comboCount)
-                       + " > 256; bail");
-            return std::nullopt;
-        }
-    }
     traceWrite("  [bounded-refute] B-domain=" + domProduct.get_str()
-               + " combos=" + std::to_string(comboCount)
                + " outer=" + std::to_string(profile.outerAssertions.size()));
 
     if (!cdcacCore_) {
@@ -3119,6 +3117,14 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
     std::vector<mpz_class> bcur;
     for (const auto& bv : bvars) bcur.push_back(bv.lo);
     std::size_t leavesChecked = 0;
+    std::size_t prefixChecks = 0;
+    // Safety backstop ONLY (not a perf floor): the DFS prunes genuinely-UNSAT
+    // trees fast and bails to giveUp() the moment a real-feasible leaf is hit,
+    // so this trips only on a pathological tree that neither prunes nor finds a
+    // feasible leaf. On trip we giveUp() → Unknown (sound), never a wrong UNSAT.
+    // Set high; lower via XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP if a case runs long.
+    const std::size_t leafCap = static_cast<std::size_t>(
+        env::paramLong("XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP", 200000));
     while (true) {
         std::unordered_map<VarId, mpz_class> Bvals;
         for (std::size_t i = 0; i < bvars.size(); ++i) Bvals[bvars[i].vid] = bcur[i];
@@ -3139,15 +3145,60 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         }
 
         if (!bTupleDead) {
-            // Branch-combo odometer.
-            std::vector<std::size_t> bc(allBlocks.size(), 0);
-            while (true) {
-                std::vector<CdcacConstraint> cons = outerCons;
-                bool leafDead = false;   // trivially violated leaf atom
-                bool leafBail = false;
-                for (std::size_t bi = 0; bi < allBlocks.size() && !leafDead;
-                     ++bi) {
-                    const auto& br = allBlocks[bi]->branches[bc[bi]];
+            // Branch-combo SEARCH: DFS over blocks with sound prefix-UNSAT
+            // pruning (replaces the old flat odometer). The leaf constraint set
+            // grows monotonically with each chosen branch and the CT-elim
+            // over-approx UNSAT test is monotone, so a prefix whose PARTIAL leaf
+            // is already UNSAT refutes EVERY completion of that prefix — prune
+            // the whole subtree (sound: pruning never drops a feasible leaf, so
+            // it can never cause a wrong UNSAT). Genuinely-UNSAT termination
+            // problems go UNSAT at a shallow prefix, collapsing the 2^blocks
+            // tree; only a real-feasible/unknown FULL leaf forces giveUp.
+            //   returns 0 = subtree fully refuted (all completions UNSAT)
+            //           1 = giveUp (feasible/unknown full leaf, unmodellable
+            //               atom, or safety backstop tripped)
+            std::function<int(std::size_t, const std::vector<CdcacConstraint>&)> dfs;
+            dfs = [&](std::size_t bi,
+                      const std::vector<CdcacConstraint>& accum) -> int {
+                if (leavesChecked + prefixChecks > leafCap) {
+                    traceWrite("  [bounded-refute] leaf/prefix budget "
+                               + std::to_string(leafCap) + " tripped; giveUp");
+                    return 1;
+                }
+                if (bi == allBlocks.size()) {
+                    // FULL leaf — exact check. Over-approx (∃CT. A+CT·S ⋈ 0 ≡
+                    // S≠0 ∨ A⋈0) first; else the real-relaxation CdcacCore. A
+                    // feasible/unknown full leaf ⇒ NOT refutable ⇒ giveUp.
+                    if (ctElim && niaLeafFarkasLiaUnsat(accum, ctVarSet, *kernel_)) {
+                        ++leavesChecked; return 0;
+                    }
+                    CdcacInput input;
+                    input.constraints = accum;
+                    // varOrder = sorted union of leaf-constraint vars (CdcacCore
+                    // indexes it directly; empty ⇒ n=0 ⇒ immediate Unknown).
+                    // integerVars stays empty → PURE REAL relaxation (sound for
+                    // UNSAT; integrality is injected via strict-ineq tightening
+                    // in atomToConstraint).
+                    std::set<VarId> vset;
+                    for (const auto& cc2 : input.constraints)
+                        for (const std::string& vn : kernel_->variables(cc2.poly))
+                            vset.insert(kernel_->getOrCreateVar(vn));
+                    input.varOrder.assign(vset.begin(), vset.end());
+                    ++leavesChecked;
+                    CdcacResult cd = cdcacCore_->solve(input);
+                    if (cd.status != CdcacStatus::Unsat) {
+                        traceWrite("  [bounded-refute] leaf feasible/unknown "
+                                   "(status=" + std::to_string((int)cd.status)
+                                   + "); bail");
+                        return 1;
+                    }
+                    return 0;
+                }
+                const auto* blk = allBlocks[bi];
+                for (std::size_t b = 0; b < blk->branches.size(); ++b) {
+                    const auto& br = blk->branches[b];
+                    std::vector<CdcacConstraint> cons = accum;
+                    bool leafDead = false, leafBail = false;
                     for (const auto& lam : br.lambdas) {   // lambda >= 0
                         CdcacConstraint c;
                         c.poly = kernel_->mkVar(kernel_->getOrCreateVar(lam));
@@ -3169,51 +3220,21 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                     if (leafBail) {
                         traceWrite("[bounded-refute] leafBail block=" + std::to_string(bi)
                                    + " (atom unmodellable) ⇒ giveUp");
-                        return giveUp();   // can't model a branch atom
+                        return 1;   // can't model a branch atom
                     }
-                }
-                if (!leafDead) {
-                    // Cost-var elimination → pure-LIA leaf (research-recommended
-                    // path): ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0, then discharge the LIA
-                    // disjunction exactly. Proven UNSAT here is sound (exact
-                    // existential elimination + integer MILP). Falls through to the
-                    // real-relaxation CdcacCore when the shape isn't handled.
-                    if (ctElim && niaLeafFarkasLiaUnsat(cons, ctVarSet, *kernel_)) {
-                        ++leavesChecked;
-                    } else {
-                    CdcacInput input;
-                    input.constraints = std::move(cons);
-                    // CdcacCore::solve indexes input.varOrder[k] directly and does
-                    // NOT synthesize an order from an empty varOrder (solveLevel(0)
-                    // would see n=0 → immediate leaf → Unknown). So populate it with
-                    // the sorted union of leaf-constraint variables. integerVars
-                    // stays empty → PURE REAL relaxation (sound for UNSAT; the
-                    // integer reasoning is already injected via the strict-ineq
-                    // tightening in atomToConstraint).
-                    std::set<VarId> vset;
-                    for (const auto& cc2 : input.constraints)
-                        for (const std::string& vn : kernel_->variables(cc2.poly))
-                            vset.insert(kernel_->getOrCreateVar(vn));
-                    input.varOrder.assign(vset.begin(), vset.end());
-                    CdcacResult cd = cdcacCore_->solve(input);
-                    ++leavesChecked;
-                    if (cd.status != CdcacStatus::Unsat) {
-                        // Real-feasible (or undecided) leaf ⇒ cannot claim UNSAT.
-                        traceWrite("  [bounded-refute] leaf feasible/unknown "
-                                   "(status=" + std::to_string((int)cd.status)
-                                   + "); bail");
-                        return giveUp();
+                    if (leafDead) continue;   // branch trivially infeasible ⇒
+                                              // its whole subtree is refuted
+                    // PREFIX PRUNING: a sound over-approx UNSAT of this partial
+                    // leaf refutes every completion ⇒ skip the subtree.
+                    if (ctElim) {
+                        ++prefixChecks;
+                        if (niaLeafFarkasLiaUnsat(cons, ctVarSet, *kernel_)) continue;
                     }
-                    }  // end else (real-relaxation CdcacCore fallback)
+                    if (dfs(bi + 1, cons) == 1) return 1;   // propagate giveUp
                 }
-                // advance branch-combo odometer
-                std::size_t p = 0;
-                while (p < bc.size()) {
-                    if (++bc[p] < allBlocks[p]->branches.size()) break;
-                    bc[p] = 0; ++p;
-                }
-                if (p == bc.size()) break;
-            }
+                return 0;   // every branch at this level refuted
+            };
+            if (dfs(0, outerCons) == 1) return giveUp();
         }
 
         // advance B odometer (integer ranges [lo,hi])
