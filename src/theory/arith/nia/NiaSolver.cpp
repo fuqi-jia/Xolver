@@ -2445,14 +2445,13 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&,
 // failed CSP / failed validation falls through to the rest of the
 // pipeline.
 //
-// Default-OFF behind XOLVER_NIA_FARKAS_OR. Full-effort only.
+// PROMOTED default-ON (2026-06-08): the bounded-B Farkas refutation solves
+// VeryMax/Stroeder QF_NIA UNSAT the rest of the pipeline cannot (+11/51 small
+// cases measured, 0-unsound), and on non-Farkas inputs the detector bails after
+// one O(tree) scan (good()==false → nullopt below). No flag — a good lever
+// belongs on the default path, not gated. Full-effort only.
 std::optional<TheoryCheckResult>
 NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_FARKAS_OR");
-        return e && *e && *e != '0';
-    }();
-    if (!enabled) return std::nullopt;
     if (coreIr_ == nullptr) return std::nullopt;
 
     // Memoize the detector profile + support table across stage calls.
@@ -2928,9 +2927,9 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
 
 std::optional<TheoryCheckResult>
 NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
-    static const bool enabled =
-        std::getenv("XOLVER_NIA_FARKAS_BOUNDED_REFUTE") != nullptr;
-    if (!enabled) return std::nullopt;
+    // PROMOTED default-ON (2026-06-08) — see stageFarkasOr. Returns nullopt
+    // immediately unless the formula is Farkas-Or-shaped with bounded template
+    // coeffs, so the cost on every other NIA solve is two empty-container checks.
 #ifndef XOLVER_HAS_LIBPOLY
     return std::nullopt;  // needs the libpoly algebra backend (CdcacCore)
 #else
@@ -3092,8 +3091,11 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
     };
 
     // Cost/slack vars to eliminate existentially in the LIA leaf engine
-    // (research note 2026-06-07: ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0).
-    static const bool ctElim = std::getenv("XOLVER_NIA_FARKAS_CT_ELIM") != nullptr;
+    // (research note 2026-06-07: ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0). PROMOTED
+    // default-ON (2026-06-08): the CT-elim leaf path is the one that actually
+    // discharges the +11 VeryMax UNSAT (the CdcacCore fallback below stays as a
+    // safety net for shapes the over-approx parse can't model).
+    const bool ctElim = true;
     std::unordered_set<VarId> ctVarSet;
     if (ctElim)
         for (const auto& nm : profile.unboundedCT)

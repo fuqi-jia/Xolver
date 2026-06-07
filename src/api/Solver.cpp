@@ -2921,7 +2921,12 @@ public:
                 // give eager-bb only a SHORT slice so it bails to Unknown and the
                 // NIA pipeline's bounded-B refutation gets the UNSAT — while the
                 // SAT cases, which eager-bb solves fast, still land in time.
-                if (std::getenv("XOLVER_NIA_FARKAS_BOUNDED_REFUTE")) {
+                // PROMOTED default-ON (2026-06-08): the bounded-B refutation is
+                // now a default NIA stage, so this routing must always engage —
+                // otherwise eager-bb hogs the wall-clock and the refutation never
+                // runs. The detector bails on non-Farkas inputs (good()==false),
+                // so the cost there is one O(tree) scan.
+                {
                     farkas::FarkasOrDetector fdet(*ir);
                     auto fprof = fdet.detect();
                     if (fprof.good() && !fprof.boundedGlobals.empty()) {
