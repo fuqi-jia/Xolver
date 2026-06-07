@@ -1,3 +1,5 @@
+#include <cstdio>
+#include <cstdlib>
 #include "theory/arith/nra/cac/CacEngine.h"
 #include "util/EnvParam.h"
 
@@ -150,6 +152,14 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     // a hard covering yields to the Collins fallback instead of grinding to the
     // global timeout. Unknown is sound (never a wrong verdict).
     if ((nodes_ & 255) == 0 && overDeadline()) { out.status = CacStatus::Unknown; markIncomplete("deadline"); return out; }
+    if ((nodes_ & 1023) == 0) {   // periodic CAC tree-size dump (survives TO-kill)
+        const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+        if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+            std::fprintf(fp, "[CAC-tick] nodes=%ld maxDepth=%d deadlineMs=%ld\n",
+                         nodes_, maxDepth_, static_cast<long>(cfg_.deadlineMillis));
+            std::fclose(fp);
+        }
+    }
 
     const int n = static_cast<int>(varOrder_.size());
     const VarId var = varOrder_[level];
@@ -382,7 +392,19 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 // rec UNSAT: project its characterization down, eliminating var_{level+1}.
                 // `sample` holds vars[0..level]; the required coefficients (in those
                 // vars) are evaluated against it (McCallum sample-aware projection).
+                double tC0 = std::chrono::duration<double, std::milli>(
+                                 std::chrono::steady_clock::now().time_since_epoch()).count();
                 CharacterizationResult ch = characterize(rec.charPolys, varOrder_[level + 1], kernel_, &sample);
+                double dC = std::chrono::duration<double, std::milli>(
+                                std::chrono::steady_clock::now().time_since_epoch()).count() - tC0;
+                if (dC > 500.0) {   // a single characterize() dominating the deep-tower TO
+                    const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+                    if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+                        std::fprintf(fp, "[SLOW-CHARACTERIZE] level=%d charPolys=%zu ms=%.0f\n",
+                                     level, rec.charPolys.size(), dC);
+                        std::fclose(fp);
+                    }
+                }
                 if (!ch.complete) { sample.pop(); out.status = CacStatus::Unknown; markIncomplete("characterize-incomplete"); return out; }
                 cellBoundaries = std::move(ch.downwardPolys);
                 // SOUNDNESS GATE (#48 fix): if characterize collapsed to NO downward

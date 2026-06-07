@@ -729,7 +729,20 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
         }
         satRpBuilt_ = true;
     }
+    double tBC0 = std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now().time_since_epoch()).count();
     buildClosure(input);
+    double dBC = std::chrono::duration<double, std::milli>(
+                     std::chrono::steady_clock::now().time_since_epoch()).count() - tBC0;
+    if (dBC > 500.0) {
+        const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+        if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+            std::fprintf(fp, "[SLOW-BUILDCLOSURE] vars=%zu cons=%zu lazard=%d ms=%.0f\n",
+                         input.varOrder.size(), input.constraints.size(),
+                         (projectionKind_ == ProjectionPolicyKind::LazardStyle || lazardLiftEnabled_) ? 1 : 0, dBC);
+            std::fclose(fp);
+        }
+    }
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
 
