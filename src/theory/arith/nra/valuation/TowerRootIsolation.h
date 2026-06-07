@@ -31,8 +31,15 @@ struct TowerNormResult {
     RationalPolynomial norm;   // in mainVar only (when ok)
     bool ok = true;
 };
+// `kernel` (optional): when supplied, the per-generator PSC elimination routes
+// through libpoly's exact psc chain (forcePsc) instead of the O(dim!) Sylvester
+// determinant — a verdict-preserving perf path (proven by test_nra_libpoly_psc).
+// This is what lets ≥2-generator deep towers (Geogebra RegDodecagon/RegPentagon)
+// finish instead of timing out in the determinant. Null kernel => determinant,
+// byte-identical.
 TowerNormResult towerNorm(const RationalPolynomial& F, VarId mainVar,
-                          const TowerContext& ctx, int maxMatrixDim = 12);
+                          const TowerContext& ctx, int maxMatrixDim = 12,
+                          PolynomialKernel* kernel = nullptr);
 
 // [H2] full real-root isolation over a tower: Norm candidates -> exact
 // root-membership oracle (RootMembershipOracle). `supported` is true ONLY when

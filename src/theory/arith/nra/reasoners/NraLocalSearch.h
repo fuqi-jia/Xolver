@@ -72,6 +72,14 @@ private:
     mpq_class epsilon_{1, 1024};
     const mpq_class kZero_{0};   // sentinel for missing var lookups
 
+    // Deterministic PRNG for WalkSAT noise moves (escape local minima). Seeded to a
+    // fixed constant so runs are reproducible (no Math.random nondeterminism).
+    mutable uint64_t lsRng_ = 0x9E3779B97F4A7C15ULL;
+    uint64_t nextRand() const {   // xorshift64*
+        uint64_t x = lsRng_; x ^= x >> 12; x ^= x << 25; x ^= x >> 27;
+        lsRng_ = x; return x * 0x2545F4914F6CDD1DULL;
+    }
+
     // Phase NRA-LS-C — incremental boundary score cache. evalAt and scaleAt
     // are called per (constraint × candidate × round); without caching, each
     // call rebuilds the same RP from PolyId or re-extracts the kernel terms
@@ -179,9 +187,14 @@ private:
     // — interval width 10⁻⁷, midpoint denom 2·10⁷ — the regular
     // pushNear offsets are too coarse and the regular MAX_DEN cap rejects
     // the midpoint). This bypass is targeted at exactly that pattern.
+    // boundDir (optional out): per single-sided-bounded var, +1 if it can be
+    // increased while staying feasible (lower bound only) or -1 if it can be
+    // decreased (upper bound only). Lets the caller diversify restart magnitudes
+    // feasibly. Vars absent from the map are two-sided or unbounded.
     std::vector<std::pair<VarId, mpq_class>>
     bracketMidpointCandidates(const std::vector<Constraint>& cs,
-                              const std::vector<VarId>& vars) const;
+                              const std::vector<VarId>& vars,
+                              std::unordered_map<VarId, int>* boundDir = nullptr) const;
 
     // Phase NRA-LS-B (XOLVER_NRA_LS_EQ_RELAX, default OFF): after a relaxed
     // satisfier (|p| ≤ ε for every equality atom), exact-restore by finding

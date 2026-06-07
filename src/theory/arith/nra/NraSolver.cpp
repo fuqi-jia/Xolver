@@ -384,11 +384,23 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
             // a longer WalkSAT run (matrix-1-all-30 found at ~5s). SAT-only +
             // exact-validated ⇒ growing the search budget never affects a verdict,
             // only how long it looks (mirrors the CAC-deadline scaling at the
-            // CacEngine config below; shareDen=100 keeps the up-front slice small
-            // so an UNSAT case — WalkSAT has no plateau-exit — front-loads ~12s of
-            // a 1200s instance budget, not a 1/4 slice).
-            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 100));
-            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds)));
+            // CacEngine config below).
+            //
+            // SHARE = 1/10 of the instance wall-clock (was 1/100). The cell-jump
+            // escape (LS-NRA critical move) makes WalkSAT the productive engine for the
+            // bilinear matrix SAT walls the covering/MCSAT can't touch, but it needs
+            // real time: at 1/100 (~12s of a 1200s instance) only the easiest residual
+            // cracks; the cell-jump-reachable cases need the larger budget. 1/10 (~120s)
+            // is a deliberate front-load for the SAT-finder. SOUND: SAT-only + exact-
+            // validated, so a bigger budget never changes a verdict, only how long the
+            // search looks; an UNSAT case (WalkSAT has no plateau-exit) pays the slice
+            // then falls through to the covering with the remaining 9/10. INERT by
+            // default (returns the 250ms base unless XOLVER_WALLCLOCK_SCALE + _MS are
+            // set), so the WSL/regression path is byte-identical — this only sizes the
+            // competition budget. The round cap is scaled hard (ref 6s, 256x) so the
+            // WALL-CLOCK time, not the round count, is the binding limit.
+            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 10));
+            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds, 6000, 256)));
             ls.setEqRelax(eqRelax);
             const auto t0 = std::chrono::steady_clock::now();
             auto candOpt = ls.tryFindModel(lsCons, vars);
@@ -1500,109 +1512,6 @@ std::optional<TheoryCheckResult> NraSolver::stageSquareCascade(
     return TheoryCheckResult::consistent();
 }
 
-// XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF). Rational-only local
-// repair pre-pass. Builds the active polynomial constraint set, runs the
-// NraLocalSearch WalkSAT-style search, and on a satisfying rational candidate
-// exact-validates EVERY active constraint via the kernel sign (invariant 1).
-// SAT only on a kernel-validated model (stored in satFastModel_); otherwise
-// std::nullopt → fall to CAC / Collins. Never emits UNSAT (invariant 2).
-std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
-        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
-    // Task Q: XOLVER_NRA_LOCALSEARCH promoted source-default-ON; getenv
-    // guard removed (no env string in binary).
-    // Per-solve ONE-SHOT at FIRST Full effort. Standard-effort firing
-    // produces a candidate but subsequent cb_propagate's assertLit resets
-    // satFastModel_, so the candidate never reaches cb_check_found_model.
-    // At Full effort the SAT model is complete and no further assertLit
-    // intervenes before getModel(); the stashed candidate survives.
-    if (effort != TheoryEffort::Full) return std::nullopt;
-    if (lsAttempted_) return std::nullopt;
-    lsAttempted_ = true;
-    // Skip in N-O combination mode: a rational satisfier of the local atom set
-    // may still violate a pending interface (dis)equality. The pure-NRA path
-    // catches the same cases without the soundness risk.
-    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
-        return std::nullopt;
-
-    // Collect active polynomial constraints + var set. Bail if any active
-    // constraint is non-polynomial (NullPoly); validating a witness only over
-    // a subset would be unsound to report as SAT.
-    std::vector<NraLocalSearch::Constraint> lsCons;
-    std::set<VarId> varSet;
-    lsCons.reserve(presolveConstraints_.size());
-    for (const auto& c : presolveConstraints_) {
-        if (c.poly == NullPoly) return std::nullopt;
-        // Pull VarIds directly from the term decomposition (subtropical pattern).
-        // The earlier name → getOrCreateVar round-trip MUTATED the kernel's
-        // name→id table mid-solve and stalled CAC.
-        auto termsOpt = kernel_->terms(c.poly);
-        if (!termsOpt) return std::nullopt;
-        lsCons.push_back({c.poly, c.rel, c.reason});
-        for (const auto& t : *termsOpt)
-            for (const auto& [v, e] : t.powers) varSet.insert(v);
-    }
-    if (lsCons.empty() || varSet.empty()) return std::nullopt;
-    std::vector<VarId> vars(varSet.begin(), varSet.end());
-
-    // micro-budget scaffold default (10ms) per master-spec; raise after
-    // univariate boundary candidates ship.
-    static const long budgetMs =
-        env::paramLong("XOLVER_NRA_LS_BUDGET_MS", 10);
-    static const int maxRounds =
-        env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 10);
-
-    NraLocalSearch ls(*kernel_);
-    ls.setBudgetMs(budgetMs);
-    ls.setMaxRounds(maxRounds);
-    const auto lsT0 = std::chrono::steady_clock::now();
-    auto candOpt = ls.tryFindModel(lsCons, vars);
-    const auto lsT1 = std::chrono::steady_clock::now();
-    const long roundtripMs =
-        std::chrono::duration_cast<std::chrono::milliseconds>(lsT1 - lsT0).count();
-    lsTotalMs_ += roundtripMs;
-    if (candOpt) ++lsCandidatesFound_;
-    if (std::getenv("XOLVER_NRA_LS_DIAG")) {
-        std::cerr << "[NRA-LS] entry vars=" << vars.size()
-                  << " cons=" << lsCons.size()
-                  << " candidate=" << (candOpt ? "yes" : "no") << "\n";
-    }
-    if (!candOpt) return std::nullopt;
-
-    // Exact validation — every active constraint MUST hold at the rational
-    // candidate under the kernel sign. The candidate is a heuristic guess;
-    // never trust it (invariant 1).
-    std::unordered_map<std::string, mpq_class> evalModel;
-    evalModel.reserve(candOpt->size());
-    for (const auto& [v, q] : *candOpt)
-        evalModel.emplace(std::string(kernel_->varName(v)), q);
-
-    for (const auto& c : presolveConstraints_) {
-        std::unordered_map<std::string, mpq_class> em = evalModel;
-        for (const auto& vn : kernel_->variables(c.poly))
-            em.emplace(vn, mpq_class(0));   // 0-fill defensively
-        const int s = kernel_->sgn(c.poly, em);
-        bool ok = false;
-        switch (c.rel) {
-            case Relation::Eq:  ok = (s == 0); break;
-            case Relation::Geq: ok = (s >= 0); break;
-            case Relation::Leq: ok = (s <= 0); break;
-            case Relation::Gt:  ok = (s > 0);  break;
-            case Relation::Lt:  ok = (s < 0);  break;
-            case Relation::Neq: ok = (s != 0); break;
-        }
-        if (!ok) return std::nullopt;   // LS lied — never report SAT.
-    }
-
-    // Sound: every active constraint exact-validates at the rational candidate.
-    satFastModel_ = std::move(*candOpt);
-    ++lsExactSats_;
-    if (std::getenv("XOLVER_NRA_LS_DIAG")) {
-        std::cerr << "[NRA-LS] SAT vars=" << vars.size()
-                  << " cons=" << lsCons.size()
-                  << " ms=" << lsTotalMs_ << "\n";
-    }
-    return TheoryCheckResult::consistent();
-}
 
 // XOLVER_NRA_CAC: conflict-driven single-cell CAC engine (the "real" CDCAC) as
 // the primary NRA decision, run BEFORE the Collins buildClosure. A/B control for
@@ -1943,9 +1852,15 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
         // an EMPTY core (could-not-attribute) falls back to all reasons (sound).
         // This is ALSO the mechanism the combination conflict will reuse to carry
         // the interface-(dis)eq lits that participated (see CAC.md / task P5).
+        // PROMOTED default-ON (Feature B / lemma learning): the tight learned clause
+        // (¬unsatCore) is sound because unsatCore over-attributes (conservative superset
+        // of the minimal core), so the sub-conjunction the covering refuted is itself
+        // UNSAT. A tighter clause = less SAT-core churn across the whole search — this is
+        // the sound cross-search "lemma reuse", delegated to the SAT clause DB. Set
+        // XOLVER_NRA_CAC_MIN_CONFLICT=0 to fall back to the whole asserted set.
         static const bool minConflict = [] {
             const char* e = std::getenv("XOLVER_NRA_CAC_MIN_CONFLICT");
-            return e && *e && *e != '0';
+            return !e || (e[0] != '0' && e[0] != 'f' && e[0] != 'F' && e[0] != 'n' && e[0] != 'N');
         }();
         if (minConflict && !res.unsatCore.empty()) {
             std::vector<SatLit> minimized;

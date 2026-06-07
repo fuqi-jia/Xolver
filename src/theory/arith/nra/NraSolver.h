@@ -168,7 +168,6 @@ private:
     // exact-validated against every active constraint (invariant 1 — Solver-level
     // realDivPurifySatFloor re-validates before SAT is emitted). nullopt
     // otherwise. Never emits UNSAT / Conflict (invariant 2).
-    std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_CAC (A/B control for the Collins-vs-CAC differential): run the
     // conflict-driven single-cell CAC engine (the "real" CDCAC) as the primary
     // NRA decision at Full effort, BEFORE the Collins buildClosure. SAT (a

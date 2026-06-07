@@ -6,6 +6,7 @@
 #include "theory/arith/nra/valuation/RationalRootIsolation.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS cap for the SAT-first libpoly guard
+#include <chrono>
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
@@ -43,8 +44,34 @@ static std::vector<PolyId> collectPolys(const std::vector<CdcacConstraint>& cons
 }
 
 // Helper: pick a rational sample from a sector (lo, hi)
+static mpq_class simplestRationalIn(const mpq_class& lo, const mpq_class& hi);  // fwd
+
+// Covering sector representative. Any value in the OPEN interval (lo,hi) is a sound
+// representative (the sector is sign-invariant), so pick the SIMPLEST rational rather
+// than the midpoint — z3/NLSAT's pick_in_complement heuristic: 0 if it lies inside,
+// else the integer closest to 0, else the smallest-denominator dyadic 1/2^k. Real
+// models cluster at such simple values, so a SAT case is more likely to land its
+// witness coordinate directly; and the simpler sample keeps the deeper specialized
+// polynomials simpler ("to simplify the polynomials"), unlike a midpoint that can be a
+// high-denominator rational between two algebraic-derived bounds.
 static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
-    return (lo + hi) / 2;
+    return simplestRationalIn(lo, hi);
+}
+
+// z3 pick_in_complement for a sector unbounded BELOW, (−∞, hi): the simplest value
+// strictly below hi — 0 if it lies inside (hi>0), else the integer closest to 0 that
+// is still < hi. Real models cluster at 0 / small integers, so the first sector should
+// try 0 (the common witness) before marching away from the root.
+static mpq_class simplestBelow(const mpq_class& hi) {
+    if (sgn(hi) > 0) return mpq_class(0);                       // 0 ∈ (−∞,hi), simplest of all
+    mpz_class chi; mpz_cdiv_q(chi.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t());
+    return mpq_class(chi - 1);                                  // largest integer strictly < hi
+}
+// z3 pick_in_complement for a sector unbounded ABOVE, (lo, +∞).
+static mpq_class simplestAbove(const mpq_class& lo) {
+    if (sgn(lo) < 0) return mpq_class(0);                       // 0 ∈ (lo,+∞)
+    mpz_class flo; mpz_fdiv_q(flo.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t());
+    return mpq_class(flo + 1);                                  // smallest integer strictly > lo
 }
 
 // V3: Helper: convert Bound to AlgebraicEndpoint
@@ -489,13 +516,17 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     closureComplete_ = true;
     int n = static_cast<int>(input.varOrder.size());
     levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
+    polyOrigins_.clear();   // Feature A: rebuilt below (Collins path)
 
     std::vector<RationalPolynomial> rps;
-    for (const auto& c : input.constraints) {
+    std::vector<size_t> rpsToConstraint;   // Feature A: rps index → input constraint index
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        const auto& c = input.constraints[ci];
         if (kernel_->isConstant(c.poly)) continue;   // constants pre-handled by caller
         auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
         if (!rp) { unsatTrustworthy_ = false; logIncSite(1); closureComplete_ = false; continue; }
         rps.push_back(std::move(*rp));
+        rpsToConstraint.push_back(ci);
     }
 
     // Projection-set selection. Default: the Collins closure (unconditionally
@@ -564,6 +595,15 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
             PolyId pid = closure_.entries()[id].poly.toPolyId(*kernel_);
             if (pid == NullPoly) { unsatTrustworthy_ = false; logIncSite(7); continue; }
             levelPolyIds_[k].push_back(pid);
+            // Feature A (A1): translate this entry's rps-indexed input origins to input
+            // constraint indices and union into the level poly's provenance.
+            std::vector<int>& dst = polyOrigins_[pid];
+            for (int r : closure_.inputOrigins(id)) {
+                if (r >= 0 && r < static_cast<int>(rpsToConstraint.size())) {
+                    const int cidx = static_cast<int>(rpsToConstraint[r]);
+                    if (std::find(dst.begin(), dst.end(), cidx) == dst.end()) dst.push_back(cidx);
+                }
+            }
         }
     }
 }
@@ -581,6 +621,8 @@ void CdcacCore::resetPerSolveState() {
     unsatTrustworthy_ = true;
     closureComplete_ = false;
     constraintVarsCache_.clear();   // forward-prune per-constraint var sets
+    constraintsByLevel_.clear();    // forward-prune per-level constraint index
+    polyOrigins_.clear();           // Feature A: level-poly → constraint provenance
 }
 
 // Lazily build + return the VarId set of constraint `ci` (cached per input).
@@ -604,6 +646,68 @@ const std::vector<VarId>& CdcacCore::constraintVars(size_t ci, const CdcacInput&
     return constraintVarsCache_[ci];
 }
 
+// Lazily build + return the constraints whose DEEPEST var (by input.varOrder
+// position) is at level `k` — exactly the set that becomes fully determined when
+// level k's variable is assigned. Lets the forward-prune iterate O(determined-at-k)
+// constraints per cell instead of re-scanning all of them. A constraint with a var
+// outside varOrder (incl. the {NullVar} "poly-unformable" tag) is excluded → never
+// forward-pruned, identical to the old hasVar/allAssigned test failing for it.
+const std::vector<size_t>& CdcacCore::constraintsAtLevel(size_t k, const CdcacInput& input) {
+    if (constraintsByLevel_.empty()) {
+        const size_t n = input.varOrder.size();
+        constraintsByLevel_.assign(n, {});
+        std::unordered_map<VarId, int> pos;
+        pos.reserve(n * 2);
+        for (size_t i = 0; i < n; ++i) pos[input.varOrder[i]] = static_cast<int>(i);
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            const auto& cv = constraintVars(ci, input);
+            int deepest = -1;
+            bool ok = !cv.empty();
+            for (VarId v : cv) {
+                auto it = pos.find(v);
+                if (it == pos.end()) { ok = false; break; }   // var not in order (or NullVar) → never prune
+                if (it->second > deepest) deepest = it->second;
+            }
+            if (ok && deepest >= 0 && deepest < static_cast<int>(n))
+                constraintsByLevel_[static_cast<size_t>(deepest)].push_back(ci);
+        }
+    }
+    static const std::vector<size_t> kEmpty;
+    return (k < constraintsByLevel_.size()) ? constraintsByLevel_[k] : kEmpty;
+}
+
+// Feature A (A2): the level-poly subset whose provenance ⊆ the reason constraints.
+std::vector<PolyId> CdcacCore::reasonProjectionSubset(
+    const std::unordered_map<PolyId, std::vector<int>>& origins,
+    const std::vector<PolyId>& levelPolys,
+    const std::vector<int>& reasonConstraints) {
+    std::vector<PolyId> out;
+    std::unordered_set<int> reasonSet(reasonConstraints.begin(), reasonConstraints.end());
+    for (PolyId pid : levelPolys) {
+        auto it = origins.find(pid);
+        if (it == origins.end() || it->second.empty()) continue;   // unknown provenance ⇒ exclude (keep its roots)
+        bool subset = true;
+        for (int ci : it->second) {
+            if (!reasonSet.count(ci)) { subset = false; break; }
+        }
+        if (subset) out.push_back(pid);
+    }
+    return out;
+}
+
+// Feature A (A2): map a conflict's reason literals to input constraint indices.
+std::vector<int> CdcacCore::reasonConstraintIndices(const std::vector<SatLit>& reasons,
+                                                    const CdcacInput& input) const {
+    std::vector<int> out;
+    out.reserve(reasons.size());
+    for (SatLit lit : reasons) {
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            if (input.constraints[ci].reason == lit) { out.push_back(static_cast<int>(ci)); break; }
+        }
+    }
+    return out;
+}
+
 CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     // Build the exact-RationalPolynomial cache used by the interval forward-prune
     // (intervalFpViolation). Once per solve (reused across hybrid Collins/Lazard
@@ -625,7 +729,20 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
         }
         satRpBuilt_ = true;
     }
+    double tBC0 = std::chrono::duration<double, std::milli>(
+                      std::chrono::steady_clock::now().time_since_epoch()).count();
     buildClosure(input);
+    double dBC = std::chrono::duration<double, std::milli>(
+                     std::chrono::steady_clock::now().time_since_epoch()).count() - tBC0;
+    if (dBC > 500.0) {
+        const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+        if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+            std::fprintf(fp, "[SLOW-BUILDCLOSURE] vars=%zu cons=%zu lazard=%d ms=%.0f\n",
+                         input.varOrder.size(), input.constraints.size(),
+                         (projectionKind_ == ProjectionPolicyKind::LazardStyle || lazardLiftEnabled_) ? 1 : 0, dBC);
+            std::fclose(fp);
+        }
+    }
     SamplePoint prefix;
     CdcacResult result = solveLevel(0, prefix, input);
 
@@ -643,8 +760,36 @@ CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     return result;
 }
 
+// Covering profiler (XOLVER_NRA_TOWER_DIAG-gated, per-thread): counts the covering
+// tree size so the deep-tower TO can be attributed to tree explosion vs per-op cost.
+// "measure don't guess" — the ViaTower timer showed the tower itself is cheap.
+namespace {
+thread_local long gSolveLevelCalls = 0;   // recursion nodes (internal)
+thread_local long gCellsTested     = 0;   // testAndRecurse invocations (cells lifted)
+thread_local long gFullSamples     = 0;   // leaf full-sample checks
+thread_local double gBoundaryMs    = 0;   // time in per-level boundary collection (specialize+isolate)
+inline double covNowMs() {
+    return std::chrono::duration<double, std::milli>(
+               std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+}
+
 CdcacResult CdcacCore::solve(const CdcacInput& input) {
     satRpBuilt_ = false;   // rebuild the interval-FP cache for this solve's constraints
+    gSolveLevelCalls = gCellsTested = gFullSamples = 0; gBoundaryMs = 0;   // reset per solve
+    struct CovDump {
+        const CdcacInput& in;
+        ~CovDump() {
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (!f || !*f) return;
+            if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[COVERING] vars=%zu cons=%zu solveLevel=%ld cells=%ld fullSamples=%ld boundaryMs=%.0f\n",
+                             in.varOrder.size(), in.constraints.size(),
+                             gSolveLevelCalls, gCellsTested, gFullSamples, gBoundaryMs);
+                std::fclose(fp);
+            }
+        }
+    } covDump{input};
     if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[CDCAC-SOLVE] entry vars=" << input.varOrder.size()
                   << " cons=" << input.constraints.size() << std::endl;
@@ -823,9 +968,35 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
 }
 
 CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& input) {
+    ++gSolveLevelCalls;
+    {   // time-based tick (every ~2s) survives a TO-kill regardless of tree size
+        static thread_local double gLastTickMs = 0;
+        double nowt = covNowMs();
+        if (nowt - gLastTickMs > 2000.0) {
+            gLastTickMs = nowt;
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[COVERING-tick] solveLevel=%ld cells=%ld fullSamples=%ld boundaryMs=%.0f\n",
+                             gSolveLevelCalls, gCellsTested, gFullSamples, gBoundaryMs);
+                std::fclose(fp);
+            }
+        }
+    }
     int n = static_cast<int>(input.varOrder.size());
     if (k == n) {
-        return checkFullSample(prefix, input);
+        ++gFullSamples;
+        double tF0 = covNowMs();
+        CdcacResult fr = checkFullSample(prefix, input);
+        double dF = covNowMs() - tF0;
+        if (dF > 500.0) {
+            const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+            if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+                std::fprintf(fp, "[SLOW-FULLSAMPLE] cons=%zu ms=%.0f totalLeaves=%ld\n",
+                             input.constraints.size(), dF, gFullSamples);
+                std::fclose(fp);
+            }
+        }
+        return fr;
     }
 
     // V4: ensure a projection policy is available. Default is CollinsConservative;
@@ -954,6 +1125,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     std::vector<UniPolyId> uniPolys;
     std::vector<RootSet> rootSets;
+    std::vector<PolyId> rootSetPolyIds;   // Feature A (A3): the level poly each rootSet came from
     bool hasAlgebraicPrefix = false;
     int algPrefixCount = 0;
     for (const auto& v : prefix.values) {
@@ -964,6 +1136,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         std::cerr << "[LAZVAL] solveLevel k=" << k << " algPrefixCoords=" << algPrefixCount
                   << " levelPolys=" << levelPolyIds_[k].size() << std::endl;
 
+    double tB0 = covNowMs();
     for (PolyId p : levelPolyIds_[k]) {
         if (kernel_->isConstant(p)) continue;
         UniPolyId up = algebra_->specializeToUnivariate(p, prefix, var);
@@ -990,7 +1163,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
                 }
                 if (supported) {
-                    if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                    if (roots.numRoots() > 0) { rootSets.push_back(std::move(roots)); rootSetPolyIds.push_back(p); }
                     continue;
                 }
             }
@@ -1032,7 +1205,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                                   << supported << " roots=" << roots.numRoots() << std::endl;
                     if (supported) {
                         recovered = true;
-                        if (roots.numRoots() > 0) rootSets.push_back(std::move(roots));
+                        if (roots.numRoots() > 0) { rootSets.push_back(std::move(roots)); rootSetPolyIds.push_back(p); }
                     }
                 }
                 if (!recovered) {
@@ -1065,6 +1238,17 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
         uniPolys.push_back(up);
         rootSets.push_back(std::move(roots));
+        rootSetPolyIds.push_back(p);
+    }
+    double dB = covNowMs() - tB0;
+    gBoundaryMs += dB;
+    if (dB > 1000.0) {   // a single level's boundary collection took > 1s — the real hotspot
+        const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
+        if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
+            std::fprintf(fp, "[SLOW-BOUNDARY] k=%d levelPolys=%zu alg=%d ms=%.0f\n",
+                         k, levelPolyIds_[k].size(), algPrefixCount, dB);
+            std::fclose(fp);
+        }
     }
 
     // Always route through the covering (incl. the empty-roots full-line cell);
@@ -1097,6 +1281,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     // 3. Helper: test a sample and recurse to deeper levels
     auto testAndRecurse = [&](const RealAlg& sample) -> CdcacResult {
+        ++gCellsTested;
         RealAlg sampleWithOrigin = sample;
         if (sampleWithOrigin.isAlgebraic()) {
             // V2-6: populate RootOrigin for algebraic samples
@@ -1130,32 +1315,26 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // subtree) and no UNSAT is lost (an incomplete level taints prune and descent
         // identically).
         CdcacResult childRes;
-        bool prefixAllRational = true;
-        for (const auto& pv : prefix.values)
-            if (!pv.isRational()) { prefixAllRational = false; break; }
         {
-            std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
             std::vector<std::pair<size_t, Sign>> fwViolated;
-            for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
-                const auto& cv = constraintVars(ci, input);
-                bool hasVar = false, allAssigned = true;
-                for (VarId v : cv) {
-                    if (v == var) hasVar = true;
-                    if (!assigned.count(v)) { allAssigned = false; break; }
-                }
-                if (!hasVar || !allAssigned) continue;   // not newly determined here
+            // Iterate ONLY the constraints newly determined at this level (deepest var ==
+            // varOrder[k]); constraintsAtLevel precomputes this so we no longer rebuild an
+            // `assigned` set + rescan every constraint on each cell. Equivalent: ci in this
+            // set ⟺ the old (hasVar==(deepest var is var) && allAssigned) test passed.
+            for (size_t ci : constraintsAtLevel(static_cast<size_t>(k), input)) {
                 Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
                 if (s == Sign::Unknown) continue;        // inconclusive — cannot prune
                 if (!relationHolds(s, input.constraints[ci].rel))
                     fwViolated.emplace_back(ci, s);
             }
-            // intervalFpViolation (box-consistency over a rational point map) is defined
-            // only for a fully rational prefix — it self-guards (returns nullopt on any
-            // algebraic coordinate), so it never contributes a prune over an algebraic
-            // prefix; gating the call keeps the algebraic path doing only the exact
-            // fully-determined check above.
+            // intervalFpViolation now carries algebraic prefix coords as their isolating
+            // interval, so it contributes a sound partial-prune over algebraic prefixes
+            // too (deep tower levels), not just fully-rational ones. The A-type single-
+            // constraint violation it returns is exact (the box ⊇ the true point, so a
+            // strict box sign IS the point's sign), making makeLeafConflictResult valid —
+            // same as the signAt forward-prune above.
             std::optional<std::pair<size_t, Sign>> ivViol;
-            if (fwViolated.empty() && prefixAllRational)
+            if (fwViolated.empty())
                 ivViol = intervalFpViolation(prefix, input);   // partially-determined
             if (!fwViolated.empty())
                 childRes = makeLeafConflictResult(fwViolated, input);
@@ -1174,6 +1353,70 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     };
 
     std::vector<CertifiedCell> certifiedCells;
+
+    // A3 (widening): widen a conflict cell to the REASON-PROJECTION roots — the level polys
+    // derived only from the conflict's reason constraints (A2) — instead of all roots, so the
+    // cell spans the non-reason-root sectors where the same conflict still holds. Returns the
+    // widened root set, or nullopt to fall back to allRoots. SOUND when the conflict's reason
+    // set is COMPLETE: between consecutive reason-projection roots the reason constraints'
+    // delineation is invariant, so the deeper conflict holds throughout the wider interval.
+    auto widenRoots = [&](const CdcacResult& cr) -> std::optional<RootSet> {
+        if (!cr.unsat || k < 0 || k >= static_cast<int>(levelPolyIds_.size())) return std::nullopt;
+        const std::vector<int> reasonCidx = reasonConstraintIndices(cr.unsat->reasons, input);
+        if (reasonCidx.empty()) return std::nullopt;
+        // SOUNDNESS GATE: only widen when EVERY reason constraint is FULLY DETERMINED at
+        // level k (all its variables are among levels 0..k = prefix ∪ {var}). Then the
+        // conflict is a genuine level-k LEAF — those constraints are definitely violated
+        // here with NO deeper-variable dependence, so the recorded reasons are RELIABLE
+        // and the reason-projection roots truly bound the conflict. A DEEPER conflict
+        // (a reason still containing an unassigned var) has UNRELIABLE reasons — the
+        // recorded set is a subset of the true conflict support — and widening on it
+        // dropped a SAT in test_cdcac_sat_first. Restricting to fully-determined reasons
+        // makes the widening sound (a fully-determined constraint's sign is invariant
+        // exactly between its own roots, which the reason-projection captures).
+        {
+            std::unordered_set<VarId> determined(prefix.varOrder.begin(), prefix.varOrder.end());
+            determined.insert(var);
+            for (int ci : reasonCidx) {
+                for (VarId v : constraintVars(static_cast<size_t>(ci), input))
+                    if (!determined.count(v)) return std::nullopt;   // deeper var ⇒ not a leaf ⇒ no widen
+            }
+        }
+        const std::vector<PolyId> reasonProj =
+            reasonProjectionSubset(polyOrigins_, levelPolyIds_[static_cast<size_t>(k)], reasonCidx);
+        if (reasonProj.empty() || reasonProj.size() >= levelPolyIds_[static_cast<size_t>(k)].size())
+            return std::nullopt;                       // not a strict subset → no widening benefit
+        std::unordered_set<PolyId> rp(reasonProj.begin(), reasonProj.end());
+        std::vector<RootSet> filtered;
+        for (size_t i = 0; i < rootSets.size() && i < rootSetPolyIds.size(); ++i)
+            if (rp.count(rootSetPolyIds[i])) filtered.push_back(rootSets[i]);   // copy (rootSets reused)
+        if (filtered.empty()) return std::nullopt;
+        auto m = mergeRoots(filtered);
+        if (!m) return std::nullopt;
+        return m;                                      // widened reason-projection root set
+    };
+    auto buildCellW = [&](const RealAlg& s, CdcacResult& cr) -> BuildCellResult {
+        std::optional<RootSet> wr = widenRoots(cr);
+        return buildConflictCell(k, s, cr, input, wr ? *wr : allRoots, levelBoundaryComplete);
+    };
+    // A4: a sample STRICTLY inside an already-recorded conflict cell is in a proven-
+    // infeasible region. Only fully-determined leaf cells are widened (the gate above), and
+    // a widened cell is bounded by its reason constraints' own roots ⊆ all-roots, so no
+    // in-between root cuts a sector ⇒ sample-in-cell ⇒ sector ⊆ cell ⇒ covered. Skip its
+    // recursion + cell (the existing cell keeps the covering complete). Conservative:
+    // STRICT '<' and an Unknown algebraic comparison ⇒ NOT covered.
+    auto coveredByRecorded = [&](const RealAlg& s) -> bool {
+        for (const auto& cc : certifiedCells) {
+            const Cell& cl = cc.cell;
+            const bool loOk = (cl.lower.kind == Bound::Kind::NegInf) ||
+                              (algebra_->compareRealAlg(cl.lower.value, s) == CompareResult::Less);
+            if (!loOk) continue;
+            const bool hiOk = (cl.upper.kind == Bound::Kind::PosInf) ||
+                              (algebra_->compareRealAlg(s, cl.upper.value) == CompareResult::Less);
+            if (hiOk) return true;
+        }
+        return false;
+    };
 
     // 4. Generate and test cells
     if (allRoots.roots.empty()) {
@@ -1229,6 +1472,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     // this sector cell — [prevRoot.lower, root.upper] ⊇ (prevRoot,root)
                     // — infeasible, the cell is a sound conflict; synthesize it without
                     // descending the exponential grid below. Rational prefix only.
+                    if (!coveredByRecorded(sample)) {   // A4: skip a sector already covered by a widened leaf cell
                     CdcacResult res;
                     bool prefRat = true;
                     for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
@@ -1241,11 +1485,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     else    res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                    auto bcr = buildCellW(sample, res);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
                     certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    }
                 }
             } else {
                 // First sector: (-inf, r0)
@@ -1253,18 +1498,31 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 bool firstConflictRecorded = false;
                 CertifiedCell firstConflictCell;
                 for (int attempt = 0; attempt < 3; ++attempt) {
-                    mpq_class sampleQ = sectorHi - (attempt + 1);
+                    // attempt 0: z3's simplest value in (−∞, r0) — 0 if it lies inside,
+                    // else the integer closest to 0 (the common witness location). Later
+                    // attempts march away from the root as before.
+                    mpq_class sampleQ = (attempt == 0) ? simplestBelow(sectorHi)
+                                                       : (sectorHi - (attempt + 1));
                     RealAlg sample = RealAlg::fromRational(sampleQ);
                     CdcacResult res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
                     if (!firstConflictRecorded) {
-                        auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                        auto bcr = buildCellW(sample, res);
                         if (bcr.status == BuildCellStatus::Unknown) {
                             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                         }
                         firstConflictCell = std::move(*bcr.conflictCell);
                         firstConflictRecorded = true;
+                        // A conflict cell always contains its own sample. The first sector's
+                        // probes march MORE NEGATIVE (sectorHi-1 > -2 > -3); if this cell is
+                        // unbounded below (lower=-inf) it covers (-inf, sample] ⊇ every
+                        // remaining probe, so those samples sit inside a proven-infeasible
+                        // cell and their subtrees are GUARANTEED unsat — not a SAT chance.
+                        // Stop probing (sound + complete: the recorded cell already covers
+                        // the rest of the sector). Kills 2/3 of the redundant recursion on
+                        // the unbounded sector whenever the conflict is robust below.
+                        if (firstConflictCell.cell.lower.isNegInf()) break;
                     }
                 }
                 if (firstConflictRecorded) {
@@ -1279,6 +1537,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 // degenerate interval [root,root] and box-check: if infeasible the
                 // section's subtree is infeasible, so skip its descent (the point cell
                 // is sound but contributes nothing to coverage — sectors cover).
+                // A4: a root STRICTLY inside a recorded widened leaf cell is in a proven-
+                // infeasible region, so skip it — sound, and sections don't affect coverage.
+                if (!coveredByRecorded(root)) {
                 CdcacResult res;
                 std::optional<std::pair<size_t, Sign>> sv;
                 if (root.isRational()) {
@@ -1290,11 +1551,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 else    res = testAndRecurse(root);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
-                auto bcr = buildConflictCell(k, root, res, input, allRoots, levelBoundaryComplete);
+                auto bcr = buildCellW(root, res);
                 if (bcr.status == BuildCellStatus::Unknown) {
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
                 certifiedCells.push_back(std::move(*bcr.conflictCell));
+                }
             }
 
             prevRoot = root;
@@ -1307,18 +1569,27 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             CertifiedCell firstConflictCell;
             // Try up to 3 samples in the infinite sector before declaring unsat
             for (int attempt = 0; attempt < 3; ++attempt) {
-                mpq_class sampleQ = sectorLo + (attempt + 1);
+                // attempt 0: z3's simplest value in (lastRoot, +∞) — 0 if it lies inside,
+                // else the integer closest to 0.
+                mpq_class sampleQ = (attempt == 0) ? simplestAbove(sectorLo)
+                                                   : (sectorLo + (attempt + 1));
                 RealAlg sample = RealAlg::fromRational(sampleQ);
                 CdcacResult res = testAndRecurse(sample);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
                 if (!firstConflictRecorded) {
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                    auto bcr = buildCellW(sample, res);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
                     firstConflictCell = std::move(*bcr.conflictCell);
                     firstConflictRecorded = true;
+                    // Symmetric to the first sector: the final sector's probes march MORE
+                    // POSITIVE (sectorLo+1 < +2 < +3); if this conflict cell is unbounded
+                    // above (upper=+inf) it covers [sample, +inf) ⊇ every remaining probe,
+                    // so they sit inside a proven-infeasible cell — guaranteed unsat, not a
+                    // SAT chance. Stop probing (sound + complete).
+                    if (firstConflictCell.cell.upper.isPosInf()) break;
                 }
             }
             if (firstConflictRecorded) {
@@ -1865,20 +2136,41 @@ CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
             if (ms > satFirstMs_) { budget = 0; break; }
         }
         prefix.push(var, cand);
-        // Forward-check: only constraints whose vars are ALL assigned get a definite
-        // signAt; a violated one prunes. (Explicit all-assigned guard avoids relying
-        // on signAt's partial-assignment behaviour and skips needless libpoly calls.)
+        // Forward-check: only constraints NEWLY fully-determined at THIS level get a
+        // signAt. A constraint must (a) contain `var` and (b) have all its vars
+        // assigned. The `hasVar` guard is the key: a constraint fully assigned at a
+        // SHALLOWER level was already sign-checked the moment its last variable was
+        // fixed (and passed — else we pruned then), and its value is independent of
+        // `var`, so re-checking it at every candidate of `var` is pure redundant work
+        // (an expensive libpoly signAt over an algebraic prefix). Skipping it loses no
+        // pruning (it stays satisfied) and no soundness (the k==n leaf re-validates
+        // EVERY constraint). Mirrors solveLevel's forward-prune, which already gates on
+        // hasVar. (Explicit all-assigned guard avoids relying on signAt's partial
+        // behaviour.)
         bool pruned = false;
         for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
             if (ci >= satRp_.size() || !satRp_[ci]) continue;
-            bool allAssigned = true;
-            for (VarId v : satRp_[ci]->variables())
+            bool allAssigned = true, hasVar = false;
+            for (VarId v : satRp_[ci]->variables()) {
+                if (v == var) hasVar = true;
                 if (!assigned.count(v)) { allAssigned = false; break; }
-            if (!allAssigned) continue;
+            }
+            if (!hasVar || !allAssigned) continue;       // only NEWLY-determined here
             Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
             if (s == Sign::Unknown) continue;            // inconclusive — don't prune
             if (!relationHolds(s, input.constraints[ci].rel)) { pruned = true; break; }
         }
+        // Box-ICP partial-assignment lookahead — "carry the assignment, exclude the
+        // impossible regions as you descend" on the DEFAULT (algebraic) SAT-first path.
+        // The forward-check above only fires once a constraint is FULLY assigned; box
+        // consistency over the partial assignment prunes whole infeasible subtrees far
+        // earlier. subtreeBoxInfeasiblePrefix carries the assignment FAITHFULLY (rational
+        // coords as exact points, algebraic coords as their isolating interval — a sound
+        // tight box) and over-approximates, so an empty box proves the subtree infeasible
+        // without ever over-pruning a real model (invariant 1; the k==n leaf still
+        // validates every constraint). Skipped at the leaf and when nothing is fixed yet.
+        if (!pruned && k + 1 < n && subtreeBoxInfeasiblePrefix(prefix, input))
+            pruned = true;
         if (pruned) { prefix.pop(); continue; }
         CdcacResult r = trySatSampleFirstAlg(k + 1, prefix, input, budget);
         prefix.pop();
@@ -2061,6 +2353,20 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
     }
     if (cons.empty()) return false;
     const int kMaxRounds = 16;
+    // When a contraction EMPTIES a variable's box, the emptying constraint forced v
+    // outside its interval, so that constraint evaluated over the current box is
+    // strictly single-signed-violating — exactly the (A)-type reason. Surface it so the
+    // covering's intervalFpViolation gets a usable (constraint,sign) and can PRUNE (a
+    // contraction-empty otherwise returned with no aConf → was discarded → no prune).
+    // Same soundness basis as the (A) check below (only fires when the over-approx range
+    // provably excludes 0); the cell interval is still delineation-derived, so blaming a
+    // single constraint over the contracted box never widens the cell (no false-UNSAT).
+    auto setConf = [&](size_t ci) {
+        if (!aConf) return;
+        Iv rr = ivEval(*satRp[ci], m, box);
+        if (!rr.loInf && rr.lo > 0) *aConf = std::make_pair(ci, Sign::Pos);
+        else if (!rr.hiInf && rr.hi < 0) *aConf = std::make_pair(ci, Sign::Neg);
+    };
     for (int round = 0; round < kMaxRounds; ++round) {
         bool changed = false;
         // (A) Infeasibility: over-approx range of each constraint must admit the relation.
@@ -2104,7 +2410,7 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                     continue;   // Neq: no contraction
                 }
                 Iv nv = ivIntersect(ivCur, tight);
-                if (nv.empty()) return true;       // no feasible v ⇒ infeasible
+                if (nv.empty()) { setConf(ci); return true; }   // no feasible v ⇒ infeasible
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
                     (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
                     ivCur = nv;
@@ -2147,12 +2453,12 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                 }
                 if (!haveUpper || u2.hiInf) continue;                    // no finite (v+s)² upper bound
                 const mpq_class U = u2.hi;
-                if (U < 0) return true;                                  // (v+s)² ≤ U<0 ⇒ infeasible
+                if (U < 0) { setConf(ci); return true; }                 // (v+s)² ≤ U<0 ⇒ infeasible
                 const mpq_class r = ratSqrtUpper(U);
                 // v+s ∈ [−r,r] ⇒ v ∈ [−r−s.hi, r−s.lo] (sound outer bound over s's interval).
                 Iv tight; tight.loInf = false; tight.lo = -r - s.hi; tight.hiInf = false; tight.hi = r - s.lo;
                 Iv nv = ivIntersect(ivCur, tight);
-                if (nv.empty()) return true;
+                if (nv.empty()) { setConf(ci); return true; }
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
                     (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
                     ivCur = nv;
@@ -2173,6 +2479,33 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
     ++g_icpCalls;
     std::unordered_map<VarId, Iv> box;
     bool inf = propagateBox(satRp_, satSafe_, m, input, box);
+    if (inf) ++g_icpPrunes;
+    return inf;
+}
+
+// Like subtreeBoxInfeasible but carries the FULL prefix assignment: rational coords
+// as exact points and ALGEBRAIC coords as their isolating interval [lower, upper].
+// The algebraic interval is a sound tight box (the true value lies inside), strictly
+// better than dropping the coord to (−∞,∞) — so the over-approximation box is tighter
+// and the empty-box prune fires on more subtrees, while never over-pruning a real
+// model. Used by the default algebraic SAT-first descent (trySatSampleFirstAlg).
+bool CdcacCore::subtreeBoxInfeasiblePrefix(const SamplePoint& prefix,
+                                           const CdcacInput& input) {
+    std::unordered_map<VarId, mpq_class> m;
+    std::unordered_map<VarId, Iv> seedBox;
+    for (size_t i = 0; i < prefix.varOrder.size(); ++i) {
+        const RealAlg& pv = prefix.values[i];
+        if (pv.isRational()) m.emplace(prefix.varOrder[i], pv.rational);
+        else if (pv.isAlgebraic()) {
+            Iv iv; iv.lo = pv.root.lower; iv.hi = pv.root.upper;
+            seedBox.emplace(prefix.varOrder[i], iv);
+        }
+    }
+    if (m.empty() && seedBox.empty()) return false;
+    ++g_icpCalls;
+    std::unordered_map<VarId, Iv> box;
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, nullptr,
+                            seedBox.empty() ? nullptr : &seedBox);
     if (inf) ++g_icpPrunes;
     return inf;
 }
@@ -2202,11 +2535,18 @@ bool CdcacCore::topLevelBoxInfeasible(const CdcacInput& input) {
 
 std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     const SamplePoint& prefix, const CdcacInput& input) {
-    // Caller guarantees an all-rational prefix. Build the point map.
+    // Build the assignment box: rational coords as exact points, ALGEBRAIC coords as
+    // their isolating interval [lower,upper] (a sound tight box — the true value lies
+    // inside). Previously this bailed on any algebraic coordinate, so deep tower levels
+    // (algebraic prefixes) got NO box-consistency prune; carrying the algebraic interval
+    // lets the partial-prune fire there too, only ever over-approximating (box ⊇
+    // feasible) so it never over-prunes a real model.
     std::unordered_map<VarId, mpq_class> m;
+    std::unordered_map<VarId, Iv> seedBox;
     for (size_t i = 0; i < prefix.values.size(); ++i) {
-        if (!prefix.values[i].isRational()) return std::nullopt;   // defensive
-        m[prefix.varOrder[i]] = prefix.values[i].rational;
+        const RealAlg& pv = prefix.values[i];
+        if (pv.isRational()) m[prefix.varOrder[i]] = pv.rational;
+        else { Iv iv; iv.lo = pv.root.lower; iv.hi = pv.root.upper; seedBox[prefix.varOrder[i]] = iv; }
     }
     // Run the full box-consistency fixpoint: it CONTRACTS the unassigned vars'
     // intervals (degree-1 HC4), under which far more constraints become strictly
@@ -2217,7 +2557,8 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     // (sound — just no prune). Sound throughout (box ⊇ feasible projection).
     std::unordered_map<VarId, Iv> box;
     std::optional<std::pair<size_t, Sign>> aConf;
-    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf);
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf,
+                            seedBox.empty() ? nullptr : &seedBox);
     if (!inf || !aConf) return std::nullopt;
     // Confirm the surfaced sign genuinely violates the relation.
     if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
@@ -2361,10 +2702,17 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
         bool pruned = false;
         for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
             if (ci >= satRp_.size() || !satRp_[ci]) continue;
-            bool allAssigned = true;
-            for (VarId v : satRp_[ci]->variables())
+            bool allAssigned = true, hasVar = false;
+            for (VarId v : satRp_[ci]->variables()) {
+                if (v == var) hasVar = true;
                 if (!assigned.count(v)) { allAssigned = false; break; }
-            if (!allAssigned) continue;
+            }
+            // Only constraints NEWLY fully-determined at THIS level (contain `var`).
+            // Constraints full at a shallower level were already checked when their
+            // last var was fixed and are independent of `var` — re-checking is pure
+            // redundant work, and the k==n leaf re-validates every constraint, so no
+            // soundness is lost. Mirrors solveLevel's hasVar-gated forward-prune.
+            if (!hasVar || !allAssigned) continue;
             if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel)) { pruned = true; break; }
         }
         // (Learned dead cells are checked once per prefix at the TOP of the level,

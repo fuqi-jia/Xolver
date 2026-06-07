@@ -1,5 +1,6 @@
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"   // wall::scaledCount — anytime per-round var budget
 #include "theory/arith/poly/PolynomialKernel.h"
 #include <algorithm>
 #include <chrono>
@@ -297,7 +298,8 @@ NraLocalSearch::exactRestoreEqualities(
 std::vector<std::pair<VarId, mpq_class>>
 NraLocalSearch::bracketMidpointCandidates(
         const std::vector<Constraint>& cs,
-        const std::vector<VarId>& vars) const {
+        const std::vector<VarId>& vars,
+        std::unordered_map<VarId, int>* boundDir) const {
     // For each var, collect lower bounds (root with > / ≥ orientation) and
     // upper bounds (with < / ≤ orientation) coming from LINEAR atoms in
     // that var. For each (lower, upper) pair, push the midpoint AND a
@@ -363,6 +365,27 @@ NraLocalSearch::bracketMidpointCandidates(
                 out.emplace_back(v, lo + (hi - lo) / 4);
                 out.emplace_back(v, hi - (hi - lo) / 4);
             }
+        }
+        // SINGLE-SIDED bound: a var with only lower bounds (or only uppers) gets no
+        // bracket pair above, so it keeps the all-zeros init — which VIOLATES a positive
+        // lower bound (h>0 starts at 0). Seed it to a z3-simplest FEASIBLE value so the
+        // search starts inside the bound: the integer closest to 0 that is > max(lowers)
+        // (or < min(uppers)). Bound-feasible starts help WalkSAT on systems like the
+        // Sturm-MBO / matrix families where every variable carries a one-sided bound.
+        if (!lowers.empty() && uppers.empty()) {
+            const mpq_class lo = *std::max_element(lowers.begin(), lowers.end());
+            mpq_class seed;
+            if (sgn(lo) < 0) seed = mpq_class(0);                  // 0 > lo, simplest
+            else { mpz_class f; mpz_fdiv_q(f.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t()); seed = mpq_class(f + 1); }
+            out.emplace_back(v, seed);
+            if (boundDir) (*boundDir)[v] = +1;                     // can increase, stays > lo
+        } else if (lowers.empty() && !uppers.empty()) {
+            const mpq_class hi = *std::min_element(uppers.begin(), uppers.end());
+            mpq_class seed;
+            if (sgn(hi) > 0) seed = mpq_class(0);                  // 0 < hi, simplest
+            else { mpz_class c; mpz_cdiv_q(c.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t()); seed = mpq_class(c - 1); }
+            out.emplace_back(v, seed);
+            if (boundDir) (*boundDir)[v] = -1;                     // can decrease, stays < hi
         }
     }
     return out;
@@ -519,6 +542,13 @@ NraLocalSearch::univariateBoundaryCandidates(
         // Continued-fraction-bounded approximation with denominator ≤ 1e6.
         // GMP's mpq_class(double) constructor uses the exact double
         // representation which can blow up the denominator; cap via reduce.
+        // CRASH GUARD: mpq_class(x) for a non-finite x routes through __gmpq_set_d,
+        // which raises SIGFPE (a SIGNAL, not a C++ exception — the try/catch below
+        // does NOT catch it → process abort). Extreme bilinear coefficients can make
+        // disc.get_d() overflow to +inf (⇒ sqDisc=inf ⇒ t±=inf) or a tiny |a2| blow
+        // t± up to ±inf; reject any non-finite candidate up front. (Found via the
+        // larger LS budget reaching such states on zankl/matrix-1-all-15.)
+        if (!std::isfinite(x)) return mpq_class{0};
         mpq_class q;
         try { q = mpq_class(x); } catch (...) { return mpq_class{0}; }
         q.canonicalize();
@@ -576,8 +606,16 @@ NraLocalSearch::walkOneRound(const std::vector<Constraint>& cs,
     // budget on low-impact variables. Score vars by their occurrence in
     // CURRENTLY-FALSE constraints (heaviest correction candidate) and
     // only walk the top kTopVars; the others stay fixed this round.
-    static const size_t kTopVars = static_cast<size_t>(
+    static const size_t kTopVarsBase = static_cast<size_t>(
         env::paramLong("XOLVER_NRA_LS_TOP_VARS", 8));
+    // ANYTIME-scale the per-round variable budget: at the competition wall-clock the walk
+    // can afford to coordinate MANY MORE variables per round, which is exactly what cracks
+    // the deepest coupled residual (matrix-17/10: TO at 8 vars/round, SAT at ~24 — a 22-dim
+    // bilinear witness needs all coordinates moving together, not 8 at a time). INERT at
+    // the WSL default (wall::scaledCount returns the base 8 unless XOLVER_WALLCLOCK_SCALE +
+    // _MS are set) → regression path byte-identical; this only widens the competition walk.
+    const size_t kTopVars = static_cast<size_t>(
+        wall::scaledCount(static_cast<long>(kTopVarsBase), 60000, 32));
     std::vector<VarId> walkVars;
     if (vars.size() <= kTopVars) {
         walkVars = vars;
@@ -731,7 +769,8 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     // bounds on the same var, e.g. meti-tarski's pi) and try each as a seed.
     // These are special: denom cap bypassed, fixed-count probe BEFORE the
     // walking loop. If any individual probe satisfies all atoms, return it.
-    auto bracketMids = bracketMidpointCandidates(constraints, vars);
+    std::unordered_map<VarId, int> boundDir;   // +1 lower-only, -1 upper-only (for restart diversity)
+    auto bracketMids = bracketMidpointCandidates(constraints, vars, &boundDir);
     for (const auto& [v, q] : bracketMids) {
         const mpq_class saved = asg.count(v) ? asg[v] : mpq_class{0};
         asg[v] = q;
@@ -752,8 +791,94 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     score = totalScore(constraints, weights, asg);
     if (score.isSat()) return asg;
 
+    int restartCount = 0;   // drives multi-start restart-magnitude diversity (below)
+    // TABU for the cell-jump escape: after escaping on a variable, forbid escaping it
+    // again for a few escapes so successive escapes diversify across variables. Breaks
+    // the fix-cc/break-cc' 2-variable oscillation that traps the walk on coupled
+    // bilinear systems (the algorithm-limited matrix residual). Anti-cycling, sound
+    // (only steers escape var choice, never a verdict).
+    std::unordered_map<VarId, int> escapeTabuVar;
+    int escapeCount = 0;
+    static const int kTabuTenure = 5;
+    // MULTI-START (global-then-local): the seed-greedy gets the FIRST half of the budget
+    // (its clean early shot preserves the seed-start wins, e.g. kTopVars matrix-17); if it
+    // hasn't found a model by the half-way mark we anneal ONCE from the clean seed (SA-first
+    // global exploration) and let the greedy refine from that basin for the second half —
+    // this opens the deeply-coupled basins seed-greedy cannot reach (matrix-20/23/25). The
+    // two phases are budget-disjoint, so neither preempts the other (an unconditional
+    // SA-first prefix instead REGRESSED matrix-17 by stealing its clean start). Competition-
+    // only: kSAFirst=0 when the wall-clock scaling is inert (WSL/regression) → that path is
+    // byte-identical. Sound: candidates are exact-validated (invariant 1); SA only steers.
+    const std::unordered_map<VarId, mpq_class> seedSnapshot = asg;
+    const long kSAFirstScaled = wall::scaledCount(1000, 15000, 256);
+    const long kSAFirst = (kSAFirstScaled > 1000) ? kSAFirstScaled : 0;
+    bool saFirstDone = false;
     for (int round = 0; round < maxRounds_; ++round) {
         if (budgetExpired()) break;
+        if (kSAFirst > 0 && !saFirstDone && budgetMs_ > 0) {
+            const long el = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            if (el >= budgetMs_ / 2 && !score.isSat()) {
+                saFirstDone = true;
+                asg = seedSnapshot;                          // anneal from the clean seed
+                // INCREMENTAL smooth loss: track per-constraint violations + which constraints
+                // each var occurs in. A one-variable anneal move only re-evaluates the
+                // constraints CONTAINING that var (O(occurrences), not O(all constraints)),
+                // buying far more anneal steps per budget on sparse systems → more exploration,
+                // no extra budget. (atomViolation is cached, but the full loss still pays a
+                // ViolationKey build per constraint each step; this skips the untouched ones.)
+                std::unordered_map<VarId, std::vector<size_t>> varCons;
+                for (size_t ci = 0; ci < constraints.size(); ++ci)
+                    for (VarId v : atomVars(constraints[ci].poly)) varCons[v].push_back(ci);
+                std::vector<double> cv(constraints.size());
+                double curLoss = 0.0;
+                for (size_t ci = 0; ci < constraints.size(); ++ci) {
+                    cv[ci] = atomViolation(constraints[ci], asg).get_d();
+                    curLoss += cv[ci];
+                }
+                double T = (curLoss > 1e-6) ? curLoss : 1.0;
+                const double cool = std::pow(1e-3, 1.0 / static_cast<double>(kSAFirst));
+                std::vector<double> newv;   // scratch reused across steps (avoid per-step alloc)
+                for (long step = 0; step < kSAFirst && !budgetExpired(); ++step) {
+                    const VarId rv = vars[nextRand() % vars.size()];
+                    const mpq_class saved = asg.count(rv) ? asg[rv] : mpq_class{0};
+                    mpq_class q;
+                    switch (nextRand() % 5) {
+                        case 0:  q = saved + 1; break;
+                        case 1:  q = saved - 1; break;
+                        case 2:  q = saved + mpq_class{1, 2}; break;
+                        case 3:  q = saved - mpq_class{1, 2}; break;
+                        default: q = (saved != 0) ? saved * 2 : mpq_class{1}; break;
+                    }
+                    if (mpz_class(q.get_den()) > 1000000) { continue; }
+                    asg[rv] = q;
+                    const auto vcIt = varCons.find(rv);
+                    double dE = 0.0;
+                    newv.clear();
+                    if (vcIt != varCons.end()) {
+                        for (size_t ci : vcIt->second) {
+                            const double nvc = atomViolation(constraints[ci], asg).get_d();
+                            newv.push_back(nvc);
+                            dE += nvc - cv[ci];
+                        }
+                    }
+                    const double u = static_cast<double>(nextRand() >> 11) * (1.0 / 9007199254740992.0);
+                    if (dE <= 0.0 || u < std::exp(-dE / T)) {
+                        if (vcIt != varCons.end()) {
+                            size_t k = 0;
+                            for (size_t ci : vcIt->second) cv[ci] = newv[k++];
+                        }
+                        curLoss += dE;                       // accept
+                    } else {
+                        asg[rv] = saved;                     // reject — cv unchanged
+                    }
+                    T *= cool;
+                }
+                score = totalScore(constraints, weights, asg);
+                if (score.isSat()) return asg;
+                restartCount = 0; escapeTabuVar.clear(); escapeCount = 0;   // fresh refine phase
+            }
+        }
         const bool improved = walkOneRound(constraints, weights, vars, asg, score);
         if (score.isSat()) {
             if (eqRelax_) {
@@ -766,8 +891,8 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
         }
         if (!improved) {
             // Local minimum: PAWS-style bump on every still-violated atom +
-            // restart from zero. (Master-spec lex score makes "violated" mean
-            // "non-zero atomViolation", not "below some magnitude threshold".)
+            // restart. (Master-spec lex score makes "violated" mean "non-zero
+            // atomViolation", not "below some magnitude threshold".)
             bool anyViolated = false;
             for (size_t i = 0; i < constraints.size(); ++i) {
                 if (atomViolation(constraints[i], asg) > 0) {
@@ -776,7 +901,131 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 }
             }
             if (!anyViolated) return asg;
-            for (auto& kv : asg) kv.second = 0;
+            // SA-PHASE escape (SMT-as-optimization). With probability kSAPct, run a burst of
+            // simulated-annealing random-neighbour steps from the CURRENT point, accepting
+            // worsening moves by the Metropolis rule on the SMOOTH loss E = Σ atomViolation.
+            // The smooth (continuous) loss is the key: the walk's lexicographic score is
+            // count-first, a step-like landscape on which annealing is meaningless; on the
+            // summed-violation loss small worsening steps have small ΔE and cross the rugged
+            // barriers that trap the greedy walk + cell-jump on the deepest coupled residual.
+            // Separate escape branch (does NOT preempt the cell-jump below — a prior attempt
+            // that SA-accepted inside walkOneRound stole the cell-jump's turn and regressed).
+            // Sound: candidates are exact-validated (invariant 1); SA only steers the search.
+            static const long kSAPct = env::paramLong("XOLVER_NRA_LS_SA_PCT", 33);
+            if (kSAPct > 0 && (nextRand() % 100) < kSAPct) {
+                auto loss = [&](const std::unordered_map<VarId, mpq_class>& a) -> double {
+                    double s = 0.0;
+                    for (const auto& c : constraints) s += atomViolation(c, a).get_d();
+                    return s;
+                };
+                double curLoss = loss(asg);
+                double T = (curLoss > 1e-6) ? curLoss : 1.0;   // start near the energy scale
+                for (int step = 0; step < 60 && !budgetExpired(); ++step) {
+                    const VarId rv = vars[nextRand() % vars.size()];
+                    const mpq_class saved = asg.count(rv) ? asg[rv] : mpq_class{0};
+                    mpq_class q;                                 // random neighbour
+                    switch (nextRand() % 5) {
+                        case 0:  q = saved + 1; break;
+                        case 1:  q = saved - 1; break;
+                        case 2:  q = saved + mpq_class{1, 2}; break;
+                        case 3:  q = saved - mpq_class{1, 2}; break;
+                        default: q = (saved != 0) ? saved * 2 : mpq_class{1}; break;
+                    }
+                    if (mpz_class(q.get_den()) > 1000000) { continue; }
+                    asg[rv] = q;
+                    const double nl = loss(asg);
+                    const double dE = nl - curLoss;
+                    const double u = static_cast<double>(nextRand() >> 11) * (1.0 / 9007199254740992.0);
+                    if (dE <= 0.0 || u < std::exp(-dE / T)) {
+                        curLoss = nl;                            // Metropolis accept
+                    } else {
+                        asg[rv] = saved;                         // reject — revert
+                    }
+                    T *= 0.92;                                   // geometric cooling
+                }
+                score = totalScore(constraints, weights, asg);
+                if (score.isSat()) return asg;                   // SA landed a model (caller validates)
+                continue;                                        // keep walking from the SA-explored point
+            }
+            // CELL-JUMP escape (LS-NRA critical move): at a local minimum, with
+            // probability kNoisePct, FORCE-satisfy a random VIOLATED constraint by jumping
+            // one of its variables onto a value inside that constraint's feasible cell
+            // (computed from its roots via univariateBoundaryCandidates) — ACCEPTING the
+            // move even when the total score worsens. Greedy single-var move-selection
+            // rejects such a jump (fixing one bilinear constraint breaks coupled others),
+            // which is exactly the local minimum; forcing the jump crosses the barrier and
+            // keeps walking. Sound: still only an internal sample, exact-validated at the
+            // SAT check; the jump only changes where the search goes, never a verdict.
+            static const long kNoisePct = env::paramLong("XOLVER_NRA_LS_NOISE_PCT", 35);
+            if (kNoisePct > 0 && (nextRand() % 100) < kNoisePct) {
+                std::vector<size_t> viol;
+                for (size_t i = 0; i < constraints.size(); ++i)
+                    if (atomViolation(constraints[i], asg) > 0) viol.push_back(i);
+                if (!viol.empty()) {
+                    ++escapeCount;
+                    // Pick a violated constraint and a NON-TABU variable of it (try a few
+                    // constraints so a recently-escaped var doesn't get re-picked). Falls
+                    // back to a random var only if every candidate is tabu.
+                    const Constraint* ccp = nullptr; VarId jv = NullVar;
+                    for (int attempt = 0; attempt < 6 && jv == NullVar; ++attempt) {
+                        const Constraint& c = constraints[viol[nextRand() % viol.size()]];
+                        const std::vector<VarId>& cv = atomVars(c.poly);
+                        if (cv.empty()) continue;
+                        for (size_t t = 0; t < cv.size(); ++t) {
+                            const VarId cand = cv[nextRand() % cv.size()];
+                            auto it = escapeTabuVar.find(cand);
+                            if (it == escapeTabuVar.end() || it->second <= escapeCount) { jv = cand; ccp = &c; break; }
+                        }
+                    }
+                    if (jv == NullVar) {   // all tabu — take any var of a random violated cc
+                        const Constraint& c = constraints[viol[nextRand() % viol.size()]];
+                        const std::vector<VarId>& cv = atomVars(c.poly);
+                        if (!cv.empty()) { jv = cv[nextRand() % cv.size()]; ccp = &c; }
+                    }
+                    if (ccp != nullptr) {
+                        const Constraint& cc = *ccp;
+                        const mpq_class saved = asg.count(jv) ? asg[jv] : mpq_class{0};
+                        // Among the cell-jump targets that land feasible for cc, take the one
+                        // with the LOWEST total score (least collateral damage to the coupled
+                        // constraints) rather than the first — LS-NRA scores its critical move,
+                        // so the barrier is crossed in the best feasible direction.
+                        mpq_class bestJump; bool jumped = false; Score bestJS;
+                        for (const auto& q : univariateBoundaryCandidates(cc, jv, asg)) {
+                            if (mpz_class(q.get_den()) > 1000000) continue;
+                            asg[jv] = q;
+                            if (atomViolation(cc, asg) != 0) continue;   // must satisfy cc
+                            const Score js = totalScore(constraints, weights, asg);
+                            if (!jumped || js < bestJS) { bestJS = js; bestJump = q; jumped = true; }
+                        }
+                        asg[jv] = jumped ? bestJump : saved;
+                        if (jumped) {
+                            escapeTabuVar[jv] = escapeCount + kTabuTenure;   // don't re-escape jv for a few escapes
+                            score = totalScore(constraints, weights, asg);
+                            continue;   // keep walking
+                        }
+                        // no feasible cell for cc → fall through to restart
+                    }
+                }
+            }
+            // Restart from a BOUND-FEASIBLE point (not all-zeros: a bounded var reset to
+            // 0 re-enters bound-violation, h>0 ⇒ 0 infeasible, wasting the escape re-
+            // walking out of the infeasible box). Base = the simplest feasible seed
+            // (seenFirst); MULTI-START diversity: cycle the magnitude of single-sided-
+            // bounded vars across restarts (extra ∈ {0,1,2,4}) IN THE FEASIBLE DIRECTION
+            // (lower-only ⇒ larger, upper-only ⇒ smaller). A larger-magnitude restart
+            // then lets the walk reach mixed-magnitude witnesses (e.g. a coordinate that
+            // must be 5 while others stay small) instead of only the all-simplest point.
+            // Stays feasible by construction (offsetting a one-sided bound away from it).
+            ++restartCount;
+            const mpq_class extra(restartCount % 4 == 3 ? 4 : restartCount % 4);  // 0,1,2,4
+            for (auto& kv : asg) {
+                auto sit = seenFirst.find(kv.first);
+                mpq_class base = (sit != seenFirst.end()) ? sit->second : mpq_class{0};
+                auto dit = boundDir.find(kv.first);
+                if (dit != boundDir.end() && sgn(extra) != 0)
+                    base += (dit->second > 0 ? extra : -extra);   // feasible-direction offset
+                kv.second = base;
+            }
             score = totalScore(constraints, weights, asg);
         }
     }

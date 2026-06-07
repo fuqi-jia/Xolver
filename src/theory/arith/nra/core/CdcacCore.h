@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <chrono>
+#include <unordered_map>
 
 namespace xolver {
 
@@ -40,6 +41,16 @@ public:
      */
     void setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy);
 
+    // Feature A (conflict generalization), step A2: the subset of `levelPolys` whose
+    // provenance (from `origins`) is ENTIRELY within `reasonConstraints` — i.e. the
+    // boundary polys derived only from the conflict's reason constraints. A poly with
+    // no/empty origin entry is EXCLUDED (unknown provenance ⇒ conservatively keep its
+    // roots ⇒ A3 widens less). Pure + public for direct unit testing.
+    static std::vector<PolyId> reasonProjectionSubset(
+        const std::unordered_map<PolyId, std::vector<int>>& origins,
+        const std::vector<PolyId>& levelPolys,
+        const std::vector<int>& reasonConstraints);
+
 private:
     CdcacResult solveUnivariate(const CdcacInput& input);
     CdcacResult solveLevel(int k, SamplePoint& prefix, const CdcacInput& input);
@@ -59,6 +70,30 @@ private:
     // Rebuilt when the constraint count changes; cleared in resetPerSolveState.
     std::vector<std::vector<VarId>> constraintVarsCache_;
     const std::vector<VarId>& constraintVars(size_t ci, const CdcacInput& input);
+
+    // Forward-prune index: constraintsByLevel_[k] = the constraints whose DEEPEST
+    // variable (by input.varOrder position) is at level k — i.e. exactly the
+    // constraints that become fully determined when level k's var is assigned. The
+    // forward-prune iterates only these per cell instead of re-scanning every
+    // constraint (and rebuilding an `assigned` set) on each testAndRecurse. Built
+    // lazily per solve; cleared in resetPerSolveState alongside constraintVarsCache_.
+    std::vector<std::vector<size_t>> constraintsByLevel_;
+    const std::vector<size_t>& constraintsAtLevel(size_t k, const CdcacInput& input);
+
+    // Feature A (conflict generalization), step A1: provenance of each level boundary
+    // poly — the set of INPUT-constraint indices it transitively descends from
+    // (translated from the projection closure's per-entry input-origin sets). Used by
+    // A2/A3 to widen a conflict cell only to the roots of the polys derived from the
+    // conflict's REASON constraints. Built in buildClosure (Collins path), cleared in
+    // resetPerSolveState. Empty for a poly with unknown provenance (e.g. the Lazard
+    // path) → A3 falls back to the shallow (un-widened) cell, which is always sound.
+    std::unordered_map<PolyId, std::vector<int>> polyOrigins_;
+
+    // Feature A (A2): map a conflict's reason literals to input constraint indices
+    // (matches each SatLit to the constraint that carries it). Used to feed
+    // reasonProjectionSubset with the conflict's reason constraints.
+    std::vector<int> reasonConstraintIndices(const std::vector<SatLit>& reasons,
+                                             const CdcacInput& input) const;
 
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells
@@ -225,6 +260,10 @@ private:
     // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
     bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
                               const CdcacInput& input);
+    // As above but carries the full prefix: rational coords as points, algebraic
+    // coords as their isolating interval (a sound tight box). Used by the default
+    // algebraic SAT-first descent to prune infeasible subtrees early.
+    bool subtreeBoxInfeasiblePrefix(const SamplePoint& prefix, const CdcacInput& input);
     // Interval forward-prune: a constraint whose natural-interval-extension range
     // over (rational prefix + unassigned = R) is strictly single-signed and that
     // sign violates its relation is violated by EVERY completion -> the subtree is

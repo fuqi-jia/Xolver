@@ -6,7 +6,8 @@
 namespace xolver {
 
 TowerNormResult towerNorm(const RationalPolynomial& F, VarId mainVar,
-                          const TowerContext& ctx, int maxMatrixDim) {
+                          const TowerContext& ctx, int maxMatrixDim,
+                          PolynomialKernel* kernel) {
     TowerNormResult out;
     RationalPolynomial N = F;
     N.normalize();
@@ -15,7 +16,12 @@ TowerNormResult towerNorm(const RationalPolynomial& F, VarId mainVar,
     for (int i = static_cast<int>(ctx.extensionVars.size()) - 1; i >= 0; --i) {
         VarId Ai = ctx.extensionVars[i];
         if (!N.contains(Ai)) continue;            // F independent of this generator
-        auto chain = principalSubresultantCoefficients(ctx.minimalPolys[i], N, Ai, maxMatrixDim);
+        // With a kernel, force the libpoly PSC (no matrix-dim bound): the determinant
+        // blows up on the high-degree nested resultants of ≥2-generator towers (the
+        // Geogebra deep-tower TO). forcePsc = (kernel != nullptr); null => determinant.
+        auto chain = principalSubresultantCoefficients(ctx.minimalPolys[i], N, Ai,
+                                                       maxMatrixDim, kernel,
+                                                       /*forcePsc=*/kernel != nullptr);
         if (chain.budgetExceeded) { out.ok = false; return out; }
         if (chain.psc.empty()) { out.ok = false; return out; }   // degenerate (deg < 1)
         N = chain.psc[0];                          // psc_0 == Res_{A_i}(m_i, N) up to sign

@@ -9,6 +9,7 @@
 #include "theory/arith/poly/RationalPolynomial.h"
 #include "util/EnvParam.h"   // XOLVER_NRA_LIBPOLY_MAX_COEFF_BITS firewall
 #include <algorithm>
+#include <chrono>
 #include <functional>
 
 #include <iostream>
@@ -1889,9 +1890,21 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     RootSet empty;
     // File-based (worker-thread stderr suppressed): XOLVER_NRA_TOWER_DIAG = path.
     static const char* kTwrFile = std::getenv("XOLVER_NRA_TOWER_DIAG");
+    // Cumulative per-thread timing of the deep-tower sub-ops (profiling: which phase
+    // dominates the ≥2-generator TO). Written into the tower-diag file alongside each tag.
+    static thread_local double tNormMs = 0, tIsoMs = 0, tMembMs = 0, tValMs = 0;
+    static thread_local long tMembCalls = 0;
+    auto nowMs = []() {
+        return std::chrono::duration<double, std::milli>(
+                   std::chrono::steady_clock::now().time_since_epoch()).count();
+    };
     auto twrLog = [&](const char* tag) {
         if (!kTwrFile || !*kTwrFile) return;
-        if (std::FILE* fp = std::fopen(kTwrFile, "a")) { std::fprintf(fp, "[VIATOWER] %s\n", tag); std::fclose(fp); }
+        if (std::FILE* fp = std::fopen(kTwrFile, "a")) {
+            std::fprintf(fp, "[VIATOWER] %s | cum norm=%.0f iso=%.0f memb=%.0f(%ld) val=%.0f ms\n",
+                         tag, tNormMs, tIsoMs, tMembMs, tMembCalls, tValMs);
+            std::fclose(fp);
+        }
     };
     twrLog("entry");
     auto TD = [&](const char* why) -> RootSet { twrLog(why); return empty; };
@@ -1958,7 +1971,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
                                                 bool& ok) -> RootSet {
         ok = false;
         RootSet none;
-        auto nrF = towerNorm(F, mainVar, ctx);
+        auto nrF = towerNorm(F, mainVar, ctx, 12, kernel_);   // libpoly PSC for deep towers
         if (!nrF.ok) return none;                          // degenerate Norm => Unknown
         if (nrF.norm.isConstant()) { ok = true; return none; }  // no candidate roots
         UniPolyId Nu = specializeToUnivariate(nrF.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
@@ -1983,7 +1996,9 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
     // 2. Norm over Q eliminates the generators; isolate its roots via the SAFE
     //    rational univariate path (never libpoly's crash-prone algebraic path).
     static const bool kDiag = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
-    auto nr = towerNorm(p1, mainVar, ctx);
+    double tN0 = nowMs();
+    auto nr = towerNorm(p1, mainVar, ctx, 12, kernel_);   // libpoly PSC for deep towers
+    tNormMs += nowMs() - tN0;
     if (!nr.ok) {
         if (kDiag) std::cerr << "[LAZVAL] towerNorm(p1) not ok => Unknown" << std::endl;
         return TD("towerNorm-not-ok");
@@ -1997,7 +2012,9 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         // real roots with the SAME tower-aware machinery. Sound: any incomplete
         // / unsupported / inconclusive step => supported stays false => Unknown.
         if (kDiag) std::cerr << "[LAZVAL] Norm(p1) constant => valuation recovery" << std::endl;
+        double tV0 = nowMs();
         LazardValuationResult val = lazardEvaluateToUnivariate(p1, mainVar, ctx);
+        tValMs += nowMs() - tV0;
         if (val.status == ValuationStatus::AllDerivativesZero) {
             // [H3] lists ValuationAllDerivativesZero as an INCOMPLETE reason. While
             // it usually means p1 is identically zero in the tower (no boundary),
@@ -2038,9 +2055,11 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         return recovered;
     }
 
+    double tI0 = nowMs();
     UniPolyId Nuni = specializeToUnivariate(nr.norm.toPolyId(*kernel_), SamplePoint{}, mainVar);
-    if (Nuni == NullUniPolyId) return empty;
+    if (Nuni == NullUniPolyId) { tIsoMs += nowMs() - tI0; return empty; }
     RootSet candidates = isolateRealRoots(Nuni);
+    tIsoMs += nowMs() - tI0;
     if (candidates.crashOccurred) return TD("isolate-firewall");   // ⇒ Unknown
 
     // 3. The Norm's real roots are a SOUND SUPERSET of p1's real boundaries at our
@@ -2063,7 +2082,9 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
         mpq_class lo, hi;
         if (beta.isRational()) { lo = hi = beta.rational; }
         else { lo = beta.root.lower; hi = beta.root.upper; }
+        double tM0 = nowMs();
         RootMembership m = lazardRootMembership(p1, mainVar, nr.norm, lo, hi, ctx);
+        tMembMs += nowMs() - tM0; ++tMembCalls;
         if (m == RootMembership::Keep || m == RootMembership::Unknown) {
             out.roots.push_back(beta);   // real boundary, or conservative over-refinement
         }
