@@ -2369,6 +2369,63 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
                + " feasibleTotal=" + std::to_string(table.feasibleTotal)
                + " rows=" + std::to_string(table.rows.size()));
+    // Outer-assertion structure dump (XOLVER_NIA_FARKAS_OUTER_DIAG).
+    // For each outer assertion, prints kind + variable name + whether it
+    // structurally looks like `(= var const)` (a hard equality forcing the
+    // var). Used to design row-refute-by-outer-eq sound UNSAT path.
+    if (std::getenv("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
+        // Helper: recursively check if `e` is a `(= var const)` form (either
+        // child a Variable, the other an evaluable integer constant) and
+        // return (varName, constValue) if so.
+        std::function<bool(ExprId, std::string&, mpz_class&)> matchEqVarConst;
+        matchEqVarConst = [&](ExprId eid, std::string& outVar, mpz_class& outVal) -> bool {
+            const auto& e = coreIr_->get(eid);
+            if (e.kind == Kind::Eq && e.children.size() == 2) {
+                for (int side = 0; side < 2; ++side) {
+                    const auto& v = coreIr_->get(e.children[side]);
+                    const auto& c = coreIr_->get(e.children[1 - side]);
+                    if (v.kind == Kind::Variable) {
+                        auto* nm = std::get_if<std::string>(&v.payload.value);
+                        if (!nm) continue;
+                        if (c.kind == Kind::ConstInt) {
+                            if (auto* iv = std::get_if<int64_t>(&c.payload.value)) {
+                                outVar = *nm; outVal = *iv; return true;
+                            }
+                            if (auto* sv = std::get_if<std::string>(&c.payload.value)) {
+                                try { outVal = mpz_class(*sv); outVar = *nm; return true; } catch (...) {}
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+        std::fprintf(stderr, "[FARKAS_OUTER_DIAG] outer count=%zu\n",
+                     profile.outerAssertions.size());
+        for (std::size_t i = 0; i < profile.outerAssertions.size(); ++i) {
+            ExprId aid = profile.outerAssertions[i];
+            const auto& e = coreIr_->get(aid);
+            std::fprintf(stderr, "  outer[%zu] id=%u kind=%d", i, aid, static_cast<int>(e.kind));
+            // If it's an And, scan its conjuncts for (= var const) patterns.
+            if (e.kind == Kind::And) {
+                std::fprintf(stderr, " conjuncts=%zu", e.children.size());
+                for (ExprId c : e.children) {
+                    std::string vn; mpz_class vv;
+                    if (matchEqVarConst(c, vn, vv)) {
+                        std::fprintf(stderr, " FORCES[%s=%s]",
+                                     vn.c_str(), vv.get_str().c_str());
+                    }
+                }
+            } else {
+                std::string vn; mpz_class vv;
+                if (matchEqVarConst(aid, vn, vv)) {
+                    std::fprintf(stderr, " FORCES[%s=%s]",
+                                 vn.c_str(), vv.get_str().c_str());
+                }
+            }
+            std::fprintf(stderr, "\n");
+        }
+    }
     if (trace) {
         for (std::size_t i = 0; i < profile.blocks.size(); ++i) {
             const auto& blk = profile.blocks[i];
