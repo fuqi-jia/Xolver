@@ -23,6 +23,7 @@
 #include "proof/ArithModelValidator.h"
 #include "util/EnvParam.h"
 #include <functional>
+#include <set>
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
@@ -2936,6 +2937,18 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
     if (profile.boundedGlobals.empty() || profile.blocks.empty())
         return std::nullopt;
 
+    // Once-per-solve cache: the refutation verdict depends only on the formula
+    // (coreIr_), not the trail, so a not-refutable outcome is memoized to avoid
+    // re-running the expensive per-leaf CdcacCore enumeration on every Full-effort
+    // cb_propagate. (An UNSAT outcome ends the solve, so it is never reached
+    // again — no need to cache it.)
+    static thread_local const CoreIr* refuteNotRefutableIr = nullptr;
+    if (refuteNotRefutableIr == coreIr_) return std::nullopt;
+    auto giveUp = [&]() -> std::optional<TheoryCheckResult> {
+        refuteNotRefutableIr = coreIr_;
+        return std::nullopt;
+    };
+
     static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
@@ -3082,18 +3095,19 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         std::unordered_map<VarId, mpz_class> Bvals;
         for (std::size_t i = 0; i < bvars.size(); ++i) Bvals[bvars[i].vid] = bcur[i];
 
-        // Mandatory outer constraints for this B (shared across branch combos).
+        // Mandatory residual (proxy-resolved) constraints for this B, shared
+        // across branch combos. Use profile.residualConstraints (clean atoms),
+        // NOT the raw purified outerAssertions. An unmodellable atom (kBail) is
+        // SKIPPED, not aborted: dropping a constraint only ENLARGES the feasible
+        // set, so a per-leaf UNSAT over the smaller constraint set is still a
+        // sound UNSAT of the original.
         std::vector<CdcacConstraint> outerCons;
         bool bTupleDead = false;     // some outer atom trivially violated ⇒ all
                                      // branch combos at this B are infeasible
-        {
-            AtomOutcome oo = AtomOutcome::kAdd;
-            for (ExprId oa : profile.outerAssertions) {
-                oo = flatten(oa, Bvals, outerCons);
-                if (oo != AtomOutcome::kAdd) break;
-            }
-            if (oo == AtomOutcome::kBail) return std::nullopt;     // can't model
-            if (oo == AtomOutcome::kFalse) bTupleDead = true;
+        for (ExprId rc : profile.residualConstraints) {
+            AtomOutcome oo = flatten(rc, Bvals, outerCons);
+            if (oo == AtomOutcome::kFalse) { bTupleDead = true; break; }
+            // kAdd appended already; kTrue/kBail → skip
         }
 
         if (!bTupleDead) {
@@ -3124,13 +3138,23 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                     };
                     addAtoms(br.equalities);
                     if (!leafDead && !leafBail) addAtoms(br.inequalities);
-                    if (leafBail) return std::nullopt;   // can't model a branch atom
+                    if (leafBail) return giveUp();   // can't model a branch atom
                 }
                 if (!leafDead) {
                     CdcacInput input;
                     input.constraints = std::move(cons);
-                    // varOrder empty → CdcacCore Collins ordering; integerVars
-                    // empty → PURE REAL relaxation (the sound, decisive form).
+                    // CdcacCore::solve indexes input.varOrder[k] directly and does
+                    // NOT synthesize an order from an empty varOrder (solveLevel(0)
+                    // would see n=0 → immediate leaf → Unknown). So populate it with
+                    // the sorted union of leaf-constraint variables. integerVars
+                    // stays empty → PURE REAL relaxation (sound for UNSAT; the
+                    // integer reasoning is already injected via the strict-ineq
+                    // tightening in atomToConstraint).
+                    std::set<VarId> vset;
+                    for (const auto& cc2 : input.constraints)
+                        for (const std::string& vn : kernel_->variables(cc2.poly))
+                            vset.insert(kernel_->getOrCreateVar(vn));
+                    input.varOrder.assign(vset.begin(), vset.end());
                     CdcacResult cd = cdcacCore_->solve(input);
                     ++leavesChecked;
                     if (cd.status != CdcacStatus::Unsat) {
@@ -3138,7 +3162,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                         traceWrite("  [bounded-refute] leaf feasible/unknown "
                                    "(status=" + std::to_string((int)cd.status)
                                    + "); bail");
-                        return std::nullopt;
+                        return giveUp();
                     }
                 }
                 // advance branch-combo odometer

@@ -99,6 +99,14 @@ struct FarkasProfile {
     // These remain plain assertions that the residual LIA solver must satisfy.
     std::vector<ExprId> outerAssertions;
 
+    // Proxy-RESOLVED, flattened relational atoms from the mandatory outer
+    // assertions (boolpur/Tseitin proxies resolved to a fixpoint; definitional
+    // Bool equivalences `proxy == atom` and Or/Not combinators dropped). These
+    // are the clean per-leaf constraints the bounded-B refutation conjoins with
+    // a chosen branch — `outerAssertions` itself is the raw purified soup
+    // (proxy Vars, `boolpur_K == atom` Eqs) that a per-leaf LP cannot model.
+    std::vector<ExprId> residualConstraints;
+
     bool good() const { return !blocks.empty(); }
     std::size_t branchTotal() const {
         std::size_t n = 0;

@@ -591,6 +591,53 @@ FarkasProfile FarkasOrDetector::detect() const {
         p.outerAssertions.push_back(aid);
         skip_outer:;
     }
+
+    // Build the clean proxy-resolved residual constraint set: resolve every
+    // boolpur proxy to a fixpoint, flatten Ands, and keep only ARITHMETIC
+    // relational atoms. Definitional Tseitin equivalences `proxy == atom`
+    // (a relational/Bool child) and Or/Not combinators are dropped — they are
+    // not per-leaf arithmetic constraints. Bound atoms that survive are
+    // harmless (constant after B-substitution).
+    {
+        std::function<void(ExprId)> collectResidual;
+        collectResidual = [&](ExprId aid0) {
+            ExprId aid = aid0;
+            for (int g = 0; g < 16; ++g) { ExprId n = resolve(aid); if (n == aid) break; aid = n; }
+            const auto& ce = ir_.get(aid);
+            if (ce.kind == Kind::And) {
+                for (ExprId c : ce.children) collectResidual(c);
+                return;
+            }
+            if (ce.kind != Kind::Leq && ce.kind != Kind::Geq && ce.kind != Kind::Lt
+                && ce.kind != Kind::Gt && ce.kind != Kind::Eq) {
+                return;  // Or / Not / bare proxy Variable / Bool — drop
+            }
+            // Keep only when BOTH operands are arithmetic terms (no Bool proxy,
+            // no nested relational/combinator child ⇒ not a `proxy == atom` def).
+            bool arith = true;
+            for (ExprId ch : ce.children) {
+                const auto& che = ir_.get(ch);
+                switch (che.kind) {
+                    case Kind::ConstInt: case Kind::ConstReal:
+                    case Kind::Add: case Kind::Sub: case Kind::Mul:
+                    case Kind::Neg: case Kind::Abs: case Kind::Pow:
+                    case Kind::Div: case Kind::Mod: case Kind::ToInt: case Kind::ToReal:
+                        break;
+                    case Kind::Variable: {
+                        // a proxy Variable (has a Tseitin def) is Bool, not arith
+                        auto* s = std::get_if<std::string>(&che.payload.value);
+                        if (s && tseitinDefs.count(*s)) arith = false;
+                        break;
+                    }
+                    default: arith = false; break;
+                }
+                if (!arith) break;
+            }
+            if (arith) p.residualConstraints.push_back(aid);
+        };
+        for (ExprId aid : p.outerAssertions) collectResidual(aid);
+    }
+
     classifyBilinearCovars(p);
     closeRejectDump();
     return p;
