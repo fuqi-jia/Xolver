@@ -1274,6 +1274,34 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 
     std::vector<CertifiedCell> certifiedCells;
 
+    // A3 (widening): widen a conflict cell to the REASON-PROJECTION roots — the level polys
+    // derived only from the conflict's reason constraints (A2) — instead of all roots, so the
+    // cell spans the non-reason-root sectors where the same conflict still holds. Returns the
+    // widened root set, or nullopt to fall back to allRoots. SOUND when the conflict's reason
+    // set is COMPLETE: between consecutive reason-projection roots the reason constraints'
+    // delineation is invariant, so the deeper conflict holds throughout the wider interval.
+    auto widenRoots = [&](const CdcacResult& cr) -> std::optional<RootSet> {
+        if (!cr.unsat || k < 0 || k >= static_cast<int>(levelPolyIds_.size())) return std::nullopt;
+        const std::vector<int> reasonCidx = reasonConstraintIndices(cr.unsat->reasons, input);
+        if (reasonCidx.empty()) return std::nullopt;
+        const std::vector<PolyId> reasonProj =
+            reasonProjectionSubset(polyOrigins_, levelPolyIds_[static_cast<size_t>(k)], reasonCidx);
+        if (reasonProj.empty() || reasonProj.size() >= levelPolyIds_[static_cast<size_t>(k)].size())
+            return std::nullopt;                       // not a strict subset → no widening benefit
+        std::unordered_set<PolyId> rp(reasonProj.begin(), reasonProj.end());
+        std::vector<RootSet> filtered;
+        for (size_t i = 0; i < rootSets.size() && i < rootSetPolyIds.size(); ++i)
+            if (rp.count(rootSetPolyIds[i])) filtered.push_back(rootSets[i]);   // copy (rootSets reused)
+        if (filtered.empty()) return std::nullopt;
+        auto m = mergeRoots(filtered);
+        if (!m) return std::nullopt;
+        return m;                                      // widened reason-projection root set
+    };
+    auto buildCellW = [&](const RealAlg& s, CdcacResult& cr) -> BuildCellResult {
+        std::optional<RootSet> wr = widenRoots(cr);
+        return buildConflictCell(k, s, cr, input, wr ? *wr : allRoots, levelBoundaryComplete);
+    };
+
     // 4. Generate and test cells
     if (allRoots.roots.empty()) {
         if (uniPolys.empty() && !projectionSucceeded) {
@@ -1340,7 +1368,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     else    res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                    auto bcr = buildCellW(sample, res);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
@@ -1362,7 +1390,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     if (res.status == CdcacStatus::Sat) return res;
                     if (res.status == CdcacStatus::Unknown) return res;
                     if (!firstConflictRecorded) {
-                        auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                        auto bcr = buildCellW(sample, res);
                         if (bcr.status == BuildCellStatus::Unknown) {
                             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                         }
@@ -1402,7 +1430,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 else    res = testAndRecurse(root);
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
-                auto bcr = buildConflictCell(k, root, res, input, allRoots, levelBoundaryComplete);
+                auto bcr = buildCellW(root, res);
                 if (bcr.status == BuildCellStatus::Unknown) {
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
@@ -1428,7 +1456,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (res.status == CdcacStatus::Sat) return res;
                 if (res.status == CdcacStatus::Unknown) return res;
                 if (!firstConflictRecorded) {
-                    auto bcr = buildConflictCell(k, sample, res, input, allRoots, levelBoundaryComplete);
+                    auto bcr = buildCellW(sample, res);
                     if (bcr.status == BuildCellStatus::Unknown) {
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
