@@ -2097,6 +2097,20 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
     }
     if (cons.empty()) return false;
     const int kMaxRounds = 16;
+    // When a contraction EMPTIES a variable's box, the emptying constraint forced v
+    // outside its interval, so that constraint evaluated over the current box is
+    // strictly single-signed-violating — exactly the (A)-type reason. Surface it so the
+    // covering's intervalFpViolation gets a usable (constraint,sign) and can PRUNE (a
+    // contraction-empty otherwise returned with no aConf → was discarded → no prune).
+    // Same soundness basis as the (A) check below (only fires when the over-approx range
+    // provably excludes 0); the cell interval is still delineation-derived, so blaming a
+    // single constraint over the contracted box never widens the cell (no false-UNSAT).
+    auto setConf = [&](size_t ci) {
+        if (!aConf) return;
+        Iv rr = ivEval(*satRp[ci], m, box);
+        if (!rr.loInf && rr.lo > 0) *aConf = std::make_pair(ci, Sign::Pos);
+        else if (!rr.hiInf && rr.hi < 0) *aConf = std::make_pair(ci, Sign::Neg);
+    };
     for (int round = 0; round < kMaxRounds; ++round) {
         bool changed = false;
         // (A) Infeasibility: over-approx range of each constraint must admit the relation.
@@ -2140,7 +2154,7 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                     continue;   // Neq: no contraction
                 }
                 Iv nv = ivIntersect(ivCur, tight);
-                if (nv.empty()) return true;       // no feasible v ⇒ infeasible
+                if (nv.empty()) { setConf(ci); return true; }   // no feasible v ⇒ infeasible
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
                     (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
                     ivCur = nv;
@@ -2183,12 +2197,12 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                 }
                 if (!haveUpper || u2.hiInf) continue;                    // no finite (v+s)² upper bound
                 const mpq_class U = u2.hi;
-                if (U < 0) return true;                                  // (v+s)² ≤ U<0 ⇒ infeasible
+                if (U < 0) { setConf(ci); return true; }                 // (v+s)² ≤ U<0 ⇒ infeasible
                 const mpq_class r = ratSqrtUpper(U);
                 // v+s ∈ [−r,r] ⇒ v ∈ [−r−s.hi, r−s.lo] (sound outer bound over s's interval).
                 Iv tight; tight.loInf = false; tight.lo = -r - s.hi; tight.hiInf = false; tight.hi = r - s.lo;
                 Iv nv = ivIntersect(ivCur, tight);
-                if (nv.empty()) return true;
+                if (nv.empty()) { setConf(ci); return true; }
                 if (nv.loInf != ivCur.loInf || nv.hiInf != ivCur.hiInf ||
                     (!nv.loInf && nv.lo != ivCur.lo) || (!nv.hiInf && nv.hi != ivCur.hi)) {
                     ivCur = nv;
