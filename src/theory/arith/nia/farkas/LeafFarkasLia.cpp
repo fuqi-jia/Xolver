@@ -114,39 +114,63 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
         }
     }
 
-    std::vector<std::pair<LF, Relation>> base;            // pure-λ constraints
-    std::vector<std::vector<std::pair<LF, Relation>>> disj;  // per eliminated ineq
+    // Vars known nonnegative from a base bound (v ≥ 0 / v > 0): lets us drop the
+    // impossible sign branch of an S≠0 split, curbing the combination blow-up.
+    std::unordered_set<VarId> nonnegVars;
+    for (const auto& pc : pcs) {
+        if (!pc.ct.empty()) continue;
+        if (pc.A.c.size() == 1 && pc.A.k == 0
+            && (pc.rel == Relation::Geq || pc.rel == Relation::Gt)) {
+            const auto& [v, c] = *pc.A.c.begin();
+            if (c > 0) nonnegVars.insert(v);
+        }
+    }
+    auto sgn = [&](const LF& S) -> int {   // +1: S≥0, -1: S≤0, 0: sign unknown
+        if (S.c.empty()) return S.k > 0 ? 1 : (S.k < 0 ? -1 : 0);
+        if (S.c.size() == 1 && S.k == 0) {
+            const auto& [v, c] = *S.c.begin();
+            if (nonnegVars.count(v)) return c > 0 ? 1 : (c < 0 ? -1 : 0);
+        }
+        return 0;
+    };
 
+    std::vector<std::pair<LF, Relation>> base;            // pure-λ constraints
+    std::vector<std::vector<std::pair<LF, Relation>>> disj;  // per CT-bearing constraint
+
+    // SOUNDNESS (the key generalisation, valid for ANY cost vars — shared, λ-dep,
+    // or in equalities): ∃CT. A + Σ ct·S ⋈ 0  ⟹  (∨_ct S_ct≠0) ∨ (A ⋈' 0).
+    // (In any solution each constraint has some S_ct≠0, else S=0 and A⋈0 holds.)
+    // It is a NECESSARY condition, so a pure-LIA UNSAT of the over-approximation
+    // is a SOUND leaf UNSAT — possibly incomplete, never wrong.
     for (auto& pc : pcs) {
         if (pc.ct.empty()) { base.push_back({pc.A, pc.rel}); continue; }
-        // Has cost vars. Every CT here must be exclusive to this constraint.
-        for (const auto& [v, S] : pc.ct) { (void)S; if (ctOcc[v] != 1) { ctDiag("ct-shared"); return false; } }
-
         Relation rel = pc.rel;
         LF A = pc.A;
         std::map<VarId, LF> ctm = std::move(pc.ct);
-        if (rel == Relation::Lt || rel == Relation::Leq) {   // normalise to A + Σct·S {>,≥} 0
+        if (rel == Relation::Lt || rel == Relation::Leq) {   // normalise to {>,≥} 0
             A = negate(A);
             for (auto& [v, S] : ctm) S = negate(S);
             rel = (rel == Relation::Lt) ? Relation::Gt : Relation::Geq;
-        } else if (rel == Relation::Eq) {
-            ctDiag("ct-in-equality");
-            return false;   // CT in an equality ⇒ divisibility case (not this prototype)
         }
-        // ∃CT. A + Σ ct·S  rel 0   ≡   (∨_ct S_ct ≠ 0)  ∨  (A rel 0)
         std::vector<std::pair<LF, Relation>> d;
-        for (const auto& [v, S] : ctm) {
+        for (auto& [v, S] : ctm) {
             (void)v;
-            d.push_back({S, Relation::Gt});            // S > 0
-            d.push_back({negate(S), Relation::Gt});    // S < 0  ≡  -S > 0
+            int s = sgn(S);
+            if (s >= 0) d.push_back({S, Relation::Gt});          // S > 0
+            if (s <= 0) d.push_back({negate(S), Relation::Gt});  // S < 0 (skipped if S≥0)
         }
-        d.push_back({A, rel});                          // A rel 0
+        // A-branch: equality ⇒ A = 0; inequality ⇒ A {>,≥} 0.
+        d.push_back({A, rel});
         disj.push_back(std::move(d));
     }
 
     // Enumerate disjunct combinations; leaf is UNSAT iff every combo is LIA-UNSAT.
+    // Capped: the over-approximation is sound, so a too-large leaf just bails to
+    // the caller (→ Unknown), never a wrong answer. (A disjunctive-LIA backend
+    // would lift this cap — future work.)
+    const std::size_t kComboCap = 4096;
     std::size_t combos = 1;
-    for (const auto& d : disj) { combos *= d.size(); if (combos > 4096) return false; }
+    for (const auto& d : disj) { combos *= d.size(); if (combos > kComboCap) { ctDiag("combo-cap"); return false; } }
 
     std::vector<std::size_t> sel(disj.size(), 0);
     while (true) {
