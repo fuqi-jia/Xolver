@@ -219,6 +219,12 @@ private:
     // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
     bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
                               const CdcacInput& input);
+    // Top-level box-consistency global refutation (step 2): the HC4 box fixpoint
+    // (incl. degree-2 square contraction) over the EMPTY assignment. An infeasible
+    // over-approximation box ⇒ the whole problem is UNSAT — a short refutation that
+    // short-circuits the covering-tree blowup (the hong family). Sound by over-
+    // approximation. Builds its own RationalPolynomial cache (independent of satRp_).
+    bool topLevelBoxInfeasible(const CdcacInput& input);
     // Interval forward-prune: a constraint whose natural-interval-extension range
     // over (rational prefix + unassigned = R) is strictly single-signed and that
     // sign violates its relation is violated by EVERY completion -> the subtree is
