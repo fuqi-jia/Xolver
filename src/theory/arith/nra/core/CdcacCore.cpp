@@ -1284,6 +1284,24 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         if (!cr.unsat || k < 0 || k >= static_cast<int>(levelPolyIds_.size())) return std::nullopt;
         const std::vector<int> reasonCidx = reasonConstraintIndices(cr.unsat->reasons, input);
         if (reasonCidx.empty()) return std::nullopt;
+        // SOUNDNESS GATE: only widen when EVERY reason constraint is FULLY DETERMINED at
+        // level k (all its variables are among levels 0..k = prefix ∪ {var}). Then the
+        // conflict is a genuine level-k LEAF — those constraints are definitely violated
+        // here with NO deeper-variable dependence, so the recorded reasons are RELIABLE
+        // and the reason-projection roots truly bound the conflict. A DEEPER conflict
+        // (a reason still containing an unassigned var) has UNRELIABLE reasons — the
+        // recorded set is a subset of the true conflict support — and widening on it
+        // dropped a SAT in test_cdcac_sat_first. Restricting to fully-determined reasons
+        // makes the widening sound (a fully-determined constraint's sign is invariant
+        // exactly between its own roots, which the reason-projection captures).
+        {
+            std::unordered_set<VarId> determined(prefix.varOrder.begin(), prefix.varOrder.end());
+            determined.insert(var);
+            for (int ci : reasonCidx) {
+                for (VarId v : constraintVars(static_cast<size_t>(ci), input))
+                    if (!determined.count(v)) return std::nullopt;   // deeper var ⇒ not a leaf ⇒ no widen
+            }
+        }
         const std::vector<PolyId> reasonProj =
             reasonProjectionSubset(polyOrigins_, levelPolyIds_[static_cast<size_t>(k)], reasonCidx);
         if (reasonProj.empty() || reasonProj.size() >= levelPolyIds_[static_cast<size_t>(k)].size())
@@ -1300,6 +1318,24 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     auto buildCellW = [&](const RealAlg& s, CdcacResult& cr) -> BuildCellResult {
         std::optional<RootSet> wr = widenRoots(cr);
         return buildConflictCell(k, s, cr, input, wr ? *wr : allRoots, levelBoundaryComplete);
+    };
+    // A4: a sample STRICTLY inside an already-recorded conflict cell is in a proven-
+    // infeasible region. Only fully-determined leaf cells are widened (the gate above), and
+    // a widened cell is bounded by its reason constraints' own roots ⊆ all-roots, so no
+    // in-between root cuts a sector ⇒ sample-in-cell ⇒ sector ⊆ cell ⇒ covered. Skip its
+    // recursion + cell (the existing cell keeps the covering complete). Conservative:
+    // STRICT '<' and an Unknown algebraic comparison ⇒ NOT covered.
+    auto coveredByRecorded = [&](const RealAlg& s) -> bool {
+        for (const auto& cc : certifiedCells) {
+            const Cell& cl = cc.cell;
+            const bool loOk = (cl.lower.kind == Bound::Kind::NegInf) ||
+                              (algebra_->compareRealAlg(cl.lower.value, s) == CompareResult::Less);
+            if (!loOk) continue;
+            const bool hiOk = (cl.upper.kind == Bound::Kind::PosInf) ||
+                              (algebra_->compareRealAlg(s, cl.upper.value) == CompareResult::Less);
+            if (hiOk) return true;
+        }
+        return false;
     };
 
     // 4. Generate and test cells
@@ -1356,6 +1392,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     // this sector cell — [prevRoot.lower, root.upper] ⊇ (prevRoot,root)
                     // — infeasible, the cell is a sound conflict; synthesize it without
                     // descending the exponential grid below. Rational prefix only.
+                    if (!coveredByRecorded(sample)) {   // A4: skip a sector already covered by a widened leaf cell
                     CdcacResult res;
                     bool prefRat = true;
                     for (const auto& pv : prefix.values) if (!pv.isRational()) { prefRat = false; break; }
@@ -1373,6 +1410,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                         return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                     }
                     certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    }
                 }
             } else {
                 // First sector: (-inf, r0)
@@ -1419,6 +1457,9 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 // degenerate interval [root,root] and box-check: if infeasible the
                 // section's subtree is infeasible, so skip its descent (the point cell
                 // is sound but contributes nothing to coverage — sectors cover).
+                // A4: a root STRICTLY inside a recorded widened leaf cell is in a proven-
+                // infeasible region, so skip it — sound, and sections don't affect coverage.
+                if (!coveredByRecorded(root)) {
                 CdcacResult res;
                 std::optional<std::pair<size_t, Sign>> sv;
                 if (root.isRational()) {
@@ -1435,6 +1476,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
                 }
                 certifiedCells.push_back(std::move(*bcr.conflictCell));
+                }
             }
 
             prevRoot = root;
