@@ -1265,6 +1265,15 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                         }
                         firstConflictCell = std::move(*bcr.conflictCell);
                         firstConflictRecorded = true;
+                        // A conflict cell always contains its own sample. The first sector's
+                        // probes march MORE NEGATIVE (sectorHi-1 > -2 > -3); if this cell is
+                        // unbounded below (lower=-inf) it covers (-inf, sample] ⊇ every
+                        // remaining probe, so those samples sit inside a proven-infeasible
+                        // cell and their subtrees are GUARANTEED unsat — not a SAT chance.
+                        // Stop probing (sound + complete: the recorded cell already covers
+                        // the rest of the sector). Kills 2/3 of the redundant recursion on
+                        // the unbounded sector whenever the conflict is robust below.
+                        if (firstConflictCell.cell.lower.isNegInf()) break;
                     }
                 }
                 if (firstConflictRecorded) {
@@ -1319,6 +1328,12 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                     }
                     firstConflictCell = std::move(*bcr.conflictCell);
                     firstConflictRecorded = true;
+                    // Symmetric to the first sector: the final sector's probes march MORE
+                    // POSITIVE (sectorLo+1 < +2 < +3); if this conflict cell is unbounded
+                    // above (upper=+inf) it covers [sample, +inf) ⊇ every remaining probe,
+                    // so they sit inside a proven-infeasible cell — guaranteed unsat, not a
+                    // SAT chance. Stop probing (sound + complete).
+                    if (firstConflictCell.cell.upper.isPosInf()) break;
                 }
             }
             if (firstConflictRecorded) {
