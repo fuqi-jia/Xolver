@@ -43,8 +43,18 @@ static std::vector<PolyId> collectPolys(const std::vector<CdcacConstraint>& cons
 }
 
 // Helper: pick a rational sample from a sector (lo, hi)
+static mpq_class simplestRationalIn(const mpq_class& lo, const mpq_class& hi);  // fwd
+
+// Covering sector representative. Any value in the OPEN interval (lo,hi) is a sound
+// representative (the sector is sign-invariant), so pick the SIMPLEST rational rather
+// than the midpoint — z3/NLSAT's pick_in_complement heuristic: 0 if it lies inside,
+// else the integer closest to 0, else the smallest-denominator dyadic 1/2^k. Real
+// models cluster at such simple values, so a SAT case is more likely to land its
+// witness coordinate directly; and the simpler sample keeps the deeper specialized
+// polynomials simpler ("to simplify the polynomials"), unlike a midpoint that can be a
+// high-denominator rational between two algebraic-derived bounds.
 static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
-    return (lo + hi) / 2;
+    return simplestRationalIn(lo, hi);
 }
 
 // V3: Helper: convert Bound to AlgebraicEndpoint
