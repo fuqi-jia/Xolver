@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 #include <chrono>
+#include <unordered_map>
 
 namespace xolver {
 
@@ -39,6 +40,16 @@ public:
      * V4: Set the projection policy. If not set, defaults to CollinsConservative.
      */
     void setProjectionPolicy(std::unique_ptr<ProjectionPolicy> policy);
+
+    // Feature A (conflict generalization), step A2: the subset of `levelPolys` whose
+    // provenance (from `origins`) is ENTIRELY within `reasonConstraints` — i.e. the
+    // boundary polys derived only from the conflict's reason constraints. A poly with
+    // no/empty origin entry is EXCLUDED (unknown provenance ⇒ conservatively keep its
+    // roots ⇒ A3 widens less). Pure + public for direct unit testing.
+    static std::vector<PolyId> reasonProjectionSubset(
+        const std::unordered_map<PolyId, std::vector<int>>& origins,
+        const std::vector<PolyId>& levelPolys,
+        const std::vector<int>& reasonConstraints);
 
 private:
     CdcacResult solveUnivariate(const CdcacInput& input);
@@ -77,6 +88,12 @@ private:
     // resetPerSolveState. Empty for a poly with unknown provenance (e.g. the Lazard
     // path) → A3 falls back to the shallow (un-widened) cell, which is always sound.
     std::unordered_map<PolyId, std::vector<int>> polyOrigins_;
+
+    // Feature A (A2): map a conflict's reason literals to input constraint indices
+    // (matches each SatLit to the constraint that carries it). Used to feed
+    // reasonProjectionSubset with the conflict's reason constraints.
+    std::vector<int> reasonConstraintIndices(const std::vector<SatLit>& reasons,
+                                             const CdcacInput& input) const;
 
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells

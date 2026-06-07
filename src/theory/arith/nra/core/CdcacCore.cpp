@@ -675,6 +675,38 @@ const std::vector<size_t>& CdcacCore::constraintsAtLevel(size_t k, const CdcacIn
     return (k < constraintsByLevel_.size()) ? constraintsByLevel_[k] : kEmpty;
 }
 
+// Feature A (A2): the level-poly subset whose provenance ⊆ the reason constraints.
+std::vector<PolyId> CdcacCore::reasonProjectionSubset(
+    const std::unordered_map<PolyId, std::vector<int>>& origins,
+    const std::vector<PolyId>& levelPolys,
+    const std::vector<int>& reasonConstraints) {
+    std::vector<PolyId> out;
+    std::unordered_set<int> reasonSet(reasonConstraints.begin(), reasonConstraints.end());
+    for (PolyId pid : levelPolys) {
+        auto it = origins.find(pid);
+        if (it == origins.end() || it->second.empty()) continue;   // unknown provenance ⇒ exclude (keep its roots)
+        bool subset = true;
+        for (int ci : it->second) {
+            if (!reasonSet.count(ci)) { subset = false; break; }
+        }
+        if (subset) out.push_back(pid);
+    }
+    return out;
+}
+
+// Feature A (A2): map a conflict's reason literals to input constraint indices.
+std::vector<int> CdcacCore::reasonConstraintIndices(const std::vector<SatLit>& reasons,
+                                                    const CdcacInput& input) const {
+    std::vector<int> out;
+    out.reserve(reasons.size());
+    for (SatLit lit : reasons) {
+        for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+            if (input.constraints[ci].reason == lit) { out.push_back(static_cast<int>(ci)); break; }
+        }
+    }
+    return out;
+}
+
 CdcacResult CdcacCore::solvePass(const CdcacInput& input) {
     // Build the exact-RationalPolynomial cache used by the interval forward-prune
     // (intervalFpViolation). Once per solve (reused across hybrid Collins/Lazard
