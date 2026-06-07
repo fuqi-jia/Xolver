@@ -824,6 +824,52 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 }
             }
             if (!anyViolated) return asg;
+            // SA-PHASE escape (SMT-as-optimization). With probability kSAPct, run a burst of
+            // simulated-annealing random-neighbour steps from the CURRENT point, accepting
+            // worsening moves by the Metropolis rule on the SMOOTH loss E = Σ atomViolation.
+            // The smooth (continuous) loss is the key: the walk's lexicographic score is
+            // count-first, a step-like landscape on which annealing is meaningless; on the
+            // summed-violation loss small worsening steps have small ΔE and cross the rugged
+            // barriers that trap the greedy walk + cell-jump on the deepest coupled residual.
+            // Separate escape branch (does NOT preempt the cell-jump below — a prior attempt
+            // that SA-accepted inside walkOneRound stole the cell-jump's turn and regressed).
+            // Sound: candidates are exact-validated (invariant 1); SA only steers the search.
+            static const long kSAPct = env::paramLong("XOLVER_NRA_LS_SA_PCT", 33);
+            if (kSAPct > 0 && (nextRand() % 100) < kSAPct) {
+                auto loss = [&](const std::unordered_map<VarId, mpq_class>& a) -> double {
+                    double s = 0.0;
+                    for (const auto& c : constraints) s += atomViolation(c, a).get_d();
+                    return s;
+                };
+                double curLoss = loss(asg);
+                double T = (curLoss > 1e-6) ? curLoss : 1.0;   // start near the energy scale
+                for (int step = 0; step < 60 && !budgetExpired(); ++step) {
+                    const VarId rv = vars[nextRand() % vars.size()];
+                    const mpq_class saved = asg.count(rv) ? asg[rv] : mpq_class{0};
+                    mpq_class q;                                 // random neighbour
+                    switch (nextRand() % 5) {
+                        case 0:  q = saved + 1; break;
+                        case 1:  q = saved - 1; break;
+                        case 2:  q = saved + mpq_class{1, 2}; break;
+                        case 3:  q = saved - mpq_class{1, 2}; break;
+                        default: q = (saved != 0) ? saved * 2 : mpq_class{1}; break;
+                    }
+                    if (mpz_class(q.get_den()) > 1000000) { continue; }
+                    asg[rv] = q;
+                    const double nl = loss(asg);
+                    const double dE = nl - curLoss;
+                    const double u = static_cast<double>(nextRand() >> 11) * (1.0 / 9007199254740992.0);
+                    if (dE <= 0.0 || u < std::exp(-dE / T)) {
+                        curLoss = nl;                            // Metropolis accept
+                    } else {
+                        asg[rv] = saved;                         // reject — revert
+                    }
+                    T *= 0.92;                                   // geometric cooling
+                }
+                score = totalScore(constraints, weights, asg);
+                if (score.isSat()) return asg;                   // SA landed a model (caller validates)
+                continue;                                        // keep walking from the SA-explored point
+            }
             // CELL-JUMP escape (LS-NRA critical move): at a local minimum, with
             // probability kNoisePct, FORCE-satisfy a random VIOLATED constraint by jumping
             // one of its variables onto a value inside that constraint's feasible cell
