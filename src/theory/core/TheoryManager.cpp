@@ -257,7 +257,16 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             bool isLinearArith =
                 (id == TheoryId::LIA || id == TheoryId::LRA ||
                  id == TheoryId::IDL || id == TheoryId::RDL);
-            if (!isLinearArith) continue;
+            // XOLVER_NIA_LINEAR_PROP: also drain NIA's fixed-value entailments in
+            // combination. NIA returns {} unless the flag is set, so this is a
+            // no-op by default; the producer is sound by construction (global
+            // tautology clauses over the real asserted reasons).
+            static const bool niaProp = [] {
+                const char* e = std::getenv("XOLVER_NIA_LINEAR_PROP");
+                return e && *e && *e != '0';
+            }();
+            bool allow = isLinearArith || (id == TheoryId::NIA && niaProp);
+            if (!allow) continue;
         }
         auto v = s->takeEntailmentPropagations();
         for (auto& l : v) out.push_back(std::move(l));

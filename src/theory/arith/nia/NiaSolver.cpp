@@ -125,6 +125,14 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
     add("nia.dispatch-cache", &NiaSolver::stageDispatchCacheLookup);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    // nia.linear-prop (XOLVER_NIA_LINEAR_PROP, default-OFF). Standard+Full so it
+    // fires during search at PARTIAL assignments (the cs_* QF_ANIA cluster never
+    // reaches a Full-effort model check within budget — the only place the
+    // existing nia.linear-decide could run). Placed right after normalize so it
+    // reads the fresh normalized_ set. Emits sound Farkas conflicts + fixed-value
+    // entailments over the all-linear active core.
+    linearPropEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_PROP", 0) != 0;
+    add("nia.linear-prop",    &NiaSolver::stageLinearProp);
     // Track A Phase 1.3 — native (mod x y) = c reasoner. Runs early so its
     // bound narrowings feed downstream linear/domain stages. Default-OFF via
     // XOLVER_NIA_NATIVE_MODEQCONST.
@@ -419,6 +427,8 @@ void NiaSolver::onReset() {
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
+    entailmentProps_.clear();
+    entailmentEmittedKeys_.clear();
     emittedSplits_.clear();
     branchCountPerVar_.clear();
     pendingLinLemmas_.clear();
@@ -542,6 +552,11 @@ void NiaSolver::onBacktrack(int level) {
     // Phase D: backtrack invalidates the dispatch cache. The state
     // signature recorded by the cache is no longer current.
     dispatchCacheValid_ = false;
+    // nia.linear-prop: drop any undrained entailments and reset the dedup so a
+    // fresh SAT branch can re-emit pins under its own reasons. The emitted
+    // clauses already in the SAT core stay (they are global tautologies).
+    entailmentProps_.clear();
+    entailmentEmittedKeys_.clear();
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
@@ -687,6 +702,75 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
     }
     if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
     return std::nullopt;
+}
+
+// nia.linear-prop — Standard+Full linear propagation over the all-linear active
+// core. Returns a sound Farkas conflict (prune) on linear infeasibility, else
+// buffers fixed-value entailments (drained by takeEntailmentPropagations). Never
+// claims SAT (no model returned), so zero wrong-UNSAT/wrong-SAT risk (the
+// conflict is over real asserted reasons; entailments are global tautologies).
+std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
+    TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!linearPropEnabled_) return std::nullopt;
+    if (active_.empty()) return std::nullopt;
+    if (!registry_) return std::nullopt;
+    // normalized_ is produced by the immediately-preceding nia.normalize stage;
+    // in combination it ALSO carries merged interface (dis)equalities, so it is
+    // ≥ active_.size(). Require it non-empty (normalize ran) — not equal.
+    if (normalized_.empty()) return std::nullopt;
+
+    // All active atoms must be LINEAR (total degree ≤ 1) — otherwise the simplex
+    // would drop nonlinear obligations and could mis-propagate.
+    for (const auto& a : active_) {
+        auto terms = kernel_->terms(a.poly);
+        if (!terms) return std::nullopt;
+        for (const auto& term : *terms) {
+            int total = 0;
+            for (const auto& [vid, exp] : term.powers) {
+                (void)vid;
+                total += exp;
+                if (total > 1) return std::nullopt;
+            }
+        }
+    }
+
+    if (!linDecider_) linDecider_ = std::make_unique<NiaLinearDecider>();
+
+    // Asserted-literal map for the soundness firewall + the "already decided"
+    // skip: satVar -> value, drawn from the active trail.
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto isAssigned = [&](SatVar v) { return asserted.find(v) != asserted.end(); };
+    auto litIsTrue = [&](SatLit l) {
+        auto it = asserted.find(l.var);
+        return it != asserted.end() && it->second == l.sign;
+    };
+
+    size_t entBefore = entailmentProps_.size();
+    std::optional<TheoryConflict> conflict;
+    linDecider_->collectLinearProp(
+        registry_, *kernel_, normalized_, isAssigned, litIsTrue,
+        &conflict, &entailmentProps_, &entailmentEmittedKeys_,
+        /*maxEmit=*/256);
+
+    static const bool diag = std::getenv("XOLVER_NIA_LINPROP_DIAG") != nullptr;
+    if (diag) {
+        std::fprintf(stderr,
+            "[LINPROP] fire active=%zu normalized=%zu effort=%d conflict=%s ent+=%zu (total=%zu)\n",
+            active_.size(), normalized_.size(), (int)effort,
+            conflict ? "yes" : "no",
+            entailmentProps_.size() - entBefore, entailmentProps_.size());
+        std::fflush(stderr);
+    }
+
+    if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;   // pure producer otherwise — let the pipeline continue
+}
+
+std::vector<TheoryLemma> NiaSolver::takeEntailmentPropagations() {
+    if (!linearPropEnabled_) return {};
+    return std::move(entailmentProps_);
 }
 
 // Phase D — FNV-1a hash of the active_ signature: count + sequence of

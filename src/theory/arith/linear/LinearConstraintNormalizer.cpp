@@ -29,6 +29,26 @@ LinearExpr LinearConstraintNormalizer::canonicalize(LinearExpr e) {
     return e;
 }
 
+bool LinearConstraintNormalizer::canonicalizeSign(
+    LinearFormKey& lhs, Relation& rel, mpq_class& rhs) {
+    // Leading nonzero coefficient (terms are sorted by var name).
+    bool negate = false;
+    for (const auto& t : lhs.terms) {
+        if (t.second != 0) { negate = (t.second < 0); break; }
+    }
+    if (!negate) return false;
+    for (auto& t : lhs.terms) t.second = -t.second;
+    rhs = -rhs;
+    switch (rel) {
+        case Relation::Leq: rel = Relation::Geq; break;
+        case Relation::Geq: rel = Relation::Leq; break;
+        case Relation::Lt:  rel = Relation::Gt;  break;
+        case Relation::Gt:  rel = Relation::Lt;  break;
+        case Relation::Eq:  case Relation::Neq:  break;  // symmetric under ×(-1)
+    }
+    return true;
+}
+
 // ============================================================================
 // fromPolynomialZero
 // ============================================================================

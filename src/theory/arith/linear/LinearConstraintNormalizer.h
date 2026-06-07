@@ -66,6 +66,16 @@ public:
     // ------------------------------------------------------------------------
     static LinearExpr canonicalize(LinearExpr e);
 
+    // ------------------------------------------------------------------------
+    // Sign-canonicalize a linear atom `lhs rel rhs` so its FIRST nonzero term
+    // has a positive coefficient (terms assumed sorted by var name). When the
+    // leading coefficient is negative, the whole atom is multiplied by -1:
+    // lhs → -lhs, rhs → -rhs, rel mirrored (Leq↔Geq, Lt↔Gt; Eq/Neq fixed).
+    // This makes complementary forms (x-y and y-x) share one aux in the simplex,
+    // so x≤y ∧ y≤x collapse to a single [0,0] bound → the difference pins.
+    // Returns true iff the atom was negated.
+    static bool canonicalizeSign(LinearFormKey& lhs, Relation& rel, mpq_class& rhs);
+
 private:
     // Normalize strict integer relations in-place.
     static void normalizeStrictIntegerRelation(Relation& rel, mpq_class& rhs);

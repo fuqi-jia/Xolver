@@ -5,6 +5,7 @@
 #include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/arith/lra/GeneralSimplex.h"
 #include <fstream>
 #include <filesystem>
@@ -162,4 +163,120 @@ TEST_CASE("LIA: model validation fails for fractional integer var") {
     auto r = solver.check(lemmaDb);
     CHECK((r.kind == TheoryCheckResult::Kind::Consistent ||
            r.kind == TheoryCheckResult::Kind::Lemma));
+}
+
+TEST_CASE("LIA: proveFixedValueByName pins a variable forced through a row") {
+    // x = 5 and x + y = 8 jointly force y = 3 via the simplex row, even though
+    // no atom directly bounds y. proveFixedValueByName must recover the pin and
+    // its reasons (the asserted bound literals). This is the foundation of the
+    // NIA Standard-effort linear-prop entailment producer.
+    auto sat = createSatSolver();
+    Atomizer atomizer(*sat);
+    TheoryAtomRegistry registry;
+    registry.setContext(sat.get(), &atomizer);
+
+    auto formVar = [](const std::string& n, mpq_class c) {
+        LinearFormKey f; f.terms.push_back({n, c}); return f;
+    };
+    LinearFormKey fxy;
+    fxy.terms.push_back({"x", 1});
+    fxy.terms.push_back({"y", 1});
+
+    LiaSolver solver;
+    solver.setRegistry(&registry);
+    solver.push();
+    // x = 5  (satVar 1)
+    solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, 100,
+        LinearAtomPayload{formVar("x", 1), Relation::Eq, RealValue::fromMpq(5)}},
+        true, 0, SatLit{1, true});
+    // x + y = 8  (satVar 2)  -> y pinned to 3
+    solver.assertLit(TheoryAtomRecord{2, TheoryId::LIA, false, 101,
+        LinearAtomPayload{fxy, Relation::Eq, RealValue::fromMpq(8)}},
+        true, 0, SatLit{2, true});
+    TheoryLemmaDatabase lemmaDb;
+    auto r = solver.check(lemmaDb);
+    REQUIRE(r.kind == TheoryCheckResult::Kind::Consistent);
+
+    auto px = solver.proveFixedValueByName("x");
+    REQUIRE(px.has_value());
+    CHECK(px->first == mpq_class(5));
+
+    auto py = solver.proveFixedValueByName("y");
+    REQUIRE(py.has_value());
+    CHECK(py->first == mpq_class(3));
+    // y's pin must be justified by the asserted bound literals (satVars 1/2).
+    bool sawReason = false;
+    for (const auto& l : py->second) if (l.var == 1 || l.var == 2) sawReason = true;
+    CHECK(sawReason);
+
+    CHECK_FALSE(solver.proveFixedValueByName("nonexistent").has_value());
+
+    // Form-level pin: x - y is forced to 5 - 3 = 2.
+    LinearFormKey xMinusY;
+    xMinusY.terms.push_back({"x", 1});
+    xMinusY.terms.push_back({"y", -1});
+    auto pf = solver.proveFixedFormValue(xMinusY, mpq_class(0));
+    REQUIRE(pf.has_value());
+    CHECK(pf->first == mpq_class(2));
+}
+
+TEST_CASE("LIA: canonicalizeSign mirrors a negative-leading atom") {
+    // y - x <= 0  (form {x:-1,y:1}) canonicalizes to  x - y >= 0.
+    LinearFormKey f;
+    f.terms.push_back({"x", -1});
+    f.terms.push_back({"y", 1});
+    Relation rel = Relation::Leq;
+    mpq_class rhs = 0;
+    bool flipped = LinearConstraintNormalizer::canonicalizeSign(f, rel, rhs);
+    CHECK(flipped);
+    REQUIRE(f.terms.size() == 2);
+    CHECK(f.terms[0].first == "x");
+    CHECK(f.terms[0].second == mpq_class(1));
+    CHECK(f.terms[1].second == mpq_class(-1));
+    CHECK(rel == Relation::Geq);
+    // An already-canonical atom is untouched.
+    LinearFormKey g;
+    g.terms.push_back({"x", 1});
+    g.terms.push_back({"y", -1});
+    Relation rel2 = Relation::Leq;
+    mpq_class rhs2 = 3;
+    CHECK_FALSE(LinearConstraintNormalizer::canonicalizeSign(g, rel2, rhs2));
+}
+
+TEST_CASE("LIA: proveFixedFormValue pins x-y=0 from x<=y and y<=x (canonical feed)") {
+    // The cs_* concurrency pattern: two complementary inequalities over a pair
+    // pin the DIFFERENCE to 0 even though neither variable is individually
+    // bounded. Sign-canonicalization (the linear-prop feed path) routes both to
+    // ONE aux so the bounds collapse to [0,0]. This is the variable-variable
+    // equality channel the NIA linear-prop producer needs.
+    auto sat = createSatSolver();
+    Atomizer atomizer(*sat);
+    TheoryAtomRegistry registry;
+    registry.setContext(sat.get(), &atomizer);
+
+    LinearFormKey xMinusY; xMinusY.terms.push_back({"x", 1}); xMinusY.terms.push_back({"y", -1});
+    LinearFormKey yMinusX; yMinusX.terms.push_back({"x", -1}); yMinusX.terms.push_back({"y", 1});
+
+    LiaSolver solver;
+    solver.setRegistry(&registry);
+    solver.push();
+    {   // x - y <= 0  (already canonical)
+        LinearFormKey f = xMinusY; Relation rel = Relation::Leq; mpq_class rhs = 0;
+        LinearConstraintNormalizer::canonicalizeSign(f, rel, rhs);
+        solver.assertLit(TheoryAtomRecord{1, TheoryId::LIA, false, 200,
+            LinearAtomPayload{f, rel, RealValue::fromMpq(rhs)}}, true, 0, SatLit{1, true});
+    }
+    {   // y - x <= 0  -> canonicalizes to x - y >= 0
+        LinearFormKey f = yMinusX; Relation rel = Relation::Leq; mpq_class rhs = 0;
+        LinearConstraintNormalizer::canonicalizeSign(f, rel, rhs);
+        solver.assertLit(TheoryAtomRecord{2, TheoryId::LIA, false, 201,
+            LinearAtomPayload{f, rel, RealValue::fromMpq(rhs)}}, true, 0, SatLit{2, true});
+    }
+    TheoryLemmaDatabase lemmaDb;
+    auto r = solver.check(lemmaDb);
+    REQUIRE(r.kind == TheoryCheckResult::Kind::Consistent);
+
+    auto pf = solver.proveFixedFormValue(xMinusY, mpq_class(0));
+    REQUIRE(pf.has_value());
+    CHECK(pf->first == mpq_class(0));   // x - y pinned to 0
 }

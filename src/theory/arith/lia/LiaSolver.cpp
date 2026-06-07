@@ -7,6 +7,7 @@
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
+#include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/arith/lia/GomoryCut.h"
 #include "theory/arith/nia/reasoners/DioReasoner.h"
 #include <cassert>
@@ -2180,6 +2181,40 @@ std::vector<TheoryLemma> LiaSolver::takeEntailmentPropagations() {
     // last check(). The scanner is bounded and idempotent (dedup).
     scanLiteralPinEntailments();
     return std::move(entailmentProps_);
+}
+
+std::optional<std::pair<mpq_class, std::vector<SatLit>>>
+LiaSolver::proveFixedValueByName(const std::string& name) const {
+    int idx = manager_.findVarIndex(name);
+    if (idx < 0) return std::nullopt;          // var not in the simplex
+    auto fv = gs_.proveFixedValue(idx);
+    if (!fv) return std::nullopt;              // not pinned by current bounds
+    if (fv->first.b != 0) return std::nullopt; // δ-strict (open) value — skip
+    std::vector<SatLit> reasons;
+    reasons.reserve(fv->second.size());
+    for (const auto& br : fv->second) reasons.push_back(br.reason);
+    return std::make_pair(fv->first.a, std::move(reasons));
+}
+
+std::optional<std::pair<mpq_class, std::vector<SatLit>>>
+LiaSolver::proveFixedFormValue(const LinearFormKey& lhs, const mpq_class& rhs) {
+    if (lhs.terms.empty()) return std::nullopt;       // constant form — nothing to pin
+    // Sign-canonicalize so this query hits the SAME aux as canonically-fed
+    // constraints (complementary forms share one aux). If negated, the canonical
+    // aux value is the negation of (lhs - rhs), so flip the returned value back.
+    LinearFormKey cLhs = lhs;
+    mpq_class cRhs = rhs;
+    Relation dummy = Relation::Eq;
+    bool flipped = LinearConstraintNormalizer::canonicalizeSign(cLhs, dummy, cRhs);
+    int aux = manager_.getOrCreateAuxVar(gs_, cLhs, cRhs);  // aux = cLhs - cRhs
+    auto fv = gs_.proveFixedValue(aux);
+    if (!fv) return std::nullopt;
+    if (fv->first.b != 0) return std::nullopt;        // δ-strict (open) value
+    mpq_class val = flipped ? -fv->first.a : fv->first.a;  // un-flip to (lhs - rhs)
+    std::vector<SatLit> reasons;
+    reasons.reserve(fv->second.size());
+    for (const auto& br : fv->second) reasons.push_back(br.reason);
+    return std::make_pair(val, std::move(reasons));
 }
 
 void LiaSolver::clearEntailmentDedupForBacktrack(int level) {
