@@ -108,7 +108,51 @@ bool disjLiaUnsat(PolynomialKernel& kernel,
         s.assertFormula(ors.size() == 1 ? ors[0] : s.mkOp(kc(Kind::Or), ors));
     }
     if (!ok) return false;
-    return s.checkSat() == Result::Unsat;
+    Result r = s.checkSat();
+    if (r == Result::Unsat) return true;    // abstraction UNSAT ⇒ leaf UNSAT (sound filter)
+    if (r != Result::Sat) return false;      // unknown ⇒ bail
+
+    // ── CEGAR Gate 1: extract the λ model and VALIDATE it satisfies the
+    // abstraction. No verdict change yet (still bail on abstraction-SAT). This
+    // proves the extraction is correct before any later gate trusts it for
+    // CT-feasibility / refinement — a wrong extraction would later become a
+    // wrong UNSAT, so it is fully validated here first. Diag-gated.
+    if (std::getenv("XOLVER_NIA_CT_DIAG")) {
+        Model m = s.getModel();
+        std::unordered_map<VarId, mpq_class> Mlam;
+        bool extractOk = true;
+        for (const auto& [v, t] : vt) {
+            const std::string* sv = m.getValue(t.id());
+            if (!sv) { extractOk = false; break; }
+            try { Mlam[v] = mpq_class(mpz_class(*sv)); }
+            catch (...) { extractOk = false; break; }
+        }
+        bool absOk = extractOk;
+        if (extractOk) {
+            auto evalLF = [&](const LF& lf) -> mpq_class {
+                mpq_class acc = lf.k;
+                for (const auto& [v, c] : lf.c) acc += c * Mlam[v];
+                return acc;
+            };
+            auto holds = [&](const std::pair<LF, Relation>& a) -> bool {
+                mpq_class val = evalLF(a.first);
+                switch (a.second) {
+                    case Relation::Gt: return val > 0;  case Relation::Geq: return val >= 0;
+                    case Relation::Lt: return val < 0;  case Relation::Leq: return val <= 0;
+                    case Relation::Eq: return val == 0; default: return false;
+                }
+            };
+            for (const auto& a : base) if (!holds(a)) absOk = false;
+            for (const auto& d : disj) {
+                bool any = false;
+                for (const auto& a : d) if (holds(a)) any = true;
+                if (!any) absOk = false;
+            }
+        }
+        ctDiag(extractOk ? (absOk ? "gate1-model-OK" : "gate1-model-FAIL-abs")
+                         : "gate1-extract-FAIL");
+    }
+    return false;   // abstraction SAT ⇒ not proven UNSAT (unchanged)
 }
 
 // Dump one leaf's over-approximation (base ∧ ∧disj) as QF_LIA SMT-LIB to
