@@ -1,0 +1,11 @@
+; UF bool predicate congruence with nonlinear coupling.
+(set-logic QF_UFNIA)
+(set-info :status unsat)
+(declare-fun p (Int) Bool)
+(declare-fun a () Int)
+(declare-fun b () Int)
+(assert (p a))
+(assert (not (p b)))
+(assert (= (* a a) (* b b)))
+(assert (= a b))
+(check-sat)

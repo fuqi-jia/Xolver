@@ -280,20 +280,24 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
     const CoreExpr& e = ir.get(eid);
     SatLit result{0, true};
 
-    // Bool-valued terms in formula position:
-    //   - under QF_UF (defaultTheory_ == EUF): p(a), q (Bool var), etc.
-    //   - in COMBINATION (defaultTheory_ is the arith theory): an EUF-OWNED bool
-    //     predicate — a UF application or a datatype tester — must STILL route to
-    //     EUF so its congruence / DT-tester semantics are seen. These kinds have
+    // Bool-valued terms in formula position route to EUF as a BoolTermAsFormula
+    // atom so their theory semantics (congruence / DT-tester / array Row) are
+    // seen. Routing is by OWNERSHIP, not by a single default theory:
+    //   - An EUF-OWNED bool predicate — a UF application, a datatype tester, or a
+    //     bool-valued array read — routes to EUF in ANY logic. These kinds have
     //     no meaning in arithmetic, so an EUF solver is always registered when
-    //     they occur. Without this, e.g. `((_ is red) c)` in QF_UFDTNIA was a
-    //     plain opaque bool var → the tester clash escaped as a false-SAT.
-    //     (A bare Bool variable is NOT EUF-owned: it stays a plain SAT var unless
-    //     defaultTheory_ == EUF, preserving combination behaviour.)
-    bool eufOwnedBoolPred = (e.kind == Kind::UFApply || e.kind == Kind::Tester);
-    if (e.sort == boolSortId_ &&
-        isFormulaPositionTerm(e.kind) &&
-        (defaultTheory_ == TheoryId::EUF || eufOwnedBoolPred)) {
+    //     they occur. (The old `defaultTheory_ == EUF`-only gate silently dropped
+    //     them in every combination logic: `((_ is red) c)` in QF_UFDTNIA and
+    //     `(select a i)` in QF_ALIA both escaped as opaque bool vars → false-SAT.)
+    //   - A bare Bool VARIABLE is not owned by any theory; it stays a plain SAT
+    //     var except under pure QF_UF (defaultTheory_ == EUF), preserving the
+    //     combination behaviour for boolean structure.
+    bool eufOwnedBoolPred = (e.kind == Kind::UFApply ||
+                            e.kind == Kind::Tester ||
+                            e.kind == Kind::Select);
+    bool pureEufBoolVar = (defaultTheory_ == TheoryId::EUF &&
+                           isFormulaPositionTerm(e.kind));
+    if (e.sort == boolSortId_ && (eufOwnedBoolPred || pureEufBoolVar)) {
         result = eufExtractor_.getOrCreateAtom(
             EufAtomPayload{eid, TrueSentinelExpr, Relation::Eq, EufAtomKind::BoolTermAsFormula}, eid,
             memo_,
