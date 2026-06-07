@@ -98,9 +98,16 @@ public:
     // one Full check (LP + integrality repair); if that leaves a fractional
     // branch, drives branch-and-bound over gs_ directly (no SAT loop) up to
     // nodeCap nodes. Returns the COMPLETE integer model (incl. internal vars)
-    // on SAT, or nullopt (UNSAT-on-input / Unknown / node cap). Never emits a
-    // verdict — model only; the caller re-validates it.
-    std::optional<TheoryModel> findIntegerModel(int nodeCap = 4000);
+    // on SAT, or nullopt (UNSAT-on-input / Unknown / node cap).
+    //
+    // If outConflict is non-null AND the ROOT LP relaxation is infeasible
+    // (Farkas-certified), *outConflict is set to that conflict — a genuine
+    // infeasibility of the asserted atoms whose reason literals are exactly the
+    // ones the caller passed to assertLit (real SAT literals). A B&B node cap or
+    // integrality-only infeasibility does NOT set it (that is not a proven
+    // conflict). The caller may return *outConflict as a sound theory conflict.
+    std::optional<TheoryModel> findIntegerModel(
+        int nodeCap = 4000, std::optional<TheoryConflict>* outConflict = nullptr);
 
 protected:
     void onPush() override;

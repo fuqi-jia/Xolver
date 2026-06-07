@@ -266,3 +266,32 @@ TEST_CASE("NIA linear-decide: combination linear SAT solved without bit-blast") 
     unsetenv("XOLVER_NIA_LINEAR_DECIDE");
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
+
+TEST_CASE("NIA linear-decide: theory conflict prunes an infeasible branch (still SAT, never wrong-UNSAT)") {
+    // The linear-decide stage feeds the embedded LIA the REAL asserted satVars,
+    // so when a bool assignment makes the linear part infeasible (the `!b` branch
+    // x=5 ∧ x=6), the embedded LIA's Farkas conflict — over those real literals —
+    // is returned as a theory conflict that PRUNES that branch. SAT then takes the
+    // `b` branch (a large-valued mod goal) which linear-decide solves with a
+    // model. Net: SAT (NOT unsat — the conflict must never escalate to a global
+    // UNSAT on a satisfiable formula; that is the cardinal-sin guard).
+    setenv("XOLVER_NIA_LINEAR_DECIDE", "1", 1);
+    setenv("XOLVER_NIA_NO_BITBLAST", "1", 1);
+    std::string path = writeTempSmt2(
+        "(set-logic QF_NIA)\n"
+        "(declare-const x Int)\n"
+        "(declare-const y Int)\n"
+        "(declare-const b Bool)\n"
+        "(assert (ite b\n"
+        "  (< 2147483647 (mod (+ x y) 4294967296))\n"
+        "  (and (= x 5) (= x 6))))\n"
+        "(check-sat)\n"
+    );
+    Solver solver;
+    solver.setLogic("QF_NIA");
+    REQUIRE(solver.parseFile(path));
+    Result r = solver.checkSat();
+    unsetenv("XOLVER_NIA_NO_BITBLAST");
+    unsetenv("XOLVER_NIA_LINEAR_DECIDE");
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}

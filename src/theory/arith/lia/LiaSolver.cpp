@@ -1866,7 +1866,8 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::buildModel(bool includeInter
     return model;
 }
 
-std::optional<TheorySolver::TheoryModel> LiaSolver::findIntegerModel(int nodeCap) {
+std::optional<TheorySolver::TheoryModel> LiaSolver::findIntegerModel(
+    int nodeCap, std::optional<TheoryConflict>* outConflict) {
     // One Full check applies bounds + LP + integrality repair. A Consistent
     // verdict is an immediate integer model; a branch Lemma leaves gs_ at a
     // fractional LP solution we drive to a leaf ourselves.
@@ -1874,8 +1875,15 @@ std::optional<TheorySolver::TheoryModel> LiaSolver::findIntegerModel(int nodeCap
     TheoryCheckResult r = check(scratch, TheoryEffort::Full);
     if (r.kind == TheoryCheckResult::Kind::Consistent)
         return getModelWithInternal();
+    if (r.kind == TheoryCheckResult::Kind::Conflict) {
+        // Root LP infeasible (Farkas) ⇒ the asserted atoms are jointly
+        // infeasible. Surface it as a sound conflict over the caller's real
+        // reason literals.
+        if (outConflict && r.conflictOpt) *outConflict = std::move(r.conflictOpt);
+        return std::nullopt;
+    }
     if (r.kind != TheoryCheckResult::Kind::Lemma)
-        return std::nullopt;             // Conflict (UNSAT on input) / Unknown
+        return std::nullopt;             // Unknown
     int nodes = 0;
     return branchAndBound(nodeCap, nodes);
 }

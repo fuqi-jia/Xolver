@@ -22,7 +22,8 @@ std::optional<IntegerModel> NiaLinearDecider::decide(
     TheoryAtomRegistry* registry,
     PolynomialKernel& kernel,
     const std::vector<NormalizedNiaConstraint>& normalized,
-    const IntegerModelValidator& validator) {
+    const IntegerModelValidator& validator,
+    std::optional<TheoryConflict>* outConflict) {
     if (!registry) return std::nullopt;
 
     // Lazily build the embedded complete-LIA decision. Shares NIA's registry so
@@ -68,10 +69,11 @@ std::optional<IntegerModel> NiaLinearDecider::decide(
     // constraints reference the aux vars, and an incomplete assignment both
     // falsifies the equality linkage AND sends libpoly down its heap-unsafe
     // interval-approximation path.
-    auto full = lia_->findIntegerModel();
+    auto full = lia_->findIntegerModel(/*nodeCap=*/4000, outConflict);
     if (linDeciderDiag())
-        std::fprintf(stderr, "[LINDECIDE] findIntegerModel=%s normalized=%zu\n",
-                     full ? "yes" : "NO", normalized.size());
+        std::fprintf(stderr, "[LINDECIDE] findIntegerModel=%s conflict=%s normalized=%zu\n",
+                     full ? "yes" : "NO",
+                     (outConflict && *outConflict) ? "yes" : "no", normalized.size());
     if (!full) return std::nullopt;
 
     IntegerModel im;

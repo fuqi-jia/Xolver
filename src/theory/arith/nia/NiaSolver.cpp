@@ -672,14 +672,21 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
         std::fprintf(stderr, "[LINDECIDE] stage fired: active=%zu normalized=%zu trail=%zu\n",
                      active_.size(), normalized_.size(), state_.trail.size());
 
-    // Delegate to the embedded complete-LIA decision (own TU). SAT-only: it
-    // returns a validated integer model or nullopt; we never emit UNSAT here.
+    // Delegate to the embedded complete-LIA decision (own TU). It returns either
+    // a validated integer model (SAT), or — when the asserted linear atoms are
+    // jointly infeasible at the LP root — a Farkas conflict over the REAL
+    // asserted SAT literals, which we return so the SAT search is pruned. The
+    // conflict is a genuine infeasibility of the current trail (sound; never a
+    // global UNSAT claim beyond what the linear atoms entail).
     if (!linDecider_) linDecider_ = std::make_unique<NiaLinearDecider>();
-    auto im = linDecider_->decide(registry_, *kernel_, normalized_, validator_);
-    if (!im) return std::nullopt;
-
-    currentModel_ = std::move(*im);
-    return TheoryCheckResult::consistent();
+    std::optional<TheoryConflict> conflict;
+    auto im = linDecider_->decide(registry_, *kernel_, normalized_, validator_, &conflict);
+    if (im) {
+        currentModel_ = std::move(*im);
+        return TheoryCheckResult::consistent();
+    }
+    if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;
 }
 
 // Phase D — FNV-1a hash of the active_ signature: count + sequence of

@@ -25,16 +25,25 @@ public:
     NiaLinearDecider();
     ~NiaLinearDecider();   // out-of-line: destroys the unique_ptr<LiaSolver>
 
-    // Replay the active trail into a complete-LIA decision procedure and return
-    // an exact integer model IFF the linear system is SAT and the harvested
-    // model validates against `normalized` (defense in depth). Returns nullopt
-    // on UNSAT / Unknown / non-integer model — the caller then falls through to
-    // the existing NIA stages, so this never produces an UNSAT verdict.
+    // Decide the all-linear constraint set via a complete-LIA decision procedure.
+    //
+    // Returns an exact integer model IFF the system is SAT and the harvested
+    // model validates against `normalized` (defense in depth).
+    //
+    // If the ROOT LP relaxation is infeasible (a genuine, Farkas-certified
+    // infeasibility of the asserted atoms), sets *outConflict to a sound theory
+    // conflict whose literals are exactly the `reason` SatLits of `normalized`
+    // (the real asserted SAT literals) — the caller may return it to prune the
+    // SAT search. outConflict is left untouched on SAT / Unknown / B&B-cap.
+    //
+    // Returns nullopt (and no conflict) when neither a model nor a root conflict
+    // is found; the caller then falls through to the existing NIA stages.
     std::optional<IntegerModel> decide(
         TheoryAtomRegistry* registry,
         PolynomialKernel& kernel,
         const std::vector<NormalizedNiaConstraint>& normalized,
-        const IntegerModelValidator& validator);
+        const IntegerModelValidator& validator,
+        std::optional<TheoryConflict>* outConflict = nullptr);
 
 private:
     std::unique_ptr<LiaSolver> lia_;   // lazily constructed on first decide()
