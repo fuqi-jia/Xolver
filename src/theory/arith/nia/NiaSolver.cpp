@@ -22,6 +22,7 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "proof/ArithModelValidator.h"
 #include "util/EnvParam.h"
+#include <functional>
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
@@ -2913,7 +2914,285 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         ++candIdx;
     }
     traceWrite("  → no candidate validated");
+    // SAT search exhausted. Try the sound bounded-B real-relaxation refutation
+    // (default-OFF): exhaust the finite integer B-domain × Or-branch combos and
+    // prove each leaf real-infeasible via CdcacCore ⇒ integer UNSAT.
+    if (auto refute = tryBoundedBRefutation(profile)) return refute;
     return std::nullopt;
+}
+
+std::optional<TheoryCheckResult>
+NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
+    static const bool enabled =
+        std::getenv("XOLVER_NIA_FARKAS_BOUNDED_REFUTE") != nullptr;
+    if (!enabled) return std::nullopt;
+#ifndef XOLVER_HAS_LIBPOLY
+    return std::nullopt;  // needs the libpoly algebra backend (CdcacCore)
+#else
+    if (!kernel_ || !coreIr_ || !converter_) return std::nullopt;
+    if (profile.boundedGlobals.empty() || profile.blocks.empty())
+        return std::nullopt;
+
+    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    auto traceWrite = [&](const std::string& s) {
+        if (!trace) return;
+        FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
+        if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
+    };
+
+    // ---- 1. Bounded-B domain: collect vars + integer intervals, cap product.
+    struct BVar { VarId vid; mpz_class lo, hi; };
+    std::vector<BVar> bvars;
+    bvars.reserve(profile.boundedGlobals.size());
+    const long domCap = env::paramLong("XOLVER_NIA_FARKAS_REFUTE_DOM_CAP", 8192);
+    mpz_class domProduct = 1;
+    for (const auto& [name, bound] : profile.boundedGlobals) {
+        mpz_class span = bound.second - bound.first + 1;
+        if (span <= 0) return std::nullopt;          // empty/degenerate domain
+        domProduct *= span;
+        if (domProduct > domCap) {
+            traceWrite("  [bounded-refute] B-domain " + domProduct.get_str()
+                       + " > cap " + std::to_string(domCap) + "; bail");
+            return std::nullopt;                       // too large; bail (sound)
+        }
+        bvars.push_back({kernel_->getOrCreateVar(name), bound.first, bound.second});
+    }
+
+    // ---- 2. Branch-combo count cap.
+    long comboCount = 1;
+    for (const auto& blk : profile.blocks) {
+        if (blk.branches.empty()) return std::nullopt;
+        comboCount *= static_cast<long>(blk.branches.size());
+        if (comboCount > 256) {
+            traceWrite("  [bounded-refute] combos " + std::to_string(comboCount)
+                       + " > 256; bail");
+            return std::nullopt;
+        }
+    }
+    traceWrite("  [bounded-refute] B-domain=" + domProduct.get_str()
+               + " combos=" + std::to_string(comboCount)
+               + " outer=" + std::to_string(profile.outerAssertions.size()));
+
+    if (!cdcacCore_) {
+        cdcacAlgebra_ = std::make_unique<LibpolyBackend>(kernel_.get());
+        cdcacCore_ = std::make_unique<CdcacCore>(kernel_.get(), cdcacAlgebra_.get());
+    }
+
+    // relHolds: does the rational constant `c` satisfy `c rel 0`?
+    auto relHolds = [](const mpq_class& c, Relation rel) -> bool {
+        switch (rel) {
+            case Relation::Eq:  return c == 0;
+            case Relation::Neq: return c != 0;
+            case Relation::Lt:  return c <  0;
+            case Relation::Leq: return c <= 0;
+            case Relation::Gt:  return c >  0;
+            case Relation::Geq: return c >= 0;
+        }
+        return false;
+    };
+
+    // Convert a relational atom ExprId into a (poly, rel) constraint with B
+    // substituted. Outcomes:
+    //   kAdd        -> append `out` to the leaf system
+    //   kTrue       -> trivially satisfied (skip)
+    //   kFalse      -> trivially violated  -> leaf is infeasible
+    //   kBail       -> not modellable      -> whole refutation must bail (sound)
+    enum class AtomOutcome { kAdd, kTrue, kFalse, kBail };
+    auto atomToConstraint =
+        [&](ExprId atomId, const std::unordered_map<VarId, mpz_class>& Bvals,
+            CdcacConstraint& out) -> AtomOutcome {
+        const auto& e = coreIr_->get(atomId);
+        Relation rel;
+        switch (e.kind) {
+            case Kind::Gt:  rel = Relation::Gt;  break;
+            case Kind::Geq: rel = Relation::Geq; break;
+            case Kind::Lt:  rel = Relation::Lt;  break;
+            case Kind::Leq: rel = Relation::Leq; break;
+            case Kind::Eq:  rel = Relation::Eq;  break;
+            default: return AtomOutcome::kBail;   // Neq / non-relational atom
+        }
+        if (e.children.size() != 2) return AtomOutcome::kBail;
+        auto cc = converter_->convertConstraint(e.children[0], e.children[1],
+                                                rel, *coreIr_);
+        if (cc.status == PolyConstraintStatus::Tautology) return AtomOutcome::kTrue;
+        if (cc.status == PolyConstraintStatus::Conflict)  return AtomOutcome::kFalse;
+        if (cc.status != PolyConstraintStatus::Constraint) return AtomOutcome::kBail;
+        PolyId diff = cc.diff;
+        // INTEGER TIGHTENING (the lever that makes the real relaxation decisive).
+        // Every variable is integer and every coefficient integer, so `diff` is
+        // integer-valued on any integer assignment. Hence over ℤ:
+        //     diff >  0  ⟺  diff − 1 ≥ 0
+        //     diff <  0  ⟺  diff + 1 ≤ 0
+        // Replacing the strict atom with its tightened non-strict form keeps the
+        // integer solution set unchanged while SHRINKING the real-relaxation
+        // feasible region (S_int ⊆ S'_real). Without this a strict ineq like
+        // `CT·λ > 1` with `CT < 1` is real-feasible via fractional CT even though
+        // it is integer-infeasible — exactly the Stroeder/VeryMax shape.
+        if (rel == Relation::Gt) {
+            diff = kernel_->sub(diff, kernel_->mkOne());
+            rel = Relation::Geq;
+        } else if (rel == Relation::Lt) {
+            diff = kernel_->add(diff, kernel_->mkOne());
+            rel = Relation::Leq;
+        }
+        for (const auto& [vid, val] : Bvals) {
+            if (auto sp = kernel_->substituteRational(diff, vid, mpq_class(val)))
+                diff = *sp;
+        }
+        if (kernel_->isConstant(diff))
+            return relHolds(kernel_->toConstant(diff), rel)
+                       ? AtomOutcome::kTrue : AtomOutcome::kFalse;
+        out.poly = diff;
+        out.rel = rel;
+        out.reason = SatLit{0, true};   // placeholder; conflict built separately
+        return AtomOutcome::kAdd;
+    };
+
+    // Flatten an outer assertion (possibly nested And) into leaf constraints.
+    // Returns AtomOutcome semantics over the whole subtree: kFalse if any atom
+    // is trivially violated, kBail if any atom is unmodellable / contains an Or.
+    std::function<AtomOutcome(ExprId, const std::unordered_map<VarId, mpz_class>&,
+                              std::vector<CdcacConstraint>&)> flatten;
+    flatten = [&](ExprId eid, const std::unordered_map<VarId, mpz_class>& Bvals,
+                  std::vector<CdcacConstraint>& cons) -> AtomOutcome {
+        const auto& e = coreIr_->get(eid);
+        if (e.kind == Kind::And) {
+            for (ExprId c : e.children) {
+                AtomOutcome o = flatten(c, Bvals, cons);
+                if (o == AtomOutcome::kFalse || o == AtomOutcome::kBail) return o;
+            }
+            return AtomOutcome::kAdd;
+        }
+        if (e.kind == Kind::Or || e.kind == Kind::Not)
+            return AtomOutcome::kBail;   // disjunction / negation in outer: bail
+        CdcacConstraint c;
+        AtomOutcome o = atomToConstraint(eid, Bvals, c);
+        if (o == AtomOutcome::kAdd) cons.push_back(std::move(c));
+        return o;
+    };
+
+    // ---- 3. Enumerate B-tuples × branch combos; each leaf must be Unsat.
+    std::vector<mpz_class> bcur;
+    for (const auto& bv : bvars) bcur.push_back(bv.lo);
+    std::size_t leavesChecked = 0;
+    while (true) {
+        std::unordered_map<VarId, mpz_class> Bvals;
+        for (std::size_t i = 0; i < bvars.size(); ++i) Bvals[bvars[i].vid] = bcur[i];
+
+        // Mandatory outer constraints for this B (shared across branch combos).
+        std::vector<CdcacConstraint> outerCons;
+        bool bTupleDead = false;     // some outer atom trivially violated ⇒ all
+                                     // branch combos at this B are infeasible
+        {
+            AtomOutcome oo = AtomOutcome::kAdd;
+            for (ExprId oa : profile.outerAssertions) {
+                oo = flatten(oa, Bvals, outerCons);
+                if (oo != AtomOutcome::kAdd) break;
+            }
+            if (oo == AtomOutcome::kBail) return std::nullopt;     // can't model
+            if (oo == AtomOutcome::kFalse) bTupleDead = true;
+        }
+
+        if (!bTupleDead) {
+            // Branch-combo odometer.
+            std::vector<std::size_t> bc(profile.blocks.size(), 0);
+            while (true) {
+                std::vector<CdcacConstraint> cons = outerCons;
+                bool leafDead = false;   // trivially violated leaf atom
+                bool leafBail = false;
+                for (std::size_t bi = 0; bi < profile.blocks.size() && !leafDead;
+                     ++bi) {
+                    const auto& br = profile.blocks[bi].branches[bc[bi]];
+                    for (const auto& lam : br.lambdas) {   // lambda >= 0
+                        CdcacConstraint c;
+                        c.poly = kernel_->mkVar(kernel_->getOrCreateVar(lam));
+                        c.rel = Relation::Geq;
+                        c.reason = SatLit{0, true};
+                        cons.push_back(std::move(c));
+                    }
+                    auto addAtoms = [&](const std::vector<ExprId>& atoms) {
+                        for (ExprId a : atoms) {
+                            CdcacConstraint c;
+                            AtomOutcome o = atomToConstraint(a, Bvals, c);
+                            if (o == AtomOutcome::kAdd) cons.push_back(std::move(c));
+                            else if (o == AtomOutcome::kFalse) { leafDead = true; return; }
+                            else if (o == AtomOutcome::kBail)  { leafBail = true; return; }
+                        }
+                    };
+                    addAtoms(br.equalities);
+                    if (!leafDead && !leafBail) addAtoms(br.inequalities);
+                    if (leafBail) return std::nullopt;   // can't model a branch atom
+                }
+                if (!leafDead) {
+                    CdcacInput input;
+                    input.constraints = std::move(cons);
+                    // varOrder empty → CdcacCore Collins ordering; integerVars
+                    // empty → PURE REAL relaxation (the sound, decisive form).
+                    CdcacResult cd = cdcacCore_->solve(input);
+                    ++leavesChecked;
+                    if (cd.status != CdcacStatus::Unsat) {
+                        // Real-feasible (or undecided) leaf ⇒ cannot claim UNSAT.
+                        traceWrite("  [bounded-refute] leaf feasible/unknown "
+                                   "(status=" + std::to_string((int)cd.status)
+                                   + "); bail");
+                        return std::nullopt;
+                    }
+                }
+                // advance branch-combo odometer
+                std::size_t p = 0;
+                while (p < bc.size()) {
+                    if (++bc[p] < profile.blocks[p].branches.size()) break;
+                    bc[p] = 0; ++p;
+                }
+                if (p == bc.size()) break;
+            }
+        }
+
+        // advance B odometer (integer ranges [lo,hi])
+        std::size_t p = 0;
+        while (p < bvars.size()) {
+            ++bcur[p];
+            if (bcur[p] <= bvars[p].hi) break;
+            bcur[p] = bvars[p].lo; ++p;
+        }
+        if (p == bvars.size()) break;
+    }
+
+    // Every (B-tuple, branch-combo) leaf is real-infeasible (or trivially dead).
+    // ℤⁿ ⊆ ℝⁿ and the B domain was exhausted ⇒ sound integer UNSAT.
+    traceWrite("  [bounded-refute] ALL " + std::to_string(leavesChecked)
+               + " leaves real-infeasible ⇒ UNSAT");
+    TheoryConflict tc;
+    if (registry_) {
+        std::unordered_set<SatVar> seen;
+        auto pushReason = [&](SatVar sv) {
+            if (!seen.insert(sv).second) return;
+            for (const auto& a : active_) {
+                if (a.reason.var == sv) { tc.clause.push_back(a.reason); return; }
+            }
+        };
+        for (const auto& blk : profile.blocks) {
+            for (const auto& proxy : blk.branchProxies) {
+                if (proxy.empty()) continue;
+                if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushReason(*sv);
+            }
+            for (const auto& br : blk.branches) {
+                if (br.originalAnd == NullExpr) continue;
+                if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
+                    pushReason(*sv);
+            }
+        }
+    }
+    if (tc.clause.empty()) {
+        tc.clause.reserve(active_.size());
+        for (const auto& a : active_) tc.clause.push_back(a.reason);
+    }
+    if (tc.clause.empty()) return std::nullopt;   // nothing to pin the conflict on
+    std::cerr << "[FarkasOrBoundedRefute] all " << leavesChecked
+              << " leaves real-infeasible; emit UNSAT conflict size="
+              << tc.clause.size() << "\n";
+    return TheoryCheckResult::mkConflict(std::move(tc));
+#endif
 }
 
 // SAT14-attack: early-pipeline LS stage. Same LS instance, but invoked at

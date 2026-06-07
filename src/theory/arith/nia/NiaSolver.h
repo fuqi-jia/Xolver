@@ -38,6 +38,7 @@ namespace xolver {
 class NiaLinearizationAdapter;
 class CdcacCore;        // integer-aware CDCAC (libpoly-gated; constructed in .cpp)
 class AlgebraBackend;
+namespace farkas { struct FarkasProfile; }  // bounded-B refutation input
 
 /**
  * NIA (Nonlinear Integer Arithmetic) theory solver.
@@ -391,6 +392,17 @@ private:
     // Default-OFF XOLVER_NIA_FARKAS_OR. Returns SAT only after validating
     // against the original CoreIr formula; never UNSAT.
     std::optional<TheoryCheckResult> stageFarkasOr(TheoryLemmaStorage&, TheoryEffort);
+    // Bounded-B real-relaxation refutation (XOLVER_NIA_FARKAS_BOUNDED_REFUTE,
+    // default-OFF). For each integer tuple of the bounded template vars B and
+    // each Or-branch combo, substitute B and decide the REAL relaxation over
+    // (lambda>=0, CT, residual) with CdcacCore. Every (B,combo) leaf
+    // real-infeasible ⇒ sound integer UNSAT (ℤⁿ⊆ℝⁿ, exhaustive over the finite
+    // B domain). Cracks Farkas-Or UNSAT cases (VeryMax/Stroeder) whose real
+    // relaxation is feasible only at FRACTIONAL B. UNSAT is emitted only when
+    // every leaf is a CdcacCore projection-certified Unsat; any Sat/Unknown
+    // leaf (or any modelling gap) bails to nullopt.
+    std::optional<TheoryCheckResult> tryBoundedBRefutation(
+        const farkas::FarkasProfile& profile);
     std::optional<TheoryCheckResult> stageLocalSearch(TheoryLemmaStorage&, TheoryEffort);
     // LS-SMART-Z5 (master 2026-06-02): Boolean-extend re-validate.
     // When stageLocalSearch's cost==0 gate fails, LS may still have visited a
