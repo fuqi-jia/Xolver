@@ -384,11 +384,23 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
             // a longer WalkSAT run (matrix-1-all-30 found at ~5s). SAT-only +
             // exact-validated ⇒ growing the search budget never affects a verdict,
             // only how long it looks (mirrors the CAC-deadline scaling at the
-            // CacEngine config below; shareDen=100 keeps the up-front slice small
-            // so an UNSAT case — WalkSAT has no plateau-exit — front-loads ~12s of
-            // a 1200s instance budget, not a 1/4 slice).
-            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 100));
-            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds)));
+            // CacEngine config below).
+            //
+            // SHARE = 1/10 of the instance wall-clock (was 1/100). The cell-jump
+            // escape (LS-NRA critical move) makes WalkSAT the productive engine for the
+            // bilinear matrix SAT walls the covering/MCSAT can't touch, but it needs
+            // real time: at 1/100 (~12s of a 1200s instance) only the easiest residual
+            // cracks; the cell-jump-reachable cases need the larger budget. 1/10 (~120s)
+            // is a deliberate front-load for the SAT-finder. SOUND: SAT-only + exact-
+            // validated, so a bigger budget never changes a verdict, only how long the
+            // search looks; an UNSAT case (WalkSAT has no plateau-exit) pays the slice
+            // then falls through to the covering with the remaining 9/10. INERT by
+            // default (returns the 250ms base unless XOLVER_WALLCLOCK_SCALE + _MS are
+            // set), so the WSL/regression path is byte-identical — this only sizes the
+            // competition budget. The round cap is scaled hard (ref 6s, 256x) so the
+            // WALL-CLOCK time, not the round count, is the binding limit.
+            ls.setBudgetMs(wall::scaledBudgetMs(budgetMs, 1, 10));
+            ls.setMaxRounds(static_cast<int>(wall::scaledCount(maxRounds, 6000, 256)));
             ls.setEqRelax(eqRelax);
             const auto t0 = std::chrono::steady_clock::now();
             auto candOpt = ls.tryFindModel(lsCons, vars);

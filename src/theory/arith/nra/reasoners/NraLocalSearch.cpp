@@ -541,6 +541,13 @@ NraLocalSearch::univariateBoundaryCandidates(
         // Continued-fraction-bounded approximation with denominator ≤ 1e6.
         // GMP's mpq_class(double) constructor uses the exact double
         // representation which can blow up the denominator; cap via reduce.
+        // CRASH GUARD: mpq_class(x) for a non-finite x routes through __gmpq_set_d,
+        // which raises SIGFPE (a SIGNAL, not a C++ exception — the try/catch below
+        // does NOT catch it → process abort). Extreme bilinear coefficients can make
+        // disc.get_d() overflow to +inf (⇒ sqDisc=inf ⇒ t±=inf) or a tiny |a2| blow
+        // t± up to ±inf; reject any non-finite candidate up front. (Found via the
+        // larger LS budget reaching such states on zankl/matrix-1-all-15.)
+        if (!std::isfinite(x)) return mpq_class{0};
         mpq_class q;
         try { q = mpq_class(x); } catch (...) { return mpq_class{0}; }
         q.canonicalize();
