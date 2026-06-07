@@ -785,8 +785,8 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
         }
         if (!improved) {
             // Local minimum: PAWS-style bump on every still-violated atom +
-            // restart from zero. (Master-spec lex score makes "violated" mean
-            // "non-zero atomViolation", not "below some magnitude threshold".)
+            // restart. (Master-spec lex score makes "violated" mean "non-zero
+            // atomViolation", not "below some magnitude threshold".)
             bool anyViolated = false;
             for (size_t i = 0; i < constraints.size(); ++i) {
                 if (atomViolation(constraints[i], asg) > 0) {
@@ -795,7 +795,17 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 }
             }
             if (!anyViolated) return asg;
-            for (auto& kv : asg) kv.second = 0;
+            // Restart from the BOUND-FEASIBLE seed (seenFirst), not all-zeros: a
+            // bounded var reset to 0 re-enters bound-violation (h>0 ⇒ 0 is infeasible),
+            // so a zero-restart wastes the restart re-walking out of the infeasible
+            // box on every local minimum. Restarting at the simplest feasible point
+            // (bumped weights then steer a fresh walk from inside the box) is what lets
+            // the escape actually explore the feasible region. Unbounded vars (absent
+            // from seenFirst) reset to 0 as before.
+            for (auto& kv : asg) {
+                auto sit = seenFirst.find(kv.first);
+                kv.second = (sit != seenFirst.end()) ? sit->second : mpq_class{0};
+            }
             score = totalScore(constraints, weights, asg);
         }
     }
