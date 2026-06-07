@@ -1156,9 +1156,6 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         // subtree) and no UNSAT is lost (an incomplete level taints prune and descent
         // identically).
         CdcacResult childRes;
-        bool prefixAllRational = true;
-        for (const auto& pv : prefix.values)
-            if (!pv.isRational()) { prefixAllRational = false; break; }
         {
             std::unordered_set<VarId> assigned(prefix.varOrder.begin(), prefix.varOrder.end());
             std::vector<std::pair<size_t, Sign>> fwViolated;
@@ -1175,13 +1172,14 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (!relationHolds(s, input.constraints[ci].rel))
                     fwViolated.emplace_back(ci, s);
             }
-            // intervalFpViolation (box-consistency over a rational point map) is defined
-            // only for a fully rational prefix — it self-guards (returns nullopt on any
-            // algebraic coordinate), so it never contributes a prune over an algebraic
-            // prefix; gating the call keeps the algebraic path doing only the exact
-            // fully-determined check above.
+            // intervalFpViolation now carries algebraic prefix coords as their isolating
+            // interval, so it contributes a sound partial-prune over algebraic prefixes
+            // too (deep tower levels), not just fully-rational ones. The A-type single-
+            // constraint violation it returns is exact (the box ⊇ the true point, so a
+            // strict box sign IS the point's sign), making makeLeafConflictResult valid —
+            // same as the signAt forward-prune above.
             std::optional<std::pair<size_t, Sign>> ivViol;
-            if (fwViolated.empty() && prefixAllRational)
+            if (fwViolated.empty())
                 ivViol = intervalFpViolation(prefix, input);   // partially-determined
             if (!fwViolated.empty())
                 childRes = makeLeafConflictResult(fwViolated, input);
@@ -2267,11 +2265,18 @@ bool CdcacCore::topLevelBoxInfeasible(const CdcacInput& input) {
 
 std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     const SamplePoint& prefix, const CdcacInput& input) {
-    // Caller guarantees an all-rational prefix. Build the point map.
+    // Build the assignment box: rational coords as exact points, ALGEBRAIC coords as
+    // their isolating interval [lower,upper] (a sound tight box — the true value lies
+    // inside). Previously this bailed on any algebraic coordinate, so deep tower levels
+    // (algebraic prefixes) got NO box-consistency prune; carrying the algebraic interval
+    // lets the partial-prune fire there too, only ever over-approximating (box ⊇
+    // feasible) so it never over-prunes a real model.
     std::unordered_map<VarId, mpq_class> m;
+    std::unordered_map<VarId, Iv> seedBox;
     for (size_t i = 0; i < prefix.values.size(); ++i) {
-        if (!prefix.values[i].isRational()) return std::nullopt;   // defensive
-        m[prefix.varOrder[i]] = prefix.values[i].rational;
+        const RealAlg& pv = prefix.values[i];
+        if (pv.isRational()) m[prefix.varOrder[i]] = pv.rational;
+        else { Iv iv; iv.lo = pv.root.lower; iv.hi = pv.root.upper; seedBox[prefix.varOrder[i]] = iv; }
     }
     // Run the full box-consistency fixpoint: it CONTRACTS the unassigned vars'
     // intervals (degree-1 HC4), under which far more constraints become strictly
@@ -2282,7 +2287,8 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     // (sound — just no prune). Sound throughout (box ⊇ feasible projection).
     std::unordered_map<VarId, Iv> box;
     std::optional<std::pair<size_t, Sign>> aConf;
-    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf);
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf,
+                            seedBox.empty() ? nullptr : &seedBox);
     if (!inf || !aConf) return std::nullopt;
     // Confirm the surfaced sign genuinely violates the relation.
     if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
