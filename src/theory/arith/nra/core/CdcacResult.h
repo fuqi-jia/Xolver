@@ -41,6 +41,13 @@ struct CdcacResult {
     std::optional<CdcacUnsatCertificate> unsat;
     std::optional<CoveringCertificate> coveringCert;
     CdcacUnknownReason unknownReason = CdcacUnknownReason::None;
+    // Integer-aware CDCAC (XOLVER_NRA_CAC_INT): true when this (sub)result's
+    // UNSAT relied on integer-specific exclusion (an integrality/integer-point
+    // cell anywhere in its subtree). A parent must NOT generalize such an UNSAT
+    // across a real interval that may contain other (untested) integers — it is
+    // sound only as a single integer point. Real-only UNSATs keep this false and
+    // generalize normally. Propagated up through testAndRecurse.
+    bool integralityUsed = false;
 
     static CdcacResult mkSat(SamplePoint m) {
         CdcacResult r;
