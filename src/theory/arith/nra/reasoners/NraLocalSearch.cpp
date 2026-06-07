@@ -827,14 +827,21 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                     if (!ccvars.empty()) {
                         const VarId jv = ccvars[nextRand() % ccvars.size()];
                         const mpq_class saved = asg.count(jv) ? asg[jv] : mpq_class{0};
-                        bool jumped = false;
+                        // Among the cell-jump targets that land feasible for cc, take the one
+                        // with the LOWEST total score (least collateral damage to the coupled
+                        // constraints) rather than the first — LS-NRA scores its critical move,
+                        // so the barrier is crossed in the best feasible direction.
+                        mpq_class bestJump; bool jumped = false; Score bestJS;
                         for (const auto& q : univariateBoundaryCandidates(cc, jv, asg)) {
                             if (mpz_class(q.get_den()) > 1000000) continue;
                             asg[jv] = q;
-                            if (atomViolation(cc, asg) == 0) { jumped = true; break; }  // cell-jump lands feasible for cc
+                            if (atomViolation(cc, asg) != 0) continue;   // must satisfy cc
+                            const Score js = totalScore(constraints, weights, asg);
+                            if (!jumped || js < bestJS) { bestJS = js; bestJump = q; jumped = true; }
                         }
+                        asg[jv] = jumped ? bestJump : saved;
                         if (jumped) { score = totalScore(constraints, weights, asg); continue; }  // keep walking
-                        asg[jv] = saved;   // no feasible cell found → fall through to restart
+                        // no feasible cell for cc → fall through to restart
                     }
                 }
             }
