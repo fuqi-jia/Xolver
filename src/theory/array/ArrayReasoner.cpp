@@ -16,6 +16,8 @@ namespace xolver {
 
 ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
+    // L1: relevancy-driven completion (default-OFF). See header.
+    lazyComplete_ = std::getenv("XOLVER_AX_LAZY") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
@@ -273,6 +275,8 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     // further read-over-write selects. Sound — the model floor guards any
     // missed instance; this only bounds the driver-family blowup.
     if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) return;
+    // L1: relevancy-driven path (XOLVER_AX_LAZY) replaces the eager cross-product.
+    if (lazyComplete_) { completeStoreSelectsLazy(outQueue); return; }
     discoverArrayTerms();
 
     // (1) Incrementally extend the read-index cache from NEW selectTerms_
@@ -349,6 +353,49 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     if (!budgetHit && newReadIdxStart < completeReadIdxCache_.size()) {
         for (size_t a = 0; a < newArrayStart && !budgetHit; ++a)
             processPairs(completeArrayCache_[a], newReadIdxStart, completeReadIdxCache_.size());
+    }
+}
+
+void ArrayReasoner::completeStoreSelectsLazy(std::deque<PendingMerge>& outQueue) {
+    // RELEVANCY-DRIVEN completion (L1). For each ORIGINAL read select(B, idx),
+    // intern select(s, idx) for every store s in B's e-graph class (≠ B). These
+    // are exactly the store towers the read must peel THROUGH: s ~ B (same class)
+    // means select(s,idx) congruence-merges with select(B,idx), and Row1/Row2 then
+    // resolve s. Independent arrays (not e-graph-equal to any read array) are NOT
+    // completed — that is where the eager arrays×indices cross-product exploded
+    // (24k selects on cs_*). Re-run each check: classes merge during search, so
+    // newly-connected stores are picked up; selectCompleteDone_ dedups; the
+    // completion is monotonic and verdict-sound (only tautological selects added).
+    discoverArrayTerms();
+    if (storeTerms_.empty() || selectTerms_.empty()) return;
+
+    // Group stores by e-graph class rep.
+    std::unordered_map<EClassId, std::vector<EufTermId>> storesByRep;
+    storesByRep.reserve(storeTerms_.size() * 2 + 1);
+    for (EufTermId s : storeTerms_) storesByRep[egraph_->rep(s)].push_back(s);
+
+    size_t nSel = selectTerms_.size();
+    for (size_t k = 0; k < nSel; ++k) {
+        EufTermId sel = selectTerms_[k];
+        if (internalSelect_.count(sel)) continue;        // seed from genuine reads only
+        const auto& sn = tm_->node(sel);
+        if (sn.args.size() != 2) continue;
+        EufTermId arrB = sn.args[0];
+        EufTermId idx = sn.args[1];
+        ExprId idxExpr = originExpr(idx);
+        if (idxExpr == NullExpr) continue;
+        if (extWitnessIdx_.count(idxExpr)) continue;     // parity with the eager path
+        auto it = storesByRep.find(egraph_->rep(arrB));
+        if (it == storesByRep.end()) continue;           // no store tower in this read's class
+        for (EufTermId s : it->second) {
+            if (s == arrB) continue;                     // read already on this store
+            if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) return;
+            uint64_t key = pairKey(s, idx);
+            if (!selectCompleteDone_.insert(key).second) continue;
+            ExprId sExpr = originExpr(s);
+            if (sExpr == NullExpr) continue;
+            internSelect(sExpr, idxExpr, outQueue);
+        }
     }
 }
 

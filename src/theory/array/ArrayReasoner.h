@@ -145,6 +145,18 @@ private:
     // once at construction.
     bool row2ConstEnabled_ = false;
 
+    // XOLVER_AX_LAZY (default-OFF, L1): RELEVANCY-DRIVEN read-over-write
+    // completion. The default eager path interns select(arr,idx) for the full
+    // arrays×read-indices cross-product (24k+ selects on the cs_* concurrency
+    // traces vs z3's ~100 axiom instantiations — a primary TO cause). The lazy
+    // path instead seeds select(s,idx) ONLY for stores s in the SAME e-graph
+    // class as an array actually read at idx — the towers a read genuinely needs
+    // to peel. Row2 then chains the peeling. Verdict-sound (completion adds only
+    // tautological selects; restricting which we add is completeness-only, floored
+    // by arrayModelDefinitelyViolates). Read once at construction.
+    bool lazyComplete_ = false;
+    void completeStoreSelectsLazy(std::deque<PendingMerge>& outQueue);
+
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
     // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE
     // disables it (A/B baseline only). Read once at construction.
