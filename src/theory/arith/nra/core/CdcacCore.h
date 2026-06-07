@@ -225,6 +225,10 @@ private:
     // See docs/nra-nlsat-diagnosis.md "MCSAT BUILD SPEC" M1/M2.
     bool subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>& m,
                               const CdcacInput& input);
+    // As above but carries the full prefix: rational coords as points, algebraic
+    // coords as their isolating interval (a sound tight box). Used by the default
+    // algebraic SAT-first descent to prune infeasible subtrees early.
+    bool subtreeBoxInfeasiblePrefix(const SamplePoint& prefix, const CdcacInput& input);
     // Interval forward-prune: a constraint whose natural-interval-extension range
     // over (rational prefix + unassigned = R) is strictly single-signed and that
     // sign violates its relation is violated by EVERY completion -> the subtree is

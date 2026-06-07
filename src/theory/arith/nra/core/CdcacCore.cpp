@@ -1873,6 +1873,17 @@ CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
             if (s == Sign::Unknown) continue;            // inconclusive — don't prune
             if (!relationHolds(s, input.constraints[ci].rel)) { pruned = true; break; }
         }
+        // Box-ICP partial-assignment lookahead — "carry the assignment, exclude the
+        // impossible regions as you descend" on the DEFAULT (algebraic) SAT-first path.
+        // The forward-check above only fires once a constraint is FULLY assigned; box
+        // consistency over the partial assignment prunes whole infeasible subtrees far
+        // earlier. subtreeBoxInfeasiblePrefix carries the assignment FAITHFULLY (rational
+        // coords as exact points, algebraic coords as their isolating interval — a sound
+        // tight box) and over-approximates, so an empty box proves the subtree infeasible
+        // without ever over-pruning a real model (invariant 1; the k==n leaf still
+        // validates every constraint). Skipped at the leaf and when nothing is fixed yet.
+        if (!pruned && k + 1 < n && subtreeBoxInfeasiblePrefix(prefix, input))
+            pruned = true;
         if (pruned) { prefix.pop(); continue; }
         CdcacResult r = trySatSampleFirstAlg(k + 1, prefix, input, budget);
         prefix.pop();
@@ -2167,6 +2178,33 @@ bool CdcacCore::subtreeBoxInfeasible(const std::unordered_map<VarId, mpq_class>&
     ++g_icpCalls;
     std::unordered_map<VarId, Iv> box;
     bool inf = propagateBox(satRp_, satSafe_, m, input, box);
+    if (inf) ++g_icpPrunes;
+    return inf;
+}
+
+// Like subtreeBoxInfeasible but carries the FULL prefix assignment: rational coords
+// as exact points and ALGEBRAIC coords as their isolating interval [lower, upper].
+// The algebraic interval is a sound tight box (the true value lies inside), strictly
+// better than dropping the coord to (−∞,∞) — so the over-approximation box is tighter
+// and the empty-box prune fires on more subtrees, while never over-pruning a real
+// model. Used by the default algebraic SAT-first descent (trySatSampleFirstAlg).
+bool CdcacCore::subtreeBoxInfeasiblePrefix(const SamplePoint& prefix,
+                                           const CdcacInput& input) {
+    std::unordered_map<VarId, mpq_class> m;
+    std::unordered_map<VarId, Iv> seedBox;
+    for (size_t i = 0; i < prefix.varOrder.size(); ++i) {
+        const RealAlg& pv = prefix.values[i];
+        if (pv.isRational()) m.emplace(prefix.varOrder[i], pv.rational);
+        else if (pv.isAlgebraic()) {
+            Iv iv; iv.lo = pv.root.lower; iv.hi = pv.root.upper;
+            seedBox.emplace(prefix.varOrder[i], iv);
+        }
+    }
+    if (m.empty() && seedBox.empty()) return false;
+    ++g_icpCalls;
+    std::unordered_map<VarId, Iv> box;
+    bool inf = propagateBox(satRp_, satSafe_, m, input, box, nullptr,
+                            seedBox.empty() ? nullptr : &seedBox);
     if (inf) ++g_icpPrunes;
     return inf;
 }
