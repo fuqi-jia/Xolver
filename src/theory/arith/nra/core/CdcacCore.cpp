@@ -1849,16 +1849,26 @@ CdcacResult CdcacCore::trySatSampleFirstAlg(int k, SamplePoint& prefix,
             if (ms > satFirstMs_) { budget = 0; break; }
         }
         prefix.push(var, cand);
-        // Forward-check: only constraints whose vars are ALL assigned get a definite
-        // signAt; a violated one prunes. (Explicit all-assigned guard avoids relying
-        // on signAt's partial-assignment behaviour and skips needless libpoly calls.)
+        // Forward-check: only constraints NEWLY fully-determined at THIS level get a
+        // signAt. A constraint must (a) contain `var` and (b) have all its vars
+        // assigned. The `hasVar` guard is the key: a constraint fully assigned at a
+        // SHALLOWER level was already sign-checked the moment its last variable was
+        // fixed (and passed — else we pruned then), and its value is independent of
+        // `var`, so re-checking it at every candidate of `var` is pure redundant work
+        // (an expensive libpoly signAt over an algebraic prefix). Skipping it loses no
+        // pruning (it stays satisfied) and no soundness (the k==n leaf re-validates
+        // EVERY constraint). Mirrors solveLevel's forward-prune, which already gates on
+        // hasVar. (Explicit all-assigned guard avoids relying on signAt's partial
+        // behaviour.)
         bool pruned = false;
         for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
             if (ci >= satRp_.size() || !satRp_[ci]) continue;
-            bool allAssigned = true;
-            for (VarId v : satRp_[ci]->variables())
+            bool allAssigned = true, hasVar = false;
+            for (VarId v : satRp_[ci]->variables()) {
+                if (v == var) hasVar = true;
                 if (!assigned.count(v)) { allAssigned = false; break; }
-            if (!allAssigned) continue;
+            }
+            if (!hasVar || !allAssigned) continue;       // only NEWLY-determined here
             Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
             if (s == Sign::Unknown) continue;            // inconclusive — don't prune
             if (!relationHolds(s, input.constraints[ci].rel)) { pruned = true; break; }
@@ -2345,10 +2355,17 @@ CdcacResult CdcacCore::trySatSampleFirst(int k, SamplePoint& prefix,
         bool pruned = false;
         for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
             if (ci >= satRp_.size() || !satRp_[ci]) continue;
-            bool allAssigned = true;
-            for (VarId v : satRp_[ci]->variables())
+            bool allAssigned = true, hasVar = false;
+            for (VarId v : satRp_[ci]->variables()) {
+                if (v == var) hasVar = true;
                 if (!assigned.count(v)) { allAssigned = false; break; }
-            if (!allAssigned) continue;
+            }
+            // Only constraints NEWLY fully-determined at THIS level (contain `var`).
+            // Constraints full at a shallower level were already checked when their
+            // last var was fixed and are independent of `var` — re-checking is pure
+            // redundant work, and the k==n leaf re-validates every constraint, so no
+            // soundness is lost. Mirrors solveLevel's hasVar-gated forward-prune.
+            if (!hasVar || !allAssigned) continue;
             if (!satRelHolds(exactSignAt(*satRp_[ci], m), input.constraints[ci].rel)) { pruned = true; break; }
         }
         // (Learned dead cells are checked once per prefix at the TOP of the level,
