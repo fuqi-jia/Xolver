@@ -2914,6 +2914,25 @@ public:
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
                 phase("eager-bb-start");
                 bitblast::EagerBitBlastSolver eagerbb;
+                // Farkas/termination routing: eager-bb diverges on the
+                // bilinear-λ width search of Stroeder/VeryMax UNSAT cases. When
+                // the bounded-B refutation lane is opted in and the formula IS
+                // Farkas-Or-shaped (bounded template coeffs + Farkas branches),
+                // give eager-bb only a SHORT slice so it bails to Unknown and the
+                // NIA pipeline's bounded-B refutation gets the UNSAT — while the
+                // SAT cases, which eager-bb solves fast, still land in time.
+                if (std::getenv("XOLVER_NIA_FARKAS_BOUNDED_REFUTE")) {
+                    farkas::FarkasOrDetector fdet(*ir);
+                    auto fprof = fdet.detect();
+                    if (fprof.good() && !fprof.boundedGlobals.empty()) {
+                        // pct of wall-clock (competition: 5% of 1200s ≈ 60s — ample
+                        // for fast SAT, leaves ~95% for the refutation); absMs is the
+                        // dev-only fallback when no wall-clock deadline is set.
+                        eagerbb.setFarkasBudget(
+                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_PCT", 5),
+                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
+                    }
+                }
                 auto ibr = eagerbb.solve(*ir, ir->assertions());
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {

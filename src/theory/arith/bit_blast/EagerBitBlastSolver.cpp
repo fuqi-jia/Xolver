@@ -322,13 +322,18 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // scheduling (allocate ARM budgets by percentage), not a downgrade-to-
     // Unknown floor on a crash. EAGER still returns Unknown when its share is
     // up, exactly as before -- the change is HOW MUCH budget the arm gets.
-    long long budgetMs =
-        env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
+    long long budgetMs = (budgetMsOverride_ >= 0)
+        ? budgetMsOverride_
+        : env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
     if (budgetMs < 0) budgetMs = 120000;
-    long pct = env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
+    long pct = (budgetPctOverride_ >= 0)
+        ? budgetPctOverride_
+        : env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
     if (pct < 1) pct = 1;
     if (pct > 100) pct = 100;
     if (wall::hasDeadline()) {
+        // COMPETITION path: budget = pct% of the remaining wall-clock (the
+        // absolute budgetMs above is dev-only and not used here).
         long remaining = wall::remainingMs();
         budgetMs = (static_cast<long long>(remaining) * pct) / 100;
     }

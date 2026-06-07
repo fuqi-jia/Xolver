@@ -47,7 +47,23 @@ public:
     // Attempt to find (and exactly validate) a model for `assertions` in `ir`.
     Result solve(const CoreIr& ir, const std::vector<ExprId>& assertions);
 
+    // Give eager-bb a SMALL slice for this one call (Farkas/termination shapes,
+    // where its bilinear-λ width search diverges on UNSAT) so it bails to Unknown
+    // and the bounded-B refutation in the NIA pipeline gets the UNSAT — while SAT
+    // shapes, which eager-bb solves fast, still land within the slice.
+    //   pct: PERCENTAGE of the remaining wall-clock (the COMPETITION path; >=1).
+    //        With a 1200s deadline a small pct (e.g. 5 → 60s) is plenty for fast
+    //        SAT yet leaves ~95% for the refutation. This is the right knob —
+    //        an absolute ms is wrong at competition scale.
+    //   absMs: dev-only fallback used ONLY when no wall-clock deadline is set
+    //        (e.g. bash `timeout` runs); ignored in competition.
+    void setFarkasBudget(long pct, long absMs) {
+        budgetPctOverride_ = pct; budgetMsOverride_ = absMs;
+    }
+
 private:
+    long budgetPctOverride_ = -1;
+    long budgetMsOverride_ = -1;
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
 
