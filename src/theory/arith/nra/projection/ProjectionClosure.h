@@ -101,8 +101,21 @@ public:
     // Entry ids whose main variable is varOrder[k] (non-constant boundary polys).
     const std::vector<int>& levelPolys(int k) const;
 
+    // Feature A (conflict generalization) provenance: the INPUT-constraint indices
+    // (positions in the `constraints` vector passed to build()) that entry `id`
+    // transitively descends from. An Input entry carries its own index; a derived
+    // entry (coefficient / PSC) carries the UNION of its parents'. Dedup of two
+    // derivations into one entry unions both origins — OVER-inclusion, the safe
+    // direction for generalization (a conflict cell is then widened to FEWER roots,
+    // never more, so a sound conflict can never be over-widened into a false UNSAT).
+    const std::vector<int>& inputOrigins(int id) const {
+        static const std::vector<int> kEmpty;
+        return (id >= 0 && id < static_cast<int>(entryInputs_.size())) ? entryInputs_[id] : kEmpty;
+    }
+
 private:
     std::vector<Entry> entries_;
+    std::vector<std::vector<int>> entryInputs_;   // per-entry input-constraint origin set (Feature A)
     std::vector<std::vector<int>> levelPolys_;
     std::vector<VarId> varOrder_;
     Config cfg_;

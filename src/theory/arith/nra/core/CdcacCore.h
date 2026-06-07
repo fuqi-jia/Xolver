@@ -69,6 +69,15 @@ private:
     std::vector<std::vector<size_t>> constraintsByLevel_;
     const std::vector<size_t>& constraintsAtLevel(size_t k, const CdcacInput& input);
 
+    // Feature A (conflict generalization), step A1: provenance of each level boundary
+    // poly — the set of INPUT-constraint indices it transitively descends from
+    // (translated from the projection closure's per-entry input-origin sets). Used by
+    // A2/A3 to widen a conflict cell only to the roots of the polys derived from the
+    // conflict's REASON constraints. Built in buildClosure (Collins path), cleared in
+    // resetPerSolveState. Empty for a poly with unknown provenance (e.g. the Lazard
+    // path) → A3 falls back to the shallow (un-widened) cell, which is always sound.
+    std::unordered_map<PolyId, std::vector<int>> polyOrigins_;
+
     // nlsat-engine STEP A (XOLVER_NRA_CAC_SAT_FIRST): SAT-only model-constructing
     // search, run ONCE before the eager buildClosure. Delineates each var's cells
     // LAZILY from the raw constraints (specializeToUnivariate + isolateRealRoots —

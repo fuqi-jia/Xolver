@@ -47,18 +47,36 @@ int ProjectionClosure::intern(const RationalPolynomial& pIn,
         }
     }
     std::string key = polyKey(p);
+    int id;
     auto it = dedup_.find(key);
-    if (it != dedup_.end()) return it->second;
-
-    int id = static_cast<int>(entries_.size());
-    Entry e;
-    e.mainVarLevel = mainVarLevelOf(p);
-    e.poly = std::move(p);
-    e.source = src;
-    entries_.push_back(std::move(e));
-    dedup_.emplace(std::move(key), id);
-    if (entries_[id].mainVarLevel >= 0) {
-        levelPolys_[entries_[id].mainVarLevel].push_back(id);
+    if (it != dedup_.end()) {
+        id = it->second;
+    } else {
+        id = static_cast<int>(entries_.size());
+        Entry e;
+        e.mainVarLevel = mainVarLevelOf(p);
+        e.poly = std::move(p);
+        e.source = src;
+        entries_.push_back(std::move(e));
+        dedup_.emplace(std::move(key), id);
+        if (entries_[id].mainVarLevel >= 0) {
+            levelPolys_[entries_[id].mainVarLevel].push_back(id);
+        }
+    }
+    // Feature A provenance: a derived op inherits the UNION of its parents' input
+    // origins (run on dedup hits too, so an entry reachable by several derivations
+    // accumulates all of them — the safe over-inclusive direction). Input origins
+    // are added by build() (it knows the constraint index).
+    if (static_cast<int>(entryInputs_.size()) <= id) entryInputs_.resize(id + 1);
+    if (src.op != ProjectionOpKind::Input) {
+        auto addOrigins = [&](int parent) {
+            if (parent < 0 || parent >= static_cast<int>(entryInputs_.size())) return;
+            std::vector<int>& dst = entryInputs_[id];
+            for (int x : entryInputs_[parent])
+                if (std::find(dst.begin(), dst.end(), x) == dst.end()) dst.push_back(x);
+        };
+        addOrigins(src.parent1);
+        addOrigins(src.parent2);
     }
     return id;
 }
@@ -135,6 +153,7 @@ ProjectionIncompleteReason ProjectionClosure::build(
     PolynomialKernel* kernel) {
 
     entries_.clear();
+    entryInputs_.clear();   // Feature A: per-entry input-constraint origin sets
     dedup_.clear();
     varOrder_ = varOrder;
     cfg_ = cfg;
@@ -143,9 +162,16 @@ ProjectionIncompleteReason ProjectionClosure::build(
     int n = static_cast<int>(varOrder.size());
     levelPolys_.assign(static_cast<size_t>(std::max(0, n)), {});
 
-    for (const auto& c : constraints) {
+    for (size_t i = 0; i < constraints.size(); ++i) {
         ProjectionSource s; s.op = ProjectionOpKind::Input;
-        intern(c, s);
+        const int id = intern(constraints[i], s);
+        if (id < 0) continue;   // constant/zero — not a boundary
+        // Record this input's origin index on the interned entry (dedup of two
+        // identical input polys accumulates both indices — safe over-inclusion).
+        if (static_cast<int>(entryInputs_.size()) <= id) entryInputs_.resize(id + 1);
+        std::vector<int>& dst = entryInputs_[id];
+        if (std::find(dst.begin(), dst.end(), static_cast<int>(i)) == dst.end())
+            dst.push_back(static_cast<int>(i));
     }
 
     // Eliminate from the top variable down. Polys whose main variable is

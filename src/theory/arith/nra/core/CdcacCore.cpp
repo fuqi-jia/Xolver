@@ -515,13 +515,17 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
     closureComplete_ = true;
     int n = static_cast<int>(input.varOrder.size());
     levelPolyIds_.assign(static_cast<size_t>(std::max(0, n)), {});
+    polyOrigins_.clear();   // Feature A: rebuilt below (Collins path)
 
     std::vector<RationalPolynomial> rps;
-    for (const auto& c : input.constraints) {
+    std::vector<size_t> rpsToConstraint;   // Feature A: rps index → input constraint index
+    for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+        const auto& c = input.constraints[ci];
         if (kernel_->isConstant(c.poly)) continue;   // constants pre-handled by caller
         auto rp = RationalPolynomial::fromPolyId(c.poly, *kernel_);
         if (!rp) { unsatTrustworthy_ = false; logIncSite(1); closureComplete_ = false; continue; }
         rps.push_back(std::move(*rp));
+        rpsToConstraint.push_back(ci);
     }
 
     // Projection-set selection. Default: the Collins closure (unconditionally
@@ -590,6 +594,15 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
             PolyId pid = closure_.entries()[id].poly.toPolyId(*kernel_);
             if (pid == NullPoly) { unsatTrustworthy_ = false; logIncSite(7); continue; }
             levelPolyIds_[k].push_back(pid);
+            // Feature A (A1): translate this entry's rps-indexed input origins to input
+            // constraint indices and union into the level poly's provenance.
+            std::vector<int>& dst = polyOrigins_[pid];
+            for (int r : closure_.inputOrigins(id)) {
+                if (r >= 0 && r < static_cast<int>(rpsToConstraint.size())) {
+                    const int cidx = static_cast<int>(rpsToConstraint[r]);
+                    if (std::find(dst.begin(), dst.end(), cidx) == dst.end()) dst.push_back(cidx);
+                }
+            }
         }
     }
 }
@@ -608,6 +621,7 @@ void CdcacCore::resetPerSolveState() {
     closureComplete_ = false;
     constraintVarsCache_.clear();   // forward-prune per-constraint var sets
     constraintsByLevel_.clear();    // forward-prune per-level constraint index
+    polyOrigins_.clear();           // Feature A: level-poly → constraint provenance
 }
 
 // Lazily build + return the VarId set of constraint `ci` (cached per input).
