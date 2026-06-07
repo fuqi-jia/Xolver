@@ -92,6 +92,17 @@ public:
     using SelectOverrideMap = std::map<std::pair<ExprId, mpq_class>, RealValue>;
     void setSelectOverride(const SelectOverrideMap* so) { selOverride_ = so; }
 
+    // Datatype-SELECTOR value override (DT+arith combination model check). The
+    // Purifier bridges an arith-valued datatype selector `(fst p)` into a fresh
+    // shared scalar via `(= v (fst p))` (routed to EUF); the arith theory assigns
+    // v a value but the DT model export does not reflect it, so the validator
+    // cannot evaluate `(fst p)` and floors a genuine sat to Unknown. This maps the
+    // (hash-consed) selector ExprId directly to its typed value. Optional; pointer
+    // must outlive this validator. Sound: the bridge equality holds in the model,
+    // and every ORIGINAL assertion is still independently re-checked.
+    using SelectorOverrideMap = std::unordered_map<ExprId, RealValue>;
+    void setSelectorOverride(const SelectorOverrideMap* so) { selectorOverride_ = so; }
+
     // When ON, a `(select a i)` over an Int/Real-element array surfaces a concrete
     // numeric/bool element as a TYPED value (so enclosing arithmetic mod/div/+ can
     // consume it) instead of an opaque element token. Gated because it also makes
@@ -158,6 +169,7 @@ private:
     const FuncInterpMap* funcInterps_ = nullptr;
     const RealAssignment* real_ = nullptr;
     const SelectOverrideMap* selOverride_ = nullptr;
+    const SelectorOverrideMap* selectorOverride_ = nullptr;
     bool numElems_ = false;
 
     // eval memo (XOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime

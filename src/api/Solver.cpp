@@ -485,6 +485,47 @@ public:
                 selBridge.emplace(std::make_pair(sel.children[0], *idxV), rv);  // first wins
             }
         }
+        // --- Datatype selector-bridge value back-fill (DT+arith combination) ---
+        // Mirror of the array-read back-fill above: the Purifier bridges an
+        // arith-valued datatype selector `(fst p)` via `(= v (fst p))` (routed to
+        // EUF). The arith theory assigns v a concrete value, but the DT model
+        // export does not reflect it, so the validator cannot evaluate `(fst p)`
+        // and floors a genuine sat (e.g. `(* (fst p) (fst p)) = 16`) to Unknown.
+        // Surface v's value keyed by the (hash-consed) selector ExprId. SOUND: the
+        // bridge equality holds in the model and every ORIGINAL assertion is still
+        // independently re-checked, so a globally-inconsistent value → Unknown.
+        ArithModelValidator::SelectorOverrideMap selectorBridge;
+        for (ExprId aid : ir->assertions()) {
+            const CoreExpr& a = ir->get(aid);
+            if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+            ExprId selId = NullExpr, valId = NullExpr;
+            for (int s = 0; s < 2; ++s) {
+                const CoreExpr& c = ir->get(a.children[s]);
+                // Arith-valued datatype selector, or a UF application whose
+                // argument may be a datatype value (funcInterps cannot key on a
+                // DT arg) — both are EUF-owned reads the Purifier bridges.
+                if ((c.kind == Kind::Selector || c.kind == Kind::UFApply) &&
+                    (c.sort == ir->intSortId() || c.sort == ir->realSortId())) {
+                    selId = a.children[s];
+                    valId = a.children[1 - s];
+                    break;
+                }
+            }
+            if (selId == NullExpr) continue;
+            const CoreExpr& valNode = ir->get(valId);
+            if (valNode.kind != Kind::Variable) continue;
+            const std::string* vn = std::get_if<std::string>(&valNode.payload.value);
+            if (!vn) continue;
+            auto rit = lastModel_->numericAssignments.find(*vn);
+            if (rit != lastModel_->numericAssignments.end()) {
+                selectorBridge.emplace(selId, rit->second);   // first wins
+            } else {
+                auto nit = numAsg.find(*vn);
+                if (nit != numAsg.end())
+                    selectorBridge.emplace(selId, RealValue::fromMpq(nit->second));
+            }
+        }
+
         const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
@@ -494,12 +535,14 @@ public:
             validator.setRealAssignments(&filteredReal);
             validator.setNumericArrayElements(arrBridgeModel);
             if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
+            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
             ArithModelValidator validator(*ir, numAsg, boolAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
             validator.setRealAssignments(&filteredReal);
+            if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         }

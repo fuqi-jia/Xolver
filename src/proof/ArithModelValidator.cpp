@@ -521,6 +521,15 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             return t;
         }
         case Kind::UFApply: {
+            // Purifier-bridged application value (combination): `(= u (f p))`
+            // surfaces u's theory value keyed by this UFApply's ExprId. Consult it
+            // first — it is the model's actual value for this application and works
+            // even when an argument is a datatype value (funcInterps key on numeric
+            // args only, so `(f p)` with a DT arg would otherwise be Indeterminate).
+            if (selectorOverride_) {
+                auto bit = selectorOverride_->find(eid);
+                if (bit != selectorOverride_->end()) return num(bit->second);
+            }
             // Evaluate an uninterpreted-function application by table lookup
             // against a supplied interpretation. Without an interpretation the
             // application is Indeterminate (the default below). The interp's
@@ -553,6 +562,19 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             try { return num(RealValue::fromMpq(mpq_class(*valStr))); } catch (...) {}
             // Non-numeric (uninterpreted-sort) result: an opaque equality token.
             TR t; t.kind = Kind2::Token; t.tok = *valStr; return t;
+        }
+        case Kind::Selector: {
+            // Arith-valued datatype selector `(fst p)`: the DT/EUF model does not
+            // export field values, but the Purifier bridged this read into a
+            // shared scalar whose theory value is surfaced here keyed by the
+            // (hash-consed) selector ExprId. Consult it so DT+arith combination
+            // models validate (e.g. `(* (fst p) (fst p)) = 16`). No override →
+            // Indeterminate (the default), never a wrong value.
+            if (selectorOverride_) {
+                auto it = selectorOverride_->find(eid);
+                if (it != selectorOverride_->end()) return num(it->second);
+            }
+            return r;
         }
         default:
             return r;  // quantifiers, BV/FP, … → indeterminate
