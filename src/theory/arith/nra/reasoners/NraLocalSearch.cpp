@@ -783,6 +783,14 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
     if (score.isSat()) return asg;
 
     int restartCount = 0;   // drives multi-start restart-magnitude diversity (below)
+    // TABU for the cell-jump escape: after escaping on a variable, forbid escaping it
+    // again for a few escapes so successive escapes diversify across variables. Breaks
+    // the fix-cc/break-cc' 2-variable oscillation that traps the walk on coupled
+    // bilinear systems (the algorithm-limited matrix residual). Anti-cycling, sound
+    // (only steers escape var choice, never a verdict).
+    std::unordered_map<VarId, int> escapeTabuVar;
+    int escapeCount = 0;
+    static const int kTabuTenure = 5;
     for (int round = 0; round < maxRounds_; ++round) {
         if (budgetExpired()) break;
         const bool improved = walkOneRound(constraints, weights, vars, asg, score);
@@ -822,10 +830,28 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                 for (size_t i = 0; i < constraints.size(); ++i)
                     if (atomViolation(constraints[i], asg) > 0) viol.push_back(i);
                 if (!viol.empty()) {
-                    const Constraint& cc = constraints[viol[nextRand() % viol.size()]];
-                    const std::vector<VarId>& ccvars = atomVars(cc.poly);
-                    if (!ccvars.empty()) {
-                        const VarId jv = ccvars[nextRand() % ccvars.size()];
+                    ++escapeCount;
+                    // Pick a violated constraint and a NON-TABU variable of it (try a few
+                    // constraints so a recently-escaped var doesn't get re-picked). Falls
+                    // back to a random var only if every candidate is tabu.
+                    const Constraint* ccp = nullptr; VarId jv = NullVar;
+                    for (int attempt = 0; attempt < 6 && jv == NullVar; ++attempt) {
+                        const Constraint& c = constraints[viol[nextRand() % viol.size()]];
+                        const std::vector<VarId>& cv = atomVars(c.poly);
+                        if (cv.empty()) continue;
+                        for (size_t t = 0; t < cv.size(); ++t) {
+                            const VarId cand = cv[nextRand() % cv.size()];
+                            auto it = escapeTabuVar.find(cand);
+                            if (it == escapeTabuVar.end() || it->second <= escapeCount) { jv = cand; ccp = &c; break; }
+                        }
+                    }
+                    if (jv == NullVar) {   // all tabu — take any var of a random violated cc
+                        const Constraint& c = constraints[viol[nextRand() % viol.size()]];
+                        const std::vector<VarId>& cv = atomVars(c.poly);
+                        if (!cv.empty()) { jv = cv[nextRand() % cv.size()]; ccp = &c; }
+                    }
+                    if (ccp != nullptr) {
+                        const Constraint& cc = *ccp;
                         const mpq_class saved = asg.count(jv) ? asg[jv] : mpq_class{0};
                         // Among the cell-jump targets that land feasible for cc, take the one
                         // with the LOWEST total score (least collateral damage to the coupled
@@ -840,7 +866,11 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                             if (!jumped || js < bestJS) { bestJS = js; bestJump = q; jumped = true; }
                         }
                         asg[jv] = jumped ? bestJump : saved;
-                        if (jumped) { score = totalScore(constraints, weights, asg); continue; }  // keep walking
+                        if (jumped) {
+                            escapeTabuVar[jv] = escapeCount + kTabuTenure;   // don't re-escape jv for a few escapes
+                            score = totalScore(constraints, weights, asg);
+                            continue;   // keep walking
+                        }
                         // no feasible cell for cc → fall through to restart
                     }
                 }
