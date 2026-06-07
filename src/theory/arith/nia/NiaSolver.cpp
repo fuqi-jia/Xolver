@@ -13,6 +13,7 @@
 #include "theory/arith/nra/engine/ReasonManager.h"
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nia/farkas/LeafFarkasLia.h"
 #include "theory/arith/nra/nla/NlaCutsRunner.h"           // Stage 3 Phase C-3
 #include "theory/arith/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
@@ -3087,6 +3088,14 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         return o;
     };
 
+    // Cost/slack vars to eliminate existentially in the LIA leaf engine
+    // (research note 2026-06-07: ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0).
+    static const bool ctElim = std::getenv("XOLVER_NIA_FARKAS_CT_ELIM") != nullptr;
+    std::unordered_set<VarId> ctVarSet;
+    if (ctElim)
+        for (const auto& nm : profile.unboundedCT)
+            ctVarSet.insert(kernel_->getOrCreateVar(nm));
+
     // ---- 3. Enumerate B-tuples × branch combos; each leaf must be Unsat.
     std::vector<mpz_class> bcur;
     for (const auto& bv : bvars) bcur.push_back(bv.lo);
@@ -3141,6 +3150,14 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                     if (leafBail) return giveUp();   // can't model a branch atom
                 }
                 if (!leafDead) {
+                    // Cost-var elimination → pure-LIA leaf (research-recommended
+                    // path): ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0, then discharge the LIA
+                    // disjunction exactly. Proven UNSAT here is sound (exact
+                    // existential elimination + integer MILP). Falls through to the
+                    // real-relaxation CdcacCore when the shape isn't handled.
+                    if (ctElim && niaLeafFarkasLiaUnsat(cons, ctVarSet, *kernel_)) {
+                        ++leavesChecked;
+                    } else {
                     CdcacInput input;
                     input.constraints = std::move(cons);
                     // CdcacCore::solve indexes input.varOrder[k] directly and does
@@ -3164,6 +3181,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                                    + "); bail");
                         return giveUp();
                     }
+                    }  // end else (real-relaxation CdcacCore fallback)
                 }
                 // advance branch-combo odometer
                 std::size_t p = 0;
