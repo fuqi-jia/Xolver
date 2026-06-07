@@ -3184,6 +3184,34 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                         for (const std::string& vn : kernel_->variables(cc2.poly))
                             vset.insert(kernel_->getOrCreateVar(vn));
                     input.varOrder.assign(vset.begin(), vset.end());
+                    // CRASH GUARD: the CdcacCore fallback runs a Lazard/CAD
+                    // projection whose libpoly subresultant (psc) chain blows up
+                    // coefficient sizes super-exponentially with the number of
+                    // projection levels (= variable count). On a high-dimensional
+                    // leaf (consts5nt) it exhausts RAM and SIGSEGVs inside
+                    // coefficient_ensure_capacity — a hardware fault that cannot be
+                    // caught. Prevent it: skip the fallback above a variable budget,
+                    // forfeiting only THIS leaf (giveUp → Unknown). Sound — the
+                    // refutation merely fails to prove this leaf UNSAT, never emits a
+                    // wrong UNSAT. The over-approx above already decides the
+                    // tractable leaves, so a leaf reaching here that is also
+                    // high-dimensional is one CdcacCore could not finish anyway.
+                    traceWrite("  [bounded-refute] cdcac-fallback leaf vars="
+                               + std::to_string(input.varOrder.size()));
+                    // Threshold 24: above the largest CdcacCore leaf the
+                    // refutation-solvable cases actually need (measured: Ex04 = 9,
+                    // 4Nested = 19, both decidable, no crash) yet below the
+                    // dimension whose libpoly subresultant chain OOMs/SIGSEGVs
+                    // (consts5nt = 44). Biased toward the solvable max + margin
+                    // because a crash is catastrophic (lost batch) while a forfeited
+                    // leaf is benign (Unknown, not wrong). Tunable for experiments.
+                    static const size_t kMaxLeafVars = static_cast<size_t>(
+                        env::paramLong("XOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS", 24));
+                    if (kMaxLeafVars > 0 && input.varOrder.size() > kMaxLeafVars) {
+                        traceWrite("  [bounded-refute] leaf vars > " + std::to_string(kMaxLeafVars)
+                                   + "; skip CdcacCore fallback (giveUp, projection OOM-risk)");
+                        return 1;
+                    }
                     ++leavesChecked;
                     CdcacResult cd = cdcacCore_->solve(input);
                     if (cd.status != CdcacStatus::Unsat) {
