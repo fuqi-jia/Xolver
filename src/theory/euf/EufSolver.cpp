@@ -2,6 +2,8 @@
 #include "util/EnvParam.h"
 #include <chrono>
 #include "theory/euf/EufSolver.h"
+#include "util/SolveClock.h"
+#include <stdexcept>
 #include "theory/array/AniaProfile.h"
 #include "theory/combination/CareGraph.h"
 #include "theory/core/DebugTrace.h"
@@ -1392,7 +1394,17 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     if (!minLevelHeapEnabled_) {
         // Baseline: O(n) linear min-level scan + O(n) erase per pop (byte-identical
         // to the historical loop). Congruences append to mergeQueue_.
+        // Wall-clock guard: a heavy array+UF congruence saturation (e.g. the
+        // s3_srvr/s3_clnt AUFNIA cases, 680 KB of array+UF ops) is a single long
+        // EUF check() the CaDiCaL-callback entry guards cannot interrupt. Throwing
+        // yields control: the top-level checkSat firewall converts the escaping
+        // std::exception to a sound Unknown (verified to propagate through CaDiCaL's
+        // callback). Checked every 1024 merges; default-inert unless a deadline is
+        // set and has passed (XOLVER_WALLCLOCK_MS).
+        size_t _satScan = 0;
         while (!mergeQueue_.empty()) {
+            if (((++_satScan & 0x3FF) == 0) && wall::hasDeadline() && wall::remainingMs() == 0)
+                throw std::runtime_error("wall-clock deadline (EUF saturation)");
             // Pick the minimum-level pending merge (earliest at that level).
             size_t mi = 0;
             for (size_t i = 1; i < mergeQueue_.size(); ++i)
@@ -1430,7 +1442,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         };
         absorb();
         auto pushCong = [&](PendingMerge c) { byLevel[c.level].push_back(std::move(c)); };
+        size_t _satScan2 = 0;
         while (!byLevel.empty()) {
+            if (((++_satScan2 & 0x3FF) == 0) && wall::hasDeadline() && wall::remainingMs() == 0)
+                throw std::runtime_error("wall-clock deadline (EUF saturation)");
             auto it = byLevel.begin();
             PendingMerge req = std::move(it->second.front());
             it->second.pop_front();

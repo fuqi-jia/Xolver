@@ -11,6 +11,7 @@
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"    // XOLVER_NRA_LINEARIZE: normalize nonlinear cstrs
 #include "theory/arith/nra/reasoners/SubtropicalSatFinder.h"  // XOLVER_NRA_SUBTROPICAL SAT-fast-path
 #include "theory/arith/nra/StructuralIntegerProbe.h"          // XOLVER_NRA_INT_PROBE
+#include "theory/arith/nra/NraSquareSolver.h"                   // algebraic square-cascade
 #include "theory/arith/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
 #include "theory/arith/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
@@ -89,6 +90,13 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
+    // Step 2.1 GLOBAL box-consistency refutation, EARLY (right after presolve, before
+    // the covering engines): decides bound-contradiction families (hong) in ~ms,
+    // short-circuiting the covering-tree blowup that stageCac would otherwise spend
+    // 10s+ on. Sound (interval over-approximation). Default-on, no flag/budget.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.box-refute",
+        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageBoxRefute(db, e); })));
     // §4.2 linear-subset UNSAT pre-check (XOLVER_NRA_LINEAR_SUBSET_UNSAT,
     // default OFF). If the linear subset of presolveConstraints_ is
     // already simplex-UNSAT, emit a SAT-level conflict over those atoms'
@@ -137,6 +145,9 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.eq-cascade",
         stageWrap("eq-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageCascade(db, e); })));
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.square-cascade",
+        stageWrap("square-cascade", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSquareCascade(db, e); })));
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.linearize-probe",
         stageWrap("linearize", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageLinearizeProbe(db, e); })));
@@ -576,6 +587,23 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearSubsetUnsat(
     return TheoryCheckResult::mkConflict(std::move(conflict));
 }
 
+// Step 2.1: GLOBAL box-consistency refutation, run EARLY (before the covering
+// engines). The box-ICP (incl. degree-2 square contraction) over all of ℝⁿ decides
+// bound-contradiction families — most importantly the hong family (Σx²<1 ⇒ |x_i|<1
+// ⇒ |Πx|<1, contra Πx>1) — in ~ms. Without this the conflict is only found by the
+// CdcacCore box-check INSIDE stageCdcac, i.e. AFTER stageCac has already spent a 10s+
+// covering blowup on the same problem (measured: hong_8 cac=10.76s). Running it up
+// front short-circuits that. Sound: interval over-approximation, empty box ⇒ UNSAT.
+// Skips combination mode (interface (dis)eqs live in engine_, not the box).
+std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /*lemmaDb*/,
+                                                           TheoryEffort /*effort*/) {
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    std::vector<SatLit> reasons;
+    if (!engine_.globalBoxRefute(reasons)) return std::nullopt;
+    return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+}
+
 // XOLVER_NRA_ICP: rational ICP probe. Sound by construction — emits Conflict
 // only when a contractor reports a definitively-violated constraint with
 // reasons that union the constraint's reason and the box's bound reasons.
@@ -960,10 +988,22 @@ std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
         if (c.poly == NullPoly) continue;
         intervalCs.push_back({c.poly, c.rel, c.reason});
     }
-    // First try plain interval refutation.
+    // First try plain interval refutation (cheap, every call).
     auto conflictOpt = tryRefuteByPolynomialInterval(intervalCs, facts, *kernel_);
     // If no plain conflict, try iterative factoring + back-prop (closes MGC-class).
-    if (!conflictOpt) {
+    // This is the EXPENSIVE part (maxIter back-prop passes over ALL constraints) and
+    // re-running it on every Standard cb_propagate during a SAT search is the overhead
+    // that times out SAT cases (mgc_09/10: sat→TO; iter 24/25). THROTTLE its cadence:
+    // run on the first call (catch quick UNSAT) then only every K-th call. SOUND — a
+    // conflict is still found, at most K-1 checks later; SAT cases pay K× less factoring.
+    // Tunable XOLVER_NRA_OSF_FACTOR_CADENCE (default 1 = unchanged behaviour).
+    static const long factorCadence = []() {
+        long v = env::paramInt("XOLVER_NRA_OSF_FACTOR_CADENCE", 1);
+        return v > 0 ? v : 1;
+    }();
+    static thread_local long osfCalls = 0;
+    long n = ++osfCalls;
+    if (!conflictOpt && (n == 1 || (n % factorCadence) == 0)) {
         conflictOpt = tryRefuteByIterativeFactoring(intervalCs, facts, *kernel_, /*maxIter=*/6);
     }
     if (!conflictOpt) return std::nullopt;
@@ -1432,6 +1472,34 @@ std::optional<TheoryCheckResult> NraSolver::stageCascade(
     return TheoryCheckResult::consistent();
 }
 
+// Algebraic square-cascade (default ON; XOLVER_NRA_SQUARE_CASCADE=0 disables). Builds
+// and EXACT-validates a Q(sqrt c) model for square-defined systems the rational
+// eq-cascade can't (v^2 = non-square => algebraic root). Sound by construction:
+// trySquareCascade returns true only after checking every original constraint's exact
+// sign at the constructed model (invariant 1); on any inconclusive/failing check it
+// returns false and we fall through to CAC/Collins unchanged.
+std::optional<TheoryCheckResult> NraSolver::stageSquareCascade(
+        TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
+    static const bool enabled = [] {
+        const char* e = std::getenv("XOLVER_NRA_SQUARE_CASCADE");
+        return !(e && *e == '0');
+    }();
+    if (!enabled) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty()) return std::nullopt;
+    if (presolveConstraints_.empty()) return std::nullopt;
+
+    std::vector<std::pair<PolyId, Relation>> cons;
+    cons.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) return std::nullopt;
+        cons.emplace_back(c.poly, c.rel);
+    }
+    std::vector<std::pair<VarId, RealValue>> model;
+    if (!trySquareCascade(cons, *kernel_, &model)) return std::nullopt;
+    satCacAlgModel_ = std::move(model);
+    return TheoryCheckResult::consistent();
+}
+
 // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF). Rational-only local
 // repair pre-pass. Builds the active polynomial constraint set, runs the
 // NraLocalSearch WalkSAT-style search, and on a satisfying rational candidate
@@ -1541,6 +1609,9 @@ std::optional<TheoryCheckResult> NraSolver::stageLocalSearch(
 // the Collins-vs-CAC differential; promotion to default is decided by that diff.
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
+    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+        std::cerr << "[STAGE-CAC] entry effort=" << static_cast<int>(effort)
+                  << " enableCac=" << enableCac_ << std::endl;
     if (!enableCac_) return std::nullopt;
     // EFFORT SCHEDULE (validated by the Collins-vs-CAC A/B + endorsed design):
     //   Standard effort → cheap engines (Collins as cheap CAD, linearized checks);
@@ -2055,6 +2126,8 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
 // Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
+    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+        std::cerr << "[STAGE-CDCAC] reached (engine_ will run core_->solve)" << std::endl;
     // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
     // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
     // unknown when CAC cannot decide, rather than a default/false verdict.

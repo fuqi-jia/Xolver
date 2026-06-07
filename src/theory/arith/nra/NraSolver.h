@@ -122,6 +122,9 @@ private:
     // SAT — runs as a cheap closer between presolve and sign-refute. nullopt at
     // the gate when the flag is OFF (default path byte-identical).
     std::optional<TheoryCheckResult> stageIcpProbe(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // Step 2.1: GLOBAL box-consistency refutation (early stage before the covering).
+    // Decides bound-contradiction families (hong) in ~ms; sound by over-approximation.
+    std::optional<TheoryCheckResult> stageBoxRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LINEARIZE incremental-linearization SAT loop (default OFF):
     // read the LRA sibling's relaxation model, exact-validate every original
     // constraint (consistent()/SAT if all hold), else emit model-tangent cuts
@@ -156,6 +159,10 @@ private:
     // consistent() on a validated model (stashed in satFastModel_), nullopt
     // otherwise. Pure-NRA only (skips combination/N-O mode).
     std::optional<TheoryCheckResult> stageCascade(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // Algebraic square-cascade: constructs + exact-validates a Q(sqrt c) model for
+    // square-defined systems (e.g. Geogebra IsoRightTriangle) that the rational
+    // eq-cascade and the Lazard delineation both miss. Emits satCacAlgModel_.
+    std::optional<TheoryCheckResult> stageSquareCascade(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_LOCALSEARCH (Phase NRA-LS-A, default OFF): rational-only local
     // repair heuristic. Returns consistent() iff LS finds a rational assignment
     // exact-validated against every active constraint (invariant 1 — Solver-level

@@ -1,5 +1,6 @@
 #include "theory/arith/bit_blast/BitBlastSolver.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
 #include "theory/arith/bit_blast/PolyBitBlaster.h"
 #include "sat/SatSolver.h"
@@ -175,6 +176,17 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
 
     Attempt a;
     auto sat = createSatSolver();
+    // Disable CaDiCaL congruence closure (gate extraction) on the bit-blast's
+    // dedicated solver. extract_gates -> init_closure -> init_noccs allocates an
+    // occurrence table sized by the (huge) Tseitin encoding and OOMed at ~3.3 GB
+    // on a QF_UFDTNIA case (DT+NIA combination -> very large encoding) — a real
+    // bug, since the gates it tries to re-discover are ALREADY explicit in our
+    // structured bit-blast CNF, so the pass is redundant work, not insight.
+    // Disabling it only changes SAT-solver speed, never the verdict (bit-blast is
+    // candidate-only, re-validated by IntegerModelValidator), and it removes the
+    // OOM/crash on large DT+NIA encodings. Opt-out: XOLVER_NIA_BB_CONGRUENCE=1.
+    if (!std::getenv("XOLVER_NIA_BB_CONGRUENCE"))
+        sat->configure("congruence", 0);
     if (noPreprocess_) {
         // Disable CaDiCaL's expensive Bounded Variable Elimination (which calls
         // extract_gates -> find_equivalences). Profile of QF_UFNIA floored cases
@@ -316,6 +328,13 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
         }
         unsigned K = 2;
         while (true) {
+            // Wall-clock budget guard: the ×2 width escalation over a large
+            // array+NIA encoding (e.g. ddlm2013 / in-de42) can run unbounded in
+            // a single stageBitBlast call the CaDiCaL-callback guards cannot
+            // interrupt. Abort to Unknown when the deadline has passed. Default-
+            // inert (no XOLVER_WALLCLOCK_MS => no deadline); sum10's small
+            // encoding converges in the early small widths well before any budget.
+            if (wall::hasDeadline() && wall::remainingMs() == 0) return out;
             BitWidthPlan plan;
             for (const auto& kv : full.width)
                 plan.width[kv.first] = bounded.count(kv.first) ? kv.second
@@ -336,6 +355,8 @@ BitBlastResult BitBlastSolver::solve(const std::vector<NormalizedNiaConstraint>&
     // Default path: estimator-sized widths + ×grow, with complete-box UnsatComplete.
     BitWidthPlan plan = full;
     for (unsigned iter = 0; iter < maxIters_; ++iter) {
+        // Wall-clock budget guard (see the box-incomplete loop above).
+        if (wall::hasDeadline() && wall::remainingMs() == 0) return out;
         Attempt a = attemptAtWidths(plan, cs, domains, validator);
         if (a.kind == Attempt::Overflow) return out;   // incomplete encoding; widths only grow
         if (a.kind == Attempt::Sat) {

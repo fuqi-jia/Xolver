@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <set>
 
 namespace xolver {
@@ -23,8 +24,22 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (cfg_.allowUF) collectApplicationSlots();
     if (vars_.empty()) return result_;
 
-    buildPriorityList();
+    if (cfg_.allowUF) pinForcedAppSlots();
+    if (std::getenv("XOLVER_DIAG_CMS")) {
+        size_t napp = 0;
+        for (const auto& v : vars_) if (v.isApp) ++napp;
+        size_t npin = 0;
+        for (const auto& v : vars_) if (v.pinnedValue) ++npin;
+        std::cerr << "[CMS] enabled=" << isLogicEnabled() << " vars=" << vars_.size()
+                  << " appSlots=" << napp << " pinned=" << npin
+                  << " arith=" << (vars_.size() - napp) << "\n";
+    }
+
+    // Bounds BEFORE the priority list: buildPriorityList collapses a variable
+    // forced to a single value (lower==upper, e.g. from (= v c)) to a singleton,
+    // so the enumeration is over genuinely-free vars only.
     detectActiveBounds();
+    buildPriorityList();
 
     // Run strategies in order. Each returns true if a validated witness
     // was found (early termination).
@@ -32,6 +47,10 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (runStrategy10c()) return result_;
     if (runStrategy10a()) return result_;
 
+    if (std::getenv("XOLVER_DIAG_CMS"))
+        std::cerr << "[CMS] no-witness: tried=" << diagTried_
+                  << " fcReject=" << diagFcReject_ << " evalFalse=" << diagEvalFalse_
+                  << " evalIndet=" << diagEvalIndet_ << " accept=" << diagAccept_ << "\n";
     return result_;
 }
 
@@ -144,6 +163,87 @@ void CandidateModelSearch::collectApplicationSlots() {
     }
 }
 
+void CandidateModelSearch::pinForcedAppSlots() {
+    auto extractConst = [&](ExprId eid) -> std::optional<mpq_class> {
+        const auto& n = ir_.get(eid);
+        if (n.kind == Kind::ConstInt) {
+            if (auto* p = std::get_if<int64_t>(&n.payload.value)) return mpq_class(*p);
+        } else if (n.kind == Kind::ConstReal) {
+            if (auto* s = std::get_if<std::string>(&n.payload.value)) return mpq_class(*s);
+        }
+        return std::nullopt;
+    };
+    // Descend only through top-level And (asserted-true conjuncts); never Or/Not.
+    std::vector<ExprId> work = assertionRoots();
+    std::unordered_set<ExprId> seen;
+    while (!work.empty()) {
+        ExprId e = work.back();
+        work.pop_back();
+        if (e >= ir_.size() || !seen.insert(e).second) continue;
+        const auto& n = ir_.get(e);
+        if (n.kind == Kind::And) {
+            for (ExprId c : n.children) work.push_back(c);
+            continue;
+        }
+        if (n.kind == Kind::Eq && n.children.size() == 2) {
+            ExprId a = n.children[0], b = n.children[1];
+            ExprId app = NullExpr;
+            std::optional<mpq_class> cst;
+            if (ir_.get(a).kind == Kind::UFApply) { if (auto c = extractConst(b)) { app = a; cst = c; } }
+            if (app == NullExpr && ir_.get(b).kind == Kind::UFApply) { if (auto c = extractConst(a)) { app = b; cst = c; } }
+            if (app != NullExpr && cst) {
+                auto it = varIndexByName_.find("__ufapp#" + std::to_string(app));
+                if (it != varIndexByName_.end()) {
+                    auto& v = vars_[it->second];
+                    if (v.isApp && !(v.sort == ir_.intSortId() && cst->get_den() != 1))
+                        v.pinnedValue = *cst;
+                }
+            }
+        }
+    }
+}
+
+void CandidateModelSearch::deriveAppValues(
+    std::unordered_map<std::string, mpq_class>& full) const
+{
+    // Fixpoint: an app slot whose evaluated args match a KNOWN app of the same
+    // function (a pinned base case, or an already-derived app) takes that value.
+    // Unconstrained apps keep their current (default) value. cvc5/z3 model
+    // construction: derive, don't enumerate.
+    for (int iter = 0; iter < 8; ++iter) {
+        bool changed = false;
+        std::map<std::pair<std::string, std::vector<std::string>>, mpq_class> table;
+        auto argsOf = [&](const VarRecord& v, std::vector<std::string>& out) -> bool {
+            const auto& node = ir_.get(v.exprId);
+            for (ExprId c : node.children) {
+                TermResult cr = evalTermTop(c, full);
+                if (cr.kind != TermVerdict::Number) return false;
+                out.push_back(cr.numValue.get_str());
+            }
+            return true;
+        };
+        for (const auto& v : vars_) {
+            if (!v.isApp || !v.pinnedValue) continue;
+            std::vector<std::string> a;
+            if (argsOf(v, a)) table[{v.funcName, a}] = *v.pinnedValue;
+        }
+        for (const auto& v : vars_) {
+            if (!v.isApp || v.pinnedValue) continue;
+            std::vector<std::string> a;
+            if (!argsOf(v, a)) continue;
+            auto it = table.find({v.funcName, a});
+            if (it != table.end()) {
+                auto fit = full.find(v.name);
+                if (fit == full.end() || fit->second != it->second) {
+                    full[v.name] = it->second;
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) break;
+    }
+}
+
 bool CandidateModelSearch::functionallyConsistent(
     const std::unordered_map<std::string, mpq_class>& full) const
 {
@@ -248,8 +348,91 @@ void CandidateModelSearch::buildPriorityList() {
 
     perVar_.clear();
     perVar_.resize(vars_.size());
+    // A UF-app slot is DERIVABLE (its value follows by functional consistency
+    // from a pinned base case of the same function — e.g. pow2(k)@k=1 == pow2(1))
+    // exactly when its function has at least one pinned app. Such slots are NOT
+    // enumerated (singleton seed; deriveAppValues overrides them in
+    // tryAcceptCandidate) — that is what tames the UFNIA Cartesian blow-up. Apps
+    // of a function with NO pinned base case are FREE (e.g. intand, an arbitrary
+    // squaring fun) and MUST be enumerated like ordinary variables, or we lose
+    // the models the legacy enumeration found (ufnia_001 fun_sq).
+    std::unordered_set<std::string> pinnedFuncs;
+    std::unordered_map<std::string, std::vector<mpq_class>> funcPinnedValues;
+    for (const auto& v : vars_)
+        if (v.isApp && v.pinnedValue) {
+            pinnedFuncs.insert(v.funcName);
+            funcPinnedValues[v.funcName].push_back(*v.pinnedValue);
+        }
+
     for (size_t i = 0; i < vars_.size(); ++i) {
         const auto& var = vars_[i];
+        if (var.isApp) {
+            if (var.pinnedValue) {                      // pinned base case
+                perVar_[i].push_back(*var.pinnedValue);
+                continue;
+            }
+            if (pinnedFuncs.count(var.funcName)) {
+                // Non-pinned app of a pinned function (e.g. pow2(k) with k not a
+                // pinned base-case arg). deriveAppValues OVERRIDES this when the
+                // args match a pinned app (pow2(k)@k=1 -> 2). When they do NOT
+                // (pow2(k)@k=4, a FREE value in pure QF_UFNIA where pow2 is
+                // uninterpreted), enumerate a SMALL set — the function's own
+                // pinned values (plausible) + small ints — so a feasible value
+                // (e.g. pow2(k) >= 1 for in_range; int_check_*) is reachable
+                // without the full Cartesian blow-up.
+                std::set<mpq_class> cand;
+                for (const auto& pv : funcPinnedValues[var.funcName]) cand.insert(pv);
+                for (int s : {0, 1, -1, 2}) cand.insert(mpq_class(s));
+                std::vector<mpq_class> lst;
+                for (const auto& q : cand) {
+                    if (var.sort == ir_.intSortId() && q.get_den() != 1) continue;
+                    lst.push_back(q);
+                }
+                // MUST be height-sorted: runStrategy10a's height-ordered
+                // enumeration breaks on the first element whose height exceeds the
+                // remaining envelope (it assumes monotonic height). A value-sorted
+                // list (std::set) breaks prematurely and SKIPS high-height values
+                // (e.g. pow2(k)=8), which int_check's witness needs.
+                std::sort(lst.begin(), lst.end(),
+                          [](const mpq_class& a, const mpq_class& b) {
+                              return heightOf(a) < heightOf(b);
+                          });
+                perVar_[i] = std::move(lst);
+                continue;
+            }
+            // free app: fall through to full enumeration below.
+        } else {
+            // An arith var with forced bounds [lo,hi] is RESTRICTED to that range:
+            // enumerating the full priority list (~21 values) over many bounded
+            // vars is a Cartesian explosion (e.g. 4^6 vs 21^6 for six vars in
+            // [0,3]). Sound AND complete — the bounds are top-level forced
+            // (detectActiveBounds), so no satisfying value is excluded. Subsumes
+            // the earlier lower==upper singleton case.
+            auto bit = activeBounds_.find(var.name);
+            if (bit != activeBounds_.end() && bit->second.lower && bit->second.upper) {
+                const mpq_class lo = *bit->second.lower;
+                const mpq_class hi = *bit->second.upper;
+                bool intVar = (var.sort == ir_.intSortId());
+                if (intVar && lo.get_den() == 1 && hi.get_den() == 1 &&
+                    lo <= hi && (hi - lo) <= mpq_class(4096)) {
+                    // Small finite int range (incl. singleton lo==hi): enumerate
+                    // {lo..hi}, height-sorted (runStrategy10a's envelope assumes
+                    // monotonic height). Complete: every integer in range tried.
+                    std::vector<mpq_class> rng;
+                    for (mpq_class v = lo; v <= hi; v += 1) rng.push_back(v);
+                    std::sort(rng.begin(), rng.end(),
+                              [](const mpq_class& a, const mpq_class& b) {
+                                  return heightOf(a) < heightOf(b);
+                              });
+                    perVar_[i] = std::move(rng);
+                    continue;
+                }
+                if (lo == hi && !intVar) {  // real var pinned to a single value
+                    perVar_[i].push_back(lo);
+                    continue;
+                }
+            }
+        }
         // Per-variable list = shared priority filtered by sort. Int-sorted
         // variables only receive integer-valued candidates.
         for (const auto& q : priority_) {
@@ -401,12 +584,21 @@ bool CandidateModelSearch::tryAcceptCandidate(
             full[v.name] = def;
         }
     }
+    // Derive UF-app slot values from the arith assignment (functional
+    // consistency with pinned base cases) — this is what makes pow2(k)@k=1
+    // become 2 without enumerating it (cvc5/z3 model construction).
+    if (cfg_.allowUF) deriveAppValues(full);
+
+    ++diagTried_;
     // Reject candidates that would make a function multi-valued before we
     // bother evaluating the assertions.
-    if (cfg_.allowUF && !functionallyConsistent(full)) return false;
+    if (cfg_.allowUF && !functionallyConsistent(full)) { ++diagFcReject_; return false; }
 
     auto verdict = evaluateAssertions(full);
+    if (verdict == EvalVerdict::False) ++diagEvalFalse_;
+    else if (verdict == EvalVerdict::Indeterminate) ++diagEvalIndet_;
     if (verdict != EvalVerdict::True) return false;
+    ++diagAccept_;
 
     // Accept: record model. App slots go into the function table, not the
     // variable assignment.
@@ -428,6 +620,7 @@ bool CandidateModelSearch::runStrategy10d() {
     // formula symmetry).
     static constexpr int diagonalValues[] = {0, 1, -1, 2, -2};
     for (int c : diagonalValues) {
+        if (std::chrono::steady_clock::now() > deadline_) return false;
         std::unordered_map<std::string, mpq_class> partial;
         for (const auto& v : vars_) partial[v.name] = mpq_class(c);
         if (tryAcceptCandidate(partial, "10d-symmetric")) return true;
@@ -438,6 +631,7 @@ bool CandidateModelSearch::runStrategy10d() {
 bool CandidateModelSearch::runStrategy10c() {
     // Boundary points for variables with active integer bounds.
     for (const auto& v : vars_) {
+        if (std::chrono::steady_clock::now() > deadline_) return false;
         auto it = activeBounds_.find(v.name);
         if (it == activeBounds_.end()) continue;
         const auto& b = it->second;
@@ -516,7 +710,14 @@ bool CandidateModelSearch::runStrategy10a() {
                     return false;
                 }
                 for (size_t j = 0; j < listSize[pos]; ++j) {
-                    int64_t h = heightOf(perVar_[pos][j]);
+                    // A SINGLETON dim is a FIXED value (a pinned/derived UF-app
+                    // slot, e.g. pow2(3)=8), not part of the search — it must NOT
+                    // consume the height envelope. Otherwise the pinned base cases
+                    // (pow2(0..3) = 1,2,4,8 → ~19 fixed height) starve the budget
+                    // (30), excluding witnesses whose FREE vars need more height
+                    // (int_check: k=4,x0=5,t=6,pow2(k)=8 ≈ 29 free).
+                    int64_t h = (listSize[pos] == 1)
+                                    ? 0 : heightOf(perVar_[pos][j]);
                     if (h > remainingHeight) break;  // priority list grows in height
                     cursor[pos] = j;
                     if (recurse(pos + 1, remainingHeight - h)) return true;

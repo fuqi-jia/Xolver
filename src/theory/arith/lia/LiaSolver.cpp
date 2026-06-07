@@ -8,6 +8,7 @@
 #include "theory/arith/Reasoner.h"
 #include "theory/arith/linear/SimplexDiseqSplitter.h"
 #include "theory/arith/lia/GomoryCut.h"
+#include "theory/arith/nia/reasoners/DioReasoner.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
@@ -55,6 +56,8 @@ LiaSolver::LiaSolver() {
     incrementalEnabled_ = (incEnv && *incEnv && *incEnv != '0');
     const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
     impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    const char* dioEnv = std::getenv("XOLVER_LIA_DIO");
+    dioTightenEnabled_ = (dioEnv && *dioEnv && *dioEnv != '0');
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -517,6 +520,17 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
         }
     }
 
+    // Integer-Diophantine tightening (arith-dio-tighten) — refute unbounded
+    // Diophantine systems BEFORE branch-and-bound thrashes on the unbounded
+    // mod-lowering quotient vars. Full effort only (the assignment is complete,
+    // so the disequalities that drive the refutation are decided).
+    if (dioTightenEnabled_ && effort == TheoryEffort::Full && !disequalities_.empty()) {
+        if (auto dc = checkDioTighten()) {
+            if (normalizeTheoryClause(dc->clause))
+                return TheoryCheckResult::mkConflict(std::move(*dc));
+        }
+    }
+
     auto ir = ultraSafeMode_ ? TheoryCheckResult::consistent() : checkIntegrality(lemmaDb, effort);
 
 #ifdef XOLVER_LIA_PROFILE
@@ -566,6 +580,97 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
     }
 
     return TheoryCheckResult::unknown();
+}
+
+std::optional<TheoryConflict> LiaSolver::checkDioTighten() const {
+    auto lcm2 = [](const mpz_class& a, const mpz_class& b) -> mpz_class {
+        if (a == 0 || b == 0) return (a == 0) ? abs(b) : abs(a);
+        mpz_class g; mpz_gcd(g.get_mpz_t(), a.get_mpz_t(), b.get_mpz_t());
+        return abs(a / g * b);
+    };
+    // Convert `lhs (==) rhs` into the integer form Σc·v + cst (cst = -rhs·d).
+    auto toIntForm = [&](const LinearFormKey& lhs, const mpq_class& rhs, DioLinForm& out) -> bool {
+        mpz_class d = 1;
+        for (const auto& [v, c] : lhs.terms) { (void)v; d = lcm2(d, c.get_den()); }
+        d = lcm2(d, rhs.get_den());
+        for (const auto& [v, c] : lhs.terms) {
+            mpq_class s = c * d;  // now integral
+            out.coeffs.emplace_back(v, s.get_num());
+        }
+        mpq_class r = rhs * d;
+        out.cst = -r.get_num();
+        return !out.coeffs.empty();
+    };
+
+    std::vector<DioLinForm> cons;
+    std::map<std::string, DioVarBound> bounds;
+
+    auto addSingleVarBound = [&](const std::string& v, const mpq_class& coeffQ,
+                                 const mpq_class& rhsQ, Relation rel, SatLit lit) {
+        mpz_class d = lcm2(coeffQ.get_den(), rhsQ.get_den());
+        mpq_class aq = coeffQ * d, rq = rhsQ * d;  // materialize (now integral)
+        mpz_class a = aq.get_num();
+        mpz_class r = rq.get_num();
+        if (a == 0) return;
+        if (rel == Relation::Lt) { rel = Relation::Leq; r -= 1; }      // integer strict→non-strict
+        else if (rel == Relation::Gt) { rel = Relation::Geq; r += 1; }
+        if (a < 0) {                                                    // normalize a>0
+            a = -a; r = -r;
+            if (rel == Relation::Leq) rel = Relation::Geq;
+            else if (rel == Relation::Geq) rel = Relation::Leq;
+        }
+        DioVarBound& bb = bounds[v];
+        auto setHi = [&](const mpz_class& ub) {
+            if (!bb.hasHi || ub < bb.hi) { bb.hasHi = true; bb.hi = ub; bb.hiReasons = {lit}; } };
+        auto setLo = [&](const mpz_class& lb) {
+            if (!bb.hasLo || lb > bb.lo) { bb.hasLo = true; bb.lo = lb; bb.loReasons = {lit}; } };
+        if (rel == Relation::Leq) {
+            mpz_class ub; mpz_fdiv_q(ub.get_mpz_t(), r.get_mpz_t(), a.get_mpz_t()); setHi(ub);
+        } else if (rel == Relation::Geq) {
+            mpz_class lb; mpz_cdiv_q(lb.get_mpz_t(), r.get_mpz_t(), a.get_mpz_t()); setLo(lb);
+        } else if (rel == Relation::Eq) {
+            if (r % a == 0) { mpz_class val = r / a; setLo(val); setHi(val); }
+        }
+        // Neq single-var is an exclusion, not an interval — ignored by the hull.
+    };
+
+    for (const auto& a : activeAtoms_) {
+        Relation rel = a.rel;
+        if (!a.value) {                                                // negated atom
+            switch (rel) {
+                case Relation::Eq:  rel = Relation::Neq; break;
+                case Relation::Neq: rel = Relation::Eq;  break;
+                case Relation::Leq: rel = Relation::Gt;  break;
+                case Relation::Geq: rel = Relation::Lt;  break;
+                case Relation::Lt:  rel = Relation::Geq; break;
+                case Relation::Gt:  rel = Relation::Leq; break;
+            }
+        }
+        // Push the constraint as Eq / Neq / Leq / Geq (strict → integer
+        // non-strict on the cleared-denominator form). tightenConflict folds the
+        // Leq/Geq complementary pairs into lattice equalities.
+        DioLinForm f; f.reason = a.lit;
+        if (toIntForm(a.lhs, a.rhs, f)) {
+            switch (rel) {
+                case Relation::Eq:  f.rel = Relation::Eq;  cons.push_back(std::move(f)); break;
+                case Relation::Neq: f.rel = Relation::Neq; cons.push_back(std::move(f)); break;
+                case Relation::Leq: f.rel = Relation::Leq; cons.push_back(std::move(f)); break;
+                case Relation::Geq: f.rel = Relation::Geq; cons.push_back(std::move(f)); break;
+                case Relation::Lt:  f.rel = Relation::Leq; f.cst += 1; cons.push_back(std::move(f)); break;  // f<0 ⟺ f+1≤0
+                case Relation::Gt:  f.rel = Relation::Geq; f.cst -= 1; cons.push_back(std::move(f)); break;  // f>0 ⟺ f-1≥0
+            }
+        }
+        if (a.lhs.terms.size() == 1)
+            addSingleVarBound(a.lhs.terms[0].first, a.lhs.terms[0].second, a.rhs, rel, a.lit);
+    }
+    for (const auto& d : disequalities_) {                              // separately-tracked ≠
+        DioLinForm f; f.reason = d.lit; f.rel = Relation::Neq;
+        if (toIntForm(d.lhs, d.rhs, f)) cons.push_back(std::move(f));
+    }
+
+    auto conflictOpt = DioReasoner::tightenConflict(cons, bounds);
+    if (!conflictOpt) return std::nullopt;
+    return TheoryConflict{*conflictOpt};
 }
 
 TheoryCheckResult LiaSolver::handleDisequalities(TheoryLemmaStorage& lemmaDb) {

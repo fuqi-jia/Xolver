@@ -104,6 +104,47 @@ TEST_CASE("BoolSubtermPurifier: deep nesting does not overflow") {
     CHECK(true);
 }
 
+TEST_CASE("BoolSubtermPurifier: bool comparison arg of a UF app is lifted") {
+    // Regression for the EUF pendingUnknown_ floor (commit d4b83fc): a UF
+    // application with a boolean COMPARISON argument, f(<=), could not be
+    // interned by EufTermManager (NullEufTerm) — EufSolver then set
+    // pendingUnknown_ and returned Unknown even on SAT (CLEARSY 00324).
+    // BoolSubtermPurifier must lift a comparison in an argument position to a
+    // fresh Bool var (p <-> (a<=b)). Before the fix isBoolComposite skipped bool
+    // atoms, so run() returned false (no change) for this exact input.
+    CoreIr ir; SortId b, i, r; setupSorts(ir, b, i, r);
+    ExprId x  = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("x"))});
+    ExprId y  = ir.add(CoreExpr{Kind::Variable, i, {}, Payload(std::string("y"))});
+    ExprId le = ir.add(CoreExpr{Kind::Leq, b, {x, y}, {}});               // (<= x y) : Bool
+    ExprId f  = ir.add(CoreExpr{Kind::UFApply, i, {le},
+                                Payload(std::string("f"))});             // f(<=) : Int
+    ExprId one = ir.add(CoreExpr{Kind::ConstInt, i, {}, Payload(int64_t(1))});
+    ir.addAssertion(ir.add(CoreExpr{Kind::Eq, b, {f, one}, {}}));         // (= (f (<= x y)) 1)
+    BoolSubtermPurifier pass(ir);
+    REQUIRE(pass.run());   // comparison in arg position purified (false before d4b83fc)
+    pass.commit();
+    // No UF application in the resulting assertions may have a direct comparison
+    // child anymore — f's argument is the fresh boolpur Variable.
+    bool ufHasComparisonArg = false;
+    for (ExprId a : ir.assertions()) {
+        std::vector<ExprId> stk{a};
+        while (!stk.empty()) {
+            ExprId e = stk.back(); stk.pop_back();
+            const CoreExpr& n = ir.get(e);
+            if (n.kind == Kind::UFApply) {
+                for (ExprId c : n.children) {
+                    Kind ck = ir.get(c).kind;
+                    if (ck == Kind::Leq || ck == Kind::Lt || ck == Kind::Geq ||
+                        ck == Kind::Gt  || ck == Kind::Eq)
+                        ufHasComparisonArg = true;
+                }
+            }
+            for (ExprId c : n.children) stk.push_back(c);
+        }
+    }
+    CHECK_FALSE(ufHasComparisonArg);
+}
+
 TEST_CASE("UnconditionalConstantPropagation: deep nesting does not overflow") {
     // Runs UNCONDITIONALLY on the default path (Cap. 8a). A binding x=5 plus a
     // 200k-deep chain over x makes substituteRec/constantFoldRec recurse the

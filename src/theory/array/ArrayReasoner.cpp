@@ -165,6 +165,16 @@ bool ArrayReasoner::discoverArrayTerms() {
 EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
                                       std::deque<PendingMerge>& outQueue) {
     if (arrayExpr == NullExpr || indexExpr == NullExpr) return NullEufTerm;
+    // Centralized saturation cap: ALL synthesized selects (Row1/Row2/extensional/
+    // completion) flow through internSelect, so capping here bounds the entire
+    // array-axiom saturation uniformly. Previously only completeStoreSelects
+    // counted against completeBudget_, leaving Row1/Row2/ext UNCAPPED — on a deep
+    // store-tower equality (e.g. GrandProduct) those saturation passes can fail to
+    // reach fixpoint and diverge. With completeBudget_==0 (default) this is a
+    // no-op (unlimited, no behaviour change); a finite XOLVER_AX_COMPLETE_BUDGET
+    // forces termination (the resulting model is re-validated, invariant 1).
+    if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_)
+        return NullEufTerm;
     CoreIr& ir = const_cast<CoreIr&>(*ir_);
     const auto& arrNode = ir.get(arrayExpr);
     // Element sort of the array.
@@ -194,6 +204,7 @@ EufTermId ArrayReasoner::internSelect(ExprId arrayExpr, ExprId indexExpr,
         // in Const/Row2 reasoning on this very check().
         if (symIsSelect(t) && selectSet_.insert(t).second) {
             selectTerms_.push_back(t);
+            ++completeInternsDone_;  // count every synthesized select (cap above)
         }
     }
     return t;
@@ -285,8 +296,7 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
             if (!selectCompleteDone_.insert(key).second) continue;
             ExprId idxExpr = originExpr(idx);
             if (idxExpr == NullExpr) continue;
-            internSelect(arrExpr, idxExpr, outQueue);
-            ++completeInternsDone_;
+            internSelect(arrExpr, idxExpr, outQueue);  // counts via internSelect
         }
     };
     // NEW arrays x ALL indices (covers new x new + new x old)

@@ -4,7 +4,19 @@
 #include "util/EnvParam.h"
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds (shared)
+#include "theory/arith/nra/core/CdcacCore.h"      // real-relaxation refutation
+#include "theory/arith/nra/core/CdcacConstraint.h"
+#include "theory/arith/nra/core/CdcacResult.h"
+#include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nia/preprocess/NiaNormalizer.h"   // NormalizedNiaConstraint
+#include "theory/arith/nia/core/DomainStore.h"
+#include "theory/arith/nia/reasoners/SumOfSquaresBoundReasoner.h"
+#include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
+#include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "theory/arith/nia/reasoners/ModularResidueReasoner.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "theory/core/LinearFormKey.h"
 
 #include <algorithm>
 #include <optional>
@@ -20,9 +32,13 @@ void NiaMcsatEngine::reset() {
     asserted_.clear();
     varOrderCache_.clear();
     varOrderCacheValid_ = false;
+    integralitySplitBudget_ = 5000;   // per-solve; only reset() refills it
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
@@ -32,6 +48,9 @@ void NiaMcsatEngine::onAssertAtom(const TheoryAtomRecord& atom, bool value,
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 void NiaMcsatEngine::onBacktrack(int targetLevel) {
@@ -42,6 +61,9 @@ void NiaMcsatEngine::onBacktrack(int targetLevel) {
     cachedAssignment_.clear();
     cachedAssignmentTried_ = false;
     cachedAssignmentSucceeded_ = false;
+    realRelaxTried_ = false;
+    pendingExplainClause_.clear();
+    pendingLemmas_.clear();
 }
 
 std::unordered_set<VarId> NiaMcsatEngine::collectVariables_() const {
@@ -268,8 +290,154 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
             }
         }
     }
+    // Integer reinforcement (§15.5): the integer DFS found no model. Before
+    // giving up, check whether the REAL relaxation of the asserted atoms is
+    // already infeasible — a real empty covering (CdcacStatus::Unsat, which
+    // CdcacCore only reports when projection-certified) implies the integer
+    // problem is UNSAT (ℤⁿ ⊆ ℝⁿ). Run once per engine state. SAT/Unknown here
+    // fall through to giveUp (integer-only contradictions need the integrality
+    // path — a later increment). Soundness: real-empty ⇒ integer-empty.
+    if (kernel_ && !realRelaxTried_ && !asserted_.empty()) {
+        realRelaxTried_ = true;
+
+        // (a) Reuse the standalone sound NIA refuters (the structural UNSAT proofs
+        // the default pipeline uses): sum-of-squares / square / gcd / modular.
+        // A Conflict from any is a sound integer UNSAT — closes the univariate
+        // gaps (x²=-1, sum-of-squares, gcd, mod-square) that bare real-relaxation
+        // (below) cannot certify. Run-once, cheap.
+        {
+            std::vector<NormalizedNiaConstraint> ncons;
+            for (const auto& a : asserted_) {
+                const auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+                if (!pp) continue;
+                auto rhsQ = pp->rhs.tryAsRational();
+                if (!rhsQ) continue;
+                NormalizedNiaConstraint nc;
+                nc.poly = polyMinusRhs(*kernel_, pp->poly, *rhsQ);
+                nc.rel = a.value ? pp->rel : negateRelation(pp->rel);
+                nc.reason = a.assertedLit;
+                ncons.push_back(nc);
+            }
+            if (!ncons.empty()) {
+                DomainStore dom;
+                auto take = [&](const NiaReasoningResult& r) -> bool {
+                    if (r.kind == NiaReasoningKind::Conflict && r.conflict) {
+                        pendingExplainClause_ = r.conflict->clause;
+                        return true;
+                    }
+                    return false;
+                };
+                SumOfSquaresBoundReasoner sos(*kernel_);
+                SquareBoundReasoner sq(*kernel_);
+                GcdDivisibilityReasoner gcd(*kernel_);
+                ModularResidueReasoner mod(*kernel_);
+                bool hit = take(sos.run(ncons, dom)) || take(sq.run(ncons, dom)) ||
+                           take(gcd.run(ncons)) || take(mod.run(ncons));
+                if (hit) {
+                    std::vector<TheoryAtomRecord> blocking;
+                    for (const auto& a : asserted_) blocking.push_back(a.atom);
+                    return mcsat::ValueChoice::conflict(std::move(blocking));
+                }
+            }
+        }
+
+        // (b) Real-relaxation UNSAT via CDCAC (multivariate cases).
+        if (!algebra_) algebra_ = std::make_unique<LibpolyBackend>(kernel_);
+        if (!cdcacFallback_)
+            cdcacFallback_ = std::make_unique<CdcacCore>(kernel_, algebra_.get());
+
+        CdcacInput input;
+        bool inputOk = true;
+        for (const auto& a : asserted_) {
+            const auto* pp = std::get_if<PolynomialAtomPayload>(&a.atom.payload);
+            if (!pp) continue;
+            auto rhsQ = pp->rhs.tryAsRational();
+            if (!rhsQ) { inputOk = false; break; }
+            CdcacConstraint c;
+            c.poly = polyMinusRhs(*kernel_, pp->poly, *rhsQ);
+            c.rel = a.value ? pp->rel : negateRelation(pp->rel);
+            c.reason = a.assertedLit;
+            c.level = a.level;
+            input.constraints.push_back(std::move(c));
+        }
+        if (inputOk && !input.constraints.empty()) {
+            input.varOrder.clear();  // CdcacCore's internal (Collins) ordering
+            input.integerVars = collectVariables_();  // QF_NIA: every var is integer
+            CdcacResult cd = cdcacFallback_->solve(input);
+            if (cd.status == CdcacStatus::Unsat) {
+                std::vector<SatLit> reasons;
+                if (cd.unsat) reasons = cd.unsat->reasons;
+                if (reasons.empty()) {                 // sound superset fallback
+                    for (const auto& a : asserted_) reasons.push_back(a.assertedLit);
+                }
+                pendingExplainClause_ = std::move(reasons);
+                std::vector<TheoryAtomRecord> blocking;
+                for (const auto& a : asserted_) blocking.push_back(a.atom);
+                return mcsat::ValueChoice::conflict(std::move(blocking));
+            }
+            // (b2) Integer model: with integer-aware CAD sampling the real model
+            // may already be ALL-INTEGER — consume it directly as the assignment
+            // (it is leaf-exact-validated by CdcacCore; validateModel re-checks).
+            if (cd.status == CdcacStatus::Sat && cd.model) {
+                const SamplePoint& m = *cd.model;
+                bool allInt = true;
+                for (size_t i = 0; i < m.values.size(); ++i) {
+                    const RealAlg& ra = m.values[i];
+                    if (!ra.isRational() || ra.rational.get_den() != 1) { allInt = false; break; }
+                }
+                if (allInt) {
+                    for (size_t i = 0; i < m.varOrder.size() && i < m.values.size(); ++i)
+                        cachedAssignment_[m.varOrder[i]] = RealValue::fromMpz(m.values[i].rational.get_num());
+                    cachedAssignmentSucceeded_ = true;
+                    auto cit = cachedAssignment_.find(var);
+                    if (cit != cachedAssignment_.end())
+                        return mcsat::ValueChoice::found(cit->second);
+                }
+            }
+            // (c) Integrality branching: the real relaxation is FEASIBLE but its
+            // model may be non-integer. Emit the split  v ≤ ⌊α⌋ ∨ v ≥ ⌊α⌋+1  for
+            // the first non-integer coordinate — a tautology over the integers
+            // (sound to add) that forces the SAT side out of the (⌊α⌋,⌊α⌋+1) gap
+            // and re-solves the tightened problem. This is the B&B step that lets
+            // the integer-NLSAT loop refute real-SAT / integer-UNSAT systems the
+            // structural refuters miss (e.g. x·y=1 ∧ x+y=3). A per-solve budget
+            // bounds the splits so a wiring gap degrades to Unknown, never a hang.
+            if (cd.status == CdcacStatus::Sat && cd.model && registry_ &&
+                integralitySplitBudget_ > 0) {
+                const SamplePoint& m = *cd.model;
+                for (size_t i = 0; i < m.varOrder.size() && i < m.values.size(); ++i) {
+                    const RealAlg& ra = m.values[i];
+                    if (!ra.isRational()) continue;       // algebraic coord — future work
+                    const mpq_class& q = ra.rational;
+                    if (q.get_den() == 1) continue;       // already integer
+                    VarId v = m.varOrder[i];
+                    mpz_class fl;
+                    mpz_fdiv_q(fl.get_mpz_t(), q.get_num().get_mpz_t(),
+                               q.get_den().get_mpz_t());
+                    LinearFormKey lhs;
+                    lhs.terms.emplace_back(std::string(kernel_->varName(v)), mpq_class(1));
+                    SatLit le = registry_->getOrCreateLinearBoundAtom(
+                        lhs, Relation::Leq, mpq_class(fl), TheoryId::NIA);
+                    SatLit ge = registry_->getOrCreateLinearBoundAtom(
+                        lhs, Relation::Geq, mpq_class(fl + 1), TheoryId::NIA);
+                    TheoryLemma lemma;
+                    lemma.lits = {le, ge};
+                    pendingLemmas_.push_back(std::move(lemma));
+                    --integralitySplitBudget_;
+                    return mcsat::ValueChoice::giveUp("NiaMcsatEngine: integrality split");
+                }
+            }
+        }
+    }
+
     return mcsat::ValueChoice::giveUp(
         "NiaMcsatEngine: no integer candidate survived the asserted atoms");
+}
+
+std::vector<TheoryLemma> NiaMcsatEngine::takeLemmas() {
+    std::vector<TheoryLemma> out;
+    out.swap(pendingLemmas_);
+    return out;
 }
 
 std::vector<SatLit> NiaMcsatEngine::explainConflict(
@@ -277,8 +445,9 @@ std::vector<SatLit> NiaMcsatEngine::explainConflict(
     const std::vector<TheoryAtomRecord>& blockingAtoms) {
     (void)trail;
     (void)blockingAtoms;
-    // Empty → framework downgrades to Unknown (sound floor; §15.6).
-    return {};
+    // The clause was built in pickValue (real-relaxation UNSAT). Empty if none
+    // was constructed → framework downgrades to Unknown (sound floor; §15.6).
+    return pendingExplainClause_;
 }
 
 bool NiaMcsatEngine::validateModel(const mcsat::MCSatTrail& trail,

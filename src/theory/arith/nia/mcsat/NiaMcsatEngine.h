@@ -26,6 +26,11 @@
 #include <vector>
 
 namespace xolver {
+
+class CdcacCore;          // real-relaxation refutation (nra/core)
+class LibpolyBackend;     // libpoly algebra backend (nra/backend)
+class TheoryAtomRegistry; // mints the integrality-split bound atoms
+
 namespace nia_mcsat {
 
 struct AssertedAtom {
@@ -42,6 +47,7 @@ public:
 
     void setKernel(PolynomialKernel* kernel) { kernel_ = kernel; }
     void setCoreIr(const class CoreIr* coreIr) { coreIr_ = coreIr; }
+    void setRegistry(TheoryAtomRegistry* reg) { registry_ = reg; }
 
     // MCSatEngine API
     void reset() override;
@@ -54,6 +60,7 @@ public:
     std::vector<SatLit> explainConflict(
         const mcsat::MCSatTrail& trail,
         const std::vector<TheoryAtomRecord>& blockingAtoms) override;
+    std::vector<TheoryLemma> takeLemmas() override;
     bool validateModel(const mcsat::MCSatTrail& trail,
                        TheorySolver::TheoryModel& outModel) override;
 
@@ -62,8 +69,11 @@ private:
 
     PolynomialKernel* kernel_ = nullptr;
     const class CoreIr* coreIr_ = nullptr;
+    TheoryAtomRegistry* registry_ = nullptr;
 
     std::vector<AssertedAtom> asserted_;
+    // Integrality split lemmas produced in pickValue, drained by takeLemmas().
+    std::vector<TheoryLemma> pendingLemmas_;
 
     mutable std::vector<VarId> varOrderCache_;
     mutable bool varOrderCacheValid_ = false;
@@ -74,6 +84,20 @@ private:
     std::unordered_map<VarId, RealValue> cachedAssignment_;
     bool cachedAssignmentTried_ = false;
     bool cachedAssignmentSucceeded_ = false;
+
+    // Integer reinforcement (§15.5 real-relaxation UNSAT): when no integer model
+    // is found, run CDCAC on the REAL relaxation of the asserted atoms; a real
+    // empty-covering proof (CdcacStatus::Unsat, already projection-certified)
+    // implies integer UNSAT (ℤⁿ⊆ℝⁿ). Lazily constructed; conflict clause is
+    // stashed in pendingExplainClause_ for explainConflict.
+    std::unique_ptr<LibpolyBackend> algebra_;
+    std::unique_ptr<CdcacCore> cdcacFallback_;
+    std::vector<SatLit> pendingExplainClause_;
+    bool realRelaxTried_ = false;
+    // Per-solve budget on integrality splits — a backstop so a wiring gap (a
+    // bound atom not reaching the real-relaxation) degrades to Unknown, never an
+    // infinite split loop. Reset only on reset() (must persist across branches).
+    int integralitySplitBudget_ = 5000;
 };
 
 } // namespace nia_mcsat

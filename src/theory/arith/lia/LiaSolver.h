@@ -189,6 +189,16 @@ private:
     TheoryCheckResult handleDisequalities(TheoryLemmaStorage& lemmaDb);
     TheoryCheckResult checkIntegrality(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
 
+    // XOLVER_LIA_DIO (default OFF): integer-Diophantine tightening
+    // (arith-dio-tighten). Collects the active linear equalities, single-variable
+    // bounds, and disequalities; for each disequality `form ≠ 0` asks whether the
+    // equality lattice + the bounds force `form` to 0 (DioReasoner::tightenConflict
+    // → latticeForcesFormZero). Returns a sound conflict when so. The lever LIA
+    // branch-and-bound lacks: it refutes unbounded integer-Diophantine systems
+    // (mod-lowering quotient vars) that B&B otherwise thrashes on. Full effort only.
+    bool dioTightenEnabled_ = false;
+    std::optional<TheoryConflict> checkDioTighten() const;
+
     // XOLVER_LIA_REPAIR: rounding-based LRA->LIA integrality repair. Read once
     // at construction. When set, checkIntegrality tries rounding the LRA
     // relaxation to a nearby integer point and exact-validating it before

@@ -1,5 +1,6 @@
 #include "sat/CadicalTheoryPropagator.h"
 #include "sat/CadicalBackend.h"
+#include "util/SolveClock.h"
 #include <cassert>
 #include <iostream>
 #include <iomanip>
@@ -136,6 +137,13 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
 int CadicalTheoryPropagator::cb_decide() {
     ++decideCalls_;
 
+    // Wall-clock budget guard (see cb_propagate). Default-inert when no budget.
+    if (!abortWithUnknown_ && wall::hasDeadline() && wall::remainingMs() == 0) {
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
+
     if (const char* pe = std::getenv("XOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
         static long long every = []() {
             const char* e = std::getenv("XOLVER_DECIDE_PROBE");
@@ -207,6 +215,15 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
     if (abortWithUnknown_) {
+        terminateSolve();
+        return false;
+    }
+
+    // Wall-clock budget guard (see cb_propagate). Default-inert when no budget.
+    if (wall::hasDeadline() && wall::remainingMs() == 0) {
+        writeReason(unknownReasonSink_,
+                    "wall-clock budget exceeded — aborted to Unknown");
+        abortWithUnknown_ = true;
         terminateSolve();
         return false;
     }
@@ -349,6 +366,22 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 int CadicalTheoryPropagator::cb_propagate() {
     ++stats_.propagateCallCount;
     if (abortWithUnknown_ || hasPendingClause_) return 0;
+
+    // Wall-clock budget guard. If the solve's deadline has passed, abort to
+    // Unknown cleanly rather than letting a divergent theory/combination loop
+    // spin past the budget (such a loop otherwise ignores SIGTERM, requiring a
+    // hard kill — e.g. the array+NIA GrandProduct combination divergence).
+    // Sound: Unknown is always a safe verdict. Default-INERT: remainingMs()
+    // returns NO_DEADLINE (-1) when no budget is set (XOLVER_WALLCLOCK_MS unset
+    // / <=0), so hasDeadline() is false and this guard never fires by default —
+    // verdicts and timing are unchanged unless the user opts into a budget.
+    if (wall::hasDeadline() && wall::remainingMs() == 0) {
+        writeReason(unknownReasonSink_,
+                    "wall-clock budget exceeded — aborted to Unknown");
+        abortWithUnknown_ = true;
+        terminateSolve();
+        return 0;
+    }
 
     // Throttle: avoid calling theory check on every propagate step.
     // Standard-effort LP checks are expensive; only run them when the

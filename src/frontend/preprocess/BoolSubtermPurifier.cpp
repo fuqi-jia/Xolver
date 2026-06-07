@@ -25,6 +25,21 @@ bool BoolSubtermPurifier::isBoolComposite(ExprId e) const {
         case Kind::Xor:
         case Kind::Ite:
             return true;
+        // Bool ATOMS (comparisons / predicates). EUF's term manager cannot
+        // intern these as the argument of a UF application (f(a<=b)) — intern()
+        // returns NullEufTerm, and EufSolver then sets pendingUnknown_ and gives
+        // up the whole check (returns Unknown) even on a SAT problem. In an
+        // argument position they must be lifted to a fresh Bool var p with
+        // p <-> atom (p goes to EUF as f's arg; the atom is routed to arith),
+        // exactly like a bool composite. (CLEARSY set-theory: f(<=) is common.)
+        case Kind::Lt:
+        case Kind::Leq:
+        case Kind::Gt:
+        case Kind::Geq:
+        case Kind::Eq:
+        case Kind::Distinct:
+        case Kind::IsInt:
+            return true;
         default:
             return false;
     }

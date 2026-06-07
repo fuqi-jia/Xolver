@@ -469,8 +469,22 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             return t;
         }
         case Kind::Select: {
-            // select(a,i): apply a's interpretation at index-token(i).
             if (n.children.size() != 2) return r;
+            // A purifier-bridged array read carries its arith value typed, keyed
+            // by (array-operand node, index value) — consult it first (combination
+            // model check). Returns the RealValue directly, so `(mod (select a i)
+            // M)` over a bridged read validates instead of seeing a stale array
+            // default. Robust to nested reads and compound indices. No string.
+            if (selOverride_) {
+                TR iv = eval(n.children[1]);
+                if (iv.kind == Kind2::Number) {
+                    if (auto q = iv.n.tryAsRational()) {
+                        auto so = selOverride_->find({n.children[0], *q});
+                        if (so != selOverride_->end()) return num(so->second);
+                    }
+                }
+            }
+            // select(a,i): apply a's interpretation at index-token(i).
             TR ar = eval(n.children[0]);
             if (ar.kind != Kind2::Array) return r;
             TR ir2 = eval(n.children[1]);
@@ -478,7 +492,31 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
             if (!it) return r;
             auto ov = ar.arr.overrides.find(*it);
             std::string elem = (ov != ar.arr.overrides.end()) ? ov->second : ar.arr.deflt;
-            // Result is an opaque element token.
+            // If the element is a concrete numeric/bool token (an array of Int/
+            // Real/Bool elements, e.g. QF_ANIA/ALIA), surface it as a TYPED value
+            // so enclosing arithmetic (mod/div/+/comparisons) can consume it.
+            // Without this, `(mod (select a i) M)` over an Int-element array is
+            // Indeterminate (the Add/Mod/Div cases reject non-Number operands),
+            // which floored genuine QF_ANIA sats to Unknown. Opaque "@…" element
+            // tokens (uninterpreted-element arrays, QF_AX) stay Tokens unchanged.
+            // Gated (numElems_): enabling it lets the validator DEFINITELY evaluate
+            // nested store/select reads, which can newly expose a theory-produced
+            // model as Violated (a self-store class that previously escaped as sat
+            // while the read was Indeterminate) — so it stays opt-in.
+            if (numElems_) {
+                if (elem.rfind("#n:", 0) == 0) {
+                    try {
+                        TR t; t.kind = Kind2::Number;
+                        t.n = RealValue::fromMpq(mpq_class(elem.substr(3)));
+                        return t;
+                    } catch (...) { /* fall through to opaque token */ }
+                }
+                if (elem.rfind("#b:", 0) == 0) {
+                    TR t; t.kind = Kind2::Bool; t.b = (elem.substr(3) == "1");
+                    return t;
+                }
+            }
+            // Otherwise an opaque element token (uninterpreted element sort).
             TR t; t.kind = Kind2::Token; t.tok = elem;
             return t;
         }
