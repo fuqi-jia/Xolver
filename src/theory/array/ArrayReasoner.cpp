@@ -18,6 +18,8 @@ ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
     // L1: relevancy-driven completion (default-OFF). See header.
     lazyComplete_ = std::getenv("XOLVER_AX_LAZY") != nullptr;
+    // L2: eager Row2 merge on known diseqs (default-OFF). See header.
+    row2DiseqEnabled_ = std::getenv("XOLVER_AX_ROW2_DISEQ") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
@@ -396,6 +398,57 @@ void ArrayReasoner::completeStoreSelectsLazy(std::deque<PendingMerge>& outQueue)
             if (sExpr == NullExpr) continue;
             internSelect(sExpr, idxExpr, outQueue);
         }
+    }
+}
+
+void ArrayReasoner::enqueueRow2CondMerges(
+    const std::function<std::optional<Row2CondDiseq>(EufTermId, EufTermId)>& queryDiseq,
+    int mergeLevel,
+    std::deque<PendingMerge>& outQueue) {
+    if (!active()) return;
+    discoverArrayTerms();
+    size_t r2cMerges = 0, r2cEligible = 0;
+    size_t nSel = selectTerms_.size();
+    for (size_t k = 0; k < nSel; ++k) {
+        EufTermId selTerm = selectTerms_[k];
+        const auto& seln = tm_->node(selTerm);
+        if (seln.args.size() != 2) continue;
+        EufTermId arrArg = seln.args[0];
+        EufTermId jTerm = seln.args[1];
+        EClassId arrClass = egraph_->rep(arrArg);
+        for (EufTermId member : egraph_->classMembers(arrClass)) {
+            if (!symIsStore(member)) continue;
+            const auto& stn = tm_->node(member);
+            if (stn.args.size() != 3) continue;
+            EufTermId aTerm = stn.args[0];   // underlying array
+            EufTermId iTerm = stn.args[1];   // write index
+            if (egraph_->same(iTerm, jTerm)) continue;   // Row1 case (i=j)
+            ++r2cEligible;
+            auto d = queryDiseq(iTerm, jTerm);
+            if (!d) continue;                            // i≠j not known → no eager merge
+            ExprId jExpr = originExpr(jTerm);
+            ExprId aExpr = originExpr(aTerm);
+            ExprId storeExpr = originExpr(member);
+            if (jExpr == NullExpr || aExpr == NullExpr || storeExpr == NullExpr) continue;
+            // Build the read terms over the ACTUAL store member (soundness note in
+            // instantiateLemma): select(store(a,i,v),j) and select(a,j).
+            EufTermId selStore = internSelect(storeExpr, jExpr, outQueue);
+            EufTermId selAJ = internSelect(aExpr, jExpr, outQueue);
+            if (selStore == NullEufTerm || selAJ == NullEufTerm) continue;
+            if (egraph_->same(selStore, selAJ)) continue;   // implicit dedup (backtrack-correct)
+            MergeReason mr;
+            mr.kind = MergeReasonKind::ArrayRow2Cond;
+            mr.lit = d->reason;                              // the diseq reason literal
+            mr.argPairs.push_back({iTerm, d->dForI});        // i ~ diseqLhs
+            mr.argPairs.push_back({jTerm, d->dForJ});        // j ~ diseqRhs
+            outQueue.push_back({selStore, selAJ, mr, mergeLevel});
+            ++r2cMerges;
+        }
+    }
+    if (std::getenv("XOLVER_AX_R2D_DIAG")) {
+        std::fprintf(stderr, "[R2D-merge] selects=%zu eligible=%zu merges=%zu\n",
+                     nSel, r2cEligible, r2cMerges);
+        std::fflush(stderr);
     }
 }
 

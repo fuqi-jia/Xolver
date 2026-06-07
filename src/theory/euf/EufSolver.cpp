@@ -551,6 +551,35 @@ bool EufSolver::checkProofForestInvariants(const char* where) const {
                 }
                 break;
             }
+            case MergeReasonKind::ArrayRow2Cond: {
+                // Conditional Row2: the diseq reason literal must be on the trail
+                // (or a recorded diseq reason — both folded into trailLits), and
+                // the equality chains in argPairs must currently be same-class.
+                if (r.lit.var != 0 && !trailLits.count(litKey(r.lit))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] STALE ArrayRow2Cond diseq lit %c%d NOT on trail "
+                            "(t=%u->%u level=%d)\n", where,
+                            r.lit.sign ? '+' : '-', r.lit.var, t, p, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                for (const auto& [a, b] : r.argPairs) {
+                    if (!egraph_.same(a, b)) {
+                        if (diag) {
+                            std::fprintf(stderr,
+                                "[PF-INV][%s] STALE ArrayRow2Cond argPair (%u,%u) NOT "
+                                "same-class (t=%u->%u level=%d)\n", where, a, b, t, p,
+                                currentLevel_);
+                        }
+                        ++violations;
+                        if (doAssert) std::abort();
+                        break;
+                    }
+                }
+                break;
+            }
             case MergeReasonKind::BuiltinEval:
             case MergeReasonKind::ArrayRow1:
             case MergeReasonKind::ArrayConst:
@@ -1276,6 +1305,39 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         ensureArrayContext();
         if (arrayReasoner_.active()) {
             arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+            // L2 (XOLVER_AX_ROW2_DISEQ): eager Row2 merge for index pairs that are
+            // KNOWN-disequal in the e-graph (vs only distinct constants). Provide a
+            // query over the active (local + shared) disequalities keyed by class
+            // rep-pair; the merge carries the diseq reason + i~lhs / j~rhs chains
+            // (ArrayRow2Cond) so its conflict explanation is sound, and is stamped
+            // at currentLevel_ (re-tagged below) so any backtrack removes it.
+            if (arrayReasoner_.row2DiseqEnabled()) {
+                auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
+                    uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
+                    return (static_cast<uint64_t>(lo) << 32) | hi;
+                };
+                std::unordered_map<uint64_t, const ActiveDisequality*> diseqMap;
+                diseqMap.reserve(disequalities_.size() + sharedDisequalities_.size() + 1);
+                for (const auto& d : disequalities_)
+                    diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+                for (const auto& d : sharedDisequalities_)
+                    diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+                auto queryDiseq = [&](EufTermId i, EufTermId j)
+                        -> std::optional<ArrayReasoner::Row2CondDiseq> {
+                    EClassId ri = egraph_.rep(i), rj = egraph_.rep(j);
+                    if (ri == rj) return std::nullopt;
+                    auto it = diseqMap.find(repPairKey(ri, rj));
+                    if (it == diseqMap.end()) return std::nullopt;
+                    const ActiveDisequality& d = *it->second;
+                    EClassId rl = egraph_.rep(d.lhs), rr = egraph_.rep(d.rhs);
+                    if (rl == ri && rr == rj)
+                        return ArrayReasoner::Row2CondDiseq{d.lhs, d.rhs, d.reason};
+                    if (rl == rj && rr == ri)
+                        return ArrayReasoner::Row2CondDiseq{d.rhs, d.lhs, d.reason};
+                    return std::nullopt;   // rep moved since map build — skip (sound)
+                };
+                arrayReasoner_.enqueueRow2CondMerges(queryDiseq, currentLevel_, mergeQueue_);
+            }
         }
     }
     // Register signatures for all newly interned terms before entering the
@@ -1551,6 +1613,44 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     assert(mergeQueue_.empty());
     assert(egraph_.congruenceClosed());
 #endif
+
+    // L2 measurement (XOLVER_AX_R2D_DIAG): of the Row2-eligible reads
+    // (select(arr,j) with a store(a,i,v) in arr's class, i≠j-not-same), how many
+    // have i≠j KNOWN-disequal in the e-graph right now? Decides whether eager
+    // Row2-merge-on-known-diseq will fire at these Standard checkpoints.
+    static const bool r2dDiag = std::getenv("XOLVER_AX_R2D_DIAG") != nullptr;
+    if (r2dDiag && arrayMode_ && arrayReasoner_.active()) {
+        auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
+            uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
+            return (static_cast<uint64_t>(lo) << 32) | hi;
+        };
+        std::unordered_set<uint64_t> knownDiseq;
+        for (const auto& d : disequalities_)
+            knownDiseq.insert(repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs)));
+        for (const auto& d : sharedDisequalities_)
+            knownDiseq.insert(repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs)));
+        size_t eligible = 0, known = 0;
+        for (EufTermId sel : arrayReasoner_.selectTerms()) {
+            const auto& sn = termManager_.node(sel);
+            if (sn.args.size() != 2) continue;
+            EufTermId jTerm = sn.args[1];
+            for (EufTermId m : egraph_.classMembers(egraph_.rep(sn.args[0]))) {
+                if (!arrayReasoner_.isStore(m)) continue;
+                const auto& mn = termManager_.node(m);
+                if (mn.args.size() != 3) continue;
+                EufTermId iTerm = mn.args[1];
+                if (egraph_.same(iTerm, jTerm)) continue;
+                ++eligible;
+                if (knownDiseq.count(repPairKey(egraph_.rep(iTerm), egraph_.rep(jTerm))))
+                    ++known;
+            }
+        }
+        std::fprintf(stderr,
+            "[R2D] effort=%d diseqs=%zu+%zu eligible=%zu knownDiseq=%zu\n",
+            (int)effort, disequalities_.size(), sharedDisequalities_.size(),
+            eligible, known);
+        std::fflush(stderr);
+    }
 
     // Datatype clash / acyclicity conflicts. Sound UNSAT detection against the
     // now-congruence-closed egraph; safe at any effort (a hard contradiction).
