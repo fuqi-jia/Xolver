@@ -57,6 +57,22 @@ static mpq_class pickRationalSample(const mpq_class& lo, const mpq_class& hi) {
     return simplestRationalIn(lo, hi);
 }
 
+// z3 pick_in_complement for a sector unbounded BELOW, (−∞, hi): the simplest value
+// strictly below hi — 0 if it lies inside (hi>0), else the integer closest to 0 that
+// is still < hi. Real models cluster at 0 / small integers, so the first sector should
+// try 0 (the common witness) before marching away from the root.
+static mpq_class simplestBelow(const mpq_class& hi) {
+    if (sgn(hi) > 0) return mpq_class(0);                       // 0 ∈ (−∞,hi), simplest of all
+    mpz_class chi; mpz_cdiv_q(chi.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t());
+    return mpq_class(chi - 1);                                  // largest integer strictly < hi
+}
+// z3 pick_in_complement for a sector unbounded ABOVE, (lo, +∞).
+static mpq_class simplestAbove(const mpq_class& lo) {
+    if (sgn(lo) < 0) return mpq_class(0);                       // 0 ∈ (lo,+∞)
+    mpz_class flo; mpz_fdiv_q(flo.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t());
+    return mpq_class(flo + 1);                                  // smallest integer strictly > lo
+}
+
 // V3: Helper: convert Bound to AlgebraicEndpoint
 static AlgebraicEndpoint boundToEndpoint(const Bound& bound) {
     AlgebraicEndpoint ep;
@@ -1263,7 +1279,11 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 bool firstConflictRecorded = false;
                 CertifiedCell firstConflictCell;
                 for (int attempt = 0; attempt < 3; ++attempt) {
-                    mpq_class sampleQ = sectorHi - (attempt + 1);
+                    // attempt 0: z3's simplest value in (−∞, r0) — 0 if it lies inside,
+                    // else the integer closest to 0 (the common witness location). Later
+                    // attempts march away from the root as before.
+                    mpq_class sampleQ = (attempt == 0) ? simplestBelow(sectorHi)
+                                                       : (sectorHi - (attempt + 1));
                     RealAlg sample = RealAlg::fromRational(sampleQ);
                     CdcacResult res = testAndRecurse(sample);
                     if (res.status == CdcacStatus::Sat) return res;
@@ -1326,7 +1346,10 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             CertifiedCell firstConflictCell;
             // Try up to 3 samples in the infinite sector before declaring unsat
             for (int attempt = 0; attempt < 3; ++attempt) {
-                mpq_class sampleQ = sectorLo + (attempt + 1);
+                // attempt 0: z3's simplest value in (lastRoot, +∞) — 0 if it lies inside,
+                // else the integer closest to 0.
+                mpq_class sampleQ = (attempt == 0) ? simplestAbove(sectorLo)
+                                                   : (sectorLo + (attempt + 1));
                 RealAlg sample = RealAlg::fromRational(sampleQ);
                 CdcacResult res = testAndRecurse(sample);
                 if (res.status == CdcacStatus::Sat) return res;
