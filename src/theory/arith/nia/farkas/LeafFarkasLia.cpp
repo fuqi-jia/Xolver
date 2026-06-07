@@ -1,11 +1,13 @@
 #include "theory/arith/nia/farkas/LeafFarkasLia.h"
 
-#include "theory/arith/lia/InternalMilpEngine.h"
 #include "theory/arith/poly/PolynomialKernel.h"
+#include "xolver/Solver.h"      // nested QF_LIA solve = the real CDCL(LIA) backend
 
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <set>
+#include <string>
 #include <unordered_map>
 
 namespace xolver {
@@ -58,30 +60,102 @@ bool parse(PolynomialKernel& kernel, PolyId poly,
     return true;
 }
 
-// Discharge a pure-LIA system (list of (form, rel) meaning form `rel` 0) with the
-// integer MILP engine. Returns true iff PROVEN integer-infeasible.
-bool liaUnsat(PolynomialKernel& kernel,
-              const std::vector<std::pair<LF, Relation>>& sys) {
-    InternalMilpEngine milp;
-    std::unordered_map<VarId, int> v2i;
-    auto idx = [&](VarId v) -> int {
-        auto it = v2i.find(v);
-        if (it != v2i.end()) return it->second;
-        int i = milp.addVar(std::string(kernel.varName(v)), InternalMilpEngine::VarKind::Int);
-        v2i[v] = i;
-        return i;
+// Discharge the leaf's over-approximation  base ∧ ∧_i(∨ disjunct)  with a nested
+// QF_LIA solve — the EXISTING CDCL(LIA) pipeline (SAT core + LiaSolver) handles
+// the disjunctions natively, so no DNF enumeration. Returns true iff PROVEN
+// integer-infeasible (a leaf UNSAT). Sound: a coefficient that does not fit a
+// machine integer aborts the claim (false), never a wrong UNSAT.
+bool disjLiaUnsat(PolynomialKernel& kernel,
+                  const std::vector<std::pair<LF, Relation>>& base,
+                  const std::vector<std::vector<std::pair<LF, Relation>>>& disj) {
+    // Reuse one nested Solver across the many bounded-B leaves: reset() clears
+    // assertions/symbols without re-paying the per-instance (CaDiCaL) setup.
+    static thread_local Solver s;
+    s.reset();
+    s.setLogic("QF_LIA");
+    Sort I = s.intSort();
+    std::unordered_map<VarId, Term> vt;
+    bool ok = true;
+    auto kc = [](Kind kk) { return static_cast<uint32_t>(kk); };
+    auto var = [&](VarId v) -> Term {
+        auto it = vt.find(v);
+        if (it != vt.end()) return it->second;
+        Term t = s.mkVar(I, std::string(kernel.varName(v)));
+        vt.emplace(v, t);
+        return t;
     };
-    for (const auto& [lf, rel] : sys) {
-        InternalMilpEngine::LinearConstraint lc;
-        for (const auto& [v, co] : lf.c) lc.terms.push_back({idx(v), co});
-        // (Σ co·v) + k  rel  0   ⇒   Σ co·v  rel  -k
-        lc.rhs = -lf.k;
-        lc.rel = rel;
-        lc.reason = SatLit{0, true};
-        milp.addConstraint(lc);
+    auto intT = [&](const mpq_class& c) -> Term {
+        if (c.get_den() != 1 || !c.get_num().fits_slong_p()) { ok = false; return s.mkInt(0); }
+        return s.mkInt(static_cast<int64_t>(c.get_num().get_si()));
+    };
+    auto formT = [&](const LF& lf) -> Term {
+        std::vector<Term> sum;
+        for (const auto& [v, c] : lf.c) sum.push_back(s.mkOp(kc(Kind::Mul), {intT(c), var(v)}));
+        sum.push_back(intT(lf.k));
+        return sum.size() == 1 ? sum[0] : s.mkOp(kc(Kind::Add), sum);
+    };
+    auto relK = [](Relation r) -> Kind {
+        switch (r) { case Relation::Gt: return Kind::Gt; case Relation::Geq: return Kind::Geq;
+            case Relation::Lt: return Kind::Lt; case Relation::Leq: return Kind::Leq; default: return Kind::Eq; }
+    };
+    auto atomT = [&](const std::pair<LF, Relation>& a) -> Term {
+        return s.mkOp(kc(relK(a.second)), {formT(a.first), s.mkInt(0)});
+    };
+    for (const auto& a : base) s.assertFormula(atomT(a));
+    for (const auto& d : disj) {
+        std::vector<Term> ors;
+        for (const auto& a : d) ors.push_back(atomT(a));
+        s.assertFormula(ors.size() == 1 ? ors[0] : s.mkOp(kc(Kind::Or), ors));
     }
-    auto r = milp.solve(InternalMilpEngine::MilpMode::Complete);
-    return r.kind == InternalMilpEngine::MilpResult::Kind::Unsat;
+    if (!ok) return false;
+    return s.checkSat() == Result::Unsat;
+}
+
+// Dump one leaf's over-approximation (base ∧ ∧disj) as QF_LIA SMT-LIB to
+// XOLVER_NIA_CT_SMT (first call only) — for checking whether it is really UNSAT
+// and whether the LIA backend decides it.
+void dumpSmt(PolynomialKernel& kernel,
+             const std::vector<std::pair<LF, Relation>>& base,
+             const std::vector<std::vector<std::pair<LF, Relation>>>& disj) {
+    const char* path = std::getenv("XOLVER_NIA_CT_SMT");
+    if (!path || !*path) return;
+    static thread_local bool done = false;
+    if (done) return;
+    done = true;
+    std::FILE* fp = std::fopen(path, "w");
+    if (!fp) return;
+    std::set<VarId> vars;
+    auto collect = [&](const LF& lf) { for (const auto& [v, c] : lf.c) { (void)c; vars.insert(v); } };
+    for (const auto& [lf, r] : base) { (void)r; collect(lf); }
+    for (const auto& d : disj) for (const auto& [lf, r] : d) { (void)r; collect(lf); }
+    auto lit = [](const mpq_class& c) -> std::string {
+        mpz_class n = c.get_num();
+        return n < 0 ? "(- " + mpz_class(-n).get_str() + ")" : n.get_str();
+    };
+    auto form = [&](const LF& lf) -> std::string {
+        std::string s = "(+";
+        for (const auto& [v, c] : lf.c) s += " (* " + lit(c) + " " + std::string(kernel.varName(v)) + ")";
+        s += " " + lit(lf.k) + ")";
+        return s;
+    };
+    auto relStr = [](Relation r) -> const char* {
+        switch (r) { case Relation::Gt: return ">"; case Relation::Geq: return ">=";
+            case Relation::Lt: return "<"; case Relation::Leq: return "<="; default: return "="; }
+    };
+    auto atom = [&](const std::pair<LF, Relation>& a) -> std::string {
+        return std::string("(") + relStr(a.second) + " " + form(a.first) + " 0)";
+    };
+    std::fputs("(set-logic QF_LIA)\n", fp);
+    for (VarId v : vars) std::fprintf(fp, "(declare-fun %s () Int)\n", std::string(kernel.varName(v)).c_str());
+    for (const auto& a : base) std::fprintf(fp, "(assert %s)\n", atom(a).c_str());
+    for (const auto& d : disj) {
+        std::string s = "(or";
+        for (const auto& a : d) s += " " + atom(a);
+        s += ")";
+        std::fprintf(fp, "(assert %s)\n", s.c_str());
+    }
+    std::fputs("(check-sat)\n", fp);
+    std::fclose(fp);
 }
 
 }  // namespace
@@ -164,28 +238,11 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
         disj.push_back(std::move(d));
     }
 
-    // Enumerate disjunct combinations; leaf is UNSAT iff every combo is LIA-UNSAT.
-    // Capped: the over-approximation is sound, so a too-large leaf just bails to
-    // the caller (→ Unknown), never a wrong answer. (A disjunctive-LIA backend
-    // would lift this cap — future work.)
-    const std::size_t kComboCap = 4096;
-    std::size_t combos = 1;
-    for (const auto& d : disj) { combos *= d.size(); if (combos > kComboCap) { ctDiag("combo-cap"); return false; } }
+    dumpSmt(kernel, base, disj);
 
-    std::vector<std::size_t> sel(disj.size(), 0);
-    while (true) {
-        std::vector<std::pair<LF, Relation>> sys = base;
-        for (std::size_t i = 0; i < disj.size(); ++i) sys.push_back(disj[i][sel[i]]);
-        if (!liaUnsat(kernel, sys)) return false;   // a branch is SAT/unknown ⇒ not proven
-
-        std::size_t p = 0;
-        while (p < sel.size()) {
-            if (++sel[p] < disj[p].size()) break;
-            sel[p] = 0; ++p;
-        }
-        if (p == sel.size()) break;
-    }
-    return true;   // every disjunct combination is integer-infeasible
+    // Discharge the conjunction-of-disjunctions with the existing CDCL(LIA)
+    // pipeline — no DNF enumeration, no combo blow-up.
+    return disjLiaUnsat(kernel, base, disj);
 }
 
 } // namespace xolver
