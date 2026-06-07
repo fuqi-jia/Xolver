@@ -1,0 +1,13 @@
+; Constructor injectivity: mk a b = mk c d => a=c; nonlinear feeds a contradiction.
+(set-logic QF_UFDTNIA)
+(set-info :status unsat)
+(declare-datatypes ((Pair 0)) (((mk (fst Int) (snd Int)))))
+(declare-fun a () Int)
+(declare-fun b () Int)
+(declare-fun c () Int)
+(declare-fun d () Int)
+(assert (= (mk a b) (mk c d)))
+(assert (= (* a a) 4))
+(assert (= a 2))
+(assert (= c 3))
+(check-sat)

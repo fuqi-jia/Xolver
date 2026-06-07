@@ -1,0 +1,11 @@
+; Store v at i, read at i, demand it differs from v: unsat.
+(set-logic QF_ANIA)
+(set-info :status unsat)
+(declare-fun a () (Array Int Int))
+(declare-fun i () Int)
+(declare-fun v () Int)
+(declare-fun w () Int)
+(assert (= w (select (store a i v) i)))
+(assert (= (* v v) 16))
+(assert (not (= w v)))
+(check-sat)

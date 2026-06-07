@@ -1,0 +1,10 @@
+; Read-over-write, same index (Row1) with a nonlinear element value.
+(set-logic QF_ANIA)
+(set-info :status sat)
+(declare-fun a () (Array Int Int))
+(declare-fun i () Int)
+(declare-fun v () Int)
+(assert (= (* v v) 9))
+(assert (>= v 0))
+(assert (= (select (store a i v) i) 3))
+(check-sat)

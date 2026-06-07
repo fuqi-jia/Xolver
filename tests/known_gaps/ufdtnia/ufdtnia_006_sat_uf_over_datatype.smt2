@@ -1,0 +1,11 @@
+; UF over a datatype value, combined with a nonlinear integer constraint.
+(set-logic QF_UFDTNIA)
+(set-info :status sat)
+(declare-datatypes ((Pair 0)) (((mk (fst Int) (snd Int)))))
+(declare-fun p () Pair)
+(declare-fun f (Pair) Int)
+(assert (= (f p) 6))
+(assert (= (* (fst p) (snd p)) 6))
+(assert (> (fst p) 0))
+(assert (> (snd p) 0))
+(check-sat)

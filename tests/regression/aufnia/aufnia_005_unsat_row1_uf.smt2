@@ -1,0 +1,10 @@
+; Row1 + UF: read-over-write equals stored, fed through f, contradiction.
+(set-logic QF_AUFNIA)
+(set-info :status unsat)
+(declare-fun a () (Array Int Int))
+(declare-fun f (Int) Int)
+(declare-fun i () Int)
+(declare-fun v () Int)
+(assert (= (* v v) 4))
+(assert (not (= (f (select (store a i v) i)) (f v))))
+(check-sat)

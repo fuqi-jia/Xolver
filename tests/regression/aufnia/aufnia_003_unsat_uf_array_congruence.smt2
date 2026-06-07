@@ -1,0 +1,10 @@
+; Array congruence feeds UF congruence: i=j => f(a[i])=f(a[j]).
+(set-logic QF_AUFNIA)
+(set-info :status unsat)
+(declare-fun a () (Array Int Int))
+(declare-fun f (Int) Int)
+(declare-fun i () Int)
+(declare-fun j () Int)
+(assert (= i j))
+(assert (not (= (f (select a i)) (f (select a j)))))
+(check-sat)

@@ -1,0 +1,11 @@
+; Read-over-write, different index (Row2): the write is invisible at j.
+(set-logic QF_ANIA)
+(set-info :status sat)
+(declare-fun a () (Array Int Int))
+(declare-fun i () Int)
+(declare-fun j () Int)
+(declare-fun v () Int)
+(assert (not (= i j)))
+(assert (= (select a j) 5))
+(assert (= (select (store a i v) j) 5))
+(check-sat)
