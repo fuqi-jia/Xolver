@@ -364,6 +364,25 @@ NraLocalSearch::bracketMidpointCandidates(
                 out.emplace_back(v, hi - (hi - lo) / 4);
             }
         }
+        // SINGLE-SIDED bound: a var with only lower bounds (or only uppers) gets no
+        // bracket pair above, so it keeps the all-zeros init — which VIOLATES a positive
+        // lower bound (h>0 starts at 0). Seed it to a z3-simplest FEASIBLE value so the
+        // search starts inside the bound: the integer closest to 0 that is > max(lowers)
+        // (or < min(uppers)). Bound-feasible starts help WalkSAT on systems like the
+        // Sturm-MBO / matrix families where every variable carries a one-sided bound.
+        if (!lowers.empty() && uppers.empty()) {
+            const mpq_class lo = *std::max_element(lowers.begin(), lowers.end());
+            mpq_class seed;
+            if (sgn(lo) < 0) seed = mpq_class(0);                  // 0 > lo, simplest
+            else { mpz_class f; mpz_fdiv_q(f.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t()); seed = mpq_class(f + 1); }
+            out.emplace_back(v, seed);
+        } else if (lowers.empty() && !uppers.empty()) {
+            const mpq_class hi = *std::min_element(uppers.begin(), uppers.end());
+            mpq_class seed;
+            if (sgn(hi) > 0) seed = mpq_class(0);                  // 0 < hi, simplest
+            else { mpz_class c; mpz_cdiv_q(c.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t()); seed = mpq_class(c - 1); }
+            out.emplace_back(v, seed);
+        }
     }
     return out;
 }
