@@ -80,6 +80,14 @@ struct FarkasProfile {
     // Or blocks classified as Farkas-shaped (every branch is FarkasBranch::farkasShape()).
     std::vector<FarkasOrBlock> blocks;
 
+    // Nested (non-flat) Or blocks recovered by DNF-flattening — each branch is a
+    // conjunctive DNF clause (XOLVER_NIA_FARKAS_DNF_BLOCKS). Kept SEPARATE from
+    // `blocks` because their branchProxies are empty (a DNF clause spans several
+    // original proxies), so the SAT model-assembler must not touch them. Consumed
+    // ONLY by the bounded-B UNSAT refutation odometer, which treats them exactly
+    // like `blocks`. DNF≡original ⇒ adding them only restores dropped constraints.
+    std::vector<FarkasOrBlock> dnfBlocks;
+
     // Bounded global vars discovered from outer And constraints of form
     // `(and (<= L v) (<= v U))` or `(and (>= v L) (<= v U))`.
     // name → (lo, hi) inclusive integer bounds.

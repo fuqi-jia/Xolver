@@ -50,6 +50,35 @@ private:
         ExprId andId,
         const std::function<ExprId(ExprId)>& resolve = [](ExprId e) { return e; }) const;
 
+    // Classify an already-flattened, proxy-resolved conjunction of atoms into a
+    // FarkasBranch (λ-nonneg / linear-in-λ eq / ineq). Shared by classifyAnd and
+    // the DNF-block path so a DNF clause (a conjunction of Farkas atoms produced
+    // by dnfFlatten) is classified identically.
+    FarkasBranch classifyAtomList(const std::vector<ExprId>& flat,
+                                  ExprId originalAnd) const;
+
+    // DNF-flatten a nested boolean tree over Farkas atoms (And/Or of And/Or/atom,
+    // proxies resolved) into a list of conjunctive clauses — each clause a flat
+    // list of atom ExprIds. EXACT-OR-BAIL (soundness-critical): returns false the
+    // moment it meets anything it cannot expand precisely (Not, a bare unresolved
+    // Bool proxy, or > `cap` clauses), leaving `out` unusable. A partial DNF would
+    // drop a disjunct → fewer refutation leaves → a possible WRONG UNSAT, so we
+    // never emit one. On false the caller leaves the Or unrecognized (dropped, the
+    // pre-existing sound-but-incomplete behavior).
+    bool dnfFlatten(ExprId id,
+                    const std::function<ExprId(ExprId)>& resolve,
+                    std::size_t cap,
+                    std::vector<std::vector<ExprId>>& out) const;
+
+    // Try to recognize a nested (non-flat) Or as a Farkas-Or block by DNF-
+    // flattening it: each conjunctive clause becomes a branch. Used only when the
+    // plain `tryClassifyOr`/classifyAnd path rejects the block. Gated by the
+    // caller (XOLVER_NIA_FARKAS_DNF_BLOCKS). nullopt if not exactly DNF-able or any
+    // clause is not Farkas-shaped.
+    std::optional<FarkasOrBlock> tryClassifyOrDnf(
+        ExprId orId, const std::function<ExprId(ExprId)>& resolve,
+        std::size_t cap) const;
+
     // λ-detection: an atom `Geq(v, 0)` where v is a Variable.
     // Returns the var name on success.
     std::optional<std::string> extractLambdaVar(ExprId atomId) const;

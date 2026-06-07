@@ -1,5 +1,6 @@
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 
+#include <cstdlib>
 #include <functional>
 #include <sstream>
 #include <unordered_set>
@@ -240,6 +241,13 @@ FarkasBranch FarkasOrDetector::classifyAnd(
         }
     };
     collect(andId);
+    return classifyAtomList(flat, andId);
+}
+
+FarkasBranch FarkasOrDetector::classifyAtomList(
+    const std::vector<ExprId>& flat, ExprId originalAnd) const {
+    FarkasBranch br;
+    br.originalAnd = originalAnd;
 
     // First pass: collect λ vars from Geq(v, 0) atoms.
     for (ExprId c : flat) {
@@ -271,6 +279,84 @@ FarkasBranch FarkasOrDetector::classifyAnd(
         }
     }
     return br;
+}
+
+// EXACT-OR-BAIL DNF flatten. See header for the soundness rationale (a partial
+// DNF would drop a refutation leaf → wrong UNSAT). Every node is first proxy-
+// resolved to a fixpoint; And distributes (cartesian product), Or unions, a
+// relational atom is a singleton clause. Anything else (Not, a bare unresolved
+// proxy Variable, an unexpected kind) aborts the whole flatten.
+bool FarkasOrDetector::dnfFlatten(
+    ExprId id, const std::function<ExprId(ExprId)>& resolve,
+    std::size_t cap, std::vector<std::vector<ExprId>>& out) const {
+    ExprId rid = id;
+    for (int guard = 0; guard < 16; ++guard) {
+        ExprId next = resolve(rid);
+        if (next == rid) break;
+        rid = next;
+    }
+    const auto& e = ir_.get(rid);
+    switch (e.kind) {
+        case Kind::And: {
+            // Cartesian product of children's DNFs.
+            out.assign(1, {});   // start with one empty clause
+            for (ExprId c : e.children) {
+                std::vector<std::vector<ExprId>> sub;
+                if (!dnfFlatten(c, resolve, cap, sub)) return false;
+                std::vector<std::vector<ExprId>> prod;
+                for (const auto& a : out)
+                    for (const auto& b : sub) {
+                        if (prod.size() >= cap) return false;
+                        std::vector<ExprId> merged = a;
+                        merged.insert(merged.end(), b.begin(), b.end());
+                        prod.push_back(std::move(merged));
+                    }
+                out = std::move(prod);
+                if (out.size() > cap) return false;
+            }
+            return true;
+        }
+        case Kind::Or: {
+            out.clear();
+            for (ExprId c : e.children) {
+                std::vector<std::vector<ExprId>> sub;
+                if (!dnfFlatten(c, resolve, cap, sub)) return false;
+                for (auto& cl : sub) {
+                    if (out.size() >= cap) return false;
+                    out.push_back(std::move(cl));
+                }
+            }
+            return true;
+        }
+        case Kind::Eq: case Kind::Distinct:
+        case Kind::Leq: case Kind::Geq: case Kind::Lt: case Kind::Gt:
+            out.assign(1, {rid});   // singleton clause holding this atom
+            return true;
+        default:
+            // Not / bare Bool proxy / ITE / anything we cannot expand exactly.
+            return false;
+    }
+}
+
+std::optional<FarkasOrBlock> FarkasOrDetector::tryClassifyOrDnf(
+    ExprId orId, const std::function<ExprId(ExprId)>& resolve,
+    std::size_t cap) const {
+    const auto& e = ir_.get(orId);
+    if (e.kind != Kind::Or || e.children.empty()) return std::nullopt;
+
+    std::vector<std::vector<ExprId>> clauses;
+    if (!dnfFlatten(orId, resolve, cap, clauses)) return std::nullopt;
+    if (clauses.empty()) return std::nullopt;
+
+    FarkasOrBlock block;
+    block.originalOr = orId;
+    block.branches.reserve(clauses.size());
+    for (auto& cl : clauses)
+        block.branches.push_back(classifyAtomList(cl, orId));
+    if (!block.allBranchesFarkas()) return std::nullopt;
+    // No proxy bookkeeping: DNF clauses are raw atoms, not branch proxies.
+    block.branchProxies.assign(block.branches.size(), std::string());
+    return block;
 }
 
 std::optional<FarkasOrBlock>
@@ -515,6 +601,28 @@ FarkasProfile FarkasOrDetector::detect() const {
                 for (const auto& v : resolvedProxies) usedDefs.insert(v);
                 p.blocks.push_back(std::move(block));
                 continue;
+            }
+            // DNF-block fallback (XOLVER_NIA_FARKAS_DNF_BLOCKS): the flat
+            // or-of-and shape was rejected, but a NESTED boolean Or (Stroeder
+            // refinement blocks: or-of-(and-of-(and..)(or..))) carries real
+            // Farkas constraints that collectResidual would otherwise DROP
+            // entirely (leaf incompleteness — From_T2__pentagon p6978: assert
+            // 138 is exactly this, and z3 shows it is what makes the file
+            // UNSAT). DNF-flatten the Or into a block whose branches are the
+            // conjunctive clauses. DNF ≡ original (exact, not an approximation),
+            // and `dnfFlatten` is exact-or-bail, so this only RESTORES dropped
+            // constraints — it can never invent a wrong UNSAT.
+            if (std::getenv("XOLVER_NIA_FARKAS_DNF_BLOCKS")) {
+                std::size_t cap = 256;
+                if (const char* cc = std::getenv("XOLVER_NIA_FARKAS_DNF_CAP")) {
+                    long v = std::atol(cc);
+                    if (v > 0) cap = static_cast<std::size_t>(v);
+                }
+                if (auto dblk = tryClassifyOrDnf(aid, resolve, cap)) {
+                    for (const auto& v : resolvedProxies) usedDefs.insert(v);
+                    p.dnfBlocks.push_back(std::move(*dblk));
+                    continue;
+                }
             }
             // P0.5: dump why this block was rejected. Helps fix classifyAnd.
             if (gRejectDumpFile) {

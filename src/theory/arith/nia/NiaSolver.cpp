@@ -2956,6 +2956,9 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
         if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
     };
+    traceWrite("[bounded-refute] FUNCTION ENTERED blocks=" + std::to_string(profile.blocks.size())
+               + " bounded=" + std::to_string(profile.boundedGlobals.size())
+               + " dnf=" + std::to_string(profile.dnfBlocks.size()));
 
     // ---- 1. Bounded-B domain: collect vars + integer intervals, cap product.
     struct BVar { VarId vid; mpz_class lo, hi; };
@@ -3097,6 +3100,20 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
             ctVarSet.insert(kernel_->getOrCreateVar(nm));
 
     // ---- 3. Enumerate B-tuples × branch combos; each leaf must be Unsat.
+    // The refutation odometer enumerates the flat Farkas-Or blocks AND any
+    // DNF-recovered nested Or blocks (XOLVER_NIA_FARKAS_DNF_BLOCKS) uniformly:
+    // both demand "pick one branch, every combo must be UNSAT". DNF blocks are
+    // kept out of profile.blocks (their empty branchProxies must not reach the
+    // SAT model-assembler) but are exactly the constraints whose omission made
+    // the leaf incomplete, so the refutation MUST include them.
+    std::vector<const farkas::FarkasOrBlock*> allBlocks;
+    allBlocks.reserve(profile.blocks.size() + profile.dnfBlocks.size());
+    for (const auto& b : profile.blocks)    allBlocks.push_back(&b);
+    for (const auto& b : profile.dnfBlocks) allBlocks.push_back(&b);
+    traceWrite("[bounded-refute] enter flat=" + std::to_string(profile.blocks.size())
+               + " dnf=" + std::to_string(profile.dnfBlocks.size())
+               + " residual=" + std::to_string(profile.residualConstraints.size()));
+
     std::vector<mpz_class> bcur;
     for (const auto& bv : bvars) bcur.push_back(bv.lo);
     std::size_t leavesChecked = 0;
@@ -3121,14 +3138,14 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
 
         if (!bTupleDead) {
             // Branch-combo odometer.
-            std::vector<std::size_t> bc(profile.blocks.size(), 0);
+            std::vector<std::size_t> bc(allBlocks.size(), 0);
             while (true) {
                 std::vector<CdcacConstraint> cons = outerCons;
                 bool leafDead = false;   // trivially violated leaf atom
                 bool leafBail = false;
-                for (std::size_t bi = 0; bi < profile.blocks.size() && !leafDead;
+                for (std::size_t bi = 0; bi < allBlocks.size() && !leafDead;
                      ++bi) {
-                    const auto& br = profile.blocks[bi].branches[bc[bi]];
+                    const auto& br = allBlocks[bi]->branches[bc[bi]];
                     for (const auto& lam : br.lambdas) {   // lambda >= 0
                         CdcacConstraint c;
                         c.poly = kernel_->mkVar(kernel_->getOrCreateVar(lam));
@@ -3147,7 +3164,11 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                     };
                     addAtoms(br.equalities);
                     if (!leafDead && !leafBail) addAtoms(br.inequalities);
-                    if (leafBail) return giveUp();   // can't model a branch atom
+                    if (leafBail) {
+                        traceWrite("[bounded-refute] leafBail block=" + std::to_string(bi)
+                                   + " (atom unmodellable) ⇒ giveUp");
+                        return giveUp();   // can't model a branch atom
+                    }
                 }
                 if (!leafDead) {
                     // Cost-var elimination → pure-LIA leaf (research-recommended
@@ -3186,7 +3207,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                 // advance branch-combo odometer
                 std::size_t p = 0;
                 while (p < bc.size()) {
-                    if (++bc[p] < profile.blocks[p].branches.size()) break;
+                    if (++bc[p] < allBlocks[p]->branches.size()) break;
                     bc[p] = 0; ++p;
                 }
                 if (p == bc.size()) break;
@@ -3216,12 +3237,12 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
                 if (a.reason.var == sv) { tc.clause.push_back(a.reason); return; }
             }
         };
-        for (const auto& blk : profile.blocks) {
-            for (const auto& proxy : blk.branchProxies) {
+        for (const auto* blk : allBlocks) {
+            for (const auto& proxy : blk->branchProxies) {
                 if (proxy.empty()) continue;
                 if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushReason(*sv);
             }
-            for (const auto& br : blk.branches) {
+            for (const auto& br : blk->branches) {
                 if (br.originalAnd == NullExpr) continue;
                 if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
                     pushReason(*sv);
