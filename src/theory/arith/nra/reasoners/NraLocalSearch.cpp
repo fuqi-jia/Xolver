@@ -821,12 +821,24 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
             if (el >= budgetMs_ / 2 && !score.isSat()) {
                 saFirstDone = true;
                 asg = seedSnapshot;                          // anneal from the clean seed
-                auto loss = [&](const std::unordered_map<VarId, mpq_class>& a) -> double {
-                    double s = 0.0; for (const auto& c : constraints) s += atomViolation(c, a).get_d(); return s;
-                };
-                double curLoss = loss(asg);
+                // INCREMENTAL smooth loss: track per-constraint violations + which constraints
+                // each var occurs in. A one-variable anneal move only re-evaluates the
+                // constraints CONTAINING that var (O(occurrences), not O(all constraints)),
+                // buying far more anneal steps per budget on sparse systems → more exploration,
+                // no extra budget. (atomViolation is cached, but the full loss still pays a
+                // ViolationKey build per constraint each step; this skips the untouched ones.)
+                std::unordered_map<VarId, std::vector<size_t>> varCons;
+                for (size_t ci = 0; ci < constraints.size(); ++ci)
+                    for (VarId v : atomVars(constraints[ci].poly)) varCons[v].push_back(ci);
+                std::vector<double> cv(constraints.size());
+                double curLoss = 0.0;
+                for (size_t ci = 0; ci < constraints.size(); ++ci) {
+                    cv[ci] = atomViolation(constraints[ci], asg).get_d();
+                    curLoss += cv[ci];
+                }
                 double T = (curLoss > 1e-6) ? curLoss : 1.0;
                 const double cool = std::pow(1e-3, 1.0 / static_cast<double>(kSAFirst));
+                std::vector<double> newv;   // scratch reused across steps (avoid per-step alloc)
                 for (long step = 0; step < kSAFirst && !budgetExpired(); ++step) {
                     const VarId rv = vars[nextRand() % vars.size()];
                     const mpq_class saved = asg.count(rv) ? asg[rv] : mpq_class{0};
@@ -840,10 +852,26 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
                     }
                     if (mpz_class(q.get_den()) > 1000000) { continue; }
                     asg[rv] = q;
-                    const double nl = loss(asg);
-                    const double dE = nl - curLoss;
+                    const auto vcIt = varCons.find(rv);
+                    double dE = 0.0;
+                    newv.clear();
+                    if (vcIt != varCons.end()) {
+                        for (size_t ci : vcIt->second) {
+                            const double nvc = atomViolation(constraints[ci], asg).get_d();
+                            newv.push_back(nvc);
+                            dE += nvc - cv[ci];
+                        }
+                    }
                     const double u = static_cast<double>(nextRand() >> 11) * (1.0 / 9007199254740992.0);
-                    if (dE <= 0.0 || u < std::exp(-dE / T)) { curLoss = nl; } else { asg[rv] = saved; }
+                    if (dE <= 0.0 || u < std::exp(-dE / T)) {
+                        if (vcIt != varCons.end()) {
+                            size_t k = 0;
+                            for (size_t ci : vcIt->second) cv[ci] = newv[k++];
+                        }
+                        curLoss += dE;                       // accept
+                    } else {
+                        asg[rv] = saved;                     // reject — cv unchanged
+                    }
                     T *= cool;
                 }
                 score = totalScore(constraints, weights, asg);
