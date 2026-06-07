@@ -212,6 +212,31 @@ TheoryCheckResult CdcacSolver::check(CdcacEffort /*effort*/, void* /*trail*/) {
     return check();
 }
 
+bool CdcacSolver::globalBoxRefute(std::vector<SatLit>& reasonsOut) {
+    // Cheap GLOBAL box-consistency refutation, meant to run as an EARLY stage before
+    // the (potentially exponential) covering: build the constraint set and ask the
+    // core whether the over-approximation box over all of ℝⁿ is already infeasible.
+    // True ⇒ UNSAT (sound by over-approximation); the conflict cites every active
+    // constraint's literal (a valid superset clause). Var ORDER is irrelevant to the
+    // box fixpoint, so we skip the Brown/simplex heuristic used by check().
+    if (active_.empty() || !core_ || !algebra_) return false;
+    CdcacInput input;
+    std::unordered_set<std::string> varNames;
+    for (const auto& c : active_) {
+        if (kernel_->isConstant(c.poly)) continue;   // constants handled by check()'s direct path
+        CdcacConstraint cc; cc.poly = c.poly; cc.rel = c.rel; cc.reason = c.reason;
+        input.constraints.push_back(std::move(cc));
+        for (const auto& v : kernel_->variables(c.poly)) varNames.insert(v);
+    }
+    if (input.constraints.empty() || varNames.size() < 2) return false;
+    for (const auto& name : varNames) input.varOrder.push_back(kernel_->getOrCreateVar(name));
+    if (!core_->topLevelBoxInfeasible(input)) return false;
+    reasonsOut.clear();
+    reasonsOut.reserve(active_.size());
+    for (const auto& c : active_) reasonsOut.push_back(c.reason);
+    return true;
+}
+
 std::optional<SamplePoint> CdcacSolver::getModel() const {
     return lastModel_;
 }

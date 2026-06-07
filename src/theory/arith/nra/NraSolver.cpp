@@ -90,6 +90,13 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.presolve",
         stageWrap("presolve", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stagePresolve(db, e); })));
+    // Step 2.1 GLOBAL box-consistency refutation, EARLY (right after presolve, before
+    // the covering engines): decides bound-contradiction families (hong) in ~ms,
+    // short-circuiting the covering-tree blowup that stageCac would otherwise spend
+    // 10s+ on. Sound (interval over-approximation). Default-on, no flag/budget.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.box-refute",
+        stageWrap("box-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageBoxRefute(db, e); })));
     // §4.2 linear-subset UNSAT pre-check (XOLVER_NRA_LINEAR_SUBSET_UNSAT,
     // default OFF). If the linear subset of presolveConstraints_ is
     // already simplex-UNSAT, emit a SAT-level conflict over those atoms'
@@ -578,6 +585,23 @@ std::optional<TheoryCheckResult> NraSolver::stageLinearSubsetUnsat(
     }
     if (conflict.clause.empty()) return std::nullopt;
     return TheoryCheckResult::mkConflict(std::move(conflict));
+}
+
+// Step 2.1: GLOBAL box-consistency refutation, run EARLY (before the covering
+// engines). The box-ICP (incl. degree-2 square contraction) over all of ℝⁿ decides
+// bound-contradiction families — most importantly the hong family (Σx²<1 ⇒ |x_i|<1
+// ⇒ |Πx|<1, contra Πx>1) — in ~ms. Without this the conflict is only found by the
+// CdcacCore box-check INSIDE stageCdcac, i.e. AFTER stageCac has already spent a 10s+
+// covering blowup on the same problem (measured: hong_8 cac=10.76s). Running it up
+// front short-circuits that. Sound: interval over-approximation, empty box ⇒ UNSAT.
+// Skips combination mode (interface (dis)eqs live in engine_, not the box).
+std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /*lemmaDb*/,
+                                                           TheoryEffort /*effort*/) {
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;
+    std::vector<SatLit> reasons;
+    if (!engine_.globalBoxRefute(reasons)) return std::nullopt;
+    return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
 }
 
 // XOLVER_NRA_ICP: rational ICP probe. Sound by construction — emits Conflict
