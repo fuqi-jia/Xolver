@@ -2108,7 +2108,7 @@ void LiaSolver::scanLiteralPinEntailments() {
             const auto& sp = std::get<SharedEqualityPayload>(rec.payload);
             if (!sharedTermRegistry_) continue;
             auto pinOf = [&](SharedTermId stId) -> std::optional<std::pair<mpq_class, std::vector<SatLit>>> {
-                if (const auto* st = sharedTermRegistry_->get(stId)) {
+                if (sharedTermRegistry_->get(stId)) {
                     // Numeric-constant shared term has its value baked in.
                     if (auto cv = sharedTermRegistry_->constValue(stId)) {
                         return std::make_pair(*cv, std::vector<SatLit>{});
