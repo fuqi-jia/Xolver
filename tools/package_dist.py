@@ -88,6 +88,11 @@ def main():
             # `wallclock` never reach the node).
             "run.sh",
             "diff_common.sh",
+            # diff_common.sh::emit_node_sqlite runs `python3 $here/diff_ingest.py`
+            # ON THE PANDA at the end of each logic. Without it the per-node sqlite
+            # emission errors out (rich CSV still survives, but it's a visible
+            # failure). stdlib-only, so safe to ship.
+            "diff_ingest.py",
         ]:
             src = Path("tools") / script
             if src.exists():
