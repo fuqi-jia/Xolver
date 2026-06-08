@@ -27,6 +27,7 @@ struct CombDiag {
     long checks = 0;
     long arrSplitValue = 0, arrSplitDemand = 0, arrSplitUfarg = 0;
     long dedEqLemma = 0, dedEqEufMerged = 0, dedEqAtomFresh = 0;
+    long l5IdxTerms = 0, l5PairsQueried = 0, l5Proven = 0;   // FIX-c funnel: arith->array diseq
     long lastDumpCheck = 0;
 };
 static CombDiag g_cd;
@@ -40,11 +41,13 @@ static void combDiagDump() {
         "checks=%ld\n"
         "arrSplit value=%ld demand=%ld ufarg=%ld (total=%ld)\n"
         "dedEqLemma=%ld dedEqEufMerged(skipped)=%ld dedEqAtomFresh=%ld\n"
+        "L5 idxTerms=%ld pairsQueried=%ld proven=%ld\n"
         "sharedEqAtomsCreated(global)=%ld\n",
         g_cd.checks,
         g_cd.arrSplitValue, g_cd.arrSplitDemand, g_cd.arrSplitUfarg,
         g_cd.arrSplitValue + g_cd.arrSplitDemand + g_cd.arrSplitUfarg,
         g_cd.dedEqLemma, g_cd.dedEqEufMerged, g_cd.dedEqAtomFresh,
+        g_cd.l5IdxTerms, g_cd.l5PairsQueried, g_cd.l5Proven,
         g_sharedEqAtomsCreated);
     // atomic-ish: write to temp then rename (avoids empty file if killed mid-write)
     FILE* f = std::fopen("/tmp/xolver_combdiag.tmp", "w");
@@ -677,16 +680,19 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         std::vector<SharedTermId> idxv(arrayIdxSet.begin(), arrayIdxSet.end());
         std::sort(idxv.begin(), idxv.end());   // deterministic emission order
         size_t buffered = 0;
+        if (g_combDiag) g_cd.l5IdxTerms = (long)idxv.size();
         for (size_t i = 0; i < idxv.size(); ++i) {
             for (size_t j = i + 1; j < idxv.size(); ++j) {
                 SharedTermId A = idxv[i], B = idxv[j];
                 if (sharedEqMgr_.same(A, B) || sharedEqMgr_.diseqKnown(A, B))
                     continue;
                 if (careGraphEnabled_ && !careGraph_.caresPair(A, B)) continue;
+                if (g_combDiag) ++g_cd.l5PairsQueried;
                 for (auto& s : solvers_) {
                     if (!s->supportsCombination()) continue;
                     auto r = s->proveSharedDisjoint(A, B);
                     if (!r) continue;
+                    if (g_combDiag) ++g_cd.l5Proven;
                     SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
                     if (assignmentView_ &&
                         assignmentView_->value(eqLit) == LitValue::False) break;
