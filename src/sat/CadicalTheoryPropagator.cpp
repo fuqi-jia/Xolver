@@ -370,6 +370,31 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     NO_DBG << " us=" << dur.count();
     NO_DBG << "\n";
 
+    // #2 probe: log each Full-check refutation (kind/size/reason) to a file so
+    // the cs_* non-convergence (model-specific lemmas) can be characterized.
+    if (std::getenv("XOLVER_SAT_PROF")) {
+        if (FILE* f = std::fopen("/tmp/xolver_refute.txt", "a")) {
+            size_t sz = tr.kind == TheoryCheckResult::Kind::Conflict
+                            ? (tr.conflictOpt ? tr.conflictOpt->clause.size() : 0)
+                        : tr.kind == TheoryCheckResult::Kind::Lemma
+                            ? (tr.lemmaOpt ? tr.lemmaOpt->lits.size() : 0)
+                            : 0;
+            std::fprintf(f, "kind=%d size=%zu reason=%s", (int)tr.kind, sz,
+                         tr.reason.empty() ? "-" : tr.reason.c_str());
+            if (tr.kind == TheoryCheckResult::Kind::Lemma && tr.lemmaOpt) {
+                std::fprintf(f, " lits=[");
+                for (auto lit : tr.lemmaOpt->lits) {
+                    const auto* rec = registry_.findBySatVar(lit.var);
+                    std::fprintf(f, "%s%u/p%d ", lit.sign ? "" : "-", lit.var,
+                                 rec ? (int)rec->payload.index() : -1);
+                }
+                std::fprintf(f, "]");
+            }
+            std::fprintf(f, "\n");
+            std::fclose(f);
+        }
+    }
+
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;
     }
