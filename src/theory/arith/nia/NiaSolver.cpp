@@ -3549,111 +3549,107 @@ NiaSolver::getDeducedSharedEqualities() {
             std::unordered_set<uint64_t> emittedPair;
             for (const auto& p : result) emittedPair.insert(pairKey(p.a, p.b));
 
-            for (size_t i = 0; i < svs.size(); ++i) {
-                for (size_t j = i + 1; j < svs.size(); ++j) {
-                    if (emittedPair.count(pairKey(svs[i].stId, svs[j].stId)))
-                        continue;
-                    const std::string& na = svs[i].name;
-                    const std::string& nb = svs[j].name;
+            // name -> svs index (only shared-term names are keys).
+            std::unordered_map<std::string, size_t> nameToIdx;
+            nameToIdx.reserve(svs.size() * 2);
+            for (size_t i = 0; i < svs.size(); ++i) nameToIdx.emplace(svs[i].name, i);
 
-                    bool haveLo = false, haveUp = false;
-                    mpq_class lo = 0, up = 0;
-                    SatLit loLit{}, upLit{};
+            // Per-pair accumulator of bounds on d = na - nb (na = the smaller-svs-
+            // index shared var). SINGLE trail pass: each 2-var linear-difference
+            // atom is analysed ONCE (one kernel_->variables / kernel_->terms call)
+            // and bucketed into its var pair — O(trail), versus the prior
+            // O(shared_vars^2 * trail) which re-ran the allocating libpoly
+            // variables() call for every (i,j) pair (the cs_* QF_ANIA hot path:
+            // ~100 shared vars * ~500 trail atoms * 5 checks = millions of libpoly
+            // calls -> the wall). Behaviour-identical: same tightest-bound
+            // accumulation, same trail-order tie-breaking, same pin test, same
+            // svs-index emission order.
+            struct Acc {
+                bool haveLo = false, haveUp = false;
+                mpq_class lo = 0, up = 0;
+                SatLit loLit{}, upLit{};
+            };
+            std::map<std::pair<size_t, size_t>, Acc> acc;  // key = (ia<ib) -> bounds
 
-                    for (const auto& e : state_.trail) {
-                        const auto* p = std::get_if<PolynomialAtomPayload>(
-                                            &e.atom.payload);
-                        if (!p) continue;
-                        if (!p->rhs.isRational()) continue;
+            for (const auto& e : state_.trail) {
+                const auto* p = std::get_if<PolynomialAtomPayload>(&e.atom.payload);
+                if (!p) continue;
+                if (!p->rhs.isRational()) continue;
 
-                        auto vars = kernel_->variables(p->poly);
-                        if (vars.size() != 2) continue;
-                        bool hasA = false, hasB = false;
-                        for (const auto& v : vars) {
-                            if (v == na) hasA = true;
-                            else if (v == nb) hasB = true;
-                        }
-                        if (!hasA || !hasB) continue;
+                auto vars = kernel_->variables(p->poly);
+                if (vars.size() != 2) continue;
+                auto it0 = nameToIdx.find(vars[0]);
+                auto it1 = nameToIdx.find(vars[1]);
+                if (it0 == nameToIdx.end() || it1 == nameToIdx.end()) continue;
+                size_t ia = it0->second, ib = it1->second;
+                if (ia == ib) continue;
+                if (ia > ib) std::swap(ia, ib);          // na = svs[ia] (smaller idx)
+                if (emittedPair.count(pairKey(svs[ia].stId, svs[ib].stId))) continue;
+                const std::string& na = svs[ia].name;
+                const std::string& nb = svs[ib].name;
 
-                        auto tOpt = kernel_->terms(p->poly);
-                        if (!tOpt) continue;
-                        mpz_class cA = 0, cB = 0, k = 0;
-                        bool ok = true;
-                        for (const auto& m : *tOpt) {
-                            if (m.powers.empty()) {
-                                k += m.coefficient;
-                            } else if (m.powers.size() == 1
-                                       && m.powers[0].second == 1) {
-                                std::string vn(
-                                    kernel_->varName(m.powers[0].first));
-                                if (vn == na)      cA += m.coefficient;
-                                else if (vn == nb) cB += m.coefficient;
-                                else { ok = false; break; }
-                            } else {
-                                ok = false; break;  // nonlinear monomial
-                            }
-                        }
-                        if (!ok) continue;
-                        if (cA == 0 || cA != -cB) continue;
-
-                        Relation rel = e.value ? p->rel
-                                               : negateRelation(p->rel);
-                        if (rel == Relation::Neq) continue;  // never pins
-                        const mpq_class& rhsQ = p->rhs.asRational();
-                        // poly = cA*(na - nb) + k ; rel rhsQ
-                        // => d = na - nb satisfies  cA*d  rel  (rhsQ - k)
-                        // => d rel'  (rhsQ - k)/cA  with rel' flipped if cA<0
-                        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
-                        bool flip = (cA < 0);
-                        auto addLower = [&](const mpq_class& v, SatLit lit) {
-                            if (!haveLo || v > lo) {
-                                lo = v; loLit = lit; haveLo = true;
-                            }
-                        };
-                        auto addUpper = [&](const mpq_class& v, SatLit lit) {
-                            if (!haveUp || v < up) {
-                                up = v; upLit = lit; haveUp = true;
-                            }
-                        };
-                        switch (rel) {
-                            case Relation::Eq:
-                                addLower(bnd, e.lit);
-                                addUpper(bnd, e.lit);
-                                break;
-                            case Relation::Leq:
-                                if (!flip) addUpper(bnd, e.lit);
-                                else       addLower(bnd, e.lit);
-                                break;
-                            case Relation::Geq:
-                                if (!flip) addLower(bnd, e.lit);
-                                else       addUpper(bnd, e.lit);
-                                break;
-                            case Relation::Lt:
-                            case Relation::Gt:
-                            default:
-                                break;  // strict — does not pin
-                        }
-                    }
-
-                    if (haveLo && haveUp && lo == 0 && up == 0) {
-                        std::vector<SatLit> reasons;
-                        reasons.push_back(loLit);
-                        if (!(upLit == loLit)) reasons.push_back(upLit);
-                        std::sort(reasons.begin(), reasons.end(),
-                                  [](SatLit a, SatLit b) {
-                            return a.var < b.var
-                                || (a.var == b.var && a.sign < b.sign);
-                        });
-                        reasons.erase(std::unique(reasons.begin(), reasons.end(),
-                                                  [](SatLit a, SatLit b) {
-                            return a.var == b.var && a.sign == b.sign;
-                        }), reasons.end());
-                        emittedPair.insert(
-                            pairKey(svs[i].stId, svs[j].stId));
-                        result.push_back(TheorySolver::SharedEqualityPropagation{
-                            svs[i].stId, svs[j].stId, std::move(reasons)});
+                auto tOpt = kernel_->terms(p->poly);
+                if (!tOpt) continue;
+                mpz_class cA = 0, cB = 0, k = 0;
+                bool ok = true;
+                for (const auto& m : *tOpt) {
+                    if (m.powers.empty()) {
+                        k += m.coefficient;
+                    } else if (m.powers.size() == 1 && m.powers[0].second == 1) {
+                        std::string vn(kernel_->varName(m.powers[0].first));
+                        if (vn == na)      cA += m.coefficient;
+                        else if (vn == nb) cB += m.coefficient;
+                        else { ok = false; break; }
+                    } else {
+                        ok = false; break;  // nonlinear monomial
                     }
                 }
+                if (!ok) continue;
+                if (cA == 0 || cA != -cB) continue;
+
+                Relation rel = e.value ? p->rel : negateRelation(p->rel);
+                if (rel == Relation::Neq) continue;  // never pins
+                const mpq_class& rhsQ = p->rhs.asRational();
+                // poly = cA*(na - nb) + k ; rel rhsQ  =>  d = na-nb : cA*d rel (rhsQ-k)
+                mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+                bool flip = (cA < 0);
+                Acc& a = acc[{ia, ib}];
+                auto addLower = [&](const mpq_class& v, SatLit lit) {
+                    if (!a.haveLo || v > a.lo) { a.lo = v; a.loLit = lit; a.haveLo = true; }
+                };
+                auto addUpper = [&](const mpq_class& v, SatLit lit) {
+                    if (!a.haveUp || v < a.up) { a.up = v; a.upLit = lit; a.haveUp = true; }
+                };
+                switch (rel) {
+                    case Relation::Eq:
+                        addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+                    case Relation::Leq:
+                        if (!flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+                    case Relation::Geq:
+                        if (!flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+                    case Relation::Lt:
+                    case Relation::Gt:
+                    default:
+                        break;  // strict — does not pin
+                }
+            }
+
+            // std::map iterates keys (ia, ib) in ascending order == the prior
+            // nested-loop's (i, j) emission order.
+            for (auto& [key, a] : acc) {
+                if (!(a.haveLo && a.haveUp && a.lo == 0 && a.up == 0)) continue;
+                std::vector<SatLit> reasons;
+                reasons.push_back(a.loLit);
+                if (!(a.upLit == a.loLit)) reasons.push_back(a.upLit);
+                std::sort(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+                    return x.var < y.var || (x.var == y.var && x.sign < y.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                          [](SatLit x, SatLit y) {
+                    return x.var == y.var && x.sign == y.sign;
+                }), reasons.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    svs[key.first].stId, svs[key.second].stId, std::move(reasons)});
             }
         }
     }
