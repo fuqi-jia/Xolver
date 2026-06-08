@@ -2957,6 +2957,35 @@ public:
                 !features.hasUF && !features.hasArray && !features.hasDatatype) {
                 phase("eager-bb-start");
                 bitblast::EagerBitBlastSolver eagerbb;
+                // Farkas/termination routing: eager-bb diverges on the
+                // bilinear-λ width search of Stroeder/VeryMax UNSAT cases. When
+                // the bounded-B refutation lane is opted in and the formula IS
+                // Farkas-Or-shaped (bounded template coeffs + Farkas branches),
+                // give eager-bb only a SHORT slice so it bails to Unknown and the
+                // NIA pipeline's bounded-B refutation gets the UNSAT — while the
+                // SAT cases, which eager-bb solves fast, still land in time.
+                // PROMOTED default-ON (2026-06-08): the bounded-B refutation is
+                // now a default NIA stage, so this routing must always engage —
+                // otherwise eager-bb hogs the wall-clock and the refutation never
+                // runs. The detector bails on non-Farkas inputs (good()==false),
+                // so the cost there is one O(tree) scan.
+                {
+                    farkas::FarkasOrDetector fdet(*ir);
+                    auto fprof = fdet.detect();
+                    if (fprof.good() && !fprof.boundedGlobals.empty()) {
+                        // Do NOT starve eager-bb on Farkas SAT: keep its FULL normal
+                        // wall-clock share (pct = the general 33% default). eager-bb's
+                        // consecutive-UNSAT cap bails it early on the UNSAT shapes
+                        // (loop3 ~40s) and the refutation is fast, so a full share
+                        // still leaves ample time for the UNSAT path while preserving
+                        // every bit-blast SAT win. absMs is the dev-only fallback used
+                        // when no wall-clock deadline is set (bash `timeout`), where
+                        // the cap fires later than the small dev timeout.
+                        eagerbb.setFarkasBudget(
+                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_PCT", 33),
+                            env::paramLong("XOLVER_NIA_FARKAS_EAGER_BUDGET_MS", 2000));
+                    }
+                }
                 auto ibr = eagerbb.solve(*ir, ir->assertions());
                 phase("eager-bb-done");
                 if (ibr.status == bitblast::EagerBitBlastSolver::Status::Sat) {

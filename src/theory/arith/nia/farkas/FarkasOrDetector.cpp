@@ -1,5 +1,6 @@
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 
+#include <cstdlib>
 #include <functional>
 #include <sstream>
 #include <unordered_set>
@@ -206,7 +207,8 @@ bool FarkasOrDetector::isLinearInLambdaInequality(
     return monomialsLinearInLambda(poly, lambdas);
 }
 
-FarkasBranch FarkasOrDetector::classifyAnd(ExprId andId) const {
+FarkasBranch FarkasOrDetector::classifyAnd(
+    ExprId andId, const std::function<ExprId(ExprId)>& resolve) const {
     FarkasBranch br;
     br.originalAnd = andId;
     const auto& e = ir_.get(andId);
@@ -218,18 +220,34 @@ FarkasBranch FarkasOrDetector::classifyAnd(ExprId andId) const {
 
     // Flatten nested Ands: Stroeder VeryMax encodes some Or-branches as
     // `(and (and a b) (and c d) ...)`. Walk all nested And children and
-    // collect atoms into a single flat list.
+    // collect atoms into a single flat list. Each node is first proxy-
+    // resolved (to a fixpoint) so a boolpur-purified conjunct `proxy_i`
+    // standing for a real Farkas atom is classified by that atom, not
+    // dropped as an unclassified Variable.
     std::vector<ExprId> flat;
     std::function<void(ExprId)> collect;
     collect = [&](ExprId aid) {
-        const auto& ne = ir_.get(aid);
+        ExprId rid = aid;
+        for (int guard = 0; guard < 16; ++guard) {
+            ExprId next = resolve(rid);
+            if (next == rid) break;
+            rid = next;
+        }
+        const auto& ne = ir_.get(rid);
         if (ne.kind == Kind::And) {
             for (ExprId c : ne.children) collect(c);
         } else {
-            flat.push_back(aid);
+            flat.push_back(rid);
         }
     };
     collect(andId);
+    return classifyAtomList(flat, andId);
+}
+
+FarkasBranch FarkasOrDetector::classifyAtomList(
+    const std::vector<ExprId>& flat, ExprId originalAnd) const {
+    FarkasBranch br;
+    br.originalAnd = originalAnd;
 
     // First pass: collect λ vars from Geq(v, 0) atoms.
     for (ExprId c : flat) {
@@ -263,6 +281,84 @@ FarkasBranch FarkasOrDetector::classifyAnd(ExprId andId) const {
     return br;
 }
 
+// EXACT-OR-BAIL DNF flatten. See header for the soundness rationale (a partial
+// DNF would drop a refutation leaf → wrong UNSAT). Every node is first proxy-
+// resolved to a fixpoint; And distributes (cartesian product), Or unions, a
+// relational atom is a singleton clause. Anything else (Not, a bare unresolved
+// proxy Variable, an unexpected kind) aborts the whole flatten.
+bool FarkasOrDetector::dnfFlatten(
+    ExprId id, const std::function<ExprId(ExprId)>& resolve,
+    std::size_t cap, std::vector<std::vector<ExprId>>& out) const {
+    ExprId rid = id;
+    for (int guard = 0; guard < 16; ++guard) {
+        ExprId next = resolve(rid);
+        if (next == rid) break;
+        rid = next;
+    }
+    const auto& e = ir_.get(rid);
+    switch (e.kind) {
+        case Kind::And: {
+            // Cartesian product of children's DNFs.
+            out.assign(1, {});   // start with one empty clause
+            for (ExprId c : e.children) {
+                std::vector<std::vector<ExprId>> sub;
+                if (!dnfFlatten(c, resolve, cap, sub)) return false;
+                std::vector<std::vector<ExprId>> prod;
+                for (const auto& a : out)
+                    for (const auto& b : sub) {
+                        if (prod.size() >= cap) return false;
+                        std::vector<ExprId> merged = a;
+                        merged.insert(merged.end(), b.begin(), b.end());
+                        prod.push_back(std::move(merged));
+                    }
+                out = std::move(prod);
+                if (out.size() > cap) return false;
+            }
+            return true;
+        }
+        case Kind::Or: {
+            out.clear();
+            for (ExprId c : e.children) {
+                std::vector<std::vector<ExprId>> sub;
+                if (!dnfFlatten(c, resolve, cap, sub)) return false;
+                for (auto& cl : sub) {
+                    if (out.size() >= cap) return false;
+                    out.push_back(std::move(cl));
+                }
+            }
+            return true;
+        }
+        case Kind::Eq: case Kind::Distinct:
+        case Kind::Leq: case Kind::Geq: case Kind::Lt: case Kind::Gt:
+            out.assign(1, {rid});   // singleton clause holding this atom
+            return true;
+        default:
+            // Not / bare Bool proxy / ITE / anything we cannot expand exactly.
+            return false;
+    }
+}
+
+std::optional<FarkasOrBlock> FarkasOrDetector::tryClassifyOrDnf(
+    ExprId orId, const std::function<ExprId(ExprId)>& resolve,
+    std::size_t cap) const {
+    const auto& e = ir_.get(orId);
+    if (e.kind != Kind::Or || e.children.empty()) return std::nullopt;
+
+    std::vector<std::vector<ExprId>> clauses;
+    if (!dnfFlatten(orId, resolve, cap, clauses)) return std::nullopt;
+    if (clauses.empty()) return std::nullopt;
+
+    FarkasOrBlock block;
+    block.originalOr = orId;
+    block.branches.reserve(clauses.size());
+    for (auto& cl : clauses)
+        block.branches.push_back(classifyAtomList(cl, orId));
+    if (!block.allBranchesFarkas()) return std::nullopt;
+    // No proxy bookkeeping: DNF clauses are raw atoms, not branch proxies.
+    block.branchProxies.assign(block.branches.size(), std::string());
+    return block;
+}
+
 std::optional<FarkasOrBlock>
 FarkasOrDetector::tryClassifyOr(ExprId orId) const {
     const auto& e = ir_.get(orId);
@@ -280,8 +376,9 @@ FarkasOrDetector::tryClassifyOr(ExprId orId) const {
     return block;
 }
 
-bool FarkasOrDetector::extractBoundsFromAnd(ExprId andId,
-                                            FarkasProfile& p) const {
+bool FarkasOrDetector::extractBoundsFromAnd(
+    ExprId andId, FarkasProfile& p,
+    const std::function<ExprId(ExprId)>& resolve) const {
     const auto& e = ir_.get(andId);
     if (e.kind != Kind::And) return false;
     bool any = false;
@@ -298,7 +395,13 @@ bool FarkasOrDetector::extractBoundsFromAnd(ExprId andId,
         if (!ph || hi < *ph) ph = hi;
     };
 
-    for (ExprId c : e.children) {
+    for (ExprId c0 : e.children) {
+        // Resolve boolpur/Tseitin proxies to a fixpoint: a bound atom
+        // `(<= -2 v)` is often purified to a proxy Variable; without this the
+        // And's bound conjuncts read as opaque Variables and no bound is found
+        // (Stroeder loop3 → bounded globals = 0).
+        ExprId c = c0;
+        for (int g = 0; g < 16; ++g) { ExprId n = resolve(c); if (n == c) break; c = n; }
         const auto& ce = ir_.get(c);
         if (ce.children.size() != 2) continue;
         auto lhsName = asVarName(ce.children[0]);
@@ -491,13 +594,35 @@ FarkasProfile FarkasOrDetector::detect() const {
                         }
                     }
                 }
-                block.branches.push_back(classifyAnd(resolved));
+                block.branches.push_back(classifyAnd(resolved, resolve));
                 block.branchProxies.push_back(std::move(proxyName));
             }
             if (block.allBranchesFarkas()) {
                 for (const auto& v : resolvedProxies) usedDefs.insert(v);
                 p.blocks.push_back(std::move(block));
                 continue;
+            }
+            // DNF-block fallback (XOLVER_NIA_FARKAS_DNF_BLOCKS): the flat
+            // or-of-and shape was rejected, but a NESTED boolean Or (Stroeder
+            // refinement blocks: or-of-(and-of-(and..)(or..))) carries real
+            // Farkas constraints that collectResidual would otherwise DROP
+            // entirely (leaf incompleteness — From_T2__pentagon p6978: assert
+            // 138 is exactly this, and z3 shows it is what makes the file
+            // UNSAT). DNF-flatten the Or into a block whose branches are the
+            // conjunctive clauses. DNF ≡ original (exact, not an approximation),
+            // and `dnfFlatten` is exact-or-bail, so this only RESTORES dropped
+            // constraints — it can never invent a wrong UNSAT.
+            if (std::getenv("XOLVER_NIA_FARKAS_DNF_BLOCKS")) {
+                std::size_t cap = 256;
+                if (const char* cc = std::getenv("XOLVER_NIA_FARKAS_DNF_CAP")) {
+                    long v = std::atol(cc);
+                    if (v > 0) cap = static_cast<std::size_t>(v);
+                }
+                if (auto dblk = tryClassifyOrDnf(aid, resolve, cap)) {
+                    for (const auto& v : resolvedProxies) usedDefs.insert(v);
+                    p.dnfBlocks.push_back(std::move(*dblk));
+                    continue;
+                }
             }
             // P0.5: dump why this block was rejected. Helps fix classifyAnd.
             if (gRejectDumpFile) {
@@ -557,7 +682,7 @@ FarkasProfile FarkasOrDetector::detect() const {
             }
         }
         if (a.kind == Kind::And) {
-            extractBoundsFromAnd(aid, p);
+            extractBoundsFromAnd(aid, p, resolve);
         }
         // Skip Tseitin equivalences whose proxies we consumed (avoid
         // double-counting in the residual).
@@ -574,6 +699,53 @@ FarkasProfile FarkasOrDetector::detect() const {
         p.outerAssertions.push_back(aid);
         skip_outer:;
     }
+
+    // Build the clean proxy-resolved residual constraint set: resolve every
+    // boolpur proxy to a fixpoint, flatten Ands, and keep only ARITHMETIC
+    // relational atoms. Definitional Tseitin equivalences `proxy == atom`
+    // (a relational/Bool child) and Or/Not combinators are dropped — they are
+    // not per-leaf arithmetic constraints. Bound atoms that survive are
+    // harmless (constant after B-substitution).
+    {
+        std::function<void(ExprId)> collectResidual;
+        collectResidual = [&](ExprId aid0) {
+            ExprId aid = aid0;
+            for (int g = 0; g < 16; ++g) { ExprId n = resolve(aid); if (n == aid) break; aid = n; }
+            const auto& ce = ir_.get(aid);
+            if (ce.kind == Kind::And) {
+                for (ExprId c : ce.children) collectResidual(c);
+                return;
+            }
+            if (ce.kind != Kind::Leq && ce.kind != Kind::Geq && ce.kind != Kind::Lt
+                && ce.kind != Kind::Gt && ce.kind != Kind::Eq) {
+                return;  // Or / Not / bare proxy Variable / Bool — drop
+            }
+            // Keep only when BOTH operands are arithmetic terms (no Bool proxy,
+            // no nested relational/combinator child ⇒ not a `proxy == atom` def).
+            bool arith = true;
+            for (ExprId ch : ce.children) {
+                const auto& che = ir_.get(ch);
+                switch (che.kind) {
+                    case Kind::ConstInt: case Kind::ConstReal:
+                    case Kind::Add: case Kind::Sub: case Kind::Mul:
+                    case Kind::Neg: case Kind::Abs: case Kind::Pow:
+                    case Kind::Div: case Kind::Mod: case Kind::ToInt: case Kind::ToReal:
+                        break;
+                    case Kind::Variable: {
+                        // a proxy Variable (has a Tseitin def) is Bool, not arith
+                        auto* s = std::get_if<std::string>(&che.payload.value);
+                        if (s && tseitinDefs.count(*s)) arith = false;
+                        break;
+                    }
+                    default: arith = false; break;
+                }
+                if (!arith) break;
+            }
+            if (arith) p.residualConstraints.push_back(aid);
+        };
+        for (ExprId aid : p.outerAssertions) collectResidual(aid);
+    }
+
     classifyBilinearCovars(p);
     closeRejectDump();
     return p;

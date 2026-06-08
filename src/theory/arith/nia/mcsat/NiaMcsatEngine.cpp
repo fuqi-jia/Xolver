@@ -361,8 +361,25 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
             input.constraints.push_back(std::move(c));
         }
         if (inputOk && !input.constraints.empty()) {
-            input.varOrder.clear();  // CdcacCore's internal (Collins) ordering
             input.integerVars = collectVariables_();  // QF_NIA: every var is integer
+            // CdcacCore::solve takes a const input and indexes input.varOrder[k]
+            // directly — it does NOT synthesize an order from an empty varOrder.
+            // Leaving varOrder cleared made solveLevel(0) see n==0 → immediate
+            // leaf → Unknown, i.e. the whole real-relaxation covering path was a
+            // no-op. Behind XOLVER_NRA_CAC_INT (opt-in; flag-off keeps the prior
+            // byte-identical behaviour) provide a deterministic order (all integer
+            // vars, sorted) so the covering actually runs and can refute the real
+            // relaxation (sound: a real empty covering ⇒ integer UNSAT).
+            static const bool intCac = [] {
+                const char* e = std::getenv("XOLVER_NRA_CAC_INT");
+                return e && *e && *e != '0';
+            }();
+            if (intCac) {
+                input.varOrder.assign(input.integerVars.begin(), input.integerVars.end());
+                std::sort(input.varOrder.begin(), input.varOrder.end());
+            } else {
+                input.varOrder.clear();   // prior behaviour (covering path inert)
+            }
             CdcacResult cd = cdcacFallback_->solve(input);
             if (cd.status == CdcacStatus::Unsat) {
                 std::vector<SatLit> reasons;

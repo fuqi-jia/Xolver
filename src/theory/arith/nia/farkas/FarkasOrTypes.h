@@ -80,6 +80,14 @@ struct FarkasProfile {
     // Or blocks classified as Farkas-shaped (every branch is FarkasBranch::farkasShape()).
     std::vector<FarkasOrBlock> blocks;
 
+    // Nested (non-flat) Or blocks recovered by DNF-flattening — each branch is a
+    // conjunctive DNF clause (XOLVER_NIA_FARKAS_DNF_BLOCKS). Kept SEPARATE from
+    // `blocks` because their branchProxies are empty (a DNF clause spans several
+    // original proxies), so the SAT model-assembler must not touch them. Consumed
+    // ONLY by the bounded-B UNSAT refutation odometer, which treats them exactly
+    // like `blocks`. DNF≡original ⇒ adding them only restores dropped constraints.
+    std::vector<FarkasOrBlock> dnfBlocks;
+
     // Bounded global vars discovered from outer And constraints of form
     // `(and (<= L v) (<= v U))` or `(and (>= v L) (<= v U))`.
     // name → (lo, hi) inclusive integer bounds.
@@ -98,6 +106,14 @@ struct FarkasProfile {
     // Top-level assertions that were NOT classified as Farkas-Or blocks.
     // These remain plain assertions that the residual LIA solver must satisfy.
     std::vector<ExprId> outerAssertions;
+
+    // Proxy-RESOLVED, flattened relational atoms from the mandatory outer
+    // assertions (boolpur/Tseitin proxies resolved to a fixpoint; definitional
+    // Bool equivalences `proxy == atom` and Or/Not combinators dropped). These
+    // are the clean per-leaf constraints the bounded-B refutation conjoins with
+    // a chosen branch — `outerAssertions` itself is the raw purified soup
+    // (proxy Vars, `boolpur_K == atom` Eqs) that a per-leaf LP cannot model.
+    std::vector<ExprId> residualConstraints;
 
     bool good() const { return !blocks.empty(); }
     std::size_t branchTotal() const {

@@ -17,6 +17,7 @@
 #include "expr/ir.h"
 #include "theory/arith/nia/farkas/FarkasOrTypes.h"
 #include <string>
+#include <functional>
 
 namespace xolver::farkas {
 
@@ -39,8 +40,44 @@ private:
     // rejected and the assertion goes to outerAssertions).
     std::optional<FarkasOrBlock> tryClassifyOr(ExprId orId) const;
 
-    // Classify a single Farkas branch inside an Or.
-    FarkasBranch classifyAnd(ExprId andId) const;
+    // Classify a single Farkas branch inside an Or. `resolve` maps a
+    // boolpur/Tseitin proxy Variable to its defining ExprId (identity for
+    // non-proxies); it is applied recursively to every conjunct so a doubly-
+    // purified branch `(and proxy_a proxy_b ...)` is classified by the real
+    // atoms the proxies stand for — otherwise every conjunct is unclassified
+    // and the whole Or-block is wrongly rejected (Stroeder loop3 / NO_23).
+    FarkasBranch classifyAnd(
+        ExprId andId,
+        const std::function<ExprId(ExprId)>& resolve = [](ExprId e) { return e; }) const;
+
+    // Classify an already-flattened, proxy-resolved conjunction of atoms into a
+    // FarkasBranch (λ-nonneg / linear-in-λ eq / ineq). Shared by classifyAnd and
+    // the DNF-block path so a DNF clause (a conjunction of Farkas atoms produced
+    // by dnfFlatten) is classified identically.
+    FarkasBranch classifyAtomList(const std::vector<ExprId>& flat,
+                                  ExprId originalAnd) const;
+
+    // DNF-flatten a nested boolean tree over Farkas atoms (And/Or of And/Or/atom,
+    // proxies resolved) into a list of conjunctive clauses — each clause a flat
+    // list of atom ExprIds. EXACT-OR-BAIL (soundness-critical): returns false the
+    // moment it meets anything it cannot expand precisely (Not, a bare unresolved
+    // Bool proxy, or > `cap` clauses), leaving `out` unusable. A partial DNF would
+    // drop a disjunct → fewer refutation leaves → a possible WRONG UNSAT, so we
+    // never emit one. On false the caller leaves the Or unrecognized (dropped, the
+    // pre-existing sound-but-incomplete behavior).
+    bool dnfFlatten(ExprId id,
+                    const std::function<ExprId(ExprId)>& resolve,
+                    std::size_t cap,
+                    std::vector<std::vector<ExprId>>& out) const;
+
+    // Try to recognize a nested (non-flat) Or as a Farkas-Or block by DNF-
+    // flattening it: each conjunctive clause becomes a branch. Used only when the
+    // plain `tryClassifyOr`/classifyAnd path rejects the block. Gated by the
+    // caller (XOLVER_NIA_FARKAS_DNF_BLOCKS). nullopt if not exactly DNF-able or any
+    // clause is not Farkas-shaped.
+    std::optional<FarkasOrBlock> tryClassifyOrDnf(
+        ExprId orId, const std::function<ExprId(ExprId)>& resolve,
+        std::size_t cap) const;
 
     // λ-detection: an atom `Geq(v, 0)` where v is a Variable.
     // Returns the var name on success.
@@ -50,7 +87,9 @@ private:
     // `(and (<= c v) (<= v c'))` style, populate boundedGlobals.
     // Recurses lightly so chained `And(And(a, b), c)` work too.
     // Returns true if at least one bound pair was extracted.
-    bool extractBoundsFromAnd(ExprId andId, FarkasProfile& p) const;
+    bool extractBoundsFromAnd(
+        ExprId andId, FarkasProfile& p,
+        const std::function<ExprId(ExprId)>& resolve = [](ExprId e) { return e; }) const;
 
     // Atom-shape classification used inside an And branch.
     // Returns true if the atom is linear-in-λ-shaped (best effort).

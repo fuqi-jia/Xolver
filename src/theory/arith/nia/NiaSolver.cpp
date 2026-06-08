@@ -13,6 +13,7 @@
 #include "theory/arith/nra/engine/ReasonManager.h"
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/nra/backend/LibpolyBackend.h"
+#include "theory/arith/nia/farkas/LeafFarkasLia.h"
 #include "theory/arith/nra/nla/NlaCutsRunner.h"           // Stage 3 Phase C-3
 #include "theory/arith/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
@@ -23,6 +24,8 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "proof/ArithModelValidator.h"
 #include "util/EnvParam.h"
+#include <functional>
+#include <set>
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
 #include "theory/arith/nia/farkas/FarkasOrSolver.h"
 #include "theory/arith/nia/farkas/FarkasOrModelAssembler.h"
@@ -2515,14 +2518,13 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&,
 // failed CSP / failed validation falls through to the rest of the
 // pipeline.
 //
-// Default-OFF behind XOLVER_NIA_FARKAS_OR. Full-effort only.
+// PROMOTED default-ON (2026-06-08): the bounded-B Farkas refutation solves
+// VeryMax/Stroeder QF_NIA UNSAT the rest of the pipeline cannot (+11/51 small
+// cases measured, 0-unsound), and on non-Farkas inputs the detector bails after
+// one O(tree) scan (good()==false → nullopt below). No flag — a good lever
+// belongs on the default path, not gated. Full-effort only.
 std::optional<TheoryCheckResult>
 NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
-    static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_FARKAS_OR");
-        return e && *e && *e != '0';
-    }();
-    if (!enabled) return std::nullopt;
     if (coreIr_ == nullptr) return std::nullopt;
 
     // Memoize the detector profile + support table across stage calls.
@@ -2569,6 +2571,63 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     traceWrite("stageFarkasOr: profile.blocks=" + std::to_string(profile.blocks.size())
                + " feasibleTotal=" + std::to_string(table.feasibleTotal)
                + " rows=" + std::to_string(table.rows.size()));
+    // Outer-assertion structure dump (XOLVER_NIA_FARKAS_OUTER_DIAG).
+    // For each outer assertion, prints kind + variable name + whether it
+    // structurally looks like `(= var const)` (a hard equality forcing the
+    // var). Used to design row-refute-by-outer-eq sound UNSAT path.
+    if (std::getenv("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
+        // Helper: recursively check if `e` is a `(= var const)` form (either
+        // child a Variable, the other an evaluable integer constant) and
+        // return (varName, constValue) if so.
+        std::function<bool(ExprId, std::string&, mpz_class&)> matchEqVarConst;
+        matchEqVarConst = [&](ExprId eid, std::string& outVar, mpz_class& outVal) -> bool {
+            const auto& e = coreIr_->get(eid);
+            if (e.kind == Kind::Eq && e.children.size() == 2) {
+                for (int side = 0; side < 2; ++side) {
+                    const auto& v = coreIr_->get(e.children[side]);
+                    const auto& c = coreIr_->get(e.children[1 - side]);
+                    if (v.kind == Kind::Variable) {
+                        auto* nm = std::get_if<std::string>(&v.payload.value);
+                        if (!nm) continue;
+                        if (c.kind == Kind::ConstInt) {
+                            if (auto* iv = std::get_if<int64_t>(&c.payload.value)) {
+                                outVar = *nm; outVal = *iv; return true;
+                            }
+                            if (auto* sv = std::get_if<std::string>(&c.payload.value)) {
+                                try { outVal = mpz_class(*sv); outVar = *nm; return true; } catch (...) {}
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        };
+        std::fprintf(stderr, "[FARKAS_OUTER_DIAG] outer count=%zu\n",
+                     profile.outerAssertions.size());
+        for (std::size_t i = 0; i < profile.outerAssertions.size(); ++i) {
+            ExprId aid = profile.outerAssertions[i];
+            const auto& e = coreIr_->get(aid);
+            std::fprintf(stderr, "  outer[%zu] id=%u kind=%d", i, aid, static_cast<int>(e.kind));
+            // If it's an And, scan its conjuncts for (= var const) patterns.
+            if (e.kind == Kind::And) {
+                std::fprintf(stderr, " conjuncts=%zu", e.children.size());
+                for (ExprId c : e.children) {
+                    std::string vn; mpz_class vv;
+                    if (matchEqVarConst(c, vn, vv)) {
+                        std::fprintf(stderr, " FORCES[%s=%s]",
+                                     vn.c_str(), vv.get_str().c_str());
+                    }
+                }
+            } else {
+                std::string vn; mpz_class vv;
+                if (matchEqVarConst(aid, vn, vv)) {
+                    std::fprintf(stderr, " FORCES[%s=%s]",
+                                 vn.c_str(), vv.get_str().c_str());
+                }
+            }
+            std::fprintf(stderr, "\n");
+        }
+    }
     if (trace) {
         for (std::size_t i = 0; i < profile.blocks.size(); ++i) {
             const auto& blk = profile.blocks[i];
@@ -2609,6 +2668,12 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             traceWrite(line);
         }
     }
+    // Bounded-B real-relaxation refutation runs INDEPENDENTLY of the support
+    // table (it enumerates the bounded-B domain itself), so try it before the
+    // empty-table / CSP paths — for cases like Stroeder loop3 the table is empty
+    // (no single-ray Farkas certificate) yet the bounded-B per-leaf refutation
+    // can still prove integer UNSAT. Default-OFF; soundness self-checked inside.
+    if (auto refute = tryBoundedBRefutation(profile)) return refute;
     if (table.rows.empty()) {
         traceWrite("  exhaustive=" + std::string(table.exhaustive ? "true" : "false")
                    + " outerAssertions=" + std::to_string(profile.outerAssertions.size()));
@@ -2741,8 +2806,22 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
             }
         }
         ArithModelValidator amv(*coreIr_, num, bools);
-        return amv.validate(coreIr_->assertions()) ==
-               ArithModelValidator::Verdict::Satisfied;
+        auto verdict = amv.validate(coreIr_->assertions());
+        // Per-assertion failure diag: walk each assertion individually,
+        // report which fail. Gated on XOLVER_NIA_FARKAS_FAILDIAG so the
+        // default path is identical.
+        if (verdict != ArithModelValidator::Verdict::Satisfied &&
+            std::getenv("XOLVER_NIA_FARKAS_FAILDIAG")) {
+            for (std::size_t ai = 0; ai < coreIr_->assertions().size(); ++ai) {
+                ExprId aid = coreIr_->assertions()[ai];
+                auto v = amv.validate({aid});
+                if (v != ArithModelValidator::Verdict::Satisfied) {
+                    std::fprintf(stderr, "    [FAILDIAG] assertion[%zu] (id=%u) verdict=%d\n",
+                                 ai, aid, static_cast<int>(v));
+                }
+            }
+        }
+        return verdict == ArithModelValidator::Verdict::Satisfied;
     };
 
     int candIdx = 0;
@@ -2915,7 +2994,395 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
         ++candIdx;
     }
     traceWrite("  → no candidate validated");
+    // (bounded-B refutation already attempted before the CSP path above.)
     return std::nullopt;
+}
+
+std::optional<TheoryCheckResult>
+NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
+    // PROMOTED default-ON (2026-06-08) — see stageFarkasOr. Returns nullopt
+    // immediately unless the formula is Farkas-Or-shaped with bounded template
+    // coeffs, so the cost on every other NIA solve is two empty-container checks.
+#ifndef XOLVER_HAS_LIBPOLY
+    return std::nullopt;  // needs the libpoly algebra backend (CdcacCore)
+#else
+    if (!kernel_ || !coreIr_ || !converter_) return std::nullopt;
+    if (profile.boundedGlobals.empty() || profile.blocks.empty())
+        return std::nullopt;
+
+    // Once-per-solve cache: the refutation verdict depends only on the formula
+    // (coreIr_), not the trail, so a not-refutable outcome is memoized to avoid
+    // re-running the expensive per-leaf CdcacCore enumeration on every Full-effort
+    // cb_propagate. (An UNSAT outcome ends the solve, so it is never reached
+    // again — no need to cache it.)
+    static thread_local const CoreIr* refuteNotRefutableIr = nullptr;
+    if (refuteNotRefutableIr == coreIr_) return std::nullopt;
+    auto giveUp = [&]() -> std::optional<TheoryCheckResult> {
+        refuteNotRefutableIr = coreIr_;
+        return std::nullopt;
+    };
+
+    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    auto traceWrite = [&](const std::string& s) {
+        if (!trace) return;
+        FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
+        if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
+    };
+    traceWrite("[bounded-refute] FUNCTION ENTERED blocks=" + std::to_string(profile.blocks.size())
+               + " bounded=" + std::to_string(profile.boundedGlobals.size())
+               + " dnf=" + std::to_string(profile.dnfBlocks.size()));
+
+    // ---- 1. Bounded-B domain: collect vars + integer intervals, cap product.
+    struct BVar { VarId vid; mpz_class lo, hi; };
+    std::vector<BVar> bvars;
+    bvars.reserve(profile.boundedGlobals.size());
+    const long domCap = env::paramLong("XOLVER_NIA_FARKAS_REFUTE_DOM_CAP", 8192);
+    mpz_class domProduct = 1;
+    for (const auto& [name, bound] : profile.boundedGlobals) {
+        mpz_class span = bound.second - bound.first + 1;
+        if (span <= 0) return std::nullopt;          // empty/degenerate domain
+        domProduct *= span;
+        if (domProduct > domCap) {
+            traceWrite("  [bounded-refute] B-domain " + domProduct.get_str()
+                       + " > cap " + std::to_string(domCap) + "; bail");
+            return std::nullopt;                       // too large; bail (sound)
+        }
+        bvars.push_back({kernel_->getOrCreateVar(name), bound.first, bound.second});
+    }
+
+    // ---- 2. Validity only: every block must offer at least one branch.
+    // The old hard `comboCount > 256` ceiling is GONE — it was an artificial
+    // floor that bailed (→ unknown) on every Farkas-Or UNSAT with > 8 binary
+    // blocks (Hanoi 12 blocks = 4096 combos, etc.), which a uniform VeryMax
+    // sweep showed to be the single largest miss class. The flat odometer it
+    // guarded is replaced below by a DFS with sound prefix-UNSAT pruning, so
+    // the branch-combo product no longer needs a ceiling: genuinely-UNSAT
+    // termination problems collapse at a shallow prefix.
+    for (const auto& blk : profile.blocks)
+        if (blk.branches.empty()) return std::nullopt;
+    traceWrite("  [bounded-refute] B-domain=" + domProduct.get_str()
+               + " outer=" + std::to_string(profile.outerAssertions.size()));
+
+    if (!cdcacCore_) {
+        cdcacAlgebra_ = std::make_unique<LibpolyBackend>(kernel_.get());
+        cdcacCore_ = std::make_unique<CdcacCore>(kernel_.get(), cdcacAlgebra_.get());
+    }
+
+    // relHolds: does the rational constant `c` satisfy `c rel 0`?
+    auto relHolds = [](const mpq_class& c, Relation rel) -> bool {
+        switch (rel) {
+            case Relation::Eq:  return c == 0;
+            case Relation::Neq: return c != 0;
+            case Relation::Lt:  return c <  0;
+            case Relation::Leq: return c <= 0;
+            case Relation::Gt:  return c >  0;
+            case Relation::Geq: return c >= 0;
+        }
+        return false;
+    };
+
+    // Convert a relational atom ExprId into a (poly, rel) constraint with B
+    // substituted. Outcomes:
+    //   kAdd        -> append `out` to the leaf system
+    //   kTrue       -> trivially satisfied (skip)
+    //   kFalse      -> trivially violated  -> leaf is infeasible
+    //   kBail       -> not modellable      -> whole refutation must bail (sound)
+    enum class AtomOutcome { kAdd, kTrue, kFalse, kBail };
+    auto atomToConstraint =
+        [&](ExprId atomId, const std::unordered_map<VarId, mpz_class>& Bvals,
+            CdcacConstraint& out) -> AtomOutcome {
+        const auto& e = coreIr_->get(atomId);
+        Relation rel;
+        switch (e.kind) {
+            case Kind::Gt:  rel = Relation::Gt;  break;
+            case Kind::Geq: rel = Relation::Geq; break;
+            case Kind::Lt:  rel = Relation::Lt;  break;
+            case Kind::Leq: rel = Relation::Leq; break;
+            case Kind::Eq:  rel = Relation::Eq;  break;
+            default: return AtomOutcome::kBail;   // Neq / non-relational atom
+        }
+        if (e.children.size() != 2) return AtomOutcome::kBail;
+        auto cc = converter_->convertConstraint(e.children[0], e.children[1],
+                                                rel, *coreIr_);
+        if (cc.status == PolyConstraintStatus::Tautology) return AtomOutcome::kTrue;
+        if (cc.status == PolyConstraintStatus::Conflict)  return AtomOutcome::kFalse;
+        if (cc.status != PolyConstraintStatus::Constraint) return AtomOutcome::kBail;
+        PolyId diff = cc.diff;
+        // INTEGER TIGHTENING (the lever that makes the real relaxation decisive).
+        // Every variable is integer and every coefficient integer, so `diff` is
+        // integer-valued on any integer assignment. Hence over ℤ:
+        //     diff >  0  ⟺  diff − 1 ≥ 0
+        //     diff <  0  ⟺  diff + 1 ≤ 0
+        // Replacing the strict atom with its tightened non-strict form keeps the
+        // integer solution set unchanged while SHRINKING the real-relaxation
+        // feasible region (S_int ⊆ S'_real). Without this a strict ineq like
+        // `CT·λ > 1` with `CT < 1` is real-feasible via fractional CT even though
+        // it is integer-infeasible — exactly the Stroeder/VeryMax shape.
+        if (rel == Relation::Gt) {
+            diff = kernel_->sub(diff, kernel_->mkOne());
+            rel = Relation::Geq;
+        } else if (rel == Relation::Lt) {
+            diff = kernel_->add(diff, kernel_->mkOne());
+            rel = Relation::Leq;
+        }
+        for (const auto& [vid, val] : Bvals) {
+            if (auto sp = kernel_->substituteRational(diff, vid, mpq_class(val)))
+                diff = *sp;
+        }
+        if (kernel_->isConstant(diff))
+            return relHolds(kernel_->toConstant(diff), rel)
+                       ? AtomOutcome::kTrue : AtomOutcome::kFalse;
+        out.poly = diff;
+        out.rel = rel;
+        out.reason = SatLit{0, true};   // placeholder; conflict built separately
+        return AtomOutcome::kAdd;
+    };
+
+    // Flatten an outer assertion (possibly nested And) into leaf constraints.
+    // Returns AtomOutcome semantics over the whole subtree: kFalse if any atom
+    // is trivially violated, kBail if any atom is unmodellable / contains an Or.
+    std::function<AtomOutcome(ExprId, const std::unordered_map<VarId, mpz_class>&,
+                              std::vector<CdcacConstraint>&)> flatten;
+    flatten = [&](ExprId eid, const std::unordered_map<VarId, mpz_class>& Bvals,
+                  std::vector<CdcacConstraint>& cons) -> AtomOutcome {
+        const auto& e = coreIr_->get(eid);
+        if (e.kind == Kind::And) {
+            for (ExprId c : e.children) {
+                AtomOutcome o = flatten(c, Bvals, cons);
+                if (o == AtomOutcome::kFalse || o == AtomOutcome::kBail) return o;
+            }
+            return AtomOutcome::kAdd;
+        }
+        if (e.kind == Kind::Or || e.kind == Kind::Not)
+            return AtomOutcome::kBail;   // disjunction / negation in outer: bail
+        CdcacConstraint c;
+        AtomOutcome o = atomToConstraint(eid, Bvals, c);
+        if (o == AtomOutcome::kAdd) cons.push_back(std::move(c));
+        return o;
+    };
+
+    // Cost/slack vars to eliminate existentially in the LIA leaf engine
+    // (research note 2026-06-07: ∃CT. A+CT·S ⋈ 0 ≡ S≠0 ∨ A⋈0). PROMOTED
+    // default-ON (2026-06-08): the CT-elim leaf path is the one that actually
+    // discharges the +11 VeryMax UNSAT (the CdcacCore fallback below stays as a
+    // safety net for shapes the over-approx parse can't model).
+    const bool ctElim = true;
+    std::unordered_set<VarId> ctVarSet;
+    if (ctElim)
+        for (const auto& nm : profile.unboundedCT)
+            ctVarSet.insert(kernel_->getOrCreateVar(nm));
+
+    // ---- 3. Enumerate B-tuples × branch combos; each leaf must be Unsat.
+    // The refutation odometer enumerates the flat Farkas-Or blocks AND any
+    // DNF-recovered nested Or blocks (XOLVER_NIA_FARKAS_DNF_BLOCKS) uniformly:
+    // both demand "pick one branch, every combo must be UNSAT". DNF blocks are
+    // kept out of profile.blocks (their empty branchProxies must not reach the
+    // SAT model-assembler) but are exactly the constraints whose omission made
+    // the leaf incomplete, so the refutation MUST include them.
+    std::vector<const farkas::FarkasOrBlock*> allBlocks;
+    allBlocks.reserve(profile.blocks.size() + profile.dnfBlocks.size());
+    for (const auto& b : profile.blocks)    allBlocks.push_back(&b);
+    for (const auto& b : profile.dnfBlocks) allBlocks.push_back(&b);
+    traceWrite("[bounded-refute] enter flat=" + std::to_string(profile.blocks.size())
+               + " dnf=" + std::to_string(profile.dnfBlocks.size())
+               + " residual=" + std::to_string(profile.residualConstraints.size()));
+
+    std::vector<mpz_class> bcur;
+    for (const auto& bv : bvars) bcur.push_back(bv.lo);
+    std::size_t leavesChecked = 0;
+    std::size_t prefixChecks = 0;
+    // Safety backstop ONLY (not a perf floor): the DFS prunes genuinely-UNSAT
+    // trees fast and bails to giveUp() the moment a real-feasible leaf is hit,
+    // so this trips only on a pathological tree that neither prunes nor finds a
+    // feasible leaf. On trip we giveUp() → Unknown (sound), never a wrong UNSAT.
+    // Set high; lower via XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP if a case runs long.
+    const std::size_t leafCap = static_cast<std::size_t>(
+        env::paramLong("XOLVER_NIA_FARKAS_REFUTE_LEAF_CAP", 200000));
+    while (true) {
+        std::unordered_map<VarId, mpz_class> Bvals;
+        for (std::size_t i = 0; i < bvars.size(); ++i) Bvals[bvars[i].vid] = bcur[i];
+
+        // Mandatory residual (proxy-resolved) constraints for this B, shared
+        // across branch combos. Use profile.residualConstraints (clean atoms),
+        // NOT the raw purified outerAssertions. An unmodellable atom (kBail) is
+        // SKIPPED, not aborted: dropping a constraint only ENLARGES the feasible
+        // set, so a per-leaf UNSAT over the smaller constraint set is still a
+        // sound UNSAT of the original.
+        std::vector<CdcacConstraint> outerCons;
+        bool bTupleDead = false;     // some outer atom trivially violated ⇒ all
+                                     // branch combos at this B are infeasible
+        for (ExprId rc : profile.residualConstraints) {
+            AtomOutcome oo = flatten(rc, Bvals, outerCons);
+            if (oo == AtomOutcome::kFalse) { bTupleDead = true; break; }
+            // kAdd appended already; kTrue/kBail → skip
+        }
+
+        if (!bTupleDead) {
+            // Branch-combo SEARCH: DFS over blocks with sound prefix-UNSAT
+            // pruning (replaces the old flat odometer). The leaf constraint set
+            // grows monotonically with each chosen branch and the CT-elim
+            // over-approx UNSAT test is monotone, so a prefix whose PARTIAL leaf
+            // is already UNSAT refutes EVERY completion of that prefix — prune
+            // the whole subtree (sound: pruning never drops a feasible leaf, so
+            // it can never cause a wrong UNSAT). Genuinely-UNSAT termination
+            // problems go UNSAT at a shallow prefix, collapsing the 2^blocks
+            // tree; only a real-feasible/unknown FULL leaf forces giveUp.
+            //   returns 0 = subtree fully refuted (all completions UNSAT)
+            //           1 = giveUp (feasible/unknown full leaf, unmodellable
+            //               atom, or safety backstop tripped)
+            std::function<int(std::size_t, const std::vector<CdcacConstraint>&)> dfs;
+            dfs = [&](std::size_t bi,
+                      const std::vector<CdcacConstraint>& accum) -> int {
+                if (leavesChecked + prefixChecks > leafCap) {
+                    traceWrite("  [bounded-refute] leaf/prefix budget "
+                               + std::to_string(leafCap) + " tripped; giveUp");
+                    return 1;
+                }
+                if (bi == allBlocks.size()) {
+                    // FULL leaf — exact check. Over-approx (∃CT. A+CT·S ⋈ 0 ≡
+                    // S≠0 ∨ A⋈0) first; else the real-relaxation CdcacCore. A
+                    // feasible/unknown full leaf ⇒ NOT refutable ⇒ giveUp.
+                    if (ctElim && niaLeafFarkasLiaUnsat(accum, ctVarSet, *kernel_)) {
+                        ++leavesChecked; return 0;
+                    }
+                    CdcacInput input;
+                    input.constraints = accum;
+                    // varOrder = sorted union of leaf-constraint vars (CdcacCore
+                    // indexes it directly; empty ⇒ n=0 ⇒ immediate Unknown).
+                    // integerVars stays empty → PURE REAL relaxation (sound for
+                    // UNSAT; integrality is injected via strict-ineq tightening
+                    // in atomToConstraint).
+                    std::set<VarId> vset;
+                    for (const auto& cc2 : input.constraints)
+                        for (const std::string& vn : kernel_->variables(cc2.poly))
+                            vset.insert(kernel_->getOrCreateVar(vn));
+                    input.varOrder.assign(vset.begin(), vset.end());
+                    // CRASH GUARD: the CdcacCore fallback runs a Lazard/CAD
+                    // projection whose libpoly subresultant (psc) chain blows up
+                    // coefficient sizes super-exponentially with the number of
+                    // projection levels (= variable count). On a high-dimensional
+                    // leaf (consts5nt) it exhausts RAM and SIGSEGVs inside
+                    // coefficient_ensure_capacity — a hardware fault that cannot be
+                    // caught. Prevent it: skip the fallback above a variable budget,
+                    // forfeiting only THIS leaf (giveUp → Unknown). Sound — the
+                    // refutation merely fails to prove this leaf UNSAT, never emits a
+                    // wrong UNSAT. The over-approx above already decides the
+                    // tractable leaves, so a leaf reaching here that is also
+                    // high-dimensional is one CdcacCore could not finish anyway.
+                    traceWrite("  [bounded-refute] cdcac-fallback leaf vars="
+                               + std::to_string(input.varOrder.size()));
+                    // Threshold 24: above the largest CdcacCore leaf the
+                    // refutation-solvable cases actually need (measured: Ex04 = 9,
+                    // 4Nested = 19, both decidable, no crash) yet below the
+                    // dimension whose libpoly subresultant chain OOMs/SIGSEGVs
+                    // (consts5nt = 44). Biased toward the solvable max + margin
+                    // because a crash is catastrophic (lost batch) while a forfeited
+                    // leaf is benign (Unknown, not wrong). Tunable for experiments.
+                    static const size_t kMaxLeafVars = static_cast<size_t>(
+                        env::paramLong("XOLVER_NIA_FARKAS_REFUTE_MAX_LEAF_VARS", 24));
+                    if (kMaxLeafVars > 0 && input.varOrder.size() > kMaxLeafVars) {
+                        traceWrite("  [bounded-refute] leaf vars > " + std::to_string(kMaxLeafVars)
+                                   + "; skip CdcacCore fallback (giveUp, projection OOM-risk)");
+                        return 1;
+                    }
+                    ++leavesChecked;
+                    CdcacResult cd = cdcacCore_->solve(input);
+                    if (cd.status != CdcacStatus::Unsat) {
+                        traceWrite("  [bounded-refute] leaf feasible/unknown "
+                                   "(status=" + std::to_string((int)cd.status)
+                                   + "); bail");
+                        return 1;
+                    }
+                    return 0;
+                }
+                const auto* blk = allBlocks[bi];
+                for (std::size_t b = 0; b < blk->branches.size(); ++b) {
+                    const auto& br = blk->branches[b];
+                    std::vector<CdcacConstraint> cons = accum;
+                    bool leafDead = false, leafBail = false;
+                    for (const auto& lam : br.lambdas) {   // lambda >= 0
+                        CdcacConstraint c;
+                        c.poly = kernel_->mkVar(kernel_->getOrCreateVar(lam));
+                        c.rel = Relation::Geq;
+                        c.reason = SatLit{0, true};
+                        cons.push_back(std::move(c));
+                    }
+                    auto addAtoms = [&](const std::vector<ExprId>& atoms) {
+                        for (ExprId a : atoms) {
+                            CdcacConstraint c;
+                            AtomOutcome o = atomToConstraint(a, Bvals, c);
+                            if (o == AtomOutcome::kAdd) cons.push_back(std::move(c));
+                            else if (o == AtomOutcome::kFalse) { leafDead = true; return; }
+                            else if (o == AtomOutcome::kBail)  { leafBail = true; return; }
+                        }
+                    };
+                    addAtoms(br.equalities);
+                    if (!leafDead && !leafBail) addAtoms(br.inequalities);
+                    if (leafBail) {
+                        traceWrite("[bounded-refute] leafBail block=" + std::to_string(bi)
+                                   + " (atom unmodellable) ⇒ giveUp");
+                        return 1;   // can't model a branch atom
+                    }
+                    if (leafDead) continue;   // branch trivially infeasible ⇒
+                                              // its whole subtree is refuted
+                    // PREFIX PRUNING: a sound over-approx UNSAT of this partial
+                    // leaf refutes every completion ⇒ skip the subtree.
+                    if (ctElim) {
+                        ++prefixChecks;
+                        if (niaLeafFarkasLiaUnsat(cons, ctVarSet, *kernel_)) continue;
+                    }
+                    if (dfs(bi + 1, cons) == 1) return 1;   // propagate giveUp
+                }
+                return 0;   // every branch at this level refuted
+            };
+            if (dfs(0, outerCons) == 1) return giveUp();
+        }
+
+        // advance B odometer (integer ranges [lo,hi])
+        std::size_t p = 0;
+        while (p < bvars.size()) {
+            ++bcur[p];
+            if (bcur[p] <= bvars[p].hi) break;
+            bcur[p] = bvars[p].lo; ++p;
+        }
+        if (p == bvars.size()) break;
+    }
+
+    // Every (B-tuple, branch-combo) leaf is real-infeasible (or trivially dead).
+    // ℤⁿ ⊆ ℝⁿ and the B domain was exhausted ⇒ sound integer UNSAT.
+    traceWrite("  [bounded-refute] ALL " + std::to_string(leavesChecked)
+               + " leaves real-infeasible ⇒ UNSAT");
+    TheoryConflict tc;
+    if (registry_) {
+        std::unordered_set<SatVar> seen;
+        auto pushReason = [&](SatVar sv) {
+            if (!seen.insert(sv).second) return;
+            for (const auto& a : active_) {
+                if (a.reason.var == sv) { tc.clause.push_back(a.reason); return; }
+            }
+        };
+        for (const auto* blk : allBlocks) {
+            for (const auto& proxy : blk->branchProxies) {
+                if (proxy.empty()) continue;
+                if (auto sv = registry_->findBoolVariableSatVar(proxy)) pushReason(*sv);
+            }
+            for (const auto& br : blk->branches) {
+                if (br.originalAnd == NullExpr) continue;
+                if (auto sv = registry_->findSatVarByExprId(br.originalAnd))
+                    pushReason(*sv);
+            }
+        }
+    }
+    if (tc.clause.empty()) {
+        tc.clause.reserve(active_.size());
+        for (const auto& a : active_) tc.clause.push_back(a.reason);
+    }
+    if (tc.clause.empty()) return std::nullopt;   // nothing to pin the conflict on
+    std::cerr << "[FarkasOrBoundedRefute] all " << leavesChecked
+              << " leaves real-infeasible; emit UNSAT conflict size="
+              << tc.clause.size() << "\n";
+    return TheoryCheckResult::mkConflict(std::move(tc));
+#endif
 }
 
 // SAT14-attack: early-pipeline LS stage. Same LS instance, but invoked at

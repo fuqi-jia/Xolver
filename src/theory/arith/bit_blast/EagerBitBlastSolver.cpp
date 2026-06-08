@@ -332,13 +332,18 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     // scheduling (allocate ARM budgets by percentage), not a downgrade-to-
     // Unknown floor on a crash. EAGER still returns Unknown when its share is
     // up, exactly as before -- the change is HOW MUCH budget the arm gets.
-    long long budgetMs =
-        env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
+    long long budgetMs = (budgetMsOverride_ >= 0)
+        ? budgetMsOverride_
+        : env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_MS", 120000);
     if (budgetMs < 0) budgetMs = 120000;
-    long pct = env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
+    long pct = (budgetPctOverride_ >= 0)
+        ? budgetPctOverride_
+        : env::paramLong("XOLVER_NIA_EAGER_BITBLAST_BUDGET_PCT", 33);
     if (pct < 1) pct = 1;
     if (pct > 100) pct = 100;
     if (wall::hasDeadline()) {
+        // COMPETITION path: budget = pct% of the remaining wall-clock (the
+        // absolute budgetMs above is dev-only and not used here).
         long remaining = wall::remainingMs();
         budgetMs = (static_cast<long long>(remaining) * pct) / 100;
     }
@@ -354,10 +359,27 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
                    std::chrono::steady_clock::now() - t0).count();
     };
     const unsigned widths[] = {4, 8, 16, 24, 32, 48, 64};
+    // Consecutive-UNSAT cap: when the inner SAT solver returns UNSAT at
+    // several widths in a row WITHOUT ever finding a SAT candidate, the
+    // formula is highly likely integer-genuinely-UNSAT (e.g. VeryMax
+    // Farkas-Or termination-proving cases). Eager bit-blast cannot SOUNDLY
+    // declare UNSAT (a width-K UNSAT verdict only says no model with bits
+    // ≤ K exists). But continuing to escalate just burns budget. Bail out
+    // early to Unknown so downstream stages get their share of wall-clock.
+    // Default cap = 4 (UNSAT at K=4,8,16,24 → bail before K=32). Tunable.
+    int consecutiveUnsat = 0;
+    static const int kMaxConsecutiveUnsat = static_cast<int>(
+        env::paramLong("XOLVER_NIA_EAGER_BITBLAST_UNSAT_CAP", 4));
 
     for (unsigned K : widths) {
         if (budgetMs > 0 && elapsedMs() >= budgetMs) {
             if (diag) std::cerr << "[EAGER-BB] wall-clock budget hit before width=" << K << "\n";
+            break;
+        }
+        if (kMaxConsecutiveUnsat > 0 && consecutiveUnsat >= kMaxConsecutiveUnsat) {
+            if (diag) std::cerr << "[EAGER-BB] consecutive-UNSAT cap hit ("
+                                << consecutiveUnsat << "/" << kMaxConsecutiveUnsat
+                                << ") — bail to Unknown\n";
             break;
         }
         auto sat = createSatSolver();
@@ -526,7 +548,12 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
                             << " sat=" << (res == SatSolver::SolveResult::Sat ? "Y" :
                                           res == SatSolver::SolveResult::Unsat ? "N" : "?")
                             << " encMs=" << encMs << " solveMs=" << (elapsedMs() - encMs) << "\n";
-        if (res != SatSolver::SolveResult::Sat) continue;   // wider K (never claim UNSAT)
+        if (res == SatSolver::SolveResult::Unsat) {
+            ++consecutiveUnsat;
+            continue;   // wider K (never claim UNSAT)
+        }
+        consecutiveUnsat = 0;  // reset on any non-Unsat (Unknown counts as continue too)
+        if (res != SatSolver::SolveResult::Sat) continue;
 
         // Candidate model -> EXACT integer re-validation over all assertions.
         std::unordered_map<std::string, mpz_class> model;

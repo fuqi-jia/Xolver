@@ -1280,6 +1280,14 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
 #endif
 
     // 3. Helper: test a sample and recurse to deeper levels
+    // Integer-aware CDCAC bookkeeping: levelIntegrality becomes true if this
+    // level OR any descendant relied on integer-specific (integrality / integer
+    // point) exclusion. testAndRecurse ORs each child's flag in; the integer-
+    // aware block (below) sets it on its own integrality/point cells. A would-be
+    // UNSAT that went through the REAL (non-integer-aware) path while this flag
+    // is set may have over-generalized a child's integer-specific conflict, so it
+    // is demoted to Unknown at the covering gate.
+    bool levelIntegrality = false;
     auto testAndRecurse = [&](const RealAlg& sample) -> CdcacResult {
         ++gCellsTested;
         RealAlg sampleWithOrigin = sample;
@@ -1345,6 +1353,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         }
 
         prefix.pop();
+        levelIntegrality |= childRes.integralityUsed;   // propagate integer-taint up
         if (childRes.status == CdcacStatus::Sat && childRes.model) {
             childRes.model->varOrder.insert(childRes.model->varOrder.begin(), var);
             childRes.model->values.insert(childRes.model->values.begin(), sampleWithOrigin);
@@ -1418,8 +1427,241 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return false;
     };
 
+    // ---------------------------------------------------------------------
+    // Integer-aware covering (XOLVER_NRA_CAC_INT). For an INTEGER variable we
+    // cover integer-free regions by INTEGRALITY (sound: a cell with no integer
+    // excludes no integer solution) and test only integer samples, so a system
+    // whose real relaxation is feasible only at non-integer points is refuted
+    // (integer UNSAT) instead of returning a non-integer "SAT". v1 requires all
+    // this-level roots rational; algebraic-endpoint levels fall through to the
+    // real path (which never emits a wrong UNSAT). Soundness self-checks via
+    // coversAllLine + the existing unsatTrustworthy_ gate; an infinite tail that
+    // cannot be covered by a this-level conflict demotes to Unknown.
+    // ---------------------------------------------------------------------
+    bool handledByIntAware = false;
+    {
+        // SEPARATE opt-in flag (default-OFF). The integer-aware covering uniquely
+        // cracks real-feasible/integer-UNSAT cases (e.g. nia_103) but, as a v1
+        // that REPLACES the real covering with point+integrality cells, it is less
+        // complete on genuinely real-UNSAT sectors (demotes some to Unknown) and
+        // slower. So it is gated apart from XOLVER_NRA_CAC_INT (which only
+        // resurrects the real covering via the varOrder fix, a clean win). Enable
+        // both for the integer-aware behaviour once the additive rework lands.
+        static const bool intCacCov = [] {
+            const char* e = std::getenv("XOLVER_NRA_CAC_INT_COVER");
+            return e && *e && *e != '0';
+        }();
+        bool allRational = !allRoots.roots.empty();
+        for (const auto& r : allRoots.roots)
+            if (!r.isRational()) { allRational = false; break; }
+        static const bool intDiag = std::getenv("XOLVER_NRA_CAC_INT_DIAG") != nullptr;
+        auto idiag = [&](const std::string& s) {
+            if (!intDiag) return;
+            FILE* f = std::fopen("/tmp/intcac_trace", "a");
+            if (f) { std::fputs(s.c_str(), f); std::fputc('\n', f); std::fclose(f); }
+        };
+        if (intDiag)
+            idiag("[INTCAC] k=" + std::to_string(k) + " var=" + std::string(kernel_->varName(var))
+                  + " intCac=" + std::to_string(intCacCov) + " isIntVar=" + std::to_string(input.integerVars.count(var))
+                  + " roots=" + std::to_string(allRoots.roots.size()) + " allRational=" + std::to_string(allRational)
+                  + " integerVars=" + std::to_string(input.integerVars.size()));
+        if (intCacCov && input.integerVars.count(var) && allRational) {
+            handledByIntAware = true;
+            idiag("[INTCAC]   ENTER integer-aware, roots=" + std::to_string(allRoots.roots.size()));
+            auto floorQ = [](const mpq_class& q) { mpz_class z;
+                mpz_fdiv_q(z.get_mpz_t(), q.get_num().get_mpz_t(), q.get_den().get_mpz_t()); return z; };
+            auto ceilQ = [](const mpq_class& q) { mpz_class z;
+                mpz_cdiv_q(z.get_mpz_t(), q.get_num().get_mpz_t(), q.get_den().get_mpz_t()); return z; };
+            auto isInt = [](const mpq_class& q) { return q.get_den() == 1; };
+
+            std::vector<mpq_class> bps;
+            for (const auto& r : allRoots.roots) bps.push_back(r.rational);
+            std::sort(bps.begin(), bps.end());
+            bps.erase(std::unique(bps.begin(), bps.end()), bps.end());
+
+            auto addIntegrality = [&](bool loInf, const mpq_class& lo,
+                                      bool hiInf, const mpq_class& hi) {
+                CertifiedCell cc;
+                cc.cell.var = var;
+                cc.cell.kind = CellKind::Sector;
+                cc.cell.lower = loInf ? Bound::negInf() : Bound::rational(lo, /*open=*/true);
+                cc.cell.upper = hiInf ? Bound::posInf() : Bound::rational(hi, /*open=*/true);
+                certifiedCells.push_back(std::move(cc));
+                levelIntegrality = true;
+            };
+            auto addPoint = [&](const mpz_class& m, const CdcacResult& res) {
+                CertifiedCell cc;
+                cc.cell.var = var;
+                cc.cell.kind = CellKind::Section;
+                cc.cell.lower = Bound::rational(mpq_class(m), /*open=*/false);
+                cc.cell.upper = Bound::rational(mpq_class(m), /*open=*/false);
+                if (res.unsat) cc.cell.reasons = res.unsat->reasons;
+                certifiedCells.push_back(std::move(cc));
+                levelIntegrality = true;   // point cell is integer-specific
+            };
+            // this-level constant-sign violation at an integer sample (used to
+            // cover the infinite sectors, which contain ∞-many integers and so
+            // can never be integrality-excluded).
+            auto thisLevelViol = [&](const mpq_class& sampleQ)
+                -> std::optional<std::pair<size_t, Sign>> {
+                prefix.push(var, RealAlg::fromRational(sampleQ));
+                std::unordered_set<VarId> assigned(prefix.varOrder.begin(),
+                                                   prefix.varOrder.end());
+                std::optional<std::pair<size_t, Sign>> found;
+                for (size_t ci = 0; ci < input.constraints.size(); ++ci) {
+                    const auto& cv = constraintVars(ci, input);
+                    bool hasVar = false, allA = true;
+                    for (VarId v : cv) {
+                        if (v == var) hasVar = true;
+                        if (!assigned.count(v)) { allA = false; break; }
+                    }
+                    if (!hasVar || !allA) continue;
+                    Sign s = algebra_->signAt(input.constraints[ci].poly, prefix);
+                    if (s == Sign::Unknown) continue;
+                    if (!relationHolds(s, input.constraints[ci].rel)) { found = {ci, s}; break; }
+                }
+                prefix.pop();
+                return found;
+            };
+            // Is `res` a Sat with an all-integer model? (then it is a genuine
+            // integer model, accept it directly.)
+            auto allIntModel = [](const CdcacResult& res) -> bool {
+                if (res.status != CdcacStatus::Sat || !res.model) return false;
+                for (const auto& v : res.model->values)
+                    if (!v.isRational() || v.rational.get_den() != 1) return false;
+                return true;
+            };
+
+            // ADDITIVE per-sector cover. REAL-FIRST: probe the sector with a real
+            // sample; a real-infeasible sector (UNSAT, not integrality-tainted)
+            // gets the ordinary WIDE conflict cell — identical to the real path,
+            // so real-UNSAT completeness (the varOrder-fix +7) is preserved and
+            // fast. Only a real-FEASIBLE sector (or an integrality-tainted UNSAT
+            // that cannot be generalized) falls to the integer-aware treatment:
+            // integrality cells for integer-free gaps + per-integer point tests.
+            // Returns 0 = covered; 1 = return *out (Sat/Unknown).
+            auto coverFinite = [&](const mpq_class& lo, const mpq_class& hi,
+                                   CdcacResult& out) -> int {
+                mpq_class mid = pickRationalSample(lo, hi);
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(mid));
+                if (res.status == CdcacStatus::Unknown) { out = std::move(res); return 1; }
+                if (allIntModel(res)) { out = std::move(res); return 1; }
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(mid), res,
+                                                 input, allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
+                }
+                // real-feasible (or integrality-tainted) → integer-aware per integer
+                mpz_class first = floorQ(lo) + 1;   // least integer strictly > lo
+                mpz_class last = ceilQ(hi) - 1;     // greatest integer strictly < hi
+                mpq_class cursor = lo;
+                for (mpz_class m = first; m <= last; ++m) {
+                    addIntegrality(false, cursor, false, mpq_class(m));
+                    CdcacResult rm = testAndRecurse(RealAlg::fromRational(mpq_class(m)));
+                    if (rm.status == CdcacStatus::Sat) { out = std::move(rm); return 1; }
+                    if (rm.status == CdcacStatus::Unknown) { out = std::move(rm); return 1; }
+                    addPoint(m, rm);
+                    cursor = mpq_class(m);
+                }
+                addIntegrality(false, cursor, false, hi);
+                return 0;
+            };
+            // Infinite sector at sample s. A this-level constant-sign violation OR
+            // a real-sound deeper UNSAT covers the whole tail (real wide cell). A
+            // real-feasible tail (non-integer model) or an integrality-tainted
+            // deeper UNSAT cannot cover ∞-many integers → Unknown.
+            auto coverInfinite = [&](const mpq_class& s, CdcacResult& out) -> int {
+                auto viol = thisLevelViol(s);
+                if (viol) {
+                    CdcacResult res = makeLeafConflictResult({*viol}, input);
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(s), res, input,
+                                                 allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
+                }
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(s));
+                if (res.status == CdcacStatus::Unknown) { out = std::move(res); return 1; }
+                if (allIntModel(res)) { out = std::move(res); return 1; }
+                if (res.status == CdcacStatus::Sat) {       // real-feasible tail
+                    out = CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                    return 1;
+                }
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(s), res, input,
+                                                 allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown) {
+                        out = CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                        return 1;
+                    }
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                    return 0;
+                }
+                out = CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                return 1;
+            };
+
+            CdcacResult out;
+            // LEFT infinite sector (-inf, bps.front())
+            if (coverInfinite(mpq_class(floorQ(bps.front()) - 1), out) == 1) return out;
+            // a section is a single point var=r. REAL-FIRST (same rationale as
+            // the sectors): a real conflict at r yields a real section cell that
+            // does NOT taint the level, so an all-real-UNSAT level stays
+            // untainted and a parent can still wide-generalize it. Only a real-
+            // feasible / integrality-tainted root falls to a point/integrality
+            // cell (which does taint, legitimately).
+            auto addIntegralitySection = [&](const mpq_class& r) {
+                CertifiedCell cc;
+                cc.cell.var = var;
+                cc.cell.kind = CellKind::Section;
+                cc.cell.lower = Bound::rational(r, /*open=*/false);
+                cc.cell.upper = Bound::rational(r, /*open=*/false);
+                certifiedCells.push_back(std::move(cc));
+                levelIntegrality = true;
+            };
+            // sections + finite sectors
+            for (size_t i = 0; i < bps.size(); ++i) {
+                CdcacResult res = testAndRecurse(RealAlg::fromRational(bps[i]));
+                if (res.status == CdcacStatus::Unknown) return res;
+                if (allIntModel(res)) return res;            // genuine integer model at r
+                if (res.status == CdcacStatus::Unsat && !res.integralityUsed) {
+                    // real conflict at r → real section cell (does NOT taint level)
+                    auto bcr = buildConflictCell(k, RealAlg::fromRational(bps[i]), res,
+                                                 input, allRoots, levelBoundaryComplete);
+                    if (bcr.status == BuildCellStatus::Unknown)
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
+                    certifiedCells.push_back(std::move(*bcr.conflictCell));
+                } else if (res.status == CdcacStatus::Unsat) {
+                    // integrality-tainted UNSAT at r (deeper used integrality).
+                    if (isInt(bps[i])) addPoint(floorQ(bps[i]), res);  // point cell at the integer
+                    else addIntegralitySection(bps[i]);                // non-integer root: no integer here
+                } else {
+                    // res.status == Sat but NOT all-integer (deeper real model).
+                    if (isInt(bps[i]))
+                        // integer point real-feasible but no confirmed integer
+                        // model below — cannot soundly cover OR claim SAT → Unknown.
+                        return CdcacResult::mkUnknown(CdcacUnknownReason::CoveringDidNotGrow);
+                    addIntegralitySection(bps[i]);   // non-integer root: no integer to cover
+                }
+                if (i + 1 < bps.size()) {        // finite sector (bps[i], bps[i+1])
+                    if (coverFinite(bps[i], bps[i + 1], out) == 1) return out;
+                }
+            }
+            // RIGHT infinite sector (bps.back(), +inf)
+            if (coverInfinite(mpq_class(ceilQ(bps.back()) + 1), out) == 1) return out;
+        }
+    }
+
     // 4. Generate and test cells
-    if (allRoots.roots.empty()) {
+    if (!handledByIntAware && allRoots.roots.empty()) {
         if (uniPolys.empty() && !projectionSucceeded) {
             // No local constraints at all for this variable
             mpq_class defaultSample(0);
@@ -1452,7 +1694,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
             return CdcacResult::mkUnknown(CdcacUnknownReason::AlgebraicComparisonInconclusive);
         }
         certifiedCells.push_back(std::move(*bcr.conflictCell));
-    } else {
+    } else if (!handledByIntAware) {
         // Has roots: sectors + sections
         std::optional<RealAlg> prevRoot;
 
@@ -1609,6 +1851,13 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     std::cerr << "[CDCAC] final cells=" << cover.cells.size() << std::endl;
 #endif
     CoverageResult cov = CoveringManager::coversAllLine(algebra_, cover);
+    if (std::getenv("XOLVER_NRA_CAC_INT_DIAG")) {
+        FILE* f = std::fopen("/tmp/intcac_trace", "a");
+        if (f) { std::fprintf(f, "[INTCAC] k=%d coversAllLine=%d cells=%zu handledByIntAware=%d "
+                              "levelIntegrality=%d unsatTrustworthy=%d\n",
+                              k, (int)cov, cover.cells.size(), (int)handledByIntAware,
+                              (int)levelIntegrality, (int)unsatTrustworthy_); std::fclose(f); }
+    }
     if (cov == CoverageResult::DoesNotCover) {
         return CdcacResult::mkUnknown(CdcacUnknownReason::InternalInvariantViolation);
     }
@@ -1649,8 +1898,19 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
     }
 
+    // INTEGER-TAINT DEMOTION: if this covering was built by the REAL path
+    // (not the integer-aware block) yet a descendant relied on integer-specific
+    // (integrality) exclusion, the real generalization may have covered a real
+    // interval that contains untested integers — sound only as the single point
+    // it was proven at. Demote to Unknown. The integer-aware block builds a
+    // sound point+integrality covering, so it is exempt.
+    if (levelIntegrality && !handledByIntAware) {
+        return CdcacResult::mkUnknown(CdcacUnknownReason::ProjectionClosureIncomplete);
+    }
+
     auto reasons = ReasonManager::minimize(cover);
     CdcacResult result = CdcacResult::mkUnsat(std::move(cover), std::move(reasons));
+    result.integralityUsed = levelIntegrality;
 
     // V3: Build CoveringCertificate
     CoveringCertificate coverCert;
