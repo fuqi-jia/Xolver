@@ -91,6 +91,13 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    // L5: YES (with bound-literal reasons) iff a,b have DISJOINT integer domains
+    // (separated intervals / distinct pinned constants). Complete: reasons ⟹ a≠b.
+    // Queried by the combination layer for array-index pairs; routed as a
+    // disequality so the array reasoner's Row2 fires at Standard.
+    std::optional<std::vector<SatLit>>
+    proveSharedDisjoint(SharedTermId a, SharedTermId b) override;
+
     // Look up the current NIA model value for a shared term so the combination
     // layer's model-based arrangement (TheoryManager.cpp §4) can see same-value
     // shared scalar pairs in array-combination mode (QF_ANIA / QF_AUFNIA).

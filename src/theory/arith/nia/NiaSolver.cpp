@@ -3675,6 +3675,131 @@ NiaSolver::getDeducedSharedEqualities() {
     return result;
 }
 
+std::optional<std::vector<SatLit>>
+NiaSolver::proveSharedDisjoint(SharedTermId a, SharedTermId b) {
+    // L5 demand-driven disequality: a,b are provably unequal iff their integer
+    // domains do not overlap. SOUND + complete reason:
+    //   a.upper < b.lower  =>  (a ≤ a.upper) ∧ (b ≥ b.lower) entail a < b ⟹ a≠b
+    // so the reason is exactly {a's upper-bound literals, b's lower-bound
+    // literals} (or the symmetric pair). Backtracking either bound retracts the
+    // disequality via normal SAT conflict analysis. Same domain/bound-reason
+    // contract as the fixed-value equality producer.
+    if (!sharedTermRegistry_) return std::nullopt;
+    std::string na = getVarNameForSharedTerm(a);
+    std::string nb = getVarNameForSharedTerm(b);
+    if (na.empty() || nb.empty()) return std::nullopt;
+
+    // (1) ABSOLUTE disjoint domains: a.upper < b.lower (or symmetric).
+    const IntDomain* da = domains_.getDomain(na);
+    const IntDomain* db = domains_.getDomain(nb);
+    if (da && db && da->hasLower && da->hasUpper && db->hasLower && db->hasUpper) {
+        const IntDomain* lo = nullptr;  // lower interval (its upper separates)
+        const IntDomain* hi = nullptr;  // higher interval (its lower separates)
+        if (da->upper.value < db->lower.value)      { lo = da; hi = db; }
+        else if (db->upper.value < da->lower.value) { lo = db; hi = da; }
+        if (lo) {
+            std::vector<SatLit> reasons;
+            reasons.insert(reasons.end(), lo->upper.reasons.begin(),
+                           lo->upper.reasons.end());
+            reasons.insert(reasons.end(), hi->lower.reasons.begin(),
+                           hi->lower.reasons.end());
+            if (!reasons.empty()) {
+                std::sort(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+                    return x.var < y.var || (x.var == y.var && x.sign < y.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                          [](SatLit x, SatLit y) {
+                    return x.var == y.var && x.sign == y.sign;
+                }), reasons.end());
+                return reasons;
+            }
+        }
+    }
+
+    // (2) VAR-VAR DIFFERENCE: d = na - nb forced AWAY from 0 by a 2-variable
+    // linear difference atom on the trail (the BMC index case: i = j+c with c!=0,
+    // i >= j+1, i != j, ...). Port of the var-var EQUALITY detector in
+    // getDeducedSharedEqualities, but checking 0-EXCLUSION instead of 0-pin.
+    //   d >= lo with lo > 0  =>  d > 0  => na != nb   (reason = the one lo atom)
+    //   d <= up with up < 0  =>  d < 0  => na != nb   (reason = the one up atom)
+    //   d != 0 directly                 => na != nb   (reason = that atom)
+    // Each is justified by a SINGLE asserted literal (complete: that literal
+    // entails the strict direction independent of the rest of the trail).
+    if (!kernel_) return std::nullopt;
+    bool haveLo = false, haveUp = false;
+    mpq_class lo = 0, up = 0;
+    SatLit loLit{}, upLit{};
+    for (const auto& e : state_.trail) {
+        const auto* p = std::get_if<PolynomialAtomPayload>(&e.atom.payload);
+        if (!p || !p->rhs.isRational()) continue;
+        auto vars = kernel_->variables(p->poly);
+        if (vars.size() != 2) continue;
+        bool hasA = false, hasB = false;
+        for (const auto& v : vars) { if (v == na) hasA = true; else if (v == nb) hasB = true; }
+        if (!hasA || !hasB) continue;
+        auto tOpt = kernel_->terms(p->poly);
+        if (!tOpt) continue;
+        mpz_class cA = 0, cB = 0, k = 0;
+        bool ok = true;
+        for (const auto& m : *tOpt) {
+            if (m.powers.empty()) { k += m.coefficient; }
+            else if (m.powers.size() == 1 && m.powers[0].second == 1) {
+                std::string vn(kernel_->varName(m.powers[0].first));
+                if (vn == na)      cA += m.coefficient;
+                else if (vn == nb) cB += m.coefficient;
+                else { ok = false; break; }
+            } else { ok = false; break; }   // nonlinear monomial
+        }
+        if (!ok) continue;
+        if (cA == 0 || cA != -cB) continue;   // not c*(na - nb) + k
+        Relation rel = e.value ? p->rel : negateRelation(p->rel);
+        const mpq_class& rhsQ = p->rhs.asRational();
+        // poly = cA*(na - nb) + k  rel  rhsQ   =>   d  rel'  (rhsQ - k)/cA
+        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+        bool flip = (cA < 0);
+        if (rel == Relation::Neq) {
+            if (bnd == 0) return std::vector<SatLit>{e.lit};   // d != 0 directly
+            continue;
+        }
+        auto addLower = [&](const mpq_class& v, SatLit lit) {
+            if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+        };
+        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+            if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+        };
+        // d = na - nb is an integer, so a strict bound tightens by one step:
+        //   d > bnd  => d >= floor(bnd)+1   ;   d < bnd  => d <= ceil(bnd)-1
+        // (without this, "i > j" with bnd=0 would record lo=0 and miss d>0).
+        auto floorQ = [](const mpq_class& q) {
+            mpz_class r; mpz_fdiv_q(r.get_mpz_t(), q.get_num_mpz_t(),
+                                    q.get_den_mpz_t()); return r;
+        };
+        auto ceilQ = [](const mpq_class& q) {
+            mpz_class r; mpz_cdiv_q(r.get_mpz_t(), q.get_num_mpz_t(),
+                                    q.get_den_mpz_t()); return r;
+        };
+        mpq_class loStrict(floorQ(bnd) + 1);   // d > bnd  => d >= loStrict
+        mpq_class upStrict(ceilQ(bnd) - 1);    // d < bnd  => d <= upStrict
+        switch (rel) {
+            case Relation::Eq:  addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+            case Relation::Leq:
+                if (flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+            case Relation::Geq:
+                if (flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+            case Relation::Lt:
+                if (flip) addLower(loStrict, e.lit); else addUpper(upStrict, e.lit);
+                break;
+            case Relation::Gt:
+                if (flip) addUpper(upStrict, e.lit); else addLower(loStrict, e.lit);
+                break;
+            default: break;
+        }
+    }
+    if (haveLo && lo > 0) return std::vector<SatLit>{loLit};   // d >= lo > 0
+    if (haveUp && up < 0) return std::vector<SatLit>{upLit};   // d <= up < 0
+    return std::nullopt;
+}
+
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {
     // Prefer currentModel_; fall back to lastValidatedFarkasModel_ which
     // survives reset()/backtrack and represents the last validator-

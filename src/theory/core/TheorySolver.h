@@ -91,6 +91,19 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // Demand-driven shared DISEQUALITY query (L5): does this solver's theory
+    // state force a != b? Returns the reason literals if so (they must COMPLETELY
+    // entail a != b — wrong-UNSAT risk), nullopt otherwise. The combination layer
+    // asks this for the (few) array-index pairs it cares about and routes a YES as
+    // (¬reasons ∨ ¬eqLit) so the SAT core assigns the shared-eq atom FALSE — a
+    // disequality the array reasoner's Row2 (disequal-index read-over-write)
+    // consumes. Demand-driven: bounded by the array-pair set, NOT O(n²) over all
+    // shared terms. Default: no opinion.
+    virtual std::optional<std::vector<SatLit>>
+    proveSharedDisjoint(SharedTermId a, SharedTermId b) {
+        (void)a; (void)b; return std::nullopt;
+    }
+
     // Bounded atom-level Gaussian implied equalities, SCOPED to the given (few)
     // array-index shared-var pairs (the combination layer supplies them at Full
     // effort). For each pair (a,b), tests whether a-b == 0 is entailed by the

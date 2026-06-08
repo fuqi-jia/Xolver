@@ -582,6 +582,63 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto vv = s->arrayValueSharedTerms();
         arrayIdxSet.insert(vv.begin(), vv.end());
     }
+
+    // ---- L5: demand-driven disequality propagation (XOLVER_NIA_NO_DISEQ) ----
+    // BMC memory reasoning is dominated by Row2 (the DISEQUAL-index read-over-
+    // write: i!=j => select(store(a,i,v),j) = select(a,j)). The equality
+    // connector (L4-reach) alone merges indices but never fires Row2. Here, for
+    // each array-index pair, ask each combination solver whether their domains
+    // are provably disjoint; route a YES as (¬reasons ∨ ¬eqLit) so CaDiCaL
+    // assigns the shared-eq atom FALSE. The propagator then records an EUF
+    // disequality, and the existing L2 Row2-cond path fires with the single eqLit
+    // reason (the multi-literal domain reason lives in the routed SAT clause — no
+    // change to the EUF explanation). Demand-driven + array-pair scoped: bounded
+    // by the (small) index set, never O(n^2) over all shared terms. SOUND:
+    // proveSharedDisjoint returns a COMPLETE reason (reasons ⟹ a!=b);
+    // propagating a disequality the theory already entails cannot create a wrong
+    // UNSAT that the disequality alone does not already justify.
+    static const bool noDiseq = [] {
+        const char* e = std::getenv("XOLVER_NIA_NO_DISEQ");
+        return e && *e && *e != '0';
+    }();
+    if (noDiseq && effort != TheoryEffort::Full && registry_ &&
+        arrayIdxSet.size() >= 2) {
+        std::vector<SharedTermId> idxv(arrayIdxSet.begin(), arrayIdxSet.end());
+        std::sort(idxv.begin(), idxv.end());   // deterministic emission order
+        size_t buffered = 0;
+        for (size_t i = 0; i < idxv.size(); ++i) {
+            for (size_t j = i + 1; j < idxv.size(); ++j) {
+                SharedTermId A = idxv[i], B = idxv[j];
+                if (sharedEqMgr_.same(A, B) || sharedEqMgr_.diseqKnown(A, B))
+                    continue;
+                if (careGraphEnabled_ && !careGraph_.caresPair(A, B)) continue;
+                for (auto& s : solvers_) {
+                    if (!s->supportsCombination()) continue;
+                    auto r = s->proveSharedDisjoint(A, B);
+                    if (!r) continue;
+                    SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                    if (assignmentView_ &&
+                        assignmentView_->value(eqLit) == LitValue::False) break;
+                    TheoryLemma lemma;
+                    for (auto& lit : *r) lemma.lits.push_back(lit.negated());
+                    if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                    lemma.lits.push_back(eqLit.negated());  // ¬(a=b) = a!=b
+                    if (lemmaDb.insertIfNew(lemma)) {
+                        noPropEntailments_.push_back(std::move(lemma));
+                        ++buffered;
+                    }
+                    break;   // one solver's proof suffices
+                }
+            }
+        }
+        static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+        if (l4rDiag && buffered) {
+            std::fprintf(stderr, "[L5-DISEQ] buffered=%zu idxTerms=%zu\n",
+                         buffered, idxv.size());
+            std::fflush(stderr);
+        }
+    }
+
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
