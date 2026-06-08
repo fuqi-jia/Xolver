@@ -135,6 +135,33 @@ Instrument left in place (gated, zero-cost OFF): `[LINPROP-drop]` under
 `XOLVER_NIA_LINPROP_DIAG` reports `satVar reasons notLive` for each firewall drop
 — the measurement hook the reconstruction work will iterate against.
 
+### L9 FIX SHIPPED (2026-06-09) — firewall now sees interface-eq reasons (`XOLVER_NIA_IFACE_PROP`, `9d5de42`)
+
+The `U` (unassigned) verdict was a **firewall false negative**, not a stale reason:
+`IFACE_LIFECYCLE` keeps interface (dis)equalities OFF `state_.trail`, yet
+`stageLinearProp` built its currently-true map ONLY from `state_.trail`. So an
+interface-equality atom genuinely assigned-true by CaDiCaL (and held in
+`interfaceEqualities_`) read as `U`, dropping every read-value form-pin.
+
+Fix (`XOLVER_NIA_IFACE_PROP`, default-OFF): also seed the firewall's `asserted` map
+with the interface (dis)equality reason literals — currently-true facts NIA holds
+off-trail. SOUND: the entailment clause `(¬reasons ∨ impliedAtom)` is a global
+theory tautology, so honoring these reasons cannot change a verdict.
+
+Result on cs_lazy: `[LINPROP-drop]` 100% → **0**; **theoryAtomDecisions 28972 →
+8312 (−71%)**. Gate: unit 1427/1427; FULL regression **753/753 0-unsound** with
+`XOLVER_NIA_LINEAR_PROP=1 XOLVER_NIA_IFACE_PROP=1`.
+
+**Still TOs — the cascade STALLS.** After the equality form-pins emit, the
+steady-state scan shows `formPinned=0` with ~720 arith atoms still unassigned, and
+the root LP stays **feasible** (`conflict=no`). The equality links are exhausted;
+the chain does not advance because the next read-over-write links are
+**disequality-gated** (`select(store(a,i,v),j)` needs `i≠j` to reduce to
+`select(a,j)`). So the remaining lever is the **disequality side**: ensure the
+Row2 `i≠j` propagations (and the value equalities they unlock) fire and land —
+likely the same off-trail-firewall pattern on the `proveSharedDisjoint` /
+`XOLVER_NIA_NO_DISEQ` path. That is the next link (L10).
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
