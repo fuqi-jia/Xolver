@@ -293,13 +293,41 @@ REFUTES it, and xolver cannot refute `i=j` for the symbolic BMC index pairs
 it lacks). When `i=j` is not refuted, CaDiCaL just takes the `i=j` disjunct → the
 split is satisfied trivially → `readEq` never forced → no progress.
 
-→ **The remaining wall is `i=j` REFUTATION** = complete EUF/boolean propagation over
-the program structure (the next slice, L14). It also raises a real doubt the earlier
-slices assumed away: cs_* may NOT be read-over-write-bound at all — z3's 68 props may
-be mostly boolean/EUF over the control skeleton, with array reasoning a minor part.
-Verifying that (e.g. z3 `-st` axiom-instantiation counts, or running cs_lazy with array
-reasoning disabled) should precede L14. Repro: add `AX_ROW2_SPLIT=1 RELEVANCY=1` to the
-config above.
+→ The next slice's premise was tested in L14 (below) and the diagnosis MOVED.
+
+### L14 VERIFIED (2026-06-09) — cs_* is PREPROCESSING-bound; xolver's solve-eqs is the gap
+
+z3 `-st` on cs_lazy (the decisive measurement):
+- `:array-ax1 57 :array-ax2 42 :array-ext-ax 1` — array axioms ARE used → cs_* IS
+  read-over-write-bound; the L7–L13 array lane was the right subsystem. ✓
+- **`:solve-eqs-elim-vars 182 :solve-eqs-steps 405`** — z3 eliminates **182 variables**
+  by equality-elimination PREPROCESSING before search; `:arith-fixed-eqs 198`,
+  `:added-eqs 502`; then only **`:decisions 5`** / `:propagations 68` / `:conflicts 3`.
+
+So z3's recipe is: **solve-eqs collapses the SSA equality chains → tiny residual →
+5 decisions + array axioms close it.** The reason xolver can't refute `i=j` is not a
+missing search engine — z3 *substitutes the index terms away* in preprocessing, making
+the (dis)equalities syntactically obvious.
+
+xolver's side, measured: `SolveEqs` eliminates **0** on cs_lazy, even with general
+Gaussian forced (`XOLVER_PP_SOLVE_EQS_GAUSS_NL`, a temp diagnostic, since reverted).
+Two reasons: (1) QF_ANIA is not in `solveEqsAutoLogic` (off by default); (2) its
+eligibility is far too narrow — it captures simple `(= bareVar t)` but NOT cs_lazy's
+SSA chains, which are linearly-defined (`(= v (+ v2 1))`) and **select-defined**
+(`(= v (select mem addr))`), chained. z3's solve-eqs handles all of these.
+
+**REDIRECTED cs_* closer (L15) = a capable equality-elimination preprocessor**
+(z3-grade solve-eqs: substitute linearly- and select-defined SSA vars, transitively,
+nonlinear-safe via exact model replay), NOT more search-engine integration. This is a
+PREPROCESSING effort. Soundness caveat already known (substituting a linear def into a
+*nonlinear* term floored nia_089 sat→unknown — the reason general Gaussian is gated off
+for NIA), so the capable pass must be careful around genuine nonlinear monomials.
+Code: `src/frontend/preprocess/SolveEqs.*`; gate `Solver.cpp ~1772` (`solveEqsAutoLogic`
+excludes QF_ANIA; `nonlinearArithLogic` matches the "NIA" substring inside "QF_ANIA").
+Repro: `z3 -st cs_lazy`; `XOLVER_PP_SOLVE_EQS=1 cs_lazy` → eliminated 0.
+
+The L7–L13 work (relevancy, demand-diseq, lazy split, integration slice-1) is sound,
+shipped (default-OFF) building blocks — but cs_* is won FIRST in preprocessing, not search.
 
 ---
 
