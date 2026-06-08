@@ -379,6 +379,32 @@ L16 part-2 (reconstruct eliminated shared vars into the combination SAT model) +
 part-3 (array-aware elimination + array model replay).** Both are bounded, scoped,
 engine-grade slices on top of the proven renorm mechanism.
 
+### L16 PART-2 ATTEMPTED (2026-06-09) — permissive-Elim recovers 2/5 soundly; 3 array-arrangement need part-3
+
+The 5 part-1 regressions are `(unknown-reason solve-eqs: eliminated variable not
+reconstructable)`: `ModelConverter::reconstruct` does a STRICT `evalRational` of the
+eliminated var's def `v↦t`, and fails when `t`'s dep (an unconstrained shared scalar,
+e.g. a BMC var only inside a UF/array arg) is absent from the combination model.
+
+Fix tried: `permissiveElim` — default a missing Elim dep to 0 (sound: the final model
+is validated against the ORIGINAL assertions by ArithModelValidator + the full-regression
+firewall, so a wrong default → Violated → unknown, never wrong SAT). Result
+(`XOLVER_PP_SOLVE_EQS_ARRAY=1`, full firewall): **0 UNSOUND**, regressions 5 → **3**:
+- recovered: `uflia_005_sat_fun_arith`, `uflra_001_sat_fun_real` (pure-UF: the freed
+  scalar genuinely defaults).
+- still unknown: `alia_012`/`alra_011` selfstore_arith_arrangement, `ania_010`
+  index_from_nonlinear — **array-arrangement** SAT cases: the eliminated scalar's value
+  must be reconstructed in coordination with the array/EUF ARRANGEMENT model (a default
+  isn't enough; the arrangement decides it). That is part-3 (array-aware reconstruction).
+
+Reverted (3 regressions remain; cs_lazy still 9/182). Net L16 status: part-1 (renorm
+soundness) PROVEN; part-2 (permissive-Elim) recovers 2/5 SOUNDLY; **the remaining 3
+arrangement cases AND the cs_lazy select-defined bulk both need the SAME part-3**:
+array-aware elimination (`isLinearReconstructable` → allow Select) + array model
+reconstruction (coordinate eliminated shared scalars with the EUF/array arrangement).
+Every step firewall-validated (0-unsound throughout); the closer is now one cohesive
+engine slice (part-3), fully scoped, on a proven-sound foundation.
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
