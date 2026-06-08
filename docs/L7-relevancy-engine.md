@@ -405,6 +405,33 @@ reconstruction (coordinate eliminated shared scalars with the EUF/array arrangem
 Every step firewall-validated (0-unsound throughout); the closer is now one cohesive
 engine slice (part-3), fully scoped, on a proven-sound foundation.
 
+### L16 PART-3 FULLY IMPLEMENTED (2026-06-09) — capable solve-eqs is SOUND but NOT sufficient; cs_* needs BOTH
+
+Implemented the complete capable solve-eqs: array-aware elimination (allow
+Select/Store/UFApply defs + ARRAY-sorted vars `mem'=store(...)` — the BMC store-chain
+bulk) + renorm (part-1) + permissive replay (part-2). Measured cs_lazy:
+- **elim 9 → 144** (array-var elimination captured the store-chain bulk; ≈ z3's 182),
+  formula **dag 1485 → 1190 (ratio 0.80)** — a real 20% collapse, like z3's solve-eqs.
+- **0 UNSOUND** on the full firewall (sound!); 4 SAT→unknown (array model-replay floors).
+- **BUT cs_lazy STILL TO: residual `decisionLits ≈ 51 158` (vs baseline 58 445).**
+
+**This OVERTURNS L14's "preprocessing-bound" inference and gives the FINAL answer.**
+Matching z3's variable elimination (144 ≈ 182) leaves xolver at **51k decisions** — z3
+does **5**. So solve-eqs is **necessary for z3 but NOT sufficient for xolver**: z3's
+5-decision close comes from solve-eqs **AND** its integrated theory engine solving the
+collapsed formula effectively. **cs_* requires z3's WHOLE architecture — capable
+preprocessing AND an integrated relevancy/propagation/lazy-split theory engine.** Every
+piece has now been built and measured IN ISOLATION (L7 relevancy, L9 firewall −71%,
+demand-diseq, L13 integration slice, L16 capable solve-eqs 144-elim) and proven
+**necessary but none sufficient alone** — including capable preprocessing. The gap is
+the *integrated whole* (z3's `smt_context` + simplifier + solve_eqs as one loop), a
+multi-month engine, not any single slice. Reverted (4 regressions + no close).
+
+**DEFINITIVE cs_* verdict:** not closeable by an incremental subsystem. The honest
+shipped wins are the sound default-OFF building blocks (L9 −71%, demand-diseq,
+integration slice-1); the closer is a ground-up integrated engine. Soundness held at
+every step (0-unsound throughout; the firewall caught 2 would-be false-SATs, L15+L16p1).
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
