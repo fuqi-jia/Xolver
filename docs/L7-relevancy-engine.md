@@ -329,6 +329,32 @@ Repro: `z3 -st cs_lazy`; `XOLVER_PP_SOLVE_EQS=1 cs_lazy` → eliminated 0.
 The L7–L13 work (relevancy, demand-diseq, lazy split, integration slice-1) is sound,
 shipped (default-OFF) building blocks — but cs_* is won FIRST in preprocessing, not search.
 
+### L15 ATTEMPTED + REVERTED (2026-06-09) — capable solve-eqs needs purifier CO-DESIGN, not a guard relaxation
+
+Tried extending `SolveEqs` to eliminate the SSA scalars z3 eliminates (182). Measured
+on cs_lazy, in layers:
+- **Linear bare-var shared-term elim** (relax `unsafeVars_` for linear-reconstructable
+  defs, gated `XOLVER_PP_SOLVE_EQS_ARRAY`): eliminated **9** / 182. Still TO.
+- **+ general-linear** (`a+b=c+d` combos): **+0** — cs_lazy's eqs aren't linear combos.
+- The bulk (173) is **select-defined** (`tmp=select(mem,addr)`) and **store-chain**
+  (`mem₁=store(...)`) — needs array-aware elimination + ARRAY MODEL REPLAY.
+
+**The linear relaxation was UNSOUND** — full-regression firewall caught
+`uflia_017_unsat_purify_violation`: oracle=unsat, **solver=SAT** (+5 completeness
+regressions). Eliminating a variable that is a Nelson-Oppen shared term **severs the
+shared term** → the exact "purify violation" false-SAT the `unsafeVars_` guard
+documents. The guard is NECESSARY. REVERTED (codebase clean at 9efb846).
+
+**Conclusion (the bottom of the cs_* diagnosis):** capable solve-eqs IS the cs_* lever
+(z3 eliminates 182 → 5 decisions), but doing it SOUNDLY in xolver requires **solve-eqs
+↔ purifier/combination CO-DESIGN**: after substituting `v↦t`, re-purify the new terms,
+maintain N-O shared-term consistency, and reconstruct eliminated vars (incl.
+array-read defs) in the combination model. That is exactly z3's integrated
+`solve_eqs`+purification — a major, soundness-critical preprocessing subsystem, NOT a
+guard relaxation (naive relaxation is firewall-proven UNSOUND). This is the real shape
+of the cs_* closer; it is an engine-grade build, and the soundness firewall (full
+regression with oracle) is mandatory at every step (it caught the false-SAT here).
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
