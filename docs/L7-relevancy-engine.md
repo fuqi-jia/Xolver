@@ -355,6 +355,30 @@ guard relaxation (naive relaxation is firewall-proven UNSOUND). This is the real
 of the cs_* closer; it is an engine-grade build, and the soundness firewall (full
 regression with oracle) is mandatory at every step (it caught the false-SAT here).
 
+### L16 PART-1 PROVEN (2026-06-09) — shared-term elimination IS soundifiable (renorm); parts 2-3 remain
+
+Implemented the co-design's soundness mechanism: after solve-eqs eliminates a shared
+scalar (`v↦t`), run a **FormulaRewriter re-normalization** so the substituted UF/array
+args are folded/canonicalized (`f(x+1)`[x↦1] → `f(1+1)` → **`f(2)`**), making
+arith-equal args syntactically congruent without a bridging atom.
+
+Result on the full firewall (`XOLVER_PP_SOLVE_EQS_ARRAY=1`):
+- **0 UNSOUND** — the L15 false-SAT (`uflia_017`) is HEALED → now `unsat`. The renorm
+  fixes the severance. **Shared-term elimination CAN be made sound.** ✓ (part-1 done)
+- **5 SAT→unknown completeness regressions** remain (`alia_012`/`alra_011`
+  selfstore_arith_arrangement, `ania_010` index_from_nonlinear, `uflia_005` fun_arith,
+  `uflra_001` fun_real): eliminating a shared scalar breaks **combination SAT-model
+  reconstruction** — the eliminated var's value isn't rebuilt into the arrangement, so
+  the validator floors to unknown. (part-2)
+- cs_lazy still captures only **9/182** — the bulk is select-defined/store-chain,
+  needing `isLinearReconstructable` to allow Select + ARRAY MODEL REPLAY. (part-3)
+
+Reverted (5 completeness regressions = not shippable), but part-1 de-risks the whole
+effort: the soundness question is answered (yes, via renorm). **Remaining cs_* closer =
+L16 part-2 (reconstruct eliminated shared vars into the combination SAT model) +
+part-3 (array-aware elimination + array model replay).** Both are bounded, scoped,
+engine-grade slices on top of the proven renorm mechanism.
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
