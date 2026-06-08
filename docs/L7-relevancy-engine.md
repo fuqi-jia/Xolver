@@ -1,9 +1,78 @@
-# L7 — Program-level relevancy engine (the cs_* closer)
+# L7 — Program-level relevancy engine
 
-Status: **open / fresh effort** (scoped 2026-06-08). Owner: TBD.
-Branch base: `agent/nia-linear-prop @ 06141c9` (or a fresh branch off it).
+Status: **BUILT + sound + default-OFF (2026-06-08).** The engine exists and is
+correct; it is **NOT the cs_* closer** — measurement re-diagnosed cs_* (see §0).
 
-## 1. Why this exists — the measured boundary
+## 0. MEASURED OUTCOME (2026-06-08) — engine built; cs_* is theory-prop-bound, not relevancy-bound
+
+The relevancy engine was implemented end-to-end and validated:
+- `src/sat/RelevancyEngine.{h,cpp}` — z3-style boolean relevancy (And/Or/Implies/
+  Ite/Iff/Not rules, backtrackable trail, iterative DAG propagation). 7 unit
+  cases (`tests/unit/test_relevancy_engine.cpp`), TDD red→green.
+- `Atomizer::buildRelevancyGraph` — extracts the boolean skeleton from `memo_`+IR.
+- `CadicalTheoryPropagator` drives it (`notify_assignment`→onAssign,
+  `notify_new_decision_level`→pushLevel, `notify_backtrack`→popToLevel) and steers
+  `cb_decide`→pickRelevantUnassigned. Gate `XOLVER_RELEVANCY` (default-OFF).
+- **Sound:** unit 1427/1427; combination/array regression 210/210 0-unsound BOTH
+  OFF and ON; pure decision heuristic (cannot change a verdict).
+
+**But it does not move cs_*, and the measurement says why it cannot:**
+
+cs_lazy_false-unreach (z3: unsat, 0.03s) has **761 asserts but only 2 `ite`,
+72 `or`, 4 `and`, 0 `=>`** — it is a *flat top-level conjunction* of arithmetic/
+array atoms (`(= |#sizeof~INT| 4)` …). The relevancy graph is 1045 nodes and
+**95% of them are relevant** (990/1045): every conjunct is asserted, so every
+conjunct is relevant. **There is no dead boolean branch to prune.**
+
+| config | decisions | theoryAtomDecisions | relevant/total | verdict |
+|---|---|---|---|---|
+| default, OFF | 58445 | 44842 (77%) | — | TO |
+| default, ON  | 44909 | 34717 | 990/1045 (95%) | TO |
+| eager-stack, ON | 7962 | **0** | 990/1045 | TO (≈5 ms/theory-op) |
+
+So in default config the search is **77% theory-atom decisions** (the SAT core
+*guessing* arithmetic-atom truth because the theory layer doesn't propagate it);
+under the eager stack theory atoms drop to 0 but only ~8k decisions remain and it
+*still* TOs on slow eager theory checks. Either way the wall is **theory
+reasoning, not boolean search** — and boolean relevancy is powerless on a flat
+conjunction.
+
+**z3 closes cs_lazy in 5 decisions / 68 propagations / 3 conflicts.** Those 68 are
+*theory* propagations — z3 derives the conflict by propagating implied
+(dis)equalities/bounds, never searching. That is the real cs_* lever:
+
+> **The cs_* closer is theory-implied-literal propagation** (a `theory →
+> propagator` channel that pushes entailed atoms as forced literals so the SAT
+> core stops guessing them), NOT a boolean relevancy engine. This is the same
+> conclusion the (a)/(b)/FIX-c lane reached from the other side; the relevancy
+> experiment confirms it from the boolean side: there is nothing boolean to prune.
+
+Disposition: keep `RelevancyEngine` default-OFF (correct, sound, reusable — it is
+the right tool for boolean-heavy instances with real `ite`/disjunction trees, just
+not for these flat BMC conjunctions). The next cs_* effort must target theory
+propagation completeness (L8, below), not §1–§4 of this doc.
+
+## L8 (next) — theory-implied-literal propagation (the actual cs_* closer)
+
+Build a sound `theory → CadicalTheoryPropagator` implied-literal channel: when a
+theory solver (LIA/NIA/EUF/array) *entails* an atom under the current assignment,
+emit it as a propagated literal with a valid reason clause, so the SAT core never
+decides it. Foundations already on the branch: (a) EUF e-prop
+(`XOLVER_EUF_PROP_COMB`), (b) N-O default-disequal phase, and the
+`takeEntailmentPropagations` drain. Gap = arithmetic bound/equality entailment +
+array read-value entailment as *forced literals* (not Full-effort SAT splits),
+with reason-clause validity gated by the wrong-UNSAT firewall (task #24).
+SOUNDNESS-CRITICAL (a wrong reason clause = wrong UNSAT) — every implied literal
+needs a model-checkable reason.
+
+---
+
+(Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
+program-structure decisions" was measured under the eager stack; the §0 table
+supersedes it — those residual decisions are theory-atom guesses + eager-check
+cost, not prunable boolean structure.)
+
+## 1. Why this exists — the original (superseded) boundary
 
 Target cluster: `targeted_eqnia/QF_ANIA/UltimateAutomizer/cs_{lazy,lamport,peterson}_*.smt2`
 (Ultimate concurrency BMC traces). All **UNSAT**; z3/cvc5 ≈ 0.03 s; xolver **TO** (60 s+).

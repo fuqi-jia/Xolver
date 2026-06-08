@@ -1,9 +1,11 @@
 #include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
+#include "sat/RelevancyEngine.h"
 #include <cassert>
 #include <algorithm>
 #include <iostream>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -537,6 +539,106 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
 
     memo_[eid] = result;
     return result;
+}
+
+// Classify a CoreExpr for the relevancy graph: returns the RelKind and, via
+// `descend`, whether its CoreIr children are boolean operands to recurse into.
+// A connective descends; a leaf (theory atom / bool var / const / UF / array /
+// datatype predicate) does not.
+RelKind Atomizer::relKindOf(const CoreExpr& e, const CoreIr& ir,
+                            bool& descend) const {
+    descend = false;
+    switch (e.kind) {
+        case Kind::Not:     descend = true; return RelKind::Not;
+        case Kind::And:     descend = true; return RelKind::And;
+        case Kind::Or:      descend = true; return RelKind::Or;
+        case Kind::Implies: descend = true; return RelKind::Implies;
+        case Kind::Xor:     descend = true; return RelKind::Iff;
+        case Kind::Ite:
+            // Boolean Ite is normally lowered before atomization; handle
+            // defensively if one survives (cond, then, else all boolean).
+            descend = true; return RelKind::Ite;
+        case Kind::Eq:
+        case Kind::Distinct: {
+            // A boolean (dis)equality is an Iff/Xor over boolean operands; an
+            // arithmetic/UF (dis)equality is an opaque theory atom (Leaf).
+            if (e.children.size() >= 2 &&
+                (areAllChildrenBool(e, ir) ||
+                 isProvablyBool(e.children[0], ir) ||
+                 isProvablyBool(e.children[1], ir))) {
+                descend = true;
+                return RelKind::Iff;
+            }
+            return RelKind::Leaf;
+        }
+        default:
+            return RelKind::Leaf;
+    }
+}
+
+void Atomizer::buildRelevancyGraph(const std::vector<ExprId>& roots,
+                                   const CoreIr& ir, RelevancyEngine& eng) const {
+    std::unordered_map<ExprId, uint32_t> exprToNode;  // ExprId -> engine node id
+    std::vector<ExprId> postorder;
+    std::unordered_set<ExprId> pushed;   // children already enqueued
+    std::unordered_set<ExprId> done;     // emitted to postorder
+
+    // Iterative post-order so a node is appended only after all its boolean
+    // children — addNode below can then resolve child node ids. The DAG is
+    // acyclic (formula structure), so the two-set (pushed/done) walk terminates.
+    std::vector<ExprId> stack(roots.begin(), roots.end());
+    while (!stack.empty()) {
+        ExprId eid = stack.back();
+        if (eid == NullExpr || done.count(eid)) { stack.pop_back(); continue; }
+        const CoreExpr& e = ir.get(eid);
+        bool descend = false;
+        relKindOf(e, ir, descend);
+        if (!pushed.count(eid)) {
+            pushed.insert(eid);
+            if (descend) {
+                // Push children in reverse so natural order is restored in the
+                // postorder (SmallVector has no reverse iterators).
+                for (size_t i = e.children.size(); i-- > 0;) {
+                    ExprId c = e.children[i];
+                    if (c != NullExpr && !done.count(c)) stack.push_back(c);
+                }
+            }
+            // leave eid on the stack; revisited once children are done
+        } else {
+            done.insert(eid);
+            postorder.push_back(eid);
+            stack.pop_back();
+        }
+    }
+
+    // Emit nodes in post-order; children are already in exprToNode.
+    for (ExprId eid : postorder) {
+        auto mit = memo_.find(eid);
+        if (mit == memo_.end()) continue;  // not atomized -> cannot key a node
+        const SatLit lit = mit->second;
+        if (lit.var == 0) continue;
+        const CoreExpr& e = ir.get(eid);
+        bool descend = false;
+        RelKind kind = relKindOf(e, ir, descend);
+
+        std::vector<uint32_t> childNodes;
+        if (descend) {
+            for (ExprId c : e.children) {
+                auto cit = exprToNode.find(c);
+                if (cit != exprToNode.end()) childNodes.push_back(cit->second);
+            }
+            // A connective with no resolvable boolean children carries no
+            // relevancy structure -> treat it as a leaf.
+            if (childNodes.empty()) kind = RelKind::Leaf;
+        }
+        uint32_t id = eng.addNode(kind, lit.var, lit.sign, childNodes);
+        exprToNode[eid] = id;
+    }
+
+    for (ExprId r : roots) {
+        auto it = exprToNode.find(r);
+        if (it != exprToNode.end()) eng.addRoot(it->second);
+    }
 }
 
 } // namespace xolver

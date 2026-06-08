@@ -50,6 +50,7 @@
 
 #include "sat/CadicalBackend.h"
 #include "sat/CadicalTheoryPropagator.h"
+#include "sat/RelevancyEngine.h"
 
 #include <somtparser/frontend/parser.h>
 
@@ -3125,6 +3126,11 @@ public:
 #endif
         cadicalBackend->connectPropagator(&propagator);
 
+        // L7 relevancy engine (XOLVER_RELEVANCY). Declared here so it outlives
+        // sat->solve(); built + attached after atomize() (needs the memo). Empty
+        // + inert until attached.
+        RelevancyEngine relEngine;
+
         // Atomizer registers parsed atoms into registry (which calls addObservedVar)
         Atomizer atomizer(*sat);
         registry.setContext(sat.get(), &atomizer);
@@ -3270,6 +3276,21 @@ public:
             sat->addClause({lit});
         }
         phase("atomize-done");
+
+        // L7: build the relevancy graph over the asserted boolean skeleton and
+        // attach it to the propagator to steer cb_decide toward live program
+        // branches. Pure decision heuristic (never changes the verdict), so it
+        // is safe in any logic; default-OFF until validated broadly.
+        if (std::getenv("XOLVER_RELEVANCY")) {
+            atomizer.buildRelevancyGraph(ir->assertions(), *ir, relEngine);
+            propagator.setRelevancyEngine(&relEngine);   // wires value oracle
+            relEngine.finalize();                        // seed roots relevant
+            if (std::getenv("XOLVER_RELEVANCY_DIAG")) {
+                std::fprintf(stderr, "[RELEVANCY] nodes=%zu roots seeded; "
+                             "relevantVarsSeen=%zu\n",
+                             relEngine.totalNodes(), relEngine.relevantVarsSeen());
+            }
+        }
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,

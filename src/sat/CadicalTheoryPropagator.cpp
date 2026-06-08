@@ -1,6 +1,7 @@
 #include "sat/CadicalTheoryPropagator.h"
 #include <cstdio>
 #include "sat/CadicalBackend.h"
+#include "sat/RelevancyEngine.h"
 #include "util/SolveClock.h"
 #include <cassert>
 #include <iostream>
@@ -114,6 +115,19 @@ void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
     unknownReasonSink_ = sink;
 }
 
+void CadicalTheoryPropagator::setRelevancyEngine(RelevancyEngine* rel) {
+    rel_ = rel;
+    relevancyOn_ = (rel != nullptr);
+    if (rel_) {
+        // The engine reads truth from this propagator's live assignment map.
+        rel_->setValueOracle([this](SatVar v) -> int {
+            auto it = currentAssignment_.find(v);
+            if (it == currentAssignment_.end()) return 0;
+            return it->second ? 1 : -1;
+        });
+    }
+}
+
 static void writeReason(std::string* sink, const std::string& msg) {
     if (sink) *sink = msg;
 }
@@ -151,11 +165,20 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
     }
+    // L7: drive relevancy AFTER the whole batch is in currentAssignment_ so the
+    // engine's value oracle sees every co-assigned literal. Pure heuristic.
+    if (relevancyOn_) {
+        for (int lit : lits) {
+            SatVar var = static_cast<SatVar>(std::abs(lit));
+            rel_->onAssign(var, lit > 0);
+        }
+    }
 }
 
 void CadicalTheoryPropagator::notify_new_decision_level() {
     ++currentLevel_;
     expectDecisionLit_ = true;  // next assignment's first lit is the decision
+    if (relevancyOn_) rel_->pushLevel();
 }
 
 int CadicalTheoryPropagator::cb_decide() {
@@ -195,6 +218,21 @@ int CadicalTheoryPropagator::cb_decide() {
                       << " theoryAtomDecisions=" << theoryAtomDecisions_
                       << " theoryAtomPct=" << pct << "%" << std::endl;
         }
+    }
+
+    // XOLVER_RELEVANCY (L7): steer CaDiCaL toward the RELEVANT boolean skeleton
+    // — the live program branches under the current assignment — and away from
+    // dead-branch / un-taken-interleaving variables. Returns a relevant +
+    // unassigned literal (decided TRUE; phase is a heuristic, soundness-neutral)
+    // or declines so CaDiCaL mops up the rest by VSIDS. Pure decision heuristic:
+    // every clause + theory lemma is still enforced, so the verdict is unchanged.
+    if (relevancyOn_) {
+        SatVar v = rel_->pickRelevantUnassigned();
+        if (v != 0) {
+            ++relSteeredDecisions_;
+            return static_cast<int>(v);
+        }
+        // No relevant unassigned var found -> fall through (CaDiCaL decides).
     }
 
     // XOLVER_LRA_DECIDE: steer toward a theory-feasible region. Find an
@@ -250,6 +288,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     } _btt{satProf, _bt0};
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
+    if (relevancyOn_) rel_->popToLevel(static_cast<int>(new_level));
     for (auto it = varToLevel_.begin(); it != varToLevel_.end(); ) {
         if (it->second > static_cast<int>(new_level)) {
             currentAssignment_.erase(it->first);
@@ -502,6 +541,12 @@ int CadicalTheoryPropagator::cb_propagate() {
                 std::fprintf(f, "cb_decide body: total_ms=%lld\n", g_decideUs / 1000);
                 std::fprintf(f, "cb_has_external_clause: calls=%lld total_ms=%lld\n",
                              g_hecCalls, g_hecUs / 1000);
+                if (relevancyOn_ && rel_) {
+                    std::fprintf(f, "relevancy: steeredDecisions=%lld relevantNodes=%zu "
+                                 "totalNodes=%zu relevantVarsSeen=%zu\n",
+                                 relSteeredDecisions_, rel_->relevantNodes(),
+                                 rel_->totalNodes(), rel_->relevantVarsSeen());
+                }
                 std::fclose(f);
             }
         }
