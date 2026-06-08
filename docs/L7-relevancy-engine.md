@@ -104,6 +104,33 @@ soundness-critical (a wrong reconstructed clause = wrong UNSAT), and invasive
 (touches `InterfaceEq`/`ActiveNiaConstraint` single-reason assumption + the EUF
 explanation→clause path). Start with fresh full context — do NOT bolt it on.
 
+### L9 SHARPENED (2026-06-09) — the dropped reason is an UNASSIGNED eqLit (fixpoint/staleness, not just multi-lit)
+
+Per-reason instrument (`[LINPROP-drop]` now prints `var:T/F/U`): every dropped pin
+cites a **single** read-value interface-equality atom used as both bounds, and it
+is **`U` (unassigned on the SAT trail)** — e.g. `satVar=10546 reasons=2 [ 10881:U
+10881:U ]`. So the interface equality is in NIA's merged simplex set (it pins the
+form) but its SAT atom was **never forced onto the trail** — its own literal is the
+reason, unassigned.
+
+Drain counts (cs_lazy, `XOLVER_NO_DIAG`/`XOLVER_L4R_DIAG`, full eager + linprop):
+NIA `deduced=914 arrayPair=82`, pre-pass `buffered=66`, `interface-eq merges=50`.
+So the channel forces *some* read-value eqLits but not the **chain**: the dropped
+eqLit's `(¬reasons ∨ eqLit)` clause never becomes unit because its EUF-explanation
+reasons depend on *other* still-unforced eqLits in the read-over-write chain (the
+propagation fixpoint never closes), or it is a stale post-backtrack residual whose
+`IFACE_LIFECYCLE` level-remove missed it.
+
+**Refined cs_* closer (task #24, soundness-critical, fresh context):** force the
+read-value equality **chain in dependency order to fixpoint**, each link's reason
+being its real currently-true e-graph explanation (`prop.reasons` from
+`EufSolver::getDeducedSharedEqualities`, NOT the eqLit itself). For unconditional
+Row2-const merges (distinct constant indices, empty e-graph literal) the clause is
+unit `[eqLit]` and must force immediately — verify those aren't being given a
+self-referential reason. Also audit the `IFACE_LIFECYCLE` backtrack for stale
+interface equalities (reason atom unassigned after backtrack). A wrong/stale reason
+here = wrong UNSAT; this is why the firewall (correctly) drops today.
+
 Instrument left in place (gated, zero-cost OFF): `[LINPROP-drop]` under
 `XOLVER_NIA_LINPROP_DIAG` reports `satVar reasons notLive` for each firewall drop
 — the measurement hook the reconstruction work will iterate against.

@@ -241,11 +241,17 @@ void NiaLinearDecider::collectLinearProp(
         if (diag && !allLive) {
             static size_t g_drop = 0;
             if (g_drop++ < 12) {
-                size_t notLive = 0;
-                for (const auto& r : pin->second) if (!litIsTrue(r)) ++notLive;
+                std::string detail;
+                for (const auto& r : pin->second) {
+                    char buf[48];
+                    const char* st = litIsTrue(r) ? "T" : (isAssigned(r.var) ? "F" : "U");
+                    std::snprintf(buf, sizeof(buf), " %s%u:%s",
+                                  r.sign ? "" : "-", r.var, st);
+                    detail += buf;
+                }
                 std::fprintf(stderr,
-                    "[LINPROP-drop] satVar=%u reasons=%zu notLive=%zu (firewall)\n",
-                    rec.satVar, pin->second.size(), notLive);
+                    "[LINPROP-drop] satVar=%u reasons=%zu [%s ] (T=true F=false-on-trail U=unassigned)\n",
+                    rec.satVar, pin->second.size(), detail.c_str());
                 std::fflush(stderr);
             }
         }
