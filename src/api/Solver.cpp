@@ -10,6 +10,7 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/StoreTowerEqMultiset.h"
+#include "frontend/preprocess/ArrayReadOverWrite.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
@@ -2413,6 +2414,23 @@ public:
             ToRealLiteralFold fold(*ir);
             fold.run();
             fold.commit();
+        }
+
+        // Eager constant-index read-over-write store-chain folding. Resolves
+        // `(select store-chain c)` for constant `c` by walking the chain once
+        // (the read-over-write axiom on decidable constant index comparisons),
+        // stopping at any variable-index store it cannot soundly skip. Runs
+        // AFTER UnconditionalConstantPropagation (8a) so that constant bindings
+        // already turned variable indices into constants. Exact (verdict-
+        // preserving) and general; no-op unless a constant-index select over a
+        // store chain is present. DEFAULT-OFF: the rewrite is the array
+        // simplifier fast path (matches z3 sub-second on the SV-COMP CSeq
+        // `cs_*` QF_ANIA files, whose ~1800-deep constant-index chains the lazy
+        // array theory resolves only superlinearly). Opt-in: XOLVER_PP_ROW_FOLD=1.
+        if (env::paramInt("XOLVER_PP_ROW_FOLD", 0) != 0) {
+            ArrayReadOverWrite rowFold(*ir);
+            rowFold.run();
+            rowFold.commit();
         }
 
         // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.
