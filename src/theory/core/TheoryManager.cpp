@@ -18,11 +18,63 @@ namespace xolver {
 
 static int noDebugModelCheckId = 0;
 
+// --- XOLVER_COMB_DIAG: per-channel combination-loop emission counters --------
+// File-based (worker-thread stderr is suppressed). Confirms which channel
+// (arrangement split vs deduced-eq lemma) drives the cs_* matching loop.
+extern long g_sharedEqAtomsCreated;   // defined in TheoryAtomRegistry.cpp (xolver scope)
+namespace {
+struct CombDiag {
+    long checks = 0;
+    long arrSplitValue = 0, arrSplitDemand = 0, arrSplitUfarg = 0;
+    long dedEqLemma = 0, dedEqEufMerged = 0, dedEqAtomFresh = 0;
+    long lastDumpCheck = 0;
+};
+static CombDiag g_cd;
+static const bool g_combDiag = std::getenv("XOLVER_COMB_DIAG") != nullptr;
+static void combDiagDump() {
+    if (!g_combDiag) return;
+    if (g_cd.checks - g_cd.lastDumpCheck < 100) return;
+    g_cd.lastDumpCheck = g_cd.checks;
+    char buf[512];
+    int n = std::snprintf(buf, sizeof(buf),
+        "checks=%ld\n"
+        "arrSplit value=%ld demand=%ld ufarg=%ld (total=%ld)\n"
+        "dedEqLemma=%ld dedEqEufMerged(skipped)=%ld dedEqAtomFresh=%ld\n"
+        "sharedEqAtomsCreated(global)=%ld\n",
+        g_cd.checks,
+        g_cd.arrSplitValue, g_cd.arrSplitDemand, g_cd.arrSplitUfarg,
+        g_cd.arrSplitValue + g_cd.arrSplitDemand + g_cd.arrSplitUfarg,
+        g_cd.dedEqLemma, g_cd.dedEqEufMerged, g_cd.dedEqAtomFresh,
+        g_sharedEqAtomsCreated);
+    // atomic-ish: write to temp then rename (avoids empty file if killed mid-write)
+    FILE* f = std::fopen("/tmp/xolver_combdiag.tmp", "w");
+    if (!f) return;
+    std::fwrite(buf, 1, n > 0 ? (size_t)n : 0, f);
+    std::fclose(f);
+    std::rename("/tmp/xolver_combdiag.tmp", "/tmp/xolver_combdiag.txt");
+}
+}  // namespace
+
 static std::string stName(const SharedTermRegistry* reg, SharedTermId id) {
     if (!reg) return "st" + std::to_string(id);
     auto* st = reg->get(id);
     if (!st) return "st" + std::to_string(id);
     return st->name;
+}
+
+void TheoryManager::setArrayCombinationMode(bool v) {
+    arrayCombinationMode_ = v;
+    // Nelson-Oppen default arrangement: for array-combination logics, default
+    // every fresh interface (shared-equality) atom to DISEQUAL so the SAT core
+    // stops freely guessing equalities (the cs_* matching loop). Phase-only =
+    // sound. Ablation escape: XOLVER_COMB_EQ_DISEQ_PHASE=0.
+    if (v && registry_) {
+        static const bool diseqPhase = [] {
+            const char* e = std::getenv("XOLVER_COMB_EQ_DISEQ_PHASE");
+            return !e || !(e[0] == '0' && e[1] == '\0');   // default ON
+        }();
+        registry_->setDefaultSharedEqDisequal(diseqPhase);
+    }
 }
 
 void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
@@ -265,7 +317,19 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
                 const char* e = std::getenv("XOLVER_NIA_LINEAR_PROP");
                 return e && *e && *e != '0';
             }();
-            bool allow = isLinearArith || (id == TheoryId::NIA && niaProp);
+            // XOLVER_EUF_PROP_COMB: drain EUF's entailment propagations in
+            // combination (congruence-derived equalities + disequalities over
+            // EUF Eq atoms). Each EUF lemma is (¬reasons ∨ implied), an EUF
+            // tautology — sound regardless of assignment. This forces the
+            // congruence consequences instead of leaving them for the SAT core
+            // to GUESS (the cs_* matching loop). eqAtomRegistry_ is now wired in
+            // array logics (see EufSolver::enableArrays), so EUF actually emits.
+            static const bool eufPropComb = [] {
+                const char* e = std::getenv("XOLVER_EUF_PROP_COMB");
+                return e && *e && *e != '0';
+            }();
+            bool allow = isLinearArith || (id == TheoryId::NIA && niaProp) ||
+                         (id == TheoryId::EUF && eufPropComb);
             if (!allow) continue;
         }
         auto v = s->takeEntailmentPropagations();
@@ -289,6 +353,7 @@ std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
 
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
+    if (g_combDiag) { ++g_cd.checks; combDiagDump(); }
 
     bool satMin = useSatMin();
     auto makeFalsifiedConflict = [satMin](const std::vector<SatLit>& rawReasons) {
@@ -773,6 +838,15 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
+                if (g_combDiag) {
+                    ++g_cd.dedEqLemma;
+                    auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
+                    if (eufIt2 != solverByTheory_.end() &&
+                        eufIt2->second->sharedTermsMerged(prop.a, prop.b))
+                        ++g_cd.dedEqEufMerged;
+                    else
+                        ++g_cd.dedEqAtomFresh;
+                }
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
@@ -907,6 +981,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                        << stName(sharedTermRegistry_, A.id) << " = "
                        << stName(sharedTermRegistry_, B.id) << " : "
                        << debug::fmtClause(lemma.lits) << "\n";
+                if (g_combDiag) ++g_cd.arrSplitValue;
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
@@ -994,6 +1069,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                     NO_DBG << "[NO-DEMAND] split "
                            << stName(sharedTermRegistry_, A.id) << " = "
                            << stName(sharedTermRegistry_, B.id) << "\n";
+                    if (g_combDiag) ++g_cd.arrSplitDemand;
                     return TheoryCheckResult::mkLemma(std::move(lemma));
                 }
             }
@@ -1043,6 +1119,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 NO_DBG << "[NO-UFARG] split "
                        << stName(sharedTermRegistry_, a) << " = "
                        << stName(sharedTermRegistry_, b) << "\n";
+                if (g_combDiag) ++g_cd.arrSplitUfarg;
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }

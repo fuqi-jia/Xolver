@@ -177,6 +177,15 @@ void CadicalBackend::addObservedVar(SatVar v) {
     }
 }
 
+void CadicalBackend::setDefaultPhase(SatVar v, bool value) {
+    if (v == 0) return;
+    // CaDiCaL::phase(lit) forces the default decision phase: a positive lit
+    // prefers TRUE first, a negative lit prefers FALSE first. Search heuristic
+    // only — never changes satisfiability.
+    int lit = static_cast<int>(v);
+    solver_->phase(value ? lit : -lit);
+}
+
 void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {
     if (maxVar_ > declaredVars_) {
         declaredVars_ = maxVar_ + 10000;

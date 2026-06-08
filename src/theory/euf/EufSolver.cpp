@@ -131,8 +131,9 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
     for (const auto& e : trail_) assigned.insert(e.lit.var);
 
     // Canonical (rep,rep) -> active-disequality index, for entailed-FALSE props.
-    // Single-theory only: the combination shared bus is gated off upstream
-    // (TheoryManager::takeEntailmentPropagations returns {} in combination).
+    // In combination this is drained only under XOLVER_EUF_PROP_COMB (the upstream
+    // TheoryManager allow-list gate); the EUF Eq-atom entailments here are sound
+    // by construction (¬reasons ∨ implied is an EUF tautology) in either mode.
     auto repPairKey = [](EClassId r1, EClassId r2) -> uint64_t {
         uint64_t lo = r1 < r2 ? r1 : r2, hi = r1 < r2 ? r2 : r1;
         return (lo << 32) | hi;

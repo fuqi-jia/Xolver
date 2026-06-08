@@ -69,6 +69,14 @@ public:
     // Canonical key ensures Eq(a,b) and Eq(b,a) share one SatVar.
     SatLit getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b);
 
+    // Nelson-Oppen default arrangement: when enabled, every NEWLY created
+    // shared-equality atom gets its default SAT decision phase forced to FALSE
+    // (i.e. the pair is assumed DISEQUAL until the theory propagates equality).
+    // This stops the SAT core from freely guessing interface equalities (the
+    // cs_* "matching loop"). Phase is a search heuristic only — never affects
+    // satisfiability — so this is sound by construction.
+    void setDefaultSharedEqDisequal(bool on) { defaultSharedEqDisequal_ = on; }
+
     // Dynamic EUF equality atom Eq(lhs, rhs) over CoreIr ExprIds. Used by the
     // ArrayReasoner to emit Row2/Extensionality lemmas whose literals are NEW
     // equalities between array/select/index terms. Returns the positive
@@ -81,6 +89,7 @@ public:
 private:
     SatSolver* sat_ = nullptr;
     DynamicAtomRegistrar* registrar_ = nullptr;
+    bool defaultSharedEqDisequal_ = false;
 
     std::vector<TheoryAtomRecord> records_;
     std::unordered_map<SatVar, size_t> satVarToIdx_;

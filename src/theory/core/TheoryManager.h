@@ -36,7 +36,7 @@ public:
     // (QF_ALRA/ALIA/AUFLRA/AUFLIA). Off by default to limit blast radius — the
     // splitting only fires when both an EUF (array) solver and an arith solver
     // share scalar index/element terms.
-    void setArrayCombinationMode(bool v) { arrayCombinationMode_ = v; }
+    void setArrayCombinationMode(bool v);   // also wires N-O default-disequal phase
     bool isArrayCombinationMode() const { return arrayCombinationMode_; }
 
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) override;

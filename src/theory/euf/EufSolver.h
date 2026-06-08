@@ -52,6 +52,11 @@ public:
     void enableArrays(TheoryAtomRegistry* registry) {
         arrayMode_ = true;
         arrayRegistry_ = registry;
+        // EUF e-propagation in combination needs the equality-atom registry to
+        // scan EUF Eq atoms; array logics never set it via the single-theory
+        // path, so wire it here too (same registry). Inert unless EUF_PROP is
+        // drained in combination (TheoryManager gate).
+        if (!eqAtomRegistry_) eqAtomRegistry_ = registry;
     }
 
     // Enable algebraic-datatype reasoning (QF_DT/QF_UFDT/QF_UFDTNIA). `registry`
