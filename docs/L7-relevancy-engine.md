@@ -194,12 +194,27 @@ an **array-completion dilemma**, plus a perf hotspot:
   moves checks/s. More fundamentally the search **does not converge** (~25k decisions,
   no conflict) because Row2 under-fires — perf is not the wall. Throttle reverted
   (sound but unproven; only reduces propagation).
-- **(completeness, soundness-sensitive) — THE closer.** Demand-driven Row2: the lazy
-  path under-fires Row2 (eligible 31), so the read-over-write contradiction is never
-  built → search never converges. Fire Row2 for the *relevant* reads on the conflict
-  path (z3 ≈ 68 props) without the eager cross-product flood. The select set is now
-  small (212), so selective instantiation is tractable. This is the genuine cs_*
-  closer; it instantiates array axioms, so it is soundness-sensitive — start fresh.
+- **(completeness, soundness-sensitive) — THE closer, located to the exact mechanism.**
+  `XOLVER_AX_R2D_DIAG` shows Row2-cond is **`eligible=31, merges=0`** at steady state:
+  it finds 31 `(read select(store(a,i,v),j), store)` pairs but `queryDiseq(i,j)`
+  returns null for ALL — the store-chain disequalities `i≠j` are **not in the
+  e-graph**. These are *symbolic*-index pairs (constant indices go via
+  `AX_ROW2_CONST`, which fired only 4×). Meanwhile L5 `proveSharedDisjoint` proves
+  576 diseqs blindly over `arrayIdxSet` (O(idx²)) — but none are the 31 pairs Row2
+  actually needs. **The array reasoner's demand (these 31 pairs) is disconnected
+  from the arith disequality prover**, so the read-over-write chain never starts and
+  the search never converges.
+  → cs_* CLOSER = **demand-driven disequality**: have Row2-cond's eligible `(i,j)`
+  pairs *drive* `proveSharedDisjoint` (instead of L5's blind O(idx²) sweep), then
+  propagate the proven diseq (`(¬reasons ∨ ¬eqLit)`) into the e-graph so Row2 fires
+  and the chain advances. Sound in principle (proveSharedDisjoint returns COMPLETE
+  reasons ⟹ a≠b), but it is cross-component wiring (`ArrayReasoner` must expose its
+  Row2-eligible index pairs to `TheoryManager`, which drives the arith prover) and it
+  instantiates array axioms → soundness-sensitive. Fresh focused effort.
+  Code: `ArrayReasoner::enqueueRow2CondMerges` (~404, the eligible-pair loop +
+  `queryDiseq`), `TheoryManager` L5 loop (~678 `proveSharedDisjoint` sweep),
+  `NiaSolver::proveSharedDisjoint` (~3697). Instrument: `XOLVER_AX_R2D_DIAG`
+  `[R2D-merge] selects/eligible/merges`.
 
 Best repro config: `XOLVER_NIA_NO_PROP=1 NIA_NO_DISEQ=1 AX_ROW2_DISEQ=1
 AX_ROW2_CONST=1 AX_LAZY=1 NIA_LINEAR_PROP=1 EUF_PROP_COMB=1 NIA_IFACE_PROP=1`.
