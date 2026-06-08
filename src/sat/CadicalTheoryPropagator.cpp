@@ -386,8 +386,19 @@ int CadicalTheoryPropagator::cb_propagate() {
     // Throttle: avoid calling theory check on every propagate step.
     // Standard-effort LP checks are expensive; only run them when the
     // partial assignment has grown by a threshold, or after backtrack.
+    // XOLVER_PROP_CHECK_EVERY=N (diagnostic/tuning): force a FIXED growth
+    // threshold of N instead of the default adaptive max(3, size/10). Smaller
+    // N = check the theory more often = prune theory-infeasible search earlier
+    // (sound: the same Standard check, just sooner). Default (unset) keeps the
+    // adaptive heuristic. Used to probe the cs_* QF_ANIA blind-search TO.
+    static const int checkEvery = []() {
+        const char* e = std::getenv("XOLVER_PROP_CHECK_EVERY");
+        return (e && *e) ? std::atoi(e) : 0;
+    }();
     size_t currentSize = currentAssignment_.size();
-    int threshold = std::max(3, static_cast<int>(currentSize) / 10);
+    int threshold = (checkEvery > 0)
+                        ? checkEvery
+                        : std::max(3, static_cast<int>(currentSize) / 10);
     bool sizeGrewEnough = (currentSize >= lastCheckedAssignmentSize_ + static_cast<size_t>(threshold));
     bool backtrackHappened = (currentSize < lastCheckedAssignmentSize_);
     if (!sizeGrewEnough && !backtrackHappened) return 0;

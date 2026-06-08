@@ -257,9 +257,28 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             bool isLinearArith =
                 (id == TheoryId::LIA || id == TheoryId::LRA ||
                  id == TheoryId::IDL || id == TheoryId::RDL);
-            if (!isLinearArith) continue;
+            // XOLVER_EUF_PROP_COMB (default-OFF, EXPERIMENTAL/UNVALIDATED): also
+            // drain EUF entailments in combination. Normally suppressed (EUF
+            // explanations can rest on stale interface-eq merges -> invalid reason
+            // clause -> wrong-UNSAT, xs_11_11/xs_15_15 class). Diagnostic probe for
+            // the cs_* QF_ANIA blind-search TO. NOT promoted until full regression
+            // 0-unsound. Soundness firewall: cb_propagate skips non-falsified
+            // clauses, but an INVALID entailment lemma is permanent — must validate.
+            static const bool allowEufComb =
+                std::getenv("XOLVER_EUF_PROP_COMB") != nullptr;
+            bool allow = isLinearArith || (id == TheoryId::EUF && allowEufComb);
+            if (!allow) continue;
         }
         auto v = s->takeEntailmentPropagations();
+        // Diagnostic emission counter (fd-2, periodic) for the cs_* probe: how many
+        // entailment lemmas each theory actually emits in combination. Env-gated,
+        // default-inert.
+        static const bool entDiag = std::getenv("XOLVER_ENTAIL_DIAG") != nullptr;
+        if (entDiag && !v.empty()) {
+            std::fprintf(stderr, "[ENTAIL] theory=%d emitted=%zu\n",
+                         static_cast<int>(s->id()), v.size());
+            std::fflush(stderr);
+        }
         for (auto& l : v) out.push_back(std::move(l));
     }
     return out;

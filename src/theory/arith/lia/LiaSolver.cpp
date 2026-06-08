@@ -2144,9 +2144,62 @@ void LiaSolver::scanLiteralPinEntailments() {
         if (rec.theory != TheoryId::LIA) continue;
         if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
         const auto& p = std::get<LinearAtomPayload>(rec.payload);
+        if (!p.rhs.isRational()) continue;
+        const mpq_class& rhsVal = p.rhs.asRational();
+
+        // XOLVER_LIA_ENTAIL_GEN (default-OFF): generalize entailment beyond the
+        // single-variable equality gateway to ANY LIA atom (any relation, any
+        // arity) whose entire LHS is currently PINNED to a constant by the
+        // simplex bounds. This is z3's `arith-fixed-eqs` channel — the one the
+        // cs_* QF_ANIA traces need (their atoms are 2-var equalities `(= a b)`
+        // and bound-pairs `(<= a b)`, all skipped by the single-var path). Sound:
+        // if every var in the LHS is fixed (lb==ub, δ=0) the atom's truth is
+        // determined, and the lemma (¬fixing-bounds ∨ atom) is theory-valid — the
+        // same proveFixedValue bound-reason mechanism the single-var path below
+        // already trusts in combination.
+        static const bool genEntail =
+            std::getenv("XOLVER_LIA_ENTAIL_GEN") != nullptr;
+        if (genEntail) {
+            if (p.rel != Relation::Eq && p.rel != Relation::Leq &&
+                p.rel != Relation::Geq && p.rel != Relation::Lt &&
+                p.rel != Relation::Gt) continue;
+            if (p.lhs.terms.empty()) continue;
+            mpq_class lhsVal = 0;
+            std::vector<SatLit> reasons;
+            bool allPinned = true;
+            for (const auto& [name, coeff] : p.lhs.terms) {
+                if (coeff == 0) continue;
+                int idx = manager_.findVarIndex(name);
+                if (idx < 0) { allPinned = false; break; }
+                auto fv = gs_.proveFixedValue(idx);
+                if (!fv || fv->first.b != 0) { allPinned = false; break; }
+                lhsVal += coeff * fv->first.a;
+                for (const auto& br : fv->second) reasons.push_back(br.reason);
+            }
+            if (!allPinned) continue;
+            bool atomTrue;
+            switch (p.rel) {
+                case Relation::Eq:  atomTrue = (lhsVal == rhsVal); break;
+                case Relation::Leq: atomTrue = (lhsVal <= rhsVal); break;
+                case Relation::Geq: atomTrue = (lhsVal >= rhsVal); break;
+                case Relation::Lt:  atomTrue = (lhsVal <  rhsVal); break;
+                case Relation::Gt:  atomTrue = (lhsVal >  rhsVal); break;
+                default: continue;
+            }
+            SatLit atomLit{rec.satVar, true};
+            uint64_t key = (static_cast<uint64_t>(rec.satVar) << 1) | (atomTrue ? 1u : 0u);
+            if (!entailmentEmittedKeys_.insert(key).second) continue;
+            TheoryLemma lemma;
+            for (const auto& r : reasons) lemma.lits.push_back(r.negated());
+            lemma.lits.push_back(atomTrue ? atomLit : atomLit.negated());
+            entailmentProps_.push_back(std::move(lemma));
+            ++emitted;
+            continue;
+        }
+
+        // Default single-variable equality gateway (unchanged).
         if (p.rel != Relation::Eq) continue;            // limit to equality atoms
         if (p.lhs.terms.size() != 1) continue;          // single-var atom only
-        if (!p.rhs.isRational()) continue;
         const auto& [name, coeff] = p.lhs.terms[0];
         if (coeff == 0) continue;
         int idx = manager_.findVarIndex(name);
@@ -2157,7 +2210,6 @@ void LiaSolver::scanLiteralPinEntailments() {
         if (pinned.b != 0) continue;                    // skip δ-strict (open) values
         // Atom `coeff*v = rhs` is true iff coeff * pinned.a == rhs.
         mpq_class lhsVal = coeff * pinned.a;
-        const mpq_class& rhsVal = p.rhs.asRational();
         bool atomTrue = (lhsVal == rhsVal);
         // Already assigned? Skip (TheoryManager will already see it).
         SatLit atomLit{rec.satVar, true};
