@@ -3,6 +3,36 @@
 Status: **BUILT + sound + default-OFF (2026-06-08).** The engine exists and is
 correct; it is **NOT the cs_* closer** — measurement re-diagnosed cs_* (see §0).
 
+## ★ DEFINITIVE cs_* CONCLUSION (2026-06-09) — the ceiling is INTEGRATION, not any one piece
+
+z3 closes cs_lazy in 5 decisions / 68 propagations / 0.03 s. After implementing and
+measuring z3's THREE constituent mechanisms **in isolation**, the verdict is that
+**none alone closes it, because z3's power is their integration in one tight loop**
+(its `smt_context`), not any single function:
+
+| z3 piece | xolver status (this session) | result alone |
+|---|---|---|
+| dynamic relevancy | L7 `RelevancyEngine` — built, but STATIC (atomize-time) + flat skeleton (95% relevant) | no prune |
+| complete theory propagation | L9 firewall fix (−71% theory dec) + demand-diseq — built, sound, SHIPPED | symbolic diseqs not arith-provable |
+| lazy Row2 case-split during search | L12 `XOLVER_AX_ROW2_SPLIT` — prototyped: emitted z3-like **26** splits at Standard | **decisions UNCHANGED + regressed ax_007 → REVERTED** |
+
+The Row2 splits are inert ALONE because CaDiCaL does not *prioritise deciding* the
+split atoms (no DYNAMIC relevancy over them — they are created after atomize, so the
+static L7 graph can't see them), and refuting `i=j` still needs the complete
+propagation chain. Worse, emitting them at Standard effort *starved* the Full-effort
+`instantiateLemma` path (shared `row2Done_` dedup) and regressed
+`ax_007_unsat_store_collapse` (unsat→unknown) — so the prototype was **reverted**.
+So the splits, the relevancy, and the propagation must work as ONE loop — which is the
+architectural piece xolver lacks: its SAT + EUF + arith + array + relevancy are
+separable, flag-gated layers over a CaDiCaL external propagator, not an integrated
+context. **Closing cs_* "the z3 way" = building that integrated loop** (dynamic
+relevancy over all atoms incl. lemma-introduced ones, driving decisions, with lazy
+splits + complete propagation, and a SEPARATE Standard-effort split-dedup that does
+not starve Full) — a major engine effort, not an incremental fix. Two sound default-OFF
+pieces SHIPPED this session (`XOLVER_NIA_IFACE_PROP`, `XOLVER_NIA_ROW2_DEMAND`) are
+building blocks it will assemble; the Row2-split prototype showed the *third* piece
+needs the integration to be useful. See §L11/§L12 below.
+
 ## 0. MEASURED OUTCOME (2026-06-08) — engine built; cs_* is theory-prop-bound, not relevancy-bound
 
 The relevancy engine was implemented end-to-end and validated:
