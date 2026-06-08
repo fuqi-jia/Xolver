@@ -216,6 +216,33 @@ an **array-completion dilemma**, plus a perf hotspot:
   `NiaSolver::proveSharedDisjoint` (~3697). Instrument: `XOLVER_AX_R2D_DIAG`
   `[R2D-merge] selects/eligible/merges`.
 
+### L11 IMPLEMENTED + SOUND (2026-06-09) — demand-driven diseq works; deeper wall = SYMBOLIC diseq unprovability
+
+Built end-to-end (`XOLVER_NIA_ROW2_DEMAND`, default-OFF): the `queryDiseq` lambda
+buffers eligible-but-unknown `(i,j)` pairs (mapped to shared terms) into
+`EufSolver::row2DemandPairs_`; `TheoryManager` drains them (`takeRow2DemandPairs`),
+and for each drives the arith prover, forcing `¬eqLit` through the SAME sound channel
+as L5. Added unconditional **constant–constant** handling (distinct numeric indices
+⟹ `[¬eqLit]`, a unit theorem) since `proveSharedDisjoint` refuses constants (their
+pins carry no SAT-literal reason). Gate: unit 1427/1427; **full regression 753/753
+0-unsound** with `LINEAR_PROP+IFACE_PROP+ROW2_DEMAND+ROW2_DISEQ+ROW2_CONST`.
+
+Measured cs_lazy: `[R2-DEMAND] queried=3 buffered=1` — the 31 Row2-eligible pairs
+collapse to **3** distinct shared-index pairs; **1** is distinct-constants (forced),
+**2 are symbolic and `proveSharedDisjoint` cannot prove them**, and Row2-cond
+`merges` stays 0 → still TO.
+
+**Deeper wall (the real remaining limit):** the symbolic store-chain disequalities
+are **not arithmetic-derivable** — `proveSharedDisjoint` establishes `i≠j` only from
+numeric bounds / 2-var difference atoms, but these BMC indices are distinct for
+*program-structural* reasons (control flow / SSA), not bounds. So the demand-driven
+mechanism (correct + sound + the right architecture) is blocked one level below: the
+disequalities it needs must come from **boolean/EUF propagation over the program
+skeleton**, which is the part of z3's 68 props that is NOT arithmetic. That is a
+substantially larger engine (EUF-/SAT-driven disequality derivation), not an
+incremental lane. The demand-driven diseq is kept as the sound foundation it will
+build on.
+
 Best repro config: `XOLVER_NIA_NO_PROP=1 NIA_NO_DISEQ=1 AX_ROW2_DISEQ=1
 AX_ROW2_CONST=1 AX_LAZY=1 NIA_LINEAR_PROP=1 EUF_PROP_COMB=1 NIA_IFACE_PROP=1`.
 

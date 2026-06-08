@@ -1325,12 +1325,33 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
             for (const auto& d : sharedDisequalities_)
                 diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+            // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND, default-OFF):
+            // when an eligible Row2-cond pair (i,j) has NO known diseq, buffer it
+            // (mapped to shared terms) so the combination layer can drive the arith
+            // diseq prover on exactly this pair. Read once; capping via row2DemandSeen_.
+            static const bool row2Demand = [] {
+                const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
+                return e && *e && *e != '0';
+            }();
+            auto bufferDemand = [&](EufTermId i, EufTermId j) {
+                if (!row2Demand || !sharedTermRegistry_) return;
+                ExprId ei = termManager_.node(i).origin;
+                ExprId ej = termManager_.node(j).origin;
+                if (ei == NullExpr || ej == NullExpr) return;
+                auto sa = sharedTermRegistry_->findByExprId(ei);
+                auto sb = sharedTermRegistry_->findByExprId(ej);
+                if (!sa || !sb || *sa == *sb) return;
+                SharedTermId lo = *sa < *sb ? *sa : *sb, hi = *sa < *sb ? *sb : *sa;
+                uint64_t key = (static_cast<uint64_t>(lo) << 32) | hi;
+                if (!row2DemandSeen_.insert(key).second) return;   // already demanded
+                row2DemandPairs_.push_back({lo, hi});
+            };
             auto queryDiseq = [&](EufTermId i, EufTermId j)
                     -> std::optional<ArrayReasoner::Row2CondDiseq> {
                 EClassId ri = egraph_.rep(i), rj = egraph_.rep(j);
                 if (ri == rj) return std::nullopt;
                 auto it = diseqMap.find(repPairKey(ri, rj));
-                if (it == diseqMap.end()) return std::nullopt;
+                if (it == diseqMap.end()) { bufferDemand(i, j); return std::nullopt; }
                 const ActiveDisequality& d = *it->second;
                 EClassId rl = egraph_.rep(d.lhs), rr = egraph_.rep(d.rhs);
                 if (rl == ri && rr == rj)

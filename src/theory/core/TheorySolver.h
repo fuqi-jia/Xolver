@@ -91,6 +91,15 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND): return shared-term
+    // index pairs (a,b) for which this solver's array reasoner needs a≠b decided
+    // to fire a read-over-write (Row2) reduction, but a≠b is not yet known. The
+    // combination layer drives proveSharedDisjoint on exactly these and propagates
+    // the result. Default empty (only the EUF/array solver overrides). Surfacing a
+    // demand is sound; the disequality itself is still proven + reason-checked.
+    virtual std::vector<std::pair<SharedTermId, SharedTermId>>
+    takeRow2DemandPairs() { return {}; }
+
     // Demand-driven shared DISEQUALITY query (L5): does this solver's theory
     // state force a != b? Returns the reason literals if so (they must COMPLETELY
     // entail a != b — wrong-UNSAT risk), nullopt otherwise. The combination layer

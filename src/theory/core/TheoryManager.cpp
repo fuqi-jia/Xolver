@@ -716,6 +716,79 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
     }
 
+    // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND, default-OFF). The
+    // blind L5 sweep above queries proveSharedDisjoint over arrayIdxSet (O(idx²),
+    // care-graph pruned) — but the index pairs the array reasoner ACTUALLY needs to
+    // fire a read-over-write (Row2-cond eligible=N, merges=0 on cs_*) are not
+    // necessarily in arrayIdxSet / survive the prune, so their i≠j is never proven
+    // and the chain stalls. Here the array reasoner SURFACES exactly those demanded
+    // pairs (via takeRow2DemandPairs); we drive proveSharedDisjoint on each and
+    // force ¬eqLit through the SAME sound channel (¬reasons ∨ ¬eqLit) the blind
+    // sweep uses. Demand-driven => bounded by the reads on the conflict path, not
+    // O(idx²). SOUND: identical reason contract (proveSharedDisjoint returns a
+    // COMPLETE reason ⟹ a≠b); surfacing a demand cannot create an unsound diseq.
+    static const bool row2Demand = [] {
+        const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
+        return e && *e && *e != '0';
+    }();
+    if (row2Demand && effort != TheoryEffort::Full && registry_) {
+        size_t dBuffered = 0, dQueried = 0;
+        for (auto& s : solvers_) {
+            if (!s->supportsCombination()) continue;
+            auto demand = s->takeRow2DemandPairs();
+            for (auto& [A, B] : demand) {
+                if (sharedEqMgr_.same(A, B) || sharedEqMgr_.diseqKnown(A, B)) continue;
+                ++dQueried;
+                // Constant–constant: two DISTINCT numeric-constant index terms are
+                // unconditionally disequal — force ¬eqLit with an EMPTY reason
+                // (the clause is the unit theorem [¬(A=B)]). This covers the BMC
+                // distinct-address reads the Row2-cond path needs but that
+                // proveSharedDisjoint refuses (constant pins carry no SAT-literal
+                // reason -> its non-empty-reason guard returns null). SOUND: A,B are
+                // syntactically distinct constants, so A≠B holds unconditionally.
+                if (sharedTermRegistry_) {
+                    auto va = sharedTermRegistry_->constValue(A);
+                    auto vb = sharedTermRegistry_->constValue(B);
+                    if (va && vb) {
+                        if (*va == *vb) continue;   // equal constants — not disequal
+                        SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                        if (assignmentView_ &&
+                            assignmentView_->value(eqLit) == LitValue::False) continue;
+                        TheoryLemma lemma;
+                        lemma.lits.push_back(eqLit.negated());   // unconditional A≠B
+                        if (lemmaDb.insertIfNew(lemma)) {
+                            noPropEntailments_.push_back(std::move(lemma));
+                            ++dBuffered;
+                        }
+                        continue;
+                    }
+                }
+                for (auto& s2 : solvers_) {
+                    if (!s2->supportsCombination()) continue;
+                    auto r = s2->proveSharedDisjoint(A, B);
+                    if (!r) continue;
+                    SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                    if (assignmentView_ &&
+                        assignmentView_->value(eqLit) == LitValue::False) break;
+                    TheoryLemma lemma;
+                    for (auto& lit : *r) lemma.lits.push_back(lit.negated());
+                    if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                    lemma.lits.push_back(eqLit.negated());   // ¬(A=B) = A≠B
+                    if (lemmaDb.insertIfNew(lemma)) {
+                        noPropEntailments_.push_back(std::move(lemma));
+                        ++dBuffered;
+                    }
+                    break;   // one solver's proof suffices
+                }
+            }
+        }
+        if (std::getenv("XOLVER_L4R_DIAG") && (dQueried || dBuffered)) {
+            std::fprintf(stderr, "[R2-DEMAND] queried=%zu buffered=%zu\n",
+                         dQueried, dBuffered);
+            std::fflush(stderr);
+        }
+    }
+
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;

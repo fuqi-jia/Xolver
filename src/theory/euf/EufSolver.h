@@ -46,6 +46,21 @@ public:
     // tautology, so enqueuing it is sound regardless of the current assignment.
     std::vector<TheoryLemma> takeEntailmentPropagations() override;
 
+    // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND): the array reasoner's
+    // Row2-cond pass identifies (read-index j, store write-index i) pairs where
+    // select(store(a,i,v),j) could reduce to select(a,j) — but only if i≠j is
+    // KNOWN to the e-graph. When it is NOT known, the (i,j) pair is buffered here
+    // (mapped to shared terms) so the combination layer can DRIVE the arith
+    // disequality prover on exactly these demanded pairs (instead of a blind
+    // O(idx²) sweep) and propagate the proven i≠j, after which Row2-cond fires.
+    // Drained (and cleared) by TheoryManager. Sound: only surfaces a demand; the
+    // disequality is still proven + reason-checked by the arith solver.
+    std::vector<std::pair<SharedTermId, SharedTermId>> takeRow2DemandPairs() override {
+        auto v = std::move(row2DemandPairs_);
+        row2DemandPairs_.clear();
+        return v;
+    }
+
     // Enable QF_AX array reasoning. `registry` is needed so Row2/Ext lemmas
     // can create observed dynamic equality atoms before placing them in a
     // clause. Must be called before any assertLit/check.
@@ -202,6 +217,11 @@ private:
     const CoreIr* coreIr_ = nullptr;
     const SharedTermRegistry* sharedTermRegistry_ = nullptr;
     const CareGraph* careGraph_ = nullptr;  // XOLVER_COMB_CAREGRAPH, set by TheoryManager
+    // L11 demand-driven disequality: Row2-cond-eligible index pairs whose i≠j is
+    // not yet known to the e-graph (buffered during enqueueArrayAxioms's queryDiseq,
+    // drained by TheoryManager::takeRow2DemandPairs). Per-check seen-set caps churn.
+    std::vector<std::pair<SharedTermId, SharedTermId>> row2DemandPairs_;
+    std::unordered_set<uint64_t> row2DemandSeen_;
     EufTermManager termManager_;
     IncrementalEGraph egraph_;
 
