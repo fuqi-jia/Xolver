@@ -1,4 +1,3 @@
-#include <cstdio>
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -403,9 +402,16 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 auto va = sharedTermRegistry_->constValue(ev.a);
                 auto vb = sharedTermRegistry_->constValue(ev.b);
                 if (va && vb && *va != *vb) {
+                    // Capture the reason literal BEFORE clear(): clear() destroys
+                    // the vector elements, after which `ev` dangles. Reading
+                    // ev.reasonLit post-clear was a use-after-free that put a
+                    // freed-memory (garbage, unregistered) literal into the
+                    // conflict -> a 1-lit {¬garbage} clause the propagator could
+                    // not falsify -> ABORT-388 -> Unknown (cs_* QF_ANIA).
+                    SatLit rl = ev.reasonLit;
                     pendingSharedEqEvents_.clear();
                     TheoryConflict fc;
-                    fc.clause.push_back(ev.reasonLit.negated());
+                    fc.clause.push_back(rl.negated());
                     NO_DBG << "[NO-RET-CONST] distinct-const IEQ refuted: "
                            << debug::fmtClause(fc.clause) << "\n";
                     return TheoryCheckResult::mkConflict(std::move(fc));
