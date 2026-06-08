@@ -65,6 +65,49 @@ with reason-clause validity gated by the wrong-UNSAT firewall (task #24).
 SOUNDNESS-CRITICAL (a wrong reason clause = wrong UNSAT) — every implied literal
 needs a model-checkable reason.
 
+### L8 MEASURED (2026-06-08) — the cs_* wall is reason-clause RECONSTRUCTION
+
+The existing arith implied-literal channel was measured exhaustively on all three
+cs_* with `XOLVER_NIA_LINEAR_PROP=1 XOLVER_EUF_PROP_COMB=1` (instrument:
+`XOLVER_NIA_LINPROP_DIAG=1` → `[LINPROP-scan]` + `[LINPROP-drop]`):
+
+| run | formPinned | conflict | emitted |
+|---|---|---|---|
+| cs_lazy, pure arith | **0** | no | 0 |
+| cs_lazy, +eager array (NO_PROP+ROW2_DISEQ+ROW2_CONST) | 2 | no | **0** |
+| cs_lamport / cs_peterson, +eager array | 30 | no | **0** |
+
+1. **cs_* is array-contradiction-bound, not arith-bound.** Pure-arith linear-prop
+   pins *nothing* (the simplex over the asserted linear atoms is feasible alone);
+   cs_lazy has 1137 select / 1824 store, cs_lamport/peterson ~2840 / ~3935. The
+   contradiction is derived through array read-over-write, exactly z3's 68
+   *theory* propagations — not boolean search (L7) and not arith pins.
+2. **Every array-enabled arith pin is dropped by the sound firewall.** With the
+   eager array stack the simplex *does* find pinned forms (the injected Row2
+   equalities pin `bridge_selStore − bridge_selAJ = 0`), but `[LINPROP-drop]`
+   shows **`reasons=2 notLive=2`** for every one: both reason literals are off the
+   SAT trail. The Row2 const merge is recorded in the e-graph with an *empty*
+   literal (`ArrayReasoner.cpp` ~554, a genuine zero-literal theorem), but the
+   interface-equality emitted downstream carries a 2-literal EUF *explanation
+   path* whose literals were never SAT-propagated onto the trail. The firewall
+   (`NiaLinearDecider.cpp` ~232) correctly refuses them — emitting a literal whose
+   reason isn't currently true would risk a wrong UNSAT.
+
+**Conclusion (cs_* closer, refined to the data-structure level):** the lever is
+**reason-clause reconstruction**. `InterfaceEq::reason` is a single `SatLit`
+(`NiaSolver.h` ~467) and cannot carry a multi-literal array/EUF explanation; the
+e-prop path that builds the interface equality must reconstruct the *valid* clause
+— the trail literals (or unconditional ⊥) that entail the Row2 conclusion — so the
+implied equality lands on the trail with a model-checkable reason, after which the
+downstream arith pin's reasons become trail-true and it emits. This is task #24,
+soundness-critical (a wrong reconstructed clause = wrong UNSAT), and invasive
+(touches `InterfaceEq`/`ActiveNiaConstraint` single-reason assumption + the EUF
+explanation→clause path). Start with fresh full context — do NOT bolt it on.
+
+Instrument left in place (gated, zero-cost OFF): `[LINPROP-drop]` under
+`XOLVER_NIA_LINPROP_DIAG` reports `satVar reasons notLive` for each firewall drop
+— the measurement hook the reconstruction work will iterate against.
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k

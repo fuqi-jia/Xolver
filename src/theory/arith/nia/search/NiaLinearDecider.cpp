@@ -230,9 +230,25 @@ void NiaLinearDecider::collectLinearProp(
         ++nFormPinned;
 
         // Soundness firewall: every reason must be currently true on the trail.
+        // A pin derived through theory-internal facts (e.g. eager array Row2
+        // equalities, whose justifying i≠j literal was never SAT-propagated onto
+        // the trail) has a non-live reason and is correctly refused here — emitting
+        // it would need the array/EUF explanation reconstructed into a valid clause
+        // (the cs_* wall; see docs/L7-relevancy-engine.md §L8).
         bool allLive = true;
         for (const auto& r : pin->second)
             if (!litIsTrue(r)) { allLive = false; break; }
+        if (diag && !allLive) {
+            static size_t g_drop = 0;
+            if (g_drop++ < 12) {
+                size_t notLive = 0;
+                for (const auto& r : pin->second) if (!litIsTrue(r)) ++notLive;
+                std::fprintf(stderr,
+                    "[LINPROP-drop] satVar=%u reasons=%zu notLive=%zu (firewall)\n",
+                    rec.satVar, pin->second.size(), notLive);
+                std::fflush(stderr);
+            }
+        }
         if (!allLive) continue;
 
         bool atomTrue = evalRelZero(pin->first, zlc->rel);   // (lhs - rhs) rel 0
