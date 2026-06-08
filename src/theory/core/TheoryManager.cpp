@@ -590,6 +590,18 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
+        static const bool noDiag = std::getenv("XOLVER_NO_DIAG") != nullptr;
+        if (noDiag && !props.empty()) {
+            size_t deferred = 0, arrayPair = 0;
+            for (auto& p : props) {
+                bool ina = arrayIdxSet.count(p.a), inb = arrayIdxSet.count(p.b);
+                if (ina && inb) ++arrayPair;
+                if (effort != TheoryEffort::Full && ina && inb) ++deferred;
+            }
+            std::fprintf(stderr, "[NO] solver=%d effort=%d deduced=%zu arrayPair=%zu deferred=%zu\n",
+                         (int)solver->id(), (int)effort, props.size(), arrayPair, deferred);
+            std::fflush(stderr);
+        }
         for (auto& prop : props) {
             // Defer array-index-pair deduced equalities to Full effort (see above).
             if (effort != TheoryEffort::Full &&
