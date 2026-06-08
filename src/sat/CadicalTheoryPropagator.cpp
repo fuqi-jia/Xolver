@@ -385,6 +385,22 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             if (!isClauseFalsifiedByCurrentModel(tr.conflictOpt->clause)) {
                 NO_DBG << "[PROP][BUG] malformed external conflict clause. "
                              "Rejecting it to avoid infinite modelCheck loop.\n";
+                if (std::getenv("XOLVER_SAT_PROF")) {
+                    if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a")) {
+                        std::fprintf(f, "ABORT-388: malformed Full conflict (%zu lits, not falsified)\n",
+                                     tr.conflictOpt->clause.size());
+                        for (SatLit lit : tr.conflictOpt->clause) {
+                            LitValue v = assignmentView_.value(lit);
+                            if (v == LitValue::False) continue;  // only the offending lits
+                            const auto* a = registry_.findBySatVar(lit.var);
+                            std::fprintf(f, "   STALE lit var=%u sign=%d val=%s payloadIdx=%d\n",
+                                         lit.var, (int)lit.sign,
+                                         v == LitValue::True ? "TRUE" : "UNASSIGNED",
+                                         a ? (int)a->payload.index() : -1);
+                        }
+                        std::fclose(f);
+                    }
+                }
                 abortWithUnknown_ = true;
                 terminateSolve();
                 return false;
@@ -392,6 +408,10 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
             enqueuePendingClause(tr.conflictOpt->clause);
             return false;
+        }
+        if (std::getenv("XOLVER_SAT_PROF")) {
+            if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
+            { std::fprintf(f, "ABORT-396: empty Full conflict clause\n"); std::fclose(f); }
         }
         abortWithUnknown_ = true;
         terminateSolve();
@@ -405,6 +425,10 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             lemmaDb_.insertIfNew(*tr.lemmaOpt);
             enqueuePendingClause(*tr.lemmaOpt);
             return false;
+        }
+        if (std::getenv("XOLVER_SAT_PROF")) {
+            if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
+            { std::fprintf(f, "ABORT-409: empty Full lemma\n"); std::fclose(f); }
         }
         abortWithUnknown_ = true;
         terminateSolve();
