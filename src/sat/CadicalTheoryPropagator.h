@@ -5,6 +5,8 @@
 #include <chrono>
 #include <deque>
 
+namespace xolver { class RelevancyEngine; }
+
 #ifdef XOLVER_ENABLE_CASESTATS
 #include "util/CaseStats.h"
 #endif
@@ -101,6 +103,12 @@ public:
 
     void setUnknownReasonSink(std::string* sink);
 
+    // L7: attach a finalized relevancy engine to steer cb_decide toward the
+    // relevant boolean skeleton (XOLVER_RELEVANCY). Pure decision heuristic —
+    // never changes satisfiability. The engine must outlive solve(); its value
+    // oracle is wired here to read this propagator's live assignment.
+    void setRelevancyEngine(RelevancyEngine* rel);
+
     const TheorySearchStats& stats() const { return stats_; }
 
 #ifdef XOLVER_ENABLE_CASESTATS
@@ -156,6 +164,11 @@ private:
     // region by returning an unassigned bound-atom literal at its
     // feasibility-consistent phase. Heuristic — soundness-safe.
     bool decideSteer_ = false;
+    // L7 relevancy steering (XOLVER_RELEVANCY). rel_ is borrowed (owned by the
+    // caller's scope); relevancyOn_ gates all relevancy work so OFF == zero cost.
+    RelevancyEngine* rel_ = nullptr;
+    bool relevancyOn_ = false;
+    long long relSteeredDecisions_ = 0;  // decisions returned by relevancy
     bool theoryAtomVarsBuilt_ = false;
     std::vector<SatVar> theoryAtomVars_;
     size_t decideCursor_ = 0;

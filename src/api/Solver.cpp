@@ -10,6 +10,7 @@
 #include "frontend/preprocess/ToIntDefinitionalLowerer.h"
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/StoreTowerEqMultiset.h"
+#include "frontend/preprocess/ArrayReadOverWrite.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
@@ -49,6 +50,7 @@
 
 #include "sat/CadicalBackend.h"
 #include "sat/CadicalTheoryPropagator.h"
+#include "sat/RelevancyEngine.h"
 
 #include <somtparser/frontend/parser.h>
 
@@ -2415,6 +2417,23 @@ public:
             fold.commit();
         }
 
+        // Eager constant-index read-over-write store-chain folding. Resolves
+        // `(select store-chain c)` for constant `c` by walking the chain once
+        // (the read-over-write axiom on decidable constant index comparisons),
+        // stopping at any variable-index store it cannot soundly skip. Runs
+        // AFTER UnconditionalConstantPropagation (8a) so that constant bindings
+        // already turned variable indices into constants. Exact (verdict-
+        // preserving) and general; no-op unless a constant-index select over a
+        // store chain is present. DEFAULT-OFF: the rewrite is the array
+        // simplifier fast path (matches z3 sub-second on the SV-COMP CSeq
+        // `cs_*` QF_ANIA files, whose ~1800-deep constant-index chains the lazy
+        // array theory resolves only superlinearly). Opt-in: XOLVER_PP_ROW_FOLD=1.
+        if (env::paramInt("XOLVER_PP_ROW_FOLD", 0) != 0) {
+            ArrayReadOverWrite rowFold(*ir);
+            rowFold.run();
+            rowFold.commit();
+        }
+
         // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.
         // Closes UNSAT cases by direct contradiction and pins SAT cases with
         // a unique witness in a finite bound. Mod patterns hidden inside
@@ -3136,6 +3155,11 @@ public:
 #endif
         cadicalBackend->connectPropagator(&propagator);
 
+        // L7 relevancy engine (XOLVER_RELEVANCY). Declared here so it outlives
+        // sat->solve(); built + attached after atomize() (needs the memo). Empty
+        // + inert until attached.
+        RelevancyEngine relEngine;
+
         // Atomizer registers parsed atoms into registry (which calls addObservedVar)
         Atomizer atomizer(*sat);
         registry.setContext(sat.get(), &atomizer);
@@ -3281,6 +3305,21 @@ public:
             sat->addClause({lit});
         }
         phase("atomize-done");
+
+        // L7: build the relevancy graph over the asserted boolean skeleton and
+        // attach it to the propagator to steer cb_decide toward live program
+        // branches. Pure decision heuristic (never changes the verdict), so it
+        // is safe in any logic; default-OFF until validated broadly.
+        if (std::getenv("XOLVER_RELEVANCY")) {
+            atomizer.buildRelevancyGraph(ir->assertions(), *ir, relEngine);
+            propagator.setRelevancyEngine(&relEngine);   // wires value oracle
+            relEngine.finalize();                        // seed roots relevant
+            if (std::getenv("XOLVER_RELEVANCY_DIAG")) {
+                std::fprintf(stderr, "[RELEVANCY] nodes=%zu roots seeded; "
+                             "relevantVarsSeen=%zu\n",
+                             relEngine.totalNodes(), relEngine.relevantVarsSeen());
+            }
+        }
 
         // P3: Do NOT eagerly create all shared-term-pair equality atoms.
         // Full arrangement search requires sound theory conflict explanation,

@@ -92,6 +92,13 @@ public:
     std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() override;
 
+    // L5: YES (with bound-literal reasons) iff a,b have DISJOINT integer domains
+    // (separated intervals / distinct pinned constants). Complete: reasons ⟹ a≠b.
+    // Queried by the combination layer for array-index pairs; routed as a
+    // disequality so the array reasoner's Row2 fires at Standard.
+    std::optional<std::vector<SatLit>>
+    proveSharedDisjoint(SharedTermId a, SharedTermId b) override;
+
     // Look up the current NIA model value for a shared term so the combination
     // layer's model-based arrangement (TheoryManager.cpp §4) can see same-value
     // shared scalar pairs in array-combination mode (QF_ANIA / QF_AUFNIA).
@@ -103,6 +110,12 @@ public:
     std::optional<RealValue> sharedTermArithValue(SharedTermId s) const override;
 
     std::optional<TheoryModel> getModel() const override;
+
+    // Fixed-value entailments produced by the nia.linear-prop stage
+    // (XOLVER_NIA_LINEAR_PROP). Drained by TheoryManager::takeEntailmentPropagations
+    // at cb_propagate and forwarded to the SAT core as permanent reason clauses
+    // `(¬reasons ∨ atom)`. Returns {} when the flag is off (default).
+    std::vector<TheoryLemma> takeEntailmentPropagations() override;
 
 protected:
     // Base rolls back state_.trail and clears its (unused-by-NIA)
@@ -228,6 +241,22 @@ private:
     // XOLVER_NIA_LINEAR_DECIDE=0 disables the stage (ablation / panda A-B).
     std::unique_ptr<NiaLinearDecider> linDecider_;
     bool linearDecideEnabled_ = true;
+    // XOLVER_NIA_LINEAR_PROP (default-OFF). Standard+Full stage that runs the
+    // embedded simplex (root LP only) over the all-linear active set to (a)
+    // return a sound Farkas conflict when the linear relaxation is infeasible
+    // (pruning the SAT search at a partial assignment, which NIA's per-variable
+    // DomainStore / same-poly / difference-chain conflict stages structurally
+    // miss), and (b) propagate fixed-value entailments for unassigned atoms.
+    // Closes the cs_* QF_ANIA cluster's blind SAT search (no Full-effort model
+    // check ever fires on those huge formulas, so the linear core is otherwise
+    // checked NOWHERE during search). Sound: conflicts/entailments are over the
+    // real asserted reasons; SAT verdicts are never claimed here.
+    bool linearPropEnabled_ = false;
+    // Buffered fixed-value entailments from stageLinearProp; drained by
+    // takeEntailmentPropagations(). Dedup keyed (satVar<<1 | truth); both the
+    // buffer and the dedup set are cleared on backtrack/reset.
+    std::vector<TheoryLemma> entailmentProps_;
+    std::unordered_set<uint64_t> entailmentEmittedKeys_;
 
     // Set of "proxy_name:truth" tokens we've already pinned via
     // registry->pinLiteral. Prevents the Farkas-Or stage's repeated
@@ -274,6 +303,11 @@ private:
     // wrong-UNSAT). Closes the linear QF_ANIA SVCOMP SAT cluster that NIA's
     // non-bit-blast stages leave Unknown and bit-blast escalates/TOs on.
     std::optional<TheoryCheckResult> stageLinearDecide(TheoryLemmaStorage&, TheoryEffort);
+    // nia.linear-prop (Standard+Full; XOLVER_NIA_LINEAR_PROP, default-OFF). Runs
+    // the embedded simplex (root LP) over the all-linear active set: returns a
+    // sound Farkas conflict on linear infeasibility, else buffers fixed-value
+    // entailments for unassigned atoms (drained by takeEntailmentPropagations).
+    std::optional<TheoryCheckResult> stageLinearProp(TheoryLemmaStorage&, TheoryEffort);
     // Phase D — dispatch cache front stage. Compares current active_
     // signature against dispatchCacheSignature_; returns consistent()
     // on hit, nullopt on miss. Default-OFF flag XOLVER_NIA_DISPATCH_CACHE.

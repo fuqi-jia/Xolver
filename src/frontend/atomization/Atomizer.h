@@ -13,6 +13,8 @@ namespace xolver {
 
 class TheoryAtomRegistry;
 class SharedTermRegistry;
+class RelevancyEngine;
+enum class RelKind : uint8_t;
 
 /**
  * Atomizer: extracts boolean atoms from CoreExpr and builds SAT clauses.
@@ -69,6 +71,14 @@ public:
     // atomize(); a no-op unless PG is enabled.
     void computePolarities(const std::vector<ExprId>& roots, const CoreIr& ir);
 
+    // L7: extract the boolean skeleton into `eng` for relevancy-guided
+    // decisions. Call AFTER atomize() (relies on memo_). Walks each asserted
+    // root's boolean DAG; every And/Or/Not/Implies/Xor/bool-Eq/Distinct node and
+    // every leaf atom / boolean variable becomes a RelNode keyed by its memoized
+    // SAT lit. Pure decision-heuristic input — never affects satisfiability.
+    void buildRelevancyGraph(const std::vector<ExprId>& roots, const CoreIr& ir,
+                             RelevancyEngine& eng) const;
+
 private:
     SatLit atomizeRec(ExprId eid, const CoreIr& ir);
     // Bottom-up iterative pre-pass over boolean-sorted subformulas: memoizes
@@ -85,6 +95,9 @@ private:
     std::pair<bool, bool> pgDirs(ExprId eid) const;
 
     static bool isFormulaPositionTerm(Kind k);
+    // L7: classify a CoreExpr for the relevancy graph. Sets `descend` if its
+    // CoreIr children are boolean operands to recurse into.
+    RelKind relKindOf(const CoreExpr& e, const CoreIr& ir, bool& descend) const;
     bool areAllChildrenBool(const CoreExpr& e, const CoreIr& ir) const;
     // True if `eid` is provably Boolean by sort registration OR by being a
     // Boolean-producing operator. Robust to sort-registration gaps (a declared

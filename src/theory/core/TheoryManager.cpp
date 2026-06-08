@@ -1,4 +1,3 @@
-#include <cstdio>
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -19,11 +18,66 @@ namespace xolver {
 
 static int noDebugModelCheckId = 0;
 
+// --- XOLVER_COMB_DIAG: per-channel combination-loop emission counters --------
+// File-based (worker-thread stderr is suppressed). Confirms which channel
+// (arrangement split vs deduced-eq lemma) drives the cs_* matching loop.
+extern long g_sharedEqAtomsCreated;   // defined in TheoryAtomRegistry.cpp (xolver scope)
+namespace {
+struct CombDiag {
+    long checks = 0;
+    long arrSplitValue = 0, arrSplitDemand = 0, arrSplitUfarg = 0;
+    long dedEqLemma = 0, dedEqEufMerged = 0, dedEqAtomFresh = 0;
+    long l5IdxTerms = 0, l5PairsQueried = 0, l5Proven = 0;   // FIX-c funnel: arith->array diseq
+    long lastDumpCheck = 0;
+};
+static CombDiag g_cd;
+static const bool g_combDiag = std::getenv("XOLVER_COMB_DIAG") != nullptr;
+static void combDiagDump() {
+    if (!g_combDiag) return;
+    if (g_cd.checks - g_cd.lastDumpCheck < 100) return;
+    g_cd.lastDumpCheck = g_cd.checks;
+    char buf[512];
+    int n = std::snprintf(buf, sizeof(buf),
+        "checks=%ld\n"
+        "arrSplit value=%ld demand=%ld ufarg=%ld (total=%ld)\n"
+        "dedEqLemma=%ld dedEqEufMerged(skipped)=%ld dedEqAtomFresh=%ld\n"
+        "L5 idxTerms=%ld pairsQueried=%ld proven=%ld\n"
+        "sharedEqAtomsCreated(global)=%ld\n",
+        g_cd.checks,
+        g_cd.arrSplitValue, g_cd.arrSplitDemand, g_cd.arrSplitUfarg,
+        g_cd.arrSplitValue + g_cd.arrSplitDemand + g_cd.arrSplitUfarg,
+        g_cd.dedEqLemma, g_cd.dedEqEufMerged, g_cd.dedEqAtomFresh,
+        g_cd.l5IdxTerms, g_cd.l5PairsQueried, g_cd.l5Proven,
+        g_sharedEqAtomsCreated);
+    // atomic-ish: write to temp then rename (avoids empty file if killed mid-write)
+    FILE* f = std::fopen("/tmp/xolver_combdiag.tmp", "w");
+    if (!f) return;
+    std::fwrite(buf, 1, n > 0 ? (size_t)n : 0, f);
+    std::fclose(f);
+    std::rename("/tmp/xolver_combdiag.tmp", "/tmp/xolver_combdiag.txt");
+}
+}  // namespace
+
 static std::string stName(const SharedTermRegistry* reg, SharedTermId id) {
     if (!reg) return "st" + std::to_string(id);
     auto* st = reg->get(id);
     if (!st) return "st" + std::to_string(id);
     return st->name;
+}
+
+void TheoryManager::setArrayCombinationMode(bool v) {
+    arrayCombinationMode_ = v;
+    // Nelson-Oppen default arrangement: for array-combination logics, default
+    // every fresh interface (shared-equality) atom to DISEQUAL so the SAT core
+    // stops freely guessing equalities (the cs_* matching loop). Phase-only =
+    // sound. Ablation escape: XOLVER_COMB_EQ_DISEQ_PHASE=0.
+    if (v && registry_) {
+        static const bool diseqPhase = [] {
+            const char* e = std::getenv("XOLVER_COMB_EQ_DISEQ_PHASE");
+            return !e || !(e[0] == '0' && e[1] == '\0');   // default ON
+        }();
+        registry_->setDefaultSharedEqDisequal(diseqPhase);
+    }
 }
 
 void TheoryManager::registerSolver(std::unique_ptr<TheorySolver> solver) {
@@ -40,6 +94,7 @@ void TheoryManager::clearSolvers() {
     pendingSharedEqEvents_.clear();
     snapshots_.clear();
     deducedEqCache_.clear();
+    noPropEntailments_.clear();
     emittedArrangementSplits_.clear();
     careGraph_.clear();
     aggStats_ = AggregateStats{};
@@ -257,16 +312,31 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             bool isLinearArith =
                 (id == TheoryId::LIA || id == TheoryId::LRA ||
                  id == TheoryId::IDL || id == TheoryId::RDL);
-            // XOLVER_EUF_PROP_COMB (default-OFF, EXPERIMENTAL/UNVALIDATED): also
-            // drain EUF entailments in combination. Normally suppressed (EUF
-            // explanations can rest on stale interface-eq merges -> invalid reason
-            // clause -> wrong-UNSAT, xs_11_11/xs_15_15 class). Diagnostic probe for
-            // the cs_* QF_ANIA blind-search TO. NOT promoted until full regression
-            // 0-unsound. Soundness firewall: cb_propagate skips non-falsified
-            // clauses, but an INVALID entailment lemma is permanent — must validate.
-            static const bool allowEufComb =
-                std::getenv("XOLVER_EUF_PROP_COMB") != nullptr;
-            bool allow = isLinearArith || (id == TheoryId::EUF && allowEufComb);
+            // XOLVER_NIA_LINEAR_PROP (default-OFF): also drain NIA's fixed-value
+            // entailments in combination. NIA returns {} unless the flag is set, so
+            // this is a no-op by default; the producer is sound by construction
+            // (global tautology clauses over the real asserted reasons).
+            static const bool niaProp = [] {
+                const char* e = std::getenv("XOLVER_NIA_LINEAR_PROP");
+                return e && *e && *e != '0';
+            }();
+            // XOLVER_EUF_PROP_COMB (default-OFF, EXPERIMENTAL): drain EUF's
+            // entailment propagations in combination (congruence-derived
+            // equalities + disequalities over EUF Eq atoms). Each EUF lemma is
+            // (¬reasons ∨ implied), an EUF tautology; this forces the congruence
+            // consequences instead of leaving them for the SAT core to GUESS (the
+            // cs_* matching loop). eqAtomRegistry_ is wired in array logics
+            // (EufSolver::enableArrays) so EUF actually emits.
+            // ★ SOUNDNESS RISK: an EUF explanation can rest on a STALE interface-eq
+            // merge -> invalid reason clause -> wrong-UNSAT (xs_11_11/xs_15_15
+            // class). The L9 firewall guards this, but the flag stays default-OFF
+            // and is NOT promoted until full regression is 0-unsound.
+            static const bool eufPropComb = [] {
+                const char* e = std::getenv("XOLVER_EUF_PROP_COMB");
+                return e && *e && *e != '0';
+            }();
+            bool allow = isLinearArith || (id == TheoryId::NIA && niaProp) ||
+                         (id == TheoryId::EUF && eufPropComb);
             if (!allow) continue;
         }
         auto v = s->takeEntailmentPropagations();
@@ -280,6 +350,31 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             std::fflush(stderr);
         }
         for (auto& l : v) out.push_back(std::move(l));
+    }
+    // L4-reach: drain TheoryManager-level entailments (array-relevant deduced
+    // shared eqs routed to Standard under XOLVER_NIA_NO_PROP). Empty by default.
+    for (auto& l : noPropEntailments_) out.push_back(std::move(l));
+    noPropEntailments_.clear();
+
+    // L13: drain relevancy-bounded Row2 case-split lemmas (XOLVER_AX_ROW2_SPLIT).
+    // Each is an array-axiom TAUTOLOGY (i=j ∨ readEq), tagged ArraySplit so the
+    // propagator can mark its atoms dynamically relevant. Unconditionally sound to
+    // add regardless of mode — no combination gating.
+    static const bool row2Split = [] {
+        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    // Scoped to COMBINATION mode: pure QF_AX has its own complete Full-effort
+    // array sat-gate that Standard-effort splits perturb (ax_007 unsat→unknown);
+    // the integrated split only targets combination array+arith (cs_* / QF_ANIA).
+    if (row2Split && combinationMode_) {
+        for (auto& s : solvers_) {
+            auto splits = s->takeArraySplitLemmas();
+            for (auto& l : splits) out.push_back(std::move(l));
+        }
+    } else if (row2Split) {
+        // Drain + discard so the buffer doesn't accumulate in single-theory mode.
+        for (auto& s : solvers_) (void)s->takeArraySplitLemmas();
     }
     return out;
 }
@@ -295,6 +390,7 @@ std::optional<bool> TheoryManager::evalTheoryAtom(SatVar v) {
 
 TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     NO_DBG << "\n========== NO model check #" << (++noDebugModelCheckId) << " ==========\n";
+    if (g_combDiag) { ++g_cd.checks; combDiagDump(); }
 
     bool satMin = useSatMin();
     auto makeFalsifiedConflict = [satMin](const std::vector<SatLit>& rawReasons) {
@@ -408,15 +504,27 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 auto va = sharedTermRegistry_->constValue(ev.a);
                 auto vb = sharedTermRegistry_->constValue(ev.b);
                 if (va && vb && *va != *vb) {
+                    // Capture the reason literal BEFORE clear(): clear() destroys
+                    // the vector elements, after which `ev` dangles. Reading
+                    // ev.reasonLit post-clear was a use-after-free that put a
+                    // freed-memory (garbage, unregistered) literal into the
+                    // conflict -> a 1-lit {¬garbage} clause the propagator could
+                    // not falsify -> ABORT-388 -> Unknown (cs_* QF_ANIA).
+                    SatLit rl = ev.reasonLit;
                     pendingSharedEqEvents_.clear();
                     TheoryConflict fc;
-                    fc.clause.push_back(ev.reasonLit.negated());
+                    fc.clause.push_back(rl.negated());
                     NO_DBG << "[NO-RET-CONST] distinct-const IEQ refuted: "
                            << debug::fmtClause(fc.clause) << "\n";
                     return TheoryCheckResult::mkConflict(std::move(fc));
                 }
             }
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
+            if (std::getenv("XOLVER_L4R_DIAG")) {
+                static size_t g_ieq = 0; ++g_ieq;
+                if (g_ieq % 50 == 0)
+                    std::fprintf(stderr, "[L4R-IEQ] interface-eq merges=%zu\n", g_ieq);
+            }
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
                 if (!conflictIsGenuine(c->clause))
@@ -582,6 +690,139 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto vv = s->arrayValueSharedTerms();
         arrayIdxSet.insert(vv.begin(), vv.end());
     }
+
+    // ---- L5: demand-driven disequality propagation (XOLVER_NIA_NO_DISEQ) ----
+    // BMC memory reasoning is dominated by Row2 (the DISEQUAL-index read-over-
+    // write: i!=j => select(store(a,i,v),j) = select(a,j)). The equality
+    // connector (L4-reach) alone merges indices but never fires Row2. Here, for
+    // each array-index pair, ask each combination solver whether their domains
+    // are provably disjoint; route a YES as (¬reasons ∨ ¬eqLit) so CaDiCaL
+    // assigns the shared-eq atom FALSE. The propagator then records an EUF
+    // disequality, and the existing L2 Row2-cond path fires with the single eqLit
+    // reason (the multi-literal domain reason lives in the routed SAT clause — no
+    // change to the EUF explanation). Demand-driven + array-pair scoped: bounded
+    // by the (small) index set, never O(n^2) over all shared terms. SOUND:
+    // proveSharedDisjoint returns a COMPLETE reason (reasons ⟹ a!=b);
+    // propagating a disequality the theory already entails cannot create a wrong
+    // UNSAT that the disequality alone does not already justify.
+    static const bool noDiseq = [] {
+        const char* e = std::getenv("XOLVER_NIA_NO_DISEQ");
+        return e && *e && *e != '0';
+    }();
+    if (noDiseq && effort != TheoryEffort::Full && registry_ &&
+        arrayIdxSet.size() >= 2) {
+        std::vector<SharedTermId> idxv(arrayIdxSet.begin(), arrayIdxSet.end());
+        std::sort(idxv.begin(), idxv.end());   // deterministic emission order
+        size_t buffered = 0;
+        if (g_combDiag) g_cd.l5IdxTerms = (long)idxv.size();
+        for (size_t i = 0; i < idxv.size(); ++i) {
+            for (size_t j = i + 1; j < idxv.size(); ++j) {
+                SharedTermId A = idxv[i], B = idxv[j];
+                if (sharedEqMgr_.same(A, B) || sharedEqMgr_.diseqKnown(A, B))
+                    continue;
+                if (careGraphEnabled_ && !careGraph_.caresPair(A, B)) continue;
+                if (g_combDiag) ++g_cd.l5PairsQueried;
+                for (auto& s : solvers_) {
+                    if (!s->supportsCombination()) continue;
+                    auto r = s->proveSharedDisjoint(A, B);
+                    if (!r) continue;
+                    if (g_combDiag) ++g_cd.l5Proven;
+                    SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                    if (assignmentView_ &&
+                        assignmentView_->value(eqLit) == LitValue::False) break;
+                    TheoryLemma lemma;
+                    for (auto& lit : *r) lemma.lits.push_back(lit.negated());
+                    if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                    lemma.lits.push_back(eqLit.negated());  // ¬(a=b) = a!=b
+                    if (lemmaDb.insertIfNew(lemma)) {
+                        noPropEntailments_.push_back(std::move(lemma));
+                        ++buffered;
+                    }
+                    break;   // one solver's proof suffices
+                }
+            }
+        }
+        static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+        if (l4rDiag && buffered) {
+            std::fprintf(stderr, "[L5-DISEQ] buffered=%zu idxTerms=%zu\n",
+                         buffered, idxv.size());
+            std::fflush(stderr);
+        }
+    }
+
+    // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND, default-OFF). The
+    // blind L5 sweep above queries proveSharedDisjoint over arrayIdxSet (O(idx²),
+    // care-graph pruned) — but the index pairs the array reasoner ACTUALLY needs to
+    // fire a read-over-write (Row2-cond eligible=N, merges=0 on cs_*) are not
+    // necessarily in arrayIdxSet / survive the prune, so their i≠j is never proven
+    // and the chain stalls. Here the array reasoner SURFACES exactly those demanded
+    // pairs (via takeRow2DemandPairs); we drive proveSharedDisjoint on each and
+    // force ¬eqLit through the SAME sound channel (¬reasons ∨ ¬eqLit) the blind
+    // sweep uses. Demand-driven => bounded by the reads on the conflict path, not
+    // O(idx²). SOUND: identical reason contract (proveSharedDisjoint returns a
+    // COMPLETE reason ⟹ a≠b); surfacing a demand cannot create an unsound diseq.
+    static const bool row2Demand = [] {
+        const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
+        return e && *e && *e != '0';
+    }();
+    if (row2Demand && effort != TheoryEffort::Full && registry_) {
+        size_t dBuffered = 0, dQueried = 0;
+        for (auto& s : solvers_) {
+            if (!s->supportsCombination()) continue;
+            auto demand = s->takeRow2DemandPairs();
+            for (auto& [A, B] : demand) {
+                if (sharedEqMgr_.same(A, B) || sharedEqMgr_.diseqKnown(A, B)) continue;
+                ++dQueried;
+                // Constant–constant: two DISTINCT numeric-constant index terms are
+                // unconditionally disequal — force ¬eqLit with an EMPTY reason
+                // (the clause is the unit theorem [¬(A=B)]). This covers the BMC
+                // distinct-address reads the Row2-cond path needs but that
+                // proveSharedDisjoint refuses (constant pins carry no SAT-literal
+                // reason -> its non-empty-reason guard returns null). SOUND: A,B are
+                // syntactically distinct constants, so A≠B holds unconditionally.
+                if (sharedTermRegistry_) {
+                    auto va = sharedTermRegistry_->constValue(A);
+                    auto vb = sharedTermRegistry_->constValue(B);
+                    if (va && vb) {
+                        if (*va == *vb) continue;   // equal constants — not disequal
+                        SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                        if (assignmentView_ &&
+                            assignmentView_->value(eqLit) == LitValue::False) continue;
+                        TheoryLemma lemma;
+                        lemma.lits.push_back(eqLit.negated());   // unconditional A≠B
+                        if (lemmaDb.insertIfNew(lemma)) {
+                            noPropEntailments_.push_back(std::move(lemma));
+                            ++dBuffered;
+                        }
+                        continue;
+                    }
+                }
+                for (auto& s2 : solvers_) {
+                    if (!s2->supportsCombination()) continue;
+                    auto r = s2->proveSharedDisjoint(A, B);
+                    if (!r) continue;
+                    SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(A, B);
+                    if (assignmentView_ &&
+                        assignmentView_->value(eqLit) == LitValue::False) break;
+                    TheoryLemma lemma;
+                    for (auto& lit : *r) lemma.lits.push_back(lit.negated());
+                    if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                    lemma.lits.push_back(eqLit.negated());   // ¬(A=B) = A≠B
+                    if (lemmaDb.insertIfNew(lemma)) {
+                        noPropEntailments_.push_back(std::move(lemma));
+                        ++dBuffered;
+                    }
+                    break;   // one solver's proof suffices
+                }
+            }
+        }
+        if (std::getenv("XOLVER_L4R_DIAG") && (dQueried || dBuffered)) {
+            std::fprintf(stderr, "[R2-DEMAND] queried=%zu buffered=%zu\n",
+                         dQueried, dBuffered);
+            std::fflush(stderr);
+        }
+    }
+
     for (size_t i = 0; i < solvers_.size(); ++i) {
         auto* solver = solvers_[i].get();
         if (!solver->supportsCombination()) continue;
@@ -600,6 +841,69 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
+        static const bool noDiag = std::getenv("XOLVER_NO_DIAG") != nullptr;
+        if (noDiag && !props.empty()) {
+            size_t deferred = 0, arrayPair = 0;
+            for (auto& p : props) {
+                bool ina = arrayIdxSet.count(p.a), inb = arrayIdxSet.count(p.b);
+                if (ina && inb) ++arrayPair;
+                if (effort != TheoryEffort::Full && ina && inb) ++deferred;
+            }
+            std::fprintf(stderr, "[NO] solver=%d effort=%d deduced=%zu arrayPair=%zu deferred=%zu\n",
+                         (int)solver->id(), (int)effort, props.size(), arrayPair, deferred);
+            std::fflush(stderr);
+        }
+        // L4-reach: route array-relevant deduced shared eqs through the Standard
+        // entailment channel (XOLVER_NIA_NO_PROP). The array-pair eqs are the
+        // ~handful cs_*-class instances need to fire read-over-write; they are
+        // otherwise deferred to Full (the lemma channel is dropped+cache-poisoned
+        // at Standard), which huge formulas never reach. The entailment channel is
+        // honored at Standard and the clause is the IDENTICAL globally-valid
+        // (¬reasons ∨ eqLit) the Full lemma path emits. Sound: same reason
+        // contract as Full (0-unsound there); relevancy = array-pair + caresPair,
+        // an under-approximation (propagating fewer facts can only lose
+        // completeness, never produce a wrong UNSAT).
+        static const bool noProp = [] {
+            const char* e = std::getenv("XOLVER_NIA_NO_PROP");
+            return e && *e && *e != '0';
+        }();
+        // PRE-PASS: buffer ALL array-pair entailments before the main loop. The
+        // main loop returns on the first novel NON-array eq lemma, and the ~800
+        // non-array eqs are ordered before the ~100 array pairs, so without this
+        // dedicated pass the array pairs (the ones cs_* actually needs) are
+        // starved for hundreds of cb_propagate rounds. Each clause is the SAME
+        // globally-valid (¬reasons ∨ eqLit) the Full lemma path emits; routing it
+        // via the entailment channel just makes CaDiCaL honor it at Standard.
+        if (noProp && effort != TheoryEffort::Full) {
+            size_t buffered = 0;
+            for (auto& prop : props) {
+                if (!(arrayIdxSet.count(prop.a) && arrayIdxSet.count(prop.b)))
+                    continue;
+                if (careGraphEnabled_ && !careGraph_.caresPair(prop.a, prop.b))
+                    continue;
+                SatLit eqLit =
+                    registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
+                if (assignmentView_ &&
+                    assignmentView_->value(eqLit) == LitValue::True) continue;
+                TheoryLemma lemma;
+                for (auto& reason : prop.reasons)
+                    lemma.lits.push_back(reason.negated());
+                if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                lemma.lits.push_back(eqLit);
+                // lemmaDb.insertIfNew = backtrack-safe literal-set dedup, so each
+                // clause is buffered (and added to CaDiCaL) exactly once.
+                if (lemmaDb.insertIfNew(lemma)) {
+                    noPropEntailments_.push_back(std::move(lemma));
+                    ++buffered;
+                }
+            }
+            static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+            if (l4rDiag && buffered) {
+                std::fprintf(stderr, "[L4R] solver=%d buffered=%zu total=%zu\n",
+                             (int)solver->id(), buffered, noPropEntailments_.size());
+                std::fflush(stderr);
+            }
+        }
         for (auto& prop : props) {
             // Defer array-index-pair deduced equalities to Full effort (see above).
             if (effort != TheoryEffort::Full &&
@@ -647,6 +951,15 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             lemma.lits.push_back(eqLit);
             NO_DBG << "[NO-RET-8] lemma=" << debug::fmtClause(lemma.lits) << "\n";
             if (lemmaDb.insertIfNew(lemma)) {
+                if (g_combDiag) {
+                    ++g_cd.dedEqLemma;
+                    auto eufIt2 = solverByTheory_.find(TheoryId::EUF);
+                    if (eufIt2 != solverByTheory_.end() &&
+                        eufIt2->second->sharedTermsMerged(prop.a, prop.b))
+                        ++g_cd.dedEqEufMerged;
+                    else
+                        ++g_cd.dedEqAtomFresh;
+                }
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
@@ -781,6 +1094,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                        << stName(sharedTermRegistry_, A.id) << " = "
                        << stName(sharedTermRegistry_, B.id) << " : "
                        << debug::fmtClause(lemma.lits) << "\n";
+                if (g_combDiag) ++g_cd.arrSplitValue;
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }
@@ -868,6 +1182,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                     NO_DBG << "[NO-DEMAND] split "
                            << stName(sharedTermRegistry_, A.id) << " = "
                            << stName(sharedTermRegistry_, B.id) << "\n";
+                    if (g_combDiag) ++g_cd.arrSplitDemand;
                     return TheoryCheckResult::mkLemma(std::move(lemma));
                 }
             }
@@ -917,6 +1232,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 NO_DBG << "[NO-UFARG] split "
                        << stName(sharedTermRegistry_, a) << " = "
                        << stName(sharedTermRegistry_, b) << "\n";
+                if (g_combDiag) ++g_cd.arrSplitUfarg;
                 return TheoryCheckResult::mkLemma(std::move(lemma));
             }
         }

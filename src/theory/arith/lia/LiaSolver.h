@@ -109,6 +109,27 @@ public:
     std::optional<TheoryModel> findIntegerModel(
         int nodeCap = 4000, std::optional<TheoryConflict>* outConflict = nullptr);
 
+    // Standard-effort linear PROPAGATION support for NiaSolver's embedded
+    // linear-prop stage (XOLVER_NIA_LINEAR_PROP). After the caller has asserted
+    // its constraints (assertLit) and run a check() so gs_ is pivoted, this
+    // returns the fixed (pinned) value of variable `name` together with the
+    // asserted SAT literals whose bounds force it, or nullopt if the variable is
+    // not pinned to a single rational value. Each returned reason is a real
+    // asserted literal (every bound was asserted with the caller's SatLit), so
+    // `(∧reasons) → (name == value)` is a valid theory tautology. A δ-strict
+    // (open) pin returns nullopt.
+    std::optional<std::pair<mpq_class, std::vector<SatLit>>>
+    proveFixedValueByName(const std::string& name) const;
+
+    // Like proveFixedValueByName but for a whole linear FORM: returns the pinned
+    // value of `(lhs - rhs)` together with its asserted reasons, or nullopt if
+    // the form is not pinned to a single value. This is the variable–variable
+    // equality channel (e.g. `x - y` pinned to 0 when x ≤ y ∧ y ≤ x are asserted,
+    // even though neither x nor y is individually pinned). NOT const: it
+    // getOrCreate's the form's aux variable in the simplex (a scratch instance).
+    std::optional<std::pair<mpq_class, std::vector<SatLit>>>
+    proveFixedFormValue(const LinearFormKey& lhs, const mpq_class& rhs);
+
 protected:
     void onPush() override;
     void onPop(uint32_t n) override;

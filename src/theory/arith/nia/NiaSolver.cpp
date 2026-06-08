@@ -128,6 +128,14 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // XOLVER_NIA_DISPATCH_CACHE. No-op when the flag is unset.
     add("nia.dispatch-cache", &NiaSolver::stageDispatchCacheLookup);
     add("nia.normalize",      &NiaSolver::stageNormalize);
+    // nia.linear-prop (XOLVER_NIA_LINEAR_PROP, default-OFF). Standard+Full so it
+    // fires during search at PARTIAL assignments (the cs_* QF_ANIA cluster never
+    // reaches a Full-effort model check within budget — the only place the
+    // existing nia.linear-decide could run). Placed right after normalize so it
+    // reads the fresh normalized_ set. Emits sound Farkas conflicts + fixed-value
+    // entailments over the all-linear active core.
+    linearPropEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_PROP", 0) != 0;
+    add("nia.linear-prop",    &NiaSolver::stageLinearProp);
     // Track A Phase 1.3 — native (mod x y) = c reasoner. Runs early so its
     // bound narrowings feed downstream linear/domain stages. Default-OFF via
     // XOLVER_NIA_NATIVE_MODEQCONST.
@@ -422,6 +430,8 @@ void NiaSolver::onReset() {
     pendingConflict_.reset();
     pendingUnknown_.reset();
     currentModel_.reset();
+    entailmentProps_.clear();
+    entailmentEmittedKeys_.clear();
     emittedSplits_.clear();
     branchCountPerVar_.clear();
     pendingLinLemmas_.clear();
@@ -545,6 +555,11 @@ void NiaSolver::onBacktrack(int level) {
     // Phase D: backtrack invalidates the dispatch cache. The state
     // signature recorded by the cache is no longer current.
     dispatchCacheValid_ = false;
+    // nia.linear-prop: drop any undrained entailments and reset the dedup so a
+    // fresh SAT branch can re-emit pins under its own reasons. The emitted
+    // clauses already in the SAT core stay (they are global tautologies).
+    entailmentProps_.clear();
+    entailmentEmittedKeys_.clear();
     if (pendingConflict_ && pendingConflict_->level > level) {
         pendingConflict_.reset();
     }
@@ -690,6 +705,97 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
     }
     if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
     return std::nullopt;
+}
+
+// nia.linear-prop — Standard+Full linear propagation over the all-linear active
+// core. Returns a sound Farkas conflict (prune) on linear infeasibility, else
+// buffers fixed-value entailments (drained by takeEntailmentPropagations). Never
+// claims SAT (no model returned), so zero wrong-UNSAT/wrong-SAT risk (the
+// conflict is over real asserted reasons; entailments are global tautologies).
+std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
+    TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!linearPropEnabled_) return std::nullopt;
+    if (active_.empty()) return std::nullopt;
+    if (!registry_) return std::nullopt;
+    // normalized_ is produced by the immediately-preceding nia.normalize stage;
+    // in combination it ALSO carries merged interface (dis)equalities, so it is
+    // ≥ active_.size(). Require it non-empty (normalize ran) — not equal.
+    if (normalized_.empty()) return std::nullopt;
+
+    // All active atoms must be LINEAR (total degree ≤ 1) — otherwise the simplex
+    // would drop nonlinear obligations and could mis-propagate.
+    for (const auto& a : active_) {
+        auto terms = kernel_->terms(a.poly);
+        if (!terms) return std::nullopt;
+        for (const auto& term : *terms) {
+            int total = 0;
+            for (const auto& [vid, exp] : term.powers) {
+                (void)vid;
+                total += exp;
+                if (total > 1) return std::nullopt;
+            }
+        }
+    }
+
+    if (!linDecider_) linDecider_ = std::make_unique<NiaLinearDecider>();
+
+    // Asserted-literal map for the soundness firewall + the "already decided"
+    // skip: satVar -> value, drawn from the active trail.
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size() +
+                     interfaceEqualities_.size() + interfaceDisequalities_.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    // IFACE_LIFECYCLE keeps interface (dis)equalities OFF state_.trail, so their
+    // reason literals — genuinely assigned-true by the SAT core and held here
+    // until backtrack prunes them — are invisible to the firewall above. That
+    // false negative drops every array read-value form-pin whose justifying
+    // bound is an interface equality (the cs_* wall: [LINPROP-drop] reasons U).
+    // The reason literal of an entry currently IN interfaceEqualities_/
+    // interfaceDisequalities_ is a currently-true fact (assertInterfaceEquality
+    // is only called on an assigned atom, and onBacktrack removes entries whose
+    // level was popped), so admitting it as true is SOUND — and the entailment
+    // clause (¬reasons ∨ impliedAtom) it unblocks is a global theory tautology
+    // regardless. Gated XOLVER_NIA_IFACE_PROP (default-OFF) for A/B + safety.
+    static const bool ifaceProp = [] {
+        const char* e = std::getenv("XOLVER_NIA_IFACE_PROP");
+        return e && *e && *e != '0';
+    }();
+    if (ifaceProp) {
+        for (const auto& ie : interfaceEqualities_)
+            asserted.emplace(ie.reason.var, ie.reason.sign);
+        for (const auto& id : interfaceDisequalities_)
+            asserted.emplace(id.reason.var, id.reason.sign);
+    }
+    auto isAssigned = [&](SatVar v) { return asserted.find(v) != asserted.end(); };
+    auto litIsTrue = [&](SatLit l) {
+        auto it = asserted.find(l.var);
+        return it != asserted.end() && it->second == l.sign;
+    };
+
+    size_t entBefore = entailmentProps_.size();
+    std::optional<TheoryConflict> conflict;
+    linDecider_->collectLinearProp(
+        registry_, *kernel_, normalized_, isAssigned, litIsTrue,
+        &conflict, &entailmentProps_, &entailmentEmittedKeys_,
+        /*maxEmit=*/256);
+
+    static const bool diag = std::getenv("XOLVER_NIA_LINPROP_DIAG") != nullptr;
+    if (diag) {
+        std::fprintf(stderr,
+            "[LINPROP] fire active=%zu normalized=%zu effort=%d conflict=%s ent+=%zu (total=%zu)\n",
+            active_.size(), normalized_.size(), (int)effort,
+            conflict ? "yes" : "no",
+            entailmentProps_.size() - entBefore, entailmentProps_.size());
+        std::fflush(stderr);
+    }
+
+    if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;   // pure producer otherwise — let the pipeline continue
+}
+
+std::vector<TheoryLemma> NiaSolver::takeEntailmentPropagations() {
+    if (!linearPropEnabled_) return {};
+    return std::move(entailmentProps_);
 }
 
 // Phase D — FNV-1a hash of the active_ signature: count + sequence of
@@ -3932,111 +4038,107 @@ NiaSolver::getDeducedSharedEqualities() {
             std::unordered_set<uint64_t> emittedPair;
             for (const auto& p : result) emittedPair.insert(pairKey(p.a, p.b));
 
-            for (size_t i = 0; i < svs.size(); ++i) {
-                for (size_t j = i + 1; j < svs.size(); ++j) {
-                    if (emittedPair.count(pairKey(svs[i].stId, svs[j].stId)))
-                        continue;
-                    const std::string& na = svs[i].name;
-                    const std::string& nb = svs[j].name;
+            // name -> svs index (only shared-term names are keys).
+            std::unordered_map<std::string, size_t> nameToIdx;
+            nameToIdx.reserve(svs.size() * 2);
+            for (size_t i = 0; i < svs.size(); ++i) nameToIdx.emplace(svs[i].name, i);
 
-                    bool haveLo = false, haveUp = false;
-                    mpq_class lo = 0, up = 0;
-                    SatLit loLit{}, upLit{};
+            // Per-pair accumulator of bounds on d = na - nb (na = the smaller-svs-
+            // index shared var). SINGLE trail pass: each 2-var linear-difference
+            // atom is analysed ONCE (one kernel_->variables / kernel_->terms call)
+            // and bucketed into its var pair — O(trail), versus the prior
+            // O(shared_vars^2 * trail) which re-ran the allocating libpoly
+            // variables() call for every (i,j) pair (the cs_* QF_ANIA hot path:
+            // ~100 shared vars * ~500 trail atoms * 5 checks = millions of libpoly
+            // calls -> the wall). Behaviour-identical: same tightest-bound
+            // accumulation, same trail-order tie-breaking, same pin test, same
+            // svs-index emission order.
+            struct Acc {
+                bool haveLo = false, haveUp = false;
+                mpq_class lo = 0, up = 0;
+                SatLit loLit{}, upLit{};
+            };
+            std::map<std::pair<size_t, size_t>, Acc> acc;  // key = (ia<ib) -> bounds
 
-                    for (const auto& e : state_.trail) {
-                        const auto* p = std::get_if<PolynomialAtomPayload>(
-                                            &e.atom.payload);
-                        if (!p) continue;
-                        if (!p->rhs.isRational()) continue;
+            for (const auto& e : state_.trail) {
+                const auto* p = std::get_if<PolynomialAtomPayload>(&e.atom.payload);
+                if (!p) continue;
+                if (!p->rhs.isRational()) continue;
 
-                        auto vars = kernel_->variables(p->poly);
-                        if (vars.size() != 2) continue;
-                        bool hasA = false, hasB = false;
-                        for (const auto& v : vars) {
-                            if (v == na) hasA = true;
-                            else if (v == nb) hasB = true;
-                        }
-                        if (!hasA || !hasB) continue;
+                auto vars = kernel_->variables(p->poly);
+                if (vars.size() != 2) continue;
+                auto it0 = nameToIdx.find(vars[0]);
+                auto it1 = nameToIdx.find(vars[1]);
+                if (it0 == nameToIdx.end() || it1 == nameToIdx.end()) continue;
+                size_t ia = it0->second, ib = it1->second;
+                if (ia == ib) continue;
+                if (ia > ib) std::swap(ia, ib);          // na = svs[ia] (smaller idx)
+                if (emittedPair.count(pairKey(svs[ia].stId, svs[ib].stId))) continue;
+                const std::string& na = svs[ia].name;
+                const std::string& nb = svs[ib].name;
 
-                        auto tOpt = kernel_->terms(p->poly);
-                        if (!tOpt) continue;
-                        mpz_class cA = 0, cB = 0, k = 0;
-                        bool ok = true;
-                        for (const auto& m : *tOpt) {
-                            if (m.powers.empty()) {
-                                k += m.coefficient;
-                            } else if (m.powers.size() == 1
-                                       && m.powers[0].second == 1) {
-                                std::string vn(
-                                    kernel_->varName(m.powers[0].first));
-                                if (vn == na)      cA += m.coefficient;
-                                else if (vn == nb) cB += m.coefficient;
-                                else { ok = false; break; }
-                            } else {
-                                ok = false; break;  // nonlinear monomial
-                            }
-                        }
-                        if (!ok) continue;
-                        if (cA == 0 || cA != -cB) continue;
-
-                        Relation rel = e.value ? p->rel
-                                               : negateRelation(p->rel);
-                        if (rel == Relation::Neq) continue;  // never pins
-                        const mpq_class& rhsQ = p->rhs.asRational();
-                        // poly = cA*(na - nb) + k ; rel rhsQ
-                        // => d = na - nb satisfies  cA*d  rel  (rhsQ - k)
-                        // => d rel'  (rhsQ - k)/cA  with rel' flipped if cA<0
-                        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
-                        bool flip = (cA < 0);
-                        auto addLower = [&](const mpq_class& v, SatLit lit) {
-                            if (!haveLo || v > lo) {
-                                lo = v; loLit = lit; haveLo = true;
-                            }
-                        };
-                        auto addUpper = [&](const mpq_class& v, SatLit lit) {
-                            if (!haveUp || v < up) {
-                                up = v; upLit = lit; haveUp = true;
-                            }
-                        };
-                        switch (rel) {
-                            case Relation::Eq:
-                                addLower(bnd, e.lit);
-                                addUpper(bnd, e.lit);
-                                break;
-                            case Relation::Leq:
-                                if (!flip) addUpper(bnd, e.lit);
-                                else       addLower(bnd, e.lit);
-                                break;
-                            case Relation::Geq:
-                                if (!flip) addLower(bnd, e.lit);
-                                else       addUpper(bnd, e.lit);
-                                break;
-                            case Relation::Lt:
-                            case Relation::Gt:
-                            default:
-                                break;  // strict — does not pin
-                        }
-                    }
-
-                    if (haveLo && haveUp && lo == 0 && up == 0) {
-                        std::vector<SatLit> reasons;
-                        reasons.push_back(loLit);
-                        if (!(upLit == loLit)) reasons.push_back(upLit);
-                        std::sort(reasons.begin(), reasons.end(),
-                                  [](SatLit a, SatLit b) {
-                            return a.var < b.var
-                                || (a.var == b.var && a.sign < b.sign);
-                        });
-                        reasons.erase(std::unique(reasons.begin(), reasons.end(),
-                                                  [](SatLit a, SatLit b) {
-                            return a.var == b.var && a.sign == b.sign;
-                        }), reasons.end());
-                        emittedPair.insert(
-                            pairKey(svs[i].stId, svs[j].stId));
-                        result.push_back(TheorySolver::SharedEqualityPropagation{
-                            svs[i].stId, svs[j].stId, std::move(reasons)});
+                auto tOpt = kernel_->terms(p->poly);
+                if (!tOpt) continue;
+                mpz_class cA = 0, cB = 0, k = 0;
+                bool ok = true;
+                for (const auto& m : *tOpt) {
+                    if (m.powers.empty()) {
+                        k += m.coefficient;
+                    } else if (m.powers.size() == 1 && m.powers[0].second == 1) {
+                        std::string vn(kernel_->varName(m.powers[0].first));
+                        if (vn == na)      cA += m.coefficient;
+                        else if (vn == nb) cB += m.coefficient;
+                        else { ok = false; break; }
+                    } else {
+                        ok = false; break;  // nonlinear monomial
                     }
                 }
+                if (!ok) continue;
+                if (cA == 0 || cA != -cB) continue;
+
+                Relation rel = e.value ? p->rel : negateRelation(p->rel);
+                if (rel == Relation::Neq) continue;  // never pins
+                const mpq_class& rhsQ = p->rhs.asRational();
+                // poly = cA*(na - nb) + k ; rel rhsQ  =>  d = na-nb : cA*d rel (rhsQ-k)
+                mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+                bool flip = (cA < 0);
+                Acc& a = acc[{ia, ib}];
+                auto addLower = [&](const mpq_class& v, SatLit lit) {
+                    if (!a.haveLo || v > a.lo) { a.lo = v; a.loLit = lit; a.haveLo = true; }
+                };
+                auto addUpper = [&](const mpq_class& v, SatLit lit) {
+                    if (!a.haveUp || v < a.up) { a.up = v; a.upLit = lit; a.haveUp = true; }
+                };
+                switch (rel) {
+                    case Relation::Eq:
+                        addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+                    case Relation::Leq:
+                        if (!flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+                    case Relation::Geq:
+                        if (!flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+                    case Relation::Lt:
+                    case Relation::Gt:
+                    default:
+                        break;  // strict — does not pin
+                }
+            }
+
+            // std::map iterates keys (ia, ib) in ascending order == the prior
+            // nested-loop's (i, j) emission order.
+            for (auto& [key, a] : acc) {
+                if (!(a.haveLo && a.haveUp && a.lo == 0 && a.up == 0)) continue;
+                std::vector<SatLit> reasons;
+                reasons.push_back(a.loLit);
+                if (!(a.upLit == a.loLit)) reasons.push_back(a.upLit);
+                std::sort(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+                    return x.var < y.var || (x.var == y.var && x.sign < y.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                          [](SatLit x, SatLit y) {
+                    return x.var == y.var && x.sign == y.sign;
+                }), reasons.end());
+                result.push_back(TheorySolver::SharedEqualityPropagation{
+                    svs[key.first].stId, svs[key.second].stId, std::move(reasons)});
             }
         }
     }
@@ -4056,6 +4158,131 @@ NiaSolver::getDeducedSharedEqualities() {
         }
     }
     return result;
+}
+
+std::optional<std::vector<SatLit>>
+NiaSolver::proveSharedDisjoint(SharedTermId a, SharedTermId b) {
+    // L5 demand-driven disequality: a,b are provably unequal iff their integer
+    // domains do not overlap. SOUND + complete reason:
+    //   a.upper < b.lower  =>  (a ≤ a.upper) ∧ (b ≥ b.lower) entail a < b ⟹ a≠b
+    // so the reason is exactly {a's upper-bound literals, b's lower-bound
+    // literals} (or the symmetric pair). Backtracking either bound retracts the
+    // disequality via normal SAT conflict analysis. Same domain/bound-reason
+    // contract as the fixed-value equality producer.
+    if (!sharedTermRegistry_) return std::nullopt;
+    std::string na = getVarNameForSharedTerm(a);
+    std::string nb = getVarNameForSharedTerm(b);
+    if (na.empty() || nb.empty()) return std::nullopt;
+
+    // (1) ABSOLUTE disjoint domains: a.upper < b.lower (or symmetric).
+    const IntDomain* da = domains_.getDomain(na);
+    const IntDomain* db = domains_.getDomain(nb);
+    if (da && db && da->hasLower && da->hasUpper && db->hasLower && db->hasUpper) {
+        const IntDomain* lo = nullptr;  // lower interval (its upper separates)
+        const IntDomain* hi = nullptr;  // higher interval (its lower separates)
+        if (da->upper.value < db->lower.value)      { lo = da; hi = db; }
+        else if (db->upper.value < da->lower.value) { lo = db; hi = da; }
+        if (lo) {
+            std::vector<SatLit> reasons;
+            reasons.insert(reasons.end(), lo->upper.reasons.begin(),
+                           lo->upper.reasons.end());
+            reasons.insert(reasons.end(), hi->lower.reasons.begin(),
+                           hi->lower.reasons.end());
+            if (!reasons.empty()) {
+                std::sort(reasons.begin(), reasons.end(), [](SatLit x, SatLit y) {
+                    return x.var < y.var || (x.var == y.var && x.sign < y.sign);
+                });
+                reasons.erase(std::unique(reasons.begin(), reasons.end(),
+                                          [](SatLit x, SatLit y) {
+                    return x.var == y.var && x.sign == y.sign;
+                }), reasons.end());
+                return reasons;
+            }
+        }
+    }
+
+    // (2) VAR-VAR DIFFERENCE: d = na - nb forced AWAY from 0 by a 2-variable
+    // linear difference atom on the trail (the BMC index case: i = j+c with c!=0,
+    // i >= j+1, i != j, ...). Port of the var-var EQUALITY detector in
+    // getDeducedSharedEqualities, but checking 0-EXCLUSION instead of 0-pin.
+    //   d >= lo with lo > 0  =>  d > 0  => na != nb   (reason = the one lo atom)
+    //   d <= up with up < 0  =>  d < 0  => na != nb   (reason = the one up atom)
+    //   d != 0 directly                 => na != nb   (reason = that atom)
+    // Each is justified by a SINGLE asserted literal (complete: that literal
+    // entails the strict direction independent of the rest of the trail).
+    if (!kernel_) return std::nullopt;
+    bool haveLo = false, haveUp = false;
+    mpq_class lo = 0, up = 0;
+    SatLit loLit{}, upLit{};
+    for (const auto& e : state_.trail) {
+        const auto* p = std::get_if<PolynomialAtomPayload>(&e.atom.payload);
+        if (!p || !p->rhs.isRational()) continue;
+        auto vars = kernel_->variables(p->poly);
+        if (vars.size() != 2) continue;
+        bool hasA = false, hasB = false;
+        for (const auto& v : vars) { if (v == na) hasA = true; else if (v == nb) hasB = true; }
+        if (!hasA || !hasB) continue;
+        auto tOpt = kernel_->terms(p->poly);
+        if (!tOpt) continue;
+        mpz_class cA = 0, cB = 0, k = 0;
+        bool ok = true;
+        for (const auto& m : *tOpt) {
+            if (m.powers.empty()) { k += m.coefficient; }
+            else if (m.powers.size() == 1 && m.powers[0].second == 1) {
+                std::string vn(kernel_->varName(m.powers[0].first));
+                if (vn == na)      cA += m.coefficient;
+                else if (vn == nb) cB += m.coefficient;
+                else { ok = false; break; }
+            } else { ok = false; break; }   // nonlinear monomial
+        }
+        if (!ok) continue;
+        if (cA == 0 || cA != -cB) continue;   // not c*(na - nb) + k
+        Relation rel = e.value ? p->rel : negateRelation(p->rel);
+        const mpq_class& rhsQ = p->rhs.asRational();
+        // poly = cA*(na - nb) + k  rel  rhsQ   =>   d  rel'  (rhsQ - k)/cA
+        mpq_class bnd = (rhsQ - mpq_class(k)) / mpq_class(cA);
+        bool flip = (cA < 0);
+        if (rel == Relation::Neq) {
+            if (bnd == 0) return std::vector<SatLit>{e.lit};   // d != 0 directly
+            continue;
+        }
+        auto addLower = [&](const mpq_class& v, SatLit lit) {
+            if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+        };
+        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+            if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+        };
+        // d = na - nb is an integer, so a strict bound tightens by one step:
+        //   d > bnd  => d >= floor(bnd)+1   ;   d < bnd  => d <= ceil(bnd)-1
+        // (without this, "i > j" with bnd=0 would record lo=0 and miss d>0).
+        auto floorQ = [](const mpq_class& q) {
+            mpz_class r; mpz_fdiv_q(r.get_mpz_t(), q.get_num_mpz_t(),
+                                    q.get_den_mpz_t()); return r;
+        };
+        auto ceilQ = [](const mpq_class& q) {
+            mpz_class r; mpz_cdiv_q(r.get_mpz_t(), q.get_num_mpz_t(),
+                                    q.get_den_mpz_t()); return r;
+        };
+        mpq_class loStrict(floorQ(bnd) + 1);   // d > bnd  => d >= loStrict
+        mpq_class upStrict(ceilQ(bnd) - 1);    // d < bnd  => d <= upStrict
+        switch (rel) {
+            case Relation::Eq:  addLower(bnd, e.lit); addUpper(bnd, e.lit); break;
+            case Relation::Leq:
+                if (flip) addLower(bnd, e.lit); else addUpper(bnd, e.lit); break;
+            case Relation::Geq:
+                if (flip) addUpper(bnd, e.lit); else addLower(bnd, e.lit); break;
+            case Relation::Lt:
+                if (flip) addLower(loStrict, e.lit); else addUpper(upStrict, e.lit);
+                break;
+            case Relation::Gt:
+                if (flip) addUpper(upStrict, e.lit); else addLower(loStrict, e.lit);
+                break;
+            default: break;
+        }
+    }
+    if (haveLo && lo > 0) return std::vector<SatLit>{loLit};   // d >= lo > 0
+    if (haveUp && up < 0) return std::vector<SatLit>{upLit};   // d <= up < 0
+    return std::nullopt;
 }
 
 std::optional<TheorySolver::TheoryModel> NiaSolver::getModel() const {

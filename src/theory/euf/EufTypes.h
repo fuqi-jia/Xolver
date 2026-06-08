@@ -40,7 +40,15 @@ enum class MergeReasonKind {
     // unconditional — zero literals, no SAT split needed).
     ArrayRow1,
     ArrayConst,
-    ArrayRow2
+    ArrayRow2,
+    // CONDITIONAL Row2 (L2): select(store(a,i,v),j) = select(a,j) merged eagerly
+    // when i≠j is KNOWN-disequal in the e-graph (vs the unconditional distinct-
+    // CONSTANT case ArrayRow2). Unlike ArrayRow2 it is NOT a free tautology: it
+    // rests on the disequality's reason. The explanation therefore contributes
+    // `lit` (the diseq reason literal) AND recurses on argPairs (the equality
+    // chains i~diseqLhs, j~diseqRhs). Merged at currentLevel_ so any backtrack
+    // touching its justification removes it (never stale → no wrong-UNSAT).
+    ArrayRow2Cond
 };
 
 struct MergeReason {

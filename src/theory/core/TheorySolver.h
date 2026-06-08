@@ -91,6 +91,35 @@ public:
     virtual std::vector<SharedEqualityPropagation>
     getDeducedSharedEqualities() { return {}; }
 
+    // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND): return shared-term
+    // index pairs (a,b) for which this solver's array reasoner needs a≠b decided
+    // to fire a read-over-write (Row2) reduction, but a≠b is not yet known. The
+    // combination layer drives proveSharedDisjoint on exactly these and propagates
+    // the result. Default empty (only the EUF/array solver overrides). Surfacing a
+    // demand is sound; the disequality itself is still proven + reason-checked.
+    virtual std::vector<std::pair<SharedTermId, SharedTermId>>
+    takeRow2DemandPairs() { return {}; }
+
+    // L13 relevancy-bounded Row2 case-split (XOLVER_AX_ROW2_SPLIT): array-axiom
+    // CASE-SPLIT lemmas (Row2: (i=j) ∨ select(store(a,i,v),j)=select(a,j))
+    // generated at Standard effort, tagged LemmaKind::ArraySplit. Each is a THEORY
+    // TAUTOLOGY (sound at any effort); the propagator marks their atoms dynamically
+    // relevant so cb_decide DECIDES the split — z3's lazy split. Default empty.
+    virtual std::vector<TheoryLemma> takeArraySplitLemmas() { return {}; }
+
+    // Demand-driven shared DISEQUALITY query (L5): does this solver's theory
+    // state force a != b? Returns the reason literals if so (they must COMPLETELY
+    // entail a != b — wrong-UNSAT risk), nullopt otherwise. The combination layer
+    // asks this for the (few) array-index pairs it cares about and routes a YES as
+    // (¬reasons ∨ ¬eqLit) so the SAT core assigns the shared-eq atom FALSE — a
+    // disequality the array reasoner's Row2 (disequal-index read-over-write)
+    // consumes. Demand-driven: bounded by the array-pair set, NOT O(n²) over all
+    // shared terms. Default: no opinion.
+    virtual std::optional<std::vector<SatLit>>
+    proveSharedDisjoint(SharedTermId a, SharedTermId b) {
+        (void)a; (void)b; return std::nullopt;
+    }
+
     // Bounded atom-level Gaussian implied equalities, SCOPED to the given (few)
     // array-index shared-var pairs (the combination layer supplies them at Full
     // effort). For each pair (a,b), tests whether a-b == 0 is entailed by the

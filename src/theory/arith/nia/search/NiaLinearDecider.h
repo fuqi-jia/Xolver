@@ -2,8 +2,12 @@
 
 #include "theory/arith/nia/preprocess/NiaNormalizer.h"  // NormalizedNiaConstraint
 #include "theory/arith/nia/search/IntegerModelValidator.h"  // IntegerModel, IntegerModelValidator
+#include "theory/core/TheoryAtomTypes.h"  // TheoryLemma, TheoryConflict
+#include "sat/SatSolver.h"                 // SatVar, SatLit
+#include <functional>
 #include <memory>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 namespace xolver {
@@ -44,6 +48,32 @@ public:
         const std::vector<NormalizedNiaConstraint>& normalized,
         const IntegerModelValidator& validator,
         std::optional<TheoryConflict>* outConflict = nullptr);
+
+    // Standard-effort linear PROPAGATION (XOLVER_NIA_LINEAR_PROP). Builds the
+    // embedded simplex from the current normalized constraint set and runs the
+    // root LP only (no branch-and-bound), then:
+    //   - if the LP relaxation is infeasible, sets *outConflict to the sound
+    //     Farkas conflict over the real asserted reasons (caller may return it
+    //     to prune the SAT search);
+    //   - otherwise scans `registry` for UNASSIGNED arithmetic atoms whose
+    //     variables are ALL pinned by the simplex, appending a fixed-value
+    //     entailment lemma `(¬reasons ∨ atom)` for each into *outEntailments
+    //     (deduped via *emittedKeys, capped at maxEmit).
+    // `isAssigned(satVar)` skips atoms already decided on the trail.
+    // `litIsTrue(satLit)` is the soundness firewall: an entailment is emitted
+    // only when EVERY pin reason is currently true on the trail, so the lemma's
+    // antecedent literals are all asserted and `(∧reasons) → atom` holds now.
+    // No model is constructed; nothing is returned (results flow via out-params).
+    void collectLinearProp(
+        TheoryAtomRegistry* registry,
+        PolynomialKernel& kernel,
+        const std::vector<NormalizedNiaConstraint>& normalized,
+        const std::function<bool(SatVar)>& isAssigned,
+        const std::function<bool(SatLit)>& litIsTrue,
+        std::optional<TheoryConflict>* outConflict,
+        std::vector<TheoryLemma>* outEntailments,
+        std::unordered_set<uint64_t>* emittedKeys,
+        size_t maxEmit);
 
 private:
     std::unique_ptr<LiaSolver> lia_;   // lazily constructed on first decide()

@@ -205,6 +205,8 @@ std::vector<SatVar> TheoryAtomRegistry::linearAtomVars() const {
     return out;
 }
 
+long g_sharedEqAtomsCreated = 0;  // XOLVER_COMB_DIAG counter (read in TheoryManager.cpp)
+
 SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b) {
     assert(sat_ != nullptr && registrar_ != nullptr);
 
@@ -221,6 +223,7 @@ SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedT
 
     ExprId expr = nextSyntheticExprId_++;
     SatLit lit = registrar_->registerDynamicAtom(expr, TheoryId::Combination);
+    ++g_sharedEqAtomsCreated;
 
     size_t idx = records_.size();
     records_.push_back({lit.var, TheoryId::Combination, true, expr,
@@ -229,6 +232,10 @@ SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedT
     if (expr != NullExpr) exprIdToIdxs_[expr].push_back(idx);  // iter-101 perf
     sharedEqLookup_[key] = idx;
     observeIfNeeded(lit.var);
+
+    // Nelson-Oppen default arrangement: prefer DISEQUAL for fresh interface
+    // atoms (sound — phase only; see setDefaultSharedEqDisequal).
+    if (defaultSharedEqDisequal_ && sat_) sat_->setDefaultPhase(lit.var, false);
 
     return lit;
 }

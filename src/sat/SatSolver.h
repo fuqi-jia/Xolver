@@ -54,6 +54,12 @@ public:
 
     // Observed variable support (for CaDiCaL ExternalPropagator)
     virtual void addObservedVar(SatVar /*v*/) {}
+
+    // Force the DEFAULT decision phase of a variable (search heuristic only —
+    // never changes satisfiability). Used by Nelson-Oppen combination to default
+    // shared-equality atoms to FALSE (the "all-distinct" arrangement), so the SAT
+    // core stops freely guessing interface equalities. Default no-op.
+    virtual void setDefaultPhase(SatVar /*v*/, bool /*value*/) {}
 };
 
 /**

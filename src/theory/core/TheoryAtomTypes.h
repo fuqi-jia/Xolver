@@ -86,7 +86,11 @@ struct TheoryConflict {
 
 // Distinguishes sound entailment propagations (safe to lift to SAT) from
 // heuristic guesses (XOLVER_LRA_PROP). Conservative default = Guess.
-enum class LemmaKind : uint8_t { Guess, Entailment };
+// ArraySplit: a Row2/extensionality CASE-SPLIT tautology (e.g. i=j ∨ readEq)
+// emitted at Standard effort (L13 integrated engine). Tagged so the SAT
+// propagator can mark its atoms dynamically relevant (drive cb_decide to decide
+// the split). Sound to add at any effort (it is the array axiom).
+enum class LemmaKind : uint8_t { Guess, Entailment, ArraySplit };
 
 // TheoryLemma stores a propagation lemma in the form:
 //   (¬reason₁ ∨ ¬reason₂ ∨ ... ∨ implied)

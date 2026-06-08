@@ -470,6 +470,15 @@ ExplainResult IncrementalEGraph::explainEquality(EufTermId a, EufTermId b) {
                     ret = {true, {edge.lit}}; stack.pop_back(); continue;
                 }
                 f.i = 0;
+                // ArrayRow2Cond (L2): conditional Row2 merge — its justification
+                // is the disequality reason literal PLUS the equality chains in
+                // argPairs (i~diseqLhs, j~diseqRhs). Seed the accumulator with the
+                // literal, then fall through to recurse the chains. SOUNDNESS: if
+                // this literal were dropped, the conflict would omit i≠j and be
+                // too strong (wrong-UNSAT).
+                if (edge.kind == MergeReasonKind::ArrayRow2Cond && edge.lit.var != 0) {
+                    f.acc.push_back(edge.lit);
+                }
                 // fall through to child dispatch
             }
         } else {

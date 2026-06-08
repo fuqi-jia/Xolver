@@ -79,6 +79,8 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     storeModelEnabled_ = std::getenv("XOLVER_AX_STORE_MODEL") != nullptr;
     // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
     hotProfileEnabled_ = std::getenv("XOLVER_EUF_HOTPROFILE") != nullptr;
+    // L3 (default-OFF): array-axiom saturation fixpoint (nested read-over-write).
+    arrayFixpointEnabled_ = std::getenv("XOLVER_AX_FIXPOINT") != nullptr;
     initializeBoolConstants();
 }
 
@@ -129,8 +131,9 @@ std::vector<TheoryLemma> EufSolver::takeEntailmentPropagations() {
     for (const auto& e : trail_) assigned.insert(e.lit.var);
 
     // Canonical (rep,rep) -> active-disequality index, for entailed-FALSE props.
-    // Single-theory only: the combination shared bus is gated off upstream
-    // (TheoryManager::takeEntailmentPropagations returns {} in combination).
+    // In combination this is drained only under XOLVER_EUF_PROP_COMB (the upstream
+    // TheoryManager allow-list gate); the EUF Eq-atom entailments here are sound
+    // by construction (¬reasons ∨ implied is an EUF tautology) in either mode.
     auto repPairKey = [](EClassId r1, EClassId r2) -> uint64_t {
         uint64_t lo = r1 < r2 ? r1 : r2, hi = r1 < r2 ? r2 : r1;
         return (lo << 32) | hi;
@@ -543,6 +546,35 @@ bool EufSolver::checkProofForestInvariants(const char* where) const {
                                     std::fprintf(stderr, "  rep=%u\n", egraph_.rep(arg));
                                 }
                             }
+                        }
+                        ++violations;
+                        if (doAssert) std::abort();
+                        break;
+                    }
+                }
+                break;
+            }
+            case MergeReasonKind::ArrayRow2Cond: {
+                // Conditional Row2: the diseq reason literal must be on the trail
+                // (or a recorded diseq reason — both folded into trailLits), and
+                // the equality chains in argPairs must currently be same-class.
+                if (r.lit.var != 0 && !trailLits.count(litKey(r.lit))) {
+                    if (diag) {
+                        std::fprintf(stderr,
+                            "[PF-INV][%s] STALE ArrayRow2Cond diseq lit %c%d NOT on trail "
+                            "(t=%u->%u level=%d)\n", where,
+                            r.lit.sign ? '+' : '-', r.lit.var, t, p, currentLevel_);
+                    }
+                    ++violations;
+                    if (doAssert) std::abort();
+                }
+                for (const auto& [a, b] : r.argPairs) {
+                    if (!egraph_.same(a, b)) {
+                        if (diag) {
+                            std::fprintf(stderr,
+                                "[PF-INV][%s] STALE ArrayRow2Cond argPair (%u,%u) NOT "
+                                "same-class (t=%u->%u level=%d)\n", where, a, b, t, p,
+                                currentLevel_);
                         }
                         ++violations;
                         if (doAssert) std::abort();
@@ -1271,13 +1303,68 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // tautological / congruence consequences at the current decision level.
     // Tag them with currentLevel_ so the level-ordered saturation places them
     // after all lower-level merges.
-    size_t mqTagFrom = mergeQueue_.size();
-    if (arrayMode_) {
+    // Array axiom enqueue: Row1/Const/Row2-const eager merges (enqueueEagerMerges)
+    // + L2 Row2-cond merges for KNOWN-disequal index pairs (ArrayRow2Cond carries
+    // the diseq reason + i~lhs/j~rhs chains so conflicts are sound). Factored into
+    // a lambda so the L3 fixpoint (after saturation) can re-run it — nested
+    // read-over-write (e.g. (Array Int (Array Int Int))) needs the OUTER peel's
+    // congruence closed before the INNER reads become peelable.
+    auto enqueueArrayAxioms = [&]() {
+        if (!arrayMode_) return;
         ensureArrayContext();
-        if (arrayReasoner_.active()) {
-            arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+        if (!arrayReasoner_.active()) return;
+        arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+        if (arrayReasoner_.row2DiseqEnabled()) {
+            auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
+                uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
+                return (static_cast<uint64_t>(lo) << 32) | hi;
+            };
+            std::unordered_map<uint64_t, const ActiveDisequality*> diseqMap;
+            diseqMap.reserve(disequalities_.size() + sharedDisequalities_.size() + 1);
+            for (const auto& d : disequalities_)
+                diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+            for (const auto& d : sharedDisequalities_)
+                diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+            // L11 demand-driven disequality (XOLVER_NIA_ROW2_DEMAND, default-OFF):
+            // when an eligible Row2-cond pair (i,j) has NO known diseq, buffer it
+            // (mapped to shared terms) so the combination layer can drive the arith
+            // diseq prover on exactly this pair. Read once; capping via row2DemandSeen_.
+            static const bool row2Demand = [] {
+                const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
+                return e && *e && *e != '0';
+            }();
+            auto bufferDemand = [&](EufTermId i, EufTermId j) {
+                if (!row2Demand || !sharedTermRegistry_) return;
+                ExprId ei = termManager_.node(i).origin;
+                ExprId ej = termManager_.node(j).origin;
+                if (ei == NullExpr || ej == NullExpr) return;
+                auto sa = sharedTermRegistry_->findByExprId(ei);
+                auto sb = sharedTermRegistry_->findByExprId(ej);
+                if (!sa || !sb || *sa == *sb) return;
+                SharedTermId lo = *sa < *sb ? *sa : *sb, hi = *sa < *sb ? *sb : *sa;
+                uint64_t key = (static_cast<uint64_t>(lo) << 32) | hi;
+                if (!row2DemandSeen_.insert(key).second) return;   // already demanded
+                row2DemandPairs_.push_back({lo, hi});
+            };
+            auto queryDiseq = [&](EufTermId i, EufTermId j)
+                    -> std::optional<ArrayReasoner::Row2CondDiseq> {
+                EClassId ri = egraph_.rep(i), rj = egraph_.rep(j);
+                if (ri == rj) return std::nullopt;
+                auto it = diseqMap.find(repPairKey(ri, rj));
+                if (it == diseqMap.end()) { bufferDemand(i, j); return std::nullopt; }
+                const ActiveDisequality& d = *it->second;
+                EClassId rl = egraph_.rep(d.lhs), rr = egraph_.rep(d.rhs);
+                if (rl == ri && rr == rj)
+                    return ArrayReasoner::Row2CondDiseq{d.lhs, d.rhs, d.reason};
+                if (rl == rj && rr == ri)
+                    return ArrayReasoner::Row2CondDiseq{d.rhs, d.lhs, d.reason};
+                return std::nullopt;   // rep moved since map build — skip (sound)
+            };
+            arrayReasoner_.enqueueRow2CondMerges(queryDiseq, currentLevel_, mergeQueue_);
         }
-    }
+    };
+    size_t mqTagFrom = mergeQueue_.size();
+    enqueueArrayAxioms();
     // Register signatures for all newly interned terms before entering the
     // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
     // has already been merged) are visible to congruence detection.
@@ -1472,6 +1559,52 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - _satT0).count();
 
+    // L3 (XOLVER_AX_FIXPOINT, default-OFF): array-axiom saturation FIXPOINT. The
+    // main loop above ran the array passes ONCE (pre-saturation). For NESTED
+    // arrays (e.g. (Array Int (Array Int Int))) the OUTER store peel only resolves
+    // after congruence closure, exposing INNER reads that need their own peel.
+    // Re-run the array axioms now (egraph is congruence-closed) and re-saturate;
+    // repeat until no new merge (fixpoint) or the iteration backstop. The egraph
+    // grows monotonically (internSelect dedups, same-class skips), so this
+    // converges; kMaxAxIter is only a non-termination backstop (a hit means a bug
+    // to fix, not a verdict cap — remaining merges re-derive next check). Sound:
+    // the re-run merges are the same tautological / ArrayRow2Cond merges, stamped
+    // at currentLevel_ so backtrack removes them.
+    static const bool axDiagL3 = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    if (axDiagL3)
+        std::fprintf(stderr, "[L3] reach fixpoint-gate: en=%d arrayMode=%d active=%d\n",
+                     arrayFixpointEnabled_ ? 1 : 0, arrayMode_ ? 1 : 0,
+                     arrayReasoner_.active() ? 1 : 0);
+    if (arrayFixpointEnabled_ && arrayMode_ && arrayReasoner_.active()) {
+        const int kMaxAxIter = 64;
+        for (int axIter = 0; axIter < kMaxAxIter; ++axIter) {
+            size_t mark = mergeQueue_.size();          // drained == 0
+            enqueueArrayAxioms();
+            egraph_.registerPendingSignatures(mergeQueue_);
+            for (size_t i = mark; i < mergeQueue_.size(); ++i)
+                mergeQueue_[i].level = currentLevel_;
+            if (axDiagL3)
+                std::fprintf(stderr, "[L3] axIter=%d added=%zu\n", axIter, mergeQueue_.size() - mark);
+            if (mergeQueue_.size() == mark) break;     // fixpoint: nothing new
+            if (diseqWatchEnabled_) rebuildDiseqIndex();
+            // Drain the newly-enqueued merges (baseline min-level order), reusing
+            // applyMerge (still in scope). A conflict returns immediately.
+            while (!mergeQueue_.empty()) {
+                size_t mi = 0;
+                for (size_t i = 1; i < mergeQueue_.size(); ++i)
+                    if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
+                PendingMerge req = mergeQueue_[mi];
+                mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+                auto r = applyMerge(std::move(req),
+                    [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
+                if (r) return *r;
+            }
+            if (axIter == kMaxAxIter - 1 && std::getenv("XOLVER_AX_DIAG"))
+                std::fprintf(stderr, "[L3] array fixpoint hit kMaxAxIter=%d (non-convergence?)\n",
+                             kMaxAxIter);
+        }
+    }
+
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
         egraph_.same(trueTerm_, falseTerm_)) {
@@ -1552,6 +1685,44 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     assert(egraph_.congruenceClosed());
 #endif
 
+    // L2 measurement (XOLVER_AX_R2D_DIAG): of the Row2-eligible reads
+    // (select(arr,j) with a store(a,i,v) in arr's class, i≠j-not-same), how many
+    // have i≠j KNOWN-disequal in the e-graph right now? Decides whether eager
+    // Row2-merge-on-known-diseq will fire at these Standard checkpoints.
+    static const bool r2dDiag = std::getenv("XOLVER_AX_R2D_DIAG") != nullptr;
+    if (r2dDiag && arrayMode_ && arrayReasoner_.active()) {
+        auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
+            uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
+            return (static_cast<uint64_t>(lo) << 32) | hi;
+        };
+        std::unordered_set<uint64_t> knownDiseq;
+        for (const auto& d : disequalities_)
+            knownDiseq.insert(repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs)));
+        for (const auto& d : sharedDisequalities_)
+            knownDiseq.insert(repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs)));
+        size_t eligible = 0, known = 0;
+        for (EufTermId sel : arrayReasoner_.selectTerms()) {
+            const auto& sn = termManager_.node(sel);
+            if (sn.args.size() != 2) continue;
+            EufTermId jTerm = sn.args[1];
+            for (EufTermId m : egraph_.classMembers(egraph_.rep(sn.args[0]))) {
+                if (!arrayReasoner_.isStore(m)) continue;
+                const auto& mn = termManager_.node(m);
+                if (mn.args.size() != 3) continue;
+                EufTermId iTerm = mn.args[1];
+                if (egraph_.same(iTerm, jTerm)) continue;
+                ++eligible;
+                if (knownDiseq.count(repPairKey(egraph_.rep(iTerm), egraph_.rep(jTerm))))
+                    ++known;
+            }
+        }
+        std::fprintf(stderr,
+            "[R2D] effort=%d diseqs=%zu+%zu eligible=%zu knownDiseq=%zu\n",
+            (int)effort, disequalities_.size(), sharedDisequalities_.size(),
+            eligible, known);
+        std::fflush(stderr);
+    }
+
     // Datatype clash / acyclicity conflicts. Sound UNSAT detection against the
     // now-congruence-closed egraph; safe at any effort (a hard contradiction).
     if (dtMode_) {
@@ -1559,6 +1730,46 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         if (dtReasoner_.active()) {
             if (auto conflict = dtReasoner_.checkConflict()) {
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(*conflict)});
+            }
+        }
+    }
+
+    // L13: relevancy-bounded Row2 case-split at STANDARD effort
+    // (XOLVER_AX_ROW2_SPLIT). The Row2 lemma (i=j ∨ readEq) is a THEORY TAUTOLOGY
+    // (the array axiom), so emitting it on a partial assignment is SOUND. Reuses
+    // instantiateLemma with a SEPARATE dedup set (row2SplitDone_) so it does NOT
+    // mark row2Done_ and starve the Full-effort path (the ax_007 regression). The
+    // lemmas are tagged ArraySplit; the propagator marks their atoms dynamically
+    // relevant so cb_decide DECIDES i=j (try → refute via the whole formula →
+    // i≠j → readEq forced → chain advances). Buffered for the entailment channel
+    // (cb_propagate drops Standard-effort Lemma results). z3's lazy split, made
+    // tractable by the lazy select bound + made effective by dynamic relevancy.
+    static const bool row2Split = [] {
+        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    // Scoped to COMBINATION (sharedTermRegistry_ != null): generating the split
+    // INTERNS new select terms into the e-graph, which perturbs the pure-QF_AX
+    // Full-effort sat-gate (ax_007 unsat→unknown). cs_* / QF_ANIA is combination.
+    if (arrayMode_ && row2Split && sharedTermRegistry_ && effort != TheoryEffort::Full) {
+        ensureArrayContext();
+        if (arrayReasoner_.active()) {
+            auto diseqs = activeArrayDiseqs();
+            const int kMaxSplitPerCheck = 64;
+            for (int n = 0; n < kMaxSplitPerCheck; ++n) {
+                auto lemma = arrayReasoner_.instantiateLemma(diseqs, &row2SplitDone_);
+                if (!lemma || lemma->empty()) break;  // no more eligible
+                TheoryLemma tl;
+                tl.lits = std::move(*lemma);
+                tl.kind = LemmaKind::ArraySplit;
+                if (lemmaDb.contains(tl)) continue;
+                row2SplitLemmas_.push_back(std::move(tl));
+            }
+            if (std::getenv("XOLVER_AX_R2D_DIAG") && !row2SplitLemmas_.empty()) {
+                static size_t g_split = 0; g_split += row2SplitLemmas_.size();
+                std::fprintf(stderr, "[R2-SPLIT] this=%zu cum=%zu\n",
+                             row2SplitLemmas_.size(), g_split);
+                std::fflush(stderr);
             }
         }
     }

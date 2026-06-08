@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <optional>
+#include <functional>
 #include <cstdint>
 
 namespace xolver {
@@ -98,8 +99,13 @@ public:
         EufTermId lhs;
         EufTermId rhs;
     };
+    // `dedupOverride`: when non-null, use this set for Row2 (store,j)-pair dedup
+    // instead of the internal row2Done_. The L13 Standard-effort split passes its
+    // OWN set so it does not mark row2Done_ and starve the Full-effort path
+    // (the ax_007 regression). Default null = original behavior (uses row2Done_).
     std::optional<std::vector<SatLit>>
-    instantiateLemma(const std::vector<ArrayDiseq>& disequalities);
+    instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
+                     std::unordered_set<uint64_t>* dedupOverride = nullptr);
 
     // Collect the SharedTermIds of all array INDEX terms (the index arg of every
     // select/store). Used by the combination layer to scope deduced-equality
@@ -144,6 +150,42 @@ private:
     // and read indices are syntactically-distinct numeric/bool constants. Read
     // once at construction.
     bool row2ConstEnabled_ = false;
+
+    // XOLVER_AX_LAZY (default-OFF, L1): RELEVANCY-DRIVEN read-over-write
+    // completion. The default eager path interns select(arr,idx) for the full
+    // arrays×read-indices cross-product (24k+ selects on the cs_* concurrency
+    // traces vs z3's ~100 axiom instantiations — a primary TO cause). The lazy
+    // path instead seeds select(s,idx) ONLY for stores s in the SAME e-graph
+    // class as an array actually read at idx — the towers a read genuinely needs
+    // to peel. Row2 then chains the peeling. Verdict-sound (completion adds only
+    // tautological selects; restricting which we add is completeness-only, floored
+    // by arrayModelDefinitelyViolates). Read once at construction.
+    bool lazyComplete_ = false;
+    void completeStoreSelectsLazy(std::deque<PendingMerge>& outQueue);
+
+public:
+    // L2 (XOLVER_AX_ROW2_DISEQ): the disequality descriptor the eager Row2-cond
+    // pass needs — the matched diseq endpoints (rep(dForI)==rep(i),
+    // rep(dForJ)==rep(j)) and the disequality's reason literal.
+    struct Row2CondDiseq {
+        EufTermId dForI;
+        EufTermId dForJ;
+        SatLit reason;
+    };
+    // Eager Row2 MERGE for KNOWN-disequal index pairs (L2). For every read
+    // select(arr,j) with a store(a,i,v) in arr's class where queryDiseq(i,j)
+    // reports i≠j known, merge select(store(a,i,v),j) = select(a,j) with an
+    // ArrayRow2Cond reason (diseq literal + chains i~dForI, j~dForJ). Dedup is
+    // implicit (skip when the two reads are already same-class), so it is
+    // backtrack-correct: a removed merge is simply re-derived. mergeLevel is
+    // stamped on each merge (pass currentLevel_ — conservative, never stale).
+    void enqueueRow2CondMerges(
+        const std::function<std::optional<Row2CondDiseq>(EufTermId, EufTermId)>& queryDiseq,
+        int mergeLevel,
+        std::deque<PendingMerge>& outQueue);
+    bool row2DiseqEnabled() const { return row2DiseqEnabled_; }
+private:
+    bool row2DiseqEnabled_ = false;
 
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
     // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE

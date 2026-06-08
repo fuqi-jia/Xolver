@@ -4,7 +4,42 @@
 #include "sat/CadicalTheoryPropagator.h"
 #include "util/SolveClock.h"
 
+#include <execinfo.h>
+#include <csignal>
+#include <sys/time.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 namespace xolver {
+
+// SIGPROF sampling profiler (XOLVER_SAT_SAMPLE). setitimer(ITIMER_PROF) delivers
+// SIGPROF to the CPU-bound thread; the handler writes its stack (async-signal-safe
+// backtrace_symbols_fd) to a file. Reveals where solve() wall-time actually is.
+namespace {
+int g_sampleFd = -1;
+void sigprofHandler(int) {
+    if (g_sampleFd < 0) return;
+    void* bt[48];
+    int n = backtrace(bt, 48);
+    const char sep[] = "====\n";
+    ssize_t w = ::write(g_sampleFd, sep, sizeof(sep) - 1); (void)w;
+    backtrace_symbols_fd(bt, n, g_sampleFd);
+}
+void armSamplerOnce() {
+    static bool armed = false;
+    if (armed) return;
+    armed = true;
+    g_sampleFd = ::open("/tmp/xolver_samples.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    struct sigaction sa{};
+    sa.sa_handler = sigprofHandler;
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGPROF, &sa, nullptr);
+    struct itimerval t{};
+    t.it_interval.tv_usec = 50000;   // 20 Hz
+    t.it_value.tv_usec = 50000;
+    setitimer(ITIMER_PROF, &t, nullptr);
+}
+} // namespace
 
 bool CadicalBackend::WallClockTerminator::terminate() {
     return wall::hasDeadline() && wall::remainingMs() == 0;
@@ -75,6 +110,7 @@ void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 
 SatSolver::SolveResult CadicalBackend::solve() {
     terminateRequested_ = false;
+    if (std::getenv("XOLVER_SAT_SAMPLE")) armSamplerOnce();
     if (std::getenv("XOLVER_SAT_SIZE_DIAG")) {
         std::fprintf(stderr, "[SAT-SIZE] maxVar=%u active=%d irredundant_clauses=%ld\n",
                      (unsigned)maxVar_, solver_->active(),
@@ -139,6 +175,15 @@ void CadicalBackend::addObservedVar(SatVar v) {
         solver_->add_observed_var(static_cast<int>(v));
         observedVars_[v] = true;
     }
+}
+
+void CadicalBackend::setDefaultPhase(SatVar v, bool value) {
+    if (v == 0) return;
+    // CaDiCaL::phase(lit) forces the default decision phase: a positive lit
+    // prefers TRUE first, a negative lit prefers FALSE first. Search heuristic
+    // only — never changes satisfiability.
+    int lit = static_cast<int>(v);
+    solver_->phase(value ? lit : -lit);
 }
 
 void CadicalBackend::connectPropagator(CadicalTheoryPropagator* propagator) {

@@ -1,10 +1,33 @@
 #include "theory/arith/presolve/IntegerLinearAlgebra.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 namespace xolver {
 
 namespace {
+
+// Hash an integer matrix (dimensions + every entry, by limb) for the SNF memo.
+// Smith Normal Form is a pure function of A, so an exact-A-verified memo is
+// behaviour-identical; the verification (matrix equality on a hash hit) rules
+// out any collision producing a wrong SNF.
+size_t hashMix(size_t h, size_t v) { return h ^ (v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2)); }
+size_t hashMpz(const mpz_class& z, size_t h) {
+    h = hashMix(h, static_cast<size_t>(mpz_sgn(z.get_mpz_t()) + 2));
+    size_t sz = mpz_size(z.get_mpz_t());
+    h = hashMix(h, sz);
+    for (size_t k = 0; k < sz; ++k)
+        h = hashMix(h, static_cast<size_t>(mpz_getlimbn(z.get_mpz_t(), k)));
+    return h;
+}
+size_t hashMatrix(const IntMatrix& A) {
+    size_t h = hashMix(0, A.size());
+    for (const auto& row : A) {
+        h = hashMix(h, row.size());
+        for (const auto& e : row) h = hashMpz(e, h);
+    }
+    return h;
+}
 
 IntMatrix identity(int k) {
     IntMatrix I(k, std::vector<mpz_class>(k, mpz_class(0)));
@@ -56,7 +79,7 @@ mpz_class fdiv(const mpz_class& a, const mpz_class& b) {
 
 }  // namespace
 
-SmithNormalForm smithNormalForm(const IntMatrix& A) {
+static SmithNormalForm smithNormalFormImpl(const IntMatrix& A) {
     SmithNormalForm r;
     r.m = static_cast<int>(A.size());
     r.n = r.m ? static_cast<int>(A[0].size()) : 0;
@@ -150,6 +173,28 @@ SmithNormalForm smithNormalForm(const IntMatrix& A) {
         }
     }
     return r;
+}
+
+SmithNormalForm smithNormalForm(const IntMatrix& A) {
+    // Memo: SNF is a pure function of A, and on QF_ANIA/EVM-style inputs the same
+    // (deduped) integer-equality coefficient matrix is presented to the presolve
+    // fixpoint over and over (it is rebuilt from scratch every theory check). SNF
+    // is super-linear with bignum growth, so recomputing it dominates. The memo
+    // stores A alongside the result and verifies A == cached-A on a hash hit, so a
+    // collision can never return a wrong SNF (it just recomputes). thread_local:
+    // the cache is private to the solve worker; bounded by clear-on-overflow.
+    static thread_local std::unordered_map<size_t,
+        std::pair<IntMatrix, SmithNormalForm>> cache;
+    if (!A.empty()) {
+        size_t key = hashMatrix(A);
+        auto it = cache.find(key);
+        if (it != cache.end() && it->second.first == A) return it->second.second;
+        SmithNormalForm snf = smithNormalFormImpl(A);
+        if (cache.size() > 64) cache.clear();   // bound memory (U/V can be large)
+        cache.emplace(key, std::make_pair(A, snf));
+        return snf;
+    }
+    return smithNormalFormImpl(A);
 }
 
 std::vector<mpz_class> matVec(const IntMatrix& M, const std::vector<mpz_class>& v) {

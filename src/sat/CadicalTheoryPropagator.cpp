@@ -1,5 +1,7 @@
 #include "sat/CadicalTheoryPropagator.h"
+#include <cstdio>
 #include "sat/CadicalBackend.h"
+#include "sat/RelevancyEngine.h"
 #include "util/SolveClock.h"
 #include <cassert>
 #include <iostream>
@@ -13,6 +15,17 @@
 #define NO_DBG if (true) {} else std::cerr
 
 namespace xolver {
+
+// SAT-search profiler accumulators (XOLVER_SAT_PROF). Anonymous-namespace
+// statics; updated in the callbacks, dumped from cb_propagate. Diagnostic only.
+namespace {
+long long g_notifyCalls = 0, g_notifyUs = 0;
+long long g_checkCalls = 0, g_checkUs = 0;
+long long g_propUs = 0;
+long long g_btCalls = 0, g_btUs = 0;
+long long g_decideUs = 0;
+long long g_hecCalls = 0, g_hecUs = 0;   // cb_has_external_clause
+}
 
 // ------------------------------------------------------------------
 // TheorySearchStats implementation
@@ -102,11 +115,36 @@ void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
     unknownReasonSink_ = sink;
 }
 
+void CadicalTheoryPropagator::setRelevancyEngine(RelevancyEngine* rel) {
+    rel_ = rel;
+    relevancyOn_ = (rel != nullptr);
+    if (rel_) {
+        // The engine reads truth from this propagator's live assignment map.
+        rel_->setValueOracle([this](SatVar v) -> int {
+            auto it = currentAssignment_.find(v);
+            if (it == currentAssignment_.end()) return 0;
+            return it->second ? 1 : -1;
+        });
+    }
+}
+
 static void writeReason(std::string* sink, const std::string& msg) {
     if (sink) *sink = msg;
 }
 
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
+    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    auto _na0 = satProf ? std::chrono::steady_clock::now()
+                        : std::chrono::steady_clock::time_point{};
+    struct NaTimer {
+        bool on; std::chrono::steady_clock::time_point t0;
+        ~NaTimer() {
+            if (!on) return;
+            g_notifyUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            ++g_notifyCalls;
+        }
+    } _nat{satProf, _na0};
     // Decision-steering probe: the first literal assigned right after a new
     // decision level is CaDiCaL's decision literal. Bucket it theory vs boolean.
     if (expectDecisionLit_ && !lits.empty()) {
@@ -127,15 +165,35 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
     }
+    // L7: drive relevancy AFTER the whole batch is in currentAssignment_ so the
+    // engine's value oracle sees every co-assigned literal. Pure heuristic.
+    if (relevancyOn_) {
+        for (int lit : lits) {
+            SatVar var = static_cast<SatVar>(std::abs(lit));
+            rel_->onAssign(var, lit > 0);
+        }
+    }
 }
 
 void CadicalTheoryPropagator::notify_new_decision_level() {
     ++currentLevel_;
     expectDecisionLit_ = true;  // next assignment's first lit is the decision
+    if (relevancyOn_) rel_->pushLevel();
 }
 
 int CadicalTheoryPropagator::cb_decide() {
     ++decideCalls_;
+    static const bool satProf2 = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    auto _de0 = satProf2 ? std::chrono::steady_clock::now()
+                         : std::chrono::steady_clock::time_point{};
+    struct DeTimer {
+        bool on; std::chrono::steady_clock::time_point t0;
+        ~DeTimer() {
+            if (!on) return;
+            g_decideUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+        }
+    } _det{satProf2, _de0};
 
     // Wall-clock budget guard (see cb_propagate). Default-inert when no budget.
     if (!abortWithUnknown_ && wall::hasDeadline() && wall::remainingMs() == 0) {
@@ -160,6 +218,21 @@ int CadicalTheoryPropagator::cb_decide() {
                       << " theoryAtomDecisions=" << theoryAtomDecisions_
                       << " theoryAtomPct=" << pct << "%" << std::endl;
         }
+    }
+
+    // XOLVER_RELEVANCY (L7): steer CaDiCaL toward the RELEVANT boolean skeleton
+    // — the live program branches under the current assignment — and away from
+    // dead-branch / un-taken-interleaving variables. Returns a relevant +
+    // unassigned literal (decided TRUE; phase is a heuristic, soundness-neutral)
+    // or declines so CaDiCaL mops up the rest by VSIDS. Pure decision heuristic:
+    // every clause + theory lemma is still enforced, so the verdict is unchanged.
+    if (relevancyOn_) {
+        SatVar v = rel_->pickRelevantUnassigned();
+        if (v != 0) {
+            ++relSteeredDecisions_;
+            return static_cast<int>(v);
+        }
+        // No relevant unassigned var found -> fall through (CaDiCaL decides).
     }
 
     // XOLVER_LRA_DECIDE: steer toward a theory-feasible region. Find an
@@ -201,8 +274,21 @@ int CadicalTheoryPropagator::cb_decide() {
 }
 
 void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
+    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    auto _bt0 = satProf ? std::chrono::steady_clock::now()
+                        : std::chrono::steady_clock::time_point{};
+    struct BtTimer {
+        bool on; std::chrono::steady_clock::time_point t0;
+        ~BtTimer() {
+            if (!on) return;
+            g_btUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            ++g_btCalls;
+        }
+    } _btt{satProf, _bt0};
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
+    if (relevancyOn_) rel_->popToLevel(static_cast<int>(new_level));
     for (auto it = varToLevel_.begin(); it != varToLevel_.end(); ) {
         if (it->second > static_cast<int>(new_level)) {
             currentAssignment_.erase(it->first);
@@ -214,6 +300,18 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
 }
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
+    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    auto _ck0 = satProf ? std::chrono::steady_clock::now()
+                        : std::chrono::steady_clock::time_point{};
+    struct CkTimer {
+        bool on; std::chrono::steady_clock::time_point t0;
+        ~CkTimer() {
+            if (!on) return;
+            g_checkUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            ++g_checkCalls;
+        }
+    } _ckt{satProf, _ck0};
     if (abortWithUnknown_) {
         terminateSolve();
         return false;
@@ -311,6 +409,31 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     NO_DBG << " us=" << dur.count();
     NO_DBG << "\n";
 
+    // #2 probe: log each Full-check refutation (kind/size/reason) to a file so
+    // the cs_* non-convergence (model-specific lemmas) can be characterized.
+    if (std::getenv("XOLVER_SAT_PROF")) {
+        if (FILE* f = std::fopen("/tmp/xolver_refute.txt", "a")) {
+            size_t sz = tr.kind == TheoryCheckResult::Kind::Conflict
+                            ? (tr.conflictOpt ? tr.conflictOpt->clause.size() : 0)
+                        : tr.kind == TheoryCheckResult::Kind::Lemma
+                            ? (tr.lemmaOpt ? tr.lemmaOpt->lits.size() : 0)
+                            : 0;
+            std::fprintf(f, "kind=%d size=%zu reason=%s", (int)tr.kind, sz,
+                         tr.reason.empty() ? "-" : tr.reason.c_str());
+            if (tr.kind == TheoryCheckResult::Kind::Lemma && tr.lemmaOpt) {
+                std::fprintf(f, " lits=[");
+                for (auto lit : tr.lemmaOpt->lits) {
+                    const auto* rec = registry_.findBySatVar(lit.var);
+                    std::fprintf(f, "%s%u/p%d ", lit.sign ? "" : "-", lit.var,
+                                 rec ? (int)rec->payload.index() : -1);
+                }
+                std::fprintf(f, "]");
+            }
+            std::fprintf(f, "\n");
+            std::fclose(f);
+        }
+    }
+
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
         return true;
     }
@@ -326,6 +449,22 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             if (!isClauseFalsifiedByCurrentModel(tr.conflictOpt->clause)) {
                 NO_DBG << "[PROP][BUG] malformed external conflict clause. "
                              "Rejecting it to avoid infinite modelCheck loop.\n";
+                if (std::getenv("XOLVER_SAT_PROF")) {
+                    if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a")) {
+                        std::fprintf(f, "ABORT-388: malformed Full conflict (%zu lits, not falsified)\n",
+                                     tr.conflictOpt->clause.size());
+                        for (SatLit lit : tr.conflictOpt->clause) {
+                            LitValue v = assignmentView_.value(lit);
+                            if (v == LitValue::False) continue;  // only the offending lits
+                            const auto* a = registry_.findBySatVar(lit.var);
+                            std::fprintf(f, "   STALE lit var=%u sign=%d val=%s payloadIdx=%d\n",
+                                         lit.var, (int)lit.sign,
+                                         v == LitValue::True ? "TRUE" : "UNASSIGNED",
+                                         a ? (int)a->payload.index() : -1);
+                        }
+                        std::fclose(f);
+                    }
+                }
                 abortWithUnknown_ = true;
                 terminateSolve();
                 return false;
@@ -333,6 +472,10 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
             enqueuePendingClause(tr.conflictOpt->clause);
             return false;
+        }
+        if (std::getenv("XOLVER_SAT_PROF")) {
+            if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
+            { std::fprintf(f, "ABORT-396: empty Full conflict clause\n"); std::fclose(f); }
         }
         abortWithUnknown_ = true;
         terminateSolve();
@@ -346,6 +489,10 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             lemmaDb_.insertIfNew(*tr.lemmaOpt);
             enqueuePendingClause(*tr.lemmaOpt);
             return false;
+        }
+        if (std::getenv("XOLVER_SAT_PROF")) {
+            if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
+            { std::fprintf(f, "ABORT-409: empty Full lemma\n"); std::fclose(f); }
         }
         abortWithUnknown_ = true;
         terminateSolve();
@@ -365,6 +512,45 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
 int CadicalTheoryPropagator::cb_propagate() {
     ++stats_.propagateCallCount;
+    // Mid-solve SAT-search profiler (XOLVER_SAT_PROF). Worker-thread stderr is
+    // suppressed, so snapshot to a file every ~2s (overwrite); a timeout-kill
+    // leaves the last snapshot. Reveals whether the boolean search is exploding
+    // (decisions/conflicts huge) vs the theory layer. Zero cost when unset.
+    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    if (satProf) {
+        static auto lastDump = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastDump).count() >= 2000) {
+            lastDump = now;
+            // NB: do NOT call backend_.getStats() here — CaDiCaL forbids get()
+            // during solving (aborts). Dump only our own callback counters.
+            if (FILE* f = std::fopen("/tmp/xolver_satprof.txt", "w")) {
+                std::fprintf(f, "cb_propagate_calls=%lld theory_checks=%lld "
+                             "cb_decide_calls=%lld decisionLits=%lld theoryAtomDecisions=%lld\n",
+                             (long long)stats_.propagateCallCount,
+                             (long long)stats_.propagateTheoryCheckCount,
+                             (long long)decideCalls_, (long long)decisionLits_,
+                             (long long)theoryAtomDecisions_);
+                std::fprintf(f, "notify_assignment: calls=%lld total_ms=%lld\n",
+                             g_notifyCalls, g_notifyUs / 1000);
+                std::fprintf(f, "cb_check_found_model(Full): calls=%lld total_ms=%lld\n",
+                             g_checkCalls, g_checkUs / 1000);
+                std::fprintf(f, "cb_propagate body: total_ms=%lld\n", g_propUs / 1000);
+                std::fprintf(f, "notify_backtrack: calls=%lld total_ms=%lld\n",
+                             g_btCalls, g_btUs / 1000);
+                std::fprintf(f, "cb_decide body: total_ms=%lld\n", g_decideUs / 1000);
+                std::fprintf(f, "cb_has_external_clause: calls=%lld total_ms=%lld\n",
+                             g_hecCalls, g_hecUs / 1000);
+                if (relevancyOn_ && rel_) {
+                    std::fprintf(f, "relevancy: steeredDecisions=%lld relevantNodes=%zu "
+                                 "totalNodes=%zu relevantVarsSeen=%zu\n",
+                                 relSteeredDecisions_, rel_->relevantNodes(),
+                                 rel_->totalNodes(), rel_->relevantVarsSeen());
+                }
+                std::fclose(f);
+            }
+        }
+    }
     if (abortWithUnknown_ || hasPendingClause_) return 0;
 
     // Wall-clock budget guard. If the solve's deadline has passed, abort to
@@ -548,7 +734,23 @@ int CadicalTheoryPropagator::cb_propagate() {
          (stats_.propagateCallCount % entailPropEvery == 0))) {
         auto props = tm_.takeEntailmentPropagations();
         for (auto& lem : props) {
-            if (!lem.lits.empty()) enqueuePendingClause(lem.lits);
+            if (lem.lits.empty()) continue;
+            // L13 integrated engine: a Row2 case-split lemma (i=j ∨ readEq) is
+            // inert unless the SAT core DECIDES its atoms. When relevancy steering
+            // is on, force the split atoms dynamically relevant so cb_decide picks
+            // them — CaDiCaL tries i=j, the rest of the formula refutes it, learns
+            // i≠j, forces readEq, and the read-over-write chain advances. Pure
+            // decision heuristic — soundness-neutral (the clause itself is a
+            // tautology, added regardless).
+            if (relevancyOn_ && rel_ && lem.kind == LemmaKind::ArraySplit) {
+                for (SatLit l : lem.lits) rel_->forceRelevantVar(l.var);
+            }
+            enqueuePendingClause(lem.lits);
+        }
+        if (std::getenv("XOLVER_L4R_DIAG") && !props.empty()) {
+            static size_t g_enq = 0; g_enq += props.size();
+            std::fprintf(stderr, "[L4R-ENQ] this=%zu cum=%zu\n", props.size(), g_enq);
+            std::fflush(stderr);
         }
     }
 
@@ -556,6 +758,18 @@ int CadicalTheoryPropagator::cb_propagate() {
 }
 
 bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {
+    static const bool satProf3 = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    auto _he0 = satProf3 ? std::chrono::steady_clock::now()
+                         : std::chrono::steady_clock::time_point{};
+    struct HeTimer {
+        bool on; std::chrono::steady_clock::time_point t0;
+        ~HeTimer() {
+            if (!on) return;
+            g_hecUs += std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            ++g_hecCalls;
+        }
+    } _het{satProf3, _he0};
     is_forgettable = false;
     // If current clause exhausted, mark installed and pop
     while (hasPendingClause_ && currentPendingClausePos_ >= currentPendingClause_.size()) {

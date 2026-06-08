@@ -36,7 +36,7 @@ public:
     // (QF_ALRA/ALIA/AUFLRA/AUFLIA). Off by default to limit blast radius — the
     // splitting only fires when both an EUF (array) solver and an arith solver
     // share scalar index/element terms.
-    void setArrayCombinationMode(bool v) { arrayCombinationMode_ = v; }
+    void setArrayCombinationMode(bool v);   // also wires N-O default-disequal phase
     bool isArrayCombinationMode() const { return arrayCombinationMode_; }
 
     void assertTheoryLit(const TheoryAtomRecord& atom, SatLit assignedLit, int level) override;
@@ -176,6 +176,17 @@ private:
         }
     };
     std::unordered_set<ReportedPropKey, ReportedPropKeyHash> deducedEqCache_;
+
+    // L4-reach (XOLVER_NIA_NO_PROP, default-OFF): array-relevant deduced shared
+    // equalities routed through the ENTAILMENT channel at Standard effort so they
+    // fire BEFORE Full (which huge cs_*-class formulas never reach). Each buffered
+    // TheoryLemma is the SAME globally-valid clause (¬reasons ∨ eqLit) the Full
+    // lemma path emits — only the channel differs: lemmas are dropped by
+    // cb_propagate at Standard, entailments are honored. Drained (and cleared) by
+    // takeEntailmentPropagations(); deduped once via lemmaDb.insertIfNew, so each
+    // clause is added to the SAT core a single time (permanent + sound: it is a
+    // theory tautology, valid independent of the rest of the trail).
+    std::vector<TheoryLemma> noPropEntailments_;
 
     std::vector<TheorySolver*> solversOwning(SharedTermId a, SharedTermId b) const;
 

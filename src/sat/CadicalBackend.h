@@ -22,6 +22,7 @@ public:
     bool limit(const char* name, int value) override;
     std::vector<SatLit> getFailedAssumptions() const override;
     void addObservedVar(SatVar v) override;
+    void setDefaultPhase(SatVar v, bool value) override;
 
     void connectPropagator(CadicalTheoryPropagator* propagator);
     void disconnectPropagator();

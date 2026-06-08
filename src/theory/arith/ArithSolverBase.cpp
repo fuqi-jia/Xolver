@@ -70,16 +70,18 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
         long pipelineCalls = 0;
         std::chrono::steady_clock::time_point lastDump = std::chrono::steady_clock::now();
         void dump() {
-            // Write via raw fd 2 (fprintf), NOT std::cerr: the public API
-            // redirects the worker thread's std::cerr streambuf, which silently
-            // swallows iostream output, but leaves fd 2 alone (same reason
-            // AniaProfile uses fprintf). std::cerr here printed nothing under
-            // `xolver solve`.
-            std::fprintf(stderr, "[STAGE-PROF] pipeline-calls=%ld\n", pipelineCalls);
+            // Worker-thread stderr is suppressed in the solve worker; write the
+            // cumulative snapshot to a file (overwrite each dump so the last one
+            // before a timeout-kill is preserved). Override path via ARITH_STAGE_PROF.
+            const char* p = std::getenv("ARITH_STAGE_PROF");
+            const char* path = (p && *p && *p != '1') ? p : "/tmp/xolver_stageprof.txt";
+            FILE* f = std::fopen(path, "w");
+            if (!f) return;
+            std::fprintf(f, "[STAGE-PROF] pipeline-calls=%ld\n", pipelineCalls);
             for (const auto& [nm, mc] : acc)
-                std::fprintf(stderr, "  %s  ms=%ld calls=%ld\n",
-                             nm.c_str(), (long)mc.first, mc.second);
-            std::fflush(stderr);  // survive SIGKILL on a piped-to-file stderr
+                std::fprintf(f, "  %s  ms=%ld calls=%ld\n", nm.c_str(),
+                             (long)mc.first, mc.second);
+            std::fclose(f);
         }
     };
     static ProfState prof;

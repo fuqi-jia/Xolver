@@ -8,6 +8,7 @@
 #include "expr/ir.h"
 #include "util/MpqUtils.h"
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 
@@ -15,6 +16,10 @@ namespace xolver {
 
 ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
+    // L1: relevancy-driven completion (default-OFF). See header.
+    lazyComplete_ = std::getenv("XOLVER_AX_LAZY") != nullptr;
+    // L2: eager Row2 merge on known diseqs (default-OFF). See header.
+    row2DiseqEnabled_ = std::getenv("XOLVER_AX_ROW2_DISEQ") != nullptr;
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
@@ -272,6 +277,8 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     // further read-over-write selects. Sound — the model floor guards any
     // missed instance; this only bounds the driver-family blowup.
     if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) return;
+    // L1: relevancy-driven path (XOLVER_AX_LAZY) replaces the eager cross-product.
+    if (lazyComplete_) { completeStoreSelectsLazy(outQueue); return; }
     discoverArrayTerms();
 
     // (1) Incrementally extend the read-index cache from NEW selectTerms_
@@ -351,10 +358,105 @@ void ArrayReasoner::completeStoreSelects(std::deque<PendingMerge>& outQueue) {
     }
 }
 
+void ArrayReasoner::completeStoreSelectsLazy(std::deque<PendingMerge>& outQueue) {
+    // RELEVANCY-DRIVEN completion (L1). For each ORIGINAL read select(B, idx),
+    // intern select(s, idx) for every store s in B's e-graph class (≠ B). These
+    // are exactly the store towers the read must peel THROUGH: s ~ B (same class)
+    // means select(s,idx) congruence-merges with select(B,idx), and Row1/Row2 then
+    // resolve s. Independent arrays (not e-graph-equal to any read array) are NOT
+    // completed — that is where the eager arrays×indices cross-product exploded
+    // (24k selects on cs_*). Re-run each check: classes merge during search, so
+    // newly-connected stores are picked up; selectCompleteDone_ dedups; the
+    // completion is monotonic and verdict-sound (only tautological selects added).
+    discoverArrayTerms();
+    if (storeTerms_.empty() || selectTerms_.empty()) return;
+
+    // Group stores by e-graph class rep.
+    std::unordered_map<EClassId, std::vector<EufTermId>> storesByRep;
+    storesByRep.reserve(storeTerms_.size() * 2 + 1);
+    for (EufTermId s : storeTerms_) storesByRep[egraph_->rep(s)].push_back(s);
+
+    size_t nSel = selectTerms_.size();
+    for (size_t k = 0; k < nSel; ++k) {
+        EufTermId sel = selectTerms_[k];
+        if (internalSelect_.count(sel)) continue;        // seed from genuine reads only
+        const auto& sn = tm_->node(sel);
+        if (sn.args.size() != 2) continue;
+        EufTermId arrB = sn.args[0];
+        EufTermId idx = sn.args[1];
+        ExprId idxExpr = originExpr(idx);
+        if (idxExpr == NullExpr) continue;
+        if (extWitnessIdx_.count(idxExpr)) continue;     // parity with the eager path
+        auto it = storesByRep.find(egraph_->rep(arrB));
+        if (it == storesByRep.end()) continue;           // no store tower in this read's class
+        for (EufTermId s : it->second) {
+            if (s == arrB) continue;                     // read already on this store
+            if (completeBudget_ != 0 && completeInternsDone_ >= completeBudget_) return;
+            uint64_t key = pairKey(s, idx);
+            if (!selectCompleteDone_.insert(key).second) continue;
+            ExprId sExpr = originExpr(s);
+            if (sExpr == NullExpr) continue;
+            internSelect(sExpr, idxExpr, outQueue);
+        }
+    }
+}
+
+void ArrayReasoner::enqueueRow2CondMerges(
+    const std::function<std::optional<Row2CondDiseq>(EufTermId, EufTermId)>& queryDiseq,
+    int mergeLevel,
+    std::deque<PendingMerge>& outQueue) {
+    if (!active()) return;
+    discoverArrayTerms();
+    size_t r2cMerges = 0, r2cEligible = 0;
+    size_t nSel = selectTerms_.size();
+    for (size_t k = 0; k < nSel; ++k) {
+        EufTermId selTerm = selectTerms_[k];
+        const auto& seln = tm_->node(selTerm);
+        if (seln.args.size() != 2) continue;
+        EufTermId arrArg = seln.args[0];
+        EufTermId jTerm = seln.args[1];
+        EClassId arrClass = egraph_->rep(arrArg);
+        for (EufTermId member : egraph_->classMembers(arrClass)) {
+            if (!symIsStore(member)) continue;
+            const auto& stn = tm_->node(member);
+            if (stn.args.size() != 3) continue;
+            EufTermId aTerm = stn.args[0];   // underlying array
+            EufTermId iTerm = stn.args[1];   // write index
+            if (egraph_->same(iTerm, jTerm)) continue;   // Row1 case (i=j)
+            ++r2cEligible;
+            auto d = queryDiseq(iTerm, jTerm);
+            if (!d) continue;                            // i≠j not known → no eager merge
+            ExprId jExpr = originExpr(jTerm);
+            ExprId aExpr = originExpr(aTerm);
+            ExprId storeExpr = originExpr(member);
+            if (jExpr == NullExpr || aExpr == NullExpr || storeExpr == NullExpr) continue;
+            // Build the read terms over the ACTUAL store member (soundness note in
+            // instantiateLemma): select(store(a,i,v),j) and select(a,j).
+            EufTermId selStore = internSelect(storeExpr, jExpr, outQueue);
+            EufTermId selAJ = internSelect(aExpr, jExpr, outQueue);
+            if (selStore == NullEufTerm || selAJ == NullEufTerm) continue;
+            if (egraph_->same(selStore, selAJ)) continue;   // implicit dedup (backtrack-correct)
+            MergeReason mr;
+            mr.kind = MergeReasonKind::ArrayRow2Cond;
+            mr.lit = d->reason;                              // the diseq reason literal
+            mr.argPairs.push_back({iTerm, d->dForI});        // i ~ diseqLhs
+            mr.argPairs.push_back({jTerm, d->dForJ});        // j ~ diseqRhs
+            outQueue.push_back({selStore, selAJ, mr, mergeLevel});
+            ++r2cMerges;
+        }
+    }
+    if (std::getenv("XOLVER_AX_R2D_DIAG")) {
+        std::fprintf(stderr, "[R2D-merge] selects=%zu eligible=%zu merges=%zu\n",
+                     nSel, r2cEligible, r2cMerges);
+        std::fflush(stderr);
+    }
+}
+
 void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
     aniaprof::Scope _prof(aniaprof::ARR_EAGER);
     if (!active()) return;
     discoverArrayTerms();
+    size_t row1Merges = 0, row2Merges = 0, row2Eligible = 0;
     // Push read indices through store towers BEFORE the Row1/Const pass so the
     // selects they create get their Row1 eager-merge in this same saturation.
     completeStoreSelects(outQueue);
@@ -379,6 +481,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
             mr.kind = MergeReasonKind::ArrayRow1;
             mr.lit = SatLit();
             outQueue.push_back({selSI, vTerm, mr});
+            ++row1Merges;
         }
     }
 
@@ -431,6 +534,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
                 EufTermId aTerm = stn.args[0];   // underlying array
                 EufTermId iTerm = stn.args[1];   // write index
                 if (egraph_->same(iTerm, jTerm)) continue;
+                ++row2Eligible;
                 if (!provablyDistinctConstIndices(iTerm, jTerm)) continue;
 
                 ExprId jExpr = originExpr(jTerm);
@@ -449,17 +553,30 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
                     mr.kind = MergeReasonKind::ArrayRow2;
                     mr.lit = SatLit();
                     outQueue.push_back({selStore, selAJ, mr});
+                    ++row2Merges;
                 }
             }
         }
     }
+
+    static const bool axDiag = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    if (axDiag) {
+        std::fprintf(stderr,
+            "[AX-eager] stores=%zu selects=%zu completed=%zu row1+=%zu row2Eligible=%zu row2const+=%zu\n",
+            storeTerms_.size(), selectTerms_.size(),
+            static_cast<size_t>(completeInternsDone_),
+            row1Merges, row2Eligible, row2Merges);
+        std::fflush(stderr);
+    }
 }
 
 std::optional<std::vector<SatLit>>
-ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
+ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
+                               std::unordered_set<uint64_t>* dedupOverride) {
     aniaprof::Scope _prof(aniaprof::ARR_LEMMA);
     if (!active() || !registry_) return std::nullopt;
     discoverArrayTerms();
+    std::unordered_set<uint64_t>& row2Dedup = dedupOverride ? *dedupOverride : row2Done_;
 
     // --- Row2: i!=j => select(store(a,i,v),j) = select(a,j) ---------------
     // Trigger: a select term select(s, j) where s (or its class) is a store
@@ -500,7 +617,7 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
 
             // Dedup by stable term ids (store member id, read index j id).
             uint64_t key = pairKey(member, jTerm);
-            if (!row2Done_.insert(key).second) continue;
+            if (!row2Dedup.insert(key).second) continue;
 
             ExprId iExpr = originExpr(iTerm);
             ExprId jExpr = originExpr(jTerm);
