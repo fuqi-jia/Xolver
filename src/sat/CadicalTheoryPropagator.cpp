@@ -539,6 +539,11 @@ int CadicalTheoryPropagator::cb_propagate() {
         for (auto& lem : props) {
             if (!lem.lits.empty()) enqueuePendingClause(lem.lits);
         }
+        if (std::getenv("XOLVER_L4R_DIAG") && !props.empty()) {
+            static size_t g_enq = 0; g_enq += props.size();
+            std::fprintf(stderr, "[L4R-ENQ] this=%zu cum=%zu\n", props.size(), g_enq);
+            std::fflush(stderr);
+        }
     }
 
     return 0;

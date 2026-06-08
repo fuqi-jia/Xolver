@@ -40,6 +40,7 @@ void TheoryManager::clearSolvers() {
     pendingSharedEqEvents_.clear();
     snapshots_.clear();
     deducedEqCache_.clear();
+    noPropEntailments_.clear();
     emittedArrangementSplits_.clear();
     careGraph_.clear();
     aggStats_ = AggregateStats{};
@@ -271,6 +272,10 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
         auto v = s->takeEntailmentPropagations();
         for (auto& l : v) out.push_back(std::move(l));
     }
+    // L4-reach: drain TheoryManager-level entailments (array-relevant deduced
+    // shared eqs routed to Standard under XOLVER_NIA_NO_PROP). Empty by default.
+    for (auto& l : noPropEntailments_) out.push_back(std::move(l));
+    noPropEntailments_.clear();
     return out;
 }
 
@@ -407,6 +412,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 }
             }
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
+            if (std::getenv("XOLVER_L4R_DIAG")) {
+                static size_t g_ieq = 0; ++g_ieq;
+                if (g_ieq % 50 == 0)
+                    std::fprintf(stderr, "[L4R-IEQ] interface-eq merges=%zu\n", g_ieq);
+            }
             if (auto c = sharedEqMgr_.checkDisequalityConflict()) {
                 pendingSharedEqEvents_.clear();
                 if (!conflictIsGenuine(c->clause))
@@ -601,6 +611,57 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             std::fprintf(stderr, "[NO] solver=%d effort=%d deduced=%zu arrayPair=%zu deferred=%zu\n",
                          (int)solver->id(), (int)effort, props.size(), arrayPair, deferred);
             std::fflush(stderr);
+        }
+        // L4-reach: route array-relevant deduced shared eqs through the Standard
+        // entailment channel (XOLVER_NIA_NO_PROP). The array-pair eqs are the
+        // ~handful cs_*-class instances need to fire read-over-write; they are
+        // otherwise deferred to Full (the lemma channel is dropped+cache-poisoned
+        // at Standard), which huge formulas never reach. The entailment channel is
+        // honored at Standard and the clause is the IDENTICAL globally-valid
+        // (¬reasons ∨ eqLit) the Full lemma path emits. Sound: same reason
+        // contract as Full (0-unsound there); relevancy = array-pair + caresPair,
+        // an under-approximation (propagating fewer facts can only lose
+        // completeness, never produce a wrong UNSAT).
+        static const bool noProp = [] {
+            const char* e = std::getenv("XOLVER_NIA_NO_PROP");
+            return e && *e && *e != '0';
+        }();
+        // PRE-PASS: buffer ALL array-pair entailments before the main loop. The
+        // main loop returns on the first novel NON-array eq lemma, and the ~800
+        // non-array eqs are ordered before the ~100 array pairs, so without this
+        // dedicated pass the array pairs (the ones cs_* actually needs) are
+        // starved for hundreds of cb_propagate rounds. Each clause is the SAME
+        // globally-valid (¬reasons ∨ eqLit) the Full lemma path emits; routing it
+        // via the entailment channel just makes CaDiCaL honor it at Standard.
+        if (noProp && effort != TheoryEffort::Full) {
+            size_t buffered = 0;
+            for (auto& prop : props) {
+                if (!(arrayIdxSet.count(prop.a) && arrayIdxSet.count(prop.b)))
+                    continue;
+                if (careGraphEnabled_ && !careGraph_.caresPair(prop.a, prop.b))
+                    continue;
+                SatLit eqLit =
+                    registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
+                if (assignmentView_ &&
+                    assignmentView_->value(eqLit) == LitValue::True) continue;
+                TheoryLemma lemma;
+                for (auto& reason : prop.reasons)
+                    lemma.lits.push_back(reason.negated());
+                if (satMin) ConflictMinimizer::dedup(lemma.lits);
+                lemma.lits.push_back(eqLit);
+                // lemmaDb.insertIfNew = backtrack-safe literal-set dedup, so each
+                // clause is buffered (and added to CaDiCaL) exactly once.
+                if (lemmaDb.insertIfNew(lemma)) {
+                    noPropEntailments_.push_back(std::move(lemma));
+                    ++buffered;
+                }
+            }
+            static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+            if (l4rDiag && buffered) {
+                std::fprintf(stderr, "[L4R] solver=%d buffered=%zu total=%zu\n",
+                             (int)solver->id(), buffered, noPropEntailments_.size());
+                std::fflush(stderr);
+            }
         }
         for (auto& prop : props) {
             // Defer array-index-pair deduced equalities to Full effort (see above).

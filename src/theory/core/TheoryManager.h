@@ -177,6 +177,17 @@ private:
     };
     std::unordered_set<ReportedPropKey, ReportedPropKeyHash> deducedEqCache_;
 
+    // L4-reach (XOLVER_NIA_NO_PROP, default-OFF): array-relevant deduced shared
+    // equalities routed through the ENTAILMENT channel at Standard effort so they
+    // fire BEFORE Full (which huge cs_*-class formulas never reach). Each buffered
+    // TheoryLemma is the SAME globally-valid clause (¬reasons ∨ eqLit) the Full
+    // lemma path emits — only the channel differs: lemmas are dropped by
+    // cb_propagate at Standard, entailments are honored. Drained (and cleared) by
+    // takeEntailmentPropagations(); deduped once via lemmaDb.insertIfNew, so each
+    // clause is added to the SAT core a single time (permanent + sound: it is a
+    // theory tautology, valid independent of the rest of the trail).
+    std::vector<TheoryLemma> noPropEntailments_;
+
     std::vector<TheorySolver*> solversOwning(SharedTermId a, SharedTermId b) const;
 
     // Phase 1: is a differing same-function UF-argument pair a genuine
