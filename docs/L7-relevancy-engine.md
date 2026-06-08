@@ -276,6 +276,31 @@ build on.
 Best repro config: `XOLVER_NIA_NO_PROP=1 NIA_NO_DISEQ=1 AX_ROW2_DISEQ=1
 AX_ROW2_CONST=1 AX_LAZY=1 NIA_LINEAR_PROP=1 EUF_PROP_COMB=1 NIA_IFACE_PROP=1`.
 
+### L13 SHIPPED (2026-06-09) — integrated-engine slice-1: dynamic relevancy + lazy split (3280cc9)
+
+The first integration slice combines the two pieces that were inert ALONE:
+`XOLVER_AX_ROW2_SPLIT` emits Row2 case-splits at Standard (separate dedup +
+combination-scoped → ax_007 fixed), tagged `ArraySplit`; the propagator
+`forceRelevantVar`s their atoms under `XOLVER_RELEVANCY` so `cb_decide` DECIDES them.
+
+It MECHANICALLY WORKS: cs_lazy steeredDecisions 2248→**6656**, the split atoms enter
+the relevant set (relevantVarsSeen 1028→1083). Gate: unit 1427/1427; full reg 753/753
+0-unsound, no regression; all default-OFF.
+
+**But cs_lazy STILL TOs** — because deciding `i=j` only helps if the formula then
+REFUTES it, and xolver cannot refute `i=j` for the symbolic BMC index pairs
+(program-structural diseqs need EUF/boolean propagation over the SSA/control skeleton
+it lacks). When `i=j` is not refuted, CaDiCaL just takes the `i=j` disjunct → the
+split is satisfied trivially → `readEq` never forced → no progress.
+
+→ **The remaining wall is `i=j` REFUTATION** = complete EUF/boolean propagation over
+the program structure (the next slice, L14). It also raises a real doubt the earlier
+slices assumed away: cs_* may NOT be read-over-write-bound at all — z3's 68 props may
+be mostly boolean/EUF over the control skeleton, with array reasoning a minor part.
+Verifying that (e.g. z3 `-st` axiom-instantiation counts, or running cs_lazy with array
+reasoning disabled) should precede L14. Repro: add `AX_ROW2_SPLIT=1 RELEVANCY=1` to the
+config above.
+
 ---
 
 (Below: the ORIGINAL relevancy plan, retained for reference. §1's "27k
