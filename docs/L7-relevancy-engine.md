@@ -185,15 +185,21 @@ an **array-completion dilemma**, plus a perf hotspot:
    `proveFixedFormValue` on **all ~720 unassigned arith atoms every check** — each
    a simplex pin-query returning "not pinned" → pure waste.
 
-**L11 next levers (both needed to close, scoped):**
-- **(perf, low-risk/completeness-only)** Throttle/bound the form-pin scan once it is
-  exhausted (skip atoms whose form can't have changed; or scan every K checks). Keep
-  the root-LP conflict check (it is the sound prune); only throttle the entailment
-  scan. Also gate `PresolveEngine`/`proveSharedDisjoint` per-check frequency.
-- **(completeness, soundness-sensitive)** Demand-driven Row2: the lazy path under-
-  fires Row2 (eligible 31) — fire Row2 for the *relevant* reads on the conflict path
-  (z3 ≈ 68 props) without the eager cross-product flood. The select set is now small
-  enough (212) to be selective.
+**L11 next levers — perf RULED OUT (measured); demand-driven Row2 is the SOLE closer:**
+- **(perf) RULED OUT.** Implemented + measured a `stageLinearProp` throttle
+  (`XOLVER_NIA_LINPROP_EVERY=K`, since reverted): at K=8, checks/s stayed **~7/s
+  (≈140 ms/check) UNCHANGED**, cs_lazy still TO. So `stageLinearProp` was NOT the
+  per-check bottleneck — the cost is **distributed** (`PresolveEngine` every check +
+  `proveSharedDisjoint` O(idx²) ~1500 pairs/check + linprop), and no single throttle
+  moves checks/s. More fundamentally the search **does not converge** (~25k decisions,
+  no conflict) because Row2 under-fires — perf is not the wall. Throttle reverted
+  (sound but unproven; only reduces propagation).
+- **(completeness, soundness-sensitive) — THE closer.** Demand-driven Row2: the lazy
+  path under-fires Row2 (eligible 31), so the read-over-write contradiction is never
+  built → search never converges. Fire Row2 for the *relevant* reads on the conflict
+  path (z3 ≈ 68 props) without the eager cross-product flood. The select set is now
+  small (212), so selective instantiation is tractable. This is the genuine cs_*
+  closer; it instantiates array axioms, so it is soundness-sensitive — start fresh.
 
 Best repro config: `XOLVER_NIA_NO_PROP=1 NIA_NO_DISEQ=1 AX_ROW2_DISEQ=1
 AX_ROW2_CONST=1 AX_LAZY=1 NIA_LINEAR_PROP=1 EUF_PROP_COMB=1 NIA_IFACE_PROP=1`.
