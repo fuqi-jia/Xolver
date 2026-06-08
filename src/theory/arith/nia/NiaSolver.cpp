@@ -739,8 +739,30 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
     // Asserted-literal map for the soundness firewall + the "already decided"
     // skip: satVar -> value, drawn from the active trail.
     std::unordered_map<SatVar, bool> asserted;
-    asserted.reserve(state_.trail.size());
+    asserted.reserve(state_.trail.size() +
+                     interfaceEqualities_.size() + interfaceDisequalities_.size());
     for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    // IFACE_LIFECYCLE keeps interface (dis)equalities OFF state_.trail, so their
+    // reason literals — genuinely assigned-true by the SAT core and held here
+    // until backtrack prunes them — are invisible to the firewall above. That
+    // false negative drops every array read-value form-pin whose justifying
+    // bound is an interface equality (the cs_* wall: [LINPROP-drop] reasons U).
+    // The reason literal of an entry currently IN interfaceEqualities_/
+    // interfaceDisequalities_ is a currently-true fact (assertInterfaceEquality
+    // is only called on an assigned atom, and onBacktrack removes entries whose
+    // level was popped), so admitting it as true is SOUND — and the entailment
+    // clause (¬reasons ∨ impliedAtom) it unblocks is a global theory tautology
+    // regardless. Gated XOLVER_NIA_IFACE_PROP (default-OFF) for A/B + safety.
+    static const bool ifaceProp = [] {
+        const char* e = std::getenv("XOLVER_NIA_IFACE_PROP");
+        return e && *e && *e != '0';
+    }();
+    if (ifaceProp) {
+        for (const auto& ie : interfaceEqualities_)
+            asserted.emplace(ie.reason.var, ie.reason.sign);
+        for (const auto& id : interfaceDisequalities_)
+            asserted.emplace(id.reason.var, id.reason.sign);
+    }
     auto isAssigned = [&](SatVar v) { return asserted.find(v) != asserted.end(); };
     auto litIsTrue = [&](SatLit l) {
         auto it = asserted.find(l.var);
