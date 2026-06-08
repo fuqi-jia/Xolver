@@ -571,10 +571,12 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
 }
 
 std::optional<std::vector<SatLit>>
-ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
+ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
+                               std::unordered_set<uint64_t>* dedupOverride) {
     aniaprof::Scope _prof(aniaprof::ARR_LEMMA);
     if (!active() || !registry_) return std::nullopt;
     discoverArrayTerms();
+    std::unordered_set<uint64_t>& row2Dedup = dedupOverride ? *dedupOverride : row2Done_;
 
     // --- Row2: i!=j => select(store(a,i,v),j) = select(a,j) ---------------
     // Trigger: a select term select(s, j) where s (or its class) is a store
@@ -615,7 +617,7 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities) {
 
             // Dedup by stable term ids (store member id, read index j id).
             uint64_t key = pairKey(member, jTerm);
-            if (!row2Done_.insert(key).second) continue;
+            if (!row2Dedup.insert(key).second) continue;
 
             ExprId iExpr = originExpr(iTerm);
             ExprId jExpr = originExpr(jTerm);

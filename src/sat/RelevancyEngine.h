@@ -75,6 +75,13 @@ public:
     void pushLevel();                       // notify_new_decision_level
     void popToLevel(int level);             // notify_backtrack(level)
 
+    // L13 integrated engine: force a DYNAMIC atom (created after finalize, e.g. a
+    // Row2 case-split's i=j / readEq literal) to be relevant, so cb_decide steers
+    // CaDiCaL to DECIDE it. Resizes the var-indexed maps for vars beyond the static
+    // graph. Permanently relevant (not trail-managed) — a split we introduced is
+    // always worth deciding. Pure decision heuristic — soundness-neutral.
+    void forceRelevantVar(SatVar var);
+
     // ---- queries ----
     bool isRelevantVar(SatVar var) const {
         return var < varRelevantCount_.size() && varRelevantCount_[var] > 0;

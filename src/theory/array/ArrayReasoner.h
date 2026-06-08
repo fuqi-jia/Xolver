@@ -99,8 +99,13 @@ public:
         EufTermId lhs;
         EufTermId rhs;
     };
+    // `dedupOverride`: when non-null, use this set for Row2 (store,j)-pair dedup
+    // instead of the internal row2Done_. The L13 Standard-effort split passes its
+    // OWN set so it does not mark row2Done_ and starve the Full-effort path
+    // (the ax_007 regression). Default null = original behavior (uses row2Done_).
     std::optional<std::vector<SatLit>>
-    instantiateLemma(const std::vector<ArrayDiseq>& disequalities);
+    instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
+                     std::unordered_set<uint64_t>* dedupOverride = nullptr);
 
     // Collect the SharedTermIds of all array INDEX terms (the index arg of every
     // select/store). Used by the combination layer to scope deduced-equality

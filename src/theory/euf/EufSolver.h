@@ -61,6 +61,16 @@ public:
         return v;
     }
 
+    // L13: relevancy-bounded Row2 case-split lemmas collected at Standard effort
+    // (XOLVER_AX_ROW2_SPLIT). Each is the array-axiom tautology (i=j ∨ readEq),
+    // tagged LemmaKind::ArraySplit so the propagator marks its atoms dynamically
+    // relevant (drive cb_decide). Drained by TheoryManager into the SAT core.
+    std::vector<TheoryLemma> takeArraySplitLemmas() override {
+        auto v = std::move(row2SplitLemmas_);
+        row2SplitLemmas_.clear();
+        return v;
+    }
+
     // Enable QF_AX array reasoning. `registry` is needed so Row2/Ext lemmas
     // can create observed dynamic equality atoms before placing them in a
     // clause. Must be called before any assertLit/check.
@@ -222,6 +232,11 @@ private:
     // drained by TheoryManager::takeRow2DemandPairs). Per-check seen-set caps churn.
     std::vector<std::pair<SharedTermId, SharedTermId>> row2DemandPairs_;
     std::unordered_set<uint64_t> row2DemandSeen_;
+    // L13: Row2 case-split lemmas collected at Standard effort (XOLVER_AX_ROW2_SPLIT)
+    // + their OWN dedup set (kept SEPARATE from ArrayReasoner::row2Done_ so the
+    // Standard split never starves the Full-effort instantiateLemma — the ax_007 fix).
+    std::vector<TheoryLemma> row2SplitLemmas_;
+    std::unordered_set<uint64_t> row2SplitDone_;
     EufTermManager termManager_;
     IncrementalEGraph egraph_;
 

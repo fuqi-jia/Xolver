@@ -100,6 +100,13 @@ public:
     virtual std::vector<std::pair<SharedTermId, SharedTermId>>
     takeRow2DemandPairs() { return {}; }
 
+    // L13 relevancy-bounded Row2 case-split (XOLVER_AX_ROW2_SPLIT): array-axiom
+    // CASE-SPLIT lemmas (Row2: (i=j) ∨ select(store(a,i,v),j)=select(a,j))
+    // generated at Standard effort, tagged LemmaKind::ArraySplit. Each is a THEORY
+    // TAUTOLOGY (sound at any effort); the propagator marks their atoms dynamically
+    // relevant so cb_decide DECIDES the split — z3's lazy split. Default empty.
+    virtual std::vector<TheoryLemma> takeArraySplitLemmas() { return {}; }
+
     // Demand-driven shared DISEQUALITY query (L5): does this solver's theory
     // state force a != b? Returns the reason literals if so (they must COMPLETELY
     // entail a != b — wrong-UNSAT risk), nullopt otherwise. The combination layer

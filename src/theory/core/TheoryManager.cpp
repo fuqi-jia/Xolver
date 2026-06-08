@@ -342,6 +342,27 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
     // shared eqs routed to Standard under XOLVER_NIA_NO_PROP). Empty by default.
     for (auto& l : noPropEntailments_) out.push_back(std::move(l));
     noPropEntailments_.clear();
+
+    // L13: drain relevancy-bounded Row2 case-split lemmas (XOLVER_AX_ROW2_SPLIT).
+    // Each is an array-axiom TAUTOLOGY (i=j ∨ readEq), tagged ArraySplit so the
+    // propagator can mark its atoms dynamically relevant. Unconditionally sound to
+    // add regardless of mode — no combination gating.
+    static const bool row2Split = [] {
+        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    // Scoped to COMBINATION mode: pure QF_AX has its own complete Full-effort
+    // array sat-gate that Standard-effort splits perturb (ax_007 unsat→unknown);
+    // the integrated split only targets combination array+arith (cs_* / QF_ANIA).
+    if (row2Split && combinationMode_) {
+        for (auto& s : solvers_) {
+            auto splits = s->takeArraySplitLemmas();
+            for (auto& l : splits) out.push_back(std::move(l));
+        }
+    } else if (row2Split) {
+        // Drain + discard so the buffer doesn't accumulate in single-theory mode.
+        for (auto& s : solvers_) (void)s->takeArraySplitLemmas();
+    }
     return out;
 }
 

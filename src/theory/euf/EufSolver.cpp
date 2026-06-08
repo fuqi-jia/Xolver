@@ -1734,6 +1734,46 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         }
     }
 
+    // L13: relevancy-bounded Row2 case-split at STANDARD effort
+    // (XOLVER_AX_ROW2_SPLIT). The Row2 lemma (i=j ∨ readEq) is a THEORY TAUTOLOGY
+    // (the array axiom), so emitting it on a partial assignment is SOUND. Reuses
+    // instantiateLemma with a SEPARATE dedup set (row2SplitDone_) so it does NOT
+    // mark row2Done_ and starve the Full-effort path (the ax_007 regression). The
+    // lemmas are tagged ArraySplit; the propagator marks their atoms dynamically
+    // relevant so cb_decide DECIDES i=j (try → refute via the whole formula →
+    // i≠j → readEq forced → chain advances). Buffered for the entailment channel
+    // (cb_propagate drops Standard-effort Lemma results). z3's lazy split, made
+    // tractable by the lazy select bound + made effective by dynamic relevancy.
+    static const bool row2Split = [] {
+        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
+        return e && *e && *e != '0';
+    }();
+    // Scoped to COMBINATION (sharedTermRegistry_ != null): generating the split
+    // INTERNS new select terms into the e-graph, which perturbs the pure-QF_AX
+    // Full-effort sat-gate (ax_007 unsat→unknown). cs_* / QF_ANIA is combination.
+    if (arrayMode_ && row2Split && sharedTermRegistry_ && effort != TheoryEffort::Full) {
+        ensureArrayContext();
+        if (arrayReasoner_.active()) {
+            auto diseqs = activeArrayDiseqs();
+            const int kMaxSplitPerCheck = 64;
+            for (int n = 0; n < kMaxSplitPerCheck; ++n) {
+                auto lemma = arrayReasoner_.instantiateLemma(diseqs, &row2SplitDone_);
+                if (!lemma || lemma->empty()) break;  // no more eligible
+                TheoryLemma tl;
+                tl.lits = std::move(*lemma);
+                tl.kind = LemmaKind::ArraySplit;
+                if (lemmaDb.contains(tl)) continue;
+                row2SplitLemmas_.push_back(std::move(tl));
+            }
+            if (std::getenv("XOLVER_AX_R2D_DIAG") && !row2SplitLemmas_.empty()) {
+                static size_t g_split = 0; g_split += row2SplitLemmas_.size();
+                std::fprintf(stderr, "[R2-SPLIT] this=%zu cum=%zu\n",
+                             row2SplitLemmas_.size(), g_split);
+                std::fflush(stderr);
+            }
+        }
+    }
+
     // Array Row2/Extensionality lemmas — emitted only at Full effort (complete
     // SAT model), so the case split is over a stable assignment. The lemma
     // literals are observed dynamic equality atoms; returning Lemma lets the

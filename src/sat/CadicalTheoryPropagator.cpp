@@ -723,7 +723,18 @@ int CadicalTheoryPropagator::cb_propagate() {
          (stats_.propagateCallCount % entailPropEvery == 0))) {
         auto props = tm_.takeEntailmentPropagations();
         for (auto& lem : props) {
-            if (!lem.lits.empty()) enqueuePendingClause(lem.lits);
+            if (lem.lits.empty()) continue;
+            // L13 integrated engine: a Row2 case-split lemma (i=j ∨ readEq) is
+            // inert unless the SAT core DECIDES its atoms. When relevancy steering
+            // is on, force the split atoms dynamically relevant so cb_decide picks
+            // them — CaDiCaL tries i=j, the rest of the formula refutes it, learns
+            // i≠j, forces readEq, and the read-over-write chain advances. Pure
+            // decision heuristic — soundness-neutral (the clause itself is a
+            // tautology, added regardless).
+            if (relevancyOn_ && rel_ && lem.kind == LemmaKind::ArraySplit) {
+                for (SatLit l : lem.lits) rel_->forceRelevantVar(l.var);
+            }
+            enqueuePendingClause(lem.lits);
         }
         if (std::getenv("XOLVER_L4R_DIAG") && !props.empty()) {
             static size_t g_enq = 0; g_enq += props.size();

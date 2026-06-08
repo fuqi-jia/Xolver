@@ -173,6 +173,21 @@ void RelevancyEngine::popToLevel(int level) {
     }
 }
 
+void RelevancyEngine::forceRelevantVar(SatVar var) {
+    if (var == 0) return;
+    if (var >= varRelevantCount_.size()) {
+        varRelevantCount_.resize(var + 1, 0);
+        varListed_.resize(var + 1, 0);
+    }
+    // Permanently relevant: bump the count once and list it for the decide ring.
+    // (No trail entry — dynamic split atoms stay decidable for the whole search.)
+    if (varRelevantCount_[var] == 0) ++varRelevantCount_[var];
+    if (!varListed_[var]) {
+        varListed_[var] = 1;
+        relevantVarList_.push_back(var);
+    }
+}
+
 SatVar RelevancyEngine::pickRelevantUnassigned(size_t maxProbe) {
     const size_t n = relevantVarList_.size();
     if (n == 0 || !valueOf_) return 0;
