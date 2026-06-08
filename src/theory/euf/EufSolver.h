@@ -311,6 +311,10 @@ private:
     // any call happened. Used to triage QG-classification / eq_diamond hot
     // path (perf+flamegraph not available on WSL).
     bool hotProfileEnabled_ = false;
+    // XOLVER_AX_FIXPOINT (L3, default-OFF): re-run the array-axiom passes to
+    // fixpoint after the main saturation, so nested read-over-write resolves
+    // within one check() instead of one nesting level per CDCL(T) round.
+    bool arrayFixpointEnabled_ = false;
     struct EufHotProfile {
         uint64_t checkCalls = 0;
         uint64_t mergesProcessed = 0;       // saturation merges drained

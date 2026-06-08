@@ -79,6 +79,8 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     storeModelEnabled_ = std::getenv("XOLVER_AX_STORE_MODEL") != nullptr;
     // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
     hotProfileEnabled_ = std::getenv("XOLVER_EUF_HOTPROFILE") != nullptr;
+    // L3 (default-OFF): array-axiom saturation fixpoint (nested read-over-write).
+    arrayFixpointEnabled_ = std::getenv("XOLVER_AX_FIXPOINT") != nullptr;
     initializeBoolConstants();
 }
 
@@ -1300,46 +1302,47 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // tautological / congruence consequences at the current decision level.
     // Tag them with currentLevel_ so the level-ordered saturation places them
     // after all lower-level merges.
-    size_t mqTagFrom = mergeQueue_.size();
-    if (arrayMode_) {
+    // Array axiom enqueue: Row1/Const/Row2-const eager merges (enqueueEagerMerges)
+    // + L2 Row2-cond merges for KNOWN-disequal index pairs (ArrayRow2Cond carries
+    // the diseq reason + i~lhs/j~rhs chains so conflicts are sound). Factored into
+    // a lambda so the L3 fixpoint (after saturation) can re-run it — nested
+    // read-over-write (e.g. (Array Int (Array Int Int))) needs the OUTER peel's
+    // congruence closed before the INNER reads become peelable.
+    auto enqueueArrayAxioms = [&]() {
+        if (!arrayMode_) return;
         ensureArrayContext();
-        if (arrayReasoner_.active()) {
-            arrayReasoner_.enqueueEagerMerges(mergeQueue_);
-            // L2 (XOLVER_AX_ROW2_DISEQ): eager Row2 merge for index pairs that are
-            // KNOWN-disequal in the e-graph (vs only distinct constants). Provide a
-            // query over the active (local + shared) disequalities keyed by class
-            // rep-pair; the merge carries the diseq reason + i~lhs / j~rhs chains
-            // (ArrayRow2Cond) so its conflict explanation is sound, and is stamped
-            // at currentLevel_ (re-tagged below) so any backtrack removes it.
-            if (arrayReasoner_.row2DiseqEnabled()) {
-                auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
-                    uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
-                    return (static_cast<uint64_t>(lo) << 32) | hi;
-                };
-                std::unordered_map<uint64_t, const ActiveDisequality*> diseqMap;
-                diseqMap.reserve(disequalities_.size() + sharedDisequalities_.size() + 1);
-                for (const auto& d : disequalities_)
-                    diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
-                for (const auto& d : sharedDisequalities_)
-                    diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
-                auto queryDiseq = [&](EufTermId i, EufTermId j)
-                        -> std::optional<ArrayReasoner::Row2CondDiseq> {
-                    EClassId ri = egraph_.rep(i), rj = egraph_.rep(j);
-                    if (ri == rj) return std::nullopt;
-                    auto it = diseqMap.find(repPairKey(ri, rj));
-                    if (it == diseqMap.end()) return std::nullopt;
-                    const ActiveDisequality& d = *it->second;
-                    EClassId rl = egraph_.rep(d.lhs), rr = egraph_.rep(d.rhs);
-                    if (rl == ri && rr == rj)
-                        return ArrayReasoner::Row2CondDiseq{d.lhs, d.rhs, d.reason};
-                    if (rl == rj && rr == ri)
-                        return ArrayReasoner::Row2CondDiseq{d.rhs, d.lhs, d.reason};
-                    return std::nullopt;   // rep moved since map build — skip (sound)
-                };
-                arrayReasoner_.enqueueRow2CondMerges(queryDiseq, currentLevel_, mergeQueue_);
-            }
+        if (!arrayReasoner_.active()) return;
+        arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+        if (arrayReasoner_.row2DiseqEnabled()) {
+            auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
+                uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
+                return (static_cast<uint64_t>(lo) << 32) | hi;
+            };
+            std::unordered_map<uint64_t, const ActiveDisequality*> diseqMap;
+            diseqMap.reserve(disequalities_.size() + sharedDisequalities_.size() + 1);
+            for (const auto& d : disequalities_)
+                diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+            for (const auto& d : sharedDisequalities_)
+                diseqMap[repPairKey(egraph_.rep(d.lhs), egraph_.rep(d.rhs))] = &d;
+            auto queryDiseq = [&](EufTermId i, EufTermId j)
+                    -> std::optional<ArrayReasoner::Row2CondDiseq> {
+                EClassId ri = egraph_.rep(i), rj = egraph_.rep(j);
+                if (ri == rj) return std::nullopt;
+                auto it = diseqMap.find(repPairKey(ri, rj));
+                if (it == diseqMap.end()) return std::nullopt;
+                const ActiveDisequality& d = *it->second;
+                EClassId rl = egraph_.rep(d.lhs), rr = egraph_.rep(d.rhs);
+                if (rl == ri && rr == rj)
+                    return ArrayReasoner::Row2CondDiseq{d.lhs, d.rhs, d.reason};
+                if (rl == rj && rr == ri)
+                    return ArrayReasoner::Row2CondDiseq{d.rhs, d.lhs, d.reason};
+                return std::nullopt;   // rep moved since map build — skip (sound)
+            };
+            arrayReasoner_.enqueueRow2CondMerges(queryDiseq, currentLevel_, mergeQueue_);
         }
-    }
+    };
+    size_t mqTagFrom = mergeQueue_.size();
+    enqueueArrayAxioms();
     // Register signatures for all newly interned terms before entering the
     // saturation loop.  This ensures late-interned terms (e.g. f(a) after a=b
     // has already been merged) are visible to congruence detection.
@@ -1533,6 +1536,52 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     if (hotProfileEnabled_) hotProfile_.saturationUs +=
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - _satT0).count();
+
+    // L3 (XOLVER_AX_FIXPOINT, default-OFF): array-axiom saturation FIXPOINT. The
+    // main loop above ran the array passes ONCE (pre-saturation). For NESTED
+    // arrays (e.g. (Array Int (Array Int Int))) the OUTER store peel only resolves
+    // after congruence closure, exposing INNER reads that need their own peel.
+    // Re-run the array axioms now (egraph is congruence-closed) and re-saturate;
+    // repeat until no new merge (fixpoint) or the iteration backstop. The egraph
+    // grows monotonically (internSelect dedups, same-class skips), so this
+    // converges; kMaxAxIter is only a non-termination backstop (a hit means a bug
+    // to fix, not a verdict cap — remaining merges re-derive next check). Sound:
+    // the re-run merges are the same tautological / ArrayRow2Cond merges, stamped
+    // at currentLevel_ so backtrack removes them.
+    static const bool axDiagL3 = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    if (axDiagL3)
+        std::fprintf(stderr, "[L3] reach fixpoint-gate: en=%d arrayMode=%d active=%d\n",
+                     arrayFixpointEnabled_ ? 1 : 0, arrayMode_ ? 1 : 0,
+                     arrayReasoner_.active() ? 1 : 0);
+    if (arrayFixpointEnabled_ && arrayMode_ && arrayReasoner_.active()) {
+        const int kMaxAxIter = 64;
+        for (int axIter = 0; axIter < kMaxAxIter; ++axIter) {
+            size_t mark = mergeQueue_.size();          // drained == 0
+            enqueueArrayAxioms();
+            egraph_.registerPendingSignatures(mergeQueue_);
+            for (size_t i = mark; i < mergeQueue_.size(); ++i)
+                mergeQueue_[i].level = currentLevel_;
+            if (axDiagL3)
+                std::fprintf(stderr, "[L3] axIter=%d added=%zu\n", axIter, mergeQueue_.size() - mark);
+            if (mergeQueue_.size() == mark) break;     // fixpoint: nothing new
+            if (diseqWatchEnabled_) rebuildDiseqIndex();
+            // Drain the newly-enqueued merges (baseline min-level order), reusing
+            // applyMerge (still in scope). A conflict returns immediately.
+            while (!mergeQueue_.empty()) {
+                size_t mi = 0;
+                for (size_t i = 1; i < mergeQueue_.size(); ++i)
+                    if (mergeQueue_[i].level < mergeQueue_[mi].level) mi = i;
+                PendingMerge req = mergeQueue_[mi];
+                mergeQueue_.erase(mergeQueue_.begin() + static_cast<long>(mi));
+                auto r = applyMerge(std::move(req),
+                    [&](PendingMerge c) { mergeQueue_.push_back(std::move(c)); });
+                if (r) return *r;
+            }
+            if (axIter == kMaxAxIter - 1 && std::getenv("XOLVER_AX_DIAG"))
+                std::fprintf(stderr, "[L3] array fixpoint hit kMaxAxIter=%d (non-convergence?)\n",
+                             kMaxAxIter);
+        }
+    }
 
     // true/false conflict
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
