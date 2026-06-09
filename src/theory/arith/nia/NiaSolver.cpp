@@ -2069,6 +2069,18 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
 std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     if (!enableBitBlast_) return std::nullopt;
     if (std::getenv("XOLVER_NIA_NO_BITBLAST")) return std::nullopt;  // diag/A-B: isolate non-bit-blast NIA reasoning
+    // PER-BRANCH bit-blast is OFF for PURE QF_NIA (no shared-term registry ⇒
+    // single-theory). This stage fires AFTER the SAT search has PINNED the bounded
+    // vars to a specific (often wrong) branch and then bit-blasts that pinned
+    // subproblem — on a box-incomplete branch it escalates width and OOMs, and does
+    // not pay off on pure integer problems. The WHOLE-FORMULA eager bit-blast
+    // (stageBitBlastEarly, run while the box is still free) stays ON — that is the
+    // validated decider. In a COMBINATION logic (UFNIA/ANIA/AUFNIA/UFNRA/AUFDTNIA,
+    // sharedTermRegistry_ set) the per-branch path is KEPT (combination already
+    // branches; bit-blast is an acceptable backend there). Opt-in restore for pure
+    // NIA: XOLVER_NIA_PER_BRANCH_BB=1.
+    if (!sharedTermRegistry_ && !std::getenv("XOLVER_NIA_PER_BRANCH_BB"))
+        return std::nullopt;
     // H3 (master 2026-06-01) entry counter: confirm whether bit-blast
     // actually fires on SAT14-class inputs before the run TOs upstream.
     static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
