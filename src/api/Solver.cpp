@@ -12,6 +12,7 @@
 #include "frontend/preprocess/StoreTowerEqMultiset.h"
 #include "frontend/preprocess/ArrayReadOverWrite.h"
 #include "frontend/preprocess/targeted/ReadOnlyArrayElim.h"
+#include "frontend/preprocess/targeted/UfApplyAckermann.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
@@ -2509,6 +2510,15 @@ public:
                 roaeFreeArrayVars_ = roae.freeArrayVars();
                 roaeUsedWriteArray_ = roae.usedWriteArray();
             }
+        }
+
+        // TARGETED (XOLVER_TARGETED_PP_UFACK, default-OFF): Ackermannize scalar
+        // uninterpreted-function applications (QF_UFNRA "hidden nonlinearity"
+        // FFT family). Exact reduction; the UNSAT direction needs no model
+        // reconstruction (a SAT over the abstracted formula floors to Unknown).
+        if (std::getenv("XOLVER_TARGETED_PP_UFACK")) {
+            UfApplyAckermann ufack(*ir);
+            if (ufack.run()) ufack.commit();
         }
 
         // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.

@@ -241,14 +241,20 @@ void ReadOnlyArrayElim::buildCongruences() {
                 eqs.push_back(ir_.addShared(CoreExpr{Kind::Eq, boolS, {a, b}, {}}));
             }
             if (provablyDistinct) continue;                    // antecedent unsatisfiable
-            if (eqs.empty()) continue;                         // identical keys merge upstream
-
+            ExprId cons = ir_.addShared(CoreExpr{Kind::Eq, boolS,
+                          {readList_[i].second, readList_[j].second}, {}});
+            if (eqs.empty()) {
+                // All index pairs equal (syntactically, or value-equal constants
+                // with distinct ExprIds): the reads are CONGRUENT -> equal value
+                // UNCONDITIONALLY. (Skipping here was a latent unsoundness: two
+                // fresh vars for the same read left unlinked.)
+                extra_.push_back(cons);
+                continue;
+            }
             ExprId ante = eqs.size() == 1
                 ? eqs[0]
                 : ir_.addShared(CoreExpr{Kind::And, boolS,
                           SmallVector<ExprId, 4>(eqs.begin(), eqs.end()), {}});
-            ExprId cons = ir_.addShared(CoreExpr{Kind::Eq, boolS,
-                          {readList_[i].second, readList_[j].second}, {}});
             extra_.push_back(ir_.addShared(CoreExpr{Kind::Implies, boolS, {ante, cons}, {}}));
         }
     }
