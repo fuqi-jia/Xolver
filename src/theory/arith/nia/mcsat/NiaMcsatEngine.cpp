@@ -2,6 +2,7 @@
 
 #include "expr/ir.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"   // wall::scaledCount (time-proportional node budget)
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds (shared)
 #include "theory/arith/nra/core/CdcacCore.h"      // real-relaxation refutation
@@ -277,7 +278,10 @@ mcsat::ValueChoice NiaMcsatEngine::pickValue(VarId var,
             std::iter_swap(remaining.begin(), it);
         }
 
-        int budget = NIA_DFS_NODE_BUDGET;
+        // TIME-PROPORTIONAL (2026-06-10): grow the DFS node budget with the wall-clock
+        // budget when XOLVER_WALLCLOCK_SCALE is on (inert otherwise). Sound: only grows
+        // a count cap, never shrinks — cannot change a verdict, only coverage.
+        int budget = static_cast<int>(wall::scaledCount(NIA_DFS_NODE_BUDGET));
         if (niaDfsAssign(*kernel_, asserted_, BASE_CANDIDATES, sample,
                          remaining, 0, budget)) {
             cachedAssignmentSucceeded_ = true;

@@ -2,6 +2,7 @@
 
 #include "expr/ir.h"
 #include "util/EnvParam.h"
+#include "util/SolveClock.h"   // wall::scaledCount (time-proportional iso budget)
 #include "theory/arith/linear/LinearExpr.h"      // negateRelation
 #include "theory/arith/nra/backend/AlgebraBackend.h"
 #include "theory/arith/nra/core/CdcacCommon.h"   // Sign, relationHolds
@@ -157,8 +158,11 @@ int maxExponentOfVar(PolynomialKernel& kernel,
 // each pickValue. thread_local so portfolio worker threads don't share it.
 static thread_local long g_nlsatIsoCalls = 0;
 static long nlsatIsoCallCap() {
-    static const long cap = env::paramLong("XOLVER_NRA_NLSAT_ISO_BUDGET", 1500);
-    return cap;
+    static const long base = env::paramLong("XOLVER_NRA_NLSAT_ISO_BUDGET", 1500);
+    // TIME-PROPORTIONAL (2026-06-10): grow the per-pickValue root-isolation budget
+    // with the wall-clock budget when XOLVER_WALLCLOCK_SCALE is on (inert otherwise).
+    // Sound: only grows a count cap. Recomputed each call so it tracks time-left.
+    return wall::scaledCount(base);
 }
 
 } // namespace
@@ -376,7 +380,7 @@ void absorbBound(AccumulatedInterval& iv, const LinearBound& lb) {
     }
 }
 
-std::optional<mpq_class> chooseFeasiblePoint(const AccumulatedInterval& iv) {
+[[maybe_unused]] std::optional<mpq_class> chooseFeasiblePoint(const AccumulatedInterval& iv) {
     if (iv.emptied) return std::nullopt;
     if (iv.hasLo && iv.hasHi) {
         if (iv.lo == iv.hi) return iv.lo;  // equality, one point
