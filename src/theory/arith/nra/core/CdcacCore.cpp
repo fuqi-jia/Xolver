@@ -2594,7 +2594,8 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
                          const CdcacInput& input,
                          std::unordered_map<VarId, Iv>& box,
                          std::optional<std::pair<size_t, Sign>>* aConf = nullptr,
-                         const std::unordered_map<VarId, Iv>* seed = nullptr) {
+                         const std::unordered_map<VarId, Iv>* seed = nullptr,
+                         bool noContract = false) {
     box.clear();
     for (VarId v : input.varOrder) {
         if (m.count(v)) continue;
@@ -2644,6 +2645,19 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
             }
         }
         // (B) Degree-1 contraction: A·v + B rel 0 ⇒ tighten box[v].
+        // SOUNDNESS (2026-06-10): a caller that turns a propagateBox conflict into a
+        // SINGLE-constraint FullLine (whole-axis) leaf conflict (intervalFpViolation)
+        // must pass noContract=true. Contraction narrows the delineation var's box;
+        // the (A) check then finds a SECOND constraint single-signed over the NARROWED
+        // box and we'd blame it ALONE over the WHOLE axis — but it is violated only on
+        // the narrowed sub-range (the contracting constraint handles the rest). That
+        // false "this constraint is violated for ALL var values" drops the var
+        // dependence → the parent projection loses a boundary → over-extended cell →
+        // FALSE UNSAT (meti-tarski sin degree-7). Without contraction, the (A) check
+        // over the seed box only surfaces a constraint that is GENUINELY single-signed
+        // over the whole fiber — a sound FullLine reason. (boxSectorViolation keeps
+        // contraction: its conflict is scoped to the SECTOR it pins, not a FullLine.)
+        if (!noContract)
         for (size_t ci : cons) {
             const RationalPolynomial& rp = *satRp[ci];
             Relation rel = input.constraints[ci].rel;
@@ -2679,6 +2693,7 @@ static bool propagateBox(const std::vector<std::optional<RationalPolynomial>>& s
             }
         }
         // (B2) Degree-2 contraction: c2·v² + c1·v + c0 rel 0 ⇒ complete the square
+        if (!noContract)
         // (c2(v+s)² + D, with s = c1/(2c2), D = c0 − c1²/(4c2)) ⇒ bound (v+s)² ⇒ bound v.
         // Generalises the sum-of-squares lever (c1=0, the hong family Σx²<1 ⇒ |x_i|<1
         // ⇒ |Πx|<1, contra Πx>1) to the FULL single-var quadratic (c1≠0, e.g. x²−2x+2<0
@@ -2818,7 +2833,10 @@ std::optional<std::pair<size_t, Sign>> CdcacCore::intervalFpViolation(
     std::unordered_map<VarId, Iv> box;
     std::optional<std::pair<size_t, Sign>> aConf;
     bool inf = propagateBox(satRp_, satSafe_, m, input, box, &aConf,
-                            seedBox.empty() ? nullptr : &seedBox);
+                            seedBox.empty() ? nullptr : &seedBox,
+                            /*noContract=*/true);   // a FullLine single-constraint leaf
+                                                    // reason must hold over the WHOLE
+                                                    // fiber, not a contracted sub-range
     if (!inf || !aConf) return std::nullopt;
     // Confirm the surfaced sign genuinely violates the relation.
     if (relationHolds(aConf->second, input.constraints[aConf->first].rel))
