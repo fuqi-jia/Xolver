@@ -11,6 +11,7 @@
 #include "frontend/preprocess/IntDivModConstantFold.h"
 #include "frontend/preprocess/StoreTowerEqMultiset.h"
 #include "frontend/preprocess/ArrayReadOverWrite.h"
+#include "frontend/preprocess/targeted/ReadOnlyArrayElim.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
 #include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
@@ -104,6 +105,14 @@ public:
     // Reset at the start of each checkSat's preprocessing; empty when the pass
     // did not run (flag off / incremental scope).
     ModelConverter modelConverter_;
+
+    // Read records from ReadOnlyArrayElim (XOLVER_TARGETED_PP). Each says a
+    // scalar array read `(select arrOperand idxExpr)` was Ackermannized into a
+    // fresh variable. Post-solve, the validator re-keys these as select
+    // overrides so the ORIGINAL array-bearing assertions still evaluate (the
+    // arrOperand/idxExpr ExprIds are hash-cons-stable in originalAssertions_).
+    // Cleared each checkSat; empty when the pass did not fire.
+    std::vector<ReadOnlyArrayElim::ReadRec> roaeReads_;
 
     // Constants bound by UnconditionalConstantPropagation (Cap 8a). Captured
     // immediately after `cprop.commit()` so model emission and validators can
@@ -486,6 +495,38 @@ public:
                 }
                 selBridge.emplace(std::make_pair(sel.children[0], *idxV), rv);  // first wins
             }
+        }
+        // --- ReadOnlyArrayElim (XOLVER_TARGETED_PP) read reconstruction ---
+        // Each Ackermannized scalar read `(select arrOperand idxExpr)` -> fresh
+        // var becomes a select override keyed (arrOperand-ExprId, value(idxExpr))
+        // -> value(freshVar). The arrOperand/idxExpr ExprIds are hash-cons-stable
+        // in the ORIGINAL snapshot, so the original array reads now evaluate
+        // concretely. SOUND: every original assertion is still independently
+        // re-checked here, so a wrong reconstructed value -> Violated/Indeterminate
+        // -> NOT Satisfied -> Unknown (never a spurious sat).
+        if (!roaeReads_.empty()) {
+            ArithModelValidator::NumAssignment numAsgFull = numAsg;
+            for (const auto& [nm, rv2] : lastModel_->numericAssignments)
+                if (auto q = rv2.tryAsRational()) numAsgFull[nm] = *q;
+            ArithModelValidator idxEval(*ir, numAsgFull, boolAsg);
+            size_t roaeFound = 0, roaeDefault = 0, roaeNoIdx = 0;
+            for (const auto& rr : roaeReads_) {
+                auto idxV = idxEval.evalNumber(rr.idxExpr);
+                if (!idxV) { ++roaeNoIdx; continue; }
+                RealValue rv;
+                auto rit = lastModel_->numericAssignments.find(rr.freshName);
+                if (rit != lastModel_->numericAssignments.end()) {
+                    rv = rit->second; ++roaeFound;
+                } else {
+                    auto nit = numAsg.find(rr.freshName);
+                    if (nit != numAsg.end()) { rv = RealValue::fromMpq(nit->second); ++roaeFound; }
+                    else { rv = RealValue::fromMpq(mpq_class(0)); ++roaeDefault; }
+                }
+                selBridge.emplace(std::make_pair(rr.arrOperand, *idxV), rv);  // first wins
+            }
+            if (std::getenv("XOLVER_TARGETED_PP_DIAG"))
+                std::fprintf(stderr, "[ROAE-RECON] reads=%zu found=%zu default0=%zu noIdx=%zu\n",
+                             roaeReads_.size(), roaeFound, roaeDefault, roaeNoIdx);
         }
         // --- Datatype selector-bridge value back-fill (DT+arith combination) ---
         // Mirror of the array-read back-fill above: the Purifier bridges an
@@ -1212,15 +1253,20 @@ public:
         originalAssertions_ = ir->assertions();
 
         // Coarse phase timing (SOLVE_PHASE_PROF) to localize a pre-solve hang.
-        // Flushed to stderr so a timeout-killed run shows the last phase entered.
+        // Uses C-level stderr (fprintf), NOT std::cerr: checkSatInternal can run
+        // on a worker thread whose std::cerr is redirected/suppressed, which
+        // silently swallowed every [PHASE] line and made the profiler useless.
         static const bool phaseProf = std::getenv("SOLVE_PHASE_PROF") != nullptr;
         auto phaseClock = std::chrono::steady_clock::now();
         auto phase = [&](const char* nm) {
             if (!phaseProf) return;
             auto now = std::chrono::steady_clock::now();
-            std::cerr << "[PHASE] " << nm << "  +"
-                      << std::chrono::duration_cast<std::chrono::milliseconds>(now - phaseClock).count()
-                      << "ms (asserts=" << ir->assertions().size() << ")" << std::endl;
+            std::fprintf(stderr, "[PHASE] %s  +%lldms (asserts=%zu)\n", nm,
+                         static_cast<long long>(
+                             std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 now - phaseClock).count()),
+                         ir->assertions().size());
+            std::fflush(stderr);
             phaseClock = now;
         };
         phase("enter");
@@ -2434,6 +2480,25 @@ public:
             rowFold.commit();
         }
 
+        // TARGETED preprocessing (XOLVER_TARGETED_PP, default-OFF): rules tuned
+        // to the failing 5-logic corpus (QF_ANIA/AUFNIA/UFNIA/UFNRA/UFDTNIA),
+        // not a general capability. ReadOnlyArrayElim Ackermannizes the
+        // read-only array fragment that dominates the SV-COMP memory-model
+        // QF_ANIA/AUFNIA cases (UltimateAutomizer `#memory_int` is never stored
+        // to on the VC path): with no store/array-eq, `select` is an
+        // uninterpreted function, so each scalar read becomes a fresh variable
+        // plus per-base-array congruence axioms. Equisatisfiable; drops the
+        // problem to QF_(N)IA and lets the pure-arith path solve it. Self-
+        // guarding no-op the moment it sees a store/const-array/array-equality.
+        roaeReads_.clear();
+        if (env::paramInt("XOLVER_TARGETED_PP", 0) != 0) {
+            ReadOnlyArrayElim roae(*ir);
+            if (roae.run()) {
+                roae.commit();
+                roaeReads_ = roae.reads();
+            }
+        }
+
         // CRT consistency check for (= (mod x N) c) patterns BEFORE lowering.
         // Closes UNSAT cases by direct contradiction and pins SAT cases with
         // a unique witness in a finite bound. Mod patterns hidden inside
@@ -2717,6 +2782,13 @@ public:
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
         phase("detect-done");
+        if (std::getenv("XOLVER_DUMP_FINAL_ASSERTS")) {
+            int di = 0;
+            for (ExprId aid : ir->assertions())
+                std::fprintf(stderr, "[FINAL-ASSERT %d] %s\n", di++,
+                             dumpExprToSMT2(aid, *ir).c_str());
+            std::fflush(stderr);
+        }
 
         // -------------------------------------------------------------------
         // ARRAY-LOGIC FEATURE DOWNGRADE (default-ON since 2026-06-02 COMB-2
