@@ -71,6 +71,17 @@ public:
     };
     const std::vector<ReadRec>& reads() const { return reads_; }
 
+    // Write-array mode (XOLVER_TARGETED_PP, avg20/array-swap family): array
+    // equalities `(= S W)` where W is a free read-only array variable are
+    // replaced by `false` (W can always be chosen != S), and W's reads are
+    // Ackermannized. freeArrayVars() are the (hash-cons-stable) Variable ExprIds
+    // the validator must treat as free (any equality involving them -> false).
+    // usedWriteArray() is true iff at least one such equality was rewritten — in
+    // which case the caller MUST suppress UNSAT to Unknown (the rewrite is a
+    // relaxation; only the validator-confirmed SAT direction is sound).
+    const std::unordered_set<ExprId>& freeArrayVars() const { return freeArrayVars_; }
+    bool usedWriteArray() const { return usedWriteArray_; }
+
 private:
     CoreIr& ir_;
     bool didRewrite_ = false;
@@ -101,7 +112,16 @@ private:
     std::vector<std::pair<ReadKey, ExprId>> readList_;            // for pairwise congruence
     std::vector<ReadRec> reads_;                                  // for model reconstruction
 
+    // Write-array mode state.
+    std::unordered_set<ExprId> falseEqNodes_;    // Eq ExprIds replaced by `false`
+    std::unordered_set<ExprId> freeArrayVars_;   // free read-only array Variable ExprIds
+    bool usedWriteArray_ = false;
+
     bool isArraySort(SortId s) const;
+    // Pass 1: find array equalities `(= S W)` with W a free read-only array var.
+    // Populates falseEqNodes_/freeArrayVars_. Returns false (bail) on a
+    // non-falsifiable array equality.
+    bool collectFalseEqs();
     bool intConstVal(ExprId e, mpz_class& out) const;
     // Pre-scan: returns false (and sets bailed_) if anything outside the
     // read-only fragment is present.

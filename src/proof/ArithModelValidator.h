@@ -8,6 +8,7 @@
 #include <string>
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace xolver {
@@ -103,6 +104,17 @@ public:
     using SelectorOverrideMap = std::unordered_map<ExprId, RealValue>;
     void setSelectorOverride(const SelectorOverrideMap* so) { selectorOverride_ = so; }
 
+    // Free read-only array variables eliminated by ReadOnlyArrayElim's
+    // write-array mode (XOLVER_TARGETED_PP). Such a var W is never stored to and
+    // appears only in reads (Ackermannized) and in array (dis)equalities `(= S W)`.
+    // Because W is unconstrained except at finitely many read indices, it can
+    // always be chosen UNEQUAL to S (differ at an unread index), so any equality
+    // involving W evaluates to false here. SOUND for the SAT direction (the found
+    // model extends to a real one with W != S) — and ReadOnlyArrayElim suppresses
+    // UNSAT to Unknown whenever this mode fired, so it cannot cause a wrong UNSAT.
+    // Keyed on the (hash-cons-stable) Variable ExprId. Optional; outlives this.
+    void setFreeArrayVars(const std::unordered_set<ExprId>* fv) { freeArrayVars_ = fv; }
+
     // When ON, a `(select a i)` over an Int/Real-element array surfaces a concrete
     // numeric/bool element as a TYPED value (so enclosing arithmetic mod/div/+ can
     // consume it) instead of an opaque element token. Gated because it also makes
@@ -170,6 +182,7 @@ private:
     const RealAssignment* real_ = nullptr;
     const SelectOverrideMap* selOverride_ = nullptr;
     const SelectorOverrideMap* selectorOverride_ = nullptr;
+    const std::unordered_set<ExprId>* freeArrayVars_ = nullptr;
     bool numElems_ = false;
 
     // eval memo (XOLVER_PP_VALIDATOR_MEMO). Valid for this validator's lifetime

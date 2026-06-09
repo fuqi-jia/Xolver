@@ -113,6 +113,12 @@ public:
     // arrOperand/idxExpr ExprIds are hash-cons-stable in originalAssertions_).
     // Cleared each checkSat; empty when the pass did not fire.
     std::vector<ReadOnlyArrayElim::ReadRec> roaeReads_;
+    // ReadOnlyArrayElim write-array mode (avg20/swap): free read-only array
+    // Variable ExprIds the validator treats as free (any equality -> false), and
+    // a flag that this relaxation fired — in which case UNSAT is suppressed to
+    // Unknown (only the validator-confirmed SAT direction is sound).
+    std::unordered_set<ExprId> roaeFreeArrayVars_;
+    bool roaeUsedWriteArray_ = false;
 
     // Constants bound by UnconditionalConstantPropagation (Cap 8a). Captured
     // immediately after `cprop.commit()` so model emission and validators can
@@ -257,6 +263,7 @@ public:
         }
         ArithModelValidator validator(*ir, numAsg, boolAsg,
                                       lastModel_->arrayInterps, tokAsg);
+        if (!roaeFreeArrayVars_.empty()) validator.setFreeArrayVars(&roaeFreeArrayVars_);
         validator.setNumericArrayElements(
             env::paramInt("XOLVER_COMB_ARRAY_BRIDGE_MODEL", 1) != 0);
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
@@ -571,7 +578,7 @@ public:
 
         const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
         ArithModelValidator::Verdict v;
-        if (!lastModel_->arrayInterps.empty() || !selBridge.empty()) {
+        if (!lastModel_->arrayInterps.empty() || !selBridge.empty() || !roaeFreeArrayVars_.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
                                           lastModel_->arrayInterps, tokAsg);
             validator.setFunctionInterps(&lastModel_->functionInterps);
@@ -579,6 +586,7 @@ public:
             validator.setNumericArrayElements(arrBridgeModel);
             if (!selBridge.empty()) validator.setSelectOverride(&selBridge);
             if (!selectorBridge.empty()) validator.setSelectorOverride(&selectorBridge);
+            if (!roaeFreeArrayVars_.empty()) validator.setFreeArrayVars(&roaeFreeArrayVars_);
             validator.setEvalMemo(validatorMemo);
             v = validator.validate(originalAssertions_);
         } else {
@@ -2491,11 +2499,15 @@ public:
         // problem to QF_(N)IA and lets the pure-arith path solve it. Self-
         // guarding no-op the moment it sees a store/const-array/array-equality.
         roaeReads_.clear();
+        roaeFreeArrayVars_.clear();
+        roaeUsedWriteArray_ = false;
         if (env::paramInt("XOLVER_TARGETED_PP", 0) != 0) {
             ReadOnlyArrayElim roae(*ir);
             if (roae.run()) {
                 roae.commit();
                 roaeReads_ = roae.reads();
+                roaeFreeArrayVars_ = roae.freeArrayVars();
+                roaeUsedWriteArray_ = roae.usedWriteArray();
             }
         }
 
@@ -3552,7 +3564,10 @@ public:
                 }
             }
         } else if (result == SatSolver::SolveResult::Unsat) {
-            ret = Result::Unsat;
+            // ReadOnlyArrayElim write-array mode is a RELAXATION (free read-only
+            // arrays, array equalities forced false): only its validator-confirmed
+            // SAT direction is sound, so a derived UNSAT must not be trusted.
+            ret = roaeUsedWriteArray_ ? Result::Unknown : Result::Unsat;
         } else {
             // Cap. 10 — Validated CandidateModelSearch (SAT-only last
             // resort). The legacy complete engines returned Unknown for

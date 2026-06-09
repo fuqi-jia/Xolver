@@ -30,6 +30,11 @@ bool ReadOnlyArrayElim::intConstVal(ExprId e, mpz_class& out) const {
 void ReadOnlyArrayElim::scanNode(ExprId e, std::unordered_set<ExprId>& seen) {
     if (bailed_) return;
     if (!seen.insert(e).second) return;
+    // A `(= S W)` to be replaced by `false` is opaque to the read-only scan:
+    // its subtree (the store-expression S etc.) is discarded, so it need not
+    // satisfy the read-only fragment rules. Reads of W referenced elsewhere are
+    // scanned via their other occurrences.
+    if (falseEqNodes_.count(e)) return;
     const CoreExpr& n = ir_.get(e);
 
     // (a) Any store / const-array means the array is written: not read-only.
@@ -55,6 +60,43 @@ void ReadOnlyArrayElim::scanNode(ExprId e, std::unordered_set<ExprId>& seen) {
         scanNode(c, seen);
         if (bailed_) return;
     }
+}
+
+bool ReadOnlyArrayElim::collectFalseEqs() {
+    // Gather all Store array-operands (a Variable used as child 0 of a Store is a
+    // "written" array — NOT free) and all array-sorted equalities.
+    std::unordered_set<ExprId> storeOperands;
+    std::vector<ExprId> arrayEqs;
+    std::unordered_set<ExprId> seen;
+    std::vector<ExprId> work;
+    for (const auto& [level, eid] : ir_.getScopedAssertions()) { (void)level; work.push_back(eid); }
+    while (!work.empty()) {
+        ExprId e = work.back(); work.pop_back();
+        if (!seen.insert(e).second) continue;
+        const CoreExpr& n = ir_.get(e);
+        if (n.kind == Kind::Store && !n.children.empty()) storeOperands.insert(n.children[0]);
+        if (n.children.size() == 2 && isArraySort(ir_.get(n.children[0]).sort)) {
+            if (n.kind == Kind::Eq) arrayEqs.push_back(e);
+            else if (n.kind == Kind::Distinct) return false;  // array Distinct: not handled yet
+        }
+        for (ExprId c : n.children) work.push_back(c);
+    }
+    if (arrayEqs.empty()) return true;   // store-free R1 path: nothing to do here
+    // An array equality is falsifiable iff at least one side is an array Variable
+    // that is never a Store operand (a free array): W can always be chosen != S
+    // at an unread index, so the equality is false. Mark W free + the Eq for
+    // `false` replacement. Bail on any array equality with no free-variable side.
+    for (ExprId eqNode : arrayEqs) {
+        const CoreExpr& n = ir_.get(eqNode);
+        ExprId a = n.children[0], b = n.children[1];
+        ExprId w = NullExpr;
+        if (ir_.get(a).kind == Kind::Variable && !storeOperands.count(a)) w = a;
+        else if (ir_.get(b).kind == Kind::Variable && !storeOperands.count(b)) w = b;
+        if (w == NullExpr) return false;            // non-falsifiable array eq -> bail
+        freeArrayVars_.insert(w);
+        falseEqNodes_.insert(eqNode);
+    }
+    return true;
 }
 
 bool ReadOnlyArrayElim::safeToEliminate() {
@@ -98,6 +140,17 @@ ExprId ReadOnlyArrayElim::rewriteRec(ExprId e) {
     auto it = memo_.find(e);
     if (it != memo_.end()) return it->second;
     if (!inProgress_.insert(e).second) return e;     // defensive cycle guard
+
+    // Write-array mode: `(= S W)` with W a free read-only array var -> `false`
+    // (W can always differ from S). Drops the whole store-expression S.
+    if (falseEqNodes_.count(e)) {
+        ExprId f = ir_.addShared(CoreExpr{Kind::ConstBool, ir_.boolSortId(), {}, Payload(false)});
+        inProgress_.erase(e);
+        memo_[e] = f;
+        didRewrite_ = true;
+        usedWriteArray_ = true;
+        return f;
+    }
 
     const CoreExpr& n = ir_.get(e);
     ExprId r;
@@ -209,9 +262,21 @@ bool ReadOnlyArrayElim::run() {
     readVar_.clear();
     readList_.clear();
     reads_.clear();
+    falseEqNodes_.clear();
+    freeArrayVars_.clear();
+    usedWriteArray_ = false;
     didRewrite_ = false;
     bailed_ = false;
 
+    // Pass 1: identify falsifiable array equalities (write-array mode). Must run
+    // before safeToEliminate so its scan can treat those equalities as opaque.
+    // Gated SEPARATELY (XOLVER_TARGETED_PP_WRITEARRAY, default-OFF): it is a
+    // RELAXATION that suppresses UNSAT, so it regresses array-extensionality
+    // UNSAT cases (e.g. QF_AX) and only pays off once the residual NIA is
+    // solvable. R1 (store-free) is unaffected when this is off.
+    if (std::getenv("XOLVER_TARGETED_PP_WRITEARRAY")) {
+        if (!collectFalseEqs()) return false;
+    }
     if (!safeToEliminate()) return false;
 
     for (const auto& [level, eid] : ir_.getScopedAssertions()) {

@@ -308,6 +308,14 @@ ArithModelValidator::TR ArithModelValidator::evalImpl(ExprId eid) const {
         }
         case Kind::Eq: {
             if (n.children.size() != 2) return r;
+            // Free read-only array var (ReadOnlyArrayElim write-array mode): an
+            // equality with such a var on either side is always falsifiable (the
+            // var differs from the other side at an unread index), so it is false
+            // here. Lets `(not (= S W))` evaluate true so the original assertion
+            // validates. Checked BEFORE eval (the var has no array interp).
+            if (freeArrayVars_ &&
+                (freeArrayVars_->count(n.children[0]) || freeArrayVars_->count(n.children[1])))
+                return bl(false);
             TR a = eval(n.children[0]), b = eval(n.children[1]);
             if (a.kind == Kind2::Indeterminate || b.kind == Kind2::Indeterminate) return r;
             // Array equality: equal defaults AND equal at every read index of
