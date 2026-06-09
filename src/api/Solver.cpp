@@ -2516,7 +2516,11 @@ public:
         // uninterpreted-function applications (QF_UFNRA "hidden nonlinearity"
         // FFT family). Exact reduction; the UNSAT direction needs no model
         // reconstruction (a SAT over the abstracted formula floors to Unknown).
-        if (std::getenv("XOLVER_TARGETED_PP_UFACK")) {
+        // Restricted to QF_UFNRA: it is net-positive there (the nonlinear term
+        // hides in a UF arg) but net-NEGATIVE on QF_UFNIA (0 flips, regresses
+        // solved cases by abstracting UF the combination was using).
+        if (std::getenv("XOLVER_TARGETED_PP_UFACK") &&
+            (logic == "QF_UFNRA" || logic == "UFNRA")) {
             UfApplyAckermann ufack(*ir);
             if (ufack.run()) ufack.commit();
         }
