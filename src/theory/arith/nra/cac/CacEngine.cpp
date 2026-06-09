@@ -155,7 +155,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     if ((nodes_ & 1023) == 0) {   // periodic CAC tree-size dump (survives TO-kill)
         const char* f = std::getenv("XOLVER_NRA_TOWER_DIAG");
         if (f && *f) if (std::FILE* fp = std::fopen(f, "a")) {
-            std::fprintf(fp, "[CAC-tick] nodes=%ld maxDepth=%d deadlineMs=%ld\n",
+            std::fprintf(fp, "[CAC-tick] nodes=%ld maxDepth=%ld deadlineMs=%ld\n",
                          nodes_, maxDepth_, static_cast<long>(cfg_.deadlineMillis));
             std::fclose(fp);
         }
@@ -179,7 +179,6 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     };
     std::vector<LocalCell> cellsList;
     long iterCount = 0;
-    bool levelEarlyHit = false;   // any EARLY_INFEAS hit at this level (#48 fix)
 
     // In-loop interval pruning (#49, default OFF). After each cell add, check
     // the newest cell vs existing: drop the new if subsumed by an existing
@@ -375,7 +374,6 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                     cellOrigins.push_back(ci);
                     earlyHit = true;
                 }
-                if (earlyHit) levelEarlyHit = true;
             }
             if (!earlyHit) {
                 CoverOut rec = getUnsatCover(level + 1, sample);
@@ -478,10 +476,19 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     // MUST run BEFORE the flatten below — the flatten moves polys out of c.polys.
     if (std::getenv("XOLVER_NRA_CAC_TRACE")) {
         std::ofstream st("/tmp/cac_trace.txt", std::ios::app);
-        st << "[L" << level << "] var=" << var << " cells=" << cellsList.size() << "\n";
+        auto fmtE = [](const ExtendedRealValue& e) -> std::string {
+            if (e.isNegInf()) return "-inf";
+            if (e.isPosInf()) return "+inf";
+            return e.asFinite().toDebugString();
+        };
+        st << "[L" << level << "] var=" << var << " cells=" << cellsList.size()
+           << " complete=" << (cov.isComplete() ? "Y" : "N") << "\n";
         for (size_t i = 0; i < cellsList.size(); ++i) {
             const auto& c = cellsList[i];
-            st << "  cell[" << i << "] polys=" << c.polys.size() << " origins=" << c.origins.size() << "\n";
+            const auto& iv = c.interval;
+            st << "  cell[" << i << "] excl=" << (iv.loOpen ? "(" : "[")
+               << fmtE(iv.lo) << "," << fmtE(iv.hi) << (iv.hiOpen ? ")" : "]")
+               << " polys=" << c.polys.size() << " origins=" << c.origins.size() << "\n";
             for (size_t pi = 0; pi < c.polys.size() && pi < 12; ++pi) {
                 st << "    p[" << pi << "] vars={";
                 bool first = true;
@@ -503,33 +510,32 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         for (auto& p : c.polys) levelChar.push_back(std::move(p));
         levelOrigins.insert(c.origins.begin(), c.origins.end());
     }
-    // SOUNDNESS INJECTION (#48 _3a path): when EARLY_INFEAS fired at this level
-    // for any cell, the leaf was short-circuited — the propagated charPolys
-    // would otherwise lack the constraints whose mainLevel > level (those that
-    // EARLY_INFEAS at this level SKIPPED, the ones leaf-propagation would have
-    // brought). The Lazard projection at parent levels then has no pairwise
-    // resultant partners — the equation-driven resultants that capture
-    // algebraic SAT boundaries (e.g. m²+4m-4 in IsoRightTriangle) are NEVER
-    // computed. Inject ONLY those skipped-deeper constraints into levelChar.
-    // mainLevel ≤ level constraints are EITHER pushed as violated (already in
-    // cellBoundaries → propagated) OR satisfied at sample (don't constrain
-    // this cell's exclusion → no need to propagate). The mainLevel > level
-    // ones are the surgical minimum: enough to compute the pairwise
-    // resultants the leaf would have generated, without flooding the parent
-    // with redundant low-level polys. Parent dedups via unitKey.
-    if (levelEarlyHit && earlyInfeasSafe_) {
-        for (size_t ci = 0; ci < cons_.size(); ++ci) {
-            if (consMainLevel_[ci] <= level) continue;
-            // Only equations drive the pairwise-resultant chain that exposes
-            // the #48 algebraic SAT boundaries (e.g. m²+4m-4 from
-            // Res_v8(-v8²+1, -v10²+v8²+1)). Strict inequalities at deeper
-            // levels don't contribute new resultant partners — they're
-            // handled by the standard cell construction at their own level.
-            // Filtering to equations only keeps the parent Lazard's projection
-            // input small while still recovering the soundness chain.
-            if (cons_[ci].rel != Relation::Eq) continue;
-            levelChar.push_back(cons_[ci].poly);
-        }
+    // SOUNDNESS — COMPLETE PROJECTION INPUT (2026-06-09). Inject EVERY constraint
+    // whose main variable is THIS level (mainLevel == level), INCLUDING those
+    // SATISFIED at the sample, into the propagated characterization. This matches
+    // cvc5's construct_characterization (which characterizes over ALL main-var-k
+    // constraints of the covering) and z3 nlsat's collect_polys (which projects ALL
+    // core polynomials, not just the falsified one).
+    //
+    // WHY IT IS REQUIRED FOR SOUNDNESS: a constraint satisfied at the sample forms
+    // no exclusion cell, so only the VIOLATED constraints were pushed as cell
+    // boundaries above — the satisfied one's poly is dropped. But the parent-level
+    // cell boundary is the RESULTANT of a violated poly with a satisfied poly; if
+    // the satisfied partner never reaches the parent's characterize(), that
+    // resultant is never formed, the parent cell OVER-EXTENDS past the true
+    // feasibility boundary, the covering wrongly completes, and we emit a FALSE
+    // UNSAT (meti-tarski sin/atan/exp — conjunctions of strict inequalities, so the
+    // old equation-only #48 filter never fired). The parent's characterize()
+    // forms the pairwise resultants over this complete input and dedups via
+    // unitKey, so a redundant inject is free.
+    //
+    // SOUND BY CONSTRUCTION: this only ADDS projection input — it can never drop a
+    // boundary, so it can never turn a real SAT into UNSAT. It runs ONLY on the
+    // UNSAT-covering path (the SAT path returns earlier), so SAT cost is unchanged.
+    for (size_t ci = 0; ci < cons_.size(); ++ci) {
+        if (consMainLevel_[ci] != level) continue;
+        if (consPid_[ci] == NullPoly) continue;
+        levelChar.push_back(cons_[ci].poly);
     }
 
     // The covering is gap-free over ℝ (loop exited) and every cell was a
