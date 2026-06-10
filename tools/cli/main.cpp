@@ -287,11 +287,65 @@ static int cmdVersion() {
     return EXIT_SUCCESS;
 }
 
+// Competition default configuration, BAKED INTO THE BINARY.
+//
+// The SMT-COMP harness invokes the bare `xolver` binary with no wrapper script,
+// so the campaign-validated lever set (formerly tools/run.sh CANDFLAGS=allopt)
+// must be turned on here. The 2026-06-09 panda differential over 70540 cases
+// measured this set at +3273 decided vs the default config (recovers 3405,
+// regresses 132) with 0 wrong answers on HEAD (the one allon false-UNSAT,
+// QF_NRA exp-problem-10-2-chunk-0333, is fixed by 579b4bb and verified SAT here).
+//
+// Each flag self-gates to its theory (e.g. XOLVER_NIA_* only affects NIA), so
+// enabling them globally is safe. setenv(..., 0) does NOT overwrite an existing
+// value, so the config stays fully overridable for ablation/testing
+// (XOLVER_X=0 disables flag X; the differential harness still works).
+//
+// Excluded deliberately: XOLVER_DECIDE_PROBE (diagnostic print only, not a
+// solving lever); CF_NRA_AGGR / SAT_LEMMA_MGMT / floors (known to regress or
+// hang per the campaign). Targeted preprocessing for the 5 weak combined logics
+// (XOLVER_TARGETED_PP = read-only-array elim, +11 QF_ANIA; XOLVER_TARGETED_PP_UFACK
+// = UF-application Ackermann, +1 QF_UFNRA) is baked ON here — both gate-validated
+// 0-unsound. width-probe (QF_UFNIA shift family) is already code-default-ON.
+static void xolverBakeCompetitionDefaults() {
+    // Opt-out hatch: XOLVER_NO_BAKED_DEFAULTS=1 leaves every flag at its code
+    // default (used to reproduce the pre-bake binary for differentials).
+    if (const char* off = std::getenv("XOLVER_NO_BAKED_DEFAULTS");
+        off && *off && *off != '0')
+        return;
+    static const char* kFlags[] = {
+        // CF_NIA
+        "XOLVER_NIA_CDCAC", "XOLVER_NIA_EAGER_BITBLAST",
+        "XOLVER_NIA_IFACE_LIFECYCLE", "XOLVER_NIA_LOCALSEARCH",
+        // CF_NRA
+        "XOLVER_NRA_LAZARD_LIFT", "XOLVER_NRA_LIBPOLY_PSC",
+        // CF_LIA
+        "XOLVER_LIA_CUTS", "XOLVER_LIA_REPAIR",
+        // CF_LRA
+        "XOLVER_LRA_BOUND_AXIOMS", "XOLVER_LRA_DECIDE",
+        "XOLVER_LRA_PIVOT_HEUR", "XOLVER_LRA_PROP",
+        // CF_COMB
+        "XOLVER_COMB_MODEL_BASED", "XOLVER_COMB_SCALAR_BACKFILL",
+        "XOLVER_COMB_UFARG_ARRANGE", "XOLVER_UF_FAST_CC",
+        // CF_ARRAY
+        "XOLVER_ARRAY_CONGR_EXT", "XOLVER_AX_ROW2_CONST",
+        // CF_PP
+        "XOLVER_PP_LET_ELIM", "XOLVER_PP_PG_CNF", "XOLVER_PP_REWRITE",
+        "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_VALIDATOR_MEMO",
+        // CF_SAT (DECIDE_PROBE excluded — diagnostic only)
+        "XOLVER_SAT_MIN", "XOLVER_STRAT_PRESETS",
+        // Targeted preprocessing for the 5 weak combined logics
+        "XOLVER_TARGETED_PP", "XOLVER_TARGETED_PP_UFACK",
+    };
+    for (const char* f : kFlags) setenv(f, "1", /*overwrite=*/0);
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printUsage(argv[0]);
         return EXIT_FAILURE;
     }
+    xolverBakeCompetitionDefaults();
     xolverMaybeInstallSelfprof();
 
     const char* cmd = argv[1];

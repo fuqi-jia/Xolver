@@ -1765,6 +1765,19 @@ public:
         if (!enableRewrite && std::getenv("XOLVER_STRAT_PRESETS")) {
             enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
         }
+        // R1 precedence (XOLVER_TARGETED_PP). The generic rewriter runs HERE,
+        // before ReadOnlyArrayElim fires at the targeted-preprocess stage below,
+        // and folds the read-over-write structure R1 pattern-matches — silently
+        // pre-empting the +11 QF_ANIA read-only-array elimination (sum10 etc.
+        // regress sat -> unknown when PP_REWRITE / STRAT_PRESETS is also on). On
+        // exactly the array+NIA logics where R1 applies, defer to R1: skip the
+        // generic rewriter so its elimination can match. The rewriter (and the
+        // rest of STRAT_PRESETS) is untouched on every other logic.
+        if (enableRewrite && env::paramInt("XOLVER_TARGETED_PP", 0) != 0 &&
+            (logic == "QF_ANIA" || logic == "QF_AUFNIA" ||
+             logic == "ANIA"    || logic == "AUFNIA")) {
+            enableRewrite = false;
+        }
         if (enableRewrite) {
             FormulaRewriter rewriter(*ir, boolSortId_);
             if (rewriter.run() == FormulaRewriter::Verdict::Unsat) {
