@@ -103,6 +103,13 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
             std::cerr << "[STAGE-ENTER] " << r->name() << " effort="
                       << (effort == TheoryEffort::Full ? "F" : "S") << "\n";
             std::cerr.flush();
+            // Worker-thread std::cerr is suppressed; ALSO write a file heartbeat
+            // (overwrite) so a single-stage hang is visible after timeout-kill.
+            if (FILE* f = std::fopen("/tmp/xolver_stage.txt", "w")) {
+                std::fprintf(f, "stage=%s effort=%s\n", r->name().c_str(),
+                             effort == TheoryEffort::Full ? "F" : "S");
+                std::fclose(f);
+            }
         }
 #ifndef NDEBUG
         size_t trailBefore = state_.trail.size();
