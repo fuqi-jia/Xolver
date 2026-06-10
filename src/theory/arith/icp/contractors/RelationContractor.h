@@ -7,11 +7,11 @@
 
 namespace xolver {
 
-class RelationContractorZ : public ContractorZ {
+class RelationContractor : public Contractor {
 public:
-    RelationContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel);
+    RelationContractor(const IcpConstraint& constraint, PolynomialKernel& kernel);
 
-    ContractorResultZ contract(ReasonedBoxZ& box) override;
+    ContractorResultZ contract(ReasonedBox& box) override;
     std::vector<std::string> vars() const override;
     SatLit reason() const override;
 

@@ -4,18 +4,18 @@
 #include "theory/arith/icp/IcpTypes.h"
 #include "theory/arith/icp/IcpResult.h"
 #include "theory/arith/icp/Worklist.h"
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include <memory>
 #include <vector>
 
 namespace xolver {
 
-class IcpEngineZ {
+class IcpEngine {
 public:
     IcpResultZ run(
-        const std::vector<std::unique_ptr<ContractorZ>>& contractors,
+        const std::vector<std::unique_ptr<Contractor>>& contractors,
         const WatcherMap& watchers,
-        ReasonedBoxZ& box,
+        ReasonedBox& box,
         const IcpConfig& config);
 };
 

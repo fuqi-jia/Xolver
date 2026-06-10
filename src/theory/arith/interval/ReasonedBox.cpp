@@ -1,19 +1,19 @@
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include <algorithm>
 
 namespace xolver {
 
-std::optional<ReasonedInterval> ReasonedBoxZ::get(const std::string& var) const {
+std::optional<ReasonedInterval> ReasonedBox::get(const std::string& var) const {
     auto it = box_.find(var);
     if (it == box_.end()) return std::nullopt;
     return it->second;
 }
 
-void ReasonedBoxZ::set(const std::string& var, ReasonedInterval ri) {
+void ReasonedBox::set(const std::string& var, ReasonedInterval ri) {
     box_[var] = std::move(ri);
 }
 
-bool ReasonedBoxZ::narrow(const std::string& var, IntervalZ newInterval,
+bool ReasonedBox::narrow(const std::string& var, IntervalZ newInterval,
                          const std::vector<SatLit>& reasons) {
     auto it = box_.find(var);
     if (it == box_.end()) {
@@ -39,18 +39,18 @@ bool ReasonedBoxZ::narrow(const std::string& var, IntervalZ newInterval,
     return changed;
 }
 
-bool ReasonedBoxZ::isEmpty() const {
+bool ReasonedBox::isEmpty() const {
     for (const auto& [var, ri] : box_) {
         if (ri.interval.isEmpty()) return true;
     }
     return false;
 }
 
-void ReasonedBoxZ::clear() {
+void ReasonedBox::clear() {
     box_.clear();
 }
 
-const std::unordered_map<std::string, ReasonedInterval>& ReasonedBoxZ::entries() const {
+const std::unordered_map<std::string, ReasonedInterval>& ReasonedBox::entries() const {
     return box_;
 }
 

@@ -1,11 +1,11 @@
-#include "theory/arith/icp/IcpEngineZ.h"
+#include "theory/arith/icp/IcpEngine.h"
 
 namespace xolver {
 
-IcpResultZ IcpEngineZ::run(
-    const std::vector<std::unique_ptr<ContractorZ>>& contractors,
+IcpResultZ IcpEngine::run(
+    const std::vector<std::unique_ptr<Contractor>>& contractors,
     const WatcherMap& watchers,
-    ReasonedBoxZ& box,
+    ReasonedBox& box,
     const IcpConfig& config) {
 
     Worklist wl;

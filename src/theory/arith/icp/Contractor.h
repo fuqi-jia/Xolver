@@ -1,6 +1,6 @@
 #pragma once
 
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include "theory/arith/interval/ReasonedBoxQ.h"
 #include "theory/arith/icp/IcpResult.h"
 #include <string>
@@ -8,10 +8,10 @@
 
 namespace xolver {
 
-class ContractorZ {
+class Contractor {
 public:
-    virtual ~ContractorZ() = default;
-    virtual ContractorResultZ contract(ReasonedBoxZ& box) = 0;
+    virtual ~Contractor() = default;
+    virtual ContractorResultZ contract(ReasonedBox& box) = 0;
     virtual std::vector<std::string> vars() const = 0;
     virtual SatLit reason() const = 0;
 };

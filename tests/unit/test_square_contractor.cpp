@@ -1,13 +1,13 @@
 #include <doctest/doctest.h>
-#include "theory/arith/icp/contractors/SquareContractorZ.h"
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/icp/contractors/SquareContractor.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 
 using namespace xolver;
 
-// Regression for a false-UNSAT in SquareContractorZ: for the sign=-1 normal
+// Regression for a false-UNSAT in SquareContractor: for the sign=-1 normal
 // form (-x^2 + c) REL 0 the contractor must rewrite to "x^2 flip(REL) c"
 // keeping c UNCHANGED. A prior `c = -c` turned x^2 = 16 (i.e. -x^2 + 16 = 0)
 // into c<0 => a spurious Conflict. Reachable only with XOLVER_NIA_ICP, but a
@@ -27,8 +27,8 @@ static PolyId sqPoly(PolynomialKernel& k, int sign, long a0) {
 
 static ContractorResultZ run(PolynomialKernel& k, PolyId poly, Relation rel) {
     IcpConstraint c{std::nullopt, poly, rel, reason(1), TheoryId::NIA};
-    SquareContractorZ ctr(c, k);
-    ReasonedBoxZ box;  // empty box: matches the real failure (x not pre-bounded)
+    SquareContractor ctr(c, k);
+    ReasonedBox box;  // empty box: matches the real failure (x not pre-bounded)
     return ctr.contract(box);
 }
 

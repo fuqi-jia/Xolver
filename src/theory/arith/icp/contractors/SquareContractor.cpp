@@ -1,15 +1,15 @@
-#include "theory/arith/icp/contractors/SquareContractorZ.h"
+#include "theory/arith/icp/contractors/SquareContractor.h"
 #include "theory/arith/interval/IntervalOperations.h"
 #include <cmath>
 
 namespace xolver {
 
-SquareContractorZ::SquareContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel)
+SquareContractor::SquareContractor(const IcpConstraint& constraint, PolynomialKernel& kernel)
     : constraint_(constraint), kernel_(kernel) {
     vars_ = kernel_.variables(constraint_.poly);
 }
 
-bool SquareContractorZ::recognizePattern(int& sign, mpz_class& c) const {
+bool SquareContractor::recognizePattern(int& sign, mpz_class& c) const {
     if (vars_.size() != 1) return false;
 
     auto degOpt = kernel_.degree(constraint_.poly, vars_[0]);
@@ -35,7 +35,7 @@ bool SquareContractorZ::recognizePattern(int& sign, mpz_class& c) const {
     return false;
 }
 
-ContractorResultZ SquareContractorZ::contract(ReasonedBoxZ& box) {
+ContractorResultZ SquareContractor::contract(ReasonedBox& box) {
     int sign;
     mpz_class c;
     if (!recognizePattern(sign, c)) {
@@ -126,11 +126,11 @@ ContractorResultZ SquareContractorZ::contract(ReasonedBoxZ& box) {
     return ContractorResultZ{IcpStatus::NoChange, std::nullopt, {}};
 }
 
-std::vector<std::string> SquareContractorZ::vars() const {
+std::vector<std::string> SquareContractor::vars() const {
     return vars_;
 }
 
-SatLit SquareContractorZ::reason() const {
+SatLit SquareContractor::reason() const {
     return constraint_.reason;
 }
 

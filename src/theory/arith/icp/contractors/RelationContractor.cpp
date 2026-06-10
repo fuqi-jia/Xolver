@@ -1,14 +1,14 @@
-#include "theory/arith/icp/contractors/RelationContractorZ.h"
+#include "theory/arith/icp/contractors/RelationContractor.h"
 #include <algorithm>
 
 namespace xolver {
 
-RelationContractorZ::RelationContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel)
+RelationContractor::RelationContractor(const IcpConstraint& constraint, PolynomialKernel& kernel)
     : constraint_(constraint), kernel_(kernel) {
     vars_ = kernel_.variables(constraint_.poly);
 }
 
-ContractorResultZ RelationContractorZ::contract(ReasonedBoxZ& box) {
+ContractorResultZ RelationContractor::contract(ReasonedBox& box) {
     // Multivar safeguard: if more than one variable, we cannot soundly eval interval
     if (vars_.size() != 1) {
         return ContractorResultZ{IcpStatus::NoChange, std::nullopt, {}};
@@ -62,15 +62,15 @@ ContractorResultZ RelationContractorZ::contract(ReasonedBoxZ& box) {
     return ContractorResultZ{IcpStatus::NoChange, std::nullopt, {}};
 }
 
-std::vector<std::string> RelationContractorZ::vars() const {
+std::vector<std::string> RelationContractor::vars() const {
     return vars_;
 }
 
-SatLit RelationContractorZ::reason() const {
+SatLit RelationContractor::reason() const {
     return constraint_.reason;
 }
 
-bool RelationContractorZ::isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel) const {
+bool RelationContractor::isDefinitelyViolated(const IntervalZ& polyInterval, Relation rel) const {
     switch (rel) {
         case Relation::Leq:
             return polyInterval.lo > 0;

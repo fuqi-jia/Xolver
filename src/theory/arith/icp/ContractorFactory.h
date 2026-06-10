@@ -10,18 +10,18 @@
 namespace xolver {
 
 /**
- * ContractorFactoryZ: builds V1 contractors from IcpConstraints.
+ * ContractorFactory: builds V1 contractors from IcpConstraints.
  *
  * Dispatch order (fixed):
- *   1. Try SquareContractorZ
- *   2. Try SumSquaresContractorZ (stub in V1)
- *   3. Try RelationContractorZ only if single-var interval eval succeeds
+ *   1. Try SquareContractor
+ *   2. Try SumSquaresContractor (stub in V1)
+ *   3. Try RelationContractor only if single-var interval eval succeeds
  *   4. Otherwise no contractor
  */
-class ContractorFactoryZ {
+class ContractorFactory {
 public:
     struct BuildResult {
-        std::vector<std::unique_ptr<ContractorZ>> contractors;
+        std::vector<std::unique_ptr<Contractor>> contractors;
         WatcherMap watchers;
     };
 

@@ -9,7 +9,7 @@
 namespace xolver {
 
 /**
- * NiaIcpAdapter: bridges DomainStore/NiaSolver to IcpEngineZ.
+ * NiaIcpAdapter: bridges DomainStore/NiaSolver to IcpEngine.
  *
  * V1: forward eval + square/sum-of-squares pattern contractors only.
  */

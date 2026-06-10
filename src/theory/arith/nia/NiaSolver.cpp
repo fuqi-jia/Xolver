@@ -1797,7 +1797,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageProductPositivity(TheoryLemmaSt
 
 std::optional<TheoryCheckResult> NiaSolver::stageInterval(TheoryLemmaStorage&, TheoryEffort) {
     // Interval evaluation (single-variable only, via common framework)
-    ReasonedBoxZ box;
+    ReasonedBox box;
     for (const auto& c : normalized_) {
         for (const auto& var : kernel_->variables(c.poly)) {
             if (box.get(var)) continue; // already set

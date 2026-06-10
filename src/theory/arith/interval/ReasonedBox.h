@@ -8,12 +8,12 @@
 namespace xolver {
 
 /**
- * ReasonedBoxZ: a box of per-variable integer intervals, each carrying SAT literal reasons.
+ * ReasonedBox: a box of per-variable integer intervals, each carrying SAT literal reasons.
  *
  * Does NOT construct conflicts. The caller (e.g. NiaSolver adapter) is responsible
  * for assembling conflicts from violated constraints + used interval reasons.
  */
-class ReasonedBoxZ {
+class ReasonedBox {
 public:
     // Get interval for a variable
     std::optional<ReasonedInterval> get(const std::string& var) const;

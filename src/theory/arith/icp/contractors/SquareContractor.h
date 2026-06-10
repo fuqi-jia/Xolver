@@ -7,15 +7,15 @@
 namespace xolver {
 
 /**
- * SquareContractorZ: recognizes x^2 - c rel 0 pattern for NIA.
+ * SquareContractor: recognizes x^2 - c rel 0 pattern for NIA.
  *
  * V1: only interval updates, no finite-set refinement.
  */
-class SquareContractorZ : public ContractorZ {
+class SquareContractor : public Contractor {
 public:
-    SquareContractorZ(const IcpConstraint& constraint, PolynomialKernel& kernel);
+    SquareContractor(const IcpConstraint& constraint, PolynomialKernel& kernel);
 
-    ContractorResultZ contract(ReasonedBoxZ& box) override;
+    ContractorResultZ contract(ReasonedBox& box) override;
     std::vector<std::string> vars() const override;
     SatLit reason() const override;
 

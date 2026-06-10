@@ -10,7 +10,7 @@
 
 namespace xolver {
 
-// Rational-side ICP engine — symmetric mirror of IcpEngineZ for NRA.
+// Rational-side ICP engine — symmetric mirror of IcpEngine for NRA.
 // Sound by construction: only emits Conflict when a contractor reports a
 // definitively-violated constraint, with reasons that combine the constraint
 // reason with the interval reasons that produced the violating box.

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "theory/arith/interval/IntervalEvaluator.h"
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
@@ -29,9 +29,9 @@ static IntervalConstraint makeIntervalConstraint(
     return {result, rel, reason};
 }
 
-static ReasonedBoxZ makeBox(const std::string& var, mpz_class lo, mpz_class hi,
+static ReasonedBox makeBox(const std::string& var, mpz_class lo, mpz_class hi,
                            const std::vector<SatLit>& reasons) {
-    ReasonedBoxZ box;
+    ReasonedBox box;
     box.set(var, ReasonedInterval{IntervalZ{lo, hi}, reasons});
     return box;
 }
@@ -76,7 +76,7 @@ TEST_CASE("IntervalEvaluator: x^3 - 8 <= 0 on [0,2] -> not violated") {
 TEST_CASE("IntervalEvaluator: no upper bound -> skip") {
     auto kernel = createPolynomialKernel();
     IntervalEvaluator eval(*kernel);
-    ReasonedBoxZ box;
+    ReasonedBox box;
     // Variable "x" not in box at all -> no bounds
 
     auto c = makeIntervalConstraint(*kernel, "x", {mpz_class(1), mpz_class(0), mpz_class(0), mpz_class(1)},

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/interval/IntervalTypes.h"
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/interval/ReasonedBox.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/core/TheorySolver.h"
 #include "expr/types.h"
@@ -43,7 +43,7 @@ struct IntervalConstraint {
  *
  * For a single normalized constraint p(x) rel 0:
  *   1. If the polynomial is multi-variable → NoChange (single-var only for now).
- *   2. Requires the variable to have both lower and upper bounds in the ReasonedBoxZ.
+ *   2. Requires the variable to have both lower and upper bounds in the ReasonedBox.
  *   3. Computes the over-approx interval of p(x) over the variable's domain.
  *   4. If the interval proves the constraint is definitely violated:
  *      returns DefinitelyViolated with the used bound reasons.
@@ -54,14 +54,14 @@ public:
 
     // Evaluate a single constraint against the box.
     IntervalEvalResult run(const IntervalConstraint& constraint,
-                           const ReasonedBoxZ& box);
+                           const ReasonedBox& box);
 
 private:
     PolynomialKernel& kernel_;
 
     // Build interval for a variable from the ReasonedBox.
     std::optional<IntervalZ> getVariableInterval(const std::string& var,
-                                                  const ReasonedBoxZ& box) const;
+                                                  const ReasonedBox& box) const;
 
     // Evaluate a single-variable polynomial at an interval.
     // coeffs: [leading, ..., constant] from getIntegerCoefficients.

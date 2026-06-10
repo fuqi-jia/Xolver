@@ -1,7 +1,7 @@
 #include "theory/arith/nia/search/NiaIcpAdapter.h"
-#include "theory/arith/icp/ContractorFactoryZ.h"
-#include "theory/arith/icp/IcpEngineZ.h"
-#include "theory/arith/interval/ReasonedBoxZ.h"
+#include "theory/arith/icp/ContractorFactory.h"
+#include "theory/arith/icp/IcpEngine.h"
+#include "theory/arith/interval/ReasonedBox.h"
 
 namespace xolver {
 
@@ -10,8 +10,8 @@ NiaIcpAdapter::NiaIcpAdapter(PolynomialKernel& kernel, DomainStore& store)
 
 IcpResultZ NiaIcpAdapter::run(const std::vector<IcpConstraint>& constraints,
                               const IcpConfig& config) {
-    // Build ReasonedBoxZ from DomainStore
-    ReasonedBoxZ box;
+    // Build ReasonedBox from DomainStore
+    ReasonedBox box;
     for (const auto& [var, domain] : store_.getAllDomains()) {
         if (domain.hasLower && domain.hasUpper) {
             std::vector<SatLit> reasons;
@@ -22,8 +22,8 @@ IcpResultZ NiaIcpAdapter::run(const std::vector<IcpConstraint>& constraints,
     }
 
     // Build contractors and run ICP
-    auto buildResult = ContractorFactoryZ::build(constraints, kernel_);
-    IcpEngineZ engine;
+    auto buildResult = ContractorFactory::build(constraints, kernel_);
+    IcpEngine engine;
     IcpResultZ result = engine.run(buildResult.contractors, buildResult.watchers, box, config);
 
     // Apply domain updates back to DomainStore
