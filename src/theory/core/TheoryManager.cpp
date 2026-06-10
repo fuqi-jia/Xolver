@@ -32,6 +32,17 @@ struct CombDiag {
 };
 static CombDiag g_cd;
 static const bool g_combDiag = std::getenv("XOLVER_COMB_DIAG") != nullptr;
+// ⚠️ UNSOUND-WHEN-ON, DEFAULT-OFF, DO-NOT-PROMOTE. Research toggle for the
+// combination-loop convergence work (see check()). Skipping the deduced-eq
+// publish for EUF-already-merged pairs DOES converge the 444-round loop, but
+// the reg UF-bearing gate proved it produces WRONG-SAT on 8 UNSAT cases
+// (ufdtnia_002/003/007, uflia_003/006/010, uflra_002, ufdtnia_projection:
+// unsat->sat) because the shared-eq atom is the INTER-THEORY conflict channel,
+// not redundant. Kept only so the convergence mechanism + its soundness
+// boundary are reproducible; the real fix is theory PROPAGATION (keep the eqs,
+// propagate forced atoms via cb_propagate). NEVER enable in a shipped binary.
+static const bool g_skipEufMergedUNSAFE =
+    std::getenv("XOLVER_COMB_SKIP_EUF_MERGED_UNSAFE") != nullptr;
 static void combDiagDump() {
     if (!g_combDiag) return;
     if (g_cd.checks - g_cd.lastDumpCheck < 100) return;
@@ -920,6 +931,22 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                        << stName(sharedTermRegistry_, prop.a) << " = "
                        << stName(sharedTermRegistry_, prop.b) << "\n";
                 continue;
+            }
+            // ⚠️ UNSOUND research toggle (g_skipEufMergedUNSAFE, default-OFF). Skips
+            // publishing a deduced equality EUF has already merged. This CONVERGES
+            // the 444-round combination loop on the Zohar ground repro (hang ->
+            // terminate) but is UNSOUND: the shared-eq atom is the inter-theory
+            // conflict channel, so dropping it loses UNSAT detection -> WRONG-SAT
+            // (reg gate: 8 unsat->sat). DO NOT enable in a shipped binary. Retained
+            // only to reproduce the convergence mechanism for the eventual sound fix
+            // (theory propagation that keeps the eq but propagates it efficiently).
+            if (g_skipEufMergedUNSAFE) {
+                auto eufIt = solverByTheory_.find(TheoryId::EUF);
+                if (eufIt != solverByTheory_.end() &&
+                    eufIt->second->sharedTermsMerged(prop.a, prop.b)) {
+                    deducedEqCache_.insert(ReportedPropKey{solver->id(), prop.a, prop.b});
+                    continue;
+                }
             }
             SatLit eqLit = registry_->getOrCreateSharedEqualityAtom(prop.a, prop.b);
             NO_DBG << "[NO] deduced EQ " << stName(sharedTermRegistry_, prop.a)
