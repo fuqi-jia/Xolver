@@ -630,8 +630,24 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
     TheoryCheckResult pendingLemma = TheoryCheckResult::consistent();
     bool havePendingLemma = false;
+    static const bool tmHb = std::getenv("XOLVER_TMCHECK_HB") != nullptr;
     for (auto& solver : solvers_) {
+        if (tmHb) {
+            if (FILE* f = std::fopen("/tmp/xolver_tmcheck.txt", "w")) {
+                std::fprintf(f, "phase2 solver=%d effort=%s ENTER\n",
+                             (int)solver->id(),
+                             effort == TheoryEffort::Full ? "Full" : "Standard");
+                std::fclose(f);
+            }
+        }
         auto tr = solver->check(lemmaDb, effort);
+        if (tmHb) {
+            if (FILE* f = std::fopen("/tmp/xolver_tmcheck.txt", "w")) {
+                std::fprintf(f, "phase2 solver=%d EXIT kind=%d\n",
+                             (int)solver->id(), (int)tr.kind);
+                std::fclose(f);
+            }
+        }
         recordCheckResult(tr);
         // Conflict-source attribution (XOLVER_COMB_CONFLICT_TRACE): name the
         // solver behind a combination-path conflict so we can route the eventual

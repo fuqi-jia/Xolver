@@ -60,6 +60,8 @@ public:
 
     const TheoryAtomRecord* findBySatVar(SatVar v) const override;
     std::vector<SatVar> linearAtomVars() const override;
+    std::vector<SatVar> allAtomVars() const override;
+    size_t numAtomVars() const override;
     const std::vector<TheoryAtomRecord>& records() const { return records_; }
 
     bool hasUnsupportedTheoryAtom() const { return unsupportedTheorySeen_; }

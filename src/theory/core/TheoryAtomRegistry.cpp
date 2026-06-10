@@ -205,6 +205,15 @@ std::vector<SatVar> TheoryAtomRegistry::linearAtomVars() const {
     return out;
 }
 
+std::vector<SatVar> TheoryAtomRegistry::allAtomVars() const {
+    std::vector<SatVar> out;
+    out.reserve(records_.size());
+    for (const auto& rec : records_) out.push_back(rec.satVar);
+    return out;
+}
+
+size_t TheoryAtomRegistry::numAtomVars() const { return records_.size(); }
+
 long g_sharedEqAtomsCreated = 0;  // XOLVER_COMB_DIAG counter (read in TheoryManager.cpp)
 
 SatLit TheoryAtomRegistry::getOrCreateSharedEqualityAtom(SharedTermId a, SharedTermId b) {

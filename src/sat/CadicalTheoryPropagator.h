@@ -172,6 +172,13 @@ private:
     bool theoryAtomVarsBuilt_ = false;
     std::vector<SatVar> theoryAtomVars_;
     size_t decideCursor_ = 0;
+    // cb_decide free-observed-atom fallback (XOLVER_COMB_DECIDE_FREE_ATOMS):
+    // cached snapshot of all atom SatVars + the registry size it was taken at
+    // (rebuild when atoms are created mid-solve) + a round-robin scan cursor.
+    std::vector<SatVar> allAtomVars_;
+    size_t allAtomVarsSize_ = SIZE_MAX;  // != registry size => rebuild
+    size_t freeAtomCursor_ = 0;
+    long long freeAtomDecisions_ = 0;
     long long steeredDecisions_ = 0;
     long long dbgUnassignedProbes_ = 0;
     long long dbgEvalNull_ = 0;

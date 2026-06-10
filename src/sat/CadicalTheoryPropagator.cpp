@@ -269,6 +269,47 @@ int CadicalTheoryPropagator::cb_decide() {
         // fall through: no steerable unassigned atom found → let CaDiCaL decide
     }
 
+    // Combination livelock fix (XOLVER_COMB_DECIDE_FREE_ATOMS). Shared-equality
+    // and other interface atoms are OBSERVED by CaDiCaL but appear in no
+    // irredundant clause, so CaDiCaL's internal VSIDS cannot decide them. When
+    // every clause var is assigned but such free observed atoms remain, CaDiCaL
+    // keeps calling cb_decide hoping the external propagator assigns them; with
+    // cb_decide declining it spins WITHOUT completing a model (the QF_UFNIA /
+    // cs_* combination livelock: decisions freeze, cb_check_found_model never
+    // fires, the solve hangs past timeout). Decide any unassigned observed atom
+    // at phase FALSE (= the Nelson-Oppen "assume disequal" default) so the
+    // assignment can complete and the theory validate it.
+    //
+    // SOUND: a returned literal is a branching DECISION — fully backtrackable,
+    // and the final model is theory-validated in cb_check_found_model. A wrong
+    // guess only costs a backtrack; the verdict is unchanged. Only search order
+    // is affected, never satisfiability.
+    static const bool decideFreeAtoms = [] {
+        const char* e = std::getenv("XOLVER_COMB_DECIDE_FREE_ATOMS");
+        return e && *e && *e != '0';
+    }();
+    if (decideFreeAtoms) {
+        // Rebuild the snapshot when the registry grew (atoms are minted during
+        // solving). O(1) size check on the hot path; full copy only on growth.
+        size_t curN = registry_.numAtomVars();
+        if (curN != allAtomVarsSize_) {
+            allAtomVars_ = registry_.allAtomVars();
+            allAtomVarsSize_ = curN;
+            if (allAtomVars_.empty() || freeAtomCursor_ >= allAtomVars_.size())
+                freeAtomCursor_ = 0;
+        }
+        const size_t n = allAtomVars_.size();
+        for (size_t p = 0; p < n; ++p) {
+            SatVar v = allAtomVars_[freeAtomCursor_];
+            freeAtomCursor_ = (freeAtomCursor_ + 1) % n;
+            if (currentAssignment_.find(v) == currentAssignment_.end()) {
+                ++freeAtomDecisions_;
+                return -static_cast<int>(v);  // decide FALSE (disequal default)
+            }
+        }
+        // All observed atoms assigned → genuinely nothing to steer; decline.
+    }
+
     // Behavior-neutral: decline, let CaDiCaL decide (probe dump done at top).
     return 0;
 }

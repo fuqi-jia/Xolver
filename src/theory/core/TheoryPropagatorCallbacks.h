@@ -16,6 +16,15 @@ public:
     // SatVars of all registered linear (bound) atoms. Used by cb_decide
     // feasibility steering. Default empty.
     virtual std::vector<SatVar> linearAtomVars() const { return {}; }
+    // SatVars of ALL registered theory atoms (linear, polynomial, shared-eq,
+    // EUF-eq, ...). Used by cb_decide to break the combination livelock:
+    // shared-equality / interface atoms are OBSERVED but appear in no
+    // irredundant clause, so CaDiCaL cannot VSIDS-decide them and spins on
+    // cb_decide without completing a model. Default empty.
+    virtual std::vector<SatVar> allAtomVars() const { return {}; }
+    // O(1) count of registered atoms, so cb_decide can detect when its cached
+    // allAtomVars() snapshot is stale (atoms are created dynamically mid-solve).
+    virtual size_t numAtomVars() const { return 0; }
 };
 
 // ---------------------------------------------------------------------------
