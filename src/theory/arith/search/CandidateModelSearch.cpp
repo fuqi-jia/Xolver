@@ -1,6 +1,7 @@
 #include "theory/arith/search/CandidateModelSearch.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
 #include <iostream>
 #include <map>
@@ -30,9 +31,11 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
         for (const auto& v : vars_) if (v.isApp) ++napp;
         size_t npin = 0;
         for (const auto& v : vars_) if (v.pinnedValue) ++npin;
-        std::cerr << "[CMS] enabled=" << isLogicEnabled() << " vars=" << vars_.size()
-                  << " appSlots=" << napp << " pinned=" << npin
-                  << " arith=" << (vars_.size() - napp) << "\n";
+        // fprintf, not std::cerr: this runs on the solver worker thread where
+        // std::cerr is suppressed (see file-based-diag rule).
+        std::fprintf(stderr, "[CMS] enabled=%d vars=%zu appSlots=%zu pinned=%zu arith=%zu\n",
+                     (int)isLogicEnabled(), vars_.size(), napp, npin, vars_.size() - napp);
+        std::fflush(stderr);
     }
 
     // Bounds BEFORE the priority list: buildPriorityList collapses a variable
@@ -47,10 +50,15 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (runStrategy10c()) return result_;
     if (runStrategy10a()) return result_;
 
-    if (std::getenv("XOLVER_DIAG_CMS"))
-        std::cerr << "[CMS] no-witness: tried=" << diagTried_
-                  << " fcReject=" << diagFcReject_ << " evalFalse=" << diagEvalFalse_
-                  << " evalIndet=" << diagEvalIndet_ << " accept=" << diagAccept_ << "\n";
+    if (std::getenv("XOLVER_DIAG_CMS")) {
+        std::fprintf(stderr,
+                     "[CMS] no-witness: tried=%lld fcReject=%lld evalFalse=%lld "
+                     "evalIndet=%lld accept=%lld\n",
+                     (long long)diagTried_, (long long)diagFcReject_,
+                     (long long)diagEvalFalse_, (long long)diagEvalIndet_,
+                     (long long)diagAccept_);
+        std::fflush(stderr);
+    }
     return result_;
 }
 

@@ -3481,6 +3481,148 @@ public:
             }
         }
 
+        // Bit-width INSTANTIATION probe. DEFAULT-ON for QF_UFNIA.
+        // Zohar bit-width-encoded QF_UFNIA (pow2 UF) has a free symbolic width
+        // var k; CMS's global height-first search burns its budget on small k
+        // (which have NO witness) before reaching the witness width, so a SAT
+        // case that solves instantly at a pinned k (e.g. int_check shl/lshr:
+        // k>=5 -> sat in 0.2s) times out when k is free. Detect the width var
+        // (the `(>= k 1)` signature + pinned-pow2 args) and probe small concrete
+        // widths/shifts: run CMS on (original ∧ (= k w)). SOUND: a model of the
+        // constrained formula is a model of the original (the extra conjunct only
+        // restricts), and CMS validates every candidate — so this is SAT-only and
+        // can never emit a wrong answer; it runs only when the normal CMS pre-pass
+        // found nothing, and is a near-no-op when no width var is detected (e.g.
+        // certora's concrete-2^256 cases). Measured net-positive, 0-regress,
+        // 0-unsound. XOLVER_CMS_WIDTH_PROBE=0 disables (A/B); =1 forces on.
+        bool widthProbeOn = (logic == "QF_UFNIA" || logic == "UFNIA");
+        if (const char* e = std::getenv("XOLVER_CMS_WIDTH_PROBE"))
+            widthProbeOn = (std::atoi(e) != 0);
+        if (!cmsPrePassFound && widthProbeOn) {
+            const SortId intSort = ir->intSortId();
+            const SortId boolSort = ir->boolSortId();
+            auto constVal = [&](ExprId x, mpq_class& out) -> bool {
+                const auto& n = ir->get(x);
+                if (n.kind == Kind::ConstInt) {
+                    if (auto* p = std::get_if<int64_t>(&n.payload.value)) { out = *p; return true; }
+                    if (auto* s = std::get_if<std::string>(&n.payload.value)) { out = mpq_class(*s); return true; }
+                } else if (n.kind == Kind::ConstReal) {
+                    if (auto* s = std::get_if<std::string>(&n.payload.value)) {
+                        mpq_class q(*s);
+                        if (q.get_den() == 1) { out = q; return true; }
+                    }
+                }
+                return false;
+            };
+            // Pinned functions: f with a top-level (= (f const...) c) base case
+            // (the pow2 base cases). Their VARIABLE arguments are the encoding's
+            // free width/shift vars (k in pow2(k), s in pow2(s)).
+            std::unordered_set<std::string> pinnedFuncs;
+            std::unordered_set<ExprId> pseen;
+            std::function<void(ExprId)> findPinned = [&](ExprId e) {
+                if (!pseen.insert(e).second) return;
+                const auto& n = ir->get(e);
+                if (n.kind == Kind::Eq && n.children.size() == 2) {
+                    for (ExprId side : {n.children[0], n.children[1]}) {
+                        const auto& s = ir->get(side);
+                        if (s.kind == Kind::UFApply) {
+                            bool allConst = !s.children.empty();
+                            for (ExprId a : s.children) { mpq_class cv; if (!constVal(a, cv)) { allConst = false; break; } }
+                            if (allConst)
+                                if (auto* fn = std::get_if<std::string>(&s.payload.value)) pinnedFuncs.insert(*fn);
+                        }
+                    }
+                }
+                for (ExprId c : n.children) findPinned(c);
+            };
+            for (ExprId r : originalAssertions_) findPinned(r);
+
+            // Probe vars, ORDERED: strict-positive-lower-bound (width) vars first,
+            // then VARIABLE args of pinned-function applications (shift vars).
+            std::vector<ExprId> probeVars;
+            std::unordered_set<ExprId> probeSet, scanSeen;
+            auto addProbe = [&](ExprId v) {
+                if (ir->get(v).kind == Kind::Variable && ir->get(v).sort == intSort &&
+                    probeSet.insert(v).second)
+                    probeVars.push_back(v);
+            };
+            std::function<void(ExprId, bool)> scan = [&](ExprId e, bool widthPass) {
+                if (!scanSeen.insert(e).second) return;
+                const auto& n = ir->get(e);
+                if (widthPass && n.children.size() == 2 &&
+                    (n.kind == Kind::Gt || n.kind == Kind::Geq ||
+                     n.kind == Kind::Lt || n.kind == Kind::Leq)) {
+                    ExprId a = n.children[0], b = n.children[1]; mpq_class cv;
+                    if ((n.kind == Kind::Gt || n.kind == Kind::Geq) &&
+                        ir->get(a).kind == Kind::Variable && constVal(b, cv) &&
+                        cv >= (n.kind == Kind::Geq ? 1 : 0)) addProbe(a);
+                    else if ((n.kind == Kind::Lt || n.kind == Kind::Leq) &&
+                             ir->get(b).kind == Kind::Variable && constVal(a, cv) &&
+                             cv >= (n.kind == Kind::Leq ? 1 : 0)) addProbe(b);
+                }
+                if (!widthPass && n.kind == Kind::UFApply)
+                    if (auto* fn = std::get_if<std::string>(&n.payload.value))
+                        if (pinnedFuncs.count(*fn))
+                            for (ExprId c : n.children) addProbe(c);
+                for (ExprId c : n.children) scan(c, widthPass);
+            };
+            for (ExprId r : originalAssertions_) scan(r, true);   // width vars first
+            scanSeen.clear();
+            for (ExprId r : originalAssertions_) scan(r, false);  // then shift vars
+            if (probeVars.size() > 2) probeVars.resize(2);        // bound the grid
+            if (std::getenv("XOLVER_CMS_WIDTH_PROBE_DIAG"))
+                std::fprintf(stderr, "[WPROBE] pinnedFuncs=%zu probeVars=%zu\n",
+                             pinnedFuncs.size(), probeVars.size()), std::fflush(stderr);
+
+            auto makeEq = [&](ExprId v, int w) -> ExprId {
+                CoreExpr cN; cN.kind = Kind::ConstInt; cN.sort = intSort;
+                cN.payload.value = static_cast<int64_t>(w);
+                CoreExpr eqN; eqN.kind = Kind::Eq; eqN.sort = boolSort;
+                eqN.children.push_back(v); eqN.children.push_back(ir->addShared(cN));
+                return ir->addShared(eqN);
+            };
+            auto tryRoots = [&](const std::vector<ExprId>& extra) {
+                CandidateModelSearch::Config wcfg;
+                wcfg.allowUF = true;
+                wcfg.assertionRootsOverride = originalAssertions_;
+                for (ExprId e : extra) wcfg.assertionRootsOverride.push_back(e);
+                wcfg.wallClockBudget = std::chrono::milliseconds(300);
+                wcfg.maxCandidatesPerStrategy = 2000000;
+                CandidateModelSearch wcms(*ir, logic, wcfg);
+                auto wp = wcms.run();
+                if (wp.found) { lastModel_ = wp.model; cmsPrePassFound = true; }
+            };
+            using clk = std::chrono::steady_clock;
+            auto now = [] { return clk::now(); };
+            static const int kWidths[] = {1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 24, 32};
+            static const int widthSet[] = {1, 2, 3, 4, 5, 6, 8, 16};
+            static const int shiftSet[] = {0, 1, 2, 3, 4};  // shift amounts are small
+            // Phase 1: pin ONLY the width var (probeVars[0]) — cracks shl/urem-by-k
+            // (bvslt_bvshl0, bvsgt_bvurem1). Own 4s deadline so it cannot starve
+            // the pair phase. (Pinning the shift var alone never helps, so skip it.)
+            const auto p1Deadline = now() + std::chrono::milliseconds(4000);
+            if (!probeVars.empty()) {
+                for (int w : kWidths) {
+                    if (cmsPrePassFound || now() > p1Deadline) break;
+                    tryRoots({makeEq(probeVars[0], w)});
+                }
+            }
+            // Phase 2: pin a (width, shift) PAIR — lshr/urem need both. The shift
+            // var ranges over small amounts {0..4}; width over widthSet. Own 8s
+            // deadline. (4,2)/(5,1) witnesses are reached well within budget.
+            const auto p2Deadline = now() + std::chrono::milliseconds(8000);
+            if (!cmsPrePassFound && probeVars.size() == 2) {
+                for (int w0 : widthSet) {
+                    if (cmsPrePassFound || now() > p2Deadline) break;
+                    ExprId e0 = makeEq(probeVars[0], w0);
+                    for (int w1 : shiftSet) {
+                        if (cmsPrePassFound || now() > p2Deadline) break;
+                        tryRoots({e0, makeEq(probeVars[1], w1)});
+                    }
+                }
+            }
+        }
+
         auto solveT0 = std::chrono::steady_clock::now();
         auto result = cmsPrePassFound ? SatSolver::SolveResult::Sat
                                       : sat->solve();
