@@ -697,16 +697,23 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
 
     // --- Bool finite-domain splits ----------------------------------------
     // A Bool-SORTED term observed by the array module (a select result over
-    // Bool elements, or a select/store index of Bool index sort) admits only
+    // Bool elements, or a select/store index/value of Bool sort) admits only
     // two values, but to EUF it is an unconstrained constant — a phantom
     // "third value" that breaks pigeonhole-style UNSAT completeness (e.g.
-    // three pairwise-distinct Bool elements, or two Bool indices asserted
-    // distinct). Emit, once per term, the valid split
+    // three pairwise-distinct Bool elements) and model-export coherence (an
+    // unbound Bool class exports an opaque "@e…" token; once split-bound,
+    // classToken exports typed #b:… and the validator's channels agree).
+    // Emit, once per term, the valid split
     //     (t = true)  OR  (t = false).
     // Sound: a tautology over the Bool domain. The UNSAT direction closes via
     // the egraph's BoolConstMark conflict when a class would contain both
-    // constants. Scoped to array-observed terms (zero lemmas outside the
-    // Bool-index/Bool-element corner).
+    // constants. Deliberately scoped to ARRAY-OBSERVED terms: splitting every
+    // Bool-sorted e-graph term (tried) lets EUF bind a bare formula-position
+    // variable OPPOSITE to its plain-SAT literal (the two are unlinked atoms),
+    // steering search into incoherent candidates; the select/store-operand
+    // scope plus the boolean-level Iff lowering already syncs the remaining
+    // channels (a bare var equated to a select tracks the select's split
+    // through the Iff at the SAT level).
     {
         auto boolDomLemma = [&](EufTermId t) -> std::optional<std::vector<SatLit>> {
             if (t == NullEufTerm) return std::nullopt;
