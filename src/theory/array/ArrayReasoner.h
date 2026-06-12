@@ -270,8 +270,24 @@ private:
     EufTermId internSelect(ExprId arrayExpr, ExprId indexExpr,
                            std::deque<PendingMerge>& outQueue);
 
-    // ExprId of a term given its EufTermId origin (or NullExpr).
+    // ExprId of a term given its EufTermId origin (or NullExpr). True/False
+    // sentinel origins are materialized as real ConstBool nodes (sentinels are
+    // not valid CoreIr indices; embedding one as a CoreExpr child crashes any
+    // later ir.get() — the Bool-index-array segfault).
     ExprId originExpr(EufTermId t) const;
+
+    // Hash-consed ConstBool node for `true` / `false` (used by originExpr
+    // materialization and the Bool finite-domain lemmas).
+    ExprId boolConstExpr(bool v) const;
+
+    // True iff the sort is the Bool sort (sort-kind check; boolSortId may be
+    // unset on file-parsed IR, mirroring ArithModelValidator's discipline).
+    bool isBoolSort(SortId s) const;
+
+    // Bool finite-domain split dedup: Bool-sorted terms (select results over
+    // Bool elements, select/store indices of Bool index sort) already given
+    // their (t=true) OR (t=false) domain lemma. Monotonic, like row2Done_.
+    std::unordered_set<EufTermId> boolDomDone_;
 
     // Lemma dedup, keyed by STABLE term ids (never eclass reps). For Row2 the
     // key is (store-term-id, read-index-term-id). For Ext the key is the

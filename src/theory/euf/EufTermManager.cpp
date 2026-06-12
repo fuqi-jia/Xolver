@@ -263,7 +263,12 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
                     break;
                 }
                 args.push_back(arg);
-                argSorts.push_back(ir.get(cid).sort);
+                // True/False sentinel children are not valid CoreIr indices;
+                // ir.get() on one reads out of bounds. They are Bool-sorted.
+                argSorts.push_back(
+                    (cid == TrueSentinelExpr || cid == FalseSentinelExpr)
+                        ? ir.boolSortId()
+                        : ir.get(cid).sort);
             }
             if (hasNull) {
                 exprToTerm_[f.eid] = NullEufTerm;

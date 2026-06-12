@@ -102,6 +102,7 @@ void ArrayReasoner::reset() {
     nextTermToScan_ = 0;
     row2Done_.clear();
     extDone_.clear();
+    boolDomDone_.clear();
     selectCompleteDone_.clear();
     completeInternsDone_ = 0;
     extWitnessIdx_.clear();
@@ -116,7 +117,34 @@ void ArrayReasoner::reset() {
 
 ExprId ArrayReasoner::originExpr(EufTermId t) const {
     if (t == NullEufTerm) return NullExpr;
-    return tm_->node(t).origin;
+    ExprId e = tm_->node(t).origin;
+    // The EUF true/false constants carry SENTINEL origins (TrueSentinelExpr /
+    // FalseSentinelExpr) — these are NOT valid CoreIr indices. Every consumer
+    // of originExpr here may embed the ExprId as a CoreExpr child (internSelect,
+    // equality-atom creation), and any later ir.get(child) on a sentinel reads
+    // out of bounds (the Bool-index-array segfault: select(a,true) read index
+    // fanned through completion). Materialize a real ConstBool node instead;
+    // addShared dedups it against any parser-created literal, and the EUF
+    // intern of that node folds back to the same true/false constant term.
+    if (e == TrueSentinelExpr || e == FalseSentinelExpr)
+        return boolConstExpr(e == TrueSentinelExpr);
+    return e;
+}
+
+ExprId ArrayReasoner::boolConstExpr(bool v) const {
+    CoreIr& ir = const_cast<CoreIr&>(*ir_);
+    CoreExpr c;
+    c.kind = Kind::ConstBool;
+    c.sort = ir.boolSortId();
+    c.payload = Payload(v);
+    return ir.addShared(std::move(c));
+}
+
+bool ArrayReasoner::isBoolSort(SortId s) const {
+    if (s == NullSort) return false;
+    if (s == ir_->boolSortId()) return true;
+    auto sk = ir_->sortKind(s);
+    return sk && *sk == SortKind::Bool;
 }
 
 SatLit ArrayReasoner::makeRow2IndexEqLit(ExprId iExpr, ExprId jExpr) {
@@ -667,6 +695,44 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
         }
     }
 
+    // --- Bool finite-domain splits ----------------------------------------
+    // A Bool-SORTED term observed by the array module (a select result over
+    // Bool elements, or a select/store index of Bool index sort) admits only
+    // two values, but to EUF it is an unconstrained constant — a phantom
+    // "third value" that breaks pigeonhole-style UNSAT completeness (e.g.
+    // three pairwise-distinct Bool elements, or two Bool indices asserted
+    // distinct). Emit, once per term, the valid split
+    //     (t = true)  OR  (t = false).
+    // Sound: a tautology over the Bool domain. The UNSAT direction closes via
+    // the egraph's BoolConstMark conflict when a class would contain both
+    // constants. Scoped to array-observed terms (zero lemmas outside the
+    // Bool-index/Bool-element corner).
+    {
+        auto boolDomLemma = [&](EufTermId t) -> std::optional<std::vector<SatLit>> {
+            if (t == NullEufTerm) return std::nullopt;
+            if (t == tm_->trueConstant() || t == tm_->falseConstant()) return std::nullopt;
+            if (!isBoolSort(tm_->node(t).sort)) return std::nullopt;
+            if (!boolDomDone_.insert(t).second) return std::nullopt;
+            ExprId tExpr = originExpr(t);
+            if (tExpr == NullExpr) return std::nullopt;
+            SatLit eqT = registry_->getOrCreateEufEqualityAtom(tExpr, boolConstExpr(true));
+            SatLit eqF = registry_->getOrCreateEufEqualityAtom(tExpr, boolConstExpr(false));
+            return std::vector<SatLit>{eqT, eqF};
+        };
+        for (EufTermId sel : selectTerms_) {
+            const auto& sn = tm_->node(sel);
+            if (sn.args.size() != 2) continue;
+            if (auto l = boolDomLemma(sel)) return l;          // Bool element
+            if (auto l = boolDomLemma(sn.args[1])) return l;   // Bool index
+        }
+        for (EufTermId st : storeTerms_) {
+            const auto& sn = tm_->node(st);
+            if (sn.args.size() != 3) continue;
+            if (auto l = boolDomLemma(sn.args[1])) return l;   // Bool index
+            if (auto l = boolDomLemma(sn.args[2])) return l;   // Bool value
+        }
+    }
+
     // --- Extensionality: a!=b => select(a,k) != select(b,k), fresh k ------
     for (const auto& d : disequalities) {
         EufTermId aTerm = d.lhs;
@@ -684,10 +750,37 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
         ExprId bExpr = originExpr(bTerm);
         if (aExpr == NullExpr || bExpr == NullExpr) continue;
 
-        // Fresh witness index k of the array's index sort.
         CoreIr& ir = const_cast<CoreIr&>(*ir_);
         SortId idxSort = NullSort;
         if (auto params = ir.arraySortParams(an.sort)) idxSort = params->first;
+
+        // FINITE Bool index domain: a fresh witness would act as a phantom
+        // THIRD index value (EUF cannot see that Bool has only two), so a
+        // genuinely-UNSAT disequality (arrays equal at BOTH true and false)
+        // escapes as sat. Enumerate the domain instead:
+        //     (a=b) OR sel(a,true)!=sel(b,true) OR sel(a,false)!=sel(b,false)
+        // — a valid extensionality instance for the two-element index domain.
+        if (isBoolSort(idxSort)) {
+            ExprId tExpr = boolConstExpr(true);
+            ExprId fExpr = boolConstExpr(false);
+            std::deque<PendingMerge> dummyQ;
+            EufTermId sAT = internSelect(aExpr, tExpr, dummyQ);
+            EufTermId sBT = internSelect(bExpr, tExpr, dummyQ);
+            EufTermId sAF = internSelect(aExpr, fExpr, dummyQ);
+            EufTermId sBF = internSelect(bExpr, fExpr, dummyQ);
+            if (sAT == NullEufTerm || sBT == NullEufTerm ||
+                sAF == NullEufTerm || sBF == NullEufTerm) continue;
+            ExprId eAT = originExpr(sAT), eBT = originExpr(sBT);
+            ExprId eAF = originExpr(sAF), eBF = originExpr(sBF);
+            if (eAT == NullExpr || eBT == NullExpr ||
+                eAF == NullExpr || eBF == NullExpr) continue;
+            SatLit abEq = registry_->getOrCreateEufEqualityAtom(aExpr, bExpr);
+            SatLit eqT = registry_->getOrCreateEufEqualityAtom(eAT, eBT);
+            SatLit eqF = registry_->getOrCreateEufEqualityAtom(eAF, eBF);
+            return std::vector<SatLit>{abEq, eqT.negated(), eqF.negated()};
+        }
+
+        // Fresh witness index k of the array's index sort.
         ExprId kExpr = ir.makeFreshVariable(idxSort, "__nlc_ext_idx");
         extWitnessIdx_.insert(kExpr);  // exclude from read-closure completion
 

@@ -1,0 +1,7 @@
+(set-logic QF_AX)
+(set-info :status sat)
+(declare-const a (Array Bool Bool))
+(declare-const b (Array Bool Bool))
+(assert (distinct a b))
+(assert (= (select a true) (select b true)))
+(check-sat)

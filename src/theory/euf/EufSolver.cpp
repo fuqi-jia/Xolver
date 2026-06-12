@@ -2068,7 +2068,15 @@ std::string EufSolver::classToken(EufTermId t) const {
     for (EufTermId m : egraph_.classMembers(rep)) {
         const auto& mn = termManager_.node(m);
         if (mn.origin == NullExpr) continue;
-        if (mn.origin == TrueSentinelExpr || mn.origin == FalseSentinelExpr) continue;
+        // The true/false constants carry sentinel origins (no CoreIr node).
+        // They ARE the canonical Bool values: emit the typed token the model
+        // validator computes for a Bool (asToken "#b:…"), so an entry keyed or
+        // valued by a Bool-bound class matches the validator's typed eval
+        // instead of degrading to an opaque "@e…" token (which made the
+        // exported a[true]/b[true] look distinct from the asserted reads —
+        // the Bool-index-array spurious-unknown floor).
+        if (mn.origin == TrueSentinelExpr) return "#b:1";
+        if (mn.origin == FalseSentinelExpr) return "#b:0";
         const auto& e = coreIr_->get(mn.origin);
         if (e.isConst()) {
             if (auto* i = std::get_if<int64_t>(&e.payload.value))

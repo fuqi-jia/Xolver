@@ -1,0 +1,7 @@
+(set-logic QF_AX)
+(set-info :status sat)
+(declare-sort I 0)
+(declare-const a (Array I Bool))
+(declare-const b (Array I Bool))
+(assert (distinct a b))
+(check-sat)
