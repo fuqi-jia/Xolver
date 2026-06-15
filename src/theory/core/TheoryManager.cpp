@@ -1,4 +1,5 @@
 #include "theory/core/TheoryManager.h"
+#include "util/EnvParam.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/DebugTrace.h"
@@ -31,7 +32,7 @@ struct CombDiag {
     long lastDumpCheck = 0;
 };
 static CombDiag g_cd;
-static const bool g_combDiag = std::getenv("XOLVER_COMB_DIAG") != nullptr;
+static const bool g_combDiag = xolver::env::diag("XOLVER_COMB_DIAG");
 // ⚠️ UNSOUND-WHEN-ON, DEFAULT-OFF, DO-NOT-PROMOTE. Research toggle for the
 // combination-loop convergence work (see check()). Skipping the deduced-eq
 // publish for EUF-already-merged pairs DOES converge the 444-round loop, but
@@ -42,7 +43,7 @@ static const bool g_combDiag = std::getenv("XOLVER_COMB_DIAG") != nullptr;
 // boundary are reproducible; the real fix is theory PROPAGATION (keep the eqs,
 // propagate forced atoms via cb_propagate). NEVER enable in a shipped binary.
 static const bool g_skipEufMergedUNSAFE =
-    std::getenv("XOLVER_COMB_SKIP_EUF_MERGED_UNSAFE") != nullptr;
+    xolver::env::diag("XOLVER_COMB_SKIP_EUF_MERGED_UNSAFE");
 static void combDiagDump() {
     if (!g_combDiag) return;
     if (g_cd.checks - g_cd.lastDumpCheck < 100) return;
@@ -120,7 +121,7 @@ void TheoryManager::ensureCareGraph() {
         // prune is sound (under-approximation per CareGraph.h header), and no
         // existing case regresses (the value-based arrangement still uses the
         // same caresPair filter it did before).
-        careGraphEnabled_ = (std::getenv("XOLVER_COMB_CAREGRAPH") != nullptr) ||
+        careGraphEnabled_ = (xolver::env::diag("XOLVER_COMB_CAREGRAPH")) ||
                             arrayCombinationMode_;
         careGraphEnvChecked_ = true;
     }
@@ -136,7 +137,7 @@ void TheoryManager::ensureCareGraph() {
 
 bool TheoryManager::useSatMin() {
     if (!satMinEnvChecked_) {
-        satMinEnabled_ = (std::getenv("XOLVER_SAT_MIN") != nullptr);
+        satMinEnabled_ = (xolver::env::diag("XOLVER_SAT_MIN"));
         satMinEnvChecked_ = true;
     }
     return satMinEnabled_;
@@ -328,8 +329,7 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             // this is a no-op by default; the producer is sound by construction
             // (global tautology clauses over the real asserted reasons).
             static const bool niaProp = [] {
-                const char* e = std::getenv("XOLVER_NIA_LINEAR_PROP");
-                return e && *e && *e != '0';
+                return xolver::env::flag("XOLVER_NIA_LINEAR_PROP");
             }();
             // XOLVER_EUF_PROP_COMB (default-OFF, EXPERIMENTAL): drain EUF's
             // entailment propagations in combination (congruence-derived
@@ -343,8 +343,7 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
             // class). The L9 firewall guards this, but the flag stays default-OFF
             // and is NOT promoted until full regression is 0-unsound.
             static const bool eufPropComb = [] {
-                const char* e = std::getenv("XOLVER_EUF_PROP_COMB");
-                return e && *e && *e != '0';
+                return xolver::env::flag("XOLVER_EUF_PROP_COMB");
             }();
             bool allow = isLinearArith || (id == TheoryId::NIA && niaProp) ||
                          (id == TheoryId::EUF && eufPropComb);
@@ -354,7 +353,7 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
         // Diagnostic emission counter (fd-2, periodic) for the cs_* probe: how many
         // entailment lemmas each theory actually emits in combination. Env-gated,
         // default-inert.
-        static const bool entDiag = std::getenv("XOLVER_ENTAIL_DIAG") != nullptr;
+        static const bool entDiag = xolver::env::diag("XOLVER_ENTAIL_DIAG");
         if (entDiag && !v.empty()) {
             std::fprintf(stderr, "[ENTAIL] theory=%d emitted=%zu\n",
                          static_cast<int>(s->id()), v.size());
@@ -372,8 +371,7 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
     // propagator can mark its atoms dynamically relevant. Unconditionally sound to
     // add regardless of mode — no combination gating.
     static const bool row2Split = [] {
-        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT");
     }();
     // Scoped to COMBINATION mode: pure QF_AX has its own complete Full-effort
     // array sat-gate that Standard-effort splits perturb (ax_007 unsat→unknown);
@@ -531,7 +529,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 }
             }
             sharedEqMgr_.assertEquality(ev.a, ev.b, ev.reasonLit);
-            if (std::getenv("XOLVER_L4R_DIAG")) {
+            if (xolver::env::diag("XOLVER_L4R_DIAG")) {
                 static size_t g_ieq = 0; ++g_ieq;
                 if (g_ieq % 50 == 0)
                     std::fprintf(stderr, "[L4R-IEQ] interface-eq merges=%zu\n", g_ieq);
@@ -630,7 +628,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     }
     TheoryCheckResult pendingLemma = TheoryCheckResult::consistent();
     bool havePendingLemma = false;
-    static const bool tmHb = std::getenv("XOLVER_TMCHECK_HB") != nullptr;
+    static const bool tmHb = xolver::env::diag("XOLVER_TMCHECK_HB");
     for (auto& solver : solvers_) {
         if (tmHb) {
             if (FILE* f = std::fopen("/tmp/xolver_tmcheck.txt", "w")) {
@@ -733,8 +731,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // propagating a disequality the theory already entails cannot create a wrong
     // UNSAT that the disequality alone does not already justify.
     static const bool noDiseq = [] {
-        const char* e = std::getenv("XOLVER_NIA_NO_DISEQ");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NO_DISEQ");
     }();
     if (noDiseq && effort != TheoryEffort::Full && registry_ &&
         arrayIdxSet.size() >= 2) {
@@ -769,7 +766,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                 }
             }
         }
-        static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+        static const bool l4rDiag = xolver::env::diag("XOLVER_L4R_DIAG");
         if (l4rDiag && buffered) {
             std::fprintf(stderr, "[L5-DISEQ] buffered=%zu idxTerms=%zu\n",
                          buffered, idxv.size());
@@ -789,8 +786,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     // O(idx²). SOUND: identical reason contract (proveSharedDisjoint returns a
     // COMPLETE reason ⟹ a≠b); surfacing a demand cannot create an unsound diseq.
     static const bool row2Demand = [] {
-        const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_ROW2_DEMAND");
     }();
     if (row2Demand && effort != TheoryEffort::Full && registry_) {
         size_t dBuffered = 0, dQueried = 0;
@@ -868,7 +864,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         }
         NO_DBG << "[NO] solver=" << (int)solver->id()
                << " deducedEqualities=" << props.size() << "\n";
-        static const bool noDiag = std::getenv("XOLVER_NO_DIAG") != nullptr;
+        static const bool noDiag = xolver::env::diag("XOLVER_NO_DIAG");
         if (noDiag && !props.empty()) {
             size_t deferred = 0, arrayPair = 0;
             for (auto& p : props) {
@@ -891,8 +887,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         // an under-approximation (propagating fewer facts can only lose
         // completeness, never produce a wrong UNSAT).
         static const bool noProp = [] {
-            const char* e = std::getenv("XOLVER_NIA_NO_PROP");
-            return e && *e && *e != '0';
+            return xolver::env::flag("XOLVER_NIA_NO_PROP");
         }();
         // PRE-PASS: buffer ALL array-pair entailments before the main loop. The
         // main loop returns on the first novel NON-array eq lemma, and the ~800
@@ -924,7 +919,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
                     ++buffered;
                 }
             }
-            static const bool l4rDiag = std::getenv("XOLVER_L4R_DIAG") != nullptr;
+            static const bool l4rDiag = xolver::env::diag("XOLVER_L4R_DIAG");
             if (l4rDiag && buffered) {
                 std::fprintf(stderr, "[L4R] solver=%d buffered=%zu total=%zu\n",
                              (int)solver->id(), buffered, noPropEntailments_.size());
@@ -1061,7 +1056,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         // current arith-model value (from whichever arith solver owns them).
         struct ValuedTerm { SharedTermId id; SortId sort; RealValue val; };
         std::vector<ValuedTerm> valued;
-        const bool arrangeInternals = std::getenv("XOLVER_COMB_ARRANGE_INTERNAL") != nullptr;
+        const bool arrangeInternals = xolver::env::diag("XOLVER_COMB_ARRANGE_INTERNAL");
         for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
             const auto* st = sharedTermRegistry_->get(stId);
             if (!st) continue;
@@ -1181,7 +1176,7 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             if (eufItDD != solverByTheory_.end()) eufSolverDD = eufItDD->second;
 
             const bool arrangeInternalsDD =
-                std::getenv("XOLVER_COMB_ARRANGE_INTERNAL") != nullptr;
+                xolver::env::diag("XOLVER_COMB_ARRANGE_INTERNAL");
 
             // Collect cared shared scalars. Bound: |cared| ≤ |all shared|.
             // emittedArrangementSplits_ ensures EACH pair is split at most
@@ -1479,7 +1474,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
     //   - arrayInterps empty (array combination has axiom-pinned "unconstrained"
     //     scalars whose mint would falsify Row2 — alra_010 class; recovery there
     //     needs real array-aware model construction, not scalar minting).
-    static const bool t3UfMint = std::getenv("XOLVER_EUF_UF_MODEL") != nullptr;
+    static const bool t3UfMint = xolver::env::diag("XOLVER_EUF_UF_MODEL");
     if (t3UfMint && !aggregated.functionInterps.empty() &&
         aggregated.arrayInterps.empty()) {
         std::unordered_set<long long> usedNums;
@@ -1584,7 +1579,7 @@ std::optional<TheorySolver::TheoryModel> TheoryManager::getModel() const {
             else if (v == "#b:0") v = "0";
         };
         std::vector<std::string> dropFns;
-        const bool diagFi = std::getenv("XOLVER_DIAG_FI") != nullptr;
+        const bool diagFi = xolver::env::diag("XOLVER_DIAG_FI");
         for (auto& [fname, fi] : aggregated.functionInterps) {
             for (auto& e : fi.entries) {
                 for (auto& a : e.args) toBare(a);

@@ -15,20 +15,20 @@
 namespace xolver {
 
 ArrayReasoner::ArrayReasoner() {
-    row2ConstEnabled_ = std::getenv("XOLVER_AX_ROW2_CONST") != nullptr;
+    row2ConstEnabled_ = xolver::env::diag("XOLVER_AX_ROW2_CONST");
     // L1: relevancy-driven completion (default-OFF). See header.
-    lazyComplete_ = std::getenv("XOLVER_AX_LAZY") != nullptr;
+    lazyComplete_ = xolver::env::diag("XOLVER_AX_LAZY");
     // L2: eager Row2 merge on known diseqs (default-OFF). See header.
-    row2DiseqEnabled_ = std::getenv("XOLVER_AX_ROW2_DISEQ") != nullptr;
+    row2DiseqEnabled_ = xolver::env::diag("XOLVER_AX_ROW2_DISEQ");
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
-    selectCompletionEnabled_ = std::getenv("XOLVER_AX_NO_SELECT_COMPLETE") == nullptr;
+    selectCompletionEnabled_ = !xolver::env::diag("XOLVER_AX_NO_SELECT_COMPLETE");
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
     // (agent-array-deep, 2026-05-31) measured: fanning the fresh Ext witness k
     // through store towers recovers ALL 38 QF_AX storeinv cases (18 sat + 20
     // unsat) to the correct verdict, 0 unsound, regression 668/668 OFF+ON, and
     // the feared storecomm genuine-sat regression did NOT reproduce (159
     // already-solved storecomm cases stable). Explicit opt-out for A/B baseline.
-    extWitnessComplete_ = std::getenv("XOLVER_AX_NO_EXT_WITNESS_COMPLETE") == nullptr;
+    extWitnessComplete_ = !xolver::env::diag("XOLVER_AX_NO_EXT_WITNESS_COMPLETE");
     // XOLVER_AX_COMPLETE_BUDGET (default 0 = unbounded): cap the TOTAL number of
     // read-over-write completion selects interned across the whole solve. The
     // driver-verification QF_ANIA/QF_AUFNIA family (cdaudio/floppy/kbfiltr/…)
@@ -445,7 +445,7 @@ void ArrayReasoner::enqueueRow2CondMerges(
             ++r2cMerges;
         }
     }
-    if (std::getenv("XOLVER_AX_R2D_DIAG")) {
+    if (xolver::env::diag("XOLVER_AX_R2D_DIAG")) {
         std::fprintf(stderr, "[R2D-merge] selects=%zu eligible=%zu merges=%zu\n",
                      nSel, r2cEligible, r2cMerges);
         std::fflush(stderr);
@@ -559,7 +559,7 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
         }
     }
 
-    static const bool axDiag = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    static const bool axDiag = xolver::env::diag("XOLVER_AX_DIAG");
     if (axDiag) {
         std::fprintf(stderr,
             "[AX-eager] stores=%zu selects=%zu completed=%zu row1+=%zu row2Eligible=%zu row2const+=%zu\n",

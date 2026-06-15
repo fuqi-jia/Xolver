@@ -134,7 +134,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                 cs.parts.push_back({NullPoly, Relation::Neq});  // marker: always-false (0!=0)
                 break;
             default:
-                if (std::getenv("NIA_EAGER_BB_DIAG")) {
+                if (xolver::env::diag("NIA_EAGER_BB_DIAG")) {
                     auto kindStr = [](Kind k) -> const char* {
                         switch (k) {
                           case Kind::ConstInt: return "ConstInt"; case Kind::ConstReal: return "ConstReal";
@@ -197,7 +197,7 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
                 // A walked Variable is a boolean (arith vars live inside atoms,
                 // collected via convertConstraint). Non-bool bare var => reject.
                 if (e.sort != ir.boolSortId()) {
-                    if (std::getenv("NIA_EAGER_BB_DIAG"))
+                    if (xolver::env::diag("NIA_EAGER_BB_DIAG"))
                         std::cerr << "[EAGER-BB] collect reject non-bool Variable eid=" << eid
                                   << " sort=" << e.sort << "\n";
                     ok = false;
@@ -227,12 +227,12 @@ bool EagerBitBlastSolver::collect(const CoreIr& ir, const std::vector<ExprId>& a
             case Kind::Lt: case Kind::Leq: case Kind::Gt: case Kind::Geq: {
                 AtomCs cs;
                 if (e.children.size() == 2) addPair(e.children[0], e.children[1], relOf(e.kind), cs);
-                else { if (std::getenv("NIA_EAGER_BB_DIAG")) std::cerr << "[EAGER-BB] collect reject rel-arity=" << e.children.size() << " kind=" << (int)e.kind << "\n"; ok = false; }
+                else { if (xolver::env::diag("NIA_EAGER_BB_DIAG")) std::cerr << "[EAGER-BB] collect reject rel-arity=" << e.children.size() << " kind=" << (int)e.kind << "\n"; ok = false; }
                 atomCs_[eid] = std::move(cs);
                 return;
             }
             default:
-                if (std::getenv("NIA_EAGER_BB_DIAG"))
+                if (xolver::env::diag("NIA_EAGER_BB_DIAG"))
                     std::cerr << "[EAGER-BB] collect reject kind=" << (int)e.kind << " eid=" << eid << "\n";
                 ok = false;  // UF / array / quantifier / real / BV / datatype
                 return;
@@ -284,7 +284,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
     intVars_.clear();
     lb_.clear();
     ub_.clear();
-    static const bool diag = std::getenv("NIA_EAGER_BB_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("NIA_EAGER_BB_DIAG");
     if (!collect(ir, assertions)) return out;   // unsupported construct -> Unknown
     if (diag) std::cerr << "[EAGER-BB] collect done: intVars=" << intVars_.size()
                         << " atoms=" << atomCs_.size() << "\n";
@@ -393,7 +393,7 @@ EagerBitBlastSolver::Result EagerBitBlastSolver::solve(const CoreIr& ir,
         // Sound: eager bit-blast is candidate-only (validator-gated), and
         // preprocessing only affects SAT speed, not its verdict.
         static const bool nopre =
-            std::getenv("XOLVER_NIA_BITBLAST_NOPRE") != nullptr;
+            xolver::env::diag("XOLVER_NIA_BITBLAST_NOPRE");
         if (nopre) {
             sat->configure("elim",      0);
             sat->configure("subsume",   0);

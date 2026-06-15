@@ -73,7 +73,7 @@ std::vector<std::pair<VarId, mpq_class>> NraLocalSearch::buildSubAsg(
 
 NraLocalSearch::~NraLocalSearch() {
     // LS-C + LS-D: env-gated stats dump for cache hit-rate sanity. Default no-op.
-    if (std::getenv("XOLVER_NRA_LS_STATS") == nullptr) return;
+    if (!xolver::env::diag("XOLVER_NRA_LS_STATS")) return;
     const uint64_t evalTotal      = evalCacheHits_      + evalCacheMisses_;
     const uint64_t scaleTotal     = scaleCacheHits_     + scaleCacheMisses_;
     const uint64_t violationTotal = violationCacheHits_ + violationCacheMisses_;

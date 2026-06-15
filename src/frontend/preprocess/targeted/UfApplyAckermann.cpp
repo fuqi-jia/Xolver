@@ -1,4 +1,5 @@
 #include "frontend/preprocess/targeted/UfApplyAckermann.h"
+#include "util/EnvParam.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -136,7 +137,7 @@ bool UfApplyAckermann::run() {
     if (!didRewrite_) return false;
     buildCongruences();
 
-    if (std::getenv("XOLVER_TARGETED_PP_DIAG"))
+    if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG"))
         std::fprintf(stderr, "[UFACK] apps=%zu congruences=%zu\n",
                      appVar_.size(), extra_.size());
     return true;

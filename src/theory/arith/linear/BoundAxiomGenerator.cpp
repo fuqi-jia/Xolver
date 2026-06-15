@@ -128,8 +128,7 @@ BoundAxiomGenerator::pairShapes(Relation relA, const mpq_class& cA,
 
 bool BoundAxiomGenerator::enabled() {
     static bool e = []() {
-        const char* v = std::getenv("XOLVER_LRA_BOUND_AXIOMS");
-        return v && *v && *v != '0';
+        return xolver::env::flag("XOLVER_LRA_BOUND_AXIOMS");
     }();
     return e;
 }

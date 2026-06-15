@@ -1,4 +1,5 @@
 #include "frontend/preprocess/FormulaRewriter.h"
+#include "util/EnvParam.h"
 #include "util/MpqUtils.h"
 
 #include <algorithm>
@@ -277,7 +278,7 @@ ExprId FormulaRewriter::rewriteRec(ExprId root) {
                 // everywhere is logically equivalent. Closes the VeryMax
                 // Farkas lambda pattern `(<= 0 lam) ∧ (< lam 1)` -> lam = 0.
                 static const bool tightSubst =
-                    std::getenv("XOLVER_PP_TIGHT_BOUND_SUBST") != nullptr;
+                    xolver::env::diag("XOLVER_PP_TIGHT_BOUND_SUBST");
                 if (tightSubst && node.kind == Kind::Variable) {
                     if (auto* s = std::get_if<std::string>(&node.payload.value)) {
                         mpz_class val;

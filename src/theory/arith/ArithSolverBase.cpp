@@ -1,4 +1,5 @@
 #include "theory/arith/ArithSolverBase.h"
+#include "util/EnvParam.h"
 #include <cstdio>
 #include "theory/arith/Reasoner.h"
 #include "expr/ir.h"
@@ -129,7 +130,7 @@ TheoryCheckResult ArithSolverBase::runReasonerPipeline(TheoryLemmaStorage& lemma
         // (Consistent here means "theory state is consistent, stop", NOT
         // "continue").
         if (res.has_value()) {
-            static const bool stageDiag = std::getenv("ARITH_STAGE_DIAG") != nullptr;
+            static const bool stageDiag = xolver::env::diag("ARITH_STAGE_DIAG");
             if (stageDiag && res->kind == TheoryCheckResult::Kind::Conflict) {
                 std::cerr << "[STAGE-CONFLICT] stage=" << r->name()
                           << " size=" << (res->conflictOpt ? res->conflictOpt->clause.size() : 0)

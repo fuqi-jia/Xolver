@@ -1,4 +1,5 @@
 #include "theory/arith/lra/GeneralSimplex.h"
+#include "util/EnvParam.h"
 #include <cassert>
 #include <chrono>
 #include <algorithm>
@@ -42,8 +43,7 @@ GeneralSimplex::GeneralSimplex() {
     // affects the SAT/UNSAT verdict (any eligible entering var yields a valid
     // pivot; the Farkas conflict on Unsat is independent of the path), so this
     // is sound regardless of the heuristic chosen.
-    const char* env = std::getenv("XOLVER_LRA_PIVOT_HEUR");
-    useHeuristicPivot_ = (env && *env && *env != '0');
+    useHeuristicPivot_ = xolver::env::flag("XOLVER_LRA_PIVOT_HEUR");
     // XOLVER_LRA_INCREMENTAL_BETA (default OFF): on backtrack (pop / backtrackToLevel)
     // skip the full O(nnz) recomputeBeta and just refresh the O(rows) violation
     // queue. Sound because bound assertions are tighten-only (assertLower/Upper
@@ -54,8 +54,7 @@ GeneralSimplex::GeneralSimplex() {
     // basic-var bound feasibility can change (now within looser bounds), which the
     // violation-queue refresh captures. Falls back to a full recompute whenever
     // beta is already dirty (a structural new-var change is pending).
-    const char* ibEnv = std::getenv("XOLVER_LRA_INCREMENTAL_BETA");
-    incrementalBetaEnabled_ = (ibEnv && *ibEnv && *ibEnv != '0');
+    incrementalBetaEnabled_ = xolver::env::flag("XOLVER_LRA_INCREMENTAL_BETA");
     // XOLVER_LRA_INCREMENTAL_BETA_REFRESH=K (default 0 = never): force a full
     // canonical recomputeBeta every K-th incremental backtrack. Skipping recompute
     // forever lets beta drift away from the canonical chooseValueWithinBounds
@@ -249,7 +248,7 @@ void GeneralSimplex::checkInvariants() const {
     // the invariant the incremental-beta paths (backtrack-skip / new-var) must
     // preserve. A mismatch means the incremental beta is WRONG (then the slowness is
     // pivot-repair, i.e. a BUG, not a genuine drift tradeoff).
-    static const bool verifyBeta = std::getenv("XOLVER_LRA_VERIFY_BETA") != nullptr;
+    static const bool verifyBeta = xolver::env::diag("XOLVER_LRA_VERIFY_BETA");
     if (verifyBeta && !betaDirty_) {
         for (int r = 0; r < tab_.numRows(); ++r) {
             const SparseRow& row = tab_.row(r);
@@ -324,8 +323,7 @@ void GeneralSimplex::recomputeBeta() {
     // pivoting — is the LIA/LRA theory-throughput hot path. It is env-driven (not
     // compile-gated) so it works on the shipped binary; zero-overhead when unset.
     static const int betaEvery = []() {
-        const char* e = std::getenv("XOLVER_LRA_BETA_EVERY");
-        return (e && *e) ? std::atoi(e) : 0;
+        return env::paramInt("XOLVER_LRA_BETA_EVERY", 0);
     }();
     bool betaTimed = (betaEvery > 0);
 #ifdef XOLVER_LRA_PROFILE
@@ -709,8 +707,7 @@ void GeneralSimplex::pivot(int leaving, int entering) {
     // that time out before check() returns. Diagnostic-only, profile-gated.
     {
         static int dumpEvery = []() {
-            const char* e = std::getenv("XOLVER_LRA_PROFILE_EVERY");
-            return (e && *e) ? std::atoi(e) : 0;
+            return env::paramInt("XOLVER_LRA_PROFILE_EVERY", 0);
         }();
         // Process-global pivot counter so the modulo dump works across the many
         // short check() calls of a CDCL(T) solve (per-call pivotCount_ resets).

@@ -1,4 +1,5 @@
 #include "sat/CadicalTheoryPropagator.h"
+#include "util/EnvParam.h"
 #include <cstdio>
 #include "sat/CadicalBackend.h"
 #include "sat/RelevancyEngine.h"
@@ -108,7 +109,7 @@ CadicalTheoryPropagator::CadicalTheoryPropagator(
     TheoryLemmaStorage& lemmaDb,
     CadicalBackend& backend
 ) : registry_(registry), tm_(tm), lemmaDb_(lemmaDb), backend_(backend) {
-    deferEarlyConflict_ = (std::getenv("XOLVER_SAT_DEFER_EARLY_CONFLICT") != nullptr);
+    deferEarlyConflict_ = (xolver::env::diag("XOLVER_SAT_DEFER_EARLY_CONFLICT"));
 }
 
 void CadicalTheoryPropagator::setUnknownReasonSink(std::string* sink) {
@@ -133,7 +134,7 @@ static void writeReason(std::string* sink, const std::string& msg) {
 }
 
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
-    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf = xolver::env::diag("XOLVER_SAT_PROF");
     auto _na0 = satProf ? std::chrono::steady_clock::now()
                         : std::chrono::steady_clock::time_point{};
     struct NaTimer {
@@ -183,7 +184,7 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
 
 int CadicalTheoryPropagator::cb_decide() {
     ++decideCalls_;
-    static const bool satProf2 = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf2 = xolver::env::diag("XOLVER_SAT_PROF");
     auto _de0 = satProf2 ? std::chrono::steady_clock::now()
                          : std::chrono::steady_clock::time_point{};
     struct DeTimer {
@@ -202,7 +203,7 @@ int CadicalTheoryPropagator::cb_decide() {
         return 0;
     }
 
-    if (const char* pe = std::getenv("XOLVER_DECIDE_PROBE"); pe && *pe && *pe != '0') {
+    if (xolver::env::flag("XOLVER_DECIDE_PROBE")) {
         static long long every = []() {
             const char* e = std::getenv("XOLVER_DECIDE_PROBE");
             long long n = e ? std::atoll(e) : 0;
@@ -241,14 +242,13 @@ int CadicalTheoryPropagator::cb_decide() {
     // phase. Heuristic only: a decision is backtrackable and the verdict stays
     // theory-gated + model-validated, so a wrong guess only costs a backtrack.
     static const bool steer = []() {
-        const char* e = std::getenv("XOLVER_LRA_DECIDE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_LRA_DECIDE");
     }();
     if (steer) {
         if (!theoryAtomVarsBuilt_) {
             theoryAtomVars_ = registry_.linearAtomVars();
             theoryAtomVarsBuilt_ = true;
-            if (std::getenv("XOLVER_DECIDE_PROBE"))
+            if (xolver::env::diag("XOLVER_DECIDE_PROBE"))
                 std::cerr << "[DECIDE-STEER] theoryAtomVars=" << theoryAtomVars_.size() << std::endl;
         }
         const size_t n = theoryAtomVars_.size();
@@ -285,8 +285,7 @@ int CadicalTheoryPropagator::cb_decide() {
     // guess only costs a backtrack; the verdict is unchanged. Only search order
     // is affected, never satisfiability.
     static const bool decideFreeAtoms = [] {
-        const char* e = std::getenv("XOLVER_COMB_DECIDE_FREE_ATOMS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_COMB_DECIDE_FREE_ATOMS");
     }();
     if (decideFreeAtoms) {
         // Rebuild the snapshot when the registry grew (atoms are minted during
@@ -315,7 +314,7 @@ int CadicalTheoryPropagator::cb_decide() {
 }
 
 void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
-    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf = xolver::env::diag("XOLVER_SAT_PROF");
     auto _bt0 = satProf ? std::chrono::steady_clock::now()
                         : std::chrono::steady_clock::time_point{};
     struct BtTimer {
@@ -341,7 +340,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
 }
 
 bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model) {
-    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf = xolver::env::diag("XOLVER_SAT_PROF");
     auto _ck0 = satProf ? std::chrono::steady_clock::now()
                         : std::chrono::steady_clock::time_point{};
     struct CkTimer {
@@ -452,7 +451,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
 
     // #2 probe: log each Full-check refutation (kind/size/reason) to a file so
     // the cs_* non-convergence (model-specific lemmas) can be characterized.
-    if (std::getenv("XOLVER_SAT_PROF")) {
+    if (xolver::env::diag("XOLVER_SAT_PROF")) {
         if (FILE* f = std::fopen("/tmp/xolver_refute.txt", "a")) {
             size_t sz = tr.kind == TheoryCheckResult::Kind::Conflict
                             ? (tr.conflictOpt ? tr.conflictOpt->clause.size() : 0)
@@ -490,7 +489,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             if (!isClauseFalsifiedByCurrentModel(tr.conflictOpt->clause)) {
                 NO_DBG << "[PROP][BUG] malformed external conflict clause. "
                              "Rejecting it to avoid infinite modelCheck loop.\n";
-                if (std::getenv("XOLVER_SAT_PROF")) {
+                if (xolver::env::diag("XOLVER_SAT_PROF")) {
                     if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a")) {
                         std::fprintf(f, "ABORT-388: malformed Full conflict (%zu lits, not falsified)\n",
                                      tr.conflictOpt->clause.size());
@@ -514,7 +513,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             enqueuePendingClause(tr.conflictOpt->clause);
             return false;
         }
-        if (std::getenv("XOLVER_SAT_PROF")) {
+        if (xolver::env::diag("XOLVER_SAT_PROF")) {
             if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
             { std::fprintf(f, "ABORT-396: empty Full conflict clause\n"); std::fclose(f); }
         }
@@ -531,7 +530,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
             enqueuePendingClause(*tr.lemmaOpt);
             return false;
         }
-        if (std::getenv("XOLVER_SAT_PROF")) {
+        if (xolver::env::diag("XOLVER_SAT_PROF")) {
             if (FILE* f = std::fopen("/tmp/xolver_abort.txt", "a"))
             { std::fprintf(f, "ABORT-409: empty Full lemma\n"); std::fclose(f); }
         }
@@ -557,7 +556,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     // suppressed, so snapshot to a file every ~2s (overwrite); a timeout-kill
     // leaves the last snapshot. Reveals whether the boolean search is exploding
     // (decisions/conflicts huge) vs the theory layer. Zero cost when unset.
-    static const bool satProf = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf = xolver::env::diag("XOLVER_SAT_PROF");
     if (satProf) {
         static auto lastDump = std::chrono::steady_clock::now();
         auto now = std::chrono::steady_clock::now();
@@ -619,8 +618,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     // (sound: the same Standard check, just sooner). Default (unset) keeps the
     // adaptive heuristic. Used to probe the cs_* QF_ANIA blind-search TO.
     static const int checkEvery = []() {
-        const char* e = std::getenv("XOLVER_PROP_CHECK_EVERY");
-        return (e && *e) ? std::atoi(e) : 0;
+        return xolver::env::paramInt("XOLVER_PROP_CHECK_EVERY", 0);
     }();
     size_t currentSize = currentAssignment_.size();
     int threshold = (checkEvery > 0)
@@ -695,7 +693,7 @@ int CadicalTheoryPropagator::cb_propagate() {
                 }
             }
             if (!falsified) {
-                if (std::getenv("XOLVER_WISA_DIAG"))
+                if (xolver::env::diag("XOLVER_WISA_DIAG"))
                     std::fprintf(stderr, "[PROP] SKIP non-falsified conflict (%zu lits) — stale reason\n",
                                  clause.size());
                 NO_DBG << "[PROP] skip non-falsified conflict (" << clause.size() << " lits)\n";
@@ -766,9 +764,7 @@ int CadicalTheoryPropagator::cb_propagate() {
     // cost is still the bottleneck; throttling to every K cb_propagate calls
     // amortises it. Sound — propagation is a refinement, not a verdict driver.
     static const int entailPropEvery = []() {
-        const char* v = std::getenv("XOLVER_THEORY_ENTAIL_PROP_EVERY");
-        if (v && *v) { try { return std::max(1, std::atoi(v)); } catch (...) {} }
-        return 1;
+        return std::max(1, xolver::env::paramInt("XOLVER_THEORY_ENTAIL_PROP_EVERY", 1));
     }();
     if (!hasPendingClause_ &&
         (entailPropEvery == 1 ||
@@ -799,7 +795,7 @@ int CadicalTheoryPropagator::cb_propagate() {
 }
 
 bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {
-    static const bool satProf3 = std::getenv("XOLVER_SAT_PROF") != nullptr;
+    static const bool satProf3 = xolver::env::diag("XOLVER_SAT_PROF");
     auto _he0 = satProf3 ? std::chrono::steady_clock::now()
                          : std::chrono::steady_clock::time_point{};
     struct HeTimer {

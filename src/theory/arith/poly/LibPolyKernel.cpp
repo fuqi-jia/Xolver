@@ -1,4 +1,5 @@
 #include "theory/arith/poly/LibPolyKernel.h"
+#include "util/EnvParam.h"
 #include "theory/arith/poly/RationalPolynomial.h"
 
 #ifdef XOLVER_HAS_LIBPOLY
@@ -74,7 +75,7 @@ LibPolyKernel::LibPolyKernel() = default;
 
 LibPolyKernel::~LibPolyKernel() {
     // S1 + S1b + S2 + S1c (P6 / Task J) — env-gated stats dump for hit-rate sanity. Default no-op.
-    if (std::getenv("XOLVER_NRA_KERNEL_STATS") != nullptr) {
+    if (xolver::env::diag("XOLVER_NRA_KERNEL_STATS")) {
         const uint64_t total = binOpHits_ + binOpMisses_;
         const double hitRate = total ? 100.0 * static_cast<double>(binOpHits_) / static_cast<double>(total) : 0.0;
         const uint64_t tpiTotal = tpiHits_ + tpiMisses_;

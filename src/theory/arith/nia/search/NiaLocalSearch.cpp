@@ -48,58 +48,58 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     if (const char* e = std::getenv("XOLVER_NIA_LOCALSEARCH"); e && *e && *e != '0') {
         enhanced_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_TWO_LEVEL"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_TWO_LEVEL")) {
         twoLevel_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_WARM_START"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_WARM_START")) {
         warmStart_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_MULTI_SCALE"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_MULTI_SCALE")) {
         multiScale_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_QUAD_CRITICAL"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_QUAD_CRITICAL")) {
         quadCritical_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_FS_JUMP"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_FS_JUMP")) {
         fsJump_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_DIVERSE_INIT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_DIVERSE_INIT")) {
         diverseInit_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_PAIR"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_BILINEAR_PAIR")) {
         bilinearPair_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_BILINEAR_SUBST"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_BILINEAR_SUBST")) {
         bilinearSubst_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_PIN_EQ"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_PIN_EQ")) {
         pinEq_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_MODULAR_ESCALATE"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_MODULAR_ESCALATE")) {
         modularEscalate_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_DIVERSIFY"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_DIVERSIFY")) {
         diversify_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_PARTITION_HINT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_PARTITION_HINT")) {
         partitionHint_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_INIT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_SMART_INIT")) {
         smartInit_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_SMART_MOVE"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_SMART_MOVE")) {
         smartMove_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_TABU"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_TABU")) {
         tabu_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_VIOLATION_CORE"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_VIOLATION_CORE")) {
         violationCore_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_ATOM_LOCAL_ACCEPT")) {
         atomLocalAccept_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_BOUND_TRACK"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_BOUND_TRACK")) {
         boundTrack_ = true;
     }
     // LS-SMART-Z6 (master 2026-06-02): tunable restart/flip budgets for
@@ -112,24 +112,22 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
         long v = std::atol(e);
         if (v > 0 && v < 100000) { restartsBudget_ = (int)v; restartsSet = true; }
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_MAX_FLIPS")) {
-        long v = std::atol(e);
-        if (v > 0 && v < 10000000) { maxFlipsBudget_ = (int)v; maxFlipsSet = true; }
-    }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_LONG"); e && *e && *e != '0') {
+    { long v = env::paramLong("XOLVER_NIA_LS_MAX_FLIPS", 0);
+      if (v > 0 && v < 10000000) { maxFlipsBudget_ = (int)v; maxFlipsSet = true; } }
+    if (xolver::env::flag("XOLVER_NIA_LS_LONG")) {
         if (!restartsSet) restartsBudget_ = 80;
         if (!maxFlipsSet) maxFlipsBudget_ = 25000;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_RW_HUB"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_RW_HUB")) {
         rwHub_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_RW_LADDER"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_RW_LADDER")) {
         rwLadder_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_ADAPTIVE_PLATEAU"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_ADAPTIVE_PLATEAU")) {
         adaptivePlateau_ = true;
     }
-    if (const char* e = std::getenv("XOLVER_NIA_LS_FARKAS_INIT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LS_FARKAS_INIT")) {
         farkasInit_ = true;
     }
 }
@@ -1774,7 +1772,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                 // accepted candidate roots. Lets us confirm bilinearSubst
                 // fires on real VeryMax atoms before claiming the lever
                 // is broken vs just outbudget.
-                static const bool diag = std::getenv("XOLVER_NIA_LS_DIAG") != nullptr;
+                static const bool diag = xolver::env::diag("XOLVER_NIA_LS_DIAG");
                 int diag_pairs = 0, diag_lin_roots = 0, diag_quad_roots = 0,
                     diag_cands = 0, diag_accepted = 0;
                 auto termsOpt = kernel_.terms(C.poly);
@@ -2118,7 +2116,7 @@ std::optional<IntegerModel> NiaLocalSearch::walkSatTwoLevel(
                         break;
                     }
                 }
-                static const bool diag = std::getenv("XOLVER_NIA_LS_DIAG") != nullptr;
+                static const bool diag = xolver::env::diag("XOLVER_NIA_LS_DIAG");
                 if (diag) {
                     std::fprintf(stderr,
                         "[LS-VM3] plateau-exit restart=%d bestCost=%s infeasible=%d\n",

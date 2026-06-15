@@ -26,11 +26,9 @@ LraSolver::LraSolver() {
 
     // XOLVER_LRA_PROP (default OFF): lift sound Farkas row-propagations to the
     // SAT solver during search. Read once.
-    const char* prop = std::getenv("XOLVER_LRA_PROP");
-    lraPropEnabled_ = (prop && *prop && *prop != '0');
+    lraPropEnabled_ = xolver::env::flag("XOLVER_LRA_PROP");
     // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
-    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
-    impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    impliedEqEnabled_ = xolver::env::flag("XOLVER_SIMPLEX_IMPLIED_EQ");
     lpDualityBudget_ = std::max(
         0, env::paramInt("XOLVER_LRA_LP_DUALITY_BUDGET", lpDualityBudget_));
 }

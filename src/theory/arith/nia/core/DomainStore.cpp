@@ -1,4 +1,5 @@
 #include "theory/arith/nia/core/DomainStore.h"
+#include "util/EnvParam.h"
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -252,7 +253,7 @@ std::vector<SatLit> DomainStore::collectEmptyReasons(const IntDomain& d) const {
 }
 
 TheoryConflict DomainStore::buildEmptyDomainConflict() const {
-    static const bool domDiag = std::getenv("NIA_DOM_DIAG") != nullptr;
+    static const bool domDiag = xolver::env::diag("NIA_DOM_DIAG");
     std::vector<SatLit> clause;
     for (const auto& [var, d] : domains_) {
         if (isDomainEmpty(d)) {

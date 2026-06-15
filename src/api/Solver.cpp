@@ -270,7 +270,7 @@ public:
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
         // verdict so a floored array sat can be root-caused (which assertion,
         // which interp). Never affects the verdict.
-        if (std::getenv("XOLVER_DIAG_AM")) {
+        if (xolver::env::diag("XOLVER_DIAG_AM")) {
             std::cerr << "[DIAG_AM] arrayInterps (" << lastModel_->arrayInterps.size() << "):\n";
             for (const auto& [nm, ai] : lastModel_->arrayInterps) {
                 std::cerr << "  " << nm << " deflt=" << ai.defaultVal
@@ -532,7 +532,7 @@ public:
                 }
                 selBridge.emplace(std::make_pair(rr.arrOperand, *idxV), rv);  // first wins
             }
-            if (std::getenv("XOLVER_TARGETED_PP_DIAG"))
+            if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG"))
                 std::fprintf(stderr, "[ROAE-RECON] reads=%zu found=%zu default0=%zu noIdx=%zu\n",
                              roaeReads_.size(), roaeFound, roaeDefault, roaeNoIdx);
         }
@@ -577,7 +577,7 @@ public:
             }
         }
 
-        const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
+        const bool validatorMemo = xolver::env::diag("XOLVER_PP_VALIDATOR_MEMO");
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty() || !roaeFreeArrayVars_.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
@@ -893,7 +893,7 @@ public:
         // DIAG (XOLVER_NO_EXPAND_FUNCTIONS): toggle define-fun inlining to confirm
         // whether parse-time expansion is the Certora blowup. Not for production.
         parser->setOption("expand_functions",
-                          std::getenv("XOLVER_NO_EXPAND_FUNCTIONS") == nullptr);
+                          !xolver::env::diag("XOLVER_NO_EXPAND_FUNCTIONS"));
         if (!parser->parse(std::string(filename))) {
             return false;
         }
@@ -1761,7 +1761,7 @@ public:
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
-        bool enableRewrite = (std::getenv("XOLVER_PP_REWRITE") != nullptr);
+        bool enableRewrite = (xolver::env::diag("XOLVER_PP_REWRITE"));
         if (!enableRewrite && std::getenv("XOLVER_STRAT_PRESETS")) {
             enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
         }
@@ -2004,7 +2004,7 @@ public:
             //       V := LHS_0 into other occurrences and drops the def.
             //       Targets leipzig/term-unsat-01's int polynomial chain.
             bool inlineSingleDefsInt =
-                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS_INT") != nullptr;
+                xolver::env::diag("XOLVER_PP_INLINE_SINGLE_DEFS_INT");
             SortId intSort = ir->intSortId();
             std::unordered_map<ExprId, ExprId> subst;
             std::vector<size_t> dropAtoms;
@@ -2570,7 +2570,7 @@ public:
             e && *e && *e != '0') {
             ZoharBwiAxiomEmitter zohar(*ir, boolSortId_);
             zohar.run();
-            if (std::getenv("XOLVER_NIA_ZOHAR_DIAG")) {
+            if (xolver::env::diag("XOLVER_NIA_ZOHAR_DIAG")) {
                 std::cerr << "[ZOHAR-PLUGIN] detected=" << zohar.detected()
                           << " axioms=" << zohar.axiomCount() << "\n";
             }
@@ -2643,7 +2643,7 @@ public:
                 // patterns where the SMT-LIB file declares QF_NIA but uses
                 // div/mod with an unbounded "auxiliary witness" divisor.
                 bool autoPromote =
-                    std::getenv("XOLVER_PP_AUTO_EUF_PROMOTE") != nullptr;
+                    xolver::env::diag("XOLVER_PP_AUTO_EUF_PROMOTE");
                 if (autoPromote) {
                     std::string upgraded = logic;
                     if (logic == "QF_NIA")  upgraded = "QF_UFNIA";
@@ -2821,7 +2821,7 @@ public:
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
         phase("detect-done");
-        if (std::getenv("XOLVER_DUMP_FINAL_ASSERTS")) {
+        if (xolver::env::diag("XOLVER_DUMP_FINAL_ASSERTS")) {
             int di = 0;
             for (ExprId aid : ir->assertions())
                 std::fprintf(stderr, "[FINAL-ASSERT %d] %s\n", di++,
@@ -2859,7 +2859,7 @@ public:
                 else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
                          logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
                 if (!dg.empty()) {
-                    if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
+                    if (xolver::env::diag("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
                         std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
                                   << " (no array/UF features)\n";
                     logic = dg;
@@ -2890,7 +2890,7 @@ public:
                 linDgEnabled = !(e[0] == '0' && e[1] == '\0');
             if (linDgEnabled && !features.hasNonlinear &&
                 (logic == "QF_NRA" || logic == "NRA")) {
-                if (std::getenv("XOLVER_NRA_LINEAR_DOWNGRADE_DIAG"))
+                if (xolver::env::diag("XOLVER_NRA_LINEAR_DOWNGRADE_DIAG"))
                     std::cerr << "[NRA-LINEAR-DOWNGRADE] " << logic
                               << " -> QF_LRA (no nonlinear terms)\n";
                 logic = "QF_LRA";
@@ -2917,7 +2917,7 @@ public:
                 linDgEnabled = !(e[0] == '0' && e[1] == '\0');
             if (linDgEnabled && !features.hasNonlinear &&
                 (logic == "QF_NIA" || logic == "NIA")) {
-                if (std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
+                if (xolver::env::diag("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
                     std::cerr << "[NIA-LINEAR-DOWNGRADE] " << logic
                               << " -> QF_LIA (no nonlinear terms)\n";
                 logic = "QF_LIA";
@@ -3056,7 +3056,7 @@ public:
         {
             const char* eagerEnv = std::getenv("XOLVER_NIA_EAGER_BITBLAST");
             bool eagerOn = !(eagerEnv && eagerEnv[0] == '0');
-            if (std::getenv("NIA_EAGER_BB_GATE_DIAG")) {
+            if (xolver::env::diag("NIA_EAGER_BB_GATE_DIAG")) {
                 std::cerr << "[EAGER-GATE] eagerOn=" << eagerOn
                           << " logic=" << logic
                           << " hasRealVar=" << features.hasRealVar
@@ -3079,7 +3079,7 @@ public:
             // assertion. The verdict stays sound (validator-gated), but get-model
             // returns garbage, so until the export reconstructs pinned vars this
             // path must not run by default. QF_NIA EAGER is unaffected (proven).
-            bool eagerLia = std::getenv("XOLVER_NIA_EAGER_LIA") != nullptr;
+            bool eagerLia = xolver::env::diag("XOLVER_NIA_EAGER_LIA");
             bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
                             (eagerLia && (logic == "QF_LIA" || logic == "LIA")));
             if (eagerOn && logicOk &&
@@ -3180,7 +3180,7 @@ public:
         // override. Phase 1 leaves LIA flags at defaults and envFlags empty, so
         // this is behavior-neutral until the table is tuned / cross-agent flags
         // merge. envFlags use setenv(...,overwrite=0): explicit user env wins.
-        if (std::getenv("XOLVER_STRAT_PRESETS")) {
+        if (xolver::env::diag("XOLVER_STRAT_PRESETS")) {
             StrategyConfig sc = selectStrategy(logic, features);
             liaSafeMode = sc.liaSafeMode;
             liaUltraSafeMode = sc.liaUltraSafeMode;
@@ -3276,7 +3276,7 @@ public:
         registry.setContext(sat.get(), &atomizer);
         atomizer.setRegistry(&registry);
         atomizer.setBoolSortId(boolSortId_);
-        atomizer.setPgCnf(std::getenv("XOLVER_PP_PG_CNF") != nullptr);
+        atomizer.setPgCnf(xolver::env::diag("XOLVER_PP_PG_CNF"));
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
@@ -3397,7 +3397,7 @@ public:
         // to a file (env XOLVER_NIA_FARKAS_DUMP=1 enables; output goes to
         // XOLVER_NIA_FARKAS_DUMP_FILE or /tmp/farkas_dump). Pure
         // diagnostic — no behavioral change to the solve.
-        if (std::getenv("XOLVER_NIA_FARKAS_DUMP")) {
+        if (xolver::env::diag("XOLVER_NIA_FARKAS_DUMP")) {
             const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
             if (!path || !*path) path = "/tmp/farkas_dump";
             FILE* fdump = std::fopen(path, "a");
@@ -3425,7 +3425,7 @@ public:
             atomizer.buildRelevancyGraph(ir->assertions(), *ir, relEngine);
             propagator.setRelevancyEngine(&relEngine);   // wires value oracle
             relEngine.finalize();                        // seed roots relevant
-            if (std::getenv("XOLVER_RELEVANCY_DIAG")) {
+            if (xolver::env::diag("XOLVER_RELEVANCY_DIAG")) {
                 std::fprintf(stderr, "[RELEVANCY] nodes=%zu roots seeded; "
                              "relevantVarsSeen=%zu\n",
                              relEngine.totalNodes(), relEngine.relevantVarsSeen());
@@ -3583,7 +3583,7 @@ public:
             scanSeen.clear();
             for (ExprId r : originalAssertions_) scan(r, false);  // then shift vars
             if (probeVars.size() > 2) probeVars.resize(2);        // bound the grid
-            if (std::getenv("XOLVER_CMS_WIDTH_PROBE_DIAG"))
+            if (xolver::env::diag("XOLVER_CMS_WIDTH_PROBE_DIAG"))
                 std::fprintf(stderr, "[WPROBE] pinnedFuncs=%zu probeVars=%zu\n",
                              pinnedFuncs.size(), probeVars.size()), std::fflush(stderr);
 
@@ -3975,12 +3975,12 @@ public:
                    L == "QF_AUFLIA" || L == "AUFLIA" || L == "QF_AUFLRA" || L == "AUFLRA";
         };
         bool arrayCombSatFloor = features.hasArray && isCombArrayLogic(logic) &&
-                                 std::getenv("XOLVER_ARRAY_COMB_VALIDATE_SAT") != nullptr;
+                                 xolver::env::diag("XOLVER_ARRAY_COMB_VALIDATE_SAT");
         bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
                            arrayCombSatFloor ||
-                           (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
+                           (xolver::env::diag("XOLVER_PP_STRICT_VALIDATION")) ||
                            (features.hasNonlinear &&
-                            std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
+                            xolver::env::diag("XOLVER_PP_VALIDATE_NONLINEAR_SAT"));
         if (ret == Result::Sat && validateSat) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
             // Theory models do not track pure-boolean VARIABLES (those values

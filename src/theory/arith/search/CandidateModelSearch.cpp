@@ -1,4 +1,5 @@
 #include "theory/arith/search/CandidateModelSearch.h"
+#include "util/EnvParam.h"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -26,7 +27,7 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (vars_.empty()) return result_;
 
     if (cfg_.allowUF) pinForcedAppSlots();
-    if (std::getenv("XOLVER_DIAG_CMS")) {
+    if (xolver::env::diag("XOLVER_DIAG_CMS")) {
         size_t napp = 0;
         for (const auto& v : vars_) if (v.isApp) ++napp;
         size_t npin = 0;
@@ -50,7 +51,7 @@ CandidateModelSearch::Result CandidateModelSearch::run() {
     if (runStrategy10c()) return result_;
     if (runStrategy10a()) return result_;
 
-    if (std::getenv("XOLVER_DIAG_CMS")) {
+    if (xolver::env::diag("XOLVER_DIAG_CMS")) {
         std::fprintf(stderr,
                      "[CMS] no-witness: tried=%lld fcReject=%lld evalFalse=%lld "
                      "evalIndet=%lld accept=%lld\n",

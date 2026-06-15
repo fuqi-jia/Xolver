@@ -348,7 +348,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // no ℤ-root ⇒ UNSAT (Nullstellensatz direction); bounded Buchberger.
     // iter-77 cherry-pick of 7afeda9 — Step 5 Gröbner-lite (env var renamed
     // ZOLVER_* → XOLVER_* to match this branch's naming convention).
-    if (const char* e = std::getenv("XOLVER_NIA_GROBNER"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_GROBNER"))
         enableGroebner_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-ON).
@@ -482,7 +482,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
     if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
-        static const bool oppDiag = std::getenv("NIA_OPP_DIAG") != nullptr;
+        static const bool oppDiag = xolver::env::diag("NIA_OPP_DIAG");
         if (oppDiag) {
             std::cerr << "[NIA-OPP] satVar=" << assertedLit.var
                       << " sign=" << (int)assertedLit.sign
@@ -686,7 +686,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
         }
     }
 
-    if (std::getenv("XOLVER_NIA_LINDECIDE_DIAG"))
+    if (xolver::env::diag("XOLVER_NIA_LINDECIDE_DIAG"))
         std::fprintf(stderr, "[LINDECIDE] stage fired: active=%zu normalized=%zu trail=%zu\n",
                      active_.size(), normalized_.size(), state_.trail.size());
 
@@ -757,8 +757,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
     // clause (¬reasons ∨ impliedAtom) it unblocks is a global theory tautology
     // regardless. Gated XOLVER_NIA_IFACE_PROP (default-OFF) for A/B + safety.
     static const bool ifaceProp = [] {
-        const char* e = std::getenv("XOLVER_NIA_IFACE_PROP");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_IFACE_PROP");
     }();
     if (ifaceProp) {
         for (const auto& ie : interfaceEqualities_)
@@ -779,7 +778,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
         &conflict, &entailmentProps_, &entailmentEmittedKeys_,
         /*maxEmit=*/256);
 
-    static const bool diag = std::getenv("XOLVER_NIA_LINPROP_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NIA_LINPROP_DIAG");
     if (diag) {
         std::fprintf(stderr,
             "[LINPROP] fire active=%zu normalized=%zu effort=%d conflict=%s ent+=%zu (total=%zu)\n",
@@ -828,8 +827,7 @@ uint64_t computeDispatchSignature(
 
 std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheLookup(TheoryLemmaStorage&, TheoryEffort) {
     static const bool dcEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DISPATCH_CACHE");
     }();
     if (!dcEnabled) return std::nullopt;
     if (!dispatchCacheValid_) return std::nullopt;
@@ -856,8 +854,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheLookup(TheoryLemma
 
 std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheRecord(TheoryLemmaStorage&, TheoryEffort) {
     static const bool dcEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DISPATCH_CACHE");
     }();
     if (!dcEnabled) return std::nullopt;
     // Reaching this stage means every earlier stage returned nullopt
@@ -882,7 +879,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
     // and the full-normalize path are exercised. Fires after normalized_
     // has been populated (i.e., after the cache update below). Cheap.
     auto emitPartitionDiag = [this]() {
-        static const bool partDiag = std::getenv("XOLVER_NIA_VAR_PARTITION_DIAG") != nullptr;
+        static const bool partDiag = xolver::env::diag("XOLVER_NIA_VAR_PARTITION_DIAG");
         if (partDiag && !partitionDiagPrinted_ && !normalized_.empty()) {
             partitionDiagPrinted_ = true;
             VariablePartition vp(*kernel_);
@@ -1011,8 +1008,7 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
 std::optional<TheoryCheckResult> NiaSolver::stageNlaCuts(TheoryLemmaStorage&,
                                                           TheoryEffort) {
     static const bool nlaCutsEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NLA_CUTS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NLA_CUTS");
     }();
     if (!nlaCutsEnabled) return std::nullopt;
     if (normalized_.empty()) return std::nullopt;
@@ -1267,7 +1263,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
     // 3. Reset domains
     domains_.reset();
 
-    static const bool domDiag = std::getenv("NIA_DOM_DIAG") != nullptr;
+    static const bool domDiag = xolver::env::diag("NIA_DOM_DIAG");
     if (domDiag) {
         std::cerr << "[NIA-DOM] normalized constraints (" << normalized_.size() << "):\n";
         for (const auto& c : normalized_) {
@@ -1488,8 +1484,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
     // stable because normalized_ is grown in lockstep with active_ /
     // onBacktrack resizes it from the tail.
     static const bool warmStartEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_MODULAR_WARM_START");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_MODULAR_WARM_START");
     }();
     auto computeSignature = [&]() -> uint64_t {
         uint64_t h = 1469598103934665603ULL;  // FNV-1a basis
@@ -1538,8 +1533,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
     TheoryLemmaStorage&, TheoryEffort) {
     // Track A Phase 1.3 — bridge fact list to ModEqConstReasoner.
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NATIVE_MODEQCONST");
     }();
     if (!enabled) return std::nullopt;
     if (modEqConstFacts_.empty()) return std::nullopt;
@@ -1575,8 +1569,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
 
 std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DIO");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DIO");
     }();
     if (!enabled) return std::nullopt;
 
@@ -1862,8 +1855,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearization(TheoryLemmaStorag
         LinearizationConfig cfg;
         cfg.emitAllMcCormick = true;
         static const bool secantOn = [] {
-            const char* e = std::getenv("XOLVER_NIA_SECANT");
-            return e && *e && *e != '0';
+            return xolver::env::flag("XOLVER_NIA_SECANT");
         }();
         cfg.emitSquareSecant = secantOn;
         cfg.emitSquareTangent = true;
@@ -1895,8 +1887,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage
     // never returns UnsatComplete. On failure, falls through to the
     // rest of the pipeline (so the standard reasoners still get to run).
     static const bool earlyEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL_EARLY");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_BOUNDED_PARTIAL_EARLY");
     }();
     if (!earlyEnabled) return std::nullopt;
     // Reuse the same algorithm; differs only in pipeline position.
@@ -1905,8 +1896,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage
     // tried as the FIRST candidate before cartesian enumeration. Sound:
     // validator-gated like every other candidate.
     static const bool lsFeedback = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_FEEDBACK");
     }();
     const IntegerModel* hint = nullptr;
     if (lsFeedback) {
@@ -1946,8 +1936,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
         // never returned from this path (unbounded search space is not
         // exhausted).
         static const bool partialEnabled = [] {
-            const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL");
-            return e && *e && *e != '0';
+            return xolver::env::flag("XOLVER_NIA_BOUNDED_PARTIAL");
         }();
         if (partialEnabled) {
             // Phase L1 step 3 — LS feedback hint (XOLVER_NIA_LS_FEEDBACK=1,
@@ -1955,8 +1944,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
     // tried as the FIRST candidate before cartesian enumeration. Sound:
     // validator-gated like every other candidate.
     static const bool lsFeedback = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_FEEDBACK");
     }();
     const IntegerModel* hint = nullptr;
     if (lsFeedback) {
@@ -2029,7 +2017,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
         return static_cast<size_t>(50);
     }();
     if (normalized_.size() < minActive) return std::nullopt;
-    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    static const bool h3Diag = xolver::env::diag("XOLVER_NIA_BB_ENTRY_DIAG");
     if (h3Diag) {
         static thread_local long earlyCount = 0;
         ++earlyCount;
@@ -2044,7 +2032,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
     // unchanged and a re-blast just burns seconds (00314 80x/11s; a UFDTNIA
     // 4x/14.6s) — skip it. Opt-out XOLVER_NIA_BB_EARLY_NODEDUP=1.
     static const bool bbEarlyDedup =
-        std::getenv("XOLVER_NIA_BB_EARLY_NODEDUP") == nullptr;
+        !xolver::env::diag("XOLVER_NIA_BB_EARLY_NODEDUP");
     if (bbEarlyDedup && bbEarlyUnkSize_ == normalized_.size())
         return std::nullopt;
     // The bit-blast solver respects its own gate/iteration env caps
@@ -2083,7 +2071,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
         return std::nullopt;
     // H3 (master 2026-06-01) entry counter: confirm whether bit-blast
     // actually fires on SAT14-class inputs before the run TOs upstream.
-    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    static const bool h3Diag = xolver::env::diag("XOLVER_NIA_BB_ENTRY_DIAG");
     if (h3Diag) {
         static thread_local long bbEntryCount = 0;
         ++bbEntryCount;
@@ -2318,7 +2306,7 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
     // HYB-X partition-hint wire-up (default-OFF).
     {
-        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        static const bool partHint = xolver::env::diag("XOLVER_NIA_LS_PARTITION_HINT");
         if (partHint && !normalized_.empty()) {
             VariablePartition vp(*kernel_);
             auto pr = vp.partition(normalized_, domains_, 32);
@@ -2355,8 +2343,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
 std::optional<TheoryCheckResult>
 NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_BOOL_EXTEND");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_BOOL_EXTEND");
     }();
     if (!enabled || coreIr_ == nullptr) return std::nullopt;
 
@@ -2447,8 +2434,7 @@ NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
 //   XOLVER_NIA_HYB_BB_LS_PROBE_MS (default 500): per-LS-probe budget
 std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_HYB_BB_LS");
     }();
     if (!enabled) return std::nullopt;
     if (normalized_.empty()) return std::nullopt;
@@ -2520,8 +2506,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&,
 // (XOLVER_NIA_LBBB), Full-effort only via addFull registration.
 std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LBBB");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LBBB");
     }();
     if (!enabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
@@ -2583,8 +2568,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStor
 // the original NIA formula.
 std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_HYB_LS_BB");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_HYB_LS_BB");
     }();
     if (!enabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
@@ -2680,7 +2664,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     const auto& profile = cachedProfile;
     const auto& table = cachedTable;
     farkas::FarkasOrSolver solver(*coreIr_);
-    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    static const bool trace = xolver::env::diag("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
         FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
@@ -2693,7 +2677,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // For each outer assertion, prints kind + variable name + whether it
     // structurally looks like `(= var const)` (a hard equality forcing the
     // var). Used to design row-refute-by-outer-eq sound UNSAT path.
-    if (std::getenv("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
         // Helper: recursively check if `e` is a `(= var const)` form (either
         // child a Variable, the other an evaluable integer constant) and
         // return (varName, constValue) if so.
@@ -3140,7 +3124,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         return std::nullopt;
     };
 
-    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    static const bool trace = xolver::env::diag("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
         FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
@@ -3515,8 +3499,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
 // just falls through to the rest of the pipeline.
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort) {
     static const bool earlyEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_EARLY");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_EARLY");
     }();
     if (!earlyEnabled) return std::nullopt;
     // Save the LS's current per-call / cumulative budgets. We TEMPORARILY
@@ -3541,7 +3524,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaSto
     // HYB-X: pass partition hint to LS (cheap; partition is recomputed
     // here but the cost is bounded by normalized_.size()).
     {
-        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        static const bool partHint = xolver::env::diag("XOLVER_NIA_LS_PARTITION_HINT");
         if (partHint && !normalized_.empty()) {
             VariablePartition vp(*kernel_);
             auto pr = vp.partition(normalized_, domains_, 32);
@@ -3641,8 +3624,7 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     // conflict the SAT engine needs. Heuristic only — never affects
     // soundness; the branch lemma is still a tautology (x<=k ∨ x>=k+1).
     static const bool lsBranchHint = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_BRANCH_HINT");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_BRANCH_HINT");
     }();
     const auto& lsAct = localSearch_.lsContext().varActivity;
     auto activityOf = [&lsAct](const std::string& v) -> uint64_t {
@@ -3904,7 +3886,7 @@ NiaSolver::sharedTermArithValue(SharedTermId s) const {
     // Iter#25 diag: count ALL invocations + classification (null-model vs
     // found vs missing-from-model). Set XOLVER_NIA_ARITH_VALUE_DIAG=1.
     static const bool diag =
-        std::getenv("XOLVER_NIA_ARITH_VALUE_DIAG") != nullptr;
+        xolver::env::diag("XOLVER_NIA_ARITH_VALUE_DIAG");
     static long callCount = 0;
     static long nullModelCount = 0;
     static long missingNameCount = 0;
@@ -4160,7 +4142,7 @@ NiaSolver::getDeducedSharedEqualities() {
     // master directive #1: does NIA emit shared-eqs at all on QF_ANIA?
     static long callCount = 0;
     static long totalEmitted = 0;
-    if (std::getenv("XOLVER_NIA_SHARED_EQ_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_SHARED_EQ_DIAG")) {
         ++callCount;
         totalEmitted += result.size();
         if (callCount % 20 == 1 || !result.empty()) {

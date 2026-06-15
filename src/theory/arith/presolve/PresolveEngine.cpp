@@ -1,4 +1,5 @@
 #include "theory/arith/presolve/Presolve.h"
+#include "util/EnvParam.h"
 #include "theory/arith/presolve/AffineSubstitution.h"
 #include "theory/arith/presolve/IntLinearEqualityCoreHNF.h"
 #include "theory/arith/presolve/PolynomialEqualityCombination.h"
@@ -90,7 +91,7 @@ PresolveResult PresolveEngine::run(std::chrono::steady_clock::time_point deadlin
         for (auto& cap : caps_) {
             if (cap->run(st_)) { progress = true; anyProgress = true; }
             if (st_.hasConflict) {
-                if (std::getenv("XOLVER_PRESOLVE_DIAG")) dumpPresolveConflict(cap->name(), st_);
+                if (xolver::env::diag("XOLVER_PRESOLVE_DIAG")) dumpPresolveConflict(cap->name(), st_);
                 PresolveResult r;
                 r.kind = PresolveResult::Kind::Conflict;
                 r.conflict = st_.conflict;

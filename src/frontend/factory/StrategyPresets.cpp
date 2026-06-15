@@ -1,4 +1,5 @@
 #include "frontend/factory/StrategyPresets.h"
+#include "util/EnvParam.h"
 
 #include <cstdlib>
 
@@ -115,10 +116,8 @@ std::vector<PortfolioArm> selectPortfolio(const std::string& logic,
     // Ops/test hook: stamp a per-arm wall-clock budget (ms) on every arm so the
     // anytime executor's timeout path can be driven without a promoted preset.
     // A budget only ever turns an arm's verdict into Unknown (sound).
-    if (const char* b = std::getenv("XOLVER_STRAT_PORTFOLIO_BUDGET_MS")) {
-        int ms = std::atoi(b);
-        if (ms > 0) for (auto& a : arms) a.budgetMs = ms;
-    }
+    { int ms = env::paramInt("XOLVER_STRAT_PORTFOLIO_BUDGET_MS", 0);
+      if (ms > 0) for (auto& a : arms) a.budgetMs = ms; }
 
     return arms;
 }

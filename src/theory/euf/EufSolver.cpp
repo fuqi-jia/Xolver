@@ -58,13 +58,13 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     }
     // XOLVER_EUF_MINLEVEL_HEAP (default-OFF, array-deep B2): drain saturation mergeQueue_
     // with level-bucketed map; O(n^2) → O(n log L). Same order; targets QF_ANIA/QF_AX-swap blowup.
-    minLevelHeapEnabled_ = std::getenv("XOLVER_EUF_MINLEVEL_HEAP") != nullptr;
+    minLevelHeapEnabled_ = xolver::env::diag("XOLVER_EUF_MINLEVEL_HEAP");
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, euf-deep): incremental entailment-prop scan.
-    eufIncrementalProp_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP") != nullptr;
-    eufIncrementalVerify_ = std::getenv("XOLVER_EUF_INCREMENTAL_PROP_VERIFY") != nullptr;
+    eufIncrementalProp_ = xolver::env::diag("XOLVER_EUF_INCREMENTAL_PROP");
+    eufIncrementalVerify_ = xolver::env::diag("XOLVER_EUF_INCREMENTAL_PROP_VERIFY");
     if (eufIncrementalVerify_) eufIncrementalProp_ = true;  // verify implies on
     // XOLVER_EUF_PROP_DEDUP (Phase A v2): skip atoms with lemma already emitted at level<=current.
-    eufPropDedup_ = std::getenv("XOLVER_EUF_PROP_DEDUP") != nullptr;
+    eufPropDedup_ = xolver::env::diag("XOLVER_EUF_PROP_DEDUP");
     // XOLVER_AX_STORE_MODEL (default-OFF, array-deep A1): store-aware array model
     // construction. The baseline buildArrayModel collects each array's interp
     // from DIRECT select terms only, so an array defined by a store chain
@@ -76,11 +76,11 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     // override), then overlays explicit reads. Verdict-SOUND: model
     // construction only; the arrayModelDefinitelyViolates floor still validates,
     // so a better model recovers genuine sats and a wrong one still floors.
-    storeModelEnabled_ = std::getenv("XOLVER_AX_STORE_MODEL") != nullptr;
+    storeModelEnabled_ = xolver::env::diag("XOLVER_AX_STORE_MODEL");
     // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
-    hotProfileEnabled_ = std::getenv("XOLVER_EUF_HOTPROFILE") != nullptr;
+    hotProfileEnabled_ = xolver::env::diag("XOLVER_EUF_HOTPROFILE");
     // L3 (default-OFF): array-axiom saturation fixpoint (nested read-over-write).
-    arrayFixpointEnabled_ = std::getenv("XOLVER_AX_FIXPOINT") != nullptr;
+    arrayFixpointEnabled_ = xolver::env::diag("XOLVER_AX_FIXPOINT");
     initializeBoolConstants();
 }
 
@@ -438,8 +438,8 @@ TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
 }
 
 bool EufSolver::checkProofForestInvariants(const char* where) const {
-    const bool diag = std::getenv("XOLVER_DIAG_PF_INV") != nullptr;
-    const bool doAssert = std::getenv("XOLVER_ASSERT_PF_INV") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_DIAG_PF_INV");
+    const bool doAssert = xolver::env::diag("XOLVER_ASSERT_PF_INV");
     if (!diag && !doAssert) return true;
 
     // "Currently asserted literal" must be sourced from BOTH:
@@ -904,7 +904,7 @@ std::vector<ArrayReasoner::ArrayDiseq> EufSolver::activeArrayDiseqs() const {
     // diseq is truly entailed; the contrapositive only governs WHICH pairs are
     // worth splitting on (precision + termination), never the verdict. The Ext
     // site re-checks array-sortedness as a second guard.
-    static const bool congrExt = std::getenv("XOLVER_ARRAY_CONGR_EXT") != nullptr;
+    static const bool congrExt = xolver::env::diag("XOLVER_ARRAY_CONGR_EXT");
     if (congrExt) {
         // Group application terms by (symbol, arity). Restrict to USER-declared
         // functions: skip ALL internal symbols (#array.*, #builtin.*, #dt.*, …).
@@ -1133,7 +1133,7 @@ void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
     // Both -> conflict
     if (merged == BoolConstMark::Both) {
         auto er = egraph_.explainEquality(trueTerm_, falseTerm_);
-        if (std::getenv("EUF_DIAG")) {
+        if (xolver::env::diag("EUF_DIAG")) {
             std::cerr << "[EUF-DIAG] BOOL-BOTH kept=" << kept << " killed=" << killed
                       << " kMark=" << (int)kInfo.boolMark << " dMark=" << (int)dInfo.boolMark
                       << " explainTF.ok=" << er.ok << " chain=" << er.reasons.size()
@@ -1330,8 +1330,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             // (mapped to shared terms) so the combination layer can drive the arith
             // diseq prover on exactly this pair. Read once; capping via row2DemandSeen_.
             static const bool row2Demand = [] {
-                const char* e = std::getenv("XOLVER_NIA_ROW2_DEMAND");
-                return e && *e && *e != '0';
+                return xolver::env::flag("XOLVER_NIA_ROW2_DEMAND");
             }();
             auto bufferDemand = [&](EufTermId i, EufTermId j) {
                 if (!row2Demand || !sharedTermRegistry_) return;
@@ -1570,7 +1569,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // to fix, not a verdict cap — remaining merges re-derive next check). Sound:
     // the re-run merges are the same tautological / ArrayRow2Cond merges, stamped
     // at currentLevel_ so backtrack removes them.
-    static const bool axDiagL3 = std::getenv("XOLVER_AX_DIAG") != nullptr;
+    static const bool axDiagL3 = xolver::env::diag("XOLVER_AX_DIAG");
     if (axDiagL3)
         std::fprintf(stderr, "[L3] reach fixpoint-gate: en=%d arrayMode=%d active=%d\n",
                      arrayFixpointEnabled_ ? 1 : 0, arrayMode_ ? 1 : 0,
@@ -1609,14 +1608,14 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     if (trueTerm_ != NullEufTerm && falseTerm_ != NullEufTerm &&
         egraph_.same(trueTerm_, falseTerm_)) {
         auto er = egraph_.explainEquality(trueTerm_, falseTerm_);
-        if (std::getenv("EUF_DIAG")) {
+        if (xolver::env::diag("EUF_DIAG")) {
             std::cerr << "[EUF-DIAG] TRUE-FALSE-conflict ok=" << er.ok
                       << " chain=" << er.reasons.size() << "\n";
         }
         if (er.ok) {
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
-        if (std::getenv("EUF_DIAG")) {
+        if (xolver::env::diag("EUF_DIAG")) {
             std::cerr << "[EUF_EXPLAIN_FAIL] true=false same=" << egraph_.same(trueTerm_, falseTerm_)
                       << " activeReasons=" << allActiveReasons().size() << "\n";
         }
@@ -1627,7 +1626,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     for (const auto& d : disequalities_) {
         if (egraph_.same(d.lhs, d.rhs)) {
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
-            if (std::getenv("EUF_DIAG")) {
+            if (xolver::env::diag("EUF_DIAG")) {
                 std::cerr << "[EUF-DIAG] diseq-conflict lhs=" << d.lhs << " rhs=" << d.rhs
                           << " ok=" << er.ok << " chain=" << er.reasons.size() << " reasons=";
                 for (auto l : er.reasons) std::cerr << (l.sign?"":"-") << l.var << " ";
@@ -1637,7 +1636,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 er.reasons.push_back(d.reason);
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
-            if (std::getenv("EUF_DIAG")) {
+            if (xolver::env::diag("EUF_DIAG")) {
                 std::cerr << "[EUF_EXPLAIN_FAIL] diseq lhs=" << d.lhs << " rhs=" << d.rhs
                           << " same=" << egraph_.same(d.lhs, d.rhs)
                           << " activeReasons=" << allActiveReasons().size() << "\n";
@@ -1652,7 +1651,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     for (const auto& d : sharedDisequalities_) {
         if (egraph_.same(d.lhs, d.rhs)) {
             auto er = egraph_.explainEquality(d.lhs, d.rhs);
-            if (std::getenv("EUF_DIAG")) {
+            if (xolver::env::diag("EUF_DIAG")) {
                 auto exprOf = [&](EufTermId t) -> int {
                     for (auto& kv : sharedTermToEufTerm_) {
                         if (kv.second == t && sharedTermRegistry_) {
@@ -1689,7 +1688,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // (select(arr,j) with a store(a,i,v) in arr's class, i≠j-not-same), how many
     // have i≠j KNOWN-disequal in the e-graph right now? Decides whether eager
     // Row2-merge-on-known-diseq will fire at these Standard checkpoints.
-    static const bool r2dDiag = std::getenv("XOLVER_AX_R2D_DIAG") != nullptr;
+    static const bool r2dDiag = xolver::env::diag("XOLVER_AX_R2D_DIAG");
     if (r2dDiag && arrayMode_ && arrayReasoner_.active()) {
         auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
             uint32_t lo = a < b ? a : b, hi = a < b ? b : a;
@@ -1745,8 +1744,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // (cb_propagate drops Standard-effort Lemma results). z3's lazy split, made
     // tractable by the lazy select bound + made effective by dynamic relevancy.
     static const bool row2Split = [] {
-        const char* e = std::getenv("XOLVER_AX_ROW2_SPLIT");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT");
     }();
     // Scoped to COMBINATION (sharedTermRegistry_ != null): generating the split
     // INTERNS new select terms into the e-graph, which perturbs the pure-QF_AX
@@ -1835,7 +1833,7 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         // Violated — never over-rejects sat cases like `(head nil) = red`.
         // Default ON; XOLVER_DT_VALIDATE_OFF=1 disables (A/B escape).
         static const bool dtValidateOff =
-            std::getenv("XOLVER_DT_VALIDATE_OFF") != nullptr;
+            xolver::env::diag("XOLVER_DT_VALIDATE_OFF");
         if (!dtValidateOff && dtReasoner_.active() && coreIr_ &&
             originalAssertionsForDtValidate_ &&
             !originalAssertionsForDtValidate_->empty()) {
@@ -1846,10 +1844,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             // for structural eval to ground out). Sound but may over-floor
             // true-sat opaque-DT cases. See validator header.
             static const bool dtValidatorStrict =
-                std::getenv("XOLVER_DT_VALIDATOR_STRICT") != nullptr;
+                xolver::env::diag("XOLVER_DT_VALIDATOR_STRICT");
             v.setStrictMode(dtValidatorStrict);
             auto verdict = v.validate(*originalAssertionsForDtValidate_);
-            if (std::getenv("XOLVER_DT_VALIDATE_DIAG")) {
+            if (xolver::env::diag("XOLVER_DT_VALIDATE_DIAG")) {
                 std::cerr << "[DT-VAL] assertions=" << originalAssertionsForDtValidate_->size()
                           << " verdict=" << (verdict == DtModelValidator::Verdict::Satisfied ? "Sat"
                                           : verdict == DtModelValidator::Verdict::Violated ? "Violated"
@@ -1945,7 +1943,7 @@ TheoryCheckResult EufSolver::assertInterfaceDisequality(
 
     if (egraph_.same(ta, tb)) {
         auto er = egraph_.explainEquality(ta, tb);
-        if (std::getenv("EUF_DIAG")) {
+        if (xolver::env::diag("EUF_DIAG")) {
             const auto* sa = sharedTermRegistry_ ? sharedTermRegistry_->get(a) : nullptr;
             const auto* sb = sharedTermRegistry_ ? sharedTermRegistry_->get(b) : nullptr;
             auto dump = [&](const char* tag, auto s) {

@@ -1,4 +1,5 @@
 #include "theory/combination/Purifier.h"
+#include "util/EnvParam.h"
 #include "theory/core/DebugTrace.h"
 #include "expr/ir.h"
 #include <unordered_set>
@@ -14,8 +15,8 @@ namespace xolver {
 // floor (needs the bridge var to SEE the obligation) or the arrangement (needs
 // it to SPLIT and recover) is enabled.
 static bool ufArgBridgeEnabled() {
-    return std::getenv("XOLVER_COMB_SAT_FLOOR") != nullptr ||
-           std::getenv("XOLVER_COMB_UFARG_ARRANGE") != nullptr;
+    return xolver::env::diag("XOLVER_COMB_SAT_FLOOR") ||
+           xolver::env::diag("XOLVER_COMB_UFARG_ARRANGE");
 }
 
 Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
@@ -449,7 +450,7 @@ void Purifier::run() {
         ir_.addAssertion(bridge);
     }
 
-    if (std::getenv("EUF_DIAG")) {
+    if (xolver::env::diag("EUF_DIAG")) {
         std::function<std::string(ExprId)> nameOf = [&](ExprId e) -> std::string {
             const auto& ex = ir_.get(e);
             if (ex.kind == Kind::Variable) {

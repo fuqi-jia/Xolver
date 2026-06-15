@@ -1,4 +1,5 @@
 #include "theory/arith/nra/cac/SingleCellProjection.h"
+#include "util/EnvParam.h"
 
 #include "theory/arith/nra/projection/LazardProjectionOperator.h"
 
@@ -238,7 +239,7 @@ CellResult intervalFromCharacterization(
     if (!algebra || !kernel) return out;
     ++g_cacInstr.cellCalls;
 
-    static const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NRA_CAC_DIAG");
     auto bail = [&](const char* why) -> CellResult {
         if (diag) {
             std::ofstream st("/tmp/cac_cell.txt", std::ios::app);
@@ -427,7 +428,7 @@ CellResult intervalFromCharacterization(
     if (cmpFail) {
         // [P0 step1] Dump the exact RealAlg pairs compareRealAlg cannot order, as
         // standalone algebraic-kernel reproducers (gated XOLVER_NRA_CAC_DUMP).
-        if (std::getenv("XOLVER_NRA_CAC_DUMP")) {
+        if (xolver::env::diag("XOLVER_NRA_CAC_DUMP")) {
             std::ofstream st("/tmp/cac_repro_compare.txt", std::ios::app);
             auto ser = [&](const RealAlg& r) {
                 if (r.isRational()) { st << "R " << r.rational.get_str(); return; }

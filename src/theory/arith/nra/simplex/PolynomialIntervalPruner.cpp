@@ -1,4 +1,5 @@
 #include "theory/arith/nra/simplex/PolynomialIntervalPruner.h"
+#include "util/EnvParam.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_set>
@@ -1167,7 +1168,7 @@ std::optional<IntervalConflict> tryRefuteByIterativeFactoring(
         return conf;
     };
 
-    bool diag = std::getenv("XOLVER_NRA_OSF_DIAG") != nullptr;
+    bool diag = xolver::env::diag("XOLVER_NRA_OSF_DIAG");
 
     // Focused approach: pick the LARGEST EQ constraint and apply all
     // solvable substitutions to IT directly, then check.

@@ -1,4 +1,5 @@
 #include "proof/ArithModelValidator.h"
+#include "util/EnvParam.h"
 #include <iostream>
 
 namespace xolver {
@@ -15,8 +16,8 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
-    const bool diag = std::getenv("XOLVER_DIAG_AMV") != nullptr;
-    const bool diagDeep = std::getenv("XOLVER_DIAG_AMV_DEEP") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_DIAG_AMV");
+    const bool diagDeep = xolver::env::diag("XOLVER_DIAG_AMV_DEEP");
     for (ExprId a : assertions) {
         TR r = eval(a);
         if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }

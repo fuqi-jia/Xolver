@@ -1,4 +1,5 @@
 #include "theory/datatype/DtReasoner.h"
+#include "util/EnvParam.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -10,7 +11,7 @@
 namespace xolver {
 
 DtReasoner::~DtReasoner() {
-    if (std::getenv("XOLVER_DT_HC_STATS")) {
+    if (xolver::env::diag("XOLVER_DT_HC_STATS")) {
         const uint64_t total = finiteHits_ + finiteMisses_;
         if (total > 0) {
             const double rate = 100.0 * static_cast<double>(finiteHits_) / static_cast<double>(total);
