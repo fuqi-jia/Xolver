@@ -145,6 +145,15 @@ private:
     std::unordered_map<SatVar, int> varToLevel_;
     std::unordered_map<SatVar, bool> currentAssignment_;
     size_t lastCheckedAssignmentSize_ = 0;
+    // Set true whenever a theory *atom* is asserted (notify_assignment); cleared
+    // when cb_propagate runs a Standard check. When the cb_propagate throttle
+    // fires on pure-boolean growth (no atom asserted since the last check, no
+    // backtrack), the theory atom-set is unchanged, so the check + O(n) view
+    // rebuild are skipped — provably the same result (a non-backtrack check on an
+    // unchanged atom-set that found a conflict/propagation would have changed the
+    // atom-set or backtracked, so the re-check returns 0). This is unconditional
+    // (verdict-identical, not a tunable). Starts true so the first check runs.
+    bool theoryDirtySinceCheck_ = true;
 
     // Soundness floor (XOLVER_SAT_DEFER_EARLY_CONFLICT). In combination mode a
     // Standard-effort cb_propagate theory conflict is UNVALIDATED (conflictIsGenuine

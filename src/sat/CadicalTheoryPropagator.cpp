@@ -165,6 +165,7 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
+        theoryDirtySinceCheck_ = true;  // a theory atom changed; cb_propagate must re-check
     }
     // L7: drive relevancy AFTER the whole batch is in currentAssignment_ so the
     // engine's value oracle sees every co-assigned literal. Pure heuristic.
@@ -628,6 +629,20 @@ int CadicalTheoryPropagator::cb_propagate() {
     bool backtrackHappened = (currentSize < lastCheckedAssignmentSize_);
     if (!sizeGrewEnough && !backtrackHappened) return 0;
     lastCheckedAssignmentSize_ = currentSize;
+
+    // The throttle keys on TOTAL assignment growth, but it can fire on pure-
+    // boolean growth — no theory atom asserted since the last check and no
+    // backtrack — meaning the asserted theory atom-set is byte-identical to what
+    // the last check already ran on. That check found nothing actionable (any
+    // conflict/propagation would have changed the atom-set or backtracked), so
+    // re-running the full Standard check + O(n) view rebuild here is a guaranteed
+    // no-op. Skip it. This is a provably verdict-identical correctness-preserving
+    // optimization (the meaningful checks still fire at exactly the same points),
+    // so it is unconditional — not behind a feature flag.
+    if (!backtrackHappened && !theoryDirtySinceCheck_) {
+        return 0;
+    }
+    theoryDirtySinceCheck_ = false;  // committing to a check on the current atom-set
 
     // Build partial assignment view for defensive validation in TheoryManager
     partialAssignmentView_.clear();
