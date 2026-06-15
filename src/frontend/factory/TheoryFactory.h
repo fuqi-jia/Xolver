@@ -6,23 +6,22 @@
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/core/LogicFeatureDetector.h"
+#include "frontend/factory/SolverRegistry.h"  // SolverSetupResult, BuildContext, registry
 #include <memory>
 #include <string>
 
 namespace xolver {
 
 /**
- * TheoryFactory: central factory for creating and registering concrete theory solvers.
+ * TheoryFactory: thin driver over SolverRegistry.
  *
- * This is the ONLY place in the codebase that includes all concrete solver headers.
- * It isolates the rest of the frontend (including api/Solver.cpp) from solver details.
+ * The concrete solver headers are now included only by the builder translation
+ * units that register into SolverRegistry (the open-core builtins live in
+ * TheoryFactory.cpp; pro stacks self-register from src/pro/). setupSolvers looks
+ * up the registered builder for `logic` and runs it; the legacy signature is
+ * kept so api/Solver.cpp is unchanged. `SolverSetupResult` is defined in
+ * SolverRegistry.h.
  */
-struct SolverSetupResult {
-    bool success = true;
-    bool logicMismatch = false;
-    PolynomialKernel* polyKernelRaw = nullptr;
-};
-
 SolverSetupResult setupSolvers(
     const std::string& logic,
     const LogicFeatures& features,
