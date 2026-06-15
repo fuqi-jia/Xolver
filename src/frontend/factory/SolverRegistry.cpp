@@ -39,6 +39,20 @@ void SolverRegistry::registerLogic(std::vector<std::string> logics, int priority
     }
 }
 
+bool SolverRegistry::registerProLogic(int proSpiVersion, std::vector<std::string> logics,
+                                      int priority, LogicBuilder builder,
+                                      const char* label) {
+    // The pro module passes its compiled-in XOLVER_SPI_VERSION; we compare it
+    // against the core's. A major mismatch means the pro plugin was built against
+    // an incompatible BuildContext/registration ABI — refuse rather than let it
+    // register a builder the core would mis-invoke.
+    if (proSpiVersion != XOLVER_SPI_VERSION) return false;
+    registerLogic(std::move(logics), priority, std::move(builder), label);
+    return true;
+}
+
+int SolverRegistry::coreSpiVersion() { return XOLVER_SPI_VERSION; }
+
 const LogicBuilder* SolverRegistry::builderFor(const std::string& logic) {
     std::lock_guard<std::mutex> g(tableMutex());
     auto it = table().find(logic);
