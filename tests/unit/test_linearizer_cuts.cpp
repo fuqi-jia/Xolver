@@ -343,3 +343,97 @@ TEST_CASE("Bernstein: skipTrivial collapses to 0 cuts when convex hull matches e
     auto cuts = gen.generate(aux, "x", 4, xb, SatLit{0, false}, opt);
     CHECK(cuts.empty());
 }
+
+// ─────────── McCormick partial-bounds extension (XOLVER_NRA_MCCORMICK_PARTIAL) ───────────
+// Each envelope cut follows from one sign fact (x−a)(y−b)⪋0 and needs only TWO of the
+// four bounds. The gated extension emits the valid subset when the box is partial.
+#include <cstdlib>
+
+namespace {
+BoundInfo mkLowerOnly(const mpq_class& lo) {
+    BoundInfo b; b.lower = lo; b.hasLower = true; b.lowerReasonComplete = true; return b;
+}
+BoundInfo mkUpperOnly(const mpq_class& hi) {
+    BoundInfo b; b.upper = hi; b.hasUpper = true; b.upperReasonComplete = true; return b;
+}
+// Evaluate a McCormick cut at (xv,yv) with t = xv*yv; true iff its relation holds.
+bool mcCutHolds(const LinearCut& c, const std::string& tname,
+                const mpq_class& xv, const mpq_class& yv) {
+    mpq_class lhs = c.constraint.expr.constant;
+    for (const auto& term : c.constraint.expr.terms) {
+        mpq_class v = (term.var == "x") ? xv
+                    : (term.var == "y") ? yv
+                    : (term.var == tname) ? xv * yv : mpq_class(0);
+        lhs += term.coeff * v;
+    }
+    switch (c.constraint.rel) {
+        case Relation::Leq: return lhs <= 0;
+        case Relation::Lt:  return lhs <  0;
+        case Relation::Geq: return lhs >= 0;
+        case Relation::Gt:  return lhs >  0;
+        case Relation::Eq:  return lhs == 0;
+        default:            return lhs != 0;
+    }
+}
+// Grid-validate every partial cut over the box [xlo,xhi]×[ylo,yhi]. The range MUST
+// stay within the variables' actual asserted bounds: a partial cut is only valid
+// inside the box it was derived from (an upper-corner cut needs x ≤ ux, etc.).
+void gridValidate(const std::vector<LinearCut>& cuts, const std::string& tname,
+                  long xlo, long xhi, long ylo, long yhi) {
+    for (const auto& c : cuts)
+        for (long xv = xlo; xv <= xhi; ++xv)
+            for (long yv = ylo; yv <= yhi; ++yv)
+                CHECK(mcCutHolds(c, tname, mpq_class(xv), mpq_class(yv)));
+}
+}  // namespace
+
+TEST_CASE("McCormick partial: gated OFF emits nothing on a partial (unpinned) box") {
+    unsetenv("XOLVER_NRA_MCCORMICK_PARTIAL");
+    McCormickGenerator gen;
+    auto aux = mkAuxProduct("__nl_aux_xy", VarId{1}, VarId{2});
+    auto xb = mkLowerOnly(-3);   // x >= -3, no upper, sign not pinned
+    auto yb = mkLowerOnly(-2);   // y >= -2, no upper, sign not pinned
+    auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit{0, false});
+    CHECK(cuts.empty());         // no sign cut (unpinned), no partial cut (gated off)
+}
+
+TEST_CASE("McCormick partial: lower-only box emits exactly cut1 and it is grid-sound") {
+    setenv("XOLVER_NRA_MCCORMICK_PARTIAL", "1", 1);
+    McCormickGenerator gen;
+    auto aux = mkAuxProduct("__nl_aux_xy", VarId{1}, VarId{2});
+    auto xb = mkLowerOnly(-3);   // x >= -3
+    auto yb = mkLowerOnly(-2);   // y >= -2
+    auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit{0, false});
+    // Only cut1 (needs lx,ly) is emitable; cut2/3/4 need an absent upper bound.
+    CHECK(cuts.size() == 1);
+    CHECK(cuts[0].debugTag == "mccormick_partial_lower1");
+    // x,y unbounded above ⇒ cut1 valid for all x≥-3, y≥-2; sample a finite window.
+    gridValidate(cuts, "__nl_aux_xy", -3, 9, -2, 10);
+    unsetenv("XOLVER_NRA_MCCORMICK_PARTIAL");
+}
+
+TEST_CASE("McCormick partial: x fully bounded, y lower-only emits cut1+cut3, grid-sound") {
+    setenv("XOLVER_NRA_MCCORMICK_PARTIAL", "1", 1);
+    McCormickGenerator gen;
+    auto aux = mkAuxProduct("__nl_aux_xy", VarId{1}, VarId{2});
+    auto xb = mkBounds(-3, 5);   // -3 <= x <= 5 (complete)
+    auto yb = mkLowerOnly(-2);   // y >= -2 only
+    auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit{0, false});
+    // cut1 (lx,ly) and cut3 (ux,ly) emitable; cut2/cut4 need uy (absent).
+    CHECK(cuts.size() == 2);
+    // x is bounded [-3,5] (cut3 needs x ≤ ux=5); y unbounded above.
+    gridValidate(cuts, "__nl_aux_xy", -3, 5, -2, 10);
+    unsetenv("XOLVER_NRA_MCCORMICK_PARTIAL");
+}
+
+TEST_CASE("McCormick partial: incomplete reasons suppress the cut (soundness)") {
+    setenv("XOLVER_NRA_MCCORMICK_PARTIAL", "1", 1);
+    McCormickGenerator gen;
+    auto aux = mkAuxProduct("__nl_aux_xy", VarId{1}, VarId{2});
+    BoundInfo xb; xb.lower = -3; xb.hasLower = true;
+    xb.lowerReasonComplete = false; xb.lowerIsGlobal = false;   // reason NOT complete
+    auto yb = mkLowerOnly(-2);
+    auto cuts = gen.generate(aux, "x", "y", xb, yb, SatLit{0, false});
+    CHECK(cuts.empty());   // cut1 would need x's lower reason complete — suppressed
+    unsetenv("XOLVER_NRA_MCCORMICK_PARTIAL");
+}
