@@ -3723,7 +3723,22 @@ public:
         // passed; map each back to its assumption root Term. An empty failed set
         // (UNSAT proven without the assumptions) leaves the conservative full-set
         // core seeded by checkSatAssuming. Sound, possibly non-minimal.
-        if (!assumptionLits.empty() && result == SatSolver::SolveResult::Unsat) {
+        // Best-effort core MINIMIZATION via failed(), RESTRICTED to theories where
+        // it is validated-reliable. failed() reports the assumptions used in the
+        // boolean conflict; for single-sort linear / UF / array logics this is a
+        // sound core (corpus-validated by tools/check_unsat_core.py — 0 insufficient
+        // across lia/lra/euf). But for NONLINEAR or MIXED int/real reasoning, the
+        // theory can derive a conflict whose explanation under-reports the
+        // contributing assertions (NIA substituting x=0; mixed-sort atom desync),
+        // yielding an INSUFFICIENT core — and Xolver's theory solvers are
+        // incremental, so an in-context re-solve cannot validate it (stale tableau/
+        // e-graph). There we KEEP the conservative full set seeded before the solve
+        // (always a valid core — the problem is UNSAT); reliable minimal cores for
+        // those logics need proof tracking (Track C2) or external deletion
+        // (check_unsat_core.py --minimize). Soundness-first: never emit a core we
+        // cannot stand behind.
+        if (!assumptionLits.empty() && result == SatSolver::SolveResult::Unsat &&
+            !features.hasNonlinear && !features.hasMixedIntReal) {
             std::vector<SatLit> failed = sat->getFailedAssumptions();
             std::vector<Term> core;
             core.reserve(failed.size());
