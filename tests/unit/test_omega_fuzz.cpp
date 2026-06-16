@@ -1,8 +1,10 @@
-// Soundness fuzz for the Omega test: thousands of random small linear-integer
-// systems, cross-checked against z3. The non-negotiable invariant is
-//   Omega-Unsat  ⟹  z3-unsat        (a single violation = an unsound false UNSAT).
-// It also reports COMPLETENESS (of the z3-unsat systems, how many Omega catches) —
-// informative, not asserted (v1 is incomplete until the dark shadow lands).
+// Soundness + completeness fuzz for the Omega test: thousands of random small
+// linear-integer systems, cross-checked against z3. Two invariants:
+//   (1) SOUNDNESS  Omega-Unsat ⟹ z3-unsat   (one violation = an unsound false UNSAT).
+//   (2) COMPLETENESS  z3-unsat ⟹ Omega-Unsat (within the node budget) — now that the
+//       dark shadow + exact splinters (Pugh §2.3) make the engine integer-complete.
+// Soundness is the release blocker; completeness is asserted on the small regime
+// (budget never bites) and reported on the heavy regime (where it theoretically can).
 //
 // Skips gracefully if z3 is not on PATH (keeps CI green without z3).
 #include <doctest/doctest.h>
@@ -68,32 +70,28 @@ std::string z3Verdict(int nv, const std::vector<Constraint>& cs) {
     return "unknown";
 }
 
-}  // namespace
-
-TEST_CASE("omega: soundness fuzz vs z3 (Omega-Unsat => z3-unsat)") {
-    // Gated: spawns ~1500 z3 processes (~30s), so off by default — run explicitly
-    // with XOLVER_OMEGA_FUZZ=1 (the soundness gate before trusting the engine).
-    if (!std::getenv("XOLVER_OMEGA_FUZZ")) { MESSAGE("set XOLVER_OMEGA_FUZZ=1 to run"); return; }
-    if (!z3Available()) { MESSAGE("z3 not on PATH — skipping omega fuzz"); return; }
-
-    std::mt19937 rng(0xC0FFEE);
+// One fuzz regime: `iters` random systems with the given size/coefficient ranges
+// and seed. Reports {falseUnsat, z3Unsat, caught} via the out-params.
+void runRegime(const char* name, unsigned seed, int iters, int vlo, int vhi,
+               int clo, int chi, int coefMag, int constMag,
+               int& falseUnsat, int& z3Unsat, int& caught) {
+    std::mt19937 rng(seed);
     auto rnd = [&](int lo, int hi) { return lo + (int)(rng() % (unsigned)(hi - lo + 1)); };
+    int omegaUnsat = 0;
+    falseUnsat = z3Unsat = caught = 0;
 
-    const int ITERS = 1500;
-    int falseUnsat = 0, omegaUnsat = 0, z3Unsat = 0, caught = 0;
-
-    for (int it = 0; it < ITERS; ++it) {
-        const int nv = rnd(2, 4);
-        const int nc = rnd(2, 6);
+    for (int it = 0; it < iters; ++it) {
+        const int nv = rnd(vlo, vhi);
+        const int nc = rnd(clo, chi);
         std::vector<Constraint> cs;
         for (int j = 0; j < nc; ++j) {
             Constraint c;
             for (int v = 0; v < nv; ++v) {
-                int a = rnd(-3, 3);
+                int a = rnd(-coefMag, coefMag);
                 if (a != 0) c.coeffs[v] = a;
             }
-            if (c.coeffs.empty()) c.coeffs[rnd(0, nv - 1)] = rnd(1, 3);  // avoid trivial
-            c.constant = rnd(-6, 6);
+            if (c.coeffs.empty()) c.coeffs[rnd(0, nv - 1)] = rnd(1, coefMag);  // avoid trivial
+            c.constant = rnd(-constMag, constMag);
             int r = rnd(0, 2);
             c.rel = r == 0 ? Constraint::Eq : r == 1 ? Constraint::Geq : Constraint::Leq;
             cs.push_back(std::move(c));
@@ -112,13 +110,43 @@ TEST_CASE("omega: soundness fuzz vs z3 (Omega-Unsat => z3-unsat)") {
             if (falseUnsat <= 3) {
                 std::string dump;
                 for (const auto& c : cs) dump += smtConstraint(c) + " ";
-                MESSAGE("FALSE UNSAT: " << dump);
+                MESSAGE("[" << name << "] FALSE UNSAT: " << dump);
+            }
+        }
+        if (z3 == "unsat" && omega != Result::Unsat) {   // incompleteness (sound, but missed)
+            static int missedShown = 0;
+            if (missedShown++ < 6) {
+                std::string dump;
+                for (const auto& c : cs) dump += smtConstraint(c) + " ";
+                MESSAGE("[" << name << "] MISSED (z3-unsat, omega no-claim): nv=" << nv << " : " << dump);
             }
         }
     }
-
-    MESSAGE("omega fuzz: iters=" << ITERS << " omegaUnsat=" << omegaUnsat
+    MESSAGE("omega fuzz [" << name << "]: iters=" << iters << " omegaUnsat=" << omegaUnsat
             << " z3Unsat=" << z3Unsat << " caught=" << caught
             << " (completeness " << (z3Unsat ? 100 * caught / z3Unsat : 0) << "%)");
-    CHECK(falseUnsat == 0);   // the soundness invariant
+}
+
+}  // namespace
+
+TEST_CASE("omega: soundness + completeness fuzz vs z3") {
+    // Gated: spawns thousands of z3 processes (~1min), so off by default — run
+    // explicitly with XOLVER_OMEGA_FUZZ=1 (the gate before trusting the engine).
+    if (!std::getenv("XOLVER_OMEGA_FUZZ")) { MESSAGE("set XOLVER_OMEGA_FUZZ=1 to run"); return; }
+    if (!z3Available()) { MESSAGE("z3 not on PATH — skipping omega fuzz"); return; }
+
+    int fu, z3u, caught;
+
+    // Small regime: coeffs/consts well within the node budget ⇒ the engine is
+    // integer-complete here, so BOTH invariants are hard-asserted.
+    runRegime("small", 0xC0FFEE, 1500, 2, 4, 2, 6, 3, 6, fu, z3u, caught);
+    CHECK(fu == 0);            // SOUNDNESS — release blocker
+    CHECK(caught == z3u);      // COMPLETENESS — every z3-unsat caught (dark shadow + splinters)
+
+    // Heavy regime: bigger coeffs ⇒ more both-coefficient>1 pairs ⇒ exercises the
+    // dark-shadow gap + splinter recursion much harder. Different seed. Soundness is
+    // still hard-asserted; completeness is reported (the budget can in principle bite).
+    runRegime("heavy", 0x5EED1234, 2000, 2, 5, 3, 8, 5, 12, fu, z3u, caught);
+    CHECK(fu == 0);            // SOUNDNESS — release blocker
+    CHECK(caught >= z3u * 99 / 100);   // completeness should stay ~100% even here
 }

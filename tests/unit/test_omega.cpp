@@ -100,3 +100,56 @@ TEST_CASE("omega: satisfiable inequality systems are NOT claimed unsat") {
     CHECK(decide({geq({{0, 1}}, 0), geq({{1, 1}}, 0), leq({{0, 1}, {1, 1}}, -4)})
           == Result::SatOrUnknown);
 }
+
+// ───────────── Stage 3: DARK shadow + exact splinters (T6) ─────────────
+// These are the integer-specific cases: the REAL relaxation is feasible, yet no
+// integer point exists. The pre-T6 real-shadow-only engine returned SatOrUnknown
+// here; the dark shadow + splinter recursion proves them UNSAT. (All z3-confirmed.)
+
+TEST_CASE("omega: dark shadow — box 2x+3y=4 in [0,1]^2 is integer-infeasible") {
+    // Real point x=0.5,y=1 satisfies 2x+3y=4; no integer (x,y)∈{0,1}² hits 4.
+    std::vector<Constraint> box = {
+        geq({{0, 2}, {1, 3}}, -4), leq({{0, 2}, {1, 3}}, -4),   // 2x+3y = 4
+        geq({{0, 1}}, 0), leq({{0, 1}}, -1),                    // 0 <= x <= 1
+        geq({{1, 1}}, 0), leq({{1, 1}}, -1),                    // 0 <= y <= 1
+    };
+    CHECK(decide(box) == Result::Unsat);
+    // Same region stated as a single equality — equality elimination then bounds.
+    CHECK(decide({eq({{0, 2}, {1, 3}}, -4),
+                  geq({{0, 1}}, 0), leq({{0, 1}}, -1),
+                  geq({{1, 1}}, 0), leq({{1, 1}}, -1)}) == Result::Unsat);
+}
+
+TEST_CASE("omega: dark shadow — thin slab 2x<=3y<=2x+1 pinned at x=2") {
+    // 3y ∈ [2x, 2x+1]; at x=2 the window is [4,5] with no multiple of 3 → the dark
+    // shadow fails AND both splinters (3y=4, 3y=5) are empty ⇒ UNSAT.
+    std::vector<Constraint> s = {
+        geq({{0, -2}, {1, 3}}, 0),    // 3y - 2x >= 0
+        leq({{0, -2}, {1, 3}}, -1),   // 3y - 2x <= 1
+        geq({{0, 1}}, -2), leq({{0, 1}}, -2),   // x = 2
+    };
+    CHECK(decide(s) == Result::Unsat);
+}
+
+TEST_CASE("omega: splinter SAT control — dark fails but a splinter succeeds") {
+    // 3y ∈ [2x, 2x+1] with 0<=x<=1. The dark shadow fails (window < 1), but x=0 ⇒
+    // 3y∈[0,1] ⇒ y=0 works. The splinter recursion MUST find it and NOT claim UNSAT.
+    std::vector<Constraint> s = {
+        geq({{0, -2}, {1, 3}}, 0),    // 3y - 2x >= 0
+        leq({{0, -2}, {1, 3}}, -1),   // 3y - 2x <= 1
+        geq({{0, 1}}, 0), leq({{0, 1}}, -1),     // 0 <= x <= 1
+    };
+    CHECK(decide(s) == Result::SatOrUnknown);   // over-claiming here would be UNSOUND
+}
+
+TEST_CASE("omega: dark shadow — three-variable integer-infeasible band") {
+    // 2x+3y+5z = 1 has integer solutions, but constrained to z=0 and 0<=x,y<=1 the
+    // residual 2x+3y=1 over the unit box is empty (z3-confirmed unsat).
+    std::vector<Constraint> s = {
+        eq({{0, 2}, {1, 3}, {2, 5}}, -1),       // 2x+3y+5z = 1
+        geq({{2, 1}}, 0), leq({{2, 1}}, 0),     // z = 0
+        geq({{0, 1}}, 0), leq({{0, 1}}, -1),    // 0 <= x <= 1
+        geq({{1, 1}}, 0), leq({{1, 1}}, -1),    // 0 <= y <= 1
+    };
+    CHECK(decide(s) == Result::Unsat);
+}
