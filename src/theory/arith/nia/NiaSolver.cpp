@@ -20,6 +20,7 @@
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
 #include "theory/arith/nia/reasoners/OmegaTest.h"        // nia.omega: sound linear-integer UNSAT
+#include "theory/arith/nia/reasoners/SmallPrimeModular.h" // nia.small-prime-modular: GF(p) schedule
 #include "theory/arith/linearizer/NonlinearTermAbstraction.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/core/LogicFeatureDetector.h"
@@ -209,6 +210,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
     enableOmega_ = xolver::env::flag("XOLVER_NIA_OMEGA");
     addFull("nia.omega", &NiaSolver::stageOmega);
+    // nia.small-prime-modular: cheap GF(p) congruence refutation over the equality
+    // subsystem. Standard+Full (unlike Omega) so it can prune EARLY, before complete
+    // models — the gap the Full-effort-only Dio/Smith-NF reasoner leaves open.
+    enableSmallPrimeModular_ = xolver::env::flag("XOLVER_NIA_SMALL_PRIME_MODULAR");
+    add("nia.small-prime-modular", &NiaSolver::stageSmallPrimeModular);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -788,6 +794,73 @@ std::optional<TheoryCheckResult> NiaSolver::stageOmega(TheoryLemmaStorage&, Theo
         std::fprintf(stderr, "[OMEGA] constraints=%zu vars~%zu -> %s\n",
                      ocs.size(), nv, unsat ? "UNSAT" : "SatOrUnknown");
     }
+    if (unsat)
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    return std::nullopt;
+}
+
+// nia.small-prime-modular — cheap GF(p) congruence refutation (see SmallPrimeModular).
+// Builds the linear-INTEGER relaxation of the active EQUALITY constraints (nonlinear
+// monomials → free int vars, a relaxation) and asks whether the system is inconsistent
+// modulo some small prime; if so, emits a conflict over those equalities' reasons.
+// Runs at Standard effort too, so a derived obstruction like 2x=1 prunes the search
+// before a complete model is reached. SOUND: GF(p)-infeasible ⇒ Z-infeasible, and the
+// abstraction/firewall are the same relaxations as nia.omega.
+std::optional<TheoryCheckResult> NiaSolver::stageSmallPrimeModular(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableSmallPrimeModular_) return std::nullopt;
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    if (omegaSafe_ < 0)   // shared pure-integer soundness gate (no real vars)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> reasons;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    for (const auto& c : normalized_) {
+        if (c.rel != Relation::Eq) continue;             // modular reasoning uses equalities only
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) continue;                   // cannot relax this row ⇒ skip it (still sound)
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) continue;
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) continue;
+        oc.constant = cst;
+        oc.rel = omega::Constraint::Eq;
+        ocs.push_back(std::move(oc));
+        reasons.push_back(c.reason);
+    }
+    if (ocs.empty()) return std::nullopt;
+    const bool unsat = modular::decide(ocs) == modular::Result::Unsat;
+    if (xolver::env::diag("XOLVER_NIA_SMALL_PRIME_MODULAR_DIAG"))
+        std::fprintf(stderr, "[MODULAR] eqs=%zu -> %s\n",
+                     ocs.size(), unsat ? "UNSAT" : "SatOrUnknown");
     if (unsat)
         return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
     return std::nullopt;

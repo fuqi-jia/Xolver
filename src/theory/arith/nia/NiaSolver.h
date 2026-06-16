@@ -226,6 +226,7 @@ private:
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
     bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
     bool enableOmega_ = false;    // XOLVER_NIA_OMEGA: Pugh Omega test — sound linear-integer UNSAT (default-OFF)
+    bool enableSmallPrimeModular_ = false;  // XOLVER_NIA_SMALL_PRIME_MODULAR: GF(p) congruence refutation (default-OFF)
     int  omegaSafe_ = -1;         // cached pure-integer soundness gate: -1 unknown, 0 has-real (skip), 1 pure-int
     // (iter-77 cherry-pick of 7afeda9 added groebner_ field + enableGroebner_ above)
 
@@ -295,6 +296,9 @@ private:
     // gap that Farkas/CDCAC miss). Abstracts nonlinear monomials to free int vars
     // (relaxation), gated to pure-integer problems (real var ⇒ skip, soundness).
     std::optional<TheoryCheckResult> stageOmega(TheoryLemmaStorage&, TheoryEffort);
+    // nia.small-prime-modular: cheap GF(p) congruence refutation over the equality
+    // subsystem (XOLVER_NIA_SMALL_PRIME_MODULAR, default-OFF). Standard+Full.
+    std::optional<TheoryCheckResult> stageSmallPrimeModular(TheoryLemmaStorage&, TheoryEffort);
     // Reference NLSAT-plan §2.3 + §5.1 step 1: when every currently-active
     // atom has a polynomial of total degree ≤ 1, NIA's verdict on this
     // active set is definitionally equal to LIA's. LIA is registered
