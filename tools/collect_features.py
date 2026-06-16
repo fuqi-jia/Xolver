@@ -100,16 +100,21 @@ def main():
     ap.add_argument("--root", required=True, help="benchmark tree (recursive *.smt2)")
     ap.add_argument("--solver", default="build/bin/xolver")
     ap.add_argument("--timeout", type=float, default=15.0)
-    ap.add_argument("-j", "--jobs", type=int, default=2, help="<=2 on WSL")
+    ap.add_argument("-j", "--jobs", type=int, default=2,
+                    help="parallelism: keep <=2 on WSL; on a big server use ~cores (e.g. 200)")
     ap.add_argument("--memkb", type=int, default=4194304, help="ulimit -v (KB), default 4G")
     ap.add_argument("--limit", type=int, default=0, help="sample at most N files")
     ap.add_argument("--configs", default="", help="name=ENV=1,...;name2=... (default: built-in set)")
     ap.add_argument("--out", default="/tmp/feature_corpus.jsonl")
     args = ap.parse_args()
 
-    if args.jobs > 2:
-        print("refusing -j>2 on WSL (memory safety); capping to 2", file=sys.stderr)
-        args.jobs = 2
+    # No hard cap — the caller owns parallelism. On WSL keep -j<=2 + a tight
+    # --memkb (a runaway solve OOMs the whole VM). On a big idle server (e.g. a
+    # 256-thread / 2 TB Panda) use -j ~200 and a generous --memkb (e.g. 16-32 GB)
+    # so hard QF_NIA/QF_NRA solves are not falsely killed.
+    if args.jobs > 4 and (os.cpu_count() or 4) <= 8:
+        print(f"warning: -j{args.jobs} on a {os.cpu_count()}-core box may thrash/OOM",
+              file=sys.stderr)
 
     files = sorted(Path(args.root).rglob("*.smt2"))
     if args.limit:
