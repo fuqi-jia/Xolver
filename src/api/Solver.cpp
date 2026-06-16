@@ -87,6 +87,14 @@ public:
     std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
     std::optional<TheorySolver::TheoryModel> lastModel_;
     std::vector<Term> lastAssumptions_;
+    // Assumption-based unsat-core (checkSatAssuming). assumptionRoots_ holds the
+    // ExprIds of the in-flight assumptions; EMPTY for a plain checkSat, in which
+    // case the core machinery in checkSatInternal is fully inert and the default
+    // path is byte-identical. lastUnsatCore_ holds the minimized subset that
+    // CaDiCaL's failed() reported as necessary for UNSAT (consumed by
+    // getUnsatCore()); seeded to the full assumption set as a sound fallback.
+    std::vector<ExprId> assumptionRoots_;
+    std::vector<Term> lastUnsatCore_;
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
@@ -3417,6 +3425,22 @@ public:
         }
         phase("atomize-done");
 
+        // Assumption-based unsat-core (checkSatAssuming). Atomize each assumption
+        // so its atom becomes theory-observed (atomize → registry → addObservedVar),
+        // and collect the literals to ASSUME — we do NOT add them as clauses, so
+        // they enter the solve as retractable CaDiCaL assumptions and failed() can
+        // report the minimized core on UNSAT. assumptionRoots_ is empty on a plain
+        // checkSat, so assumptionLits stays empty and the solve path is unchanged.
+        std::vector<SatLit> assumptionLits;
+        std::vector<ExprId> assumptionLitRoots;  // parallel: root each lit came from
+        assumptionLits.reserve(assumptionRoots_.size());
+        assumptionLitRoots.reserve(assumptionRoots_.size());
+        for (ExprId aRoot : assumptionRoots_) {
+            SatLit lit = atomizer.atomize(aRoot, *ir);
+            assumptionLits.push_back(lit);
+            assumptionLitRoots.push_back(aRoot);
+        }
+
         // L7: build the relevancy graph over the asserted boolean skeleton and
         // attach it to the propagator to steer cb_decide toward live program
         // branches. Pure decision heuristic (never changes the verdict), so it
@@ -3638,9 +3662,31 @@ public:
 
         auto solveT0 = std::chrono::steady_clock::now();
         auto result = cmsPrePassFound ? SatSolver::SolveResult::Sat
-                                      : sat->solve();
+                    : (assumptionLits.empty() ? sat->solve()
+                                              : sat->solve(assumptionLits));
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
+
+        // Extract the assumption-based unsat-core (the failed assumptions) WHILE
+        // CaDiCaL still holds the post-solve state, before disconnectPropagator()
+        // below. getFailedAssumptions() returns a subset of the exact lits we
+        // passed; map each back to its assumption root Term. An empty failed set
+        // (UNSAT proven without the assumptions) leaves the conservative full-set
+        // core seeded by checkSatAssuming. Sound, possibly non-minimal.
+        if (!assumptionLits.empty() && result == SatSolver::SolveResult::Unsat) {
+            std::vector<SatLit> failed = sat->getFailedAssumptions();
+            std::vector<Term> core;
+            core.reserve(failed.size());
+            for (SatLit fl : failed) {
+                for (size_t k = 0; k < assumptionLits.size(); ++k) {
+                    if (assumptionLits[k] == fl) {
+                        core.push_back(Term(static_cast<uint32_t>(assumptionLitRoots[k])));
+                        break;
+                    }
+                }
+            }
+            if (!core.empty()) lastUnsatCore_ = std::move(core);
+        }
 
         // Capture boolean VARIABLE values from the SAT assignment WHILE the
         // model is still live (disconnecting the propagator below invalidates
@@ -4279,10 +4325,33 @@ Result Solver::checkSat() {
 
 Result Solver::checkSatAssuming(std::vector<Term> assumptions) {
     pImpl->lastAssumptions_ = assumptions;
-    push();
-    for (Term a : assumptions) {
-        assertFormula(a);
+    // Sound fallback core: until the SAT layer reports a minimized subset, the
+    // whole assumption set is a valid (if non-minimal) core.
+    pImpl->lastUnsatCore_ = assumptions;
+
+    // Preferred path (hard assertions present): pass the assumptions to the SAT
+    // core as real assumption LITERALS rather than asserting them. Each
+    // assumption atom is observed by the theory via atomize, CaDiCaL assumes its
+    // literal, and on UNSAT failed() yields the MINIMIZED core (see
+    // checkSatInternal). Not mutating the assertion list means lowering can never
+    // rewrite an assumption, and getUnsatCore() returns the true failing subset.
+    const bool haveHardAssertions = pImpl->ir && !pImpl->ir->assertions().empty();
+    if (haveHardAssertions) {
+        pImpl->assumptionRoots_.clear();
+        pImpl->assumptionRoots_.reserve(assumptions.size());
+        for (Term a : assumptions) pImpl->assumptionRoots_.push_back(a.id());
+        Result r = checkSat();
+        pImpl->assumptionRoots_.clear();
+        return r;
     }
+
+    // Degenerate path (no hard assertions): the SAT-assumption route would have
+    // nothing to drive theory setup / would short-circuit on the empty assertion
+    // set. Fall back to the original behavior — assert the assumptions as
+    // formulas so the worker reaches a real solve — giving the correct verdict
+    // with the conservative full-set core (no minimization, but no regression).
+    push();
+    for (Term a : assumptions) assertFormula(a);
     Result r = checkSat();
     pop();
     return r;
@@ -4366,10 +4435,13 @@ Term Solver::getValue(Term t) {
     return Term{};
 }
 std::vector<Term> Solver::getUnsatCore() const {
-    // TODO: proper unsat core extraction using SAT solver assumptions.
-    // For now, return the last assumptions passed to checkSatAssuming.
     if (!pImpl) return {};
-    return pImpl->lastAssumptions_;
+    // Assumption-based core: the minimized subset of the checkSatAssuming
+    // assumptions that CaDiCaL's failed() reported as necessary for UNSAT
+    // (falls back to the full assumption set when no SAT-level minimization was
+    // available, e.g. UNSAT proven in preprocessing). Sound, possibly
+    // non-minimal. Meaningful only after checkSatAssuming() returned Unsat.
+    return pImpl->lastUnsatCore_;
 }
 
 bool Solver::modelRequested() const {

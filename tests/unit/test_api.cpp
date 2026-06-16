@@ -274,6 +274,35 @@ TEST_CASE("API: getUnsatCore for checkSatAssuming") {
     CHECK(core[0] == ge);
 }
 
+TEST_CASE("API: getUnsatCore minimizes to the conflicting subset") {
+    Solver s;
+    s.setLogic("QF_LIA");
+
+    Sort intSort = s.intSort();
+    Term x = s.mkConst(intSort, "x");
+    Term le2  = s.mkOp(static_cast<uint32_t>(Kind::Leq), {x, s.mkInt(2)});   // x <= 2  (HARD)
+    Term ge10 = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(10)});  // x >= 10 (assumption, conflicts le2)
+    Term ge0  = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(0)});   // x >= 0  (assumption, irrelevant)
+
+    // Hard le2 alone is SAT; adding ge10 makes it UNSAT, adding ge0 does not.
+    // So any SOUND core must contain ge10, and a MINIMIZED one drops ge0.
+    s.assertFormula(le2);
+    Result r = s.checkSatAssuming({ge0, ge10});
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+
+    auto core = s.getUnsatCore();
+    bool hasGe10 = false, hasGe0 = false;
+    for (const auto& t : core) {
+        if (t == ge10) hasGe10 = true;
+        if (t == ge0)  hasGe0 = true;
+    }
+    // Soundness invariant (ge10 is the only assumption that creates the conflict):
+    CHECK(hasGe10);
+    // Minimization (the win over the old return-all-assumptions stub):
+    CHECK(core.size() < 2);
+    CHECK_FALSE(hasGe0);
+}
+
 // Deep-recursion regression for the global recursion->iteration sweep. These run
 // on the default (8MB) test-thread stack: a still-recursive frontend/theory
 // walker overflows here. The deep ARITH term exercises PolynomialConverter::
