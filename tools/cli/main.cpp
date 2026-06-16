@@ -157,6 +157,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     bool checkModel = false;
     bool verbose = false;
     bool parseOnly = false;
+    bool produceModels = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--parse-only") {
@@ -183,7 +184,10 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // unsat, the core assertions are printed on stdout after the verdict.
             solver.setOption("produce-unsat-cores", xolver::OptionValue(true));
         } else if (arg == "--produce-models") {
-            // TODO: enable model production
+            // Force the SMT-LIB get-model response after `sat`, even if the input
+            // did not set :produce-models / issue (get-model). The model is built
+            // internally on every sat (see Solver.cpp), so dumpModel is meaningful.
+            produceModels = true;
         } else if (arg == "--produce-proofs") {
             // TODO: enable proof production
         } else if (arg == "--lia-safe-mode") {
@@ -244,7 +248,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         std::cout << toString(r) << "\n";
         // Model-Validation track: if the input requested a model and we found
         // one, emit the SMT-LIB get-model response on stdout right after `sat`.
-        if (r == xolver::Result::Sat && solver.modelRequested()) {
+        if (r == xolver::Result::Sat && (solver.modelRequested() || produceModels)) {
             solver.dumpModel(std::cout);
         }
         // Unsat-core track: if the input requested cores (:produce-unsat-cores)
