@@ -19,6 +19,10 @@
 #endif
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
+#include "theory/arith/nia/reasoners/OmegaTest.h"        // nia.omega: sound linear-integer UNSAT
+#include "theory/arith/linearizer/NonlinearTermAbstraction.h"
+#include "theory/arith/linear/LinearConstraintNormalizer.h"
+#include "theory/core/LogicFeatureDetector.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -203,6 +207,8 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // fallthrough is a regression risk, so it stays opt-in.
     linearDecideEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_DECIDE", 0) != 0;
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
+    enableOmega_ = xolver::env::flag("XOLVER_NIA_OMEGA");
+    addFull("nia.omega", &NiaSolver::stageOmega);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -704,6 +710,86 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
         return TheoryCheckResult::consistent();
     }
     if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;
+}
+
+// nia.omega — Pugh's Omega test (sound linear-integer UNSAT). See OmegaTest.{h,cpp}
+// (engine: equality elimination + real-shadow FM + integer tightening; fuzz-validated
+// 0 false-UNSAT vs z3). This stage builds the linear-INTEGER relaxation of the active
+// system and asks the engine; on a proven UNSAT it emits a conflict over the
+// contributing constraints' reasons. SOUND: nonlinear monomials → FREE int vars and
+// dropped Neq are both relaxations (relaxed-UNSAT ⇒ original-UNSAT); real vars ⇒ skip.
+std::optional<TheoryCheckResult> NiaSolver::stageOmega(TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!enableOmega_) return std::nullopt;
+    if (effort != TheoryEffort::Full) return std::nullopt;  // refute complete models
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    // Soundness gate (cached): integer reasoning is unsound if any variable is real.
+    if (omegaSafe_ < 0)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    // Soundness firewall: the conflict clause may ONLY contain literals currently
+    // true on the SAT trail. So build the relaxation from constraints whose reason
+    // is live (skip derived/definitional ones with off-trail reasons — dropping
+    // them only relaxes, keeping Omega-UNSAT ⇒ original-UNSAT sound, while every
+    // emitted conflict literal stays a real, backtrackable SAT decision).
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> reasons;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    for (const auto& c : normalized_) {
+        if (c.rel == Relation::Neq) continue;            // drop Neq (sound: subset-UNSAT ⇒ UNSAT)
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) return std::nullopt;        // cannot relax ⇒ no claim
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) return std::nullopt;                   // not linear after abstraction ⇒ no claim
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) return std::nullopt;
+        oc.constant = cst;
+        oc.rel = c.rel == Relation::Eq  ? omega::Constraint::Eq
+               : c.rel == Relation::Leq ? omega::Constraint::Leq
+                                        : omega::Constraint::Geq;
+        ocs.push_back(std::move(oc));
+        reasons.push_back(c.reason);
+    }
+    if (ocs.size() < 2) return std::nullopt;
+    const bool diag = xolver::env::diag("XOLVER_NIA_OMEGA_DIAG");
+    const bool unsat = omega::decide(ocs) == omega::Result::Unsat;
+    if (diag) {
+        size_t nv = 0;
+        for (const auto& c : ocs) nv = std::max(nv, c.coeffs.empty() ? size_t(0)
+                                                    : c.coeffs.rbegin()->first + 1);
+        std::fprintf(stderr, "[OMEGA] constraints=%zu vars~%zu -> %s\n",
+                     ocs.size(), nv, unsat ? "UNSAT" : "SatOrUnknown");
+    }
+    if (unsat)
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
     return std::nullopt;
 }
 
