@@ -106,8 +106,9 @@ def first_verdict(out):
     return m[0] if m else ""
 
 
-def oracle_verdict(oracle, preamble_cmds, assert_terms, timeout):
-    """Build a reduced problem (preamble + asserts) and ask the oracle."""
+def reduced_verdict(run_argv_fn, preamble_cmds, assert_terms, timeout):
+    """Write a reduced problem (preamble + asserts) to a temp file and run the
+    solver given by run_argv_fn(path) -> argv. Returns its verdict."""
     lines = list(preamble_cmds)
     lines += [f"(assert {t})" for t in assert_terms]
     lines.append("(check-sat)")
@@ -115,16 +116,37 @@ def oracle_verdict(oracle, preamble_cmds, assert_terms, timeout):
         f.write("\n".join(lines) + "\n")
         path = f.name
     try:
-        if oracle == "z3":
-            out = run(["z3", "-smt2", path], timeout)
-        else:
-            out = run(["cvc5", "--lang=smt2", path], timeout)
-        return first_verdict(out)
+        return first_verdict(run(run_argv_fn(path), timeout))
     finally:
         os.unlink(path)
 
 
-def check_file(path, solver, oracle, timeout, minimal, verbose):
+def oracle_verdict(oracle, preamble_cmds, assert_terms, timeout):
+    """Build a reduced problem and ask the external oracle (z3/cvc5)."""
+    argv = (lambda p: ["z3", "-smt2", p]) if oracle == "z3" \
+        else (lambda p: ["cvc5", "--lang=smt2", p])
+    return reduced_verdict(argv, preamble_cmds, assert_terms, timeout)
+
+
+def minimize_core(solver, preamble, core, timeout):
+    """Deletion-based minimization using FRESH solver runs (no incremental
+    carryover, so it is reliable for ALL logics — including nonlinear, where the
+    in-solver failed() path is deliberately conservative). Try removing each
+    assertion; if the solver still proves unsat without it, it is redundant.
+    One pass yields a minimal core: every remaining assertion is necessary."""
+    argv = lambda p: [str(solver), "solve", p]
+    core = list(core)
+    i = 0
+    while i < len(core):
+        candidate = core[:i] + core[i + 1:]
+        if reduced_verdict(argv, preamble, candidate, timeout) == "unsat":
+            del core[i]          # redundant → drop, re-check the same index
+        else:
+            i += 1               # necessary → keep
+    return core
+
+
+def check_file(path, solver, oracle, timeout, minimal, verbose, minimize=False):
     """Returns (status, detail). status in {PASS, FAIL, SKIP, NONMIN}."""
     text = path.read_text(errors="replace")
     cmds = split_smt2_commands(text)
@@ -158,6 +180,16 @@ def check_file(path, solver, oracle, timeout, minimal, verbose):
         return ("SKIP", f"{oracle} {v or 'no-verdict'} on the core (inconclusive)")
     detail = f"core size {len(core)} validated unsat by {oracle}"
 
+    # Minimize (optional): deletion-based reduction via FRESH solver runs, giving
+    # a verified minimal core for ANY logic (the in-solver path is conservative
+    # for nonlinear/mixed). Print the minimal core so it is usable directly.
+    if minimize:
+        minimal = minimize_core(solver, preamble, core, timeout)
+        detail += f" → minimal core size {len(minimal)}"
+        if verbose or len(minimal) < len(core):
+            print(f"  minimal core ({len(minimal)}): "
+                  f"({' '.join(minimal)})")
+
     # Minimality (optional): dropping any one core assertion should break unsat.
     if minimal and len(core) > 1:
         nonmin = []
@@ -178,7 +210,10 @@ def main():
     ap.add_argument("--solver", default="build/bin/xolver")
     ap.add_argument("--oracle", default="z3", choices=["z3", "cvc5"])
     ap.add_argument("--timeout", type=float, default=20.0)
-    ap.add_argument("--minimal", action="store_true")
+    ap.add_argument("--minimal", action="store_true",
+                    help="check (don't produce) whether the core is minimal")
+    ap.add_argument("--minimize", action="store_true",
+                    help="produce a verified MINIMAL core via deletion (fresh solves)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -191,7 +226,8 @@ def main():
     failures = []
     for f in files:
         status, detail = check_file(f, args.solver, args.oracle,
-                                    args.timeout, args.minimal, args.verbose)
+                                    args.timeout, args.minimal, args.verbose,
+                                    args.minimize)
         tally[status] += 1
         if status == "FAIL":
             failures.append((f, detail))
