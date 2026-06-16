@@ -303,6 +303,41 @@ TEST_CASE("API: getUnsatCore minimizes to the conflicting subset") {
     CHECK_FALSE(hasGe0);
 }
 
+TEST_CASE("API: produce-unsat-cores returns the core ASSERTIONS (file-level)") {
+    Solver s;
+    s.setLogic("QF_LIA");
+    s.setOption("produce-unsat-cores", OptionValue(true));
+
+    Sort intSort = s.intSort();
+    Term x = s.mkConst(intSort, "x");
+    Term le2  = s.mkOp(static_cast<uint32_t>(Kind::Leq), {x, s.mkInt(2)});   // x <= 2
+    Term ge10 = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(10)});  // x >= 10 (conflicts le2)
+    Term ge0  = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(0)});   // x >= 0  (irrelevant)
+
+    // Unlike checkSatAssuming, ALL three are HARD assertions; the indicator
+    // gating happens internally so getUnsatCore() reports which original
+    // assertions form the core.
+    s.assertFormula(le2);
+    s.assertFormula(ge10);
+    s.assertFormula(ge0);
+
+    Result r = s.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+
+    auto core = s.getUnsatCore();
+    bool hasLe2 = false, hasGe10 = false, hasGe0 = false;
+    for (const auto& t : core) {
+        if (t == le2)  hasLe2 = true;
+        if (t == ge10) hasGe10 = true;
+        if (t == ge0)  hasGe0 = true;
+    }
+    // The conflict le2 ∧ ge10 must be in any sound core; ge0 is minimized out.
+    CHECK(hasLe2);
+    CHECK(hasGe10);
+    CHECK(core.size() < 3);
+    CHECK_FALSE(hasGe0);
+}
+
 // Deep-recursion regression for the global recursion->iteration sweep. These run
 // on the default (8MB) test-thread stack: a still-recursive frontend/theory
 // walker overflows here. The deep ARITH term exercises PolynomialConverter::

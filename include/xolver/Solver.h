@@ -85,6 +85,14 @@ public:
     Model getModel() const;
     Term getValue(Term t);
     std::vector<Term> getUnsatCore() const;
+    // True iff the input requested unsat cores (:produce-unsat-cores, or the
+    // "produce-unsat-cores" option). After an `unsat`, dumpUnsatCore writes the
+    // core assertions.
+    bool unsatCoreRequested() const;
+    // Write the unsat core as an SMT-LIB list of the ORIGINAL assertions that
+    // form it: ( <assertion> ... ). Meaningful only after checkSat() returned
+    // Unsat with unsat cores requested.
+    void dumpUnsatCore(std::ostream& os) const;
     Proof getProof() const;
     Statistics getStatistics() const;
 

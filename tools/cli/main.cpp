@@ -55,6 +55,7 @@ static void printUsage(const char* prog) {
               << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
               << "  --certify <file>       On sat, write a re-checkable certificate (independently re-validated model)\n"
+              << "  --unsat-core           On unsat, print the core assertions (subset that proves unsat)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
@@ -176,6 +177,11 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             solver.setDumpStatsPath(argv[++i]);
         } else if (arg == "--certify" && i + 1 < argc) {
             certifyPath = argv[++i];
+        } else if (arg == "--unsat-core") {
+            // Enable unsat-core production. (The parser does not yet map the
+            // SMT-LIB :produce-unsat-cores option, so expose it as a flag.) On
+            // unsat, the core assertions are printed on stdout after the verdict.
+            solver.setOption("produce-unsat-cores", xolver::OptionValue(true));
         } else if (arg == "--produce-models") {
             // TODO: enable model production
         } else if (arg == "--produce-proofs") {
@@ -240,6 +246,11 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // one, emit the SMT-LIB get-model response on stdout right after `sat`.
         if (r == xolver::Result::Sat && solver.modelRequested()) {
             solver.dumpModel(std::cout);
+        }
+        // Unsat-core track: if the input requested cores (:produce-unsat-cores)
+        // and we proved unsat, emit the core assertions on stdout after `unsat`.
+        if (r == xolver::Result::Unsat && solver.unsatCoreRequested()) {
+            solver.dumpUnsatCore(std::cout);
         }
         std::cout.flush();
         // Diagnostic: independent model self-check against original assertions.

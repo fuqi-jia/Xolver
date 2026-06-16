@@ -95,6 +95,16 @@ public:
     // getUnsatCore()); seeded to the full assumption set as a sound fallback.
     std::vector<ExprId> assumptionRoots_;
     std::vector<Term> lastUnsatCore_;
+    // File-level unsat-core (:produce-unsat-cores / setOption "produce-unsat-cores").
+    // When set, checkSatInternal gates every top-level assertion A with a fresh
+    // boolean indicator (A becomes (=> a A)) and assumes all indicators, so
+    // failed() pinpoints which ORIGINAL assertions form the core. indicatorRoots_
+    // are the indicator vars (the literals to assume); indicatorCoreTerms_[k] is
+    // the ORIGINAL assertion Term reported when indicator k fails. Default OFF →
+    // the whole mechanism is inert and the solve path is byte-identical.
+    bool produceUnsatCores_ = false;
+    std::vector<ExprId> indicatorRoots_;
+    std::vector<Term> indicatorCoreTerms_;
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
@@ -1268,6 +1278,43 @@ public:
         // these ExprIds keep referencing the original formula even after
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
+
+        // File-level unsat-core gating (:produce-unsat-cores). Replace each
+        // top-level assertion A with (=> a A) for a fresh indicator a, BEFORE
+        // lowering, so the CNF guard distributes into every clause derived from A
+        // (AND-flatten/rewrite preserve the implication). All indicators are
+        // assumed in the solve below; failed() then reports which ORIGINAL
+        // assertions (indicatorCoreTerms_) form the core. Gated → the default path
+        // is byte-identical. originalAssertions_ keeps the UNGUARDED roots for the
+        // model self-check. (Re-entrant solves — portfolio/escalating — would
+        // re-guard; produce-unsat-cores is a single-solve CLI/API mode.)
+        produceUnsatCores_ = parser && parser->getOptions() &&
+                             parser->getOptions()->get_unsat_core;
+        if (auto itUc = options.find("produce-unsat-cores");
+            itUc != options.end() && itUc->second.kind == OptionValue::Bool &&
+            itUc->second.b)
+            produceUnsatCores_ = true;
+        indicatorRoots_.clear();
+        indicatorCoreTerms_.clear();
+        {
+            SortId bsid = (boolSortId_ != NullSort) ? boolSortId_ : ir->boolSortId();
+            if (produceUnsatCores_ && bsid != NullSort) {
+                const std::vector<std::pair<ScopeLevel, ExprId>> scoped =
+                    ir->getScopedAssertions();
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : scoped) {
+                    ExprId a = ir->makeFreshVariable(bsid, "__xolver_uc");
+                    ExprId guarded =
+                        ir->add(CoreExpr{Kind::Implies, bsid, {a, eid}, Payload{}});
+                    ir->addAssertion(guarded, lv);
+                    indicatorRoots_.push_back(a);
+                    indicatorCoreTerms_.push_back(Term(static_cast<uint32_t>(eid)));
+                }
+                // Conservative fallback core (used only if UNSAT is proven before
+                // the SAT solve, so failed() never runs): the full assertion set.
+                lastUnsatCore_ = indicatorCoreTerms_;
+            }
+        }
 
         // Coarse phase timing (SOLVE_PHASE_PROF) to localize a pre-solve hang.
         // Uses C-level stderr (fprintf), NOT std::cerr: checkSatInternal can run
@@ -3432,13 +3479,16 @@ public:
         // report the minimized core on UNSAT. assumptionRoots_ is empty on a plain
         // checkSat, so assumptionLits stays empty and the solve path is unchanged.
         std::vector<SatLit> assumptionLits;
-        std::vector<ExprId> assumptionLitRoots;  // parallel: root each lit came from
-        assumptionLits.reserve(assumptionRoots_.size());
-        assumptionLitRoots.reserve(assumptionRoots_.size());
+        std::vector<Term> assumptionReportTerms;  // parallel: Term to report if lit fails
+        // API assumptions (checkSatAssuming): report the assumption itself.
         for (ExprId aRoot : assumptionRoots_) {
-            SatLit lit = atomizer.atomize(aRoot, *ir);
-            assumptionLits.push_back(lit);
-            assumptionLitRoots.push_back(aRoot);
+            assumptionLits.push_back(atomizer.atomize(aRoot, *ir));
+            assumptionReportTerms.push_back(Term(static_cast<uint32_t>(aRoot)));
+        }
+        // File-level indicators (:produce-unsat-cores): report the ORIGINAL assertion.
+        for (size_t k = 0; k < indicatorRoots_.size(); ++k) {
+            assumptionLits.push_back(atomizer.atomize(indicatorRoots_[k], *ir));
+            assumptionReportTerms.push_back(indicatorCoreTerms_[k]);
         }
 
         // L7: build the relevancy graph over the asserted boolean skeleton and
@@ -3680,7 +3730,7 @@ public:
             for (SatLit fl : failed) {
                 for (size_t k = 0; k < assumptionLits.size(); ++k) {
                     if (assumptionLits[k] == fl) {
-                        core.push_back(Term(static_cast<uint32_t>(assumptionLitRoots[k])));
+                        core.push_back(assumptionReportTerms[k]);
                         break;
                     }
                 }
@@ -4442,6 +4492,32 @@ std::vector<Term> Solver::getUnsatCore() const {
     // available, e.g. UNSAT proven in preprocessing). Sound, possibly
     // non-minimal. Meaningful only after checkSatAssuming() returned Unsat.
     return pImpl->lastUnsatCore_;
+}
+
+bool Solver::unsatCoreRequested() const {
+    if (!pImpl) return false;
+    auto it = pImpl->options.find("produce-unsat-cores");
+    if (it != pImpl->options.end() && it->second.kind == OptionValue::Bool &&
+        it->second.b)
+        return true;
+    if (!pImpl->parser) return false;
+    auto opts = pImpl->parser->getOptions();
+    return opts && opts->get_unsat_core;
+}
+
+void Solver::dumpUnsatCore(std::ostream& os) const {
+    // SMT-LIB get-unsat-core response shape: a parenthesized list. We emit the
+    // ORIGINAL assertions that form the core as SMT-LIB terms (Xolver gates each
+    // assertion with an indicator; :named-name output is a future enhancement
+    // needing the parser to expose its named-assertion map).
+    os << "(";
+    if (pImpl && pImpl->ir) {
+        const auto& core = pImpl->lastUnsatCore_;
+        for (size_t i = 0; i < core.size(); ++i) {
+            os << (i ? " " : "") << dumpExprToSMT2(core[i].id(), *pImpl->ir);
+        }
+    }
+    os << ")\n";
 }
 
 bool Solver::modelRequested() const {
