@@ -437,3 +437,79 @@ TEST_CASE("McCormick partial: incomplete reasons suppress the cut (soundness)") 
     CHECK(cuts.empty());   // cut1 would need x's lower reason complete — suppressed
     unsetenv("XOLVER_NRA_MCCORMICK_PARTIAL");
 }
+
+// ─────────── PowerCutGenerator soundness lock-in (grid-validated) ───────────
+// x^N (N>=3): even N is convex everywhere; odd N is convex on x>=0, concave on
+// x<=0, and mixed-sign odd intervals must emit NO secant/tangent (wrong-branch
+// unsound). Each emitted cut is checked at every half-integer in the box.
+#include "theory/arith/linearizer/PowerCutGenerator.h"
+
+namespace {
+mpq_class powq(const mpq_class& b, int e) { mpq_class r = 1; for (int i = 0; i < e; ++i) r *= b; return r; }
+bool powCutHolds(const LinearCut& c, const std::string& sname, const mpq_class& xv, int N) {
+    mpq_class lhs = c.constraint.expr.constant;
+    for (const auto& term : c.constraint.expr.terms) {
+        mpq_class v = (term.var == "x") ? xv : (term.var == sname) ? powq(xv, N) : mpq_class(0);
+        lhs += term.coeff * v;
+    }
+    switch (c.constraint.rel) {
+        case Relation::Leq: return lhs <= 0;
+        case Relation::Lt:  return lhs <  0;
+        case Relation::Geq: return lhs >= 0;
+        case Relation::Gt:  return lhs >  0;
+        case Relation::Eq:  return lhs == 0;
+        default:            return lhs != 0;
+    }
+}
+// Half-integer grid over [lo,hi] — finer than integers to catch a sign/slope slip.
+void powGrid(const std::vector<LinearCut>& cuts, const std::string& sname, int N, long lo, long hi) {
+    for (const auto& c : cuts)
+        for (long k = 2 * lo; k <= 2 * hi; ++k)
+            CHECK(powCutHolds(c, sname, mpq_class(k, 2), N));
+}
+}  // namespace
+
+TEST_CASE("PowerCut: even x^4 on mixed-sign [-2,3] — nonneg+secant+tangent grid-sound") {
+    PowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x4", VarId{1}, 4);
+    auto xb = mkBounds(-2, 3);
+    auto cuts = gen.generate(aux, "x", 4, xb, SatLit{0, false}, std::nullopt,
+                             /*nonneg*/ true, /*secant*/ true, /*tangent*/ true);
+    CHECK(cuts.size() == 3);     // even ⇒ convex everywhere ⇒ all three fire
+    powGrid(cuts, "__nl_aux_x4", 4, -2, 3);
+}
+
+TEST_CASE("PowerCut: odd x^3 on positive [1,3] — convex branch grid-sound") {
+    PowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x3", VarId{1}, 3);
+    auto xb = mkBounds(1, 3);
+    auto cuts = gen.generate(aux, "x", 3, xb, SatLit{0, false}, std::nullopt,
+                             true, true, true);
+    CHECK(cuts.size() == 3);     // nonneg (x>=0) + convex secant + convex tangent
+    powGrid(cuts, "__nl_aux_x3", 3, 1, 3);
+}
+
+TEST_CASE("PowerCut: odd x^3 on negative [-3,-1] — concave branch grid-sound") {
+    PowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x3", VarId{1}, 3);
+    auto xb = mkBounds(-3, -1);
+    auto cuts = gen.generate(aux, "x", 3, xb, SatLit{0, false}, std::nullopt,
+                             true, true, true);
+    CHECK(cuts.size() == 3);     // nonpos (x<=0) + concave secant + concave tangent
+    powGrid(cuts, "__nl_aux_x3", 3, -3, -1);
+}
+
+TEST_CASE("PowerCut: odd x^3 on mixed-sign [-2,3] emits no secant/tangent (soundness)") {
+    PowerCutGenerator gen;
+    auto aux = mkAuxPower("__nl_aux_x3", VarId{1}, 3);
+    auto xb = mkBounds(-2, 3);
+    auto cuts = gen.generate(aux, "x", 3, xb, SatLit{0, false}, std::nullopt,
+                             true, true, true);
+    // No sign-determinate interval and inflection at 0 ⇒ no secant/tangent.
+    for (const auto& c : cuts) {
+        CHECK(c.debugTag != "power_secant_convex");
+        CHECK(c.debugTag != "power_secant_concave");
+        CHECK(c.debugTag != "power_tangent_convex");
+        CHECK(c.debugTag != "power_tangent_concave");
+    }
+}
