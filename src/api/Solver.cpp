@@ -4929,4 +4929,28 @@ void Solver::dumpSMT2(std::ostream& os) {
     }
 }
 
+void Solver::dumpFeatures(std::ostream& os) const {
+    if (!pImpl || !pImpl->ir) { os << "{}\n"; return; }
+    const CoreIr& ir = *pImpl->ir;
+    LogicFeatures f = LogicFeatureDetector(ir).detect();
+    size_t nVars = 0;
+    for (ExprId id = 0; id < static_cast<ExprId>(ir.size()); ++id)
+        if (ir.get(id).kind == Kind::Variable) ++nVars;
+    auto b = [](bool v) { return v ? "true" : "false"; };
+    os << "{\"logic\":\"" << pImpl->logic << "\""
+       << ",\"asserts\":" << ir.assertions().size()
+       << ",\"vars\":" << nVars
+       << ",\"nodes\":" << ir.size()
+       << ",\"nonlinear\":" << b(f.hasNonlinear)
+       << ",\"mixed_int_real\":" << b(f.hasMixedIntReal)
+       << ",\"int\":" << b(f.hasInt)
+       << ",\"real\":" << b(f.hasReal)
+       << ",\"array\":" << b(f.hasArray)
+       << ",\"uf\":" << b(f.hasUF)
+       << ",\"bv\":" << b(f.hasBV)
+       << ",\"datatype\":" << b(f.hasDatatype)
+       << ",\"quantifier\":" << b(f.hasQuantifier)
+       << "}\n";
+}
+
 } // namespace xolver

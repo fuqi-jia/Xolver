@@ -62,6 +62,7 @@ static void printUsage(const char* prog) {
               << "  --lia-enable-gcd-ineq-tightening     Re-enable GCD inequality tightening\n"
               << "  --lia-enable-eq-gcd-normalization    Re-enable equality GCD normalization\n"
               << "  --parse-only           Parse the file and exit (print parse-ok); no solve\n"
+              << "  --features             Print the instance feature vector (JSON) and exit; no solve\n"
               << "  -v, --verbose          Verbose output\n";
 }
 
@@ -158,10 +159,13 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     bool verbose = false;
     bool parseOnly = false;
     bool produceModels = false;
+    bool featuresOnly = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--parse-only") {
             parseOnly = true;
+        } else if (arg == "--features") {
+            featuresOnly = true;
         } else if (arg == "--logic" && i + 1 < argc) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
@@ -232,6 +236,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // under a normal solve). Emits `parse-ok` on stdout; no solver run.
         if (parseOnly) {
             std::cout << "parse-ok\n";
+            std::cout.flush();
+            return EXIT_SUCCESS;
+        }
+
+        // --features: emit the per-instance feature vector (JSON) and exit
+        // WITHOUT solving — fast (parse + detect only). For mining a benchmark
+        // tree into a training corpus (learned strategy selection / autotuning).
+        if (featuresOnly) {
+            solver.dumpFeatures(std::cout);
             std::cout.flush();
             return EXIT_SUCCESS;
         }

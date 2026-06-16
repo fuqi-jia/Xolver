@@ -129,6 +129,12 @@ public:
     // Debug / research
     void dumpSMT2(std::ostream& os);
 
+    // Per-instance FEATURE VECTOR (one JSON object) for learned strategy
+    // selection / autotuning (no solve — parse + detect only). Emits the logic,
+    // size counts (asserts/vars/nodes), and the detected LogicFeatures flags.
+    // Meaningful after parseFile() (or after asserting formulas) has built the IR.
+    void dumpFeatures(std::ostream& os) const;
+
 private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
