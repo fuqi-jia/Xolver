@@ -437,6 +437,20 @@ static void xolverBakeCompetitionDefaults() {
     for (const char* f : kFlags) setenv(f, "1", /*overwrite=*/0);
 }
 
+// Server-bake-PENDING levers (roadmap A9+B4 — NLA cuts + lazy array completion).
+// These are validated SOUND and 0-REGRESSION but are intentionally NOT in kFlags[]
+// yet, because the project rule (CLAUDE.md) bakes a default ON only after the
+// regression gate proves a NET WIN — and that win is unmeasurable in-tree: the
+// curated regression corpus is at the PASS ceiling, so the levers show neutral
+// here even when they help on the full benchmark set.
+//   XOLVER_NRA_NLA_CUTS   — NRA monotonicity/shape cuts   (in-tree: nra ceiling, 0-unsound)
+//   XOLVER_NIA_NLA_CUTS   — NIA tightening cuts           (in-tree: nia 118→118, 0-unsound)
+//   XOLVER_AX_LAZY        — lazy array-axiom completion   (in-tree: array 52→52, 0-unsound)
+// To promote (cluster only): run tools/compare_solvers.py over benchmark/ with each
+// flag off vs on; require a net solved-count increase AND 0-unsound; then add the
+// winning flag(s) to kFlags[] above and re-run the full gate. WSL cannot run the
+// benchmark set, so this step is deferred to the server (roadmap A9+B4.b).
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         printUsage(argv[0]);
