@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <optional>
 #include <functional>
@@ -53,6 +54,7 @@ static void printUsage(const char* prog) {
               << "  --seed <n>             Random seed for reproducibility\n"
               << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
+              << "  --certify <file>       On sat, write a re-checkable certificate (independently re-validated model)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
@@ -108,6 +110,37 @@ inline int runWithLargeStack(std::function<int()> fn) {
 }
 }  // namespace
 
+// --certify: persist a portable, independently re-checkable SAT certificate.
+// Xolver already re-validates every `sat` internally (ModelValidator) before it
+// is emitted (the soundness invariant); --certify makes that moat first-class by
+// running a SECOND independent re-check (caller side: modelMatchesOriginal) and
+// writing the validated model as a self-contained SMT-LIB artifact. A third
+// party reloads the original formula, binds these define-funs, and evaluates the
+// assertions to confirm `sat` without trusting Xolver. Returns true iff written.
+static bool writeSatCertificate(const xolver::Solver& solver,
+                                const std::string& sourcePath,
+                                const std::string& outPath) {
+    std::ofstream out(outPath);
+    if (!out) {
+        std::cerr << "(certify-error cannot-open " << outPath << ")\n";
+        return false;
+    }
+    out << "; Xolver SAT certificate\n"
+        << "; format: xolver-sat-cert/1\n"
+        << "; source: " << sourcePath << "\n"
+        << "; generated-by: Xolver " << XOLVER_VERSION_MAJOR << "."
+        << XOLVER_VERSION_MINOR << "." << XOLVER_VERSION_PATCH << "\n"
+        << "; verdict: sat\n"
+        << "; certification: model independently re-validated against the original\n"
+        << ";   assertions by ModelValidator (exact GMP/MPFR/libpoly; no floating point).\n"
+        << "; replay: assert the original formula, bind the model below, evaluate to true.\n"
+        << ";\n"
+        << "; --- model (SMT-LIB get-model response) ---\n";
+    solver.dumpModel(out);
+    out.flush();
+    return static_cast<bool>(out);
+}
+
 static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     int fileIdx = defaultMode ? 1 : 2;
     if (argc < fileIdx + 1) {
@@ -119,6 +152,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
 
     // Parse options after the file path
     std::optional<std::string> logicOpt;
+    std::optional<std::string> certifyPath;
     bool checkModel = false;
     bool verbose = false;
     bool parseOnly = false;
@@ -140,6 +174,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
                        std::to_string(secs * 1000).c_str(), /*overwrite=*/1);
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
+        } else if (arg == "--certify" && i + 1 < argc) {
+            certifyPath = argv[++i];
         } else if (arg == "--produce-models") {
             // TODO: enable model production
         } else if (arg == "--produce-proofs") {
@@ -167,7 +203,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // for --verbose (debugging) and --check-model (whose MODEL_MISMATCH report
     // goes to stderr). The buffer must outlive every write, so it is static.
     static NullStreambuf nullCerr;
-    if (!verbose && !checkModel) {
+    if (!verbose && !checkModel && !certifyPath) {
         std::cerr.rdbuf(&nullCerr);
     }
 
@@ -209,6 +245,30 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // Diagnostic: independent model self-check against original assertions.
         if (checkModel && r == xolver::Result::Sat && !solver.modelMatchesOriginal()) {
             std::cerr << "MODEL_MISMATCH\n";
+        }
+        // --certify: surface the certified-SAT moat. On `sat`, run a SECOND,
+        // independent re-validation (the internal ModelValidator gate already
+        // passed) and persist a portable certificate. A re-check disagreement
+        // here means a validator bug, not a normal outcome — alarm loudly and
+        // fail rather than write a false certificate. unsat/unknown have no SAT
+        // model to certify (proof certificates are Track C2, separate).
+        if (certifyPath) {
+            if (r == xolver::Result::Sat) {
+                if (solver.modelMatchesOriginal()) {
+                    if (writeSatCertificate(solver, argv[fileIdx], *certifyPath))
+                        std::cerr << "(certified-sat " << *certifyPath << ")\n";
+                    else
+                        return EXIT_FAILURE;
+                } else {
+                    std::cerr << "CERTIFICATION_FAILED (independent re-validation "
+                                 "disagreed with the sat verdict; no certificate "
+                                 "written — please report)\n";
+                    return EXIT_FAILURE;
+                }
+            } else {
+                std::cerr << "(certify: no SAT model to certify — verdict "
+                          << toString(r) << ")\n";
+            }
         }
         if (r == xolver::Result::Unknown) {
             auto reason = solver.lastUnknownReason();
