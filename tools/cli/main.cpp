@@ -51,6 +51,7 @@ static void printUsage(const char* prog) {
               << "  --produce-proofs       Enable proof production\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
+              << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
@@ -129,6 +130,14 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
             solver.setOption("seed", xolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+        } else if (arg == "--timeout" && i + 1 < argc) {
+            // Expose the per-solve wall-clock budget as a CLI flag. beginSolve()
+            // reads XOLVER_WALLCLOCK_MS at solve time (api/Solver.cpp), so setting
+            // it here before solve() takes effect. <=0 means no limit (the default).
+            long long secs = std::stoll(argv[++i]);
+            if (secs > 0)
+                setenv("XOLVER_WALLCLOCK_MS",
+                       std::to_string(secs * 1000).c_str(), /*overwrite=*/1);
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
         } else if (arg == "--produce-models") {
