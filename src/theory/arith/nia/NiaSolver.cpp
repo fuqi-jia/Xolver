@@ -1791,12 +1791,13 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
     return std::nullopt;
 }
 
-void NiaSolver::setModEqConstFacts(ModEqConstFactList facts) {
+void NiaSolver::setModEqConstFacts(const ModEqConstFactList& facts) {
     // Track A Phase 1.3 — Solver::Impl hands off facts captured from
     // IntDivModLowerer here. Each fact's `reason` SatLit is still
     // unset (atomization is done after preprocess); the stage method
-    // resolves it via TheoryAtomRegistry per call.
-    modEqConstFacts_ = std::move(facts);
+    // resolves it via TheoryAtomRegistry per call. (const-ref to match the
+    // polymorphic TheorySolver::setModEqConstFacts hook; set once at setup.)
+    modEqConstFacts_ = facts;
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(

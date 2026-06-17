@@ -80,7 +80,7 @@ public:
     // Track A Phase 1.3: receive ModEqConstFacts captured by IntDivModLowerer.
     // Called by Solver::Impl after preprocessing and theory-solver setup. The
     // facts are consumed by stageNativeModEqConst on each NIA check call.
-    void setModEqConstFacts(ModEqConstFactList facts);
+    void setModEqConstFacts(const ModEqConstFactList& facts) override;
 
     bool supportsCombination() const override { return true; }
 

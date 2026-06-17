@@ -100,7 +100,7 @@ public:
     // state, return Unknown (sound floor for the QF_DT blocksworld false-SAT
     // residual class). SMT-LIB semantics respected: selector-on-wrong-ctor
     // is Indeterminate, not Violated.
-    void setOriginalAssertions(const std::vector<ExprId>* p) {
+    void setOriginalAssertions(const std::vector<ExprId>* p) override {
         originalAssertionsForDtValidate_ = p;
     }
 

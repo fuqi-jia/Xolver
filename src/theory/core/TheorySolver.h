@@ -12,6 +12,7 @@ namespace xolver {
 
 class TheoryLemmaStorage;
 class CareGraph;
+struct ModEqConstFact;  // theory/arith/nia/reasoners/ModEqConstFact.h (fwd: base hook only)
 
 // ---------------------------------------------------------------------------
 // Abstract interface for theory solvers
@@ -55,6 +56,28 @@ public:
     // -----------------------------------------------------------------------
     virtual void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) {
         (void)context;
+    }
+
+    // -----------------------------------------------------------------------
+    // Post-setup data handoffs (optional; default = no-op). The api floor wires
+    // these on the base TheorySolver* returned by TheoryManager::solverFor(), so
+    // api/Solver.cpp stays polymorphic over the theory interface (no dynamic_cast
+    // to concrete solvers — enforced by scripts/check_architecture.sh).
+    // -----------------------------------------------------------------------
+
+    // NIA native ModEqConst facts captured by IntDivModLowerer during preprocess
+    // (Track A Phase 1.3). Only NiaSolver consumes them (via its native
+    // ModEqConst reasoner stage); every other theory ignores the handoff.
+    virtual void setModEqConstFacts(const std::vector<ModEqConstFact>& facts) {
+        (void)facts;
+    }
+
+    // Original-formula assertions for independent Full-effort model re-validation.
+    // Only the EUF (datatype) solver consumes them, to re-evaluate the original
+    // formula under the candidate e-graph (DT false-SAT floor). The pointer must
+    // outlive this solver; default no-op for every non-EUF theory.
+    virtual void setOriginalAssertions(const std::vector<ExprId>* assertions) {
+        (void)assertions;
     }
 
     // -----------------------------------------------------------------------

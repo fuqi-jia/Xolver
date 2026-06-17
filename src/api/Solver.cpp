@@ -1,7 +1,6 @@
 #include "xolver/Solver.h"
 #include "xolver/Result.h"
 #include "expr/ir.h"
-#include "theory/euf/EufSolver.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
@@ -15,7 +14,6 @@
 #include "frontend/preprocess/targeted/UfApplyAckermann.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
-#include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -3290,9 +3288,13 @@ public:
         // to the NIA solver if present. The NiaSolver consumes them through
         // its native ModEqConstReasoner pipeline stage (gated by the env flag
         // XOLVER_NIA_NATIVE_MODEQCONST inside the stage).
+        // Polymorphic handoff via the base TheorySolver interface (the hook is a
+        // no-op on every theory but the NIA solver) — keeps api/ decoupled from
+        // the concrete solver type. In NIA-MCSAT mode solverFor(NIA) is an MCSAT
+        // solver that inherits the no-op, exactly as the old concrete-typed cast
+        // returned null and skipped the handoff.
         if (!modEqConstFacts_.empty()) {
-            if (auto* nia = dynamic_cast<NiaSolver*>(
-                    theoryManager.solverFor(TheoryId::NIA))) {
+            if (auto* nia = theoryManager.solverFor(TheoryId::NIA)) {
                 nia->setModEqConstFacts(modEqConstFacts_);
             }
         }
@@ -3303,10 +3305,9 @@ public:
         // floor for the QF_DT blocksworld false-SAT residual class (deep
         // BMC ITE-chain violations that modelFullyDetermined accepts).
         // Pointer outlives the solver (originalAssertions_ is a member).
-        if (auto* eufBase = theoryManager.solverFor(TheoryId::EUF)) {
-            if (auto* euf = dynamic_cast<EufSolver*>(eufBase)) {
-                euf->setOriginalAssertions(&originalAssertions_);
-            }
+        // Polymorphic: the hook is a no-op on every theory but the EUF solver.
+        if (auto* euf = theoryManager.solverFor(TheoryId::EUF)) {
+            euf->setOriginalAssertions(&originalAssertions_);
         }
 
         // Connect propagator FIRST (required before addObservedVar)
