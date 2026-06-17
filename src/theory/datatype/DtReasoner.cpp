@@ -161,11 +161,21 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
             // conflict (false-UNSAT, e.g. is_cons(x) with x already cons).
             std::string tnm = opName(tt);
             if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
+            // ROBUSTNESS (#70/#72): a tester whose constructor NAME was dropped
+            // by the upstream payload loss (compound-arg testers intern as bare
+            // "#dt.is.") yields an empty tnm. Comparing it against a (recovered)
+            // constructor name spuriously mismatches -> a false-UNSAT conflict.
+            // An empty/unreliable name cannot be soundly compared, so skip the
+            // tester-consistency check here; a genuinely-violating model is still
+            // caught by the selector-projection floor in modelFullyDetermined().
+            if (tnm.empty()) continue;
             // Find a known constructor in u's class.
             EClassId uc = egraph_->rep(u);
             for (EufTermId m : egraph_->classMembers(uc)) {
                 if (!symIsConstructor(m)) continue;
-                bool sameCtor = (opName(m) == tnm);
+                const std::string mName = opName(m);
+                if (mName.empty()) continue;        // same robustness for the ctor side
+                bool sameCtor = (mName == tnm);
                 // is_C(u)=true but ctor is D!=C, or is_C(u)=false but ctor IS C.
                 if ((isTrue && !sameCtor) || (isFalse && sameCtor)) {
                     std::vector<SatLit> reasons;
@@ -198,6 +208,7 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
             if (!egraph_->same(tt, trueTerm_)) continue;   // only testers asserted TRUE
             std::string tnm = opName(tt);
             if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
+            if (tnm.empty()) continue;   // unreliable name (#70/#72) — cannot clash soundly
             EClassId uc = egraph_->rep(tn.args[0]);
             auto it = trueTesterByClass.find(uc);
             if (it == trueTesterByClass.end()) {
