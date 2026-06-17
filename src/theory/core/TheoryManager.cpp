@@ -372,8 +372,9 @@ std::vector<TheoryLemma> TheoryManager::takeEntailmentPropagations() {
     // Each is an array-axiom TAUTOLOGY (i=j ∨ readEq), tagged ArraySplit so the
     // propagator can mark its atoms dynamically relevant. Unconditionally sound to
     // add regardless of mode — no combination gating.
+    // Default-ON: completeness tautology, not a heuristic (=0 is a kill-switch).
     static const bool row2Split = [] {
-        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT");
+        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT", true);
     }();
     // Scoped to COMBINATION mode: pure QF_AX has its own complete Full-effort
     // array sat-gate that Standard-effort splits perturb (ax_007 unsat→unknown);

@@ -1743,8 +1743,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
     // i≠j → readEq forced → chain advances). Buffered for the entailment channel
     // (cb_propagate drops Standard-effort Lemma results). z3's lazy split, made
     // tractable by the lazy select bound + made effective by dynamic relevancy.
+    // Default-ON: the Row2 case-split is a sound array TAUTOLOGY (completeness, not
+    // a heuristic), so it is on by default; XOLVER_AX_ROW2_SPLIT=0 is a kill-switch.
     static const bool row2Split = [] {
-        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT");
+        return xolver::env::flag("XOLVER_AX_ROW2_SPLIT", true);
     }();
     // Scoped to COMBINATION (sharedTermRegistry_ != null): generating the split
     // INTERNS new select terms into the e-graph, which perturbs the pure-QF_AX
