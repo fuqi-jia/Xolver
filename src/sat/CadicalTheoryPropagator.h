@@ -144,6 +144,11 @@ private:
     std::string* unknownReasonSink_ = nullptr;
     std::unordered_map<SatVar, int> varToLevel_;
     std::unordered_map<SatVar, bool> currentAssignment_;
+    // Assignment trail (var, level) in assignment order, kept in lockstep with the two
+    // maps above. Lets notify_backtrack pop only the vars above the new level — O(#popped)
+    // — instead of scanning the whole varToLevel_ map (profiled ~6% on miplib QF_LRA).
+    // Levels are non-decreasing in trail order, so vars above any level form a suffix.
+    std::vector<std::pair<SatVar, int>> assignTrail_;
     size_t lastCheckedAssignmentSize_ = 0;
     // Set true whenever a theory *atom* is asserted (notify_assignment); cleared
     // when cb_propagate runs a Standard check. When the cb_propagate throttle

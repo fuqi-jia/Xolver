@@ -161,7 +161,9 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         varToLevel_[var] = currentLevel_;
-        currentAssignment_[var] = sign;
+        auto ins = currentAssignment_.emplace(var, sign);
+        if (ins.second) assignTrail_.emplace_back(var, currentLevel_);
+        else ins.first->second = sign;   // re-assignment without backtrack (shouldn't occur) — no trail dup
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
@@ -335,13 +337,15 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
     if (relevancyOn_) rel_->popToLevel(static_cast<int>(new_level));
-    for (auto it = varToLevel_.begin(); it != varToLevel_.end(); ) {
-        if (it->second > static_cast<int>(new_level)) {
-            currentAssignment_.erase(it->first);
-            it = varToLevel_.erase(it);
-        } else {
-            ++it;
-        }
+    // Pop the trail suffix above new_level (O(#popped)) instead of scanning the whole
+    // varToLevel_ map. Equivalent erase set: the trail holds exactly the assigned vars
+    // with their levels, level-sorted, so vars above new_level are precisely the suffix.
+    while (!assignTrail_.empty() &&
+           assignTrail_.back().second > static_cast<int>(new_level)) {
+        const SatVar v = assignTrail_.back().first;
+        currentAssignment_.erase(v);
+        varToLevel_.erase(v);
+        assignTrail_.pop_back();
     }
 }
 
