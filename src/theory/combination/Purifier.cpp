@@ -333,6 +333,9 @@ ExprId Purifier::purifyRec(ExprId root) {
                 CoreExpr ne;
                 ne.kind = e.kind;
                 ne.sort = e.sort;
+                ne.payload = e.payload;   // preserve payload (robustness; array ops
+                                          // take their symbol from builtinName, but
+                                          // keep it consistent with the other paths)
                 for (ExprId c : newChildren) ne.children.push_back(c);
                 rebuilt = ir_.addShared(ne);
             }
@@ -412,6 +415,14 @@ ExprId Purifier::purifyRec(ExprId root) {
             CoreExpr ne;
             ne.kind = e.kind;
             ne.sort = e.sort;
+            ne.payload = e.payload;   // #72 ROOT: preserve the node's payload — a
+            // datatype Constructor/Tester (and any payload-bearing node) rebuilt
+            // here with a purified COMPOUND child (e.g. mk(snd q, 0), is-mk(mk(...)))
+            // otherwise loses its name and interns as a bare "#dt.ctor."/"#dt.is.",
+            // breaking selector projection, the constructor-clash symbol compare,
+            // and tester-consistency -> false sat AND false unsat (#70). The
+            // Selector branch above already preserves it; this default branch did
+            // not, so any compound-arg ctor/tester fell through and was stripped.
             for (ExprId c : newChildren) ne.children.push_back(c);
             done[f.eid] = ir_.addShared(ne);
         }

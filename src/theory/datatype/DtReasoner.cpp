@@ -643,6 +643,31 @@ bool DtReasoner::modelFullyDetermined() const {
             const auto& margs = tm_->node(m).args;
             if (argIdx >= margs.size()) continue;
             if (!egraph_->same(s, margs[argIdx])) return false;  // projection unapplied -> floor
+
+            // (#70/#74) Even when the projection holds in EUF, an ARITH-sorted
+            // field that is a COMPOUND term (e.g. mk((+ a 1), 0)) is unsound to
+            // accept: EUF merges sel_i^C(u) with the field term, but the field's
+            // arith VALUE is not coupled to the selector across the EUF/arith
+            // boundary (the constructor field is not purified into a shared
+            // leaf), so the arith theory can assign sel and the field different
+            // values and we never see the conflict. z3/cvc5 derive the
+            // projection through arithmetic and refute (e.g. (+ a 1) != (fst q)
+            // while q = mk((+ a 1), 0) is UNSAT, not sat). We do not
+            // independently re-validate that arith coupling, so floor to
+            // Unknown. SOUNDNESS: sat->unknown only; fires solely for a selector
+            // applied to its OWN constructor whose field is a compound arith
+            // expression — exactly the uncoupled case. A bare variable/constant
+            // field is already a shared leaf (coupled) and is NOT floored.
+            ExprId fieldE = originExpr(margs[argIdx]);
+            if (fieldE != NullExpr && fieldE < static_cast<ExprId>(ir_->size())) {
+                const auto& fe = ir_->get(fieldE);
+                bool arithSorted = (fe.sort == ir_->intSortId() ||
+                                    fe.sort == ir_->realSortId());
+                bool compoundArith = arithSorted && !fe.isLeaf() &&
+                                     fe.kind != Kind::UFApply &&
+                                     fe.kind != Kind::Selector;
+                if (compoundArith) return false;  // uncoupled arith field -> floor
+            }
         }
     }
     // Note on selector-owner ownership: SMT-LIB datatype semantics treat
