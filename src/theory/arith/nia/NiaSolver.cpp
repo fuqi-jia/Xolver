@@ -348,7 +348,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // reasoning path. The backend is uncapped on this base and OOMs on dense
     // AProVE inputs before any reasoning verdict, masking 357-refutation work.
     // Default-on preserved; only an explicit non-empty/non-"0" value turns it off.
-    if (const char* e = std::getenv("XOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_NO_BITBLAST"))
         enableBitBlast_ = false;
 
     // Bound-free product-positivity refutation (default-ON). Sound: only
@@ -377,7 +377,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // real relaxation implies integer-UNSAT (ℤⁿ⊆ℝⁿ; gated by CdcacCore's own
     // unsatTrustworthy_); a CDCAC SAT sample is accepted only when every
     // coordinate is an exact integer AND it passes IntegerModelValidator.
-    if (const char* e = std::getenv("XOLVER_NIA_CDCAC"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_CDCAC"))
         enableCdcac_ = true;
 
     // Incremental normalize cache (default-ON).

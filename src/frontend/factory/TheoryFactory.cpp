@@ -14,6 +14,7 @@
 #include "theory/arith/nia/mcsat/NiaMcsatEngine.h"
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/nra/nlsat/NlsatEngine.h"
+#include "util/EnvParam.h"
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
@@ -63,7 +64,7 @@ void buildNRA(BuildContext& c) {
     // XOLVER_NRA_MCSAT (default-OFF): swap NraSolver out for the experimental
     // MCSAT-style NlsatEngine. The LRA sibling stays registered. Sound: NlsatEngine
     // returns Unknown when it cannot decide; it never produces UNSAT.
-    if (const char* e = std::getenv("XOLVER_NRA_MCSAT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NRA_MCSAT")) {
         auto polyKernel = createPolynomialKernel();
         result.polyKernelRaw = polyKernel.get();
         auto algebra = std::make_unique<LibpolyBackend>(polyKernel.get());
@@ -99,7 +100,7 @@ void buildNIA(BuildContext& c) {
     CoreIr* ir = c.ir;
     // XOLVER_NIA_MCSAT (default-OFF): swap NiaSolver for the experimental MCSAT
     // NiaMcsatEngine. Sound floor identical to NRA — Unknown, never wrong UNSAT.
-    if (const char* e = std::getenv("XOLVER_NIA_MCSAT"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_MCSAT")) {
         auto polyKernel = createPolynomialKernel();
         result.polyKernelRaw = polyKernel.get();
         auto engine = std::make_unique<nia_mcsat::NiaMcsatEngine>();

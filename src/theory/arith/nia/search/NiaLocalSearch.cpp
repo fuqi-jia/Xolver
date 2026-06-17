@@ -45,7 +45,7 @@ NiaLocalSearch::NiaLocalSearch(PolynomialKernel& kernel)
     // 0 or negative = unlimited; unset keeps the ctor-init default.
     budgetMs_ = env::paramLong("XOLVER_NIA_LS_BUDGET_MS", budgetMs_);
     totalBudgetMs_ = env::paramLong("XOLVER_NIA_LS_TOTAL_MS", totalBudgetMs_);
-    if (const char* e = std::getenv("XOLVER_NIA_LOCALSEARCH"); e && *e && *e != '0') {
+    if (xolver::env::flag("XOLVER_NIA_LOCALSEARCH")) {
         enhanced_ = true;
     }
     if (xolver::env::flag("XOLVER_NIA_LS_TWO_LEVEL")) {
