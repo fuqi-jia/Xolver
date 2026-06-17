@@ -146,6 +146,10 @@ public:
     bool isFiniteInt() const;
     // The explicit, sorted list of integer points (valid iff isFiniteInt()).
     std::vector<mpz_class> integerPoints() const;
+    // The COUNT of integer points — exactly integerPoints().size() — computed in
+    // O(#intervals) WITHOUT materializing them, so callers can size-gate a huge
+    // domain before paying the O(range) materialization.
+    mpz_class integerPointCount() const;
     // True iff at least one integer lies in some interval (handles unbounded
     // intervals, which always contain integers).  Rational/±Inf endpoints only;
     // algebraic endpoints are treated conservatively (assumed to contain one).

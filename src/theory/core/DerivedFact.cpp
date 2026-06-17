@@ -157,6 +157,38 @@ std::vector<mpz_class> IntervalSet::integerPoints() const {
     return pts;
 }
 
+// Exactly integerPoints().size(), in O(#intervals): take each interval's integer
+// range [loInt, hiInt], merge overlapping/touching ranges (so shared integers are
+// counted once — matching integerPoints()'s sort+unique), and sum the sizes. No
+// O(range) materialization, so a huge domain costs nothing to size.
+mpz_class IntervalSet::integerPointCount() const {
+    if (!isFiniteInt()) return 0;
+    std::vector<std::pair<mpz_class, mpz_class>> ranges;
+    for (const auto& iv : intervals) {
+        const mpq_class& lo = iv.lower.rationalValue;
+        const mpq_class& hi = iv.upper.rationalValue;
+        mpz_class fl;
+        mpz_fdiv_q(fl.get_mpz_t(), lo.get_num().get_mpz_t(), lo.get_den().get_mpz_t());
+        const bool loIsInt = (lo.get_den() == 1);
+        const mpz_class ceilLo = loIsInt ? fl : (fl + 1);
+        const mpz_class loInt = (iv.lowerOpen && loIsInt) ? ceilLo + 1 : ceilLo;
+        mpz_fdiv_q(fl.get_mpz_t(), hi.get_num().get_mpz_t(), hi.get_den().get_mpz_t());
+        const bool hiIsInt = (hi.get_den() == 1);
+        const mpz_class hiInt = (iv.upperOpen && hiIsInt) ? fl - 1 : fl;
+        if (loInt <= hiInt) ranges.emplace_back(loInt, hiInt);
+    }
+    std::sort(ranges.begin(), ranges.end());
+    mpz_class count = 0, curLo, curHi;
+    bool have = false;
+    for (const auto& [lo, hi] : ranges) {
+        if (!have) { curLo = lo; curHi = hi; have = true; }
+        else if (lo <= curHi) { if (hi > curHi) curHi = hi; }   // overlap/touch ⇒ merge
+        else { count += curHi - curLo + 1; curLo = lo; curHi = hi; }
+    }
+    if (have) count += curHi - curLo + 1;
+    return count;
+}
+
 bool IntervalSet::hasIntegerPoint() const {
     for (const auto& iv : intervals) {
         // Algebraic / unbounded endpoints: an unbounded side always admits
