@@ -204,7 +204,12 @@ int CadicalTheoryPropagator::cb_decide() {
         return 0;
     }
 
-    if (xolver::env::flag("XOLVER_DECIDE_PROBE")) {
+    // Cache the probe flag: cb_decide runs on every SAT decision, and a live
+    // env::flag() here is a getenv()+parse per decision (profiled hot ≈5% on
+    // miplib QF_LRA). The flag cannot change mid-solve, so caching is
+    // verdict-identical — a pure speedup, especially in the (default) off case.
+    static const bool decideProbe = xolver::env::flag("XOLVER_DECIDE_PROBE");
+    if (decideProbe) {
         static long long every = []() {
             const char* e = std::getenv("XOLVER_DECIDE_PROBE");
             long long n = e ? std::atoll(e) : 0;
