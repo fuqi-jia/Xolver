@@ -589,6 +589,51 @@ bool DtReasoner::modelFullyDetermined() const {
     for (EClassId c : needing) {
         if (hasCtor.find(c) == hasCtor.end()) return false;  // observed-but-undetermined
     }
+
+    // Selector-projection consistency (#70a, sound floor). For every selector
+    // sel_i^C(u) whose operand class holds a constructor C(a..) of the SELECTOR'S
+    // OWN constructor, the projection axiom sel_i^C(u) = a_i MUST hold in the
+    // model. If the egraph does not reflect it, the DtReasoner failed to
+    // instantiate the projection (observed #70: when the ctor field is a
+    // compound / self-referential selector, e.g. q = mk(snd q, 0), the
+    // guarded-projection at instantiateLemma() does not fire), leaving a model
+    // that locally satisfies the constructor but is internally inconsistent
+    // (fst(q) != snd(q) while q = mk(snd q, 0)). z3/cvc5 derive the projection
+    // and refute -> our `sat` is unsound. Floor it to Unknown. SOUNDNESS: this
+    // only ever turns a sat into Unknown, never an unsat into sat, and only
+    // fires for the well-defined case (selector applied to its OWN ctor — the
+    // wrong-ctor case is underspecified per SMT-LIB and is NOT checked).
+    for (EufTermId s = 0; s < total; ++s) {
+        if (!symIsSelector(s)) continue;
+        const auto& sn = tm_->node(s);
+        if (sn.args.empty()) continue;
+        EufTermId u = sn.args[0];
+        ExprId uE = originExpr(u);
+        if (uE == NullExpr || uE >= static_cast<ExprId>(ir_->size())) continue;
+        SortId dtSort = ir_->get(uE).sort;
+        uint32_t argIdx = 0;
+        const DtConstructorInfo* owner =
+            ir_->datatypes().selector(dtSort, opName(s), argIdx);
+        if (!owner) continue;
+        EClassId uClass = egraph_->rep(u);
+        for (EufTermId m : egraph_->classMembers(uClass)) {
+            if (!symIsConstructor(m)) continue;
+            // Match the selector's OWN constructor by name. A constructor whose
+            // name is EMPTY is MALFORMED (the parser dropped the ctor name for
+            // some terms — e.g. mk(snd q, 0) interns as bare "#dt.ctor." — which
+            // is exactly what makes the projection at instantiateLemma() SKIP it
+            // and leave the false-sat #70). Treat an empty-name constructor of
+            // the right sort as a possible match so this floor still fires: this
+            // is conservative (sat->unknown only) and only ever affects the
+            // already-buggy empty-name case, never a genuine named-ctor sat.
+            const std::string mName = opName(m);
+            if (!mName.empty() && mName != owner->name) continue;
+            if (ctorSort(m) != dtSort) continue;
+            const auto& margs = tm_->node(m).args;
+            if (argIdx >= margs.size()) continue;
+            if (!egraph_->same(s, margs[argIdx])) return false;  // projection unapplied -> floor
+        }
+    }
     // Note on selector-owner ownership: SMT-LIB datatype semantics treat
     // (sel x) when x is in a wrong-ctor class as UNDERSPECIFIED (any value),
     // not as a conflict. So a "selector applied to wrong ctor" check is NOT
