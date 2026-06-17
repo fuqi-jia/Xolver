@@ -670,6 +670,82 @@ bool DtReasoner::modelFullyDetermined() const {
             }
         }
     }
+    // (#70/#74) Injectivity constant-clash floor. Two same-constructor terms in
+    // one class imply field-wise equality a_i = b_i (constructor injectivity).
+    // When those equalities force two DISTINCT interpreted constants to be equal
+    // — directly mk(i,2) = mk(1,1) => 2 = 1, or transitively through a shared
+    // operand mk(-1,1) = mk(k,k) => -1 = k = 1 — the model is UNSAT. EUF merges
+    // the constructors, but the implied field equalities over arith CONSTANTS
+    // (which are not registered shared terms) never reach arithmetic, so the
+    // contradiction is invisible and the combination reports a false sat. Detect
+    // it structurally: per merged same-ctor pair, union the field operands by
+    // their egraph rep and floor if a union class accumulates >= 2 distinct
+    // constant values. SOUNDNESS: sat->unknown only — a genuine model can never
+    // equate two distinct constants — and it is polarity-free (a floor, never a
+    // conflict clause). Cost is tiny (few ctor terms/class, 2 fields each).
+    auto constKeyOf = [&](EufTermId op) -> std::string {
+        ExprId oe = originExpr(op);
+        if (oe == NullExpr || oe >= static_cast<ExprId>(ir_->size())) return {};
+        const auto& oce = ir_->get(oe);
+        if (oce.kind == Kind::ConstInt) {
+            if (auto* iv = std::get_if<int64_t>(&oce.payload.value))
+                return "i:" + std::to_string(*iv);
+        } else if (oce.kind == Kind::ConstReal) {
+            if (auto* sv = std::get_if<std::string>(&oce.payload.value))
+                return "r:" + *sv;
+        }
+        return {};
+    };
+    std::unordered_map<EClassId, std::vector<EufTermId>> ctorByClass;
+    for (EufTermId t = 0; t < total; ++t)
+        if (symIsConstructor(t)) ctorByClass[egraph_->rep(t)].push_back(t);
+    for (auto& [cr, terms] : ctorByClass) {
+        (void)cr;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            for (size_t j = i + 1; j < terms.size(); ++j) {
+                EufTermId t1 = terms[i], t2 = terms[j];
+                if (tm_->node(t1).symbol != tm_->node(t2).symbol) continue;  // diff ctor = clash, not inj
+                const auto& a1 = tm_->node(t1).args;
+                const auto& a2 = tm_->node(t2).args;
+                if (a1.size() != a2.size()) continue;
+                // Iterative union-find over operand egraph reps for this pair.
+                std::unordered_map<EClassId, EClassId> parent;
+                auto find = [&](EClassId x) {
+                    while (true) {
+                        auto it = parent.find(x);
+                        if (it == parent.end() || it->second == x) return x;
+                        it->second = parent[it->second];  // path halving
+                        x = it->second;
+                    }
+                };
+                auto uni = [&](EClassId x, EClassId y) {
+                    if (!parent.count(x)) parent[x] = x;
+                    if (!parent.count(y)) parent[y] = y;
+                    parent[find(x)] = find(y);
+                };
+                for (size_t k = 0; k < a1.size(); ++k)
+                    uni(egraph_->rep(a1[k]), egraph_->rep(a2[k]));
+                // Collect, per union class, the distinct constant value among the
+                // operands; a second distinct constant in the same class -> floor.
+                std::unordered_map<EClassId, std::string> classConst;
+                bool clash = false;
+                auto consider = [&](EufTermId op) {
+                    std::string key = constKeyOf(op);
+                    if (key.empty()) return;
+                    EClassId c = find(egraph_->rep(op));
+                    auto it = classConst.find(c);
+                    if (it == classConst.end()) classConst.emplace(c, key);
+                    else if (it->second != key) clash = true;
+                };
+                for (size_t k = 0; k < a1.size() && !clash; ++k) {
+                    consider(a1[k]);
+                    consider(a2[k]);
+                }
+                if (clash) return false;  // injectivity forces distinct consts equal -> floor
+            }
+        }
+    }
+
     // Note on selector-owner ownership: SMT-LIB datatype semantics treat
     // (sel x) when x is in a wrong-ctor class as UNDERSPECIFIED (any value),
     // not as a conflict. So a "selector applied to wrong ctor" check is NOT
