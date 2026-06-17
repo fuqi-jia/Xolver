@@ -44,7 +44,9 @@ namespace xolver {
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
-      engine_(kernel_.get()) {
+      engine_(kernel_.get()),
+      groebner_(*kernel_) {
+    enableGroebner_ = xolver::env::flag("XOLVER_NRA_GROBNER");
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
     // NRA-MGC-PROFILE diagnostic: env-gated per-stage wall-time accounting.
     // Set XOLVER_NRA_STAGE_TIMING=1 for per-stage cumulative on exit.
@@ -118,6 +120,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-refute",
         stageWrap("sign-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); })));
+    // XOLVER_NRA_GROBNER (default OFF): cross-equation ideal-saturation refuter.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.groebner",
+        stageWrap("groebner", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageGroebner(db, e); })));
     // XOLVER_NRA_SIGN_SPLIT (default OFF): case-split on sign-blocking variables
     // when sign-refute can't fire. See NDEEP-3/4 / MGC R&D audit.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -806,6 +812,50 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
         st.flush();
     }
     return TheoryCheckResult::mkConflict(std::move(tc));
+}
+
+// nra.groebner — cross-equation ideal-saturation refutation. Reuses the
+// (theory-agnostic) GroebnerIdealReasoner on the asserted EQUALITY polynomials:
+// a degree/step-bounded Buchberger reduction; if 1 ∈ ideal(equalities) the system
+// has no common root over ℂ, hence none over ℝ ⇒ UNSAT. SOUND: presolveConstraints_
+// is the live asserted set (truncated on backtrack, like stageSignRefute), so every
+// reason in the emitted conflict is currently on the trail. Bounded (the reasoner
+// bails to NoChange past its budget). Catches cross-equation obstructions (e.g.
+// x*y=1 ∧ x=0) that sign-refute / single-substitution miss.
+std::optional<TheoryCheckResult> NraSolver::stageGroebner(TheoryLemmaStorage& /*lemmaDb*/,
+                                                          TheoryEffort /*effort*/) {
+    if (!enableGroebner_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        cs.push_back({c.poly, c.rel, c.reason});   // reasoner filters to equalities internally
+    }
+    if (cs.size() < 2) return std::nullopt;
+
+    // Warm-start dedup: the bounded Buchberger run is non-trivial, and the SAT search
+    // re-enters check() many times with an UNCHANGED constraint set. Skip the re-run
+    // when the (poly,rel) signature matches the last NO-CONFLICT call. Sound: replaying
+    // a no-conflict verdict is safe; a hash collision only loses completeness (we fall
+    // through to CDCAC), never soundness.
+    size_t sig = 1469598103934665603ull;   // FNV-1a over (poly,rel)
+    for (const auto& c : cs) {
+        sig = (sig ^ static_cast<size_t>(c.poly)) * 1099511628211ull;
+        sig = (sig ^ static_cast<size_t>(c.rel)) * 1099511628211ull;
+    }
+    if (groebnerNoConflictSig_ == sig) return std::nullopt;
+
+    auto r = groebner_.run(cs);
+    if (r.kind != NiaReasoningKind::Conflict || !r.conflict) groebnerNoConflictSig_ = sig;
+    if (r.kind == NiaReasoningKind::Conflict && r.conflict) {
+        if (xolver::env::diag("XOLVER_NRA_GROBNER_DIAG"))
+            std::fprintf(stderr, "[NRA-GROBNER] UNSAT cons=%zu\n", cs.size());
+        return TheoryCheckResult::mkConflict(std::move(*r.conflict));
+    }
+    return std::nullopt;
 }
 
 // XOLVER_NRA_SIGN_SPLIT (default OFF). MGC-RD closing lever.
