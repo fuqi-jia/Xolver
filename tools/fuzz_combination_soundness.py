@@ -101,6 +101,59 @@ class Gen:
         lines.append("(check-sat)")
         return "\n".join(lines) + "\n"
 
+class DtGen:
+    """QF_UFDTLIA: a Pair datatype over Int + UF, exercising constructor/selector/
+    tester congruence in combination (validates the #66 datatype routing at scale)."""
+    def __init__(self, rng):
+        self.rng = rng
+        self.logic = "QF_UFDTLIA"
+        self.int_vars = ["i", "j", "k"]
+        self.pair_vars = ["p", "q", "r"]
+        self.iconsts = ["0", "1", "2", "(- 1)", "5"]
+
+    def int_term(self, d):
+        r = self.rng
+        ch = ["var", "const"]
+        if d > 0: ch += ["add", "sub", "fst", "snd", "uf"]
+        c = r.choice(ch)
+        if c == "var": return r.choice(self.int_vars)
+        if c == "const": return r.choice(self.iconsts)
+        if c == "add": return f"(+ {self.int_term(d-1)} {self.int_term(d-1)})"
+        if c == "sub": return f"(- {self.int_term(d-1)} {self.int_term(d-1)})"
+        if c == "fst": return f"(fst {self.pair_term(d-1)})"
+        if c == "snd": return f"(snd {self.pair_term(d-1)})"
+        if c == "uf":  return f"(f {self.pair_term(d-1)})"
+        return "0"
+
+    def pair_term(self, d):
+        r = self.rng
+        if d <= 0 or r.random() < 0.5: return r.choice(self.pair_vars)
+        return f"(mk {self.int_term(d-1)} {self.int_term(d-1)})"
+
+    def atom(self, d):
+        r = self.rng
+        k = r.choice(["int_eq", "int_le", "pair_eq", "pair_neq", "tester"])
+        if k == "int_eq":  return f"(= {self.int_term(d)} {self.int_term(d)})"
+        if k == "int_le":  return f"(<= {self.int_term(d)} {self.int_term(d)})"
+        if k == "pair_eq": return f"(= {self.pair_term(d)} {self.pair_term(d)})"
+        if k == "pair_neq":return f"(distinct {self.pair_term(d)} {self.pair_term(d)})"
+        if k == "tester":  return f"((_ is mk) {self.pair_term(d)})"
+        return "true"
+
+    def formula(self):
+        r = self.rng
+        lines = [f"(set-logic {self.logic})",
+                 "(declare-datatype Pair ((mk (fst Int) (snd Int))))"]
+        for v in self.int_vars: lines.append(f"(declare-fun {v} () Int)")
+        for v in self.pair_vars: lines.append(f"(declare-fun {v} () Pair)")
+        lines.append("(declare-fun f (Pair) Int)")
+        for _ in range(r.randint(2, 7)):
+            a = self.atom(r.randint(1, 3))
+            if r.random() < 0.3: a = f"(not {a})"
+            lines.append(f"(assert {a})")
+        lines.append("(check-sat)")
+        return "\n".join(lines) + "\n"
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=400)
@@ -110,12 +163,12 @@ def main():
     args = ap.parse_args()
     rng = random.Random(args.seed)
     logics = ["QF_AUFLIA", "QF_ALIA", "QF_UFLIA",
-              "QF_AUFLRA", "QF_ALRA", "QF_UFLRA"]
+              "QF_AUFLRA", "QF_ALRA", "QF_UFLRA", "QF_UFDTLIA"]
     unsound, gaps, checked = [], [], 0
     tmpf = os.path.join(tempfile.gettempdir(), f"fuzz_{os.getpid()}.smt2")
     for idx in range(args.n):
         logic = rng.choice(logics)
-        smt = Gen(rng, logic).formula()
+        smt = (DtGen(rng) if logic == "QF_UFDTLIA" else Gen(rng, logic)).formula()
         with open(tmpf, "w") as fh:
             fh.write(smt)
         xo = run([args.solver, "solve", tmpf], "", args.timeout)
