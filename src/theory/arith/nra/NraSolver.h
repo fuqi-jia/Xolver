@@ -195,6 +195,11 @@ private:
     GroebnerIdealReasoner groebner_;
     bool enableGroebner_ = false;   // XOLVER_NRA_GROBNER (default-OFF)
     size_t groebnerNoConflictSig_ = 0;   // warm-start: last (poly,rel)-signature that found no conflict
+    // libpoly hardening: decline the CDCAC path (→ unknown, sound) on inputs above
+    // these thresholds, preventing libpoly blowup/OOM on pathological systems.
+    // 0 = disabled (default ⇒ no corpus impact); tuned on the benchmark set.
+    int cdcacMaxVars_ = 0;   // XOLVER_NRA_CDCAC_MAX_VARS
+    int cdcacMaxDeg_ = 0;    // XOLVER_NRA_CDCAC_MAX_DEGREE
 
     std::vector<SatLit> activeLits_;
     std::vector<NraTrailEntry> trail_;

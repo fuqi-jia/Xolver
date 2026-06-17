@@ -47,6 +47,8 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
       engine_(kernel_.get()),
       groebner_(*kernel_) {
     enableGroebner_ = xolver::env::flag("XOLVER_NRA_GROBNER");
+    cdcacMaxVars_ = xolver::env::paramInt("XOLVER_NRA_CDCAC_MAX_VARS", 0);
+    cdcacMaxDeg_  = xolver::env::paramInt("XOLVER_NRA_CDCAC_MAX_DEGREE", 0);
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
     // NRA-MGC-PROFILE diagnostic: env-gated per-stage wall-time accounting.
     // Set XOLVER_NRA_STAGE_TIMING=1 for per-stage cumulative on exit.
@@ -2087,6 +2089,29 @@ std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lem
                                                        TheoryEffort /*effort*/) {
     if (xolver::env::diag("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[STAGE-CDCAC] reached (engine_ will run core_->solve)" << std::endl;
+    // libpoly hardening (XOLVER_NRA_CDCAC_MAX_VARS / _MAX_DEGREE, 0=disabled):
+    // decline pathologically large systems where libpoly (CDCAC's CAD backend) can
+    // blow up / OOM, returning unknown (SOUND — declining to decide is never a wrong
+    // verdict) rather than risking a process-killing crash. A robustness guard; the
+    // threshold is tuned on the benchmark set (E1). Default disabled ⇒ no corpus impact.
+    if (cdcacMaxVars_ > 0 || cdcacMaxDeg_ > 0) {
+        std::set<std::string> vars;
+        int maxDeg = 0;
+        for (const auto& c : presolveConstraints_) {
+            if (c.poly == NullPoly) continue;
+            for (const auto& v : kernel_->variables(c.poly)) {
+                vars.insert(v);
+                if (auto d = kernel_->degree(c.poly, v)) maxDeg = std::max(maxDeg, *d);
+            }
+        }
+        if ((cdcacMaxVars_ > 0 && static_cast<int>(vars.size()) > cdcacMaxVars_) ||
+            (cdcacMaxDeg_ > 0 && maxDeg > cdcacMaxDeg_)) {
+            if (xolver::env::diag("XOLVER_NRA_CDCAC_GUARD_DIAG"))
+                std::fprintf(stderr, "[CDCAC-GUARD] declined: vars=%zu maxDeg=%d\n",
+                             vars.size(), maxDeg);
+            return TheoryCheckResult::unknown("cdcac-input-exceeds-libpoly-guard");
+        }
+    }
     // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
     // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
     // unknown when CAC cannot decide, rather than a default/false verdict.
