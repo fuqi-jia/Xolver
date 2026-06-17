@@ -192,9 +192,38 @@ EufTermId EufTermManager::intern(ExprId root, const CoreIr& ir) {
     // arg/result sorts, so distinct constructors (or a selector vs a different
     // datatype's selector) never collide. The DtReasoner layers the datatype
     // axioms on top. The DT-operator symbol of a CoreExpr (name from payload).
-    auto dtSymbolName = [](const CoreExpr& e) -> std::string {
+    auto dtSymbolName = [&ir](const CoreExpr& e) -> std::string {
         const std::string* nm = std::get_if<std::string>(&e.payload.value);
         std::string base = nm ? *nm : std::string();
+        // Recover a DROPPED constructor name (#72). A preprocessing/rewrite pass
+        // can rebuild a constructor CoreExpr (observed for compound / self-
+        // referential ctor args, e.g. mk(snd q, 0), mk((+ a 1), 0)) WITHOUT its
+        // payload name — the name is present at the parser/adapter but empty by
+        // the time EUF interns it, so the term would become a bare "#dt.ctor."
+        // with no constructor suffix. That empty name then breaks BOTH the
+        // selector-projection axiom (DtReasoner guard opName==ctorName) AND
+        // structural model evaluation (DtModelValidator matches the tree
+        // ctorName), producing false `sat` (QF_UFDTLIA #70). This is the single
+        // chokepoint where the #dt.ctor.<C> symbol is built, so recovering here
+        // fixes every downstream consumer regardless of which pass dropped the
+        // payload. Recover from the DatatypeRegistry by the constructor's result
+        // sort, ONLY when UNAMBIGUOUS (a sole constructor, or exactly one of the
+        // node's arity) — so a wrong name can never be substituted (unsound).
+        if (e.kind == Kind::Constructor && base.empty()) {
+            if (const DatatypeInfo* dt = ir.datatypes().datatype(e.sort)) {
+                const DtConstructorInfo* match = nullptr;
+                int nMatch = 0;
+                if (dt->constructors.size() == 1) {
+                    match = &dt->constructors[0];
+                    nMatch = 1;
+                } else {
+                    for (const auto& c : dt->constructors) {
+                        if (c.arity() == e.children.size()) { match = &c; ++nMatch; }
+                    }
+                }
+                if (match && nMatch == 1) base = match->name;
+            }
+        }
         switch (e.kind) {
             case Kind::Constructor: return "#dt.ctor." + base;
             case Kind::Selector:    return "#dt.sel." + base;
