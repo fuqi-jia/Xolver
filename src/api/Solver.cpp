@@ -593,6 +593,95 @@ public:
             }
         }
 
+        // DT/UF selector value reconciliation across IR versions
+        // (XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE, default-ON). The override above keys on
+        // the (purified) ir->assertions() selector ExprIds, but the validator
+        // re-checks the ORIGINAL assertions, whose selector nodes can be DIFFERENT
+        // ExprIds (purification rebuilt them). So a `(fst p)` inside a nonlinear term
+        // (ufdtnia_001: (* (fst p) (fst p)) = 16) keeps the ORIGINAL node un-overridden
+        // -> Indeterminate -> a genuine sat floors to Unknown. Reconcile by SEMANTIC
+        // identity: build (selectorName, baseVarName) -> value from every bridge-shaped
+        // equality (selector = model-valued var | int constant) over ALL assertions,
+        // then key the override by the ORIGINAL selector node ExprIds the validator
+        // actually evaluates. SOUND + additive: the value is theory-consistent and the
+        // validator still independently re-checks every original assertion, so a wrong
+        // value -> Violated/Indeterminate, never a confirmed false sat. Variable-base
+        // selectors only; nested-base selectors stay Indeterminate (sound).
+        static const bool dtSemBridge =
+            xolver::env::flag("XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE", true);
+        if (dtSemBridge) {
+            // Semantic identity of an EUF-owned arith read whose value the DT/EUF
+            // model does not export: a datatype selector `(fst p)` -> "S\x01fst\x01p",
+            // or a UF application over (datatype) variables `(f p)` -> "U\x01f\x01p".
+            // Returns nullopt for non-Variable bases/args (kept Indeterminate = sound).
+            auto semKey = [&](ExprId id) -> std::optional<std::string> {
+                const CoreExpr& n = ir->get(id);
+                if (n.kind == Kind::Selector && n.children.size() == 1) {
+                    const std::string* fn = std::get_if<std::string>(&n.payload.value);
+                    const CoreExpr& base = ir->get(n.children[0]);
+                    const std::string* bn = base.kind == Kind::Variable
+                        ? std::get_if<std::string>(&base.payload.value) : nullptr;
+                    if (fn && bn) return "S\x01" + *fn + "\x01" + *bn;
+                } else if (n.kind == Kind::UFApply) {
+                    const std::string* fn = std::get_if<std::string>(&n.payload.value);
+                    if (!fn) return std::nullopt;
+                    std::string k = "U\x01" + *fn;
+                    for (ExprId c : n.children) {
+                        const CoreExpr& cn = ir->get(c);
+                        if (cn.kind != Kind::Variable) return std::nullopt;  // all-Variable args only
+                        const std::string* an = std::get_if<std::string>(&cn.payload.value);
+                        if (!an) return std::nullopt;
+                        k += "\x01" + *an;
+                    }
+                    return k;
+                }
+                return std::nullopt;
+            };
+            auto modelValueOf = [&](ExprId valId) -> std::optional<RealValue> {
+                const CoreExpr& vnode = ir->get(valId);
+                if (vnode.kind == Kind::Variable) {
+                    if (const std::string* vn = std::get_if<std::string>(&vnode.payload.value)) {
+                        auto rit = lastModel_->numericAssignments.find(*vn);
+                        if (rit != lastModel_->numericAssignments.end()) return rit->second;
+                        auto nit = numAsg.find(*vn);
+                        if (nit != numAsg.end()) return RealValue::fromMpq(nit->second);
+                    }
+                } else if (vnode.kind == Kind::ConstInt) {
+                    if (const int64_t* iv = std::get_if<int64_t>(&vnode.payload.value))
+                        return RealValue::fromInt(*iv);
+                }
+                return std::nullopt;
+            };
+            // Pass 1: (semantic key) -> model value, from every bridge-shaped equality
+            // `(= read value)` across ALL (purified) assertions.
+            std::map<std::string, RealValue> semVal;
+            for (ExprId aid : ir->assertions()) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                for (int s = 0; s < 2; ++s) {
+                    auto key = semKey(a.children[s]);
+                    if (!key) continue;
+                    if (auto v = modelValueOf(a.children[1 - s])) { semVal.emplace(*key, *v); break; }
+                }
+            }
+            // Pass 2: key the ExprId-based override by the ORIGINAL read nodes the
+            // validator actually evaluates (reconciling purified vs original node ids).
+            if (!semVal.empty()) {
+                std::unordered_set<ExprId> seen;
+                std::function<void(ExprId)> scan = [&](ExprId e) {
+                    if (e == NullExpr || !seen.insert(e).second) return;
+                    const CoreExpr& n = ir->get(e);
+                    if (n.kind == Kind::Selector || n.kind == Kind::UFApply) {
+                        if (auto key = semKey(e)) {
+                            auto it = semVal.find(*key);
+                            if (it != semVal.end()) selectorBridge.emplace(e, it->second);  // first wins
+                        }
+                    }
+                    for (ExprId c : n.children) scan(c);
+                };
+                for (ExprId aid : originalAssertions_) scan(aid);
+            }
+        }
         const bool validatorMemo = xolver::env::diag("XOLVER_PP_VALIDATOR_MEMO");
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty() || !roaeFreeArrayVars_.empty()) {
