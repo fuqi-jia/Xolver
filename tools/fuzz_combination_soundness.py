@@ -32,11 +32,16 @@ class Gen:
     def __init__(self, rng, logic):
         self.rng = rng
         self.logic = logic
-        self.has_array = "A" in logic.replace("QF_", "").split("LIA")[0] or "ALIA" in logic or "AUFLIA" in logic
-        self.has_uf = "UF" in logic
+        body = logic.replace("QF_", "")
+        self.is_real = "LRA" in body
+        self.has_array = body.startswith("A") or "AUF" in body
+        self.has_uf = "UF" in body
+        self.esort = "Real" if self.is_real else "Int"
         self.int_vars = ["i", "j", "k"]
         self.arr_vars = ["a", "b", "c"] if self.has_array else []
-        self.consts = ["0", "1", "2", "(- 1)", "5"]
+        # value tokens are well-typed for the element sort
+        self.consts = (["0.0", "1.0", "2.0", "(- 1.0)", "5.0"] if self.is_real
+                       else ["0", "1", "2", "(- 1)", "5"])
 
     def int_term(self, d):
         r = self.rng
@@ -78,14 +83,16 @@ class Gen:
 
     def formula(self):
         r = self.rng
+        es = self.esort
+        arr = f"(Array {es} {es})"   # uniform index/element sort keeps gen well-typed
         lines = [f"(set-logic {self.logic})"]
-        for v in self.int_vars: lines.append(f"(declare-fun {v} () Int)")
-        for v in self.arr_vars: lines.append(f"(declare-fun {v} () (Array Int Int))")
+        for v in self.int_vars: lines.append(f"(declare-fun {v} () {es})")
+        for v in self.arr_vars: lines.append(f"(declare-fun {v} () {arr})")
         if self.has_uf:
-            lines.append("(declare-fun f (Int) Int)")
+            lines.append(f"(declare-fun f ({es}) {es})")
             if self.arr_vars:
-                lines.append("(declare-fun g ((Array Int Int)) Int)")
-                lines.append("(declare-fun h ((Array Int Int)) Bool)")
+                lines.append(f"(declare-fun g ({arr}) {es})")
+                lines.append(f"(declare-fun h ({arr}) Bool)")
         n = r.randint(2, 7)
         for _ in range(n):
             a = self.atom(r.randint(1, 3))
@@ -102,7 +109,8 @@ def main():
     ap.add_argument("--timeout", type=float, default=6.0)
     args = ap.parse_args()
     rng = random.Random(args.seed)
-    logics = ["QF_AUFLIA", "QF_ALIA", "QF_UFLIA"]
+    logics = ["QF_AUFLIA", "QF_ALIA", "QF_UFLIA",
+              "QF_AUFLRA", "QF_ALRA", "QF_UFLRA"]
     unsound, gaps, checked = [], [], 0
     tmpf = os.path.join(tempfile.gettempdir(), f"fuzz_{os.getpid()}.smt2")
     for idx in range(args.n):
