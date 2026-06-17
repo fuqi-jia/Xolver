@@ -282,6 +282,7 @@ void TheoryManager::backtrackToLevel(int level) {
 std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraints() const {
     std::vector<ActiveLinearConstraint> result;
     if (!assignmentView_ || !registry_) return result;
+    result.reserve(activeLinearCountHint_);   // active set is stable across checks ⇒ avoid push_back reallocations
 
     for (const auto& rec : registry_->records()) {
         if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
@@ -299,6 +300,7 @@ std::vector<ActiveLinearConstraint> TheoryManager::collectActiveLinearConstraint
         }
         result.push_back(alc);
     }
+    activeLinearCountHint_ = result.size();
     return result;
 }
 

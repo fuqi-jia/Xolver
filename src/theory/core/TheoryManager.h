@@ -100,6 +100,9 @@ public:
 private:
     std::vector<std::unique_ptr<TheorySolver>> solvers_;
     std::unordered_map<TheoryId, TheorySolver*> solverByTheory_;
+    // Capacity hint for collectActiveLinearConstraints: the active set is stable across
+    // checks, so reserving last-call's size avoids per-call push_back reallocations.
+    mutable size_t activeLinearCountHint_ = 0;
 
     bool combinationMode_ = false;
     bool nonConvexMode_ = false;
