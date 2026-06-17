@@ -21,6 +21,7 @@
 #include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
 #include "theory/arith/nia/reasoners/OmegaTest.h"        // nia.omega: sound linear-integer UNSAT
 #include "theory/arith/nia/reasoners/SmallPrimeModular.h" // nia.small-prime-modular: GF(p) schedule
+#include "theory/arith/nia/reasoners/IntBoundProp.h"      // nia.int-bound-prop: integer interval refutation
 #include "theory/arith/linearizer/NonlinearTermAbstraction.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
 #include "theory/core/LogicFeatureDetector.h"
@@ -215,6 +216,11 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // models — the gap the Full-effort-only Dio/Smith-NF reasoner leaves open.
     enableSmallPrimeModular_ = xolver::env::flag("XOLVER_NIA_SMALL_PRIME_MODULAR");
     add("nia.small-prime-modular", &NiaSolver::stageSmallPrimeModular);
+    // nia.int-bound-prop: integer interval contraction over the equalities seeded by
+    // the asserted single-variable bounds — refutes bound×equality integer-infeasibility
+    // (e.g. x=2y ∧ x=1) that the equalities-only modular reasoner misses.
+    enableIntBoundProp_ = xolver::env::flag("XOLVER_NIA_INT_BOUND_PROP");
+    add("nia.int-bound-prop", &NiaSolver::stageIntBoundProp);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -863,6 +869,111 @@ std::optional<TheoryCheckResult> NiaSolver::stageSmallPrimeModular(TheoryLemmaSt
                      ocs.size(), unsat ? "UNSAT" : "SatOrUnknown");
     if (unsat)
         return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    return std::nullopt;
+}
+
+// nia.int-bound-prop — integer interval contraction (see IntBoundProp). Builds the
+// integer relaxation, seeds variable domains from the asserted SINGLE-variable bound
+// atoms (a·x+c {≥,≤} 0 → an integer ceil/floor bound), and contracts over the
+// equalities; an emptied domain is a sound integer-infeasibility ⇒ conflict. This
+// refutes bound×equality obstructions (e.g. x=2y ∧ x=1 ⇒ 2y=1) that the equalities-only
+// modular reasoner misses. SOUND: the same abstraction/firewall relaxations as nia.omega,
+// plus interval contraction preserves every integer solution. (Domain-narrowing
+// PROPAGATION — feeding tightened bounds back to prune — is the separate B1+B2.2b.)
+std::optional<TheoryCheckResult> NiaSolver::stageIntBoundProp(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableIntBoundProp_) return std::nullopt;
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    if (omegaSafe_ < 0)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> eqReasons, seedReasons;
+    std::map<int, intprop::Bound> seedBounds;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    auto ceildiv = [](const mpz_class& a, const mpz_class& m) {  // m > 0
+        mpz_class q; mpz_cdiv_q(q.get_mpz_t(), a.get_mpz_t(), m.get_mpz_t()); return q;
+    };
+    auto floordiv = [](const mpz_class& a, const mpz_class& m) {  // m > 0
+        mpz_class q; mpz_fdiv_q(q.get_mpz_t(), a.get_mpz_t(), m.get_mpz_t()); return q;
+    };
+    auto tightenLo = [&](int v, const mpz_class& lo, const SatLit& r) {
+        intprop::Bound& b = seedBounds[v];
+        if (!b.hasLo || lo > b.lo) { b.lo = lo; b.hasLo = true; }
+        seedReasons.push_back(r);
+    };
+    auto tightenHi = [&](int v, const mpz_class& hi, const SatLit& r) {
+        intprop::Bound& b = seedBounds[v];
+        if (!b.hasHi || hi < b.hi) { b.hi = hi; b.hasHi = true; }
+        seedReasons.push_back(r);
+    };
+
+    for (const auto& c : normalized_) {
+        if (c.rel == Relation::Neq) continue;            // drop Neq (sound)
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) continue;
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) continue;
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) continue;
+        oc.constant = cst;
+        oc.rel = c.rel == Relation::Eq  ? omega::Constraint::Eq
+               : c.rel == Relation::Leq ? omega::Constraint::Leq
+                                        : omega::Constraint::Geq;
+
+        if (oc.rel == omega::Constraint::Eq) {
+            eqReasons.push_back(c.reason);
+            ocs.push_back(std::move(oc));
+        } else if (oc.coeffs.size() == 1) {
+            // Single-variable inequality ⇒ an integer ceil/floor bound (the seed).
+            const int v = oc.coeffs.begin()->first;
+            const mpz_class a = oc.coeffs.begin()->second;   // ≠ 0
+            const mpz_class m = (a < 0) ? mpz_class(-a) : a; // |a|
+            const mpz_class K = -oc.constant;                // a·x {≥,≤} K
+            const bool geq = (oc.rel == omega::Constraint::Geq);
+            if ((geq && a > 0) || (!geq && a < 0))      tightenLo(v, ceildiv(geq ? K : -K, m), c.reason);
+            else                                         tightenHi(v, floordiv(geq ? -K : K, m), c.reason);
+        }
+        // multi-variable inequalities are ignored (this cut handles equalities + bounds).
+    }
+    if (ocs.empty()) return std::nullopt;
+
+    const bool unsat = intprop::propagate(ocs, seedBounds) == intprop::Result::Unsat;
+    if (xolver::env::diag("XOLVER_NIA_INT_BOUND_PROP_DIAG"))
+        std::fprintf(stderr, "[INTBOUND] eqs=%zu seeds=%zu -> %s\n",
+                     ocs.size(), seedReasons.size(), unsat ? "UNSAT" : "Ok");
+    if (unsat) {
+        std::vector<SatLit> reasons = std::move(eqReasons);
+        reasons.insert(reasons.end(), seedReasons.begin(), seedReasons.end());
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    }
     return std::nullopt;
 }
 
