@@ -7,8 +7,107 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
+#include <optional>
+#include <unordered_map>
+#include <string>
 
 namespace xolver {
+
+namespace {
+// (#70/#74) Lightweight integer linear form over hash-consed atom ExprIds:
+// constant + sum(coeff_i * atom_i). Used by the injectivity linear-field floor
+// to detect when two fields of two merged same-constructor terms differ by a
+// nonzero constant (and therefore can never be equal). Opaque subterms
+// (variable / selector / UF app / *, mod, non-integer real) are atoms keyed by
+// their ExprId — two syntactically-identical such terms share an ExprId (the
+// frontend hash-conses), so e.g. the `i` in (+ i 0) and (+ i 2) cancels.
+struct LinForm {
+    int64_t constant = 0;
+    std::unordered_map<ExprId, int64_t> coeffs;
+};
+
+// dst += scale * src, with a conservative int64 overflow guard. Returns false on
+// possible overflow -> the caller abandons the floor for this field (sound: it
+// only ever under-detects, never mis-detects).
+bool addLin(LinForm& dst, const LinForm& src, int64_t scale) {
+    auto mulAdd = [](int64_t& acc, int64_t a, int64_t b) -> bool {
+        if (a != 0) {
+            int64_t aa = a < 0 ? -a : a;
+            if (b > INT64_MAX / aa || b < INT64_MIN / aa) return false;
+        }
+        int64_t prod = a * b;
+        if ((prod > 0 && acc > INT64_MAX - prod) ||
+            (prod < 0 && acc < INT64_MIN - prod)) return false;
+        acc += prod;
+        return true;
+    };
+    if (!mulAdd(dst.constant, src.constant, scale)) return false;
+    for (const auto& [atom, c] : src.coeffs) {
+        int64_t& d = dst.coeffs[atom];
+        if (!mulAdd(d, c, scale)) return false;
+        if (d == 0) dst.coeffs.erase(atom);
+    }
+    return true;
+}
+
+std::optional<LinForm> linForm(const CoreIr& ir, ExprId e, int& budget) {
+    if (e == NullExpr || e >= static_cast<ExprId>(ir.size())) return std::nullopt;
+    if (--budget < 0) return std::nullopt;
+    const CoreExpr& ce = ir.get(e);
+    auto atom = [&]() { LinForm lf; lf.coeffs[e] = 1; return lf; };
+    switch (ce.kind) {
+        case Kind::ConstInt:
+            if (auto* iv = std::get_if<int64_t>(&ce.payload.value)) {
+                LinForm lf; lf.constant = *iv; return lf;
+            }
+            return atom();
+        case Kind::ConstReal:
+            if (auto* sv = std::get_if<std::string>(&ce.payload.value)) {
+                const std::string& s = *sv;
+                size_t slash = s.find('/');
+                std::string num = slash == std::string::npos ? s : s.substr(0, slash);
+                std::string den = slash == std::string::npos ? std::string("1")
+                                                             : s.substr(slash + 1);
+                if (den != "1") return atom();  // genuine fraction -> opaque
+                try {
+                    size_t pos = 0;
+                    long long v = std::stoll(num, &pos);
+                    if (pos != num.size()) return atom();
+                    LinForm lf; lf.constant = static_cast<int64_t>(v); return lf;
+                } catch (...) { return atom(); }
+            }
+            return atom();
+        case Kind::Add: {
+            LinForm lf;
+            for (ExprId c : ce.children) {
+                auto sub = linForm(ir, c, budget);
+                if (!sub || !addLin(lf, *sub, 1)) return std::nullopt;
+            }
+            return lf;
+        }
+        case Kind::Sub: {
+            if (ce.children.size() != 2) return atom();
+            auto a = linForm(ir, ce.children[0], budget);
+            auto b = linForm(ir, ce.children[1], budget);
+            if (!a || !b) return std::nullopt;
+            LinForm lf;
+            if (!addLin(lf, *a, 1) || !addLin(lf, *b, -1)) return std::nullopt;
+            return lf;
+        }
+        case Kind::Neg: {
+            if (ce.children.size() != 1) return atom();
+            auto a = linForm(ir, ce.children[0], budget);
+            if (!a) return std::nullopt;
+            LinForm lf;
+            if (!addLin(lf, *a, -1)) return std::nullopt;
+            return lf;
+        }
+        default:
+            return atom();  // variable / selector / UF / Mul / Mod / ... -> opaque
+    }
+}
+}  // namespace
 
 DtReasoner::~DtReasoner() {
     if (xolver::env::diag("XOLVER_DT_HC_STATS")) {
@@ -723,8 +822,24 @@ bool DtReasoner::modelFullyDetermined() const {
                     if (!parent.count(y)) parent[y] = y;
                     parent[find(x)] = find(y);
                 };
-                for (size_t k = 0; k < a1.size(); ++k)
+                for (size_t k = 0; k < a1.size(); ++k) {
                     uni(egraph_->rep(a1[k]), egraph_->rep(a2[k]));
+                    // Linear-field floor: if the two fields' integer linear forms
+                    // differ by a NONZERO CONSTANT (all atom coefficients cancel),
+                    // the fields can never be equal, so two merged same-ctor terms
+                    // cannot be equal -> unsat. Catches injectivity over linear
+                    // arith fields, e.g. mk(j,(+ i 0)) = mk(_,(+ i 2)) => 0 = 2
+                    // (the i cancels). SOUND: a genuine model never merges two
+                    // constructors whose fields differ by a constant.
+                    int b1 = 64, b2 = 64;
+                    auto la = linForm(*ir_, originExpr(a1[k]), b1);
+                    auto lb = linForm(*ir_, originExpr(a2[k]), b2);
+                    if (la && lb) {
+                        LinForm d = *la;
+                        if (addLin(d, *lb, -1) && d.coeffs.empty() && d.constant != 0)
+                            return false;  // fields differ by nonzero const -> floor
+                    }
+                }
                 // Collect, per union class, the distinct constant value among the
                 // operands; a second distinct constant in the same class -> floor.
                 std::unordered_map<EClassId, std::string> classConst;
