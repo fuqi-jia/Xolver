@@ -14,7 +14,7 @@ namespace xolver {
 // so the default purified form is unchanged; active when either the certificate
 // floor (needs the bridge var to SEE the obligation) or the arrangement (needs
 // it to SPLIT and recover) is enabled.
-static bool ufArgBridgeEnabled() {
+static bool ufArgBridgeEnabledLegacy() {
     return xolver::env::diag("XOLVER_COMB_SAT_FLOOR") ||
            xolver::env::diag("XOLVER_COMB_UFARG_ARRANGE");
 }
@@ -256,7 +256,7 @@ ExprId Purifier::purifyRec(ExprId root) {
             std::vector<ExprId> newArgs;
             newArgs.reserve(e.children.size());
             bool changed = false;
-            bool bridgeArgs = ufArgBridgeEnabled();
+            bool bridgeArgs = ufArgBridge_ || ufArgBridgeEnabledLegacy();
             for (ExprId arg : e.children) {
                 ExprId p = done.at(arg);
                 // Phase 1: a COMPOUND arith argument (e.g. f(i+1)) is bridged

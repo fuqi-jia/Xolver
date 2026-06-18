@@ -1046,8 +1046,27 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
     bool hasNonlinearArith = solverByTheory_.count(TheoryId::NIA) ||
                              solverByTheory_.count(TheoryId::NRA) ||
                              solverByTheory_.count(TheoryId::NIRA);
+    // (#77) UF-over-arith congruence coupling for NON-ARRAY UF combination.
+    // When arith derives that two UF arguments are equal — incl. a CONSTANT arg
+    // vs a same-valued variable, and a COMPOUND arg via its (internal) bridge
+    // var — the model-based arrangement must split their interface equality so
+    // EUF fires congruence and a false sat (f applied to arith-equal args with
+    // distinct values, e.g. f(0) != f(i-i) with i-i=0) is refuted in the SEARCH,
+    // not tolerated. This complements the constant- and internal-term inclusion
+    // below + the Purifier UF-arg bridge. Convex UFLRA needs it too (deduced-
+    // equality sharing does not cover the constant-arg case). Default ON;
+    // XOLVER_COMB_UF_CONGRUENCE=0 disables. Nonlinear excluded (NIA/NRA re-open
+    // splits -> non-termination; that is the A2 workstream).
+    // DEFAULT-OFF server-bake-pending lever (see TheoryFactory ufCongruenceEnabled).
+    static const bool ufCongFlag = xolver::env::diag("XOLVER_COMB_UF_CONGRUENCE");
+    bool ufCong = ufCongFlag && !arrayCombinationMode_ && !hasNonlinearArith &&
+                  !hasDatatypes_ &&   // scope OUT datatype logics (DtReasoner interaction)
+                  solverByTheory_.count(TheoryId::EUF) &&
+                  (solverByTheory_.count(TheoryId::LIA) ||
+                   solverByTheory_.count(TheoryId::LRA));
     bool modelArrange = arrayCombinationMode_ ||
-                        (useModelBased() && nonConvexMode_ && !hasNonlinearArith);
+                        (useModelBased() && nonConvexMode_ && !hasNonlinearArith) ||
+                        (useModelBased() && ufCong);
     if (modelArrange && effort == TheoryEffort::Full &&
         sharedTermRegistry_ && registry_) {
         // Identify the EUF (array) solver to consult for "already merged?".
@@ -1059,7 +1078,11 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         // current arith-model value (from whichever arith solver owns them).
         struct ValuedTerm { SharedTermId id; SortId sort; RealValue val; };
         std::vector<ValuedTerm> valued;
-        const bool arrangeInternals = xolver::env::diag("XOLVER_COMB_ARRANGE_INTERNAL");
+        // ufCong: arrange INTERNAL bridge vars too — a compound UF argument
+        // (e.g. i-i) lives in an internal bridge var, and congruence f(bridge)=f(c)
+        // only fires if that bridge var is arranged against the same-valued term.
+        const bool arrangeInternals =
+            xolver::env::diag("XOLVER_COMB_ARRANGE_INTERNAL") || ufCong;
         for (SharedTermId stId : sharedTermRegistry_->allSharedTerms()) {
             const auto* st = sharedTermRegistry_->get(stId);
             if (!st) continue;
@@ -1080,7 +1103,17 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             // skip. A bare constant has no simplex value, so take it from
             // constValue() directly.
             if (auto cv = sharedTermRegistry_->constValue(stId)) {
-                if (!careGraphEnabled_) continue;
+                // ARRAY logics: skip constant-vs-variable arrangement without the
+                // care graph (it destabilizes array axiom instantiation). NON-ARRAY
+                // UF combination (#77): a constant UF ARGUMENT must be arrangeable
+                // against a same-valued variable argument, or congruence f(c)=f(v)
+                // (when arith derives v=c) never fires and QF_UFLIA/UFLRA reports a
+                // false sat (e.g. f(0) and f(j) with j=0 assigned distinct values).
+                // The split (a=b) ∨ ¬(a=b) is a sound tautology; the SAT solver
+                // commits a polarity and EUF/arith react through the validated
+                // interface paths — a SEARCH-level refutation, never a model floor,
+                // so it can never over-floor a genuine sat.
+                if (!careGraphEnabled_ && !ufCong) continue;
                 v = RealValue::fromMpq(*cv);
             } else {
                 for (auto& solver : solvers_) {
@@ -1093,7 +1126,6 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
             if (!v) continue;
             valued.push_back({stId, st->sort, std::move(*v)});
         }
-
         for (size_t i = 0; i < valued.size(); ++i) {
             for (size_t j = i + 1; j < valued.size(); ++j) {
                 const auto& A = valued[i];

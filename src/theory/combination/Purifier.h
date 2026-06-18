@@ -23,6 +23,13 @@ public:
 
     void setArithTheory(TheoryId theory) { arithTheory_ = theory; }
 
+    // (#77) Bridge COMPOUND arith UF arguments into fresh shared leaves so the
+    // model-based arrangement can fire UF congruence over arith-equal args
+    // (closes the QF_UFLIA/UFLRA false-sat class). Enabled ONLY by the pure
+    // UF-arith builders — NOT datatype/array, where it perturbs the DtReasoner /
+    // array axioms. Legacy XOLVER_COMB_SAT_FLOOR/UFARG_ARRANGE still force it on.
+    void setUfArgBridge(bool v) { ufArgBridge_ = v; }
+
     void run();
 
     const std::vector<ExprId>& bridgeAssertions() const { return bridgeAssertions_; }
@@ -32,6 +39,7 @@ private:
     SharedTermRegistry& registry_;
     SortId boolSortId_;
     TheoryId arithTheory_ = TheoryId::LRA;
+    bool ufArgBridge_ = false;   // (#77) set by pure UF-arith builders only
 
     std::vector<ExprId> bridgeAssertions_;
     uint32_t freshCounter_ = 0;

@@ -188,6 +188,7 @@ void buildDT(BuildContext& c) {
     auto& registry = *c.registry;
     auto& theoryManager = *c.theoryManager;
     CoreIr* ir = c.ir;
+    theoryManager.setHasDatatypes(true);  // (#77) scope UF-arith arrangement out
     // Algebraic datatypes (+ UF). One shared egraph; DtReasoner layers the
     // free-algebra axioms on top. QF_DT and QF_UFDT share this branch.
     auto euf = std::make_unique<EufSolver>();
@@ -268,6 +269,20 @@ void buildArrayLIA(BuildContext& c) {
     theoryManager.setArrayCombinationMode(true);
 }
 
+// (#77) XOLVER_COMB_UF_CONGRUENCE (default ON): enable the UF-argument bridge in
+// the PURE UF-arith builders so the model-based arrangement can fire UF
+// congruence over arith-equal arguments. Scoped here (not datatype/array).
+static bool ufCongruenceEnabled() {
+    // DEFAULT-OFF (server-bake-pending lever). The coupling fixes the
+    // QF_UFLIA/UFLRA UF-over-arith congruence false-sats (#77) and is clean on
+    // the real-benchmark regression, but the differential fuzzer shows a modest
+    // completeness cost (extra arrangement search on random UF-arith formulas)
+    // that needs benchmark measurement before flipping default-ON. Enable with
+    // XOLVER_COMB_UF_CONGRUENCE=1.
+    static const bool v = xolver::env::diag("XOLVER_COMB_UF_CONGRUENCE");
+    return v;
+}
+
 void buildUFLRA(BuildContext& c) {
     auto& registry = *c.registry;
     auto& theoryManager = *c.theoryManager;
@@ -278,6 +293,7 @@ void buildUFLRA(BuildContext& c) {
     sharedTermRegistry->setCoreIr(ir);
     {
         Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
+        purifier.setUfArgBridge(ufCongruenceEnabled());
         purifier.run();
     }
     auto euf = std::make_unique<EufSolver>();
@@ -309,6 +325,7 @@ void buildUFLIA(BuildContext& c) {
         {
             Purifier purifier(*ir, *sharedTermRegistry, boolSortId);
             purifier.setArithTheory(TheoryId::LIA);
+            purifier.setUfArgBridge(ufCongruenceEnabled());
             purifier.run();
         }
         auto euf = std::make_unique<EufSolver>();
@@ -372,6 +389,7 @@ void buildUFDTNIA(BuildContext& c) {
     auto& result = *c.result;
     CoreIr* ir = c.ir;
     SortId boolSortId = c.boolSortId;
+    theoryManager.setHasDatatypes(true);  // (#77) scope UF-arith arrangement out
     // UF + datatypes + NIA. Same shape as QF_UFNIA with DtReasoner enabled.
     sharedTermRegistry = std::make_unique<SharedTermRegistry>();
     sharedTermRegistry->setCoreIr(ir);
@@ -410,6 +428,7 @@ void buildUFDTLIA(BuildContext& c) {
     auto& sharedTermRegistry = *c.sharedTermRegistry;
     CoreIr* ir = c.ir;
     SortId boolSortId = c.boolSortId;
+    theoryManager.setHasDatatypes(true);  // (#77) scope UF-arith arrangement out
     // UF + datatypes + LIA.
     sharedTermRegistry = std::make_unique<SharedTermRegistry>();
     sharedTermRegistry->setCoreIr(ir);

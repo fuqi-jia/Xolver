@@ -29,6 +29,13 @@ public:
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }
 
+    // (#77) Datatypes present (EUF carries them; no separate TheoryId). Scopes
+    // the UF-over-arith congruence arrangement OUT of datatype logics, where the
+    // arg bridge + internal-term arrangement interact badly with the DtReasoner
+    // (introduces datatype false-sats). Set by the datatype build functions.
+    void setHasDatatypes(bool v) { hasDatatypes_ = v; }
+    bool hasDatatypes() const { return hasDatatypes_; }
+
     void setArrangementComplete(bool v) { arrangementComplete_ = v; }
     bool isArrangementComplete() const { return arrangementComplete_; }
 
@@ -108,6 +115,7 @@ private:
     bool nonConvexMode_ = false;
     bool arrangementComplete_ = true;
     bool arrayCombinationMode_ = false;
+    bool hasDatatypes_ = false;
     // Stable dedup of arrangement splits already emitted (per canonical pair
     // key). Bounded by #shared-scalar pairs -> guarantees termination.
     std::unordered_set<uint64_t> emittedArrangementSplits_;
