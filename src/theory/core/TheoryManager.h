@@ -211,6 +211,14 @@ private:
     // keeps the floor) -> sound for the certificate, harmless for arrangement.
     bool sharedArgsArrangeable(SharedTermId a, SharedTermId b) const;
 
+    // #77 companion: are two UF-application RESULT shared terms value-APART in
+    // the current arith model (so the apps cannot be congruent under it)? Used to
+    // relax the arrangement-split filter for apps forced apart by ARITH (f(a) <
+    // f(b)) rather than an EUF (distinct app1 app2). Split-only — sound by
+    // construction (the split lets the search resolve breakability), never used
+    // for the certificate floor.
+    bool sharedResultsApart(SharedTermId a, SharedTermId b) const;
+
     void ensureSnapshotForLevel(int level);
     LevelSnapshot& snapshotForLevel(int level);
     void discardSnapshotsAbove(int level);

@@ -156,7 +156,8 @@ public:
     // fixed (UF apps + bridge vars are created pre-solve; arranging spawns no new
     // pairs) -> provably terminating. Shares logic with the detector above.
     std::vector<std::pair<SharedTermId, SharedTermId>> collectArrangeableUfArgPairs(
-        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const override;
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        const std::function<bool(SharedTermId, SharedTermId)>& appsResultApart = {}) const override;
 
     // Diagnostic / test hook: count active AssertedEquality merges whose
     // justifying literal is no longer on the trail (stale merges left by an

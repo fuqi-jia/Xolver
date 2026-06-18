@@ -245,10 +245,19 @@ public:
     // Phase 1 arrangement (recovery): the shared-term argument pairs to split
     // (a=b ∨ a≠b) so an undischarged UF-application congruence is resolved.
     // Default empty (only EUF owns congruence). See EufSolver override.
+    //
+    // `appsResultApart` (optional, #77): two SAME-function applications whose
+    // RESULT shared terms it reports value-apart in the model are ALSO an
+    // arrangement obligation even without an EUF-level (distinct app1 app2) — they
+    // are forced apart by ARITH (e.g. f(a) < f(b) on the bridged results, which
+    // EUF cannot see). Supplying it relaxes the strict EUF-disequal app filter so
+    // the search emits the arg split; omit it (default) for the certificate floor,
+    // which must stay strict to avoid over-flooring a coincidental value-equality.
     virtual std::vector<std::pair<SharedTermId, SharedTermId>>
     collectArrangeableUfArgPairs(
-        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
-        (void)valueEqual;
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        const std::function<bool(SharedTermId, SharedTermId)>& appsResultApart = {}) const {
+        (void)valueEqual; (void)appsResultApart;
         return {};
     }
 

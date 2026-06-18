@@ -332,6 +332,27 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 }
             }
         }
+        // #77 (always-on): const-vs-var entailed-equality refutation via the
+        // tableau-chase pin. assertedVarEqualityReason needs BOTH operands to be
+        // simplex vars; the LP-duality probe above is gated by impliedEqEnabled_;
+        // and the last-resort model-branch needs an arrangement authorization a
+        // derived diseq never gets. proveFixedValue folds a constant operand into
+        // the aux's RHS and is sound (a STRUCTURAL pin — equal lower/upper bounds
+        // chased through tableau rows, not a current-point coincidence). When it
+        // pins (a - b) = 0 the asserted a != b is a hard conflict carrying the
+        // pinning bound reasons. Closes the QF_UFLRA f(0) < f(-1+j) [j pinned to
+        // 1] false-sat: the derived 0 != arg with arg structurally pinned to 0.
+        // Zero cost when there are no interface disequalities (pure LRA).
+        if (eqReasons.empty()) {
+            int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
+            if (aux >= 0) {
+                auto fixed = gs_.proveFixedValue(aux);
+                if (fixed && fixed->first.a == 0 && fixed->first.b == 0) {
+                    for (const auto& br : fixed->second)
+                        eqReasons.push_back(br.reason);
+                }
+            }
+        }
         if (eqReasons.empty()) continue;
         TheoryConflict tc;
         for (auto l : eqReasons) tc.clause.push_back(l);

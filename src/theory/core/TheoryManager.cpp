@@ -1285,10 +1285,26 @@ TheoryCheckResult TheoryManager::check(TheoryLemmaStorage& lemmaDb, TheoryEffort
         auto it = solverByTheory_.find(TheoryId::EUF);
         if (it != solverByTheory_.end()) eufS = it->second;
         if (eufS) {
+            // #77 (XOLVER_COMB_UFARG_ARITH_APART, default ON): also split arg
+            // pairs of apps forced apart by ARITH on their bridged results
+            // (f(a) < f(b)), not just EUF-distinct apps. Sound — the split lets
+            // the search refute both branches when the args are arith-forced equal
+            // (the QF_UFLRA f(0) < f(-1+j) with j pinned to 1 false-sat class).
+            static const bool arithApart = []() {
+                const char* e = std::getenv("XOLVER_COMB_UFARG_ARITH_APART");
+                if (!e) return true;
+                return !(e[0] == '0' && e[1] == '\0');
+            }();
+            std::function<bool(SharedTermId, SharedTermId)> apartCb;
+            if (arithApart)
+                apartCb = [this](SharedTermId a, SharedTermId b) {
+                    return sharedResultsApart(a, b);
+                };
             for (auto& pr : eufS->collectArrangeableUfArgPairs(
                      [this](SharedTermId a, SharedTermId b) {
                          return sharedArgsArrangeable(a, b);
-                     })) {
+                     },
+                     apartCb)) {
                 SharedTermId a = pr.first, b = pr.second;
                 if (a == b) continue;
                 if (sharedEqMgr_.same(a, b) || sharedEqMgr_.diseqKnown(a, b)) continue;
@@ -1351,6 +1367,26 @@ bool TheoryManager::sharedArgsArrangeable(SharedTermId a, SharedTermId b) const 
         if (solver->sharedTermsActivelyDisequal(a, b)) disequal = true;
     }
     return va && vb && (*va == *vb) && !disequal;
+}
+
+bool TheoryManager::sharedResultsApart(SharedTermId a, SharedTermId b) const {
+    // Two UF-application RESULT shared terms are "apart" iff the arith model
+    // assigns them different values (or they are known interface-disequal). Then
+    // the two applications cannot be congruent in this candidate, so arranging
+    // their value-equal args equal would force a congruence the model violates —
+    // a genuine arrangement obligation even with NO EUF (distinct app1 app2).
+    if (a == b) return false;
+    if (sharedEqMgr_.same(a, b)) return false;       // results merged -> not apart
+    if (sharedEqMgr_.diseqKnown(a, b)) return true;  // explicit interface diseq
+    std::optional<RealValue> va, vb;
+    for (const auto& solver : solvers_) {
+        if (solver->id() == TheoryId::EUF) continue;
+        if (!solver->supportsCombination()) continue;
+        if (!va) va = solver->sharedTermArithValue(a);
+        if (!vb) vb = solver->sharedTermArithValue(b);
+        if (solver->sharedTermsActivelyDisequal(a, b)) return true;
+    }
+    return va && vb && !(*va == *vb);
 }
 
 bool TheoryManager::hasCompleteSatCertificate(std::string* reason) const {

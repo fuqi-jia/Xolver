@@ -688,7 +688,8 @@ bool EufSolver::satComplete(std::string* reason) const {
 
 std::vector<std::pair<SharedTermId, SharedTermId>>
 EufSolver::collectArrangeableUfArgPairs(
-    const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
+    const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+    const std::function<bool(SharedTermId, SharedTermId)>& appsResultApart) const {
     std::vector<std::pair<SharedTermId, SharedTermId>> pairs;
     // Reverse map: EufTermId -> SharedTermId (interface constants/bridge vars).
     std::unordered_map<EufTermId, SharedTermId> eufToShared;
@@ -710,13 +711,29 @@ EufSolver::collectArrangeableUfArgPairs(
         auto it = eufToShared.find(t);
         return it == eufToShared.end() ? static_cast<SharedTermId>(-1) : it->second;
     };
+    // #77: an APPLICATION's result shared term is not the app EufTerm itself but
+    // a separate bridge/constant node MERGED into the app's eclass (ufbridge =
+    // f(args)). Map each eclass rep to one shared term in it so appsResultApart
+    // can compare the two apps' bridged result values.
+    std::unordered_map<EClassId, SharedTermId> repToShared;
+    for (const auto& [s, t] : sharedTermToEufTerm_) {
+        if (t == NullEufTerm) continue;
+        repToShared.emplace(egraph_.rep(t), s);
+    }
+    auto resultSharedOf = [&](EufTermId app) -> SharedTermId {
+        auto it = repToShared.find(egraph_.rep(app));
+        return it == repToShared.end() ? static_cast<SharedTermId>(-1) : it->second;
+    };
     // Two applications are a genuine arrangement obligation only if they are
-    // KNOWN-DISEQUAL (an asserted (distinct ...) puts their classes apart): then
-    // arranging their args equal would force a congruence that contradicts the
-    // disequality. If the apps are merely forced apart by ARITH (e.g. f(a)<f(b)
-    // on the bridged results, which EUF does not see), the coincidence of the
-    // args is breakable by the arith model (arrange args unequal) -> NOT an
-    // obligation, and flooring it would over-floor a satisfiable formula.
+    // forced apart. The strict source is an EUF-level (distinct ...) putting
+    // their classes apart (appsKnownDisequal): then arranging their args equal
+    // forces a congruence contradicting the disequality. The #77 source, when
+    // the caller supplies appsResultApart (split path only), additionally admits
+    // apps whose bridged RESULTS are ARITH-apart (e.g. f(a) < f(b), which EUF
+    // does not see) — sound because the emitted split lets the search resolve
+    // breakability (refute both branches when the args are arith-forced equal).
+    // The certificate floor omits appsResultApart and stays strict (a
+    // coincidental arith-apart with breakable args must not over-floor a sat).
     auto appsKnownDisequal = [&](EufTermId t1, EufTermId t2) -> bool {
         auto match = [&](const ActiveDisequality& d) {
             return (egraph_.same(t1, d.lhs) && egraph_.same(t2, d.rhs)) ||
@@ -732,7 +749,17 @@ EufSolver::collectArrangeableUfArgPairs(
             for (size_t q = p + 1; q < apps.size(); ++q) {
                 EufTermId t1 = apps[p], t2 = apps[q];
                 if (egraph_.same(t1, t2)) continue;
-                if (!appsKnownDisequal(t1, t2)) continue;
+                // Forced apart by an EUF distinct, or (#77, split path only) by
+                // ARITH on the apps' bridged result shared terms.
+                bool apart = appsKnownDisequal(t1, t2);
+                if (!apart && appsResultApart) {
+                    SharedTermId r1 = resultSharedOf(t1), r2 = resultSharedOf(t2);
+                    if (r1 != static_cast<SharedTermId>(-1) &&
+                        r2 != static_cast<SharedTermId>(-1) &&
+                        r1 != r2 && appsResultApart(r1, r2))
+                        apart = true;
+                }
+                if (!apart) continue;
                 const auto& a1 = termManager_.node(t1).args;
                 const auto& a2 = termManager_.node(t2).args;
                 if (a1.size() != a2.size()) continue;
