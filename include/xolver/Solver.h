@@ -133,8 +133,16 @@ public:
         enum class Kind { Echo, GetInfo, CheckSat, GetValue, GetModel, GetAssignment };
         Kind kind;
         std::string text;
+        size_t scriptIndex = 0;  // position in the full command script (for getValueResponse)
     };
     std::vector<ScriptResponseCommand> scriptResponseCommands() const;
+
+    // Evaluate the (get-value (...)) command at `scriptIndex` against the model
+    // of the most recent `sat` check-sat, returning the SMT-LIB response
+    // ( (t1 v1) (t2 v2) ... ). Currently supports variable and constant terms;
+    // returns "" when there is no model, the command is not get-value, or any
+    // term is an unsupported compound expression (so no partial/wrong output).
+    std::string getValueResponse(size_t scriptIndex) const;
 
     // Set path for per-case stats dump (--dump-stats)
     void setDumpStatsPath(std::string_view path);

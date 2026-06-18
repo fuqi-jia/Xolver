@@ -4635,21 +4635,23 @@ std::vector<Solver::ScriptResponseCommand> Solver::scriptResponseCommands() cons
     std::vector<ScriptResponseCommand> out;
     if (!pImpl || !pImpl->parser) return out;
     using K = ScriptResponseCommand::Kind;
-    for (const auto& cmd : pImpl->parser->getScript().commands()) {
+    const auto& cmds = pImpl->parser->getScript().commands();
+    for (size_t i = 0; i < cmds.size(); ++i) {
+        const auto& cmd = cmds[i];
         switch (cmd.type) {
             case SOMTParser::CMD_TYPE::CT_ECHO:
-                out.push_back({K::Echo, cmd.keyword}); break;
+                out.push_back({K::Echo, cmd.keyword, i}); break;
             case SOMTParser::CMD_TYPE::CT_GET_INFO:
-                out.push_back({K::GetInfo, cmd.keyword}); break;
+                out.push_back({K::GetInfo, cmd.keyword, i}); break;
             case SOMTParser::CMD_TYPE::CT_CHECK_SAT:
             case SOMTParser::CMD_TYPE::CT_CHECK_SAT_ASSUMING:
-                out.push_back({K::CheckSat, ""}); break;
+                out.push_back({K::CheckSat, "", i}); break;
             case SOMTParser::CMD_TYPE::CT_GET_VALUE:
-                out.push_back({K::GetValue, ""}); break;
+                out.push_back({K::GetValue, "", i}); break;
             case SOMTParser::CMD_TYPE::CT_GET_MODEL:
-                out.push_back({K::GetModel, ""}); break;
+                out.push_back({K::GetModel, "", i}); break;
             case SOMTParser::CMD_TYPE::CT_GET_ASSIGNMENT:
-                out.push_back({K::GetAssignment, ""}); break;
+                out.push_back({K::GetAssignment, "", i}); break;
             default: break;
         }
     }
@@ -4701,6 +4703,35 @@ std::string formatModelValue(SortKind kind, const std::string& raw) {
     return neg ? ("(- " + body + ")") : body;
 }
 } // namespace
+
+std::string Solver::getValueResponse(size_t scriptIndex) const {
+    if (!pImpl || !pImpl->parser || !pImpl->lastModel_) return {};
+    const auto& cmds = pImpl->parser->getScript().commands();
+    if (scriptIndex >= cmds.size()) return {};
+    const auto& cmd = cmds[scriptIndex];
+    if (cmd.type != SOMTParser::CMD_TYPE::CT_GET_VALUE) return {};
+    const auto& model = *pImpl->lastModel_;
+    std::string out = "(";
+    for (const auto& t : cmd.value_terms) {
+        if (!t) return {};
+        std::string val;
+        if (t->isVBool() || t->isVInt() || t->isVReal()) {
+            auto it = model.assignments.find(t->getName());
+            if (it == model.assignments.end()) return {};  // unassigned -> bail
+            SortKind sk = t->isVBool() ? SortKind::Bool
+                        : t->isVInt()  ? SortKind::Int
+                                       : SortKind::Real;
+            val = formatModelValue(sk, it->second);
+        } else if (t->isConst()) {
+            val = SOMTParser::dumpSMTLIB2(t);  // a literal evaluates to itself
+        } else {
+            return {};  // compound / unsupported term -> emit nothing (no wrong value)
+        }
+        out += "(" + SOMTParser::dumpSMTLIB2(t) + " " + val + ")";
+    }
+    out += ")";
+    return out;
+}
 
 void Solver::dumpModel(std::ostream& os) const {
     // SMT-LIB 2.6 get-model response: a bare list of define-fun bindings,

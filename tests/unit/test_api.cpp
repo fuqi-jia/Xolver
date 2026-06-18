@@ -38,6 +38,13 @@ TEST_CASE("API: scriptResponseCommands captures echo/get-info/check-sat in order
     CHECK(cmds[2].kind == K::GetValue);
     CHECK(cmds[3].kind == K::GetInfo);
     CHECK(cmds[3].text == ":name");
+
+    // #12.c: get-value evaluates variable terms against the post-sat model.
+    Result r = s.checkSat();
+    REQUIRE(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    // cmds[2] is the (get-value (x)) command.
+    REQUIRE(cmds[2].kind == K::GetValue);
+    CHECK(s.getValueResponse(cmds[2].scriptIndex) == "((x 5))");
     fs::remove(path);
 }
 

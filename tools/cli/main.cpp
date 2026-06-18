@@ -266,7 +266,8 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             using K = xolver::Solver::ScriptResponseCommand::Kind;
             bool interactive = false;
             for (const auto& c : scriptCmds)
-                if (c.kind == K::Echo || c.kind == K::GetInfo) { interactive = true; break; }
+                if (c.kind == K::Echo || c.kind == K::GetInfo ||
+                    c.kind == K::GetValue) { interactive = true; break; }
             if (interactive) {
                 xolver::Result r = xolver::Result::Unknown;
                 bool solved = false, modelDumped = false;
@@ -314,9 +315,15 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
                                 modelDumped = true;
                             }
                             break;
-                        case K::GetValue:
+                        case K::GetValue: {
+                            std::string resp = solver.getValueResponse(c.scriptIndex);
+                            if (!resp.empty())
+                                std::cout << resp << "\n";
+                            // empty -> unsupported term or no model; emit nothing
+                            break;
+                        }
                         case K::GetAssignment:
-                            break;  // deferred (#12.c)
+                            break;  // deferred
                     }
                 }
                 std::cout.flush();
