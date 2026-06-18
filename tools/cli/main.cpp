@@ -254,6 +254,76 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             solver.setLogic(*logicOpt);
         }
 
+        // #12: interactive command responses. When the script has echo or
+        // get-info commands (which the batch path below cannot answer), walk the
+        // parsed commands in SOURCE ORDER and print each response, so an
+        // (echo ...) before (check-sat) prints before the verdict. Non-interactive
+        // scripts (the SMT-COMP path) take NEITHER branch of this guard and fall
+        // through to the byte-identical batch path below. get-value /
+        // get-assignment are recognized but not yet answered (deferred #12.c).
+        {
+            auto scriptCmds = solver.scriptResponseCommands();
+            using K = xolver::Solver::ScriptResponseCommand::Kind;
+            bool interactive = false;
+            for (const auto& c : scriptCmds)
+                if (c.kind == K::Echo || c.kind == K::GetInfo) { interactive = true; break; }
+            if (interactive) {
+                xolver::Result r = xolver::Result::Unknown;
+                bool solved = false, modelDumped = false;
+                for (const auto& c : scriptCmds) {
+                    switch (c.kind) {
+                        case K::Echo:
+                            std::cout << c.text << "\n";
+                            break;
+                        case K::CheckSat:
+                            r = solver.checkSat();
+                            solved = true;
+                            std::cout << toString(r) << "\n";
+                            if (r == xolver::Result::Sat &&
+                                (solver.modelRequested() || produceModels)) {
+                                solver.dumpModel(std::cout);
+                                modelDumped = true;
+                            }
+                            if (r == xolver::Result::Unsat && solver.unsatCoreRequested())
+                                solver.dumpUnsatCore(std::cout);
+                            break;
+                        case K::GetInfo: {
+                            const std::string& kw = c.text;
+                            if (kw == ":name")
+                                std::cout << "(:name \"Xolver\")\n";
+                            else if (kw == ":version")
+                                std::cout << "(:version \"" << XOLVER_VERSION_MAJOR << "."
+                                          << XOLVER_VERSION_MINOR << "."
+                                          << XOLVER_VERSION_PATCH << "\")\n";
+                            else if (kw == ":authors")
+                                std::cout << "(:authors \"Xolver authors\")\n";
+                            else if (kw == ":error-behavior")
+                                std::cout << "(:error-behavior immediate-exit)\n";
+                            else if (kw == ":reason-unknown")
+                                std::cout << "(:reason-unknown "
+                                          << (solved && r == xolver::Result::Unknown
+                                                  ? "incomplete" : "unknown")
+                                          << ")\n";
+                            else
+                                std::cout << "unsupported\n";
+                            break;
+                        }
+                        case K::GetModel:
+                            if (solved && r == xolver::Result::Sat && !modelDumped) {
+                                solver.dumpModel(std::cout);
+                                modelDumped = true;
+                            }
+                            break;
+                        case K::GetValue:
+                        case K::GetAssignment:
+                            break;  // deferred (#12.c)
+                    }
+                }
+                std::cout.flush();
+                return EXIT_SUCCESS;
+            }
+        }
+
         // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
         // tokens (sat / unsat / unknown). Diagnostics go to stderr so the
         // competition harness (which greps stdout) is not confused.

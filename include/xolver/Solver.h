@@ -123,6 +123,19 @@ public:
     std::string lastUnknownComponent() const;
     std::string lastUnknownDetail() const;
 
+    // SMT-LIB interactive commands (#12). The response-relevant commands of the
+    // parsed script, in source order, so the CLI can print responses
+    // sequentially (e.g. an `(echo ...)` before `(check-sat)` prints before the
+    // verdict). `text` carries the echo string literal or the get-info keyword;
+    // get-value term lists are not exposed here (handled separately). Empty when
+    // the input had no such commands — the CLI then uses the batch path unchanged.
+    struct ScriptResponseCommand {
+        enum class Kind { Echo, GetInfo, CheckSat, GetValue, GetModel, GetAssignment };
+        Kind kind;
+        std::string text;
+    };
+    std::vector<ScriptResponseCommand> scriptResponseCommands() const;
+
     // Set path for per-case stats dump (--dump-stats)
     void setDumpStatsPath(std::string_view path);
 

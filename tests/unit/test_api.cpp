@@ -4,8 +4,42 @@
 #include "expr/ir.h"
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 using namespace xolver;
+
+// #12.a: the sequential-command foundation. parseFile must retain the script's
+// response/control commands (echo / check-sat / get-value / get-info) in source
+// order, while the bulk set-logic/declare/assert commands are NOT logged (so the
+// SMT-COMP hot path pays no per-assert memory). The CLI replays these to answer
+// an interactive script.
+TEST_CASE("API: scriptResponseCommands captures echo/get-info/check-sat in order (#12)") {
+    namespace fs = std::filesystem;
+    auto path = fs::temp_directory_path() / "xolver_script_cmds_test.smt2";
+    {
+        std::ofstream ofs(path);
+        ofs << "(set-logic QF_LIA)\n"
+               "(declare-fun x () Int)\n"
+               "(assert (= x 5))\n"
+               "(echo \"hello\")\n"
+               "(check-sat)\n"
+               "(get-value (x))\n"
+               "(get-info :name)\n";
+    }
+    Solver s;
+    REQUIRE(s.parseFile(path.string()));
+    auto cmds = s.scriptResponseCommands();
+    using K = Solver::ScriptResponseCommand::Kind;
+    REQUIRE(cmds.size() == 4);  // echo, check-sat, get-value, get-info (no set-logic/declare/assert)
+    CHECK(cmds[0].kind == K::Echo);
+    CHECK(cmds[0].text == "\"hello\"");  // string literal kept verbatim (SMT-LIB 2.6)
+    CHECK(cmds[1].kind == K::CheckSat);
+    CHECK(cmds[2].kind == K::GetValue);
+    CHECK(cmds[3].kind == K::GetInfo);
+    CHECK(cmds[3].text == ":name");
+    fs::remove(path);
+}
 
 TEST_CASE("API: sort creation") {
     Solver s;

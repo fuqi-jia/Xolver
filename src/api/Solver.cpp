@@ -4631,6 +4631,31 @@ bool Solver::modelRequested() const {
     return opts && opts->get_model;
 }
 
+std::vector<Solver::ScriptResponseCommand> Solver::scriptResponseCommands() const {
+    std::vector<ScriptResponseCommand> out;
+    if (!pImpl || !pImpl->parser) return out;
+    using K = ScriptResponseCommand::Kind;
+    for (const auto& cmd : pImpl->parser->getScript().commands()) {
+        switch (cmd.type) {
+            case SOMTParser::CMD_TYPE::CT_ECHO:
+                out.push_back({K::Echo, cmd.keyword}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_INFO:
+                out.push_back({K::GetInfo, cmd.keyword}); break;
+            case SOMTParser::CMD_TYPE::CT_CHECK_SAT:
+            case SOMTParser::CMD_TYPE::CT_CHECK_SAT_ASSUMING:
+                out.push_back({K::CheckSat, ""}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_VALUE:
+                out.push_back({K::GetValue, ""}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_MODEL:
+                out.push_back({K::GetModel, ""}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_ASSIGNMENT:
+                out.push_back({K::GetAssignment, ""}); break;
+            default: break;
+        }
+    }
+    return out;
+}
+
 bool Solver::modelMatchesOriginal() const {
     if (!pImpl || !pImpl->ir || !pImpl->lastModel_) return true;  // nothing to disprove
     ArithModelValidator::NumAssignment numAsg;
