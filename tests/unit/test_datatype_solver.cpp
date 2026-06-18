@@ -216,4 +216,35 @@ TEST_CASE("tester matches its own applied ctor: is_cons(cons ..) -> not unsat") 
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
 }
 
+// ---- (#76) Injectivity field-equality SYSTEM infeasibility ---------------
+
+TEST_CASE("injectivity system: mk(2,2)=mk(1+k,k-3) => k=1 AND k=5 -> not sat") {
+    // Constructor injectivity over a 2-equation linear SYSTEM: 1+k=2 (k=1) and
+    // k-3=2 (k=5) are each individually satisfiable but jointly infeasible, so
+    // the two constructors can never be equal. The per-field floor cannot see
+    // this (each field involves k); the system floor (Gaussian elimination over
+    // the field equalities) must catch it. Previously a false SAT; now floored
+    // to Unknown (sound). MUST NOT be Sat.
+    Result r = solveDt(
+        "(set-logic QF_UFDTLIA)\n"
+        "(declare-datatype Pair ((mk (fst Int) (snd Int))))\n"
+        "(declare-fun k () Int)\n"
+        "(assert (= (mk 2 2) (mk (+ 1 k) (+ k (- 2 5)))))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Sat));
+}
+
+TEST_CASE("injectivity system: consistent fields must NOT become false unsat") {
+    // mk(2, k) = mk(1+1, 5) pins k=5: a CONSISTENT system with a genuine model.
+    // The system floor must NOT fire here, so the result must never be a false
+    // Unsat (sat is floored to Unknown in DT logics).
+    Result r = solveDt(
+        "(set-logic QF_UFDTLIA)\n"
+        "(declare-datatype Pair ((mk (fst Int) (snd Int))))\n"
+        "(declare-fun k () Int)\n"
+        "(assert (= (mk 2 k) (mk (+ 1 1) 5)))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
+}
+
 } // TEST_SUITE

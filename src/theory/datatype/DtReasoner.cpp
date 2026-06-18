@@ -107,6 +107,49 @@ std::optional<LinForm> linForm(const CoreIr& ir, ExprId e, int& budget) {
             return atom();  // variable / selector / UF / Mul / Mod / ... -> opaque
     }
 }
+
+// (#76) System infeasibility over a set of integer linear EQUALITIES {form_i = 0}.
+// Constructor injectivity merging C(a..) = C(b..) implies every field-wise
+// equality a_i = b_i; the per-field floor catches only a SINGLE field whose two
+// forms differ by a nonzero constant, but a jointly-infeasible SYSTEM —
+// mk(2,2) = mk(1+k, k-3) => {1+k = 2, k-3 = 2} => k = 1 AND k = 5 — is invisible
+// per field (each is individually satisfiable). Fraction-free Gaussian
+// elimination with back-substitution (so every pivot's leader appears in exactly
+// one row): a reduction yielding 0 = (nonzero constant) proves no model can merge
+// the two constructors. Returns true ONLY on a proven contradiction; abandons
+// (false) on int64 overflow — sound under-detection, never a false positive.
+bool systemInfeasible(std::vector<LinForm> forms) {
+    std::vector<std::pair<ExprId, LinForm>> rows;  // (leader atom, reduced eq)
+    for (auto eq : forms) {
+        bool ok = true;
+        for (auto& [lead, row] : rows) {              // forward-reduce
+            auto it = eq.coeffs.find(lead);
+            if (it == eq.coeffs.end()) continue;
+            int64_t c = it->second, rc = row.coeffs.at(lead);
+            LinForm tmp;
+            if (!addLin(tmp, eq, rc) || !addLin(tmp, row, -c)) { ok = false; break; }
+            eq = std::move(tmp);
+        }
+        if (!ok) continue;                            // overflow -> skip this eq
+        if (eq.coeffs.empty()) {
+            if (eq.constant != 0) return true;        // 0 = nonzero -> infeasible
+            continue;                                 // 0 = 0, redundant
+        }
+        ExprId lead = eq.coeffs.begin()->first;
+        for (auto& [l2, row] : rows) {                // back-substitute new leader out
+            (void)l2;
+            auto it = row.coeffs.find(lead);
+            if (it == row.coeffs.end()) continue;
+            int64_t c = it->second, ec = eq.coeffs.at(lead);
+            LinForm tmp;
+            if (!addLin(tmp, row, ec) || !addLin(tmp, eq, -c)) { ok = false; break; }
+            row = std::move(tmp);
+        }
+        if (!ok) continue;
+        rows.emplace_back(lead, std::move(eq));
+    }
+    return false;
+}
 }  // namespace
 
 DtReasoner::~DtReasoner() {
@@ -822,6 +865,7 @@ bool DtReasoner::modelFullyDetermined() const {
                     if (!parent.count(y)) parent[y] = y;
                     parent[find(x)] = find(y);
                 };
+                std::vector<LinForm> fieldEqs;  // (#76) field difference forms
                 for (size_t k = 0; k < a1.size(); ++k) {
                     uni(egraph_->rep(a1[k]), egraph_->rep(a2[k]));
                     // Linear-field floor: if the two fields' integer linear forms
@@ -836,10 +880,19 @@ bool DtReasoner::modelFullyDetermined() const {
                     auto lb = linForm(*ir_, originExpr(a2[k]), b2);
                     if (la && lb) {
                         LinForm d = *la;
-                        if (addLin(d, *lb, -1) && d.coeffs.empty() && d.constant != 0)
-                            return false;  // fields differ by nonzero const -> floor
+                        if (addLin(d, *lb, -1)) {
+                            if (d.coeffs.empty() && d.constant != 0)
+                                return false;  // single field differs by const -> floor
+                            fieldEqs.push_back(std::move(d));  // for the system check
+                        }
                     }
                 }
+                // (#76) System floor: the per-field check above misses a jointly
+                // infeasible SYSTEM (mk(2,2) = mk(1+k,k-3) => k=1 AND k=5). Run
+                // Gaussian elimination over all field equalities {a_i - b_i = 0};
+                // a derived 0 = nonzero proves the merge impossible -> floor.
+                if (fieldEqs.size() >= 2 && systemInfeasible(std::move(fieldEqs)))
+                    return false;
                 // Collect, per union class, the distinct constant value among the
                 // operands; a second distinct constant in the same class -> floor.
                 std::unordered_map<EClassId, std::string> classConst;
