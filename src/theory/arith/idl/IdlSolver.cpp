@@ -86,10 +86,25 @@ IdlSolver::NormalizeResult IdlSolver::normalizeAndAdd(const ActiveAssignment& a)
         }
     }
 
-    // All-zero / empty: not a difference constraint. Bail explicitly before any
-    // node creation so we never build an illegal zero-node edge.
+    // All-zero / empty LHS (e.g. a self-difference (- x x)): this is a CONSTANT
+    // constraint 0 (rel) rhs, trivially decidable. Evaluate it directly rather
+    // than flooring the whole theory check to unknown — temporal-planning
+    // encodings emit many (- x x) (rel) c atoms, and ONE unsupported atom
+    // otherwise sinks the entire IDL solve (#81). Sound: pure constant
+    // arithmetic, no node/edge ever created. (rhs is exact; the 0-vs-rhs
+    // comparison needs no integer rounding since there is no variable.)
     if (plusVar.empty() && minusVar.empty()) {
-        return NormalizeResult::Unsupported;
+        bool holds = false;
+        switch (rel) {
+            case Relation::Leq: holds = (rhs >= 0); break;  // 0 <= rhs
+            case Relation::Lt:  holds = (rhs > 0);  break;  // 0 <  rhs
+            case Relation::Geq: holds = (rhs <= 0); break;  // 0 >= rhs
+            case Relation::Gt:  holds = (rhs < 0);  break;  // 0 >  rhs
+            case Relation::Eq:  holds = (rhs == 0); break;  // 0 == rhs
+            case Relation::Neq: holds = (rhs != 0); break;  // 0 != rhs
+        }
+        return holds ? NormalizeResult::Tautology
+                     : NormalizeResult::ImmediateConflict;
     }
 
     mpq_class mag;
