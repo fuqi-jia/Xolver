@@ -63,6 +63,22 @@ private:
 
     ExprId makeFreshVar(SortId sort);
     ExprId makeEq(ExprId lhs, ExprId rhs);
+    ExprId makeNot(ExprId child);
+    ExprId makeOr(ExprId a, ExprId b);
+
+    // (#69) store-vs-base extensionality, gated default-OFF
+    // (XOLVER_AX_STORE_VS_BASE). For each ASSERTED equality atom `(= s c)` where
+    // `s = store(c, j, v)` is a store directly over the other side `c`, add the
+    // sound biconditional axiom  (s = c) ⟺ (select(c, j) = v)  as two boolean
+    // clauses. This is a VALID array-theory lemma (read-over-write + store-is-
+    // identity-when-value-already-present), so it never removes or adds models;
+    // it only lets the Boolean layer unit-propagate the *disequality* direction
+    // `select(c, j) ≠ v` into arith via the normal interface-disequality path.
+    // Closes the compound-value store-vs-base completeness floor that otherwise
+    // leaves the validator at `unknown`. The `(= s c)` atom is REUSED (exact
+    // ExprId) so the axiom binds the very atom the assertion pins; `select(c, j)`
+    // is bridged into a fresh shared leaf so the equality routes to Combination.
+    void addStoreVsBaseAxioms();
 
     TheoryId theoryOf(ExprId eid) const;
 

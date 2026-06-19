@@ -11,6 +11,7 @@
 #include <doctest/doctest.h>
 #include <fstream>
 #include <filesystem>
+#include <cstdlib>
 
 using namespace xolver;
 
@@ -137,6 +138,38 @@ TEST_CASE("QF_ALIA sat: stored value read back, index bounded") {
         "(assert (< i 10))\n"
         "(check-sat)\n");
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
+}
+
+// ---- #69 store-vs-base extensionality (gated default-OFF) -----------------
+
+// store(c, j, k+1) != c with a COMPOUND value is sat (c[j] can differ from
+// k+1), and z3/cvc5 both agree. By default Xolver floors it to unknown: the
+// disequality select(c,j) != k+1 is never propagated to arith, so the
+// candidate model makes the store a no-op and the validator cannot confirm.
+// The sound preprocessing biconditional (store=c) <-> (select(c,j)=v), gated
+// behind XOLVER_AX_STORE_VS_BASE, recovers sat. This exercises both the
+// default floor and the flag-ON recovery so the gated lever cannot bit-rot.
+TEST_CASE("QF_ALIA #69 store-vs-base compound value: floor + gated recovery") {
+    const char* smt =
+        "(set-logic QF_ALIA)\n"
+        "(declare-fun c () (Array Int Int))\n"
+        "(declare-fun j () Int)\n"
+        "(declare-fun k () Int)\n"
+        "(assert (not (= (store c j (+ k 1)) c)))\n"
+        "(check-sat)\n";
+
+    // Default (flag OFF): sound completeness floor -> unknown (never a wrong
+    // verdict; z3/cvc5 say sat).
+    unsetenv("XOLVER_AX_STORE_VS_BASE");
+    Result off = solveStr(smt);
+    CHECK(static_cast<int>(off) == static_cast<int>(Result::Unknown));
+
+    // Flag ON: the biconditional axiom recovers the genuine sat (the model is
+    // independently re-validated by the ModelValidator before sat is emitted).
+    setenv("XOLVER_AX_STORE_VS_BASE", "1", 1);
+    Result on = solveStr(smt);
+    unsetenv("XOLVER_AX_STORE_VS_BASE");
+    CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
 }
 
 }  // TEST_SUITE
