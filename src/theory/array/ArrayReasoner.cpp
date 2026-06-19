@@ -18,8 +18,14 @@ ArrayReasoner::ArrayReasoner() {
     row2ConstEnabled_ = xolver::env::diag("XOLVER_AX_ROW2_CONST");
     // L1: relevancy-driven completion (default-OFF). See header.
     lazyComplete_ = xolver::env::diag("XOLVER_AX_LAZY");
-    // L2: eager Row2 merge on known diseqs (default-OFF). See header.
-    row2DiseqEnabled_ = xolver::env::diag("XOLVER_AX_ROW2_DISEQ");
+    // L2: eager Row2 merge on known diseqs. #82 PROMOTED default-ON (escape
+    // XOLVER_AX_ROW2_DISEQ=0): completes the read-over-write reasoning for the
+    // QF_AX swap/storeinv extensionality-witness tower reductions. Sound (the
+    // Row2 conclusion select(store(a,i,v),j)=select(a,j) under i!=j is a
+    // theorem). Validated with the store-aware model (XOLVER_AX_STORE_MODEL):
+    // reg 806/806 0-unsound 0-regression, QF_AX sample +8 solved 0-unsound
+    // 0-lost. See header.
+    row2DiseqEnabled_ = xolver::env::flag("XOLVER_AX_ROW2_DISEQ", true);
     // #75: store-store no-op merge. DEFAULT-ON soundness fix (closes the QF_AUFLRA
     // a=store(c,0,v) ^ a=store(c,2,w) ^ g(c)!=g(a) false-sat); escape
     // XOLVER_AX_STORE_NOOP=0. Validated 0-unsound: reg 802/802 + array lanes +

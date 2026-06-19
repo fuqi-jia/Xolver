@@ -76,7 +76,14 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     // override), then overlays explicit reads. Verdict-SOUND: model
     // construction only; the arrayModelDefinitelyViolates floor still validates,
     // so a better model recovers genuine sats and a wrong one still floors.
-    storeModelEnabled_ = xolver::env::diag("XOLVER_AX_STORE_MODEL");
+    // #82 PROMOTED default-ON (escape XOLVER_AX_STORE_MODEL=0): closes the QF_AX
+    // storecomm class (store-commutativity over named-intermediate towers) where
+    // the baseline per-array select construction produced store-inconsistent
+    // interps that floored genuine sats. Built once per candidate model (O(stores)
+    // memoized, DAG-safe via cycle guard) -> low cost; verdict-sound (validator-
+    // gated). Validated: reg 806/806 0-unsound 0-regression, QF_AX sample +8
+    // solved 0-unsound 0-lost (with XOLVER_AX_ROW2_DISEQ).
+    storeModelEnabled_ = xolver::env::flag("XOLVER_AX_STORE_MODEL", true);
     // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
     hotProfileEnabled_ = xolver::env::diag("XOLVER_EUF_HOTPROFILE");
     // L3 (default-OFF): array-axiom saturation fixpoint (nested read-over-write).
