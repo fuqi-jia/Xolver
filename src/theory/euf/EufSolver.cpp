@@ -1341,6 +1341,10 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
         ensureArrayContext();
         if (!arrayReasoner_.active()) return;
         arrayReasoner_.enqueueEagerMerges(mergeQueue_);
+        // #75 store-store no-op merge (gated default-OFF, level-tagged so backtrack
+        // removes it). Conditional on s1~s2 + distinct const indices, so unlike the
+        // tautology eager merges it carries currentLevel_.
+        arrayReasoner_.enqueueStoreNoopMerges(currentLevel_, mergeQueue_);
         if (arrayReasoner_.row2DiseqEnabled()) {
             auto repPairKey = [](EClassId a, EClassId b) -> uint64_t {
                 uint32_t lo = a < b ? a : b, hi = a < b ? b : a;

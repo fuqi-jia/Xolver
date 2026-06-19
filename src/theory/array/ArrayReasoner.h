@@ -91,6 +91,21 @@ public:
     // select terms are added, never new assertions.
     void completeStoreSelects(std::deque<PendingMerge>& outQueue);
 
+    // #75 (XOLVER_AX_STORE_NOOP, default-ON; =0 to disable): store-store no-op merge. When two
+    // stores of the SAME base with DISTINCT CONSTANT indices land in one e-graph
+    // class (store(c,i,v) = store(c,j,w), i!=j), both writes are no-ops
+    // (v=c[i], w=c[j]), so each store equals the base c. Eagerly merge store=base
+    // at `mergeLevel` (= currentLevel_) so backtrack removes it; the merge reason
+    // is ArrayRow2Cond with an EMPTY lit (i!=j is a constant tautology -> zero
+    // literals) and argPairs={store1,store2} (the justification recurses on their
+    // class membership). This lets UF congruence close an INDIRECT disequality
+    // such as g(c)!=g(a) that the extensionality lemma never triggers between the
+    // two arrays — the QF_AUFLRA a=store(c,0,v) ^ a=store(c,2,w) ^ g(c)!=g(a)
+    // false-sat. Uses the proven Row2Cond merge path (vs the mkLemma path, which
+    // did not drive the merge).
+    void enqueueStoreNoopMerges(int mergeLevel, std::deque<PendingMerge>& outQueue);
+    bool storeNoopEnabled() const { return storeNoopEnabled_; }
+
     // Produce one Row2 or Extensionality lemma if a fresh instance exists.
     // Returns the lemma literals (SAT polarity), or empty if none pending.
     // `disequalities` are the currently-active array-sort disequalities the
@@ -186,6 +201,7 @@ public:
     bool row2DiseqEnabled() const { return row2DiseqEnabled_; }
 private:
     bool row2DiseqEnabled_ = false;
+    bool storeNoopEnabled_ = false;  // #75 store-store no-op merge (set default-ON in ctor)
 
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
     // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE

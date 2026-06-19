@@ -20,6 +20,11 @@ ArrayReasoner::ArrayReasoner() {
     lazyComplete_ = xolver::env::diag("XOLVER_AX_LAZY");
     // L2: eager Row2 merge on known diseqs (default-OFF). See header.
     row2DiseqEnabled_ = xolver::env::diag("XOLVER_AX_ROW2_DISEQ");
+    // #75: store-store no-op merge. DEFAULT-ON soundness fix (closes the QF_AUFLRA
+    // a=store(c,0,v) ^ a=store(c,2,w) ^ g(c)!=g(a) false-sat); escape
+    // XOLVER_AX_STORE_NOOP=0. Validated 0-unsound: reg 802/802 + array lanes +
+    // fuzz seeds 271828/31337, genuine array sats preserved.
+    storeNoopEnabled_ = xolver::env::flag("XOLVER_AX_STORE_NOOP", true);
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = !xolver::env::diag("XOLVER_AX_NO_SELECT_COMPLETE");
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
@@ -449,6 +454,37 @@ void ArrayReasoner::enqueueRow2CondMerges(
         std::fprintf(stderr, "[R2D-merge] selects=%zu eligible=%zu merges=%zu\n",
                      nSel, r2cEligible, r2cMerges);
         std::fflush(stderr);
+    }
+}
+
+void ArrayReasoner::enqueueStoreNoopMerges(int mergeLevel,
+                                           std::deque<PendingMerge>& outQueue) {
+    if (!storeNoopEnabled_ || !active()) return;
+    discoverArrayTerms();
+    // Group store terms by e-graph class. Within a class, two stores of the SAME
+    // base with DISTINCT CONSTANT indices are both no-ops -> store = base.
+    std::unordered_map<EClassId, std::vector<EufTermId>> storesByClass;
+    for (EufTermId s : storeTerms_) storesByClass[egraph_->rep(s)].push_back(s);
+    for (auto& [rep, stores] : storesByClass) {
+        (void)rep;
+        for (size_t p = 0; p < stores.size(); ++p) {
+            for (size_t q = p + 1; q < stores.size(); ++q) {
+                EufTermId s1 = stores[p], s2 = stores[q];
+                const auto& n1 = tm_->node(s1);
+                const auto& n2 = tm_->node(s2);
+                if (n1.args.size() != 3 || n2.args.size() != 3) continue;
+                EufTermId base1 = n1.args[0], i1 = n1.args[1];
+                EufTermId base2 = n2.args[0], i2 = n2.args[1];
+                if (!egraph_->same(base1, base2)) continue;          // shared base
+                if (!provablyDistinctConstIndices(i1, i2)) continue; // distinct const indices
+                if (egraph_->same(s1, base1)) continue;              // store = base already
+                MergeReason mr;
+                mr.kind = MergeReasonKind::ArrayRow2Cond;
+                mr.lit = SatLit();                 // i!=j is a constant tautology: zero literals
+                mr.argPairs.push_back({s1, s2});   // justified by s1~s2 class membership
+                outQueue.push_back({s1, base1, mr, mergeLevel});
+            }
+        }
     }
 }
 
