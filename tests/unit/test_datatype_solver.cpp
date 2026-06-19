@@ -247,4 +247,28 @@ TEST_CASE("injectivity system: consistent fields must NOT become false unsat") {
     CHECK(static_cast<int>(r) != static_cast<int>(Result::Unsat));
 }
 
+// ---- (#68) ill-typed arithmetic field in a pure-DT logic ----------------
+
+TEST_CASE("ill-typed: Int datatype field under QF_DT is rejected -> not sat") {
+    // QF_DT has no arithmetic in its signature, so an Int field is ill-typed
+    // (z3/cvc5 reject it as an unknown sort). xolver must NOT return sat — it
+    // reports unknown (sound: no verdict on ill-typed input). A well-typed enum
+    // datatype under the same logic is unaffected (stays decidable).
+    Result bad = solveDt(
+        "(set-logic QF_DT)\n"
+        "(declare-datatype Pair ((mk (fst Int) (snd Int))))\n"
+        "(declare-fun p () Pair)\n"
+        "(assert ((_ is mk) p))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(bad) != static_cast<int>(Result::Sat));
+
+    Result ok = solveDt(
+        "(set-logic QF_DT)\n"
+        "(declare-datatype Color ((red) (green) (blue)))\n"
+        "(declare-fun x () Color)\n"
+        "(assert (distinct x red))\n"
+        "(check-sat)\n");
+    CHECK(static_cast<int>(ok) == static_cast<int>(Result::Sat));
+}
+
 } // TEST_SUITE

@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 
 namespace xolver {
 
@@ -188,6 +189,24 @@ void buildDT(BuildContext& c) {
     auto& registry = *c.registry;
     auto& theoryManager = *c.theoryManager;
     CoreIr* ir = c.ir;
+    // #68: QF_DT / QF_UFDT have NO arithmetic in their signature, so a datatype
+    // field declared with sort Int/Real is ill-typed — z3 and cvc5 reject it as
+    // an unknown sort. Reject it here rather than silently solving an extended
+    // logic; the CLI reports `unknown` (sound — no verdict on ill-typed input).
+    // The arith-DT logics (QF_*DTLIA / QF_*DTNIA) take a different build branch
+    // (buildUFDTLIA / buildUFDTNIA) and are unaffected.
+    {
+        const SortId intS = ir->intSortId(), realS = ir->realSortId();
+        for (const auto& kv : ir->datatypes().all())
+            for (const auto& ctor : kv.second.constructors)
+                for (const auto& sel : ctor.selectors)
+                    if ((intS != NullSort && sel.resultSort == intS) ||
+                        (realS != NullSort && sel.resultSort == realS))
+                        throw std::runtime_error(
+                            "ill-typed: datatype field '" + sel.name +
+                            "' has an arithmetic sort, but the logic has no "
+                            "arithmetic (QF_DT/QF_UFDT); use a QF_*DTLIA/QF_*DTNIA logic");
+    }
     theoryManager.setHasDatatypes(true);  // (#77) scope UF-arith arrangement out
     // Algebraic datatypes (+ UF). One shared egraph; DtReasoner layers the
     // free-algebra axioms on top. QF_DT and QF_UFDT share this branch.
