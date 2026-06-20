@@ -420,17 +420,27 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         auto it = varToLevel_.find(v);
         return it != varToLevel_.end() ? it->second : 0;
     };
-    std::vector<int> ordered(model.begin(), model.end());
-    std::stable_sort(ordered.begin(), ordered.end(), [&](int a, int b) {
-        return levelOf(static_cast<SatVar>(std::abs(a)))
-             < levelOf(static_cast<SatVar>(std::abs(b)));
-    });
-    for (int lit : ordered) {
+    // Decorate-sort-undecorate (perf): the comparator's levelOf() is a hash
+    // lookup; doing it inside stable_sort costs O(n log n) lookups and dominated
+    // cb_check_found_model on large QF_RDL/IDL models (profiled). Precompute each
+    // lit's level ONCE (O(n) lookups), sort by the integer key, and REUSE the key
+    // in the re-assertion below (which also called levelOf per lit). Verdict-
+    // identical: stable sort by .first preserves trail order within a level, the
+    // same order the by-levelOf stable_sort produced.
+    std::vector<std::pair<int, int>> ordered;  // (level, lit)
+    ordered.reserve(model.size());
+    for (int lit : model)
+        ordered.emplace_back(levelOf(static_cast<SatVar>(std::abs(lit))), lit);
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                         return a.first < b.first;
+                     });
+    for (const auto& [lvl, lit] : ordered) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
-        tm_.assertTheoryLit(*atom, SatLit{var, sign}, levelOf(var));
+        tm_.assertTheoryLit(*atom, SatLit{var, sign}, lvl);
     }
     for (int lit : model) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
