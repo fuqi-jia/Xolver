@@ -84,6 +84,8 @@ EufSolver::EufSolver() : egraph_(termManager_) {
     // gated). Validated: reg 806/806 0-unsound 0-regression, QF_AX sample +8
     // solved 0-unsound 0-lost (with XOLVER_AX_ROW2_DISEQ).
     storeModelEnabled_ = xolver::env::flag("XOLVER_AX_STORE_MODEL", true);
+    // #85 model-driven array refinement (default-OFF). See header.
+    arrayRefineEnabled_ = xolver::env::diag("XOLVER_AX_REFINE");
     // E2/E3 profile triage (default-OFF): lightweight counters + chrono.
     hotProfileEnabled_ = xolver::env::diag("XOLVER_EUF_HOTPROFILE");
     // L3 (default-OFF): array-axiom saturation fixpoint (nested read-over-write).
@@ -1830,6 +1832,32 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                 if (!lemmaDb.contains(tl)) {
                     return TheoryCheckResult::mkLemma(std::move(tl));
                 }
+            }
+        }
+    }
+
+    // #85 model-driven array refinement: the normal lazy lemma path above has
+    // EXHAUSTED (row2Done_ saturated), but the candidate model may still VIOLATE a
+    // Row2 axiom instance (the QF_AX storeinv multi-store residual: select(s,k)
+    // and select(a,k) are left unmerged though k≠i). Re-scan with a FRESH dedup +
+    // onlyViolated so we surface exactly the missed instance, and re-assert it as a
+    // lemma to force the SAT solver off this array-inconsistent model. Bounded by
+    // refineBudget_ (then accept; arrayModelDefinitelyViolates floors → sound).
+    if (arrayMode_ && arrayRefineEnabled_ && effort == TheoryEffort::Full &&
+        arrayRefineCount_ < arrayRefineBudget_) {
+        ensureArrayContext();
+        if (arrayReasoner_.active()) {
+            auto diseqs = activeArrayDiseqs();
+            std::unordered_set<uint64_t> freshDedup;
+            auto lemma = arrayReasoner_.instantiateLemma(diseqs, &freshDedup, /*onlyViolated=*/true);
+            if (lemma && !lemma->empty()) {
+                ++arrayRefineCount_;
+                TheoryLemma tl;
+                tl.lits = std::move(*lemma);
+                if (xolver::env::diag("XOLVER_AX_REFINE_DIAG"))
+                    std::fprintf(stderr, "[REFINE] #%zu re-assert violated Row2 lits=%zu\n",
+                                 arrayRefineCount_, tl.lits.size());
+                return TheoryCheckResult::mkLemma(std::move(tl));
             }
         }
     }

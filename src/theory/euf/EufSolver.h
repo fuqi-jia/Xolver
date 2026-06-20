@@ -313,6 +313,15 @@ private:
     // construction (follow store chains so a store-defined array inherits its
     // base's entries). Verdict-sound; recovers the storecomm sat class.
     bool storeModelEnabled_ = false;
+    // #85 (XOLVER_AX_REFINE, default-OFF): model-driven array refinement. At a
+    // Full-effort consistent model, re-scan for a Row2 instance whose conclusion
+    // is VIOLATED by the candidate model (reads unmerged) and re-assert it as a
+    // lemma to force re-solve, instead of accepting an array-inconsistent model
+    // when the lazy lemma set has exhausted. Bounded by refineBudget_ (then accept
+    // → the arrayModelDefinitelyViolates floor keeps it sound).
+    bool arrayRefineEnabled_ = false;
+    size_t arrayRefineCount_ = 0;
+    size_t arrayRefineBudget_ = 2000;
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
     // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
     // registry every cb_propagate, track new-since-last-call merges and scan

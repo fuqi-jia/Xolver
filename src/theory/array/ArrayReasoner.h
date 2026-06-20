@@ -118,9 +118,15 @@ public:
     // instead of the internal row2Done_. The L13 Standard-effort split passes its
     // OWN set so it does not mark row2Done_ and starve the Full-effort path
     // (the ax_007 regression). Default null = original behavior (uses row2Done_).
+    // `onlyViolated` (#85 refinement): return a Row2 instance ONLY if its
+    // conclusion is currently FALSE in the e-graph (select(store,j) and select(a,j)
+    // not merged) — i.e. the candidate model actually violates it. Lets the
+    // Full-effort sat-gate re-assert the exact missed axiom that floors the model,
+    // forcing convergence instead of accepting an array-inconsistent model.
     std::optional<std::vector<SatLit>>
     instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
-                     std::unordered_set<uint64_t>* dedupOverride = nullptr);
+                     std::unordered_set<uint64_t>* dedupOverride = nullptr,
+                     bool onlyViolated = false);
 
     // Collect the SharedTermIds of all array INDEX terms (the index arg of every
     // select/store). Used by the combination layer to scope deduced-equality

@@ -614,7 +614,8 @@ void ArrayReasoner::enqueueEagerMerges(std::deque<PendingMerge>& outQueue) {
 
 std::optional<std::vector<SatLit>>
 ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
-                               std::unordered_set<uint64_t>* dedupOverride) {
+                               std::unordered_set<uint64_t>* dedupOverride,
+                               bool onlyViolated) {
     aniaprof::Scope _prof(aniaprof::ARR_LEMMA);
     if (!active() || !registry_) return std::nullopt;
     discoverArrayTerms();
@@ -695,6 +696,10 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
             // redundant — skip the SAT split. Sound regardless; gated to keep
             // the flag-OFF path byte-identical.
             if (row2ConstEnabled_ && egraph_->same(selStore, selAJ)) continue;
+            // #85 refinement: only surface this instance if its conclusion is
+            // currently violated (the reads are NOT merged) — i.e. the model needs
+            // it. iTerm!=jTerm is already guaranteed above (line ~658).
+            if (onlyViolated && egraph_->same(selStore, selAJ)) continue;
             ExprId selStoreExpr = originExpr(selStore);  // select(store(a,i,v),j)
             ExprId selAJExpr = originExpr(selAJ);
             if (selStoreExpr == NullExpr || selAJExpr == NullExpr) continue;
