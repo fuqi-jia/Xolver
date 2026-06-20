@@ -31,6 +31,8 @@ ArrayReasoner::ArrayReasoner() {
     // XOLVER_AX_STORE_NOOP=0. Validated 0-unsound: reg 802/802 + array lanes +
     // fuzz seeds 271828/31337, genuine array sats preserved.
     storeNoopEnabled_ = xolver::env::flag("XOLVER_AX_STORE_NOOP", true);
+    // #86 constant-index store-tower extensionality (default-OFF). See header.
+    storecommExtEnabled_ = xolver::env::diag("XOLVER_AX_STORECOMM_EXT");
     // Default ON (soundness: read2/read5 class); explicit opt-out for A/B.
     selectCompletionEnabled_ = !xolver::env::diag("XOLVER_AX_NO_SELECT_COMPLETE");
     // PROMOTED default-ON (was opt-in XOLVER_AX_EXT_WITNESS_COMPLETE). Phase A
@@ -103,6 +105,38 @@ bool ArrayReasoner::provablyDistinctConstIndices(EufTermId i, EufTermId j) const
     return *ti != *tj;
 }
 
+bool ArrayReasoner::collectConstStoreTower(EufTermId arr, std::vector<EufTermId>& idxOut,
+                                           EufTermId& baseOut) const {
+    // Descend store members through the e-graph class. Each level must be
+    // store(base, idx, val) with a CONSTANT idx for the const-index extensionality
+    // bound to be valid. Bounded by storeTerms_.size() (towers are acyclic; the
+    // visited guard defends against a self-store class).
+    EufTermId cur = arr;
+    std::unordered_set<EClassId> visited;
+    for (size_t guard = 0; guard <= storeTerms_.size(); ++guard) {
+        EClassId rep = egraph_->rep(cur);
+        if (!visited.insert(rep).second) { baseOut = cur; return true; }  // cycle → stop
+        EufTermId storeM = NullEufTerm;
+        int storeCount = 0;
+        for (EufTermId m : egraph_->classMembers(rep)) {
+            if (symIsStore(m)) { if (storeM == NullEufTerm) storeM = m; ++storeCount; }
+        }
+        // SOUNDNESS: a class with >=2 distinct store members has AMBIGUOUS
+        // decompositions (the multi-store class). Picking one would miss the other's
+        // writes, so "A agrees with the base outside this chain's write-union" could
+        // be false → the const-index ext clause could force a WRONG equality. Bail.
+        if (storeCount >= 2) return false;
+        if (storeM == NullEufTerm) { baseOut = cur; return true; }  // base reached
+        const auto& sn = tm_->node(storeM);
+        if (sn.args.size() != 3) return false;
+        if (!constToken(sn.args[1])) return false;   // non-constant write index
+        idxOut.push_back(sn.args[1]);
+        cur = sn.args[0];                             // descend to this store's base
+    }
+    baseOut = cur;
+    return true;
+}
+
 void ArrayReasoner::reset() {
     selectTerms_.clear();
     storeTerms_.clear();
@@ -113,6 +147,7 @@ void ArrayReasoner::reset() {
     nextTermToScan_ = 0;
     row2Done_.clear();
     extDone_.clear();
+    storecommExtDone_.clear();
     selectCompleteDone_.clear();
     completeInternsDone_ = 0;
     extWitnessIdx_.clear();
@@ -711,6 +746,73 @@ ArrayReasoner::instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
             SatLit ijEq = makeRow2IndexEqLit(iExpr, jExpr);
             SatLit readEq = registry_->getOrCreateEufEqualityAtom(selStoreExpr, selAJExpr);
             return std::vector<SatLit>{ijEq, readEq};
+        }
+    }
+
+    // --- Constant-index store-tower extensionality (#86) ------------------
+    // For A!=B where A,B are store towers over a COMMON base with ALL-CONSTANT
+    // write indices, they agree everywhere outside the union of write indices, so
+    //   A!=B  ==>  exists c in union: select(A,c) != select(B,c).
+    // Emit the DECIDABLE clause (A=B) ∨ ⋁_c (select(A,c)!=select(B,c)); the
+    // constant-index reads reduce via Row2-const so the SAT solver picks a concrete
+    // distinguishing index — what the lazy variable-witness extensionality cannot
+    // (the QF_AUFLIA storecomm class). Sound (valid ext instance for same-base
+    // constant towers). Placed BEFORE the variable-witness Ext so applicable diseqs
+    // get the pinned form first.
+    if (storecommExtEnabled_) {
+        // Re-assertable under the refinement (dedupOverride): like Row2, the model
+        // can violate this emitted clause, so the #85 refinement must be able to
+        // re-fire it with a fresh dedup. Namespace the key (XOR magic) so it never
+        // collides with the Row2 (store,j) keys in the shared fresh-dedup set.
+        std::unordered_set<uint64_t>& ccDedup = dedupOverride ? *dedupOverride : storecommExtDone_;
+        for (const auto& d : disequalities) {
+            EufTermId A = d.lhs, B = d.rhs;
+            const auto& an = tm_->node(A);
+            if (!ir_->arraySortParams(an.sort)) continue;
+            uint64_t lo = A < B ? A : B, hi = A < B ? B : A;
+            uint64_t key = pairKey(static_cast<uint32_t>(lo), static_cast<uint32_t>(hi))
+                           ^ 0x5C0E5C0E5C0E5C0EULL;
+            if (ccDedup.count(key)) continue;
+            std::vector<EufTermId> aIdx, bIdx;
+            EufTermId aBase = NullEufTerm, bBase = NullEufTerm;
+            if (!collectConstStoreTower(A, aIdx, aBase)) continue;  // non-const → var-witness Ext
+            if (!collectConstStoreTower(B, bIdx, bBase)) continue;
+            if (!egraph_->same(aBase, bBase)) continue;             // need a common base
+            ExprId aExpr = originExpr(A), bExpr = originExpr(B);
+            if (aExpr == NullExpr || bExpr == NullExpr) continue;
+            // Union of distinct constant write-index terms (one term per const token).
+            std::unordered_map<std::string, EufTermId> unionIdx;
+            for (EufTermId t : aIdx) { auto tok = constToken(t); if (tok) unionIdx.emplace(*tok, t); }
+            for (EufTermId t : bIdx) { auto tok = constToken(t); if (tok) unionIdx.emplace(*tok, t); }
+            std::vector<SatLit> lits;
+            lits.push_back(registry_->getOrCreateEufEqualityAtom(aExpr, bExpr));  // (A=B)
+            std::deque<PendingMerge> dummy;
+            bool ok = true;
+            bool anyReadDistinct = false;  // some union read already differs in egraph
+            for (const auto& [tok, idxT] : unionIdx) {
+                (void)tok;
+                ExprId idxExpr = originExpr(idxT);
+                if (idxExpr == NullExpr) { ok = false; break; }
+                EufTermId selA = internSelect(aExpr, idxExpr, dummy);
+                EufTermId selB = internSelect(bExpr, idxExpr, dummy);
+                if (selA == NullEufTerm || selB == NullEufTerm) { ok = false; break; }
+                if (!egraph_->same(selA, selB)) anyReadDistinct = true;
+                ExprId selAExpr = originExpr(selA), selBExpr = originExpr(selB);
+                if (selAExpr == NullExpr || selBExpr == NullExpr) { ok = false; break; }
+                lits.push_back(
+                    registry_->getOrCreateEufEqualityAtom(selAExpr, selBExpr).negated());
+            }
+            if (!ok) continue;
+            // #85-refinement (onlyViolated): re-assert ONLY when the model violates
+            // this lemma — i.e. NO union read currently distinguishes A,B (so the
+            // clause would force A=B, contradicting the asserted A!=B). If some read
+            // already differs the lemma is satisfied; skip to avoid a refine spin.
+            if (onlyViolated && anyReadDistinct) continue;
+            ccDedup.insert(key);
+            if (xolver::env::diag("XOLVER_AX_STORECOMM_EXT_DIAG"))
+                std::fprintf(stderr, "[STORECOMM-EXT] A=%u B=%u union=%zu lits=%zu\n",
+                             (unsigned)A, (unsigned)B, unionIdx.size(), lits.size());
+            return lits;
         }
     }
 

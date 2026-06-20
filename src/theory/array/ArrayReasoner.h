@@ -209,6 +209,26 @@ private:
     bool row2DiseqEnabled_ = false;
     bool storeNoopEnabled_ = false;  // #75 store-store no-op merge (set default-ON in ctor)
 
+    // #86 (XOLVER_AX_STORECOMM_EXT, default-OFF): constant-index store-tower
+    // extensionality. For an array diseq A!=B where A and B are store towers over
+    // a COMMON base with ALL-CONSTANT write indices, A and B agree at every index
+    // OUTSIDE the union of their write indices (both = base there), so
+    //   A != B  ==>  exists c in (writeIdx(A) ∪ writeIdx(B)): select(A,c) != select(B,c).
+    // Emit the decidable clause  (A=B) ∨ ⋁_c (select(A,c) != select(B,c)). Each read
+    // over a constant index reduces via Row2-const, so the SAT solver picks a
+    // concrete distinguishing index — pinning the model the lazy variable-witness
+    // extensionality cannot (the QF_AUFLIA storecomm class). Sound: a valid
+    // extensionality instance for same-base constant-index towers (never adds/removes
+    // models). Bounded: fires once per (A,B) diseq, |union| constant reads.
+    bool storecommExtEnabled_ = false;
+    std::unordered_set<uint64_t> storecommExtDone_;
+    // Walk arr's store tower (descend store members in the e-graph class). Appends
+    // each write-index TERM to idxOut and sets baseOut to the bottom non-store
+    // array. Returns true iff every write index is a numeric/bool CONSTANT (so the
+    // const-index extensionality bound is valid); false otherwise (caller skips).
+    bool collectConstStoreTower(EufTermId arr, std::vector<EufTermId>& idxOut,
+                                EufTermId& baseOut) const;
+
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
     // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE
     // disables it (A/B baseline only). Read once at construction.

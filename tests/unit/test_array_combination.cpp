@@ -247,4 +247,50 @@ TEST_CASE("QF_AX #85 storeinv multi-store: floor + gated refinement recovery") {
     CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
 }
 
+// ---- #86 constant-index store-commutativity extensionality (QF_AUFLIA) -----
+// (not (= A B)) where A,B are 10-deep store towers over the SAME base a1 with
+// CONSTANT indices in different order: A writes {1..9}, B writes {1..10}, so they
+// differ ONLY at index 10 (A[10]=a1[10], B[10]=e10) -> SAT. The lazy
+// variable-witness extensionality cannot pin the witness to the distinguishing
+// constant index, so it floors. XOLVER_AX_STORECOMM_EXT emits the decidable
+// const-index ext clause (A=B) ∨ ⋁_c (select(A,c)!=select(B,c)) over the
+// write-index union, and the #85 refinement re-asserts it once the const reads
+// reduce (Row2-const) -> converges to the genuine sat. z3/cvc5 say sat; the model
+// is ModelValidator-confirmed.
+TEST_CASE("QF_AUFLIA #86 storecomm const-index ext: floor + gated recovery") {
+    std::string smt =
+        "(set-logic QF_AUFLIA)\n"
+        "(declare-fun a1 () (Array Int Int))\n"
+        "(declare-fun e1 () Int)(declare-fun e2 () Int)(declare-fun e3 () Int)\n"
+        "(declare-fun e4 () Int)(declare-fun e5 () Int)(declare-fun e6 () Int)\n"
+        "(declare-fun e7 () Int)(declare-fun e8 () Int)(declare-fun e9 () Int)\n"
+        "(declare-fun e10 () Int)\n"
+        "(assert (not (= "
+        "(store (store (store (store (store (store (store (store (store (store "
+        "a1 1 e1) 2 e2) 3 e3) 4 e4) 5 e5) 6 e6) 7 e7) 8 e8) 9 e9) 1 e1) "
+        "(store (store (store (store (store (store (store (store (store (store "
+        "a1 9 e9) 3 e3) 5 e5) 4 e4) 6 e6) 1 e1) 10 e10) 2 e2) 8 e8) 7 e7))))\n"
+        "(check-sat)\n";
+
+    // Replicate the baked competition config (XOLVER_AX_ROW2_CONST=1, which the
+    // const reads reduce through). The Solver API does not apply baked defaults.
+    setenv("XOLVER_AX_ROW2_CONST", "1", 1);
+
+    // OFF: the variable-witness extensionality cannot pin the distinguishing
+    // constant index -> sound completeness floor -> unknown.
+    unsetenv("XOLVER_AX_STORECOMM_EXT");
+    unsetenv("XOLVER_AX_REFINE");
+    Result off = solveStr(smt);
+    CHECK(static_cast<int>(off) == static_cast<int>(Result::Unknown));
+
+    // ON: const-index ext lemma + refinement converge to the genuine sat.
+    setenv("XOLVER_AX_STORECOMM_EXT", "1", 1);
+    setenv("XOLVER_AX_REFINE", "1", 1);
+    Result on = solveStr(smt);
+    unsetenv("XOLVER_AX_STORECOMM_EXT");
+    unsetenv("XOLVER_AX_REFINE");
+    unsetenv("XOLVER_AX_ROW2_CONST");
+    CHECK(static_cast<int>(on) == static_cast<int>(Result::Sat));
+}
+
 }  // TEST_SUITE
