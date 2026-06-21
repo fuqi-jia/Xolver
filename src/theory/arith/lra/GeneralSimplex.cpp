@@ -1059,7 +1059,18 @@ GeneralSimplex::proveFixedValueImpl(int var, std::unordered_set<int>& visited) c
     // Non-basic variable: check if its value is determined by a fixed basic variable.
     // If var appears in basic row b = RHS + sum(c_i * v_i), and b is fixed,
     // and all non-basic entries except var are fixed, then var is fixed.
-    for (int r = 0; r < tableau().numRows(); ++r) {
+    // var is non-basic here (the basic case above returned), so the tableau's
+    // column cross-link gives EXACTLY the rows that contain var as an entry —
+    // visit those instead of scanning every row. Sort by row index so the FIRST
+    // proving row (hence the returned value AND its bound-reason set) is identical
+    // to the old r=0..numRows scan: behaviour byte-identical, O(numRows) ->
+    // O(deg(var)). proveFixedValueImpl was ~60% of QF_LIA bofill-scheduling
+    // samples (profiled) — the all-rows scan on a ~2600-row tableau was the cliff.
+    std::vector<int> colRows;
+    colRows.reserve(tableau().col(var).entries.size());
+    for (const auto& ce : tableau().col(var).entries) colRows.push_back(ce.row);
+    std::sort(colRows.begin(), colRows.end());
+    for (int r : colRows) {
         const auto& tabRow = tableau().row(r);
         int b = tabRow.basicVar;
         if (b < 0) continue;
