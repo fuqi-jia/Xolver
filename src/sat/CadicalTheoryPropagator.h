@@ -150,6 +150,10 @@ private:
     // Levels are non-decreasing in trail order, so vars above any level form a suffix.
     std::vector<std::pair<SatVar, int>> assignTrail_;
     size_t lastCheckedAssignmentSize_ = 0;
+    // Reused scratch for cb_check_found_model's (level,lit) decorate-sort-undecorate
+    // (#88) — a persistent member avoids a per-found-model heap allocation (malloc
+    // was visible in the cb_check_found_model profile). clear() keeps capacity.
+    std::vector<std::pair<int, int>> modelSortScratch_;
     // Set true whenever a theory *atom* is asserted (notify_assignment); cleared
     // when cb_propagate runs a Standard check. When the cb_propagate throttle
     // fires on pure-boolean growth (no atom asserted since the last check, no

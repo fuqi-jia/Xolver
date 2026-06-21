@@ -427,7 +427,8 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     // in the re-assertion below (which also called levelOf per lit). Verdict-
     // identical: stable sort by .first preserves trail order within a level, the
     // same order the by-levelOf stable_sort produced.
-    std::vector<std::pair<int, int>> ordered;  // (level, lit)
+    std::vector<std::pair<int, int>>& ordered = modelSortScratch_;  // (level, lit)
+    ordered.clear();
     ordered.reserve(model.size());
     for (int lit : model)
         ordered.emplace_back(levelOf(static_cast<SatVar>(std::abs(lit))), lit);
