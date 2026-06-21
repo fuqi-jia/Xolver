@@ -1286,13 +1286,23 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     // Remove stale equality for the same pair
     auto it = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [a, b](const auto& e) { return e.a == a && e.b == b; });
+    const bool removedEq = (it != interfaceEqualities_.end());
     interfaceEqualities_.erase(it, interfaceEqualities_.end());
 
     interfaceDisequalities_.push_back({a, b, reason, level});
-    // Invalidate simplex state because an interface disequality may remove a
-    // previously-applied interface equality bound.  Force full rebuild on next check.
-    gs_.resetActiveBounds();
-    appliedCursor_ = 0;
+    // Invalidate simplex state ONLY when this disequality actually removed a
+    // previously-applied interface EQUALITY bound — that is the only way a pending
+    // diseq perturbs the simplex (a!=b itself is recorded for conflict detection,
+    // not applied as a bound). The unconditional full rebuild re-applied every
+    // bound on each diseq; the Nelson-Oppen arrangement asserts MANY value-distinct
+    // diseqs with no prior equality (the SAT solver decides a!=b directly), so the
+    // reset was almost always wasted — assertInterfaceDisequality + the GeneralSimplex
+    // rebuild dominated the QF_UFLIA Wisa profile. Verdict-identical: with no equality
+    // bound removed, no simplex bound changed, so the reset would be a no-op.
+    if (removedEq) {
+        gs_.resetActiveBounds();
+        appliedCursor_ = 0;
+    }
     return TheoryCheckResult::consistent();
 }
 
