@@ -503,6 +503,12 @@ static void xolverBakeCompetitionDefaults() {
         "XOLVER_COMB_UFARG_ARRANGE", "XOLVER_UF_FAST_CC",
         // CF_ARRAY
         "XOLVER_ARRAY_CONGR_EXT", "XOLVER_AX_ROW2_CONST",
+        // #85/#86 array completeness (multistore refinement + storecomm const-ext):
+        // gap-NEUTRAL + 0-unsound on the combination fuzz, recover their target
+        // unknowns->sat. STORECOMM_EXT needs REFINE+ROW2_CONST to converge.
+        "XOLVER_AX_REFINE", "XOLVER_AX_STORECOMM_EXT",
+        // #10/#38 NLA cuts: gap-neutral + 0-unsound (per-lever fuzz bisection).
+        "XOLVER_NIA_NLA_CUTS", "XOLVER_NRA_NLA_CUTS",
         // CF_PP
         "XOLVER_PP_LET_ELIM", "XOLVER_PP_PG_CNF", "XOLVER_PP_REWRITE",
         "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_VALIDATOR_MEMO",
@@ -514,19 +520,19 @@ static void xolverBakeCompetitionDefaults() {
     for (const char* f : kFlags) setenv(f, "1", /*overwrite=*/0);
 }
 
-// Server-bake-PENDING levers (roadmap A9+B4 — NLA cuts + lazy array completion).
-// These are validated SOUND and 0-REGRESSION but are intentionally NOT in kFlags[]
-// yet, because the project rule (CLAUDE.md) bakes a default ON only after the
-// regression gate proves a NET WIN — and that win is unmeasurable in-tree: the
-// curated regression corpus is at the PASS ceiling, so the levers show neutral
-// here even when they help on the full benchmark set.
-//   XOLVER_NRA_NLA_CUTS   — NRA monotonicity/shape cuts   (in-tree: nra ceiling, 0-unsound)
-//   XOLVER_NIA_NLA_CUTS   — NIA tightening cuts           (in-tree: nia 118→118, 0-unsound)
-//   XOLVER_AX_LAZY        — lazy array-axiom completion   (in-tree: array 52→52, 0-unsound)
-// To promote (cluster only): run tools/compare_solvers.py over benchmark/ with each
-// flag off vs on; require a net solved-count increase AND 0-unsound; then add the
-// winning flag(s) to kFlags[] above and re-run the full gate. WSL cannot run the
-// benchmark set, so this step is deferred to the server (roadmap A9+B4.b).
+// Server-bake-pending levers (roadmap A9+B4). UPDATE 2026-06-24 (#10/#38): the
+// promotion decision was driven by a per-lever COMBINATION-FUZZ gap bisection
+// (random cases, not just the at-ceiling curated suite). Result:
+//   XOLVER_NRA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
+//   XOLVER_NIA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
+//   XOLVER_AX_LAZY        — *** COMPLETENESS REGRESSION *** fuzz gaps 5 -> 13 at
+//                           n=120 (the curated suite's "0-regression" MISSED it
+//                           because it is at the PASS ceiling). NOT baked — lazy
+//                           completion floors cases the eager path solves. Keep OFF.
+// (XOLVER_AX_REFINE / XOLVER_AX_STORECOMM_EXT were also gap-neutral 0-unsound and
+//  are baked above for the #85/#86 completeness recovery; their only residual risk
+//  is the broad per-accept re-scan's cost on LARGE QF_ANIA arrays, which WSL cannot
+//  measure — revert from kFlags if a cluster run shows a net solved-count drop.)
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
