@@ -26,6 +26,8 @@
 #include "frontend/preprocess/UnconstrainedElim.h"
 #include "frontend/factory/StrategyPresets.h"
 #include <cstdlib>
+#include <csignal>
+#include <csetjmp>
 #include "theory/arith/search/CandidateModelSearch.h"
 #include "proof/ArithModelValidator.h"
 #include <gmpxx.h>
@@ -4427,11 +4429,65 @@ void Solver::assertFormula(Term t) {
     pImpl->sourcePath_.clear();
 }
 
+// #19/#49 native-crash firewall: libpoly / GMP can SIGSEGV / SIGABRT / SIGFPE deep
+// in real-algebraic computation on degenerate inputs (a class the C++ try/catch
+// below cannot intercept — signals are not exceptions). When enabled, a synchronous
+// crash during the solve siglongjmps back and the verdict becomes Unknown (SOUND —
+// an incomplete answer, never a wrong one), preserving the process so the
+// regression runner / incremental API survive a single bad case instead of dying.
+// The signal is synchronous, so it is delivered to the faulting (solve) thread; the
+// jmp_buf + active flag are thread_local so the handler resolves to that thread's
+// recovery point. Default-OFF: XOLVER_SIGNAL_FIREWALL=1 to enable.
+namespace {
+thread_local sigjmp_buf g_solveCrashJmp;
+thread_local volatile sig_atomic_t g_solveCrashActive = 0;
+void solveCrashHandler(int sig) {
+    if (g_solveCrashActive) {
+        g_solveCrashActive = 0;
+        siglongjmp(g_solveCrashJmp, sig);
+    }
+    // Not inside a guarded solve — restore default disposition and re-raise so a
+    // genuine crash outside the firewall is NOT masked.
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
+}
+}  // namespace
+
 Result Solver::checkSat() {
     // Start the global solve wall-clock so per-engine budgets can scale to the
     // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
     wall::beginSolve(env::paramLong("XOLVER_WALLCLOCK_MS", 0));
     Result r;
+    // Non-static: re-read per solve so per-call control works (one getenv/solve is
+    // negligible) and so a unit test can toggle the firewall between checkSat calls.
+    const bool sigFirewall = env::diag("XOLVER_SIGNAL_FIREWALL");
+    struct sigaction oldSegv{}, oldAbrt{}, oldFpe{};
+    bool fwInstalled = false;
+    if (sigFirewall) {
+        if (sigsetjmp(g_solveCrashJmp, 1) != 0) {
+            // Recovered from a native crash mid-solve.
+            if (fwInstalled) {
+                sigaction(SIGSEGV, &oldSegv, nullptr);
+                sigaction(SIGABRT, &oldAbrt, nullptr);
+                sigaction(SIGFPE, &oldFpe, nullptr);
+            }
+            g_solveCrashActive = 0;
+            pImpl->lastUnknownReason_ =
+                "native crash (signal) during solve — firewalled to Unknown";
+            pImpl->lastModel_.reset();
+            wall::endSolve();
+            return Result::Unknown;
+        }
+        struct sigaction sa{};
+        sa.sa_handler = solveCrashHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_NODEFER;
+        sigaction(SIGSEGV, &sa, &oldSegv);
+        sigaction(SIGABRT, &sa, &oldAbrt);
+        sigaction(SIGFPE, &sa, &oldFpe);
+        fwInstalled = true;
+        g_solveCrashActive = 1;
+    }
     // Top-level bad_alloc firewall (iter#18, pre-existing class). A pathological
     // input (e.g. AProVE aproveSMT4461031801876451415: 16 vars + nested
     // assertion) can OOM deep in atomization / theory / SAT layers before any
@@ -4442,6 +4498,13 @@ Result Solver::checkSat() {
     // bad_alloc — regardless of which inner stage allocated past the
     // process limit — surfaces as a clean Unknown verdict.
     try {
+        // Test-only hook to exercise the native-crash firewall (#19/#49). Gated by
+        // an env var no production path sets; raises a synchronous SIGSEGV inside
+        // the guarded region so the firewall's recover-to-Unknown can be tested.
+        if (env::diag("XOLVER_TEST_FORCE_CRASH")) {
+            volatile int* p = nullptr;
+            *p = 1;  // SIGSEGV
+        }
         int ebsRounds = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT", 0);
         if (ebsRounds > 0 && !std::getenv("XOLVER_STRAT_PORTFOLIO")) {
             int budget = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS", 15000);
@@ -4476,6 +4539,12 @@ Result Solver::checkSat() {
             ") — solver firewalled to Unknown";
         pImpl->lastModel_.reset();
         r = Result::Unknown;
+    }
+    if (fwInstalled) {
+        g_solveCrashActive = 0;
+        sigaction(SIGSEGV, &oldSegv, nullptr);
+        sigaction(SIGABRT, &oldAbrt, nullptr);
+        sigaction(SIGFPE, &oldFpe, nullptr);
     }
     wall::endSolve();
     return r;
