@@ -501,6 +501,10 @@ static void xolverBakeCompetitionDefaults() {
         // CF_COMB
         "XOLVER_COMB_MODEL_BASED", "XOLVER_COMB_SCALAR_BACKFILL",
         "XOLVER_COMB_UFARG_ARRANGE", "XOLVER_UF_FAST_CC",
+        // #16 EUF entailment propagation in combination: gap-neutral (fuzz 4/7 vs
+        // baseline 5/6) + 0-unsound (full reg + combination fuzz) — the L9 firewall
+        // guards the soundness-sensitive class. Promoted on that gate.
+        "XOLVER_EUF_PROP_COMB",
         // CF_ARRAY
         "XOLVER_ARRAY_CONGR_EXT", "XOLVER_AX_ROW2_CONST",
         // #85/#86 array completeness (multistore refinement + storecomm const-ext):
