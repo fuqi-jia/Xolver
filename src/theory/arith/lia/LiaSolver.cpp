@@ -2097,6 +2097,21 @@ void LiaSolver::scanLiteralPinEntailments() {
     // Throttle: hard cap per check to avoid quadratic worst-case in the SAT bus.
     const size_t kMaxPropsPerScan = 256;
     size_t emitted = 0;
+    // #87: memoize proveFixedValue across this scan. The scan iterates ALL atoms and
+    // queries proveFixedValue for the SAME shared vars (sp.a/sp.b, LHS vars) across
+    // many atoms — redundant recursion (the xs-13-09 Wisa cliff: 86% of samples in
+    // GeneralSimplex::proveFixedValueImpl). The scan only READS the simplex
+    // (proveFixedValue is const; no assert/pivot here), so the bounds+tableau are
+    // STABLE throughout — caching by var index is sound + verdict-identical (same
+    // result, computed once per var instead of once per occurrence). Local to this
+    // call and discarded after, so there is no cross-mutation staleness.
+    using FixedResult = decltype(gs_.proveFixedValue(0));
+    std::unordered_map<int, FixedResult> fixedCache;
+    auto cachedProveFixedValue = [&](int idx) -> const FixedResult& {
+        auto it = fixedCache.find(idx);
+        if (it != fixedCache.end()) return it->second;
+        return fixedCache.emplace(idx, gs_.proveFixedValue(idx)).first->second;
+    };
     for (const auto& rec : registry_->records()) {
         if (emitted >= kMaxPropsPerScan) break;
         // --- Path A: shared-equality atom (Combination): both sides are
@@ -2123,7 +2138,7 @@ void LiaSolver::scanLiteralPinEntailments() {
                 if (nm.empty()) return std::nullopt;
                 int idx = manager_.findVarIndex(nm);
                 if (idx < 0) return std::nullopt;
-                auto fv = gs_.proveFixedValue(idx);
+                const auto& fv = cachedProveFixedValue(idx);
                 if (!fv) return std::nullopt;
                 if (fv->first.b != 0) return std::nullopt;
                 std::vector<SatLit> reasons;
@@ -2176,7 +2191,7 @@ void LiaSolver::scanLiteralPinEntailments() {
                 if (coeff == 0) continue;
                 int idx = manager_.findVarIndex(name);
                 if (idx < 0) { allPinned = false; break; }
-                auto fv = gs_.proveFixedValue(idx);
+                const auto& fv = cachedProveFixedValue(idx);
                 if (!fv || fv->first.b != 0) { allPinned = false; break; }
                 lhsVal += coeff * fv->first.a;
                 for (const auto& br : fv->second) reasons.push_back(br.reason);
@@ -2209,7 +2224,7 @@ void LiaSolver::scanLiteralPinEntailments() {
         if (coeff == 0) continue;
         int idx = manager_.findVarIndex(name);
         if (idx < 0) continue;                          // not in simplex yet
-        auto fixedOpt = gs_.proveFixedValue(idx);
+        const auto& fixedOpt = cachedProveFixedValue(idx);
         if (!fixedOpt) continue;                        // not pinned by current bounds
         const DeltaRational& pinned = fixedOpt->first;
         if (pinned.b != 0) continue;                    // skip δ-strict (open) values
