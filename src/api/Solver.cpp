@@ -682,7 +682,10 @@ public:
                 for (ExprId aid : originalAssertions_) scan(aid);
             }
         }
-        const bool validatorMemo = xolver::env::diag("XOLVER_PP_VALIDATOR_MEMO");
+        // #41 promoted default-ON: validator eval memoization is verdict-identical
+        // (memoizes a PURE eval over ExprId) — a speedup on validator-heavy sat
+        // re-checks, never changes a verdict. XOLVER_PP_VALIDATOR_MEMO=0 disables.
+        const bool validatorMemo = xolver::env::flag("XOLVER_PP_VALIDATOR_MEMO", true);
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty() || !roaeFreeArrayVars_.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
