@@ -18,7 +18,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-v=0 rej=0 nop=0 skip=0 rejected_files=""
+v=0 skel=0 rej=0 nop=0 skip=0 rejected_files=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   [ -f "$f" ] || { echo "MISSING: $f"; continue; }
@@ -26,7 +26,7 @@ while IFS= read -r f; do
   rc=$?
   echo "$out"
   case $rc in
-    0) v=$((v+1));;
+    0) case "$out" in *VERIFIED-SKELETON*) skel=$((skel+1));; *) v=$((v+1));; esac;;
     1) rej=$((rej+1)); rejected_files="$rejected_files
   $f";;
     2) nop=$((nop+1));;
@@ -35,7 +35,7 @@ while IFS= read -r f; do
 done < "$LIST"
 
 echo "----------------------------------------------------------------"
-echo "VERIFIED=$v  NO-PROOF(degraded)=$nop  SKIP(not-unsat)=$skip  REJECTED=$rej"
+echo "VERIFIED(complete)=$v  VERIFIED-SKELETON(lemmas assumed)=$skel  NO-PROOF(degraded)=$nop  SKIP(not-unsat)=$skip  REJECTED=$rej"
 if [ "$rej" -ne 0 ]; then
   echo "HARD FAILURE: $rej proof(s) REJECTED by the external checker:$rejected_files"
   exit 1

@@ -7,6 +7,13 @@
 namespace xolver {
 
 class CadicalTheoryPropagator;
+// Custom CaDiCaL proof tracer that captures the COMPLETE input clause set
+// (original CNF + every external-propagator clause CaDiCaL records as original:
+// lemmas, conflicts, reason clauses) via add_original_clause. Defined in the .cpp
+// (it needs CaDiCaL's internal tracer.hpp). This is the single source of truth
+// for the DIMACS the external checker needs — it cannot miss a clause path the
+// way per-callback hooks could. Only used under XOLVER_ENABLE_PROOFS.
+class ProofCnfCapture;
 
 class CadicalBackend : public SatSolver {
 public:
@@ -30,14 +37,6 @@ public:
 
     bool enableProofTrace(const std::string& base, bool lrat) override;
     void finalizeProof() override;
-
-    // Called by the theory propagator when it feeds an external (theory) clause
-    // to the SAT engine. Such clauses bypass addClause(), so the captured DIMACS
-    // would be INCOMPLETE — a proof referencing them would be (correctly) rejected
-    // by an external checker. Until theory-lemma certificates land (Phase C), a
-    // run that used any external clause emits NO proof (honest degraded mode)
-    // rather than an incomplete one. No-op unless proof tracing is active.
-    void noteExternalProofClause();
 
     // Statistics (available only when compiled with CaDiCaL)
     struct Stats {
@@ -74,12 +73,20 @@ private:
     // compiled only under XOLVER_ENABLE_PROOFS — see CadicalBackend.cpp). ---
     bool proofTracing_ = false;     // proof emission enabled for this solve
     bool proofConcluded_ = false;   // finalizeProof already ran (idempotent guard)
-    bool proofHadExternalClause_ = false; // a theory clause bypassed addClause()
     std::string proofBase_;         // path stem: <base>.cnf + <base>.drat/.lrat
-    // Captured DIMACS clause set fed to the SAT engine (CaDiCaL numbering). The
-    // checker needs the formula AND the proof; CaDiCaL emits only the proof.
-    std::vector<std::vector<int>> proofCnf_;
-    void writeProofCnf() const;     // dump <base>.cnf from proofCnf_
+    // How many clauses we fed via addClause() (= the original CNF size). The
+    // capture tracer records original CNF + external theory clauses together, so
+    // (captured total - this) = the count of theory lemmas ASSUMED as axioms — a
+    // theory instance's proof certifies the Boolean skeleton only; the lemmas are
+    // justified in Phase C. Recorded as a comment in <base>.cnf for honesty.
+    std::size_t proofOrigClauseCount_ = 0;
+#ifdef XOLVER_ENABLE_PROOFS
+    // Gated out in the default (no-proof) build: a unique_ptr to the incomplete
+    // ProofCnfCapture would need the full type at the (.cpp) destructor, which is
+    // only defined under this macro.
+    std::unique_ptr<ProofCnfCapture> proofCapture_; // the add_original_clause sink
+#endif
+    void writeProofCnf() const;     // dump <base>.cnf from the capture tracer
 };
 
 } // namespace xolver
