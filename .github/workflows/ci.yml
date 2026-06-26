@@ -1,7 +1,7 @@
 name: CI
 
 # Build Xolver and run the unit + regression suites. The regression harness
-# (tools/run_regression.py) compares each verdict against the (set-info :status)
+# (tools/regression/run_regression.py) compares each verdict against the (set-info :status)
 # embedded in the .smt2 file, so no external solver (z3/cvc5) is needed in CI.
 # Exit is non-zero on any UNSOUND / UNEXPECTED_FAIL / TIMEOUT, which fails the job.
 
@@ -51,7 +51,7 @@ jobs:
       # green; everything else finishes in milliseconds.
       - name: Regression suite (xolver vs embedded :status)
         run: |
-          python3 tools/run_regression.py \
+          python3 tools/regression/run_regression.py \
             --root tests/regression \
             --solver build/bin/xolver \
             --timeout 240 \

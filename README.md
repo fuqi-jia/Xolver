@@ -86,7 +86,7 @@ CLI at `build/bin/xolver`. CMake options: `XOLVER_BUILD_TESTS`, `XOLVER_BUILD_TO
 ```bash
 cd build && ctest                          # unit + per-logic regression
 ./build/tests/xolver_unit_tests            # unit only
-python3 tools/run_regression.py --root tests/regression --solver build/bin/xolver
+python3 tools/regression/run_regression.py --root tests/regression --solver build/bin/xolver
 ```
 
 The regression harness compares each verdict against z3/cvc5 and flags any sat↔unsat disagreement.

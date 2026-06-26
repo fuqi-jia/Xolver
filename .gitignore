@@ -177,3 +177,10 @@ tools/deploy_pandas.sh
 tools/collect_pandas.sh
 tools/deploy_pandas.ps1
 tools/collect_pandas.ps1
+
+# generated / artifacts (repo-layout cleanup)
+__pycache__/
+*.tar.gz
+/results/
+*.tsv
+xolver-dist.tar.gz
