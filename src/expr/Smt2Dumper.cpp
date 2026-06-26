@@ -1,6 +1,26 @@
 #include "expr/Smt2Dumper.h"
 #include <sstream>
 #include <unordered_set>
+#include <gmpxx.h>
+
+namespace {
+// Print a rational value string ("2", "-3", "1/3") as a valid SMT-LIB Real literal
+// (N.0 or (/ N.0 D.0)) so it parses in a Real-sorted context — e.g. RDL's
+// (* 2 x) with x:Real, where a bare "2" is an Int numeral and a strict checker
+// (Carcara) rejects the Int/Real mix.
+std::string realLiteral(const std::string& v) {
+    mpq_class q(v);
+    q.canonicalize();
+    auto dec = [](mpz_class n) { return n.get_str() + ".0"; };
+    if (q.get_den() == 1) {
+        if (q.get_num() < 0) return "(- " + dec(-q.get_num()) + ")";
+        return dec(q.get_num());
+    }
+    if (q.get_num() < 0)
+        return "(- (/ " + dec(-q.get_num()) + " " + dec(q.get_den()) + "))";
+    return "(/ " + dec(q.get_num()) + " " + dec(q.get_den()) + ")";
+}
+}  // namespace
 
 namespace xolver {
 
@@ -72,10 +92,15 @@ static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth
                 os << (std::get<bool>(e.payload.value) ? "true" : "false");
                 break;
             case Kind::ConstInt:
-                os << std::get<int64_t>(e.payload.value);
+                // A Real-sorted integer literal must print as "N.0" (e.g. RDL),
+                // an Int-sorted one stays bare (e.g. IDL).
+                if (ir.sortKind(e.sort) == SortKind::Real)
+                    os << realLiteral(std::to_string(std::get<int64_t>(e.payload.value)));
+                else
+                    os << std::get<int64_t>(e.payload.value);
                 break;
             case Kind::ConstReal:
-                os << std::get<std::string>(e.payload.value);
+                os << realLiteral(std::get<std::string>(e.payload.value));
                 break;
             case Kind::ConstBV:
                 if (std::holds_alternative<uint64_t>(e.payload.value)) {

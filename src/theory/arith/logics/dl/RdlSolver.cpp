@@ -224,6 +224,9 @@ TheoryCheckResult RdlSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     } else {
         bfResult = bf_.runFull(graph_);
         if (bfResult.negativeCycle) {
+#ifdef XOLVER_ENABLE_PROOFS
+            pushDlFarkasCert(bfResult.cycle, graph_, registry_);
+#endif
             return TheoryCheckResult::mkConflict(
                 buildConflict(bfResult.cycle, graph_));
         }
