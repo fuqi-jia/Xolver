@@ -221,8 +221,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     // ...). z3 nlsat finds these in 0.13s precisely because it tries them
     // directly. We mirror that lightweight hint without rebuilding nlsat.
     static const bool satSampleEnabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_CAC_SAT_SAMPLE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_CAC_SAT_SAMPLE");
     }();
     static const int kMaxSweepDepth = [] {
         // top 2 variables only — keeps cost O(K^2 × cells)
@@ -230,7 +229,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
         return v > 0 ? v : 2;
     }();
     if (satSampleEnabled && level < kMaxSweepDepth) {
-        if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
+        if (xolver::env::diag("XOLVER_NRA_CAC_DIAG")) {
             std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
             std::string vname = std::string(kernel_->varName(var));
             st << "[SAT-SAMPLE-ENTER] level=" << level << " var=" << var
@@ -323,7 +322,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
                 // UniformTrue, or NonUniform-and-holds ⇒ satisfied at the sample ⇒
                 // contributes nothing (no boundary, not a violation).
             }
-            if (std::getenv("XOLVER_NRA_CAC_DIAG")) {
+            if (xolver::env::diag("XOLVER_NRA_CAC_DIAG")) {
                 std::ofstream st("/tmp/cac_leaf.txt", std::ios::app);
                 st << "[LEAF] var=" << var << " sample=" << (s_i.isRational() ? s_i.rational.get_str() : "alg")
                    << " allHold=" << allHold << " violated=" << violated.size()
@@ -474,7 +473,7 @@ CacEngine::CoverOut CacEngine::getUnsatCover(int level, SamplePoint& sample) {
     // TRACE (XOLVER_NRA_CAC_TRACE=1): per-level UNSAT-covering dump to find
     // where the projection chain loses an algebraic SAT boundary (#48 debug).
     // MUST run BEFORE the flatten below — the flatten moves polys out of c.polys.
-    if (std::getenv("XOLVER_NRA_CAC_TRACE")) {
+    if (xolver::env::diag("XOLVER_NRA_CAC_TRACE")) {
         std::ofstream st("/tmp/cac_trace.txt", std::ios::app);
         auto fmtE = [](const ExtendedRealValue& e) -> std::string {
             if (e.isNegInf()) return "-inf";

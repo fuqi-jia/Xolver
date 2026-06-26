@@ -23,6 +23,13 @@ public:
 
     void setArithTheory(TheoryId theory) { arithTheory_ = theory; }
 
+    // (#77) Bridge COMPOUND arith UF arguments into fresh shared leaves so the
+    // model-based arrangement can fire UF congruence over arith-equal args
+    // (closes the QF_UFLIA/UFLRA false-sat class). Enabled ONLY by the pure
+    // UF-arith builders — NOT datatype/array, where it perturbs the DtReasoner /
+    // array axioms. Legacy XOLVER_COMB_SAT_FLOOR/UFARG_ARRANGE still force it on.
+    void setUfArgBridge(bool v) { ufArgBridge_ = v; }
+
     void run();
 
     const std::vector<ExprId>& bridgeAssertions() const { return bridgeAssertions_; }
@@ -32,6 +39,7 @@ private:
     SharedTermRegistry& registry_;
     SortId boolSortId_;
     TheoryId arithTheory_ = TheoryId::LRA;
+    bool ufArgBridge_ = false;   // (#77) set by pure UF-arith builders only
 
     std::vector<ExprId> bridgeAssertions_;
     uint32_t freshCounter_ = 0;
@@ -55,6 +63,22 @@ private:
 
     ExprId makeFreshVar(SortId sort);
     ExprId makeEq(ExprId lhs, ExprId rhs);
+    ExprId makeNot(ExprId child);
+    ExprId makeOr(ExprId a, ExprId b);
+
+    // (#69) store-vs-base extensionality, gated default-OFF
+    // (XOLVER_AX_STORE_VS_BASE). For each ASSERTED equality atom `(= s c)` where
+    // `s = store(c, j, v)` is a store directly over the other side `c`, add the
+    // sound biconditional axiom  (s = c) ⟺ (select(c, j) = v)  as two boolean
+    // clauses. This is a VALID array-theory lemma (read-over-write + store-is-
+    // identity-when-value-already-present), so it never removes or adds models;
+    // it only lets the Boolean layer unit-propagate the *disequality* direction
+    // `select(c, j) ≠ v` into arith via the normal interface-disequality path.
+    // Closes the compound-value store-vs-base completeness floor that otherwise
+    // leaves the validator at `unknown`. The `(= s c)` atom is REUSED (exact
+    // ExprId) so the axiom binds the very atom the assertion pins; `select(c, j)`
+    // is bridged into a fresh shared leaf so the equality routes to Combination.
+    void addStoreVsBaseAxioms();
 
     TheoryId theoryOf(ExprId eid) const;
 

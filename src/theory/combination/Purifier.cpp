@@ -1,4 +1,5 @@
 #include "theory/combination/Purifier.h"
+#include "util/EnvParam.h"
 #include "theory/core/DebugTrace.h"
 #include "expr/ir.h"
 #include <unordered_set>
@@ -13,9 +14,9 @@ namespace xolver {
 // so the default purified form is unchanged; active when either the certificate
 // floor (needs the bridge var to SEE the obligation) or the arrangement (needs
 // it to SPLIT and recover) is enabled.
-static bool ufArgBridgeEnabled() {
-    return std::getenv("XOLVER_COMB_SAT_FLOOR") != nullptr ||
-           std::getenv("XOLVER_COMB_UFARG_ARRANGE") != nullptr;
+static bool ufArgBridgeEnabledLegacy() {
+    return xolver::env::diag("XOLVER_COMB_SAT_FLOOR") ||
+           xolver::env::diag("XOLVER_COMB_UFARG_ARRANGE");
 }
 
 Purifier::Purifier(CoreIr& ir, SharedTermRegistry& registry, SortId boolSort)
@@ -101,6 +102,90 @@ ExprId Purifier::makeEq(ExprId lhs, ExprId rhs) {
     e.children.push_back(rhs);
     // iter-67: addShared so identical bridge equalities collapse.
     return ir_.addShared(e);
+}
+
+ExprId Purifier::makeNot(ExprId child) {
+    CoreExpr e;
+    e.kind = Kind::Not;
+    e.sort = boolSortId_;
+    e.children.push_back(child);
+    return ir_.addShared(e);
+}
+
+ExprId Purifier::makeOr(ExprId a, ExprId b) {
+    CoreExpr e;
+    e.kind = Kind::Or;
+    e.sort = boolSortId_;
+    e.children.push_back(a);
+    e.children.push_back(b);
+    return ir_.addShared(e);
+}
+
+void Purifier::addStoreVsBaseAxioms() {
+    if (!xolver::env::flag("XOLVER_AX_STORE_VS_BASE", false)) return;
+    const SortId intS = ir_.intSortId(), realS = ir_.realSortId();
+
+    std::unordered_set<uint64_t> done;
+    std::vector<ExprId> axioms;
+
+    // For an ASSERTED Eq atom `eqId = (= store base)` where `store` is a
+    // store(base, j, v), emit the sound store-vs-base biconditional.
+    auto consider = [&](ExprId eqId, ExprId storeId, ExprId baseId) {
+        const auto& sn = ir_.get(storeId);
+        if (sn.kind != Kind::Store || sn.children.size() != 3) return;
+        if (sn.children[0] != baseId) return;            // must store directly over base
+        auto params = ir_.arraySortParams(sn.sort);
+        if (!params) return;
+        const SortId elemS = params->second;
+        // Only interface-routable (arith) element sorts: the disequality has to
+        // reach an arith theory to matter. Non-arith element sorts already get
+        // the plain EUF read-over-write treatment.
+        if (elemS != intS && elemS != realS) return;
+        const ExprId idx = sn.children[1];
+        const ExprId val = sn.children[2];   // post-purification: a shared leaf
+        const uint64_t key =
+            (static_cast<uint64_t>(storeId) << 32) | static_cast<uint32_t>(baseId);
+        if (!done.insert(key).second) return;
+
+        // select(base, idx), bridged into a fresh shared leaf so the equality
+        // `selFresh = val` routes to Combination as an interface atom and the
+        // array reasoner discovers select(base, idx) to give it a model value.
+        CoreExpr sel;
+        sel.kind = Kind::Select;
+        sel.sort = elemS;
+        sel.children.push_back(baseId);
+        sel.children.push_back(idx);
+        const ExprId selId = ir_.addShared(sel);
+        const ExprId selFresh = makeFreshVar(elemS);
+        axioms.push_back(makeEq(selFresh, selId));          // bridge
+
+        // Biconditional (store = base) ⟺ (selFresh = val), as two clauses:
+        //   store=base → selFresh=val   :  (¬eqId ∨ selEqVal)
+        //   selFresh=val → store=base   :  (eqId ∨ ¬selEqVal)
+        // eqId is REUSED verbatim so the axiom binds the very atom the
+        // assertion pins (a reversed-children makeEq would be a distinct atom).
+        const ExprId selEqVal = makeEq(selFresh, val);
+        axioms.push_back(makeOr(makeNot(eqId), selEqVal));
+        axioms.push_back(makeOr(eqId, makeNot(selEqVal)));
+    };
+
+    // Walk the asserted formula DAG and consider every Eq atom. Snapshot the
+    // assertion roots first — the axioms we add must not be re-walked.
+    std::vector<ExprId> work = ir_.assertions();
+    std::unordered_set<ExprId> seen;
+    while (!work.empty()) {
+        const ExprId cur = work.back();
+        work.pop_back();
+        if (!seen.insert(cur).second) continue;
+        const auto& e = ir_.get(cur);
+        if (e.kind == Kind::Eq && e.children.size() == 2) {
+            consider(cur, e.children[0], e.children[1]);
+            consider(cur, e.children[1], e.children[0]);
+        }
+        for (ExprId c : e.children) work.push_back(c);
+    }
+
+    for (ExprId ax : axioms) ir_.addAssertion(ax);
 }
 
 TheoryId Purifier::theoryOf(ExprId eid) const {
@@ -255,7 +340,7 @@ ExprId Purifier::purifyRec(ExprId root) {
             std::vector<ExprId> newArgs;
             newArgs.reserve(e.children.size());
             bool changed = false;
-            bool bridgeArgs = ufArgBridgeEnabled();
+            bool bridgeArgs = ufArgBridge_ || ufArgBridgeEnabledLegacy();
             for (ExprId arg : e.children) {
                 ExprId p = done.at(arg);
                 // Phase 1: a COMPOUND arith argument (e.g. f(i+1)) is bridged
@@ -332,6 +417,9 @@ ExprId Purifier::purifyRec(ExprId root) {
                 CoreExpr ne;
                 ne.kind = e.kind;
                 ne.sort = e.sort;
+                ne.payload = e.payload;   // preserve payload (robustness; array ops
+                                          // take their symbol from builtinName, but
+                                          // keep it consistent with the other paths)
                 for (ExprId c : newChildren) ne.children.push_back(c);
                 rebuilt = ir_.addShared(ne);
             }
@@ -411,6 +499,14 @@ ExprId Purifier::purifyRec(ExprId root) {
             CoreExpr ne;
             ne.kind = e.kind;
             ne.sort = e.sort;
+            ne.payload = e.payload;   // #72 ROOT: preserve the node's payload — a
+            // datatype Constructor/Tester (and any payload-bearing node) rebuilt
+            // here with a purified COMPOUND child (e.g. mk(snd q, 0), is-mk(mk(...)))
+            // otherwise loses its name and interns as a bare "#dt.ctor."/"#dt.is.",
+            // breaking selector projection, the constructor-clash symbol compare,
+            // and tester-consistency -> false sat AND false unsat (#70). The
+            // Selector branch above already preserves it; this default branch did
+            // not, so any compound-arg ctor/tester fell through and was stripped.
             for (ExprId c : newChildren) ne.children.push_back(c);
             done[f.eid] = ir_.addShared(ne);
         }
@@ -449,7 +545,11 @@ void Purifier::run() {
         ir_.addAssertion(bridge);
     }
 
-    if (std::getenv("EUF_DIAG")) {
+    // (#69) store-vs-base extensionality axioms — gated default-OFF. Runs after
+    // purification so it sees the bridged (shared-leaf) store operands.
+    addStoreVsBaseAxioms();
+
+    if (xolver::env::diag("EUF_DIAG")) {
         std::function<std::string(ExprId)> nameOf = [&](ExprId e) -> std::string {
             const auto& ex = ir_.get(e);
             if (ex.kind == Kind::Variable) {

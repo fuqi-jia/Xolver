@@ -26,11 +26,9 @@ LraSolver::LraSolver() {
 
     // XOLVER_LRA_PROP (default OFF): lift sound Farkas row-propagations to the
     // SAT solver during search. Read once.
-    const char* prop = std::getenv("XOLVER_LRA_PROP");
-    lraPropEnabled_ = (prop && *prop && *prop != '0');
+    lraPropEnabled_ = xolver::env::flag("XOLVER_LRA_PROP");
     // XOLVER_SIMPLEX_IMPLIED_EQ (default OFF): see header comment.
-    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
-    impliedEqEnabled_ = (impl && *impl && *impl != '0');
+    impliedEqEnabled_ = xolver::env::flag("XOLVER_SIMPLEX_IMPLIED_EQ");
     lpDualityBudget_ = std::max(
         0, env::paramInt("XOLVER_LRA_LP_DUALITY_BUDGET", lpDualityBudget_));
 }
@@ -331,6 +329,27 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
                 std::vector<SatLit> probeReasons;
                 if (tryProvePairEqualityByLpDuality(aux, probeReasons)) {
                     eqReasons = std::move(probeReasons);
+                }
+            }
+        }
+        // #77 (always-on): const-vs-var entailed-equality refutation via the
+        // tableau-chase pin. assertedVarEqualityReason needs BOTH operands to be
+        // simplex vars; the LP-duality probe above is gated by impliedEqEnabled_;
+        // and the last-resort model-branch needs an arrangement authorization a
+        // derived diseq never gets. proveFixedValue folds a constant operand into
+        // the aux's RHS and is sound (a STRUCTURAL pin — equal lower/upper bounds
+        // chased through tableau rows, not a current-point coincidence). When it
+        // pins (a - b) = 0 the asserted a != b is a hard conflict carrying the
+        // pinning bound reasons. Closes the QF_UFLRA f(0) < f(-1+j) [j pinned to
+        // 1] false-sat: the derived 0 != arg with arg structurally pinned to 0.
+        // Zero cost when there are no interface disequalities (pure LRA).
+        if (eqReasons.empty()) {
+            int aux = getOrCreateInterfaceEqAuxVar(ieq.a, ieq.b);
+            if (aux >= 0) {
+                auto fixed = gs_.proveFixedValue(aux);
+                if (fixed && fixed->first.a == 0 && fixed->first.b == 0) {
+                    for (const auto& br : fixed->second)
+                        eqReasons.push_back(br.reason);
                 }
             }
         }
@@ -747,53 +766,76 @@ LraSolver::getDeducedSharedEqualities() {
 
     // Direct-pair edges: assertedVarEqualityReason catches both explicit
     // 2-var Eq atoms and complementary-bound pairs that pin (a - b) to 0.
-    std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+    // Perf: instead of the O(N^2) shared-var pair loop (each doing a map lookup
+    // into twoVarIndex), iterate the index entries directly — O(#2-var atoms),
+    // which is what actually bounds the pinned pairs. Map each index key (a name
+    // pair) back to shared-var indices, aggregate the lo/up bound ONCE per key
+    // (math identical to the per-pair version), and collect the pinned pairs. We
+    // then emit in the SAME lexicographic (i<j) order the old loop produced, so
+    // both `result` and the `adj` adjacency (ascending neighbours) are
+    // byte-identical — preserving verdict-identity even for the gated transitive-
+    // closure pass below, which reads adj insertion order.
+    std::unordered_map<std::string, std::vector<int>> nameToIdxs;
+    nameToIdxs.reserve(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i) {
-        const std::string& na = sharedNames[i];
-        if (na.empty()) continue;
-        for (int j = i + 1; j < n; ++j) {
-            const std::string& nb = sharedNames[j];
-            if (nb.empty() || na == nb) continue;
-            // Hash-lookup in pre-built index instead of full trail walk.
-            std::string ka = na, kb = nb;
-            if (ka > kb) std::swap(ka, kb);
-            auto it = twoVarIndex.find({ka, kb});
-            if (it == twoVarIndex.end()) continue;
+        if (!sharedNames[i].empty()) nameToIdxs[sharedNames[i]].push_back(i);
+    }
+    std::vector<std::tuple<int, int, std::vector<SatLit>>> pinned;  // (i<j, reasons)
+    for (const auto& [keyPair, entries] : twoVarIndex) {
+        const std::string& ka = keyPair.first;
+        const std::string& kb = keyPair.second;
+        if (ka == kb) continue;
+        auto ia = nameToIdxs.find(ka);
+        auto ib = nameToIdxs.find(kb);
+        if (ia == nameToIdxs.end() || ib == nameToIdxs.end()) continue;  // not both shared
 
-            bool haveLo = false, haveUp = false;
-            mpq_class lo = 0, up = 0;
-            SatLit loLit{}, upLit{};
-            auto addLower = [&](const mpq_class& v, SatLit lit) {
-                if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
-            };
-            auto addUpper = [&](const mpq_class& v, SatLit lit) {
-                if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
-            };
-            for (const auto& te : it->second) {
-                // Compute coefficient on (na - nb) for THIS pair direction
-                mpq_class c0;
-                if (te.n0 == na && te.n1 == nb) c0 = te.c0;
-                else if (te.n0 == nb && te.n1 == na) c0 = -te.c0;
-                else continue;  // shouldn't happen given the canonical sort
-                mpq_class bnd = te.rhs / c0;
-                bool flip = (c0 < 0);
-                switch (te.rel) {
-                    case Relation::Eq: addLower(bnd, te.lit); addUpper(bnd, te.lit); break;
-                    case Relation::Leq: if (!flip) addUpper(bnd, te.lit); else addLower(bnd, te.lit); break;
-                    case Relation::Geq: if (!flip) addLower(bnd, te.lit); else addUpper(bnd, te.lit); break;
-                    default: break;
-                }
+        bool haveLo = false, haveUp = false;
+        mpq_class lo = 0, up = 0;
+        SatLit loLit{}, upLit{};
+        auto addLower = [&](const mpq_class& v, SatLit lit) {
+            if (!haveLo || v > lo) { lo = v; loLit = lit; haveLo = true; }
+        };
+        auto addUpper = [&](const mpq_class& v, SatLit lit) {
+            if (!haveUp || v < up) { up = v; upLit = lit; haveUp = true; }
+        };
+        for (const auto& te : entries) {
+            // Index entries are stored with n0 < n1 sorted (== ka < kb).
+            mpq_class c0;
+            if (te.n0 == ka && te.n1 == kb) c0 = te.c0;
+            else if (te.n0 == kb && te.n1 == ka) c0 = -te.c0;
+            else continue;  // shouldn't happen given the canonical sort
+            mpq_class bnd = te.rhs / c0;
+            bool flip = (c0 < 0);
+            switch (te.rel) {
+                case Relation::Eq: addLower(bnd, te.lit); addUpper(bnd, te.lit); break;
+                case Relation::Leq: if (!flip) addUpper(bnd, te.lit); else addLower(bnd, te.lit); break;
+                case Relation::Geq: if (!flip) addLower(bnd, te.lit); else addUpper(bnd, te.lit); break;
+                default: break;
             }
-            if (!(haveLo && haveUp && lo == 0 && up == 0)) continue;
-            std::vector<SatLit> reasons;
-            reasons.push_back(loLit);
-            if (!(upLit == loLit)) reasons.push_back(upLit);
-
-            adj[i].push_back({j, reasons});
-            adj[j].push_back({i, reasons});
-            result.push_back(TheorySolver::SharedEqualityPropagation{
-                sharedVars[i], sharedVars[j], std::move(reasons)});
         }
+        if (!(haveLo && haveUp && lo == 0 && up == 0)) continue;
+        std::vector<SatLit> reasons;
+        reasons.push_back(loLit);
+        if (!(upLit == loLit)) reasons.push_back(upLit);
+        // idx[ka] and idx[kb] are disjoint (ka != kb), so every (i,j) is distinct.
+        for (int i : ia->second) {
+            for (int j : ib->second) {
+                if (i == j) continue;
+                pinned.emplace_back(std::min(i, j), std::max(i, j), reasons);
+            }
+        }
+    }
+    std::sort(pinned.begin(), pinned.end(),
+              [](const auto& x, const auto& y) {
+                  if (std::get<0>(x) != std::get<0>(y)) return std::get<0>(x) < std::get<0>(y);
+                  return std::get<1>(x) < std::get<1>(y);
+              });
+    std::vector<std::vector<std::pair<int, std::vector<SatLit>>>> adj(n);
+    for (auto& [i, j, reasons] : pinned) {
+        adj[i].push_back({j, reasons});
+        adj[j].push_back({i, reasons});
+        result.push_back(TheorySolver::SharedEqualityPropagation{
+            sharedVars[i], sharedVars[j], std::move(reasons)});
     }
 
     // Track 2b (XOLVER_SIMPLEX_IMPLIED_EQ): closure beyond per-pair direct

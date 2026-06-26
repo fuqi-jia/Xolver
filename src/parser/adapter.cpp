@@ -24,7 +24,7 @@ std::unique_ptr<CoreIr> FrontendAdapter::importProblem() {
     // capture-free and idempotent on non-let nodes (z3-validated), so coupling
     // it on is behavior-neutral for let-free input. Both knobs default-ON now
     // (XOLVER_COMB_ARRAY_NIA promoted 2026-06-04 overnight iter #4).
-    letElim_ = (std::getenv("XOLVER_PP_LET_ELIM") != nullptr) ||
+    letElim_ = (xolver::env::diag("XOLVER_PP_LET_ELIM")) ||
                (env::paramInt("XOLVER_COMB_ARRAY_NIA", 1) != 0);
 
     // Stage A: run SOMTParser rewriter before conversion.

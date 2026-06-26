@@ -343,7 +343,7 @@ StructuralIntegerProbe::tryProbe(
         // Diag: how many bindings were derived?
         // Diag only on each new structural pinning (skip the single-flip
         // sub-trials so the log stays readable).
-        if (std::getenv("XOLVER_NRA_INT_PROBE_DIAG")) {
+        if (xolver::env::diag("XOLVER_NRA_INT_PROBE_DIAG")) {
             std::ofstream dst("/tmp/int_probe.txt", std::ios::app);
             dst << "[INT-PROBE] trial=" << trials
                 << " structural={";
@@ -656,7 +656,7 @@ StructuralIntegerProbe::trySolveCascade(
     cands.reserve(gens.size());
     for (VarId v : gens) cands.push_back(cascadeCandidates(/*isLeaf=*/!deepMap[v], kDeep));
 
-    const bool diag = std::getenv("XOLVER_NRA_EQ_CASCADE_DIAG") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_NRA_EQ_CASCADE_DIAG");
     if (diag) {
         std::ofstream d("/tmp/eq_cascade.txt", std::ios::app);
         d << "[EQ-CASCADE] vars=" << allVars.size() << " gens=" << gens.size()

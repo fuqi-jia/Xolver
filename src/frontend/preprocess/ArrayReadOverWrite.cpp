@@ -1,4 +1,5 @@
 #include "frontend/preprocess/ArrayReadOverWrite.h"
+#include "util/EnvParam.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -12,8 +13,7 @@ struct RowDiag { size_t selConst = 0, foldVal = 0, peelResidual = 0,
 RowDiag g_rowDiag;
 bool rowDiagOn() {
     static const bool on = [] {
-        const char* e = std::getenv("XOLVER_PP_ROW_FOLD_DIAG");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_PP_ROW_FOLD_DIAG");
     }();
     return on;
 }

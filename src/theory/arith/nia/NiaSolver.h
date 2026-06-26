@@ -80,7 +80,7 @@ public:
     // Track A Phase 1.3: receive ModEqConstFacts captured by IntDivModLowerer.
     // Called by Solver::Impl after preprocessing and theory-solver setup. The
     // facts are consumed by stageNativeModEqConst on each NIA check call.
-    void setModEqConstFacts(ModEqConstFactList facts);
+    void setModEqConstFacts(const ModEqConstFactList& facts) override;
 
     bool supportsCombination() const override { return true; }
 
@@ -225,6 +225,10 @@ private:
     bool enableIcp_ = true;       // interval contraction fixpoint (empty domain ⇒ UNSAT) (promoted default-ON)
     bool enableCdcac_ = false;    // XOLVER_NIA_CDCAC: integer-aware CDCAC (real-empty ⇒ int-UNSAT; integer-validated SAT)
     bool normCache_ = true;       // incremental per-constraint normalize cache (kept in lockstep with active_) (promoted default-ON)
+    bool enableOmega_ = false;    // XOLVER_NIA_OMEGA: Pugh Omega test — sound linear-integer UNSAT (default-OFF)
+    bool enableSmallPrimeModular_ = false;  // XOLVER_NIA_SMALL_PRIME_MODULAR: GF(p) congruence refutation (default-OFF)
+    bool enableIntBoundProp_ = false;       // XOLVER_NIA_INT_BOUND_PROP: integer interval refutation (default-OFF)
+    int  omegaSafe_ = -1;         // cached pure-integer soundness gate: -1 unknown, 0 has-real (skip), 1 pure-int
     // (iter-77 cherry-pick of 7afeda9 added groebner_ field + enableGroebner_ above)
 
     // Integer-aware CDCAC engine (Phase 4). Lazily constructed on first use and
@@ -288,6 +292,17 @@ private:
     // to the next stage, or a verdict to stop. Registered as
     // CallbackReasoners in the constructor, in this order.
     std::optional<TheoryCheckResult> stagePending(TheoryLemmaStorage&, TheoryEffort);
+    // nia.omega (XOLVER_NIA_OMEGA, default-OFF): Pugh's Omega test for a sound
+    // linear-integer UNSAT certificate (the unbounded real-feasible-int-infeasible
+    // gap that Farkas/CDCAC miss). Abstracts nonlinear monomials to free int vars
+    // (relaxation), gated to pure-integer problems (real var ⇒ skip, soundness).
+    std::optional<TheoryCheckResult> stageOmega(TheoryLemmaStorage&, TheoryEffort);
+    // nia.small-prime-modular: cheap GF(p) congruence refutation over the equality
+    // subsystem (XOLVER_NIA_SMALL_PRIME_MODULAR, default-OFF). Standard+Full.
+    std::optional<TheoryCheckResult> stageSmallPrimeModular(TheoryLemmaStorage&, TheoryEffort);
+    // nia.int-bound-prop: integer interval contraction over equalities seeded by
+    // asserted single-var bounds (XOLVER_NIA_INT_BOUND_PROP, default-OFF). Standard+Full.
+    std::optional<TheoryCheckResult> stageIntBoundProp(TheoryLemmaStorage&, TheoryEffort);
     // Reference NLSAT-plan §2.3 + §5.1 step 1: when every currently-active
     // atom has a polynomial of total degree ≤ 1, NIA's verdict on this
     // active set is definitionally equal to LIA's. LIA is registered

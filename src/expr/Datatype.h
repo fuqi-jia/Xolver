@@ -100,6 +100,10 @@ public:
         return nullptr;
     }
 
+    // All registered datatypes (keyed by their sort). For whole-registry passes
+    // such as the #68 ill-typed-field check.
+    const std::unordered_map<SortId, DatatypeInfo>& all() const { return bySort_; }
+
 private:
     std::unordered_map<SortId, DatatypeInfo> bySort_;
 };

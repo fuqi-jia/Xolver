@@ -54,7 +54,7 @@ bool BoundChainComposer::run(PresolveState& st) {
         static_cast<size_t>(std::max(1, env::paramInt("XOLVER_NRA_BOUNDCHAIN_MAX_ATOMS", 2000)));
     static const long kMaxWork =
         static_cast<long>(std::max(1, env::paramInt("XOLVER_NRA_BOUNDCHAIN_MAX_WORK", 1500000)));
-    static const bool diag = std::getenv("XOLVER_PRESOLVE_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_PRESOLVE_DIAG");
     if (origN > kMaxAtoms) {
         if (diag) std::cerr << "[BOUNDCHAIN] skip: origN=" << origN
                             << " > cap=" << kMaxAtoms << "\n";

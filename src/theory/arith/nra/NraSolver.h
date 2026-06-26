@@ -4,6 +4,7 @@
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "theory/arith/poly/PolynomialConverter.h"
 #include "theory/arith/nra/core/CdcacSolver.h"
+#include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"  // nra.groebner: reused ideal-saturation (theory-agnostic)
 #include "theory/combination/SharedTermRegistry.h"
 #include "theory/core/ActiveLiteralSet.h"
 #include "theory/core/TheoryAtomTypes.h"
@@ -97,6 +98,8 @@ private:
     // O(#monomials); unconditionally sound (refutes only the provably impossible)
     // — the cheap closer for the Sturm-MBO family that CAD/CAC time out on.
     std::optional<TheoryCheckResult> stageSignRefute(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
+    // nra.groebner: cross-equation ideal-saturation refutation (XOLVER_NRA_GROBNER, default-OFF).
+    std::optional<TheoryCheckResult> stageGroebner(TheoryLemmaStorage& lemmaDb, TheoryEffort effort);
     // XOLVER_NRA_SIGN_SPLIT (default OFF): when sign-refute is blocked by ONE
     // sign-unknown variable in an otherwise refutable constraint, emit a
     // 3-way case-split theory lemma (or (> v 0) (= v 0) (< v 0)) on that
@@ -187,6 +190,16 @@ private:
     std::unique_ptr<PolynomialKernel> kernel_;
     std::unique_ptr<PolynomialConverter> converter_;
     CdcacSolver engine_;
+    // nra.groebner: reuse the (theory-agnostic) ideal-saturation reasoner — 1 ∈ ideal
+    // over the equality polys ⇒ no common complex root ⇒ no real root ⇒ UNSAT.
+    GroebnerIdealReasoner groebner_;
+    bool enableGroebner_ = false;   // XOLVER_NRA_GROBNER (default-OFF)
+    size_t groebnerNoConflictSig_ = 0;   // warm-start: last (poly,rel)-signature that found no conflict
+    // libpoly hardening: decline the CDCAC path (→ unknown, sound) on inputs above
+    // these thresholds, preventing libpoly blowup/OOM on pathological systems.
+    // 0 = disabled (default ⇒ no corpus impact); tuned on the benchmark set.
+    int cdcacMaxVars_ = 0;   // XOLVER_NRA_CDCAC_MAX_VARS
+    int cdcacMaxDeg_ = 0;    // XOLVER_NRA_CDCAC_MAX_DEGREE
 
     std::vector<SatLit> activeLits_;
     std::vector<NraTrailEntry> trail_;

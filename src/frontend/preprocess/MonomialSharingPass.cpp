@@ -1,4 +1,5 @@
 #include "frontend/preprocess/MonomialSharingPass.h"
+#include "util/EnvParam.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -109,7 +110,7 @@ size_t MonomialSharingPass::run() {
     // refcount histogram so we can confirm the pass IS scanning when
     // selected=0 (i.e., distinguish "ran but no monomial is shared
     // structurally" from "didn't run at all" on VeryMax-class inputs).
-    static const bool diag = std::getenv("XOLVER_PP_MONOMIAL_SHARE_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_PP_MONOMIAL_SHARE_DIAG");
     if (diag) {
         size_t total = refCount_.size();
         size_t shared = 0;

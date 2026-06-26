@@ -1,4 +1,5 @@
 #include "theory/arith/nia/reasoners/GroebnerIdealReasoner.h"
+#include "util/EnvParam.h"
 #include <cstdlib>
 #include <algorithm>
 #include <map>
@@ -91,19 +92,13 @@ NiaReasoningResult GroebnerIdealReasoner::run(
         // that prevent the VeryMax 22-eq/54-var SAT-case TO. UNSAT-only
         // soundness invariant unchanged.
         static const size_t kMaxEq = [] {
-            const char* e = std::getenv("XOLVER_NIA_GROBNER_MAX_EQ");
-            if (e && *e) {
-                long v = std::strtol(e, nullptr, 10);
-                if (v > 0 && v <= 1000) return static_cast<size_t>(v);
-            }
+            long v = env::paramLong("XOLVER_NIA_GROBNER_MAX_EQ", 6);
+            if (v > 0 && v <= 1000) return static_cast<size_t>(v);
             return size_t(6);
         }();
         static const size_t kMaxVars = [] {
-            const char* e = std::getenv("XOLVER_NIA_GROBNER_MAX_VARS");
-            if (e && *e) {
-                long v = std::strtol(e, nullptr, 10);
-                if (v > 0 && v <= 100) return static_cast<size_t>(v);
-            }
+            long v = env::paramLong("XOLVER_NIA_GROBNER_MAX_VARS", 8);
+            if (v > 0 && v <= 100) return static_cast<size_t>(v);
             return size_t(8);
         }();
         std::set<std::string> vs;

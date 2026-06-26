@@ -85,6 +85,14 @@ public:
     Model getModel() const;
     Term getValue(Term t);
     std::vector<Term> getUnsatCore() const;
+    // True iff the input requested unsat cores (:produce-unsat-cores, or the
+    // "produce-unsat-cores" option). After an `unsat`, dumpUnsatCore writes the
+    // core assertions.
+    bool unsatCoreRequested() const;
+    // Write the unsat core as an SMT-LIB list of the ORIGINAL assertions that
+    // form it: ( <assertion> ... ). Meaningful only after checkSat() returned
+    // Unsat with unsat cores requested.
+    void dumpUnsatCore(std::ostream& os) const;
     Proof getProof() const;
     Statistics getStatistics() const;
 
@@ -115,11 +123,38 @@ public:
     std::string lastUnknownComponent() const;
     std::string lastUnknownDetail() const;
 
+    // SMT-LIB interactive commands (#12). The response-relevant commands of the
+    // parsed script, in source order, so the CLI can print responses
+    // sequentially (e.g. an `(echo ...)` before `(check-sat)` prints before the
+    // verdict). `text` carries the echo string literal or the get-info keyword;
+    // get-value term lists are not exposed here (handled separately). Empty when
+    // the input had no such commands — the CLI then uses the batch path unchanged.
+    struct ScriptResponseCommand {
+        enum class Kind { Echo, GetInfo, CheckSat, GetValue, GetModel, GetAssignment };
+        Kind kind;
+        std::string text;
+        size_t scriptIndex = 0;  // position in the full command script (for getValueResponse)
+    };
+    std::vector<ScriptResponseCommand> scriptResponseCommands() const;
+
+    // Evaluate the (get-value (...)) command at `scriptIndex` against the model
+    // of the most recent `sat` check-sat, returning the SMT-LIB response
+    // ( (t1 v1) (t2 v2) ... ). Currently supports variable and constant terms;
+    // returns "" when there is no model, the command is not get-value, or any
+    // term is an unsupported compound expression (so no partial/wrong output).
+    std::string getValueResponse(size_t scriptIndex) const;
+
     // Set path for per-case stats dump (--dump-stats)
     void setDumpStatsPath(std::string_view path);
 
     // Debug / research
     void dumpSMT2(std::ostream& os);
+
+    // Per-instance FEATURE VECTOR (one JSON object) for learned strategy
+    // selection / autotuning (no solve — parse + detect only). Emits the logic,
+    // size counts (asserts/vars/nodes), and the detected LogicFeatures flags.
+    // Meaningful after parseFile() (or after asserting formulas) has built the IR.
+    void dumpFeatures(std::ostream& os) const;
 
 private:
     class Impl;

@@ -1,4 +1,5 @@
 #include "frontend/preprocess/targeted/ReadOnlyArrayElim.h"
+#include "util/EnvParam.h"
 #include "expr/Smt2Dumper.h"
 
 #include <algorithm>
@@ -280,7 +281,7 @@ bool ReadOnlyArrayElim::run() {
     // RELAXATION that suppresses UNSAT, so it regresses array-extensionality
     // UNSAT cases (e.g. QF_AX) and only pays off once the residual NIA is
     // solvable. R1 (store-free) is unaffected when this is off.
-    if (std::getenv("XOLVER_TARGETED_PP_WRITEARRAY")) {
+    if (xolver::env::diag("XOLVER_TARGETED_PP_WRITEARRAY")) {
         if (!collectFalseEqs()) return false;
     }
     if (!safeToEliminate()) return false;
@@ -292,7 +293,7 @@ bool ReadOnlyArrayElim::run() {
     if (!didRewrite_) return false;
     buildCongruences();
 
-    if (std::getenv("XOLVER_TARGETED_PP_DIAG")) {
+    if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG")) {
         std::fprintf(stderr,
             "[ROAE] reads=%zu congruences=%zu exprTableNow=%zu\n",
             readVar_.size(), extra_.size(), ir_.size());
@@ -315,7 +316,7 @@ void ReadOnlyArrayElim::commit() {
     for (ExprId c : extra_) {
         ir_.addAssertion(c, baseLevel);
     }
-    if (std::getenv("XOLVER_TARGETED_PP_DUMP")) {
+    if (xolver::env::diag("XOLVER_TARGETED_PP_DUMP")) {
         for (const auto& [level, eid] : rewritten_) {
             (void)level;
             std::fprintf(stderr, "[ROAE-ASSERT] %s\n",

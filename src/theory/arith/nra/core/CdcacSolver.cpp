@@ -1,4 +1,5 @@
 #include "theory/arith/nra/core/CdcacSolver.h"
+#include "util/EnvParam.h"
 #include "theory/arith/nra/core/CdcacCore.h"
 #include "theory/arith/nra/backend/LibpolyBackend.h"
 #include "theory/arith/nra/core/CdcacCache.h"
@@ -164,7 +165,7 @@ TheoryCheckResult CdcacSolver::check() {
         // this brings the Collins/Lazard CdcacCore into line. Stable over the
         // lexicographic base for determinism. (XOLVER_NRA_VARORDER_ASC opts back
         // into the old ascending order for differential.)
-        static const bool ascending = std::getenv("XOLVER_NRA_VARORDER_ASC") != nullptr;
+        static const bool ascending = xolver::env::diag("XOLVER_NRA_VARORDER_ASC");
         std::unordered_map<std::string, int> degSum;
         for (const auto& name : varOrderNames) degSum[name] = 0;
         for (const auto& c : active_) {

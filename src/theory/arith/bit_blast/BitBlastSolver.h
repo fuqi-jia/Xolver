@@ -47,7 +47,7 @@ public:
         // budget. Sound: bit-blast is candidate-only (every SAT result is
         // re-validated by IntegerModelValidator per invariant 1) and the SAT
         // verdict itself is not affected by preprocessing — only its speed.
-        if (const char* e = std::getenv("XOLVER_NIA_BITBLAST_NOPRE"); e && *e && *e != '0')
+        if (xolver::env::flag("XOLVER_NIA_BITBLAST_NOPRE"))
             noPreprocess_ = true;
         // XOLVER_NIA_BITBLAST_CONFLICTS=<N> (default-0=unlimited): cap CaDiCaL's
         // conflict budget on the bit-blast's INTERNAL SAT solve. With NOPRE off,

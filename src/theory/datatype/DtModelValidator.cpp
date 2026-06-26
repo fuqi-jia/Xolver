@@ -1,4 +1,5 @@
 #include "theory/datatype/DtModelValidator.h"
+#include "util/EnvParam.h"
 #include <cstring>
 #include <iostream>
 #include <cstdlib>
@@ -416,7 +417,7 @@ DtModelValidator::R DtModelValidator::eval(ExprId e) {
 DtModelValidator::Verdict DtModelValidator::validate(
     const std::vector<ExprId>& assertions) {
     bool anyIndet = false;
-    const bool diag = std::getenv("XOLVER_DT_VALIDATE_PER_ASSERT") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_DT_VALIDATE_PER_ASSERT");
     size_t nIndet = 0, nTrue = 0, nFalse = 0;
     for (ExprId a : assertions) {
         R r = eval(a);

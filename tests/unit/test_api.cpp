@@ -4,8 +4,49 @@
 #include "expr/ir.h"
 #include <sstream>
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 using namespace xolver;
+
+// #12.a: the sequential-command foundation. parseFile must retain the script's
+// response/control commands (echo / check-sat / get-value / get-info) in source
+// order, while the bulk set-logic/declare/assert commands are NOT logged (so the
+// SMT-COMP hot path pays no per-assert memory). The CLI replays these to answer
+// an interactive script.
+TEST_CASE("API: scriptResponseCommands captures echo/get-info/check-sat in order (#12)") {
+    namespace fs = std::filesystem;
+    auto path = fs::temp_directory_path() / "xolver_script_cmds_test.smt2";
+    {
+        std::ofstream ofs(path);
+        ofs << "(set-logic QF_LIA)\n"
+               "(declare-fun x () Int)\n"
+               "(assert (= x 5))\n"
+               "(echo \"hello\")\n"
+               "(check-sat)\n"
+               "(get-value (x))\n"
+               "(get-info :name)\n";
+    }
+    Solver s;
+    REQUIRE(s.parseFile(path.string()));
+    auto cmds = s.scriptResponseCommands();
+    using K = Solver::ScriptResponseCommand::Kind;
+    REQUIRE(cmds.size() == 4);  // echo, check-sat, get-value, get-info (no set-logic/declare/assert)
+    CHECK(cmds[0].kind == K::Echo);
+    CHECK(cmds[0].text == "\"hello\"");  // string literal kept verbatim (SMT-LIB 2.6)
+    CHECK(cmds[1].kind == K::CheckSat);
+    CHECK(cmds[2].kind == K::GetValue);
+    CHECK(cmds[3].kind == K::GetInfo);
+    CHECK(cmds[3].text == ":name");
+
+    // #12.c: get-value evaluates variable terms against the post-sat model.
+    Result r = s.checkSat();
+    REQUIRE(static_cast<int>(r) == static_cast<int>(Result::Sat));
+    // cmds[2] is the (get-value (x)) command.
+    REQUIRE(cmds[2].kind == K::GetValue);
+    CHECK(s.getValueResponse(cmds[2].scriptIndex) == "((x 5))");
+    fs::remove(path);
+}
 
 TEST_CASE("API: sort creation") {
     Solver s;
@@ -272,6 +313,70 @@ TEST_CASE("API: getUnsatCore for checkSatAssuming") {
     auto core = s.getUnsatCore();
     CHECK(!core.empty());
     CHECK(core[0] == ge);
+}
+
+TEST_CASE("API: getUnsatCore minimizes to the conflicting subset") {
+    Solver s;
+    s.setLogic("QF_LIA");
+
+    Sort intSort = s.intSort();
+    Term x = s.mkConst(intSort, "x");
+    Term le2  = s.mkOp(static_cast<uint32_t>(Kind::Leq), {x, s.mkInt(2)});   // x <= 2  (HARD)
+    Term ge10 = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(10)});  // x >= 10 (assumption, conflicts le2)
+    Term ge0  = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(0)});   // x >= 0  (assumption, irrelevant)
+
+    // Hard le2 alone is SAT; adding ge10 makes it UNSAT, adding ge0 does not.
+    // So any SOUND core must contain ge10, and a MINIMIZED one drops ge0.
+    s.assertFormula(le2);
+    Result r = s.checkSatAssuming({ge0, ge10});
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+
+    auto core = s.getUnsatCore();
+    bool hasGe10 = false, hasGe0 = false;
+    for (const auto& t : core) {
+        if (t == ge10) hasGe10 = true;
+        if (t == ge0)  hasGe0 = true;
+    }
+    // Soundness invariant (ge10 is the only assumption that creates the conflict):
+    CHECK(hasGe10);
+    // Minimization (the win over the old return-all-assumptions stub):
+    CHECK(core.size() < 2);
+    CHECK_FALSE(hasGe0);
+}
+
+TEST_CASE("API: produce-unsat-cores returns the core ASSERTIONS (file-level)") {
+    Solver s;
+    s.setLogic("QF_LIA");
+    s.setOption("produce-unsat-cores", OptionValue(true));
+
+    Sort intSort = s.intSort();
+    Term x = s.mkConst(intSort, "x");
+    Term le2  = s.mkOp(static_cast<uint32_t>(Kind::Leq), {x, s.mkInt(2)});   // x <= 2
+    Term ge10 = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(10)});  // x >= 10 (conflicts le2)
+    Term ge0  = s.mkOp(static_cast<uint32_t>(Kind::Geq), {x, s.mkInt(0)});   // x >= 0  (irrelevant)
+
+    // Unlike checkSatAssuming, ALL three are HARD assertions; the indicator
+    // gating happens internally so getUnsatCore() reports which original
+    // assertions form the core.
+    s.assertFormula(le2);
+    s.assertFormula(ge10);
+    s.assertFormula(ge0);
+
+    Result r = s.checkSat();
+    CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
+
+    auto core = s.getUnsatCore();
+    bool hasLe2 = false, hasGe10 = false, hasGe0 = false;
+    for (const auto& t : core) {
+        if (t == le2)  hasLe2 = true;
+        if (t == ge10) hasGe10 = true;
+        if (t == ge0)  hasGe0 = true;
+    }
+    // The conflict le2 ∧ ge10 must be in any sound core; ge0 is minimized out.
+    CHECK(hasLe2);
+    CHECK(hasGe10);
+    CHECK(core.size() < 3);
+    CHECK_FALSE(hasGe0);
 }
 
 // Deep-recursion regression for the global recursion->iteration sweep. These run

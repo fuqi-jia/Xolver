@@ -1,4 +1,5 @@
 #include "theory/arith/nia/farkas/LeafFarkasLia.h"
+#include "util/EnvParam.h"
 
 #include "theory/arith/poly/PolynomialKernel.h"
 #include "xolver/Solver.h"      // nested QF_LIA solve = the real CDCL(LIA) backend
@@ -177,7 +178,7 @@ bool disjLiaUnsat(PolynomialKernel& kernel,
     // proves the extraction is correct before any later gate trusts it for
     // CT-feasibility / refinement — a wrong extraction would later become a
     // wrong UNSAT, so it is fully validated here first. Diag-gated.
-    if (std::getenv("XOLVER_NIA_CT_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_CT_DIAG")) {
         Model m = s.getModel();
         std::unordered_map<VarId, mpq_class> Mlam;
         bool extractOk = true;
@@ -291,7 +292,7 @@ bool niaLeafFarkasLiaUnsat(const std::vector<CdcacConstraint>& cons,
     std::unordered_map<VarId, bool> ctLamDep;  // S λ-dependent in ANY occurrence
     for (const auto& pc : pcs)
         for (const auto& [v, S] : pc.ct) { ctOcc[v]++; if (!S.c.empty()) ctLamDep[v] = true; }
-    if (std::getenv("XOLVER_NIA_CT_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_CT_DIAG")) {
         for (const auto& [v, n] : ctOcc) {
             std::string msg = "CT " + std::string(kernel.varName(v)) + " occ=" + std::to_string(n)
                             + (ctLamDep.count(v) ? " S=lam-dep" : " S=const");

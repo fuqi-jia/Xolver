@@ -1,4 +1,5 @@
 #include "sat/CadicalBackend.h"
+#include "util/EnvParam.h"
 #include <cstdio>
 #include <cstdlib>
 #include "sat/CadicalTheoryPropagator.h"
@@ -110,8 +111,8 @@ void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 
 SatSolver::SolveResult CadicalBackend::solve() {
     terminateRequested_ = false;
-    if (std::getenv("XOLVER_SAT_SAMPLE")) armSamplerOnce();
-    if (std::getenv("XOLVER_SAT_SIZE_DIAG")) {
+    if (xolver::env::diag("XOLVER_SAT_SAMPLE")) armSamplerOnce();
+    if (xolver::env::diag("XOLVER_SAT_SIZE_DIAG")) {
         std::fprintf(stderr, "[SAT-SIZE] maxVar=%u active=%d irredundant_clauses=%ld\n",
                      (unsigned)maxVar_, solver_->active(),
                      (long)solver_->irredundant());

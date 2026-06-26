@@ -175,7 +175,7 @@ bool SolveEqs::run() {
     // over all conjuncts. Compared start vs end to see how much elimination
     // grows the formula — the Option-C signal for whether general elimination
     // is densifying (UNSAT-harmful) vs shrinking (SAT-helpful).
-    const bool diag = std::getenv("XOLVER_PP_SOLVE_EQS_DIAG") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_PP_SOLVE_EQS_DIAG");
     auto dagSize = [&]() -> uint64_t {
         std::unordered_set<ExprId> seen;
         std::vector<ExprId> st;
@@ -234,7 +234,7 @@ bool SolveEqs::run() {
             lastGrowthCheck_ = eliminated_;
             if ((double)dagSize() > (double)dag0 * growthCap_) {
                 gaussDensifyAbort_ = true;
-                if (std::getenv("XOLVER_PP_SOLVE_EQS_DIAG"))
+                if (xolver::env::diag("XOLVER_PP_SOLVE_EQS_DIAG"))
                     std::fprintf(stderr, "[SolveEqs] densify cap hit after %zu elims; "
                                  "general elimination disabled\n", eliminated_);
             }

@@ -37,12 +37,9 @@ LiaSolver::LiaSolver() {
     if (env) {
         dumpCounter_ = 0;
     }
-    const char* repairEnv = std::getenv("XOLVER_LIA_REPAIR");
-    repairEnabled_ = (repairEnv && *repairEnv && *repairEnv != '0');
-    const char* cutsEnv = std::getenv("XOLVER_LIA_CUTS");
-    cutsEnabled_ = (cutsEnv && *cutsEnv && *cutsEnv != '0');
-    const char* gmiEnv = std::getenv("XOLVER_LIA_GMI_CUTS");
-    gmiCutsEnabled_ = (gmiEnv && *gmiEnv && *gmiEnv != '0');
+    repairEnabled_ = xolver::env::flag("XOLVER_LIA_REPAIR");
+    cutsEnabled_ = xolver::env::flag("XOLVER_LIA_CUTS");
+    gmiCutsEnabled_ = xolver::env::flag("XOLVER_LIA_GMI_CUTS");
     // XOLVER_LIA_INCREMENTAL (default OFF): incremental simplex replay instead
     // of the full-rebuild-every-check baseline. The baseline resets all bounds
     // and re-asserts the entire theory trail on every stageCore() call — O(checks
@@ -53,12 +50,9 @@ LiaSolver::LiaSolver() {
     // (already exercised incrementally by LRA) to undo bounds. activeAtoms_/
     // disequalities_ are maintained by assertLit in both modes, so only the
     // simplex bound application differs.
-    const char* incEnv = std::getenv("XOLVER_LIA_INCREMENTAL");
-    incrementalEnabled_ = (incEnv && *incEnv && *incEnv != '0');
-    const char* impl = std::getenv("XOLVER_SIMPLEX_IMPLIED_EQ");
-    impliedEqEnabled_ = (impl && *impl && *impl != '0');
-    const char* dioEnv = std::getenv("XOLVER_LIA_DIO");
-    dioTightenEnabled_ = (dioEnv && *dioEnv && *dioEnv != '0');
+    incrementalEnabled_ = xolver::env::flag("XOLVER_LIA_INCREMENTAL");
+    impliedEqEnabled_ = xolver::env::flag("XOLVER_SIMPLEX_IMPLIED_EQ");
+    dioTightenEnabled_ = xolver::env::flag("XOLVER_LIA_DIO");
     // Phase 2: single core reasoner (incremental replay + interface eqs +
     // simplex + integrality + branch).
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -424,7 +418,7 @@ std::optional<TheoryCheckResult> LiaSolver::stageCore(TheoryLemmaStorage& lemmaD
             // ON (it recovers pos_pinbounds without regressions); guard the
             // LIA mirror behind a separate flag until the integer/LP edge is
             // understood and the alia_012 class re-passes.
-            static const bool liaProbeOk = std::getenv("XOLVER_LIA_LP_DUALITY") != nullptr;
+            static const bool liaProbeOk = xolver::env::diag("XOLVER_LIA_LP_DUALITY");
             // Gate: skip the LIA LP-duality probe entirely when arrays are in
             // play. ROOT CAUSE: GeneralSimplex::push/pop only restores the
             // bound trail; the probe's internal check() can pivot the tableau,
@@ -1292,13 +1286,23 @@ TheoryCheckResult LiaSolver::assertInterfaceDisequality(
     // Remove stale equality for the same pair
     auto it = std::remove_if(interfaceEqualities_.begin(), interfaceEqualities_.end(),
         [a, b](const auto& e) { return e.a == a && e.b == b; });
+    const bool removedEq = (it != interfaceEqualities_.end());
     interfaceEqualities_.erase(it, interfaceEqualities_.end());
 
     interfaceDisequalities_.push_back({a, b, reason, level});
-    // Invalidate simplex state because an interface disequality may remove a
-    // previously-applied interface equality bound.  Force full rebuild on next check.
-    gs_.resetActiveBounds();
-    appliedCursor_ = 0;
+    // Invalidate simplex state ONLY when this disequality actually removed a
+    // previously-applied interface EQUALITY bound — that is the only way a pending
+    // diseq perturbs the simplex (a!=b itself is recorded for conflict detection,
+    // not applied as a bound). The unconditional full rebuild re-applied every
+    // bound on each diseq; the Nelson-Oppen arrangement asserts MANY value-distinct
+    // diseqs with no prior equality (the SAT solver decides a!=b directly), so the
+    // reset was almost always wasted — assertInterfaceDisequality + the GeneralSimplex
+    // rebuild dominated the QF_UFLIA Wisa profile. Verdict-identical: with no equality
+    // bound removed, no simplex bound changed, so the reset would be a no-op.
+    if (removedEq) {
+        gs_.resetActiveBounds();
+        appliedCursor_ = 0;
+    }
     return TheoryCheckResult::consistent();
 }
 
@@ -2093,6 +2097,21 @@ void LiaSolver::scanLiteralPinEntailments() {
     // Throttle: hard cap per check to avoid quadratic worst-case in the SAT bus.
     const size_t kMaxPropsPerScan = 256;
     size_t emitted = 0;
+    // #87: memoize proveFixedValue across this scan. The scan iterates ALL atoms and
+    // queries proveFixedValue for the SAME shared vars (sp.a/sp.b, LHS vars) across
+    // many atoms — redundant recursion (the xs-13-09 Wisa cliff: 86% of samples in
+    // GeneralSimplex::proveFixedValueImpl). The scan only READS the simplex
+    // (proveFixedValue is const; no assert/pivot here), so the bounds+tableau are
+    // STABLE throughout — caching by var index is sound + verdict-identical (same
+    // result, computed once per var instead of once per occurrence). Local to this
+    // call and discarded after, so there is no cross-mutation staleness.
+    using FixedResult = decltype(gs_.proveFixedValue(0));
+    std::unordered_map<int, FixedResult> fixedCache;
+    auto cachedProveFixedValue = [&](int idx) -> const FixedResult& {
+        auto it = fixedCache.find(idx);
+        if (it != fixedCache.end()) return it->second;
+        return fixedCache.emplace(idx, gs_.proveFixedValue(idx)).first->second;
+    };
     for (const auto& rec : registry_->records()) {
         if (emitted >= kMaxPropsPerScan) break;
         // --- Path A: shared-equality atom (Combination): both sides are
@@ -2119,7 +2138,7 @@ void LiaSolver::scanLiteralPinEntailments() {
                 if (nm.empty()) return std::nullopt;
                 int idx = manager_.findVarIndex(nm);
                 if (idx < 0) return std::nullopt;
-                auto fv = gs_.proveFixedValue(idx);
+                const auto& fv = cachedProveFixedValue(idx);
                 if (!fv) return std::nullopt;
                 if (fv->first.b != 0) return std::nullopt;
                 std::vector<SatLit> reasons;
@@ -2159,7 +2178,7 @@ void LiaSolver::scanLiteralPinEntailments() {
         // same proveFixedValue bound-reason mechanism the single-var path below
         // already trusts in combination.
         static const bool genEntail =
-            std::getenv("XOLVER_LIA_ENTAIL_GEN") != nullptr;
+            xolver::env::diag("XOLVER_LIA_ENTAIL_GEN");
         if (genEntail) {
             if (p.rel != Relation::Eq && p.rel != Relation::Leq &&
                 p.rel != Relation::Geq && p.rel != Relation::Lt &&
@@ -2172,7 +2191,7 @@ void LiaSolver::scanLiteralPinEntailments() {
                 if (coeff == 0) continue;
                 int idx = manager_.findVarIndex(name);
                 if (idx < 0) { allPinned = false; break; }
-                auto fv = gs_.proveFixedValue(idx);
+                const auto& fv = cachedProveFixedValue(idx);
                 if (!fv || fv->first.b != 0) { allPinned = false; break; }
                 lhsVal += coeff * fv->first.a;
                 for (const auto& br : fv->second) reasons.push_back(br.reason);
@@ -2205,7 +2224,7 @@ void LiaSolver::scanLiteralPinEntailments() {
         if (coeff == 0) continue;
         int idx = manager_.findVarIndex(name);
         if (idx < 0) continue;                          // not in simplex yet
-        auto fixedOpt = gs_.proveFixedValue(idx);
+        const auto& fixedOpt = cachedProveFixedValue(idx);
         if (!fixedOpt) continue;                        // not pinned by current bounds
         const DeltaRational& pinned = fixedOpt->first;
         if (pinned.b != 0) continue;                    // skip δ-strict (open) values

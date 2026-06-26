@@ -1,4 +1,5 @@
 #include "theory/arith/bit_blast/BitBlastEncoder.h"
+#include "util/EnvParam.h"
 #include <algorithm>
 #include <cstdlib>
 
@@ -9,7 +10,7 @@ BitBlastEncoder::BitBlastEncoder(SatSolver& sat) : sat_(sat) {
     sat_.addClause({SatLit::positive(t)});   // clamp t = true
     true_  = SatLit::positive(t);
     false_ = SatLit::negative(t);
-    gateCacheOn_ = (std::getenv("XOLVER_NIA_BB_NO_GATE_CACHE") == nullptr);
+    gateCacheOn_ = (!xolver::env::diag("XOLVER_NIA_BB_NO_GATE_CACHE"));
 }
 
 // One fresh SAT variable, capped by maxVars_. Once the budget is exhausted we

@@ -1,4 +1,5 @@
 #include "theory/arith/nia/farkas/FarkasOrDetector.h"
+#include "util/EnvParam.h"
 
 #include <cstdlib>
 #include <functional>
@@ -612,12 +613,10 @@ FarkasProfile FarkasOrDetector::detect() const {
             // conjunctive clauses. DNF ≡ original (exact, not an approximation),
             // and `dnfFlatten` is exact-or-bail, so this only RESTORES dropped
             // constraints — it can never invent a wrong UNSAT.
-            if (std::getenv("XOLVER_NIA_FARKAS_DNF_BLOCKS")) {
+            if (xolver::env::diag("XOLVER_NIA_FARKAS_DNF_BLOCKS")) {
                 std::size_t cap = 256;
-                if (const char* cc = std::getenv("XOLVER_NIA_FARKAS_DNF_CAP")) {
-                    long v = std::atol(cc);
-                    if (v > 0) cap = static_cast<std::size_t>(v);
-                }
+                { long v = env::paramLong("XOLVER_NIA_FARKAS_DNF_CAP", 0);
+                  if (v > 0) cap = static_cast<std::size_t>(v); }
                 if (auto dblk = tryClassifyOrDnf(aid, resolve, cap)) {
                     for (const auto& v : resolvedProxies) usedDefs.insert(v);
                     p.dnfBlocks.push_back(std::move(*dblk));

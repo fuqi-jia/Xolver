@@ -68,15 +68,20 @@ FiniteDomainResult CompleteFiniteDomainEnumerator::run(
     std::vector<std::vector<mpz_class>> points;
     size_t product = 1;
     for (VarId v : freeVars) {
-        auto pts = st.bounds.at(v).set.integerPoints();
-        if (pts.empty()) {
+        const auto& set = st.bounds.at(v).set;
+        // Size-gate BEFORE materializing: a wide-domain var must not be enumerated
+        // into an O(range) vector only to be rejected by the product gate (the calypto
+        // QF_NIA hotspot — millions of mpz points materialized, then bailed).
+        const mpz_class cnt = set.integerPointCount();   // exact, O(#intervals), no materialization
+        if (cnt == 0) {
             // No integer in a free var's domain ⇒ vacuously unsatisfiable.
             // (addBound would normally have caught this; defensive.)
             return res;
         }
-        product *= pts.size();
+        if (cnt > kMaxFiniteDomainSize) return res;       // single domain already over the gate
+        product *= cnt.get_ui();                          // cnt ≤ kMax ⇒ fits in size_t
         if (product > kMaxFiniteDomainSize) return res;
-        points.push_back(std::move(pts));
+        points.push_back(set.integerPoints());            // materialize only within the gate
     }
 
     // Cartesian sweep.

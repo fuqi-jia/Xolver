@@ -1,4 +1,5 @@
 #include "theory/arith/linearizer/McCormickGenerator.h"
+#include "util/EnvParam.h"
 
 namespace xolver {
 
@@ -49,7 +50,54 @@ std::vector<LinearCut> McCormickGenerator::generate(
         }
     }
 
+    // ── Partial-bounds extension (XOLVER_NRA_MCCORMICK_PARTIAL, default-OFF) ──
+    // Each McCormick envelope cut follows from ONE sign fact (x−a)(y−b) ⪋ 0 and so
+    // needs only TWO of the four bounds, not all four:
+    //   (x−lx)(y−ly) ≥ 0 ⟹ t ≥ lx·y + ly·x − lx·ly      [needs lx, ly]
+    //   (x−ux)(y−uy) ≥ 0 ⟹ t ≥ ux·y + uy·x − ux·uy      [needs ux, uy]
+    //   (x−ux)(y−ly) ≤ 0 ⟹ t ≤ ux·y + ly·x − ux·ly      [needs ux, ly]
+    //   (x−lx)(y−uy) ≤ 0 ⟹ t ≤ lx·y + uy·x − lx·uy      [needs lx, uy]
+    // When the box is only partially bounded (the complete-bounds path below bails),
+    // emit whichever cuts have BOTH their required bounds present AND reason-complete.
+    // Reason-completeness is load-bearing: a cut citing an incomplete reason set would
+    // be valid only under unrecorded assumptions ⇒ an unsound lemma.
     if (!xBounds.hasFiniteCompleteBounds() || !yBounds.hasFiniteCompleteBounds()) {
+        if (env::flag("XOLVER_NRA_MCCORMICK_PARTIAL")) {
+            const bool xLo = xBounds.hasLower && (xBounds.lowerIsGlobal || xBounds.lowerReasonComplete);
+            const bool xHi = xBounds.hasUpper && (xBounds.upperIsGlobal || xBounds.upperReasonComplete);
+            const bool yLo = yBounds.hasLower && (yBounds.lowerIsGlobal || yBounds.lowerReasonComplete);
+            const bool yHi = yBounds.hasUpper && (yBounds.upperIsGlobal || yBounds.upperReasonComplete);
+            auto reasons = [&](const std::vector<SatLit>& a, const std::vector<SatLit>& b) {
+                std::vector<SatLit> r{nonlinearReason};
+                r.insert(r.end(), a.begin(), a.end());
+                r.insert(r.end(), b.begin(), b.end());
+                return r;
+            };
+            auto emit = [&](mpq_class tc, mpq_class yc, mpq_class xc, mpq_class konst,
+                            std::vector<SatLit> rs, const char* tag) {
+                ZeroLinearConstraint z;
+                z.expr.terms.push_back({t.name, tc});
+                z.expr.terms.push_back({y, yc});
+                z.expr.terms.push_back({x, xc});
+                z.expr.constant = konst;
+                z.rel = Relation::Leq;
+                z.sort = sort;
+                z.debugTag = tag;
+                cutsEarly.push_back({std::move(z), std::move(rs), tag});
+            };
+            if (xLo && yLo)   // t ≥ lx·y + ly·x − lx·ly
+                emit(-1, xBounds.lower, yBounds.lower, -(xBounds.lower * yBounds.lower),
+                     reasons(xBounds.lowerReasons, yBounds.lowerReasons), "mccormick_partial_lower1");
+            if (xHi && yHi)   // t ≥ ux·y + uy·x − ux·uy
+                emit(-1, xBounds.upper, yBounds.upper, -(xBounds.upper * yBounds.upper),
+                     reasons(xBounds.upperReasons, yBounds.upperReasons), "mccormick_partial_lower2");
+            if (xHi && yLo)   // t ≤ ux·y + ly·x − ux·ly
+                emit(1, -xBounds.upper, -yBounds.lower, xBounds.upper * yBounds.lower,
+                     reasons(xBounds.upperReasons, yBounds.lowerReasons), "mccormick_partial_upper1");
+            if (xLo && yHi)   // t ≤ lx·y + uy·x − lx·uy
+                emit(1, -xBounds.lower, -yBounds.upper, xBounds.lower * yBounds.upper,
+                     reasons(xBounds.lowerReasons, yBounds.upperReasons), "mccormick_partial_upper2");
+        }
         return cutsEarly;
     }
 

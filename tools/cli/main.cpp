@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <optional>
 #include <functional>
@@ -51,13 +52,17 @@ static void printUsage(const char* prog) {
               << "  --produce-proofs       Enable proof production\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
+              << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
               << "  --dump-stats <file>    Dump per-case stats JSON (requires XOLVER_ENABLE_CASESTATS)\n"
+              << "  --certify <file>       On sat, write a re-checkable certificate (independently re-validated model)\n"
+              << "  --unsat-core           On unsat, print the core assertions (subset that proves unsat)\n"
               << "  --lia-safe-mode        Disable aggressive LIA reasoning (GCD tighten, bound rounding, eq norm)\n"
               << "  --lia-ultra-safe-mode  Disable ALL integer reasoning (LRA relaxation only)\n"
               << "  --lia-enable-single-var-tightening   Re-enable single-var bound tightening\n"
               << "  --lia-enable-gcd-ineq-tightening     Re-enable GCD inequality tightening\n"
               << "  --lia-enable-eq-gcd-normalization    Re-enable equality GCD normalization\n"
               << "  --parse-only           Parse the file and exit (print parse-ok); no solve\n"
+              << "  --features             Print the instance feature vector (JSON) and exit; no solve\n"
               << "  -v, --verbose          Verbose output\n";
 }
 
@@ -107,6 +112,37 @@ inline int runWithLargeStack(std::function<int()> fn) {
 }
 }  // namespace
 
+// --certify: persist a portable, independently re-checkable SAT certificate.
+// Xolver already re-validates every `sat` internally (ModelValidator) before it
+// is emitted (the soundness invariant); --certify makes that moat first-class by
+// running a SECOND independent re-check (caller side: modelMatchesOriginal) and
+// writing the validated model as a self-contained SMT-LIB artifact. A third
+// party reloads the original formula, binds these define-funs, and evaluates the
+// assertions to confirm `sat` without trusting Xolver. Returns true iff written.
+static bool writeSatCertificate(const xolver::Solver& solver,
+                                const std::string& sourcePath,
+                                const std::string& outPath) {
+    std::ofstream out(outPath);
+    if (!out) {
+        std::cerr << "(certify-error cannot-open " << outPath << ")\n";
+        return false;
+    }
+    out << "; Xolver SAT certificate\n"
+        << "; format: xolver-sat-cert/1\n"
+        << "; source: " << sourcePath << "\n"
+        << "; generated-by: Xolver " << XOLVER_VERSION_MAJOR << "."
+        << XOLVER_VERSION_MINOR << "." << XOLVER_VERSION_PATCH << "\n"
+        << "; verdict: sat\n"
+        << "; certification: model independently re-validated against the original\n"
+        << ";   assertions by ModelValidator (exact GMP/MPFR/libpoly; no floating point).\n"
+        << "; replay: assert the original formula, bind the model below, evaluate to true.\n"
+        << ";\n"
+        << "; --- model (SMT-LIB get-model response) ---\n";
+    solver.dumpModel(out);
+    out.flush();
+    return static_cast<bool>(out);
+}
+
 static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     int fileIdx = defaultMode ? 1 : 2;
     if (argc < fileIdx + 1) {
@@ -118,21 +154,44 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
 
     // Parse options after the file path
     std::optional<std::string> logicOpt;
+    std::optional<std::string> certifyPath;
     bool checkModel = false;
     bool verbose = false;
     bool parseOnly = false;
+    bool produceModels = false;
+    bool featuresOnly = false;
     for (int i = fileIdx + 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--parse-only") {
             parseOnly = true;
+        } else if (arg == "--features") {
+            featuresOnly = true;
         } else if (arg == "--logic" && i + 1 < argc) {
             logicOpt = argv[++i];
         } else if (arg == "--seed" && i + 1 < argc) {
             solver.setOption("seed", xolver::OptionValue(static_cast<int64_t>(std::stoll(argv[++i]))));
+        } else if (arg == "--timeout" && i + 1 < argc) {
+            // Expose the per-solve wall-clock budget as a CLI flag. beginSolve()
+            // reads XOLVER_WALLCLOCK_MS at solve time (api/Solver.cpp), so setting
+            // it here before solve() takes effect. <=0 means no limit (the default).
+            long long secs = std::stoll(argv[++i]);
+            if (secs > 0)
+                setenv("XOLVER_WALLCLOCK_MS",
+                       std::to_string(secs * 1000).c_str(), /*overwrite=*/1);
         } else if (arg == "--dump-stats" && i + 1 < argc) {
             solver.setDumpStatsPath(argv[++i]);
+        } else if (arg == "--certify" && i + 1 < argc) {
+            certifyPath = argv[++i];
+        } else if (arg == "--unsat-core") {
+            // Enable unsat-core production. (The parser does not yet map the
+            // SMT-LIB :produce-unsat-cores option, so expose it as a flag.) On
+            // unsat, the core assertions are printed on stdout after the verdict.
+            solver.setOption("produce-unsat-cores", xolver::OptionValue(true));
         } else if (arg == "--produce-models") {
-            // TODO: enable model production
+            // Force the SMT-LIB get-model response after `sat`, even if the input
+            // did not set :produce-models / issue (get-model). The model is built
+            // internally on every sat (see Solver.cpp), so dumpModel is meaningful.
+            produceModels = true;
         } else if (arg == "--produce-proofs") {
             // TODO: enable proof production
         } else if (arg == "--lia-safe-mode") {
@@ -158,7 +217,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // for --verbose (debugging) and --check-model (whose MODEL_MISMATCH report
     // goes to stderr). The buffer must outlive every write, so it is static.
     static NullStreambuf nullCerr;
-    if (!verbose && !checkModel) {
+    if (!verbose && !checkModel && !certifyPath) {
         std::cerr.rdbuf(&nullCerr);
     }
 
@@ -181,9 +240,95 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             return EXIT_SUCCESS;
         }
 
+        // --features: emit the per-instance feature vector (JSON) and exit
+        // WITHOUT solving — fast (parse + detect only). For mining a benchmark
+        // tree into a training corpus (learned strategy selection / autotuning).
+        if (featuresOnly) {
+            solver.dumpFeatures(std::cout);
+            std::cout.flush();
+            return EXIT_SUCCESS;
+        }
+
         // Command-line --logic overrides file-declared logic
         if (logicOpt) {
             solver.setLogic(*logicOpt);
+        }
+
+        // #12: interactive command responses. When the script has echo or
+        // get-info commands (which the batch path below cannot answer), walk the
+        // parsed commands in SOURCE ORDER and print each response, so an
+        // (echo ...) before (check-sat) prints before the verdict. Non-interactive
+        // scripts (the SMT-COMP path) take NEITHER branch of this guard and fall
+        // through to the byte-identical batch path below. get-value /
+        // get-assignment are recognized but not yet answered (deferred #12.c).
+        {
+            auto scriptCmds = solver.scriptResponseCommands();
+            using K = xolver::Solver::ScriptResponseCommand::Kind;
+            bool interactive = false;
+            for (const auto& c : scriptCmds)
+                if (c.kind == K::Echo || c.kind == K::GetInfo ||
+                    c.kind == K::GetValue) { interactive = true; break; }
+            if (interactive) {
+                xolver::Result r = xolver::Result::Unknown;
+                bool solved = false, modelDumped = false;
+                for (const auto& c : scriptCmds) {
+                    switch (c.kind) {
+                        case K::Echo:
+                            std::cout << c.text << "\n";
+                            break;
+                        case K::CheckSat:
+                            r = solver.checkSat();
+                            solved = true;
+                            std::cout << toString(r) << "\n";
+                            if (r == xolver::Result::Sat &&
+                                (solver.modelRequested() || produceModels)) {
+                                solver.dumpModel(std::cout);
+                                modelDumped = true;
+                            }
+                            if (r == xolver::Result::Unsat && solver.unsatCoreRequested())
+                                solver.dumpUnsatCore(std::cout);
+                            break;
+                        case K::GetInfo: {
+                            const std::string& kw = c.text;
+                            if (kw == ":name")
+                                std::cout << "(:name \"Xolver\")\n";
+                            else if (kw == ":version")
+                                std::cout << "(:version \"" << XOLVER_VERSION_MAJOR << "."
+                                          << XOLVER_VERSION_MINOR << "."
+                                          << XOLVER_VERSION_PATCH << "\")\n";
+                            else if (kw == ":authors")
+                                std::cout << "(:authors \"Xolver authors\")\n";
+                            else if (kw == ":error-behavior")
+                                std::cout << "(:error-behavior immediate-exit)\n";
+                            else if (kw == ":reason-unknown")
+                                std::cout << "(:reason-unknown "
+                                          << (solved && r == xolver::Result::Unknown
+                                                  ? "incomplete" : "unknown")
+                                          << ")\n";
+                            else
+                                std::cout << "unsupported\n";
+                            break;
+                        }
+                        case K::GetModel:
+                            if (solved && r == xolver::Result::Sat && !modelDumped) {
+                                solver.dumpModel(std::cout);
+                                modelDumped = true;
+                            }
+                            break;
+                        case K::GetValue: {
+                            std::string resp = solver.getValueResponse(c.scriptIndex);
+                            if (!resp.empty())
+                                std::cout << resp << "\n";
+                            // empty -> unsupported term or no model; emit nothing
+                            break;
+                        }
+                        case K::GetAssignment:
+                            break;  // deferred
+                    }
+                }
+                std::cout.flush();
+                return EXIT_SUCCESS;
+            }
         }
 
         // SMT-COMP output contract: stdout carries ONLY the SMT-LIB result
@@ -193,13 +338,42 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         std::cout << toString(r) << "\n";
         // Model-Validation track: if the input requested a model and we found
         // one, emit the SMT-LIB get-model response on stdout right after `sat`.
-        if (r == xolver::Result::Sat && solver.modelRequested()) {
+        if (r == xolver::Result::Sat && (solver.modelRequested() || produceModels)) {
             solver.dumpModel(std::cout);
+        }
+        // Unsat-core track: if the input requested cores (:produce-unsat-cores)
+        // and we proved unsat, emit the core assertions on stdout after `unsat`.
+        if (r == xolver::Result::Unsat && solver.unsatCoreRequested()) {
+            solver.dumpUnsatCore(std::cout);
         }
         std::cout.flush();
         // Diagnostic: independent model self-check against original assertions.
         if (checkModel && r == xolver::Result::Sat && !solver.modelMatchesOriginal()) {
             std::cerr << "MODEL_MISMATCH\n";
+        }
+        // --certify: surface the certified-SAT moat. On `sat`, run a SECOND,
+        // independent re-validation (the internal ModelValidator gate already
+        // passed) and persist a portable certificate. A re-check disagreement
+        // here means a validator bug, not a normal outcome — alarm loudly and
+        // fail rather than write a false certificate. unsat/unknown have no SAT
+        // model to certify (proof certificates are Track C2, separate).
+        if (certifyPath) {
+            if (r == xolver::Result::Sat) {
+                if (solver.modelMatchesOriginal()) {
+                    if (writeSatCertificate(solver, argv[fileIdx], *certifyPath))
+                        std::cerr << "(certified-sat " << *certifyPath << ")\n";
+                    else
+                        return EXIT_FAILURE;
+                } else {
+                    std::cerr << "CERTIFICATION_FAILED (independent re-validation "
+                                 "disagreed with the sat verdict; no certificate "
+                                 "written — please report)\n";
+                    return EXIT_FAILURE;
+                }
+            } else {
+                std::cerr << "(certify: no SAT model to certify — verdict "
+                          << toString(r) << ")\n";
+            }
         }
         if (r == xolver::Result::Unknown) {
             auto reason = solver.lastUnknownReason();
@@ -327,8 +501,18 @@ static void xolverBakeCompetitionDefaults() {
         // CF_COMB
         "XOLVER_COMB_MODEL_BASED", "XOLVER_COMB_SCALAR_BACKFILL",
         "XOLVER_COMB_UFARG_ARRANGE", "XOLVER_UF_FAST_CC",
+        // #16 EUF entailment propagation in combination: gap-neutral (fuzz 4/7 vs
+        // baseline 5/6) + 0-unsound (full reg + combination fuzz) — the L9 firewall
+        // guards the soundness-sensitive class. Promoted on that gate.
+        "XOLVER_EUF_PROP_COMB",
         // CF_ARRAY
         "XOLVER_ARRAY_CONGR_EXT", "XOLVER_AX_ROW2_CONST",
+        // #85/#86 array completeness (multistore refinement + storecomm const-ext):
+        // gap-NEUTRAL + 0-unsound on the combination fuzz, recover their target
+        // unknowns->sat. STORECOMM_EXT needs REFINE+ROW2_CONST to converge.
+        "XOLVER_AX_REFINE", "XOLVER_AX_STORECOMM_EXT",
+        // #10/#38 NLA cuts: gap-neutral + 0-unsound (per-lever fuzz bisection).
+        "XOLVER_NIA_NLA_CUTS", "XOLVER_NRA_NLA_CUTS",
         // CF_PP
         "XOLVER_PP_LET_ELIM", "XOLVER_PP_PG_CNF", "XOLVER_PP_REWRITE",
         "XOLVER_PP_SOLVE_EQS", "XOLVER_PP_VALIDATOR_MEMO",
@@ -339,6 +523,20 @@ static void xolverBakeCompetitionDefaults() {
     };
     for (const char* f : kFlags) setenv(f, "1", /*overwrite=*/0);
 }
+
+// Server-bake-pending levers (roadmap A9+B4). UPDATE 2026-06-24 (#10/#38): the
+// promotion decision was driven by a per-lever COMBINATION-FUZZ gap bisection
+// (random cases, not just the at-ceiling curated suite). Result:
+//   XOLVER_NRA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
+//   XOLVER_NIA_NLA_CUTS   — gap-neutral, 0-unsound -> BAKED above
+//   XOLVER_AX_LAZY        — *** COMPLETENESS REGRESSION *** fuzz gaps 5 -> 13 at
+//                           n=120 (the curated suite's "0-regression" MISSED it
+//                           because it is at the PASS ceiling). NOT baked — lazy
+//                           completion floors cases the eager path solves. Keep OFF.
+// (XOLVER_AX_REFINE / XOLVER_AX_STORECOMM_EXT were also gap-neutral 0-unsound and
+//  are baked above for the #85/#86 completeness recovery; their only residual risk
+//  is the broad per-accept re-scan's cost on LARGE QF_ANIA arrays, which WSL cannot
+//  measure — revert from kFlags if a cluster run shows a net solved-count drop.)
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {

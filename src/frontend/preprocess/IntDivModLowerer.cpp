@@ -1,4 +1,5 @@
 #include "frontend/preprocess/IntDivModLowerer.h"
+#include "util/EnvParam.h"
 #include <cassert>
 #include <functional>
 #include <iostream>
@@ -362,7 +363,7 @@ void IntDivModLowerer::emitVariableDivisorConstraints(const DivModDef& def, Scop
     // engaging requires per-case validation that the engine actually
     // decides in budget.
     static const bool nonzeroPath =
-        std::getenv("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO") != nullptr;
+        xolver::env::diag("XOLVER_NIA_SYMBOLIC_DIVMOD_NONZERO");
     if (nonzeroPath && divisorIsProvenStrictlyPositive(def.b)) {
         emitVariableDivisorConstraintsPositiveDivisor(def, level);
         return;
@@ -428,8 +429,7 @@ void IntDivModLowerer::tryInterceptModEqConst(ExprId originalAssertion,
     //   - c is an integer constant.
     // We capture and register a ModEqConstFact ONLY when the flag is set.
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NATIVE_MODEQCONST");
     }();
     if (!enabled) return;
 

@@ -44,7 +44,11 @@ namespace xolver {
 NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     : kernel_(std::move(kernel)),
       converter_(std::make_unique<PolynomialConverter>(*kernel_)),
-      engine_(kernel_.get()) {
+      engine_(kernel_.get()),
+      groebner_(*kernel_) {
+    enableGroebner_ = xolver::env::flag("XOLVER_NRA_GROBNER");
+    cdcacMaxVars_ = xolver::env::paramInt("XOLVER_NRA_CDCAC_MAX_VARS", 0);
+    cdcacMaxDeg_  = xolver::env::paramInt("XOLVER_NRA_CDCAC_MAX_DEGREE", 0);
     // Phase 2 reasoner pipeline: presolve fixpoint, then CDCAC.
     // NRA-MGC-PROFILE diagnostic: env-gated per-stage wall-time accounting.
     // Set XOLVER_NRA_STAGE_TIMING=1 for per-stage cumulative on exit.
@@ -52,8 +56,8 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     auto stageWrap = [this](const char* name, auto fn) {
         return [this, name, fn](TheoryLemmaStorage& db, TheoryEffort e)
                 -> std::optional<TheoryCheckResult> {
-            static const bool timing = std::getenv("XOLVER_NRA_STAGE_TIMING") != nullptr;
-            static const bool trace = std::getenv("XOLVER_NRA_STAGE_TRACE") != nullptr;
+            static const bool timing = xolver::env::diag("XOLVER_NRA_STAGE_TIMING");
+            static const bool trace = xolver::env::diag("XOLVER_NRA_STAGE_TRACE");
             // File trace (XOLVER_NRA_STAGE_TRACE_FILE=path): the CLI runs the solve
             // on a worker thread whose stderr is suppressed AND the destructor
             // summary never surfaces on a timeout — so neither STAGE_TIMING nor
@@ -118,6 +122,10 @@ NraSolver::NraSolver(std::unique_ptr<PolynomialKernel> kernel)
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
         "nra.sign-refute",
         stageWrap("sign-refute", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageSignRefute(db, e); })));
+    // XOLVER_NRA_GROBNER (default OFF): cross-equation ideal-saturation refuter.
+    reasoners_.push_back(std::make_unique<CallbackReasoner>(
+        "nra.groebner",
+        stageWrap("groebner", [this](TheoryLemmaStorage& db, TheoryEffort e) { return stageGroebner(db, e); })));
     // XOLVER_NRA_SIGN_SPLIT (default OFF): case-split on sign-blocking variables
     // when sign-refute can't fire. See NDEEP-3/4 / MGC R&D audit.
     reasoners_.push_back(std::make_unique<CallbackReasoner>(
@@ -371,8 +379,7 @@ TheoryCheckResult NraSolver::check(TheoryLemmaStorage& lemmaDb,
                 env::paramInt("XOLVER_NRA_LS_MAX_ROUNDS", 3000);
             std::vector<VarId> vars(varSet.begin(), varSet.end());
             static const bool eqRelax = [] {
-                const char* e = std::getenv("XOLVER_NRA_LS_EQ_RELAX");
-                return e && *e && *e != '0';
+                return xolver::env::flag("XOLVER_NRA_LS_EQ_RELAX");
             }();
             NraLocalSearch ls(*kernel_);
             // Wall-clock-anytime scaling (#NRA-LS-E iter 3). INERT by default:
@@ -561,8 +568,7 @@ std::optional<TheoryCheckResult> NraSolver::stagePresolve(TheoryLemmaStorage& /*
 std::optional<TheoryCheckResult> NraSolver::stageLinearSubsetUnsat(
     TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_LINEAR_SUBSET_UNSAT");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_LINEAR_SUBSET_UNSAT");
     }();
     if (!enabled) return std::nullopt;
     if (presolveConstraints_.empty()) return std::nullopt;
@@ -626,8 +632,7 @@ std::optional<TheoryCheckResult> NraSolver::stageBoxRefute(TheoryLemmaStorage& /
 std::optional<TheoryCheckResult> NraSolver::stageIcpProbe(TheoryLemmaStorage& /*lemmaDb*/,
                                                           TheoryEffort /*effort*/) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_ICP");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_ICP");
     }();
     if (!enabled) return std::nullopt;
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
@@ -803,12 +808,56 @@ std::optional<TheoryCheckResult> NraSolver::stageSignRefute(TheoryLemmaStorage& 
 
     TheoryConflict tc;
     tc.clause = std::move(*conflict);
-    if (std::getenv("XOLVER_NRA_SIGN_REFUTE_DIAG")) {
+    if (xolver::env::diag("XOLVER_NRA_SIGN_REFUTE_DIAG")) {
         std::ofstream st("/tmp/sign_refute.txt", std::ios::app);
         st << "[SIGN-REFUTE] UNSAT cons=" << cs.size() << " clause=" << tc.clause.size() << "\n";
         st.flush();
     }
     return TheoryCheckResult::mkConflict(std::move(tc));
+}
+
+// nra.groebner — cross-equation ideal-saturation refutation. Reuses the
+// (theory-agnostic) GroebnerIdealReasoner on the asserted EQUALITY polynomials:
+// a degree/step-bounded Buchberger reduction; if 1 ∈ ideal(equalities) the system
+// has no common root over ℂ, hence none over ℝ ⇒ UNSAT. SOUND: presolveConstraints_
+// is the live asserted set (truncated on backtrack, like stageSignRefute), so every
+// reason in the emitted conflict is currently on the trail. Bounded (the reasoner
+// bails to NoChange past its budget). Catches cross-equation obstructions (e.g.
+// x*y=1 ∧ x=0) that sign-refute / single-substitution miss.
+std::optional<TheoryCheckResult> NraSolver::stageGroebner(TheoryLemmaStorage& /*lemmaDb*/,
+                                                          TheoryEffort /*effort*/) {
+    if (!enableGroebner_) return std::nullopt;
+    if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
+        return std::nullopt;   // combination: interface (dis)eqs not in presolveConstraints_
+
+    std::vector<NormalizedNiaConstraint> cs;
+    cs.reserve(presolveConstraints_.size());
+    for (const auto& c : presolveConstraints_) {
+        if (c.poly == NullPoly) continue;
+        cs.push_back({c.poly, c.rel, c.reason});   // reasoner filters to equalities internally
+    }
+    if (cs.size() < 2) return std::nullopt;
+
+    // Warm-start dedup: the bounded Buchberger run is non-trivial, and the SAT search
+    // re-enters check() many times with an UNCHANGED constraint set. Skip the re-run
+    // when the (poly,rel) signature matches the last NO-CONFLICT call. Sound: replaying
+    // a no-conflict verdict is safe; a hash collision only loses completeness (we fall
+    // through to CDCAC), never soundness.
+    size_t sig = 1469598103934665603ull;   // FNV-1a over (poly,rel)
+    for (const auto& c : cs) {
+        sig = (sig ^ static_cast<size_t>(c.poly)) * 1099511628211ull;
+        sig = (sig ^ static_cast<size_t>(c.rel)) * 1099511628211ull;
+    }
+    if (groebnerNoConflictSig_ == sig) return std::nullopt;
+
+    auto r = groebner_.run(cs);
+    if (r.kind != NiaReasoningKind::Conflict || !r.conflict) groebnerNoConflictSig_ = sig;
+    if (r.kind == NiaReasoningKind::Conflict && r.conflict) {
+        if (xolver::env::diag("XOLVER_NRA_GROBNER_DIAG"))
+            std::fprintf(stderr, "[NRA-GROBNER] UNSAT cons=%zu\n", cs.size());
+        return TheoryCheckResult::mkConflict(std::move(*r.conflict));
+    }
+    return std::nullopt;
 }
 
 // XOLVER_NRA_SIGN_SPLIT (default OFF). MGC-RD closing lever.
@@ -917,7 +966,7 @@ std::optional<TheoryCheckResult> NraSolver::stageNraSignSplit(
     TheoryLemma lemma{{gt, eq, lt}};
     signSplitDone_.insert(pick);
 
-    if (std::getenv("XOLVER_NRA_SIGN_SPLIT_DIAG")) {
+    if (xolver::env::diag("XOLVER_NRA_SIGN_SPLIT_DIAG")) {
         std::fprintf(stderr,
             "[XOLVER_NRA_SIGN_SPLIT] split on var=%u uses=%d  lemma=(>0 | =0 | <0)\n",
             (unsigned)pick, bestCount);
@@ -940,8 +989,7 @@ std::optional<TheoryCheckResult> NraSolver::stageNraSignSplit(
 std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort /*effort*/) {
     static const bool enabled = []() {
-        const char* e = std::getenv("XOLVER_NRA_OSF_PRUNE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_OSF_PRUNE");
     }();
     if (!enabled) return std::nullopt;
     if (!interfaceEqualities_.empty() || !interfaceDisequalities_.empty())
@@ -1022,7 +1070,7 @@ std::optional<TheoryCheckResult> NraSolver::stageOsfPrune(
 
     TheoryConflict tc;
     tc.clause = std::move(conflictOpt->reasons);
-    if (std::getenv("XOLVER_NRA_OSF_DIAG")) {
+    if (xolver::env::diag("XOLVER_NRA_OSF_DIAG")) {
         std::fprintf(stderr, "[XOLVER_NRA_OSF_PRUNE] UNSAT: %s reasons=%zu\n",
                      conflictOpt->explanation.c_str(), tc.clause.size());
     }
@@ -1315,7 +1363,7 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
             // Sound: a concrete rational point validates ALL active constraints
             // under the exact kernel sign. Stash it so getModel() reports it.
             satFastModel_ = std::move(vidModel);
-            if (std::getenv("XOLVER_NRA_SUBTROP_DIAG")) {
+            if (xolver::env::diag("XOLVER_NRA_SUBTROP_DIAG")) {
                 std::ofstream st("/tmp/subtropical.txt", std::ios::app);
                 st << "[SUBTROP] SAT vars=" << vars.size()
                    << " cons=" << subCons.size() << " base=" << b << "\n";
@@ -1335,15 +1383,14 @@ std::optional<TheoryCheckResult> NraSolver::stageSubtropical(TheoryLemmaStorage&
 // through because interface (dis)equalities live outside presolveConstraints_.
 std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
         TheoryLemmaStorage& /*lemmaDb*/, TheoryEffort effort) {
-    if (std::getenv("XOLVER_NRA_INT_PROBE_DIAG")) {
+    if (xolver::env::diag("XOLVER_NRA_INT_PROBE_DIAG")) {
         std::ofstream dst("/tmp/int_probe.txt", std::ios::app);
         dst << "[INT-PROBE] called effort=" << (int)effort
             << " presolve=" << presolveConstraints_.size() << "\n";
         dst.flush();
     }
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_INT_PROBE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_INT_PROBE");
     }();
     if (!enabled) return std::nullopt;
     // Run at FIRST effort entry (typically Standard) — CDCAC may not survive
@@ -1357,7 +1404,7 @@ std::optional<TheoryCheckResult> NraSolver::stageIntegerProbe(
     // No one-shot lock: each round the probe re-attempts; the value-split
     // hint dedup is per-var in intProbeValueSplitDone_ (cleared on reset).
 
-    bool diagOn = (std::getenv("XOLVER_NRA_INT_PROBE_DIAG") != nullptr);
+    bool diagOn = (xolver::env::diag("XOLVER_NRA_INT_PROBE_DIAG"));
     std::ofstream st;
     if (diagOn) {
         st.open("/tmp/int_probe.txt", std::ios::app);
@@ -1518,7 +1565,7 @@ std::optional<TheoryCheckResult> NraSolver::stageSquareCascade(
 // the Collins-vs-CAC differential; promotion to default is decided by that diff.
 std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemmaDb*/,
                                                      TheoryEffort effort) {
-    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+    if (xolver::env::diag("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[STAGE-CAC] entry effort=" << static_cast<int>(effort)
                   << " enableCac=" << enableCac_ << std::endl;
     if (!enableCac_) return std::nullopt;
@@ -1637,8 +1684,7 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     // feeds the result into NlaCutsRunner.
     // ====================================================================
     static const bool nlaCutsEnabled = [] {
-        const char* e = std::getenv("XOLVER_NRA_NLA_CUTS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NRA_NLA_CUTS");
     }();
     if (nlaCutsEnabled) {
         // Single-pass single-var bound extraction. For each constraint
@@ -1823,7 +1869,7 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
     CacEngine eng(cacBackend_.get(), kernel_.get(), varOrder, std::move(cacCons), cfg);
     CacResult res = eng.solve();
 
-    const bool diag = std::getenv("XOLVER_NRA_CAC_DIAG") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_NRA_CAC_DIAG");
     if (diag) {
         std::ofstream st("/tmp/cac_diff.txt", std::ios::app);
         st << "[CAC] vars=" << varOrder.size() << " cons=" << presolveConstraints_.size()
@@ -2041,8 +2087,31 @@ std::optional<TheoryCheckResult> NraSolver::stageCac(TheoryLemmaStorage& /*lemma
 // Stage 2: the CDCAC (Collins) engine. Always yields a definite verdict.
 std::optional<TheoryCheckResult> NraSolver::stageCdcac(TheoryLemmaStorage& /*lemmaDb*/,
                                                        TheoryEffort /*effort*/) {
-    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+    if (xolver::env::diag("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[STAGE-CDCAC] reached (engine_ will run core_->solve)" << std::endl;
+    // libpoly hardening (XOLVER_NRA_CDCAC_MAX_VARS / _MAX_DEGREE, 0=disabled):
+    // decline pathologically large systems where libpoly (CDCAC's CAD backend) can
+    // blow up / OOM, returning unknown (SOUND — declining to decide is never a wrong
+    // verdict) rather than risking a process-killing crash. A robustness guard; the
+    // threshold is tuned on the benchmark set (E1). Default disabled ⇒ no corpus impact.
+    if (cdcacMaxVars_ > 0 || cdcacMaxDeg_ > 0) {
+        std::set<std::string> vars;
+        int maxDeg = 0;
+        for (const auto& c : presolveConstraints_) {
+            if (c.poly == NullPoly) continue;
+            for (const auto& v : kernel_->variables(c.poly)) {
+                vars.insert(v);
+                if (auto d = kernel_->degree(c.poly, v)) maxDeg = std::max(maxDeg, *d);
+            }
+        }
+        if ((cdcacMaxVars_ > 0 && static_cast<int>(vars.size()) > cdcacMaxVars_) ||
+            (cdcacMaxDeg_ > 0 && maxDeg > cdcacMaxDeg_)) {
+            if (xolver::env::diag("XOLVER_NRA_CDCAC_GUARD_DIAG"))
+                std::fprintf(stderr, "[CDCAC-GUARD] declined: vars=%zu maxDeg=%d\n",
+                             vars.size(), maxDeg);
+            return TheoryCheckResult::unknown("cdcac-input-exceeds-libpoly-guard");
+        }
+    }
     // XOLVER_NRA_CAC_NO_COLLINS (differential): disable the Collins fallback so
     // CAC is the sole engine. Return Unknown (not nullopt) so the solver reports
     // unknown when CAC cannot decide, rather than a default/false verdict.

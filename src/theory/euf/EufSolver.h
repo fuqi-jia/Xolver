@@ -100,7 +100,7 @@ public:
     // state, return Unknown (sound floor for the QF_DT blocksworld false-SAT
     // residual class). SMT-LIB semantics respected: selector-on-wrong-ctor
     // is Indeterminate, not Violated.
-    void setOriginalAssertions(const std::vector<ExprId>* p) {
+    void setOriginalAssertions(const std::vector<ExprId>* p) override {
         originalAssertionsForDtValidate_ = p;
     }
 
@@ -156,7 +156,8 @@ public:
     // fixed (UF apps + bridge vars are created pre-solve; arranging spawns no new
     // pairs) -> provably terminating. Shares logic with the detector above.
     std::vector<std::pair<SharedTermId, SharedTermId>> collectArrangeableUfArgPairs(
-        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const override;
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        const std::function<bool(SharedTermId, SharedTermId)>& appsResultApart = {}) const override;
 
     // Diagnostic / test hook: count active AssertedEquality merges whose
     // justifying literal is no longer on the trail (stale merges left by an
@@ -312,6 +313,15 @@ private:
     // construction (follow store chains so a store-defined array inherits its
     // base's entries). Verdict-sound; recovers the storecomm sat class.
     bool storeModelEnabled_ = false;
+    // #85 (XOLVER_AX_REFINE, default-OFF): model-driven array refinement. At a
+    // Full-effort consistent model, re-scan for a Row2 instance whose conclusion
+    // is VIOLATED by the candidate model (reads unmerged) and re-assert it as a
+    // lemma to force re-solve, instead of accepting an array-inconsistent model
+    // when the lazy lemma set has exhausted. Bounded by refineBudget_ (then accept
+    // → the arrayModelDefinitelyViolates floor keeps it sound).
+    bool arrayRefineEnabled_ = false;
+    size_t arrayRefineCount_ = 0;
+    size_t arrayRefineBudget_ = 2000;
     // XOLVER_EUF_INCREMENTAL_PROP (Phase A, agent/euf-deep): incremental
     // entailment-propagation scan. Instead of re-iterating the full EUF Eq atom
     // registry every cb_propagate, track new-since-last-call merges and scan

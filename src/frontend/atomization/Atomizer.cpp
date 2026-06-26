@@ -458,8 +458,32 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                 TheoryId targetTheory = defaultTheory_;
                 if (defaultTheory_ == TheoryId::Combination) {
                     bool isEqOrDistinct = (e.kind == Kind::Eq || e.kind == Kind::Distinct);
+
+                    // An (dis)equality whose OPERANDS are not arith-sorted
+                    // (Int/Real/Bool) ranges over an uninterpreted/array/datatype
+                    // sort whose equality is CONGRUENCE, not arithmetic — it must
+                    // be owned by EUF (the shared egraph + array/DT reasoner).
+                    // containsArrayOrUf only detects array/UF *operators*, so a
+                    // bare equality between two array (or uninterpreted-sort)
+                    // VARIABLES — e.g. (= a b) for a,b:(Array Int Int) — slips
+                    // past it. Routing such an atom to the arith theory makes the
+                    // poly converter treat the opaque operands as numeric unknowns
+                    // (a − b = 0), which SEVERS the EUF congruence a=b ⟹ h(a)=h(b)
+                    // and admits a false `sat` (#66, QF_AUFLIA). Detect the
+                    // non-arith operand sort and force EUF — both for the direct
+                    // route below and to keep such operands OUT of the scalar
+                    // shared-eq mechanism (which is for arith bridges only).
+                    bool nonArithEqOperands = false;
+                    if (isEqOrDistinct && e.children.size() == 2) {
+                        SortId os = ir.get(e.children[0]).sort;
+                        nonArithEqOperands =
+                            os != ir.intSortId() && os != ir.realSortId() &&
+                            os != ir.boolSortId();
+                    }
+
                     bool bothShared = false;
-                    if (isEqOrDistinct && e.children.size() == 2 && sharedTermRegistry_) {
+                    if (isEqOrDistinct && e.children.size() == 2 && sharedTermRegistry_ &&
+                        !nonArithEqOperands) {
                         bothShared = sharedTermRegistry_->hasTerm(e.children[0]) &&
                                      sharedTermRegistry_->hasTerm(e.children[1]);
                     }
@@ -474,13 +498,15 @@ SatLit Atomizer::atomizeRec(ExprId eid, const CoreIr& ir) {
                         }
                     }
                     // Route to EUF if the atom mentions a UF application OR an
-                    // array operator (select/store/const-array): EUF owns the
-                    // shared egraph and the array reasoner. Pure-arith atoms
-                    // over shared (index/bridge) terms route to the arith
-                    // theory; equalities whose operands are both shared terms
-                    // were already handled above via the shared-eq mechanism.
+                    // array operator (select/store/const-array), OR is an
+                    // (dis)equality over a non-arith (array/uninterpreted/DT)
+                    // sort: EUF owns the shared egraph and the array reasoner.
+                    // Pure-arith atoms over shared (index/bridge) terms route to
+                    // the arith theory; equalities whose operands are both shared
+                    // arith terms were already handled above via the shared-eq
+                    // mechanism.
                     bool hasArrayOrUf = containsArrayOrUf(eid, ir, containsArrayOrUfMemo_);
-                    if (hasArrayOrUf) {
+                    if (hasArrayOrUf || nonArithEqOperands) {
                         targetTheory = TheoryId::EUF;
                     } else {
                         targetTheory = combinationArithTheory_;

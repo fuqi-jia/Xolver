@@ -19,6 +19,12 @@
 #endif
 #include "theory/arith/linear/LinearExpr.h"
 #include "theory/arith/nia/search/NiaLinearDecider.h"  // embedded complete-LIA (nia.linear-decide)
+#include "theory/arith/nia/reasoners/OmegaTest.h"        // nia.omega: sound linear-integer UNSAT
+#include "theory/arith/nia/reasoners/SmallPrimeModular.h" // nia.small-prime-modular: GF(p) schedule
+#include "theory/arith/nia/reasoners/IntBoundProp.h"      // nia.int-bound-prop: integer interval refutation
+#include "theory/arith/linearizer/NonlinearTermAbstraction.h"
+#include "theory/arith/linear/LinearConstraintNormalizer.h"
+#include "theory/core/LogicFeatureDetector.h"
 #include "theory/arith/presolve/Presolve.h"
 #include "theory/arith/search/CompleteFiniteDomainEnumerator.h"
 #include "theory/core/TheoryLemmaDatabase.h"
@@ -203,6 +209,18 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // fallthrough is a regression risk, so it stays opt-in.
     linearDecideEnabled_ = env::paramInt("XOLVER_NIA_LINEAR_DECIDE", 0) != 0;
     addFull("nia.linear-decide", &NiaSolver::stageLinearDecide);
+    enableOmega_ = xolver::env::flag("XOLVER_NIA_OMEGA");
+    addFull("nia.omega", &NiaSolver::stageOmega);
+    // nia.small-prime-modular: cheap GF(p) congruence refutation over the equality
+    // subsystem. Standard+Full (unlike Omega) so it can prune EARLY, before complete
+    // models — the gap the Full-effort-only Dio/Smith-NF reasoner leaves open.
+    enableSmallPrimeModular_ = xolver::env::flag("XOLVER_NIA_SMALL_PRIME_MODULAR");
+    add("nia.small-prime-modular", &NiaSolver::stageSmallPrimeModular);
+    // nia.int-bound-prop: integer interval contraction over the equalities seeded by
+    // the asserted single-variable bounds — refutes bound×equality integer-infeasibility
+    // (e.g. x=2y ∧ x=1) that the equalities-only modular reasoner misses.
+    enableIntBoundProp_ = xolver::env::flag("XOLVER_NIA_INT_BOUND_PROP");
+    add("nia.int-bound-prop", &NiaSolver::stageIntBoundProp);
     if (env::paramInt("XOLVER_NIA_PRESOLVE_FULL", 0) != 0)
         addFull("nia.presolve", &NiaSolver::stagePresolveFixpoint);
     else
@@ -330,7 +348,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // reasoning path. The backend is uncapped on this base and OOMs on dense
     // AProVE inputs before any reasoning verdict, masking 357-refutation work.
     // Default-on preserved; only an explicit non-empty/non-"0" value turns it off.
-    if (const char* e = std::getenv("XOLVER_NIA_NO_BITBLAST"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_NO_BITBLAST"))
         enableBitBlast_ = false;
 
     // Bound-free product-positivity refutation (default-ON). Sound: only
@@ -348,7 +366,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // no ℤ-root ⇒ UNSAT (Nullstellensatz direction); bounded Buchberger.
     // iter-77 cherry-pick of 7afeda9 — Step 5 Gröbner-lite (env var renamed
     // ZOLVER_* → XOLVER_* to match this branch's naming convention).
-    if (const char* e = std::getenv("XOLVER_NIA_GROBNER"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_GROBNER"))
         enableGroebner_ = true;
 
     // Interval contraction fixpoint over the existing icp/ engine (default-ON).
@@ -359,7 +377,7 @@ NiaSolver::NiaSolver(std::unique_ptr<PolynomialKernel> kernel)
     // real relaxation implies integer-UNSAT (ℤⁿ⊆ℝⁿ; gated by CdcacCore's own
     // unsatTrustworthy_); a CDCAC SAT sample is accepted only when every
     // coordinate is an exact integer AND it passes IntegerModelValidator.
-    if (const char* e = std::getenv("XOLVER_NIA_CDCAC"); e && *e && *e != '0')
+    if (xolver::env::flag("XOLVER_NIA_CDCAC"))
         enableCdcac_ = true;
 
     // Incremental normalize cache (default-ON).
@@ -482,7 +500,7 @@ void NiaSolver::assertLit(const TheoryAtomRecord& atom, bool value,
         return;
     }
     if (r == ActiveLiteralSet::InsertResult::OppositePolarity) {
-        static const bool oppDiag = std::getenv("NIA_OPP_DIAG") != nullptr;
+        static const bool oppDiag = xolver::env::diag("NIA_OPP_DIAG");
         if (oppDiag) {
             std::cerr << "[NIA-OPP] satVar=" << assertedLit.var
                       << " sign=" << (int)assertedLit.sign
@@ -686,7 +704,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
         }
     }
 
-    if (std::getenv("XOLVER_NIA_LINDECIDE_DIAG"))
+    if (xolver::env::diag("XOLVER_NIA_LINDECIDE_DIAG"))
         std::fprintf(stderr, "[LINDECIDE] stage fired: active=%zu normalized=%zu trail=%zu\n",
                      active_.size(), normalized_.size(), state_.trail.size());
 
@@ -704,6 +722,258 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearDecide(
         return TheoryCheckResult::consistent();
     }
     if (conflict) return TheoryCheckResult::mkConflict(std::move(*conflict));
+    return std::nullopt;
+}
+
+// nia.omega — Pugh's Omega test (sound linear-integer UNSAT). See OmegaTest.{h,cpp}
+// (engine: equality elimination + real-shadow FM + integer tightening; fuzz-validated
+// 0 false-UNSAT vs z3). This stage builds the linear-INTEGER relaxation of the active
+// system and asks the engine; on a proven UNSAT it emits a conflict over the
+// contributing constraints' reasons. SOUND: nonlinear monomials → FREE int vars and
+// dropped Neq are both relaxations (relaxed-UNSAT ⇒ original-UNSAT); real vars ⇒ skip.
+std::optional<TheoryCheckResult> NiaSolver::stageOmega(TheoryLemmaStorage&, TheoryEffort effort) {
+    if (!enableOmega_) return std::nullopt;
+    if (effort != TheoryEffort::Full) return std::nullopt;  // refute complete models
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    // Soundness gate (cached): integer reasoning is unsound if any variable is real.
+    if (omegaSafe_ < 0)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    // Soundness firewall: the conflict clause may ONLY contain literals currently
+    // true on the SAT trail. So build the relaxation from constraints whose reason
+    // is live (skip derived/definitional ones with off-trail reasons — dropping
+    // them only relaxes, keeping Omega-UNSAT ⇒ original-UNSAT sound, while every
+    // emitted conflict literal stays a real, backtrackable SAT decision).
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> reasons;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    for (const auto& c : normalized_) {
+        if (c.rel == Relation::Neq) continue;            // drop Neq (sound: subset-UNSAT ⇒ UNSAT)
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) return std::nullopt;        // cannot relax ⇒ no claim
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) return std::nullopt;                   // not linear after abstraction ⇒ no claim
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) return std::nullopt;
+        oc.constant = cst;
+        oc.rel = c.rel == Relation::Eq  ? omega::Constraint::Eq
+               : c.rel == Relation::Leq ? omega::Constraint::Leq
+                                        : omega::Constraint::Geq;
+        ocs.push_back(std::move(oc));
+        reasons.push_back(c.reason);
+    }
+    if (ocs.size() < 2) return std::nullopt;
+    const bool diag = xolver::env::diag("XOLVER_NIA_OMEGA_DIAG");
+    const bool unsat = omega::decide(ocs) == omega::Result::Unsat;
+    if (diag) {
+        size_t nv = 0;
+        for (const auto& c : ocs) nv = std::max(nv, c.coeffs.empty() ? size_t(0)
+                                                    : c.coeffs.rbegin()->first + 1);
+        std::fprintf(stderr, "[OMEGA] constraints=%zu vars~%zu -> %s\n",
+                     ocs.size(), nv, unsat ? "UNSAT" : "SatOrUnknown");
+    }
+    if (unsat)
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    return std::nullopt;
+}
+
+// nia.small-prime-modular — cheap GF(p) congruence refutation (see SmallPrimeModular).
+// Builds the linear-INTEGER relaxation of the active EQUALITY constraints (nonlinear
+// monomials → free int vars, a relaxation) and asks whether the system is inconsistent
+// modulo some small prime; if so, emits a conflict over those equalities' reasons.
+// Runs at Standard effort too, so a derived obstruction like 2x=1 prunes the search
+// before a complete model is reached. SOUND: GF(p)-infeasible ⇒ Z-infeasible, and the
+// abstraction/firewall are the same relaxations as nia.omega.
+std::optional<TheoryCheckResult> NiaSolver::stageSmallPrimeModular(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableSmallPrimeModular_) return std::nullopt;
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    if (omegaSafe_ < 0)   // shared pure-integer soundness gate (no real vars)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> reasons;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    for (const auto& c : normalized_) {
+        if (c.rel != Relation::Eq) continue;             // modular reasoning uses equalities only
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) continue;                   // cannot relax this row ⇒ skip it (still sound)
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) continue;
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) continue;
+        oc.constant = cst;
+        oc.rel = omega::Constraint::Eq;
+        ocs.push_back(std::move(oc));
+        reasons.push_back(c.reason);
+    }
+    if (ocs.empty()) return std::nullopt;
+    const bool unsat = modular::decide(ocs) == modular::Result::Unsat;
+    if (xolver::env::diag("XOLVER_NIA_SMALL_PRIME_MODULAR_DIAG"))
+        std::fprintf(stderr, "[MODULAR] eqs=%zu -> %s\n",
+                     ocs.size(), unsat ? "UNSAT" : "SatOrUnknown");
+    if (unsat)
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    return std::nullopt;
+}
+
+// nia.int-bound-prop — integer interval contraction (see IntBoundProp). Builds the
+// integer relaxation, seeds variable domains from the asserted SINGLE-variable bound
+// atoms (a·x+c {≥,≤} 0 → an integer ceil/floor bound), and contracts over the
+// equalities; an emptied domain is a sound integer-infeasibility ⇒ conflict. This
+// refutes bound×equality obstructions (e.g. x=2y ∧ x=1 ⇒ 2y=1) that the equalities-only
+// modular reasoner misses. SOUND: the same abstraction/firewall relaxations as nia.omega,
+// plus interval contraction preserves every integer solution. (Domain-narrowing
+// PROPAGATION — feeding tightened bounds back to prune — is the separate B1+B2.2b.)
+std::optional<TheoryCheckResult> NiaSolver::stageIntBoundProp(TheoryLemmaStorage&, TheoryEffort) {
+    if (!enableIntBoundProp_) return std::nullopt;
+    if (normalized_.empty() || !kernel_) return std::nullopt;
+
+    if (omegaSafe_ < 0)
+        omegaSafe_ = (coreIr_ && !LogicFeatureDetector(*coreIr_).detect().hasRealVar) ? 1 : 0;
+    if (omegaSafe_ != 1) return std::nullopt;
+
+    std::unordered_map<SatVar, bool> asserted;
+    asserted.reserve(state_.trail.size());
+    for (const auto& a : state_.trail) asserted[a.lit.var] = a.lit.sign;
+    auto live = [&](const SatLit& r) {
+        auto it = asserted.find(r.var);
+        return it != asserted.end() && it->second == r.sign;
+    };
+
+    NonlinearTermAbstraction abstraction(*kernel_);
+    std::vector<omega::Constraint> ocs;
+    std::vector<SatLit> eqReasons, seedReasons;
+    std::map<int, intprop::Bound> seedBounds;
+    std::map<std::string, int> varIndex;
+    auto idxOf = [&](const std::string& n) {
+        return varIndex.emplace(n, static_cast<int>(varIndex.size())).first->second;
+    };
+    auto asInt = [](const mpq_class& q, mpz_class& out) {
+        if (q.get_den() != 1) return false;
+        out = q.get_num();
+        return true;
+    };
+    auto ceildiv = [](const mpz_class& a, const mpz_class& m) {  // m > 0
+        mpz_class q; mpz_cdiv_q(q.get_mpz_t(), a.get_mpz_t(), m.get_mpz_t()); return q;
+    };
+    auto floordiv = [](const mpz_class& a, const mpz_class& m) {  // m > 0
+        mpz_class q; mpz_fdiv_q(q.get_mpz_t(), a.get_mpz_t(), m.get_mpz_t()); return q;
+    };
+    auto tightenLo = [&](int v, const mpz_class& lo, const SatLit& r) {
+        intprop::Bound& b = seedBounds[v];
+        if (!b.hasLo || lo > b.lo) { b.lo = lo; b.hasLo = true; }
+        seedReasons.push_back(r);
+    };
+    auto tightenHi = [&](int v, const mpz_class& hi, const SatLit& r) {
+        intprop::Bound& b = seedBounds[v];
+        if (!b.hasHi || hi < b.hi) { b.hi = hi; b.hasHi = true; }
+        seedReasons.push_back(r);
+    };
+
+    for (const auto& c : normalized_) {
+        if (c.rel == Relation::Neq) continue;            // drop Neq (sound)
+        if (!live(c.reason)) continue;                   // off-trail reason ⇒ exclude (relaxation)
+        auto abs = abstraction.abstract(c.poly);
+        if (abs.unsupported) continue;
+        auto zlc = LinearConstraintNormalizer::fromPolynomialZero(
+            *kernel_, abs.linearizedPoly, c.rel, SortKind::Int);
+        if (!zlc) continue;
+        omega::Constraint oc;
+        bool ok = true;
+        for (const auto& t : zlc->expr.terms) {
+            mpz_class a;
+            if (!asInt(t.coeff, a)) { ok = false; break; }
+            if (a != 0) oc.coeffs[idxOf(t.var)] += a;
+        }
+        mpz_class cst;
+        if (!ok || !asInt(zlc->expr.constant, cst)) continue;
+        oc.constant = cst;
+        oc.rel = c.rel == Relation::Eq  ? omega::Constraint::Eq
+               : c.rel == Relation::Leq ? omega::Constraint::Leq
+                                        : omega::Constraint::Geq;
+
+        if (oc.rel == omega::Constraint::Eq) {
+            eqReasons.push_back(c.reason);
+            ocs.push_back(std::move(oc));
+        } else if (oc.coeffs.size() == 1) {
+            // Single-variable inequality ⇒ an integer ceil/floor bound (the seed).
+            const int v = oc.coeffs.begin()->first;
+            const mpz_class a = oc.coeffs.begin()->second;   // ≠ 0
+            const mpz_class m = (a < 0) ? mpz_class(-a) : a; // |a|
+            const mpz_class K = -oc.constant;                // a·x {≥,≤} K
+            const bool geq = (oc.rel == omega::Constraint::Geq);
+            if ((geq && a > 0) || (!geq && a < 0))      tightenLo(v, ceildiv(geq ? K : -K, m), c.reason);
+            else                                         tightenHi(v, floordiv(geq ? -K : K, m), c.reason);
+        }
+        // multi-variable inequalities are ignored (this cut handles equalities + bounds).
+    }
+    if (ocs.empty()) return std::nullopt;
+
+    const bool unsat = intprop::propagate(ocs, seedBounds) == intprop::Result::Unsat;
+    if (xolver::env::diag("XOLVER_NIA_INT_BOUND_PROP_DIAG"))
+        std::fprintf(stderr, "[INTBOUND] eqs=%zu seeds=%zu -> %s\n",
+                     ocs.size(), seedReasons.size(), unsat ? "UNSAT" : "Ok");
+    if (unsat) {
+        std::vector<SatLit> reasons = std::move(eqReasons);
+        reasons.insert(reasons.end(), seedReasons.begin(), seedReasons.end());
+        return TheoryCheckResult::mkConflict(TheoryConflict{std::move(reasons)});
+    }
     return std::nullopt;
 }
 
@@ -757,8 +1027,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
     // clause (¬reasons ∨ impliedAtom) it unblocks is a global theory tautology
     // regardless. Gated XOLVER_NIA_IFACE_PROP (default-OFF) for A/B + safety.
     static const bool ifaceProp = [] {
-        const char* e = std::getenv("XOLVER_NIA_IFACE_PROP");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_IFACE_PROP");
     }();
     if (ifaceProp) {
         for (const auto& ie : interfaceEqualities_)
@@ -779,7 +1048,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearProp(
         &conflict, &entailmentProps_, &entailmentEmittedKeys_,
         /*maxEmit=*/256);
 
-    static const bool diag = std::getenv("XOLVER_NIA_LINPROP_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NIA_LINPROP_DIAG");
     if (diag) {
         std::fprintf(stderr,
             "[LINPROP] fire active=%zu normalized=%zu effort=%d conflict=%s ent+=%zu (total=%zu)\n",
@@ -828,8 +1097,7 @@ uint64_t computeDispatchSignature(
 
 std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheLookup(TheoryLemmaStorage&, TheoryEffort) {
     static const bool dcEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DISPATCH_CACHE");
     }();
     if (!dcEnabled) return std::nullopt;
     if (!dispatchCacheValid_) return std::nullopt;
@@ -856,8 +1124,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheLookup(TheoryLemma
 
 std::optional<TheoryCheckResult> NiaSolver::stageDispatchCacheRecord(TheoryLemmaStorage&, TheoryEffort) {
     static const bool dcEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DISPATCH_CACHE");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DISPATCH_CACHE");
     }();
     if (!dcEnabled) return std::nullopt;
     // Reaching this stage means every earlier stage returned nullopt
@@ -882,7 +1149,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNormalize(TheoryLemmaStorage&, 
     // and the full-normalize path are exercised. Fires after normalized_
     // has been populated (i.e., after the cache update below). Cheap.
     auto emitPartitionDiag = [this]() {
-        static const bool partDiag = std::getenv("XOLVER_NIA_VAR_PARTITION_DIAG") != nullptr;
+        static const bool partDiag = xolver::env::diag("XOLVER_NIA_VAR_PARTITION_DIAG");
         if (partDiag && !partitionDiagPrinted_ && !normalized_.empty()) {
             partitionDiagPrinted_ = true;
             VariablePartition vp(*kernel_);
@@ -1011,8 +1278,7 @@ std::optional<TheoryCheckResult> NiaSolver::stagePresolveFixpoint(TheoryLemmaSto
 std::optional<TheoryCheckResult> NiaSolver::stageNlaCuts(TheoryLemmaStorage&,
                                                           TheoryEffort) {
     static const bool nlaCutsEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NLA_CUTS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NLA_CUTS");
     }();
     if (!nlaCutsEnabled) return std::nullopt;
     if (normalized_.empty()) return std::nullopt;
@@ -1267,7 +1533,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageDomainInference(TheoryLemmaStor
     // 3. Reset domains
     domains_.reset();
 
-    static const bool domDiag = std::getenv("NIA_DOM_DIAG") != nullptr;
+    static const bool domDiag = xolver::env::diag("NIA_DOM_DIAG");
     if (domDiag) {
         std::cerr << "[NIA-DOM] normalized constraints (" << normalized_.size() << "):\n";
         for (const auto& c : normalized_) {
@@ -1488,8 +1754,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
     // stable because normalized_ is grown in lockstep with active_ /
     // onBacktrack resizes it from the tail.
     static const bool warmStartEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_MODULAR_WARM_START");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_MODULAR_WARM_START");
     }();
     auto computeSignature = [&]() -> uint64_t {
         uint64_t h = 1469598103934665603ULL;  // FNV-1a basis
@@ -1526,20 +1791,20 @@ std::optional<TheoryCheckResult> NiaSolver::stageModular(TheoryLemmaStorage&, Th
     return std::nullopt;
 }
 
-void NiaSolver::setModEqConstFacts(ModEqConstFactList facts) {
+void NiaSolver::setModEqConstFacts(const ModEqConstFactList& facts) {
     // Track A Phase 1.3 — Solver::Impl hands off facts captured from
     // IntDivModLowerer here. Each fact's `reason` SatLit is still
     // unset (atomization is done after preprocess); the stage method
-    // resolves it via TheoryAtomRegistry per call.
-    modEqConstFacts_ = std::move(facts);
+    // resolves it via TheoryAtomRegistry per call. (const-ref to match the
+    // polymorphic TheorySolver::setModEqConstFacts hook; set once at setup.)
+    modEqConstFacts_ = facts;
 }
 
 std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
     TheoryLemmaStorage&, TheoryEffort) {
     // Track A Phase 1.3 — bridge fact list to ModEqConstReasoner.
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_NATIVE_MODEQCONST");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_NATIVE_MODEQCONST");
     }();
     if (!enabled) return std::nullopt;
     if (modEqConstFacts_.empty()) return std::nullopt;
@@ -1575,8 +1840,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageNativeModEqConst(
 
 std::optional<TheoryCheckResult> NiaSolver::stageDio(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_DIO");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_DIO");
     }();
     if (!enabled) return std::nullopt;
 
@@ -1862,8 +2126,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLinearization(TheoryLemmaStorag
         LinearizationConfig cfg;
         cfg.emitAllMcCormick = true;
         static const bool secantOn = [] {
-            const char* e = std::getenv("XOLVER_NIA_SECANT");
-            return e && *e && *e != '0';
+            return xolver::env::flag("XOLVER_NIA_SECANT");
         }();
         cfg.emitSquareSecant = secantOn;
         cfg.emitSquareTangent = true;
@@ -1895,8 +2158,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage
     // never returns UnsatComplete. On failure, falls through to the
     // rest of the pipeline (so the standard reasoners still get to run).
     static const bool earlyEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL_EARLY");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_BOUNDED_PARTIAL_EARLY");
     }();
     if (!earlyEnabled) return std::nullopt;
     // Reuse the same algorithm; differs only in pipeline position.
@@ -1905,8 +2167,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedEarly(TheoryLemmaStorage
     // tried as the FIRST candidate before cartesian enumeration. Sound:
     // validator-gated like every other candidate.
     static const bool lsFeedback = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_FEEDBACK");
     }();
     const IntegerModel* hint = nullptr;
     if (lsFeedback) {
@@ -1946,8 +2207,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
         // never returned from this path (unbounded search space is not
         // exhausted).
         static const bool partialEnabled = [] {
-            const char* e = std::getenv("XOLVER_NIA_BOUNDED_PARTIAL");
-            return e && *e && *e != '0';
+            return xolver::env::flag("XOLVER_NIA_BOUNDED_PARTIAL");
         }();
         if (partialEnabled) {
             // Phase L1 step 3 — LS feedback hint (XOLVER_NIA_LS_FEEDBACK=1,
@@ -1955,8 +2215,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBounded(TheoryLemmaStorage& lem
     // tried as the FIRST candidate before cartesian enumeration. Sound:
     // validator-gated like every other candidate.
     static const bool lsFeedback = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_FEEDBACK");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_FEEDBACK");
     }();
     const IntegerModel* hint = nullptr;
     if (lsFeedback) {
@@ -2029,7 +2288,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
         return static_cast<size_t>(50);
     }();
     if (normalized_.size() < minActive) return std::nullopt;
-    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    static const bool h3Diag = xolver::env::diag("XOLVER_NIA_BB_ENTRY_DIAG");
     if (h3Diag) {
         static thread_local long earlyCount = 0;
         ++earlyCount;
@@ -2044,7 +2303,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlastEarly(TheoryLemmaStorag
     // unchanged and a re-blast just burns seconds (00314 80x/11s; a UFDTNIA
     // 4x/14.6s) — skip it. Opt-out XOLVER_NIA_BB_EARLY_NODEDUP=1.
     static const bool bbEarlyDedup =
-        std::getenv("XOLVER_NIA_BB_EARLY_NODEDUP") == nullptr;
+        !xolver::env::diag("XOLVER_NIA_BB_EARLY_NODEDUP");
     if (bbEarlyDedup && bbEarlyUnkSize_ == normalized_.size())
         return std::nullopt;
     // The bit-blast solver respects its own gate/iteration env caps
@@ -2083,7 +2342,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBitBlast(TheoryLemmaStorage&, T
         return std::nullopt;
     // H3 (master 2026-06-01) entry counter: confirm whether bit-blast
     // actually fires on SAT14-class inputs before the run TOs upstream.
-    static const bool h3Diag = std::getenv("XOLVER_NIA_BB_ENTRY_DIAG") != nullptr;
+    static const bool h3Diag = xolver::env::diag("XOLVER_NIA_BB_ENTRY_DIAG");
     if (h3Diag) {
         static thread_local long bbEntryCount = 0;
         ++bbEntryCount;
@@ -2318,7 +2577,7 @@ NiaSolver::stageEscalatingBounded(TheoryLemmaStorage& lemmaDb, TheoryEffort effo
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&, TheoryEffort) {
     // HYB-X partition-hint wire-up (default-OFF).
     {
-        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        static const bool partHint = xolver::env::diag("XOLVER_NIA_LS_PARTITION_HINT");
         if (partHint && !normalized_.empty()) {
             VariablePartition vp(*kernel_);
             auto pr = vp.partition(normalized_, domains_, 32);
@@ -2355,8 +2614,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearch(TheoryLemmaStorage&
 std::optional<TheoryCheckResult>
 NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_BOOL_EXTEND");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_BOOL_EXTEND");
     }();
     if (!enabled || coreIr_ == nullptr) return std::nullopt;
 
@@ -2447,8 +2705,7 @@ NiaSolver::stageLocalSearchBoolExtend(TheoryLemmaStorage&, TheoryEffort) {
 //   XOLVER_NIA_HYB_BB_LS_PROBE_MS (default 500): per-LS-probe budget
 std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_HYB_BB_LS");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_HYB_BB_LS");
     }();
     if (!enabled) return std::nullopt;
     if (normalized_.empty()) return std::nullopt;
@@ -2520,8 +2777,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageHybridBbLs(TheoryLemmaStorage&,
 // (XOLVER_NIA_LBBB), Full-effort only via addFull registration.
 std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LBBB");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LBBB");
     }();
     if (!enabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
@@ -2583,8 +2839,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageBoundedBitBlast(TheoryLemmaStor
 // the original NIA formula.
 std::optional<TheoryCheckResult> NiaSolver::stageHybridLsBb(TheoryLemmaStorage&, TheoryEffort) {
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_HYB_LS_BB");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_HYB_LS_BB");
     }();
     if (!enabled) return std::nullopt;
     if (!enableBitBlast_) return std::nullopt;
@@ -2680,7 +2935,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     const auto& profile = cachedProfile;
     const auto& table = cachedTable;
     farkas::FarkasOrSolver solver(*coreIr_);
-    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    static const bool trace = xolver::env::diag("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
         FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
@@ -2693,7 +2948,7 @@ NiaSolver::stageFarkasOr(TheoryLemmaStorage& lemmaDb, TheoryEffort) {
     // For each outer assertion, prints kind + variable name + whether it
     // structurally looks like `(= var const)` (a hard equality forcing the
     // var). Used to design row-refute-by-outer-eq sound UNSAT path.
-    if (std::getenv("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_FARKAS_OUTER_DIAG")) {
         // Helper: recursively check if `e` is a `(= var const)` form (either
         // child a Variable, the other an evaluable integer constant) and
         // return (varName, constValue) if so.
@@ -3140,7 +3395,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
         return std::nullopt;
     };
 
-    static const bool trace = std::getenv("XOLVER_NIA_FARKAS_OR_TRACE");
+    static const bool trace = xolver::env::diag("XOLVER_NIA_FARKAS_OR_TRACE");
     auto traceWrite = [&](const std::string& s) {
         if (!trace) return;
         FILE* f = std::fopen("/tmp/farkas_or_trace", "a");
@@ -3515,8 +3770,7 @@ NiaSolver::tryBoundedBRefutation(const farkas::FarkasProfile& profile) {
 // just falls through to the rest of the pipeline.
 std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaStorage&, TheoryEffort) {
     static const bool earlyEnabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_EARLY");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_EARLY");
     }();
     if (!earlyEnabled) return std::nullopt;
     // Save the LS's current per-call / cumulative budgets. We TEMPORARILY
@@ -3541,7 +3795,7 @@ std::optional<TheoryCheckResult> NiaSolver::stageLocalSearchEarly(TheoryLemmaSto
     // HYB-X: pass partition hint to LS (cheap; partition is recomputed
     // here but the cost is bounded by normalized_.size()).
     {
-        static const bool partHint = std::getenv("XOLVER_NIA_LS_PARTITION_HINT") != nullptr;
+        static const bool partHint = xolver::env::diag("XOLVER_NIA_LS_PARTITION_HINT");
         if (partHint && !normalized_.empty()) {
             VariablePartition vp(*kernel_);
             auto pr = vp.partition(normalized_, domains_, 32);
@@ -3641,8 +3895,7 @@ std::optional<TheoryLemma> NiaSolver::buildBranchLemma(
     // conflict the SAT engine needs. Heuristic only — never affects
     // soundness; the branch lemma is still a tautology (x<=k ∨ x>=k+1).
     static const bool lsBranchHint = [] {
-        const char* e = std::getenv("XOLVER_NIA_LS_BRANCH_HINT");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_LS_BRANCH_HINT");
     }();
     const auto& lsAct = localSearch_.lsContext().varActivity;
     auto activityOf = [&lsAct](const std::string& v) -> uint64_t {
@@ -3904,7 +4157,7 @@ NiaSolver::sharedTermArithValue(SharedTermId s) const {
     // Iter#25 diag: count ALL invocations + classification (null-model vs
     // found vs missing-from-model). Set XOLVER_NIA_ARITH_VALUE_DIAG=1.
     static const bool diag =
-        std::getenv("XOLVER_NIA_ARITH_VALUE_DIAG") != nullptr;
+        xolver::env::diag("XOLVER_NIA_ARITH_VALUE_DIAG");
     static long callCount = 0;
     static long nullModelCount = 0;
     static long missingNameCount = 0;
@@ -4160,7 +4413,7 @@ NiaSolver::getDeducedSharedEqualities() {
     // master directive #1: does NIA emit shared-eqs at all on QF_ANIA?
     static long callCount = 0;
     static long totalEmitted = 0;
-    if (std::getenv("XOLVER_NIA_SHARED_EQ_DIAG")) {
+    if (xolver::env::diag("XOLVER_NIA_SHARED_EQ_DIAG")) {
         ++callCount;
         totalEmitted += result.size();
         if (callCount % 20 == 1 || !result.empty()) {

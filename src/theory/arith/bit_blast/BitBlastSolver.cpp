@@ -234,7 +234,7 @@ BitBlastSolver::Attempt BitBlastSolver::attemptAtWidths(
                           std::chrono::steady_clock::now() - satT0).count();
         prof.maybeDump();
     }
-    static const bool bbDiag = std::getenv("NIA_BITBLAST_DIAG") != nullptr;
+    static const bool bbDiag = xolver::env::diag("NIA_BITBLAST_DIAG");
     if (res == SatSolver::SolveResult::Sat) {
         IntegerModel model;
         for (const auto& kv : varBits) model[kv.first] = readBitVec(*sat, kv.second);

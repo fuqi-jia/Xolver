@@ -12,6 +12,7 @@ namespace xolver {
 
 class TheoryLemmaStorage;
 class CareGraph;
+struct ModEqConstFact;  // theory/arith/nia/reasoners/ModEqConstFact.h (fwd: base hook only)
 
 // ---------------------------------------------------------------------------
 // Abstract interface for theory solvers
@@ -55,6 +56,28 @@ public:
     // -----------------------------------------------------------------------
     virtual void setActiveLinearContext(const std::vector<ActiveLinearConstraint>* context) {
         (void)context;
+    }
+
+    // -----------------------------------------------------------------------
+    // Post-setup data handoffs (optional; default = no-op). The api floor wires
+    // these on the base TheorySolver* returned by TheoryManager::solverFor(), so
+    // api/Solver.cpp stays polymorphic over the theory interface (no dynamic_cast
+    // to concrete solvers — enforced by scripts/check_architecture.sh).
+    // -----------------------------------------------------------------------
+
+    // NIA native ModEqConst facts captured by IntDivModLowerer during preprocess
+    // (Track A Phase 1.3). Only NiaSolver consumes them (via its native
+    // ModEqConst reasoner stage); every other theory ignores the handoff.
+    virtual void setModEqConstFacts(const std::vector<ModEqConstFact>& facts) {
+        (void)facts;
+    }
+
+    // Original-formula assertions for independent Full-effort model re-validation.
+    // Only the EUF (datatype) solver consumes them, to re-evaluate the original
+    // formula under the candidate e-graph (DT false-SAT floor). The pointer must
+    // outlive this solver; default no-op for every non-EUF theory.
+    virtual void setOriginalAssertions(const std::vector<ExprId>* assertions) {
+        (void)assertions;
     }
 
     // -----------------------------------------------------------------------
@@ -222,10 +245,19 @@ public:
     // Phase 1 arrangement (recovery): the shared-term argument pairs to split
     // (a=b ∨ a≠b) so an undischarged UF-application congruence is resolved.
     // Default empty (only EUF owns congruence). See EufSolver override.
+    //
+    // `appsResultApart` (optional, #77): two SAME-function applications whose
+    // RESULT shared terms it reports value-apart in the model are ALSO an
+    // arrangement obligation even without an EUF-level (distinct app1 app2) — they
+    // are forced apart by ARITH (e.g. f(a) < f(b) on the bridged results, which
+    // EUF cannot see). Supplying it relaxes the strict EUF-disequal app filter so
+    // the search emits the arg split; omit it (default) for the certificate floor,
+    // which must stay strict to avoid over-flooring a coincidental value-equality.
     virtual std::vector<std::pair<SharedTermId, SharedTermId>>
     collectArrangeableUfArgPairs(
-        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual) const {
-        (void)valueEqual;
+        const std::function<bool(SharedTermId, SharedTermId)>& valueEqual,
+        const std::function<bool(SharedTermId, SharedTermId)>& appsResultApart = {}) const {
+        (void)valueEqual; (void)appsResultApart;
         return {};
     }
 

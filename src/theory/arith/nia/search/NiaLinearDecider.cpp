@@ -1,4 +1,5 @@
 #include "theory/arith/nia/search/NiaLinearDecider.h"
+#include "util/EnvParam.h"
 
 #include "theory/arith/lia/LiaSolver.h"
 #include "theory/arith/linear/LinearConstraintNormalizer.h"
@@ -27,7 +28,7 @@ bool evalRelZero(const mpq_class& val, Relation rel) {
 }  // namespace
 
 static bool linDeciderDiag() {
-    static const bool on = std::getenv("XOLVER_NIA_LINDECIDE_DIAG") != nullptr;
+    static const bool on = xolver::env::diag("XOLVER_NIA_LINDECIDE_DIAG");
     return on;
 }
 
@@ -181,7 +182,7 @@ void NiaLinearDecider::collectLinearProp(
 
     if (!outEntailments) return;
 
-    static const bool diag = std::getenv("XOLVER_NIA_LINPROP_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NIA_LINPROP_DIAG");
     size_t nArith = 0, nUnassigned = 0, nFormPinned = 0, emitted = 0;
 
     // Scan registry for UNASSIGNED arithmetic atoms whose linear FORM is pinned

@@ -251,18 +251,12 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // nlsat-engine STEP A: SAT-only sample-first model search (default-OFF, gated).
     if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST"))
         satFirstEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
-    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_BUDGET")) {
-        long b = std::atol(e);
-        if (b > 0) satFirstBudget_ = b;
-    }
-    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS")) {
-        long b = std::atol(e);
-        if (b > 0) satSampleMaxBits_ = b;
-    }
-    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_MS")) {
-        long b = std::atol(e);
-        if (b >= 0) satFirstMs_ = b;   // 0 ⇒ no wall cap (node budget only)
-    }
+    { long b = env::paramLong("XOLVER_NRA_CAC_SAT_FIRST_BUDGET", 0);
+      if (b > 0) satFirstBudget_ = b; }
+    { long b = env::paramLong("XOLVER_NRA_CAC_SAT_FIRST_MAX_BITS", 0);
+      if (b > 0) satSampleMaxBits_ = b; }
+    { long b = env::paramLong("XOLVER_NRA_CAC_SAT_FIRST_MS", -1);
+      if (b >= 0) satFirstMs_ = b; }   // 0 ⇒ no wall cap (node budget only)
     // nlsat-engine INCREMENT 3: lazy conflict-driven projection learning on top
     // of SAT-first (default-OFF). Implies sat-first.
     if (const char* e = std::getenv("XOLVER_NRA_CAC_NLSAT")) {
@@ -273,10 +267,8 @@ CdcacCore::CdcacCore(PolynomialKernel* kernel, AlgebraBackend* algebra)
     // sat-first. Lets the model search reach algebraic-coordinate models (Geogebra).
     if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG"))
         satFirstAlgEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
-    if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG")) {
-        long b = std::atol(e);
-        if (b > 0) satFirstAlgDegCap_ = b;
-    }
+    { long b = env::paramLong("XOLVER_NRA_CAC_SAT_FIRST_ALG_DEG", 0);
+      if (b > 0) satFirstAlgDegCap_ = b; }
     // M1+M2: forward infeasibility lookahead for the rational SAT-first (default-OFF).
     if (const char* e = std::getenv("XOLVER_NRA_CAC_SAT_FIRST_LOOKAHEAD")) {
         satFirstLookaheadEnabled_ = (e[0] == '1' || e[0] == 't' || e[0] == 'T' || e[0] == 'y' || e[0] == 'Y');
@@ -504,7 +496,7 @@ static bool projectedPolyIntractable(const RationalPolynomial& rp) {
 }
 
 void CdcacCore::buildClosure(const CdcacInput& input) {
-    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
+    if (xolver::env::diag("XOLVER_NRA_LAZARD_DIAG"))
         std::cerr << "[LAZARD-CLOSURE-ENTRY] vars=" << input.varOrder.size()
                   << " constraints=" << input.constraints.size() << std::endl;
     unsatTrustworthy_ = true;
@@ -551,7 +543,7 @@ void CdcacCore::buildClosure(const CdcacInput& input) {
         // GCD/content/squarefree/resultant go through libpoly's EXACT ops
         // (high-degree multivariate inputs blow up the hand-rolled PRS).
         auto lreason = lazardClosure_.build(rps, input.varOrder, lcfg, kernel_);
-        if (std::getenv("XOLVER_NRA_LAZARD_DIAG")) {
+        if (xolver::env::diag("XOLVER_NRA_LAZARD_DIAG")) {
             std::cerr << "[LAZARD-CLOSURE] "
                       << (lreason == LazardIncompleteReason::None ? "COMPLETE"
                           : lreason == LazardIncompleteReason::ProjectionKernelFailure ? "KERNEL_FAILURE"
@@ -790,7 +782,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
             }
         }
     } covDump{input};
-    if (std::getenv("XOLVER_NRA_TOWER_DIAG"))
+    if (xolver::env::diag("XOLVER_NRA_TOWER_DIAG"))
         std::cerr << "[CDCAC-SOLVE] entry vars=" << input.varOrder.size()
                   << " cons=" << input.constraints.size() << std::endl;
 #ifndef NDEBUG
@@ -941,7 +933,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // the Lazard projection set + [H3] valuation lift + the per-cell UNSAT cert
     // gate (lazardCellCertEnabled_ already defaults ON). Reset all per-solve
     // scratch first so the closures / policy / trust flags start clean.
-    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
+    if (xolver::env::diag("XOLVER_NRA_LAZARD_DIAG"))
         std::cerr << "[CDCAC-HYBRID] Collins Unknown (reason="
                   << static_cast<int>(collinsResult.unknownReason)
                   << ") -> Lazard fallback" << std::endl;
@@ -959,7 +951,7 @@ CdcacResult CdcacCore::solve(const CdcacInput& input) {
     // original Collins Unknown stands. (Lazard Sat is full-model-validated
     // upstream; Lazard Unsat is cert-gated, incomplete => Unknown.)
     if (lazardResult.status != CdcacStatus::Unknown) {
-        if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
+        if (xolver::env::diag("XOLVER_NRA_LAZARD_DIAG"))
             std::cerr << "[CDCAC-HYBRID] Lazard RECOVERED status="
                       << static_cast<int>(lazardResult.status) << std::endl;
         return lazardResult;
@@ -1131,7 +1123,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     for (const auto& v : prefix.values) {
         if (v.isAlgebraic()) { hasAlgebraicPrefix = true; ++algPrefixCount; }
     }
-    static const bool kLazDiag = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
+    static const bool kLazDiag = xolver::env::diag("XOLVER_NRA_LAZARD_DIAG");
     if (kLazDiag && hasAlgebraicPrefix)
         std::cerr << "[LAZVAL] solveLevel k=" << k << " algPrefixCoords=" << algPrefixCount
                   << " levelPolys=" << levelPolyIds_[k].size() << std::endl;
@@ -1200,7 +1192,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
                 if (hasAlgebraicPrefix) {
                     bool supported = false;
                     RootSet roots = algebra_->isolateRealRootsViaTower(p, prefix, var, supported);
-                    if (std::getenv("XOLVER_NRA_LAZARD_DIAG"))
+                    if (xolver::env::diag("XOLVER_NRA_LAZARD_DIAG"))
                         std::cerr << "[LAZVAL] vanish-route k=" << k << " supported="
                                   << supported << " roots=" << roots.numRoots() << std::endl;
                     if (supported) {
@@ -1454,7 +1446,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
         bool allRational = !allRoots.roots.empty();
         for (const auto& r : allRoots.roots)
             if (!r.isRational()) { allRational = false; break; }
-        static const bool intDiag = std::getenv("XOLVER_NRA_CAC_INT_DIAG") != nullptr;
+        static const bool intDiag = xolver::env::diag("XOLVER_NRA_CAC_INT_DIAG");
         auto idiag = [&](const std::string& s) {
             if (!intDiag) return;
             FILE* f = std::fopen("/tmp/intcac_trace", "a");
@@ -1851,7 +1843,7 @@ CdcacResult CdcacCore::solveLevel(int k, SamplePoint& prefix, const CdcacInput& 
     std::cerr << "[CDCAC] final cells=" << cover.cells.size() << std::endl;
 #endif
     CoverageResult cov = CoveringManager::coversAllLine(algebra_, cover);
-    if (std::getenv("XOLVER_NRA_CAC_INT_DIAG")) {
+    if (xolver::env::diag("XOLVER_NRA_CAC_INT_DIAG")) {
         FILE* f = std::fopen("/tmp/intcac_trace", "a");
         if (f) { std::fprintf(f, "[INTCAC] k=%d coversAllLine=%d cells=%zu handledByIntAware=%d "
                               "levelIntegrality=%d unsatTrustworthy=%d\n",

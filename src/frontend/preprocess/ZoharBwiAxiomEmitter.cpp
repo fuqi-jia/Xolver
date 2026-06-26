@@ -1,4 +1,5 @@
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
+#include "util/EnvParam.h"
 
 #include <algorithm>
 #include <iostream>
@@ -195,7 +196,7 @@ static ExprId addOnePredecessor(const CoreIr& ir, ExprId id) {
 
 size_t ZoharBwiAxiomEmitter::emitPow2Recursion(
         const std::unordered_set<ExprId>& pow2Terms) {
-    static const bool diag = std::getenv("XOLVER_NIA_ZOHAR_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NIA_ZOHAR_DIAG");
     // Build a map arg-ExprId -> pow2-term-ExprId so we can REUSE the existing
     // (pow2 x) ExprId in the recursion's RHS (rather than mint a fresh node).
     // Reusing the ExprId means atomization assigns the same SAT variable, so

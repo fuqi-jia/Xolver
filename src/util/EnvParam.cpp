@@ -57,6 +57,9 @@ void dumpParamsToStderr() {
 void maybeInstallDumpHook() {
     static std::once_flag once;
     std::call_once(once, [] {
+        // NOTE: raw getenv here is mandatory — diag()/flag() call
+        // maybeInstallDumpHook(), so routing this through them would recurse
+        // into call_once on the same once_flag and deadlock.
         if (std::getenv("XOLVER_DUMP_PARAMS")) {
             std::atexit(dumpParamsToStderr);
         }
@@ -113,6 +116,28 @@ double paramDouble(const char* name, double def) {
     vss << value;
     record(name, dss.str(), vss.str(), overridden);
     return value;
+}
+
+bool flag(const char* name, bool def) {
+    maybeInstallDumpHook();
+    bool value = def;
+    bool overridden = false;
+    if (const char* e = std::getenv(name)) {
+        if (*e) {
+            value = (*e != '0');
+            overridden = true;
+        }
+    }
+    record(name, def ? "1" : "0", value ? "1" : "0", overridden);
+    return value;
+}
+
+bool diag(const char* name) {
+    maybeInstallDumpHook();
+    bool present = (std::getenv(name) != nullptr);
+    // Presence-as-default: a diagnostic is "off" by default, "on" iff set.
+    record(name, "0", present ? "1" : "0", present);
+    return present;
 }
 
 void dumpParams(std::ostream& os) {

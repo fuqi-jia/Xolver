@@ -125,6 +125,12 @@ preparation/
 smt-comp-2026-racing.md
 bin/
 
+# Closed-source "pro" engine overlay — kept out of this (public-origin) repo so
+# it can never be committed/pushed here. Built locally via -DXOLVER_BUILD_PRO=ON
+# (the open CMake picks it up if the dir is present) and stripped from the open
+# release by scripts/publish_open.sh. Track pro in a SEPARATE private monorepo.
+/src/pro/
+
 # Working notes (per-agent campaign tracking, kept locally)
 NOTES
 NOTES-*.md

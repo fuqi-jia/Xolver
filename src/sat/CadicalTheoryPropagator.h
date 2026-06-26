@@ -144,7 +144,25 @@ private:
     std::string* unknownReasonSink_ = nullptr;
     std::unordered_map<SatVar, int> varToLevel_;
     std::unordered_map<SatVar, bool> currentAssignment_;
+    // Assignment trail (var, level) in assignment order, kept in lockstep with the two
+    // maps above. Lets notify_backtrack pop only the vars above the new level — O(#popped)
+    // — instead of scanning the whole varToLevel_ map (profiled ~6% on miplib QF_LRA).
+    // Levels are non-decreasing in trail order, so vars above any level form a suffix.
+    std::vector<std::pair<SatVar, int>> assignTrail_;
     size_t lastCheckedAssignmentSize_ = 0;
+    // Reused scratch for cb_check_found_model's (level,lit) decorate-sort-undecorate
+    // (#88) — a persistent member avoids a per-found-model heap allocation (malloc
+    // was visible in the cb_check_found_model profile). clear() keeps capacity.
+    std::vector<std::pair<int, int>> modelSortScratch_;
+    // Set true whenever a theory *atom* is asserted (notify_assignment); cleared
+    // when cb_propagate runs a Standard check. When the cb_propagate throttle
+    // fires on pure-boolean growth (no atom asserted since the last check, no
+    // backtrack), the theory atom-set is unchanged, so the check + O(n) view
+    // rebuild are skipped — provably the same result (a non-backtrack check on an
+    // unchanged atom-set that found a conflict/propagation would have changed the
+    // atom-set or backtracked, so the re-check returns 0). This is unconditional
+    // (verdict-identical, not a tunable). Starts true so the first check runs.
+    bool theoryDirtySinceCheck_ = true;
 
     // Soundness floor (XOLVER_SAT_DEFER_EARLY_CONFLICT). In combination mode a
     // Standard-effort cb_propagate theory conflict is UNVALIDATED (conflictIsGenuine

@@ -1,4 +1,5 @@
 #include "theory/arith/nia/reasoners/AlgebraicIntegerReasoner.h"
+#include "util/EnvParam.h"
 #include "theory/arith/nia/reasoners/UnivariateIntegerReasoner.h"  // iter-89: completeDivisors
 #include <cstdlib>
 #include "theory/arith/nia/search/IntegerModelValidator.h"
@@ -196,19 +197,13 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkModular(
     //   XOLVER_NIA_MODULAR_MAX_VARS         (default 15, cap 50)
     //   XOLVER_NIA_MODULAR_MAX_ENUM         (default 50000, cap 1,000,000)
     static const size_t kVarCap = [] {
-        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_VARS");
-        if (e && *e) {
-            long v = std::strtol(e, nullptr, 10);
-            if (v > 0 && v <= 50) return static_cast<size_t>(v);
-        }
+        long v = env::paramLong("XOLVER_NIA_MODULAR_MAX_VARS", 15);
+        if (v > 0 && v <= 50) return static_cast<size_t>(v);
         return size_t(15);
     }();
     static const uint64_t kMaxEnumPerModulus = [] {
-        const char* e = std::getenv("XOLVER_NIA_MODULAR_MAX_ENUM");
-        if (e && *e) {
-            long v = std::strtol(e, nullptr, 10);
-            if (v > 0 && v <= 1000000) return static_cast<uint64_t>(v);
-        }
+        long v = env::paramLong("XOLVER_NIA_MODULAR_MAX_ENUM", 50000);
+        if (v > 0 && v <= 1000000) return static_cast<uint64_t>(v);
         return uint64_t(50000);
     }();
     if (allVars.size() > kVarCap) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
@@ -318,25 +313,18 @@ NiaReasoningResult AlgebraicIntegerReasoner::checkBilinearFactor(
     DomainStore& domains) {
 
     static const bool enabled = [] {
-        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR");
-        return e && *e && *e != '0';
+        return xolver::env::flag("XOLVER_NIA_BILINEAR_FACTOR");
     }();
     if (!enabled) return {NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
 
     static const mpz_class kMaxC = [] {
-        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_C");
-        if (e && *e) {
-            long v = std::strtol(e, nullptr, 10);
-            if (v > 0 && v <= 1000000) return mpz_class(v);
-        }
+        long v = env::paramLong("XOLVER_NIA_BILINEAR_FACTOR_MAX_C", 10000);
+        if (v > 0 && v <= 1000000) return mpz_class(v);
         return mpz_class(10000);
     }();
     static const size_t kMaxDiv = [] {
-        const char* e = std::getenv("XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV");
-        if (e && *e) {
-            long v = std::strtol(e, nullptr, 10);
-            if (v > 0 && v <= 1000) return static_cast<size_t>(v);
-        }
+        long v = env::paramLong("XOLVER_NIA_BILINEAR_FACTOR_MAX_DIV", 64);
+        if (v > 0 && v <= 1000) return static_cast<size_t>(v);
         return size_t(64);
     }();
 

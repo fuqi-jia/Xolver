@@ -57,7 +57,7 @@ Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combina
 
 ## Building
 
-Requires CMake ≥ 3.16, a C++17 compiler, GMP, and MPFR. CaDiCaL and libpoly are git submodules; nlohmann/json and doctest are fetched at configure time.
+Requires CMake ≥ 3.16, a C++20 compiler, GMP, and MPFR. CaDiCaL and libpoly are git submodules; nlohmann/json and doctest are fetched at configure time.
 
 ```bash
 git clone --recursive git@github.com:fuqi-jia/Xolver.git

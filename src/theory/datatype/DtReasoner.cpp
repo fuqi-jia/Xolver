@@ -1,4 +1,5 @@
 #include "theory/datatype/DtReasoner.h"
+#include "util/EnvParam.h"
 #include "theory/euf/EufTermManager.h"
 #include "theory/euf/IncrementalEGraph.h"
 #include "theory/core/TheoryAtomRegistry.h"
@@ -6,11 +7,153 @@
 #include <vector>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
+#include <optional>
+#include <unordered_map>
+#include <string>
 
 namespace xolver {
 
+namespace {
+// (#70/#74) Lightweight integer linear form over hash-consed atom ExprIds:
+// constant + sum(coeff_i * atom_i). Used by the injectivity linear-field floor
+// to detect when two fields of two merged same-constructor terms differ by a
+// nonzero constant (and therefore can never be equal). Opaque subterms
+// (variable / selector / UF app / *, mod, non-integer real) are atoms keyed by
+// their ExprId — two syntactically-identical such terms share an ExprId (the
+// frontend hash-conses), so e.g. the `i` in (+ i 0) and (+ i 2) cancels.
+struct LinForm {
+    int64_t constant = 0;
+    std::unordered_map<ExprId, int64_t> coeffs;
+};
+
+// dst += scale * src, with a conservative int64 overflow guard. Returns false on
+// possible overflow -> the caller abandons the floor for this field (sound: it
+// only ever under-detects, never mis-detects).
+bool addLin(LinForm& dst, const LinForm& src, int64_t scale) {
+    auto mulAdd = [](int64_t& acc, int64_t a, int64_t b) -> bool {
+        if (a != 0) {
+            int64_t aa = a < 0 ? -a : a;
+            if (b > INT64_MAX / aa || b < INT64_MIN / aa) return false;
+        }
+        int64_t prod = a * b;
+        if ((prod > 0 && acc > INT64_MAX - prod) ||
+            (prod < 0 && acc < INT64_MIN - prod)) return false;
+        acc += prod;
+        return true;
+    };
+    if (!mulAdd(dst.constant, src.constant, scale)) return false;
+    for (const auto& [atom, c] : src.coeffs) {
+        int64_t& d = dst.coeffs[atom];
+        if (!mulAdd(d, c, scale)) return false;
+        if (d == 0) dst.coeffs.erase(atom);
+    }
+    return true;
+}
+
+std::optional<LinForm> linForm(const CoreIr& ir, ExprId e, int& budget) {
+    if (e == NullExpr || e >= static_cast<ExprId>(ir.size())) return std::nullopt;
+    if (--budget < 0) return std::nullopt;
+    const CoreExpr& ce = ir.get(e);
+    auto atom = [&]() { LinForm lf; lf.coeffs[e] = 1; return lf; };
+    switch (ce.kind) {
+        case Kind::ConstInt:
+            if (auto* iv = std::get_if<int64_t>(&ce.payload.value)) {
+                LinForm lf; lf.constant = *iv; return lf;
+            }
+            return atom();
+        case Kind::ConstReal:
+            if (auto* sv = std::get_if<std::string>(&ce.payload.value)) {
+                const std::string& s = *sv;
+                size_t slash = s.find('/');
+                std::string num = slash == std::string::npos ? s : s.substr(0, slash);
+                std::string den = slash == std::string::npos ? std::string("1")
+                                                             : s.substr(slash + 1);
+                if (den != "1") return atom();  // genuine fraction -> opaque
+                try {
+                    size_t pos = 0;
+                    long long v = std::stoll(num, &pos);
+                    if (pos != num.size()) return atom();
+                    LinForm lf; lf.constant = static_cast<int64_t>(v); return lf;
+                } catch (...) { return atom(); }
+            }
+            return atom();
+        case Kind::Add: {
+            LinForm lf;
+            for (ExprId c : ce.children) {
+                auto sub = linForm(ir, c, budget);
+                if (!sub || !addLin(lf, *sub, 1)) return std::nullopt;
+            }
+            return lf;
+        }
+        case Kind::Sub: {
+            if (ce.children.size() != 2) return atom();
+            auto a = linForm(ir, ce.children[0], budget);
+            auto b = linForm(ir, ce.children[1], budget);
+            if (!a || !b) return std::nullopt;
+            LinForm lf;
+            if (!addLin(lf, *a, 1) || !addLin(lf, *b, -1)) return std::nullopt;
+            return lf;
+        }
+        case Kind::Neg: {
+            if (ce.children.size() != 1) return atom();
+            auto a = linForm(ir, ce.children[0], budget);
+            if (!a) return std::nullopt;
+            LinForm lf;
+            if (!addLin(lf, *a, -1)) return std::nullopt;
+            return lf;
+        }
+        default:
+            return atom();  // variable / selector / UF / Mul / Mod / ... -> opaque
+    }
+}
+
+// (#76) System infeasibility over a set of integer linear EQUALITIES {form_i = 0}.
+// Constructor injectivity merging C(a..) = C(b..) implies every field-wise
+// equality a_i = b_i; the per-field floor catches only a SINGLE field whose two
+// forms differ by a nonzero constant, but a jointly-infeasible SYSTEM —
+// mk(2,2) = mk(1+k, k-3) => {1+k = 2, k-3 = 2} => k = 1 AND k = 5 — is invisible
+// per field (each is individually satisfiable). Fraction-free Gaussian
+// elimination with back-substitution (so every pivot's leader appears in exactly
+// one row): a reduction yielding 0 = (nonzero constant) proves no model can merge
+// the two constructors. Returns true ONLY on a proven contradiction; abandons
+// (false) on int64 overflow — sound under-detection, never a false positive.
+bool systemInfeasible(std::vector<LinForm> forms) {
+    std::vector<std::pair<ExprId, LinForm>> rows;  // (leader atom, reduced eq)
+    for (auto eq : forms) {
+        bool ok = true;
+        for (auto& [lead, row] : rows) {              // forward-reduce
+            auto it = eq.coeffs.find(lead);
+            if (it == eq.coeffs.end()) continue;
+            int64_t c = it->second, rc = row.coeffs.at(lead);
+            LinForm tmp;
+            if (!addLin(tmp, eq, rc) || !addLin(tmp, row, -c)) { ok = false; break; }
+            eq = std::move(tmp);
+        }
+        if (!ok) continue;                            // overflow -> skip this eq
+        if (eq.coeffs.empty()) {
+            if (eq.constant != 0) return true;        // 0 = nonzero -> infeasible
+            continue;                                 // 0 = 0, redundant
+        }
+        ExprId lead = eq.coeffs.begin()->first;
+        for (auto& [l2, row] : rows) {                // back-substitute new leader out
+            (void)l2;
+            auto it = row.coeffs.find(lead);
+            if (it == row.coeffs.end()) continue;
+            int64_t c = it->second, ec = eq.coeffs.at(lead);
+            LinForm tmp;
+            if (!addLin(tmp, row, ec) || !addLin(tmp, eq, -c)) { ok = false; break; }
+            row = std::move(tmp);
+        }
+        if (!ok) continue;
+        rows.emplace_back(lead, std::move(eq));
+    }
+    return false;
+}
+}  // namespace
+
 DtReasoner::~DtReasoner() {
-    if (std::getenv("XOLVER_DT_HC_STATS")) {
+    if (xolver::env::diag("XOLVER_DT_HC_STATS")) {
         const uint64_t total = finiteHits_ + finiteMisses_;
         if (total > 0) {
             const double rate = 100.0 * static_cast<double>(finiteHits_) / static_cast<double>(total);
@@ -160,11 +303,21 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
             // conflict (false-UNSAT, e.g. is_cons(x) with x already cons).
             std::string tnm = opName(tt);
             if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
+            // ROBUSTNESS (#70/#72): a tester whose constructor NAME was dropped
+            // by the upstream payload loss (compound-arg testers intern as bare
+            // "#dt.is.") yields an empty tnm. Comparing it against a (recovered)
+            // constructor name spuriously mismatches -> a false-UNSAT conflict.
+            // An empty/unreliable name cannot be soundly compared, so skip the
+            // tester-consistency check here; a genuinely-violating model is still
+            // caught by the selector-projection floor in modelFullyDetermined().
+            if (tnm.empty()) continue;
             // Find a known constructor in u's class.
             EClassId uc = egraph_->rep(u);
             for (EufTermId m : egraph_->classMembers(uc)) {
                 if (!symIsConstructor(m)) continue;
-                bool sameCtor = (opName(m) == tnm);
+                const std::string mName = opName(m);
+                if (mName.empty()) continue;        // same robustness for the ctor side
+                bool sameCtor = (mName == tnm);
                 // is_C(u)=true but ctor is D!=C, or is_C(u)=false but ctor IS C.
                 if ((isTrue && !sameCtor) || (isFalse && sameCtor)) {
                     std::vector<SatLit> reasons;
@@ -197,6 +350,7 @@ std::optional<std::vector<SatLit>> DtReasoner::checkConflict() {
             if (!egraph_->same(tt, trueTerm_)) continue;   // only testers asserted TRUE
             std::string tnm = opName(tt);
             if (tnm.rfind("is-", 0) == 0) tnm = tnm.substr(3);
+            if (tnm.empty()) continue;   // unreliable name (#70/#72) — cannot clash soundly
             EClassId uc = egraph_->rep(tn.args[0]);
             auto it = trueTesterByClass.find(uc);
             if (it == trueTesterByClass.end()) {
@@ -588,6 +742,178 @@ bool DtReasoner::modelFullyDetermined() const {
     for (EClassId c : needing) {
         if (hasCtor.find(c) == hasCtor.end()) return false;  // observed-but-undetermined
     }
+
+    // Selector-projection consistency (#70a, sound floor). For every selector
+    // sel_i^C(u) whose operand class holds a constructor C(a..) of the SELECTOR'S
+    // OWN constructor, the projection axiom sel_i^C(u) = a_i MUST hold in the
+    // model. If the egraph does not reflect it, the DtReasoner failed to
+    // instantiate the projection (observed #70: when the ctor field is a
+    // compound / self-referential selector, e.g. q = mk(snd q, 0), the
+    // guarded-projection at instantiateLemma() does not fire), leaving a model
+    // that locally satisfies the constructor but is internally inconsistent
+    // (fst(q) != snd(q) while q = mk(snd q, 0)). z3/cvc5 derive the projection
+    // and refute -> our `sat` is unsound. Floor it to Unknown. SOUNDNESS: this
+    // only ever turns a sat into Unknown, never an unsat into sat, and only
+    // fires for the well-defined case (selector applied to its OWN ctor — the
+    // wrong-ctor case is underspecified per SMT-LIB and is NOT checked).
+    for (EufTermId s = 0; s < total; ++s) {
+        if (!symIsSelector(s)) continue;
+        const auto& sn = tm_->node(s);
+        if (sn.args.empty()) continue;
+        EufTermId u = sn.args[0];
+        ExprId uE = originExpr(u);
+        if (uE == NullExpr || uE >= static_cast<ExprId>(ir_->size())) continue;
+        SortId dtSort = ir_->get(uE).sort;
+        uint32_t argIdx = 0;
+        const DtConstructorInfo* owner =
+            ir_->datatypes().selector(dtSort, opName(s), argIdx);
+        if (!owner) continue;
+        EClassId uClass = egraph_->rep(u);
+        for (EufTermId m : egraph_->classMembers(uClass)) {
+            if (!symIsConstructor(m)) continue;
+            // Match the selector's OWN constructor by name. A constructor whose
+            // name is EMPTY is MALFORMED (the parser dropped the ctor name for
+            // some terms — e.g. mk(snd q, 0) interns as bare "#dt.ctor." — which
+            // is exactly what makes the projection at instantiateLemma() SKIP it
+            // and leave the false-sat #70). Treat an empty-name constructor of
+            // the right sort as a possible match so this floor still fires: this
+            // is conservative (sat->unknown only) and only ever affects the
+            // already-buggy empty-name case, never a genuine named-ctor sat.
+            const std::string mName = opName(m);
+            if (!mName.empty() && mName != owner->name) continue;
+            if (ctorSort(m) != dtSort) continue;
+            const auto& margs = tm_->node(m).args;
+            if (argIdx >= margs.size()) continue;
+            if (!egraph_->same(s, margs[argIdx])) return false;  // projection unapplied -> floor
+
+            // (#70/#74) Even when the projection holds in EUF, an ARITH-sorted
+            // field that is a COMPOUND term (e.g. mk((+ a 1), 0)) is unsound to
+            // accept: EUF merges sel_i^C(u) with the field term, but the field's
+            // arith VALUE is not coupled to the selector across the EUF/arith
+            // boundary (the constructor field is not purified into a shared
+            // leaf), so the arith theory can assign sel and the field different
+            // values and we never see the conflict. z3/cvc5 derive the
+            // projection through arithmetic and refute (e.g. (+ a 1) != (fst q)
+            // while q = mk((+ a 1), 0) is UNSAT, not sat). We do not
+            // independently re-validate that arith coupling, so floor to
+            // Unknown. SOUNDNESS: sat->unknown only; fires solely for a selector
+            // applied to its OWN constructor whose field is a compound arith
+            // expression — exactly the uncoupled case. A bare variable/constant
+            // field is already a shared leaf (coupled) and is NOT floored.
+            ExprId fieldE = originExpr(margs[argIdx]);
+            if (fieldE != NullExpr && fieldE < static_cast<ExprId>(ir_->size())) {
+                const auto& fe = ir_->get(fieldE);
+                bool arithSorted = (fe.sort == ir_->intSortId() ||
+                                    fe.sort == ir_->realSortId());
+                bool compoundArith = arithSorted && !fe.isLeaf() &&
+                                     fe.kind != Kind::UFApply &&
+                                     fe.kind != Kind::Selector;
+                if (compoundArith) return false;  // uncoupled arith field -> floor
+            }
+        }
+    }
+    // (#70/#74) Injectivity constant-clash floor. Two same-constructor terms in
+    // one class imply field-wise equality a_i = b_i (constructor injectivity).
+    // When those equalities force two DISTINCT interpreted constants to be equal
+    // — directly mk(i,2) = mk(1,1) => 2 = 1, or transitively through a shared
+    // operand mk(-1,1) = mk(k,k) => -1 = k = 1 — the model is UNSAT. EUF merges
+    // the constructors, but the implied field equalities over arith CONSTANTS
+    // (which are not registered shared terms) never reach arithmetic, so the
+    // contradiction is invisible and the combination reports a false sat. Detect
+    // it structurally: per merged same-ctor pair, union the field operands by
+    // their egraph rep and floor if a union class accumulates >= 2 distinct
+    // constant values. SOUNDNESS: sat->unknown only — a genuine model can never
+    // equate two distinct constants — and it is polarity-free (a floor, never a
+    // conflict clause). Cost is tiny (few ctor terms/class, 2 fields each).
+    auto constKeyOf = [&](EufTermId op) -> std::string {
+        ExprId oe = originExpr(op);
+        if (oe == NullExpr || oe >= static_cast<ExprId>(ir_->size())) return {};
+        const auto& oce = ir_->get(oe);
+        if (oce.kind == Kind::ConstInt) {
+            if (auto* iv = std::get_if<int64_t>(&oce.payload.value))
+                return "i:" + std::to_string(*iv);
+        } else if (oce.kind == Kind::ConstReal) {
+            if (auto* sv = std::get_if<std::string>(&oce.payload.value))
+                return "r:" + *sv;
+        }
+        return {};
+    };
+    std::unordered_map<EClassId, std::vector<EufTermId>> ctorByClass;
+    for (EufTermId t = 0; t < total; ++t)
+        if (symIsConstructor(t)) ctorByClass[egraph_->rep(t)].push_back(t);
+    for (auto& [cr, terms] : ctorByClass) {
+        (void)cr;
+        for (size_t i = 0; i < terms.size(); ++i) {
+            for (size_t j = i + 1; j < terms.size(); ++j) {
+                EufTermId t1 = terms[i], t2 = terms[j];
+                if (tm_->node(t1).symbol != tm_->node(t2).symbol) continue;  // diff ctor = clash, not inj
+                const auto& a1 = tm_->node(t1).args;
+                const auto& a2 = tm_->node(t2).args;
+                if (a1.size() != a2.size()) continue;
+                // Iterative union-find over operand egraph reps for this pair.
+                std::unordered_map<EClassId, EClassId> parent;
+                auto find = [&](EClassId x) {
+                    while (true) {
+                        auto it = parent.find(x);
+                        if (it == parent.end() || it->second == x) return x;
+                        it->second = parent[it->second];  // path halving
+                        x = it->second;
+                    }
+                };
+                auto uni = [&](EClassId x, EClassId y) {
+                    if (!parent.count(x)) parent[x] = x;
+                    if (!parent.count(y)) parent[y] = y;
+                    parent[find(x)] = find(y);
+                };
+                std::vector<LinForm> fieldEqs;  // (#76) field difference forms
+                for (size_t k = 0; k < a1.size(); ++k) {
+                    uni(egraph_->rep(a1[k]), egraph_->rep(a2[k]));
+                    // Linear-field floor: if the two fields' integer linear forms
+                    // differ by a NONZERO CONSTANT (all atom coefficients cancel),
+                    // the fields can never be equal, so two merged same-ctor terms
+                    // cannot be equal -> unsat. Catches injectivity over linear
+                    // arith fields, e.g. mk(j,(+ i 0)) = mk(_,(+ i 2)) => 0 = 2
+                    // (the i cancels). SOUND: a genuine model never merges two
+                    // constructors whose fields differ by a constant.
+                    int b1 = 64, b2 = 64;
+                    auto la = linForm(*ir_, originExpr(a1[k]), b1);
+                    auto lb = linForm(*ir_, originExpr(a2[k]), b2);
+                    if (la && lb) {
+                        LinForm d = *la;
+                        if (addLin(d, *lb, -1)) {
+                            if (d.coeffs.empty() && d.constant != 0)
+                                return false;  // single field differs by const -> floor
+                            fieldEqs.push_back(std::move(d));  // for the system check
+                        }
+                    }
+                }
+                // (#76) System floor: the per-field check above misses a jointly
+                // infeasible SYSTEM (mk(2,2) = mk(1+k,k-3) => k=1 AND k=5). Run
+                // Gaussian elimination over all field equalities {a_i - b_i = 0};
+                // a derived 0 = nonzero proves the merge impossible -> floor.
+                if (fieldEqs.size() >= 2 && systemInfeasible(std::move(fieldEqs)))
+                    return false;
+                // Collect, per union class, the distinct constant value among the
+                // operands; a second distinct constant in the same class -> floor.
+                std::unordered_map<EClassId, std::string> classConst;
+                bool clash = false;
+                auto consider = [&](EufTermId op) {
+                    std::string key = constKeyOf(op);
+                    if (key.empty()) return;
+                    EClassId c = find(egraph_->rep(op));
+                    auto it = classConst.find(c);
+                    if (it == classConst.end()) classConst.emplace(c, key);
+                    else if (it->second != key) clash = true;
+                };
+                for (size_t k = 0; k < a1.size() && !clash; ++k) {
+                    consider(a1[k]);
+                    consider(a2[k]);
+                }
+                if (clash) return false;  // injectivity forces distinct consts equal -> floor
+            }
+        }
+    }
+
     // Note on selector-owner ownership: SMT-LIB datatype semantics treat
     // (sel x) when x is in a wrong-ctor class as UNDERSPECIFIED (any value),
     // not as a conflict. So a "selector applied to wrong ctor" check is NOT

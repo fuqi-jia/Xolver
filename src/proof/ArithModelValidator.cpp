@@ -1,4 +1,5 @@
 #include "proof/ArithModelValidator.h"
+#include "util/EnvParam.h"
 #include <iostream>
 
 namespace xolver {
@@ -15,12 +16,32 @@ ArithModelValidator::validate(const std::vector<ExprId>& assertions) const {
 
     Verdict verdict = Verdict::Satisfied;
     bool anyIndeterminate = false;
-    const bool diag = std::getenv("XOLVER_DIAG_AMV") != nullptr;
-    const bool diagDeep = std::getenv("XOLVER_DIAG_AMV_DEEP") != nullptr;
+    const bool diag = xolver::env::diag("XOLVER_DIAG_AMV");
+    const bool diagDeep = xolver::env::diag("XOLVER_DIAG_AMV_DEEP");
     for (ExprId a : assertions) {
         TR r = eval(a);
-        if (r.kind == Kind2::Indeterminate) { anyIndeterminate = true; continue; }
-        if (r.kind != Kind2::Bool) { anyIndeterminate = true; continue; }
+        if (r.kind == Kind2::Indeterminate || r.kind != Kind2::Bool) {
+            if (diag) {
+                std::cerr << "[AMV] INDETERMINATE assertion eid=" << a
+                          << " kind2=" << (int)r.kind << "\n";
+                amvDumpExpr(ir_, a, 0, 4);
+                std::function<void(ExprId,int)> drill = [&](ExprId e, int depth) {
+                    TR sr = eval(e);
+                    const char* k = sr.kind == Kind2::Bool ? "Bool"
+                                  : sr.kind == Kind2::Number ? "Number"
+                                  : sr.kind == Kind2::Token ? "Token"
+                                  : sr.kind == Kind2::Array ? "Array" : "INDET";
+                    const auto& n = ir_.get(e);
+                    std::cerr << std::string(depth*2,' ') << "eid=" << e
+                              << " kind=" << (int)n.kind << " -> " << k;
+                    if (auto* nm = std::get_if<std::string>(&n.payload.value)) std::cerr << " name=" << *nm;
+                    std::cerr << "\n";
+                    if (depth < 8) for (ExprId c : n.children) drill(c, depth+1);
+                };
+                drill(a, 0);
+            }
+            anyIndeterminate = true; continue;
+        }
         if (!r.b) {
             if (diag) {
                 std::cerr << "[AMV] VIOLATED assertion eid=" << a << "\n";

@@ -1,7 +1,6 @@
 #include "xolver/Solver.h"
 #include "xolver/Result.h"
 #include "expr/ir.h"
-#include "theory/euf/EufSolver.h"
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
@@ -15,7 +14,6 @@
 #include "frontend/preprocess/targeted/UfApplyAckermann.h"
 #include "frontend/preprocess/IntDivModLowerer.h"
 #include "theory/arith/nia/reasoners/ModEqConstFact.h"
-#include "theory/arith/nia/NiaSolver.h"  // Track A Phase 1.3: solverFor handoff
 #include "frontend/preprocess/ZoharBwiAxiomEmitter.h"
 #include "frontend/preprocess/ModularConsistencyChecker.h"
 #include "frontend/preprocess/NaryDistinctLowerer.h"
@@ -28,6 +26,8 @@
 #include "frontend/preprocess/UnconstrainedElim.h"
 #include "frontend/factory/StrategyPresets.h"
 #include <cstdlib>
+#include <csignal>
+#include <csetjmp>
 #include "theory/arith/search/CandidateModelSearch.h"
 #include "proof/ArithModelValidator.h"
 #include <gmpxx.h>
@@ -87,6 +87,24 @@ public:
     std::unique_ptr<SharedTermRegistry> sharedTermRegistry_;
     std::optional<TheorySolver::TheoryModel> lastModel_;
     std::vector<Term> lastAssumptions_;
+    // Assumption-based unsat-core (checkSatAssuming). assumptionRoots_ holds the
+    // ExprIds of the in-flight assumptions; EMPTY for a plain checkSat, in which
+    // case the core machinery in checkSatInternal is fully inert and the default
+    // path is byte-identical. lastUnsatCore_ holds the minimized subset that
+    // CaDiCaL's failed() reported as necessary for UNSAT (consumed by
+    // getUnsatCore()); seeded to the full assumption set as a sound fallback.
+    std::vector<ExprId> assumptionRoots_;
+    std::vector<Term> lastUnsatCore_;
+    // File-level unsat-core (:produce-unsat-cores / setOption "produce-unsat-cores").
+    // When set, checkSatInternal gates every top-level assertion A with a fresh
+    // boolean indicator (A becomes (=> a A)) and assumes all indicators, so
+    // failed() pinpoints which ORIGINAL assertions form the core. indicatorRoots_
+    // are the indicator vars (the literals to assume); indicatorCoreTerms_[k] is
+    // the ORIGINAL assertion Term reported when indicator k fails. Default OFF →
+    // the whole mechanism is inert and the solve path is byte-identical.
+    bool produceUnsatCores_ = false;
+    std::vector<ExprId> indicatorRoots_;
+    std::vector<Term> indicatorCoreTerms_;
     // Original (pre-lowering) assertion roots, snapshotted each checkSat for
     // the independent model self-check (modelMatchesOriginal).
     std::vector<ExprId> originalAssertions_;
@@ -270,7 +288,7 @@ public:
         // XOLVER_DIAG_AM (diagnostic only): dump the array model + per-assertion
         // verdict so a floored array sat can be root-caused (which assertion,
         // which interp). Never affects the verdict.
-        if (std::getenv("XOLVER_DIAG_AM")) {
+        if (xolver::env::diag("XOLVER_DIAG_AM")) {
             std::cerr << "[DIAG_AM] arrayInterps (" << lastModel_->arrayInterps.size() << "):\n";
             for (const auto& [nm, ai] : lastModel_->arrayInterps) {
                 std::cerr << "  " << nm << " deflt=" << ai.defaultVal
@@ -532,7 +550,7 @@ public:
                 }
                 selBridge.emplace(std::make_pair(rr.arrOperand, *idxV), rv);  // first wins
             }
-            if (std::getenv("XOLVER_TARGETED_PP_DIAG"))
+            if (xolver::env::diag("XOLVER_TARGETED_PP_DIAG"))
                 std::fprintf(stderr, "[ROAE-RECON] reads=%zu found=%zu default0=%zu noIdx=%zu\n",
                              roaeReads_.size(), roaeFound, roaeDefault, roaeNoIdx);
         }
@@ -577,7 +595,99 @@ public:
             }
         }
 
-        const bool validatorMemo = std::getenv("XOLVER_PP_VALIDATOR_MEMO") != nullptr;
+        // DT/UF selector value reconciliation across IR versions
+        // (XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE, default-ON). The override above keys on
+        // the (purified) ir->assertions() selector ExprIds, but the validator
+        // re-checks the ORIGINAL assertions, whose selector nodes can be DIFFERENT
+        // ExprIds (purification rebuilt them). So a `(fst p)` inside a nonlinear term
+        // (ufdtnia_001: (* (fst p) (fst p)) = 16) keeps the ORIGINAL node un-overridden
+        // -> Indeterminate -> a genuine sat floors to Unknown. Reconcile by SEMANTIC
+        // identity: build (selectorName, baseVarName) -> value from every bridge-shaped
+        // equality (selector = model-valued var | int constant) over ALL assertions,
+        // then key the override by the ORIGINAL selector node ExprIds the validator
+        // actually evaluates. SOUND + additive: the value is theory-consistent and the
+        // validator still independently re-checks every original assertion, so a wrong
+        // value -> Violated/Indeterminate, never a confirmed false sat. Variable-base
+        // selectors only; nested-base selectors stay Indeterminate (sound).
+        static const bool dtSemBridge =
+            xolver::env::flag("XOLVER_DT_SELECTOR_SEMANTIC_BRIDGE", true);
+        if (dtSemBridge) {
+            // Semantic identity of an EUF-owned arith read whose value the DT/EUF
+            // model does not export: a datatype selector `(fst p)` -> "S\x01fst\x01p",
+            // or a UF application over (datatype) variables `(f p)` -> "U\x01f\x01p".
+            // Returns nullopt for non-Variable bases/args (kept Indeterminate = sound).
+            auto semKey = [&](ExprId id) -> std::optional<std::string> {
+                const CoreExpr& n = ir->get(id);
+                if (n.kind == Kind::Selector && n.children.size() == 1) {
+                    const std::string* fn = std::get_if<std::string>(&n.payload.value);
+                    const CoreExpr& base = ir->get(n.children[0]);
+                    const std::string* bn = base.kind == Kind::Variable
+                        ? std::get_if<std::string>(&base.payload.value) : nullptr;
+                    if (fn && bn) return "S\x01" + *fn + "\x01" + *bn;
+                } else if (n.kind == Kind::UFApply) {
+                    const std::string* fn = std::get_if<std::string>(&n.payload.value);
+                    if (!fn) return std::nullopt;
+                    std::string k = "U\x01" + *fn;
+                    for (ExprId c : n.children) {
+                        const CoreExpr& cn = ir->get(c);
+                        if (cn.kind != Kind::Variable) return std::nullopt;  // all-Variable args only
+                        const std::string* an = std::get_if<std::string>(&cn.payload.value);
+                        if (!an) return std::nullopt;
+                        k += "\x01" + *an;
+                    }
+                    return k;
+                }
+                return std::nullopt;
+            };
+            auto modelValueOf = [&](ExprId valId) -> std::optional<RealValue> {
+                const CoreExpr& vnode = ir->get(valId);
+                if (vnode.kind == Kind::Variable) {
+                    if (const std::string* vn = std::get_if<std::string>(&vnode.payload.value)) {
+                        auto rit = lastModel_->numericAssignments.find(*vn);
+                        if (rit != lastModel_->numericAssignments.end()) return rit->second;
+                        auto nit = numAsg.find(*vn);
+                        if (nit != numAsg.end()) return RealValue::fromMpq(nit->second);
+                    }
+                } else if (vnode.kind == Kind::ConstInt) {
+                    if (const int64_t* iv = std::get_if<int64_t>(&vnode.payload.value))
+                        return RealValue::fromInt(*iv);
+                }
+                return std::nullopt;
+            };
+            // Pass 1: (semantic key) -> model value, from every bridge-shaped equality
+            // `(= read value)` across ALL (purified) assertions.
+            std::map<std::string, RealValue> semVal;
+            for (ExprId aid : ir->assertions()) {
+                const CoreExpr& a = ir->get(aid);
+                if (a.kind != Kind::Eq || a.children.size() != 2) continue;
+                for (int s = 0; s < 2; ++s) {
+                    auto key = semKey(a.children[s]);
+                    if (!key) continue;
+                    if (auto v = modelValueOf(a.children[1 - s])) { semVal.emplace(*key, *v); break; }
+                }
+            }
+            // Pass 2: key the ExprId-based override by the ORIGINAL read nodes the
+            // validator actually evaluates (reconciling purified vs original node ids).
+            if (!semVal.empty()) {
+                std::unordered_set<ExprId> seen;
+                std::function<void(ExprId)> scan = [&](ExprId e) {
+                    if (e == NullExpr || !seen.insert(e).second) return;
+                    const CoreExpr& n = ir->get(e);
+                    if (n.kind == Kind::Selector || n.kind == Kind::UFApply) {
+                        if (auto key = semKey(e)) {
+                            auto it = semVal.find(*key);
+                            if (it != semVal.end()) selectorBridge.emplace(e, it->second);  // first wins
+                        }
+                    }
+                    for (ExprId c : n.children) scan(c);
+                };
+                for (ExprId aid : originalAssertions_) scan(aid);
+            }
+        }
+        // #41 promoted default-ON: validator eval memoization is verdict-identical
+        // (memoizes a PURE eval over ExprId) — a speedup on validator-heavy sat
+        // re-checks, never changes a verdict. XOLVER_PP_VALIDATOR_MEMO=0 disables.
+        const bool validatorMemo = xolver::env::flag("XOLVER_PP_VALIDATOR_MEMO", true);
         ArithModelValidator::Verdict v;
         if (!lastModel_->arrayInterps.empty() || !selBridge.empty() || !roaeFreeArrayVars_.empty()) {
             ArithModelValidator validator(*ir, numAsg, boolAsg,
@@ -893,7 +1003,7 @@ public:
         // DIAG (XOLVER_NO_EXPAND_FUNCTIONS): toggle define-fun inlining to confirm
         // whether parse-time expansion is the Certora blowup. Not for production.
         parser->setOption("expand_functions",
-                          std::getenv("XOLVER_NO_EXPAND_FUNCTIONS") == nullptr);
+                          !xolver::env::diag("XOLVER_NO_EXPAND_FUNCTIONS"));
         if (!parser->parse(std::string(filename))) {
             return false;
         }
@@ -1260,6 +1370,43 @@ public:
         // these ExprIds keep referencing the original formula even after
         // the assertion list is rewritten by lowering.
         originalAssertions_ = ir->assertions();
+
+        // File-level unsat-core gating (:produce-unsat-cores). Replace each
+        // top-level assertion A with (=> a A) for a fresh indicator a, BEFORE
+        // lowering, so the CNF guard distributes into every clause derived from A
+        // (AND-flatten/rewrite preserve the implication). All indicators are
+        // assumed in the solve below; failed() then reports which ORIGINAL
+        // assertions (indicatorCoreTerms_) form the core. Gated → the default path
+        // is byte-identical. originalAssertions_ keeps the UNGUARDED roots for the
+        // model self-check. (Re-entrant solves — portfolio/escalating — would
+        // re-guard; produce-unsat-cores is a single-solve CLI/API mode.)
+        produceUnsatCores_ = parser && parser->getOptions() &&
+                             parser->getOptions()->get_unsat_core;
+        if (auto itUc = options.find("produce-unsat-cores");
+            itUc != options.end() && itUc->second.kind == OptionValue::Bool &&
+            itUc->second.b)
+            produceUnsatCores_ = true;
+        indicatorRoots_.clear();
+        indicatorCoreTerms_.clear();
+        {
+            SortId bsid = (boolSortId_ != NullSort) ? boolSortId_ : ir->boolSortId();
+            if (produceUnsatCores_ && bsid != NullSort) {
+                const std::vector<std::pair<ScopeLevel, ExprId>> scoped =
+                    ir->getScopedAssertions();
+                ir->clearAssertions();
+                for (const auto& [lv, eid] : scoped) {
+                    ExprId a = ir->makeFreshVariable(bsid, "__xolver_uc");
+                    ExprId guarded =
+                        ir->add(CoreExpr{Kind::Implies, bsid, {a, eid}, Payload{}});
+                    ir->addAssertion(guarded, lv);
+                    indicatorRoots_.push_back(a);
+                    indicatorCoreTerms_.push_back(Term(static_cast<uint32_t>(eid)));
+                }
+                // Conservative fallback core (used only if UNSAT is proven before
+                // the SAT solve, so failed() never runs): the full assertion set.
+                lastUnsatCore_ = indicatorCoreTerms_;
+            }
+        }
 
         // Coarse phase timing (SOLVE_PHASE_PROF) to localize a pre-solve hang.
         // Uses C-level stderr (fprintf), NOT std::cerr: checkSatInternal can run
@@ -1761,7 +1908,7 @@ public:
         // Rewriter activation: explicit XOLVER_PP_REWRITE, or chosen by the
         // per-logic strategy preset (XOLVER_STRAT_PRESETS). enableRewrite is
         // logic-only here, so empty features suffice this early in the pipeline.
-        bool enableRewrite = (std::getenv("XOLVER_PP_REWRITE") != nullptr);
+        bool enableRewrite = (xolver::env::diag("XOLVER_PP_REWRITE"));
         if (!enableRewrite && std::getenv("XOLVER_STRAT_PRESETS")) {
             enableRewrite = selectStrategy(logic, LogicFeatures{}).enableRewrite;
         }
@@ -2004,7 +2151,7 @@ public:
             //       V := LHS_0 into other occurrences and drops the def.
             //       Targets leipzig/term-unsat-01's int polynomial chain.
             bool inlineSingleDefsInt =
-                std::getenv("XOLVER_PP_INLINE_SINGLE_DEFS_INT") != nullptr;
+                xolver::env::diag("XOLVER_PP_INLINE_SINGLE_DEFS_INT");
             SortId intSort = ir->intSortId();
             std::unordered_map<ExprId, ExprId> subst;
             std::vector<size_t> dropAtoms;
@@ -2570,7 +2717,7 @@ public:
             e && *e && *e != '0') {
             ZoharBwiAxiomEmitter zohar(*ir, boolSortId_);
             zohar.run();
-            if (std::getenv("XOLVER_NIA_ZOHAR_DIAG")) {
+            if (xolver::env::diag("XOLVER_NIA_ZOHAR_DIAG")) {
                 std::cerr << "[ZOHAR-PLUGIN] detected=" << zohar.detected()
                           << " axioms=" << zohar.axiomCount() << "\n";
             }
@@ -2643,7 +2790,7 @@ public:
                 // patterns where the SMT-LIB file declares QF_NIA but uses
                 // div/mod with an unbounded "auxiliary witness" divisor.
                 bool autoPromote =
-                    std::getenv("XOLVER_PP_AUTO_EUF_PROMOTE") != nullptr;
+                    xolver::env::diag("XOLVER_PP_AUTO_EUF_PROMOTE");
                 if (autoPromote) {
                     std::string upgraded = logic;
                     if (logic == "QF_NIA")  upgraded = "QF_UFNIA";
@@ -2821,7 +2968,7 @@ public:
         LogicFeatureDetector detector(*ir);
         LogicFeatures features = detector.detect();
         phase("detect-done");
-        if (std::getenv("XOLVER_DUMP_FINAL_ASSERTS")) {
+        if (xolver::env::diag("XOLVER_DUMP_FINAL_ASSERTS")) {
             int di = 0;
             for (ExprId aid : ir->assertions())
                 std::fprintf(stderr, "[FINAL-ASSERT %d] %s\n", di++,
@@ -2859,7 +3006,7 @@ public:
                 else if (logic == "QF_AUFLRA" || logic == "AUFLRA" ||
                          logic == "QF_ALRA" || logic == "ALRA") dg = "QF_LRA";
                 if (!dg.empty()) {
-                    if (std::getenv("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
+                    if (xolver::env::diag("XOLVER_ARRAY_NOARR_DOWNGRADE_DIAG"))
                         std::cerr << "[NOARR-DOWNGRADE] " << logic << " -> " << dg
                                   << " (no array/UF features)\n";
                     logic = dg;
@@ -2890,7 +3037,7 @@ public:
                 linDgEnabled = !(e[0] == '0' && e[1] == '\0');
             if (linDgEnabled && !features.hasNonlinear &&
                 (logic == "QF_NRA" || logic == "NRA")) {
-                if (std::getenv("XOLVER_NRA_LINEAR_DOWNGRADE_DIAG"))
+                if (xolver::env::diag("XOLVER_NRA_LINEAR_DOWNGRADE_DIAG"))
                     std::cerr << "[NRA-LINEAR-DOWNGRADE] " << logic
                               << " -> QF_LRA (no nonlinear terms)\n";
                 logic = "QF_LRA";
@@ -2917,7 +3064,7 @@ public:
                 linDgEnabled = !(e[0] == '0' && e[1] == '\0');
             if (linDgEnabled && !features.hasNonlinear &&
                 (logic == "QF_NIA" || logic == "NIA")) {
-                if (std::getenv("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
+                if (xolver::env::diag("XOLVER_NIA_LINEAR_DOWNGRADE_DIAG"))
                     std::cerr << "[NIA-LINEAR-DOWNGRADE] " << logic
                               << " -> QF_LIA (no nonlinear terms)\n";
                 logic = "QF_LIA";
@@ -3056,7 +3203,7 @@ public:
         {
             const char* eagerEnv = std::getenv("XOLVER_NIA_EAGER_BITBLAST");
             bool eagerOn = !(eagerEnv && eagerEnv[0] == '0');
-            if (std::getenv("NIA_EAGER_BB_GATE_DIAG")) {
+            if (xolver::env::diag("NIA_EAGER_BB_GATE_DIAG")) {
                 std::cerr << "[EAGER-GATE] eagerOn=" << eagerOn
                           << " logic=" << logic
                           << " hasRealVar=" << features.hasRealVar
@@ -3079,7 +3226,7 @@ public:
             // assertion. The verdict stays sound (validator-gated), but get-model
             // returns garbage, so until the export reconstructs pinned vars this
             // path must not run by default. QF_NIA EAGER is unaffected (proven).
-            bool eagerLia = std::getenv("XOLVER_NIA_EAGER_LIA") != nullptr;
+            bool eagerLia = xolver::env::diag("XOLVER_NIA_EAGER_LIA");
             bool logicOk = (logic == "QF_NIA" || logic == "NIA" ||
                             (eagerLia && (logic == "QF_LIA" || logic == "LIA")));
             if (eagerOn && logicOk &&
@@ -3180,7 +3327,7 @@ public:
         // override. Phase 1 leaves LIA flags at defaults and envFlags empty, so
         // this is behavior-neutral until the table is tuned / cross-agent flags
         // merge. envFlags use setenv(...,overwrite=0): explicit user env wins.
-        if (std::getenv("XOLVER_STRAT_PRESETS")) {
+        if (xolver::env::diag("XOLVER_STRAT_PRESETS")) {
             StrategyConfig sc = selectStrategy(logic, features);
             liaSafeMode = sc.liaSafeMode;
             liaUltraSafeMode = sc.liaUltraSafeMode;
@@ -3235,9 +3382,13 @@ public:
         // to the NIA solver if present. The NiaSolver consumes them through
         // its native ModEqConstReasoner pipeline stage (gated by the env flag
         // XOLVER_NIA_NATIVE_MODEQCONST inside the stage).
+        // Polymorphic handoff via the base TheorySolver interface (the hook is a
+        // no-op on every theory but the NIA solver) — keeps api/ decoupled from
+        // the concrete solver type. In NIA-MCSAT mode solverFor(NIA) is an MCSAT
+        // solver that inherits the no-op, exactly as the old concrete-typed cast
+        // returned null and skipped the handoff.
         if (!modEqConstFacts_.empty()) {
-            if (auto* nia = dynamic_cast<NiaSolver*>(
-                    theoryManager.solverFor(TheoryId::NIA))) {
+            if (auto* nia = theoryManager.solverFor(TheoryId::NIA)) {
                 nia->setModEqConstFacts(modEqConstFacts_);
             }
         }
@@ -3248,10 +3399,9 @@ public:
         // floor for the QF_DT blocksworld false-SAT residual class (deep
         // BMC ITE-chain violations that modelFullyDetermined accepts).
         // Pointer outlives the solver (originalAssertions_ is a member).
-        if (auto* eufBase = theoryManager.solverFor(TheoryId::EUF)) {
-            if (auto* euf = dynamic_cast<EufSolver*>(eufBase)) {
-                euf->setOriginalAssertions(&originalAssertions_);
-            }
+        // Polymorphic: the hook is a no-op on every theory but the EUF solver.
+        if (auto* euf = theoryManager.solverFor(TheoryId::EUF)) {
+            euf->setOriginalAssertions(&originalAssertions_);
         }
 
         // Connect propagator FIRST (required before addObservedVar)
@@ -3276,7 +3426,7 @@ public:
         registry.setContext(sat.get(), &atomizer);
         atomizer.setRegistry(&registry);
         atomizer.setBoolSortId(boolSortId_);
-        atomizer.setPgCnf(std::getenv("XOLVER_PP_PG_CNF") != nullptr);
+        atomizer.setPgCnf(xolver::env::diag("XOLVER_PP_PG_CNF"));
 
         if (logic == "QF_LIA" || logic == "LIA") {
             atomizer.setDefaultTheory(TheoryId::LIA);
@@ -3397,7 +3547,7 @@ public:
         // to a file (env XOLVER_NIA_FARKAS_DUMP=1 enables; output goes to
         // XOLVER_NIA_FARKAS_DUMP_FILE or /tmp/farkas_dump). Pure
         // diagnostic — no behavioral change to the solve.
-        if (std::getenv("XOLVER_NIA_FARKAS_DUMP")) {
+        if (xolver::env::diag("XOLVER_NIA_FARKAS_DUMP")) {
             const char* path = std::getenv("XOLVER_NIA_FARKAS_DUMP_FILE");
             if (!path || !*path) path = "/tmp/farkas_dump";
             FILE* fdump = std::fopen(path, "a");
@@ -3417,6 +3567,25 @@ public:
         }
         phase("atomize-done");
 
+        // Assumption-based unsat-core (checkSatAssuming). Atomize each assumption
+        // so its atom becomes theory-observed (atomize → registry → addObservedVar),
+        // and collect the literals to ASSUME — we do NOT add them as clauses, so
+        // they enter the solve as retractable CaDiCaL assumptions and failed() can
+        // report the minimized core on UNSAT. assumptionRoots_ is empty on a plain
+        // checkSat, so assumptionLits stays empty and the solve path is unchanged.
+        std::vector<SatLit> assumptionLits;
+        std::vector<Term> assumptionReportTerms;  // parallel: Term to report if lit fails
+        // API assumptions (checkSatAssuming): report the assumption itself.
+        for (ExprId aRoot : assumptionRoots_) {
+            assumptionLits.push_back(atomizer.atomize(aRoot, *ir));
+            assumptionReportTerms.push_back(Term(static_cast<uint32_t>(aRoot)));
+        }
+        // File-level indicators (:produce-unsat-cores): report the ORIGINAL assertion.
+        for (size_t k = 0; k < indicatorRoots_.size(); ++k) {
+            assumptionLits.push_back(atomizer.atomize(indicatorRoots_[k], *ir));
+            assumptionReportTerms.push_back(indicatorCoreTerms_[k]);
+        }
+
         // L7: build the relevancy graph over the asserted boolean skeleton and
         // attach it to the propagator to steer cb_decide toward live program
         // branches. Pure decision heuristic (never changes the verdict), so it
@@ -3425,7 +3594,7 @@ public:
             atomizer.buildRelevancyGraph(ir->assertions(), *ir, relEngine);
             propagator.setRelevancyEngine(&relEngine);   // wires value oracle
             relEngine.finalize();                        // seed roots relevant
-            if (std::getenv("XOLVER_RELEVANCY_DIAG")) {
+            if (xolver::env::diag("XOLVER_RELEVANCY_DIAG")) {
                 std::fprintf(stderr, "[RELEVANCY] nodes=%zu roots seeded; "
                              "relevantVarsSeen=%zu\n",
                              relEngine.totalNodes(), relEngine.relevantVarsSeen());
@@ -3583,7 +3752,7 @@ public:
             scanSeen.clear();
             for (ExprId r : originalAssertions_) scan(r, false);  // then shift vars
             if (probeVars.size() > 2) probeVars.resize(2);        // bound the grid
-            if (std::getenv("XOLVER_CMS_WIDTH_PROBE_DIAG"))
+            if (xolver::env::diag("XOLVER_CMS_WIDTH_PROBE_DIAG"))
                 std::fprintf(stderr, "[WPROBE] pinnedFuncs=%zu probeVars=%zu\n",
                              pinnedFuncs.size(), probeVars.size()), std::fflush(stderr);
 
@@ -3638,9 +3807,46 @@ public:
 
         auto solveT0 = std::chrono::steady_clock::now();
         auto result = cmsPrePassFound ? SatSolver::SolveResult::Sat
-                                      : sat->solve();
+                    : (assumptionLits.empty() ? sat->solve()
+                                              : sat->solve(assumptionLits));
         auto solveT1 = std::chrono::steady_clock::now();
         auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
+
+        // Extract the assumption-based unsat-core (the failed assumptions) WHILE
+        // CaDiCaL still holds the post-solve state, before disconnectPropagator()
+        // below. getFailedAssumptions() returns a subset of the exact lits we
+        // passed; map each back to its assumption root Term. An empty failed set
+        // (UNSAT proven without the assumptions) leaves the conservative full-set
+        // core seeded by checkSatAssuming. Sound, possibly non-minimal.
+        // Best-effort core MINIMIZATION via failed(), RESTRICTED to theories where
+        // it is validated-reliable. failed() reports the assumptions used in the
+        // boolean conflict; for single-sort linear / UF / array logics this is a
+        // sound core (corpus-validated by tools/check_unsat_core.py — 0 insufficient
+        // across lia/lra/euf). But for NONLINEAR or MIXED int/real reasoning, the
+        // theory can derive a conflict whose explanation under-reports the
+        // contributing assertions (NIA substituting x=0; mixed-sort atom desync),
+        // yielding an INSUFFICIENT core — and Xolver's theory solvers are
+        // incremental, so an in-context re-solve cannot validate it (stale tableau/
+        // e-graph). There we KEEP the conservative full set seeded before the solve
+        // (always a valid core — the problem is UNSAT); reliable minimal cores for
+        // those logics need proof tracking (Track C2) or external deletion
+        // (check_unsat_core.py --minimize). Soundness-first: never emit a core we
+        // cannot stand behind.
+        if (!assumptionLits.empty() && result == SatSolver::SolveResult::Unsat &&
+            !features.hasNonlinear && !features.hasMixedIntReal) {
+            std::vector<SatLit> failed = sat->getFailedAssumptions();
+            std::vector<Term> core;
+            core.reserve(failed.size());
+            for (SatLit fl : failed) {
+                for (size_t k = 0; k < assumptionLits.size(); ++k) {
+                    if (assumptionLits[k] == fl) {
+                        core.push_back(assumptionReportTerms[k]);
+                        break;
+                    }
+                }
+            }
+            if (!core.empty()) lastUnsatCore_ = std::move(core);
+        }
 
         // Capture boolean VARIABLE values from the SAT assignment WHILE the
         // model is still live (disconnecting the propagator below invalidates
@@ -3975,12 +4181,12 @@ public:
                    L == "QF_AUFLIA" || L == "AUFLIA" || L == "QF_AUFLRA" || L == "AUFLRA";
         };
         bool arrayCombSatFloor = features.hasArray && isCombArrayLogic(logic) &&
-                                 std::getenv("XOLVER_ARRAY_COMB_VALIDATE_SAT") != nullptr;
+                                 xolver::env::diag("XOLVER_ARRAY_COMB_VALIDATE_SAT");
         bool validateSat = niaSatFloor || divModSatFloor || realDivPurifySatFloor ||
                            arrayCombSatFloor ||
-                           (std::getenv("XOLVER_PP_STRICT_VALIDATION") != nullptr) ||
+                           (xolver::env::diag("XOLVER_PP_STRICT_VALIDATION")) ||
                            (features.hasNonlinear &&
-                            std::getenv("XOLVER_PP_VALIDATE_NONLINEAR_SAT") != nullptr);
+                            xolver::env::diag("XOLVER_PP_VALIDATE_NONLINEAR_SAT"));
         if (ret == Result::Sat && validateSat) {
             if (!lastModel_) lastModel_ = theoryManager.getModel();
             // Theory models do not track pure-boolean VARIABLES (those values
@@ -4223,11 +4429,65 @@ void Solver::assertFormula(Term t) {
     pImpl->sourcePath_.clear();
 }
 
+// #19/#49 native-crash firewall: libpoly / GMP can SIGSEGV / SIGABRT / SIGFPE deep
+// in real-algebraic computation on degenerate inputs (a class the C++ try/catch
+// below cannot intercept — signals are not exceptions). When enabled, a synchronous
+// crash during the solve siglongjmps back and the verdict becomes Unknown (SOUND —
+// an incomplete answer, never a wrong one), preserving the process so the
+// regression runner / incremental API survive a single bad case instead of dying.
+// The signal is synchronous, so it is delivered to the faulting (solve) thread; the
+// jmp_buf + active flag are thread_local so the handler resolves to that thread's
+// recovery point. Default-OFF: XOLVER_SIGNAL_FIREWALL=1 to enable.
+namespace {
+thread_local sigjmp_buf g_solveCrashJmp;
+thread_local volatile sig_atomic_t g_solveCrashActive = 0;
+void solveCrashHandler(int sig) {
+    if (g_solveCrashActive) {
+        g_solveCrashActive = 0;
+        siglongjmp(g_solveCrashJmp, sig);
+    }
+    // Not inside a guarded solve — restore default disposition and re-raise so a
+    // genuine crash outside the firewall is NOT masked.
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
+}
+}  // namespace
+
 Result Solver::checkSat() {
     // Start the global solve wall-clock so per-engine budgets can scale to the
     // time remaining (P0-A). Unset / 0 => no deadline => no behavior change.
     wall::beginSolve(env::paramLong("XOLVER_WALLCLOCK_MS", 0));
     Result r;
+    // Non-static: re-read per solve so per-call control works (one getenv/solve is
+    // negligible) and so a unit test can toggle the firewall between checkSat calls.
+    const bool sigFirewall = env::diag("XOLVER_SIGNAL_FIREWALL");
+    struct sigaction oldSegv{}, oldAbrt{}, oldFpe{};
+    bool fwInstalled = false;
+    if (sigFirewall) {
+        if (sigsetjmp(g_solveCrashJmp, 1) != 0) {
+            // Recovered from a native crash mid-solve.
+            if (fwInstalled) {
+                sigaction(SIGSEGV, &oldSegv, nullptr);
+                sigaction(SIGABRT, &oldAbrt, nullptr);
+                sigaction(SIGFPE, &oldFpe, nullptr);
+            }
+            g_solveCrashActive = 0;
+            pImpl->lastUnknownReason_ =
+                "native crash (signal) during solve — firewalled to Unknown";
+            pImpl->lastModel_.reset();
+            wall::endSolve();
+            return Result::Unknown;
+        }
+        struct sigaction sa{};
+        sa.sa_handler = solveCrashHandler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = SA_NODEFER;
+        sigaction(SIGSEGV, &sa, &oldSegv);
+        sigaction(SIGABRT, &sa, &oldAbrt);
+        sigaction(SIGFPE, &sa, &oldFpe);
+        fwInstalled = true;
+        g_solveCrashActive = 1;
+    }
     // Top-level bad_alloc firewall (iter#18, pre-existing class). A pathological
     // input (e.g. AProVE aproveSMT4461031801876451415: 16 vars + nested
     // assertion) can OOM deep in atomization / theory / SAT layers before any
@@ -4238,6 +4498,13 @@ Result Solver::checkSat() {
     // bad_alloc — regardless of which inner stage allocated past the
     // process limit — surfaces as a clean Unknown verdict.
     try {
+        // Test-only hook to exercise the native-crash firewall (#19/#49). Gated by
+        // an env var no production path sets; raises a synchronous SIGSEGV inside
+        // the guarded region so the firewall's recover-to-Unknown can be tested.
+        if (env::diag("XOLVER_TEST_FORCE_CRASH")) {
+            volatile int* p = nullptr;
+            *p = 1;  // SIGSEGV
+        }
         int ebsRounds = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT", 0);
         if (ebsRounds > 0 && !std::getenv("XOLVER_STRAT_PORTFOLIO")) {
             int budget = env::paramInt("XOLVER_ESCALATING_BOUNDED_SAT_BUDGET_MS", 15000);
@@ -4273,16 +4540,45 @@ Result Solver::checkSat() {
         pImpl->lastModel_.reset();
         r = Result::Unknown;
     }
+    if (fwInstalled) {
+        g_solveCrashActive = 0;
+        sigaction(SIGSEGV, &oldSegv, nullptr);
+        sigaction(SIGABRT, &oldAbrt, nullptr);
+        sigaction(SIGFPE, &oldFpe, nullptr);
+    }
     wall::endSolve();
     return r;
 }
 
 Result Solver::checkSatAssuming(std::vector<Term> assumptions) {
     pImpl->lastAssumptions_ = assumptions;
-    push();
-    for (Term a : assumptions) {
-        assertFormula(a);
+    // Sound fallback core: until the SAT layer reports a minimized subset, the
+    // whole assumption set is a valid (if non-minimal) core.
+    pImpl->lastUnsatCore_ = assumptions;
+
+    // Preferred path (hard assertions present): pass the assumptions to the SAT
+    // core as real assumption LITERALS rather than asserting them. Each
+    // assumption atom is observed by the theory via atomize, CaDiCaL assumes its
+    // literal, and on UNSAT failed() yields the MINIMIZED core (see
+    // checkSatInternal). Not mutating the assertion list means lowering can never
+    // rewrite an assumption, and getUnsatCore() returns the true failing subset.
+    const bool haveHardAssertions = pImpl->ir && !pImpl->ir->assertions().empty();
+    if (haveHardAssertions) {
+        pImpl->assumptionRoots_.clear();
+        pImpl->assumptionRoots_.reserve(assumptions.size());
+        for (Term a : assumptions) pImpl->assumptionRoots_.push_back(a.id());
+        Result r = checkSat();
+        pImpl->assumptionRoots_.clear();
+        return r;
     }
+
+    // Degenerate path (no hard assertions): the SAT-assumption route would have
+    // nothing to drive theory setup / would short-circuit on the empty assertion
+    // set. Fall back to the original behavior — assert the assumptions as
+    // formulas so the worker reaches a real solve — giving the correct verdict
+    // with the conservative full-set core (no minimization, but no regression).
+    push();
+    for (Term a : assumptions) assertFormula(a);
     Result r = checkSat();
     pop();
     return r;
@@ -4366,16 +4662,72 @@ Term Solver::getValue(Term t) {
     return Term{};
 }
 std::vector<Term> Solver::getUnsatCore() const {
-    // TODO: proper unsat core extraction using SAT solver assumptions.
-    // For now, return the last assumptions passed to checkSatAssuming.
     if (!pImpl) return {};
-    return pImpl->lastAssumptions_;
+    // Assumption-based core: the minimized subset of the checkSatAssuming
+    // assumptions that CaDiCaL's failed() reported as necessary for UNSAT
+    // (falls back to the full assumption set when no SAT-level minimization was
+    // available, e.g. UNSAT proven in preprocessing). Sound, possibly
+    // non-minimal. Meaningful only after checkSatAssuming() returned Unsat.
+    return pImpl->lastUnsatCore_;
+}
+
+bool Solver::unsatCoreRequested() const {
+    if (!pImpl) return false;
+    auto it = pImpl->options.find("produce-unsat-cores");
+    if (it != pImpl->options.end() && it->second.kind == OptionValue::Bool &&
+        it->second.b)
+        return true;
+    if (!pImpl->parser) return false;
+    auto opts = pImpl->parser->getOptions();
+    return opts && opts->get_unsat_core;
+}
+
+void Solver::dumpUnsatCore(std::ostream& os) const {
+    // SMT-LIB get-unsat-core response shape: a parenthesized list. We emit the
+    // ORIGINAL assertions that form the core as SMT-LIB terms (Xolver gates each
+    // assertion with an indicator; :named-name output is a future enhancement
+    // needing the parser to expose its named-assertion map).
+    os << "(";
+    if (pImpl && pImpl->ir) {
+        const auto& core = pImpl->lastUnsatCore_;
+        for (size_t i = 0; i < core.size(); ++i) {
+            os << (i ? " " : "") << dumpExprToSMT2(core[i].id(), *pImpl->ir);
+        }
+    }
+    os << ")\n";
 }
 
 bool Solver::modelRequested() const {
     if (!pImpl || !pImpl->parser) return false;
     auto opts = pImpl->parser->getOptions();
     return opts && opts->get_model;
+}
+
+std::vector<Solver::ScriptResponseCommand> Solver::scriptResponseCommands() const {
+    std::vector<ScriptResponseCommand> out;
+    if (!pImpl || !pImpl->parser) return out;
+    using K = ScriptResponseCommand::Kind;
+    const auto& cmds = pImpl->parser->getScript().commands();
+    for (size_t i = 0; i < cmds.size(); ++i) {
+        const auto& cmd = cmds[i];
+        switch (cmd.type) {
+            case SOMTParser::CMD_TYPE::CT_ECHO:
+                out.push_back({K::Echo, cmd.keyword, i}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_INFO:
+                out.push_back({K::GetInfo, cmd.keyword, i}); break;
+            case SOMTParser::CMD_TYPE::CT_CHECK_SAT:
+            case SOMTParser::CMD_TYPE::CT_CHECK_SAT_ASSUMING:
+                out.push_back({K::CheckSat, "", i}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_VALUE:
+                out.push_back({K::GetValue, "", i}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_MODEL:
+                out.push_back({K::GetModel, "", i}); break;
+            case SOMTParser::CMD_TYPE::CT_GET_ASSIGNMENT:
+                out.push_back({K::GetAssignment, "", i}); break;
+            default: break;
+        }
+    }
+    return out;
 }
 
 bool Solver::modelMatchesOriginal() const {
@@ -4423,6 +4775,35 @@ std::string formatModelValue(SortKind kind, const std::string& raw) {
     return neg ? ("(- " + body + ")") : body;
 }
 } // namespace
+
+std::string Solver::getValueResponse(size_t scriptIndex) const {
+    if (!pImpl || !pImpl->parser || !pImpl->lastModel_) return {};
+    const auto& cmds = pImpl->parser->getScript().commands();
+    if (scriptIndex >= cmds.size()) return {};
+    const auto& cmd = cmds[scriptIndex];
+    if (cmd.type != SOMTParser::CMD_TYPE::CT_GET_VALUE) return {};
+    const auto& model = *pImpl->lastModel_;
+    std::string out = "(";
+    for (const auto& t : cmd.value_terms) {
+        if (!t) return {};
+        std::string val;
+        if (t->isVBool() || t->isVInt() || t->isVReal()) {
+            auto it = model.assignments.find(t->getName());
+            if (it == model.assignments.end()) return {};  // unassigned -> bail
+            SortKind sk = t->isVBool() ? SortKind::Bool
+                        : t->isVInt()  ? SortKind::Int
+                                       : SortKind::Real;
+            val = formatModelValue(sk, it->second);
+        } else if (t->isConst()) {
+            val = SOMTParser::dumpSMTLIB2(t);  // a literal evaluates to itself
+        } else {
+            return {};  // compound / unsupported term -> emit nothing (no wrong value)
+        }
+        out += "(" + SOMTParser::dumpSMTLIB2(t) + " " + val + ")";
+    }
+    out += ")";
+    return out;
+}
 
 void Solver::dumpModel(std::ostream& os) const {
     // SMT-LIB 2.6 get-model response: a bare list of define-fun bindings,
@@ -4764,6 +5145,30 @@ void Solver::dumpSMT2(std::ostream& os) {
             os << dumpExprToSMT2(aid, *pImpl->ir) << "\n";
         }
     }
+}
+
+void Solver::dumpFeatures(std::ostream& os) const {
+    if (!pImpl || !pImpl->ir) { os << "{}\n"; return; }
+    const CoreIr& ir = *pImpl->ir;
+    LogicFeatures f = LogicFeatureDetector(ir).detect();
+    size_t nVars = 0;
+    for (ExprId id = 0; id < static_cast<ExprId>(ir.size()); ++id)
+        if (ir.get(id).kind == Kind::Variable) ++nVars;
+    auto b = [](bool v) { return v ? "true" : "false"; };
+    os << "{\"logic\":\"" << pImpl->logic << "\""
+       << ",\"asserts\":" << ir.assertions().size()
+       << ",\"vars\":" << nVars
+       << ",\"nodes\":" << ir.size()
+       << ",\"nonlinear\":" << b(f.hasNonlinear)
+       << ",\"mixed_int_real\":" << b(f.hasMixedIntReal)
+       << ",\"int\":" << b(f.hasInt)
+       << ",\"real\":" << b(f.hasReal)
+       << ",\"array\":" << b(f.hasArray)
+       << ",\"uf\":" << b(f.hasUF)
+       << ",\"bv\":" << b(f.hasBV)
+       << ",\"datatype\":" << b(f.hasDatatype)
+       << ",\"quantifier\":" << b(f.hasQuantifier)
+       << "}\n";
 }
 
 } // namespace xolver

@@ -29,6 +29,13 @@ public:
     void setNonConvexMode(bool enabled) { nonConvexMode_ = enabled; }
     bool isNonConvexMode() const { return nonConvexMode_; }
 
+    // (#77) Datatypes present (EUF carries them; no separate TheoryId). Scopes
+    // the UF-over-arith congruence arrangement OUT of datatype logics, where the
+    // arg bridge + internal-term arrangement interact badly with the DtReasoner
+    // (introduces datatype false-sats). Set by the datatype build functions.
+    void setHasDatatypes(bool v) { hasDatatypes_ = v; }
+    bool hasDatatypes() const { return hasDatatypes_; }
+
     void setArrangementComplete(bool v) { arrangementComplete_ = v; }
     bool isArrangementComplete() const { return arrangementComplete_; }
 
@@ -100,11 +107,15 @@ public:
 private:
     std::vector<std::unique_ptr<TheorySolver>> solvers_;
     std::unordered_map<TheoryId, TheorySolver*> solverByTheory_;
+    // Capacity hint for collectActiveLinearConstraints: the active set is stable across
+    // checks, so reserving last-call's size avoids per-call push_back reallocations.
+    mutable size_t activeLinearCountHint_ = 0;
 
     bool combinationMode_ = false;
     bool nonConvexMode_ = false;
     bool arrangementComplete_ = true;
     bool arrayCombinationMode_ = false;
+    bool hasDatatypes_ = false;
     // Stable dedup of arrangement splits already emitted (per canonical pair
     // key). Bounded by #shared-scalar pairs -> guarantees termination.
     std::unordered_set<uint64_t> emittedArrangementSplits_;
@@ -199,6 +210,14 @@ private:
     // unsure), sufficient on the disequality side (a missed disequality only
     // keeps the floor) -> sound for the certificate, harmless for arrangement.
     bool sharedArgsArrangeable(SharedTermId a, SharedTermId b) const;
+
+    // #77 companion: are two UF-application RESULT shared terms value-APART in
+    // the current arith model (so the apps cannot be congruent under it)? Used to
+    // relax the arrangement-split filter for apps forced apart by ARITH (f(a) <
+    // f(b)) rather than an EUF (distinct app1 app2). Split-only — sound by
+    // construction (the split lets the search resolve breakability), never used
+    // for the certificate floor.
+    bool sharedResultsApart(SharedTermId a, SharedTermId b) const;
 
     void ensureSnapshotForLevel(int level);
     LevelSnapshot& snapshotForLevel(int level);

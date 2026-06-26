@@ -125,7 +125,7 @@ long fwCapBits() {
 }
 bool fwTrips(long estBits, const char* where) {
     if (estBits <= fwCapBits()) return false;
-    static const bool diag = std::getenv("XOLVER_NRA_LIBPOLY_FIREWALL_DIAG") != nullptr;
+    static const bool diag = xolver::env::diag("XOLVER_NRA_LIBPOLY_FIREWALL_DIAG");
     if (diag) {
         std::cerr << "[LIBPOLY-FIREWALL] refuse " << where << " est=" << estBits
                   << "b > cap=" << fwCapBits() << "b (heap-corruption guard)\n";
@@ -1787,7 +1787,7 @@ RootSet LibpolyBackend::isolateRealRootsViaNorm(
         if (prefix.values[i].isAlgebraic()) { ++algCount; algIdx = static_cast<int>(i); }
     }
     if (algCount != 1) {                 // multi-extension / none → tower path takes over
-        static const bool kTd = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
+        static const bool kTd = xolver::env::diag("XOLVER_NRA_LAZARD_DIAG");
         if (kTd) std::cerr << "[LAZVAL] norm bail=algCount=" << algCount << std::endl;
         return empty;
     }
@@ -1995,7 +1995,7 @@ RootSet LibpolyBackend::isolateRealRootsViaTower(
 
     // 2. Norm over Q eliminates the generators; isolate its roots via the SAFE
     //    rational univariate path (never libpoly's crash-prone algebraic path).
-    static const bool kDiag = std::getenv("XOLVER_NRA_LAZARD_DIAG") != nullptr;
+    static const bool kDiag = xolver::env::diag("XOLVER_NRA_LAZARD_DIAG");
     double tN0 = nowMs();
     auto nr = towerNorm(p1, mainVar, ctx, 12, kernel_);   // libpoly PSC for deep towers
     tNormMs += nowMs() - tN0;

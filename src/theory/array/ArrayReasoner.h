@@ -91,6 +91,21 @@ public:
     // select terms are added, never new assertions.
     void completeStoreSelects(std::deque<PendingMerge>& outQueue);
 
+    // #75 (XOLVER_AX_STORE_NOOP, default-ON; =0 to disable): store-store no-op merge. When two
+    // stores of the SAME base with DISTINCT CONSTANT indices land in one e-graph
+    // class (store(c,i,v) = store(c,j,w), i!=j), both writes are no-ops
+    // (v=c[i], w=c[j]), so each store equals the base c. Eagerly merge store=base
+    // at `mergeLevel` (= currentLevel_) so backtrack removes it; the merge reason
+    // is ArrayRow2Cond with an EMPTY lit (i!=j is a constant tautology -> zero
+    // literals) and argPairs={store1,store2} (the justification recurses on their
+    // class membership). This lets UF congruence close an INDIRECT disequality
+    // such as g(c)!=g(a) that the extensionality lemma never triggers between the
+    // two arrays — the QF_AUFLRA a=store(c,0,v) ^ a=store(c,2,w) ^ g(c)!=g(a)
+    // false-sat. Uses the proven Row2Cond merge path (vs the mkLemma path, which
+    // did not drive the merge).
+    void enqueueStoreNoopMerges(int mergeLevel, std::deque<PendingMerge>& outQueue);
+    bool storeNoopEnabled() const { return storeNoopEnabled_; }
+
     // Produce one Row2 or Extensionality lemma if a fresh instance exists.
     // Returns the lemma literals (SAT polarity), or empty if none pending.
     // `disequalities` are the currently-active array-sort disequalities the
@@ -103,9 +118,15 @@ public:
     // instead of the internal row2Done_. The L13 Standard-effort split passes its
     // OWN set so it does not mark row2Done_ and starve the Full-effort path
     // (the ax_007 regression). Default null = original behavior (uses row2Done_).
+    // `onlyViolated` (#85 refinement): return a Row2 instance ONLY if its
+    // conclusion is currently FALSE in the e-graph (select(store,j) and select(a,j)
+    // not merged) — i.e. the candidate model actually violates it. Lets the
+    // Full-effort sat-gate re-assert the exact missed axiom that floors the model,
+    // forcing convergence instead of accepting an array-inconsistent model.
     std::optional<std::vector<SatLit>>
     instantiateLemma(const std::vector<ArrayDiseq>& disequalities,
-                     std::unordered_set<uint64_t>* dedupOverride = nullptr);
+                     std::unordered_set<uint64_t>* dedupOverride = nullptr,
+                     bool onlyViolated = false);
 
     // Collect the SharedTermIds of all array INDEX terms (the index arg of every
     // select/store). Used by the combination layer to scope deduced-equality
@@ -186,6 +207,27 @@ public:
     bool row2DiseqEnabled() const { return row2DiseqEnabled_; }
 private:
     bool row2DiseqEnabled_ = false;
+    bool storeNoopEnabled_ = false;  // #75 store-store no-op merge (set default-ON in ctor)
+
+    // #86 (XOLVER_AX_STORECOMM_EXT, default-OFF): constant-index store-tower
+    // extensionality. For an array diseq A!=B where A and B are store towers over
+    // a COMMON base with ALL-CONSTANT write indices, A and B agree at every index
+    // OUTSIDE the union of their write indices (both = base there), so
+    //   A != B  ==>  exists c in (writeIdx(A) ∪ writeIdx(B)): select(A,c) != select(B,c).
+    // Emit the decidable clause  (A=B) ∨ ⋁_c (select(A,c) != select(B,c)). Each read
+    // over a constant index reduces via Row2-const, so the SAT solver picks a
+    // concrete distinguishing index — pinning the model the lazy variable-witness
+    // extensionality cannot (the QF_AUFLIA storecomm class). Sound: a valid
+    // extensionality instance for same-base constant-index towers (never adds/removes
+    // models). Bounded: fires once per (A,B) diseq, |union| constant reads.
+    bool storecommExtEnabled_ = false;
+    std::unordered_set<uint64_t> storecommExtDone_;
+    // Walk arr's store tower (descend store members in the e-graph class). Appends
+    // each write-index TERM to idxOut and sets baseOut to the bottom non-store
+    // array. Returns true iff every write index is a numeric/bool CONSTANT (so the
+    // const-index extensionality bound is valid); false otherwise (caller skips).
+    bool collectConstStoreTower(EufTermId arr, std::vector<EufTermId>& idxOut,
+                                EufTermId& baseOut) const;
 
     // Read-over-write completion (see completeStoreSelects). Default ON: needed
     // for QF_AX/QF_ALIA soundness (read2/read5 false-SAT). XOLVER_AX_NO_SELECT_COMPLETE

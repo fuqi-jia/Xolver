@@ -96,6 +96,15 @@ static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth
             case Kind::Unknown:
                 os << "???";
                 break;
+            case Kind::Div: {
+                // The IR uses one Div kind for both; real division prints as "/",
+                // integer division as "div" — disambiguate by the result sort
+                // (kindToSMT2 has no sort context and would always say "div").
+                auto sk = ir.sortKind(e.sort);
+                os << "(" << (sk && *sk == SortKind::Real ? "/" : "div");
+                expandChildren();
+                break;
+            }
             default: {
                 const char* op = kindToSMT2(e.kind);
                 if (!op || !*op) {
