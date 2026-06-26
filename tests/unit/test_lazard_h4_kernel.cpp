@@ -16,7 +16,7 @@
 
 #include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/arith/kernel/poly/RationalPolynomial.h"
-#include "theory/arith/logics/nra/projection/LazardProjectionClosure.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionClosure.h"
 
 using namespace xolver;
 

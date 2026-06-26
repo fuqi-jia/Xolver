@@ -180,7 +180,7 @@ add_subdirectory(src)
 
 # Closed-source pro engines: built only when requested AND the (gitignored-in-
 # release) src/pro tree is present. The open core never references src/pro, so the
-# open build is whole without it (enforced by scripts/check_architecture.sh).
+# open build is whole without it (enforced by tools/governance/check_architecture.sh).
 if(XOLVER_BUILD_PRO AND EXISTS "${CMAKE_SOURCE_DIR}/src/pro/CMakeLists.txt")
     add_subdirectory(src/pro)
     message(STATUS "Pro engines: building from src/pro (XOLVER_BUILD_PRO=ON)")

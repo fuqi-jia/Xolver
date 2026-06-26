@@ -15,7 +15,7 @@
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/logics/nra/backend/LibpolyBackend.h"
 #include "theory/arith/logics/nia/farkas/LeafFarkasLia.h"
-#include "theory/arith/logics/nra/nla/NlaCutsRunner.h"           // Stage 3 Phase C-3
+#include "theory/arith/logics/nra/reasoners/NlaCutsRunner.h"           // Stage 3 Phase C-3
 #include "theory/arith/kernel/poly/RationalPolynomial.h"          // Stage 3 Phase C-3
 #endif
 #include "theory/arith/kernel/linear/LinearExpr.h"

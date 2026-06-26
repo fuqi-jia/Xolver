@@ -4,7 +4,7 @@
 #include "util/EnvParam.h"
 
 #include "theory/arith/logics/nra/cac/SingleCellProjection.h"
-#include "theory/arith/logics/nra/projection/SubresultantChain.h"   // clearPscChainCache (#50)
+#include "theory/arith/logics/nra/lazard/SubresultantChain.h"   // clearPscChainCache (#50)
 
 #include <algorithm>
 #include <cstdlib>

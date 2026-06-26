@@ -1,7 +1,7 @@
 #include "theory/arith/logics/nra/cac/SingleCellProjection.h"
 #include "util/EnvParam.h"
 
-#include "theory/arith/logics/nra/projection/LazardProjectionOperator.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionOperator.h"
 
 #include <algorithm>
 #include <cstdlib>

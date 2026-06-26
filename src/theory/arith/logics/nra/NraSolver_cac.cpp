@@ -13,7 +13,7 @@
 #include "theory/arith/logics/nra/StructuralIntegerProbe.h"          // XOLVER_NRA_INT_PROBE
 #include "theory/arith/logics/nra/NraSquareSolver.h"                   // algebraic square-cascade
 #include "theory/arith/logics/nra/reasoners/NraLocalSearch.h"        // XOLVER_NRA_LOCALSEARCH Phase NRA-LS-A
-#include "theory/arith/logics/nra/search/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
+#include "theory/arith/logics/nra/core/HybridPartitionStats.h"     // Task NRA-HYB Step 1 partition stats
 #include "theory/arith/logics/nra/simplex/CertifiedSimplexFacts.h"   // OSF-CDCAC P1
 #include "theory/arith/logics/nra/simplex/NraLinearExtractor.h"      // §4.2 classifyConstraints
 #include "theory/arith/logics/nra/simplex/SimplexTableauFacts.h"     // §4.2 linearSubsetUnsat
@@ -29,7 +29,7 @@
 #include "theory/arith/logics/nra/engine/ReasonManager.h"         // XOLVER_NRA_PREELIM conflict reasons
 #ifdef XOLVER_HAS_LIBPOLY
 #include "theory/arith/logics/nra/backend/LibpolyBackend.h"       // XOLVER_NRA_PREELIM algebra backend
-#include "theory/arith/logics/nra/nla/NlaCutsRunner.h"             // XOLVER_NRA_NLA_CUTS Phase C-2 hook
+#include "theory/arith/logics/nra/reasoners/NlaCutsRunner.h"             // XOLVER_NRA_NLA_CUTS Phase C-2 hook
 #endif
 #include <cstdlib>
 #include <set>

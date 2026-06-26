@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 #include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/projection/ProjectionPolicy.h"
+#include "theory/arith/logics/nra/lazard/ProjectionPolicy.h"
 #include "theory/arith/logics/nra/preprocess/EquationalConstraintManager.h"
 #include "theory/arith/logics/nra/preprocess/NullificationAnalyzer.h"
 

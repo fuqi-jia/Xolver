@@ -12,7 +12,7 @@
 // atom that is evaluable to a constant under the current trail.
 
 #include "experimental/mcsat/MCSatTrail.h"
-#include "theory/arith/logics/nra/nlsat/NlsatEngine.h"
+#include "theory/arith/logics/nra/engine/NlsatEngine.h"
 #include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include "util/RealValue.h"

@@ -1,5 +1,5 @@
 #include "theory/arith/logics/nra/preprocess/EquationalConstraintManager.h"
-#include "theory/arith/logics/nra/projection/ProjectionPolicy.h"
+#include "theory/arith/logics/nra/lazard/ProjectionPolicy.h"
 #include "theory/arith/logics/nra/backend/AlgebraBackend.h"
 
 namespace xolver {
