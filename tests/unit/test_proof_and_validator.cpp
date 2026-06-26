@@ -38,7 +38,7 @@ TEST_CASE("Proof: recordTheoryLemma stores multiple lemmas") {
     CHECK_NOTHROW(m.recordTheoryLemma(c2, "EUF-lemma"));
     auto alethe = m.exportAlethe();
     // Skeleton may return empty or placeholder; at minimum it should not crash.
-    CHECK_NOTHROW(alethe.length());
+    CHECK_NOTHROW((void)alethe.length());
 }
 
 TEST_CASE("Proof: setSatProofFile is settable to empty and non-empty path") {

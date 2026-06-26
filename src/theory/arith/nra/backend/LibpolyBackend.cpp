@@ -1662,7 +1662,7 @@ int LibpolyBackend::countRealRootsInInterval(UniPolyId h, const mpq_class& lo, c
     // instead of killing the process. SIGSEGV = bad read (heap intact) so longjmp
     // recovery is safe; this path is NOT nested inside the isolation firewall, so
     // the single global jmp-buf is not clobbered.
-    int rc = -1;
+    volatile int rc = -1;
     g_oldSegvHandler = std::signal(SIGSEGV, libpolyCrashHandler);
     g_oldFpeHandler  = std::signal(SIGFPE,  libpolyCrashHandler);
     g_libpolyCrashRecoveryActive = 1;

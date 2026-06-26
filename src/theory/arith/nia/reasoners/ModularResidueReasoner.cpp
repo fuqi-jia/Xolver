@@ -684,7 +684,7 @@ NiaReasoningResult ModularResidueReasoner::run(
                         // a_poly_lhs: the lhs `a` polynomial. From `a + b*q*sign_q + r*sign_r = 0`:
                         // (with sign_r being rt.coefficient sign) → a = -(b*q*sign_q + r*sign_r),
                         // but `a_terms` are EXACTLY the monomials of `a` already, so just sum.
-                        PolyId aPolyLhs = buildPolyFromTerms(aTerms);
+                        [[maybe_unused]] PolyId aPolyLhs = buildPolyFromTerms(aTerms);
                         // Note: `aPolyLhs` here is the actual `a` expression in
                         // the equation `a + (-b*q -r*sign_r? or +b*q +r*sign_r)=0`.
                         // Because we MOVE r and q*b to the other side: a = sign_r * (-r) +

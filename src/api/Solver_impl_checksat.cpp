@@ -2459,7 +2459,7 @@ Result Solver::Impl::checkSatInternal() {
                     : (assumptionLits.empty() ? sat->solve()
                                               : sat->solve(assumptionLits));
         auto solveT1 = std::chrono::steady_clock::now();
-        auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
+        [[maybe_unused]] auto solveDurMs = std::chrono::duration_cast<std::chrono::microseconds>(solveT1 - solveT0).count() / 1000.0;
 
         // Extract the assumption-based unsat-core (the failed assumptions) WHILE
         // CaDiCaL still holds the post-solve state, before disconnectPropagator()
