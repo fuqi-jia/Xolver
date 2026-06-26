@@ -7,8 +7,8 @@
 // scope/level tracking, and the main decide/propagate/conflict loop;
 // algebraic decisions are delegated to an MCSatEngine subclass:
 //
-//   NRA (real values, libpoly cells)   → src/theory/arith/nra/nlsat/NlsatEngine
-//   NIA (integer values, modular etc.) → src/theory/arith/nia/mcsat/NiaMcsatEngine
+//   NRA (real values, libpoly cells)   → src/theory/arith/logics/nra/nlsat/NlsatEngine
+//   NIA (integer values, modular etc.) → src/theory/arith/logics/nia/mcsat/NiaMcsatEngine
 //
 // Soundness floor (mirrors docs/agents/NLSAT-plan.md §15):
 //   - A theory-decision value is never reported as a SAT literal.
@@ -19,7 +19,7 @@
 #include "experimental/mcsat/MCSatEngine.h"
 #include "experimental/mcsat/MCSatTrail.h"
 #include "experimental/search/LocalSearchAdvisor.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/core/TheorySolver.h"
 #include <memory>
 

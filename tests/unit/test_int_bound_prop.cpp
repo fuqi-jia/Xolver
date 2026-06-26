@@ -5,7 +5,7 @@
 //       (no over-tightening).
 // The brute-force fuzz checks BOTH exhaustively over a small box (no z3 needed).
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/IntBoundProp.h"
+#include "theory/arith/logics/nia/reasoners/IntBoundProp.h"
 
 #include <cstdlib>
 #include <functional>

@@ -16,8 +16,8 @@
 // input — the exact shape that corrupts the heap without the guard.
 
 #include <doctest/doctest.h>
-#include "theory/arith/nra/backend/LibpolyBackend.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <gmpxx.h>
 
 using namespace xolver;

@@ -1,5 +1,5 @@
 #include "experimental/mcsat/McsatSolver.h"
-#include "theory/arith/nra/backend/AlgebraBackend.h"  // complete AlgebraBackend for unique_ptr dtor
+#include "theory/arith/logics/nra/backend/AlgebraBackend.h"  // complete AlgebraBackend for unique_ptr dtor
 
 namespace xolver {
 

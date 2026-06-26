@@ -7,8 +7,8 @@
 // independent of the high-level strict-validation gate.
 
 #include <doctest/doctest.h>
-#include "theory/arith/idl/IdlSolver.h"
-#include "theory/arith/rdl/RdlSolver.h"
+#include "theory/arith/logics/dl/IdlSolver.h"
+#include "theory/arith/logics/dl/RdlSolver.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "expr/types.h"
 #include <gmpxx.h>

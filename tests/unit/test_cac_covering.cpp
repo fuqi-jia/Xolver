@@ -1,10 +1,10 @@
-// CAC covering data structures (module A — src/theory/arith/nra/cac/CacCovering).
+// CAC covering data structures (module A — src/theory/arith/logics/nra/cac/CacCovering).
 // Exact open/closed/±∞ interval union: membership, gap-sampling, completeness,
 // and a rational strictly between two reals (incl. algebraic endpoints).
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/nra/cac/Covering.h"
+#include "theory/arith/logics/nra/cac/Covering.h"
 
 using namespace xolver;
 

@@ -17,8 +17,8 @@
 
 #include "expr/types.h"
 #include "sat/SatSolver.h"
-#include "theory/arith/poly/RationalPolynomial.h"
-#include "theory/arith/nra/core/CdcacValue.h"   // AlgebraicRoot, RealAlg
+#include "theory/arith/kernel/poly/RationalPolynomial.h"
+#include "theory/arith/logics/nra/core/CdcacValue.h"   // AlgebraicRoot, RealAlg
 #include "theory/core/TheoryAtomTypes.h"          // TheoryConflict, TheoryLemma
 
 #include <gmpxx.h>

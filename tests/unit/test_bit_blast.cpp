@@ -2,8 +2,8 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 #include "sat/SatSolver.h"
-#include "theory/arith/bit_blast/BitVec.h"
-#include "theory/arith/bit_blast/BitBlastEncoder.h"
+#include "theory/arith/kernel/bit_blast/BitVec.h"
+#include "theory/arith/kernel/bit_blast/BitBlastEncoder.h"
 
 using namespace xolver;
 using namespace xolver::bitblast;
@@ -114,8 +114,8 @@ TEST_CASE("Encoder: relZero Geq + Leq pins value to 0 (Eq)") {
     CHECK(readBitVec(*sat, x) == 0);
 }
 
-#include "theory/arith/bit_blast/PolyBitBlaster.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/bit_blast/PolyBitBlaster.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 
 TEST_CASE("PolyBitBlaster: encode 2*x*y + 3 == 0 with x=3,y forced") {
     auto kernel = createPolynomialKernel();
@@ -156,8 +156,8 @@ TEST_CASE("PolyBitBlaster: Greedy-Addition narrows max intermediate width") {
     CHECK(w <= 5u);   // balanced GA tree, not the 6 of a linear chain
 }
 
-#include "theory/arith/bit_blast/SpaceEstimator.h"
-#include "theory/arith/nia/core/DomainStore.h"
+#include "theory/arith/kernel/bit_blast/SpaceEstimator.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
 
 TEST_CASE("SpaceEstimator: bitsToCover") {
     using bitblast::SpaceEstimator;
@@ -265,8 +265,8 @@ TEST_CASE("SpaceEstimator: vote unifies unbounded widths when one dominates") {
     CHECK(plan.width.at("b1") == 7u);
 }
 
-#include "theory/arith/bit_blast/BitBlastSolver.h"
-#include "theory/arith/nia/search/IntegerModelValidator.h"
+#include "theory/arith/kernel/bit_blast/BitBlastSolver.h"
+#include "theory/arith/logics/nia/search/IntegerModelValidator.h"
 
 // SOUNDNESS REGRESSION (reviewer's counterexample): bounds live ONLY in
 // DomainStore, NOT in cs. The solver must still confine the search to the box
@@ -407,7 +407,7 @@ TEST_CASE("BitBlastSolver: domain-only variable inconsistency is detected") {
     CHECK(r.status != bitblast::BitBlastResult::Status::Sat);
 }
 
-#include "theory/arith/nia/NiaSolver.h"
+#include "theory/arith/logics/nia/NiaSolver.h"
 #include <algorithm>
 
 // Real registration check: the bit-blast stage must appear by name in the NIA

@@ -10,8 +10,8 @@
 #include <set>
 #include <unordered_map>
 #include <vector>
-#include "theory/arith/nra/projection/ProjectionClosure.h"
-#include "theory/arith/nra/core/CdcacCore.h"   // Feature A: reasonProjectionSubset
+#include "theory/arith/logics/nra/projection/ProjectionClosure.h"
+#include "theory/arith/logics/nra/core/CdcacCore.h"   // Feature A: reasonProjectionSubset
 
 using namespace xolver;
 

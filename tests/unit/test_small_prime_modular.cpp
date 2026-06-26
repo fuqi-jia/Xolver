@@ -4,7 +4,7 @@
 // Crafted cases check the system-level obstructions a per-equation gcd test misses;
 // the gated z3 fuzz (XOLVER_MODULAR_FUZZ=1) is the soundness gate.
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/SmallPrimeModular.h"
+#include "theory/arith/logics/nia/reasoners/SmallPrimeModular.h"
 
 #include <cstdio>
 #include <cstdlib>

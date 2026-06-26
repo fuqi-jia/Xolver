@@ -3,7 +3,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/nra/valuation/LazardValuationEngine.h"
+#include "theory/arith/logics/nra/valuation/LazardValuationEngine.h"
 
 using namespace xolver;
 

@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/nra/valuation/RootMembershipOracle.h"
+#include "theory/arith/logics/nra/valuation/RootMembershipOracle.h"
 
 using namespace xolver;
 

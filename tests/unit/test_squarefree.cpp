@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/nra/projection/Squarefree.h"
+#include "theory/arith/logics/nra/projection/Squarefree.h"
 
 using namespace xolver;
 

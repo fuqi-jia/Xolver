@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/OmegaTest.h"
+#include "theory/arith/logics/nia/reasoners/OmegaTest.h"
 
 using namespace xolver::omega;
 

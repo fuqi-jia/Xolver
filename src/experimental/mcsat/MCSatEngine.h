@@ -15,9 +15,9 @@
 //   5. model validation   — confirm a complete trail satisfies every
 //                           original assertion before claiming SAT.
 //
-// NRA backend: `src/theory/arith/nra/nlsat/NlsatEngine` — real values via
+// NRA backend: `src/theory/arith/logics/nra/nlsat/NlsatEngine` — real values via
 //   libpoly's AlgebraBackend; explain via SingleCellProjection-style cell.
-// NIA backend: `src/theory/arith/nia/mcsat/NiaMcsatEngine` — integer values;
+// NIA backend: `src/theory/arith/logics/nia/mcsat/NiaMcsatEngine` — integer values;
 //   explain combines real-relaxation cell projection and an integrality
 //   split lemma whenever the relaxation returns a non-integral root.
 

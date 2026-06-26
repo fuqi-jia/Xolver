@@ -3,8 +3,8 @@
 // the expected primitive non-negative ray + CT interval.
 
 #include "expr/ir.h"
-#include "theory/arith/nia/farkas/FarkasOrBranchSolver.h"
-#include "theory/arith/nia/farkas/FarkasOrTypes.h"
+#include "theory/arith/logics/nia/farkas/FarkasOrBranchSolver.h"
+#include "theory/arith/logics/nia/farkas/FarkasOrTypes.h"
 
 #include <doctest/doctest.h>
 

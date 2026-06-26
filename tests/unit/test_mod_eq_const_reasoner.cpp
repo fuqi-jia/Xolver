@@ -1,11 +1,11 @@
 #include <doctest/doctest.h>
 
 #include "expr/ir.h"
-#include "theory/arith/nia/NiaTypes.h"
-#include "theory/arith/nia/core/DomainStore.h"
-#include "theory/arith/nia/reasoners/ModEqConstFact.h"
-#include "theory/arith/nia/reasoners/ModEqConstReasoner.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/NiaTypes.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "theory/arith/logics/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/logics/nia/reasoners/ModEqConstReasoner.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 
 namespace xolver {
 namespace {

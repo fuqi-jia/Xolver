@@ -3,7 +3,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/nra/valuation/TowerPolyGcd.h"
+#include "theory/arith/logics/nra/valuation/TowerPolyGcd.h"
 
 using namespace xolver;
 

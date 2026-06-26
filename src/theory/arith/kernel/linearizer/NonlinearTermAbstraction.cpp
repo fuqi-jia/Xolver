@@ -1,0 +1,128 @@
+#include "theory/arith/kernel/linearizer/NonlinearTermAbstraction.h"
+#include <algorithm>
+
+namespace xolver {
+
+NonlinearTermAbstraction::NonlinearTermAbstraction(PolynomialKernel& kernel)
+    : kernel_(kernel) {}
+
+std::optional<NonlinearTermKey> NonlinearTermAbstraction::detectNonlinearTerm(
+    const PolynomialKernel::MonomialTerm& term) {
+
+    const auto& powers = term.powers;
+
+    // Product: x*y
+    if (powers.size() == 2 &&
+        powers[0].second == 1 && powers[1].second == 1) {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::Product;
+        key.powers = powers;
+        std::sort(key.powers.begin(), key.powers.end(),
+                  [](auto& a, auto& b) { return a.first < b.first; });
+        return key;
+    }
+
+    // Square: x^2
+    if (powers.size() == 1 && powers[0].second == 2) {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::Square;
+        key.powers = powers;
+        return key;
+    }
+
+    // Power: x^N for N >= 3 (single variable). Routes to PowerCutGenerator
+    // for proper convex-envelope cuts instead of the HigherMixed sign-only
+    // fallback. Phase 1 of incremental-linearization upgrade.
+    if (powers.size() == 1 && powers[0].second >= 3) {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::Power;
+        key.powers = powers;
+        return key;
+    }
+
+    // Linear or constant: not nonlinear
+    if (powers.empty() ||
+        (powers.size() == 1 && powers[0].second == 1)) {
+        return std::nullopt;
+    }
+
+    // MGC-RD Phase 2A: HigherMixed catches every other monomial (x^3, x*y*z,
+    // x*y^2, theta*vv1*vv3^2, etc.) so the linearizer no longer drops the
+    // entire equation as unsupported. The cut generator emits a simple
+    // sign-based bound when the factor signs are known; otherwise the
+    // monomial gets an aux var and the SAT layer treats it as opaque (still
+    // strictly better than silent rejection). Gated by XOLVER_NRA_NLEXT_HIGHER
+    // at the caller; the detector returns the key unconditionally so the
+    // abstraction cache stays consistent.
+    {
+        NonlinearTermKey key;
+        key.kind = NonlinearKind::HigherMixed;
+        key.powers = powers;
+        std::sort(key.powers.begin(), key.powers.end(),
+                  [](auto& a, auto& b) { return a.first < b.first; });
+        return key;
+    }
+}
+
+AuxTerm NonlinearTermAbstraction::getOrCreateAux(const NonlinearTermKey& key) {
+    auto it = auxCache_.find(key);
+    if (it != auxCache_.end()) {
+        return it->second;
+    }
+
+    std::string name = std::string(NL_AUX_PREFIX) + std::to_string(nextAuxId_++);
+    VarId vid = kernel_.getOrCreateVar(name);
+    PolyId poly = kernel_.mkVar(vid);
+
+    AuxTerm aux{std::move(name), vid, poly, key};
+    auxCache_.emplace(key, aux);
+    return aux;
+}
+
+AbstractionResult NonlinearTermAbstraction::abstract(PolyId poly) {
+    auto termsOpt = kernel_.terms(poly);
+    if (!termsOpt) {
+        return {poly, {}, true}; // unsupported
+    }
+
+    const auto& terms = *termsOpt;
+    std::vector<AuxTerm> auxTerms;
+    std::vector<PolynomialKernel::MonomialTerm> linearizedTerms;
+
+    for (const auto& term : terms) {
+        auto keyOpt = detectNonlinearTerm(term);
+        if (!keyOpt) {
+            // Linear or constant term: keep as-is
+            linearizedTerms.push_back(term);
+            continue;
+        }
+
+        // Nonlinear term: replace with aux * coeff
+        AuxTerm aux = getOrCreateAux(*keyOpt);
+        auxTerms.push_back(aux);
+
+        PolynomialKernel::MonomialTerm newTerm;
+        newTerm.coefficient = term.coefficient;
+        newTerm.powers = {{aux.vid, 1}};
+        linearizedTerms.push_back(std::move(newTerm));
+    }
+
+    // Build linearized polynomial from terms
+    PolyId result = kernel_.mkConst(mpq_class(0));
+    for (const auto& term : linearizedTerms) {
+        PolyId termPoly = kernel_.mkConst(mpq_class(term.coefficient));
+        for (const auto& [var, exp] : term.powers) {
+            PolyId varPoly = kernel_.mkVar(var);
+            if (exp == 1) {
+                termPoly = kernel_.mul(termPoly, varPoly);
+            } else {
+                termPoly = kernel_.mul(termPoly, kernel_.pow(varPoly, static_cast<uint32_t>(exp)));
+            }
+        }
+        result = kernel_.add(result, termPoly);
+    }
+
+    return {result, std::move(auxTerms), false};
+}
+
+} // namespace xolver

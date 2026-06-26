@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/backend/LibpolyBackend.h"
-#include "theory/arith/nra/core/CdcacCore.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
+#include "theory/arith/logics/nra/core/CdcacCore.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <cstdlib>
 #include <string>
 #include <unordered_map>

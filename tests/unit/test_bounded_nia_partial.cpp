@@ -1,9 +1,9 @@
 #include <doctest/doctest.h>
 
-#include "theory/arith/nia/reasoners/BoundedNiaSolver.h"
-#include "theory/arith/nia/core/DomainStore.h"
-#include "theory/arith/nia/search/IntegerModelValidator.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/reasoners/BoundedNiaSolver.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "theory/arith/logics/nia/search/IntegerModelValidator.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 
 #include <gmpxx.h>
 #include <vector>

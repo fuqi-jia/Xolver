@@ -7,10 +7,10 @@
 #include <gmpxx.h>
 #include <algorithm>
 #include <vector>
-#include "theory/arith/nra/cac/CacEngine.h"
+#include "theory/arith/logics/nra/cac/CacEngine.h"
 #ifdef XOLVER_HAS_LIBPOLY
-#include "theory/arith/nra/backend/LibpolyBackend.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #endif
 
 using namespace xolver;

@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/reasoners/NraLocalSearch.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/reasoners/NraLocalSearch.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 #include <chrono>

@@ -1,7 +1,27 @@
 # `theory/arith/` — arithmetic theory solvers
 
-This directory holds the arithmetic theory solvers (LRA, LIA, NRA, NIA,
-NIRA, LIRA, IDL, RDL) plus the shared infrastructure they build on.
+Two groups separate the **per-logic decision procedures** from the **shared
+engines** they build on, so it's clear at a glance which directories are
+solvers and which are reusable infrastructure:
+
+```
+logics/   per-logic decision procedures
+  nra/   nonlinear real        nia/   nonlinear integer
+  lra/   linear real           lia/   linear integer
+  dl/    difference logic (IDL + RDL)
+  mixed/ mixed int/real (NIRA + LIRA)
+
+kernel/   engines shared across the logics above
+  poly/      polynomial kernel      interval/   interval arithmetic
+  linear/    linear-form algebra    linearizer/ nonlinear → linear cuts
+  presolve/  preprocessing passes   bit_blast/  bounded → SAT encoding
+  icp/       interval contraction   search/     candidate-model search
+  refute/    sign/definiteness      integer/    integer reasoning
+```
+
+At this root: `ArithSolverBase.{h,cpp}` (the common base for the per-logic
+solvers) and `Reasoner.h` (the staged-reasoner interface). The rest of this
+document describes that base.
 
 ## Shared base: `ArithSolverBase`
 

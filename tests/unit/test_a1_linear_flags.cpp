@@ -8,7 +8,7 @@
 
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "theory/arith/lra/GeneralSimplex.h"
+#include "theory/arith/logics/lra/GeneralSimplex.h"
 #include <cstdlib>
 #include <fstream>
 #include <filesystem>

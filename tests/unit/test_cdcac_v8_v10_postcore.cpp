@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/core/CdcacObjective.h"
+#include "theory/arith/logics/nra/core/CdcacObjective.h"
 
 using namespace xolver;
 

@@ -41,9 +41,9 @@
 #include <random>
 #include <sstream>
 
-#include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/arith/poly/RationalPolynomial.h"
-#include "theory/arith/nra/projection/SubresultantChain.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/RationalPolynomial.h"
+#include "theory/arith/logics/nra/projection/SubresultantChain.h"
 
 // NB: this test never includes LibPolyKernel.h directly — the libpoly include
 // path is PRIVATE to xolver_core. pscChain is exposed on the PolynomialKernel
