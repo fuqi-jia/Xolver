@@ -91,6 +91,10 @@ public:
     // backend's proof finalizer. Carries no soundness weight — Carcara is the gate.
     proof::TheoryProofSink proofSink_;
 #endif
+    // Last UNSAT proof (public Solver::getProof()). Populated by checkSat() in
+    // proof-enabled builds; stays empty otherwise. Always present so the public
+    // API type is config-independent.
+    Proof lastProof_;
     SortId boolSortId_ = NullSort;
     SortId intSortId_ = NullSort;
     SortId realSortId_ = NullSort;

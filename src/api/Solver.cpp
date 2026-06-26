@@ -395,6 +395,7 @@ Result Solver::checkSat() {
     // unambiguous single-conflict case for now; multi-conflict / Boolean assembly
     // is later. A wrong certificate is rejected by Carcara offline (never
     // claimed), so this only ADDS a verifiable artifact next to the DRAT.
+    pImpl->lastProof_.clear();  // fresh per solve
     const proof::TheoryConflictCert* uc =
         (r == Result::Unsat && pImpl->ir)
             ? proofUniqueConflict(pImpl->proofSink_.conflicts()) : nullptr;
@@ -459,10 +460,14 @@ Result Solver::checkSat() {
                 // The proof references post-normalization IR atoms, so it is
                 // checked against an IR-derived problem (terms match by
                 // construction); the original->IR step is trusted preprocessing.
+                std::string problemStr = dumpProblemToSMT2(*pImpl->ir, pImpl->ir->assertions());
+                std::string aletheStr = ap.serialize();
                 std::ofstream pout(pit->second.s + ".smt2");
-                if (pout) pout << dumpProblemToSMT2(*pImpl->ir, pImpl->ir->assertions());
+                if (pout) pout << problemStr;
                 std::ofstream aout(pit->second.s + ".alethe");
-                if (aout) aout << ap.serialize();
+                if (aout) aout << aletheStr;
+                // Also expose it via the public Solver::getProof() value.
+                pImpl->lastProof_.set(std::move(aletheStr), std::move(problemStr));
             }
         }
     }
@@ -1040,7 +1045,7 @@ void Solver::dumpModel(std::ostream& os) const {
     }
     os << ")\n";
 }
-Proof Solver::getProof() const { return Proof{}; }
+Proof Solver::getProof() const { return pImpl->lastProof_; }
 Statistics Solver::getStatistics() const { return Statistics{}; }
 
 std::string Solver::lastUnknownReason() const { return pImpl->lastUnknownReason_; }
