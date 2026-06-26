@@ -126,3 +126,95 @@ jobs:
             "${PKG}.tar.gz" "${PKG}.tar.gz.sha256" \
             --title "Xolver ${GITHUB_REF_NAME}" \
             --generate-notes
+
+  # ---------------------------------------------------------------------------
+  # Python wheels (Linux x86_64, manylinux). Built on the SAME v* tag so
+  # `pip install xolver==X.Y.Z` works right after a release. macOS/Windows wheels
+  # are deferred (the int64_t<->gmpxx ambiguity needs a porting pass first).
+  # ---------------------------------------------------------------------------
+  wheels:
+    name: python-wheels-linux-x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # cibuildwheel copies these into the container
+
+      # Derive the wheel version from the tag (X.Y.Z) on the host and inject it
+      # into the build, so setuptools_scm needs no git inside the manylinux
+      # container. Manual runs get a dev version.
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="0.0.0.dev0"
+          fi
+          echo "v=${V}" >> "$GITHUB_OUTPUT"
+          echo "Building wheels for version ${V}"
+
+      - name: Build sdist
+        run: |
+          python -m pip install --upgrade build
+          SETUPTOOLS_SCM_PRETEND_VERSION="${{ steps.ver.outputs.v }}" \
+            python -m build --sdist --outdir dist
+
+      - name: Build wheels (cibuildwheel / manylinux)
+        uses: pypa/cibuildwheel@v2.21
+        env:
+          # Recent CPythons; extend once build time is acceptable.
+          CIBW_BUILD: "cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64"
+          CIBW_ARCHS_LINUX: x86_64
+          # manylinux2014 (CentOS 7) -> yum. GMP/MPFR are dynamically linked and
+          # then vendored into the wheel by auditwheel (cibuildwheel runs it).
+          CIBW_BEFORE_ALL_LINUX: "yum install -y gmp-devel mpfr-devel"
+          # No git in the container -> hand setuptools_scm the version. Bound the
+          # C++ build parallelism to the runner's cores to avoid OOM on the
+          # heavy -O3 translation units.
+          CIBW_ENVIRONMENT: >-
+            SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.ver.outputs.v }}
+            CMAKE_BUILD_PARALLEL_LEVEL=2
+          CIBW_BUILD_VERBOSITY: 1
+          # Smoke-test every wheel: import + a trivial solve.
+          CIBW_TEST_COMMAND: >-
+            python -c "import xolver;
+            x=xolver.Int('x');
+            s=xolver.Solver(); s.add(x>0); s.add(x<2);
+            assert str(s.check())=='sat', s.check();
+            assert s.model()[x]==1, s.model();
+            print('xolver', xolver.__version__, 'wheel OK')"
+        with:
+          output-dir: wheelhouse
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p pydist
+          cp dist/*.tar.gz pydist/ 2>/dev/null || true
+          cp wheelhouse/*.whl pydist/
+          ls -l pydist
+
+      - name: Upload wheels (manual/test runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xolver-python-wheels
+          path: pydist/*
+
+      - name: Attach wheels to the GitHub Release (tag pushes)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" pydist/* --clobber
+
+      # Optional PyPI publish — only fires if a PYPI_API_TOKEN secret is set.
+      - name: Publish to PyPI (if token configured)
+        if: github.ref_type == 'tag' && env.PYPI_API_TOKEN != ''
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install --upgrade twine
+          twine upload --non-interactive -u __token__ -p "$PYPI_API_TOKEN" pydist/*
