@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
 #include "expr/ir.h"
 
 // Directly exercises extractLinearExpr's n-ary handling of Sub/Mul/Div.

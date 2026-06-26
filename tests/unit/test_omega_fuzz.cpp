@@ -8,7 +8,7 @@
 //
 // Skips gracefully if z3 is not on PATH (keeps CI green without z3).
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/OmegaTest.h"
+#include "theory/arith/logics/nia/reasoners/OmegaTest.h"
 
 #include <cstdio>
 #include <cstdlib>

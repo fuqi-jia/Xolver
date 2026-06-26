@@ -7,8 +7,8 @@
 // never libpoly root isolation.
 
 #include <doctest/doctest.h>
-#include "theory/arith/nra/StructuralIntegerProbe.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/StructuralIntegerProbe.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <gmpxx.h>
 
 using namespace xolver;

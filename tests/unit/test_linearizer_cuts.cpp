@@ -17,9 +17,9 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/linearizer/McCormickGenerator.h"
-#include "theory/arith/linearizer/SquareCutGenerator.h"
-#include "theory/arith/linearizer/LinearizationTypes.h"
+#include "theory/arith/kernel/linearizer/McCormickGenerator.h"
+#include "theory/arith/kernel/linearizer/SquareCutGenerator.h"
+#include "theory/arith/kernel/linearizer/LinearizationTypes.h"
 
 using namespace xolver;
 
@@ -155,7 +155,7 @@ TEST_CASE("Linearizer: SquareCut with sample outside bounds — graceful") {
 // =============================================================================
 // MonomialBoundGenerator — Phase 2 cuts on compound monomials.
 // =============================================================================
-#include "theory/arith/linearizer/MonomialBoundGenerator.h"
+#include "theory/arith/kernel/linearizer/MonomialBoundGenerator.h"
 
 static AuxTerm mkAuxHigher(const std::string& name,
                             std::vector<std::pair<VarId,int>> powers) {
@@ -267,7 +267,7 @@ TEST_CASE("MonomialBound: missing bounds on any factor -> no cuts") {
 // =============================================================================
 // BernsteinPowerCutGenerator — Phase 1c convex-hull envelope for x^N on [l,u].
 // =============================================================================
-#include "theory/arith/linearizer/BernsteinPowerCutGenerator.h"
+#include "theory/arith/kernel/linearizer/BernsteinPowerCutGenerator.h"
 
 TEST_CASE("Bernstein: boundary coefficients reproduce l^N and u^N (positive box)") {
     auto b = BernsteinPowerCutGenerator::bernsteinCoeffs(4, mpq_class(1), mpq_class(3));
@@ -442,7 +442,7 @@ TEST_CASE("McCormick partial: incomplete reasons suppress the cut (soundness)") 
 // x^N (N>=3): even N is convex everywhere; odd N is convex on x>=0, concave on
 // x<=0, and mixed-sign odd intervals must emit NO secant/tangent (wrong-branch
 // unsound). Each emitted cut is checked at every half-integer in the box.
-#include "theory/arith/linearizer/PowerCutGenerator.h"
+#include "theory/arith/kernel/linearizer/PowerCutGenerator.h"
 
 namespace {
 mpq_class powq(const mpq_class& b, int e) { mpq_class r = 1; for (int i = 0; i < e; ++i) r *= b; return r; }

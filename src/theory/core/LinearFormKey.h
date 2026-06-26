@@ -11,7 +11,7 @@ namespace xolver {
 // LinearFormKey: canonical representation of a linear expression's LHS.
 // Contains only variable terms (no constant). Sorted by var name for hashing.
 //
-// Moved from theory/arith/linear/LinearExpr.h to theory/core/ to break
+// Moved from theory/arith/kernel/linear/LinearExpr.h to theory/core/ to break
 // the dependency of TheorySolver.h on linear/ module headers.
 // ============================================================================
 struct LinearFormKey {

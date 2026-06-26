@@ -3,7 +3,7 @@
 // RealAlgebraicOps — the algebraic-number operations behind RealValue, declared
 // here WITHOUT any libpoly include so that util/RealValue.cpp (libpoly-free) can
 // call them.  The implementation lives in
-// src/theory/arith/nra/backend/LibpolyAlgebraic.cpp, the single translation
+// src/theory/arith/logics/nra/backend/LibpolyAlgebraic.cpp, the single translation
 // unit that pulls in <polyxx.h>.  This keeps the dependency edge pointing the
 // right way: util declares the contract, the nra backend implements it.
 //

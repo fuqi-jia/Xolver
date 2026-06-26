@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/GcdDivisibilityReasoner.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/reasoners/GcdDivisibilityReasoner.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 

@@ -8,7 +8,7 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
-#include "theory/arith/interval/IntervalQRoots.h"
+#include "theory/arith/kernel/interval/IntervalQRoots.h"
 
 using namespace xolver;
 

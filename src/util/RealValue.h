@@ -7,7 +7,7 @@
 // isolation interval).  Rational⊕Rational stays Rational; an Algebraic operand
 // promotes the result to Algebraic.
 //
-// Location is `src/util/` (not `theory/arith/nra/`) so it is reachable from
+// Location is `src/util/` (not `theory/arith/logics/nra/`) so it is reachable from
 // expr/, theory/, util/, and the public API without pulling in libpoly headers.
 //
 // PHASE 0 STATUS: this is the interface skeleton.  Every method body is a stub

@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/poly/FlatMonomialMap.h"
+#include "theory/arith/kernel/poly/FlatMonomialMap.h"
 #include "expr/types.h"
 #include <gmpxx.h>
 using namespace xolver;

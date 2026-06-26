@@ -6,7 +6,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/poly/RationalPolynomial.h"
+#include "theory/arith/kernel/poly/RationalPolynomial.h"
 
 using namespace xolver;
 

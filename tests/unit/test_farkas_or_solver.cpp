@@ -12,9 +12,9 @@
 // Expected: solveCsp finds B = (0, 0), choice 0 → ray (0, 1), CT ≥ 2.
 
 #include "expr/ir.h"
-#include "theory/arith/nia/farkas/FarkasOrDetector.h"
-#include "theory/arith/nia/farkas/FarkasOrSolver.h"
-#include "theory/arith/nia/farkas/FarkasOrTypes.h"
+#include "theory/arith/logics/nia/farkas/FarkasOrDetector.h"
+#include "theory/arith/logics/nia/farkas/FarkasOrSolver.h"
+#include "theory/arith/logics/nia/farkas/FarkasOrTypes.h"
 
 #include <doctest/doctest.h>
 

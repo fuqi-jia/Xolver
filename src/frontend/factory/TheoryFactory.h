@@ -4,7 +4,7 @@
 #include "theory/core/TheoryManager.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/combination/SharedTermRegistry.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/core/LogicFeatureDetector.h"
 #include "frontend/factory/SolverRegistry.h"  // SolverSetupResult, BuildContext, registry
 #include <memory>

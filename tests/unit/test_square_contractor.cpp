@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/icp/contractors/SquareContractor.h"
-#include "theory/arith/interval/ReasonedBox.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/icp/contractors/SquareContractor.h"
+#include "theory/arith/kernel/interval/ReasonedBox.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 

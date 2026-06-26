@@ -1,8 +1,8 @@
 #include <gmpxx.h>
 #include <doctest/doctest.h>
-#include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/arith/poly/PolynomialConverter.h"
-#include "theory/arith/poly/RationalPolynomial.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/PolynomialConverter.h"
+#include "theory/arith/kernel/poly/RationalPolynomial.h"
 #include "expr/ir.h"
 
 using namespace xolver;

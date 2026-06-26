@@ -1,9 +1,9 @@
 // LS-SMART-1 SmartInit unit tests. Pin the constraint-propagation
 // init behavior: single-var pins, 2-var derives, bound tightening.
 #include <doctest/doctest.h>
-#include "theory/arith/nia/search/SmartInit.h"
-#include "theory/arith/nia/core/DomainStore.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/search/SmartInit.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 #include <random>

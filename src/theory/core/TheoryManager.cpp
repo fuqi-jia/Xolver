@@ -3,7 +3,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/core/DebugTrace.h"
-#include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
 #include "sat/SatSolver.h"
 #include "expr/ir.h"
 #include <cassert>

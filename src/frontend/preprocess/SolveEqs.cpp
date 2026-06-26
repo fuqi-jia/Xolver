@@ -1,5 +1,5 @@
 #include "frontend/preprocess/SolveEqs.h"
-#include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
 #include "util/EnvParam.h"
 
 #include <algorithm>

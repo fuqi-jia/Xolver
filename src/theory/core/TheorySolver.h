@@ -12,7 +12,7 @@ namespace xolver {
 
 class TheoryLemmaStorage;
 class CareGraph;
-struct ModEqConstFact;  // theory/arith/nia/reasoners/ModEqConstFact.h (fwd: base hook only)
+struct ModEqConstFact;  // theory/arith/logics/nia/reasoners/ModEqConstFact.h (fwd: base hook only)
 
 // ---------------------------------------------------------------------------
 // Abstract interface for theory solvers

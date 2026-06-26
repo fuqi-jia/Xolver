@@ -1,8 +1,8 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/simplex/NraLinearExtractor.h"
-#include "theory/arith/nra/core/CdcacTypes.h"
-#include "theory/arith/nra/core/CdcacConstraint.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/simplex/NraLinearExtractor.h"
+#include "theory/arith/logics/nra/core/CdcacTypes.h"
+#include "theory/arith/logics/nra/core/CdcacConstraint.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <set>
 #include <algorithm>
 
@@ -44,9 +44,9 @@ TEST_CASE("extractor: x*y - 1 is nonlinear") {
     CHECK(cc.nonlinear.size() == 1);
 }
 
-#include "theory/arith/nra/simplex/SimplexTableauFacts.h"
-#include "theory/arith/lra/GeneralSimplex.h"
-#include "theory/arith/lra/SparseTableau.h"
+#include "theory/arith/logics/nra/simplex/SimplexTableauFacts.h"
+#include "theory/arith/logics/lra/GeneralSimplex.h"
+#include "theory/arith/logics/lra/SparseTableau.h"
 
 TEST_CASE("deriveBasicInterval: x = 1 - y over y in [0,1] -> [0,1]") {
     // xb = rhs + sum coeff*col ; here rhs=1, one term coeff=-1 with col bounds [0,1]
@@ -141,7 +141,7 @@ TEST_CASE("tableau facts: an ORIGINAL variable acquires a row-derived bound (end
     CHECK(f.isFixed(xv));             // x = 5 - 2 = 3
 }
 
-#include "theory/arith/nra/simplex/PolyStructureFacts.h"
+#include "theory/arith/logics/nra/simplex/PolyStructureFacts.h"
 
 TEST_CASE("structure: xy+xz-3 -> fixing x linearizes; fixing y/z does not") {
     auto kernel = createPolynomialKernel();
@@ -182,7 +182,7 @@ TEST_CASE("structure: x*y^2 -> fixing y linearizes, fixing x does not") {
     CHECK(f.maxDegree(yv) == 2);
 }
 
-#include "theory/arith/nra/simplex/VarOrderSelector.h"
+#include "theory/arith/logics/nra/simplex/VarOrderSelector.h"
 
 static int posOf(const std::vector<std::string>& v, const std::string& n) {
     return (int)(std::find(v.begin(), v.end(), n) - v.begin());
@@ -244,7 +244,7 @@ TEST_CASE("varorder: all-linear input is a valid deterministic permutation") {
     CHECK(got == std::set<std::string>{"x", "y"});
 }
 
-#include "theory/arith/nra/core/CdcacSolver.h"
+#include "theory/arith/logics/nra/core/CdcacSolver.h"
 #include <cstdlib>
 
 TEST_CASE("cdcac varorder flag: same verdict on/off for xy + x^2 - 2 = 0 and y>=1") {

@@ -1,0 +1,354 @@
+#include "theory/arith/logics/mixed/LiraSolver.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#include "expr/ir.h"
+#include <algorithm>
+
+namespace xolver {
+
+LiraSolver::LiraSolver() = default;
+LiraSolver::~LiraSolver() = default;
+
+void LiraSolver::onPush() {
+    // No engine action: the active constraint set is rebuilt from the trail on
+    // the next check(). (Scope push/pop is incompatible with the persistent
+    // row cache, which would leave stale aux indices after a simplex pop.)
+}
+
+void LiraSolver::onPop(uint32_t /*n*/) {
+    // Full reset; the next check() rebuilds vars/rows/bounds from the (already
+    // scope-truncated) trail. Correct regardless of nesting; the single-query
+    // competition path never calls push/pop, so this costs nothing there.
+    milpEngine_.clear();
+    nameToIdx_.clear();
+    registeredRecordCount_ = 0;
+    disequalities_.clear();
+}
+
+TheoryCheckResult LiraSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
+    if (effort == TheoryEffort::Standard) {
+        return checkStandardEffort(lemmaDb);
+    }
+    return checkFullEffort(lemmaDb);
+}
+
+void LiraSolver::ensureIntVarCache() const {
+    if (!coreIr_ || coreIr_->size() == intVarCacheIrSize_) return;
+    intVarCache_.clear();
+    SortId intSort = coreIr_->intSortId();
+    for (size_t i = 0; i < coreIr_->size(); ++i) {
+        const auto& expr = coreIr_->get(static_cast<ExprId>(i));
+        if (expr.kind == Kind::Variable &&
+            std::holds_alternative<std::string>(expr.payload.value)) {
+            intVarCache_[std::get<std::string>(expr.payload.value)] =
+                (expr.sort == intSort);
+        }
+    }
+    intVarCacheIrSize_ = coreIr_->size();
+}
+
+bool LiraSolver::isIntegerVar(const std::string& name) const {
+    if (!coreIr_) return false;
+    ensureIntVarCache();
+    auto it = intVarCache_.find(name);
+    return it != intVarCache_.end() ? it->second : false;
+}
+
+int LiraSolver::engineVarIndex(const std::string& name) {
+    auto it = nameToIdx_.find(name);
+    if (it != nameToIdx_.end()) return it->second;
+    auto kind = isIntegerVar(name) ? InternalMilpEngine::VarKind::Int
+                                   : InternalMilpEngine::VarKind::Real;
+    int idx = milpEngine_.addVar(name, kind);
+    nameToIdx_[name] = idx;
+    return idx;
+}
+
+// Front-load the row form of every LIRA linear atom in the registry. On the
+// first (clean) check this declares all static atom rows up front, so the rows
+// are created in one clean pass instead of provoking a clean rebuild each time
+// a new atom is first asserted later. Processes only newly-added records.
+void LiraSolver::preRegisterAtomRows() {
+    if (!registry_) return;
+    const auto& recs = registry_->records();
+    for (size_t i = registeredRecordCount_; i < recs.size(); ++i) {
+        const auto& rec = recs[i];
+        if (rec.theory != TheoryId::LIRA) continue;
+        if (!std::holds_alternative<LinearAtomPayload>(rec.payload)) continue;
+        const auto& p = std::get<LinearAtomPayload>(rec.payload);
+        auto rhsQ = p.rhs.tryAsRational();
+        if (!rhsQ) continue;
+        std::vector<std::pair<int, mpq_class>> terms;
+        terms.reserve(p.lhs.terms.size());
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            terms.push_back({engineVarIndex(name), coeff});
+        }
+        milpEngine_.registerForm(terms, *rhsQ);
+    }
+    registeredRecordCount_ = recs.size();
+}
+
+TheoryCheckResult LiraSolver::checkStandardEffort(TheoryLemmaStorage& /*lemmaDb*/) {
+    // Keep vars + simplex rows across checks (built once, cached); only the
+    // active constraint set is re-specified here. Bounds are fully re-asserted
+    // by solve(), so the verdict is identical to a clear()+rebuild.
+    milpEngine_.resetConstraints();
+    preRegisterAtomRows();
+    disequalities_.clear();
+    auto& nameToIdx = nameToIdx_;
+
+    for (const auto& a : trail()) {
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
+
+        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+        // LIRA linear bounds are rational; algebraic RHS never arises from inputs.
+        auto pRhsQ = p.rhs.tryAsRational();
+        if (!pRhsQ) continue;  // skip un-representable algebraic bound (defensive)
+        const mpq_class& pRhs = *pRhsQ;
+
+        // Compute effective relation (handle negated literals)
+        Relation effRel = p.rel;
+        if (!a.value) {
+            switch (p.rel) {
+                case Relation::Eq:  effRel = Relation::Neq; break;
+                case Relation::Neq: effRel = Relation::Eq; break;
+                case Relation::Lt:  effRel = Relation::Geq; break;
+                case Relation::Leq: effRel = Relation::Gt; break;
+                case Relation::Gt:  effRel = Relation::Leq; break;
+                case Relation::Geq: effRel = Relation::Lt; break;
+            }
+        }
+
+        // Register variables
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            (void)coeff;
+            if (nameToIdx.count(name)) continue;
+            auto kind = isIntegerVar(name)
+                ? InternalMilpEngine::VarKind::Int
+                : InternalMilpEngine::VarKind::Real;
+            int idx = milpEngine_.addVar(name, kind);
+            nameToIdx[name] = idx;
+        }
+
+        if (effRel == Relation::Neq) {
+            disequalities_.push_back({p.lhs, pRhs, a.lit});
+        } else {
+            InternalMilpEngine::LinearConstraint c;
+            for (const auto& [name, coeff] : p.lhs.terms) {
+                c.terms.push_back({nameToIdx[name], coeff});
+            }
+            c.rhs = pRhs;
+            c.rel = effRel;
+            c.reason = a.lit;
+            milpEngine_.addConstraint(c);
+        }
+    }
+
+    auto r = milpEngine_.solve(InternalMilpEngine::MilpMode::Budgeted);
+
+    switch (r.kind) {
+        case InternalMilpEngine::MilpResult::Kind::Unsat: {
+            auto tc = TheoryConflict{};
+            auto precise = milpEngine_.getConflictReasons();
+            // A branch-and-bound Unsat is NOT explained by the last LP leaf's
+            // conflict (the branch bounds were essential); using `precise` there
+            // is a too-narrow conflict -> false UNSAT. Only trust the leaf
+            // conflict when the LP relaxation itself was infeasible (not branched).
+            if (r.branched || precise.empty()) {
+                tc.clause = allActiveReasons();
+            } else {
+                tc.clause = precise;
+            }
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
+        case InternalMilpEngine::MilpResult::Kind::Unknown:
+            return TheoryCheckResult::unknown();
+
+        case InternalMilpEngine::MilpResult::Kind::Sat: {
+            // Validate disequalities using full DeltaRational values
+            for (const auto& d : disequalities_) {
+                DeltaRational val;
+                for (const auto& [name, coeff] : d.lhs.terms) {
+                    auto it = nameToIdx.find(name);
+                    if (it != nameToIdx.end()) {
+                        auto dv = milpEngine_.deltaValue(it->second);
+                        val.a += dv.a * coeff;
+                        val.b += dv.b * coeff;
+                    }
+                }
+                val.a -= d.rhs;
+                if (val.isZero()) {
+                    auto litLt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Lt, d.rhs, TheoryId::LIRA);
+                    auto litGt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Gt, d.rhs, TheoryId::LIRA);
+                    return TheoryCheckResult::mkLemma(TheoryLemma{{litLt, litGt}});
+                }
+            }
+            return TheoryCheckResult::consistent();
+        }
+
+        case InternalMilpEngine::MilpResult::Kind::NeedBranch: {
+            if (!registry_) return TheoryCheckResult::unknown();
+            std::string name = std::string(milpEngine_.varName(r.branchVar));
+            if (name.empty()) return TheoryCheckResult::unknown();
+            LinearFormKey form;
+            form.terms.push_back({name, mpq_class(1)});
+            auto litLo = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Leq, r.floorVal, TheoryId::LIRA);
+            auto litHi = registry_->getOrCreateLinearBoundAtom(
+                form, Relation::Geq, r.ceilVal, TheoryId::LIRA);
+            return TheoryCheckResult::mkLemma(TheoryLemma{{litLo, litHi}});
+        }
+    }
+
+    return TheoryCheckResult::unknown();
+}
+
+TheoryCheckResult LiraSolver::checkFullEffort(TheoryLemmaStorage& /*lemmaDb*/) {
+    milpEngine_.resetConstraints();
+    preRegisterAtomRows();
+    disequalities_.clear();
+    auto& nameToIdx = nameToIdx_;
+
+    for (const auto& a : trail()) {
+        if (!std::holds_alternative<LinearAtomPayload>(a.atom.payload)) continue;
+
+        const auto& p = std::get<LinearAtomPayload>(a.atom.payload);
+        auto pRhsQ = p.rhs.tryAsRational();
+        if (!pRhsQ) continue;  // algebraic RHS never arises from inputs
+        const mpq_class& pRhs = *pRhsQ;
+
+        Relation effRel = p.rel;
+        if (!a.value) {
+            switch (p.rel) {
+                case Relation::Eq:  effRel = Relation::Neq; break;
+                case Relation::Neq: effRel = Relation::Eq; break;
+                case Relation::Lt:  effRel = Relation::Geq; break;
+                case Relation::Leq: effRel = Relation::Gt; break;
+                case Relation::Gt:  effRel = Relation::Leq; break;
+                case Relation::Geq: effRel = Relation::Lt; break;
+            }
+        }
+
+        for (const auto& [name, coeff] : p.lhs.terms) {
+            (void)coeff;
+            if (nameToIdx.count(name)) continue;
+            auto kind = isIntegerVar(name)
+                ? InternalMilpEngine::VarKind::Int
+                : InternalMilpEngine::VarKind::Real;
+            int idx = milpEngine_.addVar(name, kind);
+            nameToIdx[name] = idx;
+        }
+
+        if (effRel == Relation::Neq) {
+            disequalities_.push_back({p.lhs, pRhs, a.lit});
+        } else {
+            InternalMilpEngine::LinearConstraint c;
+            for (const auto& [name, coeff] : p.lhs.terms) {
+                c.terms.push_back({nameToIdx[name], coeff});
+            }
+            c.rhs = pRhs;
+            c.rel = effRel;
+            c.reason = a.lit;
+            milpEngine_.addConstraint(c);
+        }
+    }
+
+    auto r = milpEngine_.solve(InternalMilpEngine::MilpMode::Complete);
+
+    switch (r.kind) {
+        case InternalMilpEngine::MilpResult::Kind::Sat: {
+            // Validate disequalities using full DeltaRational values
+            for (const auto& d : disequalities_) {
+                DeltaRational val;
+                for (const auto& [name, coeff] : d.lhs.terms) {
+                    auto it = nameToIdx.find(name);
+                    if (it != nameToIdx.end()) {
+                        auto dv = milpEngine_.deltaValue(it->second);
+                        val.a += dv.a * coeff;
+                        val.b += dv.b * coeff;
+                    }
+                }
+                val.a -= d.rhs;
+                if (val.isZero()) {
+                    auto litLt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Lt, d.rhs, TheoryId::LIRA);
+                    auto litGt = registry_->getOrCreateLinearBoundAtom(
+                        d.lhs, Relation::Gt, d.rhs, TheoryId::LIRA);
+                    return TheoryCheckResult::mkLemma(TheoryLemma{{litLt, litGt}});
+                }
+            }
+            return TheoryCheckResult::consistent();
+        }
+        case InternalMilpEngine::MilpResult::Kind::Unsat: {
+            auto tc = TheoryConflict{};
+            auto precise = milpEngine_.getConflictReasons();
+            // A branch-and-bound Unsat is NOT explained by the last LP leaf's
+            // conflict (the branch bounds were essential); using `precise` there
+            // is a too-narrow conflict -> false UNSAT. Only trust the leaf
+            // conflict when the LP relaxation itself was infeasible (not branched).
+            if (r.branched || precise.empty()) {
+                tc.clause = allActiveReasons();
+            } else {
+                tc.clause = precise;
+            }
+            return TheoryCheckResult::mkConflict(std::move(tc));
+        }
+        default:
+            return TheoryCheckResult::unknown();
+    }
+}
+
+void LiraSolver::onReset() {
+    // Base clears the trail; clear LIRA-specific state here.
+    disequalities_.clear();
+    milpEngine_.clear();
+    nameToIdx_.clear();
+    registeredRecordCount_ = 0;
+}
+
+void LiraSolver::setRegistry(TheoryAtomRegistry* reg) {
+    registry_ = reg;
+}
+
+// setCoreIr now uses the ArithSolverBase default (2026-06-04).
+
+std::optional<TheorySolver::TheoryModel> LiraSolver::getModel() const {
+    TheoryModel model;
+    int n = milpEngine_.numVars();
+    for (int i = 0; i < n; ++i) {
+        std::string name = std::string(milpEngine_.varName(i));
+        if (name.empty()) continue;
+        if (name.size() >= 2 && name[0] == '_' && name[1] == '_') continue;
+        // concreteValue instantiates the infinitesimal δ so strict bounds
+        // (x < r) are reflected as plain rationals instead of collapsing.
+        mpq_class val = milpEngine_.concreteValue(i);
+        if (val.get_den() == 1) {
+            model.assignments[name] = val.get_num().get_str();
+        } else {
+            model.assignments[name] = val.get_str();
+        }
+        model.numericAssignments.insert({name, RealValue::fromMpq(val)});
+    }
+    if (model.assignments.empty()) return std::nullopt;
+    return model;
+}
+
+std::vector<SatLit> LiraSolver::allActiveReasons() const {
+    std::vector<SatLit> reasons;
+    for (const auto& a : trail()) {
+        reasons.push_back(a.lit);
+    }
+    std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), reasons.end());
+    return reasons;
+}
+
+
+
+} // namespace xolver

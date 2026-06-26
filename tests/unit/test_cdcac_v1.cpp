@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 #include <iostream>
-#include "theory/arith/poly/RationalPolynomial.h"
-#include "theory/arith/nra/projection/LocalProjection.h"
+#include "theory/arith/kernel/poly/RationalPolynomial.h"
+#include "theory/arith/logics/nra/projection/LocalProjection.h"
 
 using namespace xolver;
 

@@ -1,9 +1,9 @@
 // HYB-1 VariablePartition unit tests. Pin the partition classification
 // behavior independent of any downstream hybrid solver.
 #include <doctest/doctest.h>
-#include "theory/arith/nia/preprocess/VariablePartition.h"
-#include "theory/arith/nia/core/DomainStore.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/preprocess/VariablePartition.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 

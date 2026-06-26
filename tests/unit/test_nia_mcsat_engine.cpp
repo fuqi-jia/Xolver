@@ -11,8 +11,8 @@
 // candidate, and exhaustion means GiveUp → framework returns Unknown.
 
 #include "experimental/mcsat/MCSatTrail.h"
-#include "theory/arith/nia/mcsat/NiaMcsatEngine.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/mcsat/NiaMcsatEngine.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include "util/RealValue.h"
 

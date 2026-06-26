@@ -13,8 +13,8 @@
 // engine never reports the WRONG verdict.
 
 #include "experimental/mcsat/MCSatTrail.h"
-#include "theory/arith/nra/nlsat/NlsatEngine.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/nlsat/NlsatEngine.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include "util/RealValue.h"
 

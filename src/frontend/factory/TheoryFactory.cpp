@@ -1,19 +1,19 @@
 #include "frontend/factory/TheoryFactory.h"
 #include "frontend/factory/SolverRegistry.h"
-#include "theory/arith/lra/LraSolver.h"
-#include "theory/arith/lia/LiaSolver.h"
-#include "theory/arith/nra/NraSolver.h"
-#include "theory/arith/nia/NiaSolver.h"
-#include "theory/arith/lira/LiraSolver.h"
-#include "theory/arith/nira/NiraSolver.h"
-#include "theory/arith/idl/IdlSolver.h"
-#include "theory/arith/rdl/RdlSolver.h"
+#include "theory/arith/logics/lra/LraSolver.h"
+#include "theory/arith/logics/lia/LiaSolver.h"
+#include "theory/arith/logics/nra/NraSolver.h"
+#include "theory/arith/logics/nia/NiaSolver.h"
+#include "theory/arith/logics/mixed/LiraSolver.h"
+#include "theory/arith/logics/mixed/NiraSolver.h"
+#include "theory/arith/logics/dl/IdlSolver.h"
+#include "theory/arith/logics/dl/RdlSolver.h"
 #include "theory/euf/EufSolver.h"
 #include "theory/combination/Purifier.h"
 #include "experimental/mcsat/McsatSolver.h"
-#include "theory/arith/nia/mcsat/NiaMcsatEngine.h"
-#include "theory/arith/nra/backend/LibpolyBackend.h"
-#include "theory/arith/nra/nlsat/NlsatEngine.h"
+#include "theory/arith/logics/nia/mcsat/NiaMcsatEngine.h"
+#include "theory/arith/logics/nra/backend/LibpolyBackend.h"
+#include "theory/arith/logics/nra/nlsat/NlsatEngine.h"
 #include "util/EnvParam.h"
 #include <cstdlib>
 #include <iostream>
@@ -36,7 +36,7 @@ void configureLia(LiaSolver& lia, const LiaConfig& cfg) {
 // Builders — one per logic family. Each aliases the BuildContext fields it uses
 // so the body matches the legacy TheoryFactory branch verbatim (the only change
 // is configureLia(*lia) -> configureLia(*lia, c.lia)). createPolynomialKernel is
-// declared in theory/arith/poly/PolynomialKernel.h.
+// declared in theory/arith/kernel/poly/PolynomialKernel.h.
 // ---------------------------------------------------------------------------
 
 void buildLIA(BuildContext& c) {

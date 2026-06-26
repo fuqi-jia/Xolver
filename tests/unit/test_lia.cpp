@@ -1,12 +1,12 @@
 #include <doctest/doctest.h>
 #include "xolver/Solver.h"
-#include "theory/arith/lia/LiaSolver.h"
+#include "theory/arith/logics/lia/LiaSolver.h"
 #include "theory/core/TheoryAtomRegistry.h"
 #include "frontend/atomization/Atomizer.h"
 #include "theory/core/TheoryLemmaDatabase.h"
-#include "theory/arith/linear/LinearExpr.h"
-#include "theory/arith/linear/LinearConstraintNormalizer.h"
-#include "theory/arith/lra/GeneralSimplex.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
+#include "theory/arith/kernel/linear/LinearConstraintNormalizer.h"
+#include "theory/arith/logics/lra/GeneralSimplex.h"
 #include <fstream>
 #include <filesystem>
 

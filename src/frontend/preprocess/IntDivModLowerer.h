@@ -1,7 +1,7 @@
 #pragma once
 
 #include "expr/ir.h"
-#include "theory/arith/nia/reasoners/ModEqConstFact.h"
+#include "theory/arith/logics/nia/reasoners/ModEqConstFact.h"
 #include <gmpxx.h>
 #include <optional>
 #include <string>

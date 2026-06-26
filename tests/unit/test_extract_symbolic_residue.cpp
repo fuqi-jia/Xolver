@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <functional>
 #include <gmpxx.h>
 #include <unordered_map>

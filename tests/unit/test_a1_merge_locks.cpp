@@ -14,7 +14,7 @@
 #include "theory/core/TheoryAtomRegistry.h"
 #include "theory/core/TheoryAtomTypes.h"
 #include "theory/core/TheoryLemmaDatabase.h"
-#include "theory/arith/lra/LraSolver.h"
+#include "theory/arith/logics/lra/LraSolver.h"
 #include "util/RealValue.h"
 #include "sat/SatSolver.h"
 #include "xolver/Solver.h"

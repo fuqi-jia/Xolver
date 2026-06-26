@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nra/proof/CdcacProof.h"
-#include "theory/arith/nra/proof/CdcacProofChecker.h"
-#include "theory/arith/nra/fuzz/CdcacFuzzer.h"
+#include "theory/arith/logics/nra/proof/CdcacProof.h"
+#include "theory/arith/logics/nra/proof/CdcacProofChecker.h"
+#include "theory/arith/logics/nra/fuzz/CdcacFuzzer.h"
 
 using namespace xolver;
 

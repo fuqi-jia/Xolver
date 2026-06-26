@@ -1,9 +1,9 @@
 #pragma once
 
 #include "expr/ir.h"
-#include "theory/arith/linear/LinearExpr.h"
-#include "theory/arith/poly/PolynomialKernel.h"
-#include "theory/arith/poly/PolynomialConverter.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/poly/PolynomialConverter.h"
 #include <memory>
 #include <unordered_map>
 

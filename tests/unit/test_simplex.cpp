@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/lra/LraSolver.h"
-#include "theory/arith/lra/GeneralSimplex.h"
-#include "theory/arith/linear/LinearExpr.h"
+#include "theory/arith/logics/lra/LraSolver.h"
+#include "theory/arith/logics/lra/GeneralSimplex.h"
+#include "theory/arith/kernel/linear/LinearExpr.h"
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "expr/ir.h"
 #include <random>

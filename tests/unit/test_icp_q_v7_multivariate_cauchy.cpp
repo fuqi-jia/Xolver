@@ -7,12 +7,12 @@
 #include <doctest/doctest.h>
 #include <gmpxx.h>
 
-#include "theory/arith/icp/IcpEngineQ.h"
-#include "theory/arith/icp/ContractorFactoryQ.h"
-#include "theory/arith/icp/contractors/MultivariateCauchyContractorQ.h"
-#include "theory/arith/icp/IcpTypes.h"
-#include "theory/arith/interval/ReasonedBoxQ.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/kernel/icp/IcpEngineQ.h"
+#include "theory/arith/kernel/icp/ContractorFactoryQ.h"
+#include "theory/arith/kernel/icp/contractors/MultivariateCauchyContractorQ.h"
+#include "theory/arith/kernel/icp/IcpTypes.h"
+#include "theory/arith/kernel/interval/ReasonedBoxQ.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 
 using namespace xolver;

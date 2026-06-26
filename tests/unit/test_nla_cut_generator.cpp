@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
-#include "theory/arith/nra/nla/NlaCutGenerator.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nra/nla/NlaCutGenerator.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 
 #include <gmpxx.h>
 #include <unordered_map>
@@ -359,7 +359,7 @@ TEST_CASE("NlaCut math grid: lo_x * lo_y <= x*y <= hi_x * hi_y on non-neg quadra
 }
 
 // ---------- Phase C: NlaCutsRunner scaffold ----------
-#include "theory/arith/nra/nla/NlaCutsRunner.h"
+#include "theory/arith/logics/nra/nla/NlaCutsRunner.h"
 
 TEST_CASE("NlaCutsRunner: disabled by default emits nothing") {
     auto k = createPolynomialKernel();

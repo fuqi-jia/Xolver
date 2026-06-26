@@ -5,7 +5,7 @@
 // force over a bounded box — the "localized per-cut validity check".
 
 #include <doctest/doctest.h>
-#include "theory/arith/lia/GomoryCut.h"
+#include "theory/arith/logics/lia/GomoryCut.h"
 #include <gmpxx.h>
 #include <vector>
 

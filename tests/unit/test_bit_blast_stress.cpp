@@ -6,7 +6,7 @@
 #include <random>
 #include <vector>
 #include "sat/SatSolver.h"
-#include "theory/arith/bit_blast/BitBlastEncoder.h"
+#include "theory/arith/kernel/bit_blast/BitBlastEncoder.h"
 
 using namespace xolver;
 using namespace xolver::bitblast;

@@ -1,0 +1,374 @@
+#include "theory/arith/logics/lia/InternalMilpEngine.h"
+#include <algorithm>
+
+#include "util/EnvParam.h"
+
+namespace xolver {
+
+void InternalMilpEngine::clear() {
+    simplex_.reset();
+    varNames_.clear();
+    varKinds_.clear();
+    constraints_.clear();
+    integerVars_.clear();
+    rowCache_.clear();
+    allForms_.clear();
+    knownFormKeys_.clear();
+    clean_ = true;
+    needsRebuild_ = false;
+}
+
+void InternalMilpEngine::resetConstraints() {
+    // Keep vars, simplex rows, rowCache_, allForms_; only forget the active set.
+    constraints_.clear();
+}
+
+std::string InternalMilpEngine::formKey(const LinearConstraint& c) {
+    std::string key;
+    key.reserve(c.terms.size() * 8 + 16);
+    for (const auto& [idx, coeff] : c.terms) {
+        key += std::to_string(idx);
+        key += ':';
+        key += coeff.get_str();
+        key += ';';
+    }
+    key += '|';
+    key += c.rhs.get_str();
+    return key;
+}
+
+// Recreate every accumulated row on a freshly reset (clean, un-pivoted) basis.
+// This is the ONLY place a row may be created after a check() has pivoted, and
+// it is safe precisely because reset() restores a clean basis first.
+void InternalMilpEngine::rebuildOnCleanBasis() {
+    simplex_.reset();
+    rowCache_.clear();
+    // Re-register user vars in their original order so indices stay stable
+    // (form keys and integerVars_ reference these indices).
+    for (const auto& name : varNames_) {
+        simplex_.addVar(name);
+    }
+    for (const auto& form : allForms_) {
+        int aux = simplex_.addConstraint(form.terms, form.rhs);
+        rowCache_[formKey(form)] = aux;
+    }
+    clean_ = true;
+    needsRebuild_ = false;
+}
+
+int InternalMilpEngine::getOrCreateRow(const LinearConstraint& c) {
+    std::string key = formKey(c);
+    auto it = rowCache_.find(key);
+    if (it != rowCache_.end()) return it->second;
+    // Reached only on a clean basis: either the very first solve since a reset
+    // (clean_ == true), or right after rebuildOnCleanBasis(). A genuinely new
+    // form arriving on a DIRTY basis sets needsRebuild_ in addConstraint, so the
+    // row is created during the clean rebuild before this point — never here.
+    int aux = simplex_.addConstraint(c.terms, c.rhs);
+    rowCache_[key] = aux;
+    return aux;
+}
+
+void InternalMilpEngine::push() {
+    simplex_.push();
+}
+
+void InternalMilpEngine::pop() {
+    simplex_.pop();
+}
+
+int InternalMilpEngine::addVar(std::string_view name, VarKind kind) {
+    int idx = static_cast<int>(varNames_.size());
+    varNames_.push_back(std::string(name));
+    varKinds_.push_back(kind);
+    simplex_.addVar(std::string(name));
+    if (kind == VarKind::Int) {
+        integerVars_.insert(idx);
+    }
+    return idx;
+}
+
+std::string_view InternalMilpEngine::varName(int var) const {
+    if (var < 0 || var >= (int)varNames_.size()) return "";
+    return varNames_[var];
+}
+
+void InternalMilpEngine::noteForm(const LinearConstraint& c) {
+    if (knownFormKeys_.insert(formKey(c)).second) {
+        // First time we ever see this form. Remember it for clean rebuilds.
+        allForms_.push_back(c);
+        // If the basis is already dirty (a check() has pivoted since the last
+        // reset), its row cannot be created safely now — defer to a clean rebuild.
+        if (!clean_) needsRebuild_ = true;
+    }
+}
+
+void InternalMilpEngine::addConstraint(const LinearConstraint& c) {
+    constraints_.push_back(c);
+    noteForm(c);
+}
+
+void InternalMilpEngine::registerForm(
+    const std::vector<std::pair<int, mpq_class>>& terms, const mpq_class& rhs) {
+    // Pre-declare a row form WITHOUT making it an active constraint. Lets the
+    // caller front-load every atom's row on the first (clean) check so that
+    // later checks rarely hit a new form (which would force a clean rebuild).
+    LinearConstraint c;
+    c.terms = terms;
+    c.rhs = rhs;
+    c.rel = Relation::Eq;     // placeholder: only terms+rhs define the row
+    c.reason = SatLit{0, true};
+    noteForm(c);
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::solve(MilpMode mode) {
+    if (needsRebuild_) rebuildOnCleanBasis();
+    auto r = solveLpRelaxation();
+    // solveLpRelaxation()'s check() pivots the basis: it is now dirty until the
+    // next reset/rebuild. New forms arriving from here on need a clean rebuild.
+    clean_ = false;
+    if (r.kind != MilpResult::Kind::Sat) return r;
+
+    switch (mode) {
+        case MilpMode::RelaxationOnly:
+            return r;
+        case MilpMode::Budgeted: {
+            // Default FAST_BRANCH_BUDGET; tunable for autotuning.
+            static const int kFastBranchBudget =
+                env::paramInt("XOLVER_LIA_MILP_BRANCH_BUDGET", FAST_BRANCH_BUDGET);
+            int budget = kFastBranchBudget;
+            auto ir = checkIntegrality(/*useBudget=*/true, budget);
+            return ir;
+        }
+        case MilpMode::Complete: {
+            int budget = -1;
+            auto ir = checkIntegrality(/*useBudget=*/false, budget);
+            return ir;
+        }
+    }
+    return r; // unreachable
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::solveLpRelaxation() {
+    simplex_.resetActiveBounds();
+
+    for (const auto& c : constraints_) {
+        int aux = getOrCreateRow(c);
+        if (aux < 0) continue;
+
+        SatLit reason = c.reason;
+        if (reason.var == 0) reason = SatLit{0, true}; // defensive fallback
+
+        switch (c.rel) {
+            case Relation::Eq:
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
+                break;
+            case Relation::Leq:
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
+                break;
+            case Relation::Lt:
+                simplex_.assertUpper(aux, BoundInfo(BoundValue(DeltaRational(0, -1)), reason));
+                break;
+            case Relation::Geq:
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0)), reason));
+                break;
+            case Relation::Gt:
+                simplex_.assertLower(aux, BoundInfo(BoundValue(DeltaRational(0, 1)), reason));
+                break;
+            case Relation::Neq:
+                // Neq is not supported at engine level; caller must split
+                break;
+        }
+    }
+
+    auto r = simplex_.check();
+    if (r == GeneralSimplex::Result::Unsat) return {MilpResult::Kind::Unsat, -1, {}, {}};
+    if (r == GeneralSimplex::Result::Unknown) return {MilpResult::Kind::Unknown, -1, {}, {}};
+    return {MilpResult::Kind::Sat, -1, {}, {}};
+}
+
+int InternalMilpEngine::findBestFractionalVar(mpq_class& outFrac) const {
+    int bestVar = -1;
+    mpq_class bestFrac(-1);
+
+    for (int v : integerVars_) {
+        auto val = simplex_.value(v);
+        if (val.b != 0 || val.a.get_den() != 1) {
+            mpq_class frac;
+            if (val.b != 0) {
+                frac = mpq_class(1, 2);
+            } else {
+                mpz_class num = val.a.get_num();
+                mpz_class den = val.a.get_den();
+                mpz_class f = num / den;
+                mpz_class r = num % den;
+                mpz_class floorVal;
+                if (r == 0) {
+                    floorVal = f;
+                } else if (num >= 0) {
+                    floorVal = f;
+                } else {
+                    floorVal = f - 1;
+                }
+                frac = val.a - mpq_class(floorVal, 1);
+                if (frac < 0) frac = -frac;
+            }
+            if (frac > bestFrac) {
+                bestFrac = frac;
+                bestVar = v;
+            }
+        }
+    }
+
+    outFrac = bestFrac;
+    return bestVar;
+}
+
+void InternalMilpEngine::computeFloorCeil(const DeltaRational& val,
+                                          mpq_class& floorVal,
+                                          mpq_class& ceilVal) const {
+    mpq_class q = val.a;
+    mpz_class num = q.get_num();
+    mpz_class den = q.get_den();
+
+    if (den == 1) {
+        if (val.b > 0) {
+            floorVal = q;
+            ceilVal = mpq_class(num + 1, 1);
+        } else if (val.b < 0) {
+            floorVal = mpq_class(num - 1, 1);
+            ceilVal = q;
+        } else {
+            floorVal = q;
+            ceilVal = q;
+        }
+    } else {
+        mpz_class f = num / den;
+        mpz_class r = num % den;
+        if (r == 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f, 1);
+        } else if (num >= 0) {
+            floorVal = mpq_class(f, 1);
+            ceilVal = mpq_class(f + 1, 1);
+        } else {
+            floorVal = mpq_class(f - 1, 1);
+            ceilVal = mpq_class(f, 1);
+        }
+    }
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::checkIntegrality(bool useBudget, int& budget) {
+    mpq_class frac;
+    int bestVar = findBestFractionalVar(frac);
+
+    if (bestVar == -1) {
+        return {MilpResult::Kind::Sat, -1, {}, {}};
+    }
+
+    if (useBudget && budget <= 0) {
+        auto val = simplex_.value(bestVar);
+        mpq_class floorVal, ceilVal;
+        computeFloorCeil(val, floorVal, ceilVal);
+        return {MilpResult::Kind::NeedBranch, bestVar, floorVal, ceilVal};
+    }
+    if (useBudget) --budget;
+
+    return dfsCheckIntegrality(useBudget, budget);
+}
+
+InternalMilpEngine::MilpResult InternalMilpEngine::dfsCheckIntegrality(bool useBudget, int& budget) {
+    mpq_class frac;
+    int bestVar = findBestFractionalVar(frac);
+
+    if (bestVar == -1) {
+        return {MilpResult::Kind::Sat, -1, {}, {}};
+    }
+
+    if (useBudget && budget <= 0) {
+        auto val = simplex_.value(bestVar);
+        mpq_class floorVal, ceilVal;
+        computeFloorCeil(val, floorVal, ceilVal);
+        return {MilpResult::Kind::NeedBranch, bestVar, floorVal, ceilVal};
+    }
+    if (useBudget) --budget;
+
+    auto val = simplex_.value(bestVar);
+    mpq_class floorVal, ceilVal;
+    computeFloorCeil(val, floorVal, ceilVal);
+
+    SatLit dummyReason{0, true};
+
+    // Branch 1: x <= floor
+    simplex_.push();
+    bool ok1 = simplex_.assertUpper(bestVar, BoundInfo(BoundValue(DeltaRational(floorVal)), dummyReason));
+    if (ok1) {
+        auto r1 = simplex_.check();
+        if (r1 == GeneralSimplex::Result::Sat) {
+            auto sub = dfsCheckIntegrality(useBudget, budget);
+            if (sub.kind == MilpResult::Kind::Sat || sub.kind == MilpResult::Kind::Unknown) {
+                return sub;
+            }
+        } else if (r1 == GeneralSimplex::Result::Unknown) {
+            simplex_.pop();
+            return {MilpResult::Kind::Unknown, -1, {}, {}};
+        }
+    }
+    simplex_.pop();
+
+    // Branch 2: x >= ceil
+    simplex_.push();
+    bool ok2 = simplex_.assertLower(bestVar, BoundInfo(BoundValue(DeltaRational(ceilVal)), dummyReason));
+    if (ok2) {
+        auto r2 = simplex_.check();
+        if (r2 == GeneralSimplex::Result::Sat) {
+            auto sub = dfsCheckIntegrality(useBudget, budget);
+            if (sub.kind == MilpResult::Kind::Sat || sub.kind == MilpResult::Kind::Unknown) {
+                return sub;
+            }
+        } else if (r2 == GeneralSimplex::Result::Unknown) {
+            simplex_.pop();
+            return {MilpResult::Kind::Unknown, -1, {}, {}};
+        }
+    }
+    simplex_.pop();
+
+    // Branch-and-bound Unsat: both branches failed. The last LP leaf conflict
+    // does NOT explain global integer-infeasibility, so mark it branched so the
+    // caller falls back to the full active reason set (sound).
+    return {MilpResult::Kind::Unsat, -1, {}, {}, /*branched=*/true};
+}
+
+mpq_class InternalMilpEngine::value(int var) const {
+    auto dr = simplex_.value(var);
+    return dr.a;
+}
+mpq_class InternalMilpEngine::concreteValue(int var) const {
+    auto dr = simplex_.value(var);
+    if (dr.b == 0) return dr.a;
+    return dr.a + dr.b * simplex_.computeSafeDelta();
+}
+
+DeltaRational InternalMilpEngine::deltaValue(int var) const {
+    return simplex_.value(var);
+}
+
+std::vector<SatLit> InternalMilpEngine::getConflictReasons() const {
+    std::vector<SatLit> reasons;
+    const auto& conflict = simplex_.getConflict();
+    for (const auto& br : conflict) {
+        if (br.reason.var == 0) continue; // filter dummy reasons from branching
+        reasons.push_back(br.reason);
+    }
+    std::sort(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        if (a.var != b.var) return a.var < b.var;
+        return a.sign < b.sign;
+    });
+    reasons.erase(std::unique(reasons.begin(), reasons.end(), [](SatLit a, SatLit b) {
+        return a.var == b.var && a.sign == b.sign;
+    }), reasons.end());
+    return reasons;
+}
+
+} // namespace xolver

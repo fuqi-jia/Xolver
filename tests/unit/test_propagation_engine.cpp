@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
-#include "theory/arith/lra/LraPropagationEngine.h"
-#include "theory/arith/lra/GeneralSimplex.h"
+#include "theory/arith/logics/lra/LraPropagationEngine.h"
+#include "theory/arith/logics/lra/GeneralSimplex.h"
 
 using namespace xolver;
 

@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
-#include "theory/arith/nia/reasoners/SquareBoundReasoner.h"
-#include "theory/arith/nia/core/DomainStore.h"
-#include "theory/arith/poly/PolynomialKernel.h"
+#include "theory/arith/logics/nia/reasoners/SquareBoundReasoner.h"
+#include "theory/arith/logics/nia/core/DomainStore.h"
+#include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "sat/SatSolver.h"
 #include <gmpxx.h>
 
