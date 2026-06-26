@@ -6,6 +6,8 @@
 #include <gmpxx.h>
 #include <fstream>
 #include <unordered_set>
+#include <unordered_map>
+#include <cstdio>
 #endif
 
 namespace xolver {
@@ -39,6 +41,65 @@ bool proofLinSafe(ExprId id, const CoreIr& ir) {
         default:
             return false;
     }
+}
+
+// For an eq_transitive cert: every literal must be a TOP-LEVEL Eq atom; exactly
+// ONE is negative (the conclusion disequality) and the rest positive (the asserted
+// chain equalities); and the chain must TRANSITIVELY CONNECT the conclusion's two
+// terms. The last is an independent union-find over the asserted equalities — it
+// confirms a pure transitivity conflict and rejects any congruence-involved one
+// (where the equalities don't directly connect the endpoints), for which
+// eq_transitive would be wrong. Sound by construction; Carcara is the final gate.
+bool proofEufTransitivityOk(const std::vector<std::pair<ExprId, bool>>& lits,
+                            const CoreIr& ir,
+                            const std::unordered_set<ExprId>& posAssert,
+                            const std::unordered_set<ExprId>& negAssert) {
+    std::unordered_map<ExprId, ExprId> parent;
+    auto find = [&](ExprId x) {
+        while (parent.count(x) && parent[x] != x) x = parent[x];
+        parent[x] = x;
+        return x;
+    };
+    ExprId concL = NullExpr, concR = NullExpr;
+    int neg = 0;
+    for (const auto& [atomId, positive] : lits) {
+        // assume-validity: a positive literal asserts `atom` (must be a top-level
+        // assertion); a negative literal asserts `(not atom)` (the negation must be
+        // a top-level assertion — for a disequality, the asserted (not (= l r))).
+        if (positive ? !posAssert.count(atomId) : !negAssert.count(atomId)) return false;
+        const auto& e = ir.get(atomId);
+        if (e.kind != Kind::Eq || e.children.size() != 2) return false;
+        if (positive) {
+            parent[find(e.children[0])] = find(e.children[1]);
+        } else {
+            if (++neg > 1) return false;
+            concL = e.children[0];
+            concR = e.children[1];
+        }
+    }
+    return neg == 1 && concL != NullExpr && find(concL) == find(concR);
+}
+
+// Return the single DISTINCT conflict cert, or nullptr if the sink holds zero or
+// >=2 distinct conflicts. A theory may re-derive the same conflict several times
+// during search (e.g. EUF saturation / SAT re-check), so identical certs collapse
+// to one — that single conflict alone refutes the asserted literals. Two genuinely
+// different conflicts need Boolean assembly (later) and stay skeleton.
+const proof::TheoryConflictCert*
+proofUniqueConflict(const std::vector<proof::TheoryConflictCert>& cs) {
+    if (cs.empty()) return nullptr;
+    auto same = [](const proof::TheoryConflictCert& a, const proof::TheoryConflictCert& b) {
+        if (a.rule != b.rule || a.lits.size() != b.lits.size()) return false;
+        for (const auto& la : a.lits) {
+            bool f = false;
+            for (const auto& lb : b.lits) if (la == lb) { f = true; break; }
+            if (!f) return false;
+        }
+        return true;
+    };
+    for (size_t i = 1; i < cs.size(); ++i)
+        if (!same(cs[0], cs[i])) return nullptr;
+    return &cs[0];
 }
 } // namespace
 #endif
@@ -334,12 +395,14 @@ Result Solver::checkSat() {
     // unambiguous single-conflict case for now; multi-conflict / Boolean assembly
     // is later. A wrong certificate is rejected by Carcara offline (never
     // claimed), so this only ADDS a verifiable artifact next to the DRAT.
-    if (r == Result::Unsat && pImpl->ir &&
-        pImpl->proofSink_.conflicts().size() == 1) {
+    const proof::TheoryConflictCert* uc =
+        (r == Result::Unsat && pImpl->ir)
+            ? proofUniqueConflict(pImpl->proofSink_.conflicts()) : nullptr;
+    if (uc) {
         auto pit = pImpl->options.find("produce-proofs");
         if (pit != pImpl->options.end() &&
             pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
-            const auto& c = pImpl->proofSink_.conflicts().front();
+            const auto& c = *uc;
             // Soundness guard: the Farkas multipliers come from the simplex (the
             // certificate is correct by Farkas' lemma + the infeasible-row
             // invariant), so we only need ASSUME-validity here: emit the la_generic
@@ -353,21 +416,38 @@ Result Solver::checkSat() {
             if (emit) {
                 const auto& asserts = pImpl->ir->assertions();
                 std::unordered_set<ExprId> assertSet(asserts.begin(), asserts.end());
-                for (const auto& [atomId, positive] : c.lits) {
-                    if (!positive || !assertSet.count(atomId)) { emit = false; break; }
-                    const auto& e = pImpl->ir->get(atomId);
-                    // Inequalities only: equalities need signed la_generic
-                    // multipliers, which the (non-negative) simplex bound
-                    // coefficients don't directly supply — keep those skeleton.
-                    if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
-                        e.kind != Kind::Gt && e.kind != Kind::Geq) { emit = false; break; }
-                    // Both sides must be linear + sort-safe (no division, no
-                    // non-integer real constants) — else la_generic can't certify
-                    // it or the dumped problem won't parse. Stays skeleton.
-                    bool sidesOk = true;
-                    for (ExprId ch : e.children)
-                        if (!proofLinSafe(ch, *pImpl->ir)) { sidesOk = false; break; }
-                    if (!sidesOk) { emit = false; break; }
+                if (c.rule == "la_generic") {
+                    // LRA: each literal positively-asserted, top-level, an
+                    // inequality, and linear + sort-safe (no division / no
+                    // non-integer real constants — else la_generic can't certify it
+                    // or the dumped problem won't parse). Equalities stay skeleton
+                    // (they need signed multipliers the simplex bounds don't give).
+                    for (const auto& [atomId, positive] : c.lits) {
+                        if (!positive || !assertSet.count(atomId)) { emit = false; break; }
+                        const auto& e = pImpl->ir->get(atomId);
+                        if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
+                            e.kind != Kind::Gt && e.kind != Kind::Geq) { emit = false; break; }
+                        bool sidesOk = true;
+                        for (ExprId ch : e.children)
+                            if (!proofLinSafe(ch, *pImpl->ir)) { sidesOk = false; break; }
+                        if (!sidesOk) { emit = false; break; }
+                    }
+                } else if (c.rule == "eq_transitive") {
+                    // EUF: emit only for a PURE TRANSITIVITY conflict — independent
+                    // union-find over the asserted equalities must connect the
+                    // conclusion disequality's endpoints (congruence-involved
+                    // conflicts fail this and stay skeleton). The conclusion is
+                    // asserted negatively as (not (= l r)), so collect the negated
+                    // atoms of the top-level Not-assertions for assume-validity.
+                    std::unordered_set<ExprId> negAssert;
+                    for (ExprId a : asserts) {
+                        const auto& e = pImpl->ir->get(a);
+                        if (e.kind == Kind::Not && e.children.size() == 1)
+                            negAssert.insert(e.children[0]);
+                    }
+                    emit = proofEufTransitivityOk(c.lits, *pImpl->ir, assertSet, negAssert);
+                } else {
+                    emit = false;
                 }
             }
             if (emit) {
