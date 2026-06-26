@@ -66,6 +66,13 @@ protected:
     void onReset() override;
 
 private:
+#ifdef XOLVER_ENABLE_PROOFS
+    // Phase C: push an la_generic Farkas certificate (unit multipliers) for the
+    // current IMMEDIATE simplex conflict to the active proof sink. No-op off the
+    // proof path. Called at every immediate-conflict emission point.
+    void pushImmediateLraCert();
+#endif
+
     // Single core reasoner stage (Phase 2): incremental replay + interface
     // equalities + simplex + disequality split + propagation. Always
     // yields a verdict (never nullopt-continue).

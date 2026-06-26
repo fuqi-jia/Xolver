@@ -11,9 +11,10 @@
 # Usage: run_proof_corpus.sh <xolver-bin> <drat-trim-bin> <corpus-list-file>
 #   corpus-list-file: one path to a .smt2 per line (e.g. docs/proof/corpus/UNSAT-CORPUS.txt)
 set -uo pipefail
-XOLVER="${1:?usage: run_proof_corpus.sh <xolver> <drat-trim> <corpus-list>}"
+XOLVER="${1:?usage: run_proof_corpus.sh <xolver> <drat-trim> <corpus-list> [carcara]}"
 DRATTRIM="${2:?need drat-trim binary}"
 LIST="${3:?need corpus list file}"
+CARCARA="${4:-}"   # optional: also check Alethe theory proofs with Carcara
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -22,7 +23,7 @@ v=0 skel=0 rej=0 nop=0 skip=0 rejected_files=""
 while IFS= read -r f; do
   [ -z "$f" ] && continue
   [ -f "$f" ] || { echo "MISSING: $f"; continue; }
-  out="$(bash "$HERE/check_proof.sh" "$XOLVER" "$DRATTRIM" "$f" "$WORK" 2>/dev/null)"
+  out="$(bash "$HERE/check_proof.sh" "$XOLVER" "$DRATTRIM" "$f" "$WORK" "$CARCARA" 2>/dev/null)"
   rc=$?
   echo "$out"
   case $rc in

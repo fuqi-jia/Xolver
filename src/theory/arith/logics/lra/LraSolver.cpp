@@ -8,6 +8,9 @@
 #include "theory/core/TheoryLemmaDatabase.h"
 #include "theory/arith/kernel/linear/SimplexDiseqSplitter.h"
 #include "theory/core/TheoryAtomTypes.h"
+#ifdef XOLVER_ENABLE_PROOFS
+#include "proof/TheoryProofSink.h"
+#endif
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -40,6 +43,28 @@ LraSolver::~LraSolver() {
     }
 #endif
 }
+
+#ifdef XOLVER_ENABLE_PROOFS
+void LraSolver::pushImmediateLraCert() {
+    // Proof certificate (proof-mode only): an IMMEDIATE simplex conflict is two
+    // contradictory bounds on the same variable, whose Farkas combination has
+    // provably-UNIT multipliers (1·b1 + 1·b2 -> 0<0). Emit an la_generic cert with
+    // unit args. Row conflicts (real coefficients) are not certified here — they
+    // stay VERIFIED-SKELETON. Carcara validates the multipliers, so a wrong cert
+    // is rejected offline, never claimed.
+    auto* sink = proof::activeProofSink();
+    if (!sink || !gs_.hasImmediateConflict() || !registry_) return;
+    proof::TheoryConflictCert cert;
+    cert.rule = "la_generic";
+    for (const auto& cr : gs_.getConflict()) {
+        const TheoryAtomRecord* rec = registry_->findBySatVar(cr.reason.var);
+        if (!rec) return;  // can't identify the atom -> emit none (skeleton)
+        cert.lits.push_back({rec->exprId, cr.reason.sign});
+        cert.args.push_back("1");  // immediate conflict => unit Farkas multipliers
+    }
+    if (!cert.lits.empty()) sink->addConflict(std::move(cert));
+}
+#endif
 
 void LraSolver::onPush() {
     gs_.push();
@@ -185,6 +210,9 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
         if (!ok) {
             auto tc = manager_.translateConflict(gs_);
             NO_DBG << "[LRA] immediate conflict: " << debug::fmtClause(tc.clause) << "\n";
+#ifdef XOLVER_ENABLE_PROOFS
+            pushImmediateLraCert();
+#endif
 #ifdef XOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;
@@ -262,6 +290,9 @@ std::optional<TheoryCheckResult> LraSolver::stageCore(TheoryLemmaStorage& lemmaD
             assert(ok && "complementary literal in theory conflict clause");
             (void)ok;
             NO_DBG << "[LRA] simplex conflict: " << tc.clause.size() << " lits\n";
+#ifdef XOLVER_ENABLE_PROOFS
+            pushImmediateLraCert();
+#endif
 #ifdef XOLVER_LRA_PROFILE
             int sz = static_cast<int>(tc.clause.size());
             profile_.totalConflictSize += sz;

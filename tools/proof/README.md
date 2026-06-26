@@ -41,9 +41,18 @@ blocker — exactly like an unsound verdict.
   self-contained refutation. Pure-Boolean unsats verify *complete*; theory
   instances verify their *Boolean skeleton* with the lemmas assumed. All gated
   behind `-DXOLVER_ENABLE_PROOFS=ON` (default OFF).
-- **Phase C+ (next):** justify each assumed theory lemma (EUF, LRA, …) as an
-  Alethe sub-proof checked by `carcara`, upgrading `VERIFIED-SKELETON` to full
-  `VERIFIED` certificates.
+- **Phase C (in progress):** justify theory lemmas as Alethe sub-proofs checked
+  by `carcara`, upgrading `VERIFIED-SKELETON` to full `VERIFIED`. **LRA Farkas
+  landed**: an immediate simplex conflict over simple variable bounds on one
+  variable (e.g. `x>0 ∧ x<0`) emits an `la_generic` proof with unit Farkas
+  multipliers, plus an IR-derived `<base>.smt2`, checked `valid` by Carcara. The
+  soundness guard restricts emission to the provably-correct case (positive,
+  top-level, coeff-1, single-variable); everything else stays skeleton — **0
+  rejected**. Next: row conflicts (real coefficients), EUF (`eq_transitive`),
+  IDL/RDL (negative cycle).
+  - Pass the Carcara binary as the 5th arg to `check_proof.sh` / 4th to
+    `run_proof_corpus.sh` to check the Alethe proofs; without it, only the DRAT
+    Boolean skeleton is checked.
 
 ## Quick start
 
