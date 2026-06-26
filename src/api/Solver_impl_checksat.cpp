@@ -1189,6 +1189,21 @@ Result Solver::Impl::checkSatInternal() {
         // Reset SAT solver for fresh query.
         sat = createSatSolver();
 
+#ifdef XOLVER_ENABLE_PROOFS
+        // UNSAT proof tracing (opt-in via --produce-proofs / setOption). Must be
+        // enabled here — right after the fresh solver, before atomization feeds
+        // any clause (CaDiCaL CONFIGURING state). If the backend declines (e.g.
+        // not built with proof support) we proceed in degraded no-proof mode: an
+        // unsat is still emitted, just without a certificate. Never a wrong proof.
+        {
+            auto pit = options.find("produce-proofs");
+            if (pit != options.end() &&
+                pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
+                sat->enableProofTrace(pit->second.s, /*lrat=*/false);
+            }
+        }
+#endif
+
         // Symbolic-modular simplification of `(mod p M)` for non-constant M
         // (the bit-width-independent Zohar `pow2(k)` modulus) must run BEFORE
         // ITE lowering: it pushes a mod through the `intmodtotal` ite-wrapper

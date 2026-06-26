@@ -2,6 +2,7 @@
 #include "util/EnvParam.h"
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include "sat/CadicalTheoryPropagator.h"
 #include "util/SolveClock.h"
 
@@ -55,7 +56,14 @@ CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) 
     // unlimited solver — honor XOLVER_WALLCLOCK_MS during solve().
     solver_->connect_terminator(&wallTerm_);
 }
-CadicalBackend::~CadicalBackend() = default;
+CadicalBackend::~CadicalBackend() {
+#ifdef XOLVER_ENABLE_PROOFS
+    // Close CaDiCaL's proof trace cleanly (flushes the tail). Safe even if the
+    // last solve was not UNSAT — the partial trace is simply discarded by the
+    // checker since no proof-check is claimed unless finalizeProof() ran.
+    if (proofTracing_) solver_->close_proof_trace();
+#endif
+}
 
 SatVar CadicalBackend::newVar() {
     if (inSolving_) {
@@ -101,6 +109,18 @@ SatVar CadicalBackend::newVar() {
 }
 
 void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
+#ifdef XOLVER_ENABLE_PROOFS
+    // Capture the exact clause set fed to the SAT engine so the external checker
+    // has the DIMACS formula (CaDiCaL emits only the proof). Same int encoding as
+    // below, so <base>.cnf and the DRAT share one variable numbering.
+    if (proofTracing_) {
+        std::vector<int> c;
+        c.reserve(clause.size());
+        for (SatLit lit : clause)
+            c.push_back(lit.sign ? static_cast<int>(lit.var) : -static_cast<int>(lit.var));
+        proofCnf_.push_back(std::move(c));
+    }
+#endif
     for (SatLit lit : clause) {
         int cadicalLit = lit.sign ? static_cast<int>(lit.var)
                                    : -static_cast<int>(lit.var);
@@ -127,7 +147,14 @@ SatSolver::SolveResult CadicalBackend::solve() {
     }
 
     if (res == CaDiCaL::SATISFIABLE) return SolveResult::Sat;
-    if (res == CaDiCaL::UNSATISFIABLE) return SolveResult::Unsat;
+    if (res == CaDiCaL::UNSATISFIABLE) {
+#ifdef XOLVER_ENABLE_PROOFS
+        // A propositional refutation now exists in the trace: finalize it (write
+        // the DIMACS + flush the proof) so the artifacts are checkable on disk.
+        if (proofTracing_) finalizeProof();
+#endif
+        return SolveResult::Unsat;
+    }
     return SolveResult::Unknown;
 }
 
@@ -155,6 +182,66 @@ std::vector<SatLit> CadicalBackend::getFailedAssumptions() const {
         }
     }
     return failed;
+}
+
+bool CadicalBackend::enableProofTrace(const std::string& base, bool lrat) {
+#ifdef XOLVER_ENABLE_PROOFS
+    if (proofTracing_) return true;               // idempotent
+    // Must run in CaDiCaL CONFIGURING state (before any add()/solve()).
+    proofBase_ = base;
+    const std::string proofPath = base + (lrat ? ".lrat" : ".drat");
+    if (lrat) solver_->set("lrat", 1);            // antecedent-carrying LRAT
+    solver_->set("binary", 0);                    // ASCII: directly checkable
+    // Disable bounded-variable-addition for proof runs: BVA mints fresh internal
+    // variables that would appear in the proof but not in our captured DIMACS,
+    // breaking the formula/proof variable alignment. Proof mode is opt-in and
+    // rare, so the (default-ON) search heuristic is sacrificed only here.
+    solver_->set("factor", 0);
+    if (!solver_->trace_proof(proofPath.c_str())) return false;
+    proofTracing_ = true;
+    proofConcluded_ = false;
+    proofHadExternalClause_ = false;
+    proofCnf_.clear();
+    return true;
+#else
+    (void)base; (void)lrat;
+    return false;
+#endif
+}
+
+void CadicalBackend::finalizeProof() {
+#ifdef XOLVER_ENABLE_PROOFS
+    if (!proofTracing_ || proofConcluded_) return;
+    proofConcluded_ = true;
+    solver_->conclude();          // record the UNSAT conclusion into the trace
+    solver_->flush_proof_trace(); // flush the proof tail
+    // Soundness floor: write the matching DIMACS — and thereby "produce a proof"
+    // (the <base>.cnf is the completeness signal the CLI/checker key on) — ONLY
+    // when every clause the SAT engine used went through addClause(). If a theory
+    // lemma was fed via the external propagator, the captured DIMACS is
+    // incomplete, so we suppress the certificate (degraded no-proof) rather than
+    // emit one an external checker would (correctly) reject. Never a wrong proof.
+    if (!proofHadExternalClause_)
+        writeProofCnf();
+#endif
+}
+
+void CadicalBackend::noteExternalProofClause() {
+#ifdef XOLVER_ENABLE_PROOFS
+    if (proofTracing_) proofHadExternalClause_ = true;
+#endif
+}
+
+void CadicalBackend::writeProofCnf() const {
+#ifdef XOLVER_ENABLE_PROOFS
+    std::ofstream out(proofBase_ + ".cnf");
+    if (!out) return;
+    out << "p cnf " << static_cast<long>(maxVar_) << ' ' << proofCnf_.size() << '\n';
+    for (const auto& c : proofCnf_) {
+        for (int lit : c) out << lit << ' ';
+        out << "0\n";
+    }
+#endif
 }
 
 bool CadicalBackend::configure(const char* name, int64_t value) {

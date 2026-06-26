@@ -2,6 +2,7 @@
 
 #include "expr/types.h"
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace xolver {
@@ -60,6 +61,21 @@ public:
     // shared-equality atoms to FALSE (the "all-distinct" arrangement), so the SAT
     // core stops freely guessing interface equalities. Default no-op.
     virtual void setDefaultPhase(SatVar /*v*/, bool /*value*/) {}
+
+    // --- UNSAT proof tracing (Phase B; backend gated by XOLVER_ENABLE_PROOFS) ---
+    // Enable propositional-proof emission for this solve. `base` is a path stem:
+    // the backend writes the DIMACS clause set it feeds the SAT engine to
+    // `<base>.cnf` and the refutation proof to `<base>.drat` (or `.lrat`), so an
+    // independent checker (drat-trim / lrat-check) can verify `<base>.cnf` ⊢ ⊥.
+    // MUST be called before any addClause()/solve() (CaDiCaL CONFIGURING state).
+    // Returns false if unsupported or not built with proof support — the caller
+    // then runs in degraded "no-proof" mode (still emits unsat, no certificate).
+    virtual bool enableProofTrace(const std::string& /*base*/, bool /*lrat*/) { return false; }
+
+    // Finalize the proof of the just-decided UNSAT solve (CaDiCaL conclude()) and
+    // flush both artifacts to disk so they are readable immediately. No-op unless
+    // proof tracing was enabled and the last solve was UNSAT.
+    virtual void finalizeProof() {}
 };
 
 /**

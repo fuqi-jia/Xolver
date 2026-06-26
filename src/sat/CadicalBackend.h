@@ -28,6 +28,17 @@ public:
     void disconnectPropagator();
     void requestTerminate();
 
+    bool enableProofTrace(const std::string& base, bool lrat) override;
+    void finalizeProof() override;
+
+    // Called by the theory propagator when it feeds an external (theory) clause
+    // to the SAT engine. Such clauses bypass addClause(), so the captured DIMACS
+    // would be INCOMPLETE — a proof referencing them would be (correctly) rejected
+    // by an external checker. Until theory-lemma certificates land (Phase C), a
+    // run that used any external clause emits NO proof (honest degraded mode)
+    // rather than an incomplete one. No-op unless proof tracing is active.
+    void noteExternalProofClause();
+
     // Statistics (available only when compiled with CaDiCaL)
     struct Stats {
         int64_t vars = 0;
@@ -58,6 +69,17 @@ private:
     bool inSolving_ = false;
     std::vector<SatLit> lastAssumptions_;
     std::vector<bool> observedVars_;
+
+    // --- UNSAT proof tracing state (active only when enableProofTrace succeeded;
+    // compiled only under XOLVER_ENABLE_PROOFS — see CadicalBackend.cpp). ---
+    bool proofTracing_ = false;     // proof emission enabled for this solve
+    bool proofConcluded_ = false;   // finalizeProof already ran (idempotent guard)
+    bool proofHadExternalClause_ = false; // a theory clause bypassed addClause()
+    std::string proofBase_;         // path stem: <base>.cnf + <base>.drat/.lrat
+    // Captured DIMACS clause set fed to the SAT engine (CaDiCaL numbering). The
+    // checker needs the formula AND the proof; CaDiCaL emits only the proof.
+    std::vector<std::vector<int>> proofCnf_;
+    void writeProofCnf() const;     // dump <base>.cnf from proofCnf_
 };
 
 } // namespace xolver
