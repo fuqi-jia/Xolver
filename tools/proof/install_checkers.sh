@@ -12,6 +12,10 @@
 # Usage: install_checkers.sh [install-dir]   (default: ./.proof-checkers)
 # Prints the resolved binary paths on success.
 set -euo pipefail
+# Resolve the script's own dir ABSOLUTELY before any cd — the soundness self-test
+# below is reached relative to it, and we cd into $DEST first (a relative $0 would
+# then resolve under $DEST and vanish, as it did in CI).
+HERE="$(cd "$(dirname "$0")" && pwd)"
 DEST="${1:-$(pwd)/.proof-checkers}"
 mkdir -p "$DEST"
 cd "$DEST"
@@ -36,5 +40,5 @@ else
 fi
 
 echo "== self-test the Boolean-core gate is adversarially sound =="
-bash "$(dirname "$0")/../../docs/proof/refs/checker-soundness-test.sh" "$DEST/drat-trim/drat-trim"
+bash "$HERE/../../docs/proof/refs/checker-soundness-test.sh" "$DEST/drat-trim/drat-trim"
 echo "checkers ready under: $DEST"
