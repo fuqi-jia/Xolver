@@ -9,12 +9,12 @@
 # regression to investigate (a sat/unsat that flipped, or a decided case that
 # became unknown/timeout). A clean diff == zero decided-count delta.
 #
-# Usage: scripts/capture_baseline.sh [out.tsv] [timeout_seconds]
+# Usage: tools/governance/capture_baseline.sh [out.tsv] [timeout_seconds]
 #   defaults: docs/flags/baseline-verdicts.tsv , 20s per case
 #
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 OUT="${1:-docs/flags/baseline-verdicts.tsv}"

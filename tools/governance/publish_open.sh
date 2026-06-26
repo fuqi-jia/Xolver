@@ -12,10 +12,10 @@
 # `git filter-repo --paths-from-file <allowlist> --invert-paths <private>`; this
 # script demonstrates the strip + leak gate without rewriting history.
 #
-# Usage: scripts/publish_open.sh [out_dir]   (default: /tmp/xolver-open-export)
+# Usage: tools/governance/publish_open.sh [out_dir]   (default: /tmp/xolver-open-export)
 #
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 OUT="${1:-/tmp/xolver-open-export}"
 ALLOWLIST="$ROOT/PUBLIC_ALLOWLIST"
 
