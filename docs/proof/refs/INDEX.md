@@ -62,9 +62,16 @@ independent SAT-proof checker:
 - **DRAT-trim / lrat-check:** <https://github.com/marijnheule/drat-trim>
   (papers vendored: `drat-trim.pdf`, `lrat-efficient-certified-rat.pdf`).
   - Build: `make`.
-  - Check DRAT: `drat-trim <cnf.dimacs> <proof.drat>`.
+  - Check DRAT: `drat-trim <cnf.dimacs> <proof.drat>` — **the gate.** Full forward
+    RUP; **adversarially sound** (rejects a bogus empty-clause proof of a SAT
+    formula). Exit 0 + `s VERIFIED` = accepted; exit 1 + `s NOT VERIFIED` = reject.
   - Emit LRAT from DRAT: `drat-trim <cnf> <proof.drat> -L <proof.lrat>`.
   - Check LRAT: `lrat-check <cnf.dimacs> <proof.lrat>` (the in-repo C checker).
+    **CAVEAT — verified Phase A:** this `lrat-check` *trusts* solver-supplied
+    antecedent hints and rubber-stamps an empty clause when the hints don't
+    independently conflict; it is **fine for genuine solver output but NOT a gate
+    against a wrong proof.** Do not use it as the sole soundness gate. See
+    `checker-soundness-test.sh` for the reproducible adversarial test.
 - **LRAT format:** *Efficient Certified RAT Verification* (Heule, Hunt, Kaufmann,
   Wetzler), CADE 2017 — vendored `lrat-efficient-certified-rat.pdf`. LRAT extends
   DRAT with antecedent **hints** so a checker needs no unit propagation search;

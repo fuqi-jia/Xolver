@@ -14,11 +14,17 @@ justification data is in hand, (3) the **per-theory proof-rule mapping**, and
 ## 0. TL;DR
 
 - **Target format: Alethe**, checked by the independent **Carcara** checker, with
-  the **Boolean core emitted as LRAT** by the vendored CaDiCaL (rel-3.0.0, native
-  `LratTracer`) and checked by **lrat-check**. This is the plan's recommendation,
-  now *confirmed against the actual code*: CaDiCaL can emit LRAT today, and Alethe
-  has first-class rules for every Xolver theory (`la_generic` carries Farkas
+  the **Boolean core emitted as DRAT/LRAT** by the vendored CaDiCaL (rel-3.0.0,
+  native `DratTracer`/`LratTracer`) and checked by the **adversarially-sound
+  `drat-trim`** (with `cake_lpr`, the CakeML-*verified* LRAT checker, as the
+  hardened floor in Phase E). This is the plan's recommendation, now *confirmed
+  against the actual code*: CaDiCaL can emit DRAT/LRAT today, and Alethe has
+  first-class rules for every Xolver theory (`la_generic` carries Farkas
   coefficients; `eq_congruent`/`eq_transitive` for EUF; resolution for the core).
+- **Checker soundness was verified, not assumed** (§1.4): `drat-trim` correctly
+  *rejects* a bogus empty-clause proof of a SAT formula; the `lrat-check` in the
+  drat-trim repo trusts solver hints and rubber-stamps such a claim, so it is
+  **not** the gate on its own. Carcara 1.1.0 is installed and runs.
 - **The proof is two-layer, by necessity.** Theory lemmas enter the CaDiCaL proof
   as *input clauses* ("after the query line"), **not** as propositionally-derived
   steps. So the LRAT proof certifies the Boolean skeleton *only relative to* the
@@ -107,6 +113,31 @@ the Alethe-proved lemmas) or to **translate the LRAT resolution chain into Aleth
 `resolution` steps** for a single Carcara-checked artifact. LRAT's antecedent
 hints make that translation mechanical; the choice is a tractability call made in
 Phase D, not now.
+
+### 1.4 Checker soundness — verified empirically, not assumed
+
+A proof checker is a soundness gate **only if it rejects invalid proofs**. We
+tested this adversarially before committing to a checker (reproducible via
+`refs/checker-soundness-test.sh`):
+
+| Checker | valid UNSAT proof | bogus empty-clause proof of a **SAT** formula | verdict |
+|---------|-------------------|-----------------------------------------------|---------|
+| **`drat-trim`** (full forward RUP) | verifies (exit 0) | **rejects** — `conflict claimed, but not detected` (exit 1) | **adversarially sound → use as the Boolean-core gate** |
+| `lrat-check` (drat-trim repo) | verifies | **accepts** (rubber-stamps) | trusts solver hints; **not** a gate against a *wrong* proof |
+| `cake_lpr` (CakeML-verified) | verifies | rejects (machine-checked soundness) | **the hardened floor (Phase E)** |
+
+- Root cause for `lrat-check`: for an empty clause `list[0]=0` the pivot is
+  degenerate, `RATs==0`, and `start==0`, so it returns `SUCCESS` unless a listed
+  hint clause *independently* conflicts (`lrat-check.c` `checkClause` lines
+  154/160-164). Genuine solver hints do conflict, so it is fine for real output —
+  but it cannot catch a wrong proof, which is the whole point of the gate.
+- **Consequence for the pipeline:** Phase B emits **DRAT** and checks with
+  `drat-trim` (sound, and CaDiCaL's default tracer). LRAT (native CaDiCaL or via
+  `drat-trim -L`) checked by **`cake_lpr`** is the Phase-E verified floor. The
+  soundness self-test runs in the proof CI lane as a meta-check on the gate.
+- **Carcara** (Alethe) is the theory-layer checker; its rule checks are the
+  analogous gate for theory sub-proofs (validated per-theory in Phase C against
+  real emitted proofs — Carcara is the arbiter, never a self-emitted "looks-ok").
 
 ---
 
@@ -423,9 +454,10 @@ post-guard* clauses actually fed to CaDiCaL, not the pre-minimization reasons.
 1. **Flip `XOLVER_ENABLE_PROOFS` to default-OFF and make it real** (`#ifdef`-gate
    the proof recording + a runtime `XOLVER_ENABLE_PROOFS=1` env switch per repo
    convention). Today it is ON and gates nothing. (Phase B.)
-2. **Phase B:** expose `CadicalBackend::enableProof(path, lrat=true)` and thread it
-   through `ProofManager::setSatProofFile`; emit LRAT; check `CNF ∪ lemmas ⊢ ⊥`
-   with lrat-check on the corpus. Treat theory lemmas as axioms here.
+2. **Phase B:** expose `CadicalBackend::enableProof(path, lrat=false)` and thread it
+   through `ProofManager::setSatProofFile`; emit **DRAT** and check `CNF ∪ lemmas ⊢ ⊥`
+   with the adversarially-sound **`drat-trim`** on the corpus (treating theory
+   lemmas as axioms). LRAT + `cake_lpr` is the Phase-E verified upgrade.
 3. **Phase C:** structured EUF explain first (→ `eq_congruent`/`eq_transitive`),
    then LRA `la_generic`, then IDL/RDL, LIA, Datatype, Array; NRA/NIA degraded.
 4. **Phase D:** `exportAlethe()` assembles theory sub-proofs + the (translated or
