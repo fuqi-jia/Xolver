@@ -56,3 +56,50 @@ jobs:
             --solver build/bin/xolver \
             --timeout 240 \
             -j "$(nproc)"
+
+  # ---------------------------------------------------------------------------
+  # Proof gate (Phase E): build the proofs-ON config and re-validate every
+  # produced UNSAT proof with an INDEPENDENT external checker — drat-trim for the
+  # DRAT Boolean core, Carcara for the Alethe theory certificates. A REJECTED
+  # proof is a HARD failure (run_proof_corpus.sh exits non-zero): a wrong proof is
+  # a release blocker exactly like a wrong verdict. NO-PROOF (degraded) is allowed
+  # and only counted. This is the unsat-side analogue of the regression gate.
+  proof-gate:
+    name: proof-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libgmp-dev libmpfr-dev python3
+
+      # drat-trim (single C file, fast) + carcara (Rust; cargo is preinstalled on
+      # ubuntu-latest). Binaries land under .proof-checkers/.
+      - name: Install proof checkers
+        run: bash tools/proof/install_checkers.sh
+
+      - name: Configure (Release, proofs ON)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DXOLVER_ENABLE_PROOFS=ON
+
+      - name: Build
+        run: cmake --build build -j2
+
+      # Gate every UNSAT across the proof-bearing lanes (Boolean DRAT + LRA/EUF/
+      # IDL/RDL Alethe). run_proof_corpus.sh exits non-zero on any REJECTED.
+      - name: Proof corpus gate (0 REJECTED)
+        run: |
+          DT="$PWD/.proof-checkers/drat-trim/drat-trim"
+          CAR="$PWD/.proof-checkers/carcara/bin/carcara"
+          grep -rl ':status unsat' \
+            tests/regression/bool tests/regression/lra tests/regression/euf \
+            tests/regression/idl tests/regression/rdl --include='*.smt2' \
+            | sort -u > proof-gate-corpus.txt
+          echo "Gating $(wc -l < proof-gate-corpus.txt) UNSAT instances with drat-trim + Carcara"
+          bash tools/proof/run_proof_corpus.sh build/bin/xolver "$DT" proof-gate-corpus.txt "$CAR"
