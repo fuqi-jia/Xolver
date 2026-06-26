@@ -1,6 +1,9 @@
 #include "util/CaseStats.h"
 #include <fstream>
 #include <chrono>
+#include <unistd.h>   // getpid() — needed explicitly under stricter toolchains
+                      // (e.g. manylinux devtoolset); pulled in transitively
+                      // elsewhere but not guaranteed.
 
 namespace xolver {
 
