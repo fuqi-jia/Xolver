@@ -178,12 +178,13 @@ jobs:
             SETUPTOOLS_SCM_PRETEND_VERSION=${{ steps.ver.outputs.v }}
             CMAKE_BUILD_PARALLEL_LEVEL=2
           CIBW_BUILD_VERBOSITY: 1
-          # Smoke-test every wheel: import + a trivial solve.
+          # Smoke-test every wheel: import + a trivial solve. Build x and the
+          # solver as one unit (terms are solver-bound — see the dsl design note).
           CIBW_TEST_COMMAND: >-
             python -c "import xolver;
-            x=xolver.Int('x');
-            s=xolver.Solver(); s.add(x>0); s.add(x<2);
-            assert str(s.check())=='sat', s.check();
+            s=xolver.Solver(); x=s.int('x');
+            s.add(x>0, x<2);
+            assert s.check() == xolver.sat, s.check();
             assert s.model()[x]==1, s.model();
             print('xolver', xolver.__version__, 'wheel OK')"
         with:
