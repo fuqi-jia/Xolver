@@ -18,9 +18,19 @@ option(XOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
 option(XOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
 option(XOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
 option(XOLVER_BUILD_PRO "Build closed-source pro engines from src/pro/ (if present)" OFF)
+option(XOLVER_BUILD_PYTHON "Build the Python extension module (pybind11)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# The Python extension is a shared object (.so); every static archive linked
+# into it (CaDiCaL, libpoly, SOMTParser, nlohmann/json) must be position-
+# independent or the link fails on x86_64 with "recompile with -fPIC". Force
+# PIC globally for the add_subdirectory() targets; CaDiCaL (a separate
+# ExternalProject build) gets -fPIC explicitly below.
+if(XOLVER_BUILD_PYTHON)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -76,11 +86,20 @@ set(CADICAL_BUILD_DIR  "${CMAKE_BINARY_DIR}/third_party/cadical-build")
 set(CADICAL_LIB        "${CADICAL_BUILD_DIR}/libcadical.a")
 set(CADICAL_INCLUDE    "${CADICAL_SOURCE_DIR}/src")
 
+# CaDiCaL is built in-source via its own configure/make. For the Python
+# extension (and any shared-library consumer) it must be position-independent;
+# the `-fPIC` flag is a no-op for the default static CLI build.
+if(XOLVER_BUILD_PYTHON OR BUILD_SHARED_LIBS)
+    set(CADICAL_CONFIGURE_FLAGS -O -fPIC)
+else()
+    set(CADICAL_CONFIGURE_FLAGS -O)
+endif()
+
 if(EXISTS "${CADICAL_SOURCE_DIR}/configure")
     ExternalProject_Add(cadical_ext
         SOURCE_DIR    "${CADICAL_SOURCE_DIR}"
         BINARY_DIR    "${CADICAL_BUILD_DIR}"
-        CONFIGURE_COMMAND cd "${CADICAL_SOURCE_DIR}" && ./configure -O
+        CONFIGURE_COMMAND cd "${CADICAL_SOURCE_DIR}" && ./configure ${CADICAL_CONFIGURE_FLAGS}
         BUILD_COMMAND     cd "${CADICAL_SOURCE_DIR}" && make
         INSTALL_COMMAND   ${CMAKE_COMMAND} -E copy
                           "${CADICAL_SOURCE_DIR}/build/libcadical.a"
@@ -193,4 +212,11 @@ endif()
 
 if(XOLVER_BUILD_TOOLS)
     add_subdirectory(app)
+endif()
+
+# Python extension module (pybind11). Built on demand — the wheel build
+# (scikit-build-core) configures with -DXOLVER_BUILD_PYTHON=ON and turns the
+# tests/tools off. Never part of the default C++ build.
+if(XOLVER_BUILD_PYTHON)
+    add_subdirectory(python)
 endif()

@@ -184,3 +184,13 @@ __pycache__/
 /results/
 *.tsv
 xolver-dist.tar.gz
+
+# Python packaging artifacts (wheels, sdists, scikit-build-core / setuptools_scm)
+/dist/
+/wheelhouse/
+/pydist/
+*.whl
+*.egg-info/
+.eggs/
+python/**/_version.py
+_skbuild/

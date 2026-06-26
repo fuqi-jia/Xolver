@@ -133,6 +133,50 @@ static void writeReason(std::string* sink, const std::string& msg) {
     if (sink) *sink = msg;
 }
 
+namespace {
+// SatLit clause <-> signed-int clause (the user-propagator wire form: var = true
+// phase, -var = false phase).
+std::vector<int> clauseToInts(const std::vector<SatLit>& c) {
+    std::vector<int> out;
+    out.reserve(c.size());
+    for (SatLit l : c)
+        out.push_back(l.sign ? static_cast<int>(l.var) : -static_cast<int>(l.var));
+    return out;
+}
+std::vector<SatLit> intsToClause(const std::vector<int>& c) {
+    std::vector<SatLit> out;
+    out.reserve(c.size());
+    for (int l : c)
+        out.push_back(SatLit{static_cast<SatVar>(std::abs(l)), l > 0});
+    return out;
+}
+CheckOutcome toOutcome(TheoryCheckResult::Kind k) {
+    switch (k) {
+        case TheoryCheckResult::Kind::Consistent: return CheckOutcome::Consistent;
+        case TheoryCheckResult::Kind::Conflict:   return CheckOutcome::Conflict;
+        case TheoryCheckResult::Kind::Lemma:      return CheckOutcome::Lemma;
+        case TheoryCheckResult::Kind::Unknown:    return CheckOutcome::Unknown;
+    }
+    return CheckOutcome::Unknown;
+}
+}  // namespace
+
+void CadicalTheoryPropagator::maybeUserSetup() {
+    if (!user_ || userSetupDone_) return;
+    userSetupDone_ = true;
+    std::vector<ObservedAtom> obs;
+    for (SatVar v : registry_.allAtomVars()) {
+        const TheoryAtomRecord* rec = registry_.findBySatVar(v);
+        if (!rec) continue;
+        ObservedAtom a;
+        a.var = static_cast<uint32_t>(v);
+        a.term = Term{static_cast<uint32_t>(rec->exprId)};
+        a.isTheory = true;
+        obs.push_back(a);
+    }
+    user_->onSetup(obs);
+}
+
 void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
     static const bool satProf = xolver::env::diag("XOLVER_SAT_PROF");
     auto _na0 = satProf ? std::chrono::steady_clock::now()
@@ -146,6 +190,10 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
             ++g_notifyCalls;
         }
     } _nat{satProf, _na0};
+    if (user_) maybeUserSetup();
+    // Capture (before the probe clears it) whether the first lit of this batch
+    // is CaDiCaL's decision literal — forwarded to the user propagator below.
+    const bool userDecFront = (user_ != nullptr) && expectDecisionLit_;
     // Decision-steering probe: the first literal assigned right after a new
     // decision level is CaDiCaL's decision literal. Bucket it theory vs boolean.
     if (expectDecisionLit_ && !lits.empty()) {
@@ -157,9 +205,15 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
             ++theoryAtomDecisions_;
         }
     }
+    size_t _userIdx = 0;
     for (int lit : lits) {
         SatVar var = static_cast<SatVar>(std::abs(lit));
         bool sign = lit > 0;
+        if (user_) {
+            user_->onAssignment(static_cast<uint32_t>(var), sign,
+                                userDecFront && _userIdx == 0);
+        }
+        ++_userIdx;
         varToLevel_[var] = currentLevel_;
         auto ins = currentAssignment_.emplace(var, sign);
         if (ins.second) assignTrail_.emplace_back(var, currentLevel_);
@@ -167,6 +221,10 @@ void CadicalTheoryPropagator::notify_assignment(const std::vector<int>& lits) {
         const auto* atom = registry_.findBySatVar(var);
         if (!atom) continue;
         tm_.assertTheoryLit(*atom, SatLit{var, sign}, currentLevel_);
+        if (user_) {
+            user_->onFixed(static_cast<uint32_t>(var), sign,
+                           Term{static_cast<uint32_t>(atom->exprId)});
+        }
         theoryDirtySinceCheck_ = true;  // a theory atom changed; cb_propagate must re-check
     }
     // L7: drive relevancy AFTER the whole batch is in currentAssignment_ so the
@@ -183,6 +241,7 @@ void CadicalTheoryPropagator::notify_new_decision_level() {
     ++currentLevel_;
     expectDecisionLit_ = true;  // next assignment's first lit is the decision
     if (relevancyOn_) rel_->pushLevel();
+    if (user_) { maybeUserSetup(); user_->onNewDecisionLevel(); }
 }
 
 int CadicalTheoryPropagator::cb_decide() {
@@ -204,6 +263,26 @@ int CadicalTheoryPropagator::cb_decide() {
         abortWithUnknown_ = true;
         terminateSolve();
         return 0;
+    }
+
+    // One-step control: let the user propagator pick the next decision. A
+    // non-zero signed literal is honored as-is (pure steering — a wrong guess is
+    // backtracked, so this can never change the verdict); 0 falls through to the
+    // built-in heuristics below.
+    if (user_) {
+        maybeUserSetup();
+        int d = user_->decide();
+        if (d != 0) {
+            // CaDiCaL requires external decisions over UNASSIGNED variables; a
+            // user can't always know the live trail, so silently ignore an
+            // already-assigned pick (defer to the built-in heuristics) instead
+            // of letting CaDiCaL abort.
+            SatVar dv = static_cast<SatVar>(std::abs(d));
+            if (currentAssignment_.find(dv) == currentAssignment_.end()) {
+                ++steeredDecisions_;
+                return d;
+            }
+        }
     }
 
     // Cache the probe flag: cb_decide runs on every SAT decision, and a live
@@ -337,6 +416,7 @@ void CadicalTheoryPropagator::notify_backtrack(size_t new_level) {
     currentLevel_ = static_cast<int>(new_level);
     tm_.backtrackToLevel(currentLevel_);
     if (relevancyOn_) rel_->popToLevel(static_cast<int>(new_level));
+    if (user_) user_->onBacktrack(static_cast<uint32_t>(new_level));
     // Pop the trail suffix above new_level (O(#popped)) instead of scanning the whole
     // varToLevel_ map. Equivalent erase set: the trail holds exactly the assigned vars
     // with their levels, level-sorted, so vars above new_level are precisely the suffix.
@@ -465,6 +545,8 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     updateCaseStatsSearch();
 #endif
 
+    if (user_) user_->onTheoryCheck(CheckEffort::Full, toOutcome(tr.kind));
+
     NO_DBG << "[PROP] modelCheck=" << stats_.modelCheckCount << " result=" << (int)tr.kind;
     if (!tr.reason.empty()) { NO_DBG << " reason=" << tr.reason; }
     NO_DBG << " us=" << dur.count();
@@ -496,6 +578,25 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
     }
 
     if (tr.kind == TheoryCheckResult::Kind::Consistent) {
+        if (user_) {
+            user_->onFinalCheck();
+            // ADVANCED: user-generated theory lemmas at the final check. Only a
+            // lemma the current model FALSIFIES can reject the model (return
+            // false); non-excluding lemmas are dropped so the search always
+            // makes progress and terminates. A user is responsible for the
+            // VALIDITY of any lemma it returns (an invalid one is unsound).
+            auto userLemmas = user_->generateLemmas();
+            bool reject = false;
+            for (auto& cl : userLemmas) {
+                auto satCl = intsToClause(cl);
+                if (satCl.empty()) continue;
+                if (isClauseFalsifiedByCurrentModel(satCl)) {
+                    enqueuePendingClause(satCl);
+                    reject = true;
+                }
+            }
+            if (reject) return false;
+        }
         return true;
     }
 
@@ -531,6 +632,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
                 return false;
             }
 
+            if (user_) user_->onConflict(clauseToInts(tr.conflictOpt->clause));
             enqueuePendingClause(tr.conflictOpt->clause);
             return false;
         }
@@ -547,6 +649,7 @@ bool CadicalTheoryPropagator::cb_check_found_model(const std::vector<int>& model
         if (tr.lemmaOpt && !tr.lemmaOpt->lits.empty()) {
             // Always return the clause, even if seen before.
             // The current model violates the theory; we must reject it.
+            if (user_) user_->onLemma(clauseToInts(tr.lemmaOpt->lits));
             lemmaDb_.insertIfNew(*tr.lemmaOpt);
             enqueuePendingClause(*tr.lemmaOpt);
             return false;
@@ -691,6 +794,8 @@ int CadicalTheoryPropagator::cb_propagate() {
     }
 #endif
 
+    if (user_) user_->onTheoryCheck(CheckEffort::Standard, toOutcome(tr.kind));
+
     if (isConflict) {
         if (tr.conflictOpt && !tr.conflictOpt->clause.empty()) {
             auto& clause = tr.conflictOpt->clause;
@@ -752,6 +857,7 @@ int CadicalTheoryPropagator::cb_propagate() {
                 NO_DBG << (lit.sign ? "" : "-") << lit.var << " ";
             }
             NO_DBG << " us=" << dur.count() << "\n";
+            if (user_) user_->onConflict(clauseToInts(clause));
             enqueuePendingClause(clause);
             return 0;
         }
@@ -817,6 +923,7 @@ int CadicalTheoryPropagator::cb_propagate() {
             if (relevancyOn_ && rel_ && lem.kind == LemmaKind::ArraySplit) {
                 for (SatLit l : lem.lits) rel_->forceRelevantVar(l.var);
             }
+            if (user_) user_->onPropagate(clauseToInts(lem.lits));
             enqueuePendingClause(lem.lits);
         }
         if (std::getenv("XOLVER_L4R_DIAG") && !props.empty()) {

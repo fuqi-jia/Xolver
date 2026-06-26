@@ -2,6 +2,7 @@
 
 #include <cadical.hpp>
 #include "theory/core/TheoryPropagatorCallbacks.h"
+#include "xolver/Propagator.h"   // public user-propagator interface (one-step control)
 #include <chrono>
 #include <deque>
 
@@ -103,6 +104,12 @@ public:
 
     void setUnknownReasonSink(std::string* sink);
 
+    // One-step control: a borrowed user Propagator that observes assignments /
+    // decision levels / backtracks and may steer cb_decide. nullptr (default) =>
+    // every forward below is a guarded no-op, so the search is byte-identical to
+    // the no-propagator path.
+    void setUserPropagator(Propagator* p) { user_ = p; }
+
     // L7: attach a finalized relevancy engine to steer cb_decide toward the
     // relevant boolean skeleton (XOLVER_RELEVANCY). Pure decision heuristic —
     // never changes satisfiability. The engine must outlive solve(); its value
@@ -122,6 +129,13 @@ private:
     TheoryPropagationCallbacks& tm_;
     TheoryLemmaStorage& lemmaDb_;
     CadicalBackend& backend_;
+
+    // Borrowed user propagator (one-step control); nullptr => disabled.
+    Propagator* user_ = nullptr;
+    bool userSetupDone_ = false;   // onSetup() emitted (lazily, on first callback)
+    // Build the observable-atom set from the (now-populated) registry and hand
+    // it to the user propagator's onSetup, exactly once per solve.
+    void maybeUserSetup();
 
     int currentLevel_ = 0;
     std::deque<std::vector<SatLit>> pendingClauses_;

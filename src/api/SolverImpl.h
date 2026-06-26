@@ -170,6 +170,10 @@ public:
     std::string lastUnknownComponent_;
     std::string lastUnknownDetail_;
 
+    // Optional user propagator (one-step control). Borrowed pointer (the caller
+    // owns it and must keep it alive across checkSat); nullptr = default search.
+    Propagator* userPropagator_ = nullptr;
+
     // True iff the SMT-LIB input set :produce-models / issued (get-model).
     bool modelRequestedImpl() const;
 

@@ -1,0 +1,50 @@
+# Python packaging for Xolver. scikit-build-core drives the existing CMake build
+# with -DXOLVER_BUILD_PYTHON=ON, producing the `xolver` wheel (the `_xolver`
+# pybind11 extension + the pure-Python `xolver` package). The wheel version is
+# taken from the git tag (setuptools_scm), so `git tag vX.Y.Z` builds xolver X.Y.Z.
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.13", "setuptools_scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "xolver"
+dynamic = ["version"]
+description = "Xolver — a competition-grade SMT solver for nonlinear arithmetic and its combinations (UF, arrays, datatypes)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Xolver authors" }]
+keywords = ["smt", "solver", "smt-lib", "nonlinear-arithmetic", "cdcl-t", "theorem-prover"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/fuqi-jia/Xolver"
+Source = "https://github.com/fuqi-jia/Xolver"
+
+# --- scikit-build-core -------------------------------------------------------
+[tool.scikit-build]
+# The wheel ships the pure-Python package; the compiled _xolver lands inside it
+# via the install() rule in python/CMakeLists.txt.
+wheel.packages = ["python/xolver"]
+cmake.version = ">=3.16"
+# Keep build output out of the source tree.
+build-dir = "build/skbuild/{wheel_tag}"
+# Only the bits the extension needs — never build the CLI/tests in the wheel.
+[tool.scikit-build.cmake.define]
+XOLVER_BUILD_PYTHON = "ON"
+XOLVER_BUILD_TESTS = "OFF"
+XOLVER_BUILD_TOOLS = "OFF"
+
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.setuptools_scm"
+
+# setuptools_scm: derive the version from the latest `vX.Y.Z` git tag.
+[tool.setuptools_scm]

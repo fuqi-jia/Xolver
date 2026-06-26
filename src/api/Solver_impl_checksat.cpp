@@ -2071,6 +2071,15 @@ Result Solver::Impl::checkSatInternal() {
         // Connect propagator FIRST (required before addObservedVar)
         CadicalTheoryPropagator propagator(registry, theoryManager, lemmaDb, *cadicalBackend);
         propagator.setUnknownReasonSink(&lastUnknownReason_);
+
+        // One-step control: if a user Propagator is registered, wire it for
+        // per-decision forwarding. The observable-atom set (onSetup) is built
+        // lazily on the propagator's first callback — at construction time the
+        // observed vars are not registered yet (addObservedVar runs below).
+        // No-op when none is set (the default search path is untouched).
+        if (userPropagator_) {
+            propagator.setUserPropagator(userPropagator_);
+        }
 #ifdef XOLVER_ENABLE_CASESTATS
         propagator.setCaseStats(&caseStats_);
         if (!dumpStatsPath_.empty()) {
