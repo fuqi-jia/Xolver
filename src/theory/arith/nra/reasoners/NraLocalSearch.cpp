@@ -912,7 +912,7 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
             // that SA-accepted inside walkOneRound stole the cell-jump's turn and regressed).
             // Sound: candidates are exact-validated (invariant 1); SA only steers the search.
             static const long kSAPct = env::paramLong("XOLVER_NRA_LS_SA_PCT", 33);
-            if (kSAPct > 0 && (nextRand() % 100) < kSAPct) {
+            if (kSAPct > 0 && static_cast<long>(nextRand() % 100) < kSAPct) {
                 auto loss = [&](const std::unordered_map<VarId, mpq_class>& a) -> double {
                     double s = 0.0;
                     for (const auto& c : constraints) s += atomViolation(c, a).get_d();
@@ -957,7 +957,7 @@ NraLocalSearch::tryFindModel(const std::vector<Constraint>& constraints,
             // keeps walking. Sound: still only an internal sample, exact-validated at the
             // SAT check; the jump only changes where the search goes, never a verdict.
             static const long kNoisePct = env::paramLong("XOLVER_NRA_LS_NOISE_PCT", 35);
-            if (kNoisePct > 0 && (nextRand() % 100) < kNoisePct) {
+            if (kNoisePct > 0 && static_cast<long>(nextRand() % 100) < kNoisePct) {
                 std::vector<size_t> viol;
                 for (size_t i = 0; i < constraints.size(); ++i)
                     if (atomViolation(constraints[i], asg) > 0) viol.push_back(i);

@@ -56,7 +56,7 @@ TEST_CASE("ITE R3: a=b -> ite(c, a, b) = a -> sat") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Sat));
 }
 
-TEST_CASE("ITE conflict: distinct(ite(c,a,b), a) /\ c=true -> unsat") {
+TEST_CASE("ITE conflict: distinct(ite(c,a,b), a) /\\ c=true -> unsat") {
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-fun c () Bool)\n"
@@ -72,7 +72,7 @@ TEST_CASE("ITE conflict: distinct(ite(c,a,b), a) /\ c=true -> unsat") {
     CHECK(static_cast<int>(r) == static_cast<int>(Result::Unsat));
 }
 
-TEST_CASE("ITE branches-equal conflict: distinct(ite(c,a,b), a) /\ a=b -> unsat") {
+TEST_CASE("ITE branches-equal conflict: distinct(ite(c,a,b), a) /\\ a=b -> unsat") {
     std::string path = writeTempSmt2(
         "(set-logic QF_UF)\n"
         "(declare-fun c () Bool)\n"

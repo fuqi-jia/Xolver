@@ -124,7 +124,7 @@ bool extractMonomial(
     const std::unordered_set<std::string>& residCoVars,
     MonomialInfo& out)
 {
-    const auto& e = ir.get(id);
+    [[maybe_unused]] const auto& e = ir.get(id);
     out = MonomialInfo{};
     out.coef = 1;
 
