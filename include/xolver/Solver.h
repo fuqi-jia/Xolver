@@ -6,6 +6,7 @@
 #include "xolver/Model.h"
 #include "xolver/Proof.h"
 #include "xolver/Statistics.h"
+#include "xolver/Propagator.h"
 #include <cstdint>
 #include <memory>
 #include <ostream>
@@ -80,6 +81,16 @@ public:
     void assertFormula(Term f);
     Result checkSat();
     Result checkSatAssuming(std::vector<Term> assumptions);
+
+    // One-step control (user propagator). Register a Propagator BEFORE checkSat
+    // to observe the CDCL(T) search (assignments, decision levels, backtracks)
+    // and steer it (pick the next decision). The propagator must outlive the
+    // checkSat() call. Pass nullptr (or clearPropagator) to detach. When no
+    // propagator is set the search runs exactly as before — registering one
+    // touches only the (sound) decision order, never the verdict. See
+    // include/xolver/Propagator.h.
+    void setPropagator(Propagator* p);
+    void clearPropagator();
 
     // Results
     Model getModel() const;

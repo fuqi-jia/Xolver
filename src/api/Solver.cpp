@@ -133,6 +133,10 @@ Term Solver::mkOp(uint32_t kind, std::vector<Term> args) {
                e.kind == Kind::Lt || e.kind == Kind::Leq ||
                e.kind == Kind::Gt || e.kind == Kind::Geq) {
         e.sort = pImpl->getOrCreateBoolSort();
+    } else if (e.kind == Kind::Ite && args.size() >= 2) {
+        // Ite's sort is the branch sort (then/else), NOT the condition (args[0],
+        // which is Bool). Take it from the then-branch.
+        e.sort = pImpl->ir ? pImpl->ir->get(args[1].id()).sort : NullSort;
     } else {
         // Use the sort of the first argument if IR is available.
         if (pImpl->ir) {
@@ -153,6 +157,14 @@ void Solver::assertFormula(Term t) {
     // A programmatic assertion would be lost on a portfolio re-parse, so it
     // taints re-parseability: the portfolio executor must stay single-arm.
     pImpl->sourcePath_.clear();
+}
+
+void Solver::setPropagator(Propagator* p) {
+    if (pImpl) pImpl->userPropagator_ = p;
+}
+
+void Solver::clearPropagator() {
+    if (pImpl) pImpl->userPropagator_ = nullptr;
 }
 
 // #19/#49 native-crash firewall: libpoly / GMP can SIGSEGV / SIGABRT / SIGFPE deep

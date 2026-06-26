@@ -18,4 +18,5 @@
 #include "xolver/Model.h"
 #include "xolver/Proof.h"
 #include "xolver/Statistics.h"
+#include "xolver/Propagator.h"
 #include "xolver/Solver.h"
