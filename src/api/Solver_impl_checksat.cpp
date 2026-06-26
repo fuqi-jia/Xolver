@@ -1200,6 +1200,13 @@ Result Solver::Impl::checkSatInternal() {
             if (pit != options.end() &&
                 pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
                 sat->enableProofTrace(pit->second.s, /*lrat=*/false);
+                // Install the per-solve theory-certificate sink so theory solvers
+                // can push Alethe justifications (Phase C); the backend's proof
+                // finalizer drains it. Re-cleared each query.
+                proofSink_.clear();
+                proof::setActiveProofSink(&proofSink_);
+            } else {
+                proof::setActiveProofSink(nullptr);
             }
         }
 #endif

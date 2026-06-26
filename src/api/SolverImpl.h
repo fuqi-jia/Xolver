@@ -6,6 +6,9 @@
 #include "xolver/Solver.h"
 #include "xolver/Result.h"
 #include "expr/ir.h"
+#ifdef XOLVER_ENABLE_PROOFS
+#include "proof/TheoryProofSink.h"
+#endif
 #include "expr/CoreIteLowerer.h"
 #include "frontend/preprocess/ArithCastNormalizer.h"
 #include "frontend/preprocess/BoolSubtermPurifier.h"
@@ -81,6 +84,13 @@ public:
     std::unique_ptr<SOMTParser::Parser> parser;
     std::unique_ptr<CoreIr> ir;
     std::unique_ptr<SatSolver> sat;
+#ifdef XOLVER_ENABLE_PROOFS
+    // Collector for theory conflict certificates over the current solve (Phase C).
+    // Installed as the active thread-local sink while solving with --produce-proof
+    // so theory solvers can push their Alethe justifications; drained by the
+    // backend's proof finalizer. Carries no soundness weight — Carcara is the gate.
+    proof::TheoryProofSink proofSink_;
+#endif
     SortId boolSortId_ = NullSort;
     SortId intSortId_ = NullSort;
     SortId realSortId_ = NullSort;

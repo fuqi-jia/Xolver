@@ -1,5 +1,6 @@
 #include "expr/Smt2Dumper.h"
 #include <sstream>
+#include <unordered_set>
 
 namespace xolver {
 
@@ -123,6 +124,49 @@ std::string dumpExprToSMT2(ExprId id, const CoreIr& ir) {
     std::ostringstream oss;
     dumpRec(id, ir, oss);
     return oss.str();
+}
+
+namespace {
+// Depth-first collect of the free Variables under `id`, in first-seen order.
+void collectVars(ExprId id, const CoreIr& ir, std::vector<ExprId>& out,
+                 std::unordered_set<ExprId>& seenVar,
+                 std::unordered_set<ExprId>& visited) {
+    if (id == NullExpr || id >= ir.size() || !visited.insert(id).second) return;
+    const auto& e = ir.get(id);
+    if (e.kind == Kind::Variable) {
+        if (seenVar.insert(id).second) out.push_back(id);
+        return;
+    }
+    for (ExprId c : e.children) collectVars(c, ir, out, seenVar, visited);
+}
+
+const char* sortToSMT2(const CoreIr& ir, SortId s) {
+    auto sk = ir.sortKind(s);
+    if (!sk) return "Real";
+    switch (*sk) {
+        case SortKind::Bool: return "Bool";
+        case SortKind::Int:  return "Int";
+        case SortKind::Real: return "Real";
+        default:             return "Real";  // LRA/LIA first; widen later
+    }
+}
+} // namespace
+
+std::string dumpProblemToSMT2(const CoreIr& ir, const std::vector<ExprId>& assertions) {
+    std::vector<ExprId> vars;
+    std::unordered_set<ExprId> seenVar, visited;
+    for (ExprId a : assertions) collectVars(a, ir, vars, seenVar, visited);
+
+    std::ostringstream os;
+    os << "(set-logic ALL)\n";
+    for (ExprId v : vars)
+        os << "(declare-const "
+           << std::get<std::string>(ir.get(v).payload.value) << ' '
+           << sortToSMT2(ir, ir.get(v).sort) << ")\n";
+    for (ExprId a : assertions)
+        os << "(assert " << dumpExprToSMT2(a, ir) << ")\n";
+    os << "(check-sat)\n";
+    return os.str();
 }
 
 } // namespace xolver

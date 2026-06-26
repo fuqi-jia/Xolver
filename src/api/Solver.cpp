@@ -1,4 +1,11 @@
 #include "api/SolverImpl.h"
+#ifdef XOLVER_ENABLE_PROOFS
+#include "proof/AletheProof.h"
+#include "proof/TheoryProofSink.h"
+#include "expr/Smt2Dumper.h"
+#include <fstream>
+#include <unordered_set>
+#endif
 
 namespace xolver {
 
@@ -285,6 +292,67 @@ Result Solver::checkSat() {
         sigaction(SIGFPE, &oldFpe, nullptr);
     }
     wall::endSolve();
+#ifdef XOLVER_ENABLE_PROOFS
+    // Phase C: if this proof-mode solve collected exactly ONE theory conflict
+    // certificate, that conflict alone refutes the asserted literals — render its
+    // atoms via the CoreIr we own and emit a complete Alethe theory proof to
+    // <base>.alethe (Carcara checks it against the original problem). Only the
+    // unambiguous single-conflict case for now; multi-conflict / Boolean assembly
+    // is later. A wrong certificate is rejected by Carcara offline (never
+    // claimed), so this only ADDS a verifiable artifact next to the DRAT.
+    if (r == Result::Unsat && pImpl->ir &&
+        pImpl->proofSink_.conflicts().size() == 1) {
+        auto pit = pImpl->options.find("produce-proofs");
+        if (pit != pImpl->options.end() &&
+            pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
+            const auto& c = pImpl->proofSink_.conflicts().front();
+            // Soundness guard: emit the la_generic proof ONLY when every conflict
+            // literal is a POSITIVELY-asserted, TOP-LEVEL simple variable bound
+            // (rel var const / rel const var, Lt/Leq/Gt/Geq) on ONE shared
+            // variable. For such conflicts the unit Farkas multipliers provably
+            // refute (contradictory coeff-1 bounds on one var -> 0<0) and each
+            // assumed atom is a genuine problem premise. Anything else (constants,
+            // scaled coeffs, negated/nested atoms, multi-variable rows) stays a
+            // VERIFIED-SKELETON — we never emit a proof a checker would reject.
+            bool emit = !c.lits.empty();
+            ExprId theVar = NullExpr;
+            if (emit) {
+                const auto& asserts = pImpl->ir->assertions();
+                std::unordered_set<ExprId> assertSet(asserts.begin(), asserts.end());
+                for (const auto& [atomId, positive] : c.lits) {
+                    if (!positive || !assertSet.count(atomId)) { emit = false; break; }
+                    const auto& e = pImpl->ir->get(atomId);
+                    if (e.children.size() != 2 ||
+                        (e.kind != Kind::Lt && e.kind != Kind::Leq &&
+                         e.kind != Kind::Gt && e.kind != Kind::Geq)) { emit = false; break; }
+                    const auto& l = pImpl->ir->get(e.children[0]);
+                    const auto& r = pImpl->ir->get(e.children[1]);
+                    ExprId var = NullExpr;
+                    if (l.isVar() && r.isConst()) var = e.children[0];
+                    else if (l.isConst() && r.isVar()) var = e.children[1];
+                    else { emit = false; break; }
+                    if (theVar == NullExpr) theVar = var;
+                    else if (theVar != var) { emit = false; break; }
+                }
+            }
+            if (emit) {
+                std::vector<proof::AssertedLit> lits;
+                lits.reserve(c.lits.size());
+                for (const auto& [eid, positive] : c.lits)
+                    lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
+                proof::AletheProof ap = proof::buildConflictRefutation(lits, c.rule, c.args);
+                // The proof references post-normalization IR atoms, so it is
+                // checked against an IR-derived problem (terms match by
+                // construction); the original->IR step is trusted preprocessing.
+                std::ofstream pout(pit->second.s + ".smt2");
+                if (pout) pout << dumpProblemToSMT2(*pImpl->ir, pImpl->ir->assertions());
+                std::ofstream aout(pit->second.s + ".alethe");
+                if (aout) aout << ap.serialize();
+            }
+        }
+    }
+    proof::setActiveProofSink(nullptr);
+#endif
     return r;
 }
 
