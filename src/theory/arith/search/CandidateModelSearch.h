@@ -174,6 +174,17 @@ private:
     TermResult evalTerm(
         ExprId eid,
         const std::unordered_map<std::string, mpq_class>& assignment) const;
+    // evalTerm dispatches its switch arms to these per-category evaluators
+    // (extracted verbatim for readability; each handles a contiguous group of Kinds).
+    TermResult evalArithmeticTerm(
+        ExprId eid,
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
+    TermResult evalPredicateTerm(
+        ExprId eid,
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
+    TermResult evalBooleanTerm(
+        ExprId eid,
+        const std::unordered_map<std::string, mpq_class>& assignment) const;
     // Top-level entry: pre-warms evalMemo_ bottom-up (iterative) so the recursive
     // evalTerm resolves every subterm from the memo and never recurses deeply
     // (deep-term stack-overflow guard). All external callers use this.

@@ -845,6 +845,27 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
             }
             return r;
         }
+        case Kind::Add: case Kind::Sub: case Kind::Neg: case Kind::Mul:
+        case Kind::Div: case Kind::Pow: case Kind::Mod: case Kind::Abs:
+        case Kind::ToReal: case Kind::ToInt:
+            return evalArithmeticTerm(eid, assignment);
+        case Kind::IsInt: case Kind::Eq: case Kind::Distinct: case Kind::Lt:
+        case Kind::Leq: case Kind::Gt: case Kind::Geq:
+            return evalPredicateTerm(eid, assignment);
+        case Kind::And: case Kind::Or: case Kind::Not: case Kind::Implies:
+        case Kind::Xor: case Kind::Ite:
+            return evalBooleanTerm(eid, assignment);
+        default:
+            return r;  // Indeterminate for unsupported constructs (e.g., UFApply).
+    }
+}
+
+CandidateModelSearch::TermResult CandidateModelSearch::evalArithmeticTerm(
+    ExprId eid, const std::unordered_map<std::string, mpq_class>& assignment) const
+{
+    const auto& n = ir_.get(eid);
+    TermResult r;
+    switch (n.kind) {
         case Kind::Add: {
             mpq_class acc(0);
             for (ExprId c : n.children) {
@@ -972,6 +993,15 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
             r.numValue = mpq_class(q);
             return r;
         }
+        default: return r;
+    }
+}
+CandidateModelSearch::TermResult CandidateModelSearch::evalPredicateTerm(
+    ExprId eid, const std::unordered_map<std::string, mpq_class>& assignment) const
+{
+    const auto& n = ir_.get(eid);
+    TermResult r;
+    switch (n.kind) {
         case Kind::IsInt: {
             if (n.children.size() != 1) return r;
             TermResult cr = evalTerm(n.children[0], assignment);
@@ -1060,6 +1090,15 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
             r.boolValue = (a.numValue >= b.numValue);
             return r;
         }
+        default: return r;
+    }
+}
+CandidateModelSearch::TermResult CandidateModelSearch::evalBooleanTerm(
+    ExprId eid, const std::unordered_map<std::string, mpq_class>& assignment) const
+{
+    const auto& n = ir_.get(eid);
+    TermResult r;
+    switch (n.kind) {
         case Kind::And: {
             bool anyInd = false;
             for (ExprId c : n.children) {
@@ -1133,8 +1172,7 @@ CandidateModelSearch::TermResult CandidateModelSearch::evalTerm(
             if (c.kind != TermVerdict::Bool) return r;
             return evalTerm(c.boolValue ? n.children[1] : n.children[2], assignment);
         }
-        default:
-            return r;  // Indeterminate for unsupported constructs (e.g., UFApply).
+        default: return r;
     }
 }
 
