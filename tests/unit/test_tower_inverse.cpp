@@ -4,7 +4,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/valuation/TowerAlgebraicKernel.h"
+#include "theory/arith/logics/nra/lazard/TowerAlgebraicKernel.h"
 
 using namespace xolver;
 

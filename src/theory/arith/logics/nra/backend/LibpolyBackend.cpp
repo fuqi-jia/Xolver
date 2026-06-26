@@ -1,9 +1,9 @@
 #include "theory/arith/logics/nra/backend/LibpolyBackend.h"
 #include "theory/arith/logics/nra/preprocess/SquarefreeEngine.h"
-#include "theory/arith/logics/nra/projection/LocalProjection.h"   // resultant()
-#include "theory/arith/logics/nra/valuation/TowerRootIsolation.h"     // towerNorm, TowerContext
-#include "theory/arith/logics/nra/valuation/RootMembershipOracle.h"   // lazardRootMembership
-#include "theory/arith/logics/nra/valuation/LazardValuationEngine.h"  // lazardEvaluateToUnivariate [H3]
+#include "theory/arith/logics/nra/lazard/LocalProjection.h"   // resultant()
+#include "theory/arith/logics/nra/lazard/TowerRootIsolation.h"     // towerNorm, TowerContext
+#include "theory/arith/logics/nra/lazard/RootMembershipOracle.h"   // lazardRootMembership
+#include "theory/arith/logics/nra/lazard/LazardValuationEngine.h"  // lazardEvaluateToUnivariate [H3]
 #include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/arith/kernel/poly/LibPolyKernel.h"
 #include "theory/arith/kernel/poly/RationalPolynomial.h"

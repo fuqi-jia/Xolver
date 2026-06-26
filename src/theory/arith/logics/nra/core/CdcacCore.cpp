@@ -1,9 +1,9 @@
 #include "theory/arith/logics/nra/core/CdcacCore.h"
-#include "theory/arith/logics/nra/projection/LocalProjection.h"
+#include "theory/arith/logics/nra/lazard/LocalProjection.h"
 #include "theory/arith/logics/nra/preprocess/NullificationAnalyzer.h"
 #include "theory/arith/logics/nra/proof/CellCertificateValidator.h"
-#include "theory/arith/logics/nra/projection/ProjectionPolicy.h"
-#include "theory/arith/logics/nra/valuation/RationalRootIsolation.h"
+#include "theory/arith/logics/nra/lazard/ProjectionPolicy.h"
+#include "theory/arith/logics/nra/lazard/RationalRootIsolation.h"
 #include "theory/arith/kernel/poly/RationalPolynomial.h"
 #include "util/EnvParam.h"   // XOLVER_NRA_LAZARD_MAX_COEFF_BITS cap for the SAT-first libpoly guard
 #include <chrono>

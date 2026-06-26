@@ -5,7 +5,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/valuation/TowerRootIsolation.h"
+#include "theory/arith/logics/nra/lazard/TowerRootIsolation.h"
 
 using namespace xolver;
 

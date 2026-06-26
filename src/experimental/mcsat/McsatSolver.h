@@ -7,7 +7,7 @@
 // scope/level tracking, and the main decide/propagate/conflict loop;
 // algebraic decisions are delegated to an MCSatEngine subclass:
 //
-//   NRA (real values, libpoly cells)   → src/theory/arith/logics/nra/nlsat/NlsatEngine
+//   NRA (real values, libpoly cells)   → src/theory/arith/logics/nra/engine/NlsatEngine
 //   NIA (integer values, modular etc.) → src/theory/arith/logics/nia/mcsat/NiaMcsatEngine
 //
 // Soundness floor (mirrors docs/agents/NLSAT-plan.md §15):

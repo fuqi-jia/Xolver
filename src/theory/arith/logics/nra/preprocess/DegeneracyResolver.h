@@ -1,7 +1,7 @@
 #pragma once
 
 #include "theory/arith/logics/nra/core/CdcacTypes.h"
-#include "theory/arith/logics/nra/projection/LocalProjection.h"
+#include "theory/arith/logics/nra/lazard/LocalProjection.h"
 #include <vector>
 
 namespace xolver {

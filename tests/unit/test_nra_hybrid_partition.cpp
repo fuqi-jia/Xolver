@@ -1,5 +1,5 @@
 #include <doctest/doctest.h>
-#include "theory/arith/logics/nra/search/HybridPartitionStats.h"
+#include "theory/arith/logics/nra/core/HybridPartitionStats.h"
 #include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include <gmpxx.h>
 
