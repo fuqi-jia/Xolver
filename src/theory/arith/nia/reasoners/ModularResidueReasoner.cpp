@@ -161,33 +161,34 @@ std::optional<ParsedBound> parseBound(PolynomialKernel& k, PolyId poly, Relation
 
 } // namespace
 
-NiaReasoningResult ModularResidueReasoner::run(
-    const std::vector<NormalizedNiaConstraint>& constraints) {
-
-    const NiaReasoningResult NO_CHANGE{NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
-
-    // --- 1. Partition + collect single-variable bounds ---
-    std::vector<size_t> eqIdx, neqIdx;
-    std::unordered_map<std::string, BoundPair> bounds;
+namespace {
+// --- ModularResidueReasoner::run setup phases (extracted verbatim) ---
+void partitionConstraints(
+    PolynomialKernel& kernel,
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    std::vector<size_t>& eqIdx, std::vector<size_t>& neqIdx,
+    std::unordered_map<std::string, BoundPair>& bounds) {
     for (size_t i = 0; i < constraints.size(); ++i) {
         const auto& c = constraints[i];
         if (c.rel == Relation::Eq) eqIdx.push_back(i);
         else if (c.rel == Relation::Neq) neqIdx.push_back(i);
-        else if (auto pb = parseBound(kernel_, c.poly, c.rel)) {
+        else if (auto pb = parseBound(kernel, c.poly, c.rel)) {
             auto& bp = bounds[pb->var];
             Bound b; b.has = true; b.val = pb->val; b.reason = c.reason;
             if (pb->isUpper) { if (!bp.hi.has || pb->val < bp.hi.val) bp.hi = b; }
             else             { if (!bp.lo.has || pb->val > bp.lo.val) bp.lo = b; }
         }
     }
-    if (eqIdx.empty()) return NO_CHANGE;
+}
 
-    // --- 2. Recognize div/mod groups (a = n*q + r, 0<=r<n) ---
-    std::vector<ModGroup> groups;
-    std::unordered_set<size_t> consumed;        // eq indices used as a group
-    std::unordered_set<std::string> moddefVars; // r's
-    std::unordered_set<std::string> quotientVars; // q's
-
+void recognizeModGroups(
+    PolynomialKernel& kernel,
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    const std::vector<size_t>& eqIdx,
+    const std::unordered_map<std::string, BoundPair>& bounds,
+    std::vector<ModGroup>& groups, std::unordered_set<size_t>& consumed,
+    std::unordered_set<std::string>& moddefVars,
+    std::unordered_set<std::string>& quotientVars) {
     // 2a. Collect ALL candidate matches (eq, q, r, n, a) without claiming.
     //     An equation like `inv1 = 4*q2 + r5` (a *definition* of the real var
     //     inv1) is structurally indistinguishable from a div group
@@ -203,7 +204,7 @@ NiaReasoningResult ModularResidueReasoner::run(
     std::vector<Cand> cands;
     for (size_t ei : eqIdx) {
         const auto& c = constraints[ei];
-        auto termsOpt = kernel_.terms(c.poly);
+        auto termsOpt = kernel.terms(c.poly);
         if (!termsOpt) continue;
         const auto& terms = *termsOpt;
         if (terms.size() < 2) continue;
@@ -217,14 +218,14 @@ NiaReasoningResult ModularResidueReasoner::run(
             // (The Hensel-lifting section stays pow2-only via log2pow2.)
             if (n < 2) continue;
             int eqSign = qt.coefficient > 0 ? 1 : -1;
-            std::string qName = std::string(kernel_.varName(qt.powers[0].first));
+            std::string qName = std::string(kernel.varName(qt.powers[0].first));
             for (size_t ri = 0; ri < terms.size(); ++ri) {
                 if (ri == qi) continue;
                 const Term& rt = terms[ri];
                 if (rt.powers.size() != 1 || rt.powers[0].second != 1) continue;
                 if (rt.coefficient != 1 && rt.coefficient != -1) continue;
                 if ((rt.coefficient > 0 ? 1 : -1) != eqSign) continue; // clean a = n*q + r
-                std::string rName = std::string(kernel_.varName(rt.powers[0].first));
+                std::string rName = std::string(kernel.varName(rt.powers[0].first));
                 if (rName == qName) continue;
                 auto bit = bounds.find(rName);
                 if (bit == bounds.end()) continue;
@@ -233,10 +234,10 @@ NiaReasoningResult ModularResidueReasoner::run(
                 std::vector<const Term*> rest;
                 for (size_t k = 0; k < terms.size(); ++k)
                     if (k != qi && k != ri) rest.push_back(&terms[k]);
-                PolyId leftover = buildFromTerms(kernel_, rest);
-                PolyId aPoly = (eqSign == 1) ? kernel_.neg(leftover) : leftover;
+                PolyId leftover = buildFromTerms(kernel, rest);
+                PolyId aPoly = (eqSign == 1) ? kernel.neg(leftover) : leftover;
                 bool clean = true;
-                for (const auto& v : kernel_.variables(aPoly))
+                for (const auto& v : kernel.variables(aPoly))
                     if (v == rName || v == qName) { clean = false; break; }
                 if (!clean) continue;
                 cands.push_back(Cand{ei, qName, rName, n, aPoly, c.reason,
@@ -265,26 +266,30 @@ NiaReasoningResult ModularResidueReasoner::run(
         quotientVars.insert(cd.q);
         consumed.insert(cd.ei);
     }
+}
 
-    // --- 2b. Eliminability: every occurrence of each quotient must be a
-    //         sole-variable, exponent-1 monomial whose coefficient is a
-    //         multiple of n. Otherwise demote that group. ---
-    {
+void filterEliminableGroups(
+    PolynomialKernel& kernel,
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    const std::vector<size_t>& eqIdx,
+    std::vector<ModGroup>& groups, std::unordered_set<size_t>& consumed,
+    std::unordered_set<std::string>& moddefVars,
+    std::unordered_set<std::string>& quotientVars) {
         std::unordered_map<std::string, mpz_class> qn;
         for (const auto& g : groups) qn[g.qVar] = g.n;
         std::unordered_set<std::string> bad;
         for (const auto& c : constraints) {
-            auto termsOpt = kernel_.terms(c.poly);
+            auto termsOpt = kernel.terms(c.poly);
             if (!termsOpt) {
-                for (const auto& v : kernel_.variables(c.poly))
+                for (const auto& v : kernel.variables(c.poly))
                     if (qn.count(v)) bad.insert(v);
                 continue;
             }
             for (const auto& t : *termsOpt) {
                 bool soleQ = (t.powers.size() == 1 && t.powers[0].second == 1 &&
-                              qn.count(std::string(kernel_.varName(t.powers[0].first))));
+                              qn.count(std::string(kernel.varName(t.powers[0].first))));
                 for (const auto& [vid, exp] : t.powers) {
-                    std::string nm = std::string(kernel_.varName(vid));
+                    std::string nm = std::string(kernel.varName(vid));
                     auto it = qn.find(nm);
                     if (it == qn.end()) continue;
                     if (!soleQ || (t.coefficient % it->second) != 0) bad.insert(nm);
@@ -314,42 +319,45 @@ NiaReasoningResult ModularResidueReasoner::run(
             for (size_t ei : eqIdx)
                 if (groupReasons.count(constraints[ei].reason.var)) consumed.insert(ei);
         }
-    }
+}
 
-    std::unordered_map<std::string, const ModGroup*> quotientGroup;
-    for (const auto& g : groups) quotientGroup[g.qVar] = &g;
-
-    // --- 3. Simple definitions  v := poly(others), v unit-coeff & single-occurrence ---
-    std::vector<SimpleDef> simpleDefs;
-    std::unordered_set<std::string> simpleVars;
+void collectSimpleDefinitions(
+    PolynomialKernel& kernel,
+    const std::vector<NormalizedNiaConstraint>& constraints,
+    const std::vector<size_t>& eqIdx,
+    const std::unordered_set<std::string>& moddefVars,
+    const std::unordered_set<std::string>& quotientVars,
+    std::unordered_set<size_t>& consumed,
+    std::vector<SimpleDef>& simpleDefs,
+    std::unordered_set<std::string>& simpleVars) {
     bool progress = true;
     while (progress) {
         progress = false;
         for (size_t ei : eqIdx) {
             if (consumed.count(ei)) continue;
             const auto& c = constraints[ei];
-            auto termsOpt = kernel_.terms(c.poly);
+            auto termsOpt = kernel.terms(c.poly);
             if (!termsOpt) continue;
             const auto& terms = *termsOpt;
             // count occurrences of each var across monomials
             std::unordered_map<std::string, int> occ;
             for (const auto& t : terms)
                 for (const auto& [vid, e] : t.powers)
-                    occ[std::string(kernel_.varName(vid))]++;
+                    occ[std::string(kernel.varName(vid))]++;
             for (size_t ti = 0; ti < terms.size(); ++ti) {
                 const Term& t = terms[ti];
                 if (t.powers.size() != 1 || t.powers[0].second != 1) continue;
                 if (t.coefficient != 1 && t.coefficient != -1) continue;
-                std::string v = std::string(kernel_.varName(t.powers[0].first));
+                std::string v = std::string(kernel.varName(t.powers[0].first));
                 if (occ[v] != 1) continue;                       // appears elsewhere
                 if (moddefVars.count(v) || quotientVars.count(v) || simpleVars.count(v))
                     continue;
                 std::vector<const Term*> rest;
                 for (size_t k = 0; k < terms.size(); ++k)
                     if (k != ti) rest.push_back(&terms[k]);
-                PolyId restPoly = buildFromTerms(kernel_, rest);
+                PolyId restPoly = buildFromTerms(kernel, rest);
                 // v = -rest/coeff ; coeff = ±1
-                PolyId defPoly = (t.coefficient == 1) ? kernel_.neg(restPoly) : restPoly;
+                PolyId defPoly = (t.coefficient == 1) ? kernel.neg(restPoly) : restPoly;
                 simpleDefs.push_back({v, defPoly, c.reason});
                 simpleVars.insert(v);
                 consumed.insert(ei);
@@ -358,6 +366,44 @@ NiaReasoningResult ModularResidueReasoner::run(
             }
         }
     }
+}
+
+} // namespace
+
+NiaReasoningResult ModularResidueReasoner::run(
+    const std::vector<NormalizedNiaConstraint>& constraints) {
+
+    const NiaReasoningResult NO_CHANGE{NiaReasoningKind::NoChange, std::nullopt, std::nullopt};
+
+    // --- 1. Partition + collect single-variable bounds ---
+    std::vector<size_t> eqIdx, neqIdx;
+    std::unordered_map<std::string, BoundPair> bounds;
+    partitionConstraints(kernel_, constraints, eqIdx, neqIdx, bounds);
+    if (eqIdx.empty()) return NO_CHANGE;
+
+    // --- 2. Recognize div/mod groups (a = n*q + r, 0<=r<n) ---
+    std::vector<ModGroup> groups;
+    std::unordered_set<size_t> consumed;        // eq indices used as a group
+    std::unordered_set<std::string> moddefVars; // r's
+    std::unordered_set<std::string> quotientVars; // q's
+
+    recognizeModGroups(kernel_, constraints, eqIdx, bounds,
+                       groups, consumed, moddefVars, quotientVars);
+
+    // --- 2b. Eliminability: every occurrence of each quotient must be a
+    //         sole-variable, exponent-1 monomial whose coefficient is a
+    //         multiple of n. Otherwise demote that group. ---
+    filterEliminableGroups(kernel_, constraints, eqIdx,
+                           groups, consumed, moddefVars, quotientVars);
+
+    std::unordered_map<std::string, const ModGroup*> quotientGroup;
+    for (const auto& g : groups) quotientGroup[g.qVar] = &g;
+
+    // --- 3. Simple definitions  v := poly(others), v unit-coeff & single-occurrence ---
+    std::vector<SimpleDef> simpleDefs;
+    std::unordered_set<std::string> simpleVars;
+    collectSimpleDefinitions(kernel_, constraints, eqIdx, moddefVars,
+                             quotientVars, consumed, simpleDefs, simpleVars);
 
     // --- 4. Remaining equalities are check-only; collect Neqs ---
     std::vector<CheckEq> checkEqs;
