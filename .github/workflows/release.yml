@@ -196,11 +196,12 @@ jobs:
           cp wheelhouse/*.whl pydist/
           ls -l pydist
 
-      - name: Upload wheels (manual/test runs)
-        if: github.event_name == 'workflow_dispatch'
+      # Always publish the dist as a build artifact so the separate publish job
+      # (and manual/test runs) can consume it.
+      - name: Upload dist artifact (wheels + sdist)
         uses: actions/upload-artifact@v4
         with:
-          name: xolver-python-wheels
+          name: xolver-python-dist
           path: pydist/*
 
       - name: Attach wheels to the GitHub Release (tag pushes)
@@ -210,11 +211,30 @@ jobs:
         run: |
           gh release upload "${GITHUB_REF_NAME}" pydist/* --clobber
 
-      # Optional PyPI publish — only fires if a PYPI_API_TOKEN secret is set.
-      - name: Publish to PyPI (if token configured)
-        if: github.ref_type == 'tag' && env.PYPI_API_TOKEN != ''
-        env:
-          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          python -m pip install --upgrade twine
-          twine upload --non-interactive -u __token__ -p "$PYPI_API_TOKEN" pydist/*
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI via Trusted Publishing (OIDC) — NO API token is stored.
+  # Prerequisite (one-time): on PyPI add a (pending) publisher for
+  #   project `xolver`, owner `fuqi-jia`, repo `Xolver`, workflow `release.yml`,
+  #   environment `pypi`.  https://pypi.org/manage/account/publishing/
+  # Fires only on a v* tag; a dedicated job with the minimal id-token permission.
+  # ---------------------------------------------------------------------------
+  pypi-publish:
+    name: publish-to-pypi
+    needs: wheels
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/xolver/
+    permissions:
+      id-token: write        # OIDC — the only credential Trusted Publishing needs
+    steps:
+      - name: Download dist (wheels + sdist)
+        uses: actions/download-artifact@v4
+        with:
+          name: xolver-python-dist
+          path: pydist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pydist
