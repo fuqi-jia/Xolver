@@ -3,11 +3,45 @@
 #include "proof/AletheProof.h"
 #include "proof/TheoryProofSink.h"
 #include "expr/Smt2Dumper.h"
+#include <gmpxx.h>
 #include <fstream>
 #include <unordered_set>
 #endif
 
 namespace xolver {
+
+#ifdef XOLVER_ENABLE_PROOFS
+namespace {
+// Is `id` a linear-arithmetic term that la_generic can certify AND that
+// dumpExprToSMT2 renders as sort-safe SMT-LIB? Allowed: variables, INTEGER
+// constants (bare-integer print, coerced by Carcara in arithmetic), and
+// +/-/*/unary-minus. Excluded: division (la_generic treats `(/ x c)` as an opaque
+// term, so the Farkas combination can't cancel the variable), NON-integer real
+// constants (which print as `1/3` — invalid as an SMT-LIB Real literal), and any
+// other / non-linear construct. Conservative: an excluded atom stays SKELETON.
+bool proofLinSafe(ExprId id, const CoreIr& ir) {
+    const auto& e = ir.get(id);
+    switch (e.kind) {
+        case Kind::Variable: return true;
+        case Kind::ConstInt: return true;
+        case Kind::ConstReal: {
+            mpq_class q(std::get<std::string>(e.payload.value));
+            q.canonicalize();
+            return q.get_den() == 1;
+        }
+        case Kind::Add:
+        case Kind::Sub:
+        case Kind::Mul:
+        case Kind::Neg:
+            for (ExprId c : e.children)
+                if (!proofLinSafe(c, ir)) return false;
+            return true;
+        default:
+            return false;
+    }
+}
+} // namespace
+#endif
 
 // ---------------------------------------------------------------------------
 // Solver public API
@@ -306,33 +340,34 @@ Result Solver::checkSat() {
         if (pit != pImpl->options.end() &&
             pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
             const auto& c = pImpl->proofSink_.conflicts().front();
-            // Soundness guard: emit the la_generic proof ONLY when every conflict
-            // literal is a POSITIVELY-asserted, TOP-LEVEL simple variable bound
-            // (rel var const / rel const var, Lt/Leq/Gt/Geq) on ONE shared
-            // variable. For such conflicts the unit Farkas multipliers provably
-            // refute (contradictory coeff-1 bounds on one var -> 0<0) and each
-            // assumed atom is a genuine problem premise. Anything else (constants,
-            // scaled coeffs, negated/nested atoms, multi-variable rows) stays a
-            // VERIFIED-SKELETON — we never emit a proof a checker would reject.
+            // Soundness guard: the Farkas multipliers come from the simplex (the
+            // certificate is correct by Farkas' lemma + the infeasible-row
+            // invariant), so we only need ASSUME-validity here: emit the la_generic
+            // proof ONLY when every conflict literal is POSITIVELY asserted and is
+            // a TOP-LEVEL problem assertion (so the proof's `assume` matches a real
+            // premise) AND is an arithmetic comparison (Lt/Leq/Gt/Geq/Eq — the
+            // forms la_generic reasons over). Anything else (negated/nested atoms,
+            // non-arith) stays a VERIFIED-SKELETON. A wrong multiplier would still
+            // be rejected by Carcara offline, never claimed.
             bool emit = !c.lits.empty();
-            ExprId theVar = NullExpr;
             if (emit) {
                 const auto& asserts = pImpl->ir->assertions();
                 std::unordered_set<ExprId> assertSet(asserts.begin(), asserts.end());
                 for (const auto& [atomId, positive] : c.lits) {
                     if (!positive || !assertSet.count(atomId)) { emit = false; break; }
                     const auto& e = pImpl->ir->get(atomId);
-                    if (e.children.size() != 2 ||
-                        (e.kind != Kind::Lt && e.kind != Kind::Leq &&
-                         e.kind != Kind::Gt && e.kind != Kind::Geq)) { emit = false; break; }
-                    const auto& l = pImpl->ir->get(e.children[0]);
-                    const auto& r = pImpl->ir->get(e.children[1]);
-                    ExprId var = NullExpr;
-                    if (l.isVar() && r.isConst()) var = e.children[0];
-                    else if (l.isConst() && r.isVar()) var = e.children[1];
-                    else { emit = false; break; }
-                    if (theVar == NullExpr) theVar = var;
-                    else if (theVar != var) { emit = false; break; }
+                    // Inequalities only: equalities need signed la_generic
+                    // multipliers, which the (non-negative) simplex bound
+                    // coefficients don't directly supply — keep those skeleton.
+                    if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
+                        e.kind != Kind::Gt && e.kind != Kind::Geq) { emit = false; break; }
+                    // Both sides must be linear + sort-safe (no division, no
+                    // non-integer real constants) — else la_generic can't certify
+                    // it or the dumped problem won't parse. Stays skeleton.
+                    bool sidesOk = true;
+                    for (ExprId ch : e.children)
+                        if (!proofLinSafe(ch, *pImpl->ir)) { sidesOk = false; break; }
+                    if (!sidesOk) { emit = false; break; }
                 }
             }
             if (emit) {

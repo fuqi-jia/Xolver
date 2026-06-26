@@ -826,11 +826,17 @@ void GeneralSimplex::pivot(int leaving, int entering) {
 
 void GeneralSimplex::explainLowerConflict(int basicVar) {
     conflict_.clear();
+#ifdef XOLVER_ENABLE_PROOFS
+    conflictCoeffs_.clear();
+#endif
     int r = rowOfBasic(basicVar);
 
     assert(vars_[basicVar].lower.bound.isFinite());
     if (vars_[basicVar].lower.reason.has_value()) {
         conflict_.push_back({basicVar, true, vars_[basicVar].lower.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+        conflictCoeffs_.push_back(1);  // violated basic bound: multiplier 1
+#endif
     }
 
     for (const auto& e : tab_.row(r).entries) {
@@ -839,10 +845,16 @@ void GeneralSimplex::explainLowerConflict(int basicVar) {
         if (a > 0 && atUpper(xj)) {
             if (vars_[xj].upper.reason.has_value()) {
                 conflict_.push_back({xj, false, vars_[xj].upper.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+                conflictCoeffs_.push_back(a);  // |row coeff|, a > 0
+#endif
             }
         } else if (a < 0 && atLower(xj)) {
             if (vars_[xj].lower.reason.has_value()) {
                 conflict_.push_back({xj, true, vars_[xj].lower.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+                conflictCoeffs_.push_back(-a);  // |row coeff|, a < 0
+#endif
             }
         }
     }
@@ -850,11 +862,17 @@ void GeneralSimplex::explainLowerConflict(int basicVar) {
 
 void GeneralSimplex::explainUpperConflict(int basicVar) {
     conflict_.clear();
+#ifdef XOLVER_ENABLE_PROOFS
+    conflictCoeffs_.clear();
+#endif
     int r = rowOfBasic(basicVar);
 
     assert(vars_[basicVar].upper.bound.isFinite());
     if (vars_[basicVar].upper.reason.has_value()) {
         conflict_.push_back({basicVar, false, vars_[basicVar].upper.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+        conflictCoeffs_.push_back(1);  // violated basic bound: multiplier 1
+#endif
     }
 
     for (const auto& e : tab_.row(r).entries) {
@@ -863,10 +881,16 @@ void GeneralSimplex::explainUpperConflict(int basicVar) {
         if (a > 0 && atLower(xj)) {
             if (vars_[xj].lower.reason.has_value()) {
                 conflict_.push_back({xj, true, vars_[xj].lower.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+                conflictCoeffs_.push_back(a);  // |row coeff|, a > 0
+#endif
             }
         } else if (a < 0 && atUpper(xj)) {
             if (vars_[xj].upper.reason.has_value()) {
                 conflict_.push_back({xj, false, vars_[xj].upper.reason.value()});
+#ifdef XOLVER_ENABLE_PROOFS
+                conflictCoeffs_.push_back(-a);  // |row coeff|, a < 0
+#endif
             }
         }
     }
@@ -874,6 +898,9 @@ void GeneralSimplex::explainUpperConflict(int basicVar) {
 
 void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower, SatLit newReason) {
     conflict_.clear();
+#ifdef XOLVER_ENABLE_PROOFS
+    conflictCoeffs_.clear();
+#endif
     if (newBoundIsLower) {
         assert(vars_[var].upper.bound.isFinite());
         conflict_.push_back({var, true, newReason});
@@ -887,6 +914,11 @@ void GeneralSimplex::explainImmediateConflict(int var, bool newBoundIsLower, Sat
             conflict_.push_back({var, true, vars_[var].lower.reason.value()});
         }
     }
+#ifdef XOLVER_ENABLE_PROOFS
+    // Two contradictory bounds on `var` (same simplex column => coeff 1): unit
+    // multipliers refute. Mirror conflict_'s size (1 or 2 entries).
+    conflictCoeffs_.assign(conflict_.size(), mpq_class(1));
+#endif
 }
 
 // ============================================================================
