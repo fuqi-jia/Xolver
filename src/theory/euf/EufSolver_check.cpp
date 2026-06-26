@@ -3,6 +3,10 @@
 #include <chrono>
 #include "theory/euf/EufSolver.h"
 #include "util/SolveClock.h"
+#ifdef XOLVER_ENABLE_PROOFS
+#include "proof/TheoryProofSink.h"
+#include "theory/core/TheoryAtomRegistry.h"
+#endif
 #include <stdexcept>
 #include "theory/array/AniaProfile.h"
 #include "theory/combination/CareGraph.h"
@@ -25,6 +29,26 @@ namespace xolver {
 // It compiles into the same xolver_core target and shares the class's
 // private state via the declarations in the corresponding header.
 // Behavior is byte-identical to the pre-split definitions.
+
+#ifdef XOLVER_ENABLE_PROOFS
+void EufSolver::pushEufTransitivityCert(const std::vector<SatLit>& reasons) {
+    // Record the conflict literals (asserted equality chain + the conclusion
+    // disequality, which is the last reason: a (= l r) atom asserted FALSE) by IR
+    // id and polarity, with rule eq_transitive. The Solver's union-find self-check
+    // then keeps only true transitivity conflicts. Congruence-involved conflicts
+    // carry the same shape but fail that check and stay skeleton.
+    auto* sink = proof::activeProofSink();
+    if (!sink || !eqAtomRegistry_) return;
+    proof::TheoryConflictCert cert;
+    cert.rule = "eq_transitive";
+    for (SatLit lit : reasons) {
+        const TheoryAtomRecord* rec = eqAtomRegistry_->findBySatVar(lit.var);
+        if (!rec) return;  // can't identify the atom -> emit none (skeleton)
+        cert.lits.push_back({rec->exprId, lit.sign});
+    }
+    if (!cert.lits.empty()) sink->addConflict(std::move(cert));
+}
+#endif
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
     aniaprof::init();
@@ -406,6 +430,9 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             }
             if (er.ok) {
                 er.reasons.push_back(d.reason);
+#ifdef XOLVER_ENABLE_PROOFS
+                pushEufTransitivityCert(er.reasons);
+#endif
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
             if (xolver::env::diag("EUF_DIAG")) {
@@ -443,6 +470,9 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
             }
             if (er.ok) {
                 er.reasons.push_back(d.reason);
+#ifdef XOLVER_ENABLE_PROOFS
+                pushEufTransitivityCert(er.reasons);
+#endif
                 return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
             }
             auto reasons = allActiveReasons();

@@ -355,6 +355,12 @@ TheoryConflict EufSolver::buildDiseqConflict(const ActiveDisequality& d) {
     auto er = egraph_.explainEquality(d.lhs, d.rhs);
     std::vector<SatLit> reasons = er.ok ? std::move(er.reasons) : allActiveReasons();
     reasons.push_back(d.reason);
+#ifdef XOLVER_ENABLE_PROOFS
+    // Push an eq_transitive certificate only when the explanation succeeded (a
+    // clean equality chain). The Solver's union-find self-check keeps just the
+    // pure-transitivity ones.
+    if (er.ok) pushEufTransitivityCert(reasons);
+#endif
     return TheoryConflict{std::move(reasons)};
 }
 

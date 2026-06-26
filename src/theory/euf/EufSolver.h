@@ -378,6 +378,14 @@ private:
         int64_t  registerSigUs = 0;         // wall inside registerPendingSignatures
     };
     EufHotProfile hotProfile_;
+#ifdef XOLVER_ENABLE_PROOFS
+    // Phase C: push an eq_transitive certificate (the conflict's asserted equality
+    // chain + the conclusion disequality, by IR id) to the active proof sink. The
+    // Solver applies an independent union-find self-check to keep only true
+    // transitivity conflicts (rejecting congruence-involved ones). No-op off proof.
+    void pushEufTransitivityCert(const std::vector<SatLit>& reasons);
+#endif
+
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
     // enumerate UNDECIDED equality atoms for propagation — assertLit only ever
     // sees assigned ones.
