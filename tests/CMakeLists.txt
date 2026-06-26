@@ -39,7 +39,7 @@ if(UNIT_TEST_SOURCES)
 endif()
 
 # ---------------------------------------------------------------------------
-# Regression tests — SMT-LIB files driven by tools/run_regression.py.
+# Regression tests — SMT-LIB files driven by tools/regression/run_regression.py.
 # Each logic gets its own CTest entry + label so users can run e.g.
 #     ctest -L euf            # all EUF regression
 #     ctest -L regression     # everything
@@ -58,7 +58,7 @@ if(Python3_FOUND)
             add_test(
                 NAME regression-${logic}
                 COMMAND ${Python3_EXECUTABLE}
-                    ${CMAKE_SOURCE_DIR}/tools/run_regression.py
+                    ${CMAKE_SOURCE_DIR}/tools/regression/run_regression.py
                     --root ${CMAKE_SOURCE_DIR}/tests/regression
                     --logic ${logic}
                     --solver $<TARGET_FILE:xolver-cli>

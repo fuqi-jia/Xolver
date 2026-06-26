@@ -10,7 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # ---------------------------------------------------------------------------
 option(XOLVER_BUILD_TESTS "Build unit tests and regression suite" ON)
 option(XOLVER_BUILD_TOOLS "Build CLI tools and utilities" ON)
-option(XOLVER_ENABLE_PROOFS "Enable proof production infrastructure" ON)
+option(XOLVER_ENABLE_PROOFS "Enable UNSAT proof production (DRAT/LRAT + Alethe). Default OFF: the competition/no-proof path is the baseline and proof bookkeeping must not regress it. Build -DXOLVER_ENABLE_PROOFS=ON for the proof CI lane." OFF)
 option(XOLVER_ENABLE_TRACING "Enable trace/recording for learning" ON)
 option(XOLVER_ENABLE_LRA_PROFILE "Enable LRA solver profiling" OFF)
 option(XOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)

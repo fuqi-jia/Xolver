@@ -49,7 +49,7 @@ static void printUsage(const char* prog) {
               << "\nOptions:\n"
               << "  --logic <logic>        Set logic (e.g., QF_NRA)\n"
               << "  --produce-models       Enable model production\n"
-              << "  --produce-proofs       Enable proof production\n"
+              << "  --produce-proof [base] On unsat, emit a checkable refutation: <base>.cnf + <base>.drat (needs -DXOLVER_ENABLE_PROOFS=ON)\n"
               << "  --trace-out <file>     Write execution trace\n"
               << "  --seed <n>             Random seed for reproducibility\n"
               << "  --timeout <seconds>    Per-solve wall-clock budget (0 = none)\n"
@@ -155,6 +155,7 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
     // Parse options after the file path
     std::optional<std::string> logicOpt;
     std::optional<std::string> certifyPath;
+    std::optional<std::string> proofBase;
     bool checkModel = false;
     bool verbose = false;
     bool parseOnly = false;
@@ -192,8 +193,19 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
             // did not set :produce-models / issue (get-model). The model is built
             // internally on every sat (see Solver.cpp), so dumpModel is meaningful.
             produceModels = true;
-        } else if (arg == "--produce-proofs") {
-            // TODO: enable proof production
+        } else if (arg == "--produce-proofs" || arg == "--produce-proof") {
+            // Enable UNSAT proof production. Optional explicit base path follows;
+            // otherwise derive it from the input file. The backend writes the
+            // DIMACS it feeds the SAT engine to <base>.cnf and the propositional
+            // refutation to <base>.drat, so an independent checker (drat-trim)
+            // can verify <base>.cnf |- false. Requires a build configured with
+            // -DXOLVER_ENABLE_PROOFS=ON; otherwise this is a degraded no-op
+            // (unsat is still emitted, just without a certificate).
+            std::string base;
+            if (i + 1 < argc && argv[i + 1][0] != '-') base = argv[++i];
+            else base = std::string(argv[fileIdx]) + ".proof";
+            proofBase = base;
+            solver.setOption("produce-proofs", xolver::OptionValue(std::string_view(base)));
         } else if (arg == "--lia-safe-mode") {
             solver.setOption("lia-safe-mode", xolver::OptionValue(true));
         } else if (arg == "--lia-ultra-safe-mode") {
@@ -345,6 +357,29 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // and we proved unsat, emit the core assertions on stdout after `unsat`.
         if (r == xolver::Result::Unsat && solver.unsatCoreRequested()) {
             solver.dumpUnsatCore(std::cout);
+        }
+        // --produce-proof: report the emitted refutation on stderr (stdout carries
+        // only the verdict, per the SMT-COMP contract). Honest about degraded mode:
+        // claim a proof ONLY if the backend actually wrote one — an unsat decided
+        // outside the SAT core (pure theory refutation, or a no-proof theory)
+        // produces no propositional certificate, and we never fake one.
+        if (proofBase && r == xolver::Result::Unsat) {
+#ifdef XOLVER_ENABLE_PROOFS
+            // The backend writes <base>.cnf only for a COMPLETE proof (every
+            // clause captured); its presence is the "proof produced" signal.
+            std::ifstream pf(*proofBase + ".cnf");
+            if (pf.good())
+                std::cerr << "(proof " << *proofBase << ".drat + " << *proofBase
+                          << ".cnf — verify: drat-trim " << *proofBase << ".cnf "
+                          << *proofBase << ".drat)\n";
+            else
+                std::cerr << "(no propositional proof produced — unsat used theory "
+                             "lemmas or was decided outside the SAT core; degraded "
+                             "no-proof mode)\n";
+#else
+            std::cerr << "(proof requested but this binary was built without proof "
+                         "support; rebuild with -DXOLVER_ENABLE_PROOFS=ON)\n";
+#endif
         }
         std::cout.flush();
         // Diagnostic: independent model self-check against original assertions.
