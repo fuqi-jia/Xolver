@@ -45,10 +45,14 @@ jobs:
       - name: Unit tests (doctest)
         run: ./build/tests/xolver_unit_tests
 
+      # -j1: give each case a full core. Under -j2 the heavy MetiTarski case
+      # nra_200 (~17s on a dedicated core) collides with other NRA cases and
+      # tips past the wall on the shared CI runner. -j1 removes that contention;
+      # 180s is generous headroom for the slowest case on a cold runner.
       - name: Regression suite (xolver vs embedded :status)
         run: |
           python3 tools/run_regression.py \
             --root tests/regression \
             --solver build/bin/xolver \
-            --timeout 60 \
-            -j 2
+            --timeout 180 \
+            -j 1
