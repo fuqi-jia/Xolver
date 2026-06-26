@@ -33,7 +33,7 @@ def run_reg(solver, root, timeout, jobs, flag, value):
     env = dict(os.environ)
     if flag:
         env[flag] = value
-    cmd = [sys.executable, "tools/run_regression.py", "--root", root,
+    cmd = [sys.executable, "tools/regression/run_regression.py", "--root", root,
            "--solver", solver]
     out = subprocess.run(cmd, capture_output=True, text=True, env=env).stdout
     counts = {}

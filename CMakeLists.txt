@@ -192,5 +192,5 @@ if(XOLVER_BUILD_TESTS)
 endif()
 
 if(XOLVER_BUILD_TOOLS)
-    add_subdirectory(tools)
+    add_subdirectory(app)
 endif()
