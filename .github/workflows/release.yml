@@ -1,0 +1,128 @@
+name: Release
+
+# Push a tag like `v1.0.0` to build a fully static `xolver` binary + a developer
+# library bundle and publish them as a GitHub Release. Run manually
+# (workflow_dispatch) to test the packaging without creating a release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label for a manual test build (no Release is created)'
+        default: 'dev'
+
+permissions:
+  contents: write          # required for `gh release create`
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libgmp-dev libmpfr-dev
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ -n "${GITHUB_REF_NAME:-}" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            echo "v=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "v=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Fully static executable (no runtime GMP/MPFR/libpoly dependency) so the
+      # published binary runs on any x86_64 Linux without installing anything.
+      - name: Configure (static Release)
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DXOLVER_STATIC_BUILD=ON \
+            -DXOLVER_BUILD_TESTS=OFF
+
+      - name: Build (CLI + core)
+        run: cmake --build build -j"$(nproc)" --target xolver-cli
+
+      - name: Smoke-test the static binary
+        run: |
+          file build/bin/xolver
+          echo "--- dynamic deps (expect 'not a dynamic executable') ---"
+          ldd build/bin/xolver || true
+          printf '(set-logic QF_LIA)(declare-fun x () Int)(assert (> x 0))(check-sat)\n' > /tmp/smoke.smt2
+          out=$(./build/bin/xolver solve /tmp/smoke.smt2)
+          echo "xolver says: $out"
+          [ "$out" = "sat" ] || { echo "smoke test failed"; exit 1; }
+
+      - name: Package (binary + library bundle + headers)
+        run: |
+          V="${{ steps.ver.outputs.v }}"
+          PKG="xolver-${V}-linux-x86_64"
+          mkdir -p "$PKG/bin" "$PKG/lib" "$PKG/include"
+
+          # 1. runnable, fully static CLI
+          cp build/bin/xolver "$PKG/bin/"
+          strip "$PKG/bin/xolver" || true
+
+          # 2. public headers + umbrella
+          cp -r include/xolver "$PKG/include/"
+
+          # 3. one combined static library (open libs only — never bundle pro).
+          #    Users link: -Iinclude -Llib -lxolver -lgmp -lmpfr -lpthread
+          {
+            echo "create $PKG/lib/libxolver.a"
+            for a in $(find build -name 'libxolver_core.a' -o -name 'libcadical.a' \
+                        -o -name 'libpolyxx.a' -o -name 'libpoly.a' \
+                        -o -name 'libsomtparser.a' | grep -v '/pro/'); do
+              echo "addlib $a"
+            done
+            echo save
+            echo end
+          } | ar -M
+
+          # 4. license + a short usage note
+          cp LICENSE "$PKG/" 2>/dev/null || true
+          cat > "$PKG/USAGE.md" <<EOF
+          # Xolver ${V} — linux-x86_64
+
+          ## Run the solver (no install needed; the binary is fully static)
+              ./bin/xolver solve problem.smt2
+              ./bin/xolver solve --produce-models problem.smt2
+
+          ## Use as a C++ library
+              g++ -std=c++20 -Iinclude app.cpp -Llib -lxolver -lgmp -lmpfr -lpthread
+
+              #include <xolver/xolver.h>
+              // xolver::Solver solver; solver.parseFile("p.smt2"); ...
+          EOF
+
+          tar -czf "${PKG}.tar.gz" "$PKG"
+          sha256sum "${PKG}.tar.gz" | tee "${PKG}.tar.gz.sha256"
+          echo "PKG=${PKG}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact (manual/test runs)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG }}
+          path: |
+            ${{ env.PKG }}.tar.gz
+            ${{ env.PKG }}.tar.gz.sha256
+
+      - name: Publish GitHub Release (tag pushes)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "${PKG}.tar.gz" "${PKG}.tar.gz.sha256" \
+            --title "Xolver ${GITHUB_REF_NAME}" \
+            --generate-notes
