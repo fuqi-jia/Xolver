@@ -15,26 +15,35 @@ blocker — exactly like an unsound verdict.
 
 ## Contract
 
-- **`VERIFIED`** — Xolver emitted a proof and the independent checker accepted it.
+- **`VERIFIED`** — a *complete* proof: every clause is in the formula and the
+  checker accepted the refutation (0 theory lemmas assumed). A full propositional
+  soundness certificate.
+- **`VERIFIED-SKELETON (N lemmas assumed)`** — the checker accepted the refutation,
+  but `N` theory lemmas were captured as **assumed axioms**. This certifies the
+  **Boolean skeleton only** — the lemmas themselves are *not* yet justified (a
+  wrong lemma would still pass here). The `.cnf`'s leading `c xolver-proof:`
+  comment records the count. Phase C justifies each lemma (Alethe + Carcara) to
+  upgrade these to full certificates. **Never read a skeleton as a full proof.**
 - **`REJECTED`** — the checker refused a produced proof. **HARD FAILURE**; the
-  corpus runner exits non-zero. A wrong proof is never acceptable.
+  corpus runner exits non-zero. A wrong proof is never acceptable. (With complete
+  capture this should never happen; if it does, the capture missed a clause.)
 - **`NO-PROOF` (degraded)** — Xolver answered `unsat` but produced no certificate
-  (e.g. the refutation used theory lemmas not yet certified, or was decided in
-  preprocessing). This is *allowed and honest*: we never emit a false proof to
-  avoid the degraded path.
+  (the refutation was decided outside the SAT core, e.g. in preprocessing). This
+  is *allowed and honest*: we never fake a proof to avoid the degraded path.
 - **`SKIP`** — not `unsat`; nothing to certify.
 
 ## Phase status
 
-- **Phase B (now):** the **propositional core**. A *complete* proof is produced
-  only when the SAT core alone refutes (every clause went through `addClause`).
-  When a theory lemma is fed via the external propagator, the captured DIMACS is
-  incomplete, so Xolver suppresses the certificate (`NO-PROOF`) rather than emit
-  one a checker would reject. Pure-Boolean unsats (e.g. pigeonhole) verify with
-  `drat-trim`. All gated behind `-DXOLVER_ENABLE_PROOFS=ON` (default OFF).
-- **Phase C+ (next):** capture/justify theory lemmas (EUF, LRA, …) as Alethe
-  sub-proofs checked by `carcara`, turning the degraded theory instances into
-  fully verified proofs.
+- **Phase B (done):** the **propositional core**. A custom CaDiCaL proof tracer
+  (`ProofCnfCapture`) captures the *complete* input formula — original CNF plus
+  every external-propagator clause (theory lemmas/conflicts/reason clauses), all
+  recorded by CaDiCaL as input axioms — so `<base>.cnf` + `<base>.drat` are a
+  self-contained refutation. Pure-Boolean unsats verify *complete*; theory
+  instances verify their *Boolean skeleton* with the lemmas assumed. All gated
+  behind `-DXOLVER_ENABLE_PROOFS=ON` (default OFF).
+- **Phase C+ (next):** justify each assumed theory lemma (EUF, LRA, …) as an
+  Alethe sub-proof checked by `carcara`, upgrading `VERIFIED-SKELETON` to full
+  `VERIFIED` certificates.
 
 ## Quick start
 

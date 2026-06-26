@@ -365,17 +365,19 @@ static int cmdSolve(int argc, char* argv[], bool defaultMode = false) {
         // produces no propositional certificate, and we never fake one.
         if (proofBase && r == xolver::Result::Unsat) {
 #ifdef XOLVER_ENABLE_PROOFS
-            // The backend writes <base>.cnf only for a COMPLETE proof (every
-            // clause captured); its presence is the "proof produced" signal.
+            // The backend writes <base>.cnf whenever the SAT core produced the
+            // refutation; its presence is the "proof produced" signal. The CNF's
+            // leading `c xolver-proof:` comment records how many theory lemmas (if
+            // any) are ASSUMED as axioms — read it to know whether this is a
+            // complete proof or a Boolean skeleton (lemmas justified in Phase C).
             std::ifstream pf(*proofBase + ".cnf");
             if (pf.good())
                 std::cerr << "(proof " << *proofBase << ".drat + " << *proofBase
                           << ".cnf — verify: drat-trim " << *proofBase << ".cnf "
                           << *proofBase << ".drat)\n";
             else
-                std::cerr << "(no propositional proof produced — unsat used theory "
-                             "lemmas or was decided outside the SAT core; degraded "
-                             "no-proof mode)\n";
+                std::cerr << "(no propositional proof produced — unsat decided "
+                             "outside the SAT core; degraded no-proof mode)\n";
 #else
             std::cerr << "(proof requested but this binary was built without proof "
                          "support; rebuild with -DXOLVER_ENABLE_PROOFS=ON)\n";

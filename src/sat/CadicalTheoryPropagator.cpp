@@ -970,11 +970,6 @@ bool CadicalTheoryPropagator::cb_has_external_clause(bool& is_forgettable) {
 
 int CadicalTheoryPropagator::cb_add_external_clause_lit() {
     if (!hasPendingClause_) return 0;
-    // This clause bypasses CadicalBackend::addClause(), so the proof's captured
-    // DIMACS would be incomplete: tell the backend to suppress the certificate
-    // (degraded no-proof) rather than emit one a checker would reject. No-op
-    // unless proof tracing is active.
-    backend_.noteExternalProofClause();
     if (currentPendingClausePos_ >= currentPendingClause_.size()) {
         // Mark installed before moving to next
         if (!currentPendingClause_.empty()) {

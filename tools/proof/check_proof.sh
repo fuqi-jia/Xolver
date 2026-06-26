@@ -29,6 +29,13 @@ if [ ! -s "$BASE.drat" ] || [ ! -s "$BASE.cnf" ]; then
   echo "NO-PROOF (degraded): $SMT"; exit 2
 fi
 if "$DRATTRIM" "$BASE.cnf" "$BASE.drat" 2>/dev/null | grep -q 's VERIFIED'; then
+  # Honesty: a proof that assumed theory lemmas as axioms certifies the Boolean
+  # skeleton only (lemmas justified in Phase C); report it distinctly so a
+  # skeleton is never read as a full soundness certificate.
+  assumed="$(sed -n 's/^c xolver-proof:.* \([0-9][0-9]*\) theory lemmas assumed.*/\1/p' "$BASE.cnf" | head -1)"
+  if [ -n "$assumed" ] && [ "$assumed" -gt 0 ] 2>/dev/null; then
+    echo "VERIFIED-SKELETON ($assumed lemmas assumed): $SMT"; exit 0
+  fi
   echo "VERIFIED: $SMT"; exit 0
 fi
 echo "REJECTED (checker refused the proof — HARD FAILURE): $SMT"; exit 1

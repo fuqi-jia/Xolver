@@ -5,6 +5,9 @@
 #include <fstream>
 #include "sat/CadicalTheoryPropagator.h"
 #include "util/SolveClock.h"
+#ifdef XOLVER_ENABLE_PROOFS
+#include <tracer.hpp>   // CaDiCaL internal: the custom-Tracer extension point
+#endif
 
 #include <execinfo.h>
 #include <csignal>
@@ -13,6 +16,23 @@
 #include <unistd.h>
 
 namespace xolver {
+
+#ifdef XOLVER_ENABLE_PROOFS
+// Captures every clause CaDiCaL records as ORIGINAL (input): the original CNF
+// fed via Solver::add AND every external-propagator clause (theory lemmas,
+// conflicts, reason clauses) — all of which CaDiCaL traces as original, not as
+// RUP-derived (verified empirically against the vendored rel-3.0.0). This is the
+// complete formula the external checker must see; CaDiCaL emits only the proof.
+class ProofCnfCapture : public CaDiCaL::Tracer {
+public:
+    std::vector<std::vector<int>> clauses;
+    void add_original_clause(int64_t, bool, const std::vector<int>& c,
+                             bool /*restored*/ = false) override {
+        clauses.push_back(c);
+    }
+};
+#endif
+
 
 // SIGPROF sampling profiler (XOLVER_SAT_SAMPLE). setitimer(ITIMER_PROF) delivers
 // SIGPROF to the CPU-bound thread; the handler writes its stack (async-signal-safe
@@ -58,10 +78,13 @@ CadicalBackend::CadicalBackend() : solver_(std::make_unique<CaDiCaL::Solver>()) 
 }
 CadicalBackend::~CadicalBackend() {
 #ifdef XOLVER_ENABLE_PROOFS
-    // Close CaDiCaL's proof trace cleanly (flushes the tail). Safe even if the
-    // last solve was not UNSAT — the partial trace is simply discarded by the
-    // checker since no proof-check is claimed unless finalizeProof() ran.
-    if (proofTracing_) solver_->close_proof_trace();
+    if (proofTracing_) {
+        // Disconnect the capture tracer before tearing down, then close the file
+        // trace cleanly (flushes the tail). Safe even if the last solve was not
+        // UNSAT — no proof is claimed unless finalizeProof() ran.
+        if (proofCapture_) solver_->disconnect_proof_tracer(proofCapture_.get());
+        solver_->close_proof_trace();
+    }
 #endif
 }
 
@@ -110,16 +133,10 @@ SatVar CadicalBackend::newVar() {
 
 void CadicalBackend::addClause(const std::vector<SatLit>& clause) {
 #ifdef XOLVER_ENABLE_PROOFS
-    // Capture the exact clause set fed to the SAT engine so the external checker
-    // has the DIMACS formula (CaDiCaL emits only the proof). Same int encoding as
-    // below, so <base>.cnf and the DRAT share one variable numbering.
-    if (proofTracing_) {
-        std::vector<int> c;
-        c.reserve(clause.size());
-        for (SatLit lit : clause)
-            c.push_back(lit.sign ? static_cast<int>(lit.var) : -static_cast<int>(lit.var));
-        proofCnf_.push_back(std::move(c));
-    }
+    // The capture tracer records the actual clauses (incl. these original ones);
+    // we only COUNT them here so finalizeProof can report how many of the captured
+    // clauses are theory lemmas assumed as axioms (captured total - this count).
+    if (proofTracing_) ++proofOrigClauseCount_;
 #endif
     for (SatLit lit : clause) {
         int cadicalLit = lit.sign ? static_cast<int>(lit.var)
@@ -198,10 +215,15 @@ bool CadicalBackend::enableProofTrace(const std::string& base, bool lrat) {
     // rare, so the (default-ON) search heuristic is sacrificed only here.
     solver_->set("factor", 0);
     if (!solver_->trace_proof(proofPath.c_str())) return false;
+    // Connect the capture tracer alongside the DRAT file tracer (both coexist —
+    // CaDiCaL keeps separate tracer lists). add_original_clause then records the
+    // COMPLETE input set (original CNF + every external-propagator clause) — the
+    // exact formula the DRAT was generated against, with no missed clause path.
+    proofCapture_ = std::make_unique<ProofCnfCapture>();
+    solver_->connect_proof_tracer(proofCapture_.get(), /*antecedents=*/false);
     proofTracing_ = true;
     proofConcluded_ = false;
-    proofHadExternalClause_ = false;
-    proofCnf_.clear();
+    proofOrigClauseCount_ = 0;
     return true;
 #else
     (void)base; (void)lrat;
@@ -215,29 +237,39 @@ void CadicalBackend::finalizeProof() {
     proofConcluded_ = true;
     solver_->conclude();          // record the UNSAT conclusion into the trace
     solver_->flush_proof_trace(); // flush the proof tail
-    // Soundness floor: write the matching DIMACS — and thereby "produce a proof"
-    // (the <base>.cnf is the completeness signal the CLI/checker key on) — ONLY
-    // when every clause the SAT engine used went through addClause(). If a theory
-    // lemma was fed via the external propagator, the captured DIMACS is
-    // incomplete, so we suppress the certificate (degraded no-proof) rather than
-    // emit one an external checker would (correctly) reject. Never a wrong proof.
-    if (!proofHadExternalClause_)
-        writeProofCnf();
-#endif
-}
-
-void CadicalBackend::noteExternalProofClause() {
-#ifdef XOLVER_ENABLE_PROOFS
-    if (proofTracing_) proofHadExternalClause_ = true;
+    // The capture tracer holds the complete formula (original CNF + any theory
+    // clauses as input axioms), so <base>.cnf + the DRAT are a self-contained,
+    // externally-checkable refutation. Always written now: the soundness floor is
+    // upheld not by suppression but by completeness (every clause CaDiCaL used is
+    // captured) — drat-trim cannot reject for a missing clause.
+    writeProofCnf();
 #endif
 }
 
 void CadicalBackend::writeProofCnf() const {
 #ifdef XOLVER_ENABLE_PROOFS
+    if (!proofCapture_) return;
+    const auto& cls = proofCapture_->clauses;
+    // Max variable actually referenced (robust if CaDiCaL renumbers/observes).
+    long maxv = static_cast<long>(maxVar_);
+    for (const auto& c : cls)
+        for (int lit : c) { long v = lit < 0 ? -lit : lit; if (v > maxv) maxv = v; }
     std::ofstream out(proofBase_ + ".cnf");
     if (!out) return;
-    out << "p cnf " << static_cast<long>(maxVar_) << ' ' << proofCnf_.size() << '\n';
-    for (const auto& c : proofCnf_) {
+    // Honesty: theory lemmas captured as input axioms are NOT propositionally
+    // valid — a VERIFIED proof here certifies the Boolean skeleton only; the
+    // assumed lemmas are justified in Phase C. Record the count so the checker /
+    // reader is never misled into reading this as a full soundness certificate.
+    const std::size_t total = cls.size();
+    const std::size_t assumed =
+        total > proofOrigClauseCount_ ? total - proofOrigClauseCount_ : 0;
+    out << "c xolver-proof: " << proofOrigClauseCount_ << " original clauses, "
+        << assumed << " theory lemmas assumed as axioms";
+    if (assumed > 0)
+        out << " (Boolean skeleton only; lemmas justified in Phase C)";
+    out << '\n';
+    out << "p cnf " << maxv << ' ' << total << '\n';
+    for (const auto& c : cls) {
         for (int lit : c) out << lit << ' ';
         out << "0\n";
     }
