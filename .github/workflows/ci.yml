@@ -1,0 +1,54 @@
+name: CI
+
+# Build Xolver and run the unit + regression suites. The regression harness
+# (tools/run_regression.py) compares each verdict against the (set-info :status)
+# embedded in the .smt2 file, so no external solver (z3/cvc5) is needed in CI.
+# Exit is non-zero on any UNSOUND / UNEXPECTED_FAIL / TIMEOUT, which fails the job.
+
+on:
+  push:
+    branches: [main]
+  pull_request:           # run on every PR (any base), so stacked PRs are covered too
+  workflow_dispatch:      # allow manual runs from the Actions tab
+
+# Cancel an in-progress run when the same ref is pushed again.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive   # CaDiCaL + libpoly + SOMTParser
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential libgmp-dev libmpfr-dev python3
+
+      - name: Configure (Release)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      # -j2 keeps peak compiler memory bounded — Solver.cpp / NiaSolver.cpp are
+      # large -O3 translation units. Bump once the build is split / a runner with
+      # more RAM is used.
+      - name: Build
+        run: cmake --build build -j2
+
+      - name: Unit tests (doctest)
+        run: ./build/tests/xolver_unit_tests
+
+      - name: Regression suite (xolver vs embedded :status)
+        run: |
+          python3 tools/run_regression.py \
+            --root tests/regression \
+            --solver build/bin/xolver \
+            --timeout 60 \
+            -j 2
