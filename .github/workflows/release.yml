@@ -1,8 +1,13 @@
 name: Release
 
-# Push a tag like `v1.0.0` to build a fully static `xolver` binary + a developer
-# library bundle and publish them as a GitHub Release. Run manually
-# (workflow_dispatch) to test the packaging without creating a release.
+# Push a tag like `v1.0.0` to build per-platform "download & run" binaries plus a
+# developer library bundle and publish them on a GitHub Release. Run manually
+# (workflow_dispatch) to test the archives without creating a release.
+#
+# Linux is fully static (XOLVER_STATIC_BUILD=ON => -static). macOS can't link a
+# fully-static executable (no static libSystem), so instead GMP/MPFR are forced
+# static (their dylibs are hidden so -lgmp/-lmpfr resolve to the .a) while the
+# always-present system libs stay dynamic — still a no-dependency download.
 on:
   push:
     tags: ['v*']
@@ -13,11 +18,19 @@ on:
         default: 'dev'
 
 permissions:
-  contents: write          # required for `gh release create`
+  contents: write
 
 jobs:
-  linux-x86_64:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false          # one platform failing must not drop the others
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: linux-x86_64
+          - os: macos-latest
+            arch: macos-arm64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     steps:
       - name: Checkout (with submodules)
@@ -25,87 +38,73 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake build-essential libgmp-dev libmpfr-dev
-
       - name: Resolve version
         id: ver
+        shell: bash
         run: |
-          if [ -n "${GITHUB_REF_NAME:-}" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
-            echo "v=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          else
-            echo "v=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
-          fi
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then echo "v=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else echo "v=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"; fi
 
-      # Fully static executable (no runtime GMP/MPFR/libpoly dependency) so the
-      # published binary runs on any x86_64 Linux without installing anything.
-      - name: Configure (static Release)
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
-          cmake -S . -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DXOLVER_STATIC_BUILD=ON \
-            -DXOLVER_BUILD_TESTS=OFF
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential libgmp-dev libmpfr-dev
+
+      - name: Install dependencies (macOS, force static GMP/MPFR)
+        if: runner.os == 'macOS'
+        run: |
+          brew install gmp mpfr
+          # Hide the dynamic libs so the linker can only pick the static archives.
+          rm -f "$(brew --prefix gmp)"/lib/libgmp*.dylib  "$(brew --prefix mpfr)"/lib/libmpfr*.dylib
+
+      - name: Configure
+        shell: bash
+        run: |
+          EXTRA=""
+          [ "${{ runner.os }}" = "Linux" ] && EXTRA="-DXOLVER_STATIC_BUILD=ON"
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DXOLVER_BUILD_TESTS=OFF $EXTRA
 
       - name: Build (CLI + core)
-        run: cmake --build build -j"$(nproc)" --target xolver-cli
+        run: cmake --build build -j"$(getconf _NPROCESSORS_ONLN)" --target xolver-cli
 
-      - name: Smoke-test the static binary
+      - name: Smoke-test the binary
+        shell: bash
         run: |
-          file build/bin/xolver
-          echo "--- dynamic deps (expect 'not a dynamic executable') ---"
-          ldd build/bin/xolver || true
-          printf '(set-logic QF_LIA)(declare-fun x () Int)(assert (> x 0))(check-sat)\n' > /tmp/smoke.smt2
-          out=$(./build/bin/xolver solve /tmp/smoke.smt2)
+          file build/bin/xolver || true
+          echo "--- runtime deps (expect only system libs) ---"
+          ldd build/bin/xolver 2>/dev/null || otool -L build/bin/xolver 2>/dev/null || true
+          printf '(set-logic QF_LIA)(declare-fun x () Int)(assert (> x 0))(check-sat)\n' > smoke.smt2
+          out=$(./build/bin/xolver solve smoke.smt2)
           echo "xolver says: $out"
           [ "$out" = "sat" ] || { echo "smoke test failed"; exit 1; }
 
       - name: Package (binary + library bundle + headers)
+        shell: bash
         run: |
           V="${{ steps.ver.outputs.v }}"
-          PKG="xolver-${V}-linux-x86_64"
+          PKG="xolver-${V}-${{ matrix.arch }}"
           mkdir -p "$PKG/bin" "$PKG/lib" "$PKG/include"
-
-          # 1. runnable, fully static CLI
-          cp build/bin/xolver "$PKG/bin/"
-          strip "$PKG/bin/xolver" || true
-
-          # 2. public headers + umbrella
+          cp build/bin/xolver "$PKG/bin/"; strip "$PKG/bin/xolver" || true
           cp -r include/xolver "$PKG/include/"
-
-          # 3. one combined static library (open libs only — never bundle pro).
-          #    Users link: -Iinclude -Llib -lxolver -lgmp -lmpfr -lpthread
           {
             echo "create $PKG/lib/libxolver.a"
             for a in $(find build -name 'libxolver_core.a' -o -name 'libcadical.a' \
                         -o -name 'libpolyxx.a' -o -name 'libpoly.a' \
-                        -o -name 'libsomtparser.a' | grep -v '/pro/'); do
-              echo "addlib $a"
-            done
-            echo save
-            echo end
+                        -o -name 'libsomtparser.a' | grep -v '/pro/'); do echo "addlib $a"; done
+            echo save; echo end
           } | ar -M
-
-          # 4. license + a short usage note
           cp LICENSE "$PKG/" 2>/dev/null || true
           cat > "$PKG/USAGE.md" <<EOF
-          # Xolver ${V} — linux-x86_64
-
-          ## Run the solver (no install needed; the binary is fully static)
+          # Xolver ${V} — ${{ matrix.arch }}
+          ## Run (no install needed)
               ./bin/xolver solve problem.smt2
-              ./bin/xolver solve --produce-models problem.smt2
-
-          ## Use as a C++ library
-              g++ -std=c++20 -Iinclude app.cpp -Llib -lxolver -lgmp -lmpfr -lpthread
-
+          ## Link as a C++ library
+              c++ -std=c++20 -Iinclude app.cpp -Llib -lxolver -lgmp -lmpfr -lpthread
               #include <xolver/xolver.h>
-              // xolver::Solver solver; solver.parseFile("p.smt2"); ...
           EOF
-
           tar -czf "${PKG}.tar.gz" "$PKG"
-          sha256sum "${PKG}.tar.gz" | tee "${PKG}.tar.gz.sha256"
+          (command -v sha256sum >/dev/null && sha256sum "${PKG}.tar.gz" || shasum -a 256 "${PKG}.tar.gz") > "${PKG}.tar.gz.sha256"
           echo "PKG=${PKG}" >> "$GITHUB_ENV"
 
       - name: Upload artifact (manual/test runs)
@@ -117,12 +116,11 @@ jobs:
             ${{ env.PKG }}.tar.gz
             ${{ env.PKG }}.tar.gz.sha256
 
-      - name: Publish GitHub Release (tag pushes)
+      - name: Publish to GitHub Release (tag pushes)
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            "${PKG}.tar.gz" "${PKG}.tar.gz.sha256" \
-            --title "Xolver ${GITHUB_REF_NAME}" \
-            --generate-notes
+          # First platform creates the release; the rest just add their assets.
+          gh release create "${GITHUB_REF_NAME}" --title "Xolver ${GITHUB_REF_NAME}" --generate-notes 2>/dev/null || true
+          gh release upload "${GITHUB_REF_NAME}" "${PKG}.tar.gz" "${PKG}.tar.gz.sha256" --clobber
