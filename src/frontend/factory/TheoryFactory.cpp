@@ -13,7 +13,7 @@
 #include "experimental/mcsat/McsatSolver.h"
 #include "theory/arith/logics/nia/mcsat/NiaMcsatEngine.h"
 #include "theory/arith/logics/nra/backend/LibpolyBackend.h"
-#include "theory/arith/logics/nra/nlsat/NlsatEngine.h"
+#include "theory/arith/logics/nra/engine/NlsatEngine.h"
 #include "util/EnvParam.h"
 #include <cstdlib>
 #include <iostream>

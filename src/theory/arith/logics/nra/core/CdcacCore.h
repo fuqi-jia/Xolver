@@ -5,9 +5,9 @@
 #include "theory/arith/logics/nra/backend/AlgebraBackend.h"
 #include "theory/arith/logics/nra/engine/CoveringManager.h"
 #include "theory/arith/logics/nra/engine/ReasonManager.h"
-#include "theory/arith/logics/nra/projection/ProjectionPolicy.h"
-#include "theory/arith/logics/nra/projection/ProjectionClosure.h"
-#include "theory/arith/logics/nra/projection/LazardProjectionClosure.h"
+#include "theory/arith/logics/nra/lazard/ProjectionPolicy.h"
+#include "theory/arith/logics/nra/lazard/ProjectionClosure.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionClosure.h"
 #include "theory/arith/kernel/poly/PolynomialKernel.h"
 #include "theory/arith/kernel/poly/RationalPolynomial.h"
 #include <vector>

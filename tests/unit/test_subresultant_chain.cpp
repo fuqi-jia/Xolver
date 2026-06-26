@@ -7,8 +7,8 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/projection/SubresultantChain.h"
-#include "theory/arith/logics/nra/projection/LocalProjection.h"   // resultant()
+#include "theory/arith/logics/nra/lazard/SubresultantChain.h"
+#include "theory/arith/logics/nra/lazard/LocalProjection.h"   // resultant()
 
 using namespace xolver;
 

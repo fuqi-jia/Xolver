@@ -8,10 +8,10 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/valuation/TowerAlgebraicKernel.h"
-#include "theory/arith/logics/nra/valuation/TowerRootIsolation.h"
-#include "theory/arith/logics/nra/projection/LazardProjectionClosure.h"
-#include "theory/arith/logics/nra/projection/Squarefree.h"
+#include "theory/arith/logics/nra/lazard/TowerAlgebraicKernel.h"
+#include "theory/arith/logics/nra/lazard/TowerRootIsolation.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionClosure.h"
+#include "theory/arith/logics/nra/lazard/Squarefree.h"
 
 using namespace xolver;
 

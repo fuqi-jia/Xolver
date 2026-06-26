@@ -5,8 +5,8 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/projection/LazardProjectionOperator.h"
-#include "theory/arith/logics/nra/projection/LazardProjectionClosure.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionOperator.h"
+#include "theory/arith/logics/nra/lazard/LazardProjectionClosure.h"
 
 using namespace xolver;
 

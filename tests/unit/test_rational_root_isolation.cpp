@@ -3,7 +3,7 @@
 
 #include <doctest/doctest.h>
 #include <gmpxx.h>
-#include "theory/arith/logics/nra/valuation/RationalRootIsolation.h"
+#include "theory/arith/logics/nra/lazard/RationalRootIsolation.h"
 
 using namespace xolver;
 
