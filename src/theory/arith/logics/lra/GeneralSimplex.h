@@ -129,6 +129,16 @@ public:
     /** Return the set of bounds that caused the last conflict. */
     const std::vector<BoundReason>& getConflict() const { return conflict_; }
 
+#ifdef XOLVER_ENABLE_PROOFS
+    // The Farkas multiplier (always non-negative) for each entry of getConflict(),
+    // aligned 1:1. For a row conflict the violated basic bound has multiplier 1 and
+    // each blocking non-basic bound has |row coefficient|; for an immediate
+    // conflict both bounds have multiplier 1. Summing multiplier_i * bound_i
+    // cancels the variables and leaves a constant contradiction — the la_generic
+    // certificate. Populated only under this macro (no cost to the no-proof build).
+    const std::vector<mpq_class>& getConflictCoeffs() const { return conflictCoeffs_; }
+#endif
+
     // -------------------------------------------------------------------------
     // Scope management (push/pop)
     // -------------------------------------------------------------------------
@@ -240,6 +250,9 @@ private:
     // ========================================================================
     bool betaDirty_ = true;
     std::vector<BoundReason> conflict_;
+#ifdef XOLVER_ENABLE_PROOFS
+    std::vector<mpq_class> conflictCoeffs_;  // Farkas multipliers, 1:1 with conflict_
+#endif
     bool hasImmediateConflict_ = false;
 
     // XOLVER_LRA_PIVOT_HEUR: when set, use a largest-|coefficient| entering-var

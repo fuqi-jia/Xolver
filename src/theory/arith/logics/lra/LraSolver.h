@@ -67,10 +67,11 @@ protected:
 
 private:
 #ifdef XOLVER_ENABLE_PROOFS
-    // Phase C: push an la_generic Farkas certificate (unit multipliers) for the
-    // current IMMEDIATE simplex conflict to the active proof sink. No-op off the
-    // proof path. Called at every immediate-conflict emission point.
-    void pushImmediateLraCert();
+    // Phase C: push an la_generic Farkas certificate (the multipliers GeneralSimplex
+    // captured — unit for an immediate conflict, |row coeffs| for a row conflict)
+    // for the current simplex conflict to the active proof sink. No-op off the
+    // proof path. Called at every conflict-emission point.
+    void pushLraFarkasCert();
 #endif
 
     // Single core reasoner stage (Phase 2): incremental replay + interface
