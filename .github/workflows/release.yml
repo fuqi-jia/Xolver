@@ -151,7 +151,9 @@ jobs:
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             V="${GITHUB_REF_NAME#v}"
           else
-            V="0.0.0.dev0"
+            # Manual run (TestPyPI rehearsal): unique dev version per run, since
+            # TestPyPI also permanently reserves a version and rejects re-uploads.
+            V="0.0.0.dev${{ github.run_number }}"
           fi
           echo "v=${V}" >> "$GITHUB_OUTPUT"
           echo "Building wheels for version ${V}"
@@ -238,3 +240,35 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: pydist
+
+  # ---------------------------------------------------------------------------
+  # TestPyPI rehearsal — a REVERSIBLE dry run of the publish. Fires only on a
+  # manual run (workflow_dispatch), never on a tag, so it can never touch real
+  # PyPI. Uploads the wheels + sdist to test.pypi.org via Trusted Publishing.
+  # Prerequisite (one-time): on test.pypi.org add a (pending) publisher for
+  #   project `xolver`, owner `fuqi-jia`, repo `Xolver`, workflow `release.yml`,
+  #   environment `testpypi`.  https://test.pypi.org/manage/account/publishing/
+  # Verify after:  pip install -i https://test.pypi.org/simple/ xolver
+  # ---------------------------------------------------------------------------
+  testpypi-publish:
+    name: publish-to-testpypi
+    needs: wheels
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/xolver/
+    permissions:
+      id-token: write        # OIDC — no token stored
+    steps:
+      - name: Download dist (wheels + sdist)
+        uses: actions/download-artifact@v4
+        with:
+          name: xolver-python-dist
+          path: pydist
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: pydist
+          skip-existing: true
