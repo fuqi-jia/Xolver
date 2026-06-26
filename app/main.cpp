@@ -1,4 +1,7 @@
 #include <cstdlib>
+#include <cstdio>
+#include <utility>
+#include <sys/wait.h>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -485,9 +488,92 @@ static int cmdModelCheck(int argc, char* argv[]) {
     return EXIT_SUCCESS;
 }
 
+namespace {
+// Run a shell command, capture combined stdout+stderr, return (exit-code, output).
+// exit-code is the process exit status (127 = command not found), -1 on failure.
+std::pair<int, std::string> runChecker(const std::string& cmd) {
+    FILE* p = popen((cmd + " 2>&1").c_str(), "r");
+    if (!p) return {-1, "popen failed"};
+    std::string out;
+    char buf[4096];
+    size_t n;
+    while ((n = std::fread(buf, 1, sizeof(buf), p)) > 0) out.append(buf, n);
+    int status = pclose(p);
+    int code = (status >= 0 && WIFEXITED(status)) ? WEXITSTATUS(status) : -1;
+    return {code, out};
+}
+// Resolve a checker binary: explicit flag > env var > PATH name (default).
+std::string resolveChecker(const std::string& flagVal, const char* envVar,
+                           const std::string& dflt) {
+    if (!flagVal.empty()) return flagVal;
+    if (const char* e = std::getenv(envVar); e && *e) return e;
+    return dflt;
+}
+bool proofFileExists(const std::string& p) { std::ifstream f(p); return f.good(); }
+}  // namespace
+
+// proof-check <base> [--drat-trim P] [--carcara P]
+// Validates the proof artifacts Xolver emitted at <base> with an INDEPENDENT
+// external checker: prefers the Alethe theory proof (<base>.alethe + <base>.smt2,
+// checked by Carcara — certifies the theory reasoning), else the propositional
+// DRAT proof (<base>.cnf + <base>.drat, checked by drat-trim). Exit 0 iff the
+// checker accepts; non-zero on rejection / missing artifacts / missing checker —
+// so a wrong proof can never pass silently.
 static int cmdProofCheck(int argc, char* argv[]) {
-    std::cout << "[Xolver proof-check] (stub)\n";
-    return EXIT_SUCCESS;
+    std::string base, dratTrim, carcara;
+    for (int i = 2; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--drat-trim" && i + 1 < argc) dratTrim = argv[++i];
+        else if (a == "--carcara" && i + 1 < argc) carcara = argv[++i];
+        else if (base.empty() && !a.empty() && a[0] != '-') base = a;
+    }
+    if (base.empty()) {
+        std::cerr << "usage: xolver proof-check <proof-base> [--drat-trim P] [--carcara P]\n"
+                     "  checks <base>.alethe + <base>.smt2 (Carcara) or\n"
+                     "         <base>.cnf + <base>.drat (drat-trim)\n";
+        return EXIT_FAILURE;
+    }
+    // Accept a full artifact name too: strip a known proof extension to get <base>.
+    for (const char* ext : {".alethe", ".drat", ".cnf", ".smt2"}) {
+        const std::string e(ext);
+        if (base.size() > e.size() && base.compare(base.size() - e.size(), e.size(), e) == 0) {
+            base.resize(base.size() - e.size());
+            break;
+        }
+    }
+
+    // Prefer the Alethe theory proof — it certifies the theory reasoning, not just
+    // the Boolean skeleton.
+    if (proofFileExists(base + ".alethe") && proofFileExists(base + ".smt2")) {
+        const std::string car = resolveChecker(carcara, "XOLVER_CARCARA", "carcara");
+        auto [code, out] = runChecker(car + " check \"" + base + ".alethe\" \"" + base + ".smt2\"");
+        if (code == 0) {
+            std::cout << "verified (alethe/carcara): " << base << ".alethe\n";
+            return EXIT_SUCCESS;
+        }
+        std::cerr << (code == 127 ? "proof-check: carcara not found (set --carcara or $XOLVER_CARCARA)\n"
+                                  : "NOT VERIFIED (carcara): " + base + ".alethe\n")
+                  << out;
+        return EXIT_FAILURE;
+    }
+
+    // Fall back to the propositional DRAT proof.
+    if (proofFileExists(base + ".drat") && proofFileExists(base + ".cnf")) {
+        const std::string dt = resolveChecker(dratTrim, "XOLVER_DRAT_TRIM", "drat-trim");
+        auto [code, out] = runChecker(dt + " \"" + base + ".cnf\" \"" + base + ".drat\"");
+        if (code == 0 && out.find("s VERIFIED") != std::string::npos) {
+            std::cout << "verified (drat/drat-trim): " << base << ".drat\n";
+            return EXIT_SUCCESS;
+        }
+        std::cerr << (code == 127 ? "proof-check: drat-trim not found (set --drat-trim or $XOLVER_DRAT_TRIM)\n"
+                                  : "NOT VERIFIED (drat-trim): " + base + ".drat\n")
+                  << out;
+        return EXIT_FAILURE;
+    }
+
+    std::cerr << "proof-check: no proof artifacts at \"" << base
+              << "\" (expected .alethe+.smt2 or .cnf+.drat)\n";
+    return EXIT_FAILURE;
 }
 
 static int cmdVersion() {
