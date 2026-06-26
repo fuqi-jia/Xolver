@@ -378,7 +378,7 @@ struct SolveForResult {
     std::vector<Term> remainder;              // terms of p excluding the isolated monomial
 };
 
-std::optional<SolveForResult> trySolveForLinearVariable(
+[[maybe_unused]] std::optional<SolveForResult> trySolveForLinearVariable(
         const std::vector<Term>& terms) {
     // Try each monomial as the "isolated pattern" candidate.
     for (size_t i = 0; i < terms.size(); ++i) {
@@ -527,7 +527,7 @@ std::vector<Term> addTerms(const std::vector<Term>& a, const std::vector<Term>& 
 }
 
 // Compute v^k as a term-list (single monomial).
-std::vector<Term> varPower(VarId v, int k) {
+[[maybe_unused]] std::vector<Term> varPower(VarId v, int k) {
     if (k == 0) {
         Term t;
         t.coefficient = mpz_class(1);
@@ -832,14 +832,14 @@ namespace {
         }
         return s;
     }
-    std::vector<std::pair<VarId, int>> doublePowerKey(
+    [[maybe_unused]] std::vector<std::pair<VarId, int>> doublePowerKey(
             const std::vector<std::pair<VarId, int>>& pk) {
         std::vector<std::pair<VarId, int>> out;
         out.reserve(pk.size());
         for (const auto& [v, e] : pk) out.push_back({v, 2 * e});
         return out;
     }
-    std::vector<std::pair<VarId, int>> sumPowerKeys(
+    [[maybe_unused]] std::vector<std::pair<VarId, int>> sumPowerKeys(
             const std::vector<std::pair<VarId, int>>& a,
             const std::vector<std::pair<VarId, int>>& b) {
         std::unordered_map<VarId, int> m;

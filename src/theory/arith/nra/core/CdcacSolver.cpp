@@ -174,7 +174,7 @@ TheoryCheckResult CdcacSolver::check() {
             }
         }
         std::stable_sort(varOrderNames.begin(), varOrderNames.end(),
-            [&degSum, ascending](const std::string& a, const std::string& b) {
+            [&degSum](const std::string& a, const std::string& b) {
                 return ascending ? (degSum[a] < degSum[b]) : (degSum[a] > degSum[b]);
             });
     }
