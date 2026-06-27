@@ -62,5 +62,26 @@ std::optional<AletheProof> buildClausalRefutation(
     const std::vector<LratStep>& lrat,
     const std::vector<std::string>& varTerm);
 
+// --- Increment F2a: theory-lemma Boolean assembly (generalized replay) ---
+//
+// Unlike buildClausalRefutation (which builds the whole proof, assuming flat
+// disjunctive/unit assertions), this appends ONLY the LRAT resolution replay to a
+// proof the caller has already populated. The caller — which owns the IR — has
+// emitted the assumes, the clausification steps (e.g. `and :args(i)`,
+// `distinct_elim`, `or`), and the theory-lemma tautology steps (e.g.
+// `eq_congruent`), and provides `origStepId[k]` = the Alethe step/assume id that
+// proves the k-th ORIGINAL input clause, in the SAME order those clauses were fed
+// to the SAT engine. Each derived LRAT clause becomes an Alethe `resolution` step;
+// the chain ends in the empty clause. Returns true iff a complete refutation was
+// appended; false (proof left partially extended, to be discarded) otherwise.
+//
+//  - varTerm[v] is the SMT-LIB atom for SAT variable v (1-based; index 0 unused);
+//    a negative literal renders as "(not <atom>)".
+bool appendLratResolutionReplay(
+    AletheProof& proof,
+    const std::vector<std::string>& origStepId,
+    const std::vector<LratStep>& lrat,
+    const std::vector<std::string>& varTerm);
+
 } // namespace proof
 } // namespace xolver

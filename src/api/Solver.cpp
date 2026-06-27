@@ -358,6 +358,21 @@ struct EufCongruenceProver {
     std::vector<std::string> premises;                     // used assume/step ids (unique, ordered)
     std::unordered_set<std::string> premiseSet;
 
+    // --- Phase F2a lemma mode -------------------------------------------------
+    // In lemmaMode the prover does NOT assume the leaf equalities (they come from
+    // the clausified original assertions and are resolved away by the propositional
+    // replay); instead it RECORDS every tautology step it emits — the lemma clauses
+    // (cl (not leaf_i)... (= u v)) over theory atoms — so the caller can feed them
+    // as input clauses to the abstraction's SAT solve and map each LRAT id back to
+    // its step. The closed-proof callers (proofEufCongruence/proofBoolCongruence)
+    // leave lemmaMode false and the behaviour is byte-identical to before.
+    bool lemmaMode = false;
+    struct EmittedLemmaStep {
+        std::string id;                                  // the Alethe step id
+        std::vector<std::pair<std::string, bool>> lits;  // (atom, positive-in-clause)
+    };
+    std::vector<EmittedLemmaStep> lemmaSteps;
+
     static std::pair<ExprId, ExprId> key(ExprId a, ExprId b) {
         return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
     }
@@ -449,12 +464,16 @@ struct EufCongruenceProver {
         // congruence whose argument position is syntactically the same term.
         if (u == v) {
             std::string concl = "(= " + term(u) + " " + term(u) + ")";
-            use(p.step({concl}, "refl"));
+            std::string sid = p.step({concl}, "refl");
+            if (lemmaMode) lemmaSteps.push_back({sid, {{concl, true}}});
+            else use(sid);
             return memo[k] = concl;
         }
-        // (a) directly-asserted leaf equality.
+        // (a) directly-asserted leaf equality. In lemmaMode the leaf is NOT a
+        // premise (it is referenced as `(not leaf)` in the enclosing congruence/
+        // transitivity clause and supplied by the clausified original).
         if (auto it = leaf.find(k); it != leaf.end()) {
-            use(it->second.first);
+            if (!lemmaMode) use(it->second.first);
             return memo[k] = it->second.second;
         }
         // (b) congruence: f(A) vs f(B), same function symbol and arity.
@@ -465,16 +484,21 @@ struct EufCongruenceProver {
             std::get<std::string>(eu.payload.value) ==
                 std::get<std::string>(ev.payload.value)) {
             std::vector<std::string> clause;
+            std::vector<std::pair<std::string, bool>> lits;
             bool ok = true;
             for (size_t i = 0; i < eu.children.size(); ++i) {
                 std::string li = prove(eu.children[i], ev.children[i], depth + 1);
                 if (li.empty()) { ok = false; break; }
                 clause.push_back("(not " + li + ")");
+                lits.push_back({li, false});
             }
             if (ok) {
                 std::string concl = "(= " + term(u) + " " + term(v) + ")";
                 clause.push_back(concl);
-                use(p.step(clause, "eq_congruent"));
+                lits.push_back({concl, true});
+                std::string sid = p.step(clause, "eq_congruent");
+                if (lemmaMode) lemmaSteps.push_back({sid, lits});
+                else use(sid);
                 return memo[k] = concl;
             }
         }
@@ -482,16 +506,21 @@ struct EufCongruenceProver {
         std::vector<ExprId> path = bfsPath(u, v);
         if (path.size() >= 3) {
             std::vector<std::string> clause;
+            std::vector<std::pair<std::string, bool>> lits;
             bool ok = true;
             for (size_t i = 0; i + 1 < path.size(); ++i) {
                 std::string li = prove(path[i], path[i + 1], depth + 1);
                 if (li.empty()) { ok = false; break; }
                 clause.push_back("(not " + li + ")");
+                lits.push_back({li, false});
             }
             if (ok) {
                 std::string concl = "(= " + term(u) + " " + term(v) + ")";
                 clause.push_back(concl);
-                use(p.step(clause, "eq_transitive"));
+                lits.push_back({concl, true});
+                std::string sid = p.step(clause, "eq_transitive");
+                if (lemmaMode) lemmaSteps.push_back({sid, lits});
+                else use(sid);
                 return memo[k] = concl;
             }
         }
@@ -557,6 +586,212 @@ bool proofBoolCongruence(ExprId predTrueId, ExprId predFalseId,
                                "equiv1", {eqUnit});
     out.step(/*clause=*/{}, "resolution", {eqv, hTrue, hFalse});
     return true;
+}
+
+// --- Phase F2a: single-theory-lemma Boolean assembly ------------------------
+// Generalizes the F1 flat-clausal path to a theory UNSAT whose refutation needs
+// exactly ONE theory lemma (the canonical case: an EUF congruence whose
+// conclusion disequality is buried in a top-level n-ary `(distinct ...)` or an
+// `(and ...)`, so it is NOT a top-level assertion the closed-proof path can
+// assume). Mechanism:
+//   1. Abstract each theory atom of the ORIGINAL (pre-purification) assertions to
+//      one propositional variable (rendered via dumpExprToSMT2 — the abstraction's
+//      "variables" ARE the real atoms in the Alethe proof).
+//   2. Clausify the originals: n-ary distinct -> `distinct_elim` + `equiv1` +
+//      resolution + `and :args(k)`; `(and ..)` -> `and :args(k)`; `(or ..)` ->
+//      `or`; binary distinct / negated atom / bare atom -> the assume IS the unit.
+//   3. Derive the conflict's theory tautology clause (cl (not leaf_i).. (= l r))
+//      as a REAL sub-proof (eq_congruent / eq_transitive over the leaves, lemma
+//      mode — leaves come from the clausified original, not assumed).
+//   4. Refute (clausified-original + lemma clauses) on a dedicated CaDiCaL LRAT
+//      solve and replay the resolution to the empty clause.
+// Returns nullopt -> degrade to the DRAT/skeleton path -> when any assertion shape
+// is unsupported, the lemma is outside the handled fragment, or the abstraction is
+// not propositionally unsat with this single lemma (needs CEGAR / multi-lemma,
+// F2b). Carcara is the final gate: a wrong assembly is REJECTED offline, never
+// claimed.
+std::optional<proof::AletheProof>
+tryTheoryLemmaBooleanProof(const CoreIr& ir,
+                           const std::vector<ExprId>& originalAssertions,
+                           const proof::TheoryConflictCert& cert) {
+    // F2a handles the EUF congruence/transitivity lemma (rule "eq_transitive").
+    if (cert.rule != "eq_transitive" || cert.lits.empty()) return std::nullopt;
+    if (originalAssertions.empty()) return std::nullopt;
+
+    proof::AletheProof proof;
+    auto term = [&](ExprId id) { return dumpExprToSMT2(id, ir); };
+
+    // Atom abstraction: each distinct rendered atom string -> a 1-based SAT var.
+    std::unordered_map<std::string, int> atomVar;
+    std::vector<std::string> varTerm;
+    varTerm.push_back("");  // index 0 unused (vars are 1-based)
+    auto reg = [&](const std::string& atom) -> int {
+        auto it = atomVar.find(atom);
+        if (it != atomVar.end()) return it->second;
+        int v = static_cast<int>(varTerm.size());
+        atomVar[atom] = v;
+        varTerm.push_back(atom);
+        return v;
+    };
+    // A clause literal: the underlying atom (a positive equality / comparison /
+    // bool atom) plus its sign. A binary `(distinct x y)` is a negated equality;
+    // logical connectives are not abstractable literals (-> nullopt -> degrade).
+    auto litFromExpr = [&](ExprId id) -> std::optional<std::pair<std::string, bool>> {
+        bool pos = true;
+        const auto* e = &ir.get(id);
+        while (e->kind == Kind::Not && e->children.size() == 1) {
+            pos = !pos; id = e->children[0]; e = &ir.get(id);
+        }
+        if (e->kind == Kind::Distinct && e->children.size() == 2)
+            return std::make_pair("(= " + term(e->children[0]) + " " + term(e->children[1]) + ")", !pos);
+        switch (e->kind) {
+            case Kind::And: case Kind::Or: case Kind::Implies:
+            case Kind::Xor: case Kind::Ite: case Kind::Distinct:
+                return std::nullopt;
+            default: break;
+        }
+        return std::make_pair(term(id), pos);
+    };
+
+    std::vector<std::vector<int>> cnf;
+    std::vector<std::string> origStepId;  // feed-order Alethe step per input clause
+
+    // Assume each original assertion up front (Carcara expects assumes first).
+    std::vector<std::string> assumeId;
+    assumeId.reserve(originalAssertions.size());
+    for (ExprId a : originalAssertions) assumeId.push_back(proof.assume(term(a)));
+
+    // Clausify each original assertion into propositional clauses + the Alethe
+    // step that proves each clause's (cl ...).
+    for (size_t ai = 0; ai < originalAssertions.size(); ++ai) {
+        ExprId a = originalAssertions[ai];
+        const std::string& hId = assumeId[ai];
+        const auto& e = ir.get(a);
+        if (e.kind == Kind::Distinct && e.children.size() >= 3) {
+            // n-ary distinct -> the pairwise And via distinct_elim, then `and`.
+            std::vector<std::string> pairTerms;       // "(not (= ti tj))" per pair
+            std::vector<std::pair<size_t, size_t>> pairs;
+            for (size_t i = 0; i < e.children.size(); ++i)
+                for (size_t j = i + 1; j < e.children.size(); ++j) {
+                    pairTerms.push_back("(not (= " + term(e.children[i]) + " "
+                                                   + term(e.children[j]) + "))");
+                    pairs.emplace_back(i, j);
+                }
+            std::string andTerm = "(and";
+            for (const auto& pt : pairTerms) andTerm += " " + pt;
+            andTerm += ")";
+            std::string dren = term(a);  // "(distinct ...)"
+            std::string s1 = proof.step({"(= " + dren + " " + andTerm + ")"}, "distinct_elim");
+            std::string s2 = proof.step({"(not " + dren + ")", andTerm}, "equiv1", {s1});
+            std::string s3 = proof.step({andTerm}, "resolution", {s2, hId});
+            for (size_t k = 0; k < pairs.size(); ++k) {
+                std::string atom = "(= " + term(e.children[pairs[k].first]) + " "
+                                         + term(e.children[pairs[k].second]) + ")";
+                int v = reg(atom);
+                std::string sc = proof.step({pairTerms[k]}, "and", {s3}, {std::to_string(k)});
+                cnf.push_back({-v});
+                origStepId.push_back(sc);
+            }
+        } else if (e.kind == Kind::And) {
+            for (size_t k = 0; k < e.children.size(); ++k) {
+                auto li = litFromExpr(e.children[k]);
+                if (!li) return std::nullopt;
+                int v = reg(li->first);
+                std::string sc = proof.step({term(e.children[k])}, "and", {hId}, {std::to_string(k)});
+                cnf.push_back({li->second ? v : -v});
+                origStepId.push_back(sc);
+            }
+        } else if (e.kind == Kind::Or) {
+            if (e.children.empty()) return std::nullopt;
+            std::vector<std::string> clauseTerms;
+            std::vector<int> lits;
+            for (ExprId c : e.children) {
+                auto li = litFromExpr(c);
+                if (!li) return std::nullopt;
+                int v = reg(li->first);
+                lits.push_back(li->second ? v : -v);
+                clauseTerms.push_back(term(c));
+            }
+            std::string so = proof.step(clauseTerms, "or", {hId});
+            cnf.push_back(lits);
+            origStepId.push_back(so);
+        } else {
+            // Unit: a bare atom, a negation, or a binary distinct — the assume IS
+            // the (cl ...) clause.
+            auto li = litFromExpr(a);
+            if (!li) return std::nullopt;
+            int v = reg(li->first);
+            cnf.push_back({li->second ? v : -v});
+            origStepId.push_back(hId);
+        }
+    }
+
+    // Theory lemma: classify the conflict literals into leaf equalities (positive
+    // Eq) + the single conclusion disequality (negative Eq, or positive binary
+    // Distinct), then derive (cl (not leaf_i).. (= l r)) in lemma mode.
+    ExprId lhsId = NullExpr, rhsId = NullExpr;
+    std::vector<std::tuple<ExprId, ExprId, std::string>> leafEqs;
+    int conclusions = 0;
+    for (const auto& [atomId, positive] : cert.lits) {
+        const auto& e = ir.get(atomId);
+        const bool isEq2 = (e.kind == Kind::Eq && e.children.size() == 2);
+        const bool isDist2 = (e.kind == Kind::Distinct && e.children.size() == 2);
+        if (isEq2 && positive) {
+            leafEqs.emplace_back(e.children[0], e.children[1], term(atomId));
+        } else if ((isEq2 && !positive) || (isDist2 && positive)) {
+            lhsId = e.children[0]; rhsId = e.children[1]; ++conclusions;
+        } else {
+            return std::nullopt;
+        }
+    }
+    if (conclusions != 1 || lhsId == NullExpr) return std::nullopt;
+
+    EufCongruenceProver cp{ir, proof, {}, {}, {}, {}, {}};
+    cp.lemmaMode = true;
+    for (const auto& [u, v, atom] : leafEqs) {
+        cp.leaf[EufCongruenceProver::key(u, v)] = {std::string(), atom};
+        cp.adj[u].push_back(v);
+        cp.adj[v].push_back(u);
+    }
+    cp.augmentCongruenceEdges(lhsId, rhsId);
+    if (cp.prove(lhsId, rhsId, 0).empty()) return std::nullopt;
+    if (cp.lemmaSteps.empty()) return std::nullopt;
+    for (const auto& ls : cp.lemmaSteps) {
+        std::vector<int> lits;
+        lits.reserve(ls.lits.size());
+        for (const auto& [atom, posInClause] : ls.lits) {
+            int v = reg(atom);
+            lits.push_back(posInClause ? v : -v);
+        }
+        cnf.push_back(lits);
+        origStepId.push_back(ls.id);
+    }
+
+    // Refute the abstraction (clausified-original + lemma clauses) on a dedicated
+    // CaDiCaL LRAT solve. Not unsat -> this one lemma is insufficient (needs F2b).
+    const int numVars = static_cast<int>(varTerm.size()) - 1;
+    if (numVars <= 0) return std::nullopt;
+    auto sat = createSatSolver();
+    if (!sat->enableLratCapture()) return std::nullopt;
+    for (int i = 0; i < numVars; ++i) (void)sat->newVar();
+    for (const auto& clause : cnf) {
+        std::vector<SatLit> sc;
+        sc.reserve(clause.size());
+        for (int l : clause)
+            sc.push_back(SatLit{static_cast<SatVar>(l < 0 ? -l : l), l > 0});
+        sat->addClause(sc);
+    }
+    if (sat->solve() != SatSolver::SolveResult::Unsat) return std::nullopt;
+    std::vector<LratClause> lrat;
+    if (!sat->getLratProof(lrat)) return std::nullopt;
+    std::vector<proof::LratStep> steps;
+    steps.reserve(lrat.size());
+    for (const auto& c : lrat)
+        steps.push_back(proof::LratStep{c.original, c.id, c.lits, c.chain});
+
+    if (!proof::appendLratResolutionReplay(proof, origStepId, steps, varTerm))
+        return std::nullopt;
+    return proof;
 }
 } // namespace
 #endif
@@ -1052,6 +1287,30 @@ Result Solver::checkSat() {
                 std::ofstream aout(pit->second.s + ".alethe");
                 if (aout) aout << aletheStr;
                 // Also expose it via the public Solver::getProof() value.
+                pImpl->lastProof_.set(std::move(aletheStr), std::move(problemStr));
+            }
+        }
+    }
+    // Phase F2a: single-theory-lemma Boolean assembly. Runs when a unique theory
+    // conflict cert exists but the closed-proof path above did NOT emit (e.g. the
+    // conflict's disequality is buried in a top-level n-ary `(distinct ...)` / And,
+    // not a top-level assertion). Clausify the ORIGINAL assertions over their theory
+    // atoms, splice the conflict's theory tautology as a real sub-proof, and replay
+    // the propositional refutation from a dedicated LRAT solve — one Carcara-checked
+    // Alethe proof against the original problem. Degrades silently otherwise.
+    if (r == Result::Unsat && pImpl->ir && pImpl->lastProof_.isEmpty() && uc) {
+        auto pit = pImpl->options.find("produce-proofs");
+        if (pit != pImpl->options.end() &&
+            pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
+            const auto& origAsserts = pImpl->originalAssertions_;
+            auto bp = tryTheoryLemmaBooleanProof(*pImpl->ir, origAsserts, *uc);
+            if (bp) {
+                std::string problemStr = dumpProblemToSMT2(*pImpl->ir, origAsserts);
+                std::string aletheStr = bp->serialize();
+                std::ofstream pout(pit->second.s + ".smt2");
+                if (pout) pout << problemStr;
+                std::ofstream aout(pit->second.s + ".alethe");
+                if (aout) aout << aletheStr;
                 pImpl->lastProof_.set(std::move(aletheStr), std::move(problemStr));
             }
         }

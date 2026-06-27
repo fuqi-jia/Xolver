@@ -84,6 +84,48 @@ std::optional<AletheProof> buildClausalRefutation(
     return proof;
 }
 
+bool appendLratResolutionReplay(
+    AletheProof& proof,
+    const std::vector<std::string>& origStepId,
+    const std::vector<LratStep>& lrat,
+    const std::vector<std::string>& varTerm) {
+    if (origStepId.empty() || lrat.empty()) return false;
+
+    // Map each SAT clause-id to the Alethe step that proves it. ORIGINAL input
+    // clauses come back in feed order, matching origStepId; derived clauses are
+    // replayed as resolution over their antecedent chains.
+    std::unordered_map<int64_t, std::string> idToStep;
+    size_t origCount = 0;
+    bool sawEmpty = false;
+
+    for (const auto& s : lrat) {
+        if (s.original) {
+            if (origCount >= origStepId.size()) return false;
+            idToStep[s.id] = origStepId[origCount];
+            ++origCount;
+        } else {
+            std::vector<std::string> premises;
+            premises.reserve(s.chain.size());
+            for (int64_t c : s.chain) {
+                auto it = idToStep.find(c);
+                if (it == idToStep.end()) return false;  // dangling hint
+                premises.push_back(it->second);
+            }
+            std::vector<std::string> clause;
+            clause.reserve(s.lits.size());
+            for (int lit : s.lits) {
+                auto t = renderLit(lit, varTerm);
+                if (!t) return false;
+                clause.push_back(*t);
+            }
+            std::string stepId = proof.step(clause, "resolution", premises);
+            idToStep[s.id] = stepId;
+            if (clause.empty()) sawEmpty = true;
+        }
+    }
+    return sawEmpty;
+}
+
 #endif  // XOLVER_ENABLE_PROOFS
 
 } // namespace proof
