@@ -318,7 +318,11 @@ struct EufCongruenceProver {
     // Establish (= u v) (as a positive unit producible from the recorded premises),
     // returning the exact literal string produced, or "" if outside the fragment.
     std::string prove(ExprId u, ExprId v, int depth) {
-        if (depth > 128) return "";
+        // Termination backstop: a sound proof never needs to recurse deeper than the
+        // number of distinct terms (memoization proves each pair once). Bounds any
+        // pathological recursion from the augmented graph; degrades to skeleton, never
+        // unsound.
+        if (depth > static_cast<int>(ir.size())) return "";
         auto k = key(u, v);
         if (auto it = memo.find(k); it != memo.end()) return it->second;
         // (refl) identical terms — e.g. a self-disequality (distinct a a) or a
