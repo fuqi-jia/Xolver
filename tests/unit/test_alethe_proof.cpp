@@ -56,3 +56,16 @@ TEST_CASE("AletheProof: polarity is handled — EUF eq_transitive with a negativ
           "(step t1 (cl (not (= a b)) (not (= b c)) (= a c)) :rule eq_transitive)\n"
           "(step t2 (cl) :rule resolution :premises (t1 h1 h2 h3))\n");
 }
+
+TEST_CASE("AletheProof: degenerate eq_transitive (a=b AND a!=b) resolves directly, no transitivity step") {
+    // euf_003 / euf_054: a single equality directly contradicts the disequality of
+    // the SAME pair. A 1-edge eq_transitive clause has only 2 terms — Carcara rejects
+    // it ("expected at least 3 terms"). The two literals are already complementary,
+    // so the correct proof resolves them straight to the empty clause. Carcara-valid.
+    AletheProof p = buildConflictRefutation(
+        {{"(= b a)", true}, {"(= b a)", false}}, "eq_transitive", {});
+    CHECK(p.serialize() ==
+          "(assume h1 (= b a))\n"
+          "(assume h2 (not (= b a)))\n"
+          "(step t1 (cl) :rule resolution :premises (h1 h2))\n");
+}

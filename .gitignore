@@ -194,3 +194,6 @@ xolver-dist.tar.gz
 .eggs/
 python/**/_version.py
 _skbuild/
+
+# Externally-built proof checkers (drat-trim / carcara) from tools/proof/install_checkers.sh
+/.proof-checkers/

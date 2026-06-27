@@ -64,6 +64,18 @@ AletheProof buildConflictRefutation(const std::vector<AssertedLit>& lits,
     for (const auto& l : lits)
         assumeIds.push_back(p.assume(l.positive ? l.atom : "(not " + l.atom + ")"));
 
+    // Degenerate eq_transitive: a single asserted equality directly contradicts a
+    // conclusion disequality of the SAME pair (e.g. a=b ∧ a≠b). A real transitivity
+    // chain needs >=2 equality edges — Carcara rejects a 1-edge clause with
+    // "expected at least 3 terms". But the two literals are already COMPLEMENTARY
+    // (the equality and its negation), so they resolve straight to the empty clause;
+    // no eq_transitive step is needed. (la_generic with 2 literals is a genuine
+    // Farkas conflict and keeps the normal tautology path below.)
+    if (rule == "eq_transitive" && lits.size() == 2) {
+        p.step(/*clause=*/{}, "resolution", assumeIds);
+        return p;
+    }
+
     // The theory tautology (cl ¬L1 ... ¬Ln): negate each asserted literal, with
     // double negation simplified (positive -> (not atom), negative -> atom).
     std::vector<std::string> negClause;

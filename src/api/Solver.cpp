@@ -65,11 +65,19 @@ bool proofEufTransitivityOk(const std::vector<std::pair<ExprId, bool>>& lits,
     for (const auto& [atomId, positive] : lits) {
         // assume-validity: a positive literal asserts `atom` (must be a top-level
         // assertion); a negative literal asserts `(not atom)` (the negation must be
-        // a top-level assertion — for a disequality, the asserted (not (= l r))).
+        // a top-level assertion — for a disequality, the asserted (not (= l r)) or
+        // the asserted binary (distinct l r)).
         if (positive ? !posAssert.count(atomId) : !negAssert.count(atomId)) return false;
         const auto& e = ir.get(atomId);
-        if (e.kind != Kind::Eq || e.children.size() != 2) return false;
-        if (positive) {
+        const bool isEq = (e.kind == Kind::Eq && e.children.size() == 2);
+        const bool isDistinct = (e.kind == Kind::Distinct && e.children.size() == 2);
+        if (!isEq && !isDistinct) return false;
+        // A positive Eq (or a negated binary Distinct) asserts l = r — a chain edge.
+        // A negated Eq (or a positive binary Distinct) asserts l != r — the single
+        // conclusion. Binary `distinct` is exactly `(not (= ))`, so it flips the
+        // polarity meaning relative to Eq.
+        const bool assertsEquality = isEq ? positive : !positive;
+        if (assertsEquality) {
             parent[find(e.children[0])] = find(e.children[1]);
         } else {
             if (++neg > 1) return false;
@@ -454,8 +462,21 @@ Result Solver::checkSat() {
             if (emit) {
                 std::vector<proof::AssertedLit> lits;
                 lits.reserve(c.lits.size());
-                for (const auto& [eid, positive] : c.lits)
-                    lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
+                for (const auto& [eid, positive] : c.lits) {
+                    const auto& e = pImpl->ir->get(eid);
+                    if (e.kind == Kind::Distinct && e.children.size() == 2) {
+                        // eq_transitive reasons over (= l r); a binary distinct is
+                        // its negation. Render the underlying equality and flip the
+                        // polarity so the assume matches the dumped problem (which
+                        // prints the asserted distinct as (not (= l r))) and the
+                        // tautology clause carries the bare (= l r).
+                        std::string eq = "(= " + dumpExprToSMT2(e.children[0], *pImpl->ir)
+                                       + " " + dumpExprToSMT2(e.children[1], *pImpl->ir) + ")";
+                        lits.push_back({std::move(eq), !positive});
+                    } else {
+                        lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
+                    }
+                }
                 proof::AletheProof ap = proof::buildConflictRefutation(lits, c.rule, c.args);
                 // The proof references post-normalization IR atoms, so it is
                 // checked against an IR-derived problem (terms match by
