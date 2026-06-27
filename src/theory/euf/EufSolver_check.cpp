@@ -48,6 +48,27 @@ void EufSolver::pushEufTransitivityCert(const std::vector<SatLit>& reasons) {
     }
     if (!cert.lits.empty()) sink->addConflict(std::move(cert));
 }
+
+void EufSolver::pushBoolCongruenceCert(const std::vector<SatLit>& reasons) {
+    // A Bool e-class became both true and false. The reasons explain the chain
+    // trueTerm ≡ predTrue, predTrue ≡ predFalse (by congruence), predFalse ≡
+    // falseTerm. Record every reason by IR id + asserted polarity, tagged
+    // "bool_congruence"; the Solver classifies them (Eq leaf equalities vs the two
+    // predicate atoms) and reconstructs the predicate-congruence refutation. The
+    // true/false constant merges themselves carry NO SatLit reason (they are
+    // structural), so the reason list is exactly {predicate-true literal,
+    // predicate-false literal, leaf equalities} — precisely what the proof needs.
+    auto* sink = proof::activeProofSink();
+    if (!sink || !eqAtomRegistry_) return;
+    proof::TheoryConflictCert cert;
+    cert.rule = "bool_congruence";
+    for (SatLit lit : reasons) {
+        const TheoryAtomRecord* rec = eqAtomRegistry_->findBySatVar(lit.var);
+        if (!rec) return;  // can't identify the atom -> emit none (skeleton)
+        cert.lits.push_back({rec->exprId, lit.sign});
+    }
+    if (!cert.lits.empty()) sink->addConflict(std::move(cert));
+}
 #endif
 
 TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort effort) {
@@ -409,6 +430,9 @@ TheoryCheckResult EufSolver::check(TheoryLemmaStorage& lemmaDb, TheoryEffort eff
                       << " chain=" << er.reasons.size() << "\n";
         }
         if (er.ok) {
+#ifdef XOLVER_ENABLE_PROOFS
+            pushBoolCongruenceCert(er.reasons);
+#endif
             return TheoryCheckResult::mkConflict(TheoryConflict{std::move(er.reasons)});
         }
         if (xolver::env::diag("EUF_DIAG")) {

@@ -402,6 +402,42 @@ bool proofEufCongruence(ExprId lhsId, ExprId rhsId,
     out.step(/*clause=*/{}, "resolution", resPrem);
     return true;
 }
+
+// Boolean-assembly increment 1: a predicate/Boolean congruence conflict. A
+// Bool-valued application is asserted TRUE (predTrueId, atom predTrueAtom) and a
+// congruent one asserted FALSE (predFalseId, atom predFalseAtom); they are equal
+// by congruence over the asserted leaf equalities. Reconstruct:
+//   (= predTrue predFalse)         — congruence/transitivity over the leaves,
+//   equiv1 -> (cl (not predTrue) predFalse),
+//   resolve with the predicate assumes (predTrue, (not predFalse)) -> (cl).
+// Mirrors the de-risked, Carcara-valid euf_003 shape. INDEPENDENT of the e-graph
+// (trusts only the leaf equalities + IR structure); Carcara is the final gate.
+bool proofBoolCongruence(ExprId predTrueId, ExprId predFalseId,
+                         const std::vector<std::tuple<ExprId, ExprId, std::string>>& leafEqs,
+                         const std::string& predTrueAtom,
+                         const std::string& predFalseAtom,
+                         const CoreIr& ir, proof::AletheProof& out) {
+    EufCongruenceProver cp{ir, out, {}, {}, {}, {}, {}};
+    for (const auto& [u, v, atom] : leafEqs) {
+        std::string id = out.assume(atom);
+        cp.leaf[EufCongruenceProver::key(u, v)] = {id, atom};
+        cp.adj[u].push_back(v);
+        cp.adj[v].push_back(u);
+    }
+    std::string hTrue = out.assume(predTrueAtom);                    // (f a)
+    std::string hFalse = out.assume("(not " + predFalseAtom + ")");  // (not (f b))
+    cp.augmentCongruenceEdges(predTrueId, predFalseId);
+    // Prove (= predTrue predFalse) in the passed orientation (so equiv1 cancels
+    // with the predicate assumes).
+    std::string eqLit = cp.prove(predTrueId, predFalseId, 0);
+    if (eqLit.empty()) return false;
+    // Collapse the congruence premises into the unit equality, then equiv1.
+    std::string eqUnit = out.step({eqLit}, "resolution", cp.premises);
+    std::string eqv = out.step({"(not " + predTrueAtom + ")", predFalseAtom},
+                               "equiv1", {eqUnit});
+    out.step(/*clause=*/{}, "resolution", {eqv, hTrue, hFalse});
+    return true;
+}
 } // namespace
 #endif
 
@@ -844,6 +880,45 @@ Result Solver::checkSat() {
                                                *pImpl->ir, cong))
                             builtProof = std::move(cong);
                     }
+                }
+            } else if (!c.lits.empty() && c.rule == "bool_congruence") {
+                // Boolean-assembly increment 1: a Bool e-class is both true and
+                // false. Classify the reasons: a positive Eq is a leaf equality; a
+                // positive UFApply is the asserted-true predicate; a negative
+                // UFApply is the asserted-false predicate. Assume-validity: leaf
+                // equalities and the true predicate are positive top-level
+                // assertions; the false predicate's negation is a top-level (not X)
+                // assertion. Anything else -> skeleton.
+                ExprId predTrueId = NullExpr, predFalseId = NullExpr;
+                std::vector<std::tuple<ExprId, ExprId, std::string>> leafEqs;
+                bool bcOk = true;
+                int nTrue = 0, nFalse = 0;
+                for (const auto& [atomId, positive] : c.lits) {
+                    const auto& e = pImpl->ir->get(atomId);
+                    if (e.kind == Kind::Eq && e.children.size() == 2 && positive) {
+                        if (!assertSet.count(atomId)) { bcOk = false; break; }
+                        leafEqs.emplace_back(e.children[0], e.children[1],
+                                             dumpExprToSMT2(atomId, *pImpl->ir));
+                    } else if (e.kind == Kind::UFApply) {
+                        if (positive) {
+                            if (!assertSet.count(atomId)) { bcOk = false; break; }
+                            predTrueId = atomId; ++nTrue;
+                        } else {
+                            if (!negAssert.count(atomId)) { bcOk = false; break; }
+                            predFalseId = atomId; ++nFalse;
+                        }
+                    } else {
+                        bcOk = false; break;
+                    }
+                }
+                if (bcOk && nTrue == 1 && nFalse == 1) {
+                    proof::AletheProof bc;
+                    if (proofBoolCongruence(
+                            predTrueId, predFalseId, leafEqs,
+                            dumpExprToSMT2(predTrueId, *pImpl->ir),
+                            dumpExprToSMT2(predFalseId, *pImpl->ir),
+                            *pImpl->ir, bc))
+                        builtProof = std::move(bc);
                 }
             }
             if (builtProof) {

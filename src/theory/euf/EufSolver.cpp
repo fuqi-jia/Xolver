@@ -455,6 +455,12 @@ void EufSolver::onEclassMerged(EClassId kept, EClassId killed) {
                       << " trueRep=" << egraph_.rep(trueTerm_) << " falseRep=" << egraph_.rep(falseTerm_) << "\n";
         }
         if (er.ok && egraph_.same(trueTerm_, falseTerm_)) {
+#ifdef XOLVER_ENABLE_PROOFS
+            // Predicate/Boolean congruence conflict (a Bool e-class is both true
+            // and false). Record the bool_congruence certificate before the reason
+            // chain is moved into the conflict.
+            pushBoolCongruenceCert(er.reasons);
+#endif
             pendingConflict_ = TheoryConflict{std::move(er.reasons)};
         } else {
             // SOUNDNESS: a Both boolMark means this class is tagged as

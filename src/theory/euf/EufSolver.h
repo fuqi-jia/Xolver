@@ -384,6 +384,14 @@ private:
     // Solver applies an independent union-find self-check to keep only true
     // transitivity conflicts (rejecting congruence-involved ones). No-op off proof.
     void pushEufTransitivityCert(const std::vector<SatLit>& reasons);
+    // Boolean-assembly increment 1: push a bool_congruence certificate for a
+    // predicate/Boolean congruence conflict (a Bool e-class is both true and
+    // false). The reasons explain trueTerm ≡ predTrue, predTrue ≡ predFalse (by
+    // congruence over argument equalities), predFalse ≡ falseTerm. The Solver
+    // classifies the literals by IR kind (Eq leaf equalities vs the two predicate
+    // atoms) and reconstructs (= predTrue predFalse) -> equiv1 -> empty clause.
+    // No-op off proof.
+    void pushBoolCongruenceCert(const std::vector<SatLit>& reasons);
 #endif
 
     // Registry of all parsed equality atoms (set in TheoryFactory). Needed to
