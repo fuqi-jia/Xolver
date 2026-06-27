@@ -7,6 +7,10 @@
 #include <fstream>
 #include <unordered_set>
 #include <unordered_map>
+#include <map>
+#include <tuple>
+#include <optional>
+#include <algorithm>
 #include <cstdio>
 #endif
 
@@ -108,6 +112,129 @@ proofUniqueConflict(const std::vector<proof::TheoryConflictCert>& cs) {
     for (size_t i = 1; i < cs.size(); ++i)
         if (!same(cs[0], cs[i])) return nullptr;
     return &cs[0];
+}
+
+// --- EUF congruence proof reconstruction -----------------------------------
+// Reconstruct a Carcara-checkable proof that lhs = rhs from the asserted LEAF
+// equalities, via eq_transitive over a leaf chain and eq_congruent over function
+// arguments, then resolve with the asserted disequality lhs != rhs to the empty
+// clause. INDEPENDENT of the e-graph's internal justification: we trust only the
+// leaf equalities + the IR term structure, and Carcara is the final gate — a
+// reconstruction that doesn't actually entail the equality fails to resolve and
+// is rejected offline, never claimed. Each emitted clause literal is written in
+// its sub-proof's own orientation (eq_congruent/eq_transitive tolerate flipped
+// argument equalities), so the orientation-sensitive final resolution cancels.
+struct EufCongruenceProver {
+    const CoreIr& ir;
+    proof::AletheProof& p;
+    std::map<std::pair<ExprId, ExprId>, std::pair<std::string, std::string>> leaf; // key -> (assumeId, atom)
+    std::unordered_map<ExprId, std::vector<ExprId>> adj;   // leaf-equality graph
+    std::map<std::pair<ExprId, ExprId>, std::string> memo; // proven pair -> produced literal
+    std::vector<std::string> premises;                     // used assume/step ids (unique, ordered)
+    std::unordered_set<std::string> premiseSet;
+
+    static std::pair<ExprId, ExprId> key(ExprId a, ExprId b) {
+        return a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+    }
+    void use(const std::string& id) {
+        if (premiseSet.insert(id).second) premises.push_back(id);
+    }
+    std::string term(ExprId id) const { return dumpExprToSMT2(id, ir); }
+
+    // Shortest leaf-equality-graph path s..t (inclusive); empty if unconnected.
+    std::vector<ExprId> bfsPath(ExprId s, ExprId t) {
+        std::unordered_map<ExprId, ExprId> prev;
+        std::unordered_set<ExprId> seen{s};
+        std::vector<ExprId> q{s};
+        for (size_t h = 0; h < q.size(); ++h) {
+            ExprId x = q[h];
+            if (x == t) break;
+            auto it = adj.find(x);
+            if (it == adj.end()) continue;
+            for (ExprId y : it->second)
+                if (seen.insert(y).second) { prev[y] = x; q.push_back(y); }
+        }
+        if (!seen.count(t)) return {};
+        std::vector<ExprId> path{t};
+        while (path.back() != s) path.push_back(prev[path.back()]);
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+    // Establish (= u v) (as a positive unit producible from the recorded premises),
+    // returning the exact literal string produced, or "" if outside the fragment.
+    std::string prove(ExprId u, ExprId v, int depth) {
+        if (u == v || depth > 128) return "";
+        auto k = key(u, v);
+        if (auto it = memo.find(k); it != memo.end()) return it->second;
+        // (a) directly-asserted leaf equality.
+        if (auto it = leaf.find(k); it != leaf.end()) {
+            use(it->second.first);
+            return memo[k] = it->second.second;
+        }
+        // (b) congruence: f(A) vs f(B), same function symbol and arity.
+        const auto& eu = ir.get(u);
+        const auto& ev = ir.get(v);
+        if (eu.kind == Kind::UFApply && ev.kind == Kind::UFApply &&
+            !eu.children.empty() && eu.children.size() == ev.children.size() &&
+            std::get<std::string>(eu.payload.value) ==
+                std::get<std::string>(ev.payload.value)) {
+            std::vector<std::string> clause;
+            bool ok = true;
+            for (size_t i = 0; i < eu.children.size(); ++i) {
+                std::string li = prove(eu.children[i], ev.children[i], depth + 1);
+                if (li.empty()) { ok = false; break; }
+                clause.push_back("(not " + li + ")");
+            }
+            if (ok) {
+                std::string concl = "(= " + term(u) + " " + term(v) + ")";
+                clause.push_back(concl);
+                use(p.step(clause, "eq_congruent"));
+                return memo[k] = concl;
+            }
+        }
+        // (c) transitivity over a >=2-edge leaf chain (1 edge is case (a)).
+        std::vector<ExprId> path = bfsPath(u, v);
+        if (path.size() >= 3) {
+            std::vector<std::string> clause;
+            bool ok = true;
+            for (size_t i = 0; i + 1 < path.size(); ++i) {
+                std::string li = prove(path[i], path[i + 1], depth + 1);
+                if (li.empty()) { ok = false; break; }
+                clause.push_back("(not " + li + ")");
+            }
+            if (ok) {
+                std::string concl = "(= " + term(u) + " " + term(v) + ")";
+                clause.push_back(concl);
+                use(p.step(clause, "eq_transitive"));
+                return memo[k] = concl;
+            }
+        }
+        return "";
+    }
+};
+
+// Try to build a congruence/transitivity refutation into `out`. leafEqs are the
+// positively-asserted (= u v) atoms (uId, vId, asserted-atom-string); lhsId/rhsId
+// + diseqAssume are the asserted disequality. Returns true on success (out filled
+// with a complete refutation); false leaves `out` to be discarded (-> skeleton).
+bool proofEufCongruence(ExprId lhsId, ExprId rhsId,
+                        const std::vector<std::tuple<ExprId, ExprId, std::string>>& leafEqs,
+                        const std::string& diseqAssume,
+                        const CoreIr& ir, proof::AletheProof& out) {
+    EufCongruenceProver cp{ir, out, {}, {}, {}, {}, {}};
+    for (const auto& [u, v, atom] : leafEqs) {
+        std::string id = out.assume(atom);
+        cp.leaf[EufCongruenceProver::key(u, v)] = {id, atom};
+        cp.adj[u].push_back(v);
+        cp.adj[v].push_back(u);
+    }
+    std::string diseqId = out.assume(diseqAssume);
+    if (cp.prove(lhsId, rhsId, 0).empty()) return false;
+    std::vector<std::string> resPrem = cp.premises;
+    resPrem.push_back(diseqId);
+    out.step(/*clause=*/{}, "resolution", resPrem);
+    return true;
 }
 } // namespace
 #endif
@@ -421,68 +548,103 @@ Result Solver::checkSat() {
             // forms la_generic reasons over). Anything else (negated/nested atoms,
             // non-arith) stays a VERIFIED-SKELETON. A wrong multiplier would still
             // be rejected by Carcara offline, never claimed.
-            bool emit = !c.lits.empty();
-            if (emit) {
-                const auto& asserts = pImpl->ir->assertions();
-                std::unordered_set<ExprId> assertSet(asserts.begin(), asserts.end());
-                if (c.rule == "la_generic") {
-                    // LRA: each literal positively-asserted, top-level, an
-                    // inequality, and linear + sort-safe (no division / no
-                    // non-integer real constants — else la_generic can't certify it
-                    // or the dumped problem won't parse). Equalities stay skeleton
-                    // (they need signed multipliers the simplex bounds don't give).
-                    for (const auto& [atomId, positive] : c.lits) {
-                        if (!positive || !assertSet.count(atomId)) { emit = false; break; }
-                        const auto& e = pImpl->ir->get(atomId);
-                        if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
-                            e.kind != Kind::Gt && e.kind != Kind::Geq) { emit = false; break; }
-                        bool sidesOk = true;
-                        for (ExprId ch : e.children)
-                            if (!proofLinSafe(ch, *pImpl->ir)) { sidesOk = false; break; }
-                        if (!sidesOk) { emit = false; break; }
+            std::optional<proof::AletheProof> builtProof;
+            const auto& asserts = pImpl->ir->assertions();
+            std::unordered_set<ExprId> assertSet(asserts.begin(), asserts.end());
+            // Negated atoms of the top-level (not X) assertions — the assume-valid
+            // forms of EUF disequalities (the conclusion of a transitivity/congruence
+            // conflict is asserted as (not (= l r))).
+            std::unordered_set<ExprId> negAssert;
+            for (ExprId a : asserts) {
+                const auto& e = pImpl->ir->get(a);
+                if (e.kind == Kind::Not && e.children.size() == 1)
+                    negAssert.insert(e.children[0]);
+            }
+            if (!c.lits.empty() && c.rule == "la_generic") {
+                // LRA: each literal positively-asserted, top-level, an inequality,
+                // and linear + sort-safe (no division / no non-integer real
+                // constants — else la_generic can't certify it or the dumped problem
+                // won't parse). Equalities stay skeleton (they need signed
+                // multipliers the simplex bounds don't give).
+                bool ok = true;
+                for (const auto& [atomId, positive] : c.lits) {
+                    if (!positive || !assertSet.count(atomId)) { ok = false; break; }
+                    const auto& e = pImpl->ir->get(atomId);
+                    if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
+                        e.kind != Kind::Gt && e.kind != Kind::Geq) { ok = false; break; }
+                    for (ExprId ch : e.children)
+                        if (!proofLinSafe(ch, *pImpl->ir)) { ok = false; break; }
+                    if (!ok) break;
+                }
+                if (ok) {
+                    std::vector<proof::AssertedLit> lits;
+                    lits.reserve(c.lits.size());
+                    for (const auto& [eid, positive] : c.lits)
+                        lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
+                    builtProof = proof::buildConflictRefutation(lits, c.rule, c.args);
+                }
+            } else if (!c.lits.empty() && c.rule == "eq_transitive") {
+                if (proofEufTransitivityOk(c.lits, *pImpl->ir, assertSet, negAssert)) {
+                    // PURE TRANSITIVITY: the independent union-find connects the
+                    // conclusion endpoints. Render each literal, mapping a binary
+                    // distinct to its underlying equality with flipped polarity.
+                    std::vector<proof::AssertedLit> lits;
+                    lits.reserve(c.lits.size());
+                    for (const auto& [eid, positive] : c.lits) {
+                        const auto& e = pImpl->ir->get(eid);
+                        if (e.kind == Kind::Distinct && e.children.size() == 2) {
+                            std::string eq = "(= " + dumpExprToSMT2(e.children[0], *pImpl->ir)
+                                           + " " + dumpExprToSMT2(e.children[1], *pImpl->ir) + ")";
+                            lits.push_back({std::move(eq), !positive});
+                        } else {
+                            lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
+                        }
                     }
-                } else if (c.rule == "eq_transitive") {
-                    // EUF: emit only for a PURE TRANSITIVITY conflict — independent
-                    // union-find over the asserted equalities must connect the
-                    // conclusion disequality's endpoints (congruence-involved
-                    // conflicts fail this and stay skeleton). The conclusion is
-                    // asserted negatively as (not (= l r)), so collect the negated
-                    // atoms of the top-level Not-assertions for assume-validity.
-                    std::unordered_set<ExprId> negAssert;
-                    for (ExprId a : asserts) {
-                        const auto& e = pImpl->ir->get(a);
-                        if (e.kind == Kind::Not && e.children.size() == 1)
-                            negAssert.insert(e.children[0]);
-                    }
-                    emit = proofEufTransitivityOk(c.lits, *pImpl->ir, assertSet, negAssert);
+                    builtProof = proof::buildConflictRefutation(lits, c.rule, c.args);
                 } else {
-                    emit = false;
+                    // CONGRUENCE: reconstruct via eq_congruent over function args +
+                    // eq_transitive over leaf chains. Classify the literals into leaf
+                    // equalities (positive Eq) and the single conclusion disequality
+                    // (negative Eq or positive binary Distinct), each assume-valid.
+                    ExprId lhsId = NullExpr, rhsId = NullExpr;
+                    std::string diseqAssume;
+                    std::vector<std::tuple<ExprId, ExprId, std::string>> leafEqs;
+                    bool congOk = true;
+                    int conclusions = 0;
+                    for (const auto& [atomId, positive] : c.lits) {
+                        const auto& e = pImpl->ir->get(atomId);
+                        const bool isEq2 = (e.kind == Kind::Eq && e.children.size() == 2);
+                        const bool isDist2 = (e.kind == Kind::Distinct && e.children.size() == 2);
+                        if (isEq2 && positive) {
+                            if (!assertSet.count(atomId)) { congOk = false; break; }
+                            leafEqs.emplace_back(e.children[0], e.children[1],
+                                                 dumpExprToSMT2(atomId, *pImpl->ir));
+                        } else if ((isEq2 && !positive && negAssert.count(atomId)) ||
+                                   (isDist2 && positive && assertSet.count(atomId))) {
+                            lhsId = e.children[0];
+                            rhsId = e.children[1];
+                            ++conclusions;
+                            diseqAssume = "(not (= " + dumpExprToSMT2(lhsId, *pImpl->ir) + " "
+                                                     + dumpExprToSMT2(rhsId, *pImpl->ir) + "))";
+                        } else {
+                            congOk = false;
+                            break;
+                        }
+                    }
+                    if (congOk && conclusions == 1 && !leafEqs.empty()) {
+                        proof::AletheProof cong;
+                        if (proofEufCongruence(lhsId, rhsId, leafEqs, diseqAssume,
+                                               *pImpl->ir, cong))
+                            builtProof = std::move(cong);
+                    }
                 }
             }
-            if (emit) {
-                std::vector<proof::AssertedLit> lits;
-                lits.reserve(c.lits.size());
-                for (const auto& [eid, positive] : c.lits) {
-                    const auto& e = pImpl->ir->get(eid);
-                    if (e.kind == Kind::Distinct && e.children.size() == 2) {
-                        // eq_transitive reasons over (= l r); a binary distinct is
-                        // its negation. Render the underlying equality and flip the
-                        // polarity so the assume matches the dumped problem (which
-                        // prints the asserted distinct as (not (= l r))) and the
-                        // tautology clause carries the bare (= l r).
-                        std::string eq = "(= " + dumpExprToSMT2(e.children[0], *pImpl->ir)
-                                       + " " + dumpExprToSMT2(e.children[1], *pImpl->ir) + ")";
-                        lits.push_back({std::move(eq), !positive});
-                    } else {
-                        lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
-                    }
-                }
-                proof::AletheProof ap = proof::buildConflictRefutation(lits, c.rule, c.args);
+            if (builtProof) {
                 // The proof references post-normalization IR atoms, so it is
                 // checked against an IR-derived problem (terms match by
                 // construction); the original->IR step is trusted preprocessing.
                 std::string problemStr = dumpProblemToSMT2(*pImpl->ir, pImpl->ir->assertions());
-                std::string aletheStr = ap.serialize();
+                std::string aletheStr = builtProof->serialize();
                 std::ofstream pout(pit->second.s + ".smt2");
                 if (pout) pout << problemStr;
                 std::ofstream aout(pit->second.s + ".alethe");
