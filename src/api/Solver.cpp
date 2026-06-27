@@ -191,7 +191,10 @@ bool proofEufTransitivityOk(const std::vector<std::pair<ExprId, bool>>& lits,
             concR = e.children[1];
         }
     }
-    return neg == 1 && concL != NullExpr && find(concL) == find(concR);
+    // concL == concR is a self-disequality (distinct a a): a 1-edge "chain" that
+    // eq_transitive can't express. Reject here so it falls through to the congruence
+    // path, where the refl rule discharges it.
+    return neg == 1 && concL != NullExpr && concL != concR && find(concL) == find(concR);
 }
 
 // Return the single DISTINCT conflict cert, or nullptr if the sink holds zero or
@@ -243,6 +246,55 @@ struct EufCongruenceProver {
     }
     std::string term(ExprId id) const { return dumpExprToSMT2(id, ir); }
 
+    // Add CONGRUENCE edges to `adj` so the transitivity BFS can route through
+    // equalities that hold by congruence, not just directly-asserted leaves (e.g.
+    // u = f(a,b), v = f(a,c), b = c ⊢ u = v passes through f(a,b) = f(a,c)). A small
+    // congruence-closure fixpoint over the terms reachable from the leaves and the
+    // conclusion: two same-function applications with already-connected arguments
+    // become a new edge; prove() later discharges each via eq_congruent. Bounded by
+    // the finite term set; any cycle is harmless (prove() memoizes + caps depth).
+    void augmentCongruenceEdges(ExprId lhsId, ExprId rhsId) {
+        std::unordered_map<ExprId, ExprId> parent;
+        std::vector<ExprId> apps;
+        std::vector<ExprId> stack{lhsId, rhsId};
+        for (const auto& [k, v] : leaf) { (void)v; stack.push_back(k.first); stack.push_back(k.second); }
+        std::unordered_set<ExprId> seen;
+        while (!stack.empty()) {
+            ExprId x = stack.back();
+            stack.pop_back();
+            if (x == NullExpr || x >= ir.size() || !seen.insert(x).second) continue;
+            parent[x] = x;
+            const auto& e = ir.get(x);
+            if (e.kind == Kind::UFApply && !e.children.empty()) apps.push_back(x);
+            for (ExprId c : e.children) stack.push_back(c);
+        }
+        auto find = [&](ExprId x) { while (parent[x] != x) x = parent[x]; return x; };
+        auto uni = [&](ExprId a, ExprId b) { parent[find(a)] = find(b); };
+        for (const auto& [k, v] : leaf) { (void)v; uni(k.first, k.second); }
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (size_t i = 0; i < apps.size(); ++i) {
+                const auto& ei = ir.get(apps[i]);
+                for (size_t j = i + 1; j < apps.size(); ++j) {
+                    if (find(apps[i]) == find(apps[j])) continue;
+                    const auto& ej = ir.get(apps[j]);
+                    if (ei.children.size() != ej.children.size() ||
+                        std::get<std::string>(ei.payload.value) !=
+                            std::get<std::string>(ej.payload.value)) continue;
+                    bool allEq = true;
+                    for (size_t a = 0; a < ei.children.size(); ++a)
+                        if (find(ei.children[a]) != find(ej.children[a])) { allEq = false; break; }
+                    if (!allEq) continue;
+                    uni(apps[i], apps[j]);
+                    adj[apps[i]].push_back(apps[j]);
+                    adj[apps[j]].push_back(apps[i]);
+                    changed = true;
+                }
+            }
+        }
+    }
+
     // Shortest leaf-equality-graph path s..t (inclusive); empty if unconnected.
     std::vector<ExprId> bfsPath(ExprId s, ExprId t) {
         std::unordered_map<ExprId, ExprId> prev;
@@ -266,9 +318,16 @@ struct EufCongruenceProver {
     // Establish (= u v) (as a positive unit producible from the recorded premises),
     // returning the exact literal string produced, or "" if outside the fragment.
     std::string prove(ExprId u, ExprId v, int depth) {
-        if (u == v || depth > 128) return "";
+        if (depth > 128) return "";
         auto k = key(u, v);
         if (auto it = memo.find(k); it != memo.end()) return it->second;
+        // (refl) identical terms — e.g. a self-disequality (distinct a a) or a
+        // congruence whose argument position is syntactically the same term.
+        if (u == v) {
+            std::string concl = "(= " + term(u) + " " + term(u) + ")";
+            use(p.step({concl}, "refl"));
+            return memo[k] = concl;
+        }
         // (a) directly-asserted leaf equality.
         if (auto it = leaf.find(k); it != leaf.end()) {
             use(it->second.first);
@@ -332,6 +391,7 @@ bool proofEufCongruence(ExprId lhsId, ExprId rhsId,
         cp.adj[v].push_back(u);
     }
     std::string diseqId = out.assume(diseqAssume);
+    cp.augmentCongruenceEdges(lhsId, rhsId);
     if (cp.prove(lhsId, rhsId, 0).empty()) return false;
     std::vector<std::string> resPrem = cp.premises;
     resPrem.push_back(diseqId);
@@ -772,7 +832,9 @@ Result Solver::checkSat() {
                             break;
                         }
                     }
-                    if (congOk && conclusions == 1 && !leafEqs.empty()) {
+                    // A self-disequality (distinct a a) has no leaf equalities — the
+                    // refl path handles it — so only require a single conclusion.
+                    if (congOk && conclusions == 1) {
                         proof::AletheProof cong;
                         if (proofEufCongruence(lhsId, rhsId, leafEqs, diseqAssume,
                                                *pImpl->ir, cong))
