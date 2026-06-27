@@ -14,6 +14,10 @@ class CadicalTheoryPropagator;
 // for the DIMACS the external checker needs — it cannot miss a clause path the
 // way per-callback hooks could. Only used under XOLVER_ENABLE_PROOFS.
 class ProofCnfCapture;
+// LratCapture (Phase F1): a CaDiCaL::Tracer connected WITH antecedents, recording
+// the full resolution refutation (original input clauses + derived clauses with
+// their LRAT antecedent chains) in memory. Defined in the .cpp. No file output.
+class LratCapture;
 
 class CadicalBackend : public SatSolver {
 public:
@@ -37,6 +41,10 @@ public:
 
     bool enableProofTrace(const std::string& base, bool lrat) override;
     void finalizeProof() override;
+#ifdef XOLVER_ENABLE_PROOFS
+    bool enableLratCapture() override;
+    bool getLratProof(std::vector<LratClause>& out) const override;
+#endif
 
     // Statistics (available only when compiled with CaDiCaL)
     struct Stats {
@@ -85,6 +93,11 @@ private:
     // ProofCnfCapture would need the full type at the (.cpp) destructor, which is
     // only defined under this macro.
     std::unique_ptr<ProofCnfCapture> proofCapture_; // the add_original_clause sink
+    // Phase F1 in-memory LRAT capture (no files). Active only when
+    // enableLratCapture() succeeded, on a dedicated flat-CNF solve.
+    bool lratCapturing_ = false;
+    bool lratConcluded_ = false;
+    std::unique_ptr<LratCapture> lratCapture_;
 #endif
     void writeProofCnf() const;     // dump <base>.cnf from the capture tracer
 };

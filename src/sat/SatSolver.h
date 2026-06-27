@@ -1,6 +1,7 @@
 #pragma once
 
 #include "expr/types.h"
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,6 +26,22 @@ struct SatLit {
     bool operator==(const SatLit& other) const { return var == other.var && sign == other.sign; }
     bool operator!=(const SatLit& other) const { return !(*this == other); }
 };
+
+#ifdef XOLVER_ENABLE_PROOFS
+/**
+ * One captured clause of an LRAT refutation (Phase F1 in-memory capture).
+ * Original input clauses have an empty `chain`; derived clauses carry their
+ * antecedent clause-ids (the LRAT resolution hints). Literals are external
+ * DIMACS ints (signed variable). Captured in CaDiCaL emission order; original
+ * clauses keep their assigned ids (derived ids may interleave among them).
+ */
+struct LratClause {
+    int64_t id = 0;
+    std::vector<int> lits;
+    std::vector<int64_t> chain;   // empty => original input clause
+    bool original = false;
+};
+#endif
 
 /**
  * Abstract SAT solver interface.
@@ -76,6 +93,21 @@ public:
     // flush both artifacts to disk so they are readable immediately. No-op unless
     // proof tracing was enabled and the last solve was UNSAT.
     virtual void finalizeProof() {}
+
+#ifdef XOLVER_ENABLE_PROOFS
+    // --- In-memory LRAT capture (Phase F1; backend gated by XOLVER_ENABLE_PROOFS).
+    // Unlike enableProofTrace (which writes <base>.cnf/.drat), this captures the
+    // resolution refutation WITH antecedent chains directly in memory, no files,
+    // for the propositional Boolean-assembly proof. Used on a dedicated SAT solve
+    // over a flat CNF. MUST be called before any addClause()/solve(). Returns
+    // false if unsupported / not built with proof support.
+    virtual bool enableLratCapture() { return false; }
+
+    // After an UNSAT solve() with LRAT capture enabled, fill `out` with the
+    // captured clauses (original input + derived, in emission order). Returns
+    // false (and leaves `out` untouched) if nothing was captured.
+    virtual bool getLratProof(std::vector<LratClause>& /*out*/) const { return false; }
+#endif
 };
 
 /**

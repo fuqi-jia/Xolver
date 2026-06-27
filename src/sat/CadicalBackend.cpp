@@ -31,6 +31,25 @@ public:
         clauses.push_back(c);
     }
 };
+
+// Phase F1: capture the full resolution refutation in memory. Connected WITH
+// antecedents (force_lrat), so add_derived_clause carries the LRAT chain. Records
+// original input clauses (chain empty) and derived clauses (chain = antecedent
+// ids) in CaDiCaL emission order — original ids are preserved, derived ids may
+// interleave. No file is written; the Boolean-assembly emitter reads this.
+class LratCapture : public CaDiCaL::Tracer {
+public:
+    std::vector<LratClause> clauses;
+    void add_original_clause(int64_t id, bool, const std::vector<int>& c,
+                             bool /*restored*/ = false) override {
+        clauses.push_back(LratClause{id, c, {}, /*original=*/true});
+    }
+    void add_derived_clause(int64_t id, bool, int /*witness*/,
+                            const std::vector<int>& c,
+                            const std::vector<int64_t>& chain) override {
+        clauses.push_back(LratClause{id, c, chain, /*original=*/false});
+    }
+};
 #endif
 
 
@@ -85,6 +104,8 @@ CadicalBackend::~CadicalBackend() {
         if (proofCapture_) solver_->disconnect_proof_tracer(proofCapture_.get());
         solver_->close_proof_trace();
     }
+    if (lratCapturing_ && lratCapture_)
+        solver_->disconnect_proof_tracer(lratCapture_.get());
 #endif
 }
 
@@ -169,6 +190,12 @@ SatSolver::SolveResult CadicalBackend::solve() {
         // A propositional refutation now exists in the trace: finalize it (write
         // the DIMACS + flush the proof) so the artifacts are checkable on disk.
         if (proofTracing_) finalizeProof();
+        // Phase F1: finalize the in-memory LRAT capture (records the empty-clause
+        // conclusion). Independent of the file-based DRAT path above.
+        if (lratCapturing_ && !lratConcluded_) {
+            lratConcluded_ = true;
+            solver_->conclude();
+        }
 #endif
         return SolveResult::Unsat;
     }
@@ -245,6 +272,31 @@ void CadicalBackend::finalizeProof() {
     writeProofCnf();
 #endif
 }
+
+#ifdef XOLVER_ENABLE_PROOFS
+bool CadicalBackend::enableLratCapture() {
+    if (lratCapturing_) return true;            // idempotent
+    // Must run in CaDiCaL CONFIGURING state (before any add()/solve()).
+    solver_->set("lrat", 1);                    // compute antecedent chains
+    // BVA mints fresh internal variables that would appear in the proof but not
+    // in our flat CNF, breaking the variable alignment — disable it (see the
+    // identical rationale in enableProofTrace).
+    solver_->set("factor", 0);
+    lratCapture_ = std::make_unique<LratCapture>();
+    // antecedents=true => force_lrat(): the tracer's add_derived_clause receives
+    // the LRAT antecedent chain. No file tracer is connected (in-memory only).
+    solver_->connect_proof_tracer(lratCapture_.get(), /*antecedents=*/true);
+    lratCapturing_ = true;
+    lratConcluded_ = false;
+    return true;
+}
+
+bool CadicalBackend::getLratProof(std::vector<LratClause>& out) const {
+    if (!lratCapture_ || lratCapture_->clauses.empty()) return false;
+    out = lratCapture_->clauses;
+    return true;
+}
+#endif
 
 void CadicalBackend::writeProofCnf() const {
 #ifdef XOLVER_ENABLE_PROOFS

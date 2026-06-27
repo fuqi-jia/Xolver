@@ -1,7 +1,9 @@
 #include "api/SolverImpl.h"
 #ifdef XOLVER_ENABLE_PROOFS
 #include "proof/AletheProof.h"
+#include "proof/BoolClausalProof.h"
 #include "proof/TheoryProofSink.h"
+#include "sat/SatSolver.h"
 #include "expr/Smt2Dumper.h"
 #include <gmpxx.h>
 #include <fstream>
@@ -195,6 +197,124 @@ bool proofEufTransitivityOk(const std::vector<std::pair<ExprId, bool>>& lits,
     // eq_transitive can't express. Reject here so it falls through to the congruence
     // path, where the refl rule discharges it.
     return neg == 1 && concL != NullExpr && concL != concR && find(concL) == find(concR);
+}
+
+// --- Phase F1: pure-propositional (flat-clausal) Boolean-assembly proof --------
+// When an UNSAT instance has NO theory atoms — every assertion is a Boolean
+// literal or a flat disjunction of literals — the refutation is purely
+// propositional. Build a flat CNF directly from the assertions (one clause each,
+// NO Tseitin proxy variables), refute it with a dedicated SAT solve that captures
+// the LRAT resolution chain, and translate that LRAT into a single Alethe proof
+// (clausify via `or` + replay resolution). The proof is checked by Carcara
+// against the IR-derived problem (the same assertions). Returns nullopt — degrade
+// to the DRAT path — if any assertion is not flat-clausal, the flat CNF does not
+// refute (it must, but we never assume), or the LRAT does not translate cleanly.
+std::optional<proof::AletheProof>
+tryFlatClausalBooleanProof(const CoreIr& ir, const std::vector<ExprId>& assertions) {
+    if (assertions.empty()) return std::nullopt;
+    const SortId boolSort = ir.boolSortId();
+
+    std::unordered_map<ExprId, int> varOf;     // bool-var ExprId -> SAT var (1-based)
+    std::vector<ExprId> varExpr;               // varExpr[v] = the bool var's ExprId
+    varExpr.push_back(NullExpr);               // index 0 unused (vars are 1-based)
+
+    auto isBoolVar = [&](ExprId id) {
+        const auto& e = ir.get(id);
+        if (e.kind != Kind::Variable ||
+            !std::holds_alternative<std::string>(e.payload.value))
+            return false;
+        // A declared Bool variable can carry an unregistered SortId, so accept
+        // both the canonical bool sort and any sort whose kind resolves to Bool.
+        if (e.sort == boolSort) return true;
+        auto sk = ir.sortKind(e.sort);
+        return sk && *sk == SortKind::Bool;
+    };
+    // Map a clause-literal expr to a signed SAT int, registering its variable.
+    auto litOf = [&](ExprId id) -> std::optional<int> {
+        bool neg = false;
+        const auto* e = &ir.get(id);
+        if (e->kind == Kind::Not && e->children.size() == 1) {
+            neg = true;
+            id = e->children[0];
+            e = &ir.get(id);
+        }
+        if (!isBoolVar(id)) return std::nullopt;
+        auto it = varOf.find(id);
+        int v;
+        if (it == varOf.end()) {
+            v = static_cast<int>(varExpr.size());
+            varOf[id] = v;
+            varExpr.push_back(id);
+        } else {
+            v = it->second;
+        }
+        return neg ? -v : v;
+    };
+
+    std::vector<proof::ClausalAssertion> clausal;
+    std::vector<std::vector<int>> cnf;
+    clausal.reserve(assertions.size());
+    cnf.reserve(assertions.size());
+
+    for (ExprId a : assertions) {
+        const auto& e = ir.get(a);
+        proof::ClausalAssertion ca;
+        ca.smtText = dumpExprToSMT2(a, ir);
+        std::vector<int> lits;
+        if (e.kind == Kind::Or) {
+            if (e.children.empty()) return std::nullopt;
+            for (ExprId c : e.children) {
+                auto l = litOf(c);
+                if (!l) return std::nullopt;
+                lits.push_back(*l);
+                ca.clauseTerms.push_back(dumpExprToSMT2(c, ir));
+            }
+            // An `(or ...)` ALWAYS clausifies via the `or` rule (even a 1-disjunct
+            // `(or p)`): the assume term is the disjunction, not the bare literal,
+            // so resolution needs the extracted `(cl p)`, never `(cl (or p))`.
+            ca.isUnit = false;
+        } else {
+            // A bare literal assertion: a Bool variable or its negation.
+            auto l = litOf(a);
+            if (!l) return std::nullopt;
+            lits.push_back(*l);
+            ca.clauseTerms.push_back(ca.smtText);
+            ca.isUnit = true;
+        }
+        clausal.push_back(std::move(ca));
+        cnf.push_back(std::move(lits));
+    }
+
+    const int numVars = static_cast<int>(varExpr.size()) - 1;
+    if (numVars <= 0) return std::nullopt;
+
+    // Refute the flat CNF on a dedicated SAT solve with LRAT capture. This never
+    // touches the main solve; a wrong result only causes a degrade, never a proof.
+    auto sat = createSatSolver();
+    if (!sat->enableLratCapture()) return std::nullopt;
+    for (int i = 0; i < numVars; ++i) (void)sat->newVar();   // declare vars 1..k
+    for (const auto& clause : cnf) {
+        std::vector<SatLit> sc;
+        sc.reserve(clause.size());
+        for (int l : clause)
+            sc.push_back(SatLit{static_cast<SatVar>(l < 0 ? -l : l), l > 0});
+        sat->addClause(sc);
+    }
+    if (sat->solve() != SatSolver::SolveResult::Unsat) return std::nullopt;
+
+    std::vector<LratClause> lrat;
+    if (!sat->getLratProof(lrat)) return std::nullopt;
+
+    std::vector<proof::LratStep> steps;
+    steps.reserve(lrat.size());
+    for (const auto& c : lrat)
+        steps.push_back(proof::LratStep{c.original, c.id, c.lits, c.chain});
+
+    std::vector<std::string> varTerm(varExpr.size());
+    for (size_t v = 1; v < varExpr.size(); ++v)
+        varTerm[v] = dumpExprToSMT2(varExpr[v], ir);
+
+    return proof::buildClausalRefutation(clausal, steps, varTerm);
 }
 
 // Return the single DISTINCT conflict cert, or nullptr if the sink holds zero or
@@ -932,6 +1052,33 @@ Result Solver::checkSat() {
                 std::ofstream aout(pit->second.s + ".alethe");
                 if (aout) aout << aletheStr;
                 // Also expose it via the public Solver::getProof() value.
+                pImpl->lastProof_.set(std::move(aletheStr), std::move(problemStr));
+            }
+        }
+    }
+    // Phase F1: pure-propositional Boolean assembly. Runs only when no single-
+    // conflict theory proof was emitted above (lastProof_ still empty) and the
+    // instance is flat-clausal propositional — then the refutation is replayed
+    // from the SAT engine's LRAT as one Carcara-checkable Alethe proof. Degrades
+    // silently (DRAT remains the fallback) on anything it can't translate.
+    if (r == Result::Unsat && pImpl->ir && pImpl->lastProof_.isEmpty()) {
+        auto pit = pImpl->options.find("produce-proofs");
+        if (pit != pImpl->options.end() &&
+            pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
+            // Use the ORIGINAL (pre-purification) assertion roots: Boolean
+            // purification rewrites the IR into boolpur_* proxy equalities that
+            // are not flat-clausal, but the original `(or ...)` / unit assertions
+            // are — and proving against the original problem is strictly better.
+            const auto& origAsserts = pImpl->originalAssertions_;
+            auto bp = tryFlatClausalBooleanProof(*pImpl->ir, origAsserts);
+            if (bp) {
+                std::string problemStr =
+                    dumpProblemToSMT2(*pImpl->ir, origAsserts);
+                std::string aletheStr = bp->serialize();
+                std::ofstream pout(pit->second.s + ".smt2");
+                if (pout) pout << problemStr;
+                std::ofstream aout(pit->second.s + ".alethe");
+                if (aout) aout << aletheStr;
                 pImpl->lastProof_.set(std::move(aletheStr), std::move(problemStr));
             }
         }
