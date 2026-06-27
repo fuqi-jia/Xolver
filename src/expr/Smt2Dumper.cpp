@@ -60,7 +60,32 @@ static const char* kindToSMT2(Kind k) {
     }
 }
 
-static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth*/ = 0) {
+// Dominant arithmetic sort of an expression's VARIABLES: Real if any Real var,
+// else Int if any Int var, else Other ("no arith variable — keep each constant's
+// own sort"). An integer-valued constant is then rendered to match the atom it
+// sits in, keeping the dumped problem well-sorted: Carcara's `=` is sort-STRICT,
+// so an IDL atom (= (- x z) 5) over Int x,z must print 5 as Int, not 5.0 (DL
+// stores bounds as Real-sorted rationals, which would otherwise leak out).
+static SortKind inferConstCtx(ExprId root, const CoreIr& ir) {
+    bool sawInt = false;
+    std::vector<ExprId> stack{root};
+    std::unordered_set<ExprId> seen;
+    while (!stack.empty()) {
+        ExprId x = stack.back();
+        stack.pop_back();
+        if (x == NullExpr || x >= ir.size() || !seen.insert(x).second) continue;
+        const auto& e = ir.get(x);
+        if (e.kind == Kind::Variable) {
+            auto sk = ir.sortKind(e.sort);
+            if (sk && *sk == SortKind::Real) return SortKind::Real;  // Real dominates
+            if (sk && *sk == SortKind::Int) sawInt = true;
+        }
+        for (ExprId c : e.children) stack.push_back(c);
+    }
+    return sawInt ? SortKind::Int : SortKind::Other;
+}
+
+static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, SortKind constCtx) {
     // Iterative emit (was recursive on children; a deeply-nested term overflowed
     // the stack — the former depth>100000 guard sat far above the 8MB limit).
     // A work item is either a literal to emit (lit != nullptr) or a node to
@@ -91,17 +116,29 @@ static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth
             case Kind::ConstBool:
                 os << (std::get<bool>(e.payload.value) ? "true" : "false");
                 break;
-            case Kind::ConstInt:
-                // A Real-sorted integer literal must print as "N.0" (e.g. RDL),
-                // an Int-sorted one stays bare (e.g. IDL).
-                if (ir.sortKind(e.sort) == SortKind::Real)
-                    os << realLiteral(std::to_string(std::get<int64_t>(e.payload.value)));
-                else
-                    os << std::get<int64_t>(e.payload.value);
+            case Kind::ConstInt: {
+                // Render to the atom's arithmetic sort: Real context (e.g. RDL/LRA)
+                // -> "N.0"; Int context (e.g. IDL/LIA) -> bare; no context -> the
+                // constant's own sort.
+                int64_t v = std::get<int64_t>(e.payload.value);
+                bool asReal = constCtx == SortKind::Real ||
+                              (constCtx == SortKind::Other &&
+                               ir.sortKind(e.sort) == SortKind::Real);
+                if (asReal) os << realLiteral(std::to_string(v));
+                else os << v;
                 break;
-            case Kind::ConstReal:
+            }
+            case Kind::ConstReal: {
+                // A Real-stored but integer-valued constant in an Int-sorted atom
+                // (DL bounds are rationals) must print bare so `=` stays well-sorted.
+                if (constCtx == SortKind::Int) {
+                    mpq_class q(std::get<std::string>(e.payload.value));
+                    q.canonicalize();
+                    if (q.get_den() == 1) { os << q.get_num().get_str(); break; }
+                }
                 os << realLiteral(std::get<std::string>(e.payload.value));
                 break;
+            }
             case Kind::ConstBV:
                 if (std::holds_alternative<uint64_t>(e.payload.value)) {
                     os << "#b" << std::get<uint64_t>(e.payload.value);
@@ -168,7 +205,10 @@ static void dumpRec(ExprId root, const CoreIr& ir, std::ostream& os, int /*depth
 
 std::string dumpExprToSMT2(ExprId id, const CoreIr& ir) {
     std::ostringstream oss;
-    dumpRec(id, ir, oss);
+    // Infer the atom's arithmetic sort once (from its variables) so integer-valued
+    // constants render consistently with it — the problem assertion and the proof's
+    // assume of the same atom go through this function, so they stay identical.
+    dumpRec(id, ir, oss, inferConstCtx(id, ir));
     return oss.str();
 }
 

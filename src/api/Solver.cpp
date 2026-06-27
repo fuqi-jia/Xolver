@@ -47,6 +47,108 @@ bool proofLinSafe(ExprId id, const CoreIr& ir) {
     }
 }
 
+// --- Independent Farkas verifier (for signed-multiplier equality certs) ------
+// A rational linear form over IR variables: sum of (var -> coeff) plus a constant.
+struct LinForm {
+    std::map<ExprId, mpq_class> v;
+    mpq_class k;
+};
+
+// Accumulate `scale * <linear term id>` into `out`; false if non-linear/unsupported.
+bool proofLinForm(ExprId id, const CoreIr& ir, const mpq_class& scale, LinForm& out) {
+    const auto& e = ir.get(id);
+    switch (e.kind) {
+        case Kind::Variable: out.v[id] += scale; return true;
+        case Kind::ConstInt:
+            out.k += scale * mpq_class(std::get<int64_t>(e.payload.value));
+            return true;
+        case Kind::ConstReal: {
+            mpq_class q(std::get<std::string>(e.payload.value));
+            q.canonicalize();
+            out.k += scale * q;
+            return true;
+        }
+        case Kind::Add:
+            for (ExprId c : e.children)
+                if (!proofLinForm(c, ir, scale, out)) return false;
+            return true;
+        case Kind::Sub: {
+            if (e.children.empty()) return false;
+            if (!proofLinForm(e.children[0], ir, scale, out)) return false;
+            for (size_t i = 1; i < e.children.size(); ++i)
+                if (!proofLinForm(e.children[i], ir, -scale, out)) return false;
+            return true;
+        }
+        case Kind::Neg:
+            for (ExprId c : e.children)
+                if (!proofLinForm(c, ir, -scale, out)) return false;
+            return true;
+        case Kind::Mul: {
+            // Linear only: at most one non-constant factor; fold the constant ones.
+            mpq_class coef = scale;
+            ExprId nonConst = NullExpr;
+            for (ExprId c : e.children) {
+                LinForm cf;
+                if (!proofLinForm(c, ir, 1, cf)) return false;
+                if (cf.v.empty()) coef *= cf.k;
+                else if (nonConst == NullExpr) nonConst = c;
+                else return false;  // two variable factors -> nonlinear
+            }
+            if (nonConst == NullExpr) { out.k += coef; return true; }
+            return proofLinForm(nonConst, ir, coef, out);
+        }
+        default:
+            return false;
+    }
+}
+
+// An atom's left-hand form in Carcara's la_generic `>= 0` convention, plus flags.
+struct AtomForm { LinForm ni; bool strict = false; bool isEq = false; };
+
+// Build the >=0-form of an arithmetic atom: a<=b / a<b -> (b-a); a>=b / a>b ->
+// (a-b); a=b -> (a-b) (sign-free). Mirrors la_generic's internal normalization so
+// a verified non-negative combination is exactly one Carcara accepts.
+bool proofAtomForm(ExprId atomId, const CoreIr& ir, AtomForm& out) {
+    const auto& e = ir.get(atomId);
+    if (e.children.size() != 2) return false;
+    ExprId a = e.children[0], b = e.children[1];
+    out = {};
+    switch (e.kind) {
+        case Kind::Leq: case Kind::Lt:
+            if (!proofLinForm(b, ir, 1, out.ni) || !proofLinForm(a, ir, -1, out.ni)) return false;
+            out.strict = (e.kind == Kind::Lt);
+            return true;
+        case Kind::Geq: case Kind::Gt:
+            if (!proofLinForm(a, ir, 1, out.ni) || !proofLinForm(b, ir, -1, out.ni)) return false;
+            out.strict = (e.kind == Kind::Gt);
+            return true;
+        case Kind::Eq:
+            if (!proofLinForm(a, ir, 1, out.ni) || !proofLinForm(b, ir, -1, out.ni)) return false;
+            out.isEq = true;
+            return true;
+        default:
+            return false;
+    }
+}
+
+// True iff sum_i coeff_i * atom_i.ni cancels every variable and the residual
+// constant K refutes the combined relation (K < 0, or K <= 0 if a strict atom
+// participates). Inequality coeffs must be >= 0; equality coeffs are sign-free.
+bool proofFarkasContradicts(const std::vector<AtomForm>& atoms,
+                            const std::vector<mpq_class>& coeffs) {
+    LinForm sum;
+    bool anyStrict = false;
+    for (size_t i = 0; i < atoms.size(); ++i) {
+        const mpq_class& s = coeffs[i];
+        for (const auto& [var, c] : atoms[i].ni.v) sum.v[var] += s * c;
+        sum.k += s * atoms[i].ni.k;
+        if (atoms[i].strict && s != 0) anyStrict = true;
+    }
+    for (auto& [var, c] : sum.v) { c.canonicalize(); if (c != 0) return false; }
+    sum.k.canonicalize();
+    return anyStrict ? (sum.k <= 0) : (sum.k < 0);
+}
+
 // For an eq_transitive cert: every literal must be a TOP-LEVEL Eq atom; exactly
 // ONE is negative (the conclusion disequality) and the rest positive (the asserted
 // chain equalities); and the chain must TRANSITIVELY CONNECT the conclusion's two
@@ -561,27 +663,66 @@ Result Solver::checkSat() {
                     negAssert.insert(e.children[0]);
             }
             if (!c.lits.empty() && c.rule == "la_generic") {
-                // LRA: each literal positively-asserted, top-level, an inequality,
-                // and linear + sort-safe (no division / no non-integer real
-                // constants — else la_generic can't certify it or the dumped problem
-                // won't parse). Equalities stay skeleton (they need signed
-                // multipliers the simplex bounds don't give).
-                bool ok = true;
+                // LRA: each literal positively-asserted, top-level, an arithmetic
+                // comparison (inequality OR equality), and linear + sort-safe (no
+                // division / no non-integer real constants — else la_generic can't
+                // certify it or the dumped problem won't parse).
+                bool ok = (c.lits.size() == c.args.size());
+                bool hasEq = false;
                 for (const auto& [atomId, positive] : c.lits) {
                     if (!positive || !assertSet.count(atomId)) { ok = false; break; }
                     const auto& e = pImpl->ir->get(atomId);
                     if (e.kind != Kind::Lt && e.kind != Kind::Leq &&
-                        e.kind != Kind::Gt && e.kind != Kind::Geq) { ok = false; break; }
+                        e.kind != Kind::Gt && e.kind != Kind::Geq &&
+                        e.kind != Kind::Eq) { ok = false; break; }
+                    if (e.kind == Kind::Eq) hasEq = true;
                     for (ExprId ch : e.children)
                         if (!proofLinSafe(ch, *pImpl->ir)) { ok = false; break; }
                     if (!ok) break;
+                }
+                // The simplex's Farkas multipliers are non-negative bound coeffs; for
+                // an EQUALITY atom that is the wrong sign half the time (it depends on
+                // whether the upper or lower bound was used). Independently VERIFY the
+                // Farkas combination and search the ± sign of each equality multiplier
+                // for one that genuinely refutes; emit only a verified, Carcara-valid
+                // sign assignment, else stay skeleton. Pure-inequality conflicts keep
+                // the simplex coeffs as-is (no verification, no regression).
+                std::vector<std::string> emitArgs;
+                if (ok && hasEq) {
+                    std::vector<AtomForm> forms(c.lits.size());
+                    std::vector<mpq_class> mag(c.lits.size());
+                    std::vector<int> eqIdx;
+                    for (size_t i = 0; ok && i < c.lits.size(); ++i) {
+                        if (!proofAtomForm(c.lits[i].first, *pImpl->ir, forms[i])) { ok = false; break; }
+                        mpq_class q(c.args[i]); q.canonicalize();
+                        mag[i] = abs(q);
+                        if (forms[i].isEq) eqIdx.push_back(static_cast<int>(i));
+                    }
+                    if (ok && eqIdx.size() > 12) ok = false;  // bound the sign search
+                    if (ok) {
+                        bool found = false;
+                        for (uint32_t mask = 0; !found && mask < (1u << eqIdx.size()); ++mask) {
+                            std::vector<mpq_class> coeffs(c.lits.size());
+                            for (size_t i = 0; i < c.lits.size(); ++i) coeffs[i] = mag[i];
+                            for (size_t j = 0; j < eqIdx.size(); ++j)
+                                if (mask & (1u << j)) coeffs[eqIdx[j]] = -coeffs[eqIdx[j]];
+                            if (proofFarkasContradicts(forms, coeffs)) {
+                                emitArgs.resize(c.lits.size());
+                                for (size_t i = 0; i < c.lits.size(); ++i)
+                                    emitArgs[i] = coeffs[i].get_str();
+                                found = true;
+                            }
+                        }
+                        ok = found;
+                    }
                 }
                 if (ok) {
                     std::vector<proof::AssertedLit> lits;
                     lits.reserve(c.lits.size());
                     for (const auto& [eid, positive] : c.lits)
                         lits.push_back({dumpExprToSMT2(eid, *pImpl->ir), positive});
-                    builtProof = proof::buildConflictRefutation(lits, c.rule, c.args);
+                    builtProof = proof::buildConflictRefutation(
+                        lits, c.rule, hasEq ? emitArgs : c.args);
                 }
             } else if (!c.lits.empty() && c.rule == "eq_transitive") {
                 if (proofEufTransitivityOk(c.lits, *pImpl->ir, assertSet, negAssert)) {
