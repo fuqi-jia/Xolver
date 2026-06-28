@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <map>
+#include <set>
 #include <tuple>
 #include <optional>
 #include <algorithm>
@@ -339,6 +340,31 @@ proofUniqueConflict(const std::vector<proof::TheoryConflictCert>& cs) {
     return &cs[0];
 }
 
+// Collect the DISTINCT conflict certs (one representative per equivalence class
+// under the same order-insensitive `same` predicate proofUniqueConflict uses). A
+// theory re-derives the same conflict many times during search; F2b feeds each
+// distinct conflict as one lemma clause, so identical certs must collapse to one
+// (duplicate input clauses would otherwise mis-align the LRAT feed-order replay).
+std::vector<const proof::TheoryConflictCert*>
+proofDistinctConflicts(const std::vector<proof::TheoryConflictCert>& cs) {
+    auto same = [](const proof::TheoryConflictCert& a, const proof::TheoryConflictCert& b) {
+        if (a.rule != b.rule || a.lits.size() != b.lits.size()) return false;
+        for (const auto& la : a.lits) {
+            bool f = false;
+            for (const auto& lb : b.lits) if (la == lb) { f = true; break; }
+            if (!f) return false;
+        }
+        return true;
+    };
+    std::vector<const proof::TheoryConflictCert*> out;
+    for (const auto& c : cs) {
+        bool dup = false;
+        for (const auto* o : out) if (same(*o, c)) { dup = true; break; }
+        if (!dup) out.push_back(&c);
+    }
+    return out;
+}
+
 // --- EUF congruence proof reconstruction -----------------------------------
 // Reconstruct a Carcara-checkable proof that lhs = rhs from the asserted LEAF
 // equalities, via eq_transitive over a leaf chain and eq_congruent over function
@@ -588,9 +614,9 @@ bool proofBoolCongruence(ExprId predTrueId, ExprId predFalseId,
     return true;
 }
 
-// --- Phase F2a: single-theory-lemma Boolean assembly ------------------------
+// --- Phase F2a/F2b: theory-lemma Boolean assembly ---------------------------
 // Generalizes the F1 flat-clausal path to a theory UNSAT whose refutation needs
-// exactly ONE theory lemma (the canonical case: an EUF congruence whose
+// one OR MORE theory lemmas (the canonical case: an EUF congruence whose
 // conclusion disequality is buried in a top-level n-ary `(distinct ...)` or an
 // `(and ...)`, so it is NOT a top-level assertion the closed-proof path can
 // assume). Mechanism:
@@ -600,22 +626,25 @@ bool proofBoolCongruence(ExprId predTrueId, ExprId predFalseId,
 //   2. Clausify the originals: n-ary distinct -> `distinct_elim` + `equiv1` +
 //      resolution + `and :args(k)`; `(and ..)` -> `and :args(k)`; `(or ..)` ->
 //      `or`; binary distinct / negated atom / bare atom -> the assume IS the unit.
-//   3. Derive the conflict's theory tautology clause (cl (not leaf_i).. (= l r))
-//      as a REAL sub-proof (eq_congruent / eq_transitive over the leaves, lemma
-//      mode — leaves come from the clausified original, not assumed).
-//   4. Refute (clausified-original + lemma clauses) on a dedicated CaDiCaL LRAT
+//   3. For EACH distinct conflict cert, derive its theory tautology clause
+//      (cl (not leaf_i).. (= l r)) as a REAL sub-proof (eq_congruent /
+//      eq_transitive over the leaves, lemma mode — leaves come from the clausified
+//      original, not assumed). A conflict that is a DIRECT leaf vs its negation
+//      (euf_016: `(= c a)` and `(not (= c a))`) yields NO lemma step — the
+//      clausified original already contains the contradicting unit clauses — so it
+//      simply contributes no lemma clause. Duplicate lemma clauses are fed once.
+//   4. Refute (clausified-original + all lemma clauses) on a dedicated CaDiCaL LRAT
 //      solve and replay the resolution to the empty clause.
 // Returns nullopt -> degrade to the DRAT/skeleton path -> when any assertion shape
-// is unsupported, the lemma is outside the handled fragment, or the abstraction is
-// not propositionally unsat with this single lemma (needs CEGAR / multi-lemma,
-// F2b). Carcara is the final gate: a wrong assembly is REJECTED offline, never
+// is unsupported, or the abstraction is not propositionally unsat with the captured
+// conflict lemmas (the conflict set is insufficient — would need CEGAR, out of
+// scope). Carcara is the final gate: a wrong assembly is REJECTED offline, never
 // claimed.
 std::optional<proof::AletheProof>
 tryTheoryLemmaBooleanProof(const CoreIr& ir,
                            const std::vector<ExprId>& originalAssertions,
-                           const proof::TheoryConflictCert& cert) {
-    // F2a handles the EUF congruence/transitivity lemma (rule "eq_transitive").
-    if (cert.rule != "eq_transitive" || cert.lits.empty()) return std::nullopt;
+                           const std::vector<const proof::TheoryConflictCert*>& certs) {
+    if (certs.empty()) return std::nullopt;
     if (originalAssertions.empty()) return std::nullopt;
 
     proof::AletheProof proof;
@@ -726,49 +755,72 @@ tryTheoryLemmaBooleanProof(const CoreIr& ir,
         }
     }
 
-    // Theory lemma: classify the conflict literals into leaf equalities (positive
-    // Eq) + the single conclusion disequality (negative Eq, or positive binary
-    // Distinct), then derive (cl (not leaf_i).. (= l r)) in lemma mode.
-    ExprId lhsId = NullExpr, rhsId = NullExpr;
-    std::vector<std::tuple<ExprId, ExprId, std::string>> leafEqs;
-    int conclusions = 0;
-    for (const auto& [atomId, positive] : cert.lits) {
-        const auto& e = ir.get(atomId);
-        const bool isEq2 = (e.kind == Kind::Eq && e.children.size() == 2);
-        const bool isDist2 = (e.kind == Kind::Distinct && e.children.size() == 2);
-        if (isEq2 && positive) {
-            leafEqs.emplace_back(e.children[0], e.children[1], term(atomId));
-        } else if ((isEq2 && !positive) || (isDist2 && positive)) {
-            lhsId = e.children[0]; rhsId = e.children[1]; ++conclusions;
-        } else {
-            return std::nullopt;
+    // Dedup clauses by canonical (sorted, unique) literal set: re-derived conflicts
+    // yield identical lemma clauses, and a duplicate input clause would mis-align the
+    // LRAT feed-order replay (origStepId is indexed 1:1 with the original clauses).
+    std::set<std::vector<int>> seenClause;
+    auto canon = [](std::vector<int> c) {
+        std::sort(c.begin(), c.end());
+        c.erase(std::unique(c.begin(), c.end()), c.end());
+        return c;
+    };
+    for (const auto& c : cnf) seenClause.insert(canon(c));
+
+    // Theory lemmas (F2b): for EACH distinct conflict cert, classify its literals
+    // into leaf equalities (positive Eq) + the single conclusion disequality
+    // (negative Eq, or positive binary Distinct), then derive (cl (not leaf_i)..
+    // (= l r)) in lemma mode and feed it as one input clause. A cert we cannot build
+    // a sub-proof for (unsupported rule/shape, or outside the EUF fragment) is simply
+    // SKIPPED — if it was essential, the propositional-unsat check below fails and we
+    // degrade. A DIRECT leaf-vs-negation conflict (euf_016) produces no lemma step;
+    // the clausified original already carries the contradiction.
+    for (const proof::TheoryConflictCert* certPtr : certs) {
+        const auto& cert = *certPtr;
+        if (cert.rule != "eq_transitive" || cert.lits.empty()) continue;
+        ExprId lhsId = NullExpr, rhsId = NullExpr;
+        std::vector<std::tuple<ExprId, ExprId, std::string>> leafEqs;
+        int conclusions = 0;
+        bool classOk = true;
+        for (const auto& [atomId, positive] : cert.lits) {
+            const auto& e = ir.get(atomId);
+            const bool isEq2 = (e.kind == Kind::Eq && e.children.size() == 2);
+            const bool isDist2 = (e.kind == Kind::Distinct && e.children.size() == 2);
+            if (isEq2 && positive) {
+                leafEqs.emplace_back(e.children[0], e.children[1], term(atomId));
+            } else if ((isEq2 && !positive) || (isDist2 && positive)) {
+                lhsId = e.children[0]; rhsId = e.children[1]; ++conclusions;
+            } else {
+                classOk = false; break;
+            }
+        }
+        if (!classOk || conclusions != 1 || lhsId == NullExpr) continue;
+
+        EufCongruenceProver cp{ir, proof, {}, {}, {}, {}, {}};
+        cp.lemmaMode = true;
+        for (const auto& [u, v, atom] : leafEqs) {
+            cp.leaf[EufCongruenceProver::key(u, v)] = {std::string(), atom};
+            cp.adj[u].push_back(v);
+            cp.adj[v].push_back(u);
+        }
+        cp.augmentCongruenceEdges(lhsId, rhsId);
+        if (cp.prove(lhsId, rhsId, 0).empty()) continue;  // outside fragment -> skip
+        for (const auto& ls : cp.lemmaSteps) {
+            std::vector<int> lits;
+            lits.reserve(ls.lits.size());
+            for (const auto& [atom, posInClause] : ls.lits) {
+                int v = reg(atom);
+                lits.push_back(posInClause ? v : -v);
+            }
+            if (!seenClause.insert(canon(lits)).second) continue;  // duplicate
+            cnf.push_back(std::move(lits));
+            origStepId.push_back(ls.id);
         }
     }
-    if (conclusions != 1 || lhsId == NullExpr) return std::nullopt;
 
-    EufCongruenceProver cp{ir, proof, {}, {}, {}, {}, {}};
-    cp.lemmaMode = true;
-    for (const auto& [u, v, atom] : leafEqs) {
-        cp.leaf[EufCongruenceProver::key(u, v)] = {std::string(), atom};
-        cp.adj[u].push_back(v);
-        cp.adj[v].push_back(u);
-    }
-    cp.augmentCongruenceEdges(lhsId, rhsId);
-    if (cp.prove(lhsId, rhsId, 0).empty()) return std::nullopt;
-    if (cp.lemmaSteps.empty()) return std::nullopt;
-    for (const auto& ls : cp.lemmaSteps) {
-        std::vector<int> lits;
-        lits.reserve(ls.lits.size());
-        for (const auto& [atom, posInClause] : ls.lits) {
-            int v = reg(atom);
-            lits.push_back(posInClause ? v : -v);
-        }
-        cnf.push_back(lits);
-        origStepId.push_back(ls.id);
-    }
-
-    // Refute the abstraction (clausified-original + lemma clauses) on a dedicated
-    // CaDiCaL LRAT solve. Not unsat -> this one lemma is insufficient (needs F2b).
+    // Refute the abstraction (clausified-original + all lemma clauses) on a dedicated
+    // CaDiCaL LRAT solve. Not unsat -> the captured conflict set is insufficient (the
+    // refutation needs lemmas not in the sink, e.g. propagation lemmas -> CEGAR, out
+    // of scope) -> degrade.
     const int numVars = static_cast<int>(varTerm.size()) - 1;
     if (numVars <= 0) return std::nullopt;
     auto sat = createSatSolver();
@@ -1291,19 +1343,23 @@ Result Solver::checkSat() {
             }
         }
     }
-    // Phase F2a: single-theory-lemma Boolean assembly. Runs when a unique theory
+    // Phase F2a/F2b: theory-lemma Boolean assembly. Runs when at least one theory
     // conflict cert exists but the closed-proof path above did NOT emit (e.g. the
     // conflict's disequality is buried in a top-level n-ary `(distinct ...)` / And,
-    // not a top-level assertion). Clausify the ORIGINAL assertions over their theory
-    // atoms, splice the conflict's theory tautology as a real sub-proof, and replay
-    // the propositional refutation from a dedicated LRAT solve — one Carcara-checked
-    // Alethe proof against the original problem. Degrades silently otherwise.
-    if (r == Result::Unsat && pImpl->ir && pImpl->lastProof_.isEmpty() && uc) {
+    // not a top-level assertion — or the refutation needs MULTIPLE distinct conflicts,
+    // so proofUniqueConflict returned null). Clausify the ORIGINAL assertions over
+    // their theory atoms, splice EACH distinct conflict's theory tautology as a real
+    // sub-proof, and replay the propositional refutation from a dedicated LRAT solve —
+    // one Carcara-checked Alethe proof against the original problem. Degrades silently
+    // (the captured conflict set may be insufficient -> CEGAR, out of scope).
+    if (r == Result::Unsat && pImpl->ir && pImpl->lastProof_.isEmpty() &&
+        !pImpl->proofSink_.conflicts().empty()) {
         auto pit = pImpl->options.find("produce-proofs");
         if (pit != pImpl->options.end() &&
             pit->second.kind == OptionValue::String && !pit->second.s.empty()) {
             const auto& origAsserts = pImpl->originalAssertions_;
-            auto bp = tryTheoryLemmaBooleanProof(*pImpl->ir, origAsserts, *uc);
+            auto distinctCerts = proofDistinctConflicts(pImpl->proofSink_.conflicts());
+            auto bp = tryTheoryLemmaBooleanProof(*pImpl->ir, origAsserts, distinctCerts);
             if (bp) {
                 std::string problemStr = dumpProblemToSMT2(*pImpl->ir, origAsserts);
                 std::string aletheStr = bp->serialize();
