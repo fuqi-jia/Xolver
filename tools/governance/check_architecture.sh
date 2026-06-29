@@ -61,14 +61,14 @@ for _f in XOLVER_NRA_MCSAT XOLVER_NIA_MCSAT XOLVER_NIA_CDCAC XOLVER_NIA_LOCALSEA
     "$_f is a migrated engine-selector (Phase 3) — read via env::flag, not raw getenv"
 done
 
-# Header narrowness: the logic-builder registry header (include/xolver/spi) must
-# stay narrow — no concrete solver/engine internals (expr/ IR foundation is allowed;
-# theory/ and sat/ are not), so the IR layering holds.
-check_forbidden '#include "theory/' include/xolver/spi \
-  "registry header (include/xolver/spi) must not include theory/ internals"
+# Header narrowness: the logic-builder registry header must stay light — no concrete
+# solver/engine internals (expr/ IR foundation is allowed; theory/ and sat/ are not),
+# so the IR layering holds and it stays cheap to include.
+check_forbidden '#include "theory/' src/frontend/factory/SolverRegistry.h \
+  "registry header (SolverRegistry.h) must not include theory/ internals"
 
-check_forbidden '#include "sat/' include/xolver/spi \
-  "registry header (include/xolver/spi) must not include sat/ internals"
+check_forbidden '#include "sat/' src/frontend/factory/SolverRegistry.h \
+  "registry header (SolverRegistry.h) must not include sat/ internals"
 
 if [ "$fail" -eq 0 ]; then
   echo "=== All architecture constraints satisfied ==="
