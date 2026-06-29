@@ -17,7 +17,6 @@ option(XOLVER_BUILD_LIBPOLY_TESTS "Build libpoly submodule tests (slow)" OFF)
 option(XOLVER_ENABLE_LIA_PROFILE "Enable LIA solver profiling" OFF)
 option(XOLVER_ENABLE_CASESTATS "Enable per-case stats dump for benchmark analysis" OFF)
 option(XOLVER_STATIC_BUILD "Build fully static executable (no dynamic dependencies)" OFF)
-option(XOLVER_BUILD_PRO "Build closed-source pro engines from src/pro/ (if present)" OFF)
 option(XOLVER_BUILD_PYTHON "Build the Python extension module (pybind11)" OFF)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -196,14 +195,6 @@ add_compile_definitions(
 # Main library and tools
 # ---------------------------------------------------------------------------
 add_subdirectory(src)
-
-# Closed-source pro engines: built only when requested AND the (gitignored-in-
-# release) src/pro tree is present. The open core never references src/pro, so the
-# open build is whole without it (enforced by tools/governance/check_architecture.sh).
-if(XOLVER_BUILD_PRO AND EXISTS "${CMAKE_SOURCE_DIR}/src/pro/CMakeLists.txt")
-    add_subdirectory(src/pro)
-    message(STATUS "Pro engines: building from src/pro (XOLVER_BUILD_PRO=ON)")
-endif()
 
 if(XOLVER_BUILD_TESTS)
     enable_testing()

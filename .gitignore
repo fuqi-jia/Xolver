@@ -125,13 +125,6 @@ preparation/
 smt-comp-2026-racing.md
 bin/
 
-# Local-only "pro" overlay dir — ignored on the PUBLIC repo so it can't be
-# committed/pushed here by accident. Built locally via -DXOLVER_BUILD_PRO=ON (the
-# open CMake picks it up if the dir is present). Embargoed research/advanced
-# features live on branches in the PRIVATE mirror (fuqi-jia/Xolver-research) and
-# merge back to public on publication — develop pro there, not on public main.
-/src/pro/
-
 # Working notes (per-agent campaign tracking, kept locally)
 NOTES
 NOTES-*.md
