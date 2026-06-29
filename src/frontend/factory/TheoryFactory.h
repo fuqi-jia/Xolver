@@ -16,11 +16,10 @@ namespace xolver {
  * TheoryFactory: thin driver over SolverRegistry.
  *
  * The concrete solver headers are now included only by the builder translation
- * units that register into SolverRegistry (the open-core builtins live in
- * TheoryFactory.cpp; pro stacks self-register from src/pro/). setupSolvers looks
- * up the registered builder for `logic` and runs it; the legacy signature is
- * kept so api/Solver.cpp is unchanged. `SolverSetupResult` is defined in
- * SolverRegistry.h.
+ * units that register into SolverRegistry (the builtins live in
+ * TheoryFactory.cpp). setupSolvers looks up the registered builder for `logic`
+ * and runs it; the legacy signature is kept so api/Solver.cpp is unchanged.
+ * `SolverSetupResult` is defined in SolverRegistry.h.
  */
 SolverSetupResult setupSolvers(
     const std::string& logic,

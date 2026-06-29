@@ -61,21 +61,14 @@ for _f in XOLVER_NRA_MCSAT XOLVER_NIA_MCSAT XOLVER_NIA_CDCAC XOLVER_NIA_LOCALSEA
     "$_f is a migrated engine-selector (Phase 3) — read via env::flag, not raw getenv"
 done
 
-# SPI boundary (Phase 4): the public SPI headers must stay narrow — no concrete
-# solver/engine internals — so a closed pro module stays decoupled from the open
-# core. (expr/ IR foundation is allowed; theory/ and sat/ are not.)
+# Header narrowness: the logic-builder registry header (include/xolver/spi) must
+# stay narrow — no concrete solver/engine internals (expr/ IR foundation is allowed;
+# theory/ and sat/ are not), so the IR layering holds.
 check_forbidden '#include "theory/' include/xolver/spi \
-  "SPI headers (include/xolver/spi) must not include theory/ internals"
+  "registry header (include/xolver/spi) must not include theory/ internals"
 
 check_forbidden '#include "sat/' include/xolver/spi \
-  "SPI headers (include/xolver/spi) must not include sat/ internals"
-
-# Open core must never depend on the closed pro tree, so the open build is whole
-# with src/pro/ absent. (src/pro/ may include itself; every other subtree is open.)
-for _d in src/expr src/sat src/theory src/frontend src/api src/util src/proof src/parser; do
-  check_forbidden '#include "pro/' "$_d" \
-    "open core ($_d) must not include src/pro/"
-done
+  "registry header (include/xolver/spi) must not include sat/ internals"
 
 if [ "$fail" -eq 0 ]; then
   echo "=== All architecture constraints satisfied ==="

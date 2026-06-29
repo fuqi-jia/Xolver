@@ -14,8 +14,8 @@ struct Entry {
 };
 
 // logic-name → highest-priority builder. Never destroyed (registration may run
-// during static init from src/pro/, before main); a function-local static map
-// is the standard fix for state touched during static init/teardown ordering.
+// during static init, before main); a function-local static map is the standard
+// fix for state touched during static init/teardown ordering.
 std::map<std::string, Entry>& table() {
     static std::map<std::string, Entry>* t = new std::map<std::string, Entry>();
     return *t;
@@ -38,20 +38,6 @@ void SolverRegistry::registerLogic(std::vector<std::string> logics, int priority
         }
     }
 }
-
-bool SolverRegistry::registerProLogic(int proSpiVersion, std::vector<std::string> logics,
-                                      int priority, LogicBuilder builder,
-                                      const char* label) {
-    // The pro module passes its compiled-in XOLVER_SPI_VERSION; we compare it
-    // against the core's. A major mismatch means the pro plugin was built against
-    // an incompatible BuildContext/registration ABI — refuse rather than let it
-    // register a builder the core would mis-invoke.
-    if (proSpiVersion != XOLVER_SPI_VERSION) return false;
-    registerLogic(std::move(logics), priority, std::move(builder), label);
-    return true;
-}
-
-int SolverRegistry::coreSpiVersion() { return XOLVER_SPI_VERSION; }
 
 const LogicBuilder* SolverRegistry::builderFor(const std::string& logic) {
     std::lock_guard<std::mutex> g(tableMutex());
