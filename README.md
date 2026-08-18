@@ -2,19 +2,21 @@
 
 Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combinations with uninterpreted functions, arrays, and algebraic datatypes. A CaDiCaL-driven CDCL(T) core orchestrates theory solvers that reason over exact rational (GMP/MPFR) and real-algebraic (libpoly) arithmetic, with no floating point on the decision path. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
+At SMT-COMP 2026, Xolver competed as a Standalone Solver and received two awards: **Single Query Track Largest Contribution — UNSAT Performance Winner** and **QF_NIRA Winner**.
+
 ---
 
 ## Supported logics
 
-| Family | Logics |
-|---|---|
-| Boolean / EUF | `QF_BOOL`, `QF_UF` |
-| Linear real / integer | `QF_LRA`, `QF_LIA`, `QF_LIRA` |
-| Difference logic | `QF_IDL`, `QF_RDL` |
-| Nonlinear | `QF_NRA`, `QF_NIA`, `QF_NIRA` |
-| UF + arithmetic | `QF_UFLRA`, `QF_UFLIA`, `QF_UFNRA`, `QF_UFNIA` |
-| Arrays | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`, `QF_ANIA`, `QF_AUFNIA` |
-| Datatypes | `QF_DT`, `QF_UFDT`, `QF_UFDTNIA` |
+| Family                | Logics                                                                          |
+| --------------------- | ------------------------------------------------------------------------------- |
+| Boolean / EUF         | `QF_BOOL`, `QF_UF`                                                              |
+| Linear real / integer | `QF_LRA`, `QF_LIA`, `QF_LIRA`                                                   |
+| Difference logic      | `QF_IDL`, `QF_RDL`                                                              |
+| Nonlinear             | `QF_NRA`, `QF_NIA`, `QF_NIRA`                                                   |
+| UF + arithmetic       | `QF_UFLRA`, `QF_UFLIA`, `QF_UFNRA`, `QF_UFNIA`                                  |
+| Arrays                | `QF_AX`, `QF_ALIA`, `QF_ALRA`, `QF_AUFLIA`, `QF_AUFLRA`, `QF_ANIA`, `QF_AUFNIA` |
+| Datatypes             | `QF_DT`, `QF_UFDT`, `QF_UFDTNIA`                                                |
 
 ---
 
@@ -52,6 +54,8 @@ Xolver is an SMT solver for quantifier-free nonlinear arithmetic and its combina
             ModelValidator    (gates every sat — exact)
             Advisor           (heuristic, propose-only)
 ```
+
+Xolver uses [SOMTParser](https://github.com/fuqi-jia/SOMTParser) as its frontend for SMT-LIB parsing, type checking, expression management, and rewriting.
 
 ---
 
@@ -95,17 +99,17 @@ The regression harness compares each verdict against z3/cvc5 and flags any sat�
 
 ## Repository layout
 
-| Path | Contents |
-|---|---|
-| `src/expr/` | hash-consed Core IR, rewriter |
-| `src/parser/`, `src/frontend/` | SOMTParser adapter, lowering passes |
-| `src/sat/` | CaDiCaL wrapper |
-| `src/theory/core/` | TheoryManager, Nelson–Oppen combination |
-| `src/theory/arith/` | per-theory solvers (LRA/LIA/IDL/RDL/NRA/NIA/NIRA/LIRA) |
-| `src/theory/{euf,array,datatype}/` | e-graph + lazy axioms |
-| `tools/` | CLI, build/test/benchmark scripts |
-| `tests/` | doctest unit suite + per-logic regression corpora |
-| `third_party/SOMTParser`, `cadical`, `libpoly` | git submodules |
+| Path                                           | Contents                                               |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| `src/expr/`                                    | hash-consed Core IR, rewriter                          |
+| `src/parser/`, `src/frontend/`                 | SOMTParser adapter, lowering passes                    |
+| `src/sat/`                                     | CaDiCaL wrapper                                        |
+| `src/theory/core/`                             | TheoryManager, Nelson–Oppen combination                |
+| `src/theory/arith/`                            | per-theory solvers (LRA/LIA/IDL/RDL/NRA/NIA/NIRA/LIRA) |
+| `src/theory/{euf,array,datatype}/`             | e-graph + lazy axioms                                  |
+| `tools/`                                       | CLI, build/test/benchmark scripts                      |
+| `tests/`                                       | doctest unit suite + per-logic regression corpora      |
+| `third_party/SOMTParser`, `cadical`, `libpoly` | git submodules                                         |
 
 ---
 
@@ -115,7 +119,9 @@ Apache License 2.0 — see [`LICENSE`](LICENSE). Third-party dependency manifest
 
 Xolver does not call, wrap, link, or include source from any existing SMT solver. Comments citing cvc5, z3, or others are algorithmic attribution for published algorithms (CDCAC, Lazard projection, Nelson–Oppen); the implementations are independently written.
 
-Xolver's source code was authored almost entirely by AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6), coordinated by the author through a multi-agent campaign harness with role-specialised agents per theory lane (LRA/LIA, NRA, NIA, EUF/arrays, combination, infrastructure). To the author's knowledge this is the first competition-grade SMT solver for quantifier-free nonlinear arithmetic developed in this regime; the exact soundness gates — every `sat` validated against the original formula, every `unsat` backed by a sound proof obligation — are what made the regime viable at this scale.
+Xolver was developed through a **researcher-led, AI coding-agent-assisted workflow**. The author defined the overall solver architecture, algorithm design and selection, task decomposition, integration, testing, and validation. AI coding agents (Claude Opus 4.7 / Sonnet 4.6, ChatGPT 5.5, Kimi 2.6) carried out much of the code implementation under this coordination, with role-specialised agents for individual theory lanes (LRA/LIA, NRA, NIA, EUF/arrays, combination, and infrastructure).
+
+To reduce correctness risks in AI-assisted implementation, Xolver validates candidate `sat` results against the original formula using exact arithmetic. Supported `unsat` paths use additional consistency checks and proof-certificate checks where available. Incomplete reasoning yields `unknown` rather than an unsound verdict.
 
 ### Citation
 
